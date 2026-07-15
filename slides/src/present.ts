@@ -9,7 +9,7 @@ import { gsap } from 'gsap'
 import { Flip } from 'gsap/Flip'
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
 import type { BentoDoc, Slide, SlideElement } from './model'
-import { renderSlide } from './render'
+import { applyElementFrame, renderSlide } from './render'
 
 gsap.registerPlugin(Flip, MotionPathPlugin)
 
@@ -43,7 +43,10 @@ export function startPresentation(
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
     section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
-    section.appendChild(renderSlide(slide, doc))
+    const surface = renderSlide(slide, doc)
+    // reveal slides start with only the default hover set visible
+    if (slide.hover?.type === 'reveal') applyRevealSet(surface, slide.hover.default ?? null, slide.hover.default)
+    section.appendChild(surface)
     if (slide.notes) {
       const aside = document.createElement('aside')
       aside.className = 'notes'
@@ -101,6 +104,8 @@ export function startPresentation(
       : false,
     // swipes would walk into hidden state slides; arrows are handled below
     touch: !doc.slides.some((s) => s.stateOf),
+    // heavy decks: paint only the neighbourhood of the current slide
+    viewDistance: 1,
     keyboardCondition: null,
     plugins: [RevealNotes],
   })
@@ -153,7 +158,20 @@ export function startPresentation(
     if (!to) return
     const fromIdx = from ? [...slidesEl.children].indexOf(from) : -1
     const toIdx = [...slidesEl.children].indexOf(to)
-    if (from) gsap.killTweensOf(from.querySelectorAll('.bento-el'))
+    if (from) {
+      // Kill the outgoing slide's tweens, then restore model frames —
+      // a tween killed during its delay would otherwise leave the element
+      // stuck at its "from" state (invisible) for every future visit.
+      gsap.killTweensOf(from.querySelectorAll('.bento-el'))
+      const fromSlide = doc.slides[fromIdx]
+      for (const el of fromSlide?.elements ?? []) {
+        const node = from.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+        if (node) applyElementFrame(node, el)
+      }
+      if (fromSlide?.hover?.type === 'reveal') {
+        applyRevealSet(from, null, fromSlide.hover.default)
+      }
+    }
     const forward = toIdx > fromIdx
     // Morph forward into a morph slide, and un-morph when backing out of one.
     const morphing =
@@ -213,13 +231,17 @@ function fxNodes(slide: Slide, section: HTMLElement): Array<[SlideElement, HTMLE
 /** Staggered entrance animations + count-ups for the incoming slide. */
 function runEnterFx(slide: Slide, section: HTMLElement) {
   const entering = fxNodes(slide, section)
-    .filter(([el]) => el.fx!.enter || el.fx!.countUp)
+    // reveal-set members are shown/hidden by hover, never by entrance tweens
+    .filter(([el]) => (el.fx!.enter || el.fx!.countUp) && !el.showOnHover)
     .sort((a, b) => (a[0].fx!.order ?? 0) - (b[0].fx!.order ?? 0))
   // Delay derives from fx.order when set (equal order ⇒ elements enter
   // together — how a diagram reveals band-by-band), else from list position.
   entering.forEach(([el, node], i) => {
     const fx = el.fx!
     const step = fx.order ?? i
+    // motion-path loops own the transform — an entrance tween on the same
+    // node would fight it and freeze the dot off its path
+    if (fx.loop?.type === 'motion-path') return
     if (fx.enter) {
       gsap.fromTo(
         node,
@@ -236,6 +258,26 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
     }
     if (fx.countUp) runCountUp(node)
   })
+  settleGuarantee(entering.map(([el, node]) => [node, el]))
+}
+
+/**
+ * Wall-clock safety net: on starved render loops (throttled tabs, weak
+ * machines) tween progress crawls — guarantee every animated element lands
+ * on its final model state instead of lingering half-invisible.
+ */
+function settleGuarantee(pairs: Array<[HTMLElement, SlideElement]>) {
+  if (!pairs.length) return
+  setTimeout(() => {
+    for (const [node, el] of pairs) {
+      if (!node.isConnected) continue
+      const tweens = gsap.getTweensOf(node)
+      if (tweens.some((t) => t.progress() < 1)) {
+        gsap.killTweensOf(node)
+        applyElementFrame(node, el)
+      }
+    }
+  }, 2800)
 }
 
 /** Animate every number in the element's text from 0 to its final value. */
@@ -308,18 +350,36 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
   }
 }
 
+/** Show only the showOnHover set for `group` (falling back to the default). */
+function applyRevealSet(root: HTMLElement, group: string | null, def?: string | null) {
+  const active = group ?? def ?? null
+  for (const node of root.querySelectorAll<HTMLElement>('[data-show-on-hover]')) {
+    const show = node.dataset.showOnHover === active
+    node.style.transition = 'opacity .18s ease'
+    node.style.opacity = show ? '' : '0'
+    node.style.pointerEvents = show ? '' : 'none'
+  }
+}
+
 /**
- * Hover focus: on slides with hover:'focus-group', pointing at any grouped
- * element dims every element belonging to a different group.
+ * Hover behaviours. focus-group: pointing at a grouped element dims every
+ * element outside its group. reveal: pointing at a grouped element shows the
+ * matching showOnHover set (in-slide content swap — no state slides needed).
  */
 function wireHoverFocus(slide: Slide, section: HTMLElement) {
-  if (slide?.hover?.type !== 'focus-group' || section.dataset.hoverWired) return
+  if (!slide?.hover || section.dataset.hoverWired) return
   section.dataset.hoverWired = '1'
+  const mode = slide.hover.type
   const dim = slide.hover.dim ?? 0.13
+  const def = slide.hover.default ?? null
   let current: string | null = null
   const apply = (group: string | null) => {
     if (group === current) return
     current = group
+    if (mode === 'reveal') {
+      applyRevealSet(section, group, def)
+      return
+    }
     for (const node of section.querySelectorAll<HTMLElement>('[data-group]')) {
       const other = group !== null && node.dataset.group !== group
       node.style.transition = 'opacity .25s ease'
@@ -371,18 +431,33 @@ function runMorph(
     }
   }
 
-  // Unmatched incoming elements simply fade/rise in.
-  const entering = [...toEls.values()].filter((n) => !fromEls.has(n.dataset.flipId!))
+  // Unmatched incoming elements fade/rise in — to their MODEL opacity
+  // (clearProps would wipe reveal-set hiding and dimmed-state opacities).
+  const toSlide = doc.slides[toIdx]
+  const activeSet = toSlide?.hover?.type === 'reveal' ? (toSlide.hover.default ?? null) : null
+  const entering: Array<[HTMLElement, number]> = []
+  for (const n of toEls.values()) {
+    const id = n.dataset.flipId!
+    if (fromEls.has(id)) continue
+    const m = toModel.get(id)
+    if (m?.showOnHover && m.showOnHover !== activeSet) continue // hover-revealed, stays hidden
+    entering.push([n, m?.opacity ?? 1])
+  }
   if (entering.length) {
-    gsap.from(entering, {
-      opacity: 0,
-      y: 14,
-      duration: 0.45,
-      delay: MORPH_DURATION * 0.4,
-      stagger: { amount: Math.min(0.45, entering.length * 0.03) },
-      ease: 'power2.out',
-      clearProps: 'opacity,transform',
+    const spread = Math.min(0.45, entering.length * 0.03)
+    entering.forEach(([n, opacity], i) => {
+      gsap.fromTo(n,
+        { opacity: 0, y: 14 },
+        {
+          opacity, y: 0, duration: 0.45,
+          delay: MORPH_DURATION * 0.4 + (spread * i) / entering.length,
+          ease: 'power2.out',
+        })
     })
+    settleGuarantee(entering.map(([n]) => {
+      const m = toModel.get(n.dataset.flipId!)
+      return [n, m!] as [HTMLElement, SlideElement]
+    }).filter(([, m]) => !!m))
   }
   if (!matchedFrom.length) return
 

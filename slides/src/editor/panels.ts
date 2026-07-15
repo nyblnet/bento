@@ -93,14 +93,36 @@ export class PropsPanel {
     this.host.appendChild(stateHint)
 
     this.row('Hover', this.select(
-      ['none', 'focus-group'],
+      ['none', 'focus-group', 'reveal'],
       slide.hover?.type ?? 'none',
       (v) => this.edit(() => {
-        this.store.slide.hover = v === 'focus-group' ? { type: 'focus-group', dim: slide.hover?.dim ?? 0.15 } : undefined
+        this.store.slide.hover = v === 'none'
+          ? undefined
+          : { ...(this.store.slide.hover ?? {}), type: v as 'focus-group' | 'reveal' }
       }, true)))
-    if (slide.hover) {
+    if (slide.hover?.type === 'focus-group') {
       this.row('Hover dim', this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
         this.edit(() => { if (this.store.slide.hover) this.store.slide.hover.dim = Math.min(Math.max(v, 0), 1) }, fin)))
+    }
+    if (slide.hover?.type === 'reveal') {
+      const sets = [...new Set(slide.elements.map((e) => e.showOnHover).filter(Boolean))] as string[]
+      const defIn = document.createElement('input')
+      defIn.type = 'text'
+      defIn.placeholder = sets[0] ?? 'set name'
+      defIn.value = slide.hover.default ?? ''
+      defIn.addEventListener('change', () =>
+        this.edit(() => { if (this.store.slide.hover) this.store.slide.hover.default = defIn.value || undefined }, true))
+      this.row('Default set', defIn)
+      if (sets.length) {
+        this.row('Preview set', this.select(sets, this.store.hoverPreview ?? slide.hover.default ?? sets[0], (v) => {
+          this.store.hoverPreview = v
+          this.store.emit('current') // re-render canvas without touching the doc
+        }))
+        const revealHint = document.createElement('p')
+        revealHint.className = 'ed-hint'
+        revealHint.innerHTML = 'While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.'
+        this.host.appendChild(revealHint)
+      }
     }
 
     this.section('Speaker notes')
@@ -168,6 +190,43 @@ export class PropsPanel {
       ['none', 'kenburns'], el.fx?.ambient ?? 'none',
       (v) => setFx({ ambient: v === 'none' ? undefined : 'kenburns' })))
 
+    // continuous loop animation
+    const loop = el.fx?.loop
+    this.row('Loop', this.select(
+      ['none', 'dash-march', 'motion-path'],
+      loop?.type ?? 'none',
+      (v) => setFx({
+        loop: v === 'none' ? undefined
+          : v === 'dash-march' ? { type: 'dash-march', distance: 18, duration: (loop as any)?.duration ?? 1.4 }
+          : { type: 'motion-path', path: (loop as any)?.path ?? 'M 0 0 L 100 0', duration: (loop as any)?.duration ?? 3 },
+      })))
+    if (loop) {
+      this.row('Loop secs', this.number(loop.duration ?? 2, 0.1, (v, fin) =>
+        this.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin)))
+      if (loop.type === 'motion-path') {
+        const path = document.createElement('input')
+        path.type = 'text'
+        path.value = loop.path
+        path.title = 'SVG path the element travels along, relative to its position'
+        path.addEventListener('change', () =>
+          this.mutate(el.id, (e) => { if (e.fx?.loop?.type === 'motion-path') e.fx.loop.path = path.value }, true))
+        this.row('Path', path)
+      }
+    }
+
+    // hover-reveal set membership
+    const soh = document.createElement('input')
+    soh.type = 'text'
+    soh.placeholder = 'always visible'
+    soh.value = el.showOnHover ?? ''
+    soh.title = "Only visible while an element with this group is hovered (slide hover: 'reveal')"
+    soh.addEventListener('change', () =>
+      this.mutate(el.id, (e) => {
+        if (soh.value) e.showOnHover = soh.value
+        else delete e.showOnHover
+      }, true))
+    this.row('Show on hover', soh)
+
     // group tag (hover focus & interaction targeting)
     const group = document.createElement('input')
     group.type = 'text'
@@ -220,13 +279,17 @@ export class PropsPanel {
     clone.transition = 'morph'
     delete (clone as any).hover // inherit nothing implicit; user can re-enable
     if (src.hover) clone.hover = { ...src.hover }
-    const targetIdx = this.store.doc.slides.length
+    // insert right after the parent and its existing states, keeping the
+    // family together in the slide list
+    const parentIdx = this.store.doc.slides.findIndex((s) => s.id === clone.stateOf)
+    let insertAt = parentIdx + 1
+    while (this.store.doc.slides[insertAt]?.stateOf === clone.stateOf) insertAt++
     this.store.commit(() => {
-      this.store.doc.slides.push(clone)
+      this.store.doc.slides.splice(insertAt, 0, clone)
       const live = this.store.element(el.id)
       if (live) live.link = clone.id
     }, 'slides')
-    this.store.goTo(targetIdx)
+    this.store.goTo(insertAt)
   }
 
   /** Human label for a slide in pickers. */

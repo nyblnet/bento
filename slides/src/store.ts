@@ -17,6 +17,8 @@ export class Store {
   currentIndex = 0
   selection: string[] = []
   dirty = false
+  /** editor-only: which showOnHover set the canvas previews (never saved) */
+  hoverPreview: string | null = null
 
   private undoStack: string[] = []
   private redoStack: string[] = []
@@ -104,6 +106,7 @@ export class Store {
     if (clamped === this.currentIndex) return
     this.currentIndex = clamped
     this.selection = []
+    this.hoverPreview = null
     this.emit('current')
     this.emit('selection')
   }
