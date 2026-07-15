@@ -7,7 +7,7 @@ import RevealNotes from 'reveal.js/plugin/notes/notes'
 import 'reveal.js/dist/reveal.css'
 import { gsap } from 'gsap'
 import { Flip } from 'gsap/Flip'
-import type { BentoDoc, SlideElement } from './model'
+import type { BentoDoc, Slide, SlideElement } from './model'
 import { renderSlide } from './render'
 
 gsap.registerPlugin(Flip)
@@ -100,16 +100,32 @@ export function startPresentation(
   deck.on('slidechanged', ((event: any) => {
     const from = event.previousSlide as HTMLElement | undefined
     const to = event.currentSlide as HTMLElement
-    if (!from || !to) return
-    const fromIdx = [...slidesEl.children].indexOf(from)
+    if (!to) return
+    const fromIdx = from ? [...slidesEl.children].indexOf(from) : -1
     const toIdx = [...slidesEl.children].indexOf(to)
+    if (from) gsap.killTweensOf(from.querySelectorAll('.bento-el'))
     const forward = toIdx > fromIdx
     // Morph forward into a morph slide, and un-morph when backing out of one.
     const morphing =
-      (forward && doc.slides[toIdx]?.transition === 'morph') ||
-      (!forward && doc.slides[fromIdx]?.transition === 'morph')
-    if (morphing) runMorph(doc, from, to, fromIdx, toIdx)
+      from &&
+      ((forward && doc.slides[toIdx]?.transition === 'morph') ||
+        (!forward && doc.slides[fromIdx]?.transition === 'morph'))
+    if (morphing) runMorph(doc, from!, to, fromIdx, toIdx)
+    else runEnterFx(doc.slides[toIdx], to)
+    runAmbientFx(doc.slides[toIdx], to)
   }) as any)
+
+  // Clicking an element with a link jumps to its target slide.
+  slidesEl.addEventListener('click', (ev) => {
+    const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-link]')
+    if (!target) return
+    const idx = doc.slides.findIndex((s) => s.id === target.dataset.link)
+    if (idx >= 0) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      deck.slide(idx, 0)
+    }
+  })
 
   deck.initialize().then(() => {
     if (startIndex > 0) deck.slide(startIndex, 0)
@@ -118,9 +134,91 @@ export function startPresentation(
     window.addEventListener('resize', onResize)
     setTimeout(onResize, 120)
     setTimeout(onResize, 600)
+    const first = slidesEl.children[startIndex] as HTMLElement | undefined
+    if (first) {
+      runEnterFx(doc.slides[startIndex], first)
+      runAmbientFx(doc.slides[startIndex], first)
+    }
   })
 
   return { exit }
+}
+
+// --- element fx -------------------------------------------------------------
+
+function fxNodes(slide: Slide, section: HTMLElement): Array<[SlideElement, HTMLElement]> {
+  const pairs: Array<[SlideElement, HTMLElement]> = []
+  for (const el of slide?.elements ?? []) {
+    if (!el.fx) continue
+    const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    if (node) pairs.push([el, node])
+  }
+  return pairs
+}
+
+/** Staggered entrance animations + count-ups for the incoming slide. */
+function runEnterFx(slide: Slide, section: HTMLElement) {
+  const entering = fxNodes(slide, section)
+    .filter(([el]) => el.fx!.enter || el.fx!.countUp)
+    .sort((a, b) => (a[0].fx!.order ?? 0) - (b[0].fx!.order ?? 0))
+  entering.forEach(([el, node], i) => {
+    const fx = el.fx!
+    if (fx.enter) {
+      gsap.fromTo(
+        node,
+        { opacity: 0, y: fx.enter === 'fade-up' ? 16 : 0 },
+        {
+          opacity: el.opacity,
+          y: 0,
+          duration: 0.55,
+          delay: 0.12 + Math.min(i, 24) * 0.045,
+          ease: 'power2.out',
+          overwrite: 'auto',
+        },
+      )
+    }
+    if (fx.countUp) runCountUp(node)
+  })
+}
+
+/** Animate every number in the element's text from 0 to its final value. */
+function runCountUp(node: HTMLElement) {
+  const inner = node.querySelector<HTMLElement>('.bento-text-inner') ?? node
+  const final = inner.textContent ?? ''
+  const tokens = [...final.matchAll(/\d+(?:[.,]\d+)?/g)]
+  if (!tokens.length) return
+  const state = { p: 0 }
+  gsap.to(state, {
+    p: 1,
+    duration: 1.15,
+    delay: 0.15,
+    ease: 'power2.out',
+    onUpdate() {
+      let out = ''
+      let last = 0
+      for (const m of tokens) {
+        out += final.slice(last, m.index)
+        const raw = m[0].replace(',', '.')
+        const decimals = raw.includes('.') ? raw.split('.')[1].length : 0
+        out += (parseFloat(raw) * state.p).toFixed(decimals)
+        last = m.index! + m[0].length
+      }
+      inner.textContent = out + final.slice(last)
+    },
+  })
+}
+
+/** Continuous ambient motion (ken-burns style slow zoom on photos). */
+function runAmbientFx(slide: Slide, section: HTMLElement) {
+  for (const [el, node] of fxNodes(slide, section)) {
+    if (el.fx!.ambient === 'kenburns') {
+      gsap.fromTo(
+        node,
+        { scale: 1.02 },
+        { scale: 1.1, duration: 26, ease: 'none', repeat: -1, yoyo: true, transformOrigin: '50% 40%' },
+      )
+    }
+  }
 }
 
 // --- morph ------------------------------------------------------------------
