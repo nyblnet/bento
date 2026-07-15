@@ -22,6 +22,21 @@ if (location.hash === '#present') {
   editor.present(true)
 }
 
+// Dismiss the boot splash (inline in index.html so it paints before this
+// bundle parses). Hold it briefly so the assemble animation reads as a
+// brand moment instead of a flicker; the pristine capture ran before this,
+// so saved files keep the splash for their own next boot.
+{
+  const splash = document.getElementById('bento-splash')
+  if (splash) {
+    const wait = Math.max(0, 1250 - performance.now())
+    setTimeout(() => {
+      splash.classList.add('done')
+      setTimeout(() => splash.remove(), 550)
+    }, wait)
+  }
+}
+
 // Small scripting surface for tooling and automation: read/replace the
 // document model and serialize the full .bento.html file.
 ;(window as any).bento = {

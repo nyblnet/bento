@@ -14,6 +14,34 @@
     <script type="application/bento+json" id="bento-doc"></script>
   </head>
   <body>
+    <!-- splash: pure CSS, paints before the bundle parses; main.ts dismisses it -->
+    <div id="bento-splash" aria-hidden="true">
+      <div class="bs-mark"><i class="bs-a"></i><i class="bs-b"></i><i class="bs-c"></i></div>
+      <div class="bs-word"><b>Bento</b>&#8202;&#8202;Slides</div>
+      <div class="bs-bar"><i></i></div>
+    </div>
+    <style>
+#bento-splash{position:fixed;inset:0;z-index:9999;display:grid;place-content:center;justify-items:center;gap:26px;background:radial-gradient(130% 90% at 50% 38%,#25313f 0%,#161d26 58%,#0e1319 100%);pointer-events:none;transition:opacity .5s ease;animation:bsAuto .6s ease 9s both}
+#bento-splash.done{opacity:0}
+.bs-mark{position:relative;width:104px;height:104px;border-radius:24px;background:#1e2a3a;box-shadow:0 26px 70px -16px rgba(247,166,0,.38),0 10px 34px rgba(0,0,0,.55);overflow:hidden;animation:bsIn .7s cubic-bezier(.22,1.4,.36,1) both,bsFloat 3.4s ease-in-out .9s infinite}
+.bs-mark i{position:absolute;border-radius:9px;opacity:0;animation:bsTile .55s cubic-bezier(.25,1.5,.45,1) both}
+.bs-a{left:12px;top:12px;width:50px;height:37px;background:#f7a600;animation-delay:.18s}
+.bs-b{right:12px;top:12px;width:24px;height:80px;background:#5b8def;animation-delay:.3s}
+.bs-c{left:12px;bottom:12px;width:50px;height:37px;background:#e9edf3;animation-delay:.42s}
+.bs-mark:after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.35) 50%,transparent 62%);transform:translateX(-130%);animation:bsSheen 1s ease 1.05s both}
+.bs-word{font:600 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e8edf4;letter-spacing:.42em;text-transform:uppercase;text-indent:.42em;animation:bsUp .6s ease .55s both}
+.bs-word b{color:#f7a600;font-weight:800}
+.bs-bar{width:124px;height:2px;border-radius:1px;background:rgba(255,255,255,.13);overflow:hidden;animation:bsUp .5s ease .85s both}
+.bs-bar i{display:block;width:44%;height:100%;border-radius:1px;background:linear-gradient(90deg,#f7a600,#ffc23e);animation:bsScan 1.1s cubic-bezier(.45,0,.55,1) 1s infinite alternate}
+@keyframes bsIn{from{transform:scale(.55) rotate(-8deg);opacity:0}}
+@keyframes bsTile{from{transform:translateY(28px) scale(.6);opacity:0}to{transform:none;opacity:1}}
+@keyframes bsSheen{to{transform:translateX(130%)}}
+@keyframes bsFloat{50%{transform:translateY(-5px)}}
+@keyframes bsUp{from{opacity:0;transform:translateY(10px)}}
+@keyframes bsScan{from{transform:translateX(-30%)}to{transform:translateX(210%)}}
+@keyframes bsAuto{to{opacity:0;visibility:hidden}}
+@media (prefers-reduced-motion:reduce){#bento-splash,#bento-splash *,.bs-mark:after{animation-duration:.01ms;animation-delay:0ms;animation-iteration-count:1}}
+    </style>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
