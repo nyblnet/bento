@@ -56,7 +56,13 @@ export class Editor {
     // topbar
     const bar = div('ed-topbar')
     const logo = div('ed-logo')
-    logo.innerHTML = `<span class="ed-logo-mark">🍱</span> <b>Bento</b>&nbsp;Slides`
+    logo.innerHTML =
+      `<svg class="ed-logo-mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
+      `<rect width="32" height="32" rx="7" fill="#1E2A3A"/>` +
+      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#5B8DEF"/>` +
+      `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#F7A600"/>` +
+      `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#E9EDF3"/>` +
+      `</svg> <b>Bento</b>&nbsp;Slides`
     const title = document.createElement('input')
     title.className = 'ed-title'
     title.value = this.store.doc.title

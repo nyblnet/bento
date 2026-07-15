@@ -45,8 +45,8 @@ html, body {
   z-index: 20;
 }
 
-.ed-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; white-space: nowrap; }
-.ed-logo-mark { font-size: 18px; }
+.ed-logo { display: flex; align-items: center; gap: 7px; font-size: 15px; white-space: nowrap; }
+.ed-logo-mark { display: block; border-radius: 5px; }
 
 .ed-title {
   font: inherit;
