@@ -150,24 +150,18 @@ export class Editor {
   }
 
   private rebuildSidebar() {
+    // States sit in doc order right after their parent and render nested —
+    // smaller, indented, dimmed — so the structure reads at a glance.
     this.sidebar.innerHTML = ''
     const slides = this.store.doc.slides
     slides.forEach((slide, i) => {
-      if (!slide.stateOf) this.sidebar.appendChild(this.makeThumb(slide, i, false))
+      const item = this.makeThumb(slide, i, !!slide.stateOf)
+      if (slide.stateOf) item.classList.add('ed-thumb-state')
+      this.sidebar.appendChild(item)
     })
     const add = btn(ICONS.plus, 'New slide', () => this.addSlide())
     add.classList.add('ed-add-slide')
     this.sidebar.appendChild(add)
-
-    if (slides.some((s) => s.stateOf)) {
-      const divider = div('ed-side-divider')
-      divider.textContent = 'Interactive states'
-      divider.title = 'Hidden from arrow-key flow; opened by clicking linked elements'
-      this.sidebar.appendChild(divider)
-      slides.forEach((slide, i) => {
-        if (slide.stateOf) this.sidebar.appendChild(this.makeThumb(slide, i, true))
-      })
-    }
     this.highlightSidebar()
   }
 

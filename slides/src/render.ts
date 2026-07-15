@@ -186,6 +186,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
   node.dataset.flipId = el.id
   if (el.link) node.dataset.link = el.link
   if (el.group) node.dataset.group = el.group
+  if (el.showOnHover) node.dataset.showOnHover = el.showOnHover
   applyElementFrame(node, el)
 
   switch (el.type) {

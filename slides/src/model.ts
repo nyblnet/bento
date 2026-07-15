@@ -35,6 +35,12 @@ export interface ElementBase {
   link?: string
   /** semantic group tag — hover focus and multi-element behaviours target it */
   group?: string
+  /**
+   * In-slide hover reveal: this element is only visible while an element
+   * whose `group` equals this value is hovered (slide.hover type 'reveal').
+   * The slide's hover.default set is shown when nothing is hovered.
+   */
+  showOnHover?: string
 }
 
 export interface TextElement extends ElementBase {
@@ -109,8 +115,13 @@ export interface Slide {
    * after the parent.
    */
   stateOf?: string
-  /** present-mode hover behaviour: focus the hovered element's group */
-  hover?: { type: 'focus-group'; dim?: number }
+  /**
+   * present-mode hover behaviour:
+   * - focus-group: dim every element outside the hovered element's group
+   * - reveal: show the showOnHover set matching the hovered group
+   *   (`default` names the set visible when nothing is hovered)
+   */
+  hover?: { type: 'focus-group' | 'reveal'; dim?: number; default?: string }
 }
 
 export interface BentoDoc {

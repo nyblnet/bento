@@ -166,15 +166,21 @@ html, body {
 
 .ed-add-slide { border: 1.5px dashed var(--line); justify-content: center; color: var(--muted); }
 
-.ed-side-divider {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
-  margin-top: 4px;
+/* interactive-state thumbs nest under their parent slide */
+.ed-thumb-state {
+  width: 116px;
+  margin-left: 32px;
+  margin-top: -4px;
+  opacity: 0.72;
+  border-style: dashed;
+}
+.ed-thumb-state:hover, .ed-thumb-state.active { opacity: 1; }
+.ed-thumb-state .ed-thumb-num {
+  font-size: 9px;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ed-btn-block {
@@ -222,7 +228,7 @@ html, body {
 
 .bento-slide { position: relative; overflow: hidden; }
 
-.bento-el { position: absolute; }
+.bento-el { position: absolute; contain: layout style; }
 .bento-el-text .bento-text-inner {
   overflow-wrap: break-word;
   outline: none;

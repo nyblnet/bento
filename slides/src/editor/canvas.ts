@@ -91,7 +91,16 @@ export class SlideCanvas {
 
   render() {
     this.commitTextEdit()
-    const next = renderSlide(this.store.slide, this.store.doc)
+    const slide = this.store.slide
+    const next = renderSlide(slide, this.store.doc)
+    // hover-reveal slides: preview one set at a time (panel picks which);
+    // hidden sets are display:none so they don't block selection
+    if (slide.elements.some((e) => e.showOnHover)) {
+      const active = this.store.hoverPreview ?? slide.hover?.default ?? null
+      for (const node of next.querySelectorAll<HTMLElement>('[data-show-on-hover]')) {
+        if (node.dataset.showOnHover !== active) node.style.display = 'none'
+      }
+    }
     if (this.surface) this.surface.replaceWith(next)
     else this.scaleHost.appendChild(next)
     this.surface = next
