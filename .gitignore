@@ -1,0 +1,11 @@
+# dependencies & build output
+node_modules/
+dist/
+dist-single/
+
+# local test decks — never committed (may contain confidential content)
+testing/
+
+# os cruft
+.DS_Store
+*.tsbuildinfo
