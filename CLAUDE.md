@@ -22,6 +22,10 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
   era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are
   the fallback for geography/static artwork only.
+- **Interactive states**: `Slide.stateOf` marks a slide as a hidden variant of another
+  slide — skipped by linear navigation (← returns to parent, → continues past it),
+  reached by element `link`s, morphing when ids are shared. Authoring: select an
+  element → "＋ New state linked from this element" in the Presenting panel.
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
 
 ## Hard-won details — do not regress
