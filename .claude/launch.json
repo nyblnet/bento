@@ -14,6 +14,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "5198", "--directory", "dist-single"],
       "port": 5198
+    },
+    {
+      "name": "serve-testing",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "5197", "--directory", "testing"],
+      "port": 5197
     }
   ]
 }

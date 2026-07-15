@@ -62,12 +62,14 @@ export function startPresentation(
     transition: 'fade',
     transitionSpeed: 'default',
     backgroundTransition: 'fade',
-    controls: true,
-    progress: true,
-    slideNumber: 'c/t',
+    controls: doc.present?.controls ?? true,
+    progress: doc.present?.progress ?? true,
+    slideNumber: (doc.present?.slideNumber ?? true) ? 'c/t' : false,
     keyboardCondition: null,
     plugins: [RevealNotes],
   })
+
+  const onResize = () => deck.layout()
 
   const exit = () => {
     if (exited) return
@@ -79,6 +81,7 @@ export function startPresentation(
       /* Reveal teardown is best-effort */
     }
     overlay.remove()
+    window.removeEventListener('resize', onResize)
     document.removeEventListener('keydown', onKeydown, true)
     onExit(last)
   }
@@ -110,6 +113,11 @@ export function startPresentation(
 
   deck.initialize().then(() => {
     if (startIndex > 0) deck.slide(startIndex, 0)
+    // late layout: fonts/images that finish loading after init can change
+    // the measured size, and the boot viewport may still be settling
+    window.addEventListener('resize', onResize)
+    setTimeout(onResize, 120)
+    setTimeout(onResize, 600)
   })
 
   return { exit }
