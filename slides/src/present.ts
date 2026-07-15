@@ -55,6 +55,30 @@ export function startPresentation(
 
   document.body.appendChild(overlay)
 
+  // ——— state-aware linear navigation ———
+  // Slides with stateOf are interactive states: linked-to, never walked-to.
+  const isState = (i: number) => !!doc.slides[i]?.stateOf
+  const anchorOf = (i: number) => {
+    const pid = doc.slides[i]?.stateOf
+    const p = doc.slides.findIndex((s) => s.id === pid)
+    return p >= 0 ? p : i
+  }
+  const goNext = () => {
+    const cur = deck.getIndices().h
+    for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
+      if (!isState(i)) return deck.slide(i, 0)
+    }
+  }
+  const goPrev = () => {
+    const cur = deck.getIndices().h
+    if (isState(cur)) return deck.slide(anchorOf(cur), 0)
+    for (let i = cur - 1; i >= 0; i--) {
+      if (!isState(i)) return deck.slide(i, 0)
+    }
+  }
+  const visibleIndex = (i: number) => doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
+  const visibleTotal = doc.slides.filter((s) => !s.stateOf).length
+
   let exited = false
   const deck = new Reveal(revealEl, {
     embedded: true,
@@ -69,7 +93,14 @@ export function startPresentation(
     backgroundTransition: 'fade',
     controls: doc.present?.controls ?? true,
     progress: doc.present?.progress ?? true,
-    slideNumber: (doc.present?.slideNumber ?? true) ? 'c/t' : false,
+    slideNumber: (doc.present?.slideNumber ?? true)
+      ? (((slideEl: HTMLElement) => {
+          const i = [...slidesEl.children].indexOf(slideEl)
+          return [`${visibleIndex(i)} / ${visibleTotal}`]
+        }) as any)
+      : false,
+    // swipes would walk into hidden state slides; arrows are handled below
+    touch: !doc.slides.some((s) => s.stateOf),
     keyboardCondition: null,
     plugins: [RevealNotes],
   })
@@ -103,15 +134,15 @@ export function startPresentation(
       exit()
       return
     }
-    const key = ev.key || ({ 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
-    if (key === 'ArrowRight' || key === 'PageDown') {
+    const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
+    if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
       ev.preventDefault()
       ev.stopPropagation()
-      deck.next()
+      goNext()
     } else if (key === 'ArrowLeft' || key === 'PageUp') {
       ev.preventDefault()
       ev.stopPropagation()
-      deck.prev()
+      goPrev()
     }
   }
   document.addEventListener('keydown', onKeydown, true)

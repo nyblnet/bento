@@ -120,28 +120,54 @@ export class Editor {
 
   // --- sidebar -----------------------------------------------------------------
 
+  private makeThumb(slide: import('../model').Slide, i: number, isState: boolean): HTMLElement {
+    const item = div('ed-thumb')
+    item.dataset.index = String(i)
+    item.draggable = !isState
+    const num = div('ed-thumb-num')
+    if (isState) {
+      const parentIdx = this.store.doc.slides.findIndex((s) => s.id === slide.stateOf)
+      num.textContent = slide.name ?? `⤷ ${parentIdx + 1}`
+      num.title = `Interactive state of slide ${parentIdx + 1} — reached via links while presenting`
+    } else {
+      num.textContent = String(this.linearNumber(i))
+    }
+    const surface = renderThumbnail(slide, this.store.doc, 148)
+    const tools = div('ed-thumb-tools')
+    tools.append(
+      btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, 'Duplicate slide'),
+      btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, 'Delete slide'),
+    )
+    item.append(num, surface, tools)
+    item.addEventListener('click', () => this.store.goTo(i))
+    if (!isState) this.wireThumbDrag(item, i)
+    return item
+  }
+
+  /** 1-based position among non-state slides (what the audience counts). */
+  private linearNumber(i: number): number {
+    return this.store.doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
+  }
+
   private rebuildSidebar() {
     this.sidebar.innerHTML = ''
-    this.store.doc.slides.forEach((slide, i) => {
-      const item = div('ed-thumb')
-      item.dataset.index = String(i)
-      item.draggable = true
-      const num = div('ed-thumb-num')
-      num.textContent = String(i + 1)
-      const surface = renderThumbnail(slide, this.store.doc, 148)
-      const tools = div('ed-thumb-tools')
-      tools.append(
-        btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, 'Duplicate slide'),
-        btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, 'Delete slide'),
-      )
-      item.append(num, surface, tools)
-      item.addEventListener('click', () => this.store.goTo(i))
-      this.wireThumbDrag(item, i)
-      this.sidebar.appendChild(item)
+    const slides = this.store.doc.slides
+    slides.forEach((slide, i) => {
+      if (!slide.stateOf) this.sidebar.appendChild(this.makeThumb(slide, i, false))
     })
     const add = btn(ICONS.plus, 'New slide', () => this.addSlide())
     add.classList.add('ed-add-slide')
     this.sidebar.appendChild(add)
+
+    if (slides.some((s) => s.stateOf)) {
+      const divider = div('ed-side-divider')
+      divider.textContent = 'Interactive states'
+      divider.title = 'Hidden from arrow-key flow; opened by clicking linked elements'
+      this.sidebar.appendChild(divider)
+      slides.forEach((slide, i) => {
+        if (slide.stateOf) this.sidebar.appendChild(this.makeThumb(slide, i, true))
+      })
+    }
     this.highlightSidebar()
   }
 
@@ -170,21 +196,21 @@ export class Editor {
   }
 
   private highlightSidebar() {
-    this.sidebar.querySelectorAll('.ed-thumb').forEach((n, i) => {
-      n.classList.toggle('active', i === this.store.currentIndex)
+    this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb').forEach((n) => {
+      n.classList.toggle('active', Number(n.dataset.index) === this.store.currentIndex)
     })
   }
 
   private scheduleThumbs() {
     clearTimeout(this.thumbTimer)
     this.thumbTimer = window.setTimeout(() => {
-      const thumbs = this.sidebar.querySelectorAll('.ed-thumb')
-      this.store.doc.slides.forEach((slide, i) => {
-        const item = thumbs[i]
-        if (!item) return this.rebuildSidebar()
+      const thumbs = this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb')
+      if (thumbs.length !== this.store.doc.slides.length) return this.rebuildSidebar()
+      thumbs.forEach((item) => {
+        const slide = this.store.doc.slides[Number(item.dataset.index)]
+        if (!slide) return
         item.querySelector('.bento-thumb-surface')?.replaceWith(renderThumbnail(slide, this.store.doc, 148))
       })
-      if (thumbs.length !== this.store.doc.slides.length) this.rebuildSidebar()
     }, 150)
   }
 

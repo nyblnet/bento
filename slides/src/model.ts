@@ -99,6 +99,16 @@ export interface Slide {
   transition: TransitionKind
   elements: SlideElement[]
   notes: string
+  /** optional friendly name (link pickers, state badges) */
+  name?: string
+  /**
+   * Interactive state: this slide is a variant of the slide with the given
+   * id. It is hidden from linear navigation — reachable only via element
+   * links (and morphs smoothly when element ids are shared with its parent).
+   * While on a state: ArrowLeft returns to the parent, ArrowRight continues
+   * after the parent.
+   */
+  stateOf?: string
   /** present-mode hover behaviour: focus the hovered element's group */
   hover?: { type: 'focus-group'; dim?: number }
 }
