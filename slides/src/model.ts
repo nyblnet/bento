@@ -29,6 +29,8 @@ export interface TextElement extends ElementBase {
   align: 'left' | 'center' | 'right'
   valign: 'top' | 'middle' | 'bottom'
   lineHeight: number
+  /** px; optional tracking for letter-spaced caps labels */
+  letterSpacing?: number
 }
 
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line'
@@ -41,6 +43,8 @@ export interface ShapeElement extends ElementBase {
   strokeWidth: number
   /** corner radius, rect only */
   radius: number
+  /** dash length in px; 0/undefined = solid stroke */
+  strokeDash?: number
 }
 
 export interface ImageElement extends ElementBase {
@@ -72,6 +76,12 @@ export interface BentoDoc {
     color: string
     accent: string
     fontFamily: string
+  }
+  /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
+  present?: {
+    slideNumber?: boolean
+    controls?: boolean
+    progress?: boolean
   }
   slides: Slide[]
   modified: string

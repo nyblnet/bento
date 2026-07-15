@@ -76,6 +76,7 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
   if (el.stroke && el.stroke !== 'transparent' && sw > 0) {
     node.setAttribute('stroke', el.stroke)
     node.setAttribute('stroke-width', String(sw))
+    if (el.strokeDash) node.setAttribute('stroke-dasharray', `${el.strokeDash} ${el.strokeDash}`)
   }
   svg.appendChild(node)
   return svg
@@ -136,6 +137,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc): HTMLElement {
       inner.style.color = el.color
       inner.style.textAlign = el.align
       inner.style.lineHeight = String(el.lineHeight)
+      if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
       inner.innerHTML = sanitizeHtml(el.html)
       node.appendChild(inner)
