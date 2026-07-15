@@ -13,9 +13,15 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
 - `src/present.ts` — Reveal.js overlay; slides with `transition:'morph'` use GSAP Flip:
   matched `data-flip-id` elements animate geometry via Flip, style props (fill/color)
-  tween straight from the model values. Elements can carry `fx` (enter stagger,
-  countUp, ken-burns ambient) and `link` (click → jump to slide id) — both run only
-  in present mode; the editor ignores them (no UI yet).
+  tween straight from the model values. Elements carry `fx` (enter stagger — equal
+  `order` = simultaneous, countUp, ken-burns, `loop` dash-march/motion-path), `link`
+  (click → slide id) and `group`; slides can set `hover:'focus-group'` (dim other
+  groups). Present arrows are handled capture-phase (focus-proof). Editing UI for
+  fx/link lives in the panel's "Presenting" section.
+- **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
+  `path` shapes) with groups — interactivity = linked state slides + morph (filters,
+  era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are
+  the fallback for geography/static artwork only.
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
 
 ## Hard-won details — do not regress
