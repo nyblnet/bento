@@ -31,6 +31,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
 4. **Never let a literal `</script>` into the bundle** — `save.ts` builds it by
    concatenation; the data block JSON escapes `<`.
 5. Reveal's `.reveal-viewport` paints white; the present overlay CSS overrides it black.
+6. **svg-element CSS must be scoped** (`render.ts scopeCss`) — svg `<style>` applies
+   document-wide, so one diagram's animation/dim rules would leak into every other
+   svg on the page (CSS animations with fill modes even beat later static rules).
+7. Tiny text labels make unusable click targets when scaled down — interactive
+   controls get padded transparent `link` overlay rects, not links on the text itself.
 
 ## Commands
 
