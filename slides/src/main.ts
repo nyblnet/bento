@@ -4,6 +4,7 @@
 import './styles.css'
 import { capturePristine, readEmbeddedDoc, serializeFile } from './save'
 import { parseDoc, starterDoc } from './model'
+import { injectFonts } from './fonts'
 import { Store } from './store'
 import { Editor } from './editor/editor'
 
@@ -16,20 +17,7 @@ document.title = `${doc.title} — Bento Slides`
 
 // Embedded fonts: register @font-face rules from the asset table so text
 // elements can use bundled families in the editor, presenter and thumbnails.
-if (doc.fonts?.length) {
-  const css = doc.fonts
-    .map((f) => {
-      const src = doc.assets?.[f.asset]
-      if (!src) return ''
-      return `@font-face{font-family:${JSON.stringify(f.family)};src:url(${JSON.stringify(src)});` +
-        `font-weight:${f.weight ?? 'normal'};font-style:${f.style ?? 'normal'};font-display:swap}`
-    })
-    .join('\n')
-  const style = document.createElement('style')
-  style.id = 'bento-fonts'
-  style.textContent = css
-  document.head.appendChild(style)
-}
+if (doc.fonts?.length) injectFonts(doc)
 
 const store = new Store(doc)
 const editor = new Editor(document.getElementById('app')!, store)

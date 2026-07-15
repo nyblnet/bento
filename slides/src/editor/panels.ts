@@ -4,6 +4,7 @@
 
 import type { Store } from '../store'
 import { uid, type ShapeElement, type SlideElement, type TextElement, type TransitionKind } from '../model'
+import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
 
 export class PropsPanel {
@@ -369,6 +370,7 @@ export class PropsPanel {
 
   private buildTextProps(el: TextElement) {
     this.section('Typography')
+    this.row('Font', this.fontSelect(el))
     this.row('Size', this.number(el.fontSize, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).fontSize = Math.max(v, 4) }, fin)))
     this.row('Weight', this.select(['300', '400', '600', '700', '800'], String(el.fontWeight), (v) =>
@@ -381,6 +383,76 @@ export class PropsPanel {
       this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true)))
     this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(v, 0.5) }, fin)))
+
+    const embed = document.createElement('button')
+    embed.className = 'ed-btn ed-btn-block'
+    embed.textContent = '＋ Embed font file…'
+    embed.title = 'Bundle a .woff2/.woff/.ttf/.otf into this file and use it here'
+    embed.addEventListener('click', () => this.embedFont(el))
+    this.host.appendChild(embed)
+  }
+
+  /**
+   * Font picker: theme default, curated system stacks, fonts embedded in the
+   * document, and (if unmatched) the element's current custom stack. Options
+   * render in their own face so the menu previews itself.
+   */
+  private fontSelect(el: TextElement): HTMLElement {
+    const sel = document.createElement('select')
+    const current = el.fontFamily ?? ''
+    const add = (label: string, value: string, selected: boolean) => {
+      const o = document.createElement('option')
+      o.value = value
+      o.textContent = label
+      o.style.fontFamily = value || 'inherit'
+      o.selected = selected
+      sel.appendChild(o)
+      return o
+    }
+    const curFirst = firstFamily(current)
+    let matched = false
+    add('theme default', '', current === '')
+    for (const f of this.store.doc.fonts ?? []) {
+      const hit = !matched && (current === f.family || curFirst === firstFamily(f.family))
+      if (hit) matched = true
+      add(`${f.family} (embedded)`, f.family, hit)
+    }
+    for (const c of FONT_CHOICES) {
+      const hit = !matched && current !== '' && curFirst === firstFamily(c.stack)
+      if (hit) matched = true
+      add(c.label, c.stack, hit)
+    }
+    if (current && !matched) add(curFirst || 'custom', current, true)
+    sel.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as TextElement).fontFamily = sel.value }, true))
+    return sel
+  }
+
+  /** Bundle a font file into the document and apply it to this element. */
+  private embedFont(el: TextElement) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.woff2,.woff,.ttf,.otf'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const family = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'Embedded font'
+        const asset = `font_${family.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        this.store.commit(() => {
+          const doc = this.store.doc
+          doc.assets = { ...(doc.assets ?? {}), [asset]: String(reader.result) }
+          doc.fonts = [...(doc.fonts ?? []).filter((f) => f.family !== family), { family, asset }]
+          const live = this.store.element(el.id)
+          if (live && live.type === 'text') live.fontFamily = family
+        })
+        injectFonts(this.store.doc)
+        this.toast(`"${family}" embedded into this file`)
+      }
+      reader.readAsDataURL(file)
+    })
+    input.click()
   }
 
   private buildShapeProps(el: ShapeElement) {
