@@ -3,7 +3,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import type { ShapeElement, SlideElement, TextElement, TransitionKind } from '../model'
+import { uid, type ShapeElement, type SlideElement, type TextElement, type TransitionKind } from '../model'
 import { ICONS } from '../icons'
 
 export class PropsPanel {
@@ -56,6 +56,52 @@ export class PropsPanel {
     hint.className = 'ed-hint'
     hint.innerHTML = '<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).'
     this.host.appendChild(hint)
+
+    // interactivity: naming, state-of, hover focus
+    this.section('Interactivity')
+    const name = document.createElement('input')
+    name.type = 'text'
+    name.placeholder = 'unnamed'
+    name.value = slide.name ?? ''
+    name.addEventListener('change', () =>
+      this.edit(() => { this.store.slide.name = name.value || undefined }, true))
+    this.row('Name', name)
+
+    const stateSel = document.createElement('select')
+    const optNone = document.createElement('option')
+    optNone.value = ''
+    optNone.textContent = 'no — normal slide'
+    stateSel.appendChild(optNone)
+    this.store.doc.slides.forEach((s, i) => {
+      if (s.stateOf || s.id === slide.id) return
+      const o = document.createElement('option')
+      o.value = s.id
+      o.textContent = this.slideLabel(s, i)
+      if (slide.stateOf === s.id) o.selected = true
+      stateSel.appendChild(o)
+    })
+    stateSel.addEventListener('change', () =>
+      this.edit(() => {
+        this.store.slide.stateOf = stateSel.value || undefined
+        this.store.emit('slides')
+      }, true))
+    this.row('State of', stateSel)
+    const stateHint = document.createElement('p')
+    stateHint.className = 'ed-hint'
+    stateHint.innerHTML =
+      'A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.'
+    this.host.appendChild(stateHint)
+
+    this.row('Hover', this.select(
+      ['none', 'focus-group'],
+      slide.hover?.type ?? 'none',
+      (v) => this.edit(() => {
+        this.store.slide.hover = v === 'focus-group' ? { type: 'focus-group', dim: slide.hover?.dim ?? 0.15 } : undefined
+      }, true)))
+    if (slide.hover) {
+      this.row('Hover dim', this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
+        this.edit(() => { if (this.store.slide.hover) this.store.slide.hover.dim = Math.min(Math.max(v, 0), 1) }, fin)))
+    }
 
     this.section('Speaker notes')
     const notes = document.createElement('textarea')
@@ -122,6 +168,18 @@ export class PropsPanel {
       ['none', 'kenburns'], el.fx?.ambient ?? 'none',
       (v) => setFx({ ambient: v === 'none' ? undefined : 'kenburns' })))
 
+    // group tag (hover focus & interaction targeting)
+    const group = document.createElement('input')
+    group.type = 'text'
+    group.placeholder = 'none'
+    group.value = el.group ?? ''
+    group.addEventListener('change', () =>
+      this.mutate(el.id, (e) => {
+        if (group.value) e.group = group.value
+        else delete e.group
+      }, true))
+    this.row('Group', group)
+
     // link → slide picker
     const sel = document.createElement('select')
     const none = document.createElement('option')
@@ -131,7 +189,7 @@ export class PropsPanel {
     this.store.doc.slides.forEach((s, i) => {
       const o = document.createElement('option')
       o.value = s.id
-      o.textContent = `slide ${i + 1}`
+      o.textContent = this.slideLabel(s, i)
       if (el.link === s.id) o.selected = true
       sel.appendChild(o)
     })
@@ -141,6 +199,45 @@ export class PropsPanel {
         else delete e.link
       }, true))
     this.row('Link to', sel)
+
+    // one-click interactivity: duplicate this slide as a hidden state
+    // (element ids preserved ⇒ it morphs) and link this element to it
+    const makeState = document.createElement('button')
+    makeState.className = 'ed-btn ed-btn-block'
+    makeState.textContent = '＋ New state linked from this element'
+    makeState.title = 'Duplicates this slide as a hidden interactive state and links the selected element to it'
+    makeState.addEventListener('click', () => this.createLinkedState(el))
+    this.host.appendChild(makeState)
+  }
+
+  /** Duplicate the current slide as a hidden state and link `el` to it. */
+  private createLinkedState(el: SlideElement) {
+    const src = this.store.slide
+    const clone = JSON.parse(JSON.stringify(src)) as typeof src
+    clone.id = uid('slide')
+    clone.stateOf = src.stateOf ?? src.id // states of a state share one parent
+    clone.name = `${src.name ?? 'state'} ${this.store.doc.slides.filter((s) => s.stateOf === clone.stateOf).length + 2}`
+    clone.transition = 'morph'
+    delete (clone as any).hover // inherit nothing implicit; user can re-enable
+    if (src.hover) clone.hover = { ...src.hover }
+    const targetIdx = this.store.doc.slides.length
+    this.store.commit(() => {
+      this.store.doc.slides.push(clone)
+      const live = this.store.element(el.id)
+      if (live) live.link = clone.id
+    }, 'slides')
+    this.store.goTo(targetIdx)
+  }
+
+  /** Human label for a slide in pickers. */
+  private slideLabel(s: { id: string; name?: string; stateOf?: string }, i: number): string {
+    const linear = this.store.doc.slides.slice(0, i + 1).filter((x) => !x.stateOf).length
+    if (s.stateOf) {
+      const p = this.store.doc.slides.findIndex((x) => x.id === s.stateOf)
+      const pn = this.store.doc.slides.slice(0, p + 1).filter((x) => !x.stateOf).length
+      return `state of ${pn}${s.name ? ` — ${s.name}` : ''}`
+    }
+    return `slide ${linear}${s.name ? ` — ${s.name}` : ''}`
   }
 
   private buildTextProps(el: TextElement) {

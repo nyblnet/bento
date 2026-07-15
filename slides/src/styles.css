@@ -166,6 +166,34 @@ html, body {
 
 .ed-add-slide { border: 1.5px dashed var(--line); justify-content: center; color: var(--muted); }
 
+.ed-side-divider {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
+.ed-btn-block {
+  width: 100%;
+  justify-content: center;
+  border: 1px solid var(--line);
+  margin-top: 2px;
+}
+
+.ed-row input[type='text'] {
+  width: 110px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+}
+
 /* ————— canvas ————— */
 
 .ed-canvas-wrap {
