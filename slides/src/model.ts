@@ -144,6 +144,11 @@ export interface BentoDoc {
   }
   /** shared assets (raw SVG markup or data URIs), referenced by key */
   assets?: Record<string, string>
+  /**
+   * embedded fonts: each entry becomes an @font-face at boot, with the font
+   * data living in assets (data: URI). Elements then use `family` normally.
+   */
+  fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   slides: Slide[]
   modified: string
 }

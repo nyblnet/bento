@@ -92,6 +92,15 @@ export class PropsPanel {
       'A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.'
     this.host.appendChild(stateHint)
 
+    if (slide.stateOf) {
+      const sync = document.createElement('button')
+      sync.className = 'ed-btn ed-btn-block'
+      sync.innerHTML = `${ICONS.sync}<span>Sync from parent slide</span>`
+      sync.title = 'Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept'
+      sync.addEventListener('click', () => this.syncStateFromParent())
+      this.host.appendChild(sync)
+    }
+
     this.row('Hover', this.select(
       ['none', 'focus-group', 'reveal'],
       slide.hover?.type ?? 'none',
@@ -271,6 +280,57 @@ export class PropsPanel {
     makeState.title = 'Duplicates this slide as a hidden interactive state and links the selected element to it'
     makeState.addEventListener('click', () => this.createLinkedState(el))
     this.host.appendChild(makeState)
+  }
+
+  /**
+   * Re-sync an interactive state with its parent: parent elements missing
+   * here (added since the state was created) come in, ordering follows the
+   * parent, and this state's own versions of shared elements — its whole
+   * point — stay untouched. Elements unique to this state stay on top.
+   */
+  private syncStateFromParent() {
+    const state = this.store.slide
+    const parent = this.store.doc.slides.find((s) => s.id === state.stateOf)
+    if (!parent) return
+    const own = new Map(state.elements.map((e) => [e.id, e]))
+    // sync only makes sense for states that share lineage with the parent —
+    // otherwise "merging" would just stack two full copies of everything
+    const shared = parent.elements.filter((pe) => own.has(pe.id)).length
+    if (state.elements.length && !shared) {
+      this.toast('This state shares no element ids with its parent — nothing to sync against')
+      return
+    }
+    let added = 0
+    const merged: SlideElement[] = parent.elements.map((pe) => {
+      const mine = own.get(pe.id)
+      if (mine) {
+        own.delete(pe.id)
+        return mine
+      }
+      added++
+      return JSON.parse(JSON.stringify(pe))
+    })
+    const extras = [...own.values()] // this state's additions, kept on top
+    this.store.commit(() => {
+      this.store.slide.elements = [...merged, ...extras]
+    })
+    this.store.select([])
+    const bits = [added ? `${added} new element${added > 1 ? 's' : ''} pulled in` : 'nothing new in the parent']
+    if (extras.length) bits.push(`${extras.length} state-only element${extras.length > 1 ? 's' : ''} kept`)
+    this.toast(`Synced — ${bits.join('; ')}`)
+  }
+
+  private toast(message: string) {
+    document.querySelector('.ed-toast')?.remove()
+    const t = document.createElement('div')
+    t.className = 'ed-toast'
+    t.textContent = message
+    document.body.appendChild(t)
+    setTimeout(() => t.classList.add('show'))
+    setTimeout(() => {
+      t.classList.remove('show')
+      setTimeout(() => t.remove(), 300)
+    }, 2600)
   }
 
   /** Duplicate the current slide as a hidden state and link `el` to it. */

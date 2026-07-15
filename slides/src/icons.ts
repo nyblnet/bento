@@ -17,6 +17,10 @@ export const ICONS = {
   copy: svg('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
   front: svg('<rect x="8" y="8" width="12" height="12" rx="2" fill="currentColor" stroke="none" opacity="0.35"/><rect x="4" y="4" width="12" height="12" rx="2"/>'),
   back: svg('<rect x="4" y="4" width="12" height="12" rx="2" fill="currentColor" stroke="none" opacity="0.35"/><rect x="8" y="8" width="12" height="12" rx="2"/>'),
+  panelLeft: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/>'),
+  panelRight: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/>'),
+  pdf: svg('<polyline points="6 9 6 3 18 3 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>'),
+  sync: svg('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>'),
   // shape menu entries
   rect: svg('<rect x="3" y="5" width="18" height="14" rx="2"/>'),
   ellipse: svg('<ellipse cx="12" cy="12" rx="9" ry="7"/>'),

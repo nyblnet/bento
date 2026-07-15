@@ -464,6 +464,40 @@ html, body {
   border-radius: 999px;
 }
 
+/* collapsible side panels */
+.ed-sidebar, .ed-props { transition: width .18s ease, padding .18s ease; }
+.ed-sidebar.ed-collapsed, .ed-props.ed-collapsed {
+  width: 0;
+  min-width: 0; /* flex items floor at min-content without this */
+  padding-left: 0;
+  padding-right: 0;
+  border-width: 0;
+  overflow: hidden;
+}
+
+/* interactive states read as secondary in Reveal's overview grid
+   (!important: Reveal positions overview sections with inline styles) */
+.bento-present-overlay .reveal.overview section[data-bento-state] {
+  opacity: 0.35 !important;
+  outline: 2px dashed rgb(255 255 255 / 0.35);
+  outline-offset: -2px;
+}
+
+/* PDF export: each linear slide is one exact 1600×900 page */
+#bento-print { display: none; }
+@media print {
+  #app, #bento-splash, .bento-present-overlay, .ed-toast { display: none !important; }
+  #bento-print { display: block; }
+  @page { size: 1600px 900px; margin: 0; }
+  #bento-print .bp-page {
+    width: 1600px;
+    height: 900px;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+}
+
 /* moveable accents */
 .moveable-control-box {
   --moveable-color: var(--blue);
