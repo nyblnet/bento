@@ -73,7 +73,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section({ text: 'Text', shape: 'Shape', image: 'Image' }[el.type])
+    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram' }[el.type])
     this.opsRow([el])
 
     // geometry
@@ -94,10 +94,53 @@ export class PropsPanel {
     if (el.type === 'shape') this.buildShapeProps(el)
     if (el.type === 'image') this.buildImageProps(el)
 
+    this.buildPresentingProps(el)
+
     const morph = document.createElement('p')
     morph.className = 'ed-hint'
     morph.innerHTML = `Morph id: <code>${el.id}</code>`
     this.host.appendChild(morph)
+  }
+
+  /** fx + link — how the element behaves while presenting. */
+  private buildPresentingProps(el: SlideElement) {
+    this.section('Presenting')
+    const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
+      this.mutate(el.id, (e) => {
+        const fx = { ...(e.fx ?? {}), ...patch }
+        if (!fx.enter && !fx.countUp && !fx.ambient) delete e.fx
+        else e.fx = fx
+      }, true)
+
+    this.row('Enter', this.select(
+      ['none', 'fade', 'fade-up'], el.fx?.enter ?? 'none',
+      (v) => setFx({ enter: v === 'none' ? undefined : (v as 'fade' | 'fade-up') })))
+    this.row('Count up', this.select(
+      ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
+      (v) => setFx({ countUp: v === 'on' ? true : undefined })))
+    this.row('Ambient', this.select(
+      ['none', 'kenburns'], el.fx?.ambient ?? 'none',
+      (v) => setFx({ ambient: v === 'none' ? undefined : 'kenburns' })))
+
+    // link → slide picker
+    const sel = document.createElement('select')
+    const none = document.createElement('option')
+    none.value = ''
+    none.textContent = 'none'
+    sel.appendChild(none)
+    this.store.doc.slides.forEach((s, i) => {
+      const o = document.createElement('option')
+      o.value = s.id
+      o.textContent = `slide ${i + 1}`
+      if (el.link === s.id) o.selected = true
+      sel.appendChild(o)
+    })
+    sel.addEventListener('change', () =>
+      this.mutate(el.id, (e) => {
+        if (sel.value) e.link = sel.value
+        else delete e.link
+      }, true))
+    this.row('Link to', sel)
   }
 
   private buildTextProps(el: TextElement) {

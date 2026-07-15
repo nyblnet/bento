@@ -62,13 +62,26 @@ export interface ShapeElement extends ElementBase {
 
 export interface ImageElement extends ElementBase {
   type: 'image'
-  /** data: URI — Bento files embed all assets */
+  /** data: URI, or "asset:<key>" referencing doc.assets */
   src: string
   fit: 'contain' | 'cover' | 'fill'
   radius: number
 }
 
-export type SlideElement = TextElement | ShapeElement | ImageElement
+export interface SvgElement extends ElementBase {
+  type: 'svg'
+  /** key into doc.assets holding raw SVG markup (preferred: dedupes) */
+  asset?: string
+  /** raw inline SVG markup, used when asset is unset */
+  markup?: string
+  /**
+   * CSS injected inside the svg — hover states, focus dims, and animations
+   * live here and stay self-contained (svg <style> scopes to its svg).
+   */
+  css?: string
+}
+
+export type SlideElement = TextElement | ShapeElement | ImageElement | SvgElement
 
 export interface Slide {
   id: string
@@ -96,6 +109,8 @@ export interface BentoDoc {
     controls?: boolean
     progress?: boolean
   }
+  /** shared assets (raw SVG markup or data URIs), referenced by key */
+  assets?: Record<string, string>
   slides: Slide[]
   modified: string
 }

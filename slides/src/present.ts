@@ -26,6 +26,7 @@ export function startPresentation(
 ): PresentSession {
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
+  overlay.style.setProperty('--bento-accent', doc.theme.accent)
 
   const revealEl = document.createElement('div')
   revealEl.className = 'reveal'
@@ -113,6 +114,7 @@ export function startPresentation(
     if (morphing) runMorph(doc, from!, to, fromIdx, toIdx)
     else runEnterFx(doc.slides[toIdx], to)
     runAmbientFx(doc.slides[toIdx], to)
+    restartSvgAnimations(to)
   }) as any)
 
   // Clicking an element with a link jumps to its target slide.
@@ -138,6 +140,7 @@ export function startPresentation(
     if (first) {
       runEnterFx(doc.slides[startIndex], first)
       runAmbientFx(doc.slides[startIndex], first)
+      restartSvgAnimations(first)
     }
   })
 
@@ -206,6 +209,16 @@ function runCountUp(node: HTMLElement) {
       inner.textContent = out + final.slice(last)
     },
   })
+}
+
+/** Re-parse inline svg elements so their CSS animations replay on entry. */
+function restartSvgAnimations(section: HTMLElement) {
+  for (const host of section.querySelectorAll<HTMLElement>('.bento-el-svg')) {
+    if (host.querySelector('animate, [style*="animation"], style')) {
+      // eslint-disable-next-line no-self-assign
+      host.innerHTML = host.innerHTML
+    }
+  }
 }
 
 /** Continuous ambient motion (ken-burns style slow zoom on photos). */
