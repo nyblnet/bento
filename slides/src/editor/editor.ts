@@ -132,7 +132,7 @@ export class Editor {
     } else {
       num.textContent = String(this.linearNumber(i))
     }
-    const surface = renderThumbnail(slide, this.store.doc, 148)
+    const surface = renderThumbnail(slide, this.store.doc, isState ? 124 : 148)
     const tools = div('ed-thumb-tools')
     tools.append(
       btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, 'Duplicate slide'),
@@ -304,6 +304,21 @@ export class Editor {
       if (mod && ev.key.toLowerCase() === 's') {
         ev.preventDefault()
         this.save(false)
+        return
+      }
+      if (mod && (ev.key === '=' || ev.key === '+')) {
+        ev.preventDefault()
+        this.canvas.zoomIn()
+        return
+      }
+      if (mod && ev.key === '-') {
+        ev.preventDefault()
+        this.canvas.zoomOut()
+        return
+      }
+      if (mod && ev.key === '0') {
+        ev.preventDefault()
+        this.canvas.zoomReset()
         return
       }
       if (ev.key === 'F5') {
