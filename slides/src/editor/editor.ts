@@ -6,7 +6,7 @@ import {
   defaultImage, defaultShape, defaultText, emptySlide, uid,
   type ShapeKind, type SlideElement,
 } from '../model'
-import { renderThumbnail } from '../render'
+import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
@@ -24,6 +24,7 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string }> = [
 export class Editor {
   private canvas!: SlideCanvas
   private sidebar!: HTMLElement
+  private props!: HTMLElement
   private dirtyDot!: HTMLElement
   private thumbTimer = 0
   private clipboard: SlideElement[] = []
@@ -88,7 +89,10 @@ export class Editor {
     presentB.classList.add('ed-btn-primary')
     const saveB = btn(ICONS.save, 'Save', () => this.save(false), 'Save (⌘S)')
     const saveAsB = btn(ICONS.download, '', () => this.save(true), 'Save a copy…')
-    actions.append(undoB, redoB, presentB, saveB, saveAsB)
+    const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), 'Export PDF (print)')
+    const leftT = btn(ICONS.panelLeft, '', () => this.togglePanel('left'), 'Toggle slide list ([)')
+    const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), 'Toggle properties (])')
+    actions.append(undoB, redoB, pdfB, leftT, rightT, presentB, saveB, saveAsB)
 
     bar.append(logo, title, this.dirtyDot, insert, actions)
 
@@ -96,13 +100,20 @@ export class Editor {
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
     const canvasWrap = div('ed-canvas-wrap')
-    const props = div('ed-props')
-    main.append(this.sidebar, canvasWrap, props)
+    this.props = div('ed-props')
+    main.append(this.sidebar, canvasWrap, this.props)
 
     this.root.append(bar, main)
 
     this.canvas = new SlideCanvas(canvasWrap, this.store)
-    new PropsPanel(props, this.store)
+    new PropsPanel(this.props, this.store)
+  }
+
+  /** Collapse/expand the slide list or the properties panel. */
+  togglePanel(side: 'left' | 'right') {
+    const el = side === 'left' ? this.sidebar : this.props
+    el.classList.toggle('ed-collapsed')
+    // the canvas wrap resizes; its ResizeObserver re-fits the stage
   }
 
   private shapeDropdown(): HTMLElement {
@@ -237,11 +248,63 @@ export class Editor {
 
   private deleteSlide(i: number) {
     if (this.store.doc.slides.length <= 1) return this.toast('A deck needs at least one slide')
+    const target = this.store.doc.slides[i]
+    // dependents: states of this slide, and element links pointing at it
+    const states = this.store.doc.slides.filter((s) => s.stateOf === target.id)
+    const doomedIds = new Set([target.id, ...states.map((s) => s.id)])
+    let linkCount = 0
+    for (const s of this.store.doc.slides) {
+      if (doomedIds.has(s.id)) continue
+      for (const el of s.elements) if (el.link && doomedIds.has(el.link)) linkCount++
+    }
+    if (states.length || linkCount) {
+      const parts = [
+        states.length ? `${states.length} interactive state${states.length > 1 ? 's' : ''} will be deleted with it` : '',
+        linkCount ? `${linkCount} element link${linkCount > 1 ? 's' : ''} will be cleared` : '',
+      ].filter(Boolean).join('; ')
+      if (!window.confirm(`Delete this slide? ${parts}.`)) return
+    }
     this.store.commit(() => {
-      this.store.doc.slides.splice(i, 1)
+      this.store.doc.slides = this.store.doc.slides.filter((s) => !doomedIds.has(s.id))
+      for (const s of this.store.doc.slides) {
+        for (const el of s.elements) {
+          if (el.link && doomedIds.has(el.link)) delete el.link
+        }
+      }
     }, 'slides')
     this.store.goTo(Math.min(i, this.store.doc.slides.length - 1))
     this.store.emit('current')
+  }
+
+  /**
+   * Export the deck to PDF via the browser's print pipeline: every linear
+   * slide becomes one exact 1600×900 page (states are reachable only through
+   * interaction, so they stay out of the paper trail).
+   */
+  exportPdf() {
+    this.canvas.commitTextEdit()
+    document.getElementById('bento-print')?.remove()
+    const box = div('')
+    box.id = 'bento-print'
+    for (const slide of this.store.doc.slides) {
+      if (slide.stateOf) continue
+      const page = div('bp-page')
+      const surface = renderSlide(slide, this.store.doc, { svgAsImage: true })
+      // normalise to the print page size regardless of doc size
+      const s = 1600 / this.store.doc.size.width
+      surface.style.transformOrigin = '0 0'
+      if (s !== 1) surface.style.transform = `scale(${s})`
+      page.appendChild(surface)
+      box.appendChild(page)
+    }
+    document.body.appendChild(box)
+    const cleanup = () => {
+      box.remove()
+      window.removeEventListener('afterprint', cleanup)
+    }
+    window.addEventListener('afterprint', cleanup)
+    // give the freshly-inserted images a beat to decode before printing
+    setTimeout(() => window.print(), 250)
   }
 
   // --- insert image ------------------------------------------------------------------
@@ -290,7 +353,9 @@ export class Editor {
       const result = await saveFile(this.store.doc, forcePicker)
       if (result === 'cancelled') return
       this.store.setDirty(false)
-      this.toast(result === 'downloaded' ? 'Saved a copy to Downloads' : 'Saved')
+      this.toast(result === 'downloaded'
+        ? 'This browser can’t rewrite files in place — a fresh copy went to Downloads'
+        : 'Saved')
     } catch (err) {
       console.error(err)
       this.toast('Save failed — see console')
@@ -385,6 +450,14 @@ export class Editor {
             el.y += dy
           }
         })
+        return
+      }
+      if (ev.key === '[') {
+        this.togglePanel('left')
+        return
+      }
+      if (ev.key === ']') {
+        this.togglePanel('right')
         return
       }
       if (ev.key === 'Escape') {

@@ -240,6 +240,12 @@ export class SlideCanvas {
       e.target.style.left = `${e.drag.left}px`
       e.target.style.top = `${e.drag.top}px`
     })
+    mv.on('resizeGroup', (e) => e.events.forEach((ev) => {
+      ev.target.style.width = `${ev.width}px`
+      ev.target.style.height = `${ev.height}px`
+      ev.target.style.left = `${ev.drag.left}px`
+      ev.target.style.top = `${ev.drag.top}px`
+    }))
     mv.on('rotate', (e) => {
       e.target.style.transform = `rotate(${e.rotation}deg)`
     })
@@ -251,6 +257,7 @@ export class SlideCanvas {
     mv.on('dragEnd', ({ isDrag }) => isDrag && commitFrames())
     mv.on('dragGroupEnd', ({ isDrag }) => isDrag && commitFrames())
     mv.on('resizeEnd', ({ isDrag }) => isDrag && commitFrames())
+    mv.on('resizeGroupEnd', ({ isDrag }) => isDrag && commitFrames())
     mv.on('rotateEnd', ({ isDrag }) => isDrag && commitFrames())
     mv.on('rotateGroupEnd', ({ isDrag }) => isDrag && commitFrames())
   }
