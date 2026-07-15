@@ -345,6 +345,7 @@ html, body {
   --r-overlay-element-fg-color: 0, 0, 0;
 }
 .bento-present-overlay .reveal .slides section { padding: 0; }
+.bento-present-overlay .bento-el[data-link] { cursor: pointer; }
 
 /* moveable accents */
 .moveable-control-box {

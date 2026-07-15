@@ -122,6 +122,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc): HTMLElement {
   node.className = `bento-el bento-el-${el.type}`
   node.dataset.elId = el.id
   node.dataset.flipId = el.id
+  if (el.link) node.dataset.link = el.link
   applyElementFrame(node, el)
 
   switch (el.type) {

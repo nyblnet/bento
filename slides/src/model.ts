@@ -16,6 +16,19 @@ export interface ElementBase {
   /** degrees, clockwise */
   rotation: number
   opacity: number
+  /** presentation effects, run in present mode only */
+  fx?: {
+    /** entrance animation when the slide is shown */
+    enter?: 'fade-up' | 'fade'
+    /** stagger position within the slide's entrance sequence */
+    order?: number
+    /** animate numeric parts of the text from 0 to their final value */
+    countUp?: boolean
+    /** continuous ambient motion (slow zoom, for full-bleed photos) */
+    ambient?: 'kenburns'
+  }
+  /** while presenting, clicking this element jumps to the slide with this id */
+  link?: string
 }
 
 export interface TextElement extends ElementBase {
