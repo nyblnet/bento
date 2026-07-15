@@ -79,6 +79,14 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
 
   let node: SVGElement
   switch (el.shape) {
+    case 'path': {
+      // arbitrary vector data, stretched from its authored viewBox into the box
+      if (el.pathBox) svg.setAttribute('viewBox', el.pathBox.join(' '))
+      node = document.createElementNS(SVG_NS, 'path')
+      node.setAttribute('d', el.d ?? '')
+      if (sw > 0) node.setAttribute('vector-effect', 'non-scaling-stroke')
+      break
+    }
     case 'rect': {
       node = document.createElementNS(SVG_NS, 'rect')
       node.setAttribute('x', String(inset))
@@ -177,6 +185,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
   node.dataset.elId = el.id
   node.dataset.flipId = el.id
   if (el.link) node.dataset.link = el.link
+  if (el.group) node.dataset.group = el.group
   applyElementFrame(node, el)
 
   switch (el.type) {

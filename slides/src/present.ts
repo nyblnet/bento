@@ -7,10 +7,11 @@ import RevealNotes from 'reveal.js/plugin/notes/notes'
 import 'reveal.js/dist/reveal.css'
 import { gsap } from 'gsap'
 import { Flip } from 'gsap/Flip'
+import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
 import type { BentoDoc, Slide, SlideElement } from './model'
 import { renderSlide } from './render'
 
-gsap.registerPlugin(Flip)
+gsap.registerPlugin(Flip, MotionPathPlugin)
 
 const MORPH_DURATION = 0.65
 const MORPH_EASE = 'power2.inOut'
@@ -27,6 +28,9 @@ export function startPresentation(
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
   overlay.style.setProperty('--bento-accent', doc.theme.accent)
+  // Reveal ignores key events originating from form fields. If focus is still
+  // on an editor input (title, notes…) when the show starts, arrows go dead.
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
 
   const revealEl = document.createElement('div')
   revealEl.className = 'reveal'
@@ -87,13 +91,27 @@ export function startPresentation(
     onExit(last)
   }
 
-  // Esc exits the show (capture phase so Reveal's own Esc handling never sees it).
+  // Capture-phase keys: Esc exits; arrows navigate unconditionally. Reveal
+  // drops key events when focus sits in odd places (a leftover form field, a
+  // host-embedded frame) — present mode has no fields, so arrows are always
+  // navigation. Handled here exclusively (stopPropagation avoids double-steps).
   const onKeydown = (ev: KeyboardEvent) => {
     if (ev.key === 'Escape') {
       if (deck.isOverview()) return // let Reveal close its overview first
       ev.preventDefault()
       ev.stopPropagation()
       exit()
+      return
+    }
+    const key = ev.key || ({ 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
+    if (key === 'ArrowRight' || key === 'PageDown') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      deck.next()
+    } else if (key === 'ArrowLeft' || key === 'PageUp') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      deck.prev()
     }
   }
   document.addEventListener('keydown', onKeydown, true)
@@ -115,6 +133,7 @@ export function startPresentation(
     else runEnterFx(doc.slides[toIdx], to)
     runAmbientFx(doc.slides[toIdx], to)
     restartSvgAnimations(to)
+    wireHoverFocus(doc.slides[toIdx], to)
   }) as any)
 
   // Clicking an element with a link jumps to its target slide.
@@ -141,6 +160,7 @@ export function startPresentation(
       runEnterFx(doc.slides[startIndex], first)
       runAmbientFx(doc.slides[startIndex], first)
       restartSvgAnimations(first)
+      wireHoverFocus(doc.slides[startIndex], first)
     }
   })
 
@@ -164,8 +184,11 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
   const entering = fxNodes(slide, section)
     .filter(([el]) => el.fx!.enter || el.fx!.countUp)
     .sort((a, b) => (a[0].fx!.order ?? 0) - (b[0].fx!.order ?? 0))
+  // Delay derives from fx.order when set (equal order ⇒ elements enter
+  // together — how a diagram reveals band-by-band), else from list position.
   entering.forEach(([el, node], i) => {
     const fx = el.fx!
+    const step = fx.order ?? i
     if (fx.enter) {
       gsap.fromTo(
         node,
@@ -174,7 +197,7 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
           opacity: el.opacity,
           y: 0,
           duration: 0.55,
-          delay: 0.12 + Math.min(i, 24) * 0.045,
+          delay: 0.12 + Math.min(step, 24) * 0.05,
           ease: 'power2.out',
           overwrite: 'auto',
         },
@@ -221,17 +244,62 @@ function restartSvgAnimations(section: HTMLElement) {
   }
 }
 
-/** Continuous ambient motion (ken-burns style slow zoom on photos). */
+/** Continuous motion: ken-burns zoom, marching dashes, dots along paths. */
 function runAmbientFx(slide: Slide, section: HTMLElement) {
   for (const [el, node] of fxNodes(slide, section)) {
-    if (el.fx!.ambient === 'kenburns') {
+    const fx = el.fx!
+    if (fx.ambient === 'kenburns') {
       gsap.fromTo(
         node,
         { scale: 1.02 },
         { scale: 1.1, duration: 26, ease: 'none', repeat: -1, yoyo: true, transformOrigin: '50% 40%' },
       )
     }
+    if (fx.loop?.type === 'dash-march') {
+      const target = node.querySelector('path, line, rect, ellipse, polygon')
+      if (target) {
+        gsap.fromTo(
+          target,
+          { strokeDashoffset: fx.loop.distance ?? 18 },
+          { strokeDashoffset: 0, duration: fx.loop.duration ?? 1.4, ease: 'none', repeat: -1 },
+        )
+      }
+    }
+    if (fx.loop?.type === 'motion-path') {
+      gsap.to(node, {
+        motionPath: { path: fx.loop.path },
+        duration: fx.loop.duration,
+        delay: fx.loop.delay ?? 0,
+        ease: 'none',
+        repeat: -1,
+      })
+    }
   }
+}
+
+/**
+ * Hover focus: on slides with hover:'focus-group', pointing at any grouped
+ * element dims every element belonging to a different group.
+ */
+function wireHoverFocus(slide: Slide, section: HTMLElement) {
+  if (slide?.hover?.type !== 'focus-group' || section.dataset.hoverWired) return
+  section.dataset.hoverWired = '1'
+  const dim = slide.hover.dim ?? 0.13
+  let current: string | null = null
+  const apply = (group: string | null) => {
+    if (group === current) return
+    current = group
+    for (const node of section.querySelectorAll<HTMLElement>('[data-group]')) {
+      const other = group !== null && node.dataset.group !== group
+      node.style.transition = 'opacity .25s ease'
+      node.style.opacity = other ? String(dim) : ''
+    }
+  }
+  section.addEventListener('mouseover', (ev) => {
+    const hit = (ev.target as HTMLElement).closest<HTMLElement>('[data-group]')
+    apply(hit ? hit.dataset.group! : null)
+  })
+  section.addEventListener('mouseleave', () => apply(null))
 }
 
 // --- morph ------------------------------------------------------------------
@@ -280,7 +348,7 @@ function runMorph(
       y: 14,
       duration: 0.45,
       delay: MORPH_DURATION * 0.4,
-      stagger: 0.03,
+      stagger: { amount: Math.min(0.45, entering.length * 0.03) },
       ease: 'power2.out',
       clearProps: 'opacity,transform',
     })
@@ -325,7 +393,7 @@ function runMorph(
       gsap.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
     }
     if (a.type === 'shape' && b.type === 'shape' && a.fill !== b.fill) {
-      const target = to.querySelector('rect,ellipse,polygon,line')
+      const target = to.querySelector('rect,ellipse,polygon,line,path')
       if (target) {
         gsap.fromTo(
           target,
