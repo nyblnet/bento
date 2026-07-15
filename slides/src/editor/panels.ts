@@ -220,11 +220,15 @@ export class PropsPanel {
     soh.placeholder = 'always visible'
     soh.value = el.showOnHover ?? ''
     soh.title = "Only visible while an element with this group is hovered (slide hover: 'reveal')"
-    soh.addEventListener('change', () =>
+    soh.addEventListener('change', () => {
       this.mutate(el.id, (e) => {
         if (soh.value) e.showOnHover = soh.value
         else delete e.showOnHover
-      }, true))
+      }, true)
+      // follow the element into its new set so it stays visible/editable
+      this.store.hoverPreview = soh.value || null
+      this.store.emit('current')
+    })
     this.row('Show on hover', soh)
 
     // group tag (hover focus & interaction targeting)

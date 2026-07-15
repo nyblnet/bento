@@ -93,19 +93,54 @@ export class SlideCanvas {
     this.commitTextEdit()
     const slide = this.store.slide
     const next = renderSlide(slide, this.store.doc)
-    // hover-reveal slides: preview one set at a time (panel picks which);
-    // hidden sets are display:none so they don't block selection
-    if (slide.elements.some((e) => e.showOnHover)) {
-      const active = this.store.hoverPreview ?? slide.hover?.default ?? null
+    // hover-reveal slides: preview one set at a time; hidden sets are
+    // display:none so they don't block selection
+    const sets = [...new Set(slide.elements.map((e) => e.showOnHover).filter(Boolean))] as string[]
+    if (sets.length) {
+      const active = this.store.hoverPreview ?? slide.hover?.default ?? sets[0]
       for (const node of next.querySelectorAll<HTMLElement>('[data-show-on-hover]')) {
         if (node.dataset.showOnHover !== active) node.style.display = 'none'
       }
     }
+    this.renderSetBar(sets)
     if (this.surface) this.surface.replaceWith(next)
     else this.scaleHost.appendChild(next)
     this.surface = next
     this.relayout()
     this.syncTargets()
+  }
+
+  /**
+   * Canvas set-switcher: when a slide has hover-reveal sets, a chip bar sits
+   * above the stage so each set is one click away while editing. Selection
+   * survives the switch when the selected element is in the shown set.
+   */
+  private renderSetBar(sets: string[]) {
+    this.wrap.querySelector('.ed-setbar')?.remove()
+    if (!sets.length) return
+    const slide = this.store.slide
+    const active = this.store.hoverPreview ?? slide.hover?.default ?? sets[0]
+    const bar = document.createElement('div')
+    bar.className = 'ed-setbar'
+    const label = document.createElement('span')
+    label.className = 'ed-setbar-label'
+    label.textContent = 'Hover set:'
+    bar.appendChild(label)
+    for (const set of sets) {
+      const chip = document.createElement('button')
+      chip.className = 'ed-setchip'
+      chip.textContent = set + (slide.hover?.default === set ? ' ●' : '')
+      chip.title = slide.hover?.default === set
+        ? `"${set}" — shown when nothing is hovered (default set)`
+        : `Preview and edit the "${set}" hover set`
+      if (set === active) chip.classList.add('active')
+      chip.addEventListener('click', () => {
+        this.store.hoverPreview = set
+        this.render()
+      })
+      bar.appendChild(chip)
+    }
+    this.wrap.appendChild(bar)
   }
 
   private selectedNodes(): HTMLElement[] {
@@ -280,6 +315,13 @@ export class SlideCanvas {
 
   /** Insert an element, select it, and (for text) drop straight into editing. */
   insert(el: SlideElement, startEditing = false) {
+    // inserting while previewing a non-default hover set joins that set —
+    // "I'm editing the italy panel" means new content belongs to it
+    const slide = this.store.slide
+    const preview = this.store.hoverPreview
+    if (preview && slide.hover?.type === 'reveal' && preview !== slide.hover.default) {
+      el.showOnHover = preview
+    }
     this.store.commit(() => this.store.slide.elements.push(el))
     this.store.select([el.id])
     if (startEditing && el.type === 'text') {

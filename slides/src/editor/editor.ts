@@ -298,7 +298,8 @@ export class Editor {
       if (this.presenting) return
       const mod = ev.metaKey || ev.ctrlKey
       const inField =
-        (ev.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]') != null
+        ev.target instanceof Element &&
+        ev.target.closest('input, textarea, select, [contenteditable="true"]') != null
 
       if (mod && ev.key.toLowerCase() === 's') {
         ev.preventDefault()

@@ -30,4 +30,6 @@ if (location.hash === '#present') {
     return store.doc
   },
   serialize: () => serializeFile(store.doc),
+  undo: () => store.undo(),
+  redo: () => store.redo(),
 }
