@@ -25,7 +25,14 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
 - **Interactive states**: `Slide.stateOf` marks a slide as a hidden variant of another
   slide — skipped by linear navigation (← returns to parent, → continues past it),
   reached by element `link`s, morphing when ids are shared. Authoring: select an
-  element → "＋ New state linked from this element" in the Presenting panel.
+  element → "＋ New state linked from this element" in the Presenting panel. States
+  live adjacent to their parent and render nested in the sidebar.
+- **Hover content is in-slide, not states**: `showOnHover` sets + slide
+  `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
+  one set at a time. Rule of thumb: click → state slide; hover → reveal set.
+- **Animation robustness**: slide exit kills tweens AND restores model frames; a
+  2.8s wall-clock settle guarantee lands entrances on starved render loops; never
+  put entrance tweens on motion-path elements (transform conflict).
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
 
 ## Hard-won details — do not regress
