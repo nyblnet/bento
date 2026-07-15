@@ -11,22 +11,37 @@ import { renderSlide, sanitizeHtml } from '../render'
 export class SlideCanvas {
   private stage: HTMLElement
   private scaleHost: HTMLElement
+  private scroller: HTMLElement
   private surface: HTMLElement | null = null
   private moveable: Moveable
   private selecto: Selecto
   private scale = 1
+  private fitScale = 1
+  /** user zoom, multiplier on the fitted scale (1 = fit to window) */
+  private zoom = 1
+  private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
 
   constructor(
     private wrap: HTMLElement,
     private store: Store,
   ) {
+    this.scroller = document.createElement('div')
+    this.scroller.className = 'ed-scroll'
     this.stage = document.createElement('div')
     this.stage.className = 'ed-stage'
     this.scaleHost = document.createElement('div')
     this.scaleHost.className = 'ed-stage-scale'
     this.stage.appendChild(this.scaleHost)
-    wrap.appendChild(this.stage)
+    this.scroller.appendChild(this.stage)
+    wrap.appendChild(this.scroller)
+    this.buildZoomBar()
+    // pinch / ctrl+wheel zooms like every design tool
+    this.scroller.addEventListener('wheel', (ev) => {
+      if (!ev.ctrlKey && !ev.metaKey) return
+      ev.preventDefault()
+      this.setZoom(this.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12))
+    }, { passive: false })
 
     // Control box lives INSIDE the scaled host with rootContainer at body:
     // Moveable then works in slide-local coordinates (e.left/e.top are model
@@ -78,15 +93,53 @@ export class SlideCanvas {
 
   relayout() {
     const { width, height } = this.store.doc.size
-    const availW = this.wrap.clientWidth - 64
-    const availH = this.wrap.clientHeight - 64
+    const availW = this.scroller.clientWidth - 64
+    const availH = this.scroller.clientHeight - 64
     if (availW <= 0 || availH <= 0) return
-    this.scale = Math.min(availW / width, availH / height)
+    this.fitScale = Math.min(availW / width, availH / height)
+    this.scale = this.fitScale * this.zoom
     this.stage.style.width = `${width * this.scale}px`
     this.stage.style.height = `${height * this.scale}px`
     this.scaleHost.style.transform = `scale(${this.scale})`
     this.moveable.zoom = 1 / this.scale
     this.moveable.updateRect()
+    if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
+  }
+
+  // --- zoom ------------------------------------------------------------------
+
+  setZoom(zoom: number) {
+    this.zoom = Math.min(Math.max(zoom, 0.5), 8)
+    this.relayout()
+    // keep the view centred on the slide as it grows/shrinks
+    this.scroller.scrollLeft = (this.scroller.scrollWidth - this.scroller.clientWidth) / 2
+    this.scroller.scrollTop = (this.scroller.scrollHeight - this.scroller.clientHeight) / 2
+  }
+
+  zoomIn() { this.setZoom(this.zoom * 1.25) }
+  zoomOut() { this.setZoom(this.zoom / 1.25) }
+  zoomReset() { this.setZoom(1) }
+
+  private buildZoomBar() {
+    const bar = document.createElement('div')
+    bar.className = 'ed-zoombar'
+    const mk = (label: string, title: string, onClick: () => void) => {
+      const b = document.createElement('button')
+      b.className = 'ed-zoombtn'
+      b.textContent = label
+      b.title = title
+      b.addEventListener('click', onClick)
+      return b
+    }
+    const label = mk('100%', 'Reset zoom to fit (⌘0)', () => this.zoomReset())
+    label.classList.add('ed-zoomlabel')
+    this.zoomLabel = label
+    bar.append(
+      mk('−', 'Zoom out (⌘−)', () => this.zoomOut()),
+      label,
+      mk('+', 'Zoom in (⌘+)', () => this.zoomIn()),
+    )
+    this.wrap.appendChild(bar)
   }
 
   render() {

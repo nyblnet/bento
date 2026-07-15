@@ -166,18 +166,17 @@ html, body {
 
 .ed-add-slide { border: 1.5px dashed var(--line); justify-content: center; color: var(--muted); }
 
-/* interactive-state thumbs nest under their parent slide */
+/* interactive-state thumbs: slightly smaller, centred under their parent */
 .ed-thumb-state {
-  width: 116px;
-  margin-left: 32px;
-  margin-top: -4px;
+  width: 124px;
+  margin: -2px auto 0;
   opacity: 0.72;
   border-style: dashed;
 }
 .ed-thumb-state:hover, .ed-thumb-state.active { opacity: 1; }
 .ed-thumb-state .ed-thumb-num {
   font-size: 9px;
-  max-width: 90px;
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -205,9 +204,6 @@ html, body {
 .ed-canvas-wrap {
   flex: 1;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background:
     radial-gradient(circle at 1px 1px, #d5dbe4 1px, transparent 0) 0 0 / 22px 22px,
     var(--chrome);
@@ -215,12 +211,51 @@ html, body {
   position: relative;
 }
 
+/* scrollable viewport: auto-margins centre the stage when it fits and
+   allow proper scrolling in every direction when zoomed past the window */
+.ed-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  display: flex;
+}
+
 .ed-stage {
   position: relative;
   flex: none;
+  margin: auto;
   box-shadow: 0 10px 40px rgb(20 30 45 / 0.18), 0 2px 8px rgb(20 30 45 / 0.10);
   border-radius: 2px;
 }
+
+/* zoom controls, bottom-right of the canvas */
+.ed-zoombar {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 6px;
+  box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
+  z-index: 10;
+}
+.ed-zoombtn {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.ed-zoombtn:hover { background: var(--chrome-2); }
+.ed-zoomlabel { font-size: 11.5px; min-width: 44px; text-align: center; color: var(--muted); }
 
 .ed-stage-scale { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 
