@@ -20,15 +20,21 @@ export interface ElementBase {
   fx?: {
     /** entrance animation when the slide is shown */
     enter?: 'fade-up' | 'fade'
-    /** stagger position within the slide's entrance sequence */
+    /** stagger step within the entrance sequence; equal values enter together */
     order?: number
     /** animate numeric parts of the text from 0 to their final value */
     countUp?: boolean
     /** continuous ambient motion (slow zoom, for full-bleed photos) */
     ambient?: 'kenburns'
+    /** continuous looping animation */
+    loop?:
+      | { type: 'dash-march'; distance?: number; duration?: number }
+      | { type: 'motion-path'; path: string; duration: number; delay?: number }
   }
   /** while presenting, clicking this element jumps to the slide with this id */
   link?: string
+  /** semantic group tag — hover focus and multi-element behaviours target it */
+  group?: string
 }
 
 export interface TextElement extends ElementBase {
@@ -46,7 +52,7 @@ export interface TextElement extends ElementBase {
   letterSpacing?: number
 }
 
-export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line'
+export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
 
 export interface ShapeElement extends ElementBase {
   type: 'shape'
@@ -58,6 +64,10 @@ export interface ShapeElement extends ElementBase {
   radius: number
   /** dash length in px; 0/undefined = solid stroke */
   strokeDash?: number
+  /** path only: SVG path data in the coordinate space given by pathBox */
+  d?: string
+  /** path only: [x, y, w, h] viewBox the path was authored in */
+  pathBox?: [number, number, number, number]
 }
 
 export interface ImageElement extends ElementBase {
@@ -89,6 +99,8 @@ export interface Slide {
   transition: TransitionKind
   elements: SlideElement[]
   notes: string
+  /** present-mode hover behaviour: focus the hovered element's group */
+  hover?: { type: 'focus-group'; dim?: number }
 }
 
 export interface BentoDoc {
