@@ -1,0 +1,352 @@
+/* ————— Bento Slides chrome ————— */
+
+:root {
+  --ink: #1e2a3a;
+  --ink-2: #31445c;
+  --chrome: #f5f7fa;
+  --chrome-2: #eceff4;
+  --line: #e3e8ef;
+  --muted: #5b6472;
+  --accent: #f7a600;
+  --accent-ink: #7a5200;
+  --blue: #5b8def;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--chrome);
+  overscroll-behavior: none;
+}
+
+#app { height: 100%; }
+
+.ed-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+/* ————— topbar ————— */
+
+.ed-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  z-index: 20;
+}
+
+.ed-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; white-space: nowrap; }
+.ed-logo-mark { font-size: 18px; }
+
+.ed-title {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 8px;
+  width: 220px;
+  background: transparent;
+}
+.ed-title:hover { border-color: var(--line); }
+.ed-title:focus { border-color: var(--blue); outline: none; background: #fff; }
+
+.ed-dirty {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: transparent; margin-left: -4px; flex: none;
+}
+.ed-dirty.on { background: var(--accent); }
+
+.ed-group { display: flex; align-items: center; gap: 6px; }
+.ed-group-right { margin-left: auto; }
+
+.ed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ed-btn:hover { background: var(--chrome-2); }
+.ed-btn:active { background: var(--line); }
+.ed-btn svg { display: block; }
+
+.ed-btn-primary {
+  background: var(--ink);
+  color: #fff;
+  padding: 6px 14px;
+}
+.ed-btn-primary:hover { background: var(--ink-2); }
+
+.ed-dropdown { position: relative; }
+.ed-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(20 30 45 / 0.14);
+  padding: 4px;
+  z-index: 50;
+  min-width: 150px;
+}
+.ed-dropdown.open .ed-menu { display: flex; }
+.ed-menu .ed-btn { justify-content: flex-start; width: 100%; }
+
+/* ————— main layout ————— */
+
+.ed-main { flex: 1; display: flex; min-height: 0; }
+
+.ed-sidebar {
+  width: 188px;
+  flex: none;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+  border-right: 1px solid var(--line);
+}
+
+.ed-thumb {
+  position: relative;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  flex: none;
+  background: #fff;
+}
+.ed-thumb:hover { border-color: #c9d2de; }
+.ed-thumb.active { border-color: var(--accent); }
+.ed-thumb.drop { border-color: var(--blue); }
+.ed-thumb-num {
+  position: absolute;
+  top: 4px; left: 4px;
+  z-index: 2;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgb(255 255 255 / 0.85);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.ed-thumb-tools {
+  position: absolute;
+  right: 4px; top: 4px;
+  z-index: 2;
+  display: none;
+  gap: 2px;
+}
+.ed-thumb:hover .ed-thumb-tools { display: flex; }
+.ed-thumb-tools .ed-btn { padding: 3px; background: rgb(255 255 255 / 0.9); }
+
+.bento-thumb-surface { overflow: hidden; pointer-events: none; }
+
+.ed-add-slide { border: 1.5px dashed var(--line); justify-content: center; color: var(--muted); }
+
+/* ————— canvas ————— */
+
+.ed-canvas-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 1px 1px, #d5dbe4 1px, transparent 0) 0 0 / 22px 22px,
+    var(--chrome);
+  overflow: hidden;
+  position: relative;
+}
+
+.ed-stage {
+  position: relative;
+  flex: none;
+  box-shadow: 0 10px 40px rgb(20 30 45 / 0.18), 0 2px 8px rgb(20 30 45 / 0.10);
+  border-radius: 2px;
+}
+
+.ed-stage-scale { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+/* ————— slide surface (shared by canvas, thumbs, present) ————— */
+
+.bento-slide { position: relative; overflow: hidden; }
+
+.bento-el { position: absolute; }
+.bento-el-text .bento-text-inner {
+  overflow-wrap: break-word;
+  outline: none;
+  cursor: default;
+}
+.ed-stage .bento-el { cursor: grab; }
+.ed-stage .bento-el:active { cursor: grabbing; }
+.ed-stage .bento-editing { cursor: text; }
+.ed-stage .bento-editing .bento-text-inner {
+  cursor: text;
+  user-select: text;
+  box-shadow: 0 0 0 1.5px var(--blue);
+  background: rgb(91 141 239 / 0.06);
+  min-height: 1em;
+}
+
+/* ————— properties panel ————— */
+
+.ed-props {
+  width: 236px;
+  flex: none;
+  overflow-y: auto;
+  background: #fff;
+  border-left: 1px solid var(--line);
+  padding: 14px;
+}
+
+.ed-section {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 18px 0 8px;
+}
+.ed-section:first-child { margin-top: 2px; }
+
+.ed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.ed-row > span { flex: none; }
+.ed-row input[type='number'], .ed-row select {
+  width: 110px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+.ed-row input[type='color'] {
+  width: 110px;
+  height: 26px;
+  padding: 1px 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ed-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ed-mini { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.ed-mini input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.ed-ops { display: flex; gap: 4px; margin-bottom: 10px; }
+.ed-btn-icon { border: 1px solid var(--line); padding: 6px; }
+
+.ed-notes {
+  width: 100%;
+  min-height: 130px;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+  color: var(--ink);
+}
+
+.ed-hint {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  background: var(--chrome);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.ed-hint code { font-size: 10.5px; word-break: break-all; }
+
+/* ————— toast ————— */
+
+.ed-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 12px);
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: all 0.25s ease;
+  z-index: 2000;
+  pointer-events: none;
+}
+.ed-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ————— present overlay ————— */
+
+.bento-present-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+}
+.bento-present-overlay .reveal,
+.bento-present-overlay .reveal-viewport {
+  background: #000;
+}
+.bento-present-overlay .reveal {
+  width: 100%;
+  height: 100%;
+  --r-background-color: #000;
+  --r-main-color: #fff;
+  --r-main-font-size: 32px;
+  --r-link-color: #f7a600;
+  --r-link-color-hover: #ffc23e;
+  --r-selection-background-color: #f7a600;
+  --r-controls-color: rgb(255 255 255 / 0.6);
+  --r-progress-color: #f7a600;
+  --r-overlay-element-bg-color: 255, 255, 255;
+  --r-overlay-element-fg-color: 0, 0, 0;
+}
+.bento-present-overlay .reveal .slides section { padding: 0; }
+
+/* moveable accents */
+.moveable-control-box {
+  --moveable-color: var(--blue);
+}
