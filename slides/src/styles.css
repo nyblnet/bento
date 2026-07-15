@@ -346,6 +346,11 @@ html, body {
 }
 .bento-present-overlay .reveal .slides section { padding: 0; }
 .bento-present-overlay .bento-el[data-link] { cursor: pointer; }
+.bento-present-overlay .bento-el[data-link]:hover {
+  outline: 2.5px solid var(--bento-accent, #f7a600);
+  outline-offset: 3px;
+  border-radius: 999px;
+}
 
 /* moveable accents */
 .moveable-control-box {

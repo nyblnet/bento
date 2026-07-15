@@ -1,9 +1,63 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
-import type { BentoDoc, ShapeElement, Slide, SlideElement } from './model'
+import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement } from './model'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+
+export interface RenderOpts {
+  /** render svg elements as <img> (cheap DOM) — used by thumbnails */
+  svgAsImage?: boolean
+}
+
+/** Resolve "asset:<key>" references against the document's asset table. */
+export function resolveAsset(doc: BentoDoc, ref: string): string {
+  return ref.startsWith('asset:') ? (doc.assets?.[ref.slice(6)] ?? '') : ref
+}
+
+function svgMarkup(el: SvgElement, doc: BentoDoc): string {
+  return (el.asset ? doc.assets?.[el.asset] : el.markup) ?? ''
+}
+
+/**
+ * Scope injected svg CSS to one element instance. svg <style> applies
+ * document-wide, so unscoped rules from one diagram would leak into every
+ * other svg on the page (including other slides' copies of the same asset).
+ * @keyframes blocks stay top-level; everything else gets the scope prefix.
+ */
+export function scopeCss(css: string, scope: string): string {
+  let out = ''
+  let i = 0
+  while (i < css.length) {
+    const rest = css.slice(i)
+    const at = rest.match(/^\s*@(keyframes|-webkit-keyframes)/)
+    if (at) {
+      // copy the whole block verbatim, tracking brace depth
+      let depth = 0
+      let j = i
+      let seen = false
+      while (j < css.length) {
+        if (css[j] === '{') { depth++; seen = true }
+        if (css[j] === '}') { depth--; if (seen && depth === 0) { j++; break } }
+        j++
+      }
+      out += css.slice(i, j) + '\n'
+      i = j
+      continue
+    }
+    const open = css.indexOf('{', i)
+    if (open === -1) break
+    const close = css.indexOf('}', open)
+    if (close === -1) break
+    const selectors = css.slice(i, open).trim()
+    if (selectors) {
+      out += selectors.split(',').map((s) => `${scope} ${s.trim()}`).join(', ')
+      out += ' ' + css.slice(open, close + 1) + '\n'
+    }
+    i = close + 1
+  }
+  return out
+}
 
 export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   node.style.left = `${el.x}px`
@@ -117,7 +171,7 @@ const VALIGN: Record<string, string> = { top: 'flex-start', middle: 'center', bo
  * Render one element. The wrapper carries data-el-id (edit-time selection)
  * and data-flip-id (GSAP Flip morph matching across slides).
  */
-export function renderElement(el: SlideElement, doc: BentoDoc): HTMLElement {
+export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
   const node = document.createElement('div')
   node.className = `bento-el bento-el-${el.type}`
   node.dataset.elId = el.id
@@ -149,10 +203,35 @@ export function renderElement(el: SlideElement, doc: BentoDoc): HTMLElement {
       break
     case 'image': {
       const img = document.createElement('img')
-      img.src = el.src
+      img.src = resolveAsset(doc, el.src)
       img.draggable = false
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
+      break
+    }
+    case 'svg': {
+      const markup = svgMarkup(el, doc)
+      if (opts.svgAsImage) {
+        // thumbnails: one <img> instead of thousands of svg nodes
+        const img = document.createElement('img')
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup)
+        img.draggable = false
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block'
+        node.appendChild(img)
+        break
+      }
+      node.innerHTML = markup
+      const svg = node.querySelector('svg')
+      if (svg) {
+        svg.style.width = '100%'
+        svg.style.height = '100%'
+        svg.style.display = 'block'
+        if (el.css) {
+          const style = document.createElementNS(SVG_NS, 'style')
+          style.textContent = scopeCss(el.css, `[data-el-id="${CSS.escape(el.id)}"]`)
+          svg.prepend(style)
+        }
+      }
       break
     }
   }
@@ -160,14 +239,14 @@ export function renderElement(el: SlideElement, doc: BentoDoc): HTMLElement {
 }
 
 /** Render a full slide surface (background + elements) at model coordinates. */
-export function renderSlide(slide: Slide, doc: BentoDoc): HTMLElement {
+export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
   const surface = document.createElement('div')
   surface.className = 'bento-slide'
   surface.dataset.slideId = slide.id
   surface.style.width = `${doc.size.width}px`
   surface.style.height = `${doc.size.height}px`
   surface.style.background = slide.background
-  for (const el of slide.elements) surface.appendChild(renderElement(el, doc))
+  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, opts))
   return surface
 }
 
@@ -178,7 +257,7 @@ export function renderThumbnail(slide: Slide, doc: BentoDoc, width: number): HTM
   box.className = 'bento-thumb-surface'
   box.style.width = `${width}px`
   box.style.height = `${doc.size.height * scale}px`
-  const inner = renderSlide(slide, doc)
+  const inner = renderSlide(slide, doc, { svgAsImage: true })
   inner.style.transformOrigin = '0 0'
   inner.style.transform = `scale(${scale})`
   box.appendChild(inner)
