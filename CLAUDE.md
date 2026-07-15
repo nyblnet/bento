@@ -33,6 +33,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
 - **Animation robustness**: slide exit kills tweens AND restores model frames; a
   2.8s wall-clock settle guarantee lands entrances on starved render loops; never
   put entrance tweens on motion-path elements (transform conflict).
+- **Other format/runtime features**: `doc.fonts[]` (@font-face from assets at boot);
+  PDF export via print CSS (`@page` sized 1600×900, states excluded); state
+  "Sync from parent" (id-lineage merge — generators must emit deterministic
+  element ids for it and for cross-state morphs); slide deletion cascades states
+  and clears inbound links after confirm; `[`/`]` collapse the side panels.
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
 
 ## Hard-won details — do not regress
