@@ -221,6 +221,14 @@ export class PropsPanel {
         path.addEventListener('change', () =>
           this.mutate(el.id, (e) => { if (e.fx?.loop?.type === 'motion-path') e.fx.loop.path = path.value }, true))
         this.row('Path', path)
+
+        const editPath = document.createElement('button')
+        editPath.className = 'ed-btn ed-btn-block'
+        editPath.textContent = '✎ Edit path on canvas'
+        editPath.title = 'Drag anchor points on the slide; double-click adds and removes points'
+        editPath.addEventListener('click', () =>
+          document.dispatchEvent(new CustomEvent('bento:edit-path', { detail: { id: el.id } })))
+        this.host.appendChild(editPath)
       }
     }
 

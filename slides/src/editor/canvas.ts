@@ -7,6 +7,7 @@ import Selecto from 'selecto'
 import type { Store } from '../store'
 import type { SlideElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
+import { PathEditor } from './patheditor'
 
 export class SlideCanvas {
   private stage: HTMLElement
@@ -21,6 +22,7 @@ export class SlideCanvas {
   private zoom = 1
   private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
+  private pathEditor!: PathEditor
 
   constructor(
     private wrap: HTMLElement,
@@ -74,6 +76,12 @@ export class SlideCanvas {
 
     this.wireMoveable()
     this.wireSelecto()
+
+    this.pathEditor = new PathEditor(this.scaleHost, store, () => this.syncTargets())
+    this.pathEditor.setScaleGetter(() => this.scale)
+    document.addEventListener('bento:edit-path', ((ev: CustomEvent) => {
+      this.startPathEdit(ev.detail.id)
+    }) as EventListener)
 
     this.stage.addEventListener('dblclick', (ev) => {
       const el = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-text')
@@ -142,8 +150,30 @@ export class SlideCanvas {
     this.wrap.appendChild(bar)
   }
 
+  // --- motion-path editing ----------------------------------------------------
+
+  get isPathEditing() {
+    return this.pathEditor.active
+  }
+
+  startPathEdit(elId: string) {
+    this.commitTextEdit()
+    this.pathEditor.start(elId)
+    this.syncTargets()
+  }
+
+  /** finish path editing; commit=false discards the changes */
+  stopPathEdit(commit = true) {
+    if (commit) this.pathEditor.commit()
+    else {
+      this.pathEditor.cancel()
+      this.syncTargets()
+    }
+  }
+
   render() {
     this.commitTextEdit()
+    if (this.pathEditor?.active) this.pathEditor.cancel() // doc changed under us
     const slide = this.store.slide
     const next = renderSlide(slide, this.store.doc)
     // hover-reveal slides: preview one set at a time; hidden sets are
@@ -204,7 +234,7 @@ export class SlideCanvas {
   }
 
   private syncTargets() {
-    const targets = this.editing ? [] : this.selectedNodes()
+    const targets = this.editing || this.pathEditor?.active ? [] : this.selectedNodes()
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -294,6 +324,10 @@ export class SlideCanvas {
   private wireSelecto() {
     this.selecto.on('dragStart', (e) => {
       const target = e.inputEvent.target as HTMLElement
+      if (this.pathEditor?.active) {
+        e.stop() // the path overlay owns the pointer while editing
+        return
+      }
       if (this.editing) {
         // clicking outside the text being edited commits it; inside, do nothing
         if (!this.editing.contains(target)) this.commitTextEdit()

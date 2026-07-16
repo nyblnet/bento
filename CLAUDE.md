@@ -17,7 +17,10 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   `order` = simultaneous, countUp, ken-burns, `loop` dash-march/motion-path), `link`
   (click → slide id) and `group`; slides can set `hover:'focus-group'` (dim other
   groups). Present arrows are handled capture-phase (focus-proof). Editing UI for
-  fx/link lives in the panel's "Presenting" section.
+  fx/link lives in the panel's "Presenting" section. Motion-path loops are edited
+  visually on canvas (`editor/patheditor.ts`): draggable anchors auto-smoothed
+  Catmull-Rom→cubic bezier; the stored path is RELATIVE to the element's rest
+  position (first anchor = rest position; committing moves the element there).
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
   era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are
