@@ -599,14 +599,138 @@ export class PropsPanel {
       this.opBtn(ICONS.trash, 'Delete', () => this.deleteEls(els)),
     )
     this.host.appendChild(row)
+    this.arrangeRows(els)
+  }
+
+  /** Align / distribute / step z-order / group — the classic arrange kit. */
+  private arrangeRows(els: SlideElement[]) {
+    const textBtn = (label: string, title: string, onClick: () => void, enabled = true) => {
+      const b = document.createElement('button')
+      b.className = 'ed-btn ed-arrange-btn'
+      b.textContent = label
+      b.title = title
+      b.disabled = !enabled
+      b.addEventListener('click', onClick)
+      return b
+    }
+    const grid = document.createElement('div')
+    grid.className = 'ed-ops ed-arrange'
+    grid.append(
+      textBtn('⇤', 'Align left', () => this.align(els, 'left')),
+      textBtn('⇹', 'Align horizontal centers', () => this.align(els, 'centerX')),
+      textBtn('⇥', 'Align right', () => this.align(els, 'right')),
+      textBtn('⤒', 'Align top', () => this.align(els, 'top')),
+      textBtn('⇳', 'Align vertical middles', () => this.align(els, 'middleY')),
+      textBtn('⤓', 'Align bottom', () => this.align(els, 'bottom')),
+      textBtn('⋯', 'Distribute horizontally (3+)', () => this.distribute(els, 'x'), els.length >= 3),
+      textBtn('⋮', 'Distribute vertically (3+)', () => this.distribute(els, 'y'), els.length >= 3),
+      textBtn('↑', 'Bring forward one step', () => this.step(els, +1)),
+      textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
+    )
+    this.host.appendChild(grid)
+
+    const grouped = els.some((e) => e.groupId)
+    if (els.length > 1 || grouped) {
+      const g = document.createElement('button')
+      g.className = 'ed-btn ed-btn-block'
+      const allSame = els.length > 1 && els.every((e) => e.groupId && e.groupId === els[0].groupId)
+      if (allSame || (grouped && els.length === 1)) {
+        g.textContent = '⛓ Ungroup'
+        g.title = 'Dissolve the group (⇧⌘G)'
+        g.addEventListener('click', () => this.ungroup(els))
+      } else {
+        g.textContent = '⛓ Group'
+        g.title = 'Elements select and move as one; Alt-click reaches a member (⌘G)'
+        g.addEventListener('click', () => this.group(els))
+      }
+      this.host.appendChild(g)
+    }
+  }
+
+  /** Single element aligns to the slide; a multi-selection aligns to its own bounds. */
+  private align(els: SlideElement[], edge: 'left' | 'centerX' | 'right' | 'top' | 'middleY' | 'bottom') {
+    const { width, height } = this.store.doc.size
+    const box = els.length === 1
+      ? { x0: 0, y0: 0, x1: width, y1: height }
+      : {
+          x0: Math.min(...els.map((e) => e.x)),
+          y0: Math.min(...els.map((e) => e.y)),
+          x1: Math.max(...els.map((e) => e.x + e.w)),
+          y1: Math.max(...els.map((e) => e.y + e.h)),
+        }
+    this.edit(() => {
+      for (const el of els) {
+        if (edge === 'left') el.x = box.x0
+        if (edge === 'right') el.x = box.x1 - el.w
+        if (edge === 'centerX') el.x = (box.x0 + box.x1) / 2 - el.w / 2
+        if (edge === 'top') el.y = box.y0
+        if (edge === 'bottom') el.y = box.y1 - el.h
+        if (edge === 'middleY') el.y = (box.y0 + box.y1) / 2 - el.h / 2
+      }
+    }, true)
+  }
+
+  /** Even gaps between elements, first and last stay put. */
+  private distribute(els: SlideElement[], axis: 'x' | 'y') {
+    if (els.length < 3) return
+    const size = axis === 'x' ? 'w' : 'h'
+    const sorted = [...els].sort((a, b) => a[axis] - b[axis])
+    const first = sorted[0]
+    const last = sorted[sorted.length - 1]
+    const span = last[axis] + last[size] - first[axis]
+    const total = sorted.reduce((s, e) => s + e[size], 0)
+    const gap = (span - total) / (sorted.length - 1)
+    this.edit(() => {
+      let cursor = first[axis] + first[size] + gap
+      for (const el of sorted.slice(1, -1)) {
+        el[axis] = cursor
+        cursor += el[size] + gap
+      }
+    }, true)
+  }
+
+  /** Move the selection one step up/down the paint order (adjacent swap). */
+  private step(els: SlideElement[], dir: 1 | -1) {
+    const ids = new Set(els.map((e) => e.id))
+    this.store.commit(() => {
+      const arr = this.store.slide.elements
+      const idxs = arr.map((e, i) => (ids.has(e.id) ? i : -1)).filter((i) => i >= 0)
+      const ordered = dir > 0 ? [...idxs].reverse() : idxs
+      for (const i of ordered) {
+        const j = i + dir
+        if (j < 0 || j >= arr.length || ids.has(arr[j].id)) continue
+        ;[arr[i], arr[j]] = [arr[j], arr[i]]
+      }
+    })
+  }
+
+  group(els: SlideElement[]) {
+    if (els.length < 2) return
+    const gid = `grp-${uid()}`
+    this.edit(() => { for (const el of els) el.groupId = gid }, true)
+  }
+
+  ungroup(els: SlideElement[]) {
+    const gids = new Set(els.map((e) => e.groupId).filter(Boolean))
+    this.edit(() => {
+      for (const el of this.store.slide.elements) {
+        if (el.groupId && gids.has(el.groupId)) delete el.groupId
+      }
+    }, true)
   }
 
   duplicate(els: SlideElement[]) {
+    // clones of grouped elements get fresh group ids (kept consistent within
+    // the batch) so a duplicated group is its own group, not the original's
+    const gidMap = new Map<string, string>()
     const clones = els.map((el) => ({
       ...JSON.parse(JSON.stringify(el)),
       id: `${el.id.replace(/-copy\d*$/, '')}-copy${Math.floor(Math.random() * 1000)}`,
       x: el.x + 24,
       y: el.y + 24,
+      ...(el.groupId
+        ? { groupId: gidMap.get(el.groupId) ?? gidMap.set(el.groupId, `grp-${uid()}`).get(el.groupId)! }
+        : {}),
     }))
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))

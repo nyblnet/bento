@@ -43,6 +43,12 @@ export interface ElementBase {
   /** semantic group tag — hover focus and multi-element behaviours target it */
   group?: string
   /**
+   * Editor grouping: elements sharing a groupId select and move as one
+   * (click any member → whole group; Alt-click digs to the individual).
+   * Distinct from `group`, which carries presentation semantics.
+   */
+  groupId?: string
+  /**
    * In-slide hover reveal: this element is only visible while an element
    * whose `group` equals this value is hovered (slide.hover type 'reveal').
    * The slide's hover.default set is shown when nothing is hovered.
