@@ -60,12 +60,78 @@ export function anchorsToPath(pts: Pt[]): string {
 
 const r = (v: number) => Math.round(v * 100) / 100
 
+/**
+ * Anchors that PRESERVE the curve's shape: the path is sampled through the
+ * browser (so beziers, arcs, relative commands and H/V/Z all work) and the
+ * samples are reduced with Ramer–Douglas–Peucker. A hand-written single-C
+ * curve like "M 0 0 C 122 0 133 140 255 140" yields interior anchors that
+ * reproduce the S-bend — parseAnchors alone would flatten it to a line.
+ */
+export function samplePathAnchors(d: string): Pt[] {
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden'
+  const path = document.createElementNS(SVG_NS, 'path')
+  path.setAttribute('d', d)
+  svg.appendChild(path)
+  document.body.appendChild(svg)
+  try {
+    const total = path.getTotalLength()
+    if (!Number.isFinite(total) || total < 1) return parseAnchors(d)
+    const n = Math.min(256, Math.max(24, Math.ceil(total / 4)))
+    const samples: Pt[] = []
+    for (let i = 0; i <= n; i++) {
+      const p = path.getPointAtLength((total * i) / n)
+      samples.push({ x: p.x, y: p.y })
+    }
+    // Loosen tolerance until the anchor count is comfortable to edit.
+    let eps = 0.75
+    let pts = rdp(samples, eps)
+    while (pts.length > 12) {
+      eps *= 1.7
+      pts = rdp(samples, eps)
+    }
+    return pts
+  } catch {
+    return parseAnchors(d)
+  } finally {
+    svg.remove()
+  }
+}
+
+function rdp(pts: Pt[], eps: number): Pt[] {
+  if (pts.length <= 2) return pts.slice()
+  const a = pts[0]
+  const b = pts[pts.length - 1]
+  let maxD = -1
+  let idx = 0
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = perpDist(pts[i], a, b)
+    if (d > maxD) {
+      maxD = d
+      idx = i
+    }
+  }
+  if (maxD <= eps) return [a, b]
+  const left = rdp(pts.slice(0, idx + 1), eps)
+  const right = rdp(pts.slice(idx), eps)
+  return left.slice(0, -1).concat(right)
+}
+
+function perpDist(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy)
+  if (!len) return Math.hypot(p.x - a.x, p.y - a.y)
+  return Math.abs(dx * (a.y - p.y) - (a.x - p.x) * dy) / len
+}
+
 export class PathEditor {
   private overlay: SVGSVGElement | null = null
   private hint: HTMLElement | null = null
   private pts: Pt[] = []
   private elId = ''
   private scale = () => 1
+  private dirty = false
 
   constructor(
     private scaleHost: HTMLElement,
@@ -86,13 +152,16 @@ export class PathEditor {
     const el = this.store.element(elId)
     if (!el || el.fx?.loop?.type !== 'motion-path') return
     this.elId = elId
+    this.dirty = false
     const cx = el.x + el.w / 2
     const cy = el.y + el.h / 2
-    const rel = parseAnchors(el.fx.loop.path)
+    const rel = samplePathAnchors(el.fx.loop.path)
     this.pts = rel.length
       ? rel.map((p) => ({ x: p.x + cx, y: p.y + cy }))
       : [{ x: cx, y: cy }, { x: cx + 160, y: cy }]
     if (this.pts.length === 1) this.pts.push({ x: cx + 160, y: cy })
+    // A synthesized default line counts as an edit — Done should save it.
+    if (rel.length < 2) this.dirty = true
 
     const svg = document.createElementNS(SVG_NS, 'svg')
     svg.classList.add('ed-pathedit')
@@ -122,7 +191,15 @@ export class PathEditor {
     if (!this.overlay) return
     const el = this.store.element(this.elId)
     const pts = this.pts
+    const dirty = this.dirty
     this.cancel()
+    // Nothing was touched: keep the original path byte-for-byte. The anchor
+    // set is a sampled approximation of the curve, so writing it back on a
+    // no-op edit would still subtly reshape hand-authored beziers.
+    if (!dirty) {
+      this.onExit()
+      return
+    }
     if (!el || el.fx?.loop?.type !== 'motion-path' || pts.length < 2) return
     const p0 = pts[0]
     const relPath = anchorsToPath(pts.map((p) => ({ x: p.x - p0.x, y: p.y - p0.y })))
@@ -219,6 +296,7 @@ export class PathEditor {
     let lastTs = 0
     const move = (ev: MouseEvent) => {
       const p = this.toSlide(ev)
+      if (p.x !== startPt.x || p.y !== startPt.y) this.dirty = true
       this.pts[idx] = { x: orig.x + p.x - startPt.x, y: orig.y + p.y - startPt.y }
       // first anchor = element rest position: give live feedback on the node
       if (idx === 0) {
@@ -251,7 +329,10 @@ export class PathEditor {
     if (target.classList.contains('ed-pe-anchor')) {
       // remove (keep at least two)
       const idx = Number((target as SVGElement).dataset.idx)
-      if (this.pts.length > 2) this.pts.splice(idx, 1)
+      if (this.pts.length > 2) {
+        this.pts.splice(idx, 1)
+        this.dirty = true
+      }
       this.draw()
       return
     }
@@ -266,11 +347,13 @@ export class PathEditor {
         if (dist < bestDist) { bestDist = dist; best = i }
       }
       this.pts.splice(best + 1, 0, p)
+      this.dirty = true
       this.draw()
       return
     }
     // empty canvas: append to the end
     this.pts.push(p)
+    this.dirty = true
     this.draw()
   }
 }
