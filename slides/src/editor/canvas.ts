@@ -71,7 +71,9 @@ export class SlideCanvas {
       selectByClick: true,
       selectFromInside: false,
       toggleContinueSelect: 'shift',
-      hitRate: 0,
+      // Marquee selects only elements it fully contains (clicking still
+      // selects whatever is under the cursor via selectByClick).
+      hitRate: 100,
     })
 
     this.wireMoveable()

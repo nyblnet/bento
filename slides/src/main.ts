@@ -52,4 +52,7 @@ if (location.hash === '#present') {
   serialize: () => serializeFile(store.doc),
   undo: () => store.undo(),
   redo: () => store.redo(),
+  get selection() {
+    return store.selection.slice()
+  },
 }
