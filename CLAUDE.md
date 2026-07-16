@@ -43,6 +43,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   element ids for it and for cross-state morphs); slide deletion cascades states
   and clears inbound links after confirm; `[`/`]` collapse the side panels.
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
+  Alt/Option-click digs through overlapping elements (capture-phase, beats
+  Moveable's control box). Fill/stroke colors carry alpha (color input + % pair,
+  rgba round-trip); shapes support `fillGradient` (linear, CSS-convention angle,
+  multi-stop) — rendered as per-instance svg `<defs>` gradients (unique ids:
+  url(#…) refs are document-global across canvas/thumbs/present).
 
 ## Hard-won details — do not regress
 

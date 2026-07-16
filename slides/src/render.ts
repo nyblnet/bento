@@ -68,6 +68,36 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   node.style.opacity = String(el.opacity)
 }
 
+// Gradient ids must be unique per rendered instance: the same element renders
+// on the canvas, in sidebar thumbnails and in the present overlay, and svg
+// url(#…) references resolve document-wide.
+let gradSeq = 0
+
+/** Materialize a GradientFill as a <defs> gradient; returns its url() ref. */
+function gradientRef(svg: SVGSVGElement, g: NonNullable<ShapeElement['fillGradient']>): string {
+  const id = `bento-grad-${gradSeq++}`
+  const defs = document.createElementNS(SVG_NS, 'defs')
+  const lin = document.createElementNS(SVG_NS, 'linearGradient')
+  lin.setAttribute('id', id)
+  // CSS angle convention: 0deg points up, 90deg points right
+  const rad = ((g.angle ?? 180) * Math.PI) / 180
+  const dx = Math.sin(rad) / 2
+  const dy = -Math.cos(rad) / 2
+  lin.setAttribute('x1', String(0.5 - dx))
+  lin.setAttribute('y1', String(0.5 - dy))
+  lin.setAttribute('x2', String(0.5 + dx))
+  lin.setAttribute('y2', String(0.5 + dy))
+  for (const s of g.stops) {
+    const stop = document.createElementNS(SVG_NS, 'stop')
+    stop.setAttribute('offset', String(Math.min(Math.max(s.at, 0), 1)))
+    stop.setAttribute('stop-color', s.color)
+    lin.appendChild(stop)
+  }
+  defs.appendChild(lin)
+  svg.appendChild(defs)
+  return `url(#${id})`
+}
+
 export function shapeSvg(el: ShapeElement): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg')
   const { w, h } = el
@@ -134,7 +164,7 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
       return svg
     }
   }
-  node.setAttribute('fill', el.fill)
+  node.setAttribute('fill', el.fillGradient?.stops.length ? gradientRef(svg, el.fillGradient) : el.fill)
   if (el.stroke && el.stroke !== 'transparent' && sw > 0) {
     node.setAttribute('stroke', el.stroke)
     node.setAttribute('stroke-width', String(sw))

@@ -85,6 +85,20 @@ export class SlideCanvas {
       this.startPathEdit(ev.detail.id)
     }) as EventListener)
 
+    // Alt/Option-click digs through overlapping elements: first click grabs
+    // the topmost, each further alt-click steps one element deeper (wrapping).
+    // Capture phase so it wins over Selecto AND Moveable's control-box area,
+    // which otherwise swallows clicks over the current selection.
+    document.addEventListener('mousedown', (ev) => {
+      if (!ev.altKey || ev.button !== 0 || this.pathEditor.active) return
+      const r = this.scaleHost.getBoundingClientRect()
+      if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return
+      if (ev.target instanceof Element && ev.target.closest('.ed-sidebar, .ed-props, .ed-topbar')) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      this.deepSelect((ev.clientX - r.left) / this.scale, (ev.clientY - r.top) / this.scale)
+    }, true)
+
     this.stage.addEventListener('dblclick', (ev) => {
       const el = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-text')
       if (el) this.startTextEdit(el)
@@ -150,6 +164,26 @@ export class SlideCanvas {
       mk('+', 'Zoom in (⌘+)', () => this.zoomIn()),
     )
     this.wrap.appendChild(bar)
+  }
+
+  /** Alt-click: select the element under (px, py), digging one step deeper
+   *  below the current selection on each repeat. Coordinates in slide px. */
+  private deepSelect(px: number, py: number) {
+    const stack: string[] = []
+    for (const el of this.store.slide.elements) {
+      if (px < el.x || px > el.x + el.w || py < el.y || py > el.y + el.h) continue
+      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (!node || node.style.display === 'none') continue // hidden hover set
+      stack.push(el.id)
+    }
+    if (!stack.length) return
+    const topFirst = stack.reverse() // model order is z-order; topmost last
+    let pick = topFirst[0]
+    if (this.store.selection.length === 1) {
+      const i = topFirst.indexOf(this.store.selection[0])
+      if (i >= 0) pick = topFirst[(i + 1) % topFirst.length]
+    }
+    this.store.select([pick])
   }
 
   // --- motion-path editing ----------------------------------------------------

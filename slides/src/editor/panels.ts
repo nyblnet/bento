@@ -485,9 +485,77 @@ export class PropsPanel {
 
   private buildShapeProps(el: ShapeElement) {
     this.section('Fill & stroke')
-    this.row('Fill', this.color(el.fill, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin)))
-    this.row('Stroke', this.color(el.stroke === 'transparent' ? '#1E2A3A' : el.stroke, (v, fin) =>
+    const grad = el.fillGradient
+    this.row('Fill style', this.select(['solid', 'gradient'], grad ? 'gradient' : 'solid', (v) =>
+      this.mutate(el.id, (e) => {
+        const s = e as ShapeElement
+        if (v === 'gradient') {
+          const base = parseColor(s.fill)
+          s.fillGradient ??= {
+            angle: 180,
+            stops: [
+              { at: 0, color: combineColor(base.hex, Math.max(base.a, 0.85)) },
+              { at: 1, color: combineColor(base.hex, 0) },
+            ],
+          }
+        } else {
+          delete s.fillGradient
+        }
+      }, true)))
+
+    if (!grad) {
+      this.row('Fill', this.colorAlpha(el.fill, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin)))
+    } else {
+      this.row('Grad. angle', this.number(grad.angle, 1, (v, fin) =>
+        this.mutate(el.id, (e) => {
+          const g = (e as ShapeElement).fillGradient
+          if (g) g.angle = v
+        }, fin)))
+      grad.stops.forEach((stop, i) => {
+        const wrap = document.createElement('div')
+        wrap.className = 'ed-gradstop'
+        const at = this.number(Math.round(stop.at * 100), 1, (v, fin) =>
+          this.mutate(el.id, (e) => {
+            const g = (e as ShapeElement).fillGradient
+            if (g?.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1)
+          }, fin))
+        at.title = 'Position %'
+        const color = this.colorAlpha(stop.color, (v, fin) =>
+          this.mutate(el.id, (e) => {
+            const g = (e as ShapeElement).fillGradient
+            if (g?.stops[i]) g.stops[i].color = v
+          }, fin))
+        wrap.append(at, color)
+        if (grad.stops.length > 2) {
+          const del = document.createElement('button')
+          del.className = 'ed-btn ed-btn-icon'
+          del.textContent = '✕'
+          del.title = 'Remove stop'
+          del.addEventListener('click', () =>
+            this.mutate(el.id, (e) => {
+              const g = (e as ShapeElement).fillGradient
+              if (g && g.stops.length > 2) g.stops.splice(i, 1)
+            }, true))
+          wrap.appendChild(del)
+        }
+        this.row(`Stop ${i + 1}`, wrap)
+      })
+      const add = document.createElement('button')
+      add.className = 'ed-btn ed-btn-block'
+      add.textContent = '＋ Add stop'
+      add.addEventListener('click', () =>
+        this.mutate(el.id, (e) => {
+          const g = (e as ShapeElement).fillGradient
+          if (!g) return
+          const mid = g.stops[Math.floor(g.stops.length / 2)]
+          g.stops.push({ at: 0.5, color: mid?.color ?? '#808080' })
+          g.stops.sort((a, b) => a.at - b.at)
+        }, true))
+      this.host.appendChild(add)
+    }
+
+    this.row('Stroke', this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
     this.row('Stroke width', this.number(el.strokeWidth, 0.5, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin)))
@@ -604,10 +672,38 @@ export class PropsPanel {
   private color(value: string, onEdit: (v: string, final: boolean) => void): HTMLElement {
     const input = document.createElement('input')
     input.type = 'color'
-    input.value = /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#1E2A3A'
+    input.value = /^#[0-9a-fA-F]{6}$/.test(value) ? value : parseColor(value).hex
     input.addEventListener('input', () => onEdit(input.value, false))
     input.addEventListener('change', () => onEdit(input.value, true))
     return input
+  }
+
+  /** Color swatch + opacity %. Native color inputs have no alpha channel, so
+   *  the pair round-trips rgba()/#rrggbbaa strings losslessly. */
+  private colorAlpha(value: string, onEdit: (v: string, final: boolean) => void): HTMLElement {
+    const wrap = document.createElement('div')
+    wrap.className = 'ed-coloralpha'
+    const parsed = parseColor(value)
+    const col = document.createElement('input')
+    col.type = 'color'
+    col.value = parsed.hex
+    const alpha = document.createElement('input')
+    alpha.type = 'number'
+    alpha.min = '0'
+    alpha.max = '100'
+    alpha.step = '1'
+    alpha.value = String(Math.round(parsed.a * 100))
+    alpha.title = 'Opacity %'
+    const emit = (final: boolean) => {
+      const raw = parseFloat(alpha.value)
+      const a = Number.isFinite(raw) ? Math.min(Math.max(raw / 100, 0), 1) : 1
+      onEdit(combineColor(col.value, a), final)
+    }
+    col.addEventListener('input', () => emit(false))
+    col.addEventListener('change', () => emit(true))
+    alpha.addEventListener('change', () => emit(true))
+    wrap.append(col, alpha)
+    return wrap
   }
 
   private select(options: string[], value: string, onChange: (v: string) => void): HTMLElement {
@@ -631,4 +727,33 @@ export class PropsPanel {
     btn.addEventListener('click', onClick)
     return btn
   }
+}
+
+/** Any CSS color → {hex, a}. Handles #rgb/#rrggbb/#rrggbbaa/rgb()/rgba()/transparent. */
+export function parseColor(v: string): { hex: string; a: number } {
+  if (!v || v === 'transparent' || v === 'none') return { hex: '#000000', a: 0 }
+  const m = v.match(/rgba?\(([^)]+)\)/)
+  if (m) {
+    const parts = m[1].split(/[\s,/]+/).map((s) => parseFloat(s))
+    const [r, g, b] = parts
+    const a = parts.length > 3 && Number.isFinite(parts[3]) ? parts[3] : 1
+    if ([r, g, b].every((n) => Number.isFinite(n))) {
+      const hex = '#' + [r, g, b].map((n) => Math.round(Math.min(Math.max(n, 0), 255)).toString(16).padStart(2, '0')).join('')
+      return { hex, a: Math.min(Math.max(a, 0), 1) }
+    }
+  }
+  let hex = v.trim()
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) hex = '#' + [...hex.slice(1)].map((c) => c + c).join('')
+  if (/^#[0-9a-fA-F]{8}$/.test(hex)) return { hex: hex.slice(0, 7), a: parseInt(hex.slice(7), 16) / 255 }
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) return { hex, a: 1 }
+  return { hex: '#1E2A3A', a: 1 }
+}
+
+/** {hex, a} → the shortest CSS color that keeps the alpha. */
+export function combineColor(hex: string, a: number): string {
+  if (a >= 1) return hex
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${Math.round(a * 1000) / 1000})`
 }
