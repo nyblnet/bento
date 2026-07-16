@@ -166,6 +166,19 @@ export class SlideCanvas {
     this.wrap.appendChild(bar)
   }
 
+  /** Grow a selection to whole groups: any member pulls in its groupId kin.
+   *  (Alt-click deep select bypasses this — that's how you reach a member.) */
+  private expandGroups(ids: string[]): string[] {
+    const els = this.store.slide.elements
+    const groups = new Set(
+      ids.map((id) => els.find((e) => e.id === id)?.groupId).filter((g): g is string => !!g),
+    )
+    if (!groups.size) return ids
+    const out = new Set(ids)
+    for (const el of els) if (el.groupId && groups.has(el.groupId)) out.add(el.id)
+    return [...out]
+  }
+
   /** Alt-click: select the element under (px, py), digging one step deeper
    *  below the current selection on each repeat. Coordinates in slide px. */
   private deepSelect(px: number, py: number) {
@@ -285,6 +298,9 @@ export class SlideCanvas {
     const same = current.length === targets.length && targets.every((t, i) => current[i] === t)
     if (!same) this.moveable.target = targets
     this.moveable.updateRect()
+    // Keep Selecto's continue-select memory in lockstep with the store —
+    // otherwise shift-click resurrects targets from a previously shown slide.
+    this.selecto.setSelectedTargets(targets)
   }
 
   // --- moveable -------------------------------------------------------------
@@ -383,7 +399,7 @@ export class SlideCanvas {
       const ids = (e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
         .filter((id): id is string => !!id)
-      this.store.select(ids)
+      this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()
         this.moveable.waitToChangeTarget().then(() => {
@@ -412,6 +428,16 @@ export class SlideCanvas {
       if (ev.key === 'Escape') {
         ev.preventDefault()
         this.commitTextEdit()
+        return
+      }
+      // inline markup: ⌘/Ctrl+B/I/U toggle bold/italic/underline on the
+      // selection (sanitize keeps b/i/u/strong/em, so it round-trips)
+      if (ev.metaKey || ev.ctrlKey) {
+        const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
+        if (cmd) {
+          ev.preventDefault()
+          document.execCommand(cmd)
+        }
       }
     })
     inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })

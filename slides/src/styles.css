@@ -464,6 +464,59 @@ html, body {
   border-radius: 999px;
 }
 
+/* arrange kit: align/distribute/z-step buttons */
+.ed-arrange { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.ed-arrange-btn {
+  flex: 1 0 17%;
+  min-width: 30px;
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 1.1;
+}
+.ed-arrange-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* slide-insertion gaps between sidebar thumbnails */
+.ed-insertgap {
+  flex: none;
+  width: 100%;
+  height: 12px;
+  margin: -11px 0; /* overlap the sidebar's flex gap so spacing stays as-is */
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ed-insertgap:hover { opacity: 1; }
+.ed-insertgap::before {
+  content: '';
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: #5b8def;
+}
+.ed-insertgap-btn {
+  position: relative;
+  z-index: 1;
+  border: none;
+  background: #5b8def;
+  color: #fff;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
 /* color + alpha pair, and gradient stop rows */
 .ed-coloralpha { display: flex; align-items: center; gap: 6px; }
 .ed-coloralpha input[type='number'] { width: 52px; }

@@ -23,6 +23,7 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string }> = [
 
 export class Editor {
   private canvas!: SlideCanvas
+  private panel!: PropsPanel
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
@@ -109,7 +110,7 @@ export class Editor {
 
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
-    new PropsPanel(this.props, this.store)
+    this.panel = new PropsPanel(this.props, this.store)
   }
 
   // --- resizable side panels ------------------------------------------------
@@ -239,15 +240,37 @@ export class Editor {
     this.sidebar.innerHTML = ''
     const slides = this.store.doc.slides
     slides.forEach((slide, i) => {
+      // hover gap = insert here; never between a parent and its states
+      if (!slide.stateOf) this.sidebar.appendChild(this.insertGap(i))
       const item = this.makeThumb(slide, i, !!slide.stateOf)
       if (slide.stateOf) item.classList.add('ed-thumb-state')
       this.sidebar.appendChild(item)
     })
+    this.sidebar.appendChild(this.insertGap(slides.length))
     const add = btn(ICONS.plus, 'New slide', () => this.addSlide())
     add.classList.add('ed-add-slide')
     this.sidebar.appendChild(add)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
+  }
+
+  /** Slim hover strip between thumbnails — click inserts a blank slide there. */
+  private insertGap(at: number): HTMLElement {
+    const gap = div('ed-insertgap')
+    gap.title = 'Insert slide here'
+    const plus = document.createElement('button')
+    plus.className = 'ed-insertgap-btn'
+    plus.textContent = '＋'
+    plus.tabIndex = -1
+    gap.appendChild(plus)
+    gap.addEventListener('click', () => {
+      const bg = this.store.slide.background
+      this.store.commit(() => {
+        this.store.doc.slides.splice(at, 0, emptySlide({ background: bg }))
+      }, 'slides')
+      this.store.goTo(at)
+    })
+    return gap
   }
 
   private wireThumbDrag(item: HTMLElement, index: number) {
@@ -285,10 +308,12 @@ export class Editor {
     this.thumbTimer = window.setTimeout(() => {
       const thumbs = this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb')
       if (thumbs.length !== this.store.doc.slides.length) return this.rebuildSidebar()
+      const base = Math.max(96, this.panelW.left - 40)
       thumbs.forEach((item) => {
         const slide = this.store.doc.slides[Number(item.dataset.index)]
         if (!slide) return
-        item.querySelector('.bento-thumb-surface')?.replaceWith(renderThumbnail(slide, this.store.doc, 148))
+        const w = slide.stateOf ? Math.round(base * 0.84) : base
+        item.querySelector('.bento-thumb-surface')?.replaceWith(renderThumbnail(slide, this.store.doc, w))
       })
     }, 150)
   }
@@ -467,6 +492,13 @@ export class Editor {
       }
       if (inField) return
 
+      if (mod && ev.key.toLowerCase() === 'g') {
+        ev.preventDefault()
+        const els = this.store.selectedElements
+        if (ev.shiftKey) this.panel.ungroup(els)
+        else this.panel.group(els)
+        return
+      }
       if (mod && ev.key.toLowerCase() === 'z') {
         ev.preventDefault()
         ev.shiftKey ? this.store.redo() : this.store.undo()

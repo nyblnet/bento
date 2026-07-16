@@ -49,7 +49,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   Moveable's control box). Fill/stroke colors carry alpha (color input + % pair,
   rgba round-trip); shapes support `fillGradient` (linear, CSS-convention angle,
   multi-stop) — rendered as per-instance svg `<defs>` gradients (unique ids:
-  url(#…) refs are document-global across canvas/thumbs/present).
+  url(#…) refs are document-global across canvas/thumbs/present). Arrange kit in
+  the panel: align/distribute/z-step + Group (⌘G/⇧⌘G — `groupId`, distinct from
+  presentation `group`; click selects the group, Alt-click reaches a member;
+  duplicate remaps groupIds). Text editing supports ⌘B/I/U inline markup.
+  Sidebar has hover insert-gaps between thumbnails (never between a parent and
+  its states). Selecto's continue-select list is synced in syncTargets — stale
+  cross-slide shift-click selections were a real bug.
 
 ## Hard-won details — do not regress
 
