@@ -461,7 +461,8 @@ export class Editor {
         return
       }
       if (ev.key === 'Escape') {
-        this.store.select([])
+        if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
+        else this.store.select([])
         return
       }
       if (ev.key === 'PageDown') {
