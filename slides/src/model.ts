@@ -26,6 +26,13 @@ export interface ElementBase {
     countUp?: boolean
     /** continuous ambient motion (slow zoom, for full-bleed photos) */
     ambient?: 'kenburns'
+    /**
+     * Ken-burns tuning. dir 'drift' (default) is the endless slow yoyo zoom;
+     * 'out' and 'in' play ONCE per slide entry — 'out' starts zoomed by
+     * `scale` and settles to rest (the classic title-photo effect).
+     * `scale` is the far end of the zoom (e.g. 1.06), `duration` in seconds.
+     */
+    ken?: { dir?: 'drift' | 'out' | 'in'; scale?: number; duration?: number }
     /** continuous looping animation */
     loop?:
       | { type: 'dash-march'; distance?: number; duration?: number }

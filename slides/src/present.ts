@@ -323,11 +323,24 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
   for (const [el, node] of fxNodes(slide, section)) {
     const fx = el.fx!
     if (fx.ambient === 'kenburns') {
-      gsap.fromTo(
-        node,
-        { scale: 1.02 },
-        { scale: 1.1, duration: 26, ease: 'none', repeat: -1, yoyo: true, transformOrigin: '50% 40%' },
-      )
+      const ken = fx.ken ?? {}
+      const dir = ken.dir ?? 'drift'
+      if (dir === 'drift') {
+        gsap.fromTo(
+          node,
+          { scale: 1.02 },
+          { scale: ken.scale ?? 1.1, duration: ken.duration ?? 26, ease: 'none', repeat: -1, yoyo: true, transformOrigin: '50% 40%' },
+        )
+      } else {
+        // one-shot settle, replayed on every slide entry
+        const far = ken.scale ?? 1.06
+        const dur = ken.duration ?? 2.5
+        gsap.fromTo(
+          node,
+          { scale: dir === 'out' ? far : 1 },
+          { scale: dir === 'out' ? 1 : far, duration: dur, ease: 'power2.out', transformOrigin: '50% 50%', overwrite: 'auto' },
+        )
+      }
     }
     if (fx.loop?.type === 'dash-march') {
       const target = node.querySelector('path, line, rect, ellipse, polygon')
