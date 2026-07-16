@@ -118,7 +118,7 @@ html, body {
 .ed-main { flex: 1; display: flex; min-height: 0; }
 
 .ed-sidebar {
-  width: 188px;
+  width: var(--panew, 188px);
   flex: none;
   overflow-y: auto;
   padding: 12px;
@@ -326,7 +326,7 @@ html, body {
 /* ————— properties panel ————— */
 
 .ed-props {
-  width: 236px;
+  width: var(--panew, 236px);
   flex: none;
   overflow-y: auto;
   background: #fff;
@@ -463,6 +463,21 @@ html, body {
   outline-offset: 3px;
   border-radius: 999px;
 }
+
+/* resizable side panels — thin grab strips between panel and canvas */
+.ed-resizer {
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background .12s ease .08s;
+}
+.ed-resizer:hover, body.ed-col-resizing .ed-resizer { background: rgb(91 141 239 / 0.45); }
+body.ed-col-resizing { cursor: col-resize; user-select: none; }
+.ed-noanim { transition: none !important; }
+/* no grab strip against a collapsed panel — the [ ] toggles reopen it */
+.ed-sidebar.ed-collapsed + .ed-resizer { display: none; }
+.ed-resizer:has(+ .ed-props.ed-collapsed) { display: none; }
 
 /* collapsible side panels */
 .ed-sidebar, .ed-props { transition: width .18s ease, padding .18s ease; }

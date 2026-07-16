@@ -29,6 +29,8 @@ export class Editor {
   private thumbTimer = 0
   private clipboard: SlideElement[] = []
   private presenting = false
+  /** side panel widths (px) — user-resizable, persisted per browser */
+  private panelW = { left: 188, right: 236 }
 
   constructor(
     private root: HTMLElement,
@@ -101,12 +103,74 @@ export class Editor {
     this.sidebar = div('ed-sidebar')
     const canvasWrap = div('ed-canvas-wrap')
     this.props = div('ed-props')
-    main.append(this.sidebar, canvasWrap, this.props)
+    main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
 
+    this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     new PropsPanel(this.props, this.store)
+  }
+
+  // --- resizable side panels ------------------------------------------------
+
+  private static PANEL_BOUNDS = { left: [110, 400], right: [190, 520] } as const
+  private static PANEL_DEFAULTS = { left: 188, right: 236 } as const
+
+  private restorePanelWidths() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('bento-ed-panels') ?? '{}')
+      for (const side of ['left', 'right'] as const) {
+        const [min, max] = Editor.PANEL_BOUNDS[side]
+        if (typeof saved[side] === 'number') this.panelW[side] = Math.min(max, Math.max(min, saved[side]))
+      }
+    } catch { /* corrupt storage — keep defaults */ }
+    this.applyPanelWidths()
+  }
+
+  private applyPanelWidths() {
+    this.sidebar.style.setProperty('--panew', `${this.panelW.left}px`)
+    this.props.style.setProperty('--panew', `${this.panelW.right}px`)
+  }
+
+  private makeResizer(side: 'left' | 'right'): HTMLElement {
+    const handle = div('ed-resizer')
+    handle.title = 'Drag to resize · double-click to reset'
+    const commit = () => {
+      localStorage.setItem('bento-ed-panels', JSON.stringify(this.panelW))
+      // thumbnails render at a width derived from the sidebar — refit them
+      if (side === 'left') this.rebuildSidebar()
+    }
+    handle.addEventListener('mousedown', (down) => {
+      const panel = side === 'left' ? this.sidebar : this.props
+      if (panel.classList.contains('ed-collapsed')) return
+      down.preventDefault()
+      const startX = down.clientX
+      const startW = this.panelW[side]
+      const [min, max] = Editor.PANEL_BOUNDS[side]
+      panel.classList.add('ed-noanim')
+      document.body.classList.add('ed-col-resizing')
+      const move = (ev: MouseEvent) => {
+        const dx = ev.clientX - startX
+        this.panelW[side] = Math.min(max, Math.max(min, startW + (side === 'left' ? dx : -dx)))
+        this.applyPanelWidths()
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', move)
+        window.removeEventListener('mouseup', up)
+        panel.classList.remove('ed-noanim')
+        document.body.classList.remove('ed-col-resizing')
+        commit()
+      }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+    })
+    handle.addEventListener('dblclick', () => {
+      this.panelW[side] = Editor.PANEL_DEFAULTS[side]
+      this.applyPanelWidths()
+      commit()
+    })
+    return handle
   }
 
   /** Collapse/expand the slide list or the properties panel. */
@@ -149,7 +213,9 @@ export class Editor {
     } else {
       num.textContent = String(this.linearNumber(i))
     }
-    const surface = renderThumbnail(slide, this.store.doc, isState ? 124 : 148)
+    // thumb width tracks the (resizable) sidebar; states render smaller
+    const base = Math.max(96, this.panelW.left - 40)
+    const surface = renderThumbnail(slide, this.store.doc, isState ? Math.round(base * 0.84) : base)
     const tools = div('ed-thumb-tools')
     tools.append(
       btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, 'Duplicate slide'),
@@ -169,6 +235,7 @@ export class Editor {
   private rebuildSidebar() {
     // States sit in doc order right after their parent and render nested —
     // smaller, indented, dimmed — so the structure reads at a glance.
+    const scroll = this.sidebar.scrollTop
     this.sidebar.innerHTML = ''
     const slides = this.store.doc.slides
     slides.forEach((slide, i) => {
@@ -179,6 +246,7 @@ export class Editor {
     const add = btn(ICONS.plus, 'New slide', () => this.addSlide())
     add.classList.add('ed-add-slide')
     this.sidebar.appendChild(add)
+    this.sidebar.scrollTop = scroll
     this.highlightSidebar()
   }
 
