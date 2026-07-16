@@ -73,20 +73,26 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
 // url(#…) references resolve document-wide.
 let gradSeq = 0
 
+/** Gradient line endpoints (objectBoundingBox units) for a CSS-convention
+ *  angle: 0deg points up, 90deg points right. Shared with morph tweening. */
+export function gradientLineCoords(angle: number) {
+  const rad = ((angle ?? 180) * Math.PI) / 180
+  const dx = Math.sin(rad) / 2
+  const dy = -Math.cos(rad) / 2
+  return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy }
+}
+
 /** Materialize a GradientFill as a <defs> gradient; returns its url() ref. */
 function gradientRef(svg: SVGSVGElement, g: NonNullable<ShapeElement['fillGradient']>): string {
   const id = `bento-grad-${gradSeq++}`
   const defs = document.createElementNS(SVG_NS, 'defs')
   const lin = document.createElementNS(SVG_NS, 'linearGradient')
   lin.setAttribute('id', id)
-  // CSS angle convention: 0deg points up, 90deg points right
-  const rad = ((g.angle ?? 180) * Math.PI) / 180
-  const dx = Math.sin(rad) / 2
-  const dy = -Math.cos(rad) / 2
-  lin.setAttribute('x1', String(0.5 - dx))
-  lin.setAttribute('y1', String(0.5 - dy))
-  lin.setAttribute('x2', String(0.5 + dx))
-  lin.setAttribute('y2', String(0.5 + dy))
+  const { x1, y1, x2, y2 } = gradientLineCoords(g.angle)
+  lin.setAttribute('x1', String(x1))
+  lin.setAttribute('y1', String(y1))
+  lin.setAttribute('x2', String(x2))
+  lin.setAttribute('y2', String(y2))
   for (const s of g.stops) {
     const stop = document.createElementNS(SVG_NS, 'stop')
     stop.setAttribute('offset', String(Math.min(Math.max(s.at, 0), 1)))

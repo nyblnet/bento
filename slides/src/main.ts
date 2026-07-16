@@ -2,6 +2,7 @@
 // mutation — the captured copy is what gets re-serialized on save.
 
 import './styles.css'
+import { gsap } from 'gsap'
 import { capturePristine, readEmbeddedDoc, serializeFile } from './save'
 import { parseDoc, starterDoc } from './model'
 import { injectFonts } from './fonts'
@@ -55,4 +56,6 @@ if (location.hash === '#present') {
   get selection() {
     return store.selection.slice()
   },
+  /** animation engine, exposed for scripting/diagnostics */
+  gsap,
 }

@@ -14,11 +14,21 @@ export class PropsPanel {
     private host: HTMLElement,
     private store: Store,
   ) {
-    store.on('selection', () => this.rebuild())
-    store.on('current', () => this.rebuild())
+    // Selection/slide switches always rebuild — the user acted outside the
+    // panel, so whatever input was focused is obsolete. Doc mutations respect
+    // a focused input (skip + mark stale) and catch up when focus leaves.
+    store.on('selection', () => this.rebuild(true))
+    store.on('current', () => this.rebuild(true))
     store.on('doc', () => this.rebuild())
+    this.host.addEventListener('focusout', () => {
+      setTimeout(() => {
+        if (this.stale && !this.host.matches(':focus-within')) this.rebuild()
+      }, 0)
+    })
     this.rebuild()
   }
+
+  private stale = false
 
   /** checkpoint once per burst of continuous input, commit on change. */
   private edit(mutate: () => void, final: boolean) {
@@ -31,8 +41,12 @@ export class PropsPanel {
     if (final) this.burst = false
   }
 
-  private rebuild() {
-    if (this.host.matches(':focus-within')) return // don't rip inputs out from under the user
+  private rebuild(force = false) {
+    if (!force && this.host.matches(':focus-within')) {
+      this.stale = true // don't rip inputs out from under the user; catch up on focusout
+      return
+    }
+    this.stale = false
     this.burst = false
     this.host.innerHTML = ''
     const els = this.store.selectedElements
