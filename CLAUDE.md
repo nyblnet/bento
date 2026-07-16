@@ -13,7 +13,9 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
 - `src/present.ts` — Reveal.js overlay; slides with `transition:'morph'` use GSAP Flip:
   matched `data-flip-id` elements animate geometry via Flip, style props (fill/color)
-  tween straight from the model values. Elements carry `fx` (enter stagger — equal
+  tween straight from the model values — including gradients (stop colors + line
+  coords tween; solid⇄gradient fabricates/collapses a temp gradient; from-colors
+  are the other side sampled at matching stop positions). Elements carry `fx` (enter stagger — equal
   `order` = simultaneous, countUp, ken-burns (`fx.ken` dir drift/out/in + zoom %/secs;
   out/in are one-shot settles per slide entry), `loop` dash-march/motion-path), `link`
   (click → slide id) and `group`; slides can set `hover:'focus-group'` (dim other

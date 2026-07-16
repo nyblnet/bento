@@ -8,8 +8,8 @@ import 'reveal.js/dist/reveal.css'
 import { gsap } from 'gsap'
 import { Flip } from 'gsap/Flip'
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
-import type { BentoDoc, Slide, SlideElement } from './model'
-import { applyElementFrame, renderSlide } from './render'
+import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
+import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 
 gsap.registerPlugin(Flip, MotionPathPlugin)
 
@@ -512,15 +512,9 @@ function runMorph(
     if (a.opacity !== b.opacity) {
       gsap.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
     }
-    if (a.type === 'shape' && b.type === 'shape' && a.fill !== b.fill) {
-      const target = to.querySelector('rect,ellipse,polygon,line,path')
-      if (target) {
-        gsap.fromTo(
-          target,
-          { attr: { fill: a.fill } },
-          { attr: { fill: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE },
-        )
-      }
+    if (a.type === 'shape' && b.type === 'shape') {
+      const target = to.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
+      if (target) morphShapeFill(target, a, b)
     }
     if (a.type === 'text' && b.type === 'text' && a.color !== b.color) {
       const inner = to.querySelector<HTMLElement>('.bento-text-inner')
@@ -529,4 +523,118 @@ function runMorph(
       }
     }
   }
+}
+
+// --- fill morphing (solid ⇄ solid, solid ⇄ gradient, gradient ⇄ gradient) ----
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+let morphGradSeq = 0
+
+/** Any solid CSS color we author (#hex / rgb / rgba) → [r, g, b, a]. */
+function colorParts(v: string): [number, number, number, number] {
+  const m = v?.match(/rgba?\(([^)]+)\)/)
+  if (m) {
+    const p = m[1].split(/[\s,/]+/).map(Number)
+    return [p[0] || 0, p[1] || 0, p[2] || 0, Number.isFinite(p[3]) ? p[3] : 1]
+  }
+  let hex = (v ?? '').trim()
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) hex = '#' + [...hex.slice(1)].map((c) => c + c).join('')
+  if (/^#[0-9a-fA-F]{6,8}$/.test(hex)) {
+    return [
+      parseInt(hex.slice(1, 3), 16),
+      parseInt(hex.slice(3, 5), 16),
+      parseInt(hex.slice(5, 7), 16),
+      hex.length === 9 ? parseInt(hex.slice(7, 9), 16) / 255 : 1,
+    ]
+  }
+  return [0, 0, 0, v === 'transparent' || v === 'none' ? 0 : 1]
+}
+
+const rgbaStr = (c: [number, number, number, number]) =>
+  `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${Math.round(c[3] * 1000) / 1000})`
+
+/** Color of a gradient evaluated at position t (piecewise-linear between stops). */
+function sampleGradient(stops: GradientFill['stops'], t: number): string {
+  const s = [...stops].sort((x, y) => x.at - y.at)
+  if (t <= s[0].at) return rgbaStr(colorParts(s[0].color))
+  for (let i = 0; i < s.length - 1; i++) {
+    const a = s[i]
+    const b = s[i + 1]
+    if (t <= b.at) {
+      const f = b.at === a.at ? 0 : (t - a.at) / (b.at - a.at)
+      const ca = colorParts(a.color)
+      const cb = colorParts(b.color)
+      return rgbaStr([0, 1, 2, 3].map((k) => ca[k] + (cb[k] - ca[k]) * f) as [number, number, number, number])
+    }
+  }
+  return rgbaStr(colorParts(s[s.length - 1].color))
+}
+
+/**
+ * Tween a shape's fill from element a's to element b's. Solids tween the fill
+ * attribute; when a gradient is involved the tween runs on the <stop> nodes
+ * (colors sampled from the other side at matching positions) and on the
+ * gradient line, so angle changes sweep too. A solid destination gets a
+ * temporary gradient that collapses to the flat color and is then removed.
+ */
+function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
+  if (a.fill === b.fill && JSON.stringify(a.fillGradient) === JSON.stringify(b.fillGradient)) return
+  const ag = a.fillGradient?.stops.length ? a.fillGradient : undefined
+  const bg = b.fillGradient?.stops.length ? b.fillGradient : undefined
+  if (!ag && !bg) {
+    if (a.fill !== b.fill) {
+      gsap.fromTo(target, { attr: { fill: a.fill } }, { attr: { fill: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
+    }
+    return
+  }
+  const svg = target.ownerSVGElement
+  if (!svg) return
+
+  let lin = svg.querySelector('linearGradient')
+  if (!lin) {
+    // destination is solid — fabricate a gradient shaped like the source so
+    // there is something to tween through, then collapse it to b.fill
+    lin = document.createElementNS(SVG_NS, 'linearGradient')
+    lin.id = `bento-morph-grad-${morphGradSeq++}`
+    for (const s of ag!.stops) {
+      const stop = document.createElementNS(SVG_NS, 'stop')
+      stop.setAttribute('offset', String(s.at))
+      lin.appendChild(stop)
+    }
+    const defs = document.createElementNS(SVG_NS, 'defs')
+    defs.appendChild(lin)
+    svg.appendChild(defs)
+    target.setAttribute('fill', `url(#${lin.id})`)
+  }
+
+  const stops = [...lin.querySelectorAll('stop')]
+  // per rendered stop: where it sits, what it starts as, what it ends as
+  const finals = bg ? bg.stops : ag!.stops.map((s) => ({ at: s.at, color: b.fill }))
+  stops.forEach((node, i) => {
+    const at = finals[i]?.at ?? 1
+    const fromColor = ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.fill))
+    const toColor = finals[i]?.color ?? b.fill
+    gsap.fromTo(
+      node,
+      { attr: { 'stop-color': fromColor } },
+      {
+        attr: { 'stop-color': toColor },
+        duration: MORPH_DURATION,
+        ease: MORPH_EASE,
+        ...(i === 0 && !bg
+          ? {
+              // solid destination: swap the temp gradient back to a flat fill
+              onComplete: () => {
+                target.setAttribute('fill', b.fill)
+                lin!.parentElement?.remove()
+              },
+            }
+          : {}),
+      },
+    )
+  })
+
+  const fromLine = gradientLineCoords((ag ?? bg)!.angle)
+  const toLine = gradientLineCoords((bg ?? ag)!.angle)
+  gsap.fromTo(lin, { attr: fromLine }, { attr: toLine, duration: MORPH_DURATION, ease: MORPH_EASE })
 }
