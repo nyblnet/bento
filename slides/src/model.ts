@@ -67,10 +67,20 @@ export interface TextElement extends ElementBase {
 
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
 
+/** Linear gradient fill. Colors are any CSS color, including rgba(). */
+export interface GradientFill {
+  /** degrees, CSS convention: 0 = bottom→top, 90 = left→right */
+  angle: number
+  /** ordered stops; `at` is 0..1 along the gradient line */
+  stops: Array<{ at: number; color: string }>
+}
+
 export interface ShapeElement extends ElementBase {
   type: 'shape'
   shape: ShapeKind
   fill: string
+  /** when set, wins over `fill` (which is kept as the solid fallback) */
+  fillGradient?: GradientFill
   stroke: string
   strokeWidth: number
   /** corner radius, rect only */

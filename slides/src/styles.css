@@ -464,6 +464,13 @@ html, body {
   border-radius: 999px;
 }
 
+/* color + alpha pair, and gradient stop rows */
+.ed-coloralpha { display: flex; align-items: center; gap: 6px; }
+.ed-coloralpha input[type='number'] { width: 52px; }
+.ed-gradstop { display: flex; align-items: center; gap: 6px; }
+.ed-gradstop > input[type='number'] { width: 44px; }
+.ed-gradstop .ed-btn-icon { padding: 2px 6px; }
+
 /* resizable side panels — thin grab strips between panel and canvas */
 .ed-resizer {
   flex: none;
