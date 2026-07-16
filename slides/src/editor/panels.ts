@@ -186,7 +186,7 @@ export class PropsPanel {
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
-        if (!fx.enter && !fx.countUp && !fx.ambient) delete e.fx
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop) delete e.fx
         else e.fx = fx
       }, true)
 
@@ -198,7 +198,27 @@ export class PropsPanel {
       (v) => setFx({ countUp: v === 'on' ? true : undefined })))
     this.row('Ambient', this.select(
       ['none', 'kenburns'], el.fx?.ambient ?? 'none',
-      (v) => setFx({ ambient: v === 'none' ? undefined : 'kenburns' })))
+      (v) => setFx(v === 'none' ? { ambient: undefined, ken: undefined } : { ambient: 'kenburns' })))
+    if (el.fx?.ambient === 'kenburns') {
+      const ken = el.fx.ken ?? {}
+      const dir = ken.dir ?? 'drift'
+      const setKen = (patch: Partial<NonNullable<NonNullable<SlideElement['fx']>['ken']>>) =>
+        setFx({ ken: { ...ken, ...patch } })
+      this.row('Zoom', this.select(
+        ['drift', 'zoom-out', 'zoom-in'],
+        dir === 'out' ? 'zoom-out' : dir === 'in' ? 'zoom-in' : 'drift',
+        (v) => {
+          const d = v === 'zoom-out' ? 'out' : v === 'zoom-in' ? 'in' : 'drift'
+          // give each style its natural pace when switching
+          setFx({ ken: d === 'drift' ? undefined : { dir: d, scale: 1.06, duration: 2.5 } })
+        }))
+      this.row('Zoom %', this.number(
+        Math.round(((ken.scale ?? (dir === 'drift' ? 1.1 : 1.06)) - 1) * 100), 1,
+        (v, fin) => { if (fin) setKen({ scale: 1 + Math.min(Math.max(v, 0), 100) / 100 }) }))
+      this.row('Zoom secs', this.number(
+        ken.duration ?? (dir === 'drift' ? 26 : 2.5), 0.1,
+        (v, fin) => { if (fin) setKen({ duration: Math.max(v, 0.1) }) }))
+    }
 
     // continuous loop animation
     const loop = el.fx?.loop
