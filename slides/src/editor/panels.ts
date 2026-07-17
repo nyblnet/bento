@@ -275,6 +275,11 @@ export class PropsPanel {
         if (v === 'none') delete e.shadow
         else if (v !== 'custom') e.shadow = { ...SHADOW_PRESETS[v] }
       }, true)))
+    if (el.shadow) {
+      // recoloring a preset makes it 'custom' on next rebuild — that's fine
+      this.row('Shadow color', this.colorAlpha(el.shadow.color, (v, fin) =>
+        this.mutate(el.id, (e) => { if (e.shadow) e.shadow = { ...e.shadow, color: v } }, fin)))
+    }
 
 
     if (el.type === 'text') this.buildTextProps(el)
