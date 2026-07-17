@@ -3,7 +3,8 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { uid, type ShapeElement, type SlideElement, type TextElement, type TransitionKind } from '../model'
+import { uid, type ChartElement, type ShapeElement, type SlideElement, type TextElement, type TransitionKind } from '../model'
+import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
 
@@ -165,7 +166,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram' }[el.type])
+    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart' }[el.type])
     this.opsRow([el])
 
     // geometry
@@ -185,6 +186,7 @@ export class PropsPanel {
     if (el.type === 'text') this.buildTextProps(el)
     if (el.type === 'shape') this.buildShapeProps(el)
     if (el.type === 'image') this.buildImageProps(el)
+    if (el.type === 'chart') this.buildChartProps(el)
 
     this.buildPresentingProps(el)
 
@@ -581,6 +583,37 @@ export class PropsPanel {
       this.row('Corner radius', this.number(el.radius, 1, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin)))
     }
+  }
+
+  private buildChartProps(el: ChartElement) {
+    this.section('Data')
+    this.row('Preset', this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
+      this.mutate(el.id, (e) => {
+        const c = e as ChartElement
+        c.preset = v
+        c.option = CHART_PRESETS[v]()
+      }, true)))
+
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.innerHTML = 'The full <b>ECharts option</b> as JSON (pure data — use template-string formatters like <code>{b}: {c}</code>, never functions). Tooltips and zoom run while presenting.'
+    this.host.appendChild(hint)
+
+    const ta = document.createElement('textarea')
+    ta.className = 'ed-chart-json'
+    ta.rows = 14
+    ta.spellcheck = false
+    ta.value = JSON.stringify(el.option, null, 2)
+    ta.addEventListener('change', () => {
+      try {
+        const parsed = JSON.parse(ta.value)
+        ta.classList.remove('ed-invalid')
+        this.mutate(el.id, (e) => { (e as ChartElement).option = parsed }, true)
+      } catch {
+        ta.classList.add('ed-invalid')
+      }
+    })
+    this.host.appendChild(ta)
   }
 
   private buildImageProps(el: SlideElement) {

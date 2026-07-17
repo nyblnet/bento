@@ -120,7 +120,20 @@ export interface SvgElement extends ElementBase {
   css?: string
 }
 
-export type SlideElement = TextElement | ShapeElement | ImageElement | SvgElement
+/**
+ * Data chart rendered by ECharts. `option` is a PURE-JSON ECharts option
+ * (template-string formatters only — never functions): static SVG snapshots
+ * on the editor canvas/thumbnails/print, a live interactive instance
+ * (tooltips, dataZoom) while presenting.
+ */
+export interface ChartElement extends ElementBase {
+  type: 'chart'
+  /** preset key the panel offers to re-seed from (bar/line/pie/scatter) */
+  preset?: string
+  option: Record<string, unknown>
+}
+
+export type SlideElement = TextElement | ShapeElement | ImageElement | SvgElement | ChartElement
 
 export interface Slide {
   id: string
@@ -197,6 +210,18 @@ export function defaultText(partial: Partial<TextElement> = {}): TextElement {
     align: 'center',
     valign: 'middle',
     lineHeight: 1.25,
+    ...partial,
+  }
+}
+
+export function defaultChart(option: Record<string, unknown>, partial: Partial<ChartElement> = {}): ChartElement {
+  return {
+    id: uid('c'),
+    type: 'chart',
+    x: 400, y: 190, w: 800, h: 520,
+    rotation: 0, opacity: 1,
+    preset: 'bar',
+    option,
     ...partial,
   }
 }

@@ -6,6 +6,7 @@ import Reveal from 'reveal.js'
 import RevealNotes from 'reveal.js/plugin/notes/notes'
 import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
+import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 
@@ -183,6 +184,8 @@ export function startPresentation(
     runAmbientFx(doc.slides[toIdx], to)
     restartSvgAnimations(to)
     wireHoverFocus(doc.slides[toIdx], to)
+    if (from) disposeLiveCharts(doc.slides[fromIdx], from)
+    mountLiveCharts(doc.slides[toIdx], to)
   }) as any)
 
   // Clicking an element with a link jumps to its target slide.
@@ -210,10 +213,43 @@ export function startPresentation(
       runAmbientFx(doc.slides[startIndex], first)
       restartSvgAnimations(first)
       wireHoverFocus(doc.slides[startIndex], first)
+      mountLiveCharts(doc.slides[startIndex], first)
     }
   })
 
   return { exit }
+}
+
+// --- live charts --------------------------------------------------------------
+
+// Present mode swaps chart snapshots for live ECharts instances (tooltips,
+// dataZoom). Leaving the slide disposes the instance and restores the
+// snapshot so the section stays presentable in Reveal's viewDistance cache.
+const chartHandles = new WeakMap<HTMLElement, Array<() => void>>()
+
+function mountLiveCharts(slide: Slide, section: HTMLElement) {
+  const handles: Array<() => void> = []
+  for (const el of slide?.elements ?? []) {
+    if (el.type !== 'chart') continue
+    const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    if (!node) continue
+    const dispose = mountChart(el, node)
+    handles.push(() => {
+      dispose()
+      node.innerHTML = chartSnapshotSvg(el)
+      const csvg = node.querySelector('svg')
+      if (csvg) {
+        csvg.setAttribute('preserveAspectRatio', 'none')
+        ;(csvg as SVGElement).style.cssText = 'width:100%;height:100%;display:block'
+      }
+    })
+  }
+  if (handles.length) chartHandles.set(section, handles)
+}
+
+function disposeLiveCharts(_slide: Slide, section: HTMLElement) {
+  for (const h of chartHandles.get(section) ?? []) h()
+  chartHandles.delete(section)
 }
 
 // --- element fx -------------------------------------------------------------
