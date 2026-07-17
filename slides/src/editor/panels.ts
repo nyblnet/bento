@@ -414,7 +414,7 @@ export class PropsPanel {
     this.section('Typography')
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
-    hint.innerHTML = 'While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too.'
+    hint.innerHTML = 'While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.'
     this.host.appendChild(hint)
     this.row('Font', this.fontSelect(el))
     this.row('Size', this.number(el.fontSize, 1, (v, fin) =>

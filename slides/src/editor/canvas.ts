@@ -7,7 +7,7 @@ import Selecto from 'selecto'
 import type { Store } from '../store'
 import type { SlideElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
-import { autoformatAtCaret, markdownToHtml } from './markdown'
+import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
 import { PathEditor } from './patheditor'
 
 export class SlideCanvas {
@@ -434,6 +434,12 @@ export class SlideCanvas {
       // inline markup: ⌘/Ctrl+B/I/U toggle bold/italic/underline on the
       // selection (sanitize keeps b/i/u/strong/em, so it round-trips)
       if (ev.metaKey || ev.ctrlKey) {
+        // ⌘Z right after a markdown conversion restores the literal markers;
+        // otherwise the browser's native contentEditable undo runs
+        if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
+          if (undoAutoformat()) ev.preventDefault()
+          return
+        }
         const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
         if (cmd) {
           ev.preventDefault()
@@ -442,8 +448,11 @@ export class SlideCanvas {
       }
     })
     // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
-    // collapse as you type; pasted plain text converts the same patterns
-    inner.addEventListener('input', () => autoformatAtCaret())
+    // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
+    // text converts the same patterns
+    inner.addEventListener('input', () => {
+      if (!autoformatAtCaret()) clearAutoformat()
+    })
     inner.addEventListener('paste', (ev) => {
       const text = ev.clipboardData?.getData('text/plain')
       if (!text) return
@@ -463,7 +472,7 @@ export class SlideCanvas {
     if (!inner || !id) return
     inner.contentEditable = 'false'
     // drop the zero-width caret spacers autoformat leaves behind
-    const html = sanitizeHtml(inner.innerHTML.replace(/​/g, ''))
+    const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
     const el = this.store.element(id)
     if (el && el.type === 'text' && (el.html !== html || grownH > el.h)) {

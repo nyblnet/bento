@@ -18,6 +18,37 @@ const INLINE: Array<{ re: RegExp; tag: string }> = [
   { re: /`([^`\n]+)`$/, tag: 'code' },
 ]
 
+/** The most recent conversion, revertible with ⌘Z until the next input. */
+type LastFormat =
+  | { kind: 'inline'; el: HTMLElement; source: string; tail: Text }
+  | { kind: 'bullet'; node: Text; offset: number; source: string }
+let lastFormat: LastFormat | null = null
+
+/** Forget the revertible conversion (any input that isn't a fresh conversion). */
+export function clearAutoformat() {
+  lastFormat = null
+}
+
+/** ⌘Z immediately after a conversion: restore the literal typed markers.
+ *  Returns true when it reverted (caller should preventDefault). */
+export function undoAutoformat(): boolean {
+  const last = lastFormat
+  lastFormat = null
+  if (!last) return false
+  if (last.kind === 'bullet') {
+    if (!last.node.isConnected) return false
+    last.node.replaceData(last.offset, 2, last.source)
+    placeCaret(last.node, last.offset + last.source.length)
+    return true
+  }
+  if (!last.el.isConnected) return false
+  const literal = document.createTextNode(last.source)
+  last.el.replaceWith(literal)
+  last.tail.remove()
+  placeCaret(literal, literal.data.length)
+  return true
+}
+
 /** Collapse a just-completed markdown marker before the caret. Returns true if it fired. */
 export function autoformatAtCaret(): boolean {
   const sel = document.getSelection()
@@ -29,8 +60,10 @@ export function autoformatAtCaret(): boolean {
   // "- " at line start → bullet glyph (contentEditable renders the trailing
   // space as NBSP, so match both; keep NBSP so the glyph's gap can't collapse)
   if (/(?:^|\n)-[  ]$/.test(upto) && off >= 2 && isLineStart(node, off - 2)) {
+    const source = node.data.slice(off - 2, off)
     node.replaceData(off - 2, 2, '• ')
     placeCaret(node, off)
+    lastFormat = { kind: 'bullet', node, offset: off - 2, source }
     return true
   }
 
@@ -38,6 +71,8 @@ export function autoformatAtCaret(): boolean {
     const m = upto.match(re)
     if (!m || !m[1]) continue
     const start = off - m[0].length
+    // backslash escape: \*literal\* stays literal (stripped on commit)
+    if (start > 0 && node.data[start - 1] === '\\') continue
     const range = document.createRange()
     range.setStart(node, start)
     range.setEnd(node, off)
@@ -49,6 +84,7 @@ export function autoformatAtCaret(): boolean {
     const tail = document.createTextNode('​')
     el.after(tail)
     placeCaret(tail, 1)
+    lastFormat = { kind: 'inline', el, source: m[0], tail }
     return true
   }
   return false
@@ -78,9 +114,17 @@ function placeCaret(node: Node, offset: number) {
 const escapeHtml = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 
-/** Pasted plain text → the inline-HTML subset (bold/italic/strike/code/bullets/<br>). */
+/** Pasted plain text → the inline-HTML subset (bold/italic/strike/code/bullets/<br>).
+ *  Backslash escapes markers: \*x\* pastes as literal *x*. */
 export function markdownToHtml(text: string): string {
-  return text
+  // park escaped markers in the private-use area so patterns can't see them
+  const PARK = ''
+  const parked: string[] = []
+  const withParked = text.replace(/\\([*_~`-])/g, (_, c: string) => {
+    parked.push(c)
+    return PARK + (parked.length - 1) + PARK
+  })
+  const out = withParked
     .split('\n')
     .map((line) => {
       let s = escapeHtml(line).replace(/^(\s*)- /, '$1• ')
@@ -93,4 +137,5 @@ export function markdownToHtml(text: string): string {
       return s
     })
     .join('<br>')
+  return out.replace(/(\d+)/g, (_, i) => parked[+i])
 }
