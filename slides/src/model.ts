@@ -16,6 +16,11 @@ export interface ElementBase {
   /** degrees, clockwise */
   rotation: number
   opacity: number
+  /**
+   * Drop shadow, rendered with CSS drop-shadow so it follows the element's
+   * alpha shape (rounded corners, ellipses, text glyphs, image cutouts).
+   */
+  shadow?: { x?: number; y?: number; blur: number; color: string }
   /** presentation effects, run in present mode only */
   fx?: {
     /** entrance animation when the slide is shown */

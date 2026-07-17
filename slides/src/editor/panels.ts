@@ -266,6 +266,16 @@ export class PropsPanel {
         else e.role = v
       }, true)))
 
+    const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0]
+      ?? (el.shadow ? 'custom' : 'none')
+    this.row('Shadow', this.select(
+      [...(current === 'custom' ? ['custom'] : []), 'none', ...Object.keys(SHADOW_PRESETS)],
+      current,
+      (v) => this.mutate(el.id, (e) => {
+        if (v === 'none') delete e.shadow
+        else if (v !== 'custom') e.shadow = { ...SHADOW_PRESETS[v] }
+      }, true)))
+
 
     if (el.type === 'text') this.buildTextProps(el)
     if (el.type === 'shape') this.buildShapeProps(el)
@@ -1082,4 +1092,12 @@ export function combineColor(hex: string, a: number): string {
   const g = parseInt(hex.slice(3, 5), 16)
   const b = parseInt(hex.slice(5, 7), 16)
   return `rgba(${r}, ${g}, ${b}, ${Math.round(a * 1000) / 1000})`
+}
+
+/** Aesthetic shadow presets offered in the panel (custom values stay 'custom'). */
+const SHADOW_PRESETS: Record<string, { x?: number; y?: number; blur: number; color: string }> = {
+  subtle: { y: 2, blur: 10, color: 'rgba(10,16,28,0.25)' },
+  soft: { y: 10, blur: 28, color: 'rgba(10,16,28,0.32)' },
+  elevated: { y: 24, blur: 56, color: 'rgba(8,12,22,0.45)' },
+  glow: { blur: 40, color: 'rgba(226,80,45,0.45)' },
 }
