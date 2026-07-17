@@ -11,11 +11,18 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   never contain `</script>`. File System Access API first, download fallback.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
-- `src/present.ts` — Reveal.js overlay; slides with `transition:'morph'` use GSAP Flip:
-  matched `data-flip-id` elements animate geometry via Flip, style props (fill/color)
-  tween straight from the model values — including gradients (stop colors + line
-  coords tween; solid⇄gradient fabricates/collapses a temp gradient; from-colors
-  are the other side sampled at matching stop positions). Elements carry `fx` (enter stagger — equal
+- `src/anim.ts` — in-house animation engine (no GSAP): to/fromTo tweens with
+  channels opacity/y/scale/color/strokeDashoffset/attr{}/motionPath, delay/
+  repeat/yoyo/ease, per-channel overwrite, killTweensOf/getTweensOf, manual
+  clock for tests (window.bento.anim). Transform channels compose via a
+  per-element registry that preserves the model's rotate() — call resetXform
+  after applyElementFrame or stale y/scale re-emerge on the next tween.
+- `src/present.ts` — Reveal.js overlay; slides with `transition:'morph'` morph
+  matched `data-flip-id` elements MODEL-driven (both frames are in the doc —
+  no DOM measuring): translate+scale about top-left, PowerPoint scale mode.
+  Style props (fill/color) tween straight from the model values — including
+  gradients (stop colors + line coords tween; solid⇄gradient fabricates/
+  collapses a temp gradient; from-colors sampled at matching stop positions). Elements carry `fx` (enter stagger — equal
   `order` = simultaneous, countUp, ken-burns (`fx.ken` dir drift/out/in + zoom %/secs;
   out/in are one-shot settles per slide entry), `loop` dash-march/motion-path), `link`
   (click → slide id) and `group`; slides can set `hover:'focus-group'` (dim other
