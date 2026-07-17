@@ -543,6 +543,18 @@ html, body {
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
+.ed-comment-chip {
+  position: absolute;
+  z-index: 12;
+  pointer-events: none;
+  background: var(--accent);
+  color: #3a2800;
+  font: 700 10.5px/1 -apple-system, 'Segoe UI', system-ui, sans-serif;
+  padding: 5px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(20 30 45 / 0.25);
+}
 .ed-comment-hl.slide {
   border: 2px dashed var(--accent);
   border-radius: 8px;
