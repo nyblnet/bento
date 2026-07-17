@@ -24,7 +24,7 @@ A Bento document (`*.bento.html`) is an ordinary HTML file with three parts:
 
 | App | Status | Libraries |
 |---|---|---|
-| `slides/` — Bento Slides (PowerPoint replacement) | in development | Reveal.js (present), GSAP Flip (morph/animation), Moveable + Selecto (editing) |
+| `slides/` — Bento Slides (PowerPoint replacement) | in development | Reveal.js (present), in-house engine (morph/animation), Moveable + Selecto (editing), ECharts (charts) |
 | docs (Word replacement) | planned | TBD (e.g. ProseMirror/Tiptap) |
 | sheets (Excel replacement) | planned | TBD (e.g. HyperFormula + a grid) |
 
