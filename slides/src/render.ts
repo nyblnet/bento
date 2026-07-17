@@ -69,8 +69,9 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   node.style.height = `${el.h}px`
   node.style.transform = el.rotation ? `rotate(${el.rotation}deg)` : ''
   node.style.opacity = String(el.opacity)
-  node.style.filter = el.shadow
-    ? `drop-shadow(${el.shadow.x ?? 0}px ${el.shadow.y ?? 0}px ${el.shadow.blur}px ${el.shadow.color})`
+  const shadows = Array.isArray(el.shadow) ? el.shadow : el.shadow ? [el.shadow] : []
+  node.style.filter = shadows.length
+    ? shadows.map((s) => `drop-shadow(${s.x ?? 0}px ${s.y ?? 0}px ${s.blur}px ${s.color})`).join(' ')
     : ''
 }
 
