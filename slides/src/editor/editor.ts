@@ -36,6 +36,7 @@ export class Editor {
   private presenting = false
   private updatesB!: HTMLElement
   private updateFound: string | null = null
+  private lastAutoCheck: import('../update').UpdateCheck | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
   private panelW = { left: 188, right: 236 }
 
@@ -108,11 +109,16 @@ export class Editor {
     setTimeout(async () => {
       if (!autoCheckEnabled()) return
       const r = await checkForUpdates()
+      this.lastAutoCheck = r
       if (r.status === 'update') {
         this.updateFound = r.release.version
         this.updatesB.classList.add('ed-btn-update')
         this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
         this.updatesB.title = `Version ${r.release.version} is available — click to update`
+      } else if (r.status === 'current') {
+        this.updatesB.title = `Up to date (v${APP_VERSION}) — checked at launch`
+      } else {
+        this.updatesB.title = `Update check failed: ${r.message} — click to retry`
       }
     }, 1500)
     const undoB = btn(ICONS.undo, '', () => this.store.undo(), 'Undo (⌘Z)')
@@ -736,7 +742,12 @@ export class Editor {
     box.appendChild(head)
 
     const status = div('ed-about-status')
-    status.textContent = 'This file carries its own app — it works offline, forever, as is.'
+    status.textContent =
+      this.lastAutoCheck?.status === 'current'
+        ? `Checked automatically at launch — you're on the latest version (v${APP_VERSION}).`
+        : this.lastAutoCheck?.status === 'error'
+          ? `Launch check couldn't reach the release server (${this.lastAutoCheck.message}). Check manually below.`
+          : 'This file carries its own app — it works offline, forever, as is.'
 
     const row = div('ed-about-row')
     const checkB = document.createElement('button')
