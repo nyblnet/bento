@@ -71,10 +71,12 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   editor/comments.ts; never in present/print). Anchors: element id, POINT
   (x/y slide coords — "📍 Comment at a point" arms a one-shot crosshair
   click, Esc cancels), or the slide. Author name in localStorage
-  'bento-author'; unresolved threads badge the sidebar thumb. Panel buttons
-  dispatch 'bento:add-comment'. `window.bento.comments()` returns the flat
-  typed-anchor list — the entry point for AI agents processing flagged
-  issues in a deck.
+  'bento-author'; unresolved threads badge the sidebar thumb. ONE entry
+  point: the topbar 💬 tool (C) — armed click on an element anchors there,
+  on empty canvas anchors the point; near-full-slide backdrops never
+  capture (a comment on scenery means the spot). `window.bento.comments()`
+  returns the flat typed-anchor list — the entry point for AI agents
+  processing flagged issues in a deck.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.
@@ -86,6 +88,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   "Sync from parent" (id-lineage merge — generators must emit deterministic
   element ids for it and for cross-state morphs); slide deletion cascades states
   and clears inbound links after confirm; `[`/`]` collapse the side panels.
+- **Panel accordion**: every `.ed-section` header is retrofitted into a
+  collapsible group after each rebuild (panels.applyAccordion) — open state
+  persisted per title in localStorage; Presenting/Interactivity/Layout
+  default closed. Add new panel content under a section header and the
+  accordion picks it up automatically.
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
   Alt/Option-click digs through overlapping elements (capture-phase, beats
   Moveable's control box). Fill/stroke colors carry alpha (color input + % pair,

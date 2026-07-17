@@ -498,6 +498,29 @@ html, body {
 }
 .ed-arrange-btn:disabled { opacity: 0.35; cursor: default; }
 
+/* armed topbar tool (comment mode) */
+.ed-btn-armed { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
+.ed-btn-armed:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* collapsible panel sections */
+.ed-sec-toggle { cursor: pointer; user-select: none; position: relative; padding-left: 14px; }
+.ed-sec-toggle::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  width: 0; height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transform: translateY(-50%) rotate(90deg);
+  transition: transform 0.12s ease;
+  opacity: 0.55;
+}
+.ed-sec-toggle.closed::before { transform: translateY(-50%); }
+.ed-sec-toggle:hover { color: var(--ink); }
+.ed-section-body { display: flex; flex-direction: column; }
+
 /* review comments: canvas markers, thread popover, thumb badge */
 .ed-comment-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
 .ed-comment-marker {

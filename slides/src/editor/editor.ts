@@ -90,6 +90,9 @@ export class Editor {
       btn(ICONS.image, 'Image', () => this.pickImage()),
       btn(ICONS.chart, 'Chart', () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
     )
+    const commentB = btn(ICONS.comment, '', () => this.canvas.toggleCommentMode(),
+      'Comment (C) — click an element or a spot on the slide')
+    insert.appendChild(commentB)
 
     const actions = div('ed-group ed-group-right')
     const undoB = btn(ICONS.undo, '', () => this.store.undo(), 'Undo (⌘Z)')
@@ -116,6 +119,7 @@ export class Editor {
 
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
+    this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.panel = new PropsPanel(this.props, this.store)
   }
 
@@ -593,6 +597,11 @@ export class Editor {
       }
       if (inField) return
 
+      if (!mod && ev.key.toLowerCase() === 'c') {
+        ev.preventDefault()
+        this.canvas.toggleCommentMode()
+        return
+      }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
         const els = this.store.selectedElements
