@@ -774,11 +774,6 @@ export class PropsPanel {
       textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
       textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
     ])
-    group('Rotate', [
-      textBtn('⟲', 'Rotate 90° counter-clockwise', () => this.rotateBy(els, -90)),
-      textBtn('⟳', 'Rotate 90° clockwise', () => this.rotateBy(els, 90)),
-      textBtn('0°', 'Reset rotation', () => this.rotateBy(els, null)),
-    ])
 
     const grouped = els.some((e) => e.groupId)
     if (els.length > 1 || grouped) {
@@ -803,21 +798,6 @@ export class PropsPanel {
     if (els.length < 2) return
     const ref = els[0][dim]
     this.edit(() => { for (const el of els) el[dim] = ref }, true)
-  }
-
-  /** Rotate by deg (null = reset to 0), normalized to -180..180. */
-  private rotateBy(els: SlideElement[], deg: number | null) {
-    this.edit(() => {
-      for (const el of els) {
-        if (deg === null) el.rotation = 0
-        else {
-          let r = (el.rotation + deg) % 360
-          if (r > 180) r -= 360
-          if (r < -180) r += 360
-          el.rotation = r
-        }
-      }
-    }, true)
   }
 
   /** Single element aligns to the slide; a multi-selection aligns to its own bounds. */
