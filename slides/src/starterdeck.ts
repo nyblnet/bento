@@ -255,7 +255,7 @@ const BOKEH_WARM =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">' +
   '<defs><filter id="bp-bk-w" x="-60%" y="-60%" width="220%" height="220%">' +
   '<feGaussianBlur stdDeviation="7"/></filter></defs>' +
-  '<circle cx="40" cy="40" r="21" fill="#F0653C" filter="url(#bp-bk-w)"/></svg>'
+  '<circle cx="40" cy="40" r="21" fill="#FFE3BD" filter="url(#bp-bk-w)"/></svg>'
 
 const BOKEH_COOL =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">' +
@@ -265,16 +265,16 @@ const BOKEH_COOL =
 
 const AURORA_SHU =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">' +
-  '<defs><radialGradient id="bp-ga-am"><stop offset="0" stop-color="#E2502D" stop-opacity="0.20"/>' +
-  '<stop offset="0.55" stop-color="#E2502D" stop-opacity="0.07"/>' +
-  '<stop offset="1" stop-color="#E2502D" stop-opacity="0"/></radialGradient></defs>' +
+  '<defs><radialGradient id="bp-ga-am"><stop offset="0" stop-color="#FFEED6" stop-opacity="0.15"/>' +
+  '<stop offset="0.55" stop-color="#FFEED6" stop-opacity="0.05"/>' +
+  '<stop offset="1" stop-color="#FFEED6" stop-opacity="0"/></radialGradient></defs>' +
   '<circle cx="300" cy="300" r="300" fill="url(#bp-ga-am)"/></svg>'
 
 const AURORA_INDIGO =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">' +
-  '<defs><radialGradient id="bp-ga-bl"><stop offset="0" stop-color="#3D5A85" stop-opacity="0.18"/>' +
-  '<stop offset="0.55" stop-color="#3D5A85" stop-opacity="0.06"/>' +
-  '<stop offset="1" stop-color="#3D5A85" stop-opacity="0"/></radialGradient></defs>' +
+  '<defs><radialGradient id="bp-ga-bl"><stop offset="0" stop-color="#DDE7F5" stop-opacity="0.12"/>' +
+  '<stop offset="0.55" stop-color="#DDE7F5" stop-opacity="0.04"/>' +
+  '<stop offset="1" stop-color="#DDE7F5" stop-opacity="0"/></radialGradient></defs>' +
   '<circle cx="300" cy="300" r="300" fill="url(#bp-ga-bl)"/></svg>'
 
 const DOTS_PAPER =
@@ -727,7 +727,7 @@ export function starterDoc(): BentoDoc {
             }),
             shape('rect', {
               id: 'sd-ch-btn', x: 964, y: 452, w: 220, h: 52, radius: 26, fill: SHU, fillGradient: GRAD_SHU,
-              shadow: { y: 10, blur: 26, color: 'rgba(226,80,45,0.35)' }, link: scene.to,
+              shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' }, link: scene.to,
             }),
             text({
               id: 'sd-ch-btnlabel', x: 964, y: 466, w: 220, h: 28, html: scene.chip, align: 'center',
@@ -878,7 +878,7 @@ export function starterDoc(): BentoDoc {
           html: 'Press <b>Esc</b> — this deck is already your copy of the editor.',
           fontSize: 17, fontWeight: 500, color: MIST, align: 'center',
         }),
-        shape('rect', { x: 562, y: 644, w: 156, h: 44, radius: 22, fill: SHU, fillGradient: GRAD_SHU, shadow: { y: 10, blur: 26, color: 'rgba(226,80,45,0.4)' } }),
+        shape('rect', { x: 562, y: 644, w: 156, h: 44, radius: 22, fill: SHU, fillGradient: GRAD_SHU, shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' } }),
         text({
           x: 562, y: 655, w: 156, h: 24, html: 'bento.page', fontSize: 16, fontWeight: 700,
           color: INK, align: 'center',
