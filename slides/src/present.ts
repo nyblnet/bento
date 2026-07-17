@@ -91,7 +91,7 @@ export function startPresentation(
     transition: 'fade',
     transitionSpeed: 'default',
     backgroundTransition: 'fade',
-    controls: doc.present?.controls ?? true,
+    controls: doc.present?.controls ?? false, // links/keys navigate; corner arrows are clutter
     progress: doc.present?.progress ?? true,
     slideNumber: (doc.present?.slideNumber ?? true)
       ? (((slideEl: HTMLElement) => {

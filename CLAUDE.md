@@ -67,6 +67,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   line shapes have `lineStart`/`lineEnd` tips (arrow/dot/bar) rendered as
   per-instance svg markers (sized in strokeWidth units, endpoints inset);
   line color morphs tween the STROKE attr (lines paint stroke, not fill).
+  Elements carry optional `shadow` {x,y,blur,color} — rendered as CSS
+  drop-shadow in applyElementFrame (follows alpha shape: rounded corners,
+  glyphs, image cutouts); panel offers presets (subtle/soft/elevated/glow),
+  non-matching values show as 'custom'. Present-mode Reveal CONTROLS (corner
+  arrows) default OFF (doc.present.controls re-enables).
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
   era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are

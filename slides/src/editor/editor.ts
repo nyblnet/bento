@@ -70,8 +70,8 @@ export class Editor {
     logo.innerHTML =
       `<svg class="ed-logo-mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#1C2635"/>` +
-      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#5678C4"/>` +
-      `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#EDA12F"/>` +
+      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#3D5A85"/>` +
+      `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#E2502D"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#EFECE3"/>` +
       `</svg> <b>Bento</b>&nbsp;Slides`
     logo.title = 'About Bento Slides — version, updates, licenses'
@@ -714,8 +714,8 @@ export class Editor {
     head.innerHTML =
       `<svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#1C2635"/>` +
-      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#5678C4"/>` +
-      `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#EDA12F"/>` +
+      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#3D5A85"/>` +
+      `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#E2502D"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#EFECE3"/>` +
       `</svg><div><b>Bento Slides</b><span>v${APP_VERSION} · format v${FORMAT_VERSION}</span></div>`
     box.appendChild(head)
