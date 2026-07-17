@@ -3,9 +3,10 @@
 
 import type { Store } from '../store'
 import {
-  defaultImage, defaultShape, defaultText, emptySlide, uid,
+  defaultChart, defaultImage, defaultShape, defaultText, emptySlide, uid,
   type ShapeKind, type SlideElement,
 } from '../model'
+import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
@@ -83,6 +84,7 @@ export class Editor {
       btn(ICONS.text, 'Text', () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true)),
       this.shapeDropdown(),
       btn(ICONS.image, 'Image', () => this.pickImage()),
+      btn('📊', 'Chart', () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
     )
 
     const actions = div('ed-group ed-group-right')

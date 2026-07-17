@@ -2,6 +2,7 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement } from './model'
+import { chartSnapshotSvg } from './charts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -253,6 +254,19 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       img.draggable = false
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
+      break
+    }
+    case 'chart': {
+      // Static SVG snapshot everywhere; present mode swaps in a live ECharts
+      // instance (mountLiveCharts) for tooltips/zoom. Kept as innerHTML so
+      // print and thumbnails need no chart runtime at render time.
+      node.dataset.chart = '1'
+      node.innerHTML = chartSnapshotSvg(el)
+      const csvg = node.querySelector('svg')
+      if (csvg) {
+        csvg.setAttribute('preserveAspectRatio', 'none')
+        csvg.style.cssText = 'width:100%;height:100%;display:block'
+      }
       break
     }
     case 'svg': {

@@ -31,6 +31,15 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   visually on canvas (`editor/patheditor.ts`): draggable anchors auto-smoothed
   Catmull-Rom→cubic bezier; the stored path is RELATIVE to the element's rest
   position (first anchor = rest position; committing moves the element there).
+- `src/charts.ts` — ECharts (Apache-2.0, svg renderer only, tree-shaken:
+  bar/line/pie/scatter + grid/tooltip/legend/dataZoom/title/dataset). A `chart`
+  element stores a PURE-JSON option (template-string formatters, never
+  functions — the doc must serialize). Editor canvas/thumbnails/print show
+  cached SSR SVG snapshots (chartSnapshotSvg); present mode mounts live
+  instances (tooltips + dataZoom work), disposed back to snapshots on slide
+  exit. Live node exposes `__bentoChart` for scripting. Panel: preset select
+  re-seeds the option; JSON textarea is the escape hatch. NOTICE block in
+  index.html carries MIT + Apache/BSD notices into every saved document.
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
   era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are

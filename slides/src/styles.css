@@ -464,6 +464,20 @@ html, body {
   border-radius: 999px;
 }
 
+/* chart option JSON editor */
+.ed-chart-json {
+  width: 100%;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  color: var(--ink, #1e2a3a);
+}
+.ed-chart-json.ed-invalid { border-color: #c9302c; outline: 1px solid #c9302c; }
+
 /* inline code spans inside text elements — editor, present and print alike */
 .bento-el-text code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
