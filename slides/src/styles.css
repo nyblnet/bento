@@ -498,6 +498,74 @@ html, body {
 }
 .ed-arrange-btn:disabled { opacity: 0.35; cursor: default; }
 
+/* review comments: canvas markers, thread popover, thumb badge */
+.ed-comment-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+.ed-comment-marker {
+  position: absolute;
+  pointer-events: auto;
+  width: 19px;
+  height: 19px;
+  border: none;
+  border-radius: 50% 50% 50% 3px;
+  background: var(--accent);
+  color: #3a2800;
+  font: 700 10px/19px inherit;
+  font-family: inherit;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(20 30 45 / 0.25);
+}
+.ed-comment-marker.resolved { opacity: 0.35; }
+.ed-comment-marker:hover { transform: scale(1.15); }
+
+.ed-comment-pop {
+  position: fixed;
+  z-index: 210;
+  width: 300px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(15 23 36 / 0.18);
+  padding: 12px 14px;
+}
+.ed-comment-pop-head {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.ed-comment-entries { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.ed-comment-entry b { font-size: 12.5px; }
+.ed-comment-entry .ed-comment-time { font-size: 11px; color: var(--muted); margin-left: 5px; }
+.ed-comment-entry p { margin: 2px 0 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.ed-comment-reply {
+  width: 100%;
+  margin-top: 10px;
+  font: inherit;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  resize: vertical;
+}
+.ed-comment-pop-foot { display: flex; gap: 6px; margin-top: 8px; }
+.ed-comment-pop-foot .ed-btn { border: 1px solid var(--line); flex: 1; justify-content: center; padding: 5px 6px; font-size: 12px; }
+
+.ed-thumb-cmt {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  z-index: 2;
+  width: 9px;
+  height: 9px;
+  border-radius: 50% 50% 50% 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px #fff;
+}
+
 /* layout picker — popover over the New-slide button */
 .ed-layoutpick {
   position: fixed;

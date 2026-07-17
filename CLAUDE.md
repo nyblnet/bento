@@ -66,6 +66,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   then by `role` (title/subtitle/body/kicker — Role select in the element
   panel); layout supplies frame+typography, content rides along; layout-owned
   leftovers are dropped UNLESS they are text someone wrote; user extras stay.
+- **Comments**: `Slide.comments` threads (author/at/text/replies/resolved) —
+  saved in the file, editor-only (canvas markers + thread popover via
+  editor/comments.ts; never in present/print). Anchored to an element id or
+  the slide; author name in localStorage 'bento-author'; unresolved threads
+  badge the sidebar thumb. Panel buttons dispatch 'bento:add-comment'.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.

@@ -9,6 +9,7 @@ import type { SlideElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
 import { PathEditor } from './patheditor'
+import { CommentsUI } from './comments'
 
 export class SlideCanvas {
   private stage: HTMLElement
@@ -24,6 +25,7 @@ export class SlideCanvas {
   private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
   private pathEditor!: PathEditor
+  private comments!: CommentsUI
 
   constructor(
     private wrap: HTMLElement,
@@ -86,6 +88,11 @@ export class SlideCanvas {
       this.startPathEdit(ev.detail.id)
     }) as EventListener)
 
+    this.comments = new CommentsUI(store, this.stage, () => this.scale)
+    document.addEventListener('bento:add-comment', ((ev: CustomEvent) => {
+      this.comments.openNew(ev.detail?.elementId)
+    }) as EventListener)
+
     // Alt/Option-click digs through overlapping elements: first click grabs
     // the topmost, each further alt-click steps one element deeper (wrapping).
     // Capture phase so it wins over Selecto AND Moveable's control-box area,
@@ -129,6 +136,7 @@ export class SlideCanvas {
     this.moveable.zoom = 1 / this.scale
     this.moveable.updateRect()
     if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
+    this.comments?.refresh()
   }
 
   // --- zoom ------------------------------------------------------------------

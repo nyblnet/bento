@@ -223,6 +223,11 @@ export class Editor {
     // thumb width tracks the (resizable) sidebar; states render smaller
     const base = Math.max(96, this.panelW.left - 40)
     const surface = renderThumbnail(slide, this.store.doc, isState ? Math.round(base * 0.84) : base)
+    if (slide.comments?.some((c) => !c.resolved)) {
+      const badge = div('ed-thumb-cmt')
+      badge.title = `${slide.comments.filter((c) => !c.resolved).length} open comment(s)`
+      item.appendChild(badge)
+    }
     const tools = div('ed-thumb-tools')
     tools.append(
       btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, 'Duplicate slide'),
@@ -408,6 +413,16 @@ export class Editor {
         if (!slide) return
         const w = slide.stateOf ? Math.round(base * 0.84) : base
         item.querySelector('.bento-thumb-surface')?.replaceWith(renderThumbnail(slide, this.store.doc, w))
+        // comment badge tracks doc-level changes too (comments emit 'doc')
+        const open = slide.comments?.some((c) => !c.resolved)
+        const badge = item.querySelector('.ed-thumb-cmt')
+        if (open && !badge) {
+          const b = div('ed-thumb-cmt')
+          b.title = 'Open comment(s)'
+          item.appendChild(b)
+        } else if (!open && badge) {
+          badge.remove()
+        }
       })
     }, 150)
   }
