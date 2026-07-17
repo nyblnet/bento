@@ -5,13 +5,9 @@
 import Reveal from 'reveal.js'
 import RevealNotes from 'reveal.js/plugin/notes/notes'
 import 'reveal.js/dist/reveal.css'
-import { gsap } from 'gsap'
-import { Flip } from 'gsap/Flip'
-import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
+import { anim, resetXform } from './anim'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
-
-gsap.registerPlugin(Flip, MotionPathPlugin)
 
 const MORPH_DURATION = 0.65
 const MORPH_EASE = 'power2.inOut'
@@ -163,11 +159,14 @@ export function startPresentation(
       // Kill the outgoing slide's tweens, then restore model frames —
       // a tween killed during its delay would otherwise leave the element
       // stuck at its "from" state (invisible) for every future visit.
-      gsap.killTweensOf(from.querySelectorAll('.bento-el'))
+      anim.killTweensOf(from.querySelectorAll('.bento-el'))
       const fromSlide = doc.slides[fromIdx]
       for (const el of fromSlide?.elements ?? []) {
         const node = from.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
-        if (node) applyElementFrame(node, el)
+        if (node) {
+          applyElementFrame(node, el) // resets style.transform…
+          resetXform(node) // …so the engine must forget its composed state
+        }
       }
       if (fromSlide?.hover?.type === 'reveal') {
         applyRevealSet(from, null, fromSlide.hover.default)
@@ -244,7 +243,7 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
     // node would fight it and freeze the dot off its path
     if (fx.loop?.type === 'motion-path') return
     if (fx.enter) {
-      gsap.fromTo(
+      anim.fromTo(
         node,
         { opacity: 0, y: fx.enter === 'fade-up' ? 16 : 0 },
         {
@@ -253,7 +252,6 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
           duration: 0.55,
           delay: 0.12 + Math.min(step, 24) * 0.05,
           ease: 'power2.out',
-          overwrite: 'auto',
         },
       )
     }
@@ -272,10 +270,11 @@ function settleGuarantee(pairs: Array<[HTMLElement, SlideElement]>) {
   setTimeout(() => {
     for (const [node, el] of pairs) {
       if (!node.isConnected) continue
-      const tweens = gsap.getTweensOf(node)
+      const tweens = anim.getTweensOf(node)
       if (tweens.some((t) => t.progress() < 1)) {
-        gsap.killTweensOf(node)
+        anim.killTweensOf(node)
         applyElementFrame(node, el)
+        resetXform(node)
       }
     }
   }, 2800)
@@ -288,7 +287,7 @@ function runCountUp(node: HTMLElement) {
   const tokens = [...final.matchAll(/\d+(?:[.,]\d+)?/g)]
   if (!tokens.length) return
   const state = { p: 0 }
-  gsap.to(state, {
+  anim.to(state, {
     p: 1,
     duration: 1.15,
     delay: 0.15,
@@ -326,7 +325,7 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
       const ken = fx.ken ?? {}
       const dir = ken.dir ?? 'drift'
       if (dir === 'drift') {
-        gsap.fromTo(
+        anim.fromTo(
           node,
           { scale: 1.02 },
           { scale: ken.scale ?? 1.1, duration: ken.duration ?? 26, ease: 'none', repeat: -1, yoyo: true, transformOrigin: '50% 40%' },
@@ -335,17 +334,17 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
         // one-shot settle, replayed on every slide entry
         const far = ken.scale ?? 1.06
         const dur = ken.duration ?? 2.5
-        gsap.fromTo(
+        anim.fromTo(
           node,
           { scale: dir === 'out' ? far : 1 },
-          { scale: dir === 'out' ? 1 : far, duration: dur, ease: 'power2.out', transformOrigin: '50% 50%', overwrite: 'auto' },
+          { scale: dir === 'out' ? 1 : far, duration: dur, ease: 'power2.out', transformOrigin: '50% 50%' },
         )
       }
     }
     if (fx.loop?.type === 'dash-march') {
       const target = node.querySelector('path, line, rect, ellipse, polygon')
       if (target) {
-        gsap.fromTo(
+        anim.fromTo(
           target,
           { strokeDashoffset: fx.loop.distance ?? 18 },
           { strokeDashoffset: 0, duration: fx.loop.duration ?? 1.4, ease: 'none', repeat: -1 },
@@ -353,7 +352,7 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
       }
     }
     if (fx.loop?.type === 'motion-path') {
-      gsap.to(node, {
+      anim.to(node, {
         motionPath: { path: fx.loop.path },
         duration: fx.loop.duration,
         delay: fx.loop.delay ?? 0,
@@ -460,7 +459,7 @@ function runMorph(
   if (entering.length) {
     const spread = Math.min(0.45, entering.length * 0.03)
     entering.forEach(([n, opacity], i) => {
-      gsap.fromTo(n,
+      anim.fromTo(n,
         { opacity: 0, y: 14 },
         {
           opacity, y: 0, duration: 0.45,
@@ -475,33 +474,43 @@ function runMorph(
   }
   if (!matchedFrom.length) return
 
-  // Reveal has already hidden/transformed the outgoing section. Temporarily
-  // neutralize that so Flip can measure where the elements really were.
-  const saved = {
-    display: fromSection.style.display,
-    visibility: fromSection.style.visibility,
-    transform: fromSection.style.transform,
-    opacity: fromSection.style.opacity,
+  // Geometry straight from the model — no DOM measuring needed (both sides'
+  // frames are in the doc), so the outgoing section's Reveal styling is
+  // irrelevant. Each matched node animates from the from-slide's frame to its
+  // own via translate+scale about the top-left corner (scale mode like
+  // PowerPoint: text scales instead of reflowing mid-morph). Rotating morphs
+  // pivot slightly differently than center-origin — rare and acceptable.
+  for (const node of matchedTo) {
+    const id = node.dataset.flipId!
+    const a = fromModel.get(id)
+    const b = toModel.get(id)
+    if (!a || !b) continue
+    if (a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && (a.rotation ?? 0) === (b.rotation ?? 0)) continue
+    const state = { p: 0 }
+    node.style.transformOrigin = '0 0'
+    anim.to(state, {
+      p: 1,
+      duration: MORPH_DURATION,
+      ease: MORPH_EASE,
+      onUpdate() {
+        const p = state.p
+        const x = a.x + (b.x - a.x) * p
+        const y = a.y + (b.y - a.y) * p
+        const w = a.w + (b.w - a.w) * p
+        const h = a.h + (b.h - a.h) * p
+        const r = (a.rotation ?? 0) + ((b.rotation ?? 0) - (a.rotation ?? 0)) * p
+        node.style.transform =
+          `translate(${x - b.x}px, ${y - b.y}px)` +
+          (r ? ` rotate(${r}deg)` : '') +
+          ` scale(${w / Math.max(b.w, 0.01)}, ${h / Math.max(b.h, 0.01)})`
+      },
+      onComplete() {
+        node.style.transformOrigin = ''
+        node.style.transform = b.rotation ? `rotate(${b.rotation}deg)` : ''
+        resetXform(node)
+      },
+    })
   }
-  fromSection.style.display = 'block'
-  fromSection.style.visibility = 'hidden'
-  fromSection.style.transform = 'none'
-  fromSection.style.opacity = '1'
-
-  const state = Flip.getState(matchedFrom)
-
-  fromSection.style.display = saved.display
-  fromSection.style.visibility = saved.visibility
-  fromSection.style.transform = saved.transform
-  fromSection.style.opacity = saved.opacity
-
-  // Geometry via Flip (position/size/rotation, scale mode like PowerPoint).
-  Flip.from(state, {
-    targets: matchedTo,
-    duration: MORPH_DURATION,
-    ease: MORPH_EASE,
-    scale: true,
-  })
 
   // Styles morph straight from the model — exact values, no DOM sniffing.
   for (const to of matchedTo) {
@@ -510,7 +519,7 @@ function runMorph(
     const b = toModel.get(id)
     if (!a || !b) continue
     if (a.opacity !== b.opacity) {
-      gsap.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
+      anim.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
     }
     if (a.type === 'shape' && b.type === 'shape') {
       const target = to.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
@@ -519,7 +528,7 @@ function runMorph(
     if (a.type === 'text' && b.type === 'text' && a.color !== b.color) {
       const inner = to.querySelector<HTMLElement>('.bento-text-inner')
       if (inner) {
-        gsap.fromTo(inner, { color: a.color }, { color: b.color, duration: MORPH_DURATION, ease: MORPH_EASE })
+        anim.fromTo(inner, { color: a.color }, { color: b.color, duration: MORPH_DURATION, ease: MORPH_EASE })
       }
     }
   }
@@ -583,7 +592,7 @@ function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
   const bg = b.fillGradient?.stops.length ? b.fillGradient : undefined
   if (!ag && !bg) {
     if (a.fill !== b.fill) {
-      gsap.fromTo(target, { attr: { fill: a.fill } }, { attr: { fill: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
+      anim.fromTo(target, { attr: { fill: a.fill } }, { attr: { fill: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
     }
     return
   }
@@ -614,7 +623,7 @@ function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
     const at = finals[i]?.at ?? 1
     const fromColor = ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.fill))
     const toColor = finals[i]?.color ?? b.fill
-    gsap.fromTo(
+    anim.fromTo(
       node,
       { attr: { 'stop-color': fromColor } },
       {
@@ -636,5 +645,5 @@ function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
 
   const fromLine = gradientLineCoords((ag ?? bg)!.angle)
   const toLine = gradientLineCoords((bg ?? ag)!.angle)
-  gsap.fromTo(lin, { attr: fromLine }, { attr: toLine, duration: MORPH_DURATION, ease: MORPH_EASE })
+  anim.fromTo(lin, { attr: fromLine }, { attr: toLine, duration: MORPH_DURATION, ease: MORPH_EASE })
 }

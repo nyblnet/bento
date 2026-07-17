@@ -8,11 +8,8 @@
 // anchored at the element's centre; dragging the first anchor moves the
 // element itself.
 
-import { gsap } from 'gsap'
-import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
+import { anim } from '../anim'
 import type { Store } from '../store'
-
-gsap.registerPlugin(MotionPathPlugin)
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -215,7 +212,7 @@ export class PathEditor {
 
   cancel() {
     if (!this.overlay) return
-    gsap.killTweensOf(this.overlay.querySelectorAll('*'))
+    anim.killTweensOf(this.overlay.querySelectorAll('*'))
     this.overlay.remove()
     this.overlay = null
     this.hint?.remove()
@@ -227,7 +224,7 @@ export class PathEditor {
   private draw() {
     const svg = this.overlay
     if (!svg) return
-    gsap.killTweensOf(svg.querySelectorAll('.ed-pe-dot'))
+    anim.killTweensOf(svg.querySelectorAll('.ed-pe-dot'))
     svg.innerHTML = ''
     const k = 1 / this.scale()
     const d = anchorsToPath(this.pts)
@@ -277,7 +274,7 @@ export class PathEditor {
     preview.style.pointerEvents = 'none'
     preview.classList.add('ed-pe-dot')
     svg.appendChild(preview)
-    gsap.to(preview, { motionPath: { path: d }, duration: Math.max(dur, 0.5), ease: 'none', repeat: -1 })
+    anim.to(preview, { motionPath: { path: d }, duration: Math.max(dur, 0.5), ease: 'none', repeat: -1 })
   }
 
   // --- interaction ------------------------------------------------------------
