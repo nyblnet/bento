@@ -177,7 +177,7 @@ BentoDoc
    ├─ hover?                       ← { type:'focus-group', dim } | { type:'reveal', default }
    └─ elements: SlideElement[]     ← array order = paint order (z)
       ├─ common: id · x y w h · rotation · opacity
-      │          fx? · link? · group? · groupId? · showOnHover?
+      │          fx? · link? · group? · groupId? · showOnHover? · role?
       ├─ text:  html (sanitized inline: b/i/u/s/code/br/span…) · placeholder? · fontSize · fontFamily
       │         fontWeight · color · align · valign · lineHeight · letterSpacing?
       ├─ shape: shape (rect|ellipse|triangle|arrow|line|path) · fill · fillGradient?

@@ -61,7 +61,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   their chrome morphs across transitions (and re-apply-by-lineage stays
   possible). Text `placeholder` prompts render dimmed in the editor and are
   hidden in present/print (`hidePlaceholders` RenderOpt). Picker on the
-  New-slide button; "Save slide as layout" in the slide panel.
+  New-slide button AND the insert-gaps; "Save slide as layout" + "Apply
+  layout" in the slide panel. Apply (model.applyLayout) matches donors by id,
+  then by `role` (title/subtitle/body/kicker — Role select in the element
+  panel); layout supplies frame+typography, content rides along; layout-owned
+  leftovers are dropped UNLESS they are text someone wrote; user extras stay.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.

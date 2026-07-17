@@ -54,6 +54,13 @@ export interface ElementBase {
    * The slide's hover.default set is shown when nothing is hovered.
    */
   showOnHover?: string
+  /**
+   * Layout role — what this element IS on the slide ('title', 'subtitle',
+   * 'body', 'kicker'). Applying a different layout moves content between
+   * same-role elements, PowerPoint-placeholder style. Free-form string;
+   * those four are the conventions the built-in layouts use.
+   */
+  role?: string
 }
 
 export interface TextElement extends ElementBase {
@@ -327,38 +334,38 @@ export function builtinLayouts(): Slide[] {
       id: 'layout-title', name: 'Title', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
         bar('lt-bar', { x: 160, y: 380, w: 72, h: 8 }),
         ph('lt-title', 'Click to add title', { x: 160, y: 404, w: 1280, h: 140 },
-          { fontSize: 76, fontWeight: 700, valign: 'middle' }),
+          { fontSize: 76, fontWeight: 700, valign: 'middle', role: 'title' }),
         ph('lt-sub', 'Click to add subtitle', { x: 160, y: 556, w: 1100, h: 60 },
-          { fontSize: 28, color: '#45566B', valign: 'middle' }),
+          { fontSize: 28, color: '#45566B', valign: 'middle', role: 'subtitle' }),
       ],
     },
     {
       id: 'layout-title-content', name: 'Title + content', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
         ph('ltc-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
-          { fontSize: 44, fontWeight: 700, valign: 'middle' }),
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         bar('ltc-rule', { x: 120, y: 168, w: 1360, h: 3 }),
         ph('ltc-body', 'Click to add content', { x: 120, y: 208, w: 1360, h: 600 },
-          { fontSize: 26, color: '#586A80', valign: 'top', lineHeight: 1.5 }),
+          { fontSize: 26, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
       ],
     },
     {
       id: 'layout-two-col', name: 'Two columns', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
         ph('l2c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
-          { fontSize: 44, fontWeight: 700, valign: 'middle' }),
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
         bar('l2c-rule', { x: 120, y: 168, w: 1360, h: 3 }),
         ph('l2c-left', 'Left column', { x: 120, y: 208, w: 660, h: 600 },
-          { fontSize: 24, valign: 'top', lineHeight: 1.5 }),
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'body' }),
         ph('l2c-right', 'Right column', { x: 820, y: 208, w: 660, h: 600 },
-          { fontSize: 24, valign: 'top', lineHeight: 1.5 }),
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'body' }),
       ],
     },
     {
       id: 'layout-section', name: 'Section divider', background: '#1E2A3A', transition: 'fade', notes: '', elements: [
         bar('lsec-bar', { x: 160, y: 396, w: 72, h: 8 }),
         ph('lsec-title', 'Section title', { x: 160, y: 420, w: 1280, h: 120 },
-          { fontSize: 64, fontWeight: 700, color: '#FFFFFF', valign: 'middle' }),
+          { fontSize: 64, fontWeight: 700, color: '#FFFFFF', valign: 'middle', role: 'title' }),
         ph('lsec-kicker', 'PART 1', { x: 160, y: 350, w: 800, h: 40 },
-          { fontSize: 18, fontWeight: 600, color: '#F7A600', letterSpacing: 3, valign: 'middle' }),
+          { fontSize: 18, fontWeight: 600, color: '#F7A600', letterSpacing: 3, valign: 'middle', role: 'kicker' }),
       ],
     },
     { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
@@ -369,6 +376,65 @@ export function builtinLayouts(): Slide[] {
 export function instantiateLayout(layout: Slide): Slide {
   const copy: Slide = JSON.parse(JSON.stringify(layout))
   return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
+}
+
+const textHasContent = (e: SlideElement) =>
+  e.type !== 'text' || !!e.html.replace(/<br\s*\/?>/gi, '').replace(/\u200B/g, '').trim()
+
+/**
+ * Apply a layout to an existing slide's elements. The matching ladder:
+ *   1. by id     — re-applying the slide's own layout resets frames/typography
+ *                  while keeping content
+ *   2. by role   — cross-layout: the slide's 'title' moves into the new
+ *                  layout's 'title' frame (same element type required;
+ *                  donors consumed in document order)
+ * Content (text html, link) rides along; the layout provides frame and
+ * typography. Leftover slide elements that belong to some KNOWN layout
+ * (old chrome, unfilled placeholders) are dropped; everything else is user
+ * content and survives on top of the new layout's elements.
+ */
+export function applyLayout(
+  slide: Slide,
+  layout: Slide,
+  knownLayoutElementIds: Set<string>,
+): SlideElement[] {
+  const donors = slide.elements
+  const consumed = new Set<SlideElement>()
+  const findDonor = (lel: SlideElement): SlideElement | undefined => {
+    const byId = donors.find((e) => !consumed.has(e) && e.id === lel.id)
+    if (byId) return byId
+    if (!lel.role) return undefined
+    return donors.find(
+      (e) => !consumed.has(e) && e.role === lel.role && e.type === lel.type && textHasContent(e),
+    )
+  }
+  const out: SlideElement[] = layout.elements.map((lel) => {
+    const copy = JSON.parse(JSON.stringify(lel)) as SlideElement
+    const d = findDonor(lel)
+    if (d) {
+      consumed.add(d)
+      if (copy.type === 'text' && d.type === 'text' && textHasContent(d)) copy.html = d.html
+      if (d.link) copy.link = d.link
+    }
+    return copy
+  })
+  for (const e of donors) {
+    if (consumed.has(e)) continue
+    // layout-owned leftovers: drop chrome and EMPTY placeholders, but text
+    // someone actually wrote is never silently lost — it rides along as-is
+    if (knownLayoutElementIds.has(e.id) && !(e.type === 'text' && textHasContent(e))) continue
+    out.push(e) // survives, painted above the layout
+  }
+  return out
+}
+
+/** Every element id owned by any known layout (built-ins + the document's). */
+export function layoutElementIds(doc: BentoDoc): Set<string> {
+  const ids = new Set<string>()
+  for (const ly of [...builtinLayouts(), ...(doc.layouts ?? [])]) {
+    for (const e of ly.elements) ids.add(e.id)
+  }
+  return ids
 }
 
 export function newDoc(): BentoDoc {
