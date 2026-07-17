@@ -434,6 +434,19 @@ html, body {
   user-select: none;
 }
 
+/* About actions: buttons must read against the white box without hover */
+.ed-about .ed-btn-primary {
+  background: #FF9E8A;
+  color: #0D1B2E;
+  font-weight: 700;
+}
+.ed-about .ed-btn-primary:hover { background: #F07B54; }
+.ed-about .ed-btn:not(.ed-btn-primary) {
+  border-color: var(--line);
+  background: #fff;
+}
+.ed-about .ed-btn:not(.ed-btn-primary):hover { background: var(--chrome-2); }
+
 /* ————— about dialog ————— */
 
 .ed-about-overlay {
