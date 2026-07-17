@@ -19,13 +19,14 @@ import {
   TooltipComponent,
 } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
+import { UniversalTransition } from 'echarts/features'
 import type { ChartElement } from './model'
 
 echarts.use([
   BarChart, LineChart, PieChart, ScatterChart,
   DatasetComponent, DataZoomComponent, GridComponent,
   LegendComponent, TitleComponent, TooltipComponent,
-  SVGRenderer,
+  SVGRenderer, UniversalTransition,
 ])
 
 /** Presets seed new charts and let the panel swap types without data loss. */
@@ -76,12 +77,36 @@ export const CHART_PRESETS: Record<string, () => Record<string, unknown>> = {
   }),
 }
 
-/** Live instance for present mode. Returns a dispose handle. */
-export function mountChart(el: ChartElement, host: HTMLElement): () => void {
+/** Enable smooth data/type transitions on every series of an option. */
+const withTransition = (option: Record<string, unknown>, animate: boolean): Record<string, unknown> => ({
+  ...option,
+  animation: animate,
+  animationDurationUpdate: 650,
+  animationEasingUpdate: 'quadraticInOut',
+  series: Array.isArray(option.series)
+    ? (option.series as Array<Record<string, unknown>>).map((s) => ({ ...s, universalTransition: true }))
+    : option.series,
+})
+
+/**
+ * Live instance for present mode. Returns a dispose handle. When `fromOption`
+ * is given (morph/state transition with a matching chart on the other side),
+ * the chart first paints that state and then ANIMATES to its own — value
+ * changes tween in place, and universalTransition even morphs across series
+ * types (bar → pie).
+ */
+export function mountChart(el: ChartElement, host: HTMLElement, fromOption?: Record<string, unknown>): () => void {
   host.innerHTML = ''
   const inst = echarts.init(host, undefined, { renderer: 'svg', width: el.w, height: el.h })
   try {
-    inst.setOption(el.option as never)
+    if (fromOption && JSON.stringify(fromOption) !== JSON.stringify(el.option)) {
+      inst.setOption(withTransition(fromOption, false) as never)
+      setTimeout(() => {
+        if (!inst.isDisposed()) inst.setOption(withTransition(el.option, true) as never, { notMerge: true })
+      }, 60)
+    } else {
+      inst.setOption(el.option as never)
+    }
   } catch {
     host.textContent = '⚠ invalid chart option'
   }

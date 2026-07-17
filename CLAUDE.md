@@ -40,6 +40,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   exit. Live node exposes `__bentoChart` for scripting. Panel: preset select
   re-seeds the option; JSON textarea is the escape hatch. NOTICE block in
   index.html carries MIT + Apache/BSD notices into every saved document.
+  Charts on morph/state transitions data-morph: the incoming chart paints the
+  outgoing side's option first, then setOption's to its own with
+  universalTransition (values tween in place, bar⇄pie works). Shapes:
+  `strokeStyle` solid/dashed/dotted (legacy `strokeDash` still honoured);
+  line shapes have `lineStart`/`lineEnd` tips (arrow/dot/bar) rendered as
+  per-instance svg markers (sized in strokeWidth units, endpoints inset);
+  line color morphs tween the STROKE attr (lines paint stroke, not fill).
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
   era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are
