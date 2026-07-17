@@ -363,7 +363,7 @@ export function starterDoc(): BentoDoc {
         }),
         shape('rect', { id: T_B, x: 886, y: 206, w: 84, h: 248, radius: 16, fill: STEEL, fillGradient: GRAD_STEEL, fx: { enter: 'fade-up', order: 2 } }),
         shape('rect', { id: T_A, x: 986, y: 206, w: 148, h: 112, radius: 16, fill: PEACH, fillGradient: GRAD_PEACH, fx: { enter: 'fade-up', order: 3 } }),
-        shape('rect', { id: T_C, x: 986, y: 330, w: 148, h: 124, radius: 16, fill: TILE_PAPER, fillGradient: GRAD_PAPER, fx: { enter: 'fade-up', order: 4 } }),
+        shape('rect', { id: T_C, x: 986, y: 334, w: 148, h: 120, radius: 16, fill: TILE_PAPER, fillGradient: GRAD_PAPER, fx: { enter: 'fade-up', order: 4 } }),
         kicker('BENTO SLIDES', { fx: { enter: 'fade-up', order: 0 } }),
         shape('rect', { x: 96, y: 86, w: 1088, h: 1.5, radius: 0, fill: 'rgba(255,255,255,0.12)', fx: { enter: 'fade', order: 0 } }),
         title('The file<br>is the<br>software.', {
@@ -867,7 +867,7 @@ export function starterDoc(): BentoDoc {
         }),
         shape('rect', { id: T_B, x: 532, y: 152, w: 70, h: 216, radius: 14, fill: STEEL, fillGradient: GRAD_STEEL }),
         shape('rect', { id: T_A, x: 618, y: 152, w: 130, h: 96, radius: 14, fill: PEACH, fillGradient: GRAD_PEACH }),
-        shape('rect', { id: T_C, x: 618, y: 260, w: 130, h: 108, radius: 14, fill: TILE_PAPER, fillGradient: GRAD_PAPER }),
+        shape('rect', { id: T_C, x: 618, y: 264, w: 130, h: 104, radius: 14, fill: TILE_PAPER, fillGradient: GRAD_PAPER }),
         kicker('YOUR TURN', { x: 340, y: 452, w: 600, h: 24, align: 'center' }),
         title('Make it yours.', {
           x: 240, y: 484, w: 800, h: 104, fontSize: 88, color: '#FFFFFF', align: 'center',

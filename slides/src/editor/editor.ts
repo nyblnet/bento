@@ -73,7 +73,7 @@ export class Editor {
     logo.innerHTML =
       `<svg class="ed-logo-mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
-      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#5E7699"/>` +
+      `<rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>` +
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
       `</svg> <b>Bento&nbsp;Slides</b>`
@@ -737,7 +737,7 @@ export class Editor {
     head.innerHTML =
       `<svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
-      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#5E7699"/>` +
+      `<rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>` +
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
       `</svg><div><b>Bento Slides</b><span>v${APP_VERSION} · format v${FORMAT_VERSION}</span></div>`
