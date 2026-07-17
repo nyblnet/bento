@@ -224,6 +224,10 @@ export class PropsPanel {
     notes.addEventListener('input', () => this.edit(() => { this.store.slide.notes = notes.value }, false))
     notes.addEventListener('change', () => this.edit(() => { this.store.slide.notes = notes.value }, true))
     this.host.appendChild(notes)
+    const notesHint = document.createElement('p')
+    notesHint.className = 'ed-hint'
+    notesHint.innerHTML = 'Press <b>S</b> while presenting to open the speaker view — these notes beside the current and next slide, with a timer.'
+    this.host.appendChild(notesHint)
   }
 
   private buildMultiPanel(els: SlideElement[]) {
