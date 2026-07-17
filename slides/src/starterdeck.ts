@@ -26,25 +26,25 @@ const DISPLAY = "'Fraunces', Georgia, serif"
 /** Text face — embedded variable sans. */
 const BODY = "'Instrument Sans', -apple-system, 'Segoe UI', Helvetica, sans-serif"
 
-const INK = '#0F1724'
-const PANEL = '#1C2635'
-const PAPER = '#F6F4EF'
-// Shu-iro vermilion (Japanese lacquer red) x aizome indigo — the ukiyo-e
-// pairing. Ownable, warm, and nothing like default chart colors.
-const SHU = '#E2502D'
-const SHU_SOFT = '#F07B54'
-const SHU_DEEP = '#A93317'
-const INDIGO = '#3D5A85'
-const INDIGO_SOFT = '#7A93BC'
+const INK = '#0D1B2E'
+const PANEL = '#16273E'
+const PAPER = '#F2F0EA'
+// Midnight & peach: deep navy-ink ground, one luminous peach accent, muted
+// steel-blue support. Warm-on-cool, nothing like default chart colors.
+const PEACH = '#FF9E8A'
+const PEACH_SOFT = '#FFBCA8'
+const PEACH_DEEP = '#C25A43'
+const STEEL = '#5E7699'
+const STEEL_SOFT = '#8FA3BF'
 const MIST = '#B6C1D2'
 const TILE_PAPER = '#EFECE3'
 
 // gradient-lit tile fills (light falls from above) — kills the flat-vector look
-const GRAD_SHU = { angle: 0, stops: [{ at: 0, color: '#C93E1E' }, { at: 1, color: '#F0704A' }] }
-const GRAD_INDIGO = { angle: 0, stops: [{ at: 0, color: '#2F4870' }, { at: 1, color: '#54719F' }] }
+const GRAD_PEACH = { angle: 0, stops: [{ at: 0, color: '#ED8266' }, { at: 1, color: '#FFB29B' }] }
+const GRAD_STEEL = { angle: 0, stops: [{ at: 0, color: '#48607F' }, { at: 1, color: '#7089A8' }] }
 const GRAD_PAPER = { angle: 0, stops: [{ at: 0, color: '#DDD9CD' }, { at: 1, color: '#F6F3EB' }] }
-const GRAD_CARD = { angle: 0, stops: [{ at: 0, color: '#161F2D' }, { at: 1, color: '#253143' }] }
-const INK_SOFT = 'rgba(30, 42, 58, 0.72)'
+const GRAD_CARD = { angle: 0, stops: [{ at: 0, color: '#101F33' }, { at: 1, color: '#1D3049' }] }
+const INK_SOFT = 'rgba(20, 34, 54, 0.75)'
 const CARD_STROKE = '#E7E1D2'
 const GLASS = 'rgba(255, 255, 255, 0.09)'
 
@@ -75,7 +75,7 @@ const shape = (kind: Parameters<typeof defaultShape>[0], p: Partial<ShapeElement
 const kicker = (label: string, p: Partial<TextElement> = {}): TextElement =>
   text({
     id: KICKER, x: 96, y: 54, w: 700, h: 26, html: label,
-    fontSize: 13, fontWeight: 700, color: SHU, letterSpacing: 4, ...p,
+    fontSize: 13, fontWeight: 700, color: PEACH, letterSpacing: 4, ...p,
   })
 
 const title = (html: string, p: Partial<TextElement> = {}): TextElement =>
@@ -101,7 +101,7 @@ const furniture = (index: string, dark: boolean): SlideElement[] => [
 const ghost = (n: string): TextElement =>
   text({
     x: 780, y: -30, w: 420, h: 340, html: n, align: 'right',
-    fontSize: 300, fontWeight: 900, fontFamily: DISPLAY, color: 'rgba(15,23,36,0.05)',
+    fontSize: 300, fontWeight: 900, fontFamily: DISPLAY, color: 'rgba(13,27,46,0.05)',
   })
 
 const dots = (dark: boolean, fx?: SvgElement['fx']): SvgElement => ({
@@ -170,7 +170,7 @@ const glow = (angle: number, stops: Array<{ at: number; color: string }>): Shape
 // --- chart options (pure JSON, brand-styled, embedded text face) ------------
 
 const barOption = () => ({
-  color: [SHU, INDIGO],
+  color: [PEACH, STEEL],
   textStyle: { fontFamily: 'Instrument Sans' },
   tooltip: { trigger: 'axis' },
   legend: { bottom: 0, textStyle: { color: '#6B7280' } },
@@ -189,7 +189,7 @@ const barOption = () => ({
 })
 
 const pieOption = () => ({
-  color: [SHU, SHU_SOFT, INDIGO, INDIGO_SOFT, PANEL],
+  color: [PEACH, PEACH_SOFT, STEEL, STEEL_SOFT, PANEL],
   textStyle: { fontFamily: 'Instrument Sans' },
   tooltip: { trigger: 'item' },
   legend: { bottom: 0, textStyle: { color: '#6B7280' } },
@@ -223,13 +223,13 @@ const trendOption = () => ({
   dataZoom: [{ type: 'inside' }],
   series: [{
     type: 'line', name: 'Momentum', smooth: true, symbol: 'none',
-    lineStyle: { color: SHU, width: 3 },
+    lineStyle: { color: PEACH, width: 3 },
     areaStyle: {
       color: {
         type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
         colorStops: [
-          { offset: 0, color: 'rgba(226,80,45,0.35)' },
-          { offset: 1, color: 'rgba(226,80,45,0)' },
+          { offset: 0, color: 'rgba(255,158,138,0.35)' },
+          { offset: 1, color: 'rgba(255,158,138,0)' },
         ],
       },
     },
@@ -263,14 +263,14 @@ const BOKEH_COOL =
   '<feGaussianBlur stdDeviation="7"/></filter></defs>' +
   '<circle cx="40" cy="40" r="21" fill="#DCE6F5" filter="url(#bp-bk-c)"/></svg>'
 
-const AURORA_SHU =
+const AURORA_PEACH =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">' +
   '<defs><radialGradient id="bp-ga-am"><stop offset="0" stop-color="#FFEED6" stop-opacity="0.15"/>' +
   '<stop offset="0.55" stop-color="#FFEED6" stop-opacity="0.05"/>' +
   '<stop offset="1" stop-color="#FFEED6" stop-opacity="0"/></radialGradient></defs>' +
   '<circle cx="300" cy="300" r="300" fill="url(#bp-ga-am)"/></svg>'
 
-const AURORA_INDIGO =
+const AURORA_STEEL =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">' +
   '<defs><radialGradient id="bp-ga-bl"><stop offset="0" stop-color="#DDE7F5" stop-opacity="0.12"/>' +
   '<stop offset="0.55" stop-color="#DDE7F5" stop-opacity="0.04"/>' +
@@ -280,7 +280,7 @@ const AURORA_INDIGO =
 const DOTS_PAPER =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">' +
   '<defs><pattern id="bp-dots-p" width="28" height="28" patternUnits="userSpaceOnUse">' +
-  '<circle cx="1.5" cy="1.5" r="1.4" fill="#0F1724" opacity="0.07"/></pattern></defs>' +
+  '<circle cx="1.5" cy="1.5" r="1.4" fill="#0D1B2E" opacity="0.07"/></pattern></defs>' +
   '<rect width="1280" height="720" fill="url(#bp-dots-p)"/></svg>'
 
 export function starterDoc(): BentoDoc {
@@ -296,8 +296,8 @@ export function starterDoc(): BentoDoc {
     'font-instrument': INSTRUMENT_VAR,
     'dots-ink': DOTS_INK,
     'dots-paper': DOTS_PAPER,
-    'aurora-amber': AURORA_SHU,
-    'aurora-blue': AURORA_INDIGO,
+    'aurora-amber': AURORA_PEACH,
+    'aurora-blue': AURORA_STEEL,
     'grain': GRAIN,
     'bokeh-warm': BOKEH_WARM,
     'bokeh-cool': BOKEH_COOL,
@@ -317,18 +317,18 @@ export function starterDoc(): BentoDoc {
       elements: [
         grain(),
         glow(135, [
-          { at: 0, color: 'rgba(61,90,133,0.22)' },
+          { at: 0, color: 'rgba(94,118,153,0.22)' },
           { at: 0.55, color: 'rgba(15,23,36,0)' },
-          { at: 1, color: 'rgba(226,80,45,0.16)' },
+          { at: 1, color: 'rgba(255,158,138,0.16)' },
         ]),
         shape('rect', {
           x: 0, y: 0, w: 1280, h: 720, radius: 0, fill: 'transparent',
           fillGradient: {
             angle: 250,
             stops: [
-              { at: 0, color: 'rgba(226,80,45,0.10)' },
+              { at: 0, color: 'rgba(255,158,138,0.10)' },
               { at: 0.5, color: 'rgba(15,23,36,0)' },
-              { at: 1, color: 'rgba(47,72,112,0.10)' },
+              { at: 1, color: 'rgba(62,86,120,0.10)' },
             ],
           },
         }),
@@ -361,8 +361,8 @@ export function starterDoc(): BentoDoc {
           shadow: { y: 30, blur: 70, color: 'rgba(0,0,0,0.55)' },
           fx: { enter: 'fade', order: 1 },
         }),
-        shape('rect', { id: T_B, x: 886, y: 206, w: 84, h: 248, radius: 16, fill: INDIGO, fillGradient: GRAD_INDIGO, fx: { enter: 'fade-up', order: 2 } }),
-        shape('rect', { id: T_A, x: 986, y: 206, w: 148, h: 112, radius: 16, fill: SHU, fillGradient: GRAD_SHU, fx: { enter: 'fade-up', order: 3 } }),
+        shape('rect', { id: T_B, x: 886, y: 206, w: 84, h: 248, radius: 16, fill: STEEL, fillGradient: GRAD_STEEL, fx: { enter: 'fade-up', order: 2 } }),
+        shape('rect', { id: T_A, x: 986, y: 206, w: 148, h: 112, radius: 16, fill: PEACH, fillGradient: GRAD_PEACH, fx: { enter: 'fade-up', order: 3 } }),
         shape('rect', { id: T_C, x: 986, y: 330, w: 148, h: 124, radius: 16, fill: TILE_PAPER, fillGradient: GRAD_PAPER, fx: { enter: 'fade-up', order: 4 } }),
         kicker('BENTO SLIDES', { fx: { enter: 'fade-up', order: 0 } }),
         shape('rect', { x: 96, y: 86, w: 1088, h: 1.5, radius: 0, fill: 'rgba(255,255,255,0.12)', fx: { enter: 'fade', order: 0 } }),
@@ -409,21 +409,21 @@ export function starterDoc(): BentoDoc {
       elements: [
         dots(false),
         glow(180, [
-          { at: 0, color: 'rgba(226,80,45,0.07)' },
-          { at: 1, color: 'rgba(61,90,133,0.05)' },
+          { at: 0, color: 'rgba(255,158,138,0.07)' },
+          { at: 1, color: 'rgba(94,118,153,0.05)' },
         ]),
         ghost('02'),
-        kicker('ONE FILE', { color: SHU_DEEP }),
+        kicker('ONE FILE', { color: PEACH_DEEP }),
         ...furniture('02', false),
         title('Everything ships inside.'),
         shape('rect', {
           x: 84, y: 208, w: 444, h: 420, radius: 26, fill: 'transparent',
-          stroke: SHU, strokeWidth: 2, strokeStyle: 'dashed',
+          stroke: PEACH, strokeWidth: 2, strokeStyle: 'dashed',
           fx: { loop: { type: 'dash-march', distance: 18, duration: 1.6 } },
         }),
         shape('rect', { id: T_D, x: 96, y: 220, w: 420, h: 396, radius: 20, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5 }),
-        shape('rect', { id: T_A, x: 120, y: 244, w: 372, h: 104, radius: 12, fill: SHU }),
-        shape('rect', { id: T_B, x: 120, y: 364, w: 372, h: 124, radius: 12, fill: INDIGO }),
+        shape('rect', { id: T_A, x: 120, y: 244, w: 372, h: 104, radius: 12, fill: PEACH }),
+        shape('rect', { id: T_B, x: 120, y: 364, w: 372, h: 124, radius: 12, fill: STEEL }),
         shape('rect', { id: T_C, x: 120, y: 504, w: 372, h: 88, radius: 12, fill: TILE_PAPER }),
         text({ x: 144, y: 270, w: 330, h: 58, html: '<b>your deck</b> — JSON in a &lt;script&gt; block', fontSize: 18, fontWeight: 500, color: INK, lineHeight: 1.45 }),
         text({ x: 144, y: 394, w: 330, h: 70, html: '<b>viewer + presenter</b> — morphs, charts, speaker view', fontSize: 18, fontWeight: 500, color: '#FFFFFF', lineHeight: 1.45 }),
@@ -453,17 +453,17 @@ export function starterDoc(): BentoDoc {
       elements: [
         grain(),
         glow(20, [
-          { at: 0, color: 'rgba(47,72,112,0.24)' },
+          { at: 0, color: 'rgba(62,86,120,0.24)' },
           { at: 0.6, color: 'rgba(15,23,36,0)' },
-          { at: 1, color: 'rgba(226,80,45,0.18)' },
+          { at: 1, color: 'rgba(255,158,138,0.18)' },
         ]),
         shape('rect', {
-          id: T_A, x: -140, y: -160, w: 520, h: 520, radius: 130, fill: SHU,
-          fillGradient: { angle: 135, stops: [{ at: 0, color: SHU }, { at: 1, color: SHU_SOFT }] },
+          id: T_A, x: -140, y: -160, w: 520, h: 520, radius: 130, fill: PEACH,
+          fillGradient: { angle: 135, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
         }),
         shape('rect', {
-          id: T_B, x: 980, y: -120, w: 420, h: 420, radius: 110, fill: INDIGO,
-          fillGradient: { angle: 225, stops: [{ at: 0, color: '#31497A' }, { at: 1, color: INDIGO_SOFT }] },
+          id: T_B, x: 980, y: -120, w: 420, h: 420, radius: 110, fill: STEEL,
+          fillGradient: { angle: 225, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
         }),
         shape('rect', {
           id: T_C, x: 1040, y: 520, w: 360, h: 360, radius: 96, fill: TILE_PAPER, opacity: 0.9,
@@ -487,15 +487,15 @@ export function starterDoc(): BentoDoc {
 
     // ── 4 · STATS BEAT (fade → staggers + count-ups) ───────────────────────
     slide({
-      background: SHU,
+      background: PEACH,
       transition: 'fade',
       notes:
         'A hard cut on purpose — rhythm. The numbers counted up as the slide entered; ' +
         'that’s one checkbox on any text element. The little lines show line endings: arrow, dot, bar.',
       elements: [
         shape('rect', { id: T_D, x: 96, y: 54, w: 34, h: 34, radius: 9, fill: INK }),
-        shape('rect', { id: T_B, x: 140, y: 54, w: 34, h: 34, radius: 9, fill: INDIGO }),
-        shape('rect', { id: T_A, x: 184, y: 54, w: 34, h: 34, radius: 9, fill: SHU_SOFT }),
+        shape('rect', { id: T_B, x: 140, y: 54, w: 34, h: 34, radius: 9, fill: STEEL }),
+        shape('rect', { id: T_A, x: 184, y: 54, w: 34, h: 34, radius: 9, fill: PEACH_SOFT }),
         shape('rect', { id: T_C, x: 228, y: 54, w: 34, h: 34, radius: 9, fill: PAPER }),
         text({
           x: 1024, y: 54, w: 160, h: 26, html: '04', align: 'right',
@@ -528,20 +528,20 @@ export function starterDoc(): BentoDoc {
         'Click “See the split” — it jumps to a hidden state slide and the bars MORPH into a pie.',
       elements: [
         dots(false),
-        kicker('LIVE DATA', { color: SHU_DEEP }),
+        kicker('LIVE DATA', { color: PEACH_DEEP }),
         ...furniture('05', false),
         title('Charts with a pulse.'),
         shape('rect', { id: T_C, x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' } }),
         { ...defaultChart(barOption()), id: CHART_MAIN, x: 96, y: 220, w: 780, h: 410, preset: 'bar' },
         shape('rect', { id: T_D, x: 920, y: 196, w: 264, h: 458, radius: 18, fill: PANEL, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.18)' } }),
-        shape('rect', { id: T_A, x: 944, y: 222, w: 44, h: 6, radius: 3, fill: SHU }),
+        shape('rect', { id: T_A, x: 944, y: 222, w: 44, h: 6, radius: 3, fill: PEACH }),
         text({
           x: 944, y: 248, w: 216, h: 210,
           html: '<b>Hover the bars</b> — tooltips are live.<br><br>Scroll or pinch inside the chart to zoom the data.',
           fontSize: 16.5, fontWeight: 500, color: MIST, lineHeight: 1.7,
         }),
         shape('rect', {
-          id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: INDIGO, fillGradient: GRAD_INDIGO,
+          id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: STEEL, fillGradient: GRAD_STEEL,
           stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
           link: S_CHARTS_PIE,
         }),
@@ -561,20 +561,20 @@ export function starterDoc(): BentoDoc {
         'different option: ECharts’ universal transition morphs bar→pie in place. Click back.',
       elements: [
         dots(false),
-        kicker('LIVE DATA', { color: SHU_DEEP }),
+        kicker('LIVE DATA', { color: PEACH_DEEP }),
         ...furniture('05', false),
         title('Same chart. New shape.'),
         shape('rect', { id: T_C, x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' } }),
         { ...defaultChart(pieOption()), id: CHART_MAIN, x: 96, y: 220, w: 780, h: 410, preset: 'pie' },
         shape('rect', { id: T_D, x: 920, y: 196, w: 264, h: 458, radius: 18, fill: PANEL, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.18)' } }),
-        shape('rect', { id: T_A, x: 944, y: 222, w: 44, h: 6, radius: 3, fill: SHU }),
+        shape('rect', { id: T_A, x: 944, y: 222, w: 44, h: 6, radius: 3, fill: PEACH }),
         text({
           x: 944, y: 248, w: 216, h: 210,
           html: 'This is a <b>hidden state</b> — arrow keys skip it; only the click gets here.<br><br>The data morphed in place.',
           fontSize: 16.5, fontWeight: 500, color: MIST, lineHeight: 1.7,
         }),
         shape('rect', {
-          id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: INDIGO, fillGradient: GRAD_INDIGO,
+          id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: STEEL, fillGradient: GRAD_STEEL,
           stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
           link: S_CHARTS,
         }),
@@ -593,20 +593,20 @@ export function starterDoc(): BentoDoc {
       elements: [
         grain(),
         glow(200, [
-          { at: 0, color: 'rgba(226,80,45,0.12)' },
+          { at: 0, color: 'rgba(255,158,138,0.12)' },
           { at: 0.5, color: 'rgba(15,23,36,0)' },
-          { at: 1, color: 'rgba(47,72,112,0.18)' },
+          { at: 1, color: 'rgba(62,86,120,0.18)' },
         ]),
         kicker('STORY WITH DATA'),
         ...furniture('06', true),
         title('Momentum you can feel.', { color: '#FFFFFF', w: 700 }),
         text({
           x: 800, y: 96, w: 384, h: 110, html: '+975%', fontSize: 92, fontWeight: 900,
-          fontFamily: DISPLAY, color: SHU, align: 'right',
+          fontFamily: DISPLAY, color: PEACH, align: 'right',
         }),
         shape('rect', { id: T_D, x: 1096, y: 208, w: 20, h: 20, radius: 6, fill: PANEL, stroke: 'rgba(185,196,212,0.3)', strokeWidth: 1 }),
-        shape('rect', { id: T_B, x: 1124, y: 208, w: 20, h: 20, radius: 6, fill: INDIGO }),
-        shape('rect', { id: T_A, x: 1152, y: 208, w: 20, h: 20, radius: 6, fill: SHU }),
+        shape('rect', { id: T_B, x: 1124, y: 208, w: 20, h: 20, radius: 6, fill: STEEL }),
+        shape('rect', { id: T_A, x: 1152, y: 208, w: 20, h: 20, radius: 6, fill: PEACH }),
         shape('rect', { id: T_C, x: 1180, y: 208, w: 4, h: 20, radius: 2, fill: TILE_PAPER }),
         { ...defaultChart(trendOption()), x: 64, y: 244, w: 1152, h: 420 },
       ],
@@ -621,7 +621,7 @@ export function starterDoc(): BentoDoc {
       elements: [
         dots(false),
         ghost('07'),
-        kicker('MOTION', { color: SHU_DEEP }),
+        kicker('MOTION', { color: PEACH_DEEP }),
         ...furniture('07', false),
         title('Lines that lead the eye.'),
         // the flow: a dashed path with a dot riding it, milestones as nodes
@@ -633,20 +633,20 @@ export function starterDoc(): BentoDoc {
           fx: { loop: { type: 'dash-march', distance: 20, duration: 1.8 } },
         }),
         shape('ellipse', {
-          x: 150, y: 530, w: 20, h: 20, fill: SHU,
+          x: 150, y: 530, w: 20, h: 20, fill: PEACH,
           fx: { loop: { type: 'motion-path', duration: 8,
             path: 'M 0 0 C 240 -260 500 -260 620 -110 C 710 5 880 5 960 -190' } },
         }),
         shape('ellipse', { x: 505, y: 321, w: 20, h: 20, fill: '#FFFFFF', stroke: INK, strokeWidth: 2.5 }),
         shape('ellipse', { x: 944, y: 496, w: 20, h: 20, fill: '#FFFFFF', stroke: INK, strokeWidth: 2.5 }),
-        shape('ellipse', { x: 1106, y: 336, w: 24, h: 24, fill: SHU, stroke: INK, strokeWidth: 2.5 }),
+        shape('ellipse', { x: 1106, y: 336, w: 24, h: 24, fill: PEACH, stroke: INK, strokeWidth: 2.5 }),
         text({ x: 435, y: 280, w: 160, h: 26, html: 'DRAFTED', fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: INK_SOFT, align: 'center' }),
         text({ x: 874, y: 532, w: 160, h: 26, html: 'REVIEWED', fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: INK_SOFT, align: 'center' }),
-        text({ x: 1038, y: 292, w: 160, h: 26, html: 'SHIPPED', fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: SHU_DEEP, align: 'center' }),
+        text({ x: 1038, y: 292, w: 160, h: 26, html: 'SHIPPED', fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: PEACH_DEEP, align: 'center' }),
         // tiles parked as a pill, bottom-right
         shape('rect', { id: T_D, x: 1044, y: 612, w: 140, h: 44, radius: 22, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5 }),
-        shape('rect', { id: T_B, x: 1062, y: 626, w: 18, h: 18, radius: 6, fill: INDIGO }),
-        shape('rect', { id: T_A, x: 1088, y: 626, w: 18, h: 18, radius: 6, fill: SHU }),
+        shape('rect', { id: T_B, x: 1062, y: 626, w: 18, h: 18, radius: 6, fill: STEEL }),
+        shape('rect', { id: T_A, x: 1088, y: 626, w: 18, h: 18, radius: 6, fill: PEACH }),
         shape('rect', { id: T_C, x: 1114, y: 626, w: 18, h: 18, radius: 6, fill: TILE_PAPER }),
         text({
           x: 96, y: 624, w: 800, h: 26,
@@ -668,33 +668,33 @@ export function starterDoc(): BentoDoc {
           id: S_CHOREO, step: '01', label: 'a tidy grid', chip: 'Play scene 2 →', to: S_CHOREO_2,
           blocks: [
             { id: T_D, x: 96, y: 240, w: 200, h: 170, radius: 18, fill: PANEL, fillGradient: GRAD_CARD },
-            { id: T_B, x: 316, y: 240, w: 200, h: 170, radius: 18, fill: INDIGO, fillGradient: GRAD_INDIGO },
-            { id: T_A, x: 536, y: 240, w: 200, h: 170, radius: 18, fill: SHU, fillGradient: GRAD_SHU },
+            { id: T_B, x: 316, y: 240, w: 200, h: 170, radius: 18, fill: STEEL, fillGradient: GRAD_STEEL },
+            { id: T_A, x: 536, y: 240, w: 200, h: 170, radius: 18, fill: PEACH, fillGradient: GRAD_PEACH },
             { id: T_C, x: 96, y: 430, w: 200, h: 170, radius: 18, fill: TILE_PAPER, fillGradient: GRAD_PAPER },
-            { id: 'sd-ch-e', x: 316, y: 430, w: 200, h: 170, radius: 18, fill: SHU_SOFT },
-            { id: 'sd-ch-f', x: 536, y: 430, w: 200, h: 170, radius: 18, fill: INDIGO_SOFT },
+            { id: 'sd-ch-e', x: 316, y: 430, w: 200, h: 170, radius: 18, fill: PEACH_SOFT },
+            { id: 'sd-ch-f', x: 536, y: 430, w: 200, h: 170, radius: 18, fill: STEEL_SOFT },
           ],
         },
         {
           id: S_CHOREO_2, step: '02', label: 'a loose cascade', chip: 'Play scene 3 →', to: S_CHOREO_3,
           blocks: [
             { id: T_D, x: 110, y: 216, w: 110, h: 110, radius: 30, fill: PANEL, fillGradient: GRAD_CARD },
-            { id: T_B, x: 252, y: 286, w: 150, h: 150, radius: 38, fill: INDIGO, fillGradient: GRAD_INDIGO },
-            { id: T_A, x: 430, y: 372, w: 210, h: 150, radius: 24, fill: SHU, fillGradient: GRAD_SHU, rotation: 7 },
+            { id: T_B, x: 252, y: 286, w: 150, h: 150, radius: 38, fill: STEEL, fillGradient: GRAD_STEEL },
+            { id: T_A, x: 430, y: 372, w: 210, h: 150, radius: 24, fill: PEACH, fillGradient: GRAD_PEACH, rotation: 7 },
             { id: T_C, x: 188, y: 476, w: 84, h: 84, radius: 24, fill: TILE_PAPER, fillGradient: GRAD_PAPER },
-            { id: 'sd-ch-e', x: 620, y: 236, w: 120, h: 190, radius: 34, fill: SHU_SOFT, rotation: -6 },
-            { id: 'sd-ch-f', x: 520, y: 566, w: 240, h: 70, radius: 22, fill: INDIGO_SOFT },
+            { id: 'sd-ch-e', x: 620, y: 236, w: 120, h: 190, radius: 34, fill: PEACH_SOFT, rotation: -6 },
+            { id: 'sd-ch-f', x: 520, y: 566, w: 240, h: 70, radius: 22, fill: STEEL_SOFT },
           ],
         },
         {
           id: S_CHOREO_3, step: '03', label: 'a data skyline', chip: '↺ Back to scene 1', to: S_CHOREO,
           blocks: [
-            { id: T_D, x: 96, y: 420, w: 104, h: 220, radius: 12, fill: '#2A3850' },
-            { id: T_B, x: 224, y: 330, w: 104, h: 310, radius: 12, fill: INDIGO_SOFT },
-            { id: T_A, x: 352, y: 240, w: 104, h: 400, radius: 12, fill: SHU, fillGradient: GRAD_SHU },
+            { id: T_D, x: 96, y: 420, w: 104, h: 220, radius: 12, fill: '#22344E' },
+            { id: T_B, x: 224, y: 330, w: 104, h: 310, radius: 12, fill: STEEL_SOFT },
+            { id: T_A, x: 352, y: 240, w: 104, h: 400, radius: 12, fill: PEACH, fillGradient: GRAD_PEACH },
             { id: T_C, x: 480, y: 460, w: 104, h: 180, radius: 12, fill: '#FFFFFF' },
-            { id: 'sd-ch-e', x: 608, y: 360, w: 104, h: 280, radius: 12, fill: SHU_SOFT },
-            { id: 'sd-ch-f', x: 736, y: 500, w: 104, h: 140, radius: 12, fill: INDIGO },
+            { id: 'sd-ch-e', x: 608, y: 360, w: 104, h: 280, radius: 12, fill: PEACH_SOFT },
+            { id: 'sd-ch-f', x: 736, y: 500, w: 104, h: 140, radius: 12, fill: STEEL },
           ],
         },
       ]
@@ -709,9 +709,9 @@ export function starterDoc(): BentoDoc {
           elements: [
             grain(),
             glow(105, [
-              { at: 0, color: 'rgba(226,80,45,0.12)' },
+              { at: 0, color: 'rgba(255,158,138,0.12)' },
               { at: 0.55, color: 'rgba(15,23,36,0)' },
-              { at: 1, color: 'rgba(61,90,133,0.16)' },
+              { at: 1, color: 'rgba(94,118,153,0.16)' },
             ]),
             kicker('INTERACTIVE STATES'),
             ...furniture('08', true),
@@ -726,12 +726,12 @@ export function starterDoc(): BentoDoc {
               fontSize: 19, fontWeight: 600, color: MIST,
             }),
             shape('rect', {
-              id: 'sd-ch-btn', x: 964, y: 452, w: 220, h: 52, radius: 26, fill: SHU, fillGradient: GRAD_SHU,
+              id: 'sd-ch-btn', x: 964, y: 452, w: 220, h: 52, radius: 26, fill: PEACH, fillGradient: GRAD_PEACH,
               shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' }, link: scene.to,
             }),
             text({
               id: 'sd-ch-btnlabel', x: 964, y: 466, w: 220, h: 28, html: scene.chip, align: 'center',
-              fontSize: 16, fontWeight: 700, color: '#FFFFFF', link: scene.to,
+              fontSize: 16, fontWeight: 700, color: INK, link: scene.to,
             }),
             text({
               x: 96, y: 660, w: 800, h: 26,
@@ -752,16 +752,16 @@ export function starterDoc(): BentoDoc {
       elements: [
         grain(),
         glow(160, [
-          { at: 0, color: 'rgba(61,90,133,0.16)' },
-          { at: 1, color: 'rgba(226,80,45,0.12)' },
+          { at: 0, color: 'rgba(94,118,153,0.16)' },
+          { at: 1, color: 'rgba(255,158,138,0.12)' },
         ]),
         kicker('FOCUS'),
         ...furniture('09', true),
         title('Point, and the room dims.', { color: '#FFFFFF' }),
-        shape('rect', { id: T_D, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: SHU }),
+        shape('rect', { id: T_D, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         // card 1 — one file
         shape('rect', { x: 96, y: 228, w: 336, h: 336, radius: 18, fill: PANEL, stroke: GLASS, strokeWidth: 1, group: 'g-file' }),
-        shape('rect', { id: T_A, x: 128, y: 260, w: 52, h: 52, radius: 14, fill: SHU, group: 'g-file' }),
+        shape('rect', { id: T_A, x: 128, y: 260, w: 52, h: 52, radius: 14, fill: PEACH, group: 'g-file' }),
         text({ x: 128, y: 342, w: 272, h: 32, html: 'One file', fontSize: 21, fontWeight: 700, color: '#FFFFFF', group: 'g-file' }),
         text({
           x: 128, y: 384, w: 272, h: 140,
@@ -770,7 +770,7 @@ export function starterDoc(): BentoDoc {
         }),
         // card 2 — morph
         shape('rect', { x: 472, y: 228, w: 336, h: 336, radius: 18, fill: PANEL, stroke: GLASS, strokeWidth: 1, group: 'g-morph' }),
-        shape('rect', { id: T_B, x: 504, y: 260, w: 52, h: 52, radius: 14, fill: INDIGO, group: 'g-morph' }),
+        shape('rect', { id: T_B, x: 504, y: 260, w: 52, h: 52, radius: 14, fill: STEEL, group: 'g-morph' }),
         text({ x: 504, y: 342, w: 272, h: 32, html: 'Morph everything', fontSize: 21, fontWeight: 700, color: '#FFFFFF', group: 'g-morph' }),
         text({
           x: 504, y: 384, w: 272, h: 140,
@@ -802,12 +802,12 @@ export function starterDoc(): BentoDoc {
       elements: [
         dots(false),
         ghost('10'),
-        kicker('WRITING', { color: SHU_DEEP }),
+        kicker('WRITING', { color: PEACH_DEEP }),
         ...furniture('10', false),
         title('Type markdown, get typography.'),
-        shape('rect', { id: T_A, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: SHU }),
+        shape('rect', { id: T_A, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         shape('rect', { id: T_C, x: 96, y: 228, w: 520, h: 372, radius: 18, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.10)' } }),
-        text({ x: 128, y: 256, w: 300, h: 22, html: 'YOU TYPE', fontSize: 12, fontWeight: 700, color: SHU_DEEP, letterSpacing: 3 }),
+        text({ x: 128, y: 256, w: 300, h: 22, html: 'YOU TYPE', fontSize: 12, fontWeight: 700, color: PEACH_DEEP, letterSpacing: 3 }),
         text({
           x: 128, y: 300, w: 460, h: 260,
           html: '<code>**instant** *formatting*</code><br><code>- bullets as you type</code><br><code>`code` and ~~strike~~</code>',
@@ -815,13 +815,13 @@ export function starterDoc(): BentoDoc {
         }),
         shape('line', { x: 636, y: 400, w: 116, h: 8, fill: 'rgba(30,42,58,0.5)', strokeWidth: 2.5, lineEnd: 'arrow' }),
         shape('rect', { id: T_D, x: 772, y: 228, w: 412, h: 372, radius: 18, fill: PANEL, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.16)' } }),
-        text({ x: 804, y: 256, w: 300, h: 22, html: 'YOU GET', fontSize: 12, fontWeight: 700, color: SHU, letterSpacing: 3 }),
+        text({ x: 804, y: 256, w: 300, h: 22, html: 'YOU GET', fontSize: 12, fontWeight: 700, color: PEACH, letterSpacing: 3 }),
         text({
           x: 804, y: 300, w: 350, h: 260,
           html: '<b>instant</b> <i>formatting</i><br>•&nbsp; bullets as you type<br><code>code</code> and <s>strike</s>',
           fontSize: 21, fontWeight: 500, color: '#FFFFFF', lineHeight: 2.15,
         }),
-        shape('rect', { id: T_B, x: 1130, y: 116, w: 54, h: 30, radius: 15, fill: INDIGO }),
+        shape('rect', { id: T_B, x: 1130, y: 116, w: 54, h: 30, radius: 15, fill: STEEL }),
         text({ x: 1130, y: 122, w: 54, h: 20, html: '⌘B', fontSize: 13, fontWeight: 700, color: '#FFFFFF', align: 'center' }),
       ],
     }),
@@ -834,9 +834,9 @@ export function starterDoc(): BentoDoc {
       elements: [
         grain(),
         glow(0, [
-          { at: 0, color: 'rgba(226,80,45,0.14)' },
+          { at: 0, color: 'rgba(255,158,138,0.14)' },
           { at: 0.55, color: 'rgba(15,23,36,0)' },
-          { at: 1, color: 'rgba(61,90,133,0.16)' },
+          { at: 1, color: 'rgba(94,118,153,0.16)' },
         ]),
         // atmosphere mirrors the title: auroras breathing, tiles adrift
         dots(true, { ambient: 'kenburns', ken: { dir: 'out', scale: 1.35, duration: 3.2 } }),
@@ -865,8 +865,8 @@ export function starterDoc(): BentoDoc {
           id: T_D, x: 500, y: 120, w: 280, h: 280, radius: 52, fill: PANEL, fillGradient: GRAD_CARD,
           shadow: { y: 30, blur: 70, color: 'rgba(0,0,0,0.55)' },
         }),
-        shape('rect', { id: T_B, x: 532, y: 152, w: 70, h: 216, radius: 14, fill: INDIGO, fillGradient: GRAD_INDIGO }),
-        shape('rect', { id: T_A, x: 618, y: 152, w: 130, h: 96, radius: 14, fill: SHU, fillGradient: GRAD_SHU }),
+        shape('rect', { id: T_B, x: 532, y: 152, w: 70, h: 216, radius: 14, fill: STEEL, fillGradient: GRAD_STEEL }),
+        shape('rect', { id: T_A, x: 618, y: 152, w: 130, h: 96, radius: 14, fill: PEACH, fillGradient: GRAD_PEACH }),
         shape('rect', { id: T_C, x: 618, y: 260, w: 130, h: 108, radius: 14, fill: TILE_PAPER, fillGradient: GRAD_PAPER }),
         kicker('YOUR TURN', { x: 340, y: 452, w: 600, h: 24, align: 'center' }),
         title('Make it yours.', {
@@ -878,7 +878,7 @@ export function starterDoc(): BentoDoc {
           html: 'Press <b>Esc</b> — this deck is already your copy of the editor.',
           fontSize: 17, fontWeight: 500, color: MIST, align: 'center',
         }),
-        shape('rect', { x: 562, y: 644, w: 156, h: 44, radius: 22, fill: SHU, fillGradient: GRAD_SHU, shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' } }),
+        shape('rect', { x: 562, y: 644, w: 156, h: 44, radius: 22, fill: PEACH, fillGradient: GRAD_PEACH, shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' } }),
         text({
           x: 562, y: 655, w: 156, h: 24, html: 'bento.page', fontSize: 16, fontWeight: 700,
           color: INK, align: 'center',
