@@ -364,7 +364,7 @@ export function starterDoc(): BentoDoc {
         shape('rect', { id: T_B, x: 886, y: 206, w: 84, h: 248, radius: 16, fill: STEEL, fillGradient: GRAD_STEEL, fx: { enter: 'fade-up', order: 2 } }),
         shape('rect', { id: T_A, x: 986, y: 206, w: 148, h: 112, radius: 16, fill: PEACH, fillGradient: GRAD_PEACH, fx: { enter: 'fade-up', order: 3 } }),
         shape('rect', { id: T_C, x: 986, y: 334, w: 148, h: 120, radius: 16, fill: TILE_PAPER, fillGradient: GRAD_PAPER, fx: { enter: 'fade-up', order: 4 } }),
-        kicker('BENTO SLIDES', { fx: { enter: 'fade-up', order: 0 } }),
+        kicker('BENTO/SLIDES', { fx: { enter: 'fade-up', order: 0 } }),
         shape('rect', { x: 96, y: 86, w: 1088, h: 1.5, radius: 0, fill: 'rgba(255,255,255,0.12)', fx: { enter: 'fade', order: 0 } }),
         title('The file<br>is the<br>software.', {
           x: 88, y: 122, w: 660, h: 372, fontSize: 112, lineHeight: 1.02, color: '#FFFFFF',
