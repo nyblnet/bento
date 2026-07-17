@@ -5,7 +5,16 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
 
 ## Architecture (slides/)
 
-- `src/model.ts` — the `bento/slides` JSON document model + starter deck. This is the format.
+- `src/model.ts` — the `bento/slides` JSON document model. This is the format.
+- `src/starterdeck.ts` — the showcase starter deck (what a fresh build opens
+  with): four 'sd-tile-*' elements morph through EVERY slide (the id-continuity
+  demo), one deliberate 'fade' beat exists because entrance staggers/count-ups
+  only run on non-morph entries, charts slide + hidden pie state demo the
+  bar⇄pie data morph, speaker notes double as the feature tour. Gotchas learned
+  building it: line shapes take their color from `fill` (not `stroke` — the
+  stroke attr is what morphs tween), and the renderer draws lines horizontally
+  across the element box (vertical lines = rotation), keep 96px side margins
+  (x ≤ 1184 for right-most content).
 - `src/save.ts` — the self-save trick: clone the document at boot (`capturePristine`),
   swap the `#bento-doc` data block, re-serialize. JSON is `<`-escaped (`<`) so it can
   never contain `</script>`. File System Access API first, download fallback.
