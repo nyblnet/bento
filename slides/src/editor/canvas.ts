@@ -211,16 +211,23 @@ export class SlideCanvas {
       this.commentCleanup()
       return
     }
-    this.stage.style.cursor = 'crosshair'
+    this.wrap.style.cursor = 'crosshair' // the whole canvas area, grey included
     // live feedback: an amber outline over the element the comment would
-    // anchor to, or a pin-dot + coordinates where the point would land
+    // anchor to, a pin-dot + coordinates where the point would land, or the
+    // whole-slide outline plus a cursor-following chip out on the grey
     const hl = document.createElement('div')
     hl.className = 'ed-comment-hl'
     this.stage.appendChild(hl)
+    const chip = document.createElement('div')
+    chip.className = 'ed-comment-chip'
+    chip.textContent = '💬 whole slide'
+    chip.style.display = 'none'
+    this.stage.appendChild(chip)
     const cleanup = () => {
       this.commentCleanup = null
-      this.stage.style.cursor = ''
+      this.wrap.style.cursor = ''
       hl.remove()
+      chip.remove()
       document.removeEventListener('mousedown', onDown, true)
       document.removeEventListener('mousemove', onMove, true)
       document.removeEventListener('keydown', onKey, true)
@@ -231,20 +238,28 @@ export class SlideCanvas {
       const a = inWrap ? this.commentAnchorAt(ev.clientX, ev.clientY) : null
       if (!inWrap) {
         hl.style.display = 'none'
+        chip.style.display = 'none'
         return
       }
       hl.style.display = ''
       if (!a) {
-        // on the canvas but off the slide: the WHOLE SLIDE is the anchor
+        // on the canvas but off the slide: the WHOLE SLIDE is the anchor.
+        // Outline the slide AND pin a chip to the cursor — that's where the
+        // user is looking.
         const { width, height } = this.store.doc.size
         hl.className = 'ed-comment-hl slide'
         hl.style.left = '-3px'
         hl.style.top = '-3px'
         hl.style.width = `${width * this.scale + 6}px`
         hl.style.height = `${height * this.scale + 6}px`
-        hl.textContent = 'whole slide'
+        hl.textContent = ''
+        const stageR = this.stage.getBoundingClientRect()
+        chip.style.display = ''
+        chip.style.left = `${ev.clientX - stageR.left + 14}px`
+        chip.style.top = `${ev.clientY - stageR.top + 6}px`
         return
       }
+      chip.style.display = 'none'
       if (a.el) {
         hl.className = 'ed-comment-hl element'
         hl.style.left = `${a.el.x * this.scale - 3}px`
