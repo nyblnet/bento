@@ -128,3 +128,31 @@ export async function saveFile(doc: BentoDoc, forcePicker = false): Promise<Save
 }
 
 export const currentFileName = () => fileHandle?.name ?? null
+
+// --- self-update writing ----------------------------------------------------
+
+/** Whether we hold a writable handle to the file (in-place update possible). */
+export const hasFileHandle = () => fileHandle !== null
+
+/** Overwrite the held file with arbitrary html (the freshly updated shell). */
+export async function writeUpdatedFile(html: string): Promise<void> {
+  if (!fileHandle) throw new Error('no file handle')
+  await writeHandle(fileHandle, html)
+}
+
+/**
+ * Save updated html via a picker (user points it at the file they have open,
+ * or anywhere else). Returns false if cancelled. Keeps the picked handle so
+ * subsequent ⌘S saves go to the same place.
+ */
+export async function writeUpdatedFileAs(html: string, doc: BentoDoc): Promise<boolean> {
+  if (!hasFsAccess()) {
+    downloadFile(html, suggestedFileName(doc))
+    return true
+  }
+  const handle = await pickHandle(doc)
+  if (!handle) return false
+  fileHandle = handle
+  await writeHandle(handle, html)
+  return true
+}
