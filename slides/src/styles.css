@@ -622,6 +622,23 @@ html, body {
   box-shadow: 0 12px 32px rgb(15 23 36 / 0.18);
   padding: 12px 14px;
 }
+.ed-comment-me {
+  float: right;
+  border: none;
+  background: none;
+  font: 600 10px/1.4 inherit;
+  font-family: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+.ed-comment-me:hover { color: var(--accent-ink); }
+.ed-comment-pop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
 .ed-comment-pop-head {
   font-size: 10.5px;
   font-weight: 700;

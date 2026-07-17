@@ -7,7 +7,8 @@
 import type { Store } from '../store'
 import { uid, type Comment } from '../model'
 
-/** The commenter's name, remembered per browser; asked for on first use. */
+/** The commenter's name, remembered per browser (localStorage, never sent
+ *  anywhere); asked for on first use. */
 export function commentAuthor(): string | null {
   let name = localStorage.getItem('bento-author')
   if (!name) {
@@ -16,6 +17,14 @@ export function commentAuthor(): string | null {
     localStorage.setItem('bento-author', name)
   }
   return name
+}
+
+/** Re-ask for the name; existing threads keep their original author. */
+export function changeCommentAuthor(): string | null {
+  const next = window.prompt('Your name (shown on new comments):', localStorage.getItem('bento-author') ?? '')?.trim()
+  if (!next) return null
+  localStorage.setItem('bento-author', next)
+  return next
 }
 
 function relTime(iso: string): string {
@@ -106,9 +115,19 @@ export class CommentsUI {
 
     const head = document.createElement('div')
     head.className = 'ed-comment-pop-head'
-    head.textContent = c.elementId
+    const headLabel = document.createElement('span')
+    headLabel.textContent = c.elementId
       ? 'Comment · element'
       : typeof c.x === 'number' ? `Comment · point (${c.x}, ${c.y})` : 'Comment · slide'
+    const me = document.createElement('button')
+    me.className = 'ed-comment-me'
+    me.textContent = `you: ${localStorage.getItem('bento-author') ?? '—'} ✎`
+    me.title = 'Change the name used for your new comments and replies'
+    me.addEventListener('click', () => {
+      const next = changeCommentAuthor()
+      if (next) me.textContent = `you: ${next} ✎`
+    })
+    head.append(headLabel, me)
     pop.appendChild(head)
 
     const entries = document.createElement('div')
