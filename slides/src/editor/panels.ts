@@ -54,6 +54,46 @@ export class PropsPanel {
     if (els.length === 0) this.buildSlidePanel()
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
+    this.applyAccordion()
+  }
+
+  /** Collapsed by default until the user opens them (persisted per title). */
+  private static CLOSED_BY_DEFAULT = new Set(['Presenting', 'Interactivity', 'Layout'])
+
+  /**
+   * Retrofit the flat panel into an accordion: every .ed-section header
+   * gathers its following siblings into a collapsible body. Open state is
+   * remembered per section title — everything stays discoverable (headers
+   * always visible) while rarely-used sections stop costing space.
+   */
+  private applyAccordion() {
+    let openState: Record<string, boolean> = {}
+    try { openState = JSON.parse(localStorage.getItem('bento-panel-open') ?? '{}') } catch { /* defaults */ }
+    const headers = [...this.host.querySelectorAll<HTMLElement>('.ed-section')]
+    for (const h of headers) {
+      const key = h.textContent ?? ''
+      const body = document.createElement('div')
+      body.className = 'ed-section-body'
+      let n: ChildNode | null = h.nextSibling
+      while (n && !(n instanceof HTMLElement && n.classList.contains('ed-section'))) {
+        const next: ChildNode | null = n.nextSibling
+        body.appendChild(n)
+        n = next
+      }
+      h.after(body)
+      const isOpen = openState[key] ?? !PropsPanel.CLOSED_BY_DEFAULT.has(key)
+      h.classList.add('ed-sec-toggle')
+      if (!isOpen) {
+        h.classList.add('closed')
+        body.style.display = 'none'
+      }
+      h.addEventListener('click', () => {
+        const nowClosed = h.classList.toggle('closed')
+        body.style.display = nowClosed ? 'none' : ''
+        openState[key] = !nowClosed
+        localStorage.setItem('bento-panel-open', JSON.stringify(openState))
+      })
+    }
   }
 
   // --- builders ---------------------------------------------------------------
@@ -68,10 +108,12 @@ export class PropsPanel {
       slide.transition,
       (v) => this.edit(() => { this.store.slide.transition = v as TransitionKind }, true),
     ))
-    const hint = document.createElement('p')
-    hint.className = 'ed-hint'
-    hint.innerHTML = '<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).'
-    this.host.appendChild(hint)
+    if (slide.transition === 'morph') {
+      const hint = document.createElement('p')
+      hint.className = 'ed-hint'
+      hint.innerHTML = '<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).'
+      this.host.appendChild(hint)
+    }
 
     // interactivity: naming, state-of, hover focus
     this.section('Interactivity')
@@ -150,21 +192,7 @@ export class PropsPanel {
       }
     }
 
-    const cmtS = document.createElement('button')
-    cmtS.className = 'ed-btn ed-btn-block'
-    cmtS.textContent = '💬 Comment on this slide'
-    cmtS.addEventListener('click', () =>
-      document.dispatchEvent(new CustomEvent('bento:add-comment', { detail: {} })))
-    this.host.appendChild(cmtS)
-
-    const cmtP = document.createElement('button')
-    cmtP.className = 'ed-btn ed-btn-block'
-    cmtP.textContent = '📍 Comment at a point…'
-    cmtP.title = 'Click a spot on the slide to pin the comment there'
-    cmtP.addEventListener('click', () =>
-      document.dispatchEvent(new CustomEvent('bento:add-comment', { detail: { point: true } })))
-    this.host.appendChild(cmtP)
-
+    this.section('Layout')
     const applyLy = document.createElement('button')
     applyLy.className = 'ed-btn ed-btn-block'
     applyLy.textContent = '⧉ Apply layout…'
@@ -229,12 +257,6 @@ export class PropsPanel {
         else e.role = v
       }, true)))
 
-    const cmt = document.createElement('button')
-    cmt.className = 'ed-btn ed-btn-block'
-    cmt.textContent = '💬 Comment on this element'
-    cmt.addEventListener('click', () =>
-      document.dispatchEvent(new CustomEvent('bento:add-comment', { detail: { elementId: el.id } })))
-    this.host.appendChild(cmt)
 
     if (el.type === 'text') this.buildTextProps(el)
     if (el.type === 'shape') this.buildShapeProps(el)

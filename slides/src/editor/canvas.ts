@@ -89,10 +89,6 @@ export class SlideCanvas {
     }) as EventListener)
 
     this.comments = new CommentsUI(store, this.stage, () => this.scale)
-    document.addEventListener('bento:add-comment', ((ev: CustomEvent) => {
-      if (ev.detail?.point) this.armPointComment()
-      else this.comments.openNew(ev.detail?.elementId)
-    }) as EventListener)
 
     // Alt/Option-click digs through overlapping elements: first click grabs
     // the topmost, each further alt-click steps one element deeper (wrapping).
@@ -176,14 +172,32 @@ export class SlideCanvas {
     this.wrap.appendChild(bar)
   }
 
-  /** One-shot mode: the next canvas click drops a point-anchored comment.
-   *  Capture phase so Selecto/Moveable never see the click; Esc cancels. */
-  private armPointComment() {
+  /** notified when the comment tool arms/disarms (topbar button state) */
+  onCommentModeChange: ((on: boolean) => void) | null = null
+  private commentCleanup: (() => void) | null = null
+
+  get isCommentMode() {
+    return !!this.commentCleanup
+  }
+
+  /**
+   * The unified comment tool. Armed: the next canvas click anchors a new
+   * thread — on the ELEMENT under the cursor when there is one, else at
+   * that POINT of the slide. Capture phase (Selecto/Moveable never see the
+   * click); Esc or toggling again disarms.
+   */
+  toggleCommentMode() {
+    if (this.commentCleanup) {
+      this.commentCleanup()
+      return
+    }
     this.stage.style.cursor = 'crosshair'
     const cleanup = () => {
+      this.commentCleanup = null
       this.stage.style.cursor = ''
       document.removeEventListener('mousedown', onDown, true)
       document.removeEventListener('keydown', onKey, true)
+      this.onCommentModeChange?.(false)
     }
     const onDown = (ev: MouseEvent) => {
       cleanup()
@@ -191,16 +205,29 @@ export class SlideCanvas {
       const x = Math.round((ev.clientX - r.left) / this.scale)
       const y = Math.round((ev.clientY - r.top) / this.scale)
       const { width, height } = this.store.doc.size
-      if (x < 0 || y < 0 || x > width || y > height) return // clicked outside the slide
+      if (x < 0 || y < 0 || x > width || y > height) return // outside the slide
       ev.preventDefault()
       ev.stopPropagation()
-      this.comments.openNew(undefined, { x, y })
+      // topmost element under the point wins; empty canvas → point anchor.
+      // Near-full-slide elements (photos, scrims) don't capture — a comment
+      // "here" on scenery means the spot, not the backdrop object.
+      let hit: string | undefined
+      const slideArea = width * height
+      for (const el of this.store.slide.elements) {
+        if (x < el.x || x > el.x + el.w || y < el.y || y > el.y + el.h) continue
+        if (el.w * el.h >= slideArea * 0.8) continue
+        const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+        if (node && node.style.display !== 'none') hit = el.id
+      }
+      this.comments.openNew(hit, hit ? undefined : { x, y })
     }
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') cleanup()
     }
+    this.commentCleanup = cleanup
     document.addEventListener('mousedown', onDown, true)
     document.addEventListener('keydown', onKey, true)
+    this.onCommentModeChange?.(true)
   }
 
   /** Grow a selection to whole groups: any member pulls in its groupId kin.
