@@ -439,7 +439,7 @@ export function starterDoc(): BentoDoc {
         }),
         text({
           x: 600, y: 556, w: 560, h: 50,
-          html: 'Updates? The file checks a signed manifest — <b>only when you ask</b> — and rewrites itself.',
+          html: 'Updates? The file checks a signed manifest at launch — <b>you can turn that off</b> — and rewrites itself.',
           fontSize: 15, fontWeight: 500, color: INK_SOFT, lineHeight: 1.55,
         }),
       ],
