@@ -168,6 +168,7 @@ BentoDoc
 ├─ present?: { slideNumber?, controls?, progress? }
 ├─ assets?: { key → data URI }        ← images, fonts; referenced as "asset:key"
 ├─ fonts?: [{ family, assetKey }]     ← @font-face injected at boot
+├─ layouts?: Slide[]                  ← templates; instantiation KEEPS element ids (lineage → morph continuity)
 └─ slides: Slide[]                 ← linear order; states sit right after their parent
    ├─ id                           ← stable; morph matches elements ACROSS slides by element id
    ├─ background · transition      ← none | fade | slide | zoom | morph
@@ -177,7 +178,7 @@ BentoDoc
    └─ elements: SlideElement[]     ← array order = paint order (z)
       ├─ common: id · x y w h · rotation · opacity
       │          fx? · link? · group? · groupId? · showOnHover?
-      ├─ text:  html (sanitized inline: b/i/u/s/code/br/span…) · fontSize · fontFamily
+      ├─ text:  html (sanitized inline: b/i/u/s/code/br/span…) · placeholder? · fontSize · fontFamily
       │         fontWeight · color · align · valign · lineHeight · letterSpacing?
       ├─ shape: shape (rect|ellipse|triangle|arrow|line|path) · fill · fillGradient?
       │         stroke · strokeWidth · strokeStyle? (solid|dashed|dotted) · radius

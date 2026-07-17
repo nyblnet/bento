@@ -69,6 +69,12 @@ export interface TextElement extends ElementBase {
   lineHeight: number
   /** px; optional tracking for letter-spaced caps labels */
   letterSpacing?: number
+  /**
+   * Layout placeholder prompt ("Click to add title"). While the element's
+   * html is empty: the editor shows this dimmed; present and print hide the
+   * element entirely. Cleared content brings the prompt back.
+   */
+  placeholder?: string
 }
 
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
@@ -193,6 +199,14 @@ export interface BentoDoc {
    * data living in assets (data: URI). Elements then use `family` normally.
    */
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
+  /**
+   * Slide layouts: slide-shaped templates that live outside slides[].
+   * Instantiating one deep-copies its elements KEEPING their ids — slides
+   * born from the same layout share ids, so their common chrome morphs
+   * across transitions and stays traceable for a future re-apply merge.
+   * When absent, the editor offers its built-in starter layouts.
+   */
+  layouts?: Slide[]
   slides: Slide[]
   modified: string
 }
@@ -271,6 +285,90 @@ export function emptySlide(partial: Partial<Slide> = {}): Slide {
     notes: '',
     ...partial,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Layouts. A layout is a Slide that lives in doc.layouts (or the built-in
+// set below). Element ids are deterministic per layout and are KEPT when a
+// layout is instantiated: slides born from the same layout share ids, so
+// their common chrome morphs across transitions.
+
+const ph = (
+  id: string,
+  placeholder: string,
+  frame: { x: number; y: number; w: number; h: number },
+  type: Partial<TextElement> = {},
+): TextElement => ({
+  id,
+  type: 'text',
+  ...frame,
+  rotation: 0, opacity: 1,
+  html: '',
+  placeholder,
+  fontSize: 32,
+  fontFamily: FONT_STACK,
+  fontWeight: 400,
+  color: '#1E2A3A',
+  align: 'left',
+  valign: 'top',
+  lineHeight: 1.25,
+  ...type,
+})
+
+const bar = (id: string, frame: { x: number; y: number; w: number; h: number }): ShapeElement => ({
+  id, type: 'shape', shape: 'rect', ...frame,
+  rotation: 0, opacity: 1, fill: '#F7A600', stroke: 'transparent', strokeWidth: 0, radius: 2,
+})
+
+/** The layouts every document offers out of the box (not persisted until edited). */
+export function builtinLayouts(): Slide[] {
+  return [
+    {
+      id: 'layout-title', name: 'Title', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        bar('lt-bar', { x: 160, y: 380, w: 72, h: 8 }),
+        ph('lt-title', 'Click to add title', { x: 160, y: 404, w: 1280, h: 140 },
+          { fontSize: 76, fontWeight: 700, valign: 'middle' }),
+        ph('lt-sub', 'Click to add subtitle', { x: 160, y: 556, w: 1100, h: 60 },
+          { fontSize: 28, color: '#45566B', valign: 'middle' }),
+      ],
+    },
+    {
+      id: 'layout-title-content', name: 'Title + content', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('ltc-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle' }),
+        bar('ltc-rule', { x: 120, y: 168, w: 1360, h: 3 }),
+        ph('ltc-body', 'Click to add content', { x: 120, y: 208, w: 1360, h: 600 },
+          { fontSize: 26, color: '#586A80', valign: 'top', lineHeight: 1.5 }),
+      ],
+    },
+    {
+      id: 'layout-two-col', name: 'Two columns', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('l2c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle' }),
+        bar('l2c-rule', { x: 120, y: 168, w: 1360, h: 3 }),
+        ph('l2c-left', 'Left column', { x: 120, y: 208, w: 660, h: 600 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5 }),
+        ph('l2c-right', 'Right column', { x: 820, y: 208, w: 660, h: 600 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5 }),
+      ],
+    },
+    {
+      id: 'layout-section', name: 'Section divider', background: '#1E2A3A', transition: 'fade', notes: '', elements: [
+        bar('lsec-bar', { x: 160, y: 396, w: 72, h: 8 }),
+        ph('lsec-title', 'Section title', { x: 160, y: 420, w: 1280, h: 120 },
+          { fontSize: 64, fontWeight: 700, color: '#FFFFFF', valign: 'middle' }),
+        ph('lsec-kicker', 'PART 1', { x: 160, y: 350, w: 800, h: 40 },
+          { fontSize: 18, fontWeight: 600, color: '#F7A600', letterSpacing: 3, valign: 'middle' }),
+      ],
+    },
+    { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
+  ]
+}
+
+/** A fresh slide from a layout — new slide id, element ids KEPT (lineage). */
+export function instantiateLayout(layout: Slide): Slide {
+  const copy: Slide = JSON.parse(JSON.stringify(layout))
+  return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
 }
 
 export function newDoc(): BentoDoc {

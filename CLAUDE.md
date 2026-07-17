@@ -56,6 +56,12 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   reached by element `link`s, morphing when ids are shared. Authoring: select an
   element → "＋ New state linked from this element" in the Presenting panel. States
   live adjacent to their parent and render nested in the sidebar.
+- **Layouts**: `doc.layouts` (Slide-shaped templates) + built-ins in model.ts.
+  Instantiating KEEPS element ids — slides from the same layout share ids, so
+  their chrome morphs across transitions (and re-apply-by-lineage stays
+  possible). Text `placeholder` prompts render dimmed in the editor and are
+  hidden in present/print (`hidePlaceholders` RenderOpt). Picker on the
+  New-slide button; "Save slide as layout" in the slide panel.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.

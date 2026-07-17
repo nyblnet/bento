@@ -41,7 +41,7 @@ export function startPresentation(
     // Morph slides swap instantly; the Flip animation supplies the motion.
     section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
     if (slide.stateOf) section.dataset.bentoState = '1' // dimmed in overview
-    const surface = renderSlide(slide, doc)
+    const surface = renderSlide(slide, doc, { hidePlaceholders: true })
     // reveal slides start with only the default hover set visible
     if (slide.hover?.type === 'reveal') applyRevealSet(surface, slide.hover.default ?? null, slide.hover.default)
     section.appendChild(surface)
