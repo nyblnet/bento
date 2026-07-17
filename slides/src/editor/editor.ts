@@ -76,7 +76,7 @@ export class Editor {
       `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#5E7699"/>` +
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
-      `</svg> <b>Bento</b>&nbsp;Slides`
+      `</svg> <b>Bento&nbsp;Slides</b>`
     logo.title = 'About Bento Slides — version, updates, licenses'
     logo.style.cursor = 'pointer'
     logo.addEventListener('click', () => this.openAbout())
@@ -115,8 +115,10 @@ export class Editor {
         this.updatesB.classList.add('ed-btn-update')
         this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
         this.updatesB.title = `Version ${r.release.version} is available — click to update`
+        this.toast(`Update available: v${r.release.version} — click the peach button to update`)
       } else if (r.status === 'current') {
         this.updatesB.title = `Up to date (v${APP_VERSION}) — checked at launch`
+        this.toast(`Up to date — v${APP_VERSION}`)
       } else {
         this.updatesB.title = `Update check failed: ${r.message} — click to retry`
       }
