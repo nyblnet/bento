@@ -13,9 +13,13 @@ verify the manifest signature against the public key embedded in every shell.
    printed). Losing it orphans the update channel for every shipped file;
    leaking it hands the update channel to an attacker. Never commit it, never
    put it in CI secrets.
-2. **GitHub repo + Pages**: push this repo, then Settings → Pages → deploy
-   from the `gh-pages` branch (root). Set custom domain `bento.page`,
-   tick *Enforce HTTPS* (mandatory for `.page` anyway).
+2. **Two repos** (GitHub Pages needs a public repo on the free plan; source
+   stays private until launch): private `nyblnet/bento` (this repo, `main`
+   only) + public `nyblnet/bento-site` (the published site — a sibling clone
+   at `../bento-site`, deployed by Pages from its `main` branch, root). The
+   `CNAME` file in the site sets the custom domain; after the certificate is
+   issued, tick *Enforce HTTPS* (mandatory for `.page` anyway). Release
+   artifacts never enter the source repo's history.
 3. **DNS at the registrar** for the apex `bento.page`:
    - `A` records → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
    - `AAAA` records → `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`
@@ -31,16 +35,13 @@ verify the manifest signature against the public key embedded in every shell.
 2. Commit, tag: `git tag vX.Y.Z`.
 3. `node scripts/release.mjs` — builds, signs, assembles `./site/`
    (CNAME, landing page, live demo, download, signed manifest).
-4. Publish `./site/` to the `gh-pages` branch:
+4. Publish `./site/` to the public site repo:
 
    ```sh
-   git worktree add /tmp/bento-pages gh-pages   # first time: git worktree add --orphan -b gh-pages /tmp/bento-pages
-   rm -rf /tmp/bento-pages/*
-   cp -R site/* /tmp/bento-pages/
-   git -C /tmp/bento-pages add -A
-   git -C /tmp/bento-pages commit -m "release vX.Y.Z"
-   git push origin gh-pages
-   git worktree remove /tmp/bento-pages
+   rsync -a --delete --exclude .git site/ ../bento-site/
+   git -C ../bento-site add -A
+   git -C ../bento-site commit -m "release vX.Y.Z"
+   git -C ../bento-site push
    ```
 
 5. Also attach `site/releases/slides/Bento_Slides.bento.html` to a GitHub
