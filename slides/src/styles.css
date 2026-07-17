@@ -487,8 +487,17 @@ html, body {
   border-radius: 3px;
 }
 
-/* arrange kit: align/distribute/z-step buttons */
-.ed-arrange { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+/* arrange kit: captioned, balanced button rows */
+.ed-arrange-cap {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  opacity: 0.8;
+  margin: 8px 0 3px;
+}
+.ed-arrange { display: flex; gap: 4px; margin-top: 0; }
 .ed-arrange-btn {
   flex: 1 0 17%;
   min-width: 30px;

@@ -731,7 +731,8 @@ export class PropsPanel {
     this.host.appendChild(row)
   }
 
-  /** Align / distribute / step z-order / group — the classic arrange kit. */
+  /** Align / distribute / size / order / rotate — the arrange kit, in
+   *  captioned, balanced rows. */
   private arrangeRows(els: SlideElement[]) {
     const textBtn = (label: string, title: string, onClick: () => void, enabled = true) => {
       const b = document.createElement('button')
@@ -742,29 +743,41 @@ export class PropsPanel {
       b.addEventListener('click', onClick)
       return b
     }
-    const grid = document.createElement('div')
-    grid.className = 'ed-ops ed-arrange'
-    grid.append(
+    const group = (caption: string, buttons: HTMLElement[]) => {
+      const cap = document.createElement('div')
+      cap.className = 'ed-arrange-cap'
+      cap.textContent = caption
+      const row = document.createElement('div')
+      row.className = 'ed-ops ed-arrange'
+      row.append(...buttons)
+      this.host.append(cap, row)
+    }
+
+    group('Align', [
       textBtn('⇤', 'Align left', () => this.align(els, 'left')),
       textBtn('⇹', 'Align horizontal centers', () => this.align(els, 'centerX')),
       textBtn('⇥', 'Align right', () => this.align(els, 'right')),
       textBtn('⤒', 'Align top', () => this.align(els, 'top')),
       textBtn('⇳', 'Align vertical middles', () => this.align(els, 'middleY')),
       textBtn('⤓', 'Align bottom', () => this.align(els, 'bottom')),
-      textBtn('⋯', 'Distribute horizontally (3+)', () => this.distribute(els, 'x'), els.length >= 3),
-      textBtn('⋮', 'Distribute vertically (3+)', () => this.distribute(els, 'y'), els.length >= 3),
-    )
-    this.host.appendChild(grid)
-
-    const order = document.createElement('div')
-    order.className = 'ed-ops ed-arrange'
-    order.append(
-      textBtn('⤒', 'Bring to front', () => this.reorder(els, 'front')),
+    ])
+    group('Distribute · size', [
+      textBtn('⋯', 'Equal horizontal gaps (3+)', () => this.distribute(els, 'x'), els.length >= 3),
+      textBtn('⋮', 'Equal vertical gaps (3+)', () => this.distribute(els, 'y'), els.length >= 3),
+      textBtn('↔', 'Match widths — first selected sets the size (2+)', () => this.matchSize(els, 'w'), els.length >= 2),
+      textBtn('↕', 'Match heights — first selected sets the size (2+)', () => this.matchSize(els, 'h'), els.length >= 2),
+    ])
+    group('Order', [
+      textBtn('⇈', 'Bring to front', () => this.reorder(els, 'front')),
       textBtn('↑', 'Bring forward one step', () => this.step(els, +1)),
       textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
-      textBtn('⤓', 'Send to back', () => this.reorder(els, 'back')),
-    )
-    this.host.appendChild(order)
+      textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
+    ])
+    group('Rotate', [
+      textBtn('⟲', 'Rotate 90° counter-clockwise', () => this.rotateBy(els, -90)),
+      textBtn('⟳', 'Rotate 90° clockwise', () => this.rotateBy(els, 90)),
+      textBtn('0°', 'Reset rotation', () => this.rotateBy(els, null)),
+    ])
 
     const grouped = els.some((e) => e.groupId)
     if (els.length > 1 || grouped) {
@@ -782,6 +795,28 @@ export class PropsPanel {
       }
       this.host.appendChild(g)
     }
+  }
+
+  /** Same width/height for the whole selection — first selected is the reference. */
+  private matchSize(els: SlideElement[], dim: 'w' | 'h') {
+    if (els.length < 2) return
+    const ref = els[0][dim]
+    this.edit(() => { for (const el of els) el[dim] = ref }, true)
+  }
+
+  /** Rotate by deg (null = reset to 0), normalized to -180..180. */
+  private rotateBy(els: SlideElement[], deg: number | null) {
+    this.edit(() => {
+      for (const el of els) {
+        if (deg === null) el.rotation = 0
+        else {
+          let r = (el.rotation + deg) % 360
+          if (r > 180) r -= 360
+          if (r < -180) r += 360
+          el.rotation = r
+        }
+      }
+    }, true)
   }
 
   /** Single element aligns to the slide; a multi-selection aligns to its own bounds. */
