@@ -503,10 +503,13 @@ export class PropsPanel {
     hint.innerHTML = 'While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.'
     this.host.appendChild(hint)
     this.row('Font', this.fontSelect(el))
-    this.row('Size', this.number(el.fontSize, 1, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as TextElement).fontSize = Math.max(v, 4) }, fin)))
-    this.row('Weight', this.select(['300', '400', '600', '700', '800'], String(el.fontWeight), (v) =>
-      this.mutate(el.id, (e) => { (e as TextElement).fontWeight = parseInt(v) }, true)))
+    // Shown in POINTS (the unit office users know); the model stores slide-space
+    // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
+    this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+      this.mutate(el.id, (e) => {
+        (e as TextElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
+      }, fin)))
+    this.row('Weight', this.weightSelect(el))
     this.row('Color', this.color(el.color, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin)))
     this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
@@ -999,6 +1002,34 @@ export class PropsPanel {
     alpha.addEventListener('change', () => emit(true))
     wrap.append(col, alpha)
     return wrap
+  }
+
+  /** Weight picker with the familiar named weights; stores the numeric value. */
+  private weightSelect(el: TextElement): HTMLElement {
+    const WEIGHTS: Array<[number, string]> = [
+      [100, 'Thin'], [200, 'Extra light'], [300, 'Light'], [400, 'Regular'],
+      [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold'], [900, 'Black'],
+    ]
+    const sel = document.createElement('select')
+    const current = el.fontWeight ?? 400
+    if (!WEIGHTS.some(([n]) => n === current)) {
+      const o = document.createElement('option')
+      o.value = String(current)
+      o.textContent = `Custom (${current})`
+      o.selected = true
+      sel.appendChild(o)
+    }
+    for (const [n, name] of WEIGHTS) {
+      const o = document.createElement('option')
+      o.value = String(n)
+      o.textContent = name
+      o.style.fontWeight = String(n)
+      if (n === current) o.selected = true
+      sel.appendChild(o)
+    }
+    sel.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as TextElement).fontWeight = parseInt(sel.value) }, true))
+    return sel
   }
 
   private select(options: string[], value: string, onChange: (v: string) => void): HTMLElement {
