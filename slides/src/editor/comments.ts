@@ -29,6 +29,7 @@ function relTime(iso: string): string {
 
 export class CommentsUI {
   private layer: HTMLElement
+  private justCreated: string | null = null
 
   constructor(
     private store: Store,
@@ -50,6 +51,10 @@ export class CommentsUI {
       const el = c.elementId ? slide.elements.find((e) => e.id === c.elementId) : undefined
       const marker = document.createElement('button')
       marker.className = 'ed-comment-marker' + (c.resolved ? ' resolved' : '')
+      if (c.id === this.justCreated) {
+        marker.classList.add('fresh')
+        setTimeout(() => { this.justCreated = null }, 1200)
+      }
       marker.textContent = String(1 + (c.replies?.length ?? 0))
       marker.title = `${c.author}: ${c.text.slice(0, 80)}`
       if (el) {
@@ -82,6 +87,7 @@ export class CommentsUI {
     const comment: Comment = {
       id: uid('cmt'), elementId, ...(point ?? {}), author, text, at: new Date().toISOString(),
     }
+    this.justCreated = comment.id
     this.store.commit(() => {
       const s = this.store.slide
       s.comments = [...(s.comments ?? []), comment]

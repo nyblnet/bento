@@ -74,7 +74,7 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   'bento-author'; unresolved threads badge the sidebar thumb. ONE entry
   point: the topbar 💬 tool (C) — armed click on an element anchors there,
   on empty canvas anchors the point; near-full-slide backdrops never
-  capture (a comment on scenery means the spot). `window.bento.comments()`
+  capture (a comment on scenery means the spot). While armed, hover previews the pending anchor (amber outline on elements, pin+coords elsewhere); fresh markers pulse. `window.bento.comments()`
   returns the flat typed-anchor list — the entry point for AI agents
   processing flagged issues in a deck.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
