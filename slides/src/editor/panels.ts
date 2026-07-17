@@ -3,7 +3,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { uid, type ChartElement, type LineEnding, type ShapeElement, type SlideElement, type TextElement, type TransitionKind } from '../model'
+import { uid, type ChartElement, type LineEnding, type ShapeElement, type Slide, type SlideElement, type TextElement, type TransitionKind } from '../model'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
@@ -149,6 +149,21 @@ export class PropsPanel {
         this.host.appendChild(revealHint)
       }
     }
+
+    const saveLy = document.createElement('button')
+    saveLy.className = 'ed-btn ed-btn-block'
+    saveLy.textContent = '＋ Save slide as layout…'
+    saveLy.title = "Add this slide to the document's layout picker (New slide button)"
+    saveLy.addEventListener('click', () => {
+      const name = window.prompt('Layout name', this.store.slide.name ?? 'My layout')
+      if (!name) return
+      this.edit(() => {
+        const doc = this.store.doc
+        const copy: Slide = JSON.parse(JSON.stringify(this.store.slide))
+        doc.layouts = [...(doc.layouts ?? []), { ...copy, id: uid('layout'), name, stateOf: undefined, notes: '' }]
+      }, true)
+    })
+    this.host.appendChild(saveLy)
 
     this.section('Speaker notes')
     const notes = document.createElement('textarea')

@@ -498,6 +498,70 @@ html, body {
 }
 .ed-arrange-btn:disabled { opacity: 0.35; cursor: default; }
 
+/* layout picker — popover over the New-slide button */
+.ed-layoutpick {
+  position: fixed;
+  z-index: 200;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(15 23 36 / 0.18);
+  padding: 12px 14px;
+  max-width: 420px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.ed-layoutpick-h {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 4px 2px 8px;
+}
+.ed-layoutpick-h + .ed-layoutpick-h, .ed-layoutpick-grid + .ed-layoutpick-h { margin-top: 14px; }
+.ed-layoutpick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 10px;
+}
+.ed-layoutpick-item {
+  position: relative;
+  cursor: pointer;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 3px;
+  text-align: center;
+  transition: border-color 0.12s ease;
+}
+.ed-layoutpick-item:hover { border-color: var(--accent); }
+.ed-layoutpick-name {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+}
+.ed-layoutpick-del {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: #c9302c;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: none;
+}
+.ed-layoutpick-item:hover .ed-layoutpick-del { display: block; }
+
 /* slide-insertion gaps between sidebar thumbnails */
 .ed-insertgap {
   flex: none;

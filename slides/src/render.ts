@@ -9,6 +9,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 export interface RenderOpts {
   /** render svg elements as <img> (cheap DOM) — used by thumbnails */
   svgAsImage?: boolean
+  /** hide empty placeholder text entirely — present mode and print */
+  hidePlaceholders?: boolean
 }
 
 /** Resolve "asset:<key>" references against the document's asset table. */
@@ -305,6 +307,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
       inner.innerHTML = sanitizeHtml(el.html)
+      // layout placeholder: prompt while empty (editor), gone while presenting
+      const isEmpty = !inner.textContent?.trim() && !el.html.includes('<img')
+      if (el.placeholder && isEmpty) {
+        if (opts.hidePlaceholders) {
+          node.style.display = 'none'
+        } else {
+          inner.textContent = el.placeholder
+          inner.style.opacity = '0.38'
+        }
+      }
       node.appendChild(inner)
       break
     }

@@ -3,8 +3,9 @@
 
 import type { Store } from '../store'
 import {
-  defaultChart, defaultImage, defaultShape, defaultText, emptySlide, uid,
-  type ShapeKind, type SlideElement,
+  builtinLayouts, defaultChart, defaultImage, defaultShape, defaultText, emptySlide,
+  instantiateLayout, uid,
+  type ShapeKind, type Slide, type SlideElement,
 } from '../model'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
@@ -249,11 +250,76 @@ export class Editor {
       this.sidebar.appendChild(item)
     })
     this.sidebar.appendChild(this.insertGap(slides.length))
-    const add = btn(ICONS.plus, 'New slide', () => this.addSlide())
+    const add = btn(ICONS.plus, 'New slide', () => this.openLayoutPicker(add))
     add.classList.add('ed-add-slide')
+    add.title = 'New slide from a layout'
     this.sidebar.appendChild(add)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
+  }
+
+  // --- layouts ---------------------------------------------------------------
+
+  /** Popover over the New-slide button: built-in layouts + this document's. */
+  private openLayoutPicker(anchor: HTMLElement) {
+    document.querySelector('.ed-layoutpick')?.remove()
+    const pick = div('ed-layoutpick')
+    const doc = this.store.doc
+    const sections: Array<[string, Slide[], boolean]> = [['Built-in', builtinLayouts(), false]]
+    if (doc.layouts?.length) sections.push(['This document', doc.layouts, true])
+    for (const [label, layouts, custom] of sections) {
+      const h = div('ed-layoutpick-h')
+      h.textContent = label
+      pick.appendChild(h)
+      const grid = div('ed-layoutpick-grid')
+      for (const ly of layouts) {
+        const item = div('ed-layoutpick-item')
+        item.appendChild(renderThumbnail(ly, doc, 104))
+        const name = div('ed-layoutpick-name')
+        name.textContent = ly.name ?? 'Untitled'
+        item.appendChild(name)
+        item.addEventListener('click', () => {
+          pick.remove()
+          this.addSlideFromLayout(ly)
+        })
+        if (custom) {
+          const del = document.createElement('button')
+          del.className = 'ed-layoutpick-del'
+          del.textContent = '✕'
+          del.title = 'Delete this layout'
+          del.addEventListener('click', (ev) => {
+            ev.stopPropagation()
+            this.store.commit(() => {
+              doc.layouts = doc.layouts!.filter((l) => l.id !== ly.id)
+              if (!doc.layouts.length) delete doc.layouts
+            })
+            pick.remove()
+          })
+          item.appendChild(del)
+        }
+        grid.appendChild(item)
+      }
+      pick.appendChild(grid)
+    }
+    const r = anchor.getBoundingClientRect()
+    pick.style.left = `${Math.max(8, r.left)}px`
+    pick.style.bottom = `${window.innerHeight - r.top + 8}px`
+    document.body.appendChild(pick)
+    const close = (ev: PointerEvent) => {
+      if (!pick.contains(ev.target as Node)) {
+        pick.remove()
+        document.removeEventListener('pointerdown', close, true)
+      }
+    }
+    setTimeout(() => document.addEventListener('pointerdown', close, true))
+  }
+
+  private addSlideFromLayout(layout: Slide) {
+    const slide = instantiateLayout(layout)
+    this.store.commit(() => {
+      this.store.doc.slides.splice(this.store.currentIndex + 1, 0, slide)
+    }, 'slides')
+    this.store.goTo(this.store.currentIndex + 1)
   }
 
   /** Slim hover strip between thumbnails — click inserts a blank slide there. */
@@ -322,14 +388,6 @@ export class Editor {
 
   // --- slide ops ------------------------------------------------------------------
 
-  private addSlide() {
-    const bg = this.store.slide.background
-    this.store.commit(() => {
-      this.store.doc.slides.splice(this.store.currentIndex + 1, 0, emptySlide({ background: bg }))
-    }, 'slides')
-    this.store.goTo(this.store.currentIndex + 1)
-  }
-
   private duplicateSlide(i: number) {
     // Duplicated slides keep element ids → set transition to morph and you
     // get PowerPoint-Morph behaviour for free.
@@ -384,7 +442,7 @@ export class Editor {
     for (const slide of this.store.doc.slides) {
       if (slide.stateOf) continue
       const page = div('bp-page')
-      const surface = renderSlide(slide, this.store.doc, { svgAsImage: true })
+      const surface = renderSlide(slide, this.store.doc, { svgAsImage: true, hidePlaceholders: true })
       // normalise to the print page size regardless of doc size
       const s = 1600 / this.store.doc.size.width
       surface.style.transformOrigin = '0 0'
