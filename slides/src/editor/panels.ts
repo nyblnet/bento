@@ -744,13 +744,14 @@ export class PropsPanel {
       return b
     }
     const group = (caption: string, buttons: HTMLElement[]) => {
-      const cap = document.createElement('div')
+      const row = document.createElement('div')
+      row.className = 'ed-arrange-row'
+      const cap = document.createElement('span')
       cap.className = 'ed-arrange-cap'
       cap.textContent = caption
-      const row = document.createElement('div')
-      row.className = 'ed-ops ed-arrange'
+      row.appendChild(cap)
       row.append(...buttons)
-      this.host.append(cap, row)
+      this.host.appendChild(row)
     }
 
     group('Align', [
@@ -761,7 +762,7 @@ export class PropsPanel {
       textBtn('⇳', 'Align vertical middles', () => this.align(els, 'middleY')),
       textBtn('⤓', 'Align bottom', () => this.align(els, 'bottom')),
     ])
-    group('Distribute · size', [
+    group('Space', [
       textBtn('⋯', 'Equal horizontal gaps (3+)', () => this.distribute(els, 'x'), els.length >= 3),
       textBtn('⋮', 'Equal vertical gaps (3+)', () => this.distribute(els, 'y'), els.length >= 3),
       textBtn('↔', 'Match widths — first selected sets the size (2+)', () => this.matchSize(els, 'w'), els.length >= 2),
