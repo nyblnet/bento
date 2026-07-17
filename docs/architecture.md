@@ -111,7 +111,7 @@ sequenceDiagram
     Note over Browser: editor mounts, DOM mutates freely —<br/>the pristine clone still holds the original bytes
 
     Browser->>Save: ⌘S / Save button
-    Save->>Save: clone pristine → swap #bento-doc content<br/>with JSON.stringify(doc), "<" → <
+    Save->>Save: clone pristine → swap #bento-doc content<br/>with JSON.stringify(doc), "<" → "\u003c"
     Save->>Save: sync <title> · sanity-check script-close count
     alt File System Access API (Chromium)
         Save->>Disk: rewrite the SAME file in place (persistent handle)
@@ -138,10 +138,13 @@ The data block holds one JSON object. Sketch of the current shape — see
 
 ```
 BentoDoc
-├─ format: "bento/slides"          ├─ assets?: { key → data URI }   ← images, fonts; referenced as "asset:key"
-├─ title                           ├─ fonts?:  [{ family, assetKey }]  ← @font-face injected at boot
-├─ size: { width:1600, height:900 }└─ present?: { slideNumber?, controls?, progress? }
+├─ format: "bento/slides"
+├─ title
+├─ size: { width: 1600, height: 900 }
 ├─ theme: { fontFamily, … }
+├─ present?: { slideNumber?, controls?, progress? }
+├─ assets?: { key → data URI }        ← images, fonts; referenced as "asset:key"
+├─ fonts?: [{ family, assetKey }]     ← @font-face injected at boot
 └─ slides: Slide[]                 ← linear order; states sit right after their parent
    ├─ id                           ← stable; morph matches elements ACROSS slides by element id
    ├─ background · transition      ← none | fade | slide | zoom | morph
