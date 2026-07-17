@@ -55,6 +55,11 @@ export class CommentsUI {
       if (el) {
         marker.style.left = `${(el.x + el.w) * scale - 9}px`
         marker.style.top = `${el.y * scale - 9}px`
+      } else if (typeof c.x === 'number' && typeof c.y === 'number') {
+        // point anchor: the teardrop's bottom-left tip sits ON the point
+        marker.classList.add('point')
+        marker.style.left = `${c.x * scale}px`
+        marker.style.top = `${c.y * scale - 19}px`
       } else {
         marker.style.left = '10px'
         marker.style.top = `${10 + slideStack * 26}px`
@@ -68,14 +73,14 @@ export class CommentsUI {
     })
   }
 
-  /** Start a new thread on an element (or the slide) and open its popover. */
-  openNew(elementId?: string) {
+  /** Start a new thread on an element, at a point, or on the slide. */
+  openNew(elementId?: string, point?: { x: number; y: number }) {
     const author = commentAuthor()
     if (!author) return
     const text = window.prompt('Comment:')?.trim()
     if (!text) return
     const comment: Comment = {
-      id: uid('cmt'), elementId, author, text, at: new Date().toISOString(),
+      id: uid('cmt'), elementId, ...(point ?? {}), author, text, at: new Date().toISOString(),
     }
     this.store.commit(() => {
       const s = this.store.slide
@@ -95,7 +100,9 @@ export class CommentsUI {
 
     const head = document.createElement('div')
     head.className = 'ed-comment-pop-head'
-    head.textContent = c.elementId ? 'Comment · element' : 'Comment · slide'
+    head.textContent = c.elementId
+      ? 'Comment · element'
+      : typeof c.x === 'number' ? `Comment · point (${c.x}, ${c.y})` : 'Comment · slide'
     pop.appendChild(head)
 
     const entries = document.createElement('div')

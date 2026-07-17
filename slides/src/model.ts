@@ -165,6 +165,9 @@ export interface Comment {
   id: string
   /** element the thread is anchored to; absent (or dangling) = the slide */
   elementId?: string
+  /** point anchor in slide coordinates — used when no elementId is set */
+  x?: number
+  y?: number
   author: string
   text: string
   /** ISO datetime */

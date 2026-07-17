@@ -90,7 +90,8 @@ export class SlideCanvas {
 
     this.comments = new CommentsUI(store, this.stage, () => this.scale)
     document.addEventListener('bento:add-comment', ((ev: CustomEvent) => {
-      this.comments.openNew(ev.detail?.elementId)
+      if (ev.detail?.point) this.armPointComment()
+      else this.comments.openNew(ev.detail?.elementId)
     }) as EventListener)
 
     // Alt/Option-click digs through overlapping elements: first click grabs
@@ -173,6 +174,33 @@ export class SlideCanvas {
       mk('+', 'Zoom in (⌘+)', () => this.zoomIn()),
     )
     this.wrap.appendChild(bar)
+  }
+
+  /** One-shot mode: the next canvas click drops a point-anchored comment.
+   *  Capture phase so Selecto/Moveable never see the click; Esc cancels. */
+  private armPointComment() {
+    this.stage.style.cursor = 'crosshair'
+    const cleanup = () => {
+      this.stage.style.cursor = ''
+      document.removeEventListener('mousedown', onDown, true)
+      document.removeEventListener('keydown', onKey, true)
+    }
+    const onDown = (ev: MouseEvent) => {
+      cleanup()
+      const r = this.scaleHost.getBoundingClientRect()
+      const x = Math.round((ev.clientX - r.left) / this.scale)
+      const y = Math.round((ev.clientY - r.top) / this.scale)
+      const { width, height } = this.store.doc.size
+      if (x < 0 || y < 0 || x > width || y > height) return // clicked outside the slide
+      ev.preventDefault()
+      ev.stopPropagation()
+      this.comments.openNew(undefined, { x, y })
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') cleanup()
+    }
+    document.addEventListener('mousedown', onDown, true)
+    document.addEventListener('keydown', onKey, true)
   }
 
   /** Grow a selection to whole groups: any member pulls in its groupId kin.

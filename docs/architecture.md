@@ -175,7 +175,7 @@ BentoDoc
    ├─ name? · notes
    ├─ stateOf?                     ← marks a hidden interactive state of another slide
    ├─ hover?                       ← { type:'focus-group', dim } | { type:'reveal', default }
-   ├─ comments?                       ← review threads (editor-only; never presented/printed)
+   ├─ comments?                       ← review threads, anchored to element/point/slide (editor-only; window.bento.comments() for tooling)
    └─ elements: SlideElement[]     ← array order = paint order (z)
       ├─ common: id · x y w h · rotation · opacity
       │          fx? · link? · group? · groupId? · showOnHover? · role?
