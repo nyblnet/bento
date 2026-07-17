@@ -31,6 +31,24 @@ export class PropsPanel {
 
   private stale = false
 
+  /**
+   * True only while the user is mid-edit in a control a rebuild would
+   * disrupt: typing in text/number fields, or the native color popup.
+   * Discrete controls (selects, checkboxes, buttons) commit atomically, so
+   * the panel rebuilds the moment they change — structural rows (shadow
+   * color, fx options) appear immediately instead of after focus leaves.
+   */
+  private isActiveEditFocus(): boolean {
+    const a = document.activeElement as HTMLElement | null
+    if (!a || !this.host.contains(a)) return false
+    if (a.tagName === 'TEXTAREA' || a.isContentEditable) return true
+    if (a.tagName === 'INPUT') {
+      const t = (a as HTMLInputElement).type
+      return t !== 'checkbox' && t !== 'radio' && t !== 'button'
+    }
+    return false
+  }
+
   /** checkpoint once per burst of continuous input, commit on change. */
   private edit(mutate: () => void, final: boolean) {
     if (!this.burst) {
@@ -43,8 +61,8 @@ export class PropsPanel {
   }
 
   private rebuild(force = false) {
-    if (!force && this.host.matches(':focus-within')) {
-      this.stale = true // don't rip inputs out from under the user; catch up on focusout
+    if (!force && this.isActiveEditFocus()) {
+      this.stale = true // don't rip the field out from under the user; catch up on focusout
       return
     }
     this.stale = false
