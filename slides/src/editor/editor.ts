@@ -84,7 +84,7 @@ export class Editor {
       btn(ICONS.text, 'Text', () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true)),
       this.shapeDropdown(),
       btn(ICONS.image, 'Image', () => this.pickImage()),
-      btn('📊', 'Chart', () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
+      btn(ICONS.chart, 'Chart', () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
     )
 
     const actions = div('ed-group ed-group-right')
@@ -92,8 +92,8 @@ export class Editor {
     const redoB = btn(ICONS.redo, '', () => this.store.redo(), 'Redo (⇧⌘Z)')
     const presentB = btn(ICONS.play, 'Present', () => this.present(), 'Present from current slide')
     presentB.classList.add('ed-btn-primary')
-    const saveB = btn(ICONS.save, 'Save', () => this.save(false), 'Save (⌘S)')
-    const saveAsB = btn(ICONS.download, '', () => this.save(true), 'Save a copy…')
+    const saveB = btn(ICONS.save, 'Save', () => this.save(false), 'Save — rewrite this file in place (⌘S)')
+    const saveAsB = btn(ICONS.download, '', () => this.save(true), 'Save a copy — pick a new file, leave this one untouched')
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), 'Export PDF (print)')
     const leftT = btn(ICONS.panelLeft, '', () => this.togglePanel('left'), 'Toggle slide list ([)')
     const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), 'Toggle properties (])')
