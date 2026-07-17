@@ -76,7 +76,7 @@ export class Editor {
       `<rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>` +
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
-      `</svg> <b>Bento&nbsp;Slides</b>`
+      `</svg> <b>Bento<span style="color:#FF9E8A">/</span>Slides</b>`
     logo.title = 'About Bento Slides — version, updates, licenses'
     logo.style.cursor = 'pointer'
     logo.addEventListener('click', () => this.openAbout())
@@ -740,7 +740,7 @@ export class Editor {
       `<rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>` +
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
-      `</svg><div><b>Bento Slides</b><span>v${APP_VERSION} · format v${FORMAT_VERSION}</span></div>`
+      `</svg><div><b>Bento<span style="color:#FF9E8A">/</span>Slides</b><span>v${APP_VERSION} · format v${FORMAT_VERSION}</span></div>`
     box.appendChild(head)
 
     const status = div('ed-about-status')
