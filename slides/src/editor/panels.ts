@@ -150,6 +150,13 @@ export class PropsPanel {
       }
     }
 
+    const cmtS = document.createElement('button')
+    cmtS.className = 'ed-btn ed-btn-block'
+    cmtS.textContent = '💬 Comment on this slide'
+    cmtS.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('bento:add-comment', { detail: {} })))
+    this.host.appendChild(cmtS)
+
     const applyLy = document.createElement('button')
     applyLy.className = 'ed-btn ed-btn-block'
     applyLy.textContent = '⧉ Apply layout…'
@@ -213,6 +220,13 @@ export class PropsPanel {
         if (v === 'none') delete e.role
         else e.role = v
       }, true)))
+
+    const cmt = document.createElement('button')
+    cmt.className = 'ed-btn ed-btn-block'
+    cmt.textContent = '💬 Comment on this element'
+    cmt.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('bento:add-comment', { detail: { elementId: el.id } })))
+    this.host.appendChild(cmt)
 
     if (el.type === 'text') this.buildTextProps(el)
     if (el.type === 'shape') this.buildShapeProps(el)

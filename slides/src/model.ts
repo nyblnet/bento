@@ -156,6 +156,23 @@ export interface ChartElement extends ElementBase {
 
 export type SlideElement = TextElement | ShapeElement | ImageElement | SvgElement | ChartElement
 
+/**
+ * A review comment thread. Editor-only metadata: never rendered while
+ * presenting or printing, but saved in the file so it travels with the
+ * document when people pass it around.
+ */
+export interface Comment {
+  id: string
+  /** element the thread is anchored to; absent (or dangling) = the slide */
+  elementId?: string
+  author: string
+  text: string
+  /** ISO datetime */
+  at: string
+  resolved?: boolean
+  replies?: Array<{ id: string; author: string; text: string; at: string }>
+}
+
 export interface Slide {
   id: string
   background: string
@@ -179,6 +196,8 @@ export interface Slide {
    *   (`default` names the set visible when nothing is hovered)
    */
   hover?: { type: 'focus-group' | 'reveal'; dim?: number; default?: string }
+  /** review comment threads (editor-only; see Comment) */
+  comments?: Comment[]
 }
 
 export interface BentoDoc {
