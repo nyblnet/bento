@@ -809,7 +809,7 @@ export class Editor {
     const fine = div('ed-about-fine')
     fine.innerHTML =
       `Checking contacts the release server once and sends nothing about you or this document.<br>` +
-      `Includes reveal.js, Moveable, Selecto (MIT) · Apache ECharts (Apache-2.0) · zrender (BSD-3) — full notices travel in this file’s source.`
+      `Includes reveal.js, Moveable, Selecto (MIT) · Apache ECharts (Apache-2.0) · zrender (BSD-3) · Fraunces typeface (OFL-1.1) — full notices travel in this file’s source.`
     box.appendChild(fine)
 
     overlay.appendChild(box)

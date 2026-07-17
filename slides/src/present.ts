@@ -398,6 +398,10 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
  * on its final model state instead of lingering half-invisible.
  */
 function settleGuarantee(pairs: Array<[HTMLElement, SlideElement]>) {
+  // Ambient/looping elements run infinite tweens by design — their progress
+  // never reaches 1, and "settling" them would kill the loop and freeze the
+  // element (a real bug once: orbit dots died 2.8s after every morph entry).
+  pairs = pairs.filter(([, el]) => !el.fx?.loop && el.fx?.ambient !== 'kenburns')
   if (!pairs.length) return
   setTimeout(() => {
     for (const [node, el] of pairs) {
@@ -591,10 +595,13 @@ function runMorph(
   if (entering.length) {
     const spread = Math.min(0.45, entering.length * 0.03)
     entering.forEach(([n, opacity], i) => {
+      // motion-path loops own the transform — entrance limited to opacity
+      const m = toModel.get(n.dataset.flipId!)
+      const owns = m?.fx?.loop?.type === 'motion-path'
       anim.fromTo(n,
-        { opacity: 0, y: 14 },
+        owns ? { opacity: 0 } : { opacity: 0, y: 14 },
         {
-          opacity, y: 0, duration: 0.45,
+          opacity, ...(owns ? {} : { y: 0 }), duration: 0.45,
           delay: MORPH_DURATION * 0.4 + (spread * i) / entering.length,
           ease: 'power2.out',
         })
