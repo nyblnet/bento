@@ -412,6 +412,10 @@ export class PropsPanel {
 
   private buildTextProps(el: TextElement) {
     this.section('Typography')
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.innerHTML = 'While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too.'
+    this.host.appendChild(hint)
     this.row('Font', this.fontSelect(el))
     this.row('Size', this.number(el.fontSize, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).fontSize = Math.max(v, 4) }, fin)))
