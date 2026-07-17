@@ -522,6 +522,40 @@ html, body {
 .ed-section-body { display: flex; flex-direction: column; }
 
 /* review comments: canvas markers, thread popover, thumb badge */
+.ed-comment-hl {
+  position: absolute;
+  pointer-events: none;
+  z-index: 11;
+}
+.ed-comment-hl.element {
+  border: 2px dashed var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.ed-comment-hl.pin {
+  width: 0; height: 0;
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent-ink);
+  white-space: nowrap;
+  padding-left: 12px;
+  padding-top: 2px;
+}
+.ed-comment-hl.pin::before {
+  content: '';
+  position: absolute;
+  left: -5px; top: -5px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 2.5px solid var(--accent);
+  background: rgb(255 255 255 / 0.7);
+}
+@keyframes ed-cmt-pop {
+  0% { transform: scale(0.3); }
+  55% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.ed-comment-marker.fresh { animation: ed-cmt-pop 0.45s ease-out; }
+
 .ed-comment-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
 .ed-comment-marker {
   position: absolute;

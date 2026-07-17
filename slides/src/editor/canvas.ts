@@ -186,46 +186,83 @@ export class SlideCanvas {
    * that POINT of the slide. Capture phase (Selecto/Moveable never see the
    * click); Esc or toggling again disarms.
    */
+  /** Where a comment click at these client coords would anchor.
+   *  Near-full-slide elements (photos, scrims) don't capture — a comment
+   *  "here" on scenery means the spot, not the backdrop object. */
+  private commentAnchorAt(clientX: number, clientY: number): { x: number; y: number; el?: SlideElement } | null {
+    const r = this.scaleHost.getBoundingClientRect()
+    const x = Math.round((clientX - r.left) / this.scale)
+    const y = Math.round((clientY - r.top) / this.scale)
+    const { width, height } = this.store.doc.size
+    if (x < 0 || y < 0 || x > width || y > height) return null
+    let hit: SlideElement | undefined
+    const slideArea = width * height
+    for (const el of this.store.slide.elements) {
+      if (x < el.x || x > el.x + el.w || y < el.y || y > el.y + el.h) continue
+      if (el.w * el.h >= slideArea * 0.8) continue
+      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (node && node.style.display !== 'none') hit = el
+    }
+    return { x, y, el: hit }
+  }
+
   toggleCommentMode() {
     if (this.commentCleanup) {
       this.commentCleanup()
       return
     }
     this.stage.style.cursor = 'crosshair'
+    // live feedback: an amber outline over the element the comment would
+    // anchor to, or a pin-dot + coordinates where the point would land
+    const hl = document.createElement('div')
+    hl.className = 'ed-comment-hl'
+    this.stage.appendChild(hl)
     const cleanup = () => {
       this.commentCleanup = null
       this.stage.style.cursor = ''
+      hl.remove()
       document.removeEventListener('mousedown', onDown, true)
+      document.removeEventListener('mousemove', onMove, true)
       document.removeEventListener('keydown', onKey, true)
       this.onCommentModeChange?.(false)
     }
+    const onMove = (ev: MouseEvent) => {
+      const a = this.commentAnchorAt(ev.clientX, ev.clientY)
+      if (!a) {
+        hl.style.display = 'none'
+        return
+      }
+      hl.style.display = ''
+      if (a.el) {
+        hl.className = 'ed-comment-hl element'
+        hl.style.left = `${a.el.x * this.scale - 3}px`
+        hl.style.top = `${a.el.y * this.scale - 3}px`
+        hl.style.width = `${a.el.w * this.scale + 6}px`
+        hl.style.height = `${a.el.h * this.scale + 6}px`
+        hl.textContent = ''
+      } else {
+        hl.className = 'ed-comment-hl pin'
+        hl.style.left = `${a.x * this.scale}px`
+        hl.style.top = `${a.y * this.scale}px`
+        hl.style.width = ''
+        hl.style.height = ''
+        hl.textContent = `${a.x}, ${a.y}`
+      }
+    }
     const onDown = (ev: MouseEvent) => {
+      const a = this.commentAnchorAt(ev.clientX, ev.clientY)
       cleanup()
-      const r = this.scaleHost.getBoundingClientRect()
-      const x = Math.round((ev.clientX - r.left) / this.scale)
-      const y = Math.round((ev.clientY - r.top) / this.scale)
-      const { width, height } = this.store.doc.size
-      if (x < 0 || y < 0 || x > width || y > height) return // outside the slide
+      if (!a) return // outside the slide
       ev.preventDefault()
       ev.stopPropagation()
-      // topmost element under the point wins; empty canvas → point anchor.
-      // Near-full-slide elements (photos, scrims) don't capture — a comment
-      // "here" on scenery means the spot, not the backdrop object.
-      let hit: string | undefined
-      const slideArea = width * height
-      for (const el of this.store.slide.elements) {
-        if (x < el.x || x > el.x + el.w || y < el.y || y > el.y + el.h) continue
-        if (el.w * el.h >= slideArea * 0.8) continue
-        const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
-        if (node && node.style.display !== 'none') hit = el.id
-      }
-      this.comments.openNew(hit, hit ? undefined : { x, y })
+      this.comments.openNew(a.el?.id, a.el ? undefined : { x: a.x, y: a.y })
     }
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') cleanup()
     }
     this.commentCleanup = cleanup
     document.addEventListener('mousedown', onDown, true)
+    document.addEventListener('mousemove', onMove, true)
     document.addEventListener('keydown', onKey, true)
     this.onCommentModeChange?.(true)
   }

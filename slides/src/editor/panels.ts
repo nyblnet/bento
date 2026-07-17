@@ -229,13 +229,18 @@ export class PropsPanel {
   private buildMultiPanel(els: SlideElement[]) {
     this.section(`${els.length} elements`)
     this.opsRow(els)
+    this.section('Arrange')
+    this.arrangeRows(els)
   }
 
   private buildElementPanel(el: SlideElement) {
     this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart' }[el.type])
     this.opsRow([el])
 
-    // geometry
+    this.section('Arrange')
+    this.arrangeRows([el])
+
+    this.section('Position & size')
     const geo = document.createElement('div')
     geo.className = 'ed-grid2'
     geo.append(
@@ -721,12 +726,9 @@ export class PropsPanel {
     row.className = 'ed-ops'
     row.append(
       this.opBtn(ICONS.copy, 'Duplicate', () => this.duplicate(els)),
-      this.opBtn(ICONS.front, 'Bring to front', () => this.reorder(els, 'front')),
-      this.opBtn(ICONS.back, 'Send to back', () => this.reorder(els, 'back')),
       this.opBtn(ICONS.trash, 'Delete', () => this.deleteEls(els)),
     )
     this.host.appendChild(row)
-    this.arrangeRows(els)
   }
 
   /** Align / distribute / step z-order / group — the classic arrange kit. */
@@ -751,10 +753,18 @@ export class PropsPanel {
       textBtn('⤓', 'Align bottom', () => this.align(els, 'bottom')),
       textBtn('⋯', 'Distribute horizontally (3+)', () => this.distribute(els, 'x'), els.length >= 3),
       textBtn('⋮', 'Distribute vertically (3+)', () => this.distribute(els, 'y'), els.length >= 3),
-      textBtn('↑', 'Bring forward one step', () => this.step(els, +1)),
-      textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
     )
     this.host.appendChild(grid)
+
+    const order = document.createElement('div')
+    order.className = 'ed-ops ed-arrange'
+    order.append(
+      textBtn('⤒', 'Bring to front', () => this.reorder(els, 'front')),
+      textBtn('↑', 'Bring forward one step', () => this.step(els, +1)),
+      textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
+      textBtn('⤓', 'Send to back', () => this.reorder(els, 'back')),
+    )
+    this.host.appendChild(order)
 
     const grouped = els.some((e) => e.groupId)
     if (els.length > 1 || grouped) {
