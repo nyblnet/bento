@@ -17,7 +17,10 @@
 // the file on disk, so the original is its own rollback.
 
 import type { BentoDoc } from './model'
-import { serializeWith, suggestedFileName, downloadFile } from './save'
+import {
+  serializeWith, serializeFile, suggestedFileName, downloadFile,
+  hasFileHandle, writeUpdatedFile, writeUpdatedFileAs,
+} from './save'
 
 declare const __APP_VERSION__: string
 
@@ -140,4 +143,24 @@ export async function buildUpdatedFile(release: ReleaseInfo, doc: BentoDoc): Pro
 /** Build the updated file and hand it to the user as a fresh download. */
 export async function applyUpdate(release: ReleaseInfo, doc: BentoDoc): Promise<void> {
   downloadFile(await buildUpdatedFile(release, doc), suggestedFileName(doc))
+}
+
+/** Can we rewrite the open file directly (a FS Access handle is held)? */
+export const canUpdateInPlace = hasFileHandle
+
+/**
+ * Update the file on disk. With a held handle: download a backup of the
+ * current version first, then overwrite in place — a reload then boots the
+ * new app with this document. Without one: a save picker lets the user point
+ * at the file they have open (or anywhere). Returns false if cancelled.
+ */
+export async function applyUpdateInPlace(release: ReleaseInfo, doc: BentoDoc): Promise<boolean> {
+  const html = await buildUpdatedFile(release, doc)
+  if (hasFileHandle()) {
+    const base = suggestedFileName(doc).replace(/\.bento\.html$/, '')
+    downloadFile(serializeFile(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
+    await writeUpdatedFile(html)
+    return true
+  }
+  return writeUpdatedFileAs(html, doc)
 }

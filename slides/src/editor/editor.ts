@@ -8,7 +8,7 @@ import {
   instantiateLayout, layoutElementIds, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
-import { APP_VERSION, applyUpdate, checkForUpdates } from '../update'
+import { APP_VERSION, applyUpdate, applyUpdateInPlace, canUpdateInPlace, checkForUpdates } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
@@ -747,21 +747,58 @@ export class Editor {
           notes.textContent = release.notes
           status.appendChild(notes)
         }
+        const fail = (err: any) => { status.textContent = `Update failed: ${err?.message ?? err}` }
+        const done = () => {
+          status.textContent = ''
+          const ok = div('ed-about-new')
+          ok.textContent = `Updated to v${release.version} on disk.`
+          status.appendChild(ok)
+          const note = div('ed-about-notes')
+          note.textContent = canUpdateInPlace()
+            ? `This window is still running v${APP_VERSION} — reload to finish. A v${APP_VERSION} backup was downloaded.`
+            : `This window is still running v${APP_VERSION}. If you overwrote the file that's open here, reload; otherwise open the file you saved.`
+          status.appendChild(note)
+          const reloadB = document.createElement('button')
+          reloadB.className = 'ed-btn ed-btn-primary'
+          reloadB.textContent = 'Reload into new version'
+          reloadB.addEventListener('click', () => {
+            this.store.setDirty(false) // disk already holds this exact document
+            location.reload()
+          })
+          status.appendChild(reloadB)
+        }
+
+        const inPlaceB = document.createElement('button')
+        inPlaceB.className = 'ed-btn ed-btn-primary'
+        inPlaceB.textContent = canUpdateInPlace() ? 'Update this file' : 'Update this file…'
+        inPlaceB.title = canUpdateInPlace()
+          ? 'Downloads a backup of the current version, then rewrites this file on disk as the new version — document untouched.'
+          : 'Verifies and builds the new version with this document inside, then asks where to save it — pick the file you have open to update it.'
+        inPlaceB.addEventListener('click', async () => {
+          inPlaceB.disabled = true
+          inPlaceB.textContent = 'Verifying…'
+          try {
+            const written = await applyUpdateInPlace(release, this.store.doc)
+            if (written) done()
+            else { inPlaceB.disabled = false; inPlaceB.textContent = 'Update this file…' }
+          } catch (err: any) { fail(err) }
+        })
+        status.appendChild(inPlaceB)
+
         const getB = document.createElement('button')
-        getB.className = 'ed-btn ed-btn-primary'
+        getB.className = 'ed-btn'
         getB.textContent = 'Download updated copy'
-        getB.title = 'Verifies the new app’s signature, puts this document inside it, and downloads the result. The file you have now is not touched.'
+        getB.title = 'Downloads the new version with this document inside. The file you have now is not touched.'
         getB.addEventListener('click', async () => {
           getB.disabled = true
           getB.textContent = 'Verifying…'
           try {
             await applyUpdate(release, this.store.doc)
             getB.textContent = 'Downloaded ✓'
-            this.toast('Updated copy downloaded — replace your old file with it')
-          } catch (err: any) {
-            getB.remove()
-            status.textContent = `Update failed: ${err?.message ?? err}`
-          }
+            const note = div('ed-about-notes')
+            note.textContent = `This window keeps running v${APP_VERSION} until you open the downloaded file.`
+            status.appendChild(note)
+          } catch (err: any) { fail(err) }
         })
         status.appendChild(getB)
       }
