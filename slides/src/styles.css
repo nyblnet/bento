@@ -487,15 +487,17 @@ html, body {
   border-radius: 3px;
 }
 
-/* arrange kit: captioned, balanced button rows */
+/* arrange kit: one compact row per group — tiny label left, buttons right */
+.ed-arrange-row { display: flex; align-items: center; gap: 3px; margin: 3px 0; }
 .ed-arrange-cap {
-  font-size: 9.5px;
+  flex: none;
+  width: 46px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   color: var(--muted);
-  opacity: 0.8;
-  margin: 8px 0 3px;
+  opacity: 0.85;
 }
 .ed-arrange { display: flex; gap: 4px; margin-top: 0; }
 .ed-arrange-btn {
