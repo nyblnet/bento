@@ -104,11 +104,27 @@ const dots = (dark: boolean, fx?: SvgElement['fx']): SvgElement => ({
   asset: dark ? 'dots-ink' : 'dots-paper', ...(fx ? { fx } : {}),
 })
 
-/** Seamless closed-loop drift path (tiny circle, radius r) for floating tiles. */
-const floatPath = (r: number): string => {
-  const k = Math.round(r * 0.5523 * 10) / 10
-  return `M 0 0 C ${k} 0 ${r} ${r - k} ${r} ${r} C ${r} ${r + k} ${k} ${2 * r} 0 ${2 * r} ` +
-    `C ${-k} ${2 * r} ${-r} ${r + k} ${-r} ${r} C ${-r} ${r - k} ${-k} 0 0 0`
+/**
+ * Seamless closed-loop drift path: a circle of radius r through the element's
+ * rest position. `phase` (degrees) rotates the starting point around the loop
+ * so a field of drifters de-syncs WITHOUT start delays — everything moves
+ * from the first frame (tween delays left particles frozen at entry).
+ */
+const floatPath = (r: number, phase = 0): string => {
+  const h = r * 0.5523
+  const a0 = ((phase - 90) * Math.PI) / 180
+  const C = { x: -r * Math.cos(a0), y: -r * Math.sin(a0) }
+  const P = (a: number) => ({ x: C.x + r * Math.cos(a), y: C.y + r * Math.sin(a) })
+  const T = (a: number) => ({ x: -Math.sin(a), y: Math.cos(a) })
+  const f = (n: number) => Math.round(n * 10) / 10
+  let d = 'M 0 0'
+  for (let k = 0; k < 4; k++) {
+    const aA = a0 + (k * Math.PI) / 2
+    const aB = a0 + ((k + 1) * Math.PI) / 2
+    const A = P(aA), B = P(aB), tA = T(aA), tB = T(aB)
+    d += ` C ${f(A.x + h * tA.x)} ${f(A.y + h * tA.y)} ${f(B.x - h * tB.x)} ${f(B.y - h * tB.y)} ${f(B.x)} ${f(B.y)}`
+  }
+  return d
 }
 
 /** Soft aurora blob — svg radial-gradient glow (edge-free), breathing on ken drift. */
@@ -119,18 +135,18 @@ const aurora = (
   id: uid('sv'), type: 'svg', x, y, w: size, h: size, rotation: 0, opacity: 1, asset,
   fx: {
     ambient: 'kenburns', ken: { dir: 'drift', scale: 1.22, duration: dur },
-    ...(roam ? { loop: { type: 'motion-path' as const, path: floatPath(roam), duration: roamDur, delay } } : {}),
+    ...(roam ? { loop: { type: 'motion-path' as const, path: floatPath(roam, (delay / roamDur) * 360), duration: roamDur } } : {}),
   },
 })
 
 /** Out-of-focus light speck (blurred svg disc) adrift on a slow closed loop. */
 const bokeh = (
   x: number, y: number, s: number, warm: boolean, opacity: number,
-  r: number, dur: number, delay = 0,
+  r: number, dur: number, stagger = 0,
 ): SvgElement => ({
   id: uid('sv'), type: 'svg', x, y, w: s, h: s, rotation: 0, opacity,
   asset: warm ? 'bokeh-warm' : 'bokeh-cool',
-  fx: { loop: { type: 'motion-path', path: floatPath(r), duration: dur, delay } },
+  fx: { loop: { type: 'motion-path', path: floatPath(r, (stagger / dur) * 360), duration: dur } },
 })
 
 /** Film grain for ink grounds (feTurbulence) — texture without a visible grid. */
