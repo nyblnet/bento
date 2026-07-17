@@ -227,12 +227,24 @@ export class SlideCanvas {
       this.onCommentModeChange?.(false)
     }
     const onMove = (ev: MouseEvent) => {
-      const a = this.commentAnchorAt(ev.clientX, ev.clientY)
-      if (!a) {
+      const inWrap = ev.target instanceof Element && !!ev.target.closest('.ed-canvas-wrap')
+      const a = inWrap ? this.commentAnchorAt(ev.clientX, ev.clientY) : null
+      if (!inWrap) {
         hl.style.display = 'none'
         return
       }
       hl.style.display = ''
+      if (!a) {
+        // on the canvas but off the slide: the WHOLE SLIDE is the anchor
+        const { width, height } = this.store.doc.size
+        hl.className = 'ed-comment-hl slide'
+        hl.style.left = '-3px'
+        hl.style.top = '-3px'
+        hl.style.width = `${width * this.scale + 6}px`
+        hl.style.height = `${height * this.scale + 6}px`
+        hl.textContent = 'whole slide'
+        return
+      }
       if (a.el) {
         hl.className = 'ed-comment-hl element'
         hl.style.left = `${a.el.x * this.scale - 3}px`
@@ -250,12 +262,18 @@ export class SlideCanvas {
       }
     }
     const onDown = (ev: MouseEvent) => {
+      const t = ev.target instanceof Element ? ev.target : null
+      if (t?.closest('.ed-topbar')) return // let the 💬 toggle (or other tools) handle it
+      if (!t?.closest('.ed-canvas-wrap')) {
+        cleanup() // clicked some other UI: disarm without placing
+        return
+      }
       const a = this.commentAnchorAt(ev.clientX, ev.clientY)
       cleanup()
-      if (!a) return // outside the slide
       ev.preventDefault()
       ev.stopPropagation()
-      this.comments.openNew(a.el?.id, a.el ? undefined : { x: a.x, y: a.y })
+      if (!a) this.comments.openNew() // off-slide canvas click = whole slide
+      else this.comments.openNew(a.el?.id, a.el ? undefined : { x: a.x, y: a.y })
     }
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') cleanup()

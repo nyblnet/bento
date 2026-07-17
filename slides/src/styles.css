@@ -543,6 +543,19 @@ html, body {
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
+.ed-comment-hl.slide {
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 5px 8px;
+  font: 700 9.5px/1 -apple-system, 'Segoe UI', system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
 .ed-comment-hl.pin {
   width: 0; height: 0;
   font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
