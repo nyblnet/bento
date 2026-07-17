@@ -236,13 +236,10 @@ export function starterDoc(): BentoDoc {
         shape('ellipse', {
           x: 790, y: 110, w: 440, h: 440, fill: 'transparent',
           stroke: 'rgba(185,196,212,0.30)', strokeWidth: 1.5, strokeStyle: 'dashed',
-          fx: { loop: { type: 'dash-march', distance: 16, duration: 5 } },
+          fx: { loop: { type: 'dash-march', distance: 16, duration: 8 } },
         }),
-        shape('ellipse', {
-          x: 999, y: 99, w: 22, h: 22, fill: AMBER,
-          fx: { loop: { type: 'motion-path', duration: 22,
-            path: 'M 0 0 C 121 0 220 99 220 220 C 220 341 121 440 0 440 C -121 440 -220 341 -220 220 C -220 99 -121 0 0 0' } },
-        }),
+        // static satellite on the ring — composed accent, not a spinner
+        shape('ellipse', { x: 1181, y: 195, w: 18, h: 18, fill: AMBER, fx: { enter: 'fade', order: 5 } }),
         // the bento logo, built from the cast
         shape('rect', {
           id: T_D, x: 850, y: 170, w: 320, h: 320, radius: 36, fill: PANEL,
@@ -625,13 +622,9 @@ export function starterDoc(): BentoDoc {
         shape('ellipse', {
           x: 420, y: 40, w: 440, h: 440, fill: 'transparent',
           stroke: 'rgba(185,196,212,0.30)', strokeWidth: 1.5, strokeStyle: 'dashed',
-          fx: { loop: { type: 'dash-march', distance: 16, duration: 5 } },
+          fx: { loop: { type: 'dash-march', distance: 16, duration: 8 } },
         }),
-        shape('ellipse', {
-          x: 629, y: 29, w: 22, h: 22, fill: AMBER,
-          fx: { loop: { type: 'motion-path', duration: 22,
-            path: 'M 0 0 C 121 0 220 99 220 220 C 220 341 121 440 0 440 C -121 440 -220 341 -220 220 C -220 99 -121 0 0 0' } },
-        }),
+        shape('ellipse', { x: 821, y: 141, w: 18, h: 18, fill: AMBER }),
         shape('rect', {
           id: T_D, x: 500, y: 120, w: 280, h: 280, radius: 56, fill: PANEL,
           stroke: 'rgba(185,196,212,0.28)', strokeWidth: 1.5,
