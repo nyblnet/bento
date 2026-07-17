@@ -97,6 +97,26 @@ const dots = (dark: boolean): SvgElement => ({
   asset: dark ? 'dots-ink' : 'dots-paper',
 })
 
+/** Seamless closed-loop drift path (tiny circle, radius r) for floating tiles. */
+const floatPath = (r: number): string => {
+  const k = Math.round(r * 0.5523 * 10) / 10
+  return `M 0 0 C ${k} 0 ${r} ${r - k} ${r} ${r} C ${r} ${r + k} ${k} ${2 * r} 0 ${2 * r} ` +
+    `C ${-k} ${2 * r} ${-r} ${r + k} ${-r} ${r} C ${-r} ${r - k} ${-k} 0 0 0`
+}
+
+/** Soft aurora blob — svg radial-gradient glow (edge-free), breathing on ken drift. */
+const aurora = (x: number, y: number, size: number, asset: string, dur: number): SvgElement => ({
+  id: uid('sv'), type: 'svg', x, y, w: size, h: size, rotation: 0, opacity: 1, asset,
+  fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.22, duration: dur } },
+})
+
+/** Small bento tile drifting on a slow closed loop — ambient, on-brand. */
+const floater = (x: number, y: number, s: number, fill: string, r: number, dur: number, delay = 0): ShapeElement =>
+  shape('rect', {
+    x, y, w: s, h: s, radius: Math.round(s * 0.3), fill, opacity: 0.85,
+    fx: { loop: { type: 'motion-path', path: floatPath(r), duration: dur, delay } },
+  })
+
 const glow = (angle: number, stops: Array<{ at: number; color: string }>): ShapeElement =>
   shape('rect', {
     id: GLOW, x: 0, y: 0, w: 1280, h: 720, radius: 0,
@@ -179,13 +199,27 @@ const trendOption = () => ({
 const DOTS_INK =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">' +
   '<defs><pattern id="bp-dots-i" width="28" height="28" patternUnits="userSpaceOnUse">' +
-  '<circle cx="1.5" cy="1.5" r="1.4" fill="#FFFFFF" opacity="0.05"/></pattern></defs>' +
+  '<circle cx="1.5" cy="1.5" r="1.4" fill="#FFFFFF" opacity="0.07"/></pattern></defs>' +
   '<rect width="1280" height="720" fill="url(#bp-dots-i)"/></svg>'
+
+const AURORA_AMBER =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">' +
+  '<defs><radialGradient id="bp-ga-am"><stop offset="0" stop-color="#F7A600" stop-opacity="0.20"/>' +
+  '<stop offset="0.55" stop-color="#F7A600" stop-opacity="0.07"/>' +
+  '<stop offset="1" stop-color="#F7A600" stop-opacity="0"/></radialGradient></defs>' +
+  '<circle cx="300" cy="300" r="300" fill="url(#bp-ga-am)"/></svg>'
+
+const AURORA_BLUE =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">' +
+  '<defs><radialGradient id="bp-ga-bl"><stop offset="0" stop-color="#5B8DEF" stop-opacity="0.18"/>' +
+  '<stop offset="0.55" stop-color="#5B8DEF" stop-opacity="0.06"/>' +
+  '<stop offset="1" stop-color="#5B8DEF" stop-opacity="0"/></radialGradient></defs>' +
+  '<circle cx="300" cy="300" r="300" fill="url(#bp-ga-bl)"/></svg>'
 
 const DOTS_PAPER =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">' +
   '<defs><pattern id="bp-dots-p" width="28" height="28" patternUnits="userSpaceOnUse">' +
-  '<circle cx="1.5" cy="1.5" r="1.4" fill="#0F1724" opacity="0.055"/></pattern></defs>' +
+  '<circle cx="1.5" cy="1.5" r="1.4" fill="#0F1724" opacity="0.07"/></pattern></defs>' +
   '<rect width="1280" height="720" fill="url(#bp-dots-p)"/></svg>'
 
 export function starterDoc(): BentoDoc {
@@ -201,6 +235,8 @@ export function starterDoc(): BentoDoc {
     'font-instrument': INSTRUMENT_VAR,
     'dots-ink': DOTS_INK,
     'dots-paper': DOTS_PAPER,
+    'aurora-amber': AURORA_AMBER,
+    'aurora-blue': AURORA_BLUE,
   }
 
   const slide = (p: Partial<Slide> & { elements: SlideElement[] }): Slide => ({
@@ -232,14 +268,13 @@ export function starterDoc(): BentoDoc {
             ],
           },
         }),
-        // dashed orbit ring + travelling dot around the logo
-        shape('ellipse', {
-          x: 790, y: 110, w: 440, h: 440, fill: 'transparent',
-          stroke: 'rgba(185,196,212,0.30)', strokeWidth: 1.5, strokeStyle: 'dashed',
-          fx: { loop: { type: 'dash-march', distance: 16, duration: 8 } },
-        }),
-        // static satellite on the ring — composed accent, not a spinner
-        shape('ellipse', { x: 1181, y: 195, w: 18, h: 18, fill: AMBER, fx: { enter: 'fade', order: 5 } }),
+        // atmosphere: breathing aurora blobs + bento tiles adrift around the logo
+        aurora(700, -80, 680, 'aurora-amber', 24),
+        aurora(880, 220, 560, 'aurora-blue', 32),
+        floater(792, 128, 26, AMBER, 16, 19),
+        floater(1194, 158, 18, BLUE, 12, 15, 3),
+        floater(1206, 428, 22, '#E9EDF3', 20, 24, 6),
+        floater(806, 468, 14, AMBER_SOFT, 14, 17, 9),
         // the bento logo, built from the cast
         shape('rect', {
           id: T_D, x: 850, y: 170, w: 320, h: 320, radius: 36, fill: PANEL,
@@ -253,7 +288,7 @@ export function starterDoc(): BentoDoc {
         shape('rect', { x: 96, y: 86, w: 1088, h: 1.5, radius: 0, fill: 'rgba(255,255,255,0.12)', fx: { enter: 'fade', order: 0 } }),
         title('The file<br>is the<br>software.', {
           x: 88, y: 122, w: 660, h: 372, fontSize: 112, lineHeight: 1.02, color: '#FFFFFF',
-          fx: { enter: 'fade-up', order: 1 },
+          fx: { enter: 'fade-up', order: 1, ambient: 'kenburns', ken: { dir: 'out', scale: 1.05, duration: 2.6 } },
         }),
         text({
           x: 96, y: 524, w: 520, h: 76,
@@ -619,12 +654,13 @@ export function starterDoc(): BentoDoc {
           { at: 0.55, color: 'rgba(15,23,36,0)' },
           { at: 1, color: 'rgba(91,141,239,0.16)' },
         ]),
-        shape('ellipse', {
-          x: 420, y: 40, w: 440, h: 440, fill: 'transparent',
-          stroke: 'rgba(185,196,212,0.30)', strokeWidth: 1.5, strokeStyle: 'dashed',
-          fx: { loop: { type: 'dash-march', distance: 16, duration: 8 } },
-        }),
-        shape('ellipse', { x: 821, y: 141, w: 18, h: 18, fill: AMBER }),
+        // atmosphere mirrors the title: auroras breathing, tiles adrift
+        aurora(320, -60, 660, 'aurora-amber', 26),
+        aurora(600, 80, 560, 'aurora-blue', 34),
+        floater(414, 148, 26, AMBER, 16, 19),
+        floater(864, 118, 20, BLUE, 12, 15, 3),
+        floater(838, 362, 16, '#E9EDF3', 20, 23, 6),
+        floater(452, 404, 14, AMBER_SOFT, 14, 17, 9),
         shape('rect', {
           id: T_D, x: 500, y: 120, w: 280, h: 280, radius: 56, fill: PANEL,
           stroke: 'rgba(185,196,212,0.28)', strokeWidth: 1.5,
@@ -633,7 +669,10 @@ export function starterDoc(): BentoDoc {
         shape('rect', { id: T_A, x: 618, y: 152, w: 130, h: 96, radius: 14, fill: AMBER }),
         shape('rect', { id: T_C, x: 618, y: 260, w: 130, h: 108, radius: 14, fill: '#E9EDF3' }),
         kicker('YOUR TURN', { x: 340, y: 452, w: 600, h: 24, align: 'center' }),
-        title('Make it yours.', { x: 240, y: 484, w: 800, h: 104, fontSize: 88, color: '#FFFFFF', align: 'center' }),
+        title('Make it yours.', {
+          x: 240, y: 484, w: 800, h: 104, fontSize: 88, color: '#FFFFFF', align: 'center',
+          fx: { ambient: 'kenburns', ken: { dir: 'out', scale: 1.05, duration: 2.6 } },
+        }),
         text({
           x: 290, y: 600, w: 700, h: 28,
           html: 'Press <b>Esc</b> — this deck is already your copy of the editor.',
