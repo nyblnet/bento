@@ -1,7 +1,8 @@
-// Self-update: a shipped Bento file can, ON USER REQUEST ONLY, ask the
-// release origin whether a newer app shell exists, and rebuild itself as
-// "same document, newer app" — the data block re-spliced into the fetched
-// shell via the exact machinery every save already uses.
+// Self-update: a shipped Bento file asks the release origin whether a newer
+// app shell exists — automatically at launch (per-browser opt-out in the
+// About dialog) or on demand — and rebuilds itself as "same document, newer
+// app": the data block re-spliced into the fetched shell via the exact
+// machinery every save already uses.
 //
 // Trust model (see docs/architecture.md):
 // - The manifest is SIGNED (ECDSA P-256 / SHA-256) with an offline key; the
@@ -10,8 +11,8 @@
 // - The manifest pins the new shell's sha256; the download is hashed and
 //   compared before anything is spliced.
 // - Only strictly NEWER versions are ever offered (no downgrade replay).
-// - Nothing is automatic and nothing identifies the user or the document:
-//   the check is a bare GET, fired only from the About dialog / scripting.
+// - A check is a bare GET: no identifiers, no telemetry, nothing about the
+//   user or the document. The launch check can be disabled (autoCheckEnabled).
 //
 // The result is always a NEW downloaded file — the update flow never touches
 // the file on disk, so the original is its own rollback.
@@ -26,6 +27,13 @@ declare const __APP_VERSION__: string
 
 /** Version of the running app shell (baked in at build from package.json). */
 export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+
+/** Per-browser preference: check for updates automatically at launch. */
+export const autoCheckEnabled = (): boolean => localStorage.getItem('bento-auto-check') !== 'off'
+export const setAutoCheck = (on: boolean): void => {
+  if (on) localStorage.removeItem('bento-auto-check')
+  else localStorage.setItem('bento-auto-check', 'off')
+}
 
 /** Where shipped files look for releases. Dev override: localStorage 'bento-update-url'. */
 export const UPDATE_MANIFEST_URL = 'https://bento.page/releases/slides/manifest.json'
@@ -107,7 +115,7 @@ async function verifyManifest(raw: string): Promise<ReleaseInfo> {
   return info as ReleaseInfo
 }
 
-/** Ask the release origin for the latest version. User-initiated only. */
+/** Ask the release origin for the latest version. */
 export async function checkForUpdates(manifestUrl?: string): Promise<UpdateCheck> {
   const url = manifestUrl ?? localStorage.getItem('bento-update-url') ?? UPDATE_MANIFEST_URL
   try {

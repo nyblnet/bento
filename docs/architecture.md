@@ -290,6 +290,7 @@ deliver  downloaded as a NEW file — the on-disk original is its own rollback
   hashes the built shell and writes the signed manifest. A compromised release
   host cannot forge an update without that key. Rotating the key orphans every
   shipped file — guard the key instead.
-- Privacy: the check is a bare GET with no identifiers, never automatic.
+- Privacy: the check is a bare GET with no identifiers. It runs at launch by
+  default (per-browser opt-out in the About dialog) or on demand.
 - Update channel = signed **code**; future sync channel = inert **data**
   (invariant 3). Never mix the two.

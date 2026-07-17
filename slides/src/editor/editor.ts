@@ -8,7 +8,7 @@ import {
   instantiateLayout, layoutElementIds, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
-import { APP_VERSION, applyUpdate, applyUpdateInPlace, canUpdateInPlace, checkForUpdates } from '../update'
+import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, setAutoCheck } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
@@ -34,6 +34,8 @@ export class Editor {
   private thumbTimer = 0
   private clipboard: SlideElement[] = []
   private presenting = false
+  private updatesB!: HTMLElement
+  private updateFound: string | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
   private panelW = { left: 188, right: 236 }
 
@@ -100,6 +102,19 @@ export class Editor {
     insert.appendChild(commentB)
 
     const actions = div('ed-group ed-group-right')
+    this.updatesB = btn(ICONS.sync, '', () => this.openAbout(true), 'Check for updates')
+    // launch-time check (opt-out lives in the About dialog); a found update
+    // turns the button into a visible peach chip
+    setTimeout(async () => {
+      if (!autoCheckEnabled()) return
+      const r = await checkForUpdates()
+      if (r.status === 'update') {
+        this.updateFound = r.release.version
+        this.updatesB.classList.add('ed-btn-update')
+        this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
+        this.updatesB.title = `Version ${r.release.version} is available — click to update`
+      }
+    }, 1500)
     const undoB = btn(ICONS.undo, '', () => this.store.undo(), 'Undo (⌘Z)')
     const redoB = btn(ICONS.redo, '', () => this.store.redo(), 'Redo (⇧⌘Z)')
     const presentB = btn(ICONS.play, 'Present', () => this.present(), 'Present from current slide')
@@ -109,7 +124,7 @@ export class Editor {
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), 'Export PDF (print)')
     const leftT = btn(ICONS.panelLeft, '', () => this.togglePanel('left'), 'Toggle slide list ([)')
     const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), 'Toggle properties (])')
-    actions.append(undoB, redoB, pdfB, leftT, rightT, presentB, saveB, saveAsB)
+    actions.append(undoB, redoB, pdfB, this.updatesB, leftT, rightT, presentB, saveB, saveAsB)
 
     bar.append(logo, title, this.dirtyDot, insert, actions)
 
@@ -705,7 +720,7 @@ export class Editor {
   // --- about & updates ------------------------------------------------------
 
   /** About dialog: version, user-initiated update check, licenses. */
-  private openAbout() {
+  private openAbout(runCheck = false) {
     document.querySelector('.ed-about-overlay')?.remove()
     const overlay = div('ed-about-overlay')
     const box = div('ed-about')
@@ -806,9 +821,18 @@ export class Editor {
     row.appendChild(checkB)
     box.append(row, status)
 
+    const autoRow = document.createElement('label')
+    autoRow.className = 'ed-about-auto'
+    const autoCb = document.createElement('input')
+    autoCb.type = 'checkbox'
+    autoCb.checked = autoCheckEnabled()
+    autoCb.addEventListener('change', () => setAutoCheck(autoCb.checked))
+    autoRow.append(autoCb, document.createTextNode(' Check for updates automatically at launch'))
+    box.appendChild(autoRow)
+
     const fine = div('ed-about-fine')
     fine.innerHTML =
-      `Checking contacts the release server once and sends nothing about you or this document.<br>` +
+      `Checks contact the release server and send nothing about you or this document — no ids, no telemetry.<br>` +
       `Includes reveal.js, Moveable, Selecto (MIT) · Apache ECharts (Apache-2.0) · zrender (BSD-3) · Fraunces typeface (OFL-1.1) — full notices travel in this file’s source.`
     box.appendChild(fine)
 
@@ -828,6 +852,7 @@ export class Editor {
     })
     document.addEventListener('keydown', onKey, true)
     document.body.appendChild(overlay)
+    if (runCheck || this.updateFound) checkB.click()
   }
 
   toast(message: string) {

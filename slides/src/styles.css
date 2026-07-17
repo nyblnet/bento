@@ -411,6 +411,21 @@ html, body {
 }
 .ed-hint code { font-size: 10.5px; word-break: break-all; }
 
+.ed-btn-update {
+  background: #FF9E8A !important;
+  color: #0D1B2E !important;
+  font-weight: 700;
+}
+.ed-about-auto {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
 /* ————— about dialog ————— */
 
 .ed-about-overlay {

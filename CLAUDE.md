@@ -40,9 +40,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   visually on canvas (`editor/patheditor.ts`): draggable anchors auto-smoothed
   Catmull-Rom→cubic bezier; the stored path is RELATIVE to the element's rest
   position (first anchor = rest position; committing moves the element there).
-- `src/update.ts` — signed self-update: About dialog (topbar logo) checks a
-  release manifest ON USER CLICK ONLY (`bento.page`; dev override localStorage
-  'bento-update-url'), verifies ECDSA P-256 signature against the embedded
+- `src/update.ts` — signed self-update: checks a release manifest at LAUNCH
+  by default (localStorage 'bento-auto-check'='off' disables; toggle in the
+  About dialog; found updates badge the topbar sync button) and on demand via
+  About/topbar (`bento.page`; dev override localStorage 'bento-update-url'),
+  verifies ECDSA P-256 signature against the embedded
   PUBLIC_KEY_JWK + sha256 of the fetched shell + version monotonicity, then
   re-splices the current doc into the new shell (`save.serializeWith`) and
   downloads it as a NEW file (original untouched = rollback). APP_VERSION baked
