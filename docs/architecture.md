@@ -62,7 +62,7 @@ Whole shell: 1.24 MB raw, ≈392 KB gzipped, before any document content.
 
 Two hard rules keep the file well-formed:
 
-1. **The data block JSON escapes every `<` as `<`**, so the string
+1. **The data block JSON escapes every `<` as `\u003c`**, so the string
    `</script>` can physically never appear inside it and terminate the block.
 2. **The runtime source never contains a literal script-close tag** — the one
    place that needs it (`save.ts`) builds it by string concatenation, because
