@@ -15,6 +15,10 @@ import {
   newDoc, uid, defaultText, defaultShape, defaultChart,
   type BentoDoc, type Slide, type SlideElement, type TextElement, type ShapeElement,
 } from './model'
+import { FRAUNCES_900 } from './fontdata'
+
+/** Display face — embedded in the file (see fontdata.ts), serif drama. */
+const DISPLAY = "'Fraunces', Georgia, serif"
 
 const INK = '#0F1724'
 const PANEL = '#1E2A3A'
@@ -57,8 +61,8 @@ const kicker = (label: string, p: Partial<TextElement> = {}): TextElement =>
 
 const title = (html: string, p: Partial<TextElement> = {}): TextElement =>
   text({
-    id: TITLE, x: 92, y: 92, w: 900, h: 80, html,
-    fontSize: 46, fontWeight: 800, color: INK, lineHeight: 1.08, ...p,
+    id: TITLE, x: 92, y: 88, w: 900, h: 90, html,
+    fontSize: 54, fontWeight: 900, fontFamily: DISPLAY, color: INK, lineHeight: 1.06, ...p,
   })
 
 const glow = (angle: number, stops: Array<{ at: number; color: string }>): ShapeElement =>
@@ -142,6 +146,8 @@ const trendOption = () => ({
 export function starterDoc(): BentoDoc {
   const doc = newDoc()
   doc.title = 'Bento Slides Showcase'
+  doc.fonts = [{ family: 'Fraunces', asset: 'font-fraunces-900', weight: '900' }]
+  doc.assets = { 'font-fraunces-900': FRAUNCES_900 }
 
   const slide = (p: Partial<Slide> & { elements: SlideElement[] }): Slide => ({
     id: uid('slide'), background: INK, transition: 'morph', notes: '', ...p,
@@ -181,12 +187,12 @@ export function starterDoc(): BentoDoc {
         shape('rect', { id: T_A, x: 986, y: 206, w: 148, h: 112, radius: 18, fill: AMBER, fx: { enter: 'fade-up', order: 3 } }),
         shape('rect', { id: T_C, x: 986, y: 330, w: 148, h: 124, radius: 18, fill: '#E9EDF3', fx: { enter: 'fade-up', order: 4 } }),
         kicker('BENTO SLIDES', { fx: { enter: 'fade-up', order: 0 } }),
-        title('The file is<br>the software.', {
-          x: 90, y: 96, w: 680, h: 220, fontSize: 84, color: '#FFFFFF',
+        title('The file is<br>the&nbsp;software.', {
+          x: 88, y: 108, w: 720, h: 260, fontSize: 96, color: '#FFFFFF',
           fx: { enter: 'fade-up', order: 1 },
         }),
         text({
-          x: 96, y: 330, w: 560, h: 100,
+          x: 96, y: 372, w: 560, h: 100,
           html: 'One HTML file — deck, viewer and editor together.<br>Open it anywhere. It saves itself.',
           fontSize: 22, color: MIST, lineHeight: 1.55,
           fx: { enter: 'fade-up', order: 3 },
@@ -272,10 +278,10 @@ export function starterDoc(): BentoDoc {
         }),
         kicker('PRESENT', { x: 340, y: 216, w: 600, h: 30, align: 'center' }),
         title('Morph is the<br>native transition.', {
-          x: 240, y: 254, w: 800, h: 200, fontSize: 72, color: '#FFFFFF', align: 'center',
+          x: 190, y: 240, w: 900, h: 230, fontSize: 84, color: '#FFFFFF', align: 'center',
         }),
         text({
-          x: 340, y: 476, w: 600, h: 70,
+          x: 340, y: 492, w: 600, h: 70,
           html: 'Shared ids animate between slides — position, size, color, <b>even gradients</b>.',
           fontSize: 21, color: MIST, align: 'center', lineHeight: 1.5,
         }),
@@ -296,18 +302,18 @@ export function starterDoc(): BentoDoc {
         shape('rect', { id: T_C, x: 252, y: 84, w: 40, h: 40, radius: 10, fill: PAPER }),
         kicker('NO MOVING PARTS', { y: 160, color: INK, fx: { enter: 'fade-up', order: 0 } }),
         title('Software with nothing<br>to install, break, or expire.', {
-          y: 196, w: 1000, h: 130, color: INK, fontSize: 44,
+          y: 196, w: 1060, h: 150, color: INK, fontSize: 50,
           fx: { enter: 'fade-up', order: 1 },
         }),
-        text({ x: 96, y: 370, w: 300, h: 130, html: '1', fontSize: 116, fontWeight: 800, color: INK, fx: { enter: 'fade-up', order: 2, countUp: true } }),
-        text({ x: 512, y: 370, w: 300, h: 130, html: '0', fontSize: 116, fontWeight: 800, color: INK, fx: { enter: 'fade-up', order: 3, countUp: true } }),
-        text({ x: 928, y: 370, w: 300, h: 130, html: '100%', fontSize: 116, fontWeight: 800, color: INK, fx: { enter: 'fade-up', order: 4, countUp: true } }),
-        shape('line', { x: 100, y: 508, w: 130, h: 8, fill: INK, strokeWidth: 3, lineEnd: 'arrow', fx: { enter: 'fade', order: 5 } }),
-        shape('line', { x: 516, y: 508, w: 130, h: 8, fill: INK, strokeWidth: 3, lineStart: 'dot', lineEnd: 'dot', fx: { enter: 'fade', order: 5 } }),
-        shape('line', { x: 932, y: 508, w: 130, h: 8, fill: INK, strokeWidth: 3, lineStart: 'bar', lineEnd: 'bar', fx: { enter: 'fade', order: 5 } }),
-        text({ x: 96, y: 530, w: 300, h: 40, html: 'file to send', fontSize: 21, fontWeight: 600, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
-        text({ x: 512, y: 530, w: 300, h: 40, html: 'servers required', fontSize: 21, fontWeight: 600, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
-        text({ x: 928, y: 530, w: 300, h: 40, html: 'yours, forever', fontSize: 21, fontWeight: 600, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        text({ x: 96, y: 386, w: 352, h: 150, html: '1', fontSize: 124, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 2, countUp: true } }),
+        text({ x: 464, y: 386, w: 352, h: 150, html: '0', fontSize: 124, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 3, countUp: true } }),
+        text({ x: 832, y: 386, w: 352, h: 150, html: '100%', fontSize: 124, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 4, countUp: true } }),
+        shape('line', { x: 100, y: 548, w: 130, h: 8, fill: INK, strokeWidth: 3, lineEnd: 'arrow', fx: { enter: 'fade', order: 5 } }),
+        shape('line', { x: 468, y: 548, w: 130, h: 8, fill: INK, strokeWidth: 3, lineStart: 'dot', lineEnd: 'dot', fx: { enter: 'fade', order: 5 } }),
+        shape('line', { x: 836, y: 548, w: 130, h: 8, fill: INK, strokeWidth: 3, lineStart: 'bar', lineEnd: 'bar', fx: { enter: 'fade', order: 5 } }),
+        text({ x: 96, y: 570, w: 352, h: 40, html: 'file to send', fontSize: 21, fontWeight: 600, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        text({ x: 464, y: 570, w: 352, h: 40, html: 'servers required', fontSize: 21, fontWeight: 600, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        text({ x: 832, y: 570, w: 352, h: 40, html: 'yours, forever', fontSize: 21, fontWeight: 600, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
       ],
     }),
 
@@ -389,7 +395,7 @@ export function starterDoc(): BentoDoc {
         kicker('STORY WITH DATA'),
         title('Momentum you can feel.', { color: '#FFFFFF' }),
         text({
-          x: 900, y: 92, w: 220, h: 70, html: '+975%', fontSize: 54, fontWeight: 800, color: AMBER, align: 'right',
+          x: 860, y: 88, w: 260, h: 80, html: '+975%', fontSize: 60, fontWeight: 900, fontFamily: DISPLAY, color: AMBER, align: 'right',
         }),
         { ...defaultChart(trendOption()), x: 64, y: 210, w: 1152, h: 440 },
       ],
@@ -421,12 +427,15 @@ export function starterDoc(): BentoDoc {
           fx: { loop: { type: 'motion-path', duration: 8,
             path: 'M 0 0 C 240 -260 500 -260 620 -110 C 710 5 880 5 960 -190' } },
         }),
-        text({ x: 330, y: 208, w: 220, h: 30, html: 'drafted', fontSize: 17, fontWeight: 700, color: INK_SOFT }),
-        text({ x: 660, y: 436, w: 220, h: 30, html: 'reviewed', fontSize: 17, fontWeight: 700, color: INK_SOFT }),
-        text({ x: 1044, y: 284, w: 200, h: 30, html: 'shipped', fontSize: 17, fontWeight: 700, color: AMBER_DEEP }),
+        shape('ellipse', { x: 505, y: 301, w: 20, h: 20, fill: '#FFFFFF', stroke: INK, strokeWidth: 2.5 }),
+        shape('ellipse', { x: 944, y: 476, w: 20, h: 20, fill: '#FFFFFF', stroke: INK, strokeWidth: 2.5 }),
+        shape('ellipse', { x: 1108, y: 318, w: 24, h: 24, fill: AMBER, stroke: INK, strokeWidth: 2.5 }),
+        text({ x: 435, y: 258, w: 160, h: 30, html: 'drafted', fontSize: 17, fontWeight: 700, color: INK_SOFT, align: 'center' }),
+        text({ x: 874, y: 512, w: 160, h: 30, html: 'reviewed', fontSize: 17, fontWeight: 700, color: INK_SOFT, align: 'center' }),
+        text({ x: 1040, y: 272, w: 160, h: 30, html: 'shipped', fontSize: 17, fontWeight: 700, color: AMBER_DEEP, align: 'center' }),
         text({
-          x: 96, y: 620, w: 900, h: 30,
-          html: 'Two clicks in the editor: draw the path on canvas, set the loop time.',
+          x: 96, y: 624, w: 900, h: 30,
+          html: 'Drawn with the on-canvas path editor — drag the anchors and the loop follows.',
           fontSize: 15, color: INK_SOFT,
         }),
       ],
@@ -539,7 +548,7 @@ export function starterDoc(): BentoDoc {
         shape('rect', { id: T_A, x: 616, y: 164, w: 140, h: 104, radius: 16, fill: AMBER }),
         shape('rect', { id: T_C, x: 616, y: 280, w: 140, h: 116, radius: 16, fill: '#E9EDF3' }),
         kicker('YOUR TURN', { x: 340, y: 470, w: 600, h: 30, align: 'center' }),
-        title('Make it yours.', { x: 340, y: 504, w: 600, h: 70, fontSize: 56, color: '#FFFFFF', align: 'center' }),
+        title('Make it yours.', { x: 290, y: 500, w: 700, h: 84, fontSize: 64, color: '#FFFFFF', align: 'center' }),
         text({
           x: 290, y: 590, w: 700, h: 40,
           html: 'Press <b>Esc</b> — this deck is already your copy of the editor.',
