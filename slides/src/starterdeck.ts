@@ -110,12 +110,21 @@ const aurora = (x: number, y: number, size: number, asset: string, dur: number):
   fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.22, duration: dur } },
 })
 
-/** Small bento tile drifting on a slow closed loop — ambient, on-brand. */
-const floater = (x: number, y: number, s: number, fill: string, r: number, dur: number, delay = 0): ShapeElement =>
-  shape('rect', {
-    x, y, w: s, h: s, radius: Math.round(s * 0.3), fill, opacity: 0.85,
-    fx: { loop: { type: 'motion-path', path: floatPath(r), duration: dur, delay } },
-  })
+/** Out-of-focus light speck (blurred svg disc) adrift on a slow closed loop. */
+const bokeh = (
+  x: number, y: number, s: number, warm: boolean, opacity: number,
+  r: number, dur: number, delay = 0,
+): SvgElement => ({
+  id: uid('sv'), type: 'svg', x, y, w: s, h: s, rotation: 0, opacity,
+  asset: warm ? 'bokeh-warm' : 'bokeh-cool',
+  fx: { loop: { type: 'motion-path', path: floatPath(r), duration: dur, delay } },
+})
+
+/** Film grain for ink grounds (feTurbulence) — texture without a visible grid. */
+const grain = (): SvgElement => ({
+  id: uid('sv'), type: 'svg', x: 0, y: 0, w: 1280, h: 720, rotation: 0, opacity: 1,
+  asset: 'grain',
+})
 
 const glow = (angle: number, stops: Array<{ at: number; color: string }>): ShapeElement =>
   shape('rect', {
@@ -202,6 +211,24 @@ const DOTS_INK =
   '<circle cx="1.5" cy="1.5" r="1.4" fill="#FFFFFF" opacity="0.07"/></pattern></defs>' +
   '<rect width="1280" height="720" fill="url(#bp-dots-i)"/></svg>'
 
+const GRAIN =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="none">' +
+  '<filter id="bp-grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>' +
+  '<feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.045 0"/></filter>' +
+  '<rect width="1280" height="720" filter="url(#bp-grain)"/></svg>'
+
+const BOKEH_WARM =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">' +
+  '<defs><filter id="bp-bk-w" x="-60%" y="-60%" width="220%" height="220%">' +
+  '<feGaussianBlur stdDeviation="7"/></filter></defs>' +
+  '<circle cx="40" cy="40" r="21" fill="#F7A600" filter="url(#bp-bk-w)"/></svg>'
+
+const BOKEH_COOL =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">' +
+  '<defs><filter id="bp-bk-c" x="-60%" y="-60%" width="220%" height="220%">' +
+  '<feGaussianBlur stdDeviation="7"/></filter></defs>' +
+  '<circle cx="40" cy="40" r="21" fill="#DCE6F5" filter="url(#bp-bk-c)"/></svg>'
+
 const AURORA_AMBER =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">' +
   '<defs><radialGradient id="bp-ga-am"><stop offset="0" stop-color="#F7A600" stop-opacity="0.20"/>' +
@@ -237,6 +264,9 @@ export function starterDoc(): BentoDoc {
     'dots-paper': DOTS_PAPER,
     'aurora-amber': AURORA_AMBER,
     'aurora-blue': AURORA_BLUE,
+    'grain': GRAIN,
+    'bokeh-warm': BOKEH_WARM,
+    'bokeh-cool': BOKEH_COOL,
   }
 
   const slide = (p: Partial<Slide> & { elements: SlideElement[] }): Slide => ({
@@ -251,7 +281,7 @@ export function starterDoc(): BentoDoc {
         'Welcome! This whole deck — data, viewer, editor — lives in one HTML file. ' +
         '→ advances, Esc edits, S opens the speaker view. Watch the tiles: they morph through every slide.',
       elements: [
-        dots(true),
+        grain(),
         glow(135, [
           { at: 0, color: 'rgba(91,141,239,0.22)' },
           { at: 0.55, color: 'rgba(15,23,36,0)' },
@@ -271,10 +301,11 @@ export function starterDoc(): BentoDoc {
         // atmosphere: breathing aurora blobs + bento tiles adrift around the logo
         aurora(700, -80, 680, 'aurora-amber', 24),
         aurora(880, 220, 560, 'aurora-blue', 32),
-        floater(792, 128, 26, AMBER, 16, 19),
-        floater(1194, 158, 18, BLUE, 12, 15, 3),
-        floater(1206, 428, 22, '#E9EDF3', 20, 24, 6),
-        floater(806, 468, 14, AMBER_SOFT, 14, 17, 9),
+        bokeh(770, 128, 44, true, 0.5, 18, 34),
+        bokeh(1198, 208, 26, false, 0.4, 14, 26, 5),
+        bokeh(1174, 468, 34, true, 0.32, 22, 40, 11),
+        bokeh(902, 108, 18, false, 0.35, 12, 23, 8),
+        bokeh(812, 520, 16, true, 0.28, 15, 30, 15),
         // the bento logo, built from the cast
         shape('rect', {
           id: T_D, x: 850, y: 170, w: 320, h: 320, radius: 36, fill: PANEL,
@@ -356,7 +387,7 @@ export function starterDoc(): BentoDoc {
         'The tiles scattered and grew — and picked up GRADIENT fills mid-morph (solid⇄gradient tweening). ' +
         'Press ← and → to replay it. Nothing here is a video; it’s the same four elements.',
       elements: [
-        dots(true),
+        grain(),
         glow(20, [
           { at: 0, color: 'rgba(61,111,224,0.24)' },
           { at: 0.6, color: 'rgba(15,23,36,0)' },
@@ -494,7 +525,7 @@ export function starterDoc(): BentoDoc {
         'A chart as scenery: full-width live area chart on ink. Drag horizontally inside it to zoom — ' +
         'dataZoom is on. The +975% is honest: it’s the data’s own range.',
       elements: [
-        dots(true),
+        grain(),
         glow(200, [
           { at: 0, color: 'rgba(247,166,0,0.12)' },
           { at: 0.5, color: 'rgba(15,23,36,0)' },
@@ -566,7 +597,7 @@ export function starterDoc(): BentoDoc {
         'Hover any card — everything else dims. That’s a per-slide switch plus a group tag on the elements. ' +
         'Use it for dense diagrams where pointing should focus the room.',
       elements: [
-        dots(true),
+        grain(),
         glow(160, [
           { at: 0, color: 'rgba(91,141,239,0.16)' },
           { at: 1, color: 'rgba(247,166,0,0.12)' },
@@ -648,7 +679,7 @@ export function starterDoc(): BentoDoc {
         'The cast reassembles into the logo. Press Esc — this deck is already your copy of the app: ' +
         'edit it, save it, send it. bento.page has the latest build and the story.',
       elements: [
-        dots(true),
+        grain(),
         glow(0, [
           { at: 0, color: 'rgba(247,166,0,0.14)' },
           { at: 0.55, color: 'rgba(15,23,36,0)' },
@@ -657,10 +688,11 @@ export function starterDoc(): BentoDoc {
         // atmosphere mirrors the title: auroras breathing, tiles adrift
         aurora(320, -60, 660, 'aurora-amber', 26),
         aurora(600, 80, 560, 'aurora-blue', 34),
-        floater(414, 148, 26, AMBER, 16, 19),
-        floater(864, 118, 20, BLUE, 12, 15, 3),
-        floater(838, 362, 16, '#E9EDF3', 20, 23, 6),
-        floater(452, 404, 14, AMBER_SOFT, 14, 17, 9),
+        bokeh(404, 140, 44, true, 0.5, 18, 34),
+        bokeh(872, 122, 26, false, 0.4, 14, 26, 5),
+        bokeh(846, 372, 30, true, 0.32, 22, 40, 11),
+        bokeh(508, 82, 16, false, 0.35, 12, 23, 8),
+        bokeh(438, 420, 16, true, 0.28, 15, 30, 15),
         shape('rect', {
           id: T_D, x: 500, y: 120, w: 280, h: 280, radius: 56, fill: PANEL,
           stroke: 'rgba(185,196,212,0.28)', strokeWidth: 1.5,
