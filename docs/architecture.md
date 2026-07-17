@@ -263,3 +263,33 @@ Things generators and future format revisions must not break:
    for future hosting).
 5. Motion paths are stored relative to the element's rest position; the first
    path point is that position by definition.
+6. Every document carries a stable `docId` (uuid, minted at creation, minted
+   on load for pre-docId files). It is identity for future sync/share/merge —
+   never derive it from content, never regenerate it on save.
+
+## 7. Self-update (signed releases)
+
+A shipped file pins its runtime forever — it never needs the network. On
+**user request only** (About dialog via the topbar logo, or
+`window.bento.updates`), it can ask the release origin for a newer shell and
+rebuild itself as *same document, newer app*:
+
+```
+check    GET manifest.json          { payload: "<json string>", sig: base64 }
+verify   ECDSA P-256 / SHA-256 over the payload's exact bytes, against
+         PUBLIC_KEY_JWK embedded in every shell (src/update.ts); then
+         require payload.version > APP_VERSION (no downgrade replay)
+fetch    GET payload.url → bytes; sha256(bytes) must equal payload.sha256
+splice   DOMParser the new shell → save.serializeWith(shell, doc)
+deliver  downloaded as a NEW file — the on-disk original is its own rollback
+```
+
+- `APP_VERSION` is baked at build from `slides/package.json` (vite `define`).
+- The private key lives offline (`scripts/keygen.mjs` →
+  `~/.bento/release-key.json`, never in repo or CI); `scripts/sign-release.mjs`
+  hashes the built shell and writes the signed manifest. A compromised release
+  host cannot forge an update without that key. Rotating the key orphans every
+  shipped file — guard the key instead.
+- Privacy: the check is a bare GET with no identifiers, never automatic.
+- Update channel = signed **code**; future sync channel = inert **data**
+  (invariant 3). Never mix the two.
