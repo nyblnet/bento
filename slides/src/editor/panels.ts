@@ -150,6 +150,14 @@ export class PropsPanel {
       }
     }
 
+    const applyLy = document.createElement('button')
+    applyLy.className = 'ed-btn ed-btn-block'
+    applyLy.textContent = '⧉ Apply layout…'
+    applyLy.title = 'Re-arrange this slide onto a layout — content moves by matching id, then role; extra elements are kept'
+    applyLy.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('bento:apply-layout', { detail: { anchor: applyLy } })))
+    this.host.appendChild(applyLy)
+
     const saveLy = document.createElement('button')
     saveLy.className = 'ed-btn ed-btn-block'
     saveLy.textContent = '＋ Save slide as layout…'
@@ -197,6 +205,14 @@ export class PropsPanel {
         this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1))),
     )
     this.host.appendChild(geo)
+
+    this.row('Role', this.select(
+      ['none', 'title', 'subtitle', 'body', 'kicker'],
+      el.role ?? 'none',
+      (v) => this.mutate(el.id, (e) => {
+        if (v === 'none') delete e.role
+        else e.role = v
+      }, true)))
 
     if (el.type === 'text') this.buildTextProps(el)
     if (el.type === 'shape') this.buildShapeProps(el)

@@ -3,8 +3,8 @@
 
 import type { Store } from '../store'
 import {
-  builtinLayouts, defaultChart, defaultImage, defaultShape, defaultText, emptySlide,
-  instantiateLayout, uid,
+  applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultText,
+  instantiateLayout, layoutElementIds, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
 import { CHART_PRESETS } from '../charts'
@@ -50,6 +50,9 @@ export class Editor {
     window.addEventListener('beforeunload', (ev) => {
       if (store.dirty) ev.preventDefault()
     })
+    document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
+      this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
+    }) as EventListener)
     this.rebuildSidebar()
   }
 
@@ -260,11 +263,20 @@ export class Editor {
 
   // --- layouts ---------------------------------------------------------------
 
-  /** Popover over the New-slide button: built-in layouts + this document's. */
-  private openLayoutPicker(anchor: HTMLElement) {
+  /** Layout popover. Serves three flows: the New-slide button, the
+   *  insert-gaps (both insert at a position), and Apply-to-current-slide. */
+  private openLayoutPicker(
+    anchor: HTMLElement,
+    action: { kind: 'insert'; at: number } | { kind: 'apply' } = { kind: 'insert', at: this.store.currentIndex + 1 },
+  ) {
     document.querySelector('.ed-layoutpick')?.remove()
     const pick = div('ed-layoutpick')
     const doc = this.store.doc
+    if (action.kind === 'apply') {
+      const t = div('ed-layoutpick-title')
+      t.textContent = 'Apply layout to this slide'
+      pick.appendChild(t)
+    }
     const sections: Array<[string, Slide[], boolean]> = [['Built-in', builtinLayouts(), false]]
     if (doc.layouts?.length) sections.push(['This document', doc.layouts, true])
     for (const [label, layouts, custom] of sections) {
@@ -280,7 +292,8 @@ export class Editor {
         item.appendChild(name)
         item.addEventListener('click', () => {
           pick.remove()
-          this.addSlideFromLayout(ly)
+          if (action.kind === 'insert') this.insertSlideFromLayout(ly, action.at)
+          else this.applyLayoutToCurrent(ly)
         })
         if (custom) {
           const del = document.createElement('button')
@@ -302,8 +315,15 @@ export class Editor {
       pick.appendChild(grid)
     }
     const r = anchor.getBoundingClientRect()
-    pick.style.left = `${Math.max(8, r.left)}px`
-    pick.style.bottom = `${window.innerHeight - r.top + 8}px`
+    if (anchor.classList.contains('ed-add-slide')) {
+      // bottom-of-sidebar button: open upward from it
+      pick.style.left = `${Math.max(8, r.left)}px`
+      pick.style.bottom = `${window.innerHeight - r.top + 8}px`
+    } else {
+      // insert-gap or panel button: open beside the anchor, clamped on-screen
+      pick.style.left = `${Math.max(8, Math.min(r.right + 10, window.innerWidth - 440))}px`
+      pick.style.top = `${Math.max(8, Math.min(r.top - 40, window.innerHeight - 460))}px`
+    }
     document.body.appendChild(pick)
     const close = (ev: PointerEvent) => {
       if (!pick.contains(ev.target as Node)) {
@@ -314,12 +334,24 @@ export class Editor {
     setTimeout(() => document.addEventListener('pointerdown', close, true))
   }
 
-  private addSlideFromLayout(layout: Slide) {
+  private insertSlideFromLayout(layout: Slide, at: number) {
     const slide = instantiateLayout(layout)
     this.store.commit(() => {
-      this.store.doc.slides.splice(this.store.currentIndex + 1, 0, slide)
+      this.store.doc.slides.splice(at, 0, slide)
     }, 'slides')
-    this.store.goTo(this.store.currentIndex + 1)
+    this.store.goTo(at)
+  }
+
+  /** Re-arrange the current slide onto a layout: content matched by id, then
+   *  by role; the layout brings frame + typography; extras are kept on top. */
+  private applyLayoutToCurrent(layout: Slide) {
+    const known = layoutElementIds(this.store.doc)
+    this.store.commit(() => {
+      const s = this.store.slide
+      s.elements = applyLayout(s, layout, known)
+      s.background = layout.background
+    })
+    this.store.select([])
   }
 
   /** Slim hover strip between thumbnails — click inserts a blank slide there. */
@@ -331,13 +363,7 @@ export class Editor {
     plus.textContent = '＋'
     plus.tabIndex = -1
     gap.appendChild(plus)
-    gap.addEventListener('click', () => {
-      const bg = this.store.slide.background
-      this.store.commit(() => {
-        this.store.doc.slides.splice(at, 0, emptySlide({ background: bg }))
-      }, 'slides')
-      this.store.goTo(at)
-    })
+    gap.addEventListener('click', () => this.openLayoutPicker(gap, { kind: 'insert', at }))
     return gap
   }
 
