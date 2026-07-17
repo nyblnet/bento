@@ -15,40 +15,50 @@ trick, modernized with the File System Access API).
 
 ## 1. On-disk anatomy
 
-A `.bento.html` file is ordinary, valid HTML. Byte map of the current build
-(offsets from the actual `dist-single/Bento_Slides.bento.html`, 1.24 MB shell):
+A `.bento.html` file is ordinary, valid HTML. Skeleton of the current build
+(structure of the actual `dist-single/Bento_Slides.bento.html`):
 
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"> <meta name="viewport" …> <meta name="generator" content="bento-slides">
+  <link rel="icon" href="data:image/svg+xml,…">
+  <title>Deck title — Bento Slides</title>
+
+  <!-- NOTICE — bundled open-source components …
+       (license notices; part of the shell, so they travel with every copy) -->
+
+  <!-- ═══ THE DOCUMENT ═══ (empty in a fresh shell → boots the starter deck) -->
+  <script type="application/bento+json" id="bento-doc">
+    {"format":"bento/slides","title":"…","size":{…},"slides":[…]}
+  </script>
+
+  <!-- ═══ THE RUNTIME ═══ viewer + presenter + editor, one inlined bundle -->
+  <script type="module">/* ≈1.17 MB minified JS */</script>
+  <style>/* ≈62 KB minified CSS — editor chrome, present overlay, print rules */</style>
+  <style>/* splash CSS — paints before the bundle parses */</style>
+</head>
+<body>
+  <div id="bento-splash">…</div>   <!-- pure-CSS boot splash -->
+  <div id="app"></div>             <!-- the runtime mounts the editor here -->
+</body>
+</html>
 ```
-offset     ┌──────────────────────────────────────────────────────────────┐
-0          │ <!DOCTYPE html> <html lang="en"> <head>                      │
-           │   <meta charset/viewport/generator>  <link rel="icon" …>    │
-           │   <title>…</title>                                           │
-653        │   <!-- NOTICE — bundled open-source components … -->         │  license notices travel
-           │                                                              │  with every copy
-2825       │   <script type="application/bento+json" id="bento-doc">     │
-           │     {"format":"bento/slides","title":…,"slides":[…]}         │  ◀ THE DOCUMENT
-           │   </script>                                                  │    (empty = starter deck)
-2854*      │   <script type="module"> …1.17 MB minified JS… </script>     │  ◀ THE RUNTIME
-           │     app code + Reveal.js + Moveable/Selecto + ECharts        │
-1124504    │   <style> …62 KB minified CSS… </style>                      │  editor + present styles
-1186508    │   <style> splash CSS </style>                                │  paints before JS parses
-           │ </head>                                                      │
-           │ <body>                                                       │
-           │   <div id="bento-splash">…</div>                             │  pure-CSS boot splash
-1243252    │   <div id="app"></div>                                       │  runtime mounts here
-           │ </body> </html>                                              │
-           └──────────────────────────────────────────────────────────────┘
-           * offsets shift with the data block's size; order is fixed
-```
 
-Composition of the shell (gzip ≈ 392 KB total):
+Layout and sizes, in file order (byte offsets measured on the 1.24 MB shell;
+they shift with the data block's size — the *order* is fixed):
 
-| Part | ≈ size (raw) | Contents |
-|---|---|---|
-| Runtime JS | 1.17 MB | app (~120 KB) + Reveal.js + Moveable/Selecto family + ECharts/zrender (~610 KB) |
-| Runtime CSS | 62 KB | editor chrome, present overlay, print rules |
-| HTML chrome | ~3 KB | head, NOTICE, splash, mounts |
-| Data block | 0 → *n* MB | the document; assets are data URIs, so image-heavy decks dominate |
+| # | Part | Offset (shell) | ≈ size (raw) | What it is |
+|---|---|---|---|---|
+| 1 | Head chrome | 0 | 0.7 KB | doctype, metas, favicon, title |
+| 2 | NOTICE comment | 653 | 2 KB | bundled-library license notices |
+| 3 | **`#bento-doc` data block** | 2,825 | **0 → *n* MB** | **the document** — JSON, `<` escaped; assets are data URIs, so image-heavy decks dominate the file |
+| 4 | Runtime JS | 2,854 | 1.17 MB | app (~120 KB) + Reveal.js + Moveable/Selecto family + ECharts/zrender (~610 KB) |
+| 5 | Runtime CSS | 1,124,504 | 62 KB | editor + present + print styles |
+| 6 | Splash CSS + body mounts | 1,186,508 | 2 KB | splash `<style>`/`<div>`, `#app` mount |
+
+Whole shell: 1.24 MB raw, ≈392 KB gzipped, before any document content.
 
 Two hard rules keep the file well-formed:
 
