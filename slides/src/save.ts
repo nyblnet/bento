@@ -25,10 +25,13 @@ export function readEmbeddedDoc(): string | null {
   return text || null
 }
 
-/** The full .bento.html file content with `doc` embedded. */
-export function serializeFile(doc: BentoDoc): string {
-  if (!pristine) throw new Error('capturePristine() was not called at boot')
-  const clone = pristine.cloneNode(true) as Document
+/**
+ * Serialize `doc` into an arbitrary app shell (a parsed Bento HTML document).
+ * Used with the boot-time pristine copy on every save, and by the self-update
+ * flow with a freshly fetched NEWER shell — same document, new app around it.
+ */
+export function serializeWith(shell: Document, doc: BentoDoc): string {
+  const clone = shell.cloneNode(true) as Document
 
   let block = clone.getElementById(DATA_BLOCK_ID)
   if (!block) {
@@ -43,13 +46,19 @@ export function serializeFile(doc: BentoDoc): string {
   const title = clone.querySelector('title')
   if (title) title.textContent = doc.title + ' — Bento Slides'
 
-  let html = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML
+  const html = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML
   // Belt-and-braces: an unescaped close tag anywhere in generated output would
   // corrupt the file; this should never trigger given the escaping above.
-  if (html.split(SCRIPT_CLOSE).length !== pristine.querySelectorAll('script').length + 1) {
+  if (html.split(SCRIPT_CLOSE).length !== clone.querySelectorAll('script').length + 1) {
     console.warn('bento: unexpected script-close count in serialized file')
   }
   return html
+}
+
+/** The full .bento.html file content with `doc` embedded. */
+export function serializeFile(doc: BentoDoc): string {
+  if (!pristine) throw new Error('capturePristine() was not called at boot')
+  return serializeWith(pristine, doc)
 }
 
 export function suggestedFileName(doc: BentoDoc): string {
@@ -88,7 +97,7 @@ async function writeHandle(handle: FsFileHandle, html: string) {
   await writable.close()
 }
 
-function download(html: string, name: string) {
+export function downloadFile(html: string, name: string) {
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
   const a = document.createElement('a')
   a.href = url
@@ -114,7 +123,7 @@ export async function saveFile(doc: BentoDoc, forcePicker = false): Promise<Save
     await writeHandle(fileHandle, html)
     return 'saved'
   }
-  download(html, suggestedFileName(doc))
+  downloadFile(html, suggestedFileName(doc))
   return 'downloaded'
 }
 

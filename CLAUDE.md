@@ -31,6 +31,17 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   visually on canvas (`editor/patheditor.ts`): draggable anchors auto-smoothed
   Catmull-Rom→cubic bezier; the stored path is RELATIVE to the element's rest
   position (first anchor = rest position; committing moves the element there).
+- `src/update.ts` — signed self-update: About dialog (topbar logo) checks a
+  release manifest ON USER CLICK ONLY (`bento.page`; dev override localStorage
+  'bento-update-url'), verifies ECDSA P-256 signature against the embedded
+  PUBLIC_KEY_JWK + sha256 of the fetched shell + version monotonicity, then
+  re-splices the current doc into the new shell (`save.serializeWith`) and
+  downloads it as a NEW file (original untouched = rollback). APP_VERSION baked
+  from package.json via vite define. Private key: `scripts/keygen.mjs` →
+  `~/.bento/release-key.json` (offline, NEVER commit/CI); sign releases with
+  `scripts/sign-release.mjs`. Docs carry a stable `docId` (uuid, minted at
+  creation/load) — identity for future sync/merge; never regenerate it.
+  Scripting: `window.bento.updates.{version,check,build,apply}`.
 - `src/charts.ts` — ECharts (Apache-2.0, svg renderer only, tree-shaken:
   bar/line/pie/scatter + grid/tooltip/legend/dataZoom/title/dataset). A `chart`
   element stores a PURE-JSON option (template-string formatters, never

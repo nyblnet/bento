@@ -3,10 +3,12 @@
 
 import type { Store } from '../store'
 import {
+  FORMAT_VERSION,
   applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultText,
   instantiateLayout, layoutElementIds, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
+import { APP_VERSION, applyUpdate, checkForUpdates } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
@@ -72,6 +74,9 @@ export class Editor {
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#F7A600"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#E9EDF3"/>` +
       `</svg> <b>Bento</b>&nbsp;Slides`
+    logo.title = 'About Bento Slides — version, updates, licenses'
+    logo.style.cursor = 'pointer'
+    logo.addEventListener('click', () => this.openAbout())
     const title = document.createElement('input')
     title.className = 'ed-title'
     title.value = this.store.doc.title
@@ -696,6 +701,97 @@ export class Editor {
   }
 
   // --- toast ------------------------------------------------------------------
+
+  // --- about & updates ------------------------------------------------------
+
+  /** About dialog: version, user-initiated update check, licenses. */
+  private openAbout() {
+    document.querySelector('.ed-about-overlay')?.remove()
+    const overlay = div('ed-about-overlay')
+    const box = div('ed-about')
+
+    const head = div('ed-about-head')
+    head.innerHTML =
+      `<svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">` +
+      `<rect width="32" height="32" rx="7" fill="#1E2A3A"/>` +
+      `<rect x="5" y="5" width="6" height="22" rx="2.5" fill="#5B8DEF"/>` +
+      `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#F7A600"/>` +
+      `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#E9EDF3"/>` +
+      `</svg><div><b>Bento Slides</b><span>v${APP_VERSION} · format v${FORMAT_VERSION}</span></div>`
+    box.appendChild(head)
+
+    const status = div('ed-about-status')
+    status.textContent = 'This file carries its own app — it works offline, forever, as is.'
+
+    const row = div('ed-about-row')
+    const checkB = document.createElement('button')
+    checkB.className = 'ed-btn'
+    checkB.textContent = 'Check for updates'
+    checkB.addEventListener('click', async () => {
+      checkB.disabled = true
+      status.textContent = 'Checking…'
+      const result = await checkForUpdates()
+      checkB.disabled = false
+      if (result.status === 'current') {
+        status.textContent = `You're on the latest version (v${result.version}).`
+      } else if (result.status === 'error') {
+        status.textContent = `Couldn't check: ${result.message}`
+      } else {
+        const { release } = result
+        status.textContent = ''
+        const line = div('ed-about-new')
+        line.textContent = `Version ${release.version} is available.`
+        status.appendChild(line)
+        if (release.notes) {
+          const notes = div('ed-about-notes')
+          notes.textContent = release.notes
+          status.appendChild(notes)
+        }
+        const getB = document.createElement('button')
+        getB.className = 'ed-btn ed-btn-primary'
+        getB.textContent = 'Download updated copy'
+        getB.title = 'Verifies the new app’s signature, puts this document inside it, and downloads the result. The file you have now is not touched.'
+        getB.addEventListener('click', async () => {
+          getB.disabled = true
+          getB.textContent = 'Verifying…'
+          try {
+            await applyUpdate(release, this.store.doc)
+            getB.textContent = 'Downloaded ✓'
+            this.toast('Updated copy downloaded — replace your old file with it')
+          } catch (err: any) {
+            getB.remove()
+            status.textContent = `Update failed: ${err?.message ?? err}`
+          }
+        })
+        status.appendChild(getB)
+      }
+    })
+    row.appendChild(checkB)
+    box.append(row, status)
+
+    const fine = div('ed-about-fine')
+    fine.innerHTML =
+      `Checking contacts the release server once and sends nothing about you or this document.<br>` +
+      `Includes reveal.js, Moveable, Selecto (MIT) · Apache ECharts (Apache-2.0) · zrender (BSD-3) — full notices travel in this file’s source.`
+    box.appendChild(fine)
+
+    overlay.appendChild(box)
+    const close = () => {
+      overlay.remove()
+      document.removeEventListener('keydown', onKey, true)
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        ev.stopPropagation()
+        close()
+      }
+    }
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay) close()
+    })
+    document.addEventListener('keydown', onKey, true)
+    document.body.appendChild(overlay)
+  }
 
   toast(message: string) {
     document.querySelector('.ed-toast')?.remove()

@@ -4,6 +4,7 @@
 import './styles.css'
 import { anim } from './anim'
 import { capturePristine, readEmbeddedDoc, serializeFile } from './save'
+import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { parseDoc, starterDoc } from './model'
 import { injectFonts } from './fonts'
 import { Store } from './store'
@@ -58,6 +59,18 @@ if (location.hash === '#present') {
   },
   /** animation engine, exposed for scripting/diagnostics */
   anim,
+  /**
+   * Self-update surface (all user/tooling-initiated, never automatic):
+   * check() fetches + signature-verifies the release manifest; build()
+   * returns the updated file's html (this doc inside the new shell);
+   * apply() downloads it. check(url) accepts an override for testing.
+   */
+  updates: {
+    version: APP_VERSION,
+    check: (url?: string) => checkForUpdates(url),
+    build: (release: any) => buildUpdatedFile(release, store.doc),
+    apply: (release: any) => applyUpdate(release, store.doc),
+  },
   /**
    * Flat list of every review comment thread — the entry point for tooling
    * and AI agents processing the deck ("fix everything people flagged"):

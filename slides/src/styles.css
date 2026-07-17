@@ -411,6 +411,63 @@ html, body {
 }
 .ed-hint code { font-size: 10.5px; word-break: break-all; }
 
+/* ————— about dialog ————— */
+
+.ed-about-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgb(15 23 36 / 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ed-about {
+  width: 360px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgb(15 23 36 / 0.3);
+  padding: 20px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ed-about-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ed-about-head b { font-size: 15px; display: block; }
+.ed-about-head span { font-size: 11.5px; color: var(--muted); }
+.ed-about-row { display: flex; gap: 8px; }
+.ed-about-status {
+  min-height: 18px;
+  color: var(--ink);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.ed-about-new { font-weight: 600; }
+.ed-about-notes {
+  color: var(--muted);
+  background: var(--chrome);
+  border-radius: 8px;
+  padding: 7px 10px;
+  white-space: pre-wrap;
+  max-height: 140px;
+  overflow: auto;
+}
+.ed-about-fine {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  border-top: 1px solid var(--chrome);
+  padding-top: 10px;
+}
+
 /* ————— toast ————— */
 
 .ed-toast {

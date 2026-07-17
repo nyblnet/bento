@@ -206,6 +206,12 @@ export interface Slide {
 export interface BentoDoc {
   format: typeof FORMAT
   version: number
+  /**
+   * Stable per-document identity (uuid), minted at creation and preserved
+   * for the document's whole life — the rendezvous key for future
+   * sync / share / merge features. Never derived from content.
+   */
+  docId: string
   title: string
   /** slide coordinate space, px */
   size: { width: number; height: number }
@@ -459,10 +465,14 @@ export function layoutElementIds(doc: BentoDoc): Set<string> {
   return ids
 }
 
+export const newDocId = (): string =>
+  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid('doc')
+
 export function newDoc(): BentoDoc {
   return {
     format: FORMAT,
     version: FORMAT_VERSION,
+    docId: newDocId(),
     title: 'Untitled',
     size: { width: 1280, height: 720 },
     theme: {
@@ -480,6 +490,9 @@ export function parseDoc(json: string): BentoDoc | null {
   try {
     const doc = JSON.parse(json)
     if (doc && doc.format === FORMAT && Array.isArray(doc.slides) && doc.slides.length > 0) {
+      // Documents from before docId existed get one minted here; it persists
+      // on the next save and stays stable from then on.
+      if (typeof doc.docId !== 'string' || !doc.docId) doc.docId = newDocId()
       return doc as BentoDoc
     }
   } catch {
