@@ -293,11 +293,32 @@ export class PropsPanel {
         if (v === 'none') delete e.shadow
         else if (v !== 'custom') e.shadow = { ...SHADOW_PRESETS[v] }
       }, true)))
-    if (el.shadow && !Array.isArray(el.shadow)) {
-      // recoloring a preset makes it 'custom' on next rebuild — that's fine
-      this.row('Shadow color', this.colorAlpha(el.shadow.color, (v, fin) =>
-        this.mutate(el.id, (e) => { if (e.shadow) e.shadow = { ...e.shadow, color: v } }, fin)))
-    }
+    // Always show the concrete values (per layer when stacked) — editing any
+    // of them turns a preset into 'custom' on the next rebuild, which is fine.
+    const shadows = Array.isArray(el.shadow) ? el.shadow : el.shadow ? [el.shadow] : []
+    const setShadow = (i: number, patch: Record<string, unknown>, fin = true) =>
+      this.mutate(el.id, (e) => {
+        const arr = Array.isArray(e.shadow) ? [...e.shadow] : e.shadow ? [e.shadow] : []
+        arr[i] = { ...arr[i], ...patch }
+        e.shadow = Array.isArray(e.shadow) ? arr : arr[0]
+      }, fin)
+    shadows.forEach((sh, i) => {
+      if (shadows.length > 1) {
+        const cap = document.createElement('div')
+        cap.className = 'ed-shadow-cap'
+        cap.textContent = `Layer ${i + 1}`
+        this.host.appendChild(cap)
+      }
+      const grid = document.createElement('div')
+      grid.className = 'ed-grid2'
+      grid.append(
+        this.mini('X', sh.x ?? 0, (v) => setShadow(i, { x: v })),
+        this.mini('Y', sh.y ?? 0, (v) => setShadow(i, { y: v })),
+        this.mini('Blur', sh.blur, (v) => setShadow(i, { blur: Math.max(v, 0) })),
+      )
+      this.host.appendChild(grid)
+      this.row('Color', this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
+    })
 
 
     if (el.type === 'text') this.buildTextProps(el)
