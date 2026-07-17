@@ -15,8 +15,31 @@ trick, modernized with the File System Access API).
 
 ## 1. On-disk anatomy
 
-A `.bento.html` file is ordinary, valid HTML. Skeleton of the current build
-(structure of the actual `dist-single/Bento_Slides.bento.html`):
+A `.bento.html` file is ordinary, valid HTML. Its compartments, drawn
+roughly to scale (widths √-compressed so the small parts stay visible —
+exact numbers in the table below):
+
+```mermaid
+block-beta
+  columns 56
+  chrome["hdr"]:3
+  notice["NOTICE"]:4
+  doc["#bento-doc — THE DOCUMENT (0 → n MB)"]:14
+  js["runtime JS — app + Reveal + Moveable/Selecto + ECharts (1.17 MB)"]:26
+  css["CSS (62 KB)"]:6
+  splash["splash"]:3
+
+  style chrome fill:#37485e,stroke:#22303f,color:#c8d4e2
+  style notice fill:#2a3a4e,stroke:#22303f,color:#c8d4e2
+  style doc fill:#F7A600,stroke:#b87a00,color:#2b1d00
+  style js fill:#5B8DEF,stroke:#3f6cc4,color:#0d1b33
+  style css fill:#a9c3f5,stroke:#7fa3e0,color:#1e2a3a
+  style splash fill:#e9edf3,stroke:#c9d2de,color:#45566b
+```
+
+The amber block is the only part that changes between saves — everything
+else is the fixed *shell*. Skeleton of the actual markup
+(`dist-single/Bento_Slides.bento.html`):
 
 ```html
 <!DOCTYPE html>
