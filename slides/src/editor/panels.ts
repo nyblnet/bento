@@ -3,7 +3,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { uid, type ChartElement, type ShapeElement, type SlideElement, type TextElement, type TransitionKind } from '../model'
+import { uid, type ChartElement, type LineEnding, type ShapeElement, type SlideElement, type TextElement, type TransitionKind } from '../model'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
@@ -579,6 +579,21 @@ export class PropsPanel {
       this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
     this.row('Stroke width', this.number(el.strokeWidth, 0.5, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin)))
+    this.row('Line style', this.select(
+      ['solid', 'dashed', 'dotted'],
+      el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
+      (v) => this.mutate(el.id, (e) => {
+        const s = e as ShapeElement
+        s.strokeStyle = v === 'solid' ? undefined : (v as 'dashed' | 'dotted')
+        if (v === 'solid') delete s.strokeDash // clear the legacy dash too
+      }, true)))
+    if (el.shape === 'line') {
+      const ENDINGS = ['none', 'arrow', 'dot', 'bar']
+      this.row('Start tip', this.select(ENDINGS, el.lineStart ?? 'none', (v) =>
+        this.mutate(el.id, (e) => { (e as ShapeElement).lineStart = v === 'none' ? undefined : (v as LineEnding) }, true)))
+      this.row('End tip', this.select(ENDINGS, el.lineEnd ?? 'none', (v) =>
+        this.mutate(el.id, (e) => { (e as ShapeElement).lineEnd = v === 'none' ? undefined : (v as LineEnding) }, true)))
+    }
     if (el.shape === 'rect') {
       this.row('Corner radius', this.number(el.radius, 1, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin)))

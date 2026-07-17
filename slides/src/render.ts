@@ -105,6 +105,58 @@ function gradientRef(svg: SVGSVGElement, g: NonNullable<ShapeElement['fillGradie
   return `url(#${id})`
 }
 
+/** stroke-dasharray for the element's line style (undefined = solid). */
+function dashArray(el: ShapeElement, w: number): string | undefined {
+  if (el.strokeStyle === 'dashed') return `${Math.max(w * 2.4, 7)} ${Math.max(w * 1.8, 5)}`
+  if (el.strokeStyle === 'dotted') return `0.1 ${Math.max(w * 2.2, 5)}`
+  if (el.strokeStyle === 'solid') return undefined
+  if (el.strokeDash) return `${el.strokeDash} ${el.strokeDash}` // legacy numeric dash
+  return undefined
+}
+
+let markSeq = 0
+
+/** A line-tip marker in <defs>; sized in strokeWidth units, colored like the line. */
+function markerRef(svg: SVGSVGElement, kind: NonNullable<ShapeElement['lineStart']>, color: string, start: boolean): string | null {
+  if (kind === 'none') return null
+  const id = `bento-mark-${markSeq++}`
+  const marker = document.createElementNS(SVG_NS, 'marker')
+  marker.setAttribute('id', id)
+  marker.setAttribute('viewBox', '0 0 8 8')
+  marker.setAttribute('refY', '4')
+  marker.setAttribute('orient', start ? 'auto-start-reverse' : 'auto')
+  marker.setAttribute('markerWidth', '5.5')
+  marker.setAttribute('markerHeight', '5.5')
+  let tip: SVGElement
+  if (kind === 'arrow') {
+    tip = document.createElementNS(SVG_NS, 'path')
+    tip.setAttribute('d', 'M 0 0.4 L 7.6 4 L 0 7.6 Z')
+    marker.setAttribute('refX', '6.4')
+  } else if (kind === 'dot') {
+    tip = document.createElementNS(SVG_NS, 'circle')
+    tip.setAttribute('cx', '4')
+    tip.setAttribute('cy', '4')
+    tip.setAttribute('r', '2.6')
+    marker.setAttribute('refX', '4')
+  } else {
+    tip = document.createElementNS(SVG_NS, 'rect')
+    tip.setAttribute('x', '3.2')
+    tip.setAttribute('y', '0.4')
+    tip.setAttribute('width', '1.6')
+    tip.setAttribute('height', '7.2')
+    marker.setAttribute('refX', '4')
+  }
+  tip.setAttribute('fill', color)
+  marker.appendChild(tip)
+  let defs = svg.querySelector('defs')
+  if (!defs) {
+    defs = document.createElementNS(SVG_NS, 'defs')
+    svg.appendChild(defs)
+  }
+  defs.appendChild(marker)
+  return `url(#${id})`
+}
+
 export function shapeSvg(el: ShapeElement): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg')
   const { w, h } = el
@@ -160,13 +212,22 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
     }
     case 'line': {
       node = document.createElementNS(SVG_NS, 'line')
-      node.setAttribute('x1', '0')
+      const lw = Math.max(sw, 2)
+      // inset the endpoints so tip decorations sit inside the element box
+      const tipPad = (k?: string) => (k && k !== 'none' ? lw * 2.6 : 0)
+      node.setAttribute('x1', String(tipPad(el.lineStart)))
       node.setAttribute('y1', String(h / 2))
-      node.setAttribute('x2', String(w))
+      node.setAttribute('x2', String(w - tipPad(el.lineEnd)))
       node.setAttribute('y2', String(h / 2))
       node.setAttribute('stroke', el.fill)
-      node.setAttribute('stroke-width', String(Math.max(sw, 2)))
-      node.setAttribute('stroke-linecap', 'round')
+      node.setAttribute('stroke-width', String(lw))
+      node.setAttribute('stroke-linecap', el.strokeStyle === 'dashed' ? 'butt' : 'round')
+      const lineDash = dashArray(el, lw)
+      if (lineDash) node.setAttribute('stroke-dasharray', lineDash)
+      const mStart = el.lineStart ? markerRef(svg, el.lineStart, el.fill, true) : null
+      const mEnd = el.lineEnd ? markerRef(svg, el.lineEnd, el.fill, false) : null
+      if (mStart) node.setAttribute('marker-start', mStart)
+      if (mEnd) node.setAttribute('marker-end', mEnd)
       svg.appendChild(node)
       return svg
     }
@@ -175,7 +236,9 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
   if (el.stroke && el.stroke !== 'transparent' && sw > 0) {
     node.setAttribute('stroke', el.stroke)
     node.setAttribute('stroke-width', String(sw))
-    if (el.strokeDash) node.setAttribute('stroke-dasharray', `${el.strokeDash} ${el.strokeDash}`)
+    const dash = dashArray(el, sw)
+    if (dash) node.setAttribute('stroke-dasharray', dash)
+    if (el.strokeStyle === 'dotted') node.setAttribute('stroke-linecap', 'round')
   }
   svg.appendChild(node)
   return svg

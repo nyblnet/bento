@@ -185,7 +185,7 @@ export function startPresentation(
     restartSvgAnimations(to)
     wireHoverFocus(doc.slides[toIdx], to)
     if (from) disposeLiveCharts(doc.slides[fromIdx], from)
-    mountLiveCharts(doc.slides[toIdx], to)
+    mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
   }) as any)
 
   // Clicking an element with a link jumps to its target slide.
@@ -227,13 +227,15 @@ export function startPresentation(
 // snapshot so the section stays presentable in Reveal's viewDistance cache.
 const chartHandles = new WeakMap<HTMLElement, Array<() => void>>()
 
-function mountLiveCharts(slide: Slide, section: HTMLElement) {
+function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) {
   const handles: Array<() => void> = []
   for (const el of slide?.elements ?? []) {
     if (el.type !== 'chart') continue
     const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
     if (!node) continue
-    const dispose = mountChart(el, node)
+    // a matching chart on the other side of a morph: animate its data over
+    const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
+    const dispose = mountChart(el, node, fromEl && fromEl.type === 'chart' ? fromEl.option : undefined)
     handles.push(() => {
       dispose()
       node.innerHTML = chartSnapshotSvg(el)
@@ -624,6 +626,11 @@ function sampleGradient(stops: GradientFill['stops'], t: number): string {
  */
 function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
   if (a.fill === b.fill && JSON.stringify(a.fillGradient) === JSON.stringify(b.fillGradient)) return
+  // line shapes paint with stroke (fill is the line color in the model)
+  if (b.shape === 'line' && target.tagName === 'line') {
+    anim.fromTo(target, { attr: { stroke: a.fill } }, { attr: { stroke: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
+    return
+  }
   const ag = a.fillGradient?.stops.length ? a.fillGradient : undefined
   const bg = b.fillGradient?.stops.length ? b.fillGradient : undefined
   if (!ag && !bg) {

@@ -81,6 +81,9 @@ export interface GradientFill {
   stops: Array<{ at: number; color: string }>
 }
 
+/** Decoration at a line's tip. Sized relative to the stroke width. */
+export type LineEnding = 'none' | 'arrow' | 'dot' | 'bar'
+
 export interface ShapeElement extends ElementBase {
   type: 'shape'
   shape: ShapeKind
@@ -91,8 +94,13 @@ export interface ShapeElement extends ElementBase {
   strokeWidth: number
   /** corner radius, rect only */
   radius: number
-  /** dash length in px; 0/undefined = solid stroke */
+  /** dash length in px; 0/undefined = solid stroke (legacy — see strokeStyle) */
   strokeDash?: number
+  /** stroke pattern; wins over strokeDash when set */
+  strokeStyle?: 'solid' | 'dashed' | 'dotted'
+  /** line shape only: tip decorations */
+  lineStart?: LineEnding
+  lineEnd?: LineEnding
   /** path only: SVG path data in the coordinate space given by pathBox */
   d?: string
   /** path only: [x, y, w, h] viewBox the path was authored in */
