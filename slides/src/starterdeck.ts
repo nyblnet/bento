@@ -358,7 +358,7 @@ export function starterDoc(): BentoDoc {
         // the bento logo, built from the cast
         shape('rect', {
           id: T_D, x: 850, y: 170, w: 320, h: 320, radius: 40, fill: PANEL, fillGradient: GRAD_CARD,
-          shadow: { y: 30, blur: 70, color: 'rgba(0,0,0,0.55)' },
+          shadow: [{ y: 30, blur: 70, color: 'rgba(0,0,0,0.55)' }, { blur: 90, color: 'rgba(255,238,214,0.10)' }],
           fx: { enter: 'fade', order: 1 },
         }),
         shape('rect', { id: T_B, x: 886, y: 206, w: 84, h: 248, radius: 16, fill: STEEL, fillGradient: GRAD_STEEL, fx: { enter: 'fade-up', order: 2 } }),
@@ -863,7 +863,7 @@ export function starterDoc(): BentoDoc {
         bokeh(900, 478, 8, true, 0.18, 20, 9, 18),
         shape('rect', {
           id: T_D, x: 500, y: 120, w: 280, h: 280, radius: 52, fill: PANEL, fillGradient: GRAD_CARD,
-          shadow: { y: 30, blur: 70, color: 'rgba(0,0,0,0.55)' },
+          shadow: [{ y: 30, blur: 70, color: 'rgba(0,0,0,0.55)' }, { blur: 90, color: 'rgba(255,238,214,0.10)' }],
         }),
         shape('rect', { id: T_B, x: 532, y: 152, w: 70, h: 216, radius: 14, fill: STEEL, fillGradient: GRAD_STEEL }),
         shape('rect', { id: T_A, x: 618, y: 152, w: 130, h: 96, radius: 14, fill: PEACH, fillGradient: GRAD_PEACH }),

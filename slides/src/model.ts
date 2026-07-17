@@ -17,10 +17,12 @@ export interface ElementBase {
   rotation: number
   opacity: number
   /**
-   * Drop shadow, rendered with CSS drop-shadow so it follows the element's
-   * alpha shape (rounded corners, ellipses, text glyphs, image cutouts).
+   * Drop shadow(s), rendered with CSS drop-shadow so they follow the
+   * element's alpha shape (rounded corners, ellipses, glyphs, image
+   * cutouts). An array stacks: e.g. a dark elevation shadow plus a soft
+   * white glow.
    */
-  shadow?: { x?: number; y?: number; blur: number; color: string }
+  shadow?: ShadowSpec | ShadowSpec[]
   /** presentation effects, run in present mode only */
   fx?: {
     /** entrance animation when the slide is shown */
@@ -66,6 +68,13 @@ export interface ElementBase {
    * those four are the conventions the built-in layouts use.
    */
   role?: string
+}
+
+export interface ShadowSpec {
+  x?: number
+  y?: number
+  blur: number
+  color: string
 }
 
 export interface TextElement extends ElementBase {
