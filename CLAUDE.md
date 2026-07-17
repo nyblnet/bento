@@ -80,6 +80,12 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.
+- **Speaker view**: OUR OWN popup (present.ts openSpeaker, S key) — current +
+  next slide via renderSlide, notes, elapsed timer (click resets) + clock,
+  synced on slidechanged, closed on present exit. Reveal's notes plugin is
+  NOT used: its speaker window reloads the presentation URL in iframes,
+  which boots the Bento EDITOR (a whole second app instance) — never
+  reintroduce it.
 - **Animation robustness**: slide exit kills tweens AND restores model frames; a
   2.8s wall-clock settle guarantee lands entrances on starved render loops; never
   put entrance tweens on motion-path elements (transform conflict).

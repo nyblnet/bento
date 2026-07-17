@@ -3,7 +3,6 @@
 // ids match across the two slides (PowerPoint "Morph" behaviour).
 
 import Reveal from 'reveal.js'
-import RevealNotes from 'reveal.js/plugin/notes/notes'
 import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
@@ -105,10 +104,96 @@ export function startPresentation(
     // heavy decks: paint only the neighbourhood of the current slide
     viewDistance: 1,
     keyboardCondition: null,
-    plugins: [RevealNotes],
+    plugins: [],
   })
 
   const onResize = () => deck.layout()
+
+  // ——— speaker view (S) ———
+  // Reveal's stock speaker window reloads the presentation URL in iframes —
+  // which in a Bento file boots the EDITOR. Instead: our own popup, rendered
+  // with the same renderer from this one app instance and synced directly.
+  let speaker: Window | null = null
+  let speakerTimer = 0
+  let speakerStart = 0
+  const nextVisibleIndex = (from: number) => {
+    for (let i = (isState(from) ? anchorOf(from) : from) + 1; i < doc.slides.length; i++) {
+      if (!isState(i)) return i
+    }
+    return -1
+  }
+  const svSlide = (idx: number, w: number): HTMLElement => {
+    const frame = document.createElement('div')
+    frame.className = 'sv-frame'
+    const scale = w / doc.size.width
+    frame.style.width = `${w}px`
+    frame.style.height = `${doc.size.height * scale}px`
+    if (idx >= 0) {
+      const inner = document.createElement('div')
+      inner.style.cssText = `transform:scale(${scale});transform-origin:0 0`
+      inner.appendChild(renderSlide(doc.slides[idx], doc, { hidePlaceholders: true }))
+      frame.appendChild(inner)
+    } else {
+      frame.classList.add('end')
+      frame.textContent = 'End of deck'
+    }
+    return frame
+  }
+  const updateSpeaker = () => {
+    if (!speaker || speaker.closed) return
+    const d = speaker.document
+    const cur = deck.getIndices().h
+    const nxt = nextVisibleIndex(cur)
+    const curBox = d.querySelector('.sv-current')
+    const nxtBox = d.querySelector('.sv-nextbox')
+    if (!curBox || !nxtBox) return
+    curBox.innerHTML = ''
+    curBox.appendChild(d.importNode(svSlide(cur, 660), true))
+    nxtBox.innerHTML = ''
+    nxtBox.appendChild(d.importNode(svSlide(nxt, 300), true))
+    const notes = d.querySelector('.sv-notes')
+    if (notes) notes.textContent = doc.slides[cur]?.notes || '— no notes for this slide —'
+    const count = d.querySelector('.sv-count')
+    if (count) count.textContent = `${visibleIndex(cur)} / ${visibleTotal}`
+  }
+  const openSpeaker = () => {
+    if (speaker && !speaker.closed) {
+      speaker.focus()
+      return
+    }
+    speaker = window.open('', 'bento-speaker', 'width=1080,height=640')
+    if (!speaker) return // popup blocked
+    ;(window as unknown as Record<string, unknown>).__bentoSpeaker = speaker // diagnostics
+    const d = speaker.document
+    d.title = `${doc.title} — Speaker view`
+    for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
+    d.body.className = 'bento-speaker'
+    d.body.innerHTML =
+      '<div class="sv-top"><div class="sv-timer" title="Click to reset">00:00</div>' +
+      '<div class="sv-clock"></div><div class="sv-count"></div></div>' +
+      '<div class="sv-main"><div class="sv-current"></div>' +
+      '<div class="sv-side"><div><div class="sv-label">Next</div><div class="sv-nextbox"></div></div>' +
+      '<div class="sv-notes-wrap"><div class="sv-label">Notes</div><div class="sv-notes"></div></div></div></div>'
+    speakerStart = performance.now()
+    d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
+    clearInterval(speakerTimer)
+    speakerTimer = window.setInterval(() => {
+      if (!speaker || speaker.closed) {
+        clearInterval(speakerTimer)
+        return
+      }
+      const el = speaker.document.querySelector('.sv-timer')
+      if (el) {
+        const t = Math.floor((performance.now() - speakerStart) / 1000)
+        const mm = String(Math.floor(t / 60)).padStart(2, '0')
+        const ss = String(t % 60).padStart(2, '0')
+        el.textContent = `${mm}:${ss}`
+      }
+      const clock = speaker.document.querySelector('.sv-clock')
+      if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }, 1000)
+    updateSpeaker()
+  }
 
   const exit = () => {
     if (exited) return
@@ -122,6 +207,8 @@ export function startPresentation(
     overlay.remove()
     window.removeEventListener('resize', onResize)
     document.removeEventListener('keydown', onKeydown, true)
+    clearInterval(speakerTimer)
+    if (speaker && !speaker.closed) speaker.close()
     onExit(last)
   }
 
@@ -135,6 +222,12 @@ export function startPresentation(
       ev.preventDefault()
       ev.stopPropagation()
       exit()
+      return
+    }
+    if (ev.key === 's' || ev.key === 'S') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      openSpeaker()
       return
     }
     const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
@@ -186,6 +279,7 @@ export function startPresentation(
     wireHoverFocus(doc.slides[toIdx], to)
     if (from) disposeLiveCharts(doc.slides[fromIdx], from)
     mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
+    updateSpeaker()
   }) as any)
 
   // Clicking an element with a link jumps to its target slide.
