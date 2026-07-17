@@ -56,6 +56,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   autoformat (editor/markdown.ts: **bold** *italic* `code` ~~strike~~ and "- "
   bullets collapse as typed — mind contentEditable NBSPs and stale
   Selection offsets after DOM surgery; pasted plain text converts too).
+  Escapes: backslash before a marker keeps it literal (stripped at commit);
+  ⌘Z immediately after a conversion restores the typed markers (one-shot,
+  cleared by the next input). Note markdown.ts carries LITERAL invisible
+  chars (NBSP, ZWSP, U+E000) — they don't survive retyping; edit that file
+  with line-targeted scripts, not copy-typed strings.
   Sidebar has hover insert-gaps between thumbnails (never between a parent and
   its states). Selecto's continue-select list is synced in syncTargets — stale
   cross-slide shift-click selections were a real bug.
