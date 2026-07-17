@@ -301,11 +301,25 @@ export function starterDoc(): BentoDoc {
         // atmosphere: breathing aurora blobs + bento tiles adrift around the logo
         aurora(700, -80, 680, 'aurora-amber', 24),
         aurora(880, 220, 560, 'aurora-blue', 32),
-        bokeh(770, 128, 44, true, 0.5, 18, 34),
-        bokeh(1198, 208, 26, false, 0.4, 14, 26, 5),
-        bokeh(1174, 468, 34, true, 0.32, 22, 40, 11),
-        bokeh(902, 108, 18, false, 0.35, 12, 23, 8),
-        bokeh(812, 520, 16, true, 0.28, 15, 30, 15),
+        // near field — large, bright, biggest drift
+        bokeh(770, 128, 44, true, 0.5, 26, 26),
+        bokeh(1198, 208, 30, false, 0.42, 32, 22, 5),
+        bokeh(1174, 468, 36, true, 0.34, 40, 30, 11),
+        bokeh(1226, 600, 26, true, 0.3, 30, 24, 7),
+        bokeh(716, 560, 28, false, 0.3, 34, 27, 13),
+        // mid field
+        bokeh(902, 108, 20, false, 0.38, 24, 18, 8),
+        bokeh(812, 520, 18, true, 0.3, 26, 21, 15),
+        bokeh(1080, 88, 16, true, 0.32, 22, 17, 3),
+        bokeh(960, 604, 18, false, 0.28, 28, 19, 9),
+        bokeh(656, 78, 14, false, 0.3, 20, 16, 12),
+        // far field — small, dim, may pass over the text column
+        bokeh(200, 138, 10, false, 0.22, 16, 14, 2),
+        bokeh(420, 88, 8, true, 0.2, 14, 15, 6),
+        bokeh(300, 566, 10, true, 0.22, 18, 13, 10),
+        bokeh(522, 622, 8, false, 0.2, 15, 17, 4),
+        bokeh(138, 424, 8, false, 0.18, 14, 16, 14),
+        bokeh(624, 296, 7, true, 0.16, 12, 15, 18),
         // the bento logo, built from the cast
         shape('rect', {
           id: T_D, x: 850, y: 170, w: 320, h: 320, radius: 36, fill: PANEL,
@@ -688,11 +702,25 @@ export function starterDoc(): BentoDoc {
         // atmosphere mirrors the title: auroras breathing, tiles adrift
         aurora(320, -60, 660, 'aurora-amber', 26),
         aurora(600, 80, 560, 'aurora-blue', 34),
-        bokeh(404, 140, 44, true, 0.5, 18, 34),
-        bokeh(872, 122, 26, false, 0.4, 14, 26, 5),
-        bokeh(846, 372, 30, true, 0.32, 22, 40, 11),
-        bokeh(508, 82, 16, false, 0.35, 12, 23, 8),
-        bokeh(438, 420, 16, true, 0.28, 15, 30, 15),
+        // near field
+        bokeh(404, 140, 44, true, 0.5, 26, 26),
+        bokeh(872, 122, 30, false, 0.42, 32, 22, 5),
+        bokeh(846, 372, 32, true, 0.34, 40, 30, 11),
+        bokeh(160, 180, 26, true, 0.3, 34, 25, 3),
+        bokeh(1156, 420, 28, true, 0.3, 36, 27, 9),
+        // mid field
+        bokeh(508, 82, 18, false, 0.36, 24, 18, 8),
+        bokeh(438, 420, 18, true, 0.3, 26, 21, 15),
+        bokeh(1090, 148, 24, false, 0.32, 30, 23, 7),
+        bokeh(200, 520, 22, false, 0.28, 30, 20, 13),
+        bokeh(1058, 600, 20, true, 0.26, 26, 19, 6),
+        // far field
+        bokeh(320, 300, 12, false, 0.22, 18, 15, 2),
+        bokeh(958, 282, 12, true, 0.24, 20, 16, 10),
+        bokeh(118, 358, 10, false, 0.2, 16, 14, 12),
+        bokeh(1222, 258, 10, true, 0.22, 16, 17, 4),
+        bokeh(640, 58, 10, false, 0.24, 18, 15, 16),
+        bokeh(900, 478, 8, true, 0.18, 13, 14, 18),
         shape('rect', {
           id: T_D, x: 500, y: 120, w: 280, h: 280, radius: 56, fill: PANEL,
           stroke: 'rgba(185,196,212,0.28)', strokeWidth: 1.5,
