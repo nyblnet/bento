@@ -464,6 +464,15 @@ html, body {
   border-radius: 999px;
 }
 
+/* inline code spans inside text elements — editor, present and print alike */
+.bento-el-text code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgb(127 127 127 / 0.16);
+  padding: 0 0.28em;
+  border-radius: 3px;
+}
+
 /* arrange kit: align/distribute/z-step buttons */
 .ed-arrange { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .ed-arrange-btn {

@@ -7,6 +7,7 @@ import Selecto from 'selecto'
 import type { Store } from '../store'
 import type { SlideElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
+import { autoformatAtCaret, markdownToHtml } from './markdown'
 import { PathEditor } from './patheditor'
 
 export class SlideCanvas {
@@ -440,6 +441,15 @@ export class SlideCanvas {
         }
       }
     })
+    // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
+    // collapse as you type; pasted plain text converts the same patterns
+    inner.addEventListener('input', () => autoformatAtCaret())
+    inner.addEventListener('paste', (ev) => {
+      const text = ev.clipboardData?.getData('text/plain')
+      if (!text) return
+      ev.preventDefault()
+      document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
+    })
     inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })
   }
 
@@ -452,7 +462,8 @@ export class SlideCanvas {
     node.classList.remove('bento-editing')
     if (!inner || !id) return
     inner.contentEditable = 'false'
-    const html = sanitizeHtml(inner.innerHTML)
+    // drop the zero-width caret spacers autoformat leaves behind
+    const html = sanitizeHtml(inner.innerHTML.replace(/​/g, ''))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
     const el = this.store.element(id)
     if (el && el.type === 'text' && (el.html !== html || grownH > el.h)) {

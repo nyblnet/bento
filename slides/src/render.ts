@@ -180,7 +180,7 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
   return svg
 }
 
-const ALLOWED_TAGS = new Set(['B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM'])
+const ALLOWED_TAGS = new Set(['B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE'])
 
 /** Keep pasted/edited rich text down to a safe inline subset. */
 export function sanitizeHtml(html: string): string {

@@ -52,7 +52,10 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   url(#…) refs are document-global across canvas/thumbs/present). Arrange kit in
   the panel: align/distribute/z-step + Group (⌘G/⇧⌘G — `groupId`, distinct from
   presentation `group`; click selects the group, Alt-click reaches a member;
-  duplicate remaps groupIds). Text editing supports ⌘B/I/U inline markup.
+  duplicate remaps groupIds). Text editing supports ⌘B/I/U plus markdown
+  autoformat (editor/markdown.ts: **bold** *italic* `code` ~~strike~~ and "- "
+  bullets collapse as typed — mind contentEditable NBSPs and stale
+  Selection offsets after DOM surgery; pasted plain text converts too).
   Sidebar has hover insert-gaps between thumbnails (never between a parent and
   its states). Selecto's continue-select list is synced in syncTargets — stale
   cross-slide shift-click selections were a real bug.
