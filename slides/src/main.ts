@@ -58,4 +58,29 @@ if (location.hash === '#present') {
   },
   /** animation engine, exposed for scripting/diagnostics */
   anim,
+  /**
+   * Flat list of every review comment thread — the entry point for tooling
+   * and AI agents processing the deck ("fix everything people flagged"):
+   * each item carries the slide, a typed anchor (element / point / slide),
+   * author, text, replies and resolved state.
+   */
+  comments() {
+    return store.doc.slides.flatMap((s, slideIndex) =>
+      (s.comments ?? []).map((c) => ({
+        slideId: s.id,
+        slideIndex,
+        id: c.id,
+        anchor: c.elementId
+          ? { type: 'element' as const, elementId: c.elementId }
+          : typeof c.x === 'number'
+            ? { type: 'point' as const, x: c.x, y: c.y }
+            : { type: 'slide' as const },
+        author: c.author,
+        at: c.at,
+        text: c.text,
+        replies: c.replies ?? [],
+        resolved: !!c.resolved,
+      })),
+    )
+  },
 }

@@ -68,9 +68,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   leftovers are dropped UNLESS they are text someone wrote; user extras stay.
 - **Comments**: `Slide.comments` threads (author/at/text/replies/resolved) —
   saved in the file, editor-only (canvas markers + thread popover via
-  editor/comments.ts; never in present/print). Anchored to an element id or
-  the slide; author name in localStorage 'bento-author'; unresolved threads
-  badge the sidebar thumb. Panel buttons dispatch 'bento:add-comment'.
+  editor/comments.ts; never in present/print). Anchors: element id, POINT
+  (x/y slide coords — "📍 Comment at a point" arms a one-shot crosshair
+  click, Esc cancels), or the slide. Author name in localStorage
+  'bento-author'; unresolved threads badge the sidebar thumb. Panel buttons
+  dispatch 'bento:add-comment'. `window.bento.comments()` returns the flat
+  typed-anchor list — the entry point for AI agents processing flagged
+  issues in a deck.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.

@@ -157,6 +157,14 @@ export class PropsPanel {
       document.dispatchEvent(new CustomEvent('bento:add-comment', { detail: {} })))
     this.host.appendChild(cmtS)
 
+    const cmtP = document.createElement('button')
+    cmtP.className = 'ed-btn ed-btn-block'
+    cmtP.textContent = '📍 Comment at a point…'
+    cmtP.title = 'Click a spot on the slide to pin the comment there'
+    cmtP.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('bento:add-comment', { detail: { point: true } })))
+    this.host.appendChild(cmtP)
+
     const applyLy = document.createElement('button')
     applyLy.className = 'ed-btn ed-btn-block'
     applyLy.textContent = '⧉ Apply layout…'
