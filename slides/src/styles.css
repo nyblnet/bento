@@ -592,16 +592,18 @@ html, body {
 }
 
 /* arrange kit: one compact row per group — tiny label left, buttons right */
+/* arrange rows: caption + a shared 6-column track of near-fixed square
+   buttons — columns align vertically across Align/Space/Order, buttons
+   never stretch with the panel, spare width just rests at the row end */
 .ed-arrange-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px repeat(6, minmax(20px, 26px));
   align-items: center;
   gap: 3px;
   margin: 3px 0;
 }
-/* buttons share the remaining line equally — balanced at any panel width,
-   never wrapping into orphans */
+.ed-arrange-row .ed-arrange-cap { width: auto; }
 .ed-arrange-row .ed-btn {
-  flex: 1 1 0;
   min-width: 0;
   padding: 5px 0;
   justify-content: center;
