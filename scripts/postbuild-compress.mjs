@@ -69,18 +69,51 @@ const splashCss = (() => {
 })()
 
 const TOOLING_COMMENT = `<!--
-      Tooling note (for AI assistants and scripts):
-      - The DOCUMENT lives in the script block of type "application/bento+json"
-        with id "bento-doc" below, as plain readable JSON. That block is the only part that changes
-        between saves; everything else is the fixed application shell.
-      - To modify this deck programmatically or with an AI: edit that JSON (or
-        replace the block's text), never regenerate the whole file. In the app:
-        About dialog → "Copy document JSON" / "Replace document from JSON".
-      - The base64 blocks near the end are the DEFLATE-compressed application
-        runtime (open source: https://bento.page) — no user content inside.
-      - In a running file, window.bento exposes { doc, serialize(), comments(),
-        loadDoc(json), updates, i18n } for automation.
-    -->`
+  ════════════════════════════════════════════════════════════════════════
+  AI AGENTS / TOOLING — READ THIS BEFORE EDITING THIS DECK
+  ════════════════════════════════════════════════════════════════════════
+  Full authoring guide (schema + copy-paste snippets): https://bento.page/agents.md
+
+  THE MECHANICS
+  · The document is the ONE script block of type "application/bento+json",
+    id "bento-doc", below — plain readable JSON. Edit THAT block in place;
+    never regenerate the whole file. Escape every "<" in the JSON as \\u003c.
+  · The base64 blocks near the end are the DEFLATE-compressed app runtime
+    (open source, https://bento.page) — no user content, leave them alone.
+  · In a running file, window.bento exposes { doc, serialize(), loadDoc(json),
+    comments(), updates, i18n }. In the app UI: About → Copy / Replace JSON.
+
+  MAKE A GREAT DECK, NOT JUST A CORRECT ONE
+  Bento's whole point is motion + interactivity. A wall of text slides wastes
+  it. When the source material contains ↓, reach for the feature:
+  · numbers / %, quantities, "A vs B", any table  →  a CHART element
+      (preset bar|line|pie|scatter). Never list data as bullet text.
+  · consecutive slides about the SAME thing changing (before/after, process
+    steps, a metric across stages)  →  give the shared elements the SAME id
+    on both slides and set the later slide's transition to "morph". This is
+    Bento's signature move — use it liberally; it is almost always missed.
+  · a point to drill into (a definition, "click to see how")  →  a STATE
+    slide (stateOf: "<parent-id>" + an element link: "<state-id>").
+  · a hero / full-slide image  →  full-bleed image (0,0,1280,720) + a scrim
+    rect + text on top, with a slow ken-burns drift
+      (fx:{ambient:"kenburns",ken:{dir:"drift",scale:1.08,duration:20}}).
+  · a sequence / flow / timeline / connection  →  a line or path with a
+    loop (fx:{loop:{type:"dash-march",...}}), or morph a highlight through it.
+  · a headline number  →  big, with fx:{countUp:true}.
+  · every cover / section divider  →  at least ONE ambient motion so it is
+    not dead static.
+  · repeated chrome or a logo  →  keep its id stable across slides so it
+    morphs in place instead of popping.
+
+  BEFORE YOU FINISH — self-audit:
+  [ ] any numbers rendered as text that should be a chart?
+  [ ] do consecutive slides on one subject share ids + transition:"morph"?
+  [ ] at least one motion moment (ken-burns / loop / count-up), esp. the cover?
+  [ ] a drill-down that would work better as a state slide?
+  [ ] one accent colour, at most two typefaces, 96px side margins?
+  [ ] speaker notes written (they travel in the file)?
+  ════════════════════════════════════════════════════════════════════════
+-->`
 
 // --- loader (plain script, runs at end of body; no "</script>" literal) -----
 const loader = `
