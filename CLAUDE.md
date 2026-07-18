@@ -53,6 +53,16 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   `scripts/sign-release.mjs`. Docs carry a stable `docId` (uuid, minted at
   creation/load) — identity for future sync/merge; never regenerate it.
   Scripting: `window.bento.updates.{version,check,build,apply}`.
+- `src/i18n.ts` + `src/i18n/*.ts` — internationalization: ~1KB t() with
+  ENGLISH-STRING-AS-KEY (gettext style; missing key = English fallback),
+  {placeholder} interpolation, catalogs compiled in (ja, zh-Hans, es, fr, de);
+  locale follows the VIEWER (navigator.language; localStorage 'bento-lang'
+  override; picker in About rebuilds the workspace). Language never enters the
+  document format. select() localizes DISPLAY labels only (values stay model
+  words). GOTCHAS: never call t() in module-level consts (frozen at import —
+  translate at render time); keys must match source EXACTLY (validate with the
+  extraction/diff script pattern in git history); setLocale('x-pseudo') audits
+  unswept strings. New UI strings must be added to ALL catalogs.
 - `src/charts.ts` — ECharts (Apache-2.0, svg renderer only, tree-shaken:
   bar/line/pie/scatter + grid/tooltip/legend/dataZoom/title/dataset). A `chart`
   element stores a PURE-JSON option (template-string formatters, never
