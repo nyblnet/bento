@@ -274,7 +274,10 @@ function deckTerra() {
       img({ asset: 'ph-vase-jay', x: 707, y: 117, w: 176, h: 266, radius: 88, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 } } }),
       shape('rect', { id: 'ter-b', x: 646, y: 440, w: 140, h: 200, radius: 70, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.22)' } }),
       img({ asset: 'ph-vase-classic', x: 652, y: 446, w: 128, h: 188, radius: 64, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 } } }),
-      shape('ellipse', { id: 'ter-c', x: 730, y: 350, w: 76, h: 76, fill: '#6F755C', fillGradient: GRAD_MOSS, shadow: { y: 12, blur: 26, color: 'rgba(42,39,36,0.25)' } }),
+      // the third "glaze" — a translucent celadon bead that drifts slowly in
+      // the cream negative space (opacity + a small motion-path loop). Reads as
+      // a deliberate accent rather than a flat dot stuck on the split seam.
+      shape('ellipse', { id: 'ter-c', x: 612, y: 250, w: 72, h: 72, opacity: 0.55, fill: '#6F755C', fillGradient: GRAD_MOSS, shadow: { y: 10, blur: 24, color: 'rgba(42,39,36,0.14)' }, fx: { loop: { type: 'motion-path', path: orbit(12, -Math.PI / 2, 0.85), duration: 8 } } }),
       text({ x: 96, y: 620, w: 500, h: 22, html: 'SPRING 2026 · EDITION OF 41', fontSize: 11, fontWeight: 600, letterSpacing: 4, color: SOFT }),
       text({ x: 900, y: 668, w: 360, h: 20, html: 'MET MUSEUM OPEN ACCESS · CC0', fontSize: 9, fontWeight: 600, letterSpacing: 3, color: 'rgba(247,245,240,0.75)', align: 'right' }),
     ],
