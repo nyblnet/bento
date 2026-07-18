@@ -33,6 +33,11 @@ const FR = "Fraunces, Georgia, serif"
 const IN = "'Instrument Sans', 'Helvetica Neue', sans-serif"
 const MONO = "'SF Mono', 'Courier New', monospace"
 
+// public-domain photos (see scripts/gallery-photos/SOURCES.md), embedded as
+// data-URI assets so the decks stay fully self-contained
+const photo = (name) =>
+  'data:image/jpeg;base64,' + readFileSync(join(root, 'scripts/gallery-photos', name)).toString('base64')
+
 // ——— tiny builders ———————————————————————————————————————————————
 let uid = 0
 const id = (p) => `${p}-${(++uid).toString(36)}`
@@ -63,6 +68,12 @@ const chart = (o) => ({
   id: o.id ?? id('c'), type: 'chart', x: o.x, y: o.y, w: o.w, h: o.h,
   rotation: 0, opacity: 1, preset: o.preset ?? 'bar', option: o.option,
   ...(o.fx ? { fx: o.fx } : {}),
+})
+const img = (o) => ({
+  id: o.id ?? id('im'), type: 'image', x: o.x, y: o.y, w: o.w, h: o.h,
+  rotation: o.rotation ?? 0, opacity: o.opacity ?? 1,
+  src: `asset:${o.asset}`, fit: o.fit ?? 'cover', radius: o.radius ?? 0,
+  ...(o.fx ? { fx: o.fx } : {}), ...(o.shadow ? { shadow: o.shadow } : {}),
 })
 const slide = (o) => ({
   id: o.id ?? id('sl'), background: o.background, transition: o.transition ?? 'fade',
@@ -152,6 +163,21 @@ function deckSignal() {
     ],
   })
 
+  const s3b = slide({
+    id: 'sig-floor', background: INK, transition: 'fade',
+    notes: 'The photo essay beat. A full-bleed public-domain photograph (Marjory Collins, NYT composing room, 1942 — Library of Congress) with a slow ken-burns drift, an ink scrim, and one serif line. Swap the photo, keep the recipe: image → scrim → words.',
+    elements: [
+      img({ asset: 'ph-press', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.09, duration: 22 } } }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(15,14,11,0.58)' }),
+      shape('rect', { x: 0, y: 430, w: 1280, h: 290, fill: 'rgba(15,14,11,0.4)', fillGradient: grad(180, [0, 'rgba(15,14,11,0)'], [1, 'rgba(15,14,11,0.85)']) }),
+      kick(96, 96, 'THE FLOOR'),
+      shape('rect', { x: 96, y: 130, w: 220, h: 2, fill: RED }),
+      text({ x: 90, y: 420, w: 1000, h: 220, html: 'Set by hand,<br>read by thousands.', fontSize: 76, fontFamily: FR, fontWeight: 900, color: BONE, lineHeight: 1.02, fx: { enter: 'fade-up' } }),
+      text({ x: 96, y: 640, w: 900, h: 24, html: 'COMPOSING ROOM, 1942 · LIBRARY OF CONGRESS — PUBLIC DOMAIN', fontSize: 10, fontWeight: 600, letterSpacing: 3, color: 'rgba(239,237,228,0.55)', fx: { enter: 'fade-up', order: 2 } }),
+      text({ x: 1150, y: 654, w: 80, h: 24, html: '04', fontSize: 13, fontWeight: 600, color: 'rgba(239,237,228,0.6)', align: 'right', fontFamily: MONO }),
+    ],
+  })
+
   const s4 = slide({
     id: 'sig-schedule', background: BONE, transition: 'fade',
     notes: 'A dead-simple bar chart, art-directed: ink bars, one red. Charts are template JSON — swap the numbers.',
@@ -170,7 +196,7 @@ function deckSignal() {
       }, fx: { enter: 'fade-up', order: 1 } }),
       shape('rect', { x: 996, y: 300, w: 90, h: 24, fill: RED, fx: { enter: 'fade', order: 3 } }),
       text({ x: 940, y: 268, w: 200, h: 30, html: '<b>SOLD OUT</b>', fontSize: 13, letterSpacing: 3, color: RED, align: 'center', fx: { enter: 'fade', order: 3 } }),
-      pageNo('04'),
+      pageNo('05'),
     ],
   })
 
@@ -194,14 +220,15 @@ function deckSignal() {
       text({ id: 'sig-title', x: 86, y: 150, w: 1120, h: 300, html: 'See you<br>in Hall 6.', fontSize: 132, fontFamily: FR, fontWeight: 900, color: INK, lineHeight: 0.95 }),
       shape('rect', { id: 'sig-bar', x: 96, y: 520, w: 1088, h: 74, fill: RED }),
       text({ x: 96, y: 540, w: 1088, h: 40, html: 'signal-festival.example — a fictional event for a very real template', fontSize: 16, fontWeight: 600, color: BONE, align: 'center', letterSpacing: 1 }),
-      pageNo('06'),
+      pageNo('07'),
     ],
   })
 
   return doc({
     title: 'Signal — editorial type template', withFonts: true,
+    assets: { 'ph-press': photo('signal-press.jpg') },
     theme: { background: BONE, color: INK, accent: RED, fontFamily: IN },
-    slides: [s1, s2, s3, s4, s5, s6],
+    slides: [s1, s2, s3, s3b, s4, s5, s6],
   })
 }
 
@@ -233,38 +260,40 @@ function deckTerra() {
 
   const s2 = slide({
     id: 'ter-craft', background: CHAR, transition: 'fade',
-    notes: 'The dark interlude — one sentence, one object. Ken-burns “out” settles the big vessel as the slide enters.',
+    notes: 'The dark interlude — one sentence, one photographed object (Met Museum open access, CC0). The pill mask is just the image element’s radius; ken-burns “out” settles it as the slide enters.',
     elements: [
-      shape('rect', { x: 700, y: 90, w: 380, h: 540, radius: 190, fill: CLAY, fillGradient: GRAD_CLAY, shadow: [{ blur: 90, color: 'rgba(255,238,214,0.14)' }, { y: 30, blur: 60, color: 'rgba(0,0,0,0.45)' }], fx: { ambient: 'kenburns', ken: { dir: 'out', scale: 1.1, duration: 2.2 } } }),
+      img({ asset: 'ph-vase-goat', x: 700, y: 90, w: 380, h: 540, radius: 190, shadow: { blur: 90, color: 'rgba(255,238,214,0.16)' }, fx: { ambient: 'kenburns', ken: { dir: 'out', scale: 1.1, duration: 2.2 } } }),
       kick(96, 120, 'THE WORKSHOP'),
       text({ x: 90, y: 180, w: 560, h: 320, html: 'Each piece<br>spends nine<br>days in fire.', fontSize: 72, fontFamily: FR, fontWeight: 900, color: WHITE, lineHeight: 1.06, fx: { enter: 'fade-up' } }),
       text({ x: 96, y: 540, w: 460, h: 60, html: 'Cone 10 reduction. Ash glaze from our own orchard prunings.', fontSize: 16, color: 'rgba(247,245,240,0.6)', lineHeight: 1.6, fx: { enter: 'fade-up', order: 2 } }),
+      text({ x: 700, y: 650, w: 380, h: 20, html: 'MET MUSEUM OPEN ACCESS · CC0', fontSize: 9, fontWeight: 600, letterSpacing: 3, color: 'rgba(247,245,240,0.35)', align: 'center' }),
     ],
   })
 
   const items = [
-    ['Vessel 12', '€240', GRAD_CLAY, 100],
-    ['Bowl 07', '€120', GRAD_SAND, 26],
-    ['Vase 31', '€310', GRAD_MOSS, 90],
+    ['Vessel 12', '€240', 'ph-vase-jay', GRAD_CLAY],
+    ['Bowl 07', '€120', 'ph-vase-goat', GRAD_SAND],
+    ['Vase 31', '€310', 'ph-vase-classic', GRAD_MOSS],
   ]
   const s3 = slide({
     id: 'ter-collection', background: WHITE, transition: 'morph',
-    notes: 'The commerce grid. The three cover objects morphed into product cards — same ids, new frames. Price chips are separate so you can restyle them once and copy.',
+    notes: 'The commerce grid — real product photography (Met open access, CC0) in the cards, and the three cover vessels MORPH down into the little glaze swatches beside each price. Same ids, new role.',
     elements: [
       kick(96, 96, 'THE COLLECTION'),
       text({ x: 90, y: 140, w: 700, h: 70, html: 'Forty-one objects.', fontSize: 54, fontFamily: FR, fontWeight: 900, color: CHAR }),
-      ...items.flatMap(([name, price, g, r], i) => {
+      ...items.flatMap(([name, price, ph, g], i) => {
         const x = 96 + i * 376
         const ids = ['ter-a', 'ter-b', 'ter-c'][i]
         const kind = i === 2 ? 'ellipse' : 'rect'
         return [
           shape('rect', { x, y: 250, w: 336, h: 330, radius: 18, fill: '#FFFFFF', shadow: { y: 16, blur: 38, color: 'rgba(42,39,36,0.1)' }, fx: { enter: 'fade-up', order: i } }),
-          shape(kind, { id: ids, x: x + 88, y: 280, w: 160, h: 200, radius: r, fill: '#ccc', fillGradient: g, shadow: { y: 12, blur: 26, color: 'rgba(42,39,36,0.18)' }, fx: { enter: 'fade-up', order: i } }),
+          img({ asset: ph, x: x + 20, y: 270, w: 296, h: 214, radius: 12, fx: { enter: 'fade-up', order: i } }),
           text({ x: x + 24, y: 500, w: 200, h: 30, html: name, fontSize: 20, fontWeight: 600, color: CHAR, fx: { enter: 'fade-up', order: i } }),
+          shape(kind, { id: ids, x: x + 190, y: 502, w: 22, h: 22, radius: i === 0 ? 11 : 6, fill: '#ccc', fillGradient: g, shadow: { y: 3, blur: 8, color: 'rgba(42,39,36,0.3)' } }),
           text({ x: x + 216, y: 500, w: 96, h: 30, html: price, fontSize: 18, fontWeight: 600, color: CLAY, align: 'right', fontFamily: MONO, fx: { enter: 'fade-up', order: i } }),
         ]
       }),
-      text({ x: 96, y: 632, w: 700, h: 22, html: 'EVERY OBJECT SHIPS WITH ITS FIRING CARD', fontSize: 11, fontWeight: 600, letterSpacing: 4, color: SOFT }),
+      text({ x: 96, y: 632, w: 700, h: 22, html: 'EVERY OBJECT SHIPS WITH ITS FIRING CARD · PHOTOGRAPHY: MET OPEN ACCESS (CC0)', fontSize: 11, fontWeight: 600, letterSpacing: 4, color: SOFT }),
     ],
   })
 
@@ -300,6 +329,11 @@ function deckTerra() {
 
   return doc({
     title: 'Terra — premium product template', withFonts: true,
+    assets: {
+      'ph-vase-jay': photo('terra-v1.jpg'),
+      'ph-vase-goat': photo('terra-v2.jpg'),
+      'ph-vase-classic': photo('terra-v3.jpg'),
+    },
     theme: { background: WHITE, color: CHAR, accent: CLAY, fontFamily: IN },
     slides: [s1, s2, s3, s4, s5],
   })
@@ -346,6 +380,18 @@ function deckOrbital() {
       text({ x: 96, y: 210, w: 900, h: 300, html: 'Every satellite is<br>a sensor. Nobody<br>reads the sky.', fontSize: 76, fontWeight: 800, color: '#EAF4FF', lineHeight: 1.1, fontFamily: IN, fx: { enter: 'fade-up' } }),
       text({ x: 96, y: 540, w: 620, h: 80, html: 'Twelve thousand spacecraft stream telemetry into archives nobody opens. We turn that exhaust into signal.', fontSize: 17, color: DIM, lineHeight: 1.6, fx: { enter: 'fade-up', order: 2 } }),
       star(1100, 500, 5, 19, 2),
+    ],
+  })
+
+  const s2b = slide({
+    id: 'orb-earth', background: VOID, transition: 'fade',
+    notes: 'The evidence beat: a real night-Earth photograph (ISS Expedition 40, NASA — public domain) full-bleed under a slow ken-burns drift. One scrim, one line. Photographs read as truth in a deck full of neon — use exactly one.',
+    elements: [
+      img({ asset: 'ph-earth', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.1, duration: 24 } } }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.38)', fillGradient: grad(180, [0, 'rgba(5,6,14,0.15)'], [1, 'rgba(5,6,14,0.8)']) }),
+      mono(96, 84, '01b · THE VIEW FROM 400 KM', CYAN),
+      text({ x: 96, y: 460, w: 1000, h: 180, html: 'The ground is<br>already glowing.', fontSize: 64, fontWeight: 800, color: '#EAF4FF', lineHeight: 1.08, fontFamily: IN, shadow: { y: 2, blur: 30, color: 'rgba(0,0,0,0.6)' }, fx: { enter: 'fade-up' } }),
+      mono(96, 648, 'ISS EXPEDITION 40 · NASA — PUBLIC DOMAIN', 'rgba(178,196,224,0.45)', 10),
     ],
   })
 
@@ -405,8 +451,10 @@ function deckOrbital() {
 
   const s5 = slide({
     id: 'orb-end', background: VOID, transition: 'morph',
-    notes: 'The ring comes home to center; the wordmark grows back. Loops keep breathing after the morph settles.',
+    notes: 'The ring comes home to center; the wordmark grows back. A heavily-scrimmed nebula (Hubble, Lagoon Nebula — public domain) drifts underneath: texture, not decoration. Loops keep breathing after the morph settles.',
     elements: [
+      img({ asset: 'ph-nebula', x: 0, y: 0, w: 1280, h: 720, opacity: 0.5, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.12, duration: 30 } } }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.72)' }),
       shape('ellipse', { id: 'orb-ring', x: 340, y: 60, w: 600, h: 600, fill: 'rgba(0,0,0,0)', stroke: MAG, strokeWidth: 2, shadow: glow('rgba(255,79,163,0.4)', 80) }),
       shape('ellipse', { x: 620, y: 40, w: 44, h: 44, fill: MAG, fillGradient: GRAD_MG, shadow: glow('rgba(255,79,163,0.8)', 26), fx: { loop: { type: 'motion-path', path: orbit(300, 1), duration: 18 } } }),
       text({ id: 'orb-word', x: 140, y: 300, w: 1000, h: 110, html: 'JOIN THE SWEEP', fontSize: 66, fontWeight: 800, color: '#EAF4FF', align: 'center', letterSpacing: 16, fontFamily: IN, shadow: glow('rgba(255,79,163,0.3)', 40) }),
@@ -417,9 +465,10 @@ function deckOrbital() {
 
   return doc({
     title: 'Orbital — dark immersive template',
+    assets: { 'ph-earth': photo('orbital-earth.jpg'), 'ph-nebula': photo('orbital-nebula.jpg') },
     theme: { background: VOID, color: '#EAF4FF', accent: CYAN, fontFamily: IN },
     present: { progress: true },
-    slides: [s1, s2, s3, st1, st2, s4, s5],
+    slides: [s1, s2, s2b, s3, st1, st2, s4, s5],
   })
 }
 
@@ -478,6 +527,21 @@ function deckPicnic() {
     ],
   })
 
+  const s3b = slide({
+    id: 'pic-photo', background: CREAM, transition: 'fade',
+    notes: 'The photo-as-sticker recipe: a white frame rect with the ink outline + hard shadow, a photo with a soft ken-burns drift inside it, a marker caption, and one sticker slapped over the corner. Photo: Jack Delano’s 1941 state-fair Kodachrome (Library of Congress — public domain).',
+    elements: [
+      chunky(100, 180, 'PROOF<br>IT’S FUN.', 96, INK, -2),
+      text({ x: 110, y: 460, w: 480, h: 80, html: 'actual footage of the last picnic.<br>nobody shipped anything. 10/10.', fontSize: 21, fontWeight: 700, color: INK, rotation: -2, lineHeight: 1.4, fx: { enter: 'fade-up', order: 1 } }),
+      shape('rect', { x: 690, y: 60, w: 490, h: 590, radius: 18, fill: '#FFFFFF', stroke: INK, strokeWidth: 5, rotation: 3, shadow: sticker, fx: { enter: 'fade-up' } }),
+      img({ asset: 'ph-fair', x: 716, y: 86, w: 438, h: 470, radius: 10, rotation: 3, fx: { enter: 'fade-up', ambient: 'kenburns', ken: { dir: 'drift', scale: 1.045, duration: 14 } } }),
+      text({ x: 716, y: 572, w: 438, h: 40, html: 'the wheel. august. absolute chaos.', fontSize: 19, fontWeight: 800, color: INK, align: 'center', rotation: 3, fx: { enter: 'fade-up' } }),
+      shape('ellipse', { x: 640, y: 40, w: 110, h: 110, fill: GUM, stroke: INK, strokeWidth: 5, shadow: sticker, fx: wobble(9, 8, 3) }),
+      text({ x: 645, y: 76, w: 100, h: 40, html: '1941!', fontSize: 22, fontWeight: 900, color: INK, align: 'center', rotation: -8 }),
+      text({ x: 690, y: 668, w: 490, h: 20, html: 'JACK DELANO · LIBRARY OF CONGRESS — PUBLIC DOMAIN', fontSize: 9, fontWeight: 700, letterSpacing: 2, color: 'rgba(32,26,49,0.5)', align: 'center' }),
+    ],
+  })
+
   const s4 = slide({
     id: 'pic-snacks', background: CREAM, transition: 'fade',
     notes: 'Yes, a snack chart. Charts don’t have to be serious — brand the palette and let the tooltip do a joke.',
@@ -509,8 +573,9 @@ function deckPicnic() {
 
   return doc({
     title: 'Pixel Picnic — playful template',
+    assets: { 'ph-fair': photo('picnic-fair.jpg') },
     theme: { background: SUN, color: INK, accent: GUM, fontFamily: IN },
-    slides: [s1, s2, s3, s4, s5],
+    slides: [s1, s2, s3, s3b, s4, s5],
   })
 }
 
