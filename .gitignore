@@ -11,3 +11,4 @@ testing/
 *.tsbuildinfo
 site/
 working/
+.dev.vars
