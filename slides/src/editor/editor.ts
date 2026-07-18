@@ -38,6 +38,8 @@ export class Editor {
   private clipboard: SlideElement[] = []
   private presenting = false
   private updatesB!: HTMLElement
+  private avatarsBox!: HTMLElement
+  private session: import('../sync/session').SyncSession | null = null
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
@@ -62,6 +64,38 @@ export class Editor {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
     this.rebuildSidebar()
+  }
+
+  /** wire the live-collaboration session (avatars, remote selections) */
+  connectSync(session: import('../sync/session').SyncSession) {
+    this.session = session
+    session.onPeers(() => {
+      this.renderAvatars()
+      this.canvas.setRemotePeers(session.peers())
+    })
+    this.canvas.onTextEditChange = (elId) => session.setEditing(elId)
+    this.store.on('current', () => this.canvas.setRemotePeers(session.peers()))
+  }
+
+  private renderAvatars() {
+    if (!this.session) return
+    this.avatarsBox.innerHTML = ''
+    for (const peer of this.session.peers()) {
+      const chip = document.createElement('button')
+      chip.className = 'ed-avatar'
+      chip.style.background = peer.color
+      chip.textContent = (peer.name || '?').trim().charAt(0).toUpperCase() || '?'
+      const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
+      chip.title =
+        idx >= 0
+          ? t('{name} — on slide {n} (click to follow)', { name: peer.name, n: idx + 1 })
+          : peer.name
+      chip.addEventListener('click', () => {
+        const i = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
+        if (i >= 0) this.store.goTo(i)
+      })
+      this.avatarsBox.appendChild(chip)
+    }
   }
 
   // --- DOM ----------------------------------------------------------------
@@ -90,6 +124,13 @@ export class Editor {
     title.addEventListener('change', () => {
       this.store.commit(() => { this.store.doc.title = title.value || 'Untitled' })
       document.title = `${this.store.doc.title} — Bento Slides`
+    })
+    // remote/programmatic title changes reflect live (unless being typed in)
+    this.store.on('doc', () => {
+      if (document.activeElement !== title && title.value !== this.store.doc.title) {
+        title.value = this.store.doc.title
+        document.title = `${this.store.doc.title} — Bento Slides`
+      }
     })
     this.dirtyDot = div('ed-dirty')
     this.dirtyDot.title = t('Unsaved changes')
@@ -137,7 +178,8 @@ export class Editor {
     const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), t('Toggle properties (])'))
     actions.append(undoB, redoB, pdfB, this.updatesB, leftT, rightT, presentB, saveB, saveAsB)
 
-    bar.append(logo, title, this.dirtyDot, insert, actions)
+    this.avatarsBox = div('ed-avatars')
+    bar.append(logo, title, this.dirtyDot, this.avatarsBox, insert, actions)
 
     // main area
     const main = div('ed-main')

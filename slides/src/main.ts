@@ -11,6 +11,7 @@ import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
 import { Store } from './store'
 import { Editor } from './editor/editor'
+import { SyncSession } from './sync/session'
 
 capturePristine()
 
@@ -25,6 +26,11 @@ if (doc.fonts?.length) injectFonts(doc)
 
 const store = new Store(doc)
 const editor = new Editor(document.getElementById('app')!, store)
+
+// Live collaboration (bento-sync): same-machine tabs sync automatically over
+// BroadcastChannel; the online relay transport joins via the Share UI.
+const session = new SyncSession(store)
+editor.connectSync(session)
 
 // Opening a link ending in #present starts the show immediately (player mode).
 if (location.hash === '#present') {
@@ -63,6 +69,15 @@ if (location.hash === '#present') {
   anim,
   /** i18n: t/locale/setLocale/choices — setLocale('x-pseudo') audits the sweep */
   i18n: i18nApi,
+  /** live-collaboration session: actor id, connected peers, force a diff-flush */
+  sync: {
+    get actor() {
+      return session.actor
+    },
+    peers: () => session.peers(),
+    flush: () => session.flush(),
+    transports: () => session.transportKinds,
+  },
   /**
    * AI/tooling round-trip: replace the whole document from a JSON string
    * (the contents of #bento-doc). Validates via parseDoc; returns false and
