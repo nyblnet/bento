@@ -73,7 +73,9 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   PURE JSON (template formatters {b}/{c}/{d}, never functions). Editor
   canvas/thumbs/print use chartSnapshotSvg (cached); present mounts live
   (host exposes `__bentoChart`). Unknown option keys are ignored gracefully —
-  exotic ECharts configs degrade, don't crash. Shapes:
+  exotic ECharts configs degrade, don't crash. Bar/line series data must be
+  PLAIN NUMBERS ({value,itemStyle} item objects coerce to 0 — only pie takes
+  {name,value}); per-item bar colors unsupported, color by series. Shapes:
   `strokeStyle` solid/dashed/dotted (legacy `strokeDash` still honoured);
   line shapes have `lineStart`/`lineEnd` tips (arrow/dot/bar) rendered as
   per-instance svg markers (sized in strokeWidth units, endpoints inset);

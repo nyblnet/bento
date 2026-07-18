@@ -83,6 +83,10 @@ writeFileSync(join(site, 'CNAME'), 'bento.page\n')
 // deck's embedded typefaces injected (scripts/build-landing.mjs).
 execFileSync('node', [join(root, 'scripts/build-landing.mjs'), join(site, 'index.html')], { stdio: 'inherit' })
 
+// The gallery — four template decks spliced from the same staged shell
+// (each carries template:true; opening one mints a fresh, independent deck).
+execFileSync('node', [join(root, 'scripts/build-example-decks.mjs'), join(site, 'gallery')], { stdio: 'inherit' })
+
 console.log(`\nSite assembled for v${version}:`)
 execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })
 console.log('\nPublish ./site/ to the gh-pages branch (docs/RELEASING.md).')
