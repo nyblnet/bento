@@ -283,4 +283,6 @@ export const zhHant: Catalog = {
   "slide {n}": "第 {n} 頁",
   "{name} joined": "{name} 已加入",
   "{name} left": "{name} 已離開",
+  "Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends": "全螢幕簡報 — F 切換全螢幕，S 開啟簡報者檢視，Esc 結束",
+  "Present in this tab — handy for testing or sharing a window": "在此分頁中簡報 — 便於測試或分享視窗",
 }

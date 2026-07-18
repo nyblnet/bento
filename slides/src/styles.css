@@ -1208,3 +1208,43 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
+
+/* floating present buttons over the work area (zoombar sits below them) */
+.ed-present-fabs {
+  position: absolute;
+  right: 14px;
+  bottom: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 11;
+}
+.ed-fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: #16273e;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgb(20 30 45 / 0.28);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.ed-fab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 24px rgb(20 30 45 / 0.34);
+}
+.ed-fab svg { width: 20px; height: 20px; }
+.ed-fab-small {
+  width: 32px;
+  height: 32px;
+  background: #fff;
+  color: #45566b;
+  border: 1px solid var(--line);
+  box-shadow: 0 3px 10px rgb(20 30 45 / 0.14);
+}
+.ed-fab-small svg { width: 15px; height: 15px; }

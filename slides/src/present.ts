@@ -21,6 +21,7 @@ export function startPresentation(
   doc: BentoDoc,
   startIndex: number,
   onExit: (lastIndex: number) => void,
+  opts: { fullscreen?: boolean } = {},
 ): PresentSession {
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
@@ -207,7 +208,7 @@ export function startPresentation(
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     else enterFullscreen()
   }
-  enterFullscreen()
+  if (opts.fullscreen !== false) enterFullscreen()
 
   const exit = () => {
     if (exited) return

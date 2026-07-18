@@ -191,7 +191,10 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   flush to the screen edge when collapsed); phones (<700px) boot with
   both panels collapsed (canvas-first; chevrons/[/] bring them back).
   Update chip sits beside the wordmark and exists ONLY when an update
-  is found. Save is a dropdown: copy (identity-keeping invite) / new
+  is found. Present lives as FLOATING buttons over the canvas (not the
+  topbar): big round FAB = fullscreen present, small one above it =
+  tab-fill mode (testing/window-sharing); both call editor.present(
+  fromStart, fullscreen) → startPresentation opts.fullscreen. Save is a dropdown: copy (identity-keeping invite) / new
   deck (fresh identity) / template. "Live" button popover: name field,
   collaborator list (click follows), join/leave toasts. Deck buttons use
   ONE invisible hit-rect above button+label (hard-won #7) — never put

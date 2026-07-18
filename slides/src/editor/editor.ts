@@ -204,11 +204,9 @@ export class Editor {
     }, 1500)
     const undoB = btn(ICONS.undo, '', () => this.store.undo(), t('Undo (⌘Z)'))
     const redoB = btn(ICONS.redo, '', () => this.store.redo(), t('Redo (⇧⌘Z)'))
-    const presentB = btn(ICONS.play, t('Present'), () => this.present(), t('Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends'))
-    presentB.classList.add('ed-btn-primary')
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), t('Save — rewrite this file in place (⌘S)'))
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
-    actions.append(undoB, redoB, pdfB, this.shareDropdown(), presentB, saveB, this.saveDropdown())
+    actions.append(undoB, redoB, pdfB, this.shareDropdown(), saveB, this.saveDropdown())
 
     this.avatarsBox = div('ed-avatars')
     bar.append(logo, this.updatesB, title, this.dirtyDot, this.avatarsBox, insert, actions)
@@ -217,6 +215,22 @@ export class Editor {
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
     const canvasWrap = div('ed-canvas-wrap')
+    // presenting is a canvas action: a floating pair over the work area —
+    // the big one goes fullscreen, the small one fills this tab (testing,
+    // sharing a window, projector quirks)
+    const fabs = div('ed-present-fabs')
+    const fsFab = document.createElement('button')
+    fsFab.className = 'ed-fab'
+    fsFab.innerHTML = ICONS.play
+    fsFab.title = t('Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends')
+    fsFab.addEventListener('click', () => this.present(false, true))
+    const tabFab = document.createElement('button')
+    tabFab.className = 'ed-fab ed-fab-small'
+    tabFab.innerHTML = ICONS.window
+    tabFab.title = t('Present in this tab — handy for testing or sharing a window')
+    tabFab.addEventListener('click', () => this.present(false, false))
+    fabs.append(tabFab, fsFab)
+    canvasWrap.appendChild(fabs)
     this.props = div('ed-props')
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
@@ -861,7 +875,7 @@ export class Editor {
 
   // --- present & save ------------------------------------------------------------------
 
-  present(fromStart = false) {
+  present(fromStart = false, fullscreen = true) {
     if (this.presenting) return
     this.canvas.commitTextEdit()
     this.presenting = true
@@ -869,7 +883,7 @@ export class Editor {
       this.presenting = false
       this.store.goTo(last)
       this.canvas.render()
-    })
+    }, { fullscreen })
   }
 
   async save(forcePicker: boolean) {

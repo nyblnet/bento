@@ -283,4 +283,6 @@ export const es: Catalog = {
   "slide {n}": "diapositiva {n}",
   "{name} joined": "{name} se ha unido",
   "{name} left": "{name} se ha ido",
+  "Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends": "Presentar a pantalla completa — F alterna pantalla completa, S abre la vista de ponente, Esc termina",
+  "Present in this tab — handy for testing or sharing a window": "Presentar en esta pestaña — útil para probar o compartir una ventana",
 }
