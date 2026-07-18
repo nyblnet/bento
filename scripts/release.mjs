@@ -78,6 +78,10 @@ if (key) signArgs.push('--key', key)
 execFileSync('node', signArgs, { stdio: 'inherit' })
 
 writeFileSync(join(site, 'CNAME'), 'bento.page\n')
+// The site is fully pre-built static — disable Jekyll so every file is served
+// verbatim. Without this, GitHub Pages' Jekyll processes .md files that carry
+// YAML front matter (e.g. skills/*/SKILL.md) into .html, 404-ing the .md URL.
+writeFileSync(join(site, '.nojekyll'), '')
 
 // The real landing page — assembled from site-src/landing.html with the
 // deck's embedded typefaces injected (scripts/build-landing.mjs).
