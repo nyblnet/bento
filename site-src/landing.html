@@ -187,6 +187,9 @@ header {
 .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(0, 0, 0, 0.46), 0 0 56px var(--glow); }
 .btn.ghost-btn { color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); }
 .btn.ghost-btn:hover { background: rgba(255, 255, 255, 0.06); transform: translateY(-2px); }
+.btn.live { color: #fff; border: 1px solid rgba(255, 255, 255, 0.32); background: rgba(255, 255, 255, 0.04); }
+.btn.live:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.55); transform: translateY(-2px); }
+.btn.live .pulse { width: 9px; height: 9px; border-radius: 50%; background: #34a866; animation: pulse 2.2s ease-in-out infinite; }
 .btn small { font-weight: 500; opacity: 0.75; font-size: 12.5px; }
 
 /* the living mark — three tiles that morph like the deck's cast */
@@ -717,7 +720,9 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
       <span class="chip"><b>Blind relay</b> — stores ciphertext, learns nothing</span>
       <span class="chip"><b>Offline forks merge</b> — both ways, precisely</span>
       <span class="chip"><b>Character-level</b> text merging</span>
-      <a class="chip" href="/guestbook/" style="text-decoration:none"><b>See it live → the public Guestbook</b> — one deck, everyone</a>
+    </div>
+    <div class="ctas rv d3" style="margin: 34px 0 0">
+      <a class="btn live" href="/guestbook/"><span class="pulse"></span> Join the public Guestbook <small style="opacity:.85">— one live deck, everyone</small></a>
     </div>
   </div>
 </section>
