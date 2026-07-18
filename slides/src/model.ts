@@ -256,6 +256,14 @@ export interface BentoDoc {
    * When absent, the editor offers its built-in starter layouts.
    */
   layouts?: Slide[]
+  /**
+   * Live-collaboration room (bento-sync). Present only while a document is
+   * shared: `room` is the relay WebSocket URL, `key` the base64url AES-GCM
+   * room key. Possession of the file IS the capability — anyone who opens a
+   * copy joins the session (the relay itself only ever sees ciphertext).
+   * Never transmitted as sync ops; removed by "Stop sharing".
+   */
+  collab?: { room: string; key: string }
   slides: Slide[]
   modified: string
 }

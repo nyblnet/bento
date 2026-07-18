@@ -12,6 +12,7 @@ import { injectFonts } from './fonts'
 import { Store } from './store'
 import { Editor } from './editor/editor'
 import { SyncSession } from './sync/session'
+import { onlineTransport, startSharing, stopSharing } from './sync/online'
 
 capturePristine()
 
@@ -77,6 +78,13 @@ if (location.hash === '#present') {
     peers: () => session.peers(),
     flush: () => session.flush(),
     transports: () => session.transportKinds,
+    /** start an online session (mints doc.collab, connects the relay) */
+    share: () => {
+      startSharing(session, store)
+      return store.doc.collab
+    },
+    unshare: () => stopSharing(session, store),
+    online: () => onlineTransport()?.status ?? 'off',
   },
   /**
    * AI/tooling round-trip: replace the whole document from a JSON string

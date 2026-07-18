@@ -73,18 +73,14 @@ const actorColor = (actor: string): string => {
   return PEER_COLORS[h % PEER_COLORS.length]
 }
 
-/** per-TAB actor id: two tabs on one file are two replicas */
+/**
+ * Actor id: fresh per SESSION INSTANCE, deliberately — a reloaded tab is a
+ * new replica with empty CRDT state, and the engine skips "own" ops on
+ * apply, so reusing an id would make relay replay of the previous
+ * incarnation's ops a no-op. Random ids sidestep the whole class.
+ */
 function tabActor(): string {
-  try {
-    let a = sessionStorage.getItem('bento-actor')
-    if (!a) {
-      a = Math.random().toString(36).slice(2, 10)
-      sessionStorage.setItem('bento-actor', a)
-    }
-    return a
-  } catch {
-    return Math.random().toString(36).slice(2, 10)
-  }
+  return Math.random().toString(36).slice(2, 10)
 }
 
 const DIFF_DEBOUNCE_MS = 90
@@ -321,6 +317,34 @@ export class SyncSession {
 
   private emitPeers() {
     this.peerListeners.forEach((fn) => fn())
+  }
+
+  // --- snapshots (online catch-up + file-fork merge) ------------------------
+
+  /** current (doc, sync-state) pair for an encrypted relay snapshot */
+  snapshot(): { doc: BentoDoc; state: import('./crdt').SyncStateJSON } {
+    this.flush()
+    return {
+      doc: JSON.parse(JSON.stringify(this.store.doc)) as BentoDoc,
+      state: JSON.parse(JSON.stringify(this.state.toJSON())),
+    }
+  }
+
+  /** merge a remote snapshot (relay replay for far-behind joiners) */
+  applySnapshot(rdoc: BentoDoc, rstate: import('./crdt').SyncStateJSON) {
+    this.flush()
+    this.applying = true
+    try {
+      const res = this.state.mergeSnapshot(this.store.doc, rdoc, rstate)
+      if (res.changed) this.afterRemoteChange(true)
+    } finally {
+      this.applying = false
+    }
+  }
+
+  /** re-announce (an online transport reconnected) */
+  hello() {
+    this.broadcast({ t: 'hello', a: this.actor, vv: this.state.vv, p: this.presence() })
   }
 
   // --- plumbing -------------------------------------------------------------

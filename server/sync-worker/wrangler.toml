@@ -1,0 +1,20 @@
+# bento-sync relay — Cloudflare Worker + one Durable Object room per docId.
+# Deploy:  npx wrangler deploy          (needs `npx wrangler login` once)
+# Dev:     npx wrangler dev --port 8787 (fully local, no account needed)
+# Then point sync.bento.page at the worker (Custom Domain below, or a route).
+name = "bento-sync"
+main = "src/worker.js"
+compatibility_date = "2026-07-01"
+
+# workers.dev URL is fine to start; add the custom domain when ready:
+routes = [
+  { pattern = "sync.bento.page", custom_domain = true }
+]
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
