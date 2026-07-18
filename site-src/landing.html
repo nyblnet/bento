@@ -339,6 +339,65 @@ section:not(.paper) .card p { color: var(--mist); }
 }
 .chip b { color: var(--peach-soft); font-weight: 700; }
 .chip.soon { color: var(--mist-dim); border-color: rgba(255, 255, 255, 0.1); }
+.paper .chip { color: var(--ink-soft); border-color: rgba(13, 27, 46, 0.22); }
+.paper .chip b { color: #C25B3F; }
+
+/* gallery — four template posters, each in its own art direction */
+.gal { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px; }
+.gcard {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+  transition: transform 0.35s cubic-bezier(0.2, 0.6, 0.2, 1), box-shadow 0.35s;
+}
+.gcard:hover { transform: translateY(-5px); box-shadow: 0 28px 64px rgba(0, 0, 0, 0.52); }
+.gposter { position: relative; aspect-ratio: 16 / 9; overflow: hidden; display: block; }
+.gposter * { position: absolute; }
+.gmeta { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 18px 16px; }
+.gmeta h3 { font-size: 15.5px; font-weight: 700; color: #fff; }
+.gmeta p { font-size: 12.5px; color: var(--mist-dim); margin-top: 3px; line-height: 1.45; }
+.gacts { display: flex; gap: 8px; flex-shrink: 0; }
+.gbtn {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--mist);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 7px 14px;
+  white-space: nowrap;
+  transition: color 0.2s, border-color 0.2s, transform 0.2s;
+}
+.gbtn:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); transform: translateY(-1px); }
+/* signal poster */
+.gp-signal { background: #EFEDE4; }
+.gp-signal .k { left: 9%; top: 11%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.26em; color: #E8442E; }
+.gp-signal .hr { left: 9%; right: 9%; top: 22%; height: 1.5px; background: #141310; }
+.gp-signal .t { left: 8.5%; top: 27%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 42px; line-height: 0.94; color: #141310; }
+.gp-signal .bar { left: 9%; bottom: 13%; width: 27%; height: 12%; background: #E8442E; }
+/* terra poster */
+.gp-terra { background: #F7F5F0; }
+.gp-terra .k { left: 8.5%; top: 13%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.22em; color: #C96F4A; }
+.gp-terra .t { left: 8%; top: 27%; max-width: 52%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 24px; line-height: 1.06; color: #2A2724; }
+.gp-terra .v1 { right: 9%; top: 19%; width: 16%; height: 52%; border-radius: 999px; background: linear-gradient(160deg, #CE7852, #B85F3E); }
+.gp-terra .v2 { right: 27%; top: 42%; width: 12%; height: 42%; border-radius: 999px; background: linear-gradient(160deg, #DDCDB9, #D2BFA6); }
+.gp-terra .v3 { right: 13%; bottom: 7%; width: 11%; aspect-ratio: 1; border-radius: 50%; background: #7D8471; }
+/* orbital poster */
+.gp-orbital { background: #05060E; }
+.gp-orbital .ring { left: 50%; top: 50%; width: 52%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 1.5px solid #38E1FF; border-radius: 50%; box-shadow: 0 0 34px rgba(56, 225, 255, 0.35), inset 0 0 26px rgba(56, 225, 255, 0.12); }
+.gp-orbital .t { left: 0; right: 0; top: 50%; transform: translateY(-58%); font-weight: 800; font-size: 21px; letter-spacing: 0.5em; text-indent: 0.5em; text-align: center; color: #F2F6FF; }
+.gp-orbital .moon { left: 63%; top: 13%; width: 7%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(140deg, #8F7BF7, #38B6FF); }
+.gp-orbital .s1, .gp-orbital .s2, .gp-orbital .s3 { width: 3px; height: 3px; border-radius: 50%; background: rgba(178, 196, 224, 0.8); }
+.gp-orbital .s1 { left: 14%; top: 30%; } .gp-orbital .s2 { left: 84%; top: 62%; } .gp-orbital .s3 { left: 24%; top: 78%; }
+/* picnic poster */
+.gp-picnic { background: #FFD43A; }
+.gp-picnic .t { left: 8%; top: 22%; font-weight: 900; font-size: 34px; line-height: 0.98; letter-spacing: -0.01em; color: #201A31; }
+.gp-picnic .sub { left: 8.5%; bottom: 13%; max-width: 56%; font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #201A31; transform: rotate(-2deg); }
+.gp-picnic .c1 { right: 10%; top: 14%; width: 17%; aspect-ratio: 1; border-radius: 50%; background: #FF7BAC; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; }
+.gp-picnic .c2 { right: 31%; top: 48%; width: 13%; aspect-ratio: 1; border-radius: 26%; background: #4DC9F0; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; transform: rotate(-8deg); }
+.gp-picnic .c3 { right: 9%; bottom: 10%; width: 15%; aspect-ratio: 1.1; clip-path: polygon(50% 0, 100% 100%, 0 100%); background: #7BE382; filter: drop-shadow(4px 5px 0 rgba(32, 26, 49, 0.9)); }
 
 /* code vignette — the honest document */
 .codebox {
@@ -385,6 +444,8 @@ footer b { color: var(--mist); font-weight: 600; }
   .tiles { margin: 30px auto 0; }
   section { padding: 84px 0; }
   .ghost { font-size: 130px; right: 0; }
+  .gal { grid-template-columns: 1fr; }
+  .gmeta { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tile, .m, .bokeh, .avatar.live-chip .pulse, .in .spark { animation: none !important; }
@@ -458,10 +519,117 @@ footer b { color: var(--mist); font-weight: 600; }
   </div>
 </section>
 
-<!-- ———————————————— 02 · morph ———————————————— -->
+<!-- ———————————————— 02 · gallery ———————————————— -->
 <section>
   <div class="wrap">
     <div class="ghost" aria-hidden="true">02</div>
+    <div class="kicker rv">The gallery</div>
+    <hr class="hairline rv" style="max-width:220px">
+    <h2 class="rv">Start from something beautiful.</h2>
+    <p class="lede rv d1">Four templates, four art directions — and each one is a <b>complete working file</b>. Open one: it boots straight into the app. Save it and it becomes your own deck, fresh identity and all. Every deck below was <b>designed and written by an AI agent</b> editing the document directly — which brings us to the next point.</p>
+    <div class="gal">
+      <div class="gcard rv">
+        <a class="gposter gp-signal" href="/gallery/signal-editorial-type.bento.html" target="_blank" rel="noopener" aria-label="Open the Signal template in a new tab">
+          <span class="k">SIGNAL — A FESTIVAL OF GRAPHIC IDEAS</span>
+          <span class="hr"></span>
+          <span class="t">Loud<br>letters.</span>
+          <span class="bar"></span>
+        </a>
+        <div class="gmeta">
+          <div><h3>Signal</h3><p>Editorial type — one paper, one ink, one violent red.</p></div>
+          <div class="gacts">
+            <a class="gbtn" href="/gallery/signal-editorial-type.bento.html" target="_blank" rel="noopener">Open ↗</a>
+            <a class="gbtn" href="/gallery/signal-editorial-type.bento.html" download="Signal.bento.html">⤓ Get</a>
+          </div>
+        </div>
+      </div>
+      <div class="gcard rv d1">
+        <a class="gposter gp-terra" href="/gallery/terra-premium-product.bento.html" target="_blank" rel="noopener" aria-label="Open the Terra template in a new tab">
+          <span class="k">TERRA OBJECTS — COLLECTION N°4</span>
+          <span class="t">Quiet things,<br>well made.</span>
+          <span class="v1"></span><span class="v2"></span><span class="v3"></span>
+        </a>
+        <div class="gmeta">
+          <div><h3>Terra</h3><p>Premium minimal — warm neutrals, morphing product cards.</p></div>
+          <div class="gacts">
+            <a class="gbtn" href="/gallery/terra-premium-product.bento.html" target="_blank" rel="noopener">Open ↗</a>
+            <a class="gbtn" href="/gallery/terra-premium-product.bento.html" download="Terra.bento.html">⤓ Get</a>
+          </div>
+        </div>
+      </div>
+      <div class="gcard rv d1">
+        <a class="gposter gp-orbital" href="/gallery/orbital-dark-immersive.bento.html" target="_blank" rel="noopener" aria-label="Open the Orbital template in a new tab">
+          <span class="ring"></span>
+          <span class="t">ORBITAL</span>
+          <span class="moon"></span>
+          <span class="s1"></span><span class="s2"></span><span class="s3"></span>
+        </a>
+        <div class="gmeta">
+          <div><h3>Orbital</h3><p>Dark immersive — neon systems with clickable states.</p></div>
+          <div class="gacts">
+            <a class="gbtn" href="/gallery/orbital-dark-immersive.bento.html" target="_blank" rel="noopener">Open ↗</a>
+            <a class="gbtn" href="/gallery/orbital-dark-immersive.bento.html" download="Orbital.bento.html">⤓ Get</a>
+          </div>
+        </div>
+      </div>
+      <div class="gcard rv d2">
+        <a class="gposter gp-picnic" href="/gallery/picnic-playful.bento.html" target="_blank" rel="noopener" aria-label="Open the Pixel Picnic template in a new tab">
+          <span class="t">PIXEL<br>PICNIC</span>
+          <span class="sub">a two-day jam for gloriously useless websites</span>
+          <span class="c1"></span><span class="c2"></span><span class="c3"></span>
+        </a>
+        <div class="gmeta">
+          <div><h3>Pixel Picnic</h3><p>Playful — stickers, wobbles, hard zero-blur shadows.</p></div>
+          <div class="gacts">
+            <a class="gbtn" href="/gallery/picnic-playful.bento.html" target="_blank" rel="noopener">Open ↗</a>
+            <a class="gbtn" href="/gallery/picnic-playful.bento.html" download="Pixel_Picnic.bento.html">⤓ Get</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 03 · AI ———————————————— -->
+<section class="paper">
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">03</div>
+    <div class="grid2">
+      <div>
+        <div class="kicker rv">Local-first · AI-native</div>
+        <hr class="hairline rv" style="max-width:220px">
+        <h2 class="rv">Designed for AI.<br>Entirely optional.</h2>
+        <p class="lede rv d1">Bento is local-first <b>and</b> built for the AI era. The document is plain JSON sitting openly in the file — so a chatbot round-trips it and an agent harness <b>edits the file directly</b>. That's how the gallery above was made. No converters, no uploads, no .pptx archaeology: <b>orders of magnitude leaner</b> than driving PowerPoint with a bot. And if you never touch AI, nothing here ever will either.</p>
+        <div class="chips rv d2">
+          <span class="chip"><b>The format is the API</b></span>
+          <span class="chip">No binary .pptx to decode</span>
+          <span class="chip">Agents edit the file in place</span>
+          <span class="chip">Nothing phones home</span>
+        </div>
+      </div>
+      <div class="codebox rv d1" aria-label="The document format, as it appears inside every file"><span class="c">&lt;!-- inside every .bento.html --&gt;</span>
+&lt;script type=<span class="s">"application/bento+json"</span> id=<span class="s">"bento-doc"</span>&gt;
+{
+  <span class="k">"format"</span>: <span class="s">"bento/slides"</span>,
+  <span class="k">"title"</span>: <span class="s">"Q4 All-hands"</span>,
+  <span class="k">"slides"</span>: [
+    { <span class="k">"id"</span>: <span class="s">"s1"</span>, <span class="k">"transition"</span>: <span class="s">"morph"</span>,
+      <span class="k">"elements"</span>: [ … ] }
+  ]
+}
+&lt;/script&gt;
+
+<span class="c">// and in the console:</span>
+window.bento.doc          <span class="c">// read</span>
+window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 04 · morph ———————————————— -->
+<section>
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">04</div>
     <div class="grid2">
       <div>
         <div class="kicker rv">The native transition</div>
@@ -478,10 +646,10 @@ footer b { color: var(--mist); font-weight: 600; }
   </div>
 </section>
 
-<!-- ———————————————— 03 · charts ———————————————— -->
+<!-- ———————————————— 05 · charts ———————————————— -->
 <section class="paper">
   <div class="wrap">
-    <div class="ghost" aria-hidden="true">03</div>
+    <div class="ghost" aria-hidden="true">05</div>
     <div class="grid2">
       <div class="chartbox rv d1">
         <svg viewBox="0 0 560 300" role="img" aria-label="An area chart drawn by Bento's built-in chart engine">
@@ -511,10 +679,10 @@ footer b { color: var(--mist); font-weight: 600; }
   </div>
 </section>
 
-<!-- ———————————————— 04 · live ———————————————— -->
+<!-- ———————————————— 06 · live ———————————————— -->
 <section>
   <div class="wrap">
-    <div class="ghost" aria-hidden="true">04</div>
+    <div class="ghost" aria-hidden="true">06</div>
     <div class="kicker rv">Together, live</div>
     <hr class="hairline rv" style="max-width:220px">
     <h2 class="rv">Collaboration without<br>a cloud account.</h2>
@@ -532,10 +700,10 @@ footer b { color: var(--mist); font-weight: 600; }
   </div>
 </section>
 
-<!-- ———————————————— 05 · yours ———————————————— -->
+<!-- ———————————————— 07 · yours ———————————————— -->
 <section class="paper">
   <div class="wrap">
-    <div class="ghost" aria-hidden="true">05</div>
+    <div class="ghost" aria-hidden="true">07</div>
     <div class="kicker rv">Local-first, provably</div>
     <hr class="hairline rv" style="max-width:220px">
     <h2 class="rv">No cloud required.<br>Not even ours.</h2>
@@ -544,42 +712,6 @@ footer b { color: var(--mist); font-weight: 600; }
       <div class="card rv"><div class="tick"></div><h3>Yours to keep</h3><p>Decks survive us. If bento.page vanished tomorrow, every file keeps opening, editing and presenting.</p></div>
       <div class="card rv d1"><div class="tick" style="background:var(--steel)"></div><h3>Open source runtime</h3><p>MIT-licensed components throughout — reveal.js, Moveable, our own chart and animation engines.</p></div>
       <div class="card rv d2"><div class="tick"></div><h3>No telemetry</h3><p>Update checks send nothing about you or your document. No ids, no analytics, no phoning home.</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- ———————————————— 06 · AI ———————————————— -->
-<section>
-  <div class="wrap">
-    <div class="ghost" aria-hidden="true">06</div>
-    <div class="grid2">
-      <div>
-        <div class="kicker rv">Local-first · AI-native</div>
-        <hr class="hairline rv" style="max-width:220px">
-        <h2 class="rv">Designed for AI.<br>Entirely optional.</h2>
-        <p class="lede rv d1">Bento is local-first <b>and</b> built for the AI era. The document is plain JSON sitting openly in the file — so a chatbot round-trips it and an agent harness <b>edits the file directly</b>. No converters, no uploads, no .pptx archaeology: <b>orders of magnitude leaner</b> than driving PowerPoint with a bot. And if you never touch AI, nothing here ever will either.</p>
-        <div class="chips rv d2">
-          <span class="chip"><b>The format is the API</b></span>
-          <span class="chip">No binary .pptx to decode</span>
-          <span class="chip">Agents edit the file in place</span>
-          <span class="chip">Nothing phones home</span>
-        </div>
-      </div>
-      <div class="codebox rv d1" aria-label="The document format, as it appears inside every file"><span class="c">&lt;!-- inside every .bento.html --&gt;</span>
-&lt;script type=<span class="s">"application/bento+json"</span> id=<span class="s">"bento-doc"</span>&gt;
-{
-  <span class="k">"format"</span>: <span class="s">"bento/slides"</span>,
-  <span class="k">"title"</span>: <span class="s">"Q4 All-hands"</span>,
-  <span class="k">"slides"</span>: [
-    { <span class="k">"id"</span>: <span class="s">"s1"</span>, <span class="k">"transition"</span>: <span class="s">"morph"</span>,
-      <span class="k">"elements"</span>: [ … ] }
-  ]
-}
-&lt;/script&gt;
-
-<span class="c">// and in the console:</span>
-window.bento.doc          <span class="c">// read</span>
-window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
     </div>
   </div>
 </section>

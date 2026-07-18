@@ -51,6 +51,18 @@
         "site"
       ],
       "port": 5195
+    },
+    {
+      "name": "serve-working",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5194",
+        "--directory",
+        "working"
+      ],
+      "port": 5194
     }
   ]
 }
