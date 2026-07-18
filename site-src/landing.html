@@ -371,21 +371,22 @@ section:not(.paper) .card p { color: var(--mist); }
   transition: color 0.2s, border-color 0.2s, transform 0.2s;
 }
 .gbtn:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); transform: translateY(-1px); }
-/* signal poster */
-.gp-signal { background: #EFEDE4; }
-.gp-signal .k { left: 9%; top: 11%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.26em; color: #E8442E; }
-.gp-signal .hr { left: 9%; right: 9%; top: 22%; height: 1.5px; background: #141310; }
-.gp-signal .t { left: 8.5%; top: 27%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 42px; line-height: 0.94; color: #141310; }
+/* signal poster — red duotone photo, bone masthead */
+.gp-signal { background: #141310 url(__PH_PRESS__) center/cover; }
+.gp-signal .ov { inset: 0; background: rgba(20, 19, 16, 0.42); }
+.gp-signal .ov2 { inset: 0; background: rgba(226, 52, 30, 0.48); }
+.gp-signal .k { left: 9%; top: 11%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.26em; color: #EFEDE4; }
+.gp-signal .hr { left: 9%; right: 9%; top: 22%; height: 1.5px; background: rgba(239, 237, 228, 0.7); }
+.gp-signal .t { left: 8.5%; top: 27%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 42px; line-height: 0.94; color: #EFEDE4; text-shadow: 0 2px 14px rgba(20, 19, 16, 0.45); }
 .gp-signal .bar { left: 9%; bottom: 13%; width: 27%; height: 12%; background: #E8442E; }
-.gp-signal .phf { left: 70.5%; top: 28%; width: 22%; height: 40%; background: #E8442E; }
-.gp-signal .ph { left: 69%; top: 24%; width: 22%; height: 40%; background: url(__PH_PRESS__) center/cover; filter: grayscale(1) contrast(1.05); }
-/* terra poster */
+/* terra poster — split cover, photo panel right */
 .gp-terra { background: #F7F5F0; }
+.gp-terra .panel { right: 0; top: 0; width: 37%; height: 100%; background: url(__PH_VASE2__) center/cover; }
 .gp-terra .k { left: 8.5%; top: 13%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.22em; color: #C96F4A; }
-.gp-terra .t { left: 8%; top: 27%; max-width: 52%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 24px; line-height: 1.06; color: #2A2724; }
-.gp-terra .v1 { right: 9%; top: 19%; width: 16%; height: 52%; border-radius: 999px; background: url(__PH_VASE1__) center/cover; border: 3px solid #C96F4A; }
-.gp-terra .v2 { right: 27%; top: 42%; width: 12%; height: 42%; border-radius: 999px; background: url(__PH_VASE3__) center/cover; border: 3px solid #D9C9B4; }
-.gp-terra .v3 { right: 13%; bottom: 7%; width: 11%; aspect-ratio: 1; border-radius: 50%; background: url(__PH_VASE2__) center/cover; border: 3px solid #7D8471; }
+.gp-terra .t { left: 8%; top: 27%; max-width: 48%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 24px; line-height: 1.06; color: #2A2724; }
+.gp-terra .v1 { right: 29%; top: 16%; width: 14%; height: 48%; border-radius: 999px; background: url(__PH_VASE1__) center/cover; border: 3px solid #C96F4A; box-shadow: 0 10px 24px rgba(42, 39, 36, 0.3); }
+.gp-terra .v2 { right: 35%; bottom: 7%; width: 11%; height: 36%; border-radius: 999px; background: url(__PH_VASE3__) center/cover; border: 3px solid #D9C9B4; box-shadow: 0 8px 20px rgba(42, 39, 36, 0.25); }
+.gp-terra .v3 { right: 31%; top: 47%; width: 6.5%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(15deg, #8D9376, #6F755C); box-shadow: 0 6px 14px rgba(42, 39, 36, 0.3); }
 /* orbital poster */
 .gp-orbital { background: #05060E url(__PH_STARS__) center 65%/cover; }
 .gp-orbital .ov { inset: 0; background: rgba(5, 6, 14, 0.5); }
@@ -394,8 +395,9 @@ section:not(.paper) .card p { color: var(--mist); }
 .gp-orbital .moon { left: 63%; top: 13%; width: 7%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(140deg, #8F7BF7, #38B6FF); }
 .gp-orbital .s1, .gp-orbital .s2, .gp-orbital .s3 { width: 3px; height: 3px; border-radius: 50%; background: rgba(178, 196, 224, 0.8); }
 .gp-orbital .s1 { left: 14%; top: 30%; } .gp-orbital .s2 { left: 84%; top: 62%; } .gp-orbital .s3 { left: 24%; top: 78%; }
-/* picnic poster */
-.gp-picnic { background: #FFD43A; }
+/* picnic poster — scrapbook: kodachrome under the sunshine wash */
+.gp-picnic { background: #FFD43A url(__PH_FAIRWIDE__) center/cover; }
+.gp-picnic .ov { inset: 0; background: rgba(255, 212, 58, 0.55); }
 .gp-picnic .t { left: 8%; top: 22%; font-weight: 900; font-size: 34px; line-height: 0.98; letter-spacing: -0.01em; color: #201A31; }
 .gp-picnic .sub { left: 8.5%; bottom: 13%; max-width: 40%; font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #201A31; transform: rotate(-2deg); }
 .gp-picnic .c1 { right: 10%; top: 14%; width: 17%; aspect-ratio: 1; border-radius: 50%; background: #FF7BAC; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; }
@@ -535,9 +537,9 @@ footer b { color: var(--mist); font-weight: 600; }
     <div class="gal">
       <div class="gcard rv">
         <a class="gposter gp-signal" href="/gallery/signal-editorial-type.bento.html" target="_blank" rel="noopener" aria-label="Open the Signal template in a new tab">
+          <span class="ov"></span><span class="ov2"></span>
           <span class="k">SIGNAL — A FESTIVAL OF GRAPHIC IDEAS</span>
           <span class="hr"></span>
-          <span class="phf"></span><span class="ph"></span>
           <span class="t">Loud<br>letters.</span>
           <span class="bar"></span>
         </a>
@@ -551,6 +553,7 @@ footer b { color: var(--mist); font-weight: 600; }
       </div>
       <div class="gcard rv d1">
         <a class="gposter gp-terra" href="/gallery/terra-premium-product.bento.html" target="_blank" rel="noopener" aria-label="Open the Terra template in a new tab">
+          <span class="panel"></span>
           <span class="k">TERRA OBJECTS — COLLECTION N°4</span>
           <span class="t">Quiet things,<br>well made.</span>
           <span class="v1"></span><span class="v2"></span><span class="v3"></span>
@@ -581,6 +584,7 @@ footer b { color: var(--mist); font-weight: 600; }
       </div>
       <div class="gcard rv d2">
         <a class="gposter gp-picnic" href="/gallery/picnic-playful.bento.html" target="_blank" rel="noopener" aria-label="Open the Pixel Picnic template in a new tab">
+          <span class="ov"></span>
           <span class="t">PIXEL<br>PICNIC</span>
           <span class="sub">a two-day jam for gloriously useless websites</span>
           <span class="pol"></span><span class="polp"></span>

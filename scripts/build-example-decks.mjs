@@ -116,19 +116,20 @@ function deckSignal() {
   const pageNo = (n) => text({ x: 1150, y: 654, w: 80, h: 24, html: n, fontSize: 13, fontWeight: 600, color: GREY, align: 'right', fontFamily: MONO })
 
   const s1 = slide({
-    id: 'sig-cover', background: BONE, transition: 'none',
-    notes: 'TEMPLATE — “Signal”, an editorial-typographic deck. The style family: type-as-layout, one paper tone, one ink, one violent accent. Replace the words, keep the bones. The red bar and the title share ids with slide 2 — they MORPH.',
+    id: 'sig-cover', background: INK, transition: 'none',
+    notes: 'TEMPLATE — “Signal”, an editorial-typographic deck. The cover is the poster: a full-bleed public-domain photograph pushed through a RED DUOTONE (ink scrim + red wash — two rects, no filters) with the masthead type reversed to bone. Slide 2 cuts back to paper. The red bar and the title share ids with slide 2 — they MORPH.',
     elements: [
-      kick(96, 84, 'SIGNAL — A FESTIVAL OF GRAPHIC IDEAS'),
-      rule(96, 118, 1088),
-      shape('rect', { x: 904, y: 194, w: 280, h: 290, fill: RED, fx: { enter: 'fade-up', order: 1 } }),
-      img({ asset: 'ph-press', x: 884, y: 174, w: 280, h: 290, fx: { enter: 'fade-up', order: 1, ambient: 'kenburns', ken: { dir: 'in', scale: 1.05, duration: 2.6 } } }),
-      text({ id: 'sig-title', x: 86, y: 128, w: 1120, h: 330, html: 'Loud<br>letters.', fontSize: 168, fontFamily: FR, fontWeight: 900, color: INK, lineHeight: 0.92 }),
+      img({ asset: 'ph-press', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.07, duration: 24 } } }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(20,19,16,0.42)' }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(226,52,30,0.48)' }),
+      kick(96, 84, 'SIGNAL — A FESTIVAL OF GRAPHIC IDEAS', BONE),
+      shape('rect', { x: 96, y: 118, w: 1088, h: 2, fill: 'rgba(239,237,228,0.7)' }),
+      text({ id: 'sig-title', x: 86, y: 128, w: 1120, h: 330, html: 'Loud<br>letters.', fontSize: 168, fontFamily: FR, fontWeight: 900, color: BONE, lineHeight: 0.92, shadow: { y: 3, blur: 26, color: 'rgba(20,19,16,0.4)' } }),
       shape('rect', { id: 'sig-bar', x: 96, y: 520, w: 320, h: 74, fill: RED }),
-      text({ x: 442, y: 524, w: 560, h: 80, html: 'Three days on typography, grids,<br>and the confidence to be simple.', fontSize: 19, color: GREY, lineHeight: 1.5, fx: { enter: 'fade-up', order: 1 } }),
+      text({ x: 442, y: 524, w: 560, h: 80, html: 'Three days on typography, grids,<br>and the confidence to be simple.', fontSize: 19, color: 'rgba(239,237,228,0.85)', lineHeight: 1.5, fx: { enter: 'fade-up', order: 1 } }),
       text({ x: 96, y: 536, w: 320, h: 40, html: 'OCT 12—14', fontSize: 26, fontWeight: 800, color: BONE, align: 'center', fontFamily: IN, letterSpacing: 3 }),
-      text({ x: 96, y: 640, w: 800, h: 24, html: 'HALL 6 · MAKETOWN · TICKETS AT THE DOOR', fontSize: 12, fontWeight: 600, letterSpacing: 3, color: GREY }),
-      pageNo('01'),
+      text({ x: 96, y: 640, w: 800, h: 24, html: 'HALL 6 · MAKETOWN · TICKETS AT THE DOOR · PHOTO: LIBRARY OF CONGRESS, 1942', fontSize: 12, fontWeight: 600, letterSpacing: 3, color: 'rgba(239,237,228,0.6)' }),
+      text({ x: 1150, y: 654, w: 80, h: 24, html: '01', fontSize: 13, fontWeight: 600, color: 'rgba(239,237,228,0.6)', align: 'right', fontFamily: MONO }),
     ],
   })
 
@@ -248,18 +249,20 @@ function deckTerra() {
 
   const s1 = slide({
     id: 'ter-cover', background: WHITE, transition: 'none',
-    notes: 'TEMPLATE — “Terra”, premium product-brand deck. Style family: whitespace-first commerce. Gradient blocks stand in for product photography — replace them with images and keep the composition. The three “vessels” morph into the collection grid on slide 3.',
+    notes: 'TEMPLATE — “Terra”, premium product-brand deck. The commerce classic: a SPLIT COVER — copy breathes on white, a full-height product photograph owns the right edge (ken-burns drift), and two photo pills straddle the seam. The three “vessels” morph into the collection grid on slide 3.',
     elements: [
+      img({ asset: 'ph-vase-goat', x: 800, y: 0, w: 480, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.06, duration: 20 } } }),
+      shape('rect', { x: 800, y: 0, w: 480, h: 720, fill: 'rgba(42,39,36,0.08)' }),
       kick(96, 96, 'TERRA OBJECTS — COLLECTION Nº4'),
-      text({ x: 90, y: 150, w: 760, h: 260, html: 'Quiet things,<br>well made.', fontSize: 96, fontFamily: FR, fontWeight: 900, color: CHAR, lineHeight: 1.02 }),
+      text({ x: 90, y: 150, w: 700, h: 260, html: 'Quiet things,<br>well made.', fontSize: 92, fontFamily: FR, fontWeight: 900, color: CHAR, lineHeight: 1.02 }),
       text({ x: 96, y: 430, w: 480, h: 80, html: 'Thrown, glazed and fired in one workshop.<br>Forty-one objects. No two alike.', fontSize: 17, color: SOFT, lineHeight: 1.6, fx: { enter: 'fade-up', order: 1 } }),
-      shape('rect', { id: 'ter-a', x: 880, y: 120, w: 200, h: 300, radius: 100, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.22)' } }),
-      img({ asset: 'ph-vase-jay', x: 887, y: 127, w: 186, h: 286, radius: 93, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 } } }),
-      shape('rect', { id: 'ter-b', x: 1010, y: 300, w: 150, h: 220, radius: 75, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.18)' } }),
-      img({ asset: 'ph-vase-classic', x: 1016, y: 306, w: 138, h: 208, radius: 69, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 } } }),
-      shape('ellipse', { id: 'ter-c', x: 840, y: 430, w: 120, h: 120, fill: '#6F755C', fillGradient: GRAD_MOSS, shadow: { y: 14, blur: 34, color: 'rgba(42,39,36,0.2)' } }),
-      img({ asset: 'ph-vase-goat', x: 845, y: 435, w: 110, h: 110, radius: 55 }),
+      shape('rect', { id: 'ter-a', x: 700, y: 110, w: 190, h: 280, radius: 95, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.28)' } }),
+      img({ asset: 'ph-vase-jay', x: 707, y: 117, w: 176, h: 266, radius: 88, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 } } }),
+      shape('rect', { id: 'ter-b', x: 646, y: 440, w: 140, h: 200, radius: 70, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.22)' } }),
+      img({ asset: 'ph-vase-classic', x: 652, y: 446, w: 128, h: 188, radius: 64, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 } } }),
+      shape('ellipse', { id: 'ter-c', x: 730, y: 350, w: 76, h: 76, fill: '#6F755C', fillGradient: GRAD_MOSS, shadow: { y: 12, blur: 26, color: 'rgba(42,39,36,0.25)' } }),
       text({ x: 96, y: 620, w: 500, h: 22, html: 'SPRING 2026 · EDITION OF 41', fontSize: 11, fontWeight: 600, letterSpacing: 4, color: SOFT }),
+      text({ x: 900, y: 668, w: 360, h: 20, html: 'MET MUSEUM OPEN ACCESS · CC0', fontSize: 9, fontWeight: 600, letterSpacing: 3, color: 'rgba(247,245,240,0.75)', align: 'right' }),
     ],
   })
 
@@ -498,8 +501,10 @@ function deckPicnic() {
 
   const s1 = slide({
     id: 'pic-cover', background: SUN, transition: 'none',
-    notes: 'TEMPLATE — “Pixel Picnic”, a playful toy-style deck. Style family: saturated flats, hard sticker shadows (offset, zero blur), everything 2–4° askew, shapes that wobble on motion-path loops. The blobs morph into the schedule tiles.',
+    notes: 'TEMPLATE — “Pixel Picnic”, a playful toy-style deck. The cover is a scrapbook: a full-bleed 1941 carnival Kodachrome (Library of Congress, public domain) washed with the brand yellow, stickers slapped on top. Style family: saturated flats, hard sticker shadows (offset, zero blur), everything 2–4° askew, wobble loops. The blobs morph into the schedule tiles.',
     elements: [
+      img({ asset: 'ph-fairwide', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.06, duration: 22 } } }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(255,212,58,0.55)' }),
       shape('ellipse', { id: 'pic-a', x: 950, y: 90, w: 220, h: 220, fill: GUM, stroke: INK, strokeWidth: 5, shadow: sticker, fx: wobble(10, 7) }),
       shape('rect', { id: 'pic-b', x: 560, y: 110, w: 190, h: 190, radius: 40, fill: SKY, stroke: INK, strokeWidth: 5, rotation: -8, shadow: sticker, fx: wobble(8, 9, 2) }),
       shape('triangle', { id: 'pic-c', x: 1010, y: 430, w: 180, h: 160, fill: LIME, stroke: INK, strokeWidth: 5, rotation: 7, shadow: sticker, fx: wobble(9, 8, 4) }),
@@ -509,6 +514,7 @@ function deckPicnic() {
       shape('rect', { x: 645, y: 405, w: 230, h: 272, radius: 12, fill: '#FFFFFF', stroke: INK, strokeWidth: 4, rotation: -5, shadow: sticker, fx: { enter: 'fade-up', order: 1 } }),
       img({ asset: 'ph-fair', x: 661, y: 421, w: 198, h: 204, radius: 6, rotation: -5, fx: { enter: 'fade-up', order: 1, ambient: 'kenburns', ken: { dir: 'drift', scale: 1.04, duration: 16 } } }),
       text({ x: 661, y: 633, w: 198, h: 30, html: 'last picnic!!', fontSize: 16, fontWeight: 800, color: INK, align: 'center', rotation: -5, fx: { enter: 'fade-up', order: 1 } }),
+      text({ x: 130, y: 682, w: 700, h: 20, html: 'PHOTOS: JACK DELANO, 1941 · LIBRARY OF CONGRESS — PUBLIC DOMAIN', fontSize: 9, fontWeight: 700, letterSpacing: 2, color: 'rgba(32,26,49,0.55)' }),
     ],
   })
 
@@ -590,7 +596,7 @@ function deckPicnic() {
 
   return doc({
     title: 'Pixel Picnic — playful template',
-    assets: { 'ph-fair': photo('picnic-fair.jpg') },
+    assets: { 'ph-fair': photo('picnic-fair.jpg'), 'ph-fairwide': photo('picnic-fairwide.jpg') },
     theme: { background: SUN, color: INK, accent: GUM, fontFamily: IN },
     slides: [s1, s2, s3, s3b, s4, s5],
   })
