@@ -283,4 +283,6 @@ export const zhHans: Catalog = {
   "slide {n}": "第 {n} 页",
   "{name} joined": "{name} 已加入",
   "{name} left": "{name} 已离开",
+  "Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends": "全屏演示 — F 切换全屏，S 打开演讲者视图，Esc 结束",
+  "Present in this tab — handy for testing or sharing a window": "在此标签页中演示 — 便于测试或共享窗口",
 }

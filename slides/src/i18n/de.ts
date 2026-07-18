@@ -283,4 +283,6 @@ export const de: Catalog = {
   "slide {n}": "Folie {n}",
   "{name} joined": "{name} ist beigetreten",
   "{name} left": "{name} hat verlassen",
+  "Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends": "Im Vollbild präsentieren — F wechselt Vollbild, S öffnet die Referentenansicht, Esc beendet",
+  "Present in this tab — handy for testing or sharing a window": "In diesem Tab präsentieren — praktisch zum Testen oder Teilen eines Fensters",
 }

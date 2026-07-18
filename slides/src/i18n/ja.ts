@@ -283,4 +283,6 @@ export const ja: Catalog = {
   "slide {n}": "スライド {n}",
   "{name} joined": "{name} が参加しました",
   "{name} left": "{name} が退出しました",
+  "Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends": "全画面でプレゼン — F で全画面切替、S で発表者ビュー、Esc で終了",
+  "Present in this tab — handy for testing or sharing a window": "このタブ内でプレゼン — テストやウィンドウ共有に便利",
 }

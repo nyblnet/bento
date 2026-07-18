@@ -283,4 +283,6 @@ export const fr: Catalog = {
   "slide {n}": "diapositive {n}",
   "{name} joined": "{name} a rejoint",
   "{name} left": "{name} est parti",
+  "Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends": "Présenter en plein écran — F bascule le plein écran, S ouvre la vue présentateur, Échap termine",
+  "Present in this tab — handy for testing or sharing a window": "Présenter dans cet onglet — pratique pour tester ou partager une fenêtre",
 }
