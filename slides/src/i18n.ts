@@ -15,6 +15,8 @@ import { zhHans } from './i18n/zh-Hans'
 import { es } from './i18n/es'
 import { fr } from './i18n/fr'
 import { de } from './i18n/de'
+import { zhHant } from './i18n/zh-Hant'
+import { it } from './i18n/it'
 
 export type Catalog = Record<string, string>
 
@@ -22,6 +24,10 @@ const CATALOGS: Record<string, Catalog> = {
   ja,
   'zh-Hans': zhHans,
   zh: zhHans, // zh, zh-CN, zh-SG → simplified
+  'zh-Hant': zhHant,
+  'zh-TW': zhHant,
+  'zh-HK': zhHant,
+  it,
   es,
   fr,
   de,
@@ -32,8 +38,10 @@ export const LOCALE_CHOICES: Array<{ code: string; label: string }> = [
   { code: 'en', label: 'English' },
   { code: 'ja', label: '日本語' },
   { code: 'zh-Hans', label: '简体中文' },
+  { code: 'zh-Hant', label: '繁體中文' },
   { code: 'es', label: 'Español' },
   { code: 'fr', label: 'Français' },
+  { code: 'it', label: 'Italiano' },
   { code: 'de', label: 'Deutsch' },
 ]
 
