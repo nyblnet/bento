@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bento — the office suite that fits in a file</title>
+<meta name="description" content="Bento Slides: a presentation is one HTML file — deck, viewer and editor together. No install, no account, end-to-end-encrypted live collaboration, works offline forever.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316273E'/%3E%3Crect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/%3E%3Crect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/%3E%3C/svg%3E">
+<style>
+/* ————— Faces: the SAME type that travels inside every deck ————— */
+@font-face {
+  font-family: 'Fraunces';
+  font-weight: 900;
+  font-display: swap;
+  src: url(__FRAUNCES__) format('woff2');
+}
+@font-face {
+  font-family: 'Instrument Sans';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(__INSTRUMENT__) format('woff2');
+}
+
+/* ————— Midnight & peach — the showcase deck's palette, verbatim ————— */
+:root {
+  --ink: #0D1B2E;
+  --panel: #16273E;
+  --paper: #F2F0EA;
+  --tile-paper: #F0EBE0;
+  --peach: #FF9E8A;
+  --peach-soft: #FFBCA8;
+  --peach-deep: #C25A43;
+  --steel: #5E7699;
+  --steel-soft: #8FA3BF;
+  --mist: rgba(182, 193, 210, 0.92);
+  --mist-dim: rgba(182, 193, 210, 0.55);
+  --ink-soft: rgba(20, 34, 54, 0.75);
+  --hair-light: rgba(255, 255, 255, 0.13);
+  --hair-dark: rgba(13, 27, 46, 0.14);
+  --glow: rgba(255, 238, 214, 0.22);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--ink);
+  color: var(--mist);
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+::selection { background: var(--peach); color: var(--ink); }
+
+h1, h2, .display {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; position: relative; }
+
+/* furniture — kickers, hairlines, ghost numerals, keycaps (deck grammar) */
+.kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--peach);
+}
+.paper .kicker { color: var(--peach-deep); }
+.hairline { border: 0; border-top: 1px solid var(--hair-light); margin: 18px 0 0; }
+.paper .hairline { border-top-color: var(--hair-dark); }
+.ghost {
+  position: absolute;
+  top: 8px;
+  right: -10px;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: clamp(160px, 26vw, 300px);
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.045);
+  user-select: none;
+  pointer-events: none;
+}
+.paper .ghost { color: rgba(13, 27, 46, 0.05); }
+.keys { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+.key { display: flex; gap: 9px; align-items: center; font-size: 11.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--mist-dim); }
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-bottom-width: 2.5px;
+  border-radius: 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* grain — the deck's feTurbulence texture as a body-wide veil */
+.grain {
+  position: fixed;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* aurora + bokeh — hero atmosphere */
+.sky { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.5;
+}
+.aurora.amber { width: 720px; height: 720px; right: -220px; top: -260px; background: radial-gradient(circle, rgba(255, 158, 138, 0.34), rgba(255, 158, 138, 0.05) 60%, transparent 72%); }
+.aurora.blue { width: 640px; height: 640px; left: -240px; bottom: -300px; background: radial-gradient(circle, rgba(94, 118, 153, 0.4), rgba(94, 118, 153, 0.06) 60%, transparent 72%); }
+.bokeh { position: absolute; border-radius: 50%; filter: blur(2px); animation: drift var(--t, 26s) ease-in-out infinite alternate; }
+@keyframes drift {
+  from { transform: translate(0, 0); }
+  to { transform: translate(var(--dx, 30px), var(--dy, -40px)); }
+}
+
+/* ————— header ————— */
+header {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 26px 28px 0;
+}
+.mark { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16.5px; color: #fff; text-decoration: none; }
+.mark .slash { color: var(--peach); }
+.open-app {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--mist);
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 8px 18px;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+.open-app:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.05); }
+
+/* ————— hero ————— */
+.hero { position: relative; padding: 96px 0 130px; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 40px; align-items: center; }
+.hero h1 { font-size: clamp(58px, 8.6vw, 118px); color: #fff; margin: 26px 0 30px; }
+.hero h1 .accent { color: var(--peach); }
+.hero .sub { font-size: clamp(17px, 1.7vw, 20px); max-width: 30em; color: var(--mist); }
+.hero .sub b { color: #fff; font-weight: 600; }
+.ctas { display: flex; gap: 14px; margin: 40px 0 46px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: inherit;
+  font-size: 15.5px;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 999px;
+  padding: 15px 30px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+.btn.primary {
+  color: var(--ink);
+  background: linear-gradient(180deg, #FFB29B, #ED8266);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4), 0 0 42px var(--glow);
+}
+.btn.primary:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(0, 0, 0, 0.46), 0 0 56px var(--glow); }
+.btn.ghost-btn { color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); }
+.btn.ghost-btn:hover { background: rgba(255, 255, 255, 0.06); transform: translateY(-2px); }
+.btn small { font-weight: 500; opacity: 0.75; font-size: 12.5px; }
+
+/* the living mark — three tiles that morph like the deck's cast */
+.tiles { position: relative; width: min(320px, 74vw); aspect-ratio: 1; margin-left: auto; }
+.tiles .frame {
+  position: absolute;
+  inset: -9%;
+  border-radius: 26%;
+  background: var(--panel);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 0 60px var(--glow);
+}
+.tile { position: absolute; border-radius: 14%; animation: var(--anim) 9s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.tile.steel { background: linear-gradient(180deg, #6C86AB, #536C8E); --anim: t-steel; }
+.tile.peach { background: linear-gradient(180deg, #FFB29B, #ED8266); --anim: t-peach; }
+.tile.paper-t { background: linear-gradient(180deg, #F5F1E6, #E7E0D0); --anim: t-paper; }
+@keyframes t-steel {
+  0%, 34%  { left: 4%;  top: 4%;  width: 26%; height: 92%; }
+  46%, 84% { left: 4%;  top: 4%;  width: 92%; height: 40%; }
+  96%, 100%{ left: 4%;  top: 4%;  width: 26%; height: 92%; }
+}
+@keyframes t-peach {
+  0%, 34%  { left: 36%; top: 4%;  width: 60%; height: 44%; }
+  46%, 84% { left: 4%;  top: 50%; width: 44%; height: 46%; }
+  96%, 100%{ left: 36%; top: 4%;  width: 60%; height: 44%; }
+}
+@keyframes t-paper {
+  0%, 34%  { left: 36%; top: 54%; width: 60%; height: 42%; }
+  46%, 84% { left: 54%; top: 50%; width: 42%; height: 46%; }
+  96%, 100%{ left: 36%; top: 54%; width: 60%; height: 42%; }
+}
+
+/* ————— sections ————— */
+section { position: relative; padding: 120px 0; overflow: hidden; }
+section.paper { background: var(--paper); color: var(--ink-soft); }
+section.paper h2 { color: var(--ink); }
+section h2 { font-size: clamp(40px, 5.4vw, 72px); color: #fff; margin: 22px 0 22px; }
+.lede { font-size: 18.5px; max-width: 34em; }
+.lede b { font-weight: 600; }
+section.paper .lede b { color: var(--ink); }
+section:not(.paper) .lede b { color: #fff; }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 46px; align-items: center; margin-top: 26px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin-top: 44px; }
+.card {
+  border-radius: 16px;
+  padding: 26px 24px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(30, 42, 58, 0.12);
+}
+.card .tick { width: 44px; height: 6px; border-radius: 3px; background: var(--peach); margin-bottom: 16px; }
+.card h3 { font-size: 16.5px; font-weight: 700; color: var(--ink); margin-bottom: 7px; }
+.card p { font-size: 14.5px; line-height: 1.6; }
+section:not(.paper) .card { background: var(--panel); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35); }
+section:not(.paper) .card h3 { color: #fff; }
+section:not(.paper) .card p { color: var(--mist); }
+
+/* morph demo — two layouts the tiles glide between */
+.morphbox {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 18px;
+  background: var(--ink);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.morphbox .m { position: absolute; border-radius: 10px; animation: var(--m) 7s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.m1 { background: linear-gradient(180deg, #FFB29B, #ED8266); --m: m1; }
+.m2 { background: #5E7699; --m: m2; }
+.m3 { background: #F0EBE0; --m: m3; }
+@keyframes m1 {
+  0%, 38%  { left: 7%;  top: 12%; width: 34%; height: 30%; border-radius: 10px; }
+  50%, 88% { left: 59%; top: 56%; width: 26%; height: 26%; border-radius: 50%; }
+  100%     { left: 7%;  top: 12%; width: 34%; height: 30%; border-radius: 10px; }
+}
+@keyframes m2 {
+  0%, 38%  { left: 7%;  top: 52%; width: 20%; height: 34%; }
+  50%, 88% { left: 7%;  top: 14%; width: 48%; height: 20%; }
+  100%     { left: 7%;  top: 52%; width: 20%; height: 34%; }
+}
+@keyframes m3 {
+  0%, 38%  { left: 48%; top: 24%; width: 42%; height: 50%; }
+  50%, 88% { left: 12%; top: 44%; width: 36%; height: 42%; }
+  100%     { left: 48%; top: 24%; width: 42%; height: 50%; }
+}
+
+/* chart vignette — drawn in-house, like everything else */
+.chartbox {
+  border-radius: 18px;
+  background: #fff;
+  padding: 26px 22px 14px;
+  box-shadow: 0 20px 50px rgba(30, 42, 58, 0.16);
+}
+.chartbox svg { width: 100%; height: auto; display: block; }
+.spark { stroke-dasharray: 620; stroke-dashoffset: 620; }
+.in .spark { animation: draw 1.9s cubic-bezier(0.5, 0, 0.2, 1) 0.25s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.chartbox .tip {
+  display: inline-block;
+  margin: 10px 0 6px 8px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12.5px;
+  padding: 6px 11px;
+  box-shadow: 0 8px 20px rgba(30, 42, 58, 0.3);
+}
+.chartbox .tip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--peach); margin-right: 6px; }
+
+/* live section — presence row */
+.presence { display: flex; align-items: center; gap: 0; margin: 34px 0 10px; }
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+  margin-left: -10px;
+}
+.avatar:first-child { margin-left: 0; }
+.avatar.a1 { background: var(--peach); }
+.avatar.a2 { background: #7FC8A9; }
+.avatar.a3 { background: #E8C468; }
+.avatar.live-chip {
+  width: auto;
+  border-radius: 999px;
+  padding: 0 16px;
+  background: var(--panel);
+  color: var(--mist);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.avatar.live-chip .pulse { width: 8px; height: 8px; border-radius: 50%; background: #34a866; margin-right: 8px; animation: pulse 2.2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(52, 168, 102, 0.5); } 55% { box-shadow: 0 0 0 7px rgba(52, 168, 102, 0); } }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+.chip {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--mist);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 7px 15px;
+}
+.chip b { color: var(--peach-soft); font-weight: 700; }
+
+/* code vignette — the honest document */
+.codebox {
+  border-radius: 16px;
+  background: #0A1524;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 22px 24px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #8FA3BF;
+  white-space: pre;
+  overflow-x: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.codebox .k { color: var(--peach-soft); }
+.codebox .s { color: #cfe0c5; }
+.codebox .c { color: rgba(143, 163, 191, 0.55); }
+
+/* final call ————— */
+.finale { text-align: center; padding: 150px 0 140px; }
+.finale h2 { font-size: clamp(46px, 7vw, 96px); }
+.finale .ctas { justify-content: center; }
+.finale .fine { font-size: 13px; color: var(--mist-dim); letter-spacing: 0.04em; }
+
+footer {
+  border-top: 1px solid var(--hair-light);
+  padding: 44px 0 60px;
+  font-size: 13px;
+  color: var(--mist-dim);
+}
+footer .wrap { display: grid; gap: 10px; }
+footer b { color: var(--mist); font-weight: 600; }
+
+/* reveal choreography */
+.rv { opacity: 0; transform: translateY(26px); transition: opacity 0.8s cubic-bezier(0.2, 0.6, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.6, 0.2, 1); }
+.rv.in { opacity: 1; transform: none; }
+.rv.d1 { transition-delay: 0.08s; }
+.rv.d2 { transition-delay: 0.16s; }
+.rv.d3 { transition-delay: 0.24s; }
+
+@media (max-width: 880px) {
+  .hero .wrap { grid-template-columns: 1fr; }
+  .tiles { margin: 30px auto 0; }
+  section { padding: 84px 0; }
+  .ghost { font-size: 130px; right: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile, .m, .bokeh, .avatar.live-chip .pulse, .in .spark { animation: none !important; }
+  .spark { stroke-dashoffset: 0; }
+  .rv { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<header>
+  <a class="mark" href="/">
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#16273E"/><rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/><rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/><rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/></svg>
+    <span>Bento<span class="slash">/</span>Slides</span>
+  </a>
+  <a class="open-app" href="/slides/">Open the app →</a>
+</header>
+
+<!-- ———————————————————— hero ———————————————————— -->
+<section class="hero">
+  <div class="sky" aria-hidden="true">
+    <div class="aurora amber"></div>
+    <div class="aurora blue"></div>
+    <div class="bokeh" style="left:12%; top:24%; width:10px; height:10px; background:rgba(255,238,214,.7); --t:22s; --dx:44px; --dy:-30px"></div>
+    <div class="bokeh" style="left:30%; top:64%; width:6px;  height:6px;  background:rgba(255,238,214,.5); --t:29s; --dx:-36px; --dy:-48px"></div>
+    <div class="bokeh" style="left:56%; top:16%; width:14px; height:14px; background:rgba(255,190,160,.5); --t:26s; --dx:30px; --dy:52px"></div>
+    <div class="bokeh" style="left:72%; top:70%; width:8px;  height:8px;  background:rgba(190,205,225,.55); --t:31s; --dx:-46px; --dy:-24px"></div>
+    <div class="bokeh" style="left:86%; top:38%; width:5px;  height:5px;  background:rgba(255,238,214,.6); --t:24s; --dx:-28px; --dy:36px"></div>
+    <div class="bokeh" style="left:8%;  top:82%; width:12px; height:12px; background:rgba(190,205,225,.4); --t:33s; --dx:52px; --dy:-40px"></div>
+  </div>
+  <div class="wrap">
+    <div>
+      <div class="kicker rv in">Bento / Slides</div>
+      <hr class="hairline rv in" style="max-width:220px">
+      <h1 class="rv in">The file is<br>the <span class="accent">software.</span></h1>
+      <p class="sub rv in d1">A presentation is <b>one HTML file</b> — deck, viewer and editor together. Open it anywhere. Edit it. Present it. <b>It saves itself.</b></p>
+      <div class="ctas rv in d2">
+        <a class="btn primary" href="/slides/">▶&nbsp; Try it in your browser</a>
+        <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download <small>one file · ~400 KB</small></a>
+      </div>
+      <div class="keys rv in d3" aria-hidden="true">
+        <span class="key"><span class="keycap">→</span> advance</span>
+        <span class="key"><span class="keycap">ESC</span> edit</span>
+        <span class="key"><span class="keycap">S</span> speaker view</span>
+      </div>
+    </div>
+    <div class="tiles rv in d2" aria-hidden="true">
+      <div class="frame"></div>
+      <div class="tile steel"></div>
+      <div class="tile peach"></div>
+      <div class="tile paper-t"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 01 · ships inside ———————————————— -->
+<section class="paper">
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">01</div>
+    <div class="kicker rv">Everything ships inside</div>
+    <hr class="hairline rv" style="max-width:220px">
+    <h2 class="rv">Software with nothing to install, break, or&nbsp;expire.</h2>
+    <p class="lede rv d1">No account. No cloud. No “please update to open this”. A Bento deck is an ordinary HTML file that carries its own viewer, presenter and editor — and your document, as <b>readable JSON you can open in any text editor</b>.</p>
+    <div class="cards">
+      <div class="card rv"><div class="tick"></div><h3>View-source honest</h3><p>Your data sits in a plain, legible block at the top of the file. No binary formats, no lock-in — ever.</p></div>
+      <div class="card rv d1"><div class="tick" style="background:var(--steel)"></div><h3>Fonts &amp; assets travel</h3><p>Typefaces, images and charts are embedded. A deck looks the same on any machine, forever.</p></div>
+      <div class="card rv d2"><div class="tick"></div><h3>Any copy opens alone</h3><p>Email it, AirDrop it, archive it for a decade. Every copy is the complete product.</p></div>
+      <div class="card rv d3"><div class="tick" style="background:var(--steel)"></div><h3>Updates you apply</h3><p>Cryptographically signed releases, offered in-app. You choose when — and the old file stays as rollback.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 02 · morph ———————————————— -->
+<section>
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">02</div>
+    <div class="grid2">
+      <div>
+        <div class="kicker rv">The native transition</div>
+        <hr class="hairline rv" style="max-width:220px">
+        <h2 class="rv">Morph.</h2>
+        <p class="lede rv d1">Elements that share an id <b>animate between slides</b> — position, size, color, even gradients. Duplicate a slide, move things around, and the motion designs itself.</p>
+      </div>
+      <div class="morphbox rv d1" aria-hidden="true">
+        <div class="m m1"></div>
+        <div class="m m2"></div>
+        <div class="m m3"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 03 · charts ———————————————— -->
+<section class="paper">
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">03</div>
+    <div class="grid2">
+      <div class="chartbox rv d1">
+        <svg viewBox="0 0 560 300" role="img" aria-label="An area chart drawn by Bento's built-in chart engine">
+          <g stroke="rgba(13,27,46,0.09)" stroke-width="1">
+            <line x1="40" y1="40"  x2="540" y2="40"/><line x1="40" y1="100" x2="540" y2="100"/>
+            <line x1="40" y1="160" x2="540" y2="160"/><line x1="40" y1="220" x2="540" y2="220"/>
+          </g>
+          <defs><linearGradient id="fillg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FF9E8A" stop-opacity="0.35"/><stop offset="1" stop-color="#FF9E8A" stop-opacity="0"/>
+          </linearGradient></defs>
+          <path d="M40,236 C110,228 150,206 205,196 C260,186 300,150 355,128 C410,106 460,74 540,52 L540,260 L40,260 Z" fill="url(#fillg)"/>
+          <path class="spark" d="M40,236 C110,228 150,206 205,196 C260,186 300,150 355,128 C410,106 460,74 540,52" fill="none" stroke="#ED8266" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="540" cy="52" r="6" fill="#ED8266"/>
+          <g font-family="Instrument Sans, sans-serif" font-size="12" fill="rgba(13,27,46,0.45)">
+            <text x="40" y="282">Q1</text><text x="205" y="282">Q2</text><text x="365" y="282">Q3</text><text x="524" y="282">Q4</text>
+          </g>
+        </svg>
+        <span class="tip"><span class="dot"></span>Q4 · momentum <b>+975%</b></span>
+      </div>
+      <div>
+        <div class="kicker rv">Data with a pulse</div>
+        <hr class="hairline rv" style="max-width:220px">
+        <h2 class="rv">Charts, built&nbsp;in.</h2>
+        <p class="lede rv d1">Bar, line, pie, scatter — drawn by Bento's own engine, <b>live while you present</b>: tooltips, zooming, and data that morphs when a bar chart becomes a pie.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 04 · live ———————————————— -->
+<section>
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">04</div>
+    <div class="kicker rv">Together, live</div>
+    <hr class="hairline rv" style="max-width:220px">
+    <h2 class="rv">Collaboration without<br>a cloud account.</h2>
+    <p class="lede rv d1">Start a live session and <b>the file itself is the invitation</b> — anyone who opens a copy joins, edits merge in real time, and offline work merges back when they return. Keys live in your file, not on our servers: <b>the relay only ever sees ciphertext.</b></p>
+    <div class="presence rv d1" aria-hidden="true">
+      <div class="avatar a1">A</div><div class="avatar a2">B</div><div class="avatar a3">C</div>
+      <div class="avatar live-chip"><span class="pulse"></span> Live — 3 connected</div>
+    </div>
+    <div class="chips rv d2">
+      <span class="chip"><b>E2EE</b> — AES-GCM, keys never leave your file</span>
+      <span class="chip"><b>Blind relay</b> — stores ciphertext, learns nothing</span>
+      <span class="chip"><b>Offline forks merge</b> — both ways, precisely</span>
+      <span class="chip"><b>Character-level</b> text merging</span>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 05 · yours ———————————————— -->
+<section class="paper">
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">05</div>
+    <div class="kicker rv">Local-first, provably</div>
+    <hr class="hairline rv" style="max-width:220px">
+    <h2 class="rv">No cloud required.<br>Not even ours.</h2>
+    <p class="lede rv d1">Flip on <b>Offline mode</b> and nothing ever leaves your computer — updates and online collaboration are hard-blocked, and the app says so in plain words. The file is the durable artifact; everything else is optional convenience.</p>
+    <div class="cards">
+      <div class="card rv"><div class="tick"></div><h3>Yours to keep</h3><p>Decks survive us. If bento.page vanished tomorrow, every file keeps opening, editing and presenting.</p></div>
+      <div class="card rv d1"><div class="tick" style="background:var(--steel)"></div><h3>Open source runtime</h3><p>MIT-licensed components throughout — reveal.js, Moveable, our own chart and animation engines.</p></div>
+      <div class="card rv d2"><div class="tick"></div><h3>No telemetry</h3><p>Update checks send nothing about you or your document. No ids, no analytics, no phoning home.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— 06 · AI ———————————————— -->
+<section>
+  <div class="wrap">
+    <div class="ghost" aria-hidden="true">06</div>
+    <div class="grid2">
+      <div>
+        <div class="kicker rv">The honest format</div>
+        <hr class="hairline rv" style="max-width:220px">
+        <h2 class="rv">Speaks AI,<br>fluently.</h2>
+        <p class="lede rv d1">Because the document is plain JSON, any AI can read and write it. Copy the deck into a chat, paste the edited version back — or let an agent edit the file directly. <b>The format is the API.</b></p>
+      </div>
+      <div class="codebox rv d1" aria-label="The document format, as it appears inside every file"><span class="c">&lt;!-- inside every .bento.html --&gt;</span>
+&lt;script type=<span class="s">"application/bento+json"</span> id=<span class="s">"bento-doc"</span>&gt;
+{
+  <span class="k">"format"</span>: <span class="s">"bento/slides"</span>,
+  <span class="k">"title"</span>: <span class="s">"Q4 All-hands"</span>,
+  <span class="k">"slides"</span>: [
+    { <span class="k">"id"</span>: <span class="s">"s1"</span>, <span class="k">"transition"</span>: <span class="s">"morph"</span>,
+      <span class="k">"elements"</span>: [ … ] }
+  ]
+}
+&lt;/script&gt;
+
+<span class="c">// and in the console:</span>
+window.bento.doc          <span class="c">// read</span>
+window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————————————— finale ———————————————— -->
+<section class="finale">
+  <div class="sky" aria-hidden="true">
+    <div class="aurora amber" style="left:50%; right:auto; transform:translateX(-50%); top:auto; bottom:-380px; opacity:.4"></div>
+  </div>
+  <div class="wrap">
+    <h2 class="rv" style="color:#fff">One file.<br><span style="color:var(--peach)">Yours. Forever.</span></h2>
+    <div class="ctas rv d1" style="margin-top:44px">
+      <a class="btn primary" href="/slides/">▶&nbsp; Try it in your browser</a>
+      <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download the app</a>
+    </div>
+    <p class="fine rv d2">Free · no account · the download <em>is</em> the product</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div><b>Privacy, precisely:</b> this page loads nothing from anyone. The optional collaboration relay sees ciphertext, connection timing, and a hash of your room key — never your content, never your name.</div>
+    <div>Set in <b>Fraunces</b> &amp; <b>Instrument Sans</b> (OFL) — the same faces that travel inside every deck. Built on reveal.js, Moveable, Selecto (MIT) and engines of our own.</div>
+    <div>© 2026 bento.page · Slides today — Docs &amp; Sheets are on the bench.</div>
+  </div>
+</footer>
+
+<script>
+// scroll choreography — one observer, honest to prefers-reduced-motion
+(() => {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll('.rv').forEach((n) => n.classList.add('in'))
+    return
+  }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+  }, { threshold: 0.18, rootMargin: '0px 0px -40px 0px' })
+  document.querySelectorAll('.rv:not(.in)').forEach((n) => io.observe(n))
+})()
+</script>
+</body>
+</html>
