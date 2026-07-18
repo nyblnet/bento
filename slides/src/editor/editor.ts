@@ -229,7 +229,7 @@ export class Editor {
     tabFab.innerHTML = ICONS.window
     tabFab.title = t('Present in this tab — handy for testing or sharing a window')
     tabFab.addEventListener('click', () => this.present(false, false))
-    fabs.append(tabFab, fsFab)
+    fabs.append(fsFab, tabFab)
     canvasWrap.appendChild(fabs)
     this.props = div('ed-props')
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
