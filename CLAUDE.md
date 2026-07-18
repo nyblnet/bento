@@ -40,6 +40,16 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   visually on canvas (`editor/patheditor.ts`): draggable anchors auto-smoothed
   Catmull-Rom→cubic bezier; the stored path is RELATIVE to the element's rest
   position (first anchor = rest position; committing moves the element there).
+- **File modes (v0.9.0)**: `doc.readonly` = PLAYER file (boots straight into
+  the show; exit lands on a minimal card, never the editor; "Save read-only
+  copy…" strips collab). Password encryption: the #bento-doc block can hold a
+  `bento/enc` envelope (PBKDF2-SHA-256 300k + AES-GCM-256 over the doc JSON) —
+  boot shows a password gate; the password is held in memory so ⌘S and
+  self-update keep writing encrypted (save.ts serializeAuto/serializeDocInto
+  are THE encryption-aware paths; serializeFile stays plain for tooling).
+  Splice contract intact: the envelope is still plaintext JSON in the block.
+  mintCollab now defaults on:true — decks are LIVE from creation ("Stop
+  sharing" opts out; Offline mode hard-blocks regardless).
 - `src/update.ts` — signed self-update: checks a release manifest at LAUNCH
   by default (localStorage 'bento-auto-check'='off' disables; toggle in the
   About dialog; found updates badge the topbar sync button) and on demand via

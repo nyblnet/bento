@@ -19,7 +19,7 @@
 
 import type { BentoDoc } from './model'
 import {
-  serializeWith, serializeFile, suggestedFileName, downloadFile,
+  serializeDocInto, serializeAuto, suggestedFileName, downloadFile,
   hasFileHandle, writeUpdatedFile, writeUpdatedFileAs,
 } from './save'
 
@@ -167,7 +167,7 @@ export async function buildUpdatedFile(release: ReleaseInfo, doc: BentoDoc): Pro
   const shell = new DOMParser().parseFromString(new TextDecoder().decode(bytes), 'text/html')
   if (!shell.getElementById('bento-doc'))
     throw new Error('the downloaded update is not a Bento shell')
-  return serializeWith(shell, doc)
+  return serializeDocInto(shell, doc)
 }
 
 /** Build the updated file and hand it to the user as a fresh download. */
@@ -188,7 +188,7 @@ export async function applyUpdateInPlace(release: ReleaseInfo, doc: BentoDoc): P
   const html = await buildUpdatedFile(release, doc)
   if (hasFileHandle()) {
     const base = suggestedFileName(doc).replace(/\.bento\.html$/, '')
-    downloadFile(serializeFile(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
+    downloadFile(await serializeAuto(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
     await writeUpdatedFile(html)
     return true
   }

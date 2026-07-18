@@ -1277,3 +1277,109 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-props input[type='number'] { min-width: 0; }
 .ed-props select { max-width: 100%; min-width: 0; }
 .ed-props input[type='text'] { min-width: 0; max-width: 100%; }
+
+/* ————— password gate (encrypted files) + read-only player ————— */
+
+.ed-pwgate, .ed-player {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: #0D1B2E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(182 193 210 / 0.92);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  text-align: center;
+}
+.ed-pwcard, .ed-playercard {
+  max-width: 380px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+.ed-pwmark { font-size: 40px; }
+.ed-pwcard h1, .ed-playercard h1 {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.ed-pwcard p, .ed-playercard p { font-size: 14px; line-height: 1.5; }
+.ed-pwcard input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  background: rgb(255 255 255 / 0.06);
+  color: #fff;
+  font-size: 15px;
+  text-align: center;
+}
+.ed-pwcard button, .ed-playercard button {
+  padding: 12px 26px;
+  border: 0;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  color: #0D1B2E;
+  background: linear-gradient(180deg, #FFB29B, #ED8266);
+}
+.ed-playercard button.ed-playcopy {
+  background: none;
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 0.3);
+}
+.ed-pwerr { color: #FF8A7A; font-size: 13px; min-height: 18px; }
+
+/* password dialog (set/change) */
+dialog.ed-pwdialog {
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgb(15 23 36 / 0.3);
+  padding: 20px;
+  width: 340px;
+  font-size: 13px;
+  font-family: inherit;
+}
+dialog.ed-pwdialog::backdrop { background: rgb(15 23 36 / 0.38); }
+dialog.ed-pwdialog h2 { font-size: 15px; margin-bottom: 8px; }
+dialog.ed-pwdialog p { color: #667; line-height: 1.5; margin-bottom: 10px; }
+dialog.ed-pwdialog label {
+  display: block;
+  margin: 8px 0 2px;
+  font-weight: 600;
+  color: #334;
+}
+dialog.ed-pwdialog input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid #ccd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+dialog.ed-pwdialog .ed-pwerr { color: #C33; }
+.ed-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.ed-dialog-actions button {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #ccd;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ed-dialog-actions button.ed-primary {
+  border: 0;
+  color: #0D1B2E;
+  background: linear-gradient(180deg, #FFB29B, #ED8266);
+}

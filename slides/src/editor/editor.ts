@@ -14,7 +14,7 @@ import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
-import { saveFile, serializeFile, writeUpdatedFileAs } from '../save'
+import { isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFileAs } from '../save'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
 import { disconnectOnline, joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
@@ -352,9 +352,11 @@ export class Editor {
 
   private saveDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
-    const trigger = btn(ICONS.download, '', () => wrap.classList.toggle('open'),
-      t('More ways to save — copy, new deck, template'))
     const menu = div('ed-menu ed-save-menu')
+    const trigger = btn(ICONS.download, '', () => {
+      wrap.classList.toggle('open')
+      if (wrap.classList.contains('open')) rebuild()
+    }, t('More ways to save — copy, new deck, template, read-only, encrypted'))
     const item = (label: string, title: string, onClick: () => void) => {
       const b = document.createElement('button')
       b.className = 'ed-btn'
@@ -366,20 +368,103 @@ export class Editor {
       })
       menu.appendChild(b)
     }
-    item(t('Save a copy'),
-      t('Pick a new file, leave this one untouched — a copy of a shared deck joins the same live session.'),
-      () => void this.save(true))
-    item(t('Save as new deck…'),
-      t('Same content, brand-new document — its own identity and keys; it will never sync with this one.'),
-      () => this.saveAsNewDeck())
-    item(t('Save as template…'),
-      t('Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.'),
-      () => void this.saveAsTemplate())
+    const rebuild = () => {
+      menu.textContent = ''
+      item(t('Save a copy'),
+        t('Pick a new file, leave this one untouched — a copy of a shared deck joins the same live session.'),
+        () => void this.save(true))
+      item(t('Save as new deck…'),
+        t('Same content, brand-new document — its own identity and keys; it will never sync with this one.'),
+        () => this.saveAsNewDeck())
+      item(t('Save as template…'),
+        t('Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.'),
+        () => void this.saveAsTemplate())
+      item(t('Save read-only copy…'),
+        t('A locked hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.'),
+        () => void this.saveReadonlyCopy())
+      if (isEncryptionActive()) {
+        item(t('Change password…'),
+          t('Pick a new password for this file — takes effect on the next save.'),
+          () => void this.setFilePassword())
+        item(t('Remove password'),
+          t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
+          () => {
+            setEncryptionPassword(null)
+            this.toast(t('Password removed — the next save writes an unencrypted file'))
+            void this.save(false)
+          })
+      } else {
+        item(t('Encrypt with password…'),
+          t('Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.'),
+          () => void this.setFilePassword())
+      }
+    }
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
     })
     return wrap
+  }
+
+  /** Save a locked hand-out copy: player file, no editor, no live session. */
+  private async saveReadonlyCopy() {
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    clone.readonly = true
+    delete clone.collab // a hand-out must not join (or leak) the live room
+    try {
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
+      if (ok) this.toast(t('Read-only copy saved — it opens straight into the show'))
+    } catch {
+      this.toast(t('Saving failed'))
+    }
+  }
+
+  /** Set or change the encryption password (double-entry dialog). */
+  private async setFilePassword() {
+    const pass = await this.promptPassword()
+    if (pass === null) return
+    setEncryptionPassword(pass)
+    this.toast(t('Encrypted — remember this password; it cannot be recovered'))
+    void this.save(true)
+  }
+
+  private promptPassword(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const dlg = document.createElement('dialog')
+      dlg.className = 'ed-dialog ed-pwdialog'
+      dlg.innerHTML =
+        `<h2>${t('Encrypt with password…').replace(/…$/, '')}</h2>` +
+        `<p>${t('The password cannot be recovered — if it is lost, the file is lost.')}</p>` +
+        `<label>${t('Password')}<input type="password" class="pw1" autocomplete="new-password"></label>` +
+        `<label>${t('Confirm password')}<input type="password" class="pw2" autocomplete="new-password"></label>` +
+        `<div class="ed-pwerr"></div>` +
+        `<div class="ed-dialog-actions"><button class="cancel">${t('Cancel')}</button>` +
+        `<button class="ok ed-primary">${t('Set password')}</button></div>`
+      document.body.appendChild(dlg)
+      const pw1 = dlg.querySelector<HTMLInputElement>('.pw1')!
+      const pw2 = dlg.querySelector<HTMLInputElement>('.pw2')!
+      const err = dlg.querySelector<HTMLElement>('.ed-pwerr')!
+      const done = (v: string | null) => {
+        dlg.close()
+        dlg.remove()
+        resolve(v)
+      }
+      dlg.querySelector('.cancel')!.addEventListener('click', () => done(null))
+      dlg.querySelector('.ok')!.addEventListener('click', () => {
+        if (!pw1.value) {
+          err.textContent = t('Password')
+          return
+        }
+        if (pw1.value !== pw2.value) {
+          err.textContent = t('Passwords do not match')
+          return
+        }
+        done(pw1.value)
+      })
+      dlg.addEventListener('cancel', () => done(null))
+      dlg.showModal()
+      pw1.focus()
+    })
   }
 
   private saveAsNewDeck() {

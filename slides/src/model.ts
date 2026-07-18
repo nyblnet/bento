@@ -282,6 +282,12 @@ export interface BentoDoc {
    * is no file handle until the user's first save-as).
    */
   template?: boolean
+  /**
+   * A read-only PLAYER file: boots straight into the presentation and never
+   * shows the editor. Honor-system (the JSON is right there), but it makes a
+   * hand-out copy present-only for everyone who doesn't go digging.
+   */
+  readonly?: boolean
   slides: Slide[]
   modified: string
 }

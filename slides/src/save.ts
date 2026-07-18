@@ -25,12 +25,8 @@ export function readEmbeddedDoc(): string | null {
   return text || null
 }
 
-/**
- * Serialize `doc` into an arbitrary app shell (a parsed Bento HTML document).
- * Used with the boot-time pristine copy on every save, and by the self-update
- * flow with a freshly fetched NEWER shell — same document, new app around it.
- */
-export function serializeWith(shell: Document, doc: BentoDoc): string {
+/** Serialize a raw data-block body into an app shell. */
+function serializeBody(shell: Document, body: string, title: string): string {
   const clone = shell.cloneNode(true) as Document
 
   let block = clone.getElementById(DATA_BLOCK_ID)
@@ -41,10 +37,10 @@ export function serializeWith(shell: Document, doc: BentoDoc): string {
     clone.head.appendChild(block)
   }
   // <-escape so the JSON can never contain "</script>" and break the file.
-  block.textContent = '\n' + JSON.stringify(doc).replace(/</g, '\\u003c') + '\n'
+  block.textContent = '\n' + body.replace(/</g, '\\u003c') + '\n'
 
-  const title = clone.querySelector('title')
-  if (title) title.textContent = doc.title + ' — Bento Slides'
+  const titleEl = clone.querySelector('title')
+  if (titleEl) titleEl.textContent = title + ' — Bento Slides'
 
   const html = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML
   // Belt-and-braces: an unescaped close tag anywhere in generated output would
@@ -55,10 +51,127 @@ export function serializeWith(shell: Document, doc: BentoDoc): string {
   return html
 }
 
-/** The full .bento.html file content with `doc` embedded. */
+/**
+ * Serialize `doc` into an arbitrary app shell (a parsed Bento HTML document).
+ * Used with the boot-time pristine copy on every save, and by the self-update
+ * flow with a freshly fetched NEWER shell — same document, new app around it.
+ * PLAIN output — encryption-aware callers use serializeDocInto/serializeAuto.
+ */
+export function serializeWith(shell: Document, doc: BentoDoc): string {
+  return serializeBody(shell, JSON.stringify(doc), doc.title)
+}
+
+/** The full .bento.html file content with `doc` embedded (plain). */
 export function serializeFile(doc: BentoDoc): string {
   if (!pristine) throw new Error('capturePristine() was not called at boot')
   return serializeWith(pristine, doc)
+}
+
+// --- password encryption ----------------------------------------------------
+//
+// An encrypted file keeps the SAME plaintext #bento-doc block (the splice
+// contract old updaters rely on) — but the block holds a bento/enc envelope
+// instead of the document: AES-GCM-256 over the doc JSON, key derived from
+// the password with PBKDF2-SHA-256. The password is held in memory for the
+// session so ⌘S and self-update keep writing encrypted output.
+
+export interface EncEnvelope {
+  format: 'bento/enc'
+  v: 1
+  it: number
+  salt: string
+  iv: string
+  data: string
+}
+
+const ENC_ITERATIONS = 300_000
+
+const eb64 = {
+  enc(bytes: Uint8Array): string {
+    let s = ''
+    for (const b of bytes) s += String.fromCharCode(b)
+    return btoa(s)
+  },
+  dec(s: string): Uint8Array {
+    const b = atob(s)
+    const out = new Uint8Array(b.length)
+    for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i)
+    return out
+  },
+}
+
+let encPassword: string | null = null
+
+/** Set (or clear with null) the password used for every subsequent save. */
+export function setEncryptionPassword(p: string | null) {
+  encPassword = p
+}
+
+export const isEncryptionActive = () => encPassword !== null
+
+/** Parse a data-block body as an encryption envelope; null if it is not one. */
+export function parseEnvelope(text: string): EncEnvelope | null {
+  try {
+    const env = JSON.parse(text)
+    if (env && env.format === 'bento/enc' && env.v === 1 && env.data && env.salt && env.iv) {
+      return env as EncEnvelope
+    }
+  } catch {
+    /* not an envelope */
+  }
+  return null
+}
+
+async function deriveKey(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey'])
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations },
+    material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+}
+
+async function encryptBody(json: string, password: string): Promise<string> {
+  const salt = new Uint8Array(16)
+  const iv = new Uint8Array(12)
+  crypto.getRandomValues(salt)
+  crypto.getRandomValues(iv)
+  const key = await deriveKey(password, salt, ENC_ITERATIONS)
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv as BufferSource }, key, new TextEncoder().encode(json))
+  const env: EncEnvelope = {
+    format: 'bento/enc', v: 1, it: ENC_ITERATIONS,
+    salt: eb64.enc(salt), iv: eb64.enc(iv), data: eb64.enc(new Uint8Array(ct)),
+  }
+  return JSON.stringify(env)
+}
+
+/** Decrypt an envelope with a candidate password; null on wrong password. */
+export async function decryptEnvelope(env: EncEnvelope, password: string): Promise<string | null> {
+  try {
+    const key = await deriveKey(password, eb64.dec(env.salt), env.it || ENC_ITERATIONS)
+    const pt = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: eb64.dec(env.iv) as BufferSource }, key, eb64.dec(env.data) as BufferSource)
+    return new TextDecoder().decode(pt)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Encryption-aware serialization into an arbitrary shell — THE path for
+ * saves and self-updates. Plain when no password is active.
+ */
+export async function serializeDocInto(shell: Document, doc: BentoDoc): Promise<string> {
+  const body = encPassword
+    ? await encryptBody(JSON.stringify(doc), encPassword)
+    : JSON.stringify(doc)
+  return serializeBody(shell, body, doc.title)
+}
+
+/** Encryption-aware serializeFile. */
+export async function serializeAuto(doc: BentoDoc): Promise<string> {
+  if (!pristine) throw new Error('capturePristine() was not called at boot')
+  return serializeDocInto(pristine, doc)
 }
 
 export function suggestedFileName(doc: BentoDoc): string {
@@ -111,7 +224,7 @@ export function downloadFile(html: string, name: string) {
  * save, silent rewrite after). Firefox/Safari: download a copy.
  */
 export async function saveFile(doc: BentoDoc, forcePicker = false): Promise<SaveResult> {
-  const html = serializeFile(doc)
+  const html = await serializeAuto(doc)
   if (hasFsAccess()) {
     if (forcePicker || !fileHandle) {
       const handle = await pickHandle(doc)

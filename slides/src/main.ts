@@ -3,21 +3,111 @@
 
 import './styles.css'
 import { anim } from './anim'
-import { capturePristine, readEmbeddedDoc, serializeFile } from './save'
+import {
+  capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, downloadFile,
+  suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword,
+} from './save'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
-import { i18nApi } from './i18n'
-import { parseDoc } from './model'
+import { i18nApi, t } from './i18n'
+import { parseDoc, type BentoDoc } from './model'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
 import { Store } from './store'
 import { Editor } from './editor/editor'
+import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
 import { onlineTransport, startSharing, stopSharing } from './sync/online'
 
 capturePristine()
 
+// --- boot gates: password-encrypted files, read-only player files -----------
+
 const embedded = readEmbeddedDoc()
-const doc = (embedded && parseDoc(embedded)) || starterDoc()
+const envelope = embedded ? parseEnvelope(embedded) : null
+if (envelope) {
+  void passwordGate()
+} else {
+  bootWith((embedded && parseDoc(embedded)) || starterDoc())
+}
+
+/** Encrypted file: ask for the password (looping on failure), then boot. */
+async function passwordGate() {
+  const gate = document.createElement('div')
+  gate.className = 'ed-pwgate'
+  gate.innerHTML =
+    `<div class="ed-pwcard"><div class="ed-pwmark">🔒</div>` +
+    `<h1>${t('This file is encrypted.')}</h1>` +
+    `<p>${t('Enter password to open this deck')}</p>` +
+    `<input type="password" autocomplete="current-password">` +
+    `<button>${t('Unlock')}</button><div class="ed-pwerr"></div></div>`
+  document.body.appendChild(gate)
+  document.getElementById('bento-splash')?.remove()
+  const input = gate.querySelector('input')!
+  const button = gate.querySelector('button')!
+  const err = gate.querySelector<HTMLElement>('.ed-pwerr')!
+  const tryUnlock = async () => {
+    const pass = input.value
+    if (!pass) return
+    button.setAttribute('disabled', '')
+    const json = await decryptEnvelope(envelope!, pass)
+    button.removeAttribute('disabled')
+    if (json === null) {
+      err.textContent = t('Wrong password — try again')
+      input.select()
+      return
+    }
+    const doc = parseDoc(json)
+    if (!doc) {
+      err.textContent = t('Wrong password — try again')
+      return
+    }
+    setEncryptionPassword(pass) // saves + updates keep writing encrypted
+    gate.remove()
+    bootWith(doc)
+  }
+  button.addEventListener('click', () => void tryUnlock())
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') void tryUnlock()
+  })
+  input.focus()
+}
+
+function bootWith(doc: BentoDoc) {
+  if (doc.readonly) playerMode(doc)
+  else editorMode(doc)
+}
+
+/**
+ * Read-only files are PLAYER files: they open straight into the show and
+ * never expose the editor. Leaving the presentation lands on a minimal card.
+ */
+function playerMode(doc: BentoDoc) {
+  document.title = `${doc.title} — Bento Slides`
+  if (doc.fonts?.length) injectFonts(doc)
+  document.getElementById('bento-splash')?.remove()
+  const card = document.createElement('div')
+  card.className = 'ed-player'
+  card.innerHTML =
+    `<div class="ed-playercard"><h1>${doc.title.replace(/</g, '&lt;')}</h1>` +
+    `<p>${t('This deck is read-only.')}</p>` +
+    `<button class="ed-playgo">▶&nbsp; ${t('Present')}</button>` +
+    `<button class="ed-playcopy">⤓&nbsp; ${t('Save a copy')}</button></div>`
+  document.body.appendChild(card)
+  const start = () => {
+    card.style.display = 'none'
+    startPresentation(doc, 0, () => {
+      card.style.display = ''
+    })
+  }
+  card.querySelector('.ed-playgo')!.addEventListener('click', start)
+  card.querySelector('.ed-playcopy')!.addEventListener('click', () => {
+    void serializeAuto(doc).then((html) => downloadFile(html, suggestedFileName(doc)))
+  })
+  ;(window as any).bento = { format: doc.format, doc, readonly: true }
+  start()
+}
+
+function editorMode(doc: BentoDoc) {
 
 document.title = `${doc.title} — Bento Slides`
 
@@ -144,3 +234,5 @@ if (location.hash === '#present') {
     )
   },
 }
+
+} // editorMode
