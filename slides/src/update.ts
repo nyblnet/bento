@@ -29,6 +29,28 @@ declare const __APP_VERSION__: string
 export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
 
 /** Per-browser preference: check for updates automatically at launch. */
+/**
+ * Offline mode: a hard, viewer-side switch that blocks EVERY network touch —
+ * update checks and online collaboration alike. Same-machine tab sync
+ * (BroadcastChannel) is not networking and stays on. The guarantee this
+ * buys: with the switch on, nothing about you or a document ever leaves
+ * this computer.
+ */
+export const offlineEnabled = (): boolean => {
+  try {
+    return localStorage.getItem('bento-offline') === 'on'
+  } catch {
+    return false
+  }
+}
+export const setOffline = (on: boolean): void => {
+  try {
+    localStorage.setItem('bento-offline', on ? 'on' : 'off')
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export const autoCheckEnabled = (): boolean => localStorage.getItem('bento-auto-check') !== 'off'
 export const setAutoCheck = (on: boolean): void => {
   if (on) localStorage.removeItem('bento-auto-check')

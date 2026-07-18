@@ -12,6 +12,7 @@ import type { Store } from '../store'
 import type { BentoDoc } from '../model'
 import type { SyncStateJSON } from './crdt'
 import type { Frame, SyncSession, Transport } from './session'
+import { offlineEnabled } from '../update'
 
 export const DEFAULT_SYNC_HOST = 'wss://sync.bento.page'
 const SNAP_EVERY = 200 // ops between encrypted snapshot uploads
@@ -290,6 +291,7 @@ export function sharingOn(store: Store): boolean {
 
 /** connect the session to the relay in doc.collab (no-op unless sharing is on) */
 export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport | null {
+  if (offlineEnabled()) return null // the hard no-network switch wins over everything
   if (active) return active
   if (!sharingOn(store)) return null
   session.addTransport((docId, onFrame) => {
@@ -314,13 +316,26 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
 
 /** flip sharing on and connect — the "Start live session" action.
  * Credentials already exist (minted at creation); this only arms them. */
-export function startSharing(session: SyncSession, store: Store): OnlineTransport {
+export function startSharing(session: SyncSession, store: Store): OnlineTransport | null {
+  if (offlineEnabled()) return null
   if (active) return active
   store.commit(() => {
     if (!store.doc.collab) store.doc.collab = mintCollab()
     store.doc.collab.on = true
   })
-  return joinFromDoc(session, store)!
+  return joinFromDoc(session, store)
+}
+
+/**
+ * Offline-mode disconnect: drop the relay WITHOUT touching doc.collab.on —
+ * the document's sharing intent is unchanged; this viewer just won't
+ * network. Turning offline mode off re-joins via the normal path.
+ */
+export function disconnectOnline(session: SyncSession) {
+  if (active) {
+    session.removeTransport(active)
+    active = null
+  }
 }
 
 /** flip sharing off and disconnect. Credentials stay — copies saved during
