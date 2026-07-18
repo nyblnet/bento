@@ -63,6 +63,18 @@
         "working"
       ],
       "port": 5194
+    },
+    {
+      "name": "serve-working2",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "serve",
+        "-l",
+        "5193",
+        "working"
+      ],
+      "port": 5193
     }
   ]
 }
