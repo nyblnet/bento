@@ -48,8 +48,14 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   self-update keep writing encrypted (save.ts serializeAuto/serializeDocInto
   are THE encryption-aware paths; serializeFile stays plain for tooling).
   Splice contract intact: the envelope is still plaintext JSON in the block.
-  mintCollab now defaults on:true — decks are LIVE from creation ("Stop
-  sharing" opts out; Offline mode hard-blocks regardless).
+  mintCollab now mints on:true (decks are eligible to be live from creation)
+  — BUT auto-connect-on-open is gated by SyncSession.shareEligible():
+  connect only if the doc ARRIVED carrying collab (a saved/shared file) OR
+  the user opted in this session (saved, or "Start live session" →
+  enableSharing()). A never-saved starter/template stays dormant so the
+  anonymous bento.page/slides demo and template tire-kickers never phone
+  home (v0.9.1 fix — v0.9.0 connected every visitor). "Stop sharing" opts
+  out; Offline mode hard-blocks regardless.
 - `src/update.ts` — signed self-update: checks a release manifest at LAUNCH
   by default (localStorage 'bento-auto-check'='off' disables; toggle in the
   About dialog; found updates badge the topbar sync button) and on demand via

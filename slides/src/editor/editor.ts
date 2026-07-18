@@ -90,15 +90,20 @@ export class Editor {
     this.canvas.onTextEditChange = (elId) => session.setEditing(elId)
     this.store.on('current', () => this.canvas.setRemotePeers(session.peers()))
     // a document that carries collab config joins its relay session — at
-    // boot AND whenever one is loaded (Replace-from-JSON, update splice…)
-    const joinIfShared = () => {
-      if (sharingOn(this.store) && !onlineTransport()) {
-        joinFromDoc(session, this.store)
-        this.wireOnlineStatus()
-      }
+    // boot AND whenever one is loaded (Replace-from-JSON, update splice…),
+    // but only when it is share-eligible (arrived with creds, or the user
+    // opted in). A never-saved demo/template stays off the relay.
+    this.tryJoin()
+    this.store.on('doc', () => this.tryJoin())
+  }
+
+  /** Connect to the relay if the current doc is live AND share-eligible. */
+  private tryJoin() {
+    if (!this.session) return
+    if (sharingOn(this.store) && this.session.shareEligible() && !onlineTransport()) {
+      joinFromDoc(this.session, this.store)
+      this.wireOnlineStatus()
     }
-    joinIfShared()
-    this.store.on('doc', joinIfShared)
   }
 
   private wireOnlineStatus() {
@@ -588,6 +593,7 @@ export class Editor {
       note(t('Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
       action(t('Start live session'), true, () => {
         if (!this.session) return
+        this.session.enableSharing()
         startSharing(this.session, this.store)
         this.wireOnlineStatus()
         this.renderSharePanel()
@@ -985,6 +991,11 @@ export class Editor {
       const result = await saveFile(this.store.doc, forcePicker)
       if (result === 'cancelled') return
       this.store.setDirty(false)
+      // Saving is the opt-in: a named, saved deck is "live by default" from
+      // now on (the recipient of a copy already joins on open). Connect this
+      // session too so author and recipient meet without another click.
+      this.session?.enableSharing()
+      this.tryJoin()
       this.toast(result === 'downloaded'
         ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
         : t('Saved'))
@@ -1263,8 +1274,8 @@ export class Editor {
       setOffline(offCb.checked)
       if (offCb.checked) {
         if (this.session) disconnectOnline(this.session)
-      } else if (this.session && sharingOn(this.store)) {
-        joinFromDoc(this.session, this.store)
+      } else {
+        this.tryJoin() // re-enabling network re-connects only if share-eligible
       }
       this.wireOnlineStatus()
       this.toast(
