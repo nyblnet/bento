@@ -38,16 +38,19 @@ export function mintRoomKey(): string {
 }
 
 /**
- * Fresh collaboration credentials, minted at DOCUMENT CREATION and dormant
- * (on:false) until sharing starts. The room id is random — never derived
- * from docId — so distinct sharing lineages can never collide on a room
- * (and the relay learns nothing about document identity). Everyone else
- * READS the room from the file; only minting is random.
+ * Fresh collaboration credentials, minted at DOCUMENT CREATION and LIVE by
+ * default (on:true): the moment identity and keys exist, any copy of the
+ * file joins the same room — "send first" needs no ceremony. "Stop sharing"
+ * in the Live popover turns it off; Offline mode hard-blocks regardless.
+ * The room id is random — never derived from docId — so distinct sharing
+ * lineages can never collide on a room (and the relay learns nothing about
+ * document identity). Everyone else READS the room from the file; only
+ * minting is random.
  */
 export function mintCollab(): { room: string; key: string; on: boolean } {
   const id = new Uint8Array(12)
   crypto.getRandomValues(id)
-  return { room: `${syncHost()}/d/r${b64u.enc(id)}`, key: mintRoomKey(), on: false }
+  return { room: `${syncHost()}/d/r${b64u.enc(id)}`, key: mintRoomKey(), on: true }
 }
 
 /** dev override for the relay host (e.g. ws://localhost:8787) */

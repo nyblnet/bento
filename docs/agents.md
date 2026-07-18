@@ -105,6 +105,8 @@ Two ways to work with it:
 - Don't invent property names — unknown keys are ignored, so a typo means
   your styling silently doesn't apply.
 - `docId` is the document's identity — never regenerate it when editing.
+- `readonly: true` makes a PLAYER file — it boots straight into the
+  presentation with no editor. Set it only on hand-out copies.
 - If `template: true` is set, every open mints a fresh document (that's for
   distributable templates; remove it for a personal deck).
 - Charts degrade gracefully but exotic ECharts config is ignored — keep
