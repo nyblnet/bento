@@ -865,10 +865,57 @@ export class Editor {
     langRow.append(document.createTextNode(t('Language') + ' '), langSel)
     box.appendChild(langRow)
 
+    // AI round-trip: the document is the interchange unit
+    const aiRow = div('ed-about-row')
+    const copyB = document.createElement('button')
+    copyB.className = 'ed-btn'
+    copyB.textContent = t('Copy document JSON')
+    copyB.title = t('Copies this deck as plain JSON — paste it into an AI chat or any tool, then bring the edited JSON back here.')
+    copyB.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(this.store.doc))
+        copyB.textContent = t('Copied ✓')
+        setTimeout(() => { copyB.textContent = t('Copy document JSON') }, 1600)
+      } catch {
+        this.toast(t('Couldn’t access the clipboard'))
+      }
+    })
+    const replB = document.createElement('button')
+    replB.className = 'ed-btn'
+    replB.textContent = t('Replace document from JSON…')
+    replB.addEventListener('click', () => {
+      if (box.querySelector('.ed-about-json')) return
+      const ta = document.createElement('textarea')
+      ta.className = 'ed-about-json'
+      ta.rows = 5
+      ta.placeholder = t('Paste document JSON here…')
+      const applyB = document.createElement('button')
+      applyB.className = 'ed-btn ed-btn-primary'
+      applyB.textContent = t('Apply')
+      applyB.addEventListener('click', () => {
+        const ok = (window as any).bento?.loadDoc
+          ? (window as any).bento.loadDoc(ta.value)
+          : false
+        if (ok) {
+          this.toast(t('Document replaced — ⌘Z undoes'))
+          close()
+        } else {
+          ta.style.borderColor = '#C0392B'
+          applyB.textContent = t('Invalid document JSON')
+          setTimeout(() => { applyB.textContent = t('Apply') }, 1800)
+        }
+      })
+      box.insertBefore(ta, fine)
+      box.insertBefore(applyB, fine)
+      ta.focus()
+    })
+    aiRow.append(copyB, replB)
+    box.appendChild(aiRow)
+
     const fine = div('ed-about-fine')
     fine.innerHTML =
       `${t('Checks contact the release server and send nothing about you or this document — no ids, no telemetry.')}<br>` +
-      t('Includes reveal.js, Moveable, Selecto (MIT) · Apache ECharts (Apache-2.0) · zrender (BSD-3) · Fraunces typeface (OFL-1.1) — full notices travel in this file’s source.')
+      t('Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.')
     box.appendChild(fine)
 
     overlay.appendChild(box)

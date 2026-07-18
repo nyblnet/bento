@@ -63,18 +63,17 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   translate at render time); keys must match source EXACTLY (validate with the
   extraction/diff script pattern in git history); setLocale('x-pseudo') audits
   unswept strings. New UI strings must be added to ALL catalogs.
-- `src/charts.ts` — ECharts (Apache-2.0, svg renderer only, tree-shaken:
-  bar/line/pie/scatter + grid/tooltip/legend/dataZoom/title/dataset). A `chart`
-  element stores a PURE-JSON option (template-string formatters, never
-  functions — the doc must serialize). Editor canvas/thumbnails/print show
-  cached SSR SVG snapshots (chartSnapshotSvg); present mode mounts live
-  instances (tooltips + dataZoom work), disposed back to snapshots on slide
-  exit. Live node exposes `__bentoChart` for scripting. Panel: preset select
-  re-seeds the option; JSON textarea is the escape hatch. NOTICE block in
-  index.html carries MIT + Apache/BSD notices into every saved document.
-  Charts on morph/state transitions data-morph: the incoming chart paints the
-  outgoing side's option first, then setOption's to its own with
-  universalTransition (values tween in place, bar⇄pie works). Shapes:
+- `src/charts.ts` — charts-lite, OUR OWN engine (ECharts removed for size:
+  it was 630KB = 47% of the shell; git history has the integration). Same
+  3-function API (CHART_PRESETS/mountChart/chartSnapshotSvg) interpreting the
+  ECharts option SHAPE (format unchanged): bar/line/pie/scatter, nice-tick
+  axes, legend, axis/item tooltips, inside wheel-zoom+drag-pan, transitions
+  (same series types = numeric-leaf lerp of the whole option per frame;
+  type change bar⇄pie = staged fade+sweep). Pure SVG on anim.ts. Options stay
+  PURE JSON (template formatters {b}/{c}/{d}, never functions). Editor
+  canvas/thumbs/print use chartSnapshotSvg (cached); present mounts live
+  (host exposes `__bentoChart`). Unknown option keys are ignored gracefully —
+  exotic ECharts configs degrade, don't crash. Shapes:
   `strokeStyle` solid/dashed/dotted (legacy `strokeDash` still honoured);
   line shapes have `lineStart`/`lineEnd` tips (arrow/dot/bar) rendered as
   per-instance svg markers (sized in strokeWidth units, endpoints inset);
@@ -175,6 +174,20 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
    svg on the page (CSS animations with fill modes even beat later static rules).
 7. Tiny text labels make unusable click targets when scaled down — interactive
    controls get padded transparent `link` overlay rects, not links on the text itself.
+
+- **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
+  build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
+  blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
+  get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
+  PLAINTEXT #bento-doc → splash → payloads last. Shell ~373KB (was 1.33MB).
+  SPLICE CONTRACT (old updaters are frozen code): #bento-doc stays plaintext/
+  same id, file survives DOMParser→splice→outerHTML, no stray script-close —
+  release.mjs runs a conformance GATE before signing every release.
+- **AI round-trip**: the DOCUMENT is the interchange unit (chat AIs can't emit
+  1MB+ files). About → "Copy document JSON" / "Replace document from JSON…"
+  (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
+  shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
+  Agent harnesses edit files in place; chat AIs round-trip the JSON.
 
 ## Commands
 

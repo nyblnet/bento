@@ -1,16 +1,15 @@
 {
   "name": "bento-slides",
   "private": true,
-  "version": "0.6.2",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:single": "tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Slides.bento.html",
+    "build:single": "tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Slides.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Slides.bento.html",
     "preview": "vite preview"
   },
   "dependencies": {
-    "echarts": "^6.1.0",
     "moveable": "^0.53.0",
     "reveal.js": "^5.2.1",
     "selecto": "^1.26.3"
