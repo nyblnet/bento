@@ -64,6 +64,17 @@ if (location.hash === '#present') {
   /** i18n: t/locale/setLocale/choices — setLocale('x-pseudo') audits the sweep */
   i18n: i18nApi,
   /**
+   * AI/tooling round-trip: replace the whole document from a JSON string
+   * (the contents of #bento-doc). Validates via parseDoc; returns false and
+   * changes nothing on invalid input. Undoable in the editor.
+   */
+  loadDoc(json: string): boolean {
+    const next = parseDoc(json)
+    if (!next) return false
+    store.replaceDoc(next)
+    return true
+  },
+  /**
    * Self-update surface (all user/tooling-initiated, never automatic):
    * check() fetches + signature-verifies the release manifest; build()
    * returns the updated file's html (this doc inside the new shell);

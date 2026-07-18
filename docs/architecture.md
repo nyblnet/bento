@@ -13,6 +13,14 @@ trick, modernized with the File System Access API).
 
 ---
 
+> **v0.7.0 update**: the runtime now ships DEFLATE-compressed (shell ≈373KB,
+> was 1.33MB) — byte order: chrome → NOTICE → tooling comment → **plaintext
+> `#bento-doc`** → splash → compressed payloads + 1KB loader last. The
+> document block stays plaintext forever (AI/tooling + old-updater splice
+> contract; release.mjs gates every release on it). Charts are now in-house
+> (`charts-lite`, MIT) — ECharts/zrender removed. Diagrams below describe the
+> uncompressed layout; sizes predate compression.
+
 ## 1. On-disk anatomy
 
 A `.bento.html` file is ordinary, valid HTML. Its compartments, drawn

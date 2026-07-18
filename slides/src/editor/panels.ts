@@ -753,7 +753,7 @@ export class PropsPanel {
 
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
-    hint.innerHTML = t('The full <b>ECharts option</b> as JSON (pure data — use template-string formatters like <code>{b}: {c}</code>, never functions). Tooltips and zoom run while presenting.')
+    hint.innerHTML = t('The full <b>chart option</b> as JSON (pure data — use template-string formatters like <code>{b}: {c}</code>, never functions). Tooltips and zoom run while presenting.')
     this.host.appendChild(hint)
 
     const ta = document.createElement('textarea')

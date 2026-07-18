@@ -496,6 +496,14 @@ html, body {
   max-height: 140px;
   overflow: auto;
 }
+.ed-about-json {
+  width: 100%;
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  resize: vertical;
+}
 .ed-about-fine {
   font-size: 10.5px;
   line-height: 1.5;

@@ -52,6 +52,22 @@ export class Store {
       .filter((e): e is SlideElement => !!e)
   }
 
+  /**
+   * Replace the whole document (AI/JSON round-trip import). Undoable —
+   * ⌘Z restores the previous document wholesale.
+   */
+  replaceDoc(next: BentoDoc) {
+    this.checkpoint()
+    this.doc = next
+    this.currentIndex = 0
+    this.selection = []
+    this.setDirty(true)
+    this.emit('slides')
+    this.emit('current')
+    this.emit('selection')
+    this.emit('doc')
+  }
+
   // --- history ------------------------------------------------------------
 
   /** Snapshot current doc state onto the undo stack. Call BEFORE a mutation. */
