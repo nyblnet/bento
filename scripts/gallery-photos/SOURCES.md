@@ -28,15 +28,19 @@ Added 2026-07-18 (v4 — cover backgrounds):
 Added 2026-07-18 (v5 — quality pass):
 
 The five `orbital-*.jpg` files were re-rendered from the full-resolution NASA
-originals (images-assets.nasa.gov / eol.jsc.nasa.gov IIIF) at 2200 px on the
-long edge, q88 — the earlier renditions were heavily compressed. Same frames,
-same crops (orbital-stars re-cropped a touch lower to drop the ISS-hardware
+originals — earth iss040e091208 (4256×2832), stars iss063e058409 (5568×3712),
+aurora iss030e119777 (4256×2832), dragon iss071e256593 (8256×5504, via
+images-assets.nasa.gov ~orig), nebula GSFC_20171208_Archive_e001955 (3924×2006).
+Prominent heroes (stars cover, earth) render at 3200 px on the long edge; the
+three backdrops that render dimmed under heavy scrims (nebula, aurora, dragon)
+at 2600 px. q90. The earlier renditions were low-res/heavily compressed. Same
+frames/crops (orbital-stars re-cropped a touch lower to drop the ISS-hardware
 strip). New second photo for the Signal deck so slide 4 no longer repeats the
 cover:
 
 | file | source | credit / provenance |
 |---|---|---|
-| signal-press2.jpg | Wikimedia Commons / Library of Congress (fsa 8d22695, IIIF full-res) | Marjory Collins, "Pressroom of the New York Times" — freshly printed papers off the press, 1942, FSA/OWI — public domain (scan border + caption strip cropped) |
+| signal-press2.jpg | Library of Congress FSA/OWI master TIFF (fsa 8d22695, 4802×5113) | Marjory Collins, "Pressroom of the New York Times" — freshly printed papers off the press, 1942, FSA/OWI — public domain (rendered from the master TIFF at 2600 px; scan border + caption strip cropped). NOTE: LoC's IIIF `full/` endpoint tops out at the 962×1024 service copy — pull `…/master/pnp/fsa/…u.tif` for real resolution. |
 
 Embedded webfont (`scripts/gallery-fonts/`, used by the Orbital deck):
 
