@@ -138,8 +138,14 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   default closed. Add new panel content under a section header and the
   accordion picks it up automatically.
 - `src/sync/` — **bento-sync live collaboration** (design: docs/collab-design.md).
-  `crdt.ts` is the engine (pure data, runs in node too): per-(node,key) LWW
-  regs ordered by (lamport, actor); liveness = births vs tombs (an INS is a
+  `crdt.ts` is the engine (pure data, runs in node too): element node
+  identity is the COMPOSITE `slideId U+001F elementId` (elKey) — bare ids
+  repeat across slides (the morph idiom), each per-slide copy is its own
+  node, the format never sees composite keys, and cross-slide moves diff
+  as del+ins (ord never re-parents); state+wire are versioned (SYNC_V:
+  `v` in SyncStateJSON, `pv` on frames — pre-v2 saved sync state and
+  frames are discarded, the file rejoins as a fresh adopt); per-(node,key)
+  LWW regs ordered by (lamport, actor); liveness = births vs tombs (an INS is a
   whole-node ASSIGNMENT — it resurrects by out-stamping the tomb and
   supersedes all older property regs; slide-ins = slide assignment + an
   independent element-ins per member, member processing must NEVER be
