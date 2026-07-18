@@ -253,4 +253,10 @@ export const fr: Catalog = {
   "Offline — reconnecting…": "Hors ligne — reconnexion…",
   "Save the file and send a copy — opening it joins this session automatically.": "Enregistrez le fichier et envoyez une copie — l'ouvrir rejoint automatiquement cette session.",
   "{n} connected": "{n} connectés",
+  "Any copy of this file can join once sharing is on — send it before or after, both work.": "Toute copie de ce fichier peut rejoindre dès que le partage est actif — envoyée avant ou après, les deux marchent.",
+  "Rotate keys — cut off previously sent copies": "Renouveler les clés — couper l'accès aux copies déjà envoyées",
+  "New keys minted — only copies saved from now on can join": "Nouvelles clés générées — seules les copies enregistrées à partir de maintenant pourront rejoindre",
+  "Duplicate as new deck…": "Dupliquer comme nouveau diaporama…",
+  "Copies everything into an independent document with its own identity — it will never sync with this one.": "Copie tout dans un document indépendant avec sa propre identité — il ne se synchronisera jamais avec celui-ci.",
+  "This is now a new deck — save it under a new name": "C'est maintenant un nouveau diaporama — enregistrez-le sous un nouveau nom",
 }

@@ -257,13 +257,23 @@ export interface BentoDoc {
    */
   layouts?: Slide[]
   /**
-   * Live-collaboration room (bento-sync). Present only while a document is
-   * shared: `room` is the relay WebSocket URL, `key` the base64url AES-GCM
-   * room key. Possession of the file IS the capability — anyone who opens a
-   * copy joins the session (the relay itself only ever sees ciphertext).
-   * Never transmitted as sync ops; removed by "Stop sharing".
+   * Live-collaboration credentials (bento-sync), minted AT CREATION so any
+   * copy of the file can join once sharing is turned on ("send the file
+   * first, share later" just works). `room` is the relay WebSocket URL
+   * (random id — never derived from docId), `key` the base64url AES-GCM
+   * room key. `on` gates auto-join: absent = true (v0.8.0 files only carried
+   * collab while actively shared). Possession of a copy IS the capability;
+   * "Rotate keys" re-mints both to cut old copies off. `sync` is the saved
+   * CRDT state (registers/liveness/text) stamped at save-time on shared
+   * documents — it is what lets an offline-edited copy rejoin as a true
+   * fork and merge both ways. Never transmitted as sync ops.
    */
-  collab?: { room: string; key: string }
+  collab?: {
+    room: string
+    key: string
+    on?: boolean
+    sync?: import('./sync/crdt').SyncStateJSON
+  }
   slides: Slide[]
   modified: string
 }

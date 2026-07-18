@@ -253,4 +253,10 @@ export const zhHans: Catalog = {
   "Offline — reconnecting…": "离线 — 正在重连…",
   "Save the file and send a copy — opening it joins this session automatically.": "保存文件并发送副本 — 打开即可自动加入此会话。",
   "{n} connected": "{n} 人已连接",
+  "Any copy of this file can join once sharing is on — send it before or after, both work.": "开启共享后，此文件的任何副本都能加入 — 先发后发都可以。",
+  "Rotate keys — cut off previously sent copies": "轮换密钥 — 切断此前发出的副本",
+  "New keys minted — only copies saved from now on can join": "已生成新密钥 — 只有此后保存的副本才能加入",
+  "Duplicate as new deck…": "复制为新演示文稿…",
+  "Copies everything into an independent document with its own identity — it will never sync with this one.": "将全部内容复制到具有独立身份的新文档 — 它永远不会与当前文档同步。",
+  "This is now a new deck — save it under a new name": "这已是新演示文稿 — 请用新名称保存",
 }

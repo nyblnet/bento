@@ -79,7 +79,7 @@ export class Room {
     const snap = await this.state.storage.get('snap')
     let from = since
     try {
-      if (snap && snap.q > since) {
+      if (snap && (since === 0 || snap.q >= since)) {
         ws.send(JSON.stringify({ snap: 1, q: snap.q, i: snap.i, d: snap.d }))
         from = snap.q
       }

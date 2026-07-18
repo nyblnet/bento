@@ -19,6 +19,7 @@ import type { Store } from '../store'
 import type { BentoDoc, Slide } from '../model'
 import { uid } from '../model'
 import { SyncState, type Op } from './crdt'
+import { mintCollab } from './online'
 
 export interface PresenceInfo {
   name: string
@@ -41,7 +42,14 @@ interface OpsFrame { t: 'ops'; a: string; ops: Op[] }
 interface NeedFrame { t: 'need'; a: string; vv: Record<string, number> }
 interface PresFrame { t: 'p'; a: string; p: PresenceInfo }
 interface ByeFrame { t: 'bye'; a: string }
-export type Frame = HelloFrame | OpsFrame | NeedFrame | PresFrame | ByeFrame
+/** state-based fork merge: a rejoining offline-edited copy announces itself */
+interface SnapFrame {
+  t: 'snap'
+  a: string
+  doc: BentoDoc
+  state: import('./crdt').SyncStateJSON
+}
+export type Frame = HelloFrame | OpsFrame | NeedFrame | PresFrame | ByeFrame | SnapFrame
 
 export interface Transport {
   readonly kind: string
@@ -114,18 +122,36 @@ export class SyncSession {
 
   // --- lifecycle -----------------------------------------------------------
 
+  /** a restored offline fork still owes the room its snapshot */
+  private forkPending = false
+
   private attach() {
     this.docId = this.store.doc.docId
-    this.state = new SyncState(this.actor)
-    this.state.adopt(this.store.doc)
-    this.shadow = JSON.stringify(this.store.doc)
+    const doc = this.store.doc
+    // credentials are minted AT CREATION (Andy's call): any copy of the
+    // file can join once sharing is turned on — "send first, share later"
+    // just works. Dormant (on:false) until the Share button flips it.
+    if (!doc.collab) doc.collab = mintCollab()
+    const saved = doc.collab?.sync
+    if (saved) {
+      // this file was saved during/after a shared session: restore the CRDT
+      // state so our offline edits carry real registers, remote replay
+      // dedups by version vector, and a state-based snapshot exchange can
+      // merge the fork BOTH ways (see docs/collab-design.md)
+      this.state = SyncState.fromJSON(this.actor, JSON.parse(JSON.stringify(saved)))
+      this.forkPending = true
+    } else {
+      this.state = new SyncState(this.actor)
+    }
+    this.state.adopt(doc)
+    this.shadow = JSON.stringify(doc)
     this.log = []
     this.peersMap.clear()
     this.emitPeers()
     for (const tr of this.transports) tr.close()
     this.transports = [new BroadcastTransport(this.docId, (f) => this.onFrame(f))]
     for (const mk of this.makeExtraTransports) this.transports.push(mk(this.docId, (f) => this.onFrame(f)))
-    this.broadcast({ t: 'hello', a: this.actor, vv: this.state.vv, p: this.presence() })
+    this.hello() // announces + (for restored forks) broadcasts the state snapshot
     if (this.heartbeat) clearInterval(this.heartbeat)
     this.heartbeat = window.setInterval(() => {
       this.pushPresence()
@@ -186,8 +212,11 @@ export class SyncSession {
     switch (f.t) {
       case 'hello': {
         this.touchPeer(f.a, f.p)
-        // answer so the newcomer learns us + catch them up from our log
+        // answer so the newcomer learns us + catch them up from our log,
+        // AND tell them our vv so ops they minted before connecting (which
+        // nothing else would push) flow back to us — need→ops terminates
         this.send({ t: 'p', a: this.actor, p: this.presence() })
+        this.send({ t: 'need', a: this.actor, vv: this.state.vv })
         const missing = this.state.missingFor(this.log, f.vv)
         if (missing.length) this.send({ t: 'ops', a: this.actor, ops: missing })
         break
@@ -202,6 +231,9 @@ export class SyncSession {
       }
       case 'p':
         this.touchPeer(f.a, f.p)
+        break
+      case 'snap':
+        this.applySnapshot(f.doc, f.state)
         break
       case 'bye':
         this.peersMap.delete(f.a)
@@ -345,6 +377,37 @@ export class SyncSession {
   /** re-announce (an online transport reconnected) */
   hello() {
     this.broadcast({ t: 'hello', a: this.actor, vv: this.state.vv, p: this.presence() })
+    if (this.forkPending) {
+      // rejoining offline fork: our contributions live in doc values +
+      // restored registers, not ops — a state snapshot is how they travel
+      const s = this.snapshot()
+      this.broadcast({ t: 'snap', a: this.actor, doc: s.doc, state: s.state })
+    }
+  }
+
+  /**
+   * Relay replay finished. `seen` holds the (actor,seq) pairs the room
+   * already has; anything in our log it lacks gets (re)sent for persistence
+   * — covers ops minted before the transport connected. Returns whether a
+   * fresh server snapshot should be uploaded (fork just merged).
+   */
+  onRelayReady(seen: Set<string>): boolean {
+    const missing = this.log.filter((o) => !seen.has(`${o.a}:${o.s}`))
+    if (missing.length) this.send({ t: 'ops', a: this.actor, ops: missing })
+    const fork = this.forkPending
+    this.forkPending = false
+    return fork
+  }
+
+  /**
+   * Stamp the CRDT state into doc.collab.sync so the SAVED file can rejoin
+   * as a true fork later. Called by the save/serialize paths; only shared
+   * documents carry it (never-shared files stay clean).
+   */
+  stampInto(doc: BentoDoc) {
+    if (!doc.collab || doc.collab.on === false) return
+    this.flush()
+    doc.collab.sync = JSON.parse(JSON.stringify(this.state.toJSON()))
   }
 
   // --- plumbing -------------------------------------------------------------

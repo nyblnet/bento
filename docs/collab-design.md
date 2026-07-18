@@ -4,12 +4,18 @@
 v0.8.0) — `slides/src/sync/` (engine, session, online transport),
 `server/sync-worker/` (relay), `scripts/test-sync.ts` (convergence rig).
 Notable deviations from the proposal, all deliberate:
-share links became **the file itself** (doc.collab carries room + key —
-possession of a copy is the capability; a hosted `/s/` joiner page can wrap
-this later), actor ids are fresh per session instance (a reloaded tab is a
-new replica; the engine skips "own" ops on apply), the relay replay bookmark
-is memory-only (it is valid only alongside the CRDT state it was earned
-with), and M3 (text RGA) shipped with the engine rather than after it.
+share links became **the file itself** — and since v0.8.1 credentials are
+minted at CREATION (random room ids, never docId), dormant behind
+`collab.on`, so "send the file first, share later" works and "Rotate keys"
+is revocation; a hosted `/s/` joiner page can wrap this later. Offline
+forks merge TWO-WAY: saves stamp the CRDT state into `doc.collab.sync`, a
+rejoining copy restores it, replay dedups by version vector, and a state
+snapshot frame carries the fork's edits to peers. "Duplicate as new deck"
+is the explicit identity fork (new docId + fresh credentials). Actor ids
+are fresh per session instance (a reloaded tab is a new replica; the
+engine skips "own" ops on apply), the relay replay bookmark is memory-only
+(valid only alongside the CRDT state it was earned with), and M3 (text
+RGA) shipped with the engine rather than after it.
 Companion to `architecture.md` §7 (updates) and the local-first principles in
 `README.md`.*
 
