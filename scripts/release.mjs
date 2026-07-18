@@ -79,31 +79,9 @@ execFileSync('node', signArgs, { stdio: 'inherit' })
 
 writeFileSync(join(site, 'CNAME'), 'bento.page\n')
 
-// Placeholder landing page — replaced by the real one before public launch.
-writeFileSync(
-  join(site, 'index.html'),
-  `<!DOCTYPE html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bento — the office suite that fits in a file</title>
-<style>
-  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-         max-width: 640px; margin: 12vh auto; padding: 0 24px; color: #1e2a3a; }
-  h1 { font-size: 28px; } a { color: #b87400; }
-  .apps { margin-top: 2em; } .soon { color: #8a94a3; }
-</style>
-<h1>🍱 Bento</h1>
-<p>An office suite where every document is a single, self-contained HTML file —
-data, viewer and editor together. Open it anywhere, edit it, and it saves itself.
-No install, no account, no cloud.</p>
-<div class="apps">
-  <p><b>Slides</b> — <a href="/slides/">try it in your browser</a> or
-  <a href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">download
-  the app</a> (one HTML file — that's all of it).</p>
-  <p class="soon"><b>Docs</b> — in development · <b>Sheets</b> — planned</p>
-</div>
-`,
-)
+// The real landing page — assembled from site-src/landing.html with the
+// deck's embedded typefaces injected (scripts/build-landing.mjs).
+execFileSync('node', [join(root, 'scripts/build-landing.mjs'), join(site, 'index.html')], { stdio: 'inherit' })
 
 console.log(`\nSite assembled for v${version}:`)
 execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })
