@@ -270,4 +270,5 @@ export const fr: Catalog = {
   "Save as template…": "Enregistrer comme modèle…",
   "Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.": "Enregistre une copie modèle : chaque personne qui l'ouvre obtient un diaporama neuf et indépendant, avec sa propre identité et ses propres clés.",
   "Template saved — every open of it starts a fresh deck": "Modèle enregistré — chaque ouverture démarre un nouveau diaporama",
+  "Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends": "Présenter depuis la diapositive actuelle — F bascule le plein écran, S ouvre la vue présentateur, Échap termine",
 }

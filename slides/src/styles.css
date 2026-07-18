@@ -1114,3 +1114,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font: inherit;
   font-size: 12.5px;
 }
+
+/* --- responsive topbar: stays usable at any width ----------------------- */
+/* narrow: button labels collapse to icons (tooltips still carry meaning) */
+@media (max-width: 1280px) {
+  .ed-topbar .ed-btn > span { display: none; }
+  .ed-topbar .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
+  .ed-topbar { gap: 6px; padding: 8px 8px; }
+  .ed-title { min-width: 60px; }
+}
+/* very narrow: the bar itself scrolls sideways rather than clipping */
+.ed-topbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.ed-topbar::-webkit-scrollbar { height: 4px; }
+.ed-topbar .ed-group { flex-shrink: 0; }
+.ed-logo { flex-shrink: 0; }

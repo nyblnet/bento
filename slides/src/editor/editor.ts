@@ -194,7 +194,7 @@ export class Editor {
     }, 1500)
     const undoB = btn(ICONS.undo, '', () => this.store.undo(), t('Undo (⌘Z)'))
     const redoB = btn(ICONS.redo, '', () => this.store.redo(), t('Redo (⇧⌘Z)'))
-    const presentB = btn(ICONS.play, t('Present'), () => this.present(), t('Present from current slide'))
+    const presentB = btn(ICONS.play, t('Present'), () => this.present(), t('Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends'))
     presentB.classList.add('ed-btn-primary')
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), t('Save — rewrite this file in place (⌘S)'))
     const saveAsB = btn(ICONS.download, '', () => this.save(true), t('Save a copy — pick a new file, leave this one untouched'))
@@ -214,6 +214,13 @@ export class Editor {
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
+
+    // phones/small windows: start with both panels collapsed so the CANVAS
+    // is what you see — the topbar toggles (and [ / ]) bring them back
+    if (window.innerWidth < 700) {
+      this.sidebar.classList.add('ed-collapsed')
+      this.props.classList.add('ed-collapsed')
+    }
 
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)

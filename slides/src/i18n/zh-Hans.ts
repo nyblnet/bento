@@ -270,4 +270,5 @@ export const zhHans: Catalog = {
   "Save as template…": "另存为模板…",
   "Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.": "保存为模板副本：每个打开它的人都会得到一份全新的独立演示文稿，拥有自己的标识和密钥。",
   "Template saved — every open of it starts a fresh deck": "模板已保存 — 每次打开都会生成新的演示文稿",
+  "Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends": "从当前页开始演示 — F 切换全屏，S 打开演讲者视图，Esc 结束",
 }

@@ -270,4 +270,5 @@ export const de: Catalog = {
   "Save as template…": "Als Vorlage speichern…",
   "Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.": "Speichert eine Vorlagenkopie: Wer sie öffnet, erhält ein frisches, unabhängiges Deck mit eigener Identität und eigenen Schlüsseln.",
   "Template saved — every open of it starts a fresh deck": "Vorlage gespeichert — jedes Öffnen startet ein frisches Deck",
+  "Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends": "Ab aktueller Folie präsentieren — F wechselt Vollbild, S öffnet die Referentenansicht, Esc beendet",
 }
