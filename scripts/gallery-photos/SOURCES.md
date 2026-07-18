@@ -47,3 +47,13 @@ Embedded webfont (`scripts/gallery-fonts/`, used by the Orbital deck):
 | file | source | licence |
 |---|---|---|
 | SpaceMono-{400,700}-latin.woff2 | Google Fonts (fonts.gstatic.com), latin subset | Space Mono, SIL Open Font License 1.1 |
+
+Added 2026-07-18 (v5.1 — Orbital compression pass):
+
+The five orbital-*.jpg were re-encoded smaller: the deck was ~7.9 MB, most of
+it Orbital photography. The two heroes (stars cover, earth full-bleed) drop to
+2200 px q70 — the deck canvas is 1280 px wide, so 3200 px was far past what any
+display shows. The three STATE backdrops (nebula, aurora, dragon) render dimmed
+under 55–72% scrims, where fine detail is invisible: nebula 1600 px q60, aurora
+& dragon 1800 px q64. Orbital photos 5.7 MB → 2.0 MB; deck ~7.9 MB → ~4.1 MB.
+Spot-checked at full brightness — no visible artefacts. Same frames/crops.
