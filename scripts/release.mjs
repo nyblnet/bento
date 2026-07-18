@@ -87,6 +87,16 @@ execFileSync('node', [join(root, 'scripts/build-landing.mjs'), join(site, 'index
 // (each carries template:true; opening one mints a fresh, independent deck).
 execFileSync('node', [join(root, 'scripts/build-example-decks.mjs'), join(site, 'gallery')], { stdio: 'inherit' })
 
+// The agent guide — the runnable version of the "designed for AI" claim.
+cpSync(join(root, 'docs/agents.md'), join(site, 'agents.md'))
+
+// 404 — of course it's a deck (see build-404-deck.mjs + site-src/404.html).
+execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
+cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
+
+// /q — "this QR code is a presentation" (deck lives in the URL fragment).
+execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/index.html')], { stdio: 'inherit' })
+
 console.log(`\nSite assembled for v${version}:`)
 execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })
 console.log('\nPublish ./site/ to the gh-pages branch (docs/RELEASING.md).')
