@@ -1209,13 +1209,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border-bottom-right-radius: 0;
 }
 
-/* floating present buttons over the work area (zoombar sits below them) */
+/* floating present buttons, bottom-LEFT of the work area (zoombar owns the
+   right corner); side by side so neither ever covers the slide above */
 .ed-present-fabs {
   position: absolute;
-  right: 14px;
-  bottom: 64px;
+  left: 14px;
+  bottom: 14px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
   z-index: 11;
