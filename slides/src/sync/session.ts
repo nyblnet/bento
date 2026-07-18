@@ -130,12 +130,34 @@ export class SyncSession {
   /** a restored offline fork still owes the room its snapshot */
   private forkPending = false
 
+  /** the loaded doc arrived carrying collab creds (was saved/shared) */
+  private bornWithCollab = false
+  /** the user opted in this session (saved, or hit "Start live session") */
+  private explicitShare = false
+
+  /** Should this doc auto-connect to the relay on open? See attach(). */
+  shareEligible(): boolean {
+    return this.bornWithCollab || this.explicitShare
+  }
+
+  /** Mark that the user opted into sharing (save / explicit Start live). */
+  enableSharing() {
+    this.explicitShare = true
+  }
+
   private attach() {
     this.docId = this.store.doc.docId
     const doc = this.store.doc
-    // credentials are minted AT CREATION (Andy's call): any copy of the
-    // file can join once sharing is turned on — "send first, share later"
-    // just works. Dormant (on:false) until the Share button flips it.
+    // Auto-connect eligibility: a doc that ARRIVED carrying collab creds was
+    // saved/shared by someone — it should go live on open. A doc we mint creds
+    // for right now (the anonymous starter demo, a fresh template instance) is
+    // NOT auto-connected — it phones home only after the user saves or clicks
+    // "Start live session" (enableSharing). This keeps casual visitors off the
+    // relay and honours "nothing phones home unless you ask".
+    this.bornWithCollab = !!doc.collab
+    this.explicitShare = false
+    // credentials are minted AT CREATION: any copy of the file can join once
+    // it is live (on:true by default). See eligibility gate above.
     if (!doc.collab) doc.collab = mintCollab()
     const saved = doc.collab?.sync
     if (saved && saved.v === SYNC_V) {
