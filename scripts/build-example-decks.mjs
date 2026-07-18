@@ -121,6 +121,8 @@ function deckSignal() {
     elements: [
       kick(96, 84, 'SIGNAL — A FESTIVAL OF GRAPHIC IDEAS'),
       rule(96, 118, 1088),
+      shape('rect', { x: 904, y: 194, w: 280, h: 290, fill: RED, fx: { enter: 'fade-up', order: 1 } }),
+      img({ asset: 'ph-press', x: 884, y: 174, w: 280, h: 290, fx: { enter: 'fade-up', order: 1, ambient: 'kenburns', ken: { dir: 'in', scale: 1.05, duration: 2.6 } } }),
       text({ id: 'sig-title', x: 86, y: 128, w: 1120, h: 330, html: 'Loud<br>letters.', fontSize: 168, fontFamily: FR, fontWeight: 900, color: INK, lineHeight: 0.92 }),
       shape('rect', { id: 'sig-bar', x: 96, y: 520, w: 320, h: 74, fill: RED }),
       text({ x: 442, y: 524, w: 560, h: 80, html: 'Three days on typography, grids,<br>and the confidence to be simple.', fontSize: 19, color: GREY, lineHeight: 1.5, fx: { enter: 'fade-up', order: 1 } }),
@@ -251,9 +253,12 @@ function deckTerra() {
       kick(96, 96, 'TERRA OBJECTS — COLLECTION Nº4'),
       text({ x: 90, y: 150, w: 760, h: 260, html: 'Quiet things,<br>well made.', fontSize: 96, fontFamily: FR, fontWeight: 900, color: CHAR, lineHeight: 1.02 }),
       text({ x: 96, y: 430, w: 480, h: 80, html: 'Thrown, glazed and fired in one workshop.<br>Forty-one objects. No two alike.', fontSize: 17, color: SOFT, lineHeight: 1.6, fx: { enter: 'fade-up', order: 1 } }),
-      shape('rect', { id: 'ter-a', x: 880, y: 120, w: 200, h: 300, radius: 100, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.22)' }, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 9 } } }),
-      shape('rect', { id: 'ter-b', x: 1010, y: 300, w: 150, h: 220, radius: 75, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.18)' }, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.04, duration: 11 } } }),
+      shape('rect', { id: 'ter-a', x: 880, y: 120, w: 200, h: 300, radius: 100, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.22)' } }),
+      img({ asset: 'ph-vase-jay', x: 887, y: 127, w: 186, h: 286, radius: 93, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 } } }),
+      shape('rect', { id: 'ter-b', x: 1010, y: 300, w: 150, h: 220, radius: 75, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.18)' } }),
+      img({ asset: 'ph-vase-classic', x: 1016, y: 306, w: 138, h: 208, radius: 69, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 } } }),
       shape('ellipse', { id: 'ter-c', x: 840, y: 430, w: 120, h: 120, fill: '#6F755C', fillGradient: GRAD_MOSS, shadow: { y: 14, blur: 34, color: 'rgba(42,39,36,0.2)' } }),
+      img({ asset: 'ph-vase-goat', x: 845, y: 435, w: 110, h: 110, radius: 55 }),
       text({ x: 96, y: 620, w: 500, h: 22, html: 'SPRING 2026 · EDITION OF 41', fontSize: 11, fontWeight: 600, letterSpacing: 4, color: SOFT }),
     ],
   })
@@ -358,8 +363,10 @@ function deckOrbital() {
 
   const s1 = slide({
     id: 'orb-cover', background: VOID, transition: 'none',
-    notes: 'TEMPLATE — “Orbital”, immersive dark-tech deck. Style family: void black, one luminous gradient, particles in slow orbit. The ring and wordmark morph through the whole deck. Use glow shadows sparingly — one lit object per slide.',
+    notes: 'TEMPLATE — “Orbital”, immersive dark-tech deck. Style family: void black, one luminous gradient, particles in slow orbit — over REAL sky: the backdrop is the Milky Way shot from the ISS (NASA, public domain), dimmed under a scrim so the type stays lit. The ring and wordmark morph through the whole deck.',
     elements: [
+      img({ asset: 'ph-stars', x: 0, y: 0, w: 1280, h: 720, opacity: 0.6, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.09, duration: 28 } } }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.45)', fillGradient: grad(180, [0, 'rgba(5,6,14,0.6)'], [0.55, 'rgba(5,6,14,0.25)'], [1, 'rgba(5,6,14,0.7)']) }),
       star(180, 140, 6, 17, 0), star(1050, 120, 4, 21, 2), star(940, 560, 8, 19, 4),
       star(220, 540, 5, 23, 1), star(640, 90, 4, 25, 3), star(1160, 400, 6, 15, 5),
       shape('ellipse', { id: 'orb-ring', x: 440, y: 120, w: 400, h: 400, fill: 'rgba(0,0,0,0)', stroke: CYAN, strokeWidth: 2, shadow: glow('rgba(56,225,255,0.45)', 60), fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.05, duration: 12 } } }),
@@ -413,19 +420,22 @@ function deckOrbital() {
     ],
   })
 
-  const stateBase = (sid, title, body, accent) => slide({
+  const stateBase = (sid, title, body, accent, ph, credit) => slide({
     id: sid, stateOf: 'orb-system', background: DEEP, transition: 'morph', name: title,
-    notes: 'A hidden state — reached only by clicking its node on the system map.',
+    notes: 'A hidden state — reached only by clicking its node on the system map. Each state gets its own NASA backdrop (public domain) under a deep scrim — the photo switch is what makes the zoom-in feel like a place, not a popup.',
     elements: [
+      img({ asset: ph, x: 0, y: 0, w: 1280, h: 720, opacity: 0.55, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.08, duration: 20 } } }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(11,14,30,0.62)' }),
       mono(96, 84, `02a · ${title} — CLICK ANYWHERE DIM TO GO BACK`),
       shape('ellipse', { id: sid + '-halo', x: 460, y: 130, w: 360, h: 360, fill: 'rgba(0,0,0,0)', stroke: accent, strokeWidth: 2, shadow: glow(accent === VIOLET ? 'rgba(122,92,255,0.5)' : 'rgba(255,79,163,0.5)', 70) }),
       text({ x: 340, y: 240, w: 600, h: 80, html: title, fontSize: 56, fontWeight: 800, color: '#EAF4FF', align: 'center', letterSpacing: 8, fontFamily: IN }),
       text({ x: 340, y: 330, w: 600, h: 80, html: body, fontSize: 16, color: DIM, align: 'center', lineHeight: 1.6 }),
+      mono(96, 648, credit, 'rgba(178,196,224,0.4)', 9),
       shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(0,0,0,0)', link: 'orb-system' }),
     ],
   })
-  const st1 = stateBase('orb-state-ingest', 'INGEST', '4.2 TB of telemetry per orbit,<br>deduplicated at the edge.', VIOLET)
-  const st2 = stateBase('orb-state-model', 'MODEL', 'Anomaly scores in 90 seconds —<br>before the next ground pass.', MAG)
+  const st1 = stateBase('orb-state-ingest', 'INGEST', '4.2 TB of telemetry per orbit,<br>deduplicated at the edge.', VIOLET, 'ph-aurora', 'AURORA FROM THE ISS, EXPEDITION 30 · NASA — PUBLIC DOMAIN')
+  const st2 = stateBase('orb-state-model', 'MODEL', 'Anomaly scores in 90 seconds —<br>before the next ground pass.', MAG, 'ph-dragon', 'DRAGON ENDEAVOUR & THE MILKY WAY, EXPEDITION 71 · NASA — PUBLIC DOMAIN')
 
   const s4 = slide({
     id: 'orb-growth', background: VOID, transition: 'fade',
@@ -465,7 +475,11 @@ function deckOrbital() {
 
   return doc({
     title: 'Orbital — dark immersive template',
-    assets: { 'ph-earth': photo('orbital-earth.jpg'), 'ph-nebula': photo('orbital-nebula.jpg') },
+    assets: {
+      'ph-earth': photo('orbital-earth.jpg'), 'ph-nebula': photo('orbital-nebula.jpg'),
+      'ph-stars': photo('orbital-stars.jpg'), 'ph-aurora': photo('orbital-aurora.jpg'),
+      'ph-dragon': photo('orbital-dragon.jpg'),
+    },
     theme: { background: VOID, color: '#EAF4FF', accent: CYAN, fontFamily: IN },
     present: { progress: true },
     slides: [s1, s2, s2b, s3, st1, st2, s4, s5],
@@ -492,6 +506,9 @@ function deckPicnic() {
       chunky(120, 150, 'PIXEL<br>PICNIC', 130, INK, -2),
       text({ x: 130, y: 470, w: 700, h: 60, html: 'a two-day jam for games,<br>toys &amp; gloriously useless websites', fontSize: 24, fontWeight: 700, color: INK, rotation: -2, lineHeight: 1.3 }),
       text({ x: 850, y: 350, w: 340, h: 40, html: 'AUG 22–23 · THE OLD POOL', fontSize: 16, fontWeight: 800, color: INK, rotation: 3, letterSpacing: 1 }),
+      shape('rect', { x: 645, y: 405, w: 230, h: 272, radius: 12, fill: '#FFFFFF', stroke: INK, strokeWidth: 4, rotation: -5, shadow: sticker, fx: { enter: 'fade-up', order: 1 } }),
+      img({ asset: 'ph-fair', x: 661, y: 421, w: 198, h: 204, radius: 6, rotation: -5, fx: { enter: 'fade-up', order: 1, ambient: 'kenburns', ken: { dir: 'drift', scale: 1.04, duration: 16 } } }),
+      text({ x: 661, y: 633, w: 198, h: 30, html: 'last picnic!!', fontSize: 16, fontWeight: 800, color: INK, align: 'center', rotation: -5, fx: { enter: 'fade-up', order: 1 } }),
     ],
   })
 

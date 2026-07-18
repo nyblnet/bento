@@ -23,8 +23,20 @@ const grab = (name) => {
 let html = readFileSync(join(root, 'site-src/landing.html'), 'utf8')
 html = html.replace('__FRAUNCES__', grab('FRAUNCES_900'))
 html = html.replace('__INSTRUMENT__', grab('INSTRUMENT_VAR'))
-if (html.includes('__FRAUNCES__') || html.includes('__INSTRUMENT__')) {
-  throw new Error('font placeholder not replaced')
+
+// gallery poster thumbs — small renditions of the decks' public-domain
+// photos (scripts/gallery-photos/thumbs), inlined so the page stays
+// self-contained
+const thumb = (file) =>
+  'data:image/jpeg;base64,' + readFileSync(join(root, 'scripts/gallery-photos/thumbs', file)).toString('base64')
+for (const [ph, file] of [
+  ['__PH_PRESS__', 'press.jpg'], ['__PH_VASE1__', 'vase1.jpg'],
+  ['__PH_VASE2__', 'vase2.jpg'], ['__PH_VASE3__', 'vase3.jpg'],
+  ['__PH_STARS__', 'stars.jpg'], ['__PH_FAIR__', 'fair.jpg'],
+]) html = html.replace(ph, thumb(file))
+
+if (/__(FRAUNCES|INSTRUMENT|PH_[A-Z0-9]+)__/.test(html)) {
+  throw new Error('unreplaced placeholder in landing template')
 }
 
 mkdirSync(dirname(out), { recursive: true })
