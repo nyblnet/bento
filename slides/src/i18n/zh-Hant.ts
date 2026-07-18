@@ -30,6 +30,7 @@ export const zhHant: Catalog = {
   "Comment · element": "註解 · 元素",
   "Comment · point ({x}, {y})": "註解 · 位置 ({x}, {y})",
   "Comment · slide": "註解 · 投影片",
+  "Comment": "註解",
   "Comment:": "註解：",
   "Corner radius": "圓角",
   "Couldn't check: {m}": "無法檢查：{m}",

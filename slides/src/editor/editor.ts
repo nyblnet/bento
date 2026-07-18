@@ -101,7 +101,7 @@ export class Editor {
       btn(ICONS.image, t('Image'), () => this.pickImage()),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
     )
-    const commentB = btn(ICONS.comment, '', () => this.canvas.toggleCommentMode(),
+    const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))
     insert.appendChild(commentB)
 
