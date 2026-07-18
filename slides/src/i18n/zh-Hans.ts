@@ -30,6 +30,7 @@ export const zhHans: Catalog = {
   "Comment · element": "评论 · 元素",
   "Comment · point ({x}, {y})": "评论 · 位置 ({x}, {y})",
   "Comment · slide": "评论 · 幻灯片",
+  "Comment": "评论",
   "Comment:": "评论：",
   "Corner radius": "圆角",
   "Couldn't check: {m}": "无法检查：{m}",

@@ -30,6 +30,7 @@ export const fr: Catalog = {
   "Comment · element": "Commentaire · élément",
   "Comment · point ({x}, {y})": "Commentaire · point ({x}, {y})",
   "Comment · slide": "Commentaire · diapositive",
+  "Comment": "Commentaire",
   "Comment:": "Commentaire :",
   "Corner radius": "Rayon d'angle",
   "Couldn't check: {m}": "Vérification impossible : {m}",

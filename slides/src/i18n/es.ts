@@ -30,6 +30,7 @@ export const es: Catalog = {
   "Comment · element": "Comentario · elemento",
   "Comment · point ({x}, {y})": "Comentario · punto ({x}, {y})",
   "Comment · slide": "Comentario · diapositiva",
+  "Comment": "Comentario",
   "Comment:": "Comentario:",
   "Corner radius": "Radio de esquina",
   "Couldn't check: {m}": "No se pudo comprobar: {m}",

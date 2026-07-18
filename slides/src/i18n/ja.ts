@@ -30,6 +30,7 @@ export const ja: Catalog = {
   "Comment · element": "コメント · 要素",
   "Comment · point ({x}, {y})": "コメント · 位置 ({x}, {y})",
   "Comment · slide": "コメント · スライド",
+  "Comment": "コメント",
   "Comment:": "コメント：",
   "Corner radius": "角丸",
   "Couldn't check: {m}": "確認できませんでした: {m}",
