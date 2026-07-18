@@ -78,6 +78,21 @@ export function startPresentation(
       if (!isState(i)) return deck.slide(i, 0)
     }
   }
+  const hasNext = () => {
+    const cur = deck.getIndices().h
+    for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
+      if (!isState(i)) return true
+    }
+    return false
+  }
+  const hasPrev = () => {
+    const cur = deck.getIndices().h
+    if (isState(cur)) return true // right-swipe returns to the parent slide
+    for (let i = cur - 1; i >= 0; i--) {
+      if (!isState(i)) return true
+    }
+    return false
+  }
   const visibleIndex = (i: number) => doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
   const visibleTotal = doc.slides.filter((s) => !s.stateOf).length
 
@@ -101,8 +116,8 @@ export function startPresentation(
           return [`${visibleIndex(i)} / ${visibleTotal}`]
         }) as any)
       : false,
-    // swipes would walk into hidden state slides; arrows are handled below
-    touch: !doc.slides.some((s) => s.stateOf),
+    // touch is handled by our own swipe logic below (state-aware + ends exit)
+    touch: false,
     // heavy decks: paint only the neighbourhood of the current slide
     viewDistance: 1,
     keyboardCondition: null,
@@ -208,6 +223,15 @@ export function startPresentation(
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     else enterFullscreen()
   }
+  // leaving fullscreen — Esc, F, the browser's own UI, an OS gesture —
+  // ends the show outright; it never drops into tab-fill mode. (Tab mode
+  // is only ever entered deliberately, via the small present button.)
+  let wentFullscreen = false
+  const onFsChange = () => {
+    if (document.fullscreenElement === overlay) wentFullscreen = true
+    else if (wentFullscreen && !exited) exit()
+  }
+  document.addEventListener('fullscreenchange', onFsChange)
   if (opts.fullscreen !== false) enterFullscreen()
 
   const exit = () => {
@@ -223,6 +247,7 @@ export function startPresentation(
     overlay.remove()
     window.removeEventListener('resize', onResize)
     document.removeEventListener('keydown', onKeydown, true)
+    document.removeEventListener('fullscreenchange', onFsChange)
     clearInterval(speakerTimer)
     if (speaker && !speaker.closed) speaker.close()
     onExit(last)
@@ -264,6 +289,29 @@ export function startPresentation(
     }
   }
   document.addEventListener('keydown', onKeydown, true)
+
+  // ——— touch: swipe left/right to navigate; swiping past either end of
+  // the deck drops back into the editor (phones have no Esc) ———
+  let touchX = 0
+  let touchY = 0
+  overlay.addEventListener('touchstart', (ev) => {
+    touchX = ev.touches[0].clientX
+    touchY = ev.touches[0].clientY
+  }, { passive: true })
+  overlay.addEventListener('touchend', (ev) => {
+    const t0 = ev.changedTouches[0]
+    if (!t0) return
+    const dx = t0.clientX - touchX
+    const dy = t0.clientY - touchY
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.2) return // a tap or a scroll
+    if (dx < 0) {
+      if (hasNext()) goNext()
+      else exit()
+    } else {
+      if (hasPrev()) goPrev()
+      else exit()
+    }
+  }, { passive: true })
 
   deck.on('slidechanged', ((event: any) => {
     const from = event.previousSlide as HTMLElement | undefined

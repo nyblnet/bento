@@ -117,9 +117,38 @@ export class PropsPanel {
 
   // --- builders ---------------------------------------------------------------
 
+  private static readonly PAGE_PRESETS: Record<string, { w: number; h: number }> = {
+    'Widescreen 16:9': { w: 1600, h: 900 },
+    'Classic 4:3': { w: 1200, h: 900 },
+    'Square 1:1': { w: 1080, h: 1080 },
+    'Portrait 9:16': { w: 1080, h: 1920 },
+    'A4 landscape': { w: 1123, h: 794 },
+    'A4 portrait': { w: 794, h: 1123 },
+  }
+
   private buildSlidePanel() {
     const slide = this.store.slide
     this.section(t('Slide'))
+    // deck-wide page size: presets + custom. Elements keep their absolute
+    // positions — a size change reframes the canvas, it never rescales art.
+    const { width: dw, height: dh } = this.store.doc.size
+    const presetKey =
+      Object.entries(PropsPanel.PAGE_PRESETS).find(([, s]) => s.w === dw && s.h === dh)?.[0] ?? 'Custom…'
+    this.row(t('Page size'), this.select(
+      [...Object.keys(PropsPanel.PAGE_PRESETS), 'Custom…'],
+      presetKey,
+      (v) => {
+        const s = PropsPanel.PAGE_PRESETS[v]
+        if (s) this.edit(() => { this.store.doc.size = { width: s.w, height: s.h } }, true)
+        else this.rebuild(true) // custom: just reveal the W/H inputs
+      },
+    ))
+    if (presetKey === 'Custom…') {
+      this.row(t('Width'), this.number(dw, 10, (v, fin) =>
+        this.edit(() => { this.store.doc.size.width = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
+      this.row(t('Height'), this.number(dh, 10, (v, fin) =>
+        this.edit(() => { this.store.doc.size.height = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
+    }
     this.row(t('Background'), this.color(slide.background, (v, fin) =>
       this.edit(() => { this.store.slide.background = v }, fin)))
     this.row(t('Transition'), this.select(
