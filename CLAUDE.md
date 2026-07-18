@@ -181,9 +181,16 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   edits to the same properties (documented LWW compromise).
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
   Interaction modifiers: Shift = keep-ratio resize / axis-locked drag / 15°
-  rotate snap; ⌘/Ctrl-drag = duplicate (originals move, copies stay — one
-  undo step; Alt stays reserved for deep-select, so it can't be the copy
-  key). Present: real fullscreen via overlay.requestFullscreen at start +
+  rotate snap; Alt/Option = resize from CENTER (deep-select exempts
+  Moveable's control box, so Alt-on-a-handle means center-scale);
+  ⌘/Ctrl-drag = duplicate (originals move, copies stay — one undo step;
+  Alt on element bodies stays deep-select). Selecto's container/
+  dragContainer is the SCROLLER (not the stage) — marquees must be able
+  to start on the grey surround, the natural gesture; floating controls
+  (FABs/zoombar/chevrons) are exempted in the selecto dragStart guard.
+  Pane testing: synthetic drags on Moveable HANDLES don't register at
+  all (verified against pre-change code too) — resize behavior needs a
+  real mouse. Present: real fullscreen via overlay.requestFullscreen at start +
   F toggle (denied requests degrade to tab-fill — that IS the testing/
   sharing mode). Topbar is responsive by HIDING TEXT, never scrolling: labels
   collapse to icons <1200px, the wordmark collapses to the mark <760px.

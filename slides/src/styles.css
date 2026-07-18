@@ -592,7 +592,13 @@ html, body {
 }
 
 /* arrange kit: one compact row per group — tiny label left, buttons right */
-.ed-arrange-row { display: flex; align-items: center; gap: 3px; margin: 3px 0; }
+.ed-arrange-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin: 3px 0;
+  flex-wrap: wrap; /* narrow panel: buttons flow to a second line, never overflow */
+}
 .ed-arrange-cap {
   flex: none;
   width: 46px;
@@ -1252,3 +1258,13 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 3px 10px rgb(20 30 45 / 0.14);
 }
 .ed-fab-small svg { width: 15px; height: 15px; }
+
+/* right panel: no horizontal scrollbar, ever */
+.ed-props {
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.ed-props .ed-row { flex-wrap: wrap; }
+.ed-props input[type='number'] { min-width: 0; }
+.ed-props select { max-width: 100%; min-width: 0; }
+.ed-props input[type='text'] { min-width: 0; max-width: 100%; }

@@ -70,8 +70,8 @@ export class SlideCanvas {
     })
 
     this.selecto = new Selecto({
-      container: this.stage,
-      dragContainer: this.stage,
+      container: this.scroller,
+      dragContainer: this.scroller,
       selectableTargets: ['.bento-el'],
       selectByClick: true,
       selectFromInside: false,
@@ -98,6 +98,8 @@ export class SlideCanvas {
     // which otherwise swallows clicks over the current selection.
     document.addEventListener('mousedown', (ev) => {
       if (!ev.altKey || ev.button !== 0 || this.pathEditor.active) return
+      // Alt on a resize/rotate handle means center-scale, not deep-select
+      if (ev.target instanceof Element && ev.target.closest('.moveable-control-box')) return
       const r = this.scaleHost.getBoundingClientRect()
       if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return
       if (ev.target instanceof Element && ev.target.closest('.ed-sidebar, .ed-props, .ed-topbar')) return
@@ -546,20 +548,49 @@ export class SlideCanvas {
       ev.target.style.left = `${p.left}px`
       ev.target.style.top = `${p.top}px`
     }))
-    // Shift while resizing keeps the aspect ratio (checked live per move)
-    mv.on('resizeStart', (e) => { mv.keepRatio = !!(e.inputEvent as MouseEvent | undefined)?.shiftKey })
-    mv.on('resize', (e) => {
-      mv.keepRatio = !!(e.inputEvent as MouseEvent | undefined)?.shiftKey
-      e.target.style.width = `${e.width}px`
-      e.target.style.height = `${e.height}px`
-      e.target.style.left = `${e.drag.left}px`
-      e.target.style.top = `${e.drag.top}px`
+    // Shift while resizing keeps the aspect ratio; Alt/Option scales from
+    // the center (both live per move, combinable)
+    const resizeCenters = new Map<HTMLElement, { cx: number; cy: number }>()
+    const noteResizeStart = (target: HTMLElement) => {
+      resizeCenters.set(target, {
+        cx: (parseFloat(target.style.left) || 0) + (parseFloat(target.style.width) || 0) / 2,
+        cy: (parseFloat(target.style.top) || 0) + (parseFloat(target.style.height) || 0) / 2,
+      })
+    }
+    const applyResize = (
+      target: HTMLElement,
+      w: number,
+      h: number,
+      left: number,
+      top: number,
+      inputEvent: MouseEvent | undefined,
+    ) => {
+      target.style.width = `${w}px`
+      target.style.height = `${h}px`
+      const c = resizeCenters.get(target)
+      if (inputEvent?.altKey && c) {
+        target.style.left = `${c.cx - w / 2}px`
+        target.style.top = `${c.cy - h / 2}px`
+      } else {
+        target.style.left = `${left}px`
+        target.style.top = `${top}px`
+      }
+    }
+    const syncKeepRatio = (inputEvent: MouseEvent | undefined) => {
+      const want = !!inputEvent?.shiftKey
+      if (mv.keepRatio !== want) mv.keepRatio = want
+    }
+    mv.on('resizeStart', (e) => {
+      syncKeepRatio(e.inputEvent as MouseEvent)
+      noteResizeStart(e.target as HTMLElement)
     })
+    mv.on('resize', (e) => {
+      syncKeepRatio(e.inputEvent as MouseEvent)
+      applyResize(e.target as HTMLElement, e.width, e.height, e.drag.left, e.drag.top, e.inputEvent as MouseEvent)
+    })
+    mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))
     mv.on('resizeGroup', (e) => e.events.forEach((ev) => {
-      ev.target.style.width = `${ev.width}px`
-      ev.target.style.height = `${ev.height}px`
-      ev.target.style.left = `${ev.drag.left}px`
-      ev.target.style.top = `${ev.drag.top}px`
+      applyResize(ev.target as HTMLElement, ev.width, ev.height, ev.drag.left, ev.drag.top, e.inputEvent as MouseEvent)
     }))
     // Shift while rotating snaps to 15° steps
     mv.on('rotateStart', (e) => { mv.throttleRotate = (e.inputEvent as MouseEvent | undefined)?.shiftKey ? 15 : 1 })
@@ -648,6 +679,11 @@ export class SlideCanvas {
   private wireSelecto() {
     this.selecto.on('dragStart', (e) => {
       const target = e.inputEvent.target as HTMLElement
+      // floating controls over the canvas are not marquee territory
+      if (target.closest('.ed-present-fabs, .ed-zoombar, .ed-panel-toggle, .ed-resizer')) {
+        e.stop()
+        return
+      }
       if (this.pathEditor?.active) {
         e.stop() // the path overlay owns the pointer while editing
         return
