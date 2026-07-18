@@ -8,7 +8,9 @@
 // delivered in random interleavings, and at quiescence every replica's
 // materialized document AND sync state must be identical. Plus targeted
 // cases: delete-wins, undo-resurrection, move-vs-delete, RGA text merge,
-// gap buffering, snapshot merge (file forks).
+// gap buffering, snapshot merge (file forks), and same-element-id on many
+// slides (the morph idiom — baseDoc carries a duplicated 'cast' id so every
+// random run exercises composite element identity).
 
 import { SyncState, keyBetween, spreadKey, tokenize, materialize } from '../slides/src/sync/crdt.ts'
 import type { Op } from '../slides/src/sync/crdt.ts'
@@ -127,6 +129,9 @@ function baseDoc(): Doc {
           { id: 's1-t1', type: 'text', x: 100, y: 100, w: 600, h: 80, rotation: 0, opacity: 1, html: 'Hello <b>world</b>', fontSize: 40, fontFamily: 'x', fontWeight: 700, color: '#fff', align: 'left', valign: 'top', lineHeight: 1.2 },
           { id: 's1-r1', type: 'shape', shape: 'rect', x: 200, y: 300, w: 200, h: 120, rotation: 0, opacity: 1, fill: '#FF9E8A', stroke: 'none', strokeWidth: 0, radius: 8 },
           { id: 's1-r2', type: 'shape', shape: 'ellipse', x: 500, y: 300, w: 90, h: 90, rotation: 0, opacity: 1, fill: '#5E7699', stroke: 'none', strokeWidth: 0, radius: 0 },
+          // 'cast' appears on s1 AND s2 — the id-continuity morph idiom
+          // (starterdeck's sd-tile-*). Every random run exercises it.
+          { id: 'cast', type: 'text', x: 900, y: 100, w: 300, h: 60, rotation: 0, opacity: 1, html: 'Morph <b>me</b>', fontSize: 28, fontFamily: 'x', fontWeight: 700, color: '#fff', align: 'left', valign: 'top', lineHeight: 1.2 },
         ],
       },
       {
@@ -136,6 +141,7 @@ function baseDoc(): Doc {
         notes: 'second',
         elements: [
           { id: 's2-t1', type: 'text', x: 120, y: 120, w: 500, h: 60, rotation: 0, opacity: 1, html: 'Numbers &amp; facts', fontSize: 30, fontFamily: 'x', fontWeight: 400, color: '#111', align: 'left', valign: 'top', lineHeight: 1.3 },
+          { id: 'cast', type: 'text', x: 200, y: 500, w: 600, h: 120, rotation: 0, opacity: 1, html: 'Morph <b>me</b>', fontSize: 56, fontFamily: 'x', fontWeight: 700, color: '#111', align: 'left', valign: 'top', lineHeight: 1.2 },
         ],
       },
       { id: 's3', background: '#16273E', transition: 'fade', notes: '', elements: [] },
@@ -237,11 +243,18 @@ function randomMutation(r: Replica, rnd: () => number): (doc: Doc) => void {
         break
       }
       case 6: {
-        // move element across slides
+        // move element across slides. Target must not already carry the
+        // element's id: bare ids are unique WITHIN a slide (format
+        // invariant the editor upholds); duplication ACROSS slides is the
+        // morph idiom and legal.
         const from = pick(slides.filter((x: any) => x.elements.length)) as any
         if (!from || slides.length < 2) break
-        const to = pick(slides.filter((x: any) => x !== from)) as any
-        const [el] = from.elements.splice(Math.floor(rnd() * from.elements.length), 1)
+        const i = Math.floor(rnd() * from.elements.length)
+        const to = pick(
+          slides.filter((x: any) => x !== from && !x.elements.some((e: any) => e.id === from.elements[i].id)),
+        ) as any
+        if (!to) break
+        const [el] = from.elements.splice(i, 1)
         to.elements.splice(Math.floor(rnd() * (to.elements.length + 1)), 0, el)
         break
       }
@@ -403,7 +416,7 @@ function randomMutation(r: Replica, rnd: () => number): (doc: Doc) => void {
   B.receive(res)
   ok(B.doc.slides.some((s: any) => s.id === 's2'), 'B saw the resurrection')
   ok(A.fingerprint() === B.fingerprint(), 'resurrection converged')
-  ok(B.doc.slides.find((s: any) => s.id === 's2').elements.length === 1, 'slide content restored')
+  ok(B.doc.slides.find((s: any) => s.id === 's2').elements.length === 2, 'slide content restored')
 }
 {
   console.log('move-out vs slide-delete cascade…')
@@ -522,6 +535,142 @@ function randomMutation(r: Replica, rnd: () => number): (doc: Doc) => void {
   ok(missing.length === batches[1].length + batches[2].length, `missingFor found ${missing.length} ops`)
   B.receive(missing)
   ok(A.fingerprint() === B.fingerprint(), 'log catch-up converged')
+}
+
+// ---------------------------------------------------------------------------
+// duplicated element ids across slides (the morph idiom) — regression for
+// the v1 bare-id identity collapse that dropped one copy per replica
+// ---------------------------------------------------------------------------
+const castCount = (d: Doc) =>
+  d.slides.filter((s: any) => s.elements.some((e: any) => e.id === 'cast')).length
+{
+  console.log('dup id across slides: adopt + structural op keeps every copy…')
+  // the launch-blocker repro: both replicas adopt the same file with 'cast'
+  // on s1 AND s2; any structural op must not evict either copy anywhere
+  const A = new Replica('A')
+  const B = new Replica('B')
+  const ops = A.mutate((d) =>
+    d.slides[0].elements.push({ id: 'A-extra', type: 'shape', shape: 'rect', x: 3, y: 3, w: 10, h: 10, rotation: 0, opacity: 1, fill: '#123', stroke: 'none', strokeWidth: 0, radius: 0 }),
+  )
+  B.receive(ops)
+  ok(A.fingerprint() === B.fingerprint(), 'adopt-dup structural op converged')
+  ok(castCount(A.doc) === 2, `A keeps cast on both slides (${castCount(A.doc)})`)
+  ok(castCount(B.doc) === 2, `B keeps cast on both slides (${castCount(B.doc)})`)
+}
+{
+  console.log('dup id: concurrent edits land on the right copy…')
+  const A = new Replica('A')
+  const B = new Replica('B')
+  const castOn = (d: Doc, sid: string) =>
+    d.slides.find((s: any) => s.id === sid).elements.find((e: any) => e.id === 'cast')
+  const ea = A.mutate((d) => (castOn(d, 's1').x = 111))
+  const eb = B.mutate((d) => (castOn(d, 's2').x = 222))
+  A.receive(eb)
+  B.receive(ea)
+  ok(A.fingerprint() === B.fingerprint(), 'per-copy edits converged')
+  ok(castOn(A.doc, 's1').x === 111 && castOn(A.doc, 's2').x === 222, 'each copy took its own edit on A')
+  ok(castOn(B.doc, 's1').x === 111 && castOn(B.doc, 's2').x === 222, 'each copy took its own edit on B')
+}
+{
+  console.log('dup id: concurrent RGA text edits stay per-copy…')
+  const A = new Replica('A')
+  const B = new Replica('B')
+  const castOn = (d: Doc, sid: string) =>
+    d.slides.find((s: any) => s.id === sid).elements.find((e: any) => e.id === 'cast')
+  const ea = A.mutate((d) => (castOn(d, 's1').html = 'ONE ' + castOn(d, 's1').html))
+  const eb = B.mutate((d) => (castOn(d, 's2').html = castOn(d, 's2').html + ' TWO'))
+  A.receive(eb)
+  B.receive(ea)
+  ok(A.fingerprint() === B.fingerprint(), 'per-copy text edits converged')
+  ok(castOn(A.doc, 's1').html === 'ONE Morph <b>me</b>', `s1 copy text: "${castOn(A.doc, 's1').html}"`)
+  ok(castOn(A.doc, 's2').html === 'Morph <b>me</b> TWO', `s2 copy text: "${castOn(A.doc, 's2').html}"`)
+}
+{
+  console.log('dup id: created by diff (paste-with-same-id) replicates…')
+  const A = new Replica('A')
+  const B = new Replica('B')
+  const mk = () => ({ id: 'dup-x', type: 'shape', shape: 'rect', x: 7, y: 7, w: 20, h: 20, rotation: 0, opacity: 1, fill: '#777', stroke: 'none', strokeWidth: 0, radius: 0 })
+  const o1 = A.mutate((d) => d.slides[0].elements.push(mk()))
+  const o2 = A.mutate((d) => d.slides[1].elements.push({ ...mk(), x: 77 }))
+  B.receive(o1)
+  B.receive(o2)
+  ok(A.fingerprint() === B.fingerprint(), 'diff-created dup converged')
+  const on = (d: Doc, sid: string) =>
+    d.slides.find((s: any) => s.id === sid).elements.find((e: any) => e.id === 'dup-x')
+  ok(on(B.doc, 's1')?.x === 7 && on(B.doc, 's2')?.x === 77, 'both copies present on B with their own props')
+}
+{
+  console.log('dup id: delete one copy, edit the other concurrently…')
+  const A = new Replica('A')
+  const B = new Replica('B')
+  const del = A.mutate((d) => {
+    const s1 = d.slides.find((s: any) => s.id === 's1')
+    s1.elements = s1.elements.filter((e: any) => e.id !== 'cast')
+  })
+  const edit = B.mutate((d) => {
+    const c = d.slides.find((s: any) => s.id === 's2').elements.find((e: any) => e.id === 'cast')
+    c.fill = undefined
+    c.x = 999
+  })
+  A.receive(edit)
+  B.receive(del)
+  ok(A.fingerprint() === B.fingerprint(), 'delete-one-copy converged')
+  ok(!A.doc.slides.find((s: any) => s.id === 's1').elements.some((e: any) => e.id === 'cast'), 's1 copy gone')
+  ok(A.doc.slides.find((s: any) => s.id === 's2').elements.find((e: any) => e.id === 'cast').x === 999, 's2 copy edited')
+}
+{
+  console.log('dup id: concurrent moves onto one slide converge…')
+  // A moves s1's cast → s3 while B moves s2's cast → s3: both replicas must
+  // agree (the two copies collapse to one under the within-slide id
+  // invariant — documented degradation, never divergence)
+  const A = new Replica('A')
+  const B = new Replica('B')
+  const mv = (d: Doc, from: string) => {
+    const f = d.slides.find((s: any) => s.id === from)
+    const s3 = d.slides.find((s: any) => s.id === 's3')
+    const i = f.elements.findIndex((e: any) => e.id === 'cast')
+    const [el] = f.elements.splice(i, 1)
+    s3.elements.push(el)
+  }
+  const ma = A.mutate((d) => mv(d, 's1'))
+  const mb = B.mutate((d) => mv(d, 's2'))
+  A.receive(mb)
+  B.receive(ma)
+  ok(A.fingerprint() === B.fingerprint(), 'colliding moves converged')
+  ok(
+    A.doc.slides.find((s: any) => s.id === 's3').elements.filter((e: any) => e.id === 'cast').length === 1,
+    'exactly one cast on s3 after collision',
+  )
+}
+{
+  console.log('dup id: snapshot fork merge keeps both copies…')
+  const A = new Replica('A')
+  const B = new Replica('B')
+  A.mutate((d) => (d.slides.find((s: any) => s.id === 's1').elements.find((e: any) => e.id === 'cast').y = 41))
+  B.mutate((d) => (d.slides.find((s: any) => s.id === 's2').elements.find((e: any) => e.id === 'cast').y = 42))
+  const aDoc = JSON.parse(JSON.stringify(A.doc))
+  const aState = JSON.parse(JSON.stringify(A.state.toJSON()))
+  const bDoc = JSON.parse(JSON.stringify(B.doc))
+  const bState = JSON.parse(JSON.stringify(B.state.toJSON()))
+  A.state.mergeSnapshot(A.doc, bDoc, bState)
+  A.shadow = JSON.stringify(A.doc)
+  B.state.mergeSnapshot(B.doc, aDoc, aState)
+  B.shadow = JSON.stringify(B.doc)
+  ok(A.fingerprint() === B.fingerprint(), 'dup-id fork merge converged')
+  ok(castCount(A.doc) === 2, 'both copies survive the fork merge')
+  const y = (sid: string) =>
+    A.doc.slides.find((s: any) => s.id === sid).elements.find((e: any) => e.id === 'cast').y
+  ok(y('s1') === 41 && y('s2') === 42, 'fork edits landed on their own copies')
+}
+{
+  console.log('pre-v2 saved state and snapshots are discarded…')
+  const A = new Replica('A')
+  const legacy = { lamport: 9, vv: { Z: 4 }, regs: { 'cast x': [9, 'Z'] }, pos: {}, births: {}, tombs: {}, txt: {}, stash: {}, limbo: {} }
+  const s = SyncState.fromJSON('A', legacy as any)
+  ok(s.lamport === 0 && Object.keys(s.regs).length === 0, 'v1 state ignored by fromJSON')
+  const before = A.fingerprint()
+  const r = A.state.mergeSnapshot(A.doc, baseDoc(), legacy as any)
+  ok(!r.changed && A.fingerprint() === before, 'v1 snapshot ignored by mergeSnapshot')
 }
 
 console.log(failures === 0 ? `\nALL PASS (${checks} checks)` : `\n${failures} FAILURES of ${checks} checks`)

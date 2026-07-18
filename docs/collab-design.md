@@ -86,6 +86,25 @@ raised to `max(local, seen)+1` on every received op. `(lamport, actorId)` is
 the total order used for all conflict resolution. The document's `docId`
 (already shipped) is the room key.
 
+**Node identity (v2, July 2026).** Slides key by their id, but element
+nodes key by the **composite `slideId U+001F elementId`** (`elKey` in
+`crdt.ts`). The bare element id is deliberately NOT unique across slides —
+same-id-on-many-slides is the format's core morph idiom (`data-flip-id`
+pairing; the starter deck's `sd-tile-*` cast rides through every slide) —
+so v1's bare-id keying collapsed those copies into one node and replicas
+diverged (one dropped a copy, the other kept it). Under composite keys
+each per-slide copy is its own CRDT node; the document format is untouched
+(payloads and materialized JSON carry bare ids; morph pairing happens at
+render time and never sees CRDT keys). Consequences: an element node is
+pinned to one slide for life, so a cross-slide move diffs as
+`del(oldKey)+ins(newKey)` — concurrent moves of the same element to two
+different slides duplicate it (both users keep their copy), and concurrent
+moves onto the SAME slide collapse to one LWW winner (bare ids stay unique
+*within* a slide — the editor invariant). The wire and saved sync state
+are versioned (`SYNC_V = 2`: `pv` on frames, `v` in `SyncStateJSON`);
+pre-v2 frames, room snapshots, and `doc.collab.sync` blobs are discarded
+on sight — an old-scheme file simply rejoins as a never-synced adopt.
+
 **Ops** (all JSON, ~one line each):
 
 ```jsonc
@@ -107,8 +126,9 @@ the total order used for all conflict resolution. The document's `docId`
 - `ins` — create with the full node payload and a fractional-index `ord`.
 - `del` — tombstone. Delete beats concurrent edits (standard, predictable).
   Tombstones live in the op log, never in the document JSON.
-- `ord` — LWW on a node's fractional index (slide order, element z-order,
-  moves between slides carry a `sl` too).
+- `ord` — LWW on a node's fractional index (slide order, element z-order).
+  Since node identity v2, an element's parent slide is part of its key, so
+  `ord` never re-parents — cross-slide moves are `del`+`ins`.
 
 **Order.** Slides and elements carry fractional-index keys (short base-62
 strings, jittered to avoid collisions — the Figma/Linear technique). The

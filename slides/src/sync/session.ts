@@ -18,7 +18,7 @@
 import type { Store } from '../store'
 import type { BentoDoc, Slide } from '../model'
 import { uid } from '../model'
-import { SyncState, type Op } from './crdt'
+import { SyncState, SYNC_V, type Op } from './crdt'
 import { mintCollab } from './online'
 
 export interface PresenceInfo {
@@ -49,7 +49,12 @@ interface SnapFrame {
   doc: BentoDoc
   state: import('./crdt').SyncStateJSON
 }
-export type Frame = HelloFrame | OpsFrame | NeedFrame | PresFrame | ByeFrame | SnapFrame
+/** every frame is stamped with the sync protocol version (`pv: SYNC_V`) by
+ * send(); frames without the current pv (old builds, stale relay logs from
+ * the bare-id era) are dropped in onFrame — their keys don't interoperate */
+export type Frame = (HelloFrame | OpsFrame | NeedFrame | PresFrame | ByeFrame | SnapFrame) & {
+  pv?: number
+}
 
 export interface Transport {
   readonly kind: string
@@ -133,7 +138,7 @@ export class SyncSession {
     // just works. Dormant (on:false) until the Share button flips it.
     if (!doc.collab) doc.collab = mintCollab()
     const saved = doc.collab?.sync
-    if (saved) {
+    if (saved && saved.v === SYNC_V) {
       // this file was saved during/after a shared session: restore the CRDT
       // state so our offline edits carry real registers, remote replay
       // dedups by version vector, and a state-based snapshot exchange can
@@ -141,6 +146,9 @@ export class SyncSession {
       this.state = SyncState.fromJSON(this.actor, JSON.parse(JSON.stringify(saved)))
       this.forkPending = true
     } else {
+      // no saved state, or state from the pre-composite-key era (v1) — that
+      // scheme collapsed same-id-on-many-slides, so it is discarded and the
+      // file joins as a never-synced adopt (deterministic keys from the doc)
       this.state = new SyncState(this.actor)
     }
     this.state.adopt(doc)
@@ -208,6 +216,7 @@ export class SyncSession {
   // --- remote frames --------------------------------------------------------
 
   private onFrame(f: Frame) {
+    if (f.pv !== SYNC_V) return // old-protocol frame (bare-id keys) — ignore
     if (f.a === this.actor) return
     switch (f.t) {
       case 'hello': {
@@ -364,6 +373,7 @@ export class SyncSession {
 
   /** merge a remote snapshot (relay replay for far-behind joiners) */
   applySnapshot(rdoc: BentoDoc, rstate: import('./crdt').SyncStateJSON) {
+    if (!rstate || rstate.v !== SYNC_V) return // pre-v2 room snapshot — unusable
     this.flush()
     this.applying = true
     try {
@@ -413,7 +423,8 @@ export class SyncSession {
   // --- plumbing -------------------------------------------------------------
 
   private send(frame: Frame) {
-    for (const tr of this.transports) tr.send(frame)
+    const stamped = { ...frame, pv: SYNC_V }
+    for (const tr of this.transports) tr.send(stamped)
   }
 
   private broadcast(frame: Frame) {
