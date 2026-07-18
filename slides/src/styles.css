@@ -1003,3 +1003,53 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   user-select: text;
   max-height: 320px;
 }
+
+/* --- live collaboration ----------------------------------------------- */
+.ed-avatars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 2px;
+}
+.ed-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  color: #16273e;
+  font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.ed-avatar:hover {
+  transform: translateY(-1px);
+}
+.ed-remote-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+.ed-remote-box {
+  position: absolute;
+  border: 2px solid;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.ed-remote-box.ed-remote-editing {
+  border-style: dashed;
+}
+.ed-remote-tag {
+  position: absolute;
+  top: -22px;
+  left: -2px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: #16273e;
+  font: 600 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  white-space: nowrap;
+}

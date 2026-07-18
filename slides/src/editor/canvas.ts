@@ -11,6 +11,7 @@ import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
 import { PathEditor } from './patheditor'
 import { CommentsUI } from './comments'
+import type { Peer } from '../sync/session'
 
 export class SlideCanvas {
   private stage: HTMLElement
@@ -135,6 +136,7 @@ export class SlideCanvas {
     this.moveable.updateRect()
     if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
     this.comments?.refresh()
+    this.drawRemote()
   }
 
   // --- zoom ------------------------------------------------------------------
@@ -375,6 +377,67 @@ export class SlideCanvas {
     this.surface = next
     this.relayout()
     this.syncTargets()
+    this.drawRemote()
+  }
+
+  // --- collaborator presence (colored outlines + name tags) -----------------
+
+  private remotePeers: Peer[] = []
+  private remoteLayer: HTMLElement | null = null
+
+  setRemotePeers(peers: Peer[]) {
+    this.remotePeers = peers
+    this.drawRemote()
+  }
+
+  private drawRemote() {
+    const slide = this.store.slide
+    if (!slide) return
+    if (!this.remoteLayer) {
+      this.remoteLayer = document.createElement('div')
+      this.remoteLayer.className = 'ed-remote-layer'
+      this.scaleHost.appendChild(this.remoteLayer)
+    }
+    // layer stays last in the scaled host so outlines paint above the slide
+    if (this.remoteLayer.nextSibling) this.scaleHost.appendChild(this.remoteLayer)
+    this.remoteLayer.innerHTML = ''
+    for (const peer of this.remotePeers) {
+      if (peer.slide !== slide.id) continue
+      const ids = new Set(peer.sel)
+      if (peer.editing) ids.add(peer.editing)
+      // the layer lives inside the scaled host — counter-scale strokes and
+      // name tags so they stay readable at any zoom (same idea as
+      // moveable.zoom = 1/scale)
+      const inv = 1 / (this.scale || 1)
+      let tagged = false
+      for (const id of ids) {
+        const el = slide.elements.find((e) => e.id === id)
+        if (!el) continue
+        const box = document.createElement('div')
+        box.className = 'ed-remote-box'
+        box.style.left = `${el.x}px`
+        box.style.top = `${el.y}px`
+        box.style.width = `${el.w}px`
+        box.style.height = `${el.h}px`
+        box.style.borderColor = peer.color
+        box.style.borderWidth = `${2 * inv}px`
+        if (el.rotation) box.style.transform = `rotate(${el.rotation}deg)`
+        if (peer.editing === id) box.classList.add('ed-remote-editing')
+        if (!tagged) {
+          const tag = document.createElement('div')
+          tag.className = 'ed-remote-tag'
+          tag.style.background = peer.color
+          tag.textContent = peer.editing === id ? `✏️ ${peer.name}` : peer.name
+          tag.style.transform = `scale(${inv})`
+          tag.style.transformOrigin = 'bottom left'
+          tag.style.bottom = '100%'
+          tag.style.top = 'auto'
+          box.appendChild(tag)
+          tagged = true
+        }
+        this.remoteLayer.appendChild(box)
+      }
+    }
   }
 
   /**
@@ -557,6 +620,7 @@ export class SlideCanvas {
     inner.focus()
     document.getSelection()?.selectAllChildren(inner)
     this.syncTargets()
+    this.onTextEditChange?.(node.dataset.elId)
 
     inner.addEventListener('keydown', (ev) => {
       ev.stopPropagation() // keep global shortcuts (Delete, arrows…) away
@@ -596,10 +660,14 @@ export class SlideCanvas {
     inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })
   }
 
+  /** collaborator presence: notified when text editing starts/stops */
+  onTextEditChange: ((elId: string | undefined) => void) | null = null
+
   commitTextEdit() {
     const node = this.editing
     if (!node) return
     this.editing = null
+    this.onTextEditChange?.(undefined)
     const inner = node.querySelector<HTMLElement>('.bento-text-inner')
     const id = node.dataset.elId
     node.classList.remove('bento-editing')
