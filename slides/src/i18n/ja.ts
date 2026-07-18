@@ -270,4 +270,5 @@ export const ja: Catalog = {
   "Save as template…": "テンプレートとして保存…",
   "Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.": "テンプレートを保存します。開いた人はそれぞれ、独自の ID とキーを持つ独立した新しいデッキを取得します。",
   "Template saved — every open of it starts a fresh deck": "テンプレートを保存しました — 開くたびに新しいデッキが始まります",
+  "Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends": "現在のスライドからプレゼン開始 — F で全画面切替、S で発表者ビュー、Esc で終了",
 }

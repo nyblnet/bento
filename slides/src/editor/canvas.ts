@@ -6,7 +6,7 @@ import Moveable from 'moveable'
 import Selecto from 'selecto'
 import type { Store } from '../store'
 import { t } from '../i18n'
-import type { SlideElement } from '../model'
+import { uid, type SlideElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
 import { PathEditor } from './patheditor'
@@ -503,18 +503,53 @@ export class SlideCanvas {
 
   // --- moveable -------------------------------------------------------------
 
+  /** ⌘/Ctrl-drag duplicate: originals move, copies stay behind (committed at drag end) */
+  private pendingCopy: SlideElement[] | null = null
+
   private wireMoveable() {
     const mv = this.moveable
+    // start positions per target — Shift axis-locks against these
+    const dragStarts = new Map<HTMLElement, { left: number; top: number }>()
 
+    const noteDragStart = (target: HTMLElement, inputEvent: MouseEvent | undefined) => {
+      dragStarts.set(target, {
+        left: parseFloat(target.style.left) || 0,
+        top: parseFloat(target.style.top) || 0,
+      })
+      if (inputEvent && (inputEvent.metaKey || inputEvent.ctrlKey) && !this.pendingCopy) {
+        // duplicate-drag: snapshot the selection now; the stationary copies
+        // are committed in one undo step together with the moved frames
+        this.pendingCopy = this.store.selectedElements.map(
+          (el) => JSON.parse(JSON.stringify(el)) as SlideElement,
+        )
+      }
+    }
+    const axisLock = (target: HTMLElement, left: number, top: number, ev: { inputEvent?: MouseEvent; dist?: number[] }) => {
+      const start = dragStarts.get(target)
+      if (!start || !ev.inputEvent?.shiftKey || !ev.dist) return { left, top }
+      return Math.abs(ev.dist[0]) >= Math.abs(ev.dist[1])
+        ? { left, top: start.top }
+        : { left: start.left, top }
+    }
+
+    mv.on('dragStart', (e) => noteDragStart(e.target as HTMLElement, e.inputEvent as MouseEvent))
+    mv.on('dragGroupStart', (e) =>
+      e.events.forEach((ev) => noteDragStart(ev.target as HTMLElement, e.inputEvent as MouseEvent)),
+    )
     mv.on('drag', (e) => {
-      e.target.style.left = `${e.left}px`
-      e.target.style.top = `${e.top}px`
+      const p = axisLock(e.target as HTMLElement, e.left, e.top, e)
+      e.target.style.left = `${p.left}px`
+      e.target.style.top = `${p.top}px`
     })
     mv.on('dragGroup', (e) => e.events.forEach((ev) => {
-      ev.target.style.left = `${ev.left}px`
-      ev.target.style.top = `${ev.top}px`
+      const p = axisLock(ev.target as HTMLElement, ev.left, ev.top, ev)
+      ev.target.style.left = `${p.left}px`
+      ev.target.style.top = `${p.top}px`
     }))
+    // Shift while resizing keeps the aspect ratio (checked live per move)
+    mv.on('resizeStart', (e) => { mv.keepRatio = !!(e.inputEvent as MouseEvent | undefined)?.shiftKey })
     mv.on('resize', (e) => {
+      mv.keepRatio = !!(e.inputEvent as MouseEvent | undefined)?.shiftKey
       e.target.style.width = `${e.width}px`
       e.target.style.height = `${e.height}px`
       e.target.style.left = `${e.drag.left}px`
@@ -526,19 +561,58 @@ export class SlideCanvas {
       ev.target.style.left = `${ev.drag.left}px`
       ev.target.style.top = `${ev.drag.top}px`
     }))
+    // Shift while rotating snaps to 15° steps
+    mv.on('rotateStart', (e) => { mv.throttleRotate = (e.inputEvent as MouseEvent | undefined)?.shiftKey ? 15 : 1 })
     mv.on('rotate', (e) => {
+      mv.throttleRotate = (e.inputEvent as MouseEvent | undefined)?.shiftKey ? 15 : 1
       e.target.style.transform = `rotate(${e.rotation}deg)`
     })
     mv.on('rotateGroup', (e) => e.events.forEach((ev) => {
       ev.target.style.transform = ev.transform
     }))
 
-    const commitFrames = () => this.commitDomFrames(this.selectedNodes())
-    mv.on('dragEnd', ({ isDrag }) => isDrag && commitFrames())
-    mv.on('dragGroupEnd', ({ isDrag }) => isDrag && commitFrames())
-    mv.on('resizeEnd', ({ isDrag }) => isDrag && commitFrames())
+    const commitFrames = () => {
+      const copies = this.pendingCopy
+      this.pendingCopy = null
+      if (copies?.length) {
+        // one undo step: stationary duplicates (fresh ids) + moved originals
+        const nodes = this.selectedNodes()
+        const frames = nodes.map((node) => ({
+          id: node.dataset.elId!,
+          x: parseFloat(node.style.left) || 0,
+          y: parseFloat(node.style.top) || 0,
+        }))
+        this.store.commit(() => {
+          const dupes = copies.map((el) => ({ ...el, id: uid(el.type[0]) }))
+          this.store.slide.elements.push(...dupes)
+          for (const f of frames) {
+            const el = this.store.element(f.id)
+            if (!el) continue
+            el.x = Math.round(f.x * 10) / 10
+            el.y = Math.round(f.y * 10) / 10
+          }
+        })
+        return
+      }
+      this.commitDomFrames(this.selectedNodes())
+    }
+    mv.on('dragEnd', ({ isDrag }) => {
+      if (isDrag) commitFrames()
+      else this.pendingCopy = null
+    })
+    mv.on('dragGroupEnd', ({ isDrag }) => {
+      if (isDrag) commitFrames()
+      else this.pendingCopy = null
+    })
+    mv.on('resizeEnd', ({ isDrag }) => {
+      mv.keepRatio = false
+      if (isDrag) commitFrames()
+    })
     mv.on('resizeGroupEnd', ({ isDrag }) => isDrag && commitFrames())
-    mv.on('rotateEnd', ({ isDrag }) => isDrag && commitFrames())
+    mv.on('rotateEnd', ({ isDrag }) => {
+      mv.throttleRotate = 1
+      if (isDrag) commitFrames()
+    })
     mv.on('rotateGroupEnd', ({ isDrag }) => isDrag && commitFrames())
   }
 

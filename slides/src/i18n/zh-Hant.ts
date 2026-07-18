@@ -270,4 +270,5 @@ export const zhHant: Catalog = {
   "Save as template…": "另存為範本…",
   "Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.": "儲存為範本副本：每個開啟它的人都會得到一份全新的獨立簡報，擁有自己的識別碼與金鑰。",
   "Template saved — every open of it starts a fresh deck": "範本已儲存 — 每次開啟都會產生新的簡報",
+  "Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends": "從目前頁面開始簡報 — F 切換全螢幕，S 開啟簡報者檢視，Esc 結束",
 }

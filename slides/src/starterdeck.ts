@@ -543,11 +543,17 @@ export function starterDoc(): BentoDoc {
         shape('rect', {
           id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: STEEL, fillGradient: GRAD_STEEL,
           stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
-          link: S_CHARTS_PIE,
         }),
         text({
           x: 944, y: 574, w: 216, h: 28, html: 'See the split →', fontSize: 17, fontWeight: 700,
-          color: '#FFFFFF', align: 'center', link: S_CHARTS_PIE,
+          color: '#FFFFFF', align: 'center',
+        }),
+        // ONE interactive surface per control: an invisible hit rect above
+        // button + label — a single, coherent hover outline, and the label
+        // never swallows the click (hard-won detail #7)
+        shape('rect', {
+          id: 'sd-hit-charts', x: 944, y: 560, w: 216, h: 52, radius: 26,
+          fill: 'rgba(0,0,0,0)', link: S_CHARTS_PIE,
         }),
       ],
     }),
@@ -576,11 +582,14 @@ export function starterDoc(): BentoDoc {
         shape('rect', {
           id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: STEEL, fillGradient: GRAD_STEEL,
           stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
-          link: S_CHARTS,
         }),
         text({
           x: 944, y: 574, w: 216, h: 28, html: '← Back to bars', fontSize: 17, fontWeight: 700,
-          color: '#FFFFFF', align: 'center', link: S_CHARTS,
+          color: '#FFFFFF', align: 'center',
+        }),
+        shape('rect', {
+          id: 'sd-hit-charts', x: 944, y: 560, w: 216, h: 52, radius: 26,
+          fill: 'rgba(0,0,0,0)', link: S_CHARTS,
         }),
       ],
     }),
@@ -727,11 +736,15 @@ export function starterDoc(): BentoDoc {
             }),
             shape('rect', {
               id: 'sd-ch-btn', x: 964, y: 452, w: 220, h: 52, radius: 26, fill: PEACH, fillGradient: GRAD_PEACH,
-              shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' }, link: scene.to,
+              shadow: { y: 10, blur: 26, color: 'rgba(0,0,0,0.4)' },
             }),
             text({
               id: 'sd-ch-btnlabel', x: 964, y: 466, w: 220, h: 28, html: scene.chip, align: 'center',
-              fontSize: 16, fontWeight: 700, color: INK, link: scene.to,
+              fontSize: 16, fontWeight: 700, color: INK,
+            }),
+            shape('rect', {
+              id: 'sd-ch-hit', x: 964, y: 452, w: 220, h: 52, radius: 26,
+              fill: 'rgba(0,0,0,0)', link: scene.to,
             }),
             text({
               x: 96, y: 660, w: 800, h: 26,

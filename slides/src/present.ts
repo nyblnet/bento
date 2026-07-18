@@ -196,9 +196,23 @@ export function startPresentation(
     updateSpeaker()
   }
 
+  // Real fullscreen (F toggles; Present enters it by default). The overlay
+  // element is what goes fullscreen, so the speaker popup stays independent.
+  // Requests can be denied (iframes, no user activation) — tab-fill mode is
+  // the graceful floor, and stays the mode for testing/sharing via F.
+  const enterFullscreen = () => {
+    overlay.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {})
+  }
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+    else enterFullscreen()
+  }
+  enterFullscreen()
+
   const exit = () => {
     if (exited) return
     exited = true
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     const last = deck.getIndices().h
     try {
       deck.destroy()
@@ -229,6 +243,12 @@ export function startPresentation(
       ev.preventDefault()
       ev.stopPropagation()
       openSpeaker()
+      return
+    }
+    if (ev.key === 'f' || ev.key === 'F') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      toggleFullscreen()
       return
     }
     const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
