@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bento — the office suite that fits in a file</title>
-<meta name="description" content="Bento Slides: a presentation is one HTML file — deck, viewer and editor together. No install, no account, end-to-end-encrypted live collaboration, works offline forever.">
+<title>Bento/Suite — the office suite that fits in a file</title>
+<meta name="description" content="Bento/Suite: office documents that are single HTML files — data, viewer and editor together. Local-first, AI-native, end-to-end-encrypted live collaboration, works offline forever. Slides is here; Docs and Sheets are coming.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316273E'/%3E%3Crect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/%3E%3Crect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/%3E%3C/svg%3E">
 <style>
 /* ————— Faces: the SAME type that travels inside every deck ————— */
@@ -194,11 +194,12 @@ header {
 .tiles .frame {
   position: absolute;
   inset: -9%;
-  border-radius: 26%;
+  border-radius: 22%; /* the app icon's rx (7/32), scaled */
   background: var(--panel);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 0 60px var(--glow);
 }
-.tile { position: absolute; border-radius: 14%; animation: var(--anim) 9s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+/* fixed px radius: percentage radii turn elliptical as the tiles morph */
+.tile { position: absolute; border-radius: 22px; animation: var(--anim) 9s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
 .tile.steel { background: linear-gradient(180deg, #6C86AB, #536C8E); --anim: t-steel; }
 .tile.peach { background: linear-gradient(180deg, #FFB29B, #ED8266); --anim: t-peach; }
 .tile.paper-t { background: linear-gradient(180deg, #F5F1E6, #E7E0D0); --anim: t-paper; }
@@ -337,6 +338,7 @@ section:not(.paper) .card p { color: var(--mist); }
   padding: 7px 15px;
 }
 .chip b { color: var(--peach-soft); font-weight: 700; }
+.chip.soon { color: var(--mist-dim); border-color: rgba(255, 255, 255, 0.1); }
 
 /* code vignette — the honest document */
 .codebox {
@@ -398,9 +400,8 @@ footer b { color: var(--mist); font-weight: 600; }
 <header>
   <a class="mark" href="/">
     <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#16273E"/><rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/><rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/><rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/></svg>
-    <span>Bento<span class="slash">/</span>Slides</span>
+    <span>Bento<span class="slash">/</span>Suite</span>
   </a>
-  <a class="open-app" href="/slides/">Open the app →</a>
 </header>
 
 <!-- ———————————————————— hero ———————————————————— -->
@@ -417,7 +418,7 @@ footer b { color: var(--mist); font-weight: 600; }
   </div>
   <div class="wrap">
     <div>
-      <div class="kicker rv in">Bento / Slides</div>
+      <div class="kicker rv in">Bento / Suite</div>
       <hr class="hairline rv in" style="max-width:220px">
       <h1 class="rv in">The file is<br>the <span class="accent">software.</span></h1>
       <p class="sub rv in d1">A presentation is <b>one HTML file</b> — deck, viewer and editor together. Open it anywhere. Edit it. Present it. <b>It saves itself.</b></p>
@@ -425,10 +426,10 @@ footer b { color: var(--mist); font-weight: 600; }
         <a class="btn primary" href="/slides/">▶&nbsp; Try it in your browser</a>
         <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download <small>one file · ~400 KB</small></a>
       </div>
-      <div class="keys rv in d3" aria-hidden="true">
-        <span class="key"><span class="keycap">→</span> advance</span>
-        <span class="key"><span class="keycap">ESC</span> edit</span>
-        <span class="key"><span class="keycap">S</span> speaker view</span>
+      <div class="chips rv in d3" style="margin-top:0">
+        <span class="chip"><b>Slides</b> — the first app, here now</span>
+        <span class="chip soon">Docs — coming soon</span>
+        <span class="chip soon">Sheets — coming soon</span>
       </div>
     </div>
     <div class="tiles rv in d2" aria-hidden="true">
@@ -553,10 +554,16 @@ footer b { color: var(--mist); font-weight: 600; }
     <div class="ghost" aria-hidden="true">06</div>
     <div class="grid2">
       <div>
-        <div class="kicker rv">The honest format</div>
+        <div class="kicker rv">Local-first · AI-native</div>
         <hr class="hairline rv" style="max-width:220px">
-        <h2 class="rv">Speaks AI,<br>fluently.</h2>
-        <p class="lede rv d1">Because the document is plain JSON, any AI can read and write it. Copy the deck into a chat, paste the edited version back — or let an agent edit the file directly. <b>The format is the API.</b></p>
+        <h2 class="rv">Designed for AI.<br>Entirely optional.</h2>
+        <p class="lede rv d1">Bento is local-first <b>and</b> built for the AI era. The document is plain JSON sitting openly in the file — so a chatbot round-trips it and an agent harness <b>edits the file directly</b>. No converters, no uploads, no .pptx archaeology: <b>orders of magnitude leaner</b> than driving PowerPoint with a bot. And if you never touch AI, nothing here ever will either.</p>
+        <div class="chips rv d2">
+          <span class="chip"><b>The format is the API</b></span>
+          <span class="chip">No binary .pptx to decode</span>
+          <span class="chip">Agents edit the file in place</span>
+          <span class="chip">Nothing phones home</span>
+        </div>
       </div>
       <div class="codebox rv d1" aria-label="The document format, as it appears inside every file"><span class="c">&lt;!-- inside every .bento.html --&gt;</span>
 &lt;script type=<span class="s">"application/bento+json"</span> id=<span class="s">"bento-doc"</span>&gt;
@@ -596,7 +603,7 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
   <div class="wrap">
     <div><b>Privacy, precisely:</b> this page loads nothing from anyone. The optional collaboration relay sees ciphertext, connection timing, and a hash of your room key — never your content, never your name.</div>
     <div>Set in <b>Fraunces</b> &amp; <b>Instrument Sans</b> (OFL) — the same faces that travel inside every deck. Built on reveal.js, Moveable, Selecto (MIT) and engines of our own.</div>
-    <div>© 2026 bento.page · Slides today — Docs &amp; Sheets are on the bench.</div>
+    <div>© 2026 bento.page · <b>Bento/Slides</b> is the first app of Bento/Suite — <b>Bento/Docs</b> and <b>Bento/Sheets</b> are coming soon.</div>
   </div>
 </footer>
 
