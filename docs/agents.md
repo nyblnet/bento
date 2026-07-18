@@ -2,7 +2,9 @@
 
 *Drop this file into your context (or point your harness at it) and you can
 author and edit Bento presentations directly. Also published at
-[bento.page/agents.md](https://bento.page/agents.md).*
+[bento.page/agents.md](https://bento.page/agents.md). For a harness
+(Claude Code / Cowork), the packaged skill is at
+[bento.page/skills/bento-deck/SKILL.md](https://bento.page/skills/bento-deck/SKILL.md).*
 
 A Bento deck (`*.bento.html`) is a self-contained HTML file. The document
 lives in ONE plaintext block near the top:
@@ -24,6 +26,77 @@ Two ways to work with it:
    they paste it back via *About → Replace document from JSON…* (undoable).
    In the browser console: `window.bento.doc` (read) /
    `window.bento.loadDoc(json)` (write, undoable).
+
+---
+
+## Make a GREAT deck, not just a correct one
+
+**Read this section first — it is the difference between a wall of text and a
+Bento deck.** The format's whole value is motion, morph, charts and
+interactivity. A correct-but-static result (bullets on slides) wastes it and
+is the #1 failure mode. The move is to look at the *source material* and map
+each kind of content to the feature built for it:
+
+| When the material is… | Reach for | Why |
+|---|---|---|
+| numbers, %, quantities, "A vs B", **any table** | a **chart** element | data as bars/lines reads instantly; as bullets it doesn't |
+| consecutive slides about the **same thing changing** (before/after, process steps, a metric across stages) | **morph**: same element `id` on both slides + `transition:"morph"` on the later one | the shared elements glide; this is Bento's signature and is *almost always missed* |
+| a point to **drill into** (a definition, "click to see how", a sub-topic) | a **state slide** (`stateOf` + element `link`) | keeps the linear story clean; the detail is one click away |
+| a **hero / full-slide image** | full-bleed image + scrim rect + text, with **ken-burns** | static photos feel dead; a slow drift feels intentional |
+| a **sequence / flow / timeline / connection** | a line or `path` with a **`dash-march` loop**, or morph a highlight through the steps | motion carries the eye along the sequence |
+| a **headline number** | big text + `fx:{countUp:true}` | the count-up earns attention |
+| **every cover / section divider** | at least **one ambient motion** (ken-burns, an orbiting accent) | a still cover is a missed first impression |
+| **repeated chrome / a logo** | keep its `id` stable across slides | it morphs in place instead of popping on every slide |
+
+### Copy-paste recipes
+
+**Morph a title + accent bar between two slides** — identical ids, `transition:"morph"`:
+```json
+// slide 1
+{ "id":"s1","transition":"none","elements":[
+  { "id":"headline","type":"text","x":96,"y":140,"w":900,"h":200,"html":"Big claim.","fontSize":120,"fontWeight":900,"color":"#111","align":"left","valign":"top","lineHeight":1,"rotation":0,"opacity":1 },
+  { "id":"bar","type":"shape","shape":"rect","x":96,"y":380,"w":320,"h":16,"fill":"#E8442E","stroke":"none","strokeWidth":0,"radius":0,"rotation":0,"opacity":1 } ] }
+// slide 2 — same ids, new frames → they animate
+{ "id":"s2","transition":"morph","elements":[
+  { "id":"headline","type":"text","x":96,"y":84,"w":500,"h":80,"html":"Big claim.","fontSize":40,"fontWeight":900,"color":"#888","align":"left","valign":"top","lineHeight":1,"rotation":0,"opacity":1 },
+  { "id":"bar","type":"shape","shape":"rect","x":96,"y":170,"w":16,"h":450,"fill":"#E8442E","stroke":"none","strokeWidth":0,"radius":0,"rotation":0,"opacity":1 } ] }
+```
+
+**A bar chart from a table** — bar/line data is PLAIN NUMBERS (see chart rules below):
+```json
+{ "id":"c1","type":"chart","x":96,"y":260,"w":1088,"h":380,"rotation":0,"opacity":1,"preset":"bar","option":{
+  "xAxis":{"type":"category","data":["2022","2023","2024","2025"]},
+  "yAxis":{"type":"value"},
+  "series":[{"type":"bar","data":[420,780,1300,2450],"itemStyle":{"color":"#141310"},"barWidth":90}],
+  "tooltip":{"trigger":"item","formatter":"{b}: {c}"} },
+  "fx":{"enter":"fade-up"} }
+```
+
+**A state slide reached by clicking a node** — parent slide has the clickable element, the state lives adjacent:
+```json
+// on the parent slide, an element the viewer clicks:
+{ "id":"node-ingest","type":"shape","shape":"ellipse","x":330,"y":180,"w":74,"h":74,"fill":"#0B0E1E","stroke":"#7A5CFF","strokeWidth":2,"radius":0,"rotation":0,"opacity":1,"link":"state-ingest" }
+// a hidden state slide (arrow keys skip it; ← returns to parent):
+{ "id":"state-ingest","stateOf":"parent-slide-id","transition":"morph","name":"INGEST","elements":[ /* … */
+  { "id":"dismiss","type":"shape","shape":"rect","x":0,"y":0,"w":1280,"h":720,"fill":"rgba(0,0,0,0)","stroke":"none","strokeWidth":0,"radius":0,"rotation":0,"opacity":1,"link":"parent-slide-id" } ] }
+```
+
+**Full-bleed hero image with ken-burns + scrim + text:**
+```json
+{ "id":"photo","type":"image","x":0,"y":0,"w":1280,"h":720,"src":"asset:hero","fit":"cover","radius":0,"rotation":0,"opacity":1,"fx":{"ambient":"kenburns","ken":{"dir":"drift","scale":1.09,"duration":22}} },
+{ "id":"scrim","type":"shape","shape":"rect","x":0,"y":0,"w":1280,"h":720,"fill":"rgba(10,14,26,0.55)","stroke":"none","strokeWidth":0,"radius":0,"rotation":0,"opacity":1 },
+{ "id":"htitle","type":"text","x":96,"y":460,"w":1000,"h":180,"html":"On top of the photo.","fontSize":76,"fontWeight":800,"color":"#fff","align":"left","valign":"top","lineHeight":1.05,"rotation":0,"opacity":1,"fx":{"enter":"fade-up"} }
+```
+(Embed the image as a data URI in `doc.assets` under key `hero`, then reference `"asset:hero"` — the file must stay self-contained.)
+
+### Before you finish — self-audit
+
+- [ ] Any numbers rendered as text that should be a **chart**?
+- [ ] Do consecutive slides on one subject share element **ids + `transition:"morph"`**?
+- [ ] At least one **motion moment** (ken-burns / loop / count-up), especially the cover?
+- [ ] A drill-down that would work better as a **state slide**?
+- [ ] One accent colour, at most two typefaces, **96px** side margins (right-most x ≤ 1184)?
+- [ ] **Speaker notes** written on each slide (they travel in the file and double as the talk track)?
 
 ## Minimal valid document
 

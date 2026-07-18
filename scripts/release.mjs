@@ -89,6 +89,9 @@ execFileSync('node', [join(root, 'scripts/build-example-decks.mjs'), join(site, 
 
 // The agent guide — the runnable version of the "designed for AI" claim.
 cpSync(join(root, 'docs/agents.md'), join(site, 'agents.md'))
+// The harness skill (Cowork / Claude Code), fetchable + droppable.
+mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
+cpSync(join(root, 'skills/bento-deck/SKILL.md'), join(site, 'skills/bento-deck/SKILL.md'))
 
 // 404 — of course it's a deck (see build-404-deck.mjs + site-src/404.html).
 execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
