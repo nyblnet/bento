@@ -195,7 +195,15 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   (zoombar owns the right corner): big round FAB = fullscreen present,
   small one BESIDE it (never above — it would cover the slide) =
   tab-fill mode (testing/window-sharing); both call editor.present(
-  fromStart, fullscreen) → startPresentation opts.fullscreen. Save is a dropdown: copy (identity-keeping invite) / new
+  fromStart, fullscreen) → startPresentation opts.fullscreen. Leaving
+  fullscreen (Esc/F/browser UI) ENDS the show — it never drops to
+  tab-fill (fullscreenchange listener; tab mode only via the small
+  FAB). Touch: our own swipe nav (Reveal touch OFF — it would walk
+  into hidden states); swiping past either end exits to the editor.
+  Deck PAGE SIZE: presets + custom in the slide panel (doc.size —
+  already per-doc in the format); print @page is generated per-deck
+  (width normalised to 1600, height follows aspect). Size changes
+  reframe the canvas, never rescale elements. Save is a dropdown: copy (identity-keeping invite) / new
   deck (fresh identity) / template. "Live" button popover: name field,
   collaborator list (click follows), join/leave toasts. Deck buttons use
   ONE invisible hit-rect above button+label (hard-won #7) — never put

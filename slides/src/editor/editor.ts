@@ -825,6 +825,11 @@ export class Editor {
     document.getElementById('bento-print')?.remove()
     const box = div('')
     box.id = 'bento-print'
+    // page geometry follows the deck's aspect (width normalised to 1600)
+    const pageH = Math.round((1600 * this.store.doc.size.height) / this.store.doc.size.width)
+    const pageCss = document.createElement('style')
+    pageCss.textContent = `@page { size: 1600px ${pageH}px; margin: 0; } #bento-print .bp-page { height: ${pageH}px; }`
+    box.appendChild(pageCss)
     for (const slide of this.store.doc.slides) {
       if (slide.stateOf) continue
       const page = div('bp-page')
