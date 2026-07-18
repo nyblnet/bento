@@ -31,12 +31,22 @@ const FONTS = {
 }
 const FR = "Fraunces, Georgia, serif"
 const IN = "'Instrument Sans', 'Helvetica Neue', sans-serif"
-const MONO = "'SF Mono', 'Courier New', monospace"
+// Robust monospace stack. 'SF Mono' alone falls straight through to an ugly
+// 'Courier New' in Chrome on macOS (Apple doesn't expose SF Mono to the web),
+// so lead with ui-monospace and name the fonts that ARE reachable per platform.
+const MONO_STACK = "ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace"
+const MONO = MONO_STACK
 
 // public-domain photos (see scripts/gallery-photos/SOURCES.md), embedded as
 // data-URI assets so the decks stay fully self-contained
 const photo = (name) =>
   'data:image/jpeg;base64,' + readFileSync(join(root, 'scripts/gallery-photos', name)).toString('base64')
+
+// embedded webfont files (woff2) — same technique as photo(), so a deck that
+// wants a specific typeface stays self-contained instead of leaning on a
+// system font that may not exist in the viewer's browser
+const fontFile = (name) =>
+  'data:font/woff2;base64,' + readFileSync(join(root, 'scripts/gallery-fonts', name)).toString('base64')
 
 // ——— tiny builders ———————————————————————————————————————————————
 let uid = 0
@@ -100,8 +110,8 @@ const doc = (o) => ({
   format: 'bento/slides', version: 1, title: o.title,
   size: { width: 1280, height: 720 },
   theme: o.theme, template: true,
-  ...(o.withFonts ? { assets: { ...FONTS.assets, ...(o.assets ?? {}) }, fonts: FONTS.fonts }
-    : (o.assets ? { assets: o.assets } : {})),
+  ...(o.withFonts ? { assets: { ...FONTS.assets, ...(o.assets ?? {}) }, fonts: [...FONTS.fonts, ...(o.fonts ?? [])] }
+    : (o.assets ? { assets: o.assets, ...(o.fonts ? { fonts: o.fonts } : {}) } : {})),
   ...(o.present ? { present: o.present } : {}),
   slides: o.slides, modified: new Date().toISOString(),
 })
@@ -169,15 +179,15 @@ function deckSignal() {
 
   const s3b = slide({
     id: 'sig-floor', background: INK, transition: 'fade',
-    notes: 'The photo essay beat. A full-bleed public-domain photograph (Marjory Collins, NYT composing room, 1942 — Library of Congress) with a slow ken-burns drift, an ink scrim, and one serif line. Swap the photo, keep the recipe: image → scrim → words.',
+    notes: 'The photo essay beat. A full-bleed public-domain photograph (Marjory Collins, New York Times pressroom, 1942 — Library of Congress) with a slow ken-burns drift, an ink scrim, and one serif line. A DIFFERENT frame from the cover shot on purpose — the cover sets the type, this beat prints it. Swap the photo, keep the recipe: image → scrim → words.',
     elements: [
-      img({ asset: 'ph-press', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.09, duration: 22 } } }),
+      img({ asset: 'ph-press2', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.09, duration: 22 } } }),
       shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(15,14,11,0.58)' }),
       shape('rect', { x: 0, y: 430, w: 1280, h: 290, fill: 'rgba(15,14,11,0.4)', fillGradient: grad(180, [0, 'rgba(15,14,11,0)'], [1, 'rgba(15,14,11,0.85)']) }),
       kick(96, 96, 'THE FLOOR'),
       shape('rect', { x: 96, y: 130, w: 220, h: 2, fill: RED }),
       text({ x: 90, y: 420, w: 1000, h: 220, html: 'Set by hand,<br>read by thousands.', fontSize: 76, fontFamily: FR, fontWeight: 900, color: BONE, lineHeight: 1.02, fx: { enter: 'fade-up' } }),
-      text({ x: 96, y: 640, w: 900, h: 24, html: 'COMPOSING ROOM, 1942 · LIBRARY OF CONGRESS — PUBLIC DOMAIN', fontSize: 10, fontWeight: 600, letterSpacing: 3, color: 'rgba(239,237,228,0.55)', fx: { enter: 'fade-up', order: 2 } }),
+      text({ x: 96, y: 640, w: 900, h: 24, html: 'NEW YORK TIMES PRESSROOM, 1942 · LIBRARY OF CONGRESS — PUBLIC DOMAIN', fontSize: 10, fontWeight: 600, letterSpacing: 3, color: 'rgba(239,237,228,0.55)', fx: { enter: 'fade-up', order: 2 } }),
       text({ x: 1150, y: 654, w: 80, h: 24, html: '04', fontSize: 13, fontWeight: 600, color: 'rgba(239,237,228,0.6)', align: 'right', fontFamily: MONO }),
     ],
   })
@@ -230,7 +240,10 @@ function deckSignal() {
 
   return doc({
     title: 'Signal — editorial type template', withFonts: true,
-    assets: { 'ph-press': photo('signal-press.jpg') },
+    assets: {
+      'ph-press': photo('signal-press.jpg'),
+      'ph-press2': photo('signal-press2.jpg'),
+    },
     theme: { background: BONE, color: INK, accent: RED, fontFamily: IN },
     slides: [s1, s2, s3, s3b, s4, s5, s6],
   })
@@ -353,6 +366,11 @@ function deckTerra() {
 // Void black, electric cyan→violet gradients, glow, orbiting particles.
 // ═══════════════════════════════════════════════════════════════════════
 function deckOrbital() {
+  // Orbital embeds Space Mono (OFL) for its HUD-style technical labels — the
+  // deck's mono was the one place a system font ('SF Mono') showed through as
+  // Courier in Chrome. Embedding keeps the readouts crisp and on-brand
+  // everywhere; MONO shadows the module const for this deck only.
+  const MONO = "'Space Mono', " + MONO_STACK
   const VOID = '#05060E', DEEP = '#0B0E1E', CYAN = '#38E1FF', VIOLET = '#7A5CFF', MAG = '#FF4FA3'
   const DIM = 'rgba(178,196,224,0.62)'
   const GRAD_CY = grad(30, [0, CYAN], [1, VIOLET])
@@ -483,7 +501,13 @@ function deckOrbital() {
       'ph-earth': photo('orbital-earth.jpg'), 'ph-nebula': photo('orbital-nebula.jpg'),
       'ph-stars': photo('orbital-stars.jpg'), 'ph-aurora': photo('orbital-aurora.jpg'),
       'ph-dragon': photo('orbital-dragon.jpg'),
+      'font-spacemono': fontFile('SpaceMono-400-latin.woff2'),
+      'font-spacemono-bold': fontFile('SpaceMono-700-latin.woff2'),
     },
+    fonts: [
+      { family: 'Space Mono', asset: 'font-spacemono', weight: '400' },
+      { family: 'Space Mono', asset: 'font-spacemono-bold', weight: '700' },
+    ],
     theme: { background: VOID, color: '#EAF4FF', accent: CYAN, fontFamily: IN },
     present: { progress: true },
     slides: [s1, s2, s2b, s3, st1, st2, s4, s5],

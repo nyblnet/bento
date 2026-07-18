@@ -1,0 +1,32 @@
+name = "bento-guestbook-daemon"
+main = "src/worker.js"
+workers_dev = true
+compatibility_date = "2026-06-01"
+
+# Serves the current guestbook epoch from R2 (shadows GitHub Pages for this
+# one path — apex must be proxied/orange-cloud) + the admin surface.
+routes = [
+  { pattern = "bento.page/guestbook.bento.html", zone_name = "bento.page" },
+  { pattern = "bento.page/guestbook-admin/*", zone_name = "bento.page" },
+]
+
+# Daily archivist snapshot. Cron is UTC: 01:00 UTC ≈ 09:00 HKT.
+[triggers]
+crons = ["0 1 * * *"]
+
+[[kv_namespaces]]
+binding = "STORE"
+id = "ac9eeb2800ea4e848ccf303e31d6620f"
+
+[vars]
+# where a fresh shell is fetched from at roll time (never bundled)
+SHELL_URL = "https://bento.page/releases/slides/Bento_Slides.bento.html"
+# fallback origin if R2 has no current file (GitHub Pages direct)
+ORIGIN_FALLBACK = "https://nyblnet.github.io/bento-site"
+# relay host baked into newly minted epochs
+SYNC_HOST = "wss://sync.bento.page"
+# automatic roll cadence in hours; 0 = manual rolls only (admin endpoint)
+ROLL_HOURS = "0"
+
+# secrets (set with `npx wrangler secret put ADMIN_KEY`):
+#   ADMIN_KEY — bearer for /guestbook-admin/*
