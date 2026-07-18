@@ -566,7 +566,7 @@ export class Editor {
       num.textContent = String(this.linearNumber(i))
     }
     // thumb width tracks the (resizable) sidebar; states render smaller
-    const base = Math.max(96, this.panelW.left - 40)
+    const base = Math.max(96, this.panelW.left - 52)
     const surface = renderThumbnail(slide, this.store.doc, isState ? Math.round(base * 0.84) : base)
     if (slide.comments?.some((c) => !c.resolved)) {
       const badge = div('ed-thumb-cmt')
@@ -752,7 +752,7 @@ export class Editor {
     this.thumbTimer = window.setTimeout(() => {
       const thumbs = this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb')
       if (thumbs.length !== this.store.doc.slides.length) return this.rebuildSidebar()
-      const base = Math.max(96, this.panelW.left - 40)
+      const base = Math.max(96, this.panelW.left - 52)
       thumbs.forEach((item) => {
         const slide = this.store.doc.slides[Number(item.dataset.index)]
         if (!slide) return

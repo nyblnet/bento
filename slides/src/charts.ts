@@ -523,6 +523,10 @@ export function mountChart(el: ChartElement, host: HTMLElement, fromOption?: Rec
   }
 
   function showTip(title: string, rows: Array<{ name: string; value?: string; color: string }>, x: number, y: number) {
+    // in fullscreen, only the fullscreened element's subtree paints — the
+    // tip must live inside it (fixed coords stay viewport-correct)
+    const tipHost = document.fullscreenElement ?? document.body
+    if (tipEl.parentElement !== tipHost) tipHost.appendChild(tipEl)
     tipEl.innerHTML =
       (title ? `<b>${escapeHtml(title)}</b><br>` : '') +
       rows.map((r) =>

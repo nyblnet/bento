@@ -201,9 +201,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   FAB). Touch: our own swipe nav (Reveal touch OFF — it would walk
   into hidden states); swiping past either end exits to the editor.
   Deck PAGE SIZE: presets + custom in the slide panel (doc.size —
-  already per-doc in the format); print @page is generated per-deck
-  (width normalised to 1600, height follows aspect). Size changes
-  reframe the canvas, never rescale elements. Save is a dropdown: copy (identity-keeping invite) / new
+  already per-doc in the format); canonical 16:9 = 1280×720 (matches
+  the model default; presets use exact-px matching); print @page is
+  generated per-deck (width normalised to 1600, height follows
+  aspect). Size changes reframe the canvas, never rescale elements.
+  FULLSCREEN paints only the fullscreened element's subtree — anything
+  body-mounted (chart tooltips!) must reparent into
+  document.fullscreenElement while it's active. Save is a dropdown: copy (identity-keeping invite) / new
   deck (fresh identity) / template. "Live" button popover: name field,
   collaborator list (click follows), join/leave toasts. Deck buttons use
   ONE invisible hit-rect above button+label (hard-won #7) — never put

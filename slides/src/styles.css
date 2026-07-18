@@ -121,6 +121,8 @@ html, body {
   width: var(--panew, 188px);
   flex: none;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -132,6 +134,7 @@ html, body {
 
 .ed-thumb {
   position: relative;
+  max-width: 100%;
   border: 2px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
