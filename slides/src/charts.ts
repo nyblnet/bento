@@ -487,12 +487,13 @@ export function mountChart(el: ChartElement, host: HTMLElement, fromOption?: Rec
     wireTooltips(svg, opt)
   }
 
-  // tooltip overlay
+  // tooltip overlay — FIXED to the viewport and parented to <body>, so it is
+  // immune to the slide's transform scale and to sibling stacking order
   const tipEl = document.createElement('div')
   tipEl.style.cssText =
-    'position:absolute;pointer-events:none;z-index:5;display:none;background:rgba(18,26,40,0.92);color:#fff;' +
+    'position:fixed;pointer-events:none;z-index:10000;display:none;background:rgba(18,26,40,0.92);color:#fff;' +
     'font-size:12px;line-height:1.5;padding:6px 10px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%)'
-  host.appendChild(tipEl)
+  document.body.appendChild(tipEl)
 
   const digestNow = () => digest(option, w, h)
 
@@ -501,8 +502,6 @@ export function mountChart(el: ChartElement, host: HTMLElement, fromOption?: Rec
     if (!d.tooltipTrigger) return
     svg.addEventListener('mousemove', (ev) => {
       const target = ev.target as Element & { __tip?: any; __cat?: number }
-      const rect = host.getBoundingClientRect()
-      const sx = rect.width / w
       if (d.tooltipTrigger === 'axis' && typeof target.__cat === 'number') {
         const { cats, i0 } = catWindow(d, view)
         const i = target.__cat
@@ -513,9 +512,9 @@ export function mountChart(el: ChartElement, host: HTMLElement, fromOption?: Rec
             value: fmt(num((s.data ?? [])[i0 + i], 0)),
             color: typeof s?.itemStyle?.color === 'string' ? s.itemStyle.color : d.colors[si % d.colors.length],
           }))
-        showTip(cats[i] ?? '', rows, ev.clientX - rect.left, ev.clientY - rect.top, sx)
+        showTip(cats[i] ?? '', rows, ev.clientX, ev.clientY)
       } else if (target.__tip) {
-        showTip(target.__tip.title, target.__tip.rows, ev.clientX - rect.left, ev.clientY - rect.top, sx)
+        showTip(target.__tip.title, target.__tip.rows, ev.clientX, ev.clientY)
       } else if (d.tooltipTrigger === 'item') {
         tipEl.style.display = 'none'
       }
@@ -523,16 +522,22 @@ export function mountChart(el: ChartElement, host: HTMLElement, fromOption?: Rec
     svg.addEventListener('mouseleave', () => { tipEl.style.display = 'none' })
   }
 
-  function showTip(title: string, rows: Array<{ name: string; value?: string; color: string }>, x: number, y: number, _sx: number) {
+  function showTip(title: string, rows: Array<{ name: string; value?: string; color: string }>, x: number, y: number) {
     tipEl.innerHTML =
       (title ? `<b>${escapeHtml(title)}</b><br>` : '') +
       rows.map((r) =>
         `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${r.color};margin-right:5px"></span>` +
         `${escapeHtml(r.name)}${r.value !== undefined ? `: <b>${escapeHtml(r.value)}</b>` : ''}`,
       ).join('<br>')
-    tipEl.style.left = `${x}px`
-    tipEl.style.top = `${y - 6}px`
     tipEl.style.display = 'block'
+    // clamp within the viewport; flip below the cursor near the top edge
+    const tw = tipEl.offsetWidth
+    const cx = Math.max(tw / 2 + 6, Math.min(window.innerWidth - tw / 2 - 6, x))
+    const th = tipEl.offsetHeight
+    const above = y - th - 14 >= 4
+    tipEl.style.transform = above ? 'translate(-50%,-110%)' : 'translate(-50%,14px)'
+    tipEl.style.left = `${cx}px`
+    tipEl.style.top = `${y - (above ? 6 : 0)}px`
   }
 
   // inside dataZoom: wheel to zoom, drag to pan
@@ -598,6 +603,7 @@ export function mountChart(el: ChartElement, host: HTMLElement, fromOption?: Rec
   return () => {
     disposed = true
     anim.killTweensOf(clock)
+    tipEl.remove()
     delete (host as HTMLElement & { __bentoChart?: unknown }).__bentoChart
     host.innerHTML = ''
   }
