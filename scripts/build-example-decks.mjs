@@ -84,12 +84,14 @@ const slide = (o) => ({
 const grad = (angle, ...stops) => ({
   angle, stops: stops.map(([at, color]) => ({ at, color })),
 })
-// orbit path relative to rest position (closed loop through rest)
-const orbit = (r, phase = 0) => {
+// orbit path relative to rest position (closed loop through rest).
+// phase = where on the circle the rest position sits (0 = right, -PI/2 = top);
+// squash < 1 flattens vertically for a floaty wobble, 1 = true circle.
+const orbit = (r, phase = 0, squash = 0.6) => {
   const pts = []
-  for (let i = 0; i <= 8; i++) {
-    const a = phase + (i / 8) * Math.PI * 2
-    pts.push(`${Math.cos(a) * r - Math.cos(phase) * r},${Math.sin(a) * r * 0.6 - Math.sin(phase) * r * 0.6}`)
+  for (let i = 0; i <= 24; i++) {
+    const a = phase + (i / 24) * Math.PI * 2
+    pts.push(`${(Math.cos(a) - Math.cos(phase)) * r},${(Math.sin(a) - Math.sin(phase)) * r * squash}`)
   }
   return `M0,0 L${pts.slice(1).join(' L')} Z`
 }
@@ -117,11 +119,10 @@ function deckSignal() {
 
   const s1 = slide({
     id: 'sig-cover', background: INK, transition: 'none',
-    notes: 'TEMPLATE — “Signal”, an editorial-typographic deck. The cover is the poster: a full-bleed public-domain photograph pushed through a RED DUOTONE (ink scrim + red wash — two rects, no filters) with the masthead type reversed to bone. Slide 2 cuts back to paper. The red bar and the title share ids with slide 2 — they MORPH.',
+    notes: 'TEMPLATE — “Signal”, an editorial-typographic deck. The cover is the poster: a full-bleed public-domain photograph under a deep ink scrim (one rect, no filters) with the masthead type reversed to bone. Slide 2 cuts back to paper. The red bar and the title share ids with slide 2 — they MORPH.',
     elements: [
       img({ asset: 'ph-press', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.07, duration: 24 } } }),
-      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(20,19,16,0.42)' }),
-      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(226,52,30,0.48)' }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(20,19,16,0.62)' }),
       kick(96, 84, 'SIGNAL — A FESTIVAL OF GRAPHIC IDEAS', BONE),
       shape('rect', { x: 96, y: 118, w: 1088, h: 2, fill: 'rgba(239,237,228,0.7)' }),
       text({ id: 'sig-title', x: 86, y: 128, w: 1120, h: 330, html: 'Loud<br>letters.', fontSize: 168, fontFamily: FR, fontWeight: 900, color: BONE, lineHeight: 0.92, shadow: { y: 3, blur: 26, color: 'rgba(20,19,16,0.4)' } }),
@@ -372,8 +373,8 @@ function deckOrbital() {
       shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.45)', fillGradient: grad(180, [0, 'rgba(5,6,14,0.6)'], [0.55, 'rgba(5,6,14,0.25)'], [1, 'rgba(5,6,14,0.7)']) }),
       star(180, 140, 6, 17, 0), star(1050, 120, 4, 21, 2), star(940, 560, 8, 19, 4),
       star(220, 540, 5, 23, 1), star(640, 90, 4, 25, 3), star(1160, 400, 6, 15, 5),
-      shape('ellipse', { id: 'orb-ring', x: 440, y: 120, w: 400, h: 400, fill: 'rgba(0,0,0,0)', stroke: CYAN, strokeWidth: 2, shadow: glow('rgba(56,225,255,0.45)', 60), fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.05, duration: 12 } } }),
-      shape('ellipse', { x: 610, y: 90, w: 60, h: 60, fill: CYAN, fillGradient: GRAD_CY, shadow: glow('rgba(56,225,255,0.8)', 30), fx: { loop: { type: 'motion-path', path: orbit(200, 0), duration: 14 } } }),
+      shape('ellipse', { id: 'orb-ring', x: 440, y: 120, w: 400, h: 400, fill: 'rgba(0,0,0,0)', stroke: CYAN, strokeWidth: 2, shadow: glow('rgba(56,225,255,0.45)', 60) }),
+      shape('ellipse', { x: 610, y: 90, w: 60, h: 60, fill: CYAN, fillGradient: GRAD_CY, shadow: glow('rgba(56,225,255,0.8)', 30), fx: { loop: { type: 'motion-path', path: orbit(200, -Math.PI / 2, 1), duration: 14 } } }),
       text({ id: 'orb-word', x: 140, y: 260, w: 1000, h: 130, html: 'ORBITAL', fontSize: 110, fontWeight: 800, color: '#EAF4FF', align: 'center', letterSpacing: 30, fontFamily: IN, shadow: glow('rgba(56,225,255,0.35)', 40) }),
       text({ x: 140, y: 400, w: 1000, h: 24, html: 'LOW-ORBIT DATA · A FICTIONAL COMPANY FOR A REAL TEMPLATE', fontSize: 12, fontWeight: 500, letterSpacing: 3, color: DIM, align: 'center', fontFamily: MONO }),
       text({ x: 140, y: 616, w: 1000, h: 24, html: '— PRESS → TO ENTER THE SYSTEM —', fontSize: 11, fontWeight: 500, letterSpacing: 3, color: 'rgba(178,196,224,0.4)', align: 'center', fontFamily: MONO }),
@@ -469,7 +470,7 @@ function deckOrbital() {
       img({ asset: 'ph-nebula', x: 0, y: 0, w: 1280, h: 720, opacity: 0.5, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.12, duration: 30 } } }),
       shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.72)' }),
       shape('ellipse', { id: 'orb-ring', x: 340, y: 60, w: 600, h: 600, fill: 'rgba(0,0,0,0)', stroke: MAG, strokeWidth: 2, shadow: glow('rgba(255,79,163,0.4)', 80) }),
-      shape('ellipse', { x: 620, y: 40, w: 44, h: 44, fill: MAG, fillGradient: GRAD_MG, shadow: glow('rgba(255,79,163,0.8)', 26), fx: { loop: { type: 'motion-path', path: orbit(300, 1), duration: 18 } } }),
+      shape('ellipse', { x: 620, y: 40, w: 44, h: 44, fill: MAG, fillGradient: GRAD_MG, shadow: glow('rgba(255,79,163,0.8)', 26), fx: { loop: { type: 'motion-path', path: orbit(300, -Math.PI / 2, 1), duration: 18 } } }),
       text({ id: 'orb-word', x: 140, y: 300, w: 1000, h: 110, html: 'JOIN THE SWEEP', fontSize: 66, fontWeight: 800, color: '#EAF4FF', align: 'center', letterSpacing: 16, fontFamily: IN, shadow: glow('rgba(255,79,163,0.3)', 40) }),
       mono(390, 430, 'ORBITAL.EXAMPLE · GROUND STATION OPEN HOUSE FRIDAYS', 'rgba(178,196,224,0.5)'),
       star(200, 160, 6, 18, 2), star(1040, 520, 7, 22, 4),
