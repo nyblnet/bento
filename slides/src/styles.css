@@ -906,9 +906,11 @@ html, body {
 .ed-resizer:hover, body.ed-col-resizing .ed-resizer { background: rgb(91 141 239 / 0.45); }
 body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-noanim { transition: none !important; }
-/* no grab strip against a collapsed panel — the [ ] toggles reopen it */
-.ed-sidebar.ed-collapsed + .ed-resizer { display: none; }
-.ed-resizer:has(+ .ed-props.ed-collapsed) { display: none; }
+/* against a collapsed panel the strip only carries the reopen chevron */
+.ed-sidebar.ed-collapsed + .ed-resizer,
+.ed-resizer:has(+ .ed-props.ed-collapsed) { cursor: default; }
+.ed-sidebar.ed-collapsed + .ed-resizer:hover,
+.ed-resizer:has(+ .ed-props.ed-collapsed):hover { background: transparent; }
 
 /* collapsible side panels */
 .ed-sidebar, .ed-props { transition: width .18s ease, padding .18s ease; }
@@ -1072,7 +1074,38 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   color: #b8860b;
 }
 .ed-share-status.ok { color: #2e8b57; }
-.ed-share-btn { justify-content: center; }
+.ed-share-btn {
+  justify-content: center;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.35;
+}
+.ed-share-peers { display: flex; flex-direction: column; gap: 2px; }
+.ed-share-peer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.ed-share-peer:hover { background: rgba(94, 118, 153, 0.1); }
+.ed-share-peer .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.ed-share-peer .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-share-peer .where { color: var(--muted, #5d6b80); font-size: 11.5px; flex: none; }
 .ed-btn-live { position: relative; }
 .ed-btn-live::after,
 .ed-btn-connecting::after {
@@ -1115,16 +1148,63 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 12.5px;
 }
 
-/* --- responsive topbar: stays usable at any width ----------------------- */
-/* narrow: button labels collapse to icons (tooltips still carry meaning) */
-@media (max-width: 1280px) {
-  .ed-topbar .ed-btn > span { display: none; }
-  .ed-topbar .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
-  .ed-topbar { gap: 6px; padding: 8px 8px; }
-  .ed-title { min-width: 60px; }
-}
-/* very narrow: the bar itself scrolls sideways rather than clipping */
-.ed-topbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-.ed-topbar::-webkit-scrollbar { height: 4px; }
+/* --- responsive topbar: labels give way, never a scrollbar ---------------- */
+.ed-topbar { min-width: 0; }
 .ed-topbar .ed-group { flex-shrink: 0; }
 .ed-logo { flex-shrink: 0; }
+.ed-title { flex: 0 1 220px; min-width: 48px; }
+@media (max-width: 1200px) {
+  .ed-topbar .ed-btn > span { display: none; } /* icons + tooltips take over */
+  .ed-topbar .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
+  .ed-topbar { gap: 6px; padding: 8px 8px; }
+}
+@media (max-width: 760px) {
+  .ed-topbar { gap: 4px; padding: 6px 6px; }
+  .ed-logo > b { display: none; } /* mark only — the icon is the brand */
+}
+
+/* panel collapse chevrons live ON the resizer strips, not in the topbar */
+.ed-resizer { position: relative; }
+.ed-panel-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: #5d6b80;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(20, 30, 45, 0.12);
+}
+.ed-panel-toggle:hover { color: var(--ink); border-color: #b9c3d2; }
+.ed-save-menu {
+  right: 0;
+  left: auto;
+  min-width: 190px;
+}
+.ed-save-menu .ed-btn { font-size: 12.5px; }
+/* when the adjacent panel is collapsed the chevron pins fully on-screen,
+   docked to the edge like a drawer pull */
+.ed-sidebar.ed-collapsed + .ed-resizer .ed-panel-toggle {
+  left: 0;
+  transform: translateY(-50%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.ed-resizer:has(+ .ed-props.ed-collapsed) .ed-panel-toggle {
+  left: auto;
+  right: 0;
+  transform: translateY(-50%);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}

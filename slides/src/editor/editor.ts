@@ -72,9 +72,20 @@ export class Editor {
   /** wire the live-collaboration session (avatars, remote selections, relay) */
   connectSync(session: import('../sync/session').SyncSession) {
     this.session = session
+    let known = new Map(session.peers().map((p) => [p.actor, p.name]))
     session.onPeers(() => {
       this.renderAvatars()
       this.canvas.setRemotePeers(session.peers())
+      if (this.shareWrap.classList.contains('open')) this.renderSharePanel()
+      // presence arrivals/departures get a quiet heads-up
+      const now = new Map(session.peers().map((p) => [p.actor, p.name]))
+      for (const [actor, name] of now) {
+        if (!known.has(actor)) this.toast(t('{name} joined', { name }))
+      }
+      for (const [actor, name] of known) {
+        if (!now.has(actor)) this.toast(t('{name} left', { name }))
+      }
+      known = now
     })
     this.canvas.onTextEditChange = (elId) => session.setEditing(elId)
     this.store.on('current', () => this.canvas.setRemotePeers(session.peers()))
@@ -172,24 +183,23 @@ export class Editor {
     insert.appendChild(commentB)
 
     const actions = div('ed-group ed-group-right')
+    // the update chip sits beside the wordmark and exists ONLY when an
+    // update is available (manual checks live in the About dialog)
     this.updatesB = btn(ICONS.sync, '', () => this.openAbout(true), t('Check for updates'))
-    // launch-time check (opt-out lives in the About dialog); a found update
-    // turns the button into a visible peach chip
+    this.updatesB.style.display = 'none'
     setTimeout(async () => {
       if (!autoCheckEnabled() || offlineEnabled()) return
       const r = await checkForUpdates()
       this.lastAutoCheck = r
       if (r.status === 'update') {
         this.updateFound = r.release.version
+        this.updatesB.style.display = ''
         this.updatesB.classList.add('ed-btn-update')
         this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
         this.updatesB.title = t('Version {v} is available — click to update', { v: r.release.version })
         this.toast(t('Update available: v{v} — click the peach button to update', { v: r.release.version }))
       } else if (r.status === 'current') {
-        this.updatesB.title = t('Up to date (v{v}) — checked at launch', { v: APP_VERSION })
         this.toast(t('Up to date — v{v}', { v: APP_VERSION }))
-      } else {
-        this.updatesB.title = t('Update check failed: {m} — click to retry', { m: r.message })
       }
     }, 1500)
     const undoB = btn(ICONS.undo, '', () => this.store.undo(), t('Undo (⌘Z)'))
@@ -197,14 +207,11 @@ export class Editor {
     const presentB = btn(ICONS.play, t('Present'), () => this.present(), t('Present from current slide — F toggles fullscreen, S opens speaker view, Esc ends'))
     presentB.classList.add('ed-btn-primary')
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), t('Save — rewrite this file in place (⌘S)'))
-    const saveAsB = btn(ICONS.download, '', () => this.save(true), t('Save a copy — pick a new file, leave this one untouched'))
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
-    const leftT = btn(ICONS.panelLeft, '', () => this.togglePanel('left'), t('Toggle slide list ([)'))
-    const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), t('Toggle properties (])'))
-    actions.append(undoB, redoB, pdfB, this.shareDropdown(), this.updatesB, leftT, rightT, presentB, saveB, saveAsB)
+    actions.append(undoB, redoB, pdfB, this.shareDropdown(), presentB, saveB, this.saveDropdown())
 
     this.avatarsBox = div('ed-avatars')
-    bar.append(logo, title, this.dirtyDot, this.avatarsBox, insert, actions)
+    bar.append(logo, this.updatesB, title, this.dirtyDot, this.avatarsBox, insert, actions)
 
     // main area
     const main = div('ed-main')
@@ -249,15 +256,45 @@ export class Editor {
     this.props.style.setProperty('--panew', `${this.panelW.right}px`)
   }
 
+  private panelToggles: { left?: HTMLElement; right?: HTMLElement } = {}
+
+  private updatePanelChevrons() {
+    const glyph = (side: 'left' | 'right') => {
+      const collapsed = (side === 'left' ? this.sidebar : this.props).classList.contains('ed-collapsed')
+      // chevron points where clicking will move the boundary
+      return side === 'left' ? (collapsed ? '›' : '‹') : (collapsed ? '‹' : '›')
+    }
+    for (const side of ['left', 'right'] as const) {
+      const b = this.panelToggles[side]
+      if (b) {
+        b.textContent = glyph(side)
+        const collapsed = (side === 'left' ? this.sidebar : this.props).classList.contains('ed-collapsed')
+        b.title = collapsed
+          ? side === 'left' ? t('Show slide list ([)') : t('Show properties (])')
+          : side === 'left' ? t('Hide slide list ([)') : t('Hide properties (])')
+      }
+    }
+  }
+
   private makeResizer(side: 'left' | 'right'): HTMLElement {
     const handle = div('ed-resizer')
     handle.title = t('Drag to resize · double-click to reset')
+    const toggle = document.createElement('button')
+    toggle.className = 'ed-panel-toggle'
+    toggle.addEventListener('click', (ev) => {
+      ev.stopPropagation()
+      this.togglePanel(side)
+    })
+    this.panelToggles[side] = toggle
+    handle.appendChild(toggle)
+    queueMicrotask(() => this.updatePanelChevrons())
     const commit = () => {
       localStorage.setItem('bento-ed-panels', JSON.stringify(this.panelW))
       // thumbnails render at a width derived from the sidebar — refit them
       if (side === 'left') this.rebuildSidebar()
     }
     handle.addEventListener('mousedown', (down) => {
+      if (down.target === toggle) return // the chevron is a click, not a drag
       const panel = side === 'left' ? this.sidebar : this.props
       if (panel.classList.contains('ed-collapsed')) return
       down.preventDefault()
@@ -293,7 +330,65 @@ export class Editor {
   togglePanel(side: 'left' | 'right') {
     const el = side === 'left' ? this.sidebar : this.props
     el.classList.toggle('ed-collapsed')
+    this.updatePanelChevrons()
     // the canvas wrap resizes; its ResizeObserver re-fits the stage
+  }
+
+  // --- Save dropdown: copy / new deck / template -----------------------------
+
+  private saveDropdown(): HTMLElement {
+    const wrap = div('ed-dropdown')
+    const trigger = btn(ICONS.download, '', () => wrap.classList.toggle('open'),
+      t('More ways to save — copy, new deck, template'))
+    const menu = div('ed-menu ed-save-menu')
+    const item = (label: string, title: string, onClick: () => void) => {
+      const b = document.createElement('button')
+      b.className = 'ed-btn'
+      b.textContent = label
+      b.title = title
+      b.addEventListener('click', () => {
+        wrap.classList.remove('open')
+        onClick()
+      })
+      menu.appendChild(b)
+    }
+    item(t('Save a copy'),
+      t('Pick a new file, leave this one untouched — a copy of a shared deck joins the same live session.'),
+      () => void this.save(true))
+    item(t('Save as new deck…'),
+      t('Same content, brand-new document — its own identity and keys; it will never sync with this one.'),
+      () => this.saveAsNewDeck())
+    item(t('Save as template…'),
+      t('Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.'),
+      () => void this.saveAsTemplate())
+    wrap.append(trigger, menu)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    })
+    return wrap
+  }
+
+  private saveAsNewDeck() {
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    clone.docId = newDocId()
+    clone.collab = mintCollab()
+    this.store.replaceDoc(clone)
+    this.toast(t('This is now a new deck — save it under a new name'))
+    void this.save(true)
+  }
+
+  private async saveAsTemplate() {
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    clone.template = true
+    delete clone.collab // instances mint their own credentials
+    delete (clone as { docId?: string }).docId
+    try {
+      const ok = await writeUpdatedFileAs(serializeFile(clone), clone)
+      if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
+    } catch (err) {
+      console.error(err)
+      this.toast(t('Save failed — see console'))
+    }
   }
 
   // --- live-collaboration Share popover ------------------------------------
@@ -301,7 +396,7 @@ export class Editor {
   private shareDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     this.shareWrap = wrap
-    this.shareB = btn(ICONS.share, t('Collaborate'), () => {
+    this.shareB = btn(ICONS.share, t('Live'), () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) this.renderSharePanel()
     }, t('Live collaboration — work on this deck together'))
@@ -353,6 +448,33 @@ export class Editor {
     })
     nameRow.append(nameLabel, nameInput)
     panel.appendChild(nameRow)
+
+    // who's here, live — colored dot, name, slide; click follows
+    const peers = this.session?.peers() ?? []
+    if (peers.length) {
+      const list = div('ed-share-peers')
+      for (const peer of peers) {
+        const row = document.createElement('button')
+        row.className = 'ed-share-peer'
+        const dot = document.createElement('span')
+        dot.className = 'dot'
+        dot.style.background = peer.color
+        const who = document.createElement('span')
+        who.className = 'who'
+        who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
+        const where = document.createElement('span')
+        where.className = 'where'
+        const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
+        where.textContent = idx >= 0 ? t('slide {n}', { n: idx + 1 }) : ''
+        row.append(dot, who, where)
+        row.title = t('{name} — on slide {n} (click to follow)', { name: peer.name, n: idx + 1 })
+        row.addEventListener('click', () => {
+          if (idx >= 0) this.store.goTo(idx)
+        })
+        list.appendChild(row)
+      }
+      panel.appendChild(list)
+    }
 
     if (offlineEnabled()) {
       note(t('Offline mode is on — nothing leaves this computer.'))
@@ -1116,41 +1238,6 @@ export class Editor {
     aiRow.append(copyB, replB)
     box.appendChild(aiRow)
 
-    // identity fork: same content, brand-new document — new docId + fresh
-    // collab credentials, so it never syncs with its ancestor's copies
-    const dupRow = div('ed-about-row')
-    const dupB = document.createElement('button')
-    dupB.className = 'ed-btn'
-    dupB.textContent = t('Duplicate as new deck…')
-    dupB.title = t('Copies everything into an independent document with its own identity — it will never sync with this one.')
-    dupB.addEventListener('click', () => {
-      const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
-      clone.docId = newDocId()
-      clone.collab = mintCollab()
-      this.store.replaceDoc(clone)
-      close()
-      this.toast(t('This is now a new deck — save it under a new name'))
-      void this.save(true)
-    })
-    const tplB = document.createElement('button')
-    tplB.className = 'ed-btn'
-    tplB.textContent = t('Save as template…')
-    tplB.title = t('Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.')
-    tplB.addEventListener('click', async () => {
-      const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
-      clone.template = true
-      delete clone.collab // instances mint their own credentials
-      delete (clone as { docId?: string }).docId
-      try {
-        const ok = await writeUpdatedFileAs(serializeFile(clone), clone)
-        if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
-      } catch (err) {
-        console.error(err)
-        this.toast(t('Save failed — see console'))
-      }
-    })
-    dupRow.append(dupB, tplB)
-    box.appendChild(dupRow)
 
     const fine = div('ed-about-fine')
     fine.innerHTML =

@@ -185,9 +185,15 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   undo step; Alt stays reserved for deep-select, so it can't be the copy
   key). Present: real fullscreen via overlay.requestFullscreen at start +
   F toggle (denied requests degrade to tab-fill — that IS the testing/
-  sharing mode). Topbar is responsive: labels collapse to icons <1280px,
-  the bar itself x-scrolls; phones (<700px) boot with both side panels
-  collapsed (canvas-first; toggles/[/] bring them back). Deck buttons use
+  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling: labels
+  collapse to icons <1200px, the wordmark collapses to the mark <760px.
+  Panel show/hide lives ON the resizer strips as chevron tabs (docked
+  flush to the screen edge when collapsed); phones (<700px) boot with
+  both panels collapsed (canvas-first; chevrons/[/] bring them back).
+  Update chip sits beside the wordmark and exists ONLY when an update
+  is found. Save is a dropdown: copy (identity-keeping invite) / new
+  deck (fresh identity) / template. "Live" button popover: name field,
+  collaborator list (click follows), join/leave toasts. Deck buttons use
   ONE invisible hit-rect above button+label (hard-won #7) — never put
   `link` on both a rect and its label text (two mismatched hover pills).
   Alt/Option-click digs through overlapping elements (capture-phase, beats
