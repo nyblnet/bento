@@ -19,7 +19,7 @@
 // rebuild producing different bytes than what was signed.)
 
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -96,6 +96,19 @@ cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
 
 // /q — "this QR code is a presentation" (deck lives in the URL fragment).
 execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/index.html')], { stdio: 'inherit' })
+
+// The Guestbook (U2) — ships only once an epoch has been minted into
+// working/guestbook-live/ (scripts/build-guestbook.mjs). Kill switch:
+// delete that file and re-release.
+const guestbook = join(root, 'working/guestbook-live/guestbook.bento.html')
+if (existsSync(guestbook)) {
+  cpSync(guestbook, join(site, 'guestbook.bento.html'))
+  mkdirSync(join(site, 'guestbook'), { recursive: true })
+  cpSync(join(root, 'site-src/guestbook.html'), join(site, 'guestbook/index.html'))
+  console.log('guestbook: shipped current epoch')
+} else {
+  console.log('guestbook: not armed (working/guestbook-live/ empty) — skipped')
+}
 
 console.log(`\nSite assembled for v${version}:`)
 execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })
