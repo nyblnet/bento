@@ -274,6 +274,14 @@ export interface BentoDoc {
     on?: boolean
     sync?: import('./sync/crdt').SyncStateJSON
   }
+  /**
+   * Template file (.dotx-style): every OPEN instantiates a fresh document —
+   * parseDoc strips this flag, mints a new docId and drops collab, so each
+   * person who opens the template gets an independent deck with its own
+   * identity and credentials. The template file itself never changes (there
+   * is no file handle until the user's first save-as).
+   */
+  template?: boolean
   slides: Slide[]
   modified: string
 }
@@ -525,6 +533,12 @@ export function parseDoc(json: string): BentoDoc | null {
       // Documents from before docId existed get one minted here; it persists
       // on the next save and stays stable from then on.
       if (typeof doc.docId !== 'string' || !doc.docId) doc.docId = newDocId()
+      if (doc.template) {
+        // template instantiation: this open IS a new document
+        delete doc.template
+        doc.docId = newDocId()
+        delete doc.collab
+      }
       return doc as BentoDoc
     }
   } catch {

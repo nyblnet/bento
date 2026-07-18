@@ -1086,3 +1086,31 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   background: #34a866;
 }
 .ed-btn-connecting::after { background: #d9a13b; }
+
+/* about rows wrap instead of overflowing the dialog */
+.ed-about-row {
+  flex-wrap: wrap;
+}
+.ed-about-row .ed-btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+
+/* collaborate popover: your-name field */
+.ed-share-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted, #5d6b80);
+}
+.ed-share-name input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line, #d5dbe4);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12.5px;
+}

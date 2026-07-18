@@ -232,6 +232,29 @@ One Worker + Durable Object class, ~300 lines:
 M0+M1 are pure client work, shippable through the existing release channel.
 M2 is the first Bento server code ever — small, blind, and replaceable.
 
+## Identity (v0.8.2 posture and the enterprise path)
+
+Identity is deliberately **self-managed and local**: a display name in the
+Collaborate popover (localStorage `bento-author`, shared with comments),
+shown to peers via presence — zero friction, zero accounts, consistent with
+E2EE (the relay couldn't verify identities anyway; it never sees them).
+Presence names are therefore *claims, not proofs* — fine for teams that
+share room keys deliberately. The future enterprise path, when demand
+appears: an optional identity layer where ops/presence are SIGNED by
+per-user keypairs and an org roster (SSO-provisioned) maps public keys to
+verified names — layered ON TOP of the existing protocol (a signature field
+in frames), relay still blind, local-first files unchanged. Nothing shipped
+today constrains that design.
+
+## Offline mode
+
+A viewer-side hard switch (localStorage `bento-offline`, toggle in About)
+that blocks every network touch: update checks and the relay transport.
+Same-machine tab sync (BroadcastChannel) is not networking and stays on.
+Documents keep their (dormant) credentials — offline mode is a property of
+the VIEWER, not the file — so nothing breaks when the switch flips either
+way. This is the "no cloud, provably" story for local-first purists.
+
 ## What we are explicitly protecting
 
 The five invariants that already define the format survive untouched:

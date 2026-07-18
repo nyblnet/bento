@@ -8,16 +8,16 @@ import {
   instantiateLayout, layoutElementIds, newDocId, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
-import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, setAutoCheck } from '../update'
+import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
-import { saveFile } from '../save'
+import { saveFile, serializeFile, writeUpdatedFileAs } from '../save'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
-import { joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { disconnectOnline, joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 
 const i18nT = t
 
@@ -176,7 +176,7 @@ export class Editor {
     // launch-time check (opt-out lives in the About dialog); a found update
     // turns the button into a visible peach chip
     setTimeout(async () => {
-      if (!autoCheckEnabled()) return
+      if (!autoCheckEnabled() || offlineEnabled()) return
       const r = await checkForUpdates()
       this.lastAutoCheck = r
       if (r.status === 'update') {
@@ -294,7 +294,7 @@ export class Editor {
   private shareDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     this.shareWrap = wrap
-    this.shareB = btn(ICONS.share, t('Share'), () => {
+    this.shareB = btn(ICONS.share, t('Collaborate'), () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) this.renderSharePanel()
     }, t('Live collaboration — work on this deck together'))
@@ -323,6 +323,36 @@ export class Editor {
       panel.appendChild(b)
       return b
     }
+    // your display name — self-managed, stored in this browser only, shown
+    // to collaborators via presence (shared with the comments feature)
+    const nameRow = div('ed-share-name')
+    const nameLabel = document.createElement('label')
+    nameLabel.textContent = t('Your name')
+    const nameInput = document.createElement('input')
+    nameInput.type = 'text'
+    nameInput.placeholder = t('Guest')
+    try {
+      nameInput.value = localStorage.getItem('bento-author') ?? ''
+    } catch {
+      /* storage unavailable */
+    }
+    nameInput.addEventListener('change', () => {
+      try {
+        localStorage.setItem('bento-author', nameInput.value.trim())
+      } catch {
+        /* storage unavailable */
+      }
+      this.session?.hello() // push the new name to peers right away
+    })
+    nameRow.append(nameLabel, nameInput)
+    panel.appendChild(nameRow)
+
+    if (offlineEnabled()) {
+      note(t('Offline mode is on — nothing leaves this computer.'))
+      note(t('Tabs on this machine still sync; turn offline mode off in the About dialog to collaborate online.'))
+      return
+    }
+
     const tr = onlineTransport()
     if (!sharingOn(this.store) || !tr) {
       note(t('Work on this deck together, live.'))
@@ -988,6 +1018,31 @@ export class Editor {
     autoRow.append(autoCb, document.createTextNode(' ' + t('Check for updates automatically at launch')))
     box.appendChild(autoRow)
 
+    // the hard no-network switch: blocks update checks AND online
+    // collaboration for this browser. Same-machine tab sync is not
+    // networking and stays on.
+    const offRow = document.createElement('label')
+    offRow.className = 'ed-about-auto'
+    const offCb = document.createElement('input')
+    offCb.type = 'checkbox'
+    offCb.checked = offlineEnabled()
+    offCb.addEventListener('change', () => {
+      setOffline(offCb.checked)
+      if (offCb.checked) {
+        if (this.session) disconnectOnline(this.session)
+      } else if (this.session && sharingOn(this.store)) {
+        joinFromDoc(this.session, this.store)
+      }
+      this.wireOnlineStatus()
+      this.toast(
+        offCb.checked
+          ? t('Offline mode on — nothing leaves this computer')
+          : t('Offline mode off — online features re-enabled'),
+      )
+    })
+    offRow.append(offCb, document.createTextNode(' ' + t('Offline mode — block all network features (updates, online collaboration)')))
+    box.appendChild(offRow)
+
     const langRow = document.createElement('label')
     langRow.className = 'ed-about-auto'
     const langSel = document.createElement('select')
@@ -1070,7 +1125,24 @@ export class Editor {
       this.toast(t('This is now a new deck — save it under a new name'))
       void this.save(true)
     })
-    dupRow.append(dupB)
+    const tplB = document.createElement('button')
+    tplB.className = 'ed-btn'
+    tplB.textContent = t('Save as template…')
+    tplB.title = t('Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.')
+    tplB.addEventListener('click', async () => {
+      const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+      clone.template = true
+      delete clone.collab // instances mint their own credentials
+      delete (clone as { docId?: string }).docId
+      try {
+        const ok = await writeUpdatedFileAs(serializeFile(clone), clone)
+        if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
+      } catch (err) {
+        console.error(err)
+        this.toast(t('Save failed — see console'))
+      }
+    })
+    dupRow.append(dupB, tplB)
     box.appendChild(dupRow)
 
     const fine = div('ed-about-fine')
