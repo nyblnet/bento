@@ -597,7 +597,14 @@ html, body {
   align-items: center;
   gap: 3px;
   margin: 3px 0;
-  flex-wrap: wrap; /* narrow panel: buttons flow to a second line, never overflow */
+}
+/* buttons share the remaining line equally — balanced at any panel width,
+   never wrapping into orphans */
+.ed-arrange-row .ed-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 0;
+  justify-content: center;
 }
 .ed-arrange-cap {
   flex: none;
