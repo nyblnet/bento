@@ -438,6 +438,15 @@ footer {
 footer .wrap { display: grid; gap: 10px; }
 footer b { color: var(--mist); font-weight: 600; }
 
+/* konami deck mode — the page presents itself */
+body.kdeck { overflow: hidden; }
+body.kdeck section { display: none; }
+body.kdeck section.kactive { display: flex; align-items: center; position: fixed; inset: 0; z-index: 90; overflow: auto; padding: 60px 0; background: var(--ink); }
+body.kdeck section.kactive.paper { background: var(--paper); }
+body.kdeck section.kactive .wrap { width: 100%; }
+body.kdeck header, body.kdeck footer { display: none; }
+.kchip { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 95; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: var(--mist); background: rgba(13, 27, 46, 0.85); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; padding: 8px 18px; pointer-events: none; }
+
 /* reveal choreography */
 .rv { opacity: 0; transform: translateY(26px); transition: opacity 0.8s cubic-bezier(0.2, 0.6, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.6, 0.2, 1); }
 .rv.in { opacity: 1; transform: none; }
@@ -615,6 +624,7 @@ footer b { color: var(--mist); font-weight: 600; }
           <span class="chip"><b>The format is the API</b></span>
           <span class="chip">No binary .pptx to decode</span>
           <span class="chip">Agents edit the file in place</span>
+          <a class="chip" href="/agents.md" style="text-decoration:none"><b>bento.page/agents.md</b> — the recipe for your agent</a>
           <span class="chip">Nothing phones home</span>
         </div>
       </div>
@@ -761,6 +771,35 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
   }, { threshold: 0.18, rootMargin: '0px 0px -40px 0px' })
   document.querySelectorAll('.rv:not(.in)').forEach((n) => io.observe(n))
+})()
+
+// easter egg: ↑↑↓↓←→←→BA presents this page as a deck. Of course it does.
+;(() => {
+  const seq = ['arrowup','arrowup','arrowdown','arrowdown','arrowleft','arrowright','arrowleft','arrowright','b','a']
+  let ki = 0, on = false, i = 0
+  const sections = () => [...document.querySelectorAll('section')]
+  const chip = document.createElement('div')
+  chip.className = 'kchip'
+  const show = (n) => {
+    const ss = sections()
+    i = Math.max(0, Math.min(ss.length - 1, n))
+    ss.forEach((s, j) => s.classList.toggle('kactive', j === i))
+    ss[i].querySelectorAll('.rv').forEach((r) => r.classList.add('in'))
+    chip.textContent = `${i + 1} / ${ss.length} — this page is a deck now · esc exits`
+  }
+  const start = () => { on = true; document.body.classList.add('kdeck'); document.body.appendChild(chip); show(0) }
+  const end = () => { on = false; document.body.classList.remove('kdeck'); chip.remove(); sections().forEach((s) => s.classList.remove('kactive')) }
+  addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase()
+    if (!on) {
+      ki = k === seq[ki] ? ki + 1 : (k === seq[0] ? 1 : 0)
+      if (ki === seq.length) { ki = 0; start(); e.preventDefault() }
+      return
+    }
+    if (k === 'escape') end()
+    else if (k === 'arrowright' || k === ' ') { e.preventDefault(); i < sections().length - 1 ? show(i + 1) : end() }
+    else if (k === 'arrowleft') { e.preventDefault(); show(i - 1) }
+  })
 })()
 </script>
 </body>

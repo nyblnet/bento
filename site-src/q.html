@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>This QR code is a presentation — bento.page</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316273E'/%3E%3Crect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/%3E%3Crect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/%3E%3C/svg%3E">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { min-height: 100vh; background: #0D1B2E; color: rgba(182,193,210,0.92); font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 64px 28px; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; min-height: 100vh; }
+@media (max-width: 760px) { .wrap { grid-template-columns: 1fr; padding: 44px 22px; } }
+.kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.3em; color: #FF9E8A; }
+h1 { font-family: Fraunces, Georgia, serif; font-weight: 900; color: #fff; font-size: clamp(34px, 5vw, 54px); line-height: 1.02; margin: 16px 0 18px; }
+p { line-height: 1.65; margin-bottom: 14px; max-width: 34em; }
+b { color: #fff; font-weight: 600; }
+.btn { display: inline-block; margin-top: 14px; padding: 14px 28px; border-radius: 999px; font-weight: 700; color: #0D1B2E; text-decoration: none; cursor: pointer; border: 0; font-size: 15px; background: linear-gradient(180deg, #FFB29B, #ED8266); box-shadow: 0 10px 26px rgba(0,0,0,0.4); }
+.home { color: rgba(182,193,210,0.7); margin-left: 16px; }
+.qr { background: #fff; border-radius: 18px; padding: 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
+.qr svg { display: block; width: 100%; height: auto; }
+.qcap { text-align: center; font-size: 12px; letter-spacing: 0.06em; color: rgba(182,193,210,0.55); margin-top: 12px; }
+/* projector */
+#stagewrap { position: fixed; inset: 0; background: #000; display: none; z-index: 50; }
+#stagewrap.on { display: block; }
+#stage { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center; overflow: hidden; }
+#stage .el { position: absolute; }
+#exit { position: fixed; top: 16px; right: 20px; z-index: 60; color: rgba(255,255,255,0.6); background: none; border: 1px solid rgba(255,255,255,0.3); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 12px; }
+#hint { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 60; color: rgba(255,255,255,0.45); font-size: 12px; letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div class="kicker">A STUNT, TECHNICALLY TRUE</div>
+    <h1>This QR code is a presentation.</h1>
+    <p>Not a link to one — the deck itself. The QR encodes this page's URL
+    plus the <b>entire document as compressed JSON</b> in the fragment. The
+    fragment never leaves your device, and this page is just a projector:
+    a few kilobytes that decompress the hash and play it.</p>
+    <p>Real Bento decks go further — <b>the file carries the whole editor</b>.
+    This is merely the party-trick edition.</p>
+    <button class="btn" id="play">▶&nbsp; Play the deck in the code</button>
+    <a class="home" href="/">bento.page →</a>
+  </div>
+  <div>
+    <div class="qr">__QR_SVG__</div>
+    <div class="qcap">scan it — the slides are inside the squares</div>
+  </div>
+</div>
+<div id="stagewrap"><div id="stage"></div><button id="exit">esc</button><div id="hint">→ next · ← back</div></div>
+<script>
+const FALLBACK = '__PAYLOAD__'
+const b64ToBytes = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+async function loadDoc() {
+  const payload = location.hash.length > 1 ? location.hash.slice(1) : FALLBACK
+  const ds = new DecompressionStream('deflate-raw')
+  const stream = new Blob([b64ToBytes(payload)]).stream().pipeThrough(ds)
+  return JSON.parse(await new Response(stream).text())
+}
+const stage = document.getElementById('stage'), wrapEl = document.getElementById('stagewrap')
+let doc = null, idx = 0
+function fit() {
+  const s = Math.min(innerWidth / 1280, innerHeight / 720) * 0.96
+  stage.style.transform = `translate(-50%, -50%) scale(${s})`
+}
+function render() {
+  const sl = doc.slides[idx]
+  stage.style.background = sl.background || '#000'
+  stage.innerHTML = ''
+  for (const el of sl.elements || []) {
+    const d = document.createElement('div')
+    d.className = 'el'
+    d.style.cssText = `left:${el.x}px;top:${el.y}px;width:${el.w}px;height:${el.h}px;opacity:${el.opacity ?? 1};`
+    if (el.rotation) d.style.transform = `rotate(${el.rotation}deg)`
+    if (el.type === 'text') {
+      d.innerHTML = el.html || ''
+      d.style.font = `${el.fontWeight >= 700 ? el.fontWeight : el.fontWeight || 400} ${el.fontSize || 24}px/${el.lineHeight || 1.3} ${el.fontFamily || 'inherit'}`
+      d.style.color = el.color || '#fff'
+      d.style.textAlign = el.align || 'left'
+      if (el.letterSpacing) d.style.letterSpacing = el.letterSpacing + 'px'
+    } else if (el.type === 'shape') {
+      d.style.background = el.fill || '#888'
+      d.style.borderRadius = el.shape === 'ellipse' ? '50%' : (el.radius || 0) + 'px'
+    }
+    stage.appendChild(d)
+  }
+}
+async function start() {
+  if (!doc) doc = await loadDoc()
+  idx = 0; wrapEl.classList.add('on'); fit(); render()
+}
+function stop() { wrapEl.classList.remove('on') }
+document.getElementById('play').onclick = start
+document.getElementById('exit').onclick = stop
+addEventListener('resize', fit)
+addEventListener('keydown', (e) => {
+  if (!wrapEl.classList.contains('on')) return
+  if (e.key === 'Escape') stop()
+  else if (e.key === 'ArrowRight' || e.key === ' ') idx < doc.slides.length - 1 ? (idx++, render()) : stop()
+  else if (e.key === 'ArrowLeft' && idx > 0) { idx--; render() }
+})
+if (location.hash.length > 1) start()
+</script>
+</body>
+</html>
