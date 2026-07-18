@@ -118,8 +118,8 @@ export class PropsPanel {
   // --- builders ---------------------------------------------------------------
 
   private static readonly PAGE_PRESETS: Record<string, { w: number; h: number }> = {
-    'Widescreen 16:9': { w: 1600, h: 900 },
-    'Classic 4:3': { w: 1200, h: 900 },
+    'Widescreen 16:9': { w: 1280, h: 720 },
+    'Classic 4:3': { w: 960, h: 720 },
     'Square 1:1': { w: 1080, h: 1080 },
     'Portrait 9:16': { w: 1080, h: 1920 },
     'A4 landscape': { w: 1123, h: 794 },
