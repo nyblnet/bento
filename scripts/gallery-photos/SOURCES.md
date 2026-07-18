@@ -18,3 +18,9 @@ Added 2026-07-18 (v3):
 | orbital-aurora.jpg | NASA images (iss030e119777) | Green/red aurora curtain from the ISS, Expedition 30 — public domain |
 | orbital-dragon.jpg | NASA images (iss071e256593) | SpaceX Dragon Endeavour against the Milky Way, Expedition 71 — public domain |
 | thumbs/*.jpg | derived | small renditions of the above for the landing page's gallery posters |
+
+Added 2026-07-18 (v4 — cover backgrounds):
+
+| file | source | credit / provenance |
+|---|---|---|
+| picnic-fairwide.jpg | Wikimedia Commons / Library of Congress (LCCN2017877389) | Jack Delano, backstage at the Vermont state fair, Rutland, 1941 Kodachrome, FSA/OWI — public domain (film mount cropped) |
