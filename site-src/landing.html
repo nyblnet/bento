@@ -377,15 +377,18 @@ section:not(.paper) .card p { color: var(--mist); }
 .gp-signal .hr { left: 9%; right: 9%; top: 22%; height: 1.5px; background: #141310; }
 .gp-signal .t { left: 8.5%; top: 27%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 42px; line-height: 0.94; color: #141310; }
 .gp-signal .bar { left: 9%; bottom: 13%; width: 27%; height: 12%; background: #E8442E; }
+.gp-signal .phf { left: 70.5%; top: 28%; width: 22%; height: 40%; background: #E8442E; }
+.gp-signal .ph { left: 69%; top: 24%; width: 22%; height: 40%; background: url(__PH_PRESS__) center/cover; filter: grayscale(1) contrast(1.05); }
 /* terra poster */
 .gp-terra { background: #F7F5F0; }
 .gp-terra .k { left: 8.5%; top: 13%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.22em; color: #C96F4A; }
 .gp-terra .t { left: 8%; top: 27%; max-width: 52%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 24px; line-height: 1.06; color: #2A2724; }
-.gp-terra .v1 { right: 9%; top: 19%; width: 16%; height: 52%; border-radius: 999px; background: linear-gradient(160deg, #CE7852, #B85F3E); }
-.gp-terra .v2 { right: 27%; top: 42%; width: 12%; height: 42%; border-radius: 999px; background: linear-gradient(160deg, #DDCDB9, #D2BFA6); }
-.gp-terra .v3 { right: 13%; bottom: 7%; width: 11%; aspect-ratio: 1; border-radius: 50%; background: #7D8471; }
+.gp-terra .v1 { right: 9%; top: 19%; width: 16%; height: 52%; border-radius: 999px; background: url(__PH_VASE1__) center/cover; border: 3px solid #C96F4A; }
+.gp-terra .v2 { right: 27%; top: 42%; width: 12%; height: 42%; border-radius: 999px; background: url(__PH_VASE3__) center/cover; border: 3px solid #D9C9B4; }
+.gp-terra .v3 { right: 13%; bottom: 7%; width: 11%; aspect-ratio: 1; border-radius: 50%; background: url(__PH_VASE2__) center/cover; border: 3px solid #7D8471; }
 /* orbital poster */
-.gp-orbital { background: #05060E; }
+.gp-orbital { background: #05060E url(__PH_STARS__) center 65%/cover; }
+.gp-orbital .ov { inset: 0; background: rgba(5, 6, 14, 0.5); }
 .gp-orbital .ring { left: 50%; top: 50%; width: 52%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 1.5px solid #38E1FF; border-radius: 50%; box-shadow: 0 0 34px rgba(56, 225, 255, 0.35), inset 0 0 26px rgba(56, 225, 255, 0.12); }
 .gp-orbital .t { left: 0; right: 0; top: 50%; transform: translateY(-58%); font-weight: 800; font-size: 21px; letter-spacing: 0.5em; text-indent: 0.5em; text-align: center; color: #F2F6FF; }
 .gp-orbital .moon { left: 63%; top: 13%; width: 7%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(140deg, #8F7BF7, #38B6FF); }
@@ -394,10 +397,12 @@ section:not(.paper) .card p { color: var(--mist); }
 /* picnic poster */
 .gp-picnic { background: #FFD43A; }
 .gp-picnic .t { left: 8%; top: 22%; font-weight: 900; font-size: 34px; line-height: 0.98; letter-spacing: -0.01em; color: #201A31; }
-.gp-picnic .sub { left: 8.5%; bottom: 13%; max-width: 56%; font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #201A31; transform: rotate(-2deg); }
+.gp-picnic .sub { left: 8.5%; bottom: 13%; max-width: 40%; font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #201A31; transform: rotate(-2deg); }
 .gp-picnic .c1 { right: 10%; top: 14%; width: 17%; aspect-ratio: 1; border-radius: 50%; background: #FF7BAC; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; }
 .gp-picnic .c2 { right: 31%; top: 48%; width: 13%; aspect-ratio: 1; border-radius: 26%; background: #4DC9F0; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; transform: rotate(-8deg); }
 .gp-picnic .c3 { right: 9%; bottom: 10%; width: 15%; aspect-ratio: 1.1; clip-path: polygon(50% 0, 100% 100%, 0 100%); background: #7BE382; filter: drop-shadow(4px 5px 0 rgba(32, 26, 49, 0.9)); }
+.gp-picnic .pol { left: 47%; top: 42%; width: 17%; height: 46%; border-radius: 7px; background: #fff; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; transform: rotate(-5deg); }
+.gp-picnic .polp { left: 48.6%; top: 47%; width: 13.8%; height: 32%; border-radius: 3px; background: url(__PH_FAIR__) center/cover; transform: rotate(-5deg); }
 
 /* code vignette — the honest document */
 .codebox {
@@ -532,6 +537,7 @@ footer b { color: var(--mist); font-weight: 600; }
         <a class="gposter gp-signal" href="/gallery/signal-editorial-type.bento.html" target="_blank" rel="noopener" aria-label="Open the Signal template in a new tab">
           <span class="k">SIGNAL — A FESTIVAL OF GRAPHIC IDEAS</span>
           <span class="hr"></span>
+          <span class="phf"></span><span class="ph"></span>
           <span class="t">Loud<br>letters.</span>
           <span class="bar"></span>
         </a>
@@ -559,6 +565,7 @@ footer b { color: var(--mist); font-weight: 600; }
       </div>
       <div class="gcard rv d1">
         <a class="gposter gp-orbital" href="/gallery/orbital-dark-immersive.bento.html" target="_blank" rel="noopener" aria-label="Open the Orbital template in a new tab">
+          <span class="ov"></span>
           <span class="ring"></span>
           <span class="t">ORBITAL</span>
           <span class="moon"></span>
@@ -576,6 +583,7 @@ footer b { color: var(--mist); font-weight: 600; }
         <a class="gposter gp-picnic" href="/gallery/picnic-playful.bento.html" target="_blank" rel="noopener" aria-label="Open the Pixel Picnic template in a new tab">
           <span class="t">PIXEL<br>PICNIC</span>
           <span class="sub">a two-day jam for gloriously useless websites</span>
+          <span class="pol"></span><span class="polp"></span>
           <span class="c1"></span><span class="c2"></span><span class="c3"></span>
         </a>
         <div class="gmeta">
