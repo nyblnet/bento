@@ -17,6 +17,7 @@ import { startPresentation } from '../present'
 import { saveFile } from '../save'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
+import { joinFromDoc, onlineTransport, startSharing, stopSharing } from '../sync/online'
 
 const i18nT = t
 
@@ -39,6 +40,8 @@ export class Editor {
   private presenting = false
   private updatesB!: HTMLElement
   private avatarsBox!: HTMLElement
+  private shareB!: HTMLElement
+  private shareWrap!: HTMLElement
   private session: import('../sync/session').SyncSession | null = null
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
@@ -66,7 +69,7 @@ export class Editor {
     this.rebuildSidebar()
   }
 
-  /** wire the live-collaboration session (avatars, remote selections) */
+  /** wire the live-collaboration session (avatars, remote selections, relay) */
   connectSync(session: import('../sync/session').SyncSession) {
     this.session = session
     session.onPeers(() => {
@@ -75,6 +78,28 @@ export class Editor {
     })
     this.canvas.onTextEditChange = (elId) => session.setEditing(elId)
     this.store.on('current', () => this.canvas.setRemotePeers(session.peers()))
+    // a document that carries collab config joins its relay session — at
+    // boot AND whenever one is loaded (Replace-from-JSON, update splice…)
+    const joinIfShared = () => {
+      if (this.store.doc.collab && !onlineTransport()) {
+        joinFromDoc(session, this.store)
+        this.wireOnlineStatus()
+      }
+    }
+    joinIfShared()
+    this.store.on('doc', joinIfShared)
+  }
+
+  private wireOnlineStatus() {
+    const tr = onlineTransport()
+    if (!tr) {
+      this.shareB.classList.remove('ed-btn-live', 'ed-btn-connecting')
+      return
+    }
+    tr.onStatus = () => this.wireOnlineStatus()
+    this.shareB.classList.toggle('ed-btn-live', tr.status === 'open')
+    this.shareB.classList.toggle('ed-btn-connecting', tr.status !== 'open')
+    if (this.shareWrap.classList.contains('open')) this.renderSharePanel()
   }
 
   private renderAvatars() {
@@ -176,7 +201,7 @@ export class Editor {
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
     const leftT = btn(ICONS.panelLeft, '', () => this.togglePanel('left'), t('Toggle slide list ([)'))
     const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), t('Toggle properties (])'))
-    actions.append(undoB, redoB, pdfB, this.updatesB, leftT, rightT, presentB, saveB, saveAsB)
+    actions.append(undoB, redoB, pdfB, this.shareDropdown(), this.updatesB, leftT, rightT, presentB, saveB, saveAsB)
 
     this.avatarsBox = div('ed-avatars')
     bar.append(logo, title, this.dirtyDot, this.avatarsBox, insert, actions)
@@ -262,6 +287,69 @@ export class Editor {
     const el = side === 'left' ? this.sidebar : this.props
     el.classList.toggle('ed-collapsed')
     // the canvas wrap resizes; its ResizeObserver re-fits the stage
+  }
+
+  // --- live-collaboration Share popover ------------------------------------
+
+  private shareDropdown(): HTMLElement {
+    const wrap = div('ed-dropdown')
+    this.shareWrap = wrap
+    this.shareB = btn(ICONS.share, t('Share'), () => {
+      wrap.classList.toggle('open')
+      if (wrap.classList.contains('open')) this.renderSharePanel()
+    }, t('Live collaboration — work on this deck together'))
+    const panel = div('ed-menu ed-share-pop')
+    wrap.append(this.shareB, panel)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    })
+    return wrap
+  }
+
+  private renderSharePanel() {
+    const panel = this.shareWrap.querySelector<HTMLElement>('.ed-share-pop')!
+    panel.innerHTML = ''
+    const note = (txt: string, cls = 'ed-share-note') => {
+      const e = div(cls)
+      e.textContent = txt
+      panel.appendChild(e)
+      return e
+    }
+    const action = (label: string, primary: boolean, onClick: () => void) => {
+      const b = document.createElement('button')
+      b.className = primary ? 'ed-btn ed-btn-primary ed-share-btn' : 'ed-btn ed-share-btn'
+      b.textContent = label
+      b.addEventListener('click', onClick)
+      panel.appendChild(b)
+      return b
+    }
+    const tr = onlineTransport()
+    if (!this.store.doc.collab || !tr) {
+      note(t('Work on this deck together, live.'))
+      note(t('Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
+      action(t('Start live session'), true, () => {
+        if (!this.session) return
+        startSharing(this.session, this.store)
+        this.wireOnlineStatus()
+        this.renderSharePanel()
+      })
+    } else {
+      const status = note('', 'ed-share-status')
+      const n = (this.session?.peers().length ?? 0) + 1
+      status.textContent =
+        tr.status === 'open'
+          ? `● ${t('Live')} — ${t('{n} connected', { n })}`
+          : `● ${t('Offline — reconnecting…')}`
+      status.classList.toggle('ok', tr.status === 'open')
+      note(t('Save the file and send a copy — opening it joins this session automatically.'))
+      note(t('Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
+      action(t('Stop sharing'), false, () => {
+        if (!this.session) return
+        stopSharing(this.session, this.store)
+        this.wireOnlineStatus()
+        this.renderSharePanel()
+      })
+    }
   }
 
   private shapeDropdown(): HTMLElement {

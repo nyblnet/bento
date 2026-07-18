@@ -21,6 +21,12 @@ trick, modernized with the File System Access API).
 > (`charts-lite`, MIT) — ECharts/zrender removed. Diagrams below describe the
 > uncompressed layout; sizes predate compression.
 
+> **v0.8.0 update**: live collaboration shipped — an in-house op-based CRDT
+> (**bento-sync**, §8) with automatic same-machine sync (BroadcastChannel)
+> and an optional end-to-end-encrypted blind relay (Cloudflare Durable
+> Objects, `sync.bento.page`). The saved file stays a complete standalone
+> document; `doc.collab {room, key}` is the only (additive) format change.
+
 ## 1. On-disk anatomy
 
 A `.bento.html` file is ordinary, valid HTML. Its compartments, drawn
@@ -302,3 +308,40 @@ deliver  downloaded as a NEW file — the on-disk original is its own rollback
   default (per-browser opt-out in the About dialog) or on demand.
 - Update channel = signed **code**; future sync channel = inert **data**
   (invariant 3). Never mix the two.
+
+## 8. Live collaboration (bento-sync)
+
+The in-house CRDT designed in `collab-design.md`, shipped in v0.8.0.
+
+```
+slides/src/sync/crdt.ts     engine: per-property LWW registers ordered by
+                            (lamport, actor); birth/tomb liveness (an ins is
+                            a whole-node assignment that resurrects by
+                            out-stamping the tomb); fractional-index order
+                            keys; dead-window value stash; token RGA for
+                            element.html (deterministic content-hash seeds;
+                            a generation duels plain sets AS A UNIT);
+                            per-actor contiguous seq + gap buffering;
+                            state-based mergeSnapshot for file forks
+slides/src/sync/session.ts  the store bridge: local commits → debounced
+                            shadow diff → ops out; remote ops → surgical
+                            apply → the same store events the editor
+                            already listens to. Presence, catch-up, peers.
+slides/src/sync/online.ts   E2EE relay transport: AES-GCM under the room
+                            key from doc.collab; ?tok= is a hash of the
+                            key (possession proof); reconnect + backoff;
+                            encrypted client-produced snapshots cap replay
+server/sync-worker/         Cloudflare Worker + one Durable Object per
+                            docId: blind fan-out, encrypted op log, ~30-day
+                            idle TTL. The only Bento server code.
+scripts/test-sync.ts        property-based convergence rig (SEEDS/STEPS/
+                            ACTORS env knobs) — random op interleavings
+                            across simulated actors must converge to
+                            byte-identical docs AND sync state
+```
+
+Same-machine tabs sync automatically (BroadcastChannel keyed by docId).
+Online: Share → Start live session mints `doc.collab {room, key}` — the
+saved FILE is the capability; anyone opening a copy joins and converges.
+The relay never sees plaintext, and every saved copy stays a complete,
+standalone document (sync is a layer beside the file, never a replacement).

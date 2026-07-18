@@ -60,3 +60,31 @@ verify the manifest signature against the public key embedded in every shell.
   new higher version that reverts the code.
 - The update channel ships **signed code**; future sync/collab channels ship
   **inert data**. Never blur the two.
+
+## Deploying the sync relay (one-time + on worker changes)
+
+The relay (`server/sync-worker/`) is separate from the static site — it
+lives on Cloudflare Workers and only needs redeploying when its code
+changes (client releases do NOT require it):
+
+```sh
+cd server/sync-worker
+npx wrangler login          # one-time, opens the browser
+npx wrangler deploy         # builds + publishes; prints the workers.dev URL
+```
+
+`wrangler.toml` requests the custom domain `sync.bento.page` — with the
+zone on the same Cloudflare account this is provisioned automatically at
+deploy (DNS + cert). Verify with:
+
+```sh
+curl https://sync.bento.page/        # → "bento-sync relay — see https://bento.page"
+```
+
+Local development: `npx wrangler dev --port 8787` (no account needed), and
+in the editor set `localStorage['bento-sync-url'] = 'ws://localhost:8787'`
+before starting a share session.
+
+The relay stores ONLY ciphertext (room-key-encrypted frames) and a hash of
+the room key; there are no secrets to manage server-side. Rooms self-delete
+after ~30 idle days — the file is the durable artifact.

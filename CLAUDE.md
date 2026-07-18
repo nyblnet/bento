@@ -135,6 +135,39 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   persisted per title in localStorage; Presenting/Interactivity/Layout
   default closed. Add new panel content under a section header and the
   accordion picks it up automatically.
+- `src/sync/` — **bento-sync live collaboration** (design: docs/collab-design.md).
+  `crdt.ts` is the engine (pure data, runs in node too): per-(node,key) LWW
+  regs ordered by (lamport, actor); liveness = births vs tombs (an INS is a
+  whole-node ASSIGNMENT — it resurrects by out-stamping the tomb and
+  supersedes all older property regs; slide-ins = slide assignment + an
+  independent element-ins per member, member processing must NEVER be
+  skipped by the slide-level LWW race); pos = fractional base-62 keys
+  (keyBetween midstrings, spreadKey for deterministic file adoption);
+  dead-window values park in a reg-stamped `stash` and replay on
+  resurrection ONLY while their reg is still the winner; element.html is a
+  token RGA whose seed = (max(reg,birth).l, contentHash) so concurrent
+  first-editors merge — a GENERATION duels plain sets as a unit, rebirths
+  void only seeds BELOW their lamport; delivery = per-actor contiguous `s`
+  + gap buffer + `pending` for not-yet-known nodes (drain on every liveness
+  event AND on txt progress — anchors/deletes can overtake their inserts).
+  Convergence rig: `node scripts/test-sync.ts` (SEEDS/STEPS/ACTORS env) —
+  run it after ANY crdt.ts change; it caught 15+ ordering bugs. Debug: set
+  `globalThis.__dbgEl = '<node-id>'` to trace one node through the gates.
+  `session.ts` bridges the store: local commits → debounced (90ms) shadow
+  diff → ops; remote ops apply surgically then re-emit the store events the
+  editor already listens to (zero editor rewrites). Actor ids are fresh PER
+  SESSION INSTANCE (a reloaded tab is a new replica; the engine skips "own"
+  ops on apply — a persisted actor id would make relay replay a no-op).
+  Same-machine tabs always sync (BroadcastChannel `bento-sync-<docId>`);
+  `online.ts` adds the E2EE relay (AES-GCM, key in `doc.collab.key`, ?tok=
+  hash-of-key possession proof; replay bookmark is MEMORY-ONLY — it's valid
+  only with the CRDT state it was earned with). The saved FILE is the
+  capability: doc.collab {room,key} rides in it, opening a copy auto-joins
+  (editor.connectSync joinIfShared). Relay: `server/sync-worker/` (blind DO,
+  ciphertext-only storage — verified; `npx wrangler dev --port 8787` +
+  localStorage 'bento-sync-url' for local testing). Undo under collab is
+  snapshot-based and may revert concurrent remote edits to the same
+  properties (documented LWW compromise).
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
   Alt/Option-click digs through overlapping elements (capture-phase, beats
   Moveable's control box). Fill/stroke colors carry alpha (color input + % pair,
