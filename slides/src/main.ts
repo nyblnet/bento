@@ -5,6 +5,7 @@ import './styles.css'
 import { anim } from './anim'
 import { capturePristine, readEmbeddedDoc, serializeFile } from './save'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
+import { i18nApi } from './i18n'
 import { parseDoc } from './model'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
@@ -60,6 +61,8 @@ if (location.hash === '#present') {
   },
   /** animation engine, exposed for scripting/diagnostics */
   anim,
+  /** i18n: t/locale/setLocale/choices — setLocale('x-pseudo') audits the sweep */
+  i18n: i18nApi,
   /**
    * Self-update surface (all user/tooling-initiated, never automatic):
    * check() fetches + signature-verifies the release manifest; build()

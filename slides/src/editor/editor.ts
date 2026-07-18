@@ -16,6 +16,9 @@ import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
 import { saveFile } from '../save'
 import { ICONS } from '../icons'
+import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
+
+const i18nT = t
 
 const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect },
@@ -77,7 +80,7 @@ export class Editor {
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
       `</svg> <b>Bento<span style="color:#FF9E8A">/</span>Slides</b>`
-    logo.title = 'About Bento Slides — version, updates, licenses'
+    logo.title = t('About Bento Slides — version, updates, licenses')
     logo.style.cursor = 'pointer'
     logo.addEventListener('click', () => this.openAbout())
     const title = document.createElement('input')
@@ -89,21 +92,21 @@ export class Editor {
       document.title = `${this.store.doc.title} — Bento Slides`
     })
     this.dirtyDot = div('ed-dirty')
-    this.dirtyDot.title = 'Unsaved changes'
+    this.dirtyDot.title = t('Unsaved changes')
 
     const insert = div('ed-group')
     insert.append(
-      btn(ICONS.text, 'Text', () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true)),
+      btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true)),
       this.shapeDropdown(),
-      btn(ICONS.image, 'Image', () => this.pickImage()),
-      btn(ICONS.chart, 'Chart', () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
+      btn(ICONS.image, t('Image'), () => this.pickImage()),
+      btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
     )
     const commentB = btn(ICONS.comment, '', () => this.canvas.toggleCommentMode(),
-      'Comment (C) — click an element or a spot on the slide')
+      t('Comment (C) — click an element or a spot on the slide'))
     insert.appendChild(commentB)
 
     const actions = div('ed-group ed-group-right')
-    this.updatesB = btn(ICONS.sync, '', () => this.openAbout(true), 'Check for updates')
+    this.updatesB = btn(ICONS.sync, '', () => this.openAbout(true), t('Check for updates'))
     // launch-time check (opt-out lives in the About dialog); a found update
     // turns the button into a visible peach chip
     setTimeout(async () => {
@@ -114,24 +117,24 @@ export class Editor {
         this.updateFound = r.release.version
         this.updatesB.classList.add('ed-btn-update')
         this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
-        this.updatesB.title = `Version ${r.release.version} is available — click to update`
-        this.toast(`Update available: v${r.release.version} — click the peach button to update`)
+        this.updatesB.title = t('Version {v} is available — click to update', { v: r.release.version })
+        this.toast(t('Update available: v{v} — click the peach button to update', { v: r.release.version }))
       } else if (r.status === 'current') {
-        this.updatesB.title = `Up to date (v${APP_VERSION}) — checked at launch`
-        this.toast(`Up to date — v${APP_VERSION}`)
+        this.updatesB.title = t('Up to date (v{v}) — checked at launch', { v: APP_VERSION })
+        this.toast(t('Up to date — v{v}', { v: APP_VERSION }))
       } else {
-        this.updatesB.title = `Update check failed: ${r.message} — click to retry`
+        this.updatesB.title = t('Update check failed: {m} — click to retry', { m: r.message })
       }
     }, 1500)
-    const undoB = btn(ICONS.undo, '', () => this.store.undo(), 'Undo (⌘Z)')
-    const redoB = btn(ICONS.redo, '', () => this.store.redo(), 'Redo (⇧⌘Z)')
-    const presentB = btn(ICONS.play, 'Present', () => this.present(), 'Present from current slide')
+    const undoB = btn(ICONS.undo, '', () => this.store.undo(), t('Undo (⌘Z)'))
+    const redoB = btn(ICONS.redo, '', () => this.store.redo(), t('Redo (⇧⌘Z)'))
+    const presentB = btn(ICONS.play, t('Present'), () => this.present(), t('Present from current slide'))
     presentB.classList.add('ed-btn-primary')
-    const saveB = btn(ICONS.save, 'Save', () => this.save(false), 'Save — rewrite this file in place (⌘S)')
-    const saveAsB = btn(ICONS.download, '', () => this.save(true), 'Save a copy — pick a new file, leave this one untouched')
-    const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), 'Export PDF (print)')
-    const leftT = btn(ICONS.panelLeft, '', () => this.togglePanel('left'), 'Toggle slide list ([)')
-    const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), 'Toggle properties (])')
+    const saveB = btn(ICONS.save, t('Save'), () => this.save(false), t('Save — rewrite this file in place (⌘S)'))
+    const saveAsB = btn(ICONS.download, '', () => this.save(true), t('Save a copy — pick a new file, leave this one untouched'))
+    const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
+    const leftT = btn(ICONS.panelLeft, '', () => this.togglePanel('left'), t('Toggle slide list ([)'))
+    const rightT = btn(ICONS.panelRight, '', () => this.togglePanel('right'), t('Toggle properties (])'))
     actions.append(undoB, redoB, pdfB, this.updatesB, leftT, rightT, presentB, saveB, saveAsB)
 
     bar.append(logo, title, this.dirtyDot, insert, actions)
@@ -174,7 +177,7 @@ export class Editor {
 
   private makeResizer(side: 'left' | 'right'): HTMLElement {
     const handle = div('ed-resizer')
-    handle.title = 'Drag to resize · double-click to reset'
+    handle.title = t('Drag to resize · double-click to reset')
     const commit = () => {
       localStorage.setItem('bento-ed-panels', JSON.stringify(this.panelW))
       // thumbnails render at a width derived from the sidebar — refit them
@@ -221,10 +224,10 @@ export class Editor {
 
   private shapeDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
-    const trigger = btn(ICONS.shapes, 'Shape', () => wrap.classList.toggle('open'))
+    const trigger = btn(ICONS.shapes, t('Shape'), () => wrap.classList.toggle('open'))
     const menu = div('ed-menu')
     for (const item of SHAPE_MENU) {
-      const b = btn(item.icon, item.label, () => {
+      const b = btn(item.icon, t(item.label), () => {
         wrap.classList.remove('open')
         const partial = item.kind === 'line' ? { h: 4, w: 400, strokeWidth: 3 } : {}
         this.canvas.insert(defaultShape(item.kind, partial))
@@ -262,8 +265,8 @@ export class Editor {
     }
     const tools = div('ed-thumb-tools')
     tools.append(
-      btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, 'Duplicate slide'),
-      btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, 'Delete slide'),
+      btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, t('Duplicate slide')),
+      btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, t('Delete slide')),
     )
     item.append(num, surface, tools)
     item.addEventListener('click', () => this.store.goTo(i))
@@ -290,9 +293,9 @@ export class Editor {
       this.sidebar.appendChild(item)
     })
     this.sidebar.appendChild(this.insertGap(slides.length))
-    const add = btn(ICONS.plus, 'New slide', () => this.openLayoutPicker(add))
+    const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
     add.classList.add('ed-add-slide')
-    add.title = 'New slide from a layout'
+    add.title = t('New slide from a layout')
     this.sidebar.appendChild(add)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
@@ -311,11 +314,11 @@ export class Editor {
     const doc = this.store.doc
     if (action.kind === 'apply') {
       const t = div('ed-layoutpick-title')
-      t.textContent = 'Apply layout to this slide'
+      t.textContent = i18nT('Apply layout to this slide')
       pick.appendChild(t)
     }
-    const sections: Array<[string, Slide[], boolean]> = [['Built-in', builtinLayouts(), false]]
-    if (doc.layouts?.length) sections.push(['This document', doc.layouts, true])
+    const sections: Array<[string, Slide[], boolean]> = [[t('Built-in'), builtinLayouts(), false]]
+    if (doc.layouts?.length) sections.push([t('This document'), doc.layouts, true])
     for (const [label, layouts, custom] of sections) {
       const h = div('ed-layoutpick-h')
       h.textContent = label
@@ -325,7 +328,7 @@ export class Editor {
         const item = div('ed-layoutpick-item')
         item.appendChild(renderThumbnail(ly, doc, 104))
         const name = div('ed-layoutpick-name')
-        name.textContent = ly.name ?? 'Untitled'
+        name.textContent = ly.name ?? t('Untitled')
         item.appendChild(name)
         item.addEventListener('click', () => {
           pick.remove()
@@ -336,7 +339,7 @@ export class Editor {
           const del = document.createElement('button')
           del.className = 'ed-layoutpick-del'
           del.textContent = '✕'
-          del.title = 'Delete this layout'
+          del.title = t('Delete this layout')
           del.addEventListener('click', (ev) => {
             ev.stopPropagation()
             this.store.commit(() => {
@@ -394,7 +397,7 @@ export class Editor {
   /** Slim hover strip between thumbnails — click inserts a blank slide there. */
   private insertGap(at: number): HTMLElement {
     const gap = div('ed-insertgap')
-    gap.title = 'Insert slide here'
+    gap.title = t('Insert slide here')
     const plus = document.createElement('button')
     plus.className = 'ed-insertgap-btn'
     plus.textContent = '＋'
@@ -450,7 +453,7 @@ export class Editor {
         const badge = item.querySelector('.ed-thumb-cmt')
         if (open && !badge) {
           const b = div('ed-thumb-cmt')
-          b.title = 'Open comment(s)'
+          b.title = t('Open comment(s)')
           item.appendChild(b)
         } else if (!open && badge) {
           badge.remove()
@@ -473,7 +476,7 @@ export class Editor {
   }
 
   private deleteSlide(i: number) {
-    if (this.store.doc.slides.length <= 1) return this.toast('A deck needs at least one slide')
+    if (this.store.doc.slides.length <= 1) return this.toast(t('A deck needs at least one slide'))
     const target = this.store.doc.slides[i]
     // dependents: states of this slide, and element links pointing at it
     const states = this.store.doc.slides.filter((s) => s.stateOf === target.id)
@@ -488,7 +491,7 @@ export class Editor {
         states.length ? `${states.length} interactive state${states.length > 1 ? 's' : ''} will be deleted with it` : '',
         linkCount ? `${linkCount} element link${linkCount > 1 ? 's' : ''} will be cleared` : '',
       ].filter(Boolean).join('; ')
-      if (!window.confirm(`Delete this slide? ${parts}.`)) return
+      if (!window.confirm(t('Delete this slide? {parts}.', { parts }))) return
     }
     this.store.commit(() => {
       this.store.doc.slides = this.store.doc.slides.filter((s) => !doomedIds.has(s.id))
@@ -580,11 +583,11 @@ export class Editor {
       if (result === 'cancelled') return
       this.store.setDirty(false)
       this.toast(result === 'downloaded'
-        ? 'This browser can’t rewrite files in place — a fresh copy went to Downloads'
-        : 'Saved')
+        ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
+        : t('Saved'))
     } catch (err) {
       console.error(err)
-      this.toast('Save failed — see console')
+      this.toast(t('Save failed — see console'))
     }
   }
 
@@ -746,49 +749,49 @@ export class Editor {
     const status = div('ed-about-status')
     status.textContent =
       this.lastAutoCheck?.status === 'current'
-        ? `Checked automatically at launch — you're on the latest version (v${APP_VERSION}).`
+        ? t("Checked automatically at launch — you're on the latest version (v{v}).", { v: APP_VERSION })
         : this.lastAutoCheck?.status === 'error'
-          ? `Launch check couldn't reach the release server (${this.lastAutoCheck.message}). Check manually below.`
-          : 'This file carries its own app — it works offline, forever, as is.'
+          ? t("Launch check couldn't reach the release server ({m}). Check manually below.", { m: this.lastAutoCheck.message })
+          : t('This file carries its own app — it works offline, forever, as is.')
 
     const row = div('ed-about-row')
     const checkB = document.createElement('button')
     checkB.className = 'ed-btn'
-    checkB.textContent = 'Check for updates'
+    checkB.textContent = t('Check for updates')
     checkB.addEventListener('click', async () => {
       checkB.disabled = true
-      status.textContent = 'Checking…'
+      status.textContent = t('Checking…')
       const result = await checkForUpdates()
       checkB.disabled = false
       if (result.status === 'current') {
-        status.textContent = `You're on the latest version (v${result.version}).`
+        status.textContent = t("You're on the latest version (v{v}).", { v: result.version })
       } else if (result.status === 'error') {
-        status.textContent = `Couldn't check: ${result.message}`
+        status.textContent = t("Couldn't check: {m}", { m: result.message })
       } else {
         const { release } = result
         status.textContent = ''
         const line = div('ed-about-new')
-        line.textContent = `Version ${release.version} is available.`
+        line.textContent = t('Version {v} is available.', { v: release.version })
         status.appendChild(line)
         if (release.notes) {
           const notes = div('ed-about-notes')
           notes.textContent = release.notes
           status.appendChild(notes)
         }
-        const fail = (err: any) => { status.textContent = `Update failed: ${err?.message ?? err}` }
+        const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
         const done = () => {
           status.textContent = ''
           const ok = div('ed-about-new')
-          ok.textContent = `Updated to v${release.version} on disk.`
+          ok.textContent = t('Updated to v{v} on disk.', { v: release.version })
           status.appendChild(ok)
           const note = div('ed-about-notes')
           note.textContent = canUpdateInPlace()
-            ? `This window is still running v${APP_VERSION} — reload to finish. A v${APP_VERSION} backup was downloaded.`
-            : `This window is still running v${APP_VERSION}. If you overwrote the file that's open here, reload; otherwise open the file you saved.`
+            ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
+            : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
           status.appendChild(note)
           const reloadB = document.createElement('button')
           reloadB.className = 'ed-btn ed-btn-primary'
-          reloadB.textContent = 'Reload into new version'
+          reloadB.textContent = t('Reload into new version')
           reloadB.addEventListener('click', () => {
             this.store.setDirty(false) // disk already holds this exact document
             location.reload()
@@ -798,33 +801,33 @@ export class Editor {
 
         const inPlaceB = document.createElement('button')
         inPlaceB.className = 'ed-btn ed-btn-primary'
-        inPlaceB.textContent = canUpdateInPlace() ? 'Update this file' : 'Update this file…'
+        inPlaceB.textContent = canUpdateInPlace() ? t('Update this file') : t('Update this file…')
         inPlaceB.title = canUpdateInPlace()
-          ? 'Downloads a backup of the current version, then rewrites this file on disk as the new version — document untouched.'
-          : 'Verifies and builds the new version with this document inside, then asks where to save it — pick the file you have open to update it.'
+          ? t('Downloads a backup of the current version, then rewrites this file on disk as the new version — document untouched.')
+          : t('Verifies and builds the new version with this document inside, then asks where to save it — pick the file you have open to update it.')
         inPlaceB.addEventListener('click', async () => {
           inPlaceB.disabled = true
-          inPlaceB.textContent = 'Verifying…'
+          inPlaceB.textContent = t('Verifying…')
           try {
             const written = await applyUpdateInPlace(release, this.store.doc)
             if (written) done()
-            else { inPlaceB.disabled = false; inPlaceB.textContent = 'Update this file…' }
+            else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
           } catch (err: any) { fail(err) }
         })
         status.appendChild(inPlaceB)
 
         const getB = document.createElement('button')
         getB.className = 'ed-btn'
-        getB.textContent = 'Download updated copy'
-        getB.title = 'Downloads the new version with this document inside. The file you have now is not touched.'
+        getB.textContent = t('Download updated copy')
+        getB.title = t('Downloads the new version with this document inside. The file you have now is not touched.')
         getB.addEventListener('click', async () => {
           getB.disabled = true
-          getB.textContent = 'Verifying…'
+          getB.textContent = t('Verifying…')
           try {
             await applyUpdate(release, this.store.doc)
-            getB.textContent = 'Downloaded ✓'
+            getB.textContent = t('Downloaded ✓')
             const note = div('ed-about-notes')
-            note.textContent = `This window keeps running v${APP_VERSION} until you open the downloaded file.`
+            note.textContent = t('This window keeps running v{v} until you open the downloaded file.', { v: APP_VERSION })
             status.appendChild(note)
           } catch (err: any) { fail(err) }
         })
@@ -840,13 +843,32 @@ export class Editor {
     autoCb.type = 'checkbox'
     autoCb.checked = autoCheckEnabled()
     autoCb.addEventListener('change', () => setAutoCheck(autoCb.checked))
-    autoRow.append(autoCb, document.createTextNode(' Check for updates automatically at launch'))
+    autoRow.append(autoCb, document.createTextNode(' ' + t('Check for updates automatically at launch')))
     box.appendChild(autoRow)
+
+    const langRow = document.createElement('label')
+    langRow.className = 'ed-about-auto'
+    const langSel = document.createElement('select')
+    for (const c of LOCALE_CHOICES) {
+      const o = document.createElement('option')
+      o.value = c.code
+      o.textContent = c.label
+      if (c.code === locale()) o.selected = true
+      langSel.appendChild(o)
+    }
+    langSel.addEventListener('change', () => {
+      setLocale(langSel.value)
+      close()
+      this.build()
+      this.rebuildSidebar()
+    })
+    langRow.append(document.createTextNode(t('Language') + ' '), langSel)
+    box.appendChild(langRow)
 
     const fine = div('ed-about-fine')
     fine.innerHTML =
-      `Checks contact the release server and send nothing about you or this document — no ids, no telemetry.<br>` +
-      `Includes reveal.js, Moveable, Selecto (MIT) · Apache ECharts (Apache-2.0) · zrender (BSD-3) · Fraunces typeface (OFL-1.1) — full notices travel in this file’s source.`
+      `${t('Checks contact the release server and send nothing about you or this document — no ids, no telemetry.')}<br>` +
+      t('Includes reveal.js, Moveable, Selecto (MIT) · Apache ECharts (Apache-2.0) · zrender (BSD-3) · Fraunces typeface (OFL-1.1) — full notices travel in this file’s source.')
     box.appendChild(fine)
 
     overlay.appendChild(box)

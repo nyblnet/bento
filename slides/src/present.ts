@@ -8,6 +8,7 @@ import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
+import { t } from './i18n'
 
 const MORPH_DURATION = 0.65
 const MORPH_EASE = 'power2.inOut'
@@ -135,7 +136,7 @@ export function startPresentation(
       frame.appendChild(inner)
     } else {
       frame.classList.add('end')
-      frame.textContent = 'End of deck'
+      frame.textContent = t('End of deck')
     }
     return frame
   }
@@ -152,7 +153,7 @@ export function startPresentation(
     nxtBox.innerHTML = ''
     nxtBox.appendChild(d.importNode(svSlide(nxt, 300), true))
     const notes = d.querySelector('.sv-notes')
-    if (notes) notes.textContent = doc.slides[cur]?.notes || '— no notes for this slide —'
+    if (notes) notes.textContent = doc.slides[cur]?.notes || t('— no notes for this slide —')
     const count = d.querySelector('.sv-count')
     if (count) count.textContent = `${visibleIndex(cur)} / ${visibleTotal}`
   }
@@ -165,15 +166,15 @@ export function startPresentation(
     if (!speaker) return // popup blocked
     ;(window as unknown as Record<string, unknown>).__bentoSpeaker = speaker // diagnostics
     const d = speaker.document
-    d.title = `${doc.title} — Speaker view`
+    d.title = `${doc.title} — ${t('Speaker view')}`
     for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
     d.body.className = 'bento-speaker'
     d.body.innerHTML =
-      '<div class="sv-top"><div class="sv-timer" title="Click to reset">00:00</div>' +
+      `<div class="sv-top"><div class="sv-timer" title="${t('Click to reset')}">00:00</div>` +
       '<div class="sv-clock"></div><div class="sv-count"></div></div>' +
       '<div class="sv-main"><div class="sv-current"></div>' +
-      '<div class="sv-side"><div><div class="sv-label">Next</div><div class="sv-nextbox"></div></div>' +
-      '<div class="sv-notes-wrap"><div class="sv-label">Notes</div><div class="sv-notes"></div></div></div></div>'
+      `<div class="sv-side"><div><div class="sv-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
+      `<div class="sv-notes-wrap"><div class="sv-label">${t('Notes')}</div><div class="sv-notes"></div></div></div></div>`
     speakerStart = performance.now()
     d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
     clearInterval(speakerTimer)

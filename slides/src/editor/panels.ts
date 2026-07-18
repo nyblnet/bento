@@ -7,6 +7,7 @@ import { uid, type ChartElement, type LineEnding, type ShapeElement, type Slide,
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
+import { t } from '../i18n'
 
 export class PropsPanel {
   private burst = false
@@ -118,10 +119,10 @@ export class PropsPanel {
 
   private buildSlidePanel() {
     const slide = this.store.slide
-    this.section('Slide')
-    this.row('Background', this.color(slide.background, (v, fin) =>
+    this.section(t('Slide'))
+    this.row(t('Background'), this.color(slide.background, (v, fin) =>
       this.edit(() => { this.store.slide.background = v }, fin)))
-    this.row('Transition', this.select(
+    this.row(t('Transition'), this.select(
       ['none', 'fade', 'slide', 'zoom', 'morph'],
       slide.transition,
       (v) => this.edit(() => { this.store.slide.transition = v as TransitionKind }, true),
@@ -129,24 +130,24 @@ export class PropsPanel {
     if (slide.transition === 'morph') {
       const hint = document.createElement('p')
       hint.className = 'ed-hint'
-      hint.innerHTML = '<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).'
+      hint.innerHTML = t('<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).')
       this.host.appendChild(hint)
     }
 
     // interactivity: naming, state-of, hover focus
-    this.section('Interactivity')
+    this.section(t('Interactivity'))
     const name = document.createElement('input')
     name.type = 'text'
-    name.placeholder = 'unnamed'
+    name.placeholder = t('unnamed')
     name.value = slide.name ?? ''
     name.addEventListener('change', () =>
       this.edit(() => { this.store.slide.name = name.value || undefined }, true))
-    this.row('Name', name)
+    this.row(t('Name'), name)
 
     const stateSel = document.createElement('select')
     const optNone = document.createElement('option')
     optNone.value = ''
-    optNone.textContent = 'no — normal slide'
+    optNone.textContent = t('no — normal slide')
     stateSel.appendChild(optNone)
     this.store.doc.slides.forEach((s, i) => {
       if (s.stateOf || s.id === slide.id) return
@@ -161,23 +162,23 @@ export class PropsPanel {
         this.store.slide.stateOf = stateSel.value || undefined
         this.store.emit('slides')
       }, true))
-    this.row('State of', stateSel)
+    this.row(t('State of'), stateSel)
     const stateHint = document.createElement('p')
     stateHint.className = 'ed-hint'
     stateHint.innerHTML =
-      'A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.'
+      t('A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.')
     this.host.appendChild(stateHint)
 
     if (slide.stateOf) {
       const sync = document.createElement('button')
       sync.className = 'ed-btn ed-btn-block'
-      sync.innerHTML = `${ICONS.sync}<span>Sync from parent slide</span>`
-      sync.title = 'Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept'
+      sync.innerHTML = `${ICONS.sync}<span>${t('Sync from parent slide')}</span>`
+      sync.title = t('Pull elements added to the parent into this state and adopt its ordering — your changes to shared elements are kept')
       sync.addEventListener('click', () => this.syncStateFromParent())
       this.host.appendChild(sync)
     }
 
-    this.row('Hover', this.select(
+    this.row(t('Hover'), this.select(
       ['none', 'focus-group', 'reveal'],
       slide.hover?.type ?? 'none',
       (v) => this.edit(() => {
@@ -186,7 +187,7 @@ export class PropsPanel {
           : { ...(this.store.slide.hover ?? {}), type: v as 'focus-group' | 'reveal' }
       }, true)))
     if (slide.hover?.type === 'focus-group') {
-      this.row('Hover dim', this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
+      this.row(t('Hover dim'), this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
         this.edit(() => { if (this.store.slide.hover) this.store.slide.hover.dim = Math.min(Math.max(v, 0), 1) }, fin)))
     }
     if (slide.hover?.type === 'reveal') {
@@ -197,31 +198,31 @@ export class PropsPanel {
       defIn.value = slide.hover.default ?? ''
       defIn.addEventListener('change', () =>
         this.edit(() => { if (this.store.slide.hover) this.store.slide.hover.default = defIn.value || undefined }, true))
-      this.row('Default set', defIn)
+      this.row(t('Default set'), defIn)
       if (sets.length) {
-        this.row('Preview set', this.select(sets, this.store.hoverPreview ?? slide.hover.default ?? sets[0], (v) => {
+        this.row(t('Preview set'), this.select(sets, this.store.hoverPreview ?? slide.hover.default ?? sets[0], (v) => {
           this.store.hoverPreview = v
           this.store.emit('current') // re-render canvas without touching the doc
         }))
         const revealHint = document.createElement('p')
         revealHint.className = 'ed-hint'
-        revealHint.innerHTML = 'While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.'
+        revealHint.innerHTML = t('While presenting, hovering an element whose <b>group</b> matches a set name shows that set. Use Preview to edit each set.')
         this.host.appendChild(revealHint)
       }
     }
 
-    this.section('Layout')
+    this.section(t('Layout'))
     const applyLy = document.createElement('button')
     applyLy.className = 'ed-btn ed-btn-block'
-    applyLy.textContent = '⧉ Apply layout…'
-    applyLy.title = 'Re-arrange this slide onto a layout — content moves by matching id, then role; extra elements are kept'
+    applyLy.textContent = t('⧉ Apply layout…')
+    applyLy.title = t('Re-arrange this slide onto a layout — content moves by matching id, then role; extra elements are kept')
     applyLy.addEventListener('click', () =>
       document.dispatchEvent(new CustomEvent('bento:apply-layout', { detail: { anchor: applyLy } })))
     this.host.appendChild(applyLy)
 
     const saveLy = document.createElement('button')
     saveLy.className = 'ed-btn ed-btn-block'
-    saveLy.textContent = '＋ Save slide as layout…'
+    saveLy.textContent = t('＋ Save slide as layout…')
     saveLy.title = "Add this slide to the document's layout picker (New slide button)"
     saveLy.addEventListener('click', () => {
       const name = window.prompt('Layout name', this.store.slide.name ?? 'My layout')
@@ -234,24 +235,24 @@ export class PropsPanel {
     })
     this.host.appendChild(saveLy)
 
-    this.section('Speaker notes')
+    this.section(t('Speaker notes'))
     const notes = document.createElement('textarea')
     notes.className = 'ed-notes'
-    notes.placeholder = 'Notes for presenter view (press S while presenting)…'
+    notes.placeholder = t('Notes for presenter view (press S while presenting)…')
     notes.value = slide.notes
     notes.addEventListener('input', () => this.edit(() => { this.store.slide.notes = notes.value }, false))
     notes.addEventListener('change', () => this.edit(() => { this.store.slide.notes = notes.value }, true))
     this.host.appendChild(notes)
     const notesHint = document.createElement('p')
     notesHint.className = 'ed-hint'
-    notesHint.innerHTML = 'Press <b>S</b> while presenting to open the speaker view — these notes beside the current and next slide, with a timer.'
+    notesHint.innerHTML = t('Press <b>S</b> while presenting to open the speaker view — these notes beside the current and next slide, with a timer.')
     this.host.appendChild(notesHint)
   }
 
   private buildMultiPanel(els: SlideElement[]) {
     this.section(`${els.length} elements`)
     this.opsRow(els)
-    this.section('Arrange')
+    this.section(t('Arrange'))
     this.arrangeRows(els)
   }
 
@@ -259,24 +260,24 @@ export class PropsPanel {
     this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart' }[el.type])
     this.opsRow([el])
 
-    this.section('Arrange')
+    this.section(t('Arrange'))
     this.arrangeRows([el])
 
-    this.section('Position & size')
+    this.section(t('Position & size'))
     const geo = document.createElement('div')
     geo.className = 'ed-grid2'
     geo.append(
-      this.mini('X', el.x, (v) => this.setNum(el.id, 'x', v)),
-      this.mini('Y', el.y, (v) => this.setNum(el.id, 'y', v)),
-      this.mini('W', el.w, (v) => this.setNum(el.id, 'w', Math.max(v, 1))),
-      this.mini('H', el.h, (v) => this.setNum(el.id, 'h', Math.max(v, 1))),
-      this.mini('Angle', el.rotation, (v) => this.setNum(el.id, 'rotation', v)),
-      this.mini('Opacity', Math.round(el.opacity * 100), (v) =>
+      this.mini(t('X'), el.x, (v) => this.setNum(el.id, 'x', v)),
+      this.mini(t('Y'), el.y, (v) => this.setNum(el.id, 'y', v)),
+      this.mini(t('W'), el.w, (v) => this.setNum(el.id, 'w', Math.max(v, 1))),
+      this.mini(t('H'), el.h, (v) => this.setNum(el.id, 'h', Math.max(v, 1))),
+      this.mini(t('Angle'), el.rotation, (v) => this.setNum(el.id, 'rotation', v)),
+      this.mini(t('Opacity'), Math.round(el.opacity * 100), (v) =>
         this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1))),
     )
     this.host.appendChild(geo)
 
-    this.row('Role', this.select(
+    this.row(t('Role'), this.select(
       ['none', 'title', 'subtitle', 'body', 'kicker'],
       el.role ?? 'none',
       (v) => this.mutate(el.id, (e) => {
@@ -286,7 +287,7 @@ export class PropsPanel {
 
     const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0]
       ?? (el.shadow ? 'custom' : 'none')
-    this.row('Shadow', this.select(
+    this.row(t('Shadow'), this.select(
       [...(current === 'custom' ? ['custom'] : []), 'none', ...Object.keys(SHADOW_PRESETS)],
       current,
       (v) => this.mutate(el.id, (e) => {
@@ -312,12 +313,12 @@ export class PropsPanel {
       const grid = document.createElement('div')
       grid.className = 'ed-grid2'
       grid.append(
-        this.mini('X', sh.x ?? 0, (v) => setShadow(i, { x: v })),
-        this.mini('Y', sh.y ?? 0, (v) => setShadow(i, { y: v })),
-        this.mini('Blur', sh.blur, (v) => setShadow(i, { blur: Math.max(v, 0) })),
+        this.mini(t('X'), sh.x ?? 0, (v) => setShadow(i, { x: v })),
+        this.mini(t('Y'), sh.y ?? 0, (v) => setShadow(i, { y: v })),
+        this.mini(t('Blur'), sh.blur, (v) => setShadow(i, { blur: Math.max(v, 0) })),
       )
       this.host.appendChild(grid)
-      this.row('Color', this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
+      this.row(t('Color'), this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
     })
 
 
@@ -330,13 +331,13 @@ export class PropsPanel {
 
     const morph = document.createElement('p')
     morph.className = 'ed-hint'
-    morph.innerHTML = `Morph id: <code>${el.id}</code>`
+    morph.innerHTML = `${t('Morph id:')} <code>${el.id}</code>`
     this.host.appendChild(morph)
   }
 
   /** fx + link — how the element behaves while presenting. */
   private buildPresentingProps(el: SlideElement) {
-    this.section('Presenting')
+    this.section(t('Presenting'))
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
@@ -344,13 +345,13 @@ export class PropsPanel {
         else e.fx = fx
       }, true)
 
-    this.row('Enter', this.select(
+    this.row(t('Enter'), this.select(
       ['none', 'fade', 'fade-up'], el.fx?.enter ?? 'none',
       (v) => setFx({ enter: v === 'none' ? undefined : (v as 'fade' | 'fade-up') })))
-    this.row('Count up', this.select(
+    this.row(t('Count up'), this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
       (v) => setFx({ countUp: v === 'on' ? true : undefined })))
-    this.row('Ambient', this.select(
+    this.row(t('Ambient'), this.select(
       ['none', 'kenburns'], el.fx?.ambient ?? 'none',
       (v) => setFx(v === 'none' ? { ambient: undefined, ken: undefined } : { ambient: 'kenburns' })))
     if (el.fx?.ambient === 'kenburns') {
@@ -358,7 +359,7 @@ export class PropsPanel {
       const dir = ken.dir ?? 'drift'
       const setKen = (patch: Partial<NonNullable<NonNullable<SlideElement['fx']>['ken']>>) =>
         setFx({ ken: { ...ken, ...patch } })
-      this.row('Zoom', this.select(
+      this.row(t('Zoom'), this.select(
         ['drift', 'zoom-out', 'zoom-in'],
         dir === 'out' ? 'zoom-out' : dir === 'in' ? 'zoom-in' : 'drift',
         (v) => {
@@ -366,17 +367,17 @@ export class PropsPanel {
           // give each style its natural pace when switching
           setFx({ ken: d === 'drift' ? undefined : { dir: d, scale: 1.06, duration: 2.5 } })
         }))
-      this.row('Zoom %', this.number(
+      this.row(t('Zoom %'), this.number(
         Math.round(((ken.scale ?? (dir === 'drift' ? 1.1 : 1.06)) - 1) * 100), 1,
         (v, fin) => { if (fin) setKen({ scale: 1 + Math.min(Math.max(v, 0), 100) / 100 }) }))
-      this.row('Zoom secs', this.number(
+      this.row(t('Zoom secs'), this.number(
         ken.duration ?? (dir === 'drift' ? 26 : 2.5), 0.1,
         (v, fin) => { if (fin) setKen({ duration: Math.max(v, 0.1) }) }))
     }
 
     // continuous loop animation
     const loop = el.fx?.loop
-    this.row('Loop', this.select(
+    this.row(t('Loop'), this.select(
       ['none', 'dash-march', 'motion-path'],
       loop?.type ?? 'none',
       (v) => setFx({
@@ -385,21 +386,21 @@ export class PropsPanel {
           : { type: 'motion-path', path: (loop as any)?.path ?? 'M 0 0 L 100 0', duration: (loop as any)?.duration ?? 3 },
       })))
     if (loop) {
-      this.row('Loop secs', this.number(loop.duration ?? 2, 0.1, (v, fin) =>
+      this.row(t('Loop secs'), this.number(loop.duration ?? 2, 0.1, (v, fin) =>
         this.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin)))
       if (loop.type === 'motion-path') {
         const path = document.createElement('input')
         path.type = 'text'
         path.value = loop.path
-        path.title = 'SVG path the element travels along, relative to its position'
+        path.title = t('SVG path the element travels along, relative to its position')
         path.addEventListener('change', () =>
           this.mutate(el.id, (e) => { if (e.fx?.loop?.type === 'motion-path') e.fx.loop.path = path.value }, true))
-        this.row('Path', path)
+        this.row(t('Path'), path)
 
         const editPath = document.createElement('button')
         editPath.className = 'ed-btn ed-btn-block'
-        editPath.textContent = '✎ Edit path on canvas'
-        editPath.title = 'Drag anchor points on the slide; double-click adds and removes points'
+        editPath.textContent = t('✎ Edit path on canvas')
+        editPath.title = t('Drag anchor points on the slide; double-click adds and removes points')
         editPath.addEventListener('click', () =>
           document.dispatchEvent(new CustomEvent('bento:edit-path', { detail: { id: el.id } })))
         this.host.appendChild(editPath)
@@ -409,7 +410,7 @@ export class PropsPanel {
     // hover-reveal set membership
     const soh = document.createElement('input')
     soh.type = 'text'
-    soh.placeholder = 'always visible'
+    soh.placeholder = t('always visible')
     soh.value = el.showOnHover ?? ''
     soh.title = "Only visible while an element with this group is hovered (slide hover: 'reveal')"
     soh.addEventListener('change', () => {
@@ -421,25 +422,25 @@ export class PropsPanel {
       this.store.hoverPreview = soh.value || null
       this.store.emit('current')
     })
-    this.row('Show on hover', soh)
+    this.row(t('Show on hover'), soh)
 
     // group tag (hover focus & interaction targeting)
     const group = document.createElement('input')
     group.type = 'text'
-    group.placeholder = 'none'
+    group.placeholder = t('none')
     group.value = el.group ?? ''
     group.addEventListener('change', () =>
       this.mutate(el.id, (e) => {
         if (group.value) e.group = group.value
         else delete e.group
       }, true))
-    this.row('Group', group)
+    this.row(t('Group'), group)
 
     // link → slide picker
     const sel = document.createElement('select')
     const none = document.createElement('option')
     none.value = ''
-    none.textContent = 'none'
+    none.textContent = t('none')
     sel.appendChild(none)
     this.store.doc.slides.forEach((s, i) => {
       const o = document.createElement('option')
@@ -453,14 +454,14 @@ export class PropsPanel {
         if (sel.value) e.link = sel.value
         else delete e.link
       }, true))
-    this.row('Link to', sel)
+    this.row(t('Link to'), sel)
 
     // one-click interactivity: duplicate this slide as a hidden state
     // (element ids preserved ⇒ it morphs) and link this element to it
     const makeState = document.createElement('button')
     makeState.className = 'ed-btn ed-btn-block'
-    makeState.textContent = '＋ New state linked from this element'
-    makeState.title = 'Duplicates this slide as a hidden interactive state and links the selected element to it'
+    makeState.textContent = t('＋ New state linked from this element')
+    makeState.title = t('Duplicates this slide as a hidden interactive state and links the selected element to it')
     makeState.addEventListener('click', () => this.createLinkedState(el))
     this.host.appendChild(makeState)
   }
@@ -551,32 +552,32 @@ export class PropsPanel {
   }
 
   private buildTextProps(el: TextElement) {
-    this.section('Typography')
+    this.section(t('Typography'))
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
-    hint.innerHTML = 'While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.'
+    hint.innerHTML = t('While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.')
     this.host.appendChild(hint)
-    this.row('Font', this.fontSelect(el))
+    this.row(t('Font'), this.fontSelect(el))
     // Shown in POINTS (the unit office users know); the model stores slide-space
     // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
-    this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+    this.row(t('Size (pt)'), this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
       this.mutate(el.id, (e) => {
         (e as TextElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
       }, fin)))
-    this.row('Weight', this.weightSelect(el))
-    this.row('Color', this.color(el.color, (v, fin) =>
+    this.row(t('Weight'), this.weightSelect(el))
+    this.row(t('Color'), this.color(el.color, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin)))
-    this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
+    this.row(t('Align'), this.select(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).align = v as TextElement['align'] }, true)))
-    this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+    this.row(t('V-align'), this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true)))
-    this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
+    this.row(t('Line height'), this.number(el.lineHeight, 0.05, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(v, 0.5) }, fin)))
 
     const embed = document.createElement('button')
     embed.className = 'ed-btn ed-btn-block'
-    embed.textContent = '＋ Embed font file…'
-    embed.title = 'Bundle a .woff2/.woff/.ttf/.otf into this file and use it here'
+    embed.textContent = t('＋ Embed font file…')
+    embed.title = t('Bundle a .woff2/.woff/.ttf/.otf into this file and use it here')
     embed.addEventListener('click', () => this.embedFont(el))
     this.host.appendChild(embed)
   }
@@ -645,9 +646,9 @@ export class PropsPanel {
   }
 
   private buildShapeProps(el: ShapeElement) {
-    this.section('Fill & stroke')
+    this.section(t('Fill & stroke'))
     const grad = el.fillGradient
-    this.row('Fill style', this.select(['solid', 'gradient'], grad ? 'gradient' : 'solid', (v) =>
+    this.row(t('Fill style'), this.select(['solid', 'gradient'], grad ? 'gradient' : 'solid', (v) =>
       this.mutate(el.id, (e) => {
         const s = e as ShapeElement
         if (v === 'gradient') {
@@ -665,10 +666,10 @@ export class PropsPanel {
       }, true)))
 
     if (!grad) {
-      this.row('Fill', this.colorAlpha(el.fill, (v, fin) =>
+      this.row(t('Fill'), this.colorAlpha(el.fill, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin)))
     } else {
-      this.row('Grad. angle', this.number(grad.angle, 1, (v, fin) =>
+      this.row(t('Grad. angle'), this.number(grad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
           const g = (e as ShapeElement).fillGradient
           if (g) g.angle = v
@@ -681,7 +682,7 @@ export class PropsPanel {
             const g = (e as ShapeElement).fillGradient
             if (g?.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1)
           }, fin))
-        at.title = 'Position %'
+        at.title = t('Position %')
         const color = this.colorAlpha(stop.color, (v, fin) =>
           this.mutate(el.id, (e) => {
             const g = (e as ShapeElement).fillGradient
@@ -692,7 +693,7 @@ export class PropsPanel {
           const del = document.createElement('button')
           del.className = 'ed-btn ed-btn-icon'
           del.textContent = '✕'
-          del.title = 'Remove stop'
+          del.title = t('Remove stop')
           del.addEventListener('click', () =>
             this.mutate(el.id, (e) => {
               const g = (e as ShapeElement).fillGradient
@@ -704,7 +705,7 @@ export class PropsPanel {
       })
       const add = document.createElement('button')
       add.className = 'ed-btn ed-btn-block'
-      add.textContent = '＋ Add stop'
+      add.textContent = t('＋ Add stop')
       add.addEventListener('click', () =>
         this.mutate(el.id, (e) => {
           const g = (e as ShapeElement).fillGradient
@@ -716,11 +717,11 @@ export class PropsPanel {
       this.host.appendChild(add)
     }
 
-    this.row('Stroke', this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
+    this.row(t('Stroke'), this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
-    this.row('Stroke width', this.number(el.strokeWidth, 0.5, (v, fin) =>
+    this.row(t('Stroke width'), this.number(el.strokeWidth, 0.5, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin)))
-    this.row('Line style', this.select(
+    this.row(t('Line style'), this.select(
       ['solid', 'dashed', 'dotted'],
       el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
       (v) => this.mutate(el.id, (e) => {
@@ -730,20 +731,20 @@ export class PropsPanel {
       }, true)))
     if (el.shape === 'line') {
       const ENDINGS = ['none', 'arrow', 'dot', 'bar']
-      this.row('Start tip', this.select(ENDINGS, el.lineStart ?? 'none', (v) =>
+      this.row(t('Start tip'), this.select(ENDINGS, el.lineStart ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineStart = v === 'none' ? undefined : (v as LineEnding) }, true)))
-      this.row('End tip', this.select(ENDINGS, el.lineEnd ?? 'none', (v) =>
+      this.row(t('End tip'), this.select(ENDINGS, el.lineEnd ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineEnd = v === 'none' ? undefined : (v as LineEnding) }, true)))
     }
     if (el.shape === 'rect') {
-      this.row('Corner radius', this.number(el.radius, 1, (v, fin) =>
+      this.row(t('Corner radius'), this.number(el.radius, 1, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin)))
     }
   }
 
   private buildChartProps(el: ChartElement) {
-    this.section('Data')
-    this.row('Preset', this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
+    this.section(t('Data'))
+    this.row(t('Preset'), this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
       this.mutate(el.id, (e) => {
         const c = e as ChartElement
         c.preset = v
@@ -752,7 +753,7 @@ export class PropsPanel {
 
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
-    hint.innerHTML = 'The full <b>ECharts option</b> as JSON (pure data — use template-string formatters like <code>{b}: {c}</code>, never functions). Tooltips and zoom run while presenting.'
+    hint.innerHTML = t('The full <b>ECharts option</b> as JSON (pure data — use template-string formatters like <code>{b}: {c}</code>, never functions). Tooltips and zoom run while presenting.')
     this.host.appendChild(hint)
 
     const ta = document.createElement('textarea')
@@ -773,10 +774,10 @@ export class PropsPanel {
   }
 
   private buildImageProps(el: SlideElement) {
-    this.section('Image')
-    this.row('Fit', this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
+    this.section(t('Image'))
+    this.row(t('Fit'), this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
-    this.row('Corner radius', this.number((el as any).radius, 1, (v, fin) =>
+    this.row(t('Corner radius'), this.number((el as any).radius, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin)))
   }
 
@@ -786,8 +787,8 @@ export class PropsPanel {
     const row = document.createElement('div')
     row.className = 'ed-ops'
     row.append(
-      this.opBtn(ICONS.copy, 'Duplicate', () => this.duplicate(els)),
-      this.opBtn(ICONS.trash, 'Delete', () => this.deleteEls(els)),
+      this.opBtn(ICONS.copy, t('Duplicate'), () => this.duplicate(els)),
+      this.opBtn(ICONS.trash, t('Delete'), () => this.deleteEls(els)),
     )
     this.host.appendChild(row)
   }
@@ -842,12 +843,12 @@ export class PropsPanel {
       g.className = 'ed-btn ed-btn-block'
       const allSame = els.length > 1 && els.every((e) => e.groupId && e.groupId === els[0].groupId)
       if (allSame || (grouped && els.length === 1)) {
-        g.textContent = '⛓ Ungroup'
-        g.title = 'Dissolve the group (⇧⌘G)'
+        g.textContent = t('⛓ Ungroup')
+        g.title = t('Dissolve the group (⇧⌘G)')
         g.addEventListener('click', () => this.ungroup(els))
       } else {
-        g.textContent = '⛓ Group'
-        g.title = 'Elements select and move as one; Alt-click reaches a member (⌘G)'
+        g.textContent = t('⛓ Group')
+        g.title = t('Elements select and move as one; Alt-click reaches a member (⌘G)')
         g.addEventListener('click', () => this.group(els))
       }
       this.host.appendChild(g)
@@ -1045,7 +1046,7 @@ export class PropsPanel {
     alpha.max = '100'
     alpha.step = '1'
     alpha.value = String(Math.round(parsed.a * 100))
-    alpha.title = 'Opacity %'
+    alpha.title = t('Opacity %')
     const emit = (final: boolean) => {
       const raw = parseFloat(alpha.value)
       const a = Number.isFinite(raw) ? Math.min(Math.max(raw / 100, 0), 1) : 1
@@ -1069,14 +1070,14 @@ export class PropsPanel {
     if (!WEIGHTS.some(([n]) => n === current)) {
       const o = document.createElement('option')
       o.value = String(current)
-      o.textContent = `Custom (${current})`
+      o.textContent = t('Custom ({n})', { n: current })
       o.selected = true
       sel.appendChild(o)
     }
     for (const [n, name] of WEIGHTS) {
       const o = document.createElement('option')
       o.value = String(n)
-      o.textContent = name
+      o.textContent = t(name)
       o.style.fontWeight = String(n)
       if (n === current) o.selected = true
       sel.appendChild(o)
@@ -1091,7 +1092,7 @@ export class PropsPanel {
     for (const opt of options) {
       const o = document.createElement('option')
       o.value = opt
-      o.textContent = opt
+      o.textContent = t(opt)
       if (opt === value) o.selected = true
       sel.appendChild(o)
     }

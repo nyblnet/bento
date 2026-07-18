@@ -6,13 +6,14 @@
 
 import type { Store } from '../store'
 import { uid, type Comment } from '../model'
+import { t } from '../i18n'
 
 /** The commenter's name, remembered per browser (localStorage, never sent
  *  anywhere); asked for on first use. */
 export function commentAuthor(): string | null {
   let name = localStorage.getItem('bento-author')
   if (!name) {
-    name = window.prompt('Your name (shown on comments):')?.trim() || ''
+    name = window.prompt(t('Your name (shown on comments):'))?.trim() || ''
     if (!name) return null
     localStorage.setItem('bento-author', name)
   }
@@ -21,7 +22,7 @@ export function commentAuthor(): string | null {
 
 /** Re-ask for the name; existing threads keep their original author. */
 export function changeCommentAuthor(): string | null {
-  const next = window.prompt('Your name (shown on new comments):', localStorage.getItem('bento-author') ?? '')?.trim()
+  const next = window.prompt(t('Your name (shown on new comments):'), localStorage.getItem('bento-author') ?? '')?.trim()
   if (!next) return null
   localStorage.setItem('bento-author', next)
   return next
@@ -29,10 +30,10 @@ export function changeCommentAuthor(): string | null {
 
 function relTime(iso: string): string {
   const s = (Date.now() - new Date(iso).getTime()) / 1000
-  if (!Number.isFinite(s) || s < 45) return 'just now'
-  if (s < 3600) return `${Math.round(s / 60)}m ago`
-  if (s < 86400) return `${Math.round(s / 3600)}h ago`
-  if (s < 86400 * 30) return `${Math.round(s / 86400)}d ago`
+  if (!Number.isFinite(s) || s < 45) return t('just now')
+  if (s < 3600) return t('{n}m ago', { n: Math.round(s / 60) })
+  if (s < 86400) return t('{n}h ago', { n: Math.round(s / 3600) })
+  if (s < 86400 * 30) return t('{n}d ago', { n: Math.round(s / 86400) })
   return new Date(iso).toLocaleDateString()
 }
 
@@ -91,7 +92,7 @@ export class CommentsUI {
   openNew(elementId?: string, point?: { x: number; y: number }) {
     const author = commentAuthor()
     if (!author) return
-    const text = window.prompt('Comment:')?.trim()
+    const text = window.prompt(t('Comment:'))?.trim()
     if (!text) return
     const comment: Comment = {
       id: uid('cmt'), elementId, ...(point ?? {}), author, text, at: new Date().toISOString(),
@@ -117,15 +118,15 @@ export class CommentsUI {
     head.className = 'ed-comment-pop-head'
     const headLabel = document.createElement('span')
     headLabel.textContent = c.elementId
-      ? 'Comment · element'
-      : typeof c.x === 'number' ? `Comment · point (${c.x}, ${c.y})` : 'Comment · slide'
+      ? t('Comment · element')
+      : typeof c.x === 'number' ? t('Comment · point ({x}, {y})', { x: c.x!, y: c.y! }) : t('Comment · slide')
     const me = document.createElement('button')
     me.className = 'ed-comment-me'
-    me.textContent = `you: ${localStorage.getItem('bento-author') ?? '—'} ✎`
-    me.title = 'Change the name used for your new comments and replies'
+    me.textContent = t('you: {name} ✎', { name: localStorage.getItem('bento-author') ?? '—' })
+    me.title = t('Change the name used for your new comments and replies')
     me.addEventListener('click', () => {
       const next = changeCommentAuthor()
-      if (next) me.textContent = `you: ${next} ✎`
+      if (next) me.textContent = t('you: {name} ✎', { name: next })
     })
     head.append(headLabel, me)
     pop.appendChild(head)
@@ -148,7 +149,7 @@ export class CommentsUI {
     const reply = document.createElement('textarea')
     reply.className = 'ed-comment-reply'
     reply.rows = 2
-    reply.placeholder = 'Reply…'
+    reply.placeholder = t('Reply…')
     pop.appendChild(reply)
 
     const foot = document.createElement('div')
@@ -161,7 +162,7 @@ export class CommentsUI {
       return b
     }
     foot.append(
-      mkBtn('Reply', () => {
+      mkBtn(t('Reply'), () => {
         const text = reply.value.trim()
         const author = commentAuthor()
         if (!text || !author) return
@@ -172,7 +173,7 @@ export class CommentsUI {
         pop.remove()
         this.refresh()
       }),
-      mkBtn(c.resolved ? 'Reopen' : 'Resolve', () => {
+      mkBtn(c.resolved ? t('Reopen') : t('Resolve'), () => {
         this.store.commit(() => {
           const live = this.store.slide.comments?.find((x) => x.id === commentId)
           if (live) live.resolved = !live.resolved
@@ -180,7 +181,7 @@ export class CommentsUI {
         pop.remove()
         this.refresh()
       }),
-      mkBtn('Delete', () => {
+      mkBtn(t('Delete'), () => {
         this.store.commit(() => {
           const s = this.store.slide
           s.comments = (s.comments ?? []).filter((x) => x.id !== commentId)

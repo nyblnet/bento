@@ -5,6 +5,7 @@
 import Moveable from 'moveable'
 import Selecto from 'selecto'
 import type { Store } from '../store'
+import { t } from '../i18n'
 import type { SlideElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
@@ -161,13 +162,13 @@ export class SlideCanvas {
       b.addEventListener('click', onClick)
       return b
     }
-    const label = mk('100%', 'Reset zoom to fit (⌘0)', () => this.zoomReset())
+    const label = mk('100%', t('Reset zoom to fit (⌘0)'), () => this.zoomReset())
     label.classList.add('ed-zoomlabel')
     this.zoomLabel = label
     bar.append(
-      mk('−', 'Zoom out (⌘−)', () => this.zoomOut()),
+      mk('−', t('Zoom out (⌘−)'), () => this.zoomOut()),
       label,
-      mk('+', 'Zoom in (⌘+)', () => this.zoomIn()),
+      mk('+', t('Zoom in (⌘+)'), () => this.zoomIn()),
     )
     this.wrap.appendChild(bar)
   }
@@ -220,7 +221,7 @@ export class SlideCanvas {
     this.stage.appendChild(hl)
     const chip = document.createElement('div')
     chip.className = 'ed-comment-chip'
-    chip.textContent = '💬 whole slide'
+    chip.textContent = t('💬 whole slide')
     chip.style.display = 'none'
     this.stage.appendChild(chip)
     const cleanup = () => {
@@ -390,7 +391,7 @@ export class SlideCanvas {
     bar.className = 'ed-setbar'
     const label = document.createElement('span')
     label.className = 'ed-setbar-label'
-    label.textContent = 'Hover set:'
+    label.textContent = t('Hover set:')
     bar.appendChild(label)
     for (const set of sets) {
       const chip = document.createElement('button')
