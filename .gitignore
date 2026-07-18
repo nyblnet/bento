@@ -10,3 +10,4 @@ testing/
 .DS_Store
 *.tsbuildinfo
 site/
+working/
