@@ -341,7 +341,12 @@ scripts/test-sync.ts        property-based convergence rig (SEEDS/STEPS/
 ```
 
 Same-machine tabs sync automatically (BroadcastChannel keyed by docId).
-Online: Share → Start live session mints `doc.collab {room, key}` — the
-saved FILE is the capability; anyone opening a copy joins and converges.
+Online: credentials `doc.collab {room, key}` are minted at document
+CREATION (random room id) and stay dormant until Share flips `on` — so any
+copy sent BEFORE sharing started can still join, and "Rotate keys" revokes
+every previously sent copy. Saves stamp the CRDT state (`doc.collab.sync`),
+which is what lets a copy edited offline rejoin later and merge two-way:
+its registers defend its edits, the room's replay fills in what it missed.
+"Duplicate as new deck" re-mints identity for genuinely new documents.
 The relay never sees plaintext, and every saved copy stays a complete,
 standalone document (sync is a layer beside the file, never a replacement).

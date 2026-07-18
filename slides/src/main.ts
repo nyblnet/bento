@@ -60,7 +60,10 @@ if (location.hash === '#present') {
   get doc() {
     return store.doc
   },
-  serialize: () => serializeFile(store.doc),
+  serialize: () => {
+    session.stampInto(store.doc)
+    return serializeFile(store.doc)
+  },
   undo: () => store.undo(),
   redo: () => store.redo(),
   get selection() {
@@ -106,8 +109,14 @@ if (location.hash === '#present') {
   updates: {
     version: APP_VERSION,
     check: (url?: string) => checkForUpdates(url),
-    build: (release: any) => buildUpdatedFile(release, store.doc),
-    apply: (release: any) => applyUpdate(release, store.doc),
+    build: (release: any) => {
+      session.stampInto(store.doc)
+      return buildUpdatedFile(release, store.doc)
+    },
+    apply: (release: any) => {
+      session.stampInto(store.doc)
+      return applyUpdate(release, store.doc)
+    },
   },
   /**
    * Flat list of every review comment thread — the entry point for tooling

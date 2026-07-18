@@ -161,13 +161,24 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   Same-machine tabs always sync (BroadcastChannel `bento-sync-<docId>`);
   `online.ts` adds the E2EE relay (AES-GCM, key in `doc.collab.key`, ?tok=
   hash-of-key possession proof; replay bookmark is MEMORY-ONLY — it's valid
-  only with the CRDT state it was earned with). The saved FILE is the
-  capability: doc.collab {room,key} rides in it, opening a copy auto-joins
-  (editor.connectSync joinIfShared). Relay: `server/sync-worker/` (blind DO,
-  ciphertext-only storage — verified; `npx wrangler dev --port 8787` +
-  localStorage 'bento-sync-url' for local testing). Undo under collab is
-  snapshot-based and may revert concurrent remote edits to the same
-  properties (documented LWW compromise).
+  only with the CRDT state it was earned with). Credentials are minted AT
+  CREATION (session.attach → mintCollab: RANDOM room id, never docId —
+  re-share/fork rooms can't collide and the relay learns nothing), dormant
+  until `collab.on` (absent = true for v0.8.0 files); "Rotate keys" is
+  revocation. The saved FILE is the capability: opening a copy auto-joins
+  (editor.connectSync joinIfShared). Saves stamp `doc.collab.sync`
+  (SyncStateJSON via session.stampInto) so a copy edited OFFLINE rejoins as
+  a true fork: restored regs defend its edits, relay replay vv-dedups, and
+  a fork `snap` frame carries its state to peers (mergeSnapshot) — merge is
+  two-way, verified under partition. hello replies include a `need` (ops
+  minted before connecting flow back); onRelayReady re-sends log ops the
+  room's replay lacked. "Duplicate as new deck…" (About) = identity fork:
+  new docId + fresh creds, never syncs with its ancestor. Relay:
+  `server/sync-worker/` (blind DO, ciphertext-only storage — verified;
+  `npx wrangler dev --port 8787` + localStorage 'bento-sync-url' for local
+  testing; NEVER pipe wrangler dev through `head` — SIGPIPE kills it).
+  Undo under collab is snapshot-based and may revert concurrent remote
+  edits to the same properties (documented LWW compromise).
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
   Alt/Option-click digs through overlapping elements (capture-phase, beats
   Moveable's control box). Fill/stroke colors carry alpha (color input + % pair,

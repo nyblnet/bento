@@ -253,4 +253,10 @@ export const ja: Catalog = {
   "Offline — reconnecting…": "オフライン — 再接続中…",
   "Save the file and send a copy — opening it joins this session automatically.": "ファイルを保存してコピーを送ってください — 開くだけでこのセッションに参加できます。",
   "{n} connected": "{n} 人が接続中",
+  "Any copy of this file can join once sharing is on — send it before or after, both work.": "共有をオンにすると、このファイルのどのコピーからでも参加できます — 送るのは前でも後でも構いません。",
+  "Rotate keys — cut off previously sent copies": "キーを更新 — 送付済みコピーのアクセスを遮断",
+  "New keys minted — only copies saved from now on can join": "新しいキーを発行しました — 今後保存したコピーのみ参加できます",
+  "Duplicate as new deck…": "新しいデッキとして複製…",
+  "Copies everything into an independent document with its own identity — it will never sync with this one.": "すべてを独立した新しいドキュメントに複製します — 元のファイルと同期することはありません。",
+  "This is now a new deck — save it under a new name": "新しいデッキになりました — 新しい名前で保存してください",
 }

@@ -5,7 +5,7 @@ import type { Store } from '../store'
 import {
   FORMAT_VERSION,
   applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultText,
-  instantiateLayout, layoutElementIds, uid,
+  instantiateLayout, layoutElementIds, newDocId, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, setAutoCheck } from '../update'
@@ -17,7 +17,7 @@ import { startPresentation } from '../present'
 import { saveFile } from '../save'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
-import { joinFromDoc, onlineTransport, startSharing, stopSharing } from '../sync/online'
+import { joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 
 const i18nT = t
 
@@ -81,7 +81,7 @@ export class Editor {
     // a document that carries collab config joins its relay session — at
     // boot AND whenever one is loaded (Replace-from-JSON, update splice…)
     const joinIfShared = () => {
-      if (this.store.doc.collab && !onlineTransport()) {
+      if (sharingOn(this.store) && !onlineTransport()) {
         joinFromDoc(session, this.store)
         this.wireOnlineStatus()
       }
@@ -324,13 +324,20 @@ export class Editor {
       return b
     }
     const tr = onlineTransport()
-    if (!this.store.doc.collab || !tr) {
+    if (!sharingOn(this.store) || !tr) {
       note(t('Work on this deck together, live.'))
+      note(t('Any copy of this file can join once sharing is on — send it before or after, both work.'))
       note(t('Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
       action(t('Start live session'), true, () => {
         if (!this.session) return
         startSharing(this.session, this.store)
         this.wireOnlineStatus()
+        this.renderSharePanel()
+      })
+      action(t('Rotate keys — cut off previously sent copies'), false, () => {
+        if (!this.session) return
+        rotateKeys(this.session, this.store)
+        this.toast(t('New keys minted — only copies saved from now on can join'))
         this.renderSharePanel()
       })
     } else {
@@ -708,6 +715,9 @@ export class Editor {
 
   async save(forcePicker: boolean) {
     this.canvas.commitTextEdit()
+    // shared docs persist their CRDT state so the saved copy can rejoin
+    // as a true fork later (offline edits merge both ways)
+    this.session?.stampInto(this.store.doc)
     try {
       const result = await saveFile(this.store.doc, forcePicker)
       if (result === 'cancelled') return
@@ -939,6 +949,7 @@ export class Editor {
           inPlaceB.disabled = true
           inPlaceB.textContent = t('Verifying…')
           try {
+            this.session?.stampInto(this.store.doc)
             const written = await applyUpdateInPlace(release, this.store.doc)
             if (written) done()
             else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
@@ -954,6 +965,7 @@ export class Editor {
           getB.disabled = true
           getB.textContent = t('Verifying…')
           try {
+            this.session?.stampInto(this.store.doc)
             await applyUpdate(release, this.store.doc)
             getB.textContent = t('Downloaded ✓')
             const note = div('ed-about-notes')
@@ -1041,6 +1053,25 @@ export class Editor {
     })
     aiRow.append(copyB, replB)
     box.appendChild(aiRow)
+
+    // identity fork: same content, brand-new document — new docId + fresh
+    // collab credentials, so it never syncs with its ancestor's copies
+    const dupRow = div('ed-about-row')
+    const dupB = document.createElement('button')
+    dupB.className = 'ed-btn'
+    dupB.textContent = t('Duplicate as new deck…')
+    dupB.title = t('Copies everything into an independent document with its own identity — it will never sync with this one.')
+    dupB.addEventListener('click', () => {
+      const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+      clone.docId = newDocId()
+      clone.collab = mintCollab()
+      this.store.replaceDoc(clone)
+      close()
+      this.toast(t('This is now a new deck — save it under a new name'))
+      void this.save(true)
+    })
+    dupRow.append(dupB)
+    box.appendChild(dupRow)
 
     const fine = div('ed-about-fine')
     fine.innerHTML =

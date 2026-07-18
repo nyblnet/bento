@@ -253,4 +253,10 @@ export const zhHant: Catalog = {
   "Offline — reconnecting…": "離線 — 正在重新連線…",
   "Save the file and send a copy — opening it joins this session automatically.": "儲存檔案並傳送副本 — 開啟即會自動加入此工作階段。",
   "{n} connected": "{n} 人已連線",
+  "Any copy of this file can join once sharing is on — send it before or after, both work.": "開啟共用後，此檔案的任何副本都能加入 — 先傳後傳都可以。",
+  "Rotate keys — cut off previously sent copies": "輪替金鑰 — 切斷先前送出的副本",
+  "New keys minted — only copies saved from now on can join": "已產生新金鑰 — 只有之後儲存的副本才能加入",
+  "Duplicate as new deck…": "複製為新簡報…",
+  "Copies everything into an independent document with its own identity — it will never sync with this one.": "將全部內容複製到具有獨立身分的新文件 — 它永遠不會與目前文件同步。",
+  "This is now a new deck — save it under a new name": "這已是新簡報 — 請用新名稱儲存",
 }
