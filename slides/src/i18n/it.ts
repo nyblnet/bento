@@ -458,4 +458,10 @@ export const it: Catalog = {
   "Save as presentation package…": "Salva come pacchetto di presentazione…",
   "This is a presentation package — view and present only.": "Questo è un pacchetto di presentazione — solo visualizzazione e presentazione.",
   "Turn on live sharing first — a read-only copy follows the session": "Attiva prima la condivisione live — una copia in sola lettura segue la sessione",
+  // media insert menu (v0.9.20)
+  "Video or audio file…": "File video o audio…",
+  "Video from a link…": "Video da un link…",
+  "Audio from a link…": "Audio da un link…",
+  "Add video or audio — from a file (embeds it) or a link (stays a URL)": "Aggiungi video o audio — da un file (incorporato) o un link (resta un URL)",
+  "Paste the {kind} URL — it stays a link, the file is not embedded:": "Incolla l’URL del {kind} — resta un link, il file non viene incorporato:",
 }

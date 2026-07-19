@@ -194,8 +194,7 @@ export class Editor {
       this.shapeDropdown(),
       btn(ICONS.image, t('Image'), () => this.pickImage(),
         t('Add an image — or just paste one (⌘V) straight onto the slide')),
-      btn(ICONS.media, t('Media'), () => this.pickMedia(),
-        t('Add video or audio — small clips embed in the file; for big ones, paste a hosted URL in the panel to keep the deck small')),
+      this.mediaDropdown(),
       btn(ICONS.table, t('Table'), () => this.canvas.insert(defaultTable()),
         t('Add a table — edit cells inline; turn it into a live chart from the panel')),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
@@ -1034,6 +1033,33 @@ export class Editor {
   }
 
   // --- insert media (video / audio) --------------------------------------------------
+
+  /** Media insert menu: a file (embeds) or a link (stays a URL — keeps the
+   *  deck small; good for big clips that shouldn't ride inside the file). */
+  private mediaDropdown(): HTMLElement {
+    const wrap = div('ed-dropdown')
+    const trigger = btn(ICONS.media, t('Media'), () => wrap.classList.toggle('open'),
+      t('Add video or audio — from a file (embeds it) or a link (stays a URL)'))
+    const menu = div('ed-menu')
+    const item = (label: string, onClick: () => void) => {
+      menu.appendChild(btn(ICONS.media, t(label), () => { wrap.classList.remove('open'); onClick() }))
+    }
+    item('Video or audio file…', () => this.pickMedia())
+    item('Video from a link…', () => this.promptMediaUrl('video'))
+    item('Audio from a link…', () => this.promptMediaUrl('audio'))
+    wrap.append(trigger, menu)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    })
+    return wrap
+  }
+
+  /** Insert a media element that REFERENCES a URL (not embedded). */
+  private promptMediaUrl(kind: 'video' | 'audio') {
+    const url = window.prompt(t('Paste the {kind} URL — it stays a link, the file is not embedded:', { kind }))?.trim()
+    if (!url) return
+    this.insertMedia(kind, url)
+  }
 
   private pickMedia() {
     const input = document.createElement('input')

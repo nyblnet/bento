@@ -458,4 +458,10 @@ export const ja: Catalog = {
   "Save as presentation package…": "プレゼンテーションパッケージとして保存…",
   "This is a presentation package — view and present only.": "これはプレゼンテーションパッケージです — 閲覧とプレゼンのみ。",
   "Turn on live sharing first — a read-only copy follows the session": "先にライブ共有をオンにしてください — 読み取り専用コピーはセッションに追従します",
+  // media insert menu (v0.9.20)
+  "Video or audio file…": "動画または音声ファイル…",
+  "Video from a link…": "リンクから動画…",
+  "Audio from a link…": "リンクから音声…",
+  "Add video or audio — from a file (embeds it) or a link (stays a URL)": "動画または音声を追加 — ファイルから（埋め込み）またはリンクから（URL のまま）",
+  "Paste the {kind} URL — it stays a link, the file is not embedded:": "{kind} の URL を貼り付け — リンクのままで、ファイルは埋め込まれません:",
 }

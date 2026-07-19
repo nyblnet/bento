@@ -458,4 +458,10 @@ export const zhHant: Catalog = {
   "Save as presentation package…": "另存為簡報套件…",
   "This is a presentation package — view and present only.": "這是一個簡報套件——僅供檢視與演示。",
   "Turn on live sharing first — a read-only copy follows the session": "請先開啟即時共享——唯讀副本會跟隨此工作階段",
+  // media insert menu (v0.9.20)
+  "Video or audio file…": "影片或音訊檔案…",
+  "Video from a link…": "從連結新增影片…",
+  "Audio from a link…": "從連結新增音訊…",
+  "Add video or audio — from a file (embeds it) or a link (stays a URL)": "新增影片或音訊 — 從檔案（嵌入）或連結（保留為 URL）",
+  "Paste the {kind} URL — it stays a link, the file is not embedded:": "貼上 {kind} URL — 它保留為連結，檔案不會被嵌入：",
 }

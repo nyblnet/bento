@@ -450,22 +450,22 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       }
       const inert = opts.liveMedia ? '' : ';pointer-events:none'
       if (el.kind === 'audio') {
-        // The native <audio controls> is an opinionated pill with its own
-        // surface and a fixed intrinsic height (~54px). Don't wrap it in a
-        // SECOND background — that reads as a doubled box. Just centre it and
-        // clip to the element's own radius. (A too-short box was the "funny
-        // shape" bug; authors should size the box ≥ the control's height.)
+        // Render the browser's native <audio controls> AS-IS: it's already a
+        // self-contained pill with its own surface. We add nothing behind it
+        // and don't clip it to a radius (that just cut the control's own shape
+        // and looked odd) — only centre it in the element box. Size the box to
+        // the control's ~54px intrinsic height (defaultMedia audio uses 56).
         const audio = document.createElement('audio')
         if (el.src) audio.src = resolveAsset(doc, el.src)
         audio.controls = el.controls !== false
         audio.loop = !!el.loop
         audio.preload = 'metadata'
         audio.dataset.autoplay = el.autoplay ? '1' : ''
-        audio.style.cssText = `width:100%;display:block;border-radius:${radius}px` + inert
+        audio.style.cssText = 'width:100%;display:block' + inert
         const wrap = document.createElement('div')
-        wrap.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:${radius}px`
+        wrap.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center'
         if (!el.src) {
-          wrap.style.cssText += ';background:#eef2f7;color:#93a2b6;font-size:13px'
+          wrap.style.cssText += ';background:#eef2f7;border-radius:10px;color:#93a2b6;font-size:13px'
           wrap.textContent = '♪ ' + 'No audio source'
         } else wrap.appendChild(audio)
         node.appendChild(wrap)
