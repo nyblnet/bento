@@ -154,7 +154,10 @@ each kind of content to the feature built for it:
   JSON. **Bar/line series data must be plain numbers** (`{value,itemStyle}`
   objects coerce to 0 — only pie takes `{name,value}`); per-item bar colors
   are unsupported, color by series; template formatters only (`{b}`, `{c}`,
-  `{d}`), never functions.
+  `{d}`), never functions. **Dual axis**: for two series on very different
+  scales (e.g. volume + a %), make `yAxis` an ARRAY of two `{type:"value"}`
+  axes (give the 2nd `axisLabel:{formatter:"{value}%"}`) and point the odd
+  series at it with `"yAxisIndex":1` — render it as a `line` over the bars.
 - **table**: `columns` (array of `{w}` fractional weights), `rows` (array of
   `{cells:[{html, align?, color?, bg?, bold?}]}`), `header` (bool — row 0 is
   the header), and a `style` object (`headerBg`, `headerColor`, `zebra?`,

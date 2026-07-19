@@ -77,7 +77,7 @@ export class PropsPanel {
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
-  private static CLOSED_BY_DEFAULT = new Set(['Presenting', 'Interactivity', 'Layout'])
+  private static CLOSED_BY_DEFAULT = new Set(['Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)'])
 
   /**
    * Retrofit the flat panel into an accordion: every .ed-section header
@@ -772,23 +772,50 @@ export class PropsPanel {
     }
   }
 
+  /** Edit the live chart option in place; final=false while typing. */
+  private editOption(id: string, fn: (o: Record<string, any>) => void, final = true) {
+    this.mutate(id, (e) => { fn((e as ChartElement).option as Record<string, any>) }, final)
+  }
+
+  /** Native <select> with distinct value/label pairs (for model-word values). */
+  private labeledSelect(pairs: Array<[string, string]>, value: string, onChange: (v: string) => void): HTMLSelectElement {
+    const sel = document.createElement('select')
+    for (const [v, label] of pairs) {
+      const o = document.createElement('option')
+      o.value = v; o.textContent = label
+      if (v === value) o.selected = true
+      sel.appendChild(o)
+    }
+    sel.addEventListener('change', () => onChange(sel.value))
+    return sel
+  }
+
   private buildChartProps(el: ChartElement) {
-    this.section(t('Data'))
-    this.row(t('Preset'), this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
+    const opt = el.option as Record<string, any>
+    const series: any[] = Array.isArray(opt.series) ? opt.series : opt.series ? [opt.series] : []
+    const isPie = series.some((s) => s?.type === 'pie')
+    const isScatter = series.some((s) => s?.type === 'scatter')
+
+    this.section(t('Chart'))
+    this.row(t('Type'), this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
       this.mutate(el.id, (e) => {
         const c = e as ChartElement
         c.preset = v
         c.option = applyChartPalette(CHART_PRESETS[v](), this.store.doc.theme)
       }, true)))
 
+    if (!isPie && !isScatter) this.buildChartCartesian(el, opt, series)
+    else if (isPie) this.buildChartPie(el, series)
+
+    // The escape hatch: the full option as JSON, for anything the UI omits.
+    this.section(t('Advanced (JSON)'))
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
     hint.innerHTML = t('The full <b>chart option</b> as JSON (pure data — use template-string formatters like <code>{b}: {c}</code>, never functions). Tooltips and zoom run while presenting.')
     this.host.appendChild(hint)
-
     const ta = document.createElement('textarea')
     ta.className = 'ed-chart-json'
-    ta.rows = 14
+    ta.rows = 12
     ta.spellcheck = false
     ta.value = JSON.stringify(el.option, null, 2)
     ta.addEventListener('change', () => {
@@ -796,11 +823,230 @@ export class PropsPanel {
         const parsed = JSON.parse(ta.value)
         ta.classList.remove('ed-invalid')
         this.mutate(el.id, (e) => { (e as ChartElement).option = parsed }, true)
-      } catch {
-        ta.classList.add('ed-invalid')
-      }
+      } catch { ta.classList.add('ed-invalid') }
     })
     this.host.appendChild(ta)
+  }
+
+  private static seriesColor(s: any, palette: string[] | undefined, i: number): string {
+    const c = s?.type === 'line' ? s?.lineStyle?.color : s?.itemStyle?.color
+    if (typeof c === 'string') return c
+    const p = palette && palette.length ? palette : ['#5470c6', '#91cc75', '#fac858', '#ee6666']
+    return p[i % p.length]
+  }
+
+  private static setSeriesColor(s: any, v: string) {
+    if (s?.type === 'line') s.lineStyle = { ...(s.lineStyle ?? {}), color: v }
+    else s.itemStyle = { ...(s.itemStyle ?? {}), color: v }
+  }
+
+  private buildChartCartesian(el: ChartElement, opt: Record<string, any>, series: any[]) {
+    const yAxis: any[] = Array.isArray(opt.yAxis) ? opt.yAxis : opt.yAxis ? [opt.yAxis] : [{ type: 'value' }]
+    const twoAxes = yAxis.length > 1
+
+    this.row(t('Legend'), this.toggle(!!opt.legend, (on) =>
+      this.editOption(el.id, (o) => { if (on) o.legend = { bottom: 0 }; else delete o.legend })))
+
+    this.row(t('Second axis'), this.toggle(twoAxes, (on) => this.editOption(el.id, (o) => {
+      const ss: any[] = Array.isArray(o.series) ? o.series : o.series ? [o.series] : []
+      if (on) {
+        const first = Array.isArray(o.yAxis) ? (o.yAxis[0] ?? {}) : (o.yAxis ?? {})
+        o.yAxis = [{ type: 'value', ...first }, { type: 'value', name: t('Axis {n}', { n: 2 }) }]
+        ss.forEach((s, i) => { if (s) s.yAxisIndex = i === 0 ? 0 : 1 })
+      } else {
+        o.yAxis = { type: 'value', ...(Array.isArray(o.yAxis) ? o.yAxis[0] : o.yAxis) }
+        ss.forEach((s) => { if (s) delete s.yAxisIndex })
+      }
+    })))
+
+    // --- series list --------------------------------------------------------
+    this.section(t('Series'))
+    const palette: string[] | undefined = Array.isArray(opt.color) ? opt.color : undefined
+    series.forEach((s, i) => {
+      const row = document.createElement('div')
+      row.className = 'ed-series-row'
+      const name = document.createElement('input')
+      name.type = 'text'; name.className = 'ed-series-name'; name.value = s?.name ?? ''
+      name.placeholder = t('Series {n}', { n: i + 1 })
+      name.addEventListener('input', () => this.editOption(el.id, (o) => { o.series[i].name = name.value }, false))
+      name.addEventListener('change', () => this.editOption(el.id, (o) => { o.series[i].name = name.value }, true))
+      const type = this.labeledSelect([['bar', t('Bar')], ['line', t('Line')]], s?.type === 'line' ? 'line' : 'bar',
+        (v) => this.editOption(el.id, (o) => { o.series[i].type = v }))
+      row.append(name, type)
+      if (twoAxes) {
+        row.append(this.labeledSelect([['0', t('Left')], ['1', t('Right')]], String(Math.round(s?.yAxisIndex ?? 0)),
+          (v) => this.editOption(el.id, (o) => { o.series[i].yAxisIndex = parseInt(v) })))
+      }
+      row.append(this.color(PropsPanel.seriesColor(s, palette, i), (v, final) =>
+        this.editOption(el.id, (o) => PropsPanel.setSeriesColor(o.series[i], v), final)))
+      const rm = this.opBtn('✕', t('Remove'), () => this.editOption(el.id, (o) => {
+        o.series.splice(i, 1)
+        if (o.series.length <= 1) { o.series.forEach((x: any) => x && delete x.yAxisIndex); if (Array.isArray(o.yAxis)) o.yAxis = o.yAxis[0] ?? { type: 'value' } }
+      }))
+      rm.classList.add('ed-series-rm')
+      row.append(rm)
+      this.host.appendChild(row)
+    })
+    const addRow = document.createElement('div')
+    addRow.className = 'ed-chart-add'
+    const addBtn = document.createElement('button')
+    addBtn.className = 'ed-btn'
+    addBtn.textContent = t('＋ Add series')
+    addBtn.addEventListener('click', () => this.editOption(el.id, (o) => {
+      const ss: any[] = Array.isArray(o.series) ? o.series : o.series ? [o.series] : []
+      const n = (o.xAxis?.data?.length) || 4
+      ss.push({ type: 'bar', name: t('Series {n}', { n: ss.length + 1 }), data: Array(n).fill(0) })
+      o.series = ss
+    }))
+    addRow.appendChild(addBtn)
+    this.host.appendChild(addRow)
+
+    // --- per-axis min/max ---------------------------------------------------
+    yAxis.forEach((ax, ai) => {
+      const label = twoAxes ? (ai === 0 ? t('Left axis') : t('Right axis')) : t('Y axis')
+      const wrap = document.createElement('div')
+      wrap.className = 'ed-axis-range'
+      const mk = (key: 'min' | 'max', ph: string) => {
+        const inp = document.createElement('input')
+        inp.type = 'number'; inp.placeholder = ph
+        inp.value = typeof ax?.[key] === 'number' ? String(ax[key]) : ''
+        const commit = (final: boolean) => this.editOption(el.id, (o) => {
+          const a = Array.isArray(o.yAxis) ? o.yAxis[ai] : o.yAxis
+          const raw = inp.value.trim()
+          if (raw === '' || Number.isNaN(parseFloat(raw))) delete a[key]
+          else a[key] = parseFloat(raw)
+        }, final)
+        inp.addEventListener('input', () => commit(false))
+        inp.addEventListener('change', () => commit(true))
+        return inp
+      }
+      wrap.append(mk('min', t('min')), mk('max', t('max')))
+      this.row(label, wrap)
+    })
+
+    // --- data grid ----------------------------------------------------------
+    this.buildChartGrid(el, opt, series)
+  }
+
+  /** Editable categories × series grid. Adding/removing rows keeps every
+   *  series data array and the x-axis categories in lockstep. */
+  private buildChartGrid(el: ChartElement, opt: Record<string, any>, series: any[]) {
+    const cats: any[] = opt.xAxis?.data ?? []
+    this.section(t('Data'))
+    const scroll = document.createElement('div')
+    scroll.className = 'ed-chart-grid-wrap'
+    const table = document.createElement('table')
+    table.className = 'ed-chart-grid'
+    const thead = document.createElement('tr')
+    const corner = document.createElement('th'); corner.textContent = ''
+    thead.appendChild(corner)
+    series.forEach((s, i) => {
+      const th = document.createElement('th')
+      th.textContent = s?.name || t('Series {n}', { n: i + 1 })
+      thead.appendChild(th)
+    })
+    thead.appendChild(document.createElement('th'))
+    table.appendChild(thead)
+
+    const cellInput = (value: string, onCommit: (v: string, final: boolean) => void, numeric: boolean) => {
+      const inp = document.createElement('input')
+      inp.type = numeric ? 'number' : 'text'
+      inp.value = value
+      inp.addEventListener('input', () => onCommit(inp.value, false))
+      inp.addEventListener('change', () => onCommit(inp.value, true))
+      return inp
+    }
+
+    const rowCount = Math.max(cats.length, ...series.map((s) => (s?.data?.length ?? 0)))
+    for (let r = 0; r < rowCount; r++) {
+      const tr = document.createElement('tr')
+      const cat = document.createElement('td')
+      cat.appendChild(cellInput(String(cats[r] ?? ''), (v, final) => this.editOption(el.id, (o) => {
+        if (!Array.isArray(o.xAxis?.data)) { o.xAxis = { ...(o.xAxis ?? { type: 'category' }), data: [] } }
+        o.xAxis.data[r] = v
+      }, final), false))
+      tr.appendChild(cat)
+      series.forEach((s, i) => {
+        const td = document.createElement('td')
+        td.appendChild(cellInput(String(s?.data?.[r] ?? ''), (v, final) => this.editOption(el.id, (o) => {
+          const arr = o.series[i].data ?? (o.series[i].data = [])
+          const n = parseFloat(v)
+          arr[r] = Number.isNaN(n) ? 0 : n
+        }, final), true))
+        tr.appendChild(td)
+      })
+      const rmTd = document.createElement('td')
+      rmTd.appendChild(this.opBtn('✕', t('Remove row'), () => this.editOption(el.id, (o) => {
+        if (Array.isArray(o.xAxis?.data)) o.xAxis.data.splice(r, 1)
+        o.series.forEach((s: any) => { if (Array.isArray(s?.data)) s.data.splice(r, 1) })
+      })))
+      tr.appendChild(rmTd)
+      table.appendChild(tr)
+    }
+    scroll.appendChild(table)
+    this.host.appendChild(scroll)
+
+    const addRow = document.createElement('div')
+    addRow.className = 'ed-chart-add'
+    const addBtn = document.createElement('button')
+    addBtn.className = 'ed-btn'
+    addBtn.textContent = t('＋ Add row')
+    addBtn.addEventListener('click', () => this.editOption(el.id, (o) => {
+      if (!Array.isArray(o.xAxis?.data)) o.xAxis = { ...(o.xAxis ?? { type: 'category' }), data: [] }
+      o.xAxis.data.push(t('Item {n}', { n: o.xAxis.data.length + 1 }))
+      const ss: any[] = Array.isArray(o.series) ? o.series : [o.series]
+      ss.forEach((s) => { if (s) (s.data ?? (s.data = [])).push(0) })
+    }))
+    addRow.appendChild(addBtn)
+    this.host.appendChild(addRow)
+  }
+
+  /** Pie: one row per slice (name · value · colour · remove) + add. */
+  private buildChartPie(el: ChartElement, series: any[]) {
+    const s = series.find((x) => x?.type === 'pie') ?? series[0]
+    const data: any[] = s?.data ?? []
+    const palette: string[] | undefined = Array.isArray((el.option as any).color) ? (el.option as any).color : undefined
+    this.section(t('Slices'))
+    data.forEach((d, i) => {
+      const row = document.createElement('div')
+      row.className = 'ed-series-row'
+      const name = document.createElement('input')
+      name.type = 'text'; name.className = 'ed-series-name'; name.value = d?.name ?? ''
+      name.addEventListener('input', () => this.editPieDatum(el.id, i, (x) => { x.name = name.value }, false))
+      name.addEventListener('change', () => this.editPieDatum(el.id, i, (x) => { x.name = name.value }, true))
+      const val = document.createElement('input')
+      val.type = 'number'; val.className = 'ed-pie-val'; val.value = String(d?.value ?? 0)
+      const commitVal = (final: boolean) => this.editPieDatum(el.id, i, (x) => { const n = parseFloat(val.value); x.value = Number.isNaN(n) ? 0 : n }, final)
+      val.addEventListener('input', () => commitVal(false))
+      val.addEventListener('change', () => commitVal(true))
+      const swatch = this.color((palette && palette[i]) || PropsPanel.seriesColor({ type: 'pie' }, palette, i), (v, final) =>
+        this.editOption(el.id, (o) => { if (!Array.isArray(o.color)) o.color = []; o.color[i] = v }, final))
+      const rm = this.opBtn('✕', t('Remove'), () => this.editPieDatum(el.id, i, null, true))
+      rm.classList.add('ed-series-rm')
+      row.append(name, val, swatch, rm)
+      this.host.appendChild(row)
+    })
+    const addRow = document.createElement('div')
+    addRow.className = 'ed-chart-add'
+    const addBtn = document.createElement('button')
+    addBtn.className = 'ed-btn'
+    addBtn.textContent = t('＋ Add slice')
+    addBtn.addEventListener('click', () => this.editOption(el.id, (o) => {
+      const ps = (Array.isArray(o.series) ? o.series : [o.series]).find((x: any) => x?.type === 'pie') ?? o.series[0]
+      ps.data = ps.data ?? []
+      ps.data.push({ name: t('Item {n}', { n: ps.data.length + 1 }), value: 0 })
+    }))
+    addRow.appendChild(addBtn)
+    this.host.appendChild(addRow)
+  }
+
+  private editPieDatum(id: string, i: number, fn: ((d: any) => void) | null, final: boolean) {
+    this.editOption(id, (o) => {
+      const ps = (Array.isArray(o.series) ? o.series : [o.series]).find((x: any) => x?.type === 'pie') ?? o.series[0]
+      if (!ps?.data) return
+      if (fn === null) ps.data.splice(i, 1)
+      else fn(ps.data[i])
+    }, final)
   }
 
   private buildTableProps(el: TableElement) {
@@ -894,24 +1140,55 @@ export class PropsPanel {
     const labels = bodyRows.map((r) => strip(r.cells[0]?.html ?? ''))
     const headerRow = el.header ? el.rows[0] : null
     // every column after the labels that is mostly numeric becomes its own series
-    const cols: number[] = []
+    const cols: Array<{ name: string; data: number[]; isPct: boolean; maxAbs: number }> = []
     for (let c = 1; c < el.columns.length; c++) {
-      const parsed = bodyRows.map((r) => num(r.cells[c]?.html ?? '')).filter((n) => !Number.isNaN(n))
-      if (parsed.length >= Math.ceil(bodyRows.length / 2)) cols.push(c)
+      const raw = bodyRows.map((r) => r.cells[c]?.html ?? '')
+      const parsed = raw.map(num)
+      const good = parsed.filter((n) => !Number.isNaN(n))
+      if (good.length < Math.ceil(bodyRows.length / 2)) continue
+      const isPct = /%/.test(headerRow ? strip(headerRow.cells[c]?.html ?? '') : '') ||
+        raw.filter((h) => /%/.test(h)).length >= Math.ceil(bodyRows.length / 2)
+      cols.push({
+        name: headerRow ? strip(headerRow.cells[c]?.html ?? '') : '',
+        data: parsed.map((n) => (Number.isNaN(n) ? 0 : n)),
+        isPct,
+        maxAbs: Math.max(1, ...good.map((n) => Math.abs(n))),
+      })
     }
     if (!cols.length) { this.toast(t('No numeric column found to chart')); return }
-    const series = cols.map((c) => ({
-      type: 'bar',
-      name: headerRow ? strip(headerRow.cells[c]?.html ?? '') : '',
-      data: bodyRows.map((r) => { const n = num(r.cells[c]?.html ?? ''); return Number.isNaN(n) ? 0 : n }),
-    }))
+
+    // two columns on very different scales (or one is a %) → dual axis: bars
+    // on the left, the odd one as a line on a right-hand axis
+    let secondary = -1
+    if (cols.length === 2) {
+      const pct = cols.filter((c) => c.isPct)
+      if (pct.length === 1) secondary = cols.indexOf(pct[0])
+      else {
+        const big = cols[0].maxAbs >= cols[1].maxAbs ? 0 : 1
+        if (cols[big].maxAbs / cols[1 - big].maxAbs >= 12) secondary = 1 - big
+      }
+    }
+
     const option: Record<string, unknown> = {
       xAxis: { type: 'category', data: labels },
-      yAxis: { type: 'value' },
-      series,
       tooltip: { trigger: 'axis' },
     }
-    if (series.length > 1) option.legend = { bottom: 0 }
+    if (secondary >= 0) {
+      const prim = cols[1 - secondary], sec = cols[secondary]
+      option.yAxis = [
+        { type: 'value', name: prim.name || undefined },
+        { type: 'value', name: sec.name || undefined, axisLabel: sec.isPct ? { formatter: '{value}%' } : undefined },
+      ]
+      option.series = [
+        { type: 'bar', name: prim.name, data: prim.data, yAxisIndex: 0 },
+        { type: 'line', name: sec.name, data: sec.data, yAxisIndex: 1, smooth: true },
+      ]
+      option.legend = { bottom: 0 }
+    } else {
+      option.yAxis = { type: 'value' }
+      option.series = cols.map((c) => ({ type: 'bar', name: c.name, data: c.data }))
+      if (cols.length > 1) option.legend = { bottom: 0 }
+    }
     applyChartPalette(option, this.store.doc.theme)
     const chart = defaultChart(option, {
       x: el.x, y: Math.min(el.y + el.h + 24, 480), w: Math.max(el.w, 640), h: 300, preset: 'bar',

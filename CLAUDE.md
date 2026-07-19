@@ -97,7 +97,19 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   (optional format field; the starter deck declares peach/steel) or, absent that,
   `deriveChartPalette(accent)` (accent + a cool HSL counterpart, each tinted).
   tableToChart makes ONE series per numeric column (commas/`%` stripped, blanks→0,
-  first column = x labels). Shapes:
+  first column = x labels) — and when two columns sit on very different scales
+  (or one reads as `%`) it auto-splits them onto a DUAL axis: bars on the left,
+  the odd column as a line on a right-hand axis. **Dual y-axis (v0.9.6)**:
+  `option.yAxis` may be an ARRAY of two value axes; a series picks one via
+  `yAxisIndex` (0/1). renderCartesian computes a range per axis, shares gridline
+  rows (2nd axis labels on the right, its own nice scale via `fixedTicks`), and
+  honours per-axis `min`/`max` + `axisLabel.formatter` ('{value}%'). **Visual
+  chart editor** (panels.ts buildChartProps): structured UI over the option —
+  Type, Legend + Second-axis toggles, a Series list (name · bar/line · left/right
+  axis · colour · remove), per-axis min/max, and an editable categories×series
+  data grid (add/remove rows keep xAxis.data + every series.data in lockstep);
+  pie gets a slices grid. The raw-JSON textarea stays as the 'Advanced (JSON)'
+  escape hatch. Shapes:
   `strokeStyle` solid/dashed/dotted (legacy `strokeDash` still honoured);
   line shapes have `lineStart`/`lineEnd` tips (arrow/dot/bar) rendered as
   per-instance svg markers (sized in strokeWidth units, endpoints inset);

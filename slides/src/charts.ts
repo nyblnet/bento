@@ -72,6 +72,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 
 // --- option digestion -------------------------------------------------------
 
+interface YAxisCfg { name?: string; min?: number; max?: number; formatter?: string }
+
 interface Digest {
   w: number; h: number
   font: string
@@ -82,6 +84,7 @@ interface Digest {
   grid: { x: number; y: number; w: number; h: number }
   legend: null | { color: string }
   axisLabel: string; axisLine: string; splitLine: string
+  yAxes: YAxisCfg[]      // 1 or 2 value axes; series pick one via yAxisIndex
   tooltipTrigger: 'axis' | 'item' | null
   zoomable: boolean
   labelColor: string
@@ -93,12 +96,21 @@ function digest(option: Opt, w: number, h: number): Digest {
   const g = option?.grid ?? {}
   const legend = option?.legend ? { color: option.legend?.textStyle?.color ?? '#6B7280' } : null
   const legendH = legend ? 24 : 0
+  const yRaw: Opt[] = Array.isArray(option?.yAxis) ? option.yAxis : option?.yAxis ? [option.yAxis] : [{}]
+  const yAxes: YAxisCfg[] = yRaw.slice(0, 2).map((a: Opt) => ({
+    name: typeof a?.name === 'string' ? a.name : undefined,
+    min: typeof a?.min === 'number' ? a.min : undefined,
+    max: typeof a?.max === 'number' ? a.max : undefined,
+    formatter: typeof a?.axisLabel?.formatter === 'string' ? a.axisLabel.formatter : undefined,
+  }))
+  if (!yAxes.length) yAxes.push({})
+  const twoAxes = !isPie && yAxes.length > 1
   const grid = isPie
     ? { x: 0, y: 0, w, h: h - legendH }
     : {
         x: num(g.left, 48),
         y: num(g.top, 24),
-        w: w - num(g.left, 48) - num(g.right, 16),
+        w: w - num(g.left, 48) - num(g.right, twoAxes ? 56 : 16),
         h: h - num(g.top, 24) - num(g.bottom, 44),
       }
   return {
@@ -109,9 +121,10 @@ function digest(option: Opt, w: number, h: number): Digest {
     categories: (option?.xAxis?.data ?? []).map(String),
     grid,
     legend,
-    axisLabel: option?.xAxis?.axisLabel?.color ?? option?.yAxis?.axisLabel?.color ?? '#6B7280',
+    axisLabel: option?.xAxis?.axisLabel?.color ?? yRaw[0]?.axisLabel?.color ?? '#6B7280',
     axisLine: option?.xAxis?.axisLine?.lineStyle?.color ?? 'rgba(110,120,135,0.45)',
-    splitLine: option?.yAxis?.splitLine?.lineStyle?.color ?? 'rgba(110,120,135,0.15)',
+    splitLine: yRaw[0]?.splitLine?.lineStyle?.color ?? 'rgba(110,120,135,0.15)',
+    yAxes,
     tooltipTrigger: option?.tooltip ? (option.tooltip.trigger === 'item' ? 'item' : 'axis') : null,
     zoomable: Array.isArray(option?.dataZoom) && option.dataZoom.length > 0,
     labelColor: series.find((s) => s?.type === 'pie')?.label?.color ?? '#6B7280',
@@ -135,7 +148,42 @@ function niceTicks(min: number, max: number, target = 5): number[] {
 }
 
 const fmt = (v: number): string =>
-  Math.abs(v) >= 1000 ? String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : String(Math.round(v * 100) / 100)
+  Math.abs(v) >= 1000 ? String(Math.round(v * 100) / 100).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : String(Math.round(v * 100) / 100)
+
+/** Nearest "nice" number (1/2/5 × 10^n) to x. */
+function niceNum(x: number, round: boolean): number {
+  if (!(x > 0)) return 1
+  const exp = Math.floor(Math.log10(x))
+  const f = x / Math.pow(10, exp)
+  const nf = round ? (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) : (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10)
+  return nf * Math.pow(10, exp)
+}
+
+const linspace = (a: number, b: number, n: number): number[] =>
+  Array.from({ length: n }, (_, i) => a + (b - a) * (i / (n - 1)))
+
+/** Exactly `intervals`+1 evenly spaced nice ticks covering lo0..hi0 (lo0 kept as base). */
+function fixedTicks(lo0: number, hi0: number, intervals: number): number[] {
+  const iv = Math.max(1, intervals)
+  let step = niceNum((hi0 - lo0) / iv, false) || 1
+  let guard = 0
+  while (lo0 + step * iv < hi0 && guard++ < 20) step = niceNum(step * 1.5, false)
+  return Array.from({ length: iv + 1 }, (_, i) => Math.round((lo0 + step * i) * 1e6) / 1e6)
+}
+
+/** Range + tick labels for one value axis. `forceCount` aligns a 2nd axis to the 1st. */
+function axisRange(values: number[], cfg: YAxisCfg, forceCount?: number): { lo: number; hi: number; labels: string[] } {
+  let minV = 0, maxV = 0
+  for (const v of values) { if (v > maxV) maxV = v; if (v < minV) minV = v }
+  const loBase = cfg.min != null ? cfg.min : Math.min(0, minV)
+  const hiBase = cfg.max != null ? cfg.max : (maxV || 1)
+  const overridden = cfg.min != null || cfg.max != null
+  let ticks: number[]
+  if (forceCount) ticks = overridden ? linspace(loBase, hiBase, forceCount) : fixedTicks(loBase, hiBase, forceCount - 1)
+  else ticks = overridden ? linspace(loBase, hiBase, 6) : niceTicks(loBase, hiBase)
+  const apply = (v: number) => (cfg.formatter ? cfg.formatter.replace('{value}', fmt(v)) : fmt(v))
+  return { lo: ticks[0], hi: ticks[ticks.length - 1], labels: ticks.map(apply) }
+}
 
 // --- svg helpers ------------------------------------------------------------
 
@@ -222,12 +270,13 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
   const { cats, i0 } = catWindow(d, view)
   const nCat = Math.max(1, cats.length)
 
-  // y extent across visible data
-  let maxY = 0
-  let minY = 0
+  // ----- value axes (1 or 2); gridlines align, labels on left & right --------
+  const nAxes = d.yAxes.length
+  const axisOf = (s: Opt) => Math.min(nAxes - 1, Math.max(0, Math.round(num(s?.yAxisIndex, 0))))
+  const perAxis: number[][] = Array.from({ length: nAxes }, () => [])
   for (const s of [...bars, ...lines]) {
     const data: number[] = (s.data ?? []).slice(i0, i0 + nCat).map((v: unknown) => num(v, 0))
-    for (const v of data) { if (v > maxY) maxY = v; if (v < minY) minY = v }
+    perAxis[axisOf(s)].push(...data)
   }
   let sMinX = Infinity, sMaxX = -Infinity
   for (const s of scatters) {
@@ -235,20 +284,28 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
       const [px, py] = Array.isArray(p) ? p : [0, 0]
       if (px < sMinX) sMinX = px
       if (px > sMaxX) sMaxX = px
-      if (py > maxY) maxY = py
-      if (py < minY) minY = py
+      perAxis[0].push(py)
     }
   }
-  const ticks = niceTicks(Math.min(0, minY), maxY || 1)
-  const yLo = ticks[0], yHi = ticks[ticks.length - 1]
-  const yOf = (v: number) => G.y + G.h - ((v - yLo) / (yHi - yLo)) * G.h
-
-  // gridlines + y labels
-  for (const tv of ticks) {
-    const y = yOf(tv)
-    svg.appendChild(elNS('line', { x1: G.x, y1: y, x2: G.x + G.w, y2: y, stroke: d.splitLine, 'stroke-width': 1 }))
-    svg.appendChild(text(G.x - 8, y + 4, fmt(tv), d.axisLabel, d.font, 12, 'end'))
+  const r0 = axisRange(perAxis[0], d.yAxes[0])
+  const k = r0.labels.length
+  const ranges: Array<ReturnType<typeof axisRange> | null> = [r0, nAxes > 1 ? axisRange(perAxis[1], d.yAxes[1], k) : null]
+  const yOf = (v: number, a = 0) => {
+    const r = ranges[a] ?? r0
+    return G.y + G.h - ((v - r.lo) / (r.hi - r.lo || 1)) * G.h
   }
+  const baseOf = (a = 0) => yOf((ranges[a] ?? r0).lo, a)
+
+  // shared gridlines at k evenly spaced rows; labels on the matching side(s)
+  for (let j = 0; j < k; j++) {
+    const y = G.y + G.h - (j / Math.max(1, k - 1)) * G.h
+    svg.appendChild(elNS('line', { x1: G.x, y1: y, x2: G.x + G.w, y2: y, stroke: d.splitLine, 'stroke-width': 1 }))
+    svg.appendChild(text(G.x - 8, y + 4, r0.labels[j], d.axisLabel, d.font, 12, 'end'))
+    if (ranges[1]) svg.appendChild(text(G.x + G.w + 8, y + 4, ranges[1].labels[j], d.axisLabel, d.font, 12, 'start'))
+  }
+  if (d.yAxes[0]?.name) svg.appendChild(text(G.x - 8, G.y - 9, d.yAxes[0].name, d.axisLabel, d.font, 11, 'end'))
+  if (ranges[1] && d.yAxes[1]?.name) svg.appendChild(text(G.x + G.w + 8, G.y - 9, d.yAxes[1].name, d.axisLabel, d.font, 11, 'start'))
+
   // x axis line
   svg.appendChild(elNS('line', { x1: G.x, y1: G.y + G.h, x2: G.x + G.w, y2: G.y + G.h, stroke: d.axisLine, 'stroke-width': 1 }))
 
@@ -292,14 +349,16 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
     const groupW = band * 0.62
     const barW = groupW / m
     bars.forEach((s, si) => {
+      const ax = axisOf(s)
+      const base = baseOf(ax)
       const color = typeof s?.itemStyle?.color === 'string' ? s.itemStyle.color : d.colors[d.series.indexOf(s) % d.colors.length]
       const radius = Array.isArray(s?.itemStyle?.borderRadius) ? num(s.itemStyle.borderRadius[0], 0) : num(s?.itemStyle?.borderRadius, 0)
       const data: number[] = (s.data ?? []).slice(i0, i0 + nCat).map((v: unknown) => num(v, 0))
       data.forEach((v, i) => {
         const x = G.x + band * i + (band - groupW) / 2 + barW * si
-        const hv = (yOf(yLo) - yOf(v)) * sweep
+        const hv = (base - yOf(v, ax)) * sweep
         const r = elNS('rect', {
-          x: x + 1, y: yOf(yLo) - hv, width: Math.max(1, barW - 2), height: Math.max(0, hv),
+          x: x + 1, y: base - hv, width: Math.max(1, barW - 2), height: Math.max(0, hv),
           rx: Math.min(radius, barW / 2), fill: color,
         })
         ;(r as any).__cat = i
@@ -312,10 +371,11 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
   // lines
   lines.forEach((s) => {
     const si = d.series.indexOf(s)
+    const ax = axisOf(s)
     const stroke = typeof s?.lineStyle?.color === 'string' ? s.lineStyle.color : d.colors[si % d.colors.length]
     const width = num(s?.lineStyle?.width, 2)
     const data: number[] = (s.data ?? []).slice(i0, i0 + nCat).map((v: unknown) => num(v, 0))
-    const pts = data.map((v, i) => [G.x + band * (i + 0.5), yOf(v)] as [number, number])
+    const pts = data.map((v, i) => [G.x + band * (i + 0.5), yOf(v, ax)] as [number, number])
     if (pts.length < 2) return
     let path = `M ${pts[0][0]} ${pts[0][1]}`
     if (s.smooth) {
@@ -331,7 +391,7 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
     if (s.areaStyle) {
       const fill = seriesFill(svg, s, stroke)
       const area = elNS('path', {
-        d: `${path} L ${pts[pts.length - 1][0]} ${yOf(yLo)} L ${pts[0][0]} ${yOf(yLo)} Z`,
+        d: `${path} L ${pts[pts.length - 1][0]} ${baseOf(ax)} L ${pts[0][0]} ${baseOf(ax)} Z`,
         fill, opacity: s.areaStyle.color ? 1 : 0.25,
       })
       svg.appendChild(area)
