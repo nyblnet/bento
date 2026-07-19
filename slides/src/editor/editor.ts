@@ -187,7 +187,7 @@ export class Editor {
     this.dirtyDot = div('ed-dirty')
     this.dirtyDot.title = t('Unsaved changes')
 
-    const insert = div('ed-group')
+    const insert = div('ed-group ed-insert')
     insert.append(
       btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true),
         t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
@@ -276,6 +276,18 @@ export class Editor {
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.panel = new PropsPanel(this.props, this.store)
+
+    if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
+  }
+
+  /** Live viewer: block user edits (store.readOnly), hide editing chrome, and
+   *  show a banner. Remote ops still apply — the deck updates as others edit. */
+  private enterReaderMode() {
+    this.store.readOnly = true
+    document.body.classList.add('ed-reader')
+    const banner = div('ed-reader-banner')
+    banner.innerHTML = `<span class="ed-reader-dot"></span>${t('Read-only — viewing this live session. You can watch and present, but not edit.')}`
+    document.body.appendChild(banner)
   }
 
   // --- resizable side panels ------------------------------------------------
@@ -408,9 +420,14 @@ export class Editor {
       item(t('Save as template…'),
         t('Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.'),
         () => void this.saveAsTemplate())
-      item(t('Save read-only copy…'),
-        t('A locked hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.'),
-        () => void this.saveReadonlyCopy())
+      item(t('Save as presentation package…'),
+        t('A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.'),
+        () => void this.savePresentationPackage())
+      if (sharingOn(this.store)) {
+        item(t('Save read-only copy…'),
+          t('A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).'),
+          () => void this.saveReaderCopy())
+      }
       if (isEncryptionActive()) {
         item(t('Change password…'),
           t('Pick a new password for this file — takes effect on the next save.'),
@@ -435,14 +452,34 @@ export class Editor {
     return wrap
   }
 
-  /** Save a locked hand-out copy: player file, no editor, no live session. */
-  private async saveReadonlyCopy() {
+  /** A sealed hand-out: present-only player file, no editor, no live session. */
+  private async savePresentationPackage() {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.readonly = true
-    delete clone.collab // a hand-out must not join (or leak) the live room
+    delete clone.collab // a sealed package must not join (or leak) the live room
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
-      if (ok) this.toast(t('Read-only copy saved — it opens straight into the show'))
+      if (ok) this.toast(t('Presentation package saved — it opens straight into the show'))
+    } catch {
+      this.toast(t('Saving failed'))
+    }
+  }
+
+  /** A live viewer: follows the shared session read-only. Keeps the room + read
+   *  key + writer PUBKEY (so the relay knows the room's writer) but drops the
+   *  writer PRIVATE key — the relay then rejects any op it tries to send. */
+  private async saveReaderCopy() {
+    const c = this.store.doc.collab
+    if (!c?.room || !c.key) {
+      this.toast(t('Turn on live sharing first — a read-only copy follows the session'))
+      return
+    }
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    clone.collab = { ...c, role: 'reader', on: true, sync: undefined }
+    delete clone.collab.writerPriv // the muzzle — no write capability travels
+    try {
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
+      if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
     } catch {
       this.toast(t('Saving failed'))
     }

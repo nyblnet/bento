@@ -24,6 +24,11 @@ export class Store {
   private redoStack: string[] = []
   private listeners = new Map<StoreEvent, Set<Listener>>()
 
+  /** read-only viewer: block user edits (commit) while remote ops — which
+   *  apply via the session's direct state.apply + emit, NOT commit — still
+   *  flow, so a live viewer sees updates but can never author them. */
+  readOnly = false
+
   constructor(doc: BentoDoc) {
     this.doc = doc
   }
@@ -79,6 +84,7 @@ export class Store {
 
   /** checkpoint() + mutate + notify, in one call. */
   commit(mutate: () => void, event: StoreEvent = 'doc') {
+    if (this.readOnly) return // live viewer — user edits are inert
     this.checkpoint()
     mutate()
     this.touch(event)

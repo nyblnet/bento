@@ -89,7 +89,7 @@ function playerMode(doc: BentoDoc) {
   card.className = 'ed-player'
   card.innerHTML =
     `<div class="ed-playercard"><h1>${doc.title.replace(/</g, '&lt;')}</h1>` +
-    `<p>${t('This deck is read-only.')}</p>` +
+    `<p>${t('This is a presentation package — view and present only.')}</p>` +
     `<button class="ed-playgo">▶&nbsp; ${t('Present')}</button>` +
     `<button class="ed-playcopy">⤓&nbsp; ${t('Save a copy')}</button></div>`
   document.body.appendChild(card)

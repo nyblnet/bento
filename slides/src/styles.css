@@ -635,6 +635,25 @@ html, body {
 .ed-help-more a { color: var(--accent, #ED8266); font-weight: 600; font-size: 13px; text-decoration: none; }
 .ed-help-more a:hover { text-decoration: underline; }
 
+/* --- live viewer (read-only collaborator) -------------------------------- */
+.ed-reader .ed-insert { display: none; }        /* no add-content tools */
+.ed-reader .moveable-control-box { display: none !important; }  /* no resize/move handles */
+.ed-reader-banner {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 60;
+  background: rgba(13,27,46,0.92); color: #fff; padding: 9px 18px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 9px;
+  box-shadow: 0 8px 26px rgba(0,0,0,0.32); backdrop-filter: blur(6px);
+}
+.ed-reader-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #FF9E8A; flex: none;
+  animation: ed-reader-pulse 2s infinite;
+}
+@keyframes ed-reader-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255,158,138,0.5); }
+  70% { box-shadow: 0 0 0 7px rgba(255,158,138,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,158,138,0); }
+}
+
 /* --- auto-save: recovery banner, saved tag, version history --------------- */
 .ed-recover {
   position: fixed;
