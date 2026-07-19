@@ -419,4 +419,12 @@ export const es: Catalog = {
   "Second screen ready — press S for speaker notes": "Segunda pantalla lista — pulsa S para las notas del ponente",
   "Only one screen detected — notes will open in a window (S)": "Solo se detectó una pantalla — las notas se abrirán en una ventana (S)",
   "Couldn’t access displays — notes will open in a window (S)": "No se pudo acceder a las pantallas — las notas se abrirán en una ventana (S)",
+  "Presenter display": "Pantalla del ponente",
+  "✓ Second screen enabled": "✓ Segunda pantalla activada",
+  "Speaker notes will open on your second display when you press S.": "Las notas del ponente se abrirán en tu segunda pantalla al pulsar S.",
+  "Use a second screen for notes": "Usar una segunda pantalla para las notas",
+  "Only one display detected — connect another, then enable it here.": "Solo se detectó una pantalla — conecta otra y actívala aquí.",
+  "Enable this once so pressing S in a show sends notes to your other display.": "Actívalo una vez para que al pulsar S en una presentación las notas vayan a tu otra pantalla.",
+  "Requesting…": "Solicitando…",
+  "Couldn’t access displays — allow “window management” in the browser’s site permissions.": "No se pudo acceder a las pantallas — permite «gestión de ventanas» en los permisos del sitio del navegador.",
 }

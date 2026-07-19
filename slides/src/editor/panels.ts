@@ -4,6 +4,7 @@
 
 import type { Store } from '../store'
 import { applyChartPalette, defaultChart, uid, type ChartElement, type LineEnding, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { grantScreens, screensCached, secondScreen, windowManagementSupported } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
@@ -126,6 +127,43 @@ export class PropsPanel {
     'A4 portrait': { w: 794, h: 1123 },
   }
 
+  /**
+   * Presenter display: grant Window Management here (a dedicated click) so a
+   * live show can put speaker notes on a second screen. It CANNOT be requested
+   * during present — the S keypress activation is spent on window.open /
+   * fullscreen — so this is where it belongs: in the panel, before you present.
+   */
+  private buildPresenterDisplay() {
+    if (!windowManagementSupported()) return
+    this.section(t('Presenter display'))
+    const btn = document.createElement('button')
+    btn.className = 'ed-btn ed-btn-block'
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    const set = (label: string, msg: string, done: boolean) => {
+      btn.textContent = label
+      btn.disabled = done
+      btn.classList.toggle('ed-btn-primary', !done)
+      status.textContent = msg
+    }
+    const ready = () => set(t('✓ Second screen enabled'), t('Speaker notes will open on your second display when you press S.'), true)
+    const oneScreen = () => set(t('Use a second screen for notes'), t('Only one display detected — connect another, then enable it here.'), false)
+    if (screensCached()) { secondScreen() ? ready() : oneScreen() } else {
+      set(t('Use a second screen for notes'), t('Enable this once so pressing S in a show sends notes to your other display.'), false)
+    }
+    btn.addEventListener('click', async () => {
+      const prev = btn.textContent
+      btn.textContent = t('Requesting…')
+      const r = await grantScreens()
+      if (r.ok && r.screens > 1) ready()
+      else if (r.ok) oneScreen()
+      else { set(prev ?? t('Use a second screen for notes'), t('Couldn’t access displays — allow “window management” in the browser’s site permissions.'), false) }
+    })
+    const wrap = document.createElement('div')
+    wrap.append(btn, status)
+    this.host.appendChild(wrap)
+  }
+
   private buildSlidePanel() {
     const slide = this.store.slide
     this.section(t('Slide'))
@@ -162,6 +200,8 @@ export class PropsPanel {
       hint.innerHTML = t('<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).')
       this.host.appendChild(hint)
     }
+
+    this.buildPresenterDisplay()
 
     // interactivity: naming, state-of, hover focus
     this.section(t('Interactivity'))

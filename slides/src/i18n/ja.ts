@@ -419,4 +419,12 @@ export const ja: Catalog = {
   "Second screen ready — press S for speaker notes": "2台目の画面が準備できました — S で発表者ノート",
   "Only one screen detected — notes will open in a window (S)": "画面は1台のみ — ノートはウィンドウで開きます（S）",
   "Couldn’t access displays — notes will open in a window (S)": "ディスプレイにアクセスできません — ノートはウィンドウで開きます（S）",
+  "Presenter display": "発表者ディスプレイ",
+  "✓ Second screen enabled": "✓ 2台目の画面を有効化",
+  "Speaker notes will open on your second display when you press S.": "S を押すと発表者ノートが2台目の画面に開きます。",
+  "Use a second screen for notes": "ノートに2台目の画面を使う",
+  "Only one display detected — connect another, then enable it here.": "画面は1台のみ — もう1台接続してここで有効化してください。",
+  "Enable this once so pressing S in a show sends notes to your other display.": "一度有効にすれば、ショー中に S を押すとノートがもう一方の画面に表示されます。",
+  "Requesting…": "要求中…",
+  "Couldn’t access displays — allow “window management” in the browser’s site permissions.": "ディスプレイにアクセスできません — ブラウザーのサイト権限で「ウィンドウ管理」を許可してください。",
 }
