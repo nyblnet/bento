@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Present mode: a fullscreen Reveal.js overlay generated from the model.
 // Slides marked transition:'morph' use GSAP Flip to animate elements whose
 // ids match across the two slides (PowerPoint "Morph" behaviour).

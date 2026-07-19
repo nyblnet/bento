@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Embedded display face for the starter deck: Fraunces Black (latin subset,
 // 34.6KB woff2). SIL Open Font License 1.1 — free to embed and redistribute;
 // the face travels inside every saved document via doc.fonts + doc.assets.

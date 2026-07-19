@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // The guestbook daemon's one command. Two modes:
 //
 //   node scripts/guestbook-roll.mjs --snapshot-only

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Assemble the bento.page landing page: inject the deck's embedded typefaces
 // (Fraunces Black + Instrument Sans, from slides/src/fontdata.ts) into the
 // template so the page is fully self-contained — no external requests, same

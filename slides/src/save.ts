@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Self-saving: a Bento file writes itself back to disk with updated data.
 //
 // At boot (before the app mutates the DOM) we deep-clone the document. On save

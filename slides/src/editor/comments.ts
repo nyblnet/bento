@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Review comments. Threads live in Slide.comments (saved with the file,
 // never rendered in present/print). The editor shows them as small numbered
 // markers on the canvas — at the anchored element's top-right corner, or

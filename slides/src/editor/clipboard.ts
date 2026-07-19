@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // System-clipboard copy/paste: external objects (images, text) onto the canvas,
 // and Bento elements or whole slides between decks (across tabs/windows).
 //

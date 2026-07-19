@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Internationalization, Bento-sized: a ~1KB t() with English-string-as-key
 // (gettext philosophy — the source stays readable, fallback is free), catalogs
 // compiled into the bundle (self-containment: nothing is fetched), and locale

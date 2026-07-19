@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // bento-sync M0 convergence rig.
 //
 //   node scripts/test-sync.ts        (Node ≥ 23.6 strips types natively)
