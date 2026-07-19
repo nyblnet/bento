@@ -582,7 +582,71 @@ html, body {
 }
 .ed-chart-json.ed-invalid { border-color: #c9302c; outline: 1px solid #c9302c; }
 
+/* --- auto-save: recovery banner, saved tag, version history --------------- */
+.ed-recover {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #16273e;
+  color: #f2f0ea;
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.28);
+  font-size: 13px;
+  max-width: min(92vw, 560px);
+}
+.ed-recover .ed-btn { padding: 5px 12px; }
+.ed-autosaved {
+  font-size: 11px;
+  color: #6f8; /* set by theme below */
+  color: var(--muted, #6b7a90);
+  opacity: 0;
+  transition: opacity 0.25s;
+  align-self: center;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ed-autosaved.show { opacity: 0.85; }
+.ed-version-box { max-width: 460px; }
+.ed-version-list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; max-height: 320px; overflow-y: auto; }
+.ed-version-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 9px 12px;
+  border: 1px solid var(--line, #e7e1d2);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink, #1e2a3a);
+}
+.ed-version-row:hover { background: var(--chrome-2, #f4f1ea); border-color: #c9d2df; }
+.ed-version-row .vh-tag { font-size: 11px; color: var(--muted, #8a94a4); }
+.ed-version-row .vh-do { font-size: 12px; font-weight: 600; color: #c25a43; }
+
 /* --- visual chart editor -------------------------------------------------- */
+.ed-chart-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 6px;
+  background: rgba(94, 118, 153, 0.1);
+  border: 1px solid rgba(94, 118, 153, 0.25);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--ink, #1e2a3a);
+}
+.ed-chart-link span { flex: 1; min-width: 0; }
+.ed-chart-link .ed-btn { padding: 3px 9px; font-size: 12px; }
 .ed-series-row {
   display: flex;
   align-items: center;

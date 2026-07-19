@@ -9,6 +9,7 @@
 // element itself.
 
 import { anim } from '../anim'
+import { t } from '../i18n'
 import type { Store } from '../store'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -176,10 +177,10 @@ export class PathEditor {
     this.hint = document.createElement('div')
     this.hint.className = 'ed-setbar ed-pathbar'
     this.hint.innerHTML =
-      '<span class="ed-setbar-label">Motion path — drag points · double-click path to insert · double-click point to remove · scroll a point to change its speed</span>'
+      `<span class="ed-setbar-label">${t('Motion path — drag points · double-click path to insert · double-click point to remove · scroll a point to change its speed')}</span>`
     const done = document.createElement('button')
     done.className = 'ed-setchip active'
-    done.textContent = 'Done'
+    done.textContent = t('Done')
     done.addEventListener('click', () => this.commit())
     this.hint.appendChild(done)
     this.scaleHost.closest('.ed-canvas-wrap')?.appendChild(this.hint)

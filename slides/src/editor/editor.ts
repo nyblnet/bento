@@ -5,8 +5,8 @@ import type { Store } from '../store'
 import {
   FORMAT_VERSION,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultTable, defaultText,
-  instantiateLayout, layoutElementIds, newDocId, uid,
-  type ShapeKind, type Slide, type SlideElement,
+  instantiateLayout, layoutElementIds, newDocId, syncLinkedChart, uid,
+  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
 } from '../model'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
@@ -14,7 +14,8 @@ import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
-import { isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFileAs } from '../save'
+import { hasFileHandle, isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { addVersion, clearRecovery, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
 import { disconnectOnline, joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
@@ -63,6 +64,8 @@ export class Editor {
     window.addEventListener('beforeunload', (ev) => {
       if (store.dirty) ev.preventDefault()
     })
+    this.wireAutosave()
+    store.on('doc', () => this.syncLinkedCharts())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -990,6 +993,157 @@ export class Editor {
     }, { fullscreen })
   }
 
+  // --- live table→chart binding -------------------------------------------------
+
+  private tableSig = ''
+  /** Re-derive any chart linked to a table on the current slide when that
+   *  table's content changes. Guarded by a content signature so it can't loop,
+   *  and skipped when nothing is linked. */
+  private syncLinkedCharts() {
+    const slide = this.store.slide
+    const linked = slide.elements.filter((e): e is ChartElement => e.type === 'chart' && !!(e as ChartElement).source)
+    if (!linked.length) { this.tableSig = ''; return }
+    const tables = slide.elements.filter((e): e is TableElement => e.type === 'table')
+    const sig = slide.id + '|' + tables.map((tb) => `${tb.id}:${tb.columns.length}:${JSON.stringify(tb.rows)}`).join('|')
+    if (sig === this.tableSig) return
+    this.tableSig = sig
+    let changed = false
+    for (const chart of linked) {
+      const table = tables.find((tb) => tb.id === chart.source!.tableId)
+      if (table && syncLinkedChart(chart, table)) changed = true
+    }
+    // the triggering table edit already dirtied the doc + drives collab/autosave;
+    // each replica derives identically from the synced table, so just re-render.
+    if (changed) this.canvas.render()
+  }
+
+  // --- auto-save + crash recovery -----------------------------------------------
+
+  private autosaveTimer = 0
+  private lastVersionAt = 0
+
+  private wireAutosave() {
+    if (this.store.doc.readonly) return // player file — nothing to autosave
+    void pruneOld()
+    void this.checkRecovery()
+    this.store.on('doc', () => this.scheduleAutosave())
+  }
+
+  private scheduleAutosave() {
+    if (this.store.doc.readonly) return
+    clearTimeout(this.autosaveTimer)
+    this.autosaveTimer = window.setTimeout(() => { void this.runAutosave() }, 2500)
+  }
+
+  private async runAutosave() {
+    const doc = this.store.doc
+    if (doc.readonly) return
+    // Never write an encrypted deck's plaintext to IndexedDB; its file
+    // write-back below stays encrypted via serializeAuto.
+    if (!isEncryptionActive()) {
+      await putRecovery(doc)
+      if (Date.now() - this.lastVersionAt > 120_000) { this.lastVersionAt = Date.now(); await addVersion(doc) }
+    }
+    // Silent file write-back once we hold a writable handle (Chrome/Edge).
+    if (hasFileHandle()) {
+      try {
+        this.session?.stampInto(doc)
+        await writeUpdatedFile(await serializeAuto(doc))
+        this.store.setDirty(false)
+        this.flashSaved()
+      } catch { /* keep dirty; the IndexedDB snapshot is the backstop */ }
+    }
+  }
+
+  private async checkRecovery() {
+    const doc = this.store.doc
+    const snap = await getRecovery(doc.docId)
+    if (!snap) return
+    let recovered: import('../model').BentoDoc
+    try { recovered = JSON.parse(snap.json) } catch { return }
+    if (docContentKey(recovered) === docContentKey(doc)) return // the file already has these edits
+    this.showRecoveryBanner(snap, recovered)
+  }
+
+  private showRecoveryBanner(snap: Snapshot, recovered: import('../model').BentoDoc) {
+    document.querySelector('.ed-recover')?.remove()
+    const bar = div('ed-recover')
+    const when = new Date(snap.at).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+    const msg = document.createElement('span')
+    msg.textContent = t('Unsaved changes from {when} were found.', { when })
+    const restore = document.createElement('button')
+    restore.className = 'ed-btn ed-btn-primary'
+    restore.textContent = t('Restore')
+    restore.addEventListener('click', () => {
+      this.store.replaceDoc(recovered)
+      this.canvas.render()
+      bar.remove()
+      this.toast(t('Restored your unsaved changes'))
+    })
+    const dismiss = document.createElement('button')
+    dismiss.className = 'ed-btn'
+    dismiss.textContent = t('Discard')
+    dismiss.addEventListener('click', () => { void clearRecovery(this.store.doc.docId); bar.remove() })
+    bar.append(msg, restore, dismiss)
+    document.body.appendChild(bar)
+  }
+
+  /** Browse and restore the locally-kept auto-save timeline for this deck. */
+  private async openVersionHistory() {
+    const versions = await listVersions(this.store.doc.docId)
+    document.querySelector('.ed-about-overlay')?.remove()
+    const overlay = div('ed-about-overlay')
+    const box = div('ed-about ed-version-box')
+    const h = document.createElement('h2')
+    h.textContent = t('Version history')
+    box.appendChild(h)
+    if (!versions.length) {
+      const empty = document.createElement('p')
+      empty.className = 'ed-about-fine'
+      empty.textContent = t('No saved versions yet — they accumulate as you edit and save.')
+      box.appendChild(empty)
+    } else {
+      const list = div('ed-version-list')
+      versions.forEach((v, i) => {
+        const rowEl = document.createElement('button')
+        rowEl.className = 'ed-version-row'
+        const when = new Date(v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        rowEl.innerHTML = `<span class="vh-when">${when}</span>` +
+          `<span class="vh-tag">${i === 0 ? t('most recent') : ''}</span>` +
+          `<span class="vh-do">${t('Restore')}</span>`
+        rowEl.addEventListener('click', () => {
+          try {
+            this.store.replaceDoc(JSON.parse(v.json))
+            this.canvas.render()
+            overlay.remove()
+            this.toast(t('Restored the version from {when} — ⌘Z undoes', { when }))
+          } catch { this.toast(t('That version could not be read')) }
+        })
+        list.appendChild(rowEl)
+      })
+      box.appendChild(list)
+    }
+    const fine = div('ed-about-fine')
+    fine.textContent = t('Versions are stored only in this browser, never in the file or online. Restoring is undoable.')
+    box.appendChild(fine)
+    overlay.appendChild(box)
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true) }
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); close() } }
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) close() })
+    document.addEventListener('keydown', onKey, true)
+    document.body.appendChild(overlay)
+  }
+
+  private savedTimer = 0
+  private flashSaved() {
+    let tag = document.querySelector<HTMLElement>('.ed-autosaved')
+    if (!tag) { tag = div('ed-autosaved'); this.dirtyDot.after(tag) }
+    tag.textContent = t('Saved')
+    tag.classList.add('show')
+    clearTimeout(this.savedTimer)
+    this.savedTimer = window.setTimeout(() => tag!.classList.remove('show'), 1400)
+  }
+
   async save(forcePicker: boolean) {
     this.canvas.commitTextEdit()
     // shared docs persist their CRDT state so the saved copy can rejoin
@@ -999,6 +1153,8 @@ export class Editor {
       const result = await saveFile(this.store.doc, forcePicker)
       if (result === 'cancelled') return
       this.store.setDirty(false)
+      // record a recovery baseline + a version checkpoint at each manual save
+      if (!isEncryptionActive()) { void putRecovery(this.store.doc); void addVersion(this.store.doc); this.lastVersionAt = Date.now() }
       // Saving is the opt-in: a named, saved deck is "live by default" from
       // now on (the recipient of a copy already joins on open). Connect this
       // session too so author and recipient meet without another click.
@@ -1358,7 +1514,12 @@ export class Editor {
       box.insertBefore(applyB, fine)
       ta.focus()
     })
-    aiRow.append(copyB, replB)
+    const verB = document.createElement('button')
+    verB.className = 'ed-btn'
+    verB.textContent = t('Version history…')
+    verB.title = t('Restore an earlier auto-saved version of this deck (kept locally in this browser).')
+    verB.addEventListener('click', () => { close(); void this.openVersionHistory() })
+    aiRow.append(copyB, replB, verB)
     box.appendChild(aiRow)
 
 

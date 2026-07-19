@@ -18,6 +18,19 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
 - `src/save.ts` — the self-save trick: clone the document at boot (`capturePristine`),
   swap the `#bento-doc` data block, re-serialize. JSON is `<`-escaped (`<`) so it can
   never contain `</script>`. File System Access API first, download fallback.
+- `src/autosave.ts` (v0.9.8) — auto-save + local version history, IndexedDB
+  (`bento-autosave`, two stores: `recovery` single-latest-per-docId, `versions`
+  capped timeline). Editor debounces (2.5s) on `doc` events: writes a recovery
+  snapshot (plain doc JSON, NOT the shell) + a throttled version, and — when a
+  FSA handle exists — silently rewrites the real file (`writeUpdatedFile`, shows
+  a "Saved" tag). On boot `checkRecovery` compares the latest snapshot's
+  `docContentKey` (content minus volatile modified/collab fields) to the loaded
+  doc; a mismatch shows a Restore/Discard banner. Encrypted decks are NEVER
+  snapshotted to IndexedDB (plaintext-to-disk) — their file write-back stays
+  encrypted. readonly players skip autosave. Version history UI in the About
+  dialog; restore = `store.replaceDoc` (undoable). Keyed by docId, so recovery
+  needs a stable docId (saved files) — the fresh-each-load anonymous demo won't
+  cross-reload-recover, by design.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
 - `src/anim.ts` — in-house animation engine (no GSAP): to/fromTo tweens with
@@ -116,7 +129,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   axis · colour · remove), per-axis min/max, and an editable categories×series
   data grid (add/remove rows keep xAxis.data + every series.data in lockstep);
   pie gets a slices grid. The raw-JSON textarea stays as the 'Advanced (JSON)'
-  escape hatch. Shapes:
+  escape hatch. **Live table binding (v0.9.8)**: `chart.source={tableId}` links
+  a chart to a table — table→chart sets it by default. `model.syncLinkedChart`
+  pushes the table's labels+numeric columns into the chart's option IN PLACE
+  (data only; styling/axes preserved), and editor `syncLinkedCharts` re-derives
+  on the current slide whenever a table changes (signature-guarded against
+  loops; each collab replica derives identically from the synced table so no
+  extra ops needed). Panel shows a link banner + Unlink. Shapes:
   `strokeStyle` solid/dashed/dotted (legacy `strokeDash` still honoured);
   line shapes have `lineStart`/`lineEnd` tips (arrow/dot/bar) rendered as
   per-instance svg markers (sized in strokeWidth units, endpoints inset);
@@ -183,7 +202,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   real fullscreen makes the browser leave fullscreen, whose `fullscreenchange`
   would call `exit()` and END the show — `openingSpeaker` guards onFsChange and
   re-enters fullscreen. Escape stays a separate exit path, so the guard can't
-  strand the presenter.
+  strand the presenter. **Dual-screen (v0.9.8)**: `placeSpeaker` opens the popup
+  synchronously (keeps the click gesture, avoids a popup-block), then async
+  `getScreenDetails()` (Window Management permission) moves it to a second
+  display and fullscreens the slides on the presenter's screen via
+  `requestFullscreen({screen})`. Single-screen / denied / unsupported all
+  degrade to the same-screen re-fullscreen path. Needs a real two-monitor rig
+  for final QA.
 - **Animation robustness**: slide exit kills tweens AND restores model frames; a
   2.8s wall-clock settle guarantee lands entrances on starved render loops; never
   put entrance tweens on motion-path elements (transform conflict).

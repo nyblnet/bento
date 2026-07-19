@@ -811,6 +811,21 @@ export class PropsPanel {
     const isScatter = series.some((s) => s?.type === 'scatter')
 
     this.section(t('Chart'))
+    // live table binding banner (if this chart tracks a table)
+    if (el.source?.tableId) {
+      const linkRow = document.createElement('div')
+      linkRow.className = 'ed-chart-link'
+      const label = document.createElement('span')
+      const stillThere = this.store.slide.elements.some((e) => e.id === el.source!.tableId && e.type === 'table')
+      label.textContent = stillThere ? t('🔗 Live-linked to a table') : t('🔗 Linked table not on this slide')
+      const unlink = document.createElement('button')
+      unlink.className = 'ed-btn'
+      unlink.textContent = t('Unlink')
+      unlink.title = t('Stop tracking the table; the chart keeps its current data')
+      unlink.addEventListener('click', () => this.mutate(el.id, (e) => { delete (e as ChartElement).source }, true))
+      linkRow.append(label, unlink)
+      this.host.appendChild(linkRow)
+    }
     this.row(t('Type'), this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
       this.mutate(el.id, (e) => {
         const c = e as ChartElement
@@ -1206,10 +1221,12 @@ export class PropsPanel {
     applyChartPalette(option, this.store.doc.theme)
     const chart = defaultChart(option, {
       x: el.x, y: Math.min(el.y + el.h + 24, 480), w: Math.max(el.w, 640), h: 300, preset: 'bar',
+      // live binding: edits to the table flow into this chart
+      source: { tableId: el.id },
     })
     this.store.commit(() => this.store.slide.elements.push(chart))
     this.store.select([chart.id])
-    this.toast(t('Chart created from table'))
+    this.toast(t('Chart created — it updates live with the table'))
   }
 
   private buildImageProps(el: SlideElement) {
