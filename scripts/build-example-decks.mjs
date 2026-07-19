@@ -85,6 +85,20 @@ const img = (o) => ({
   src: `asset:${o.asset}`, fit: o.fit ?? 'cover', radius: o.radius ?? 0,
   ...(o.fx ? { fx: o.fx } : {}), ...(o.shadow ? { shadow: o.shadow } : {}),
 })
+// embedded media (audio/video) as a data URI — same self-contained technique
+// as photo(). Small clips embed; big ones should pass a URL in `src` instead.
+const mediaFile = (name, mime) =>
+  `data:${mime};base64,` + readFileSync(join(root, 'scripts/gallery-media', name)).toString('base64')
+const media = (o) => ({
+  id: o.id ?? id('m'), type: 'media', kind: o.kind, x: o.x, y: o.y, w: o.w, h: o.h,
+  rotation: o.rotation ?? 0, opacity: o.opacity ?? 1, src: o.src,
+  ...(o.poster ? { poster: o.poster } : {}),
+  ...(o.fit ? { fit: o.fit } : {}), ...(o.radius != null ? { radius: o.radius } : {}),
+  ...(o.controls != null ? { controls: o.controls } : {}),
+  ...(o.autoplay ? { autoplay: o.autoplay } : {}), ...(o.loop ? { loop: o.loop } : {}),
+  ...(o.muted ? { muted: o.muted } : {}),
+  ...(o.fx ? { fx: o.fx } : {}), ...(o.shadow ? { shadow: o.shadow } : {}),
+})
 const slide = (o) => ({
   id: o.id ?? id('sl'), background: o.background, transition: o.transition ?? 'fade',
   notes: o.notes ?? '', elements: o.elements,
@@ -577,6 +591,11 @@ function deckPicnic() {
       shape('rect', { x: 645, y: 405, w: 230, h: 272, radius: 12, fill: '#FFFFFF', stroke: INK, strokeWidth: 4, rotation: -5, shadow: sticker, fx: { enter: 'fade-up', order: 1 } }),
       img({ asset: 'ph-fair', x: 661, y: 421, w: 198, h: 204, radius: 6, rotation: -5, fx: { enter: 'fade-up', order: 1, ambient: 'kenburns', ken: { dir: 'drift', scale: 1.04, duration: 16 } } }),
       text({ x: 661, y: 633, w: 198, h: 30, html: 'last picnic!!', fontSize: 16, fontWeight: 800, color: INK, align: 'center', rotation: -5, fx: { enter: 'fade-up', order: 1 } }),
+      // Embedded audio (self-contained) — a short chime synthesised in
+      // build-example-decks.mjs, so it's unambiguously public domain. Demos the
+      // media element's embed path: the sound travels inside the .bento.html.
+      text({ x: 130, y: 556, w: 360, h: 26, html: '▶ press play — the picnic jingle', fontSize: 15, fontWeight: 800, color: INK, rotation: -1 }),
+      media({ id: 'pic-jingle', kind: 'audio', src: mediaFile('chime.wav', 'audio/wav'), x: 130, y: 590, w: 320, h: 44, radius: 12, controls: true }),
       text({ x: 130, y: 682, w: 700, h: 20, html: 'PHOTOS: JACK DELANO, 1941 · LIBRARY OF CONGRESS — PUBLIC DOMAIN', fontSize: 9, fontWeight: 700, letterSpacing: 2, color: 'rgba(32,26,49,0.55)' }),
     ],
   })

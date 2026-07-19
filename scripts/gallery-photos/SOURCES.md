@@ -85,3 +85,10 @@ display shows. The three STATE backdrops (nebula, aurora, dragon) render dimmed
 under 55–72% scrims, where fine detail is invisible: nebula 1600 px q60, aurora
 & dragon 1800 px q64. Orbital photos 5.7 MB → 2.0 MB; deck ~7.9 MB → ~4.1 MB.
 Spot-checked at full brightness — no visible artefacts. Same frames/crops.
+
+## Media (v0.9.18)
+
+- `gallery-media/chime.wav` — a short major-pentatonic chime **synthesised in
+  `scripts/build-example-decks.mjs`** (native WAV, no external source), so it is
+  original work released into the **public domain**. Embedded in the Picnic
+  deck cover to demonstrate the audio media element.
