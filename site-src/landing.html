@@ -135,17 +135,22 @@ h1, h2, .display {
 
 /* ————— header ————— */
 header {
-  position: relative;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 22px 28px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid transparent;
+  transition: background 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease;
 }
+/* translucent bar fades in only after a little scroll — at the very top the
+   header floats transparent over the hero so it doesn't crowd the headline */
+header.scrolled { background: rgba(10, 15, 25, 0.72); backdrop-filter: blur(14px) saturate(1.2); border-bottom-color: rgba(255, 255, 255, 0.08); }
+.hbar { display: flex; align-items: center; justify-content: space-between; max-width: 1120px; margin: 0 auto; padding: 15px 28px; }
 .mark { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16.5px; color: #fff; text-decoration: none; }
 .mark .slash { color: var(--peach); }
+/* compact persistent CTAs in the bar (the hero keeps the full-size pair) */
+.nav-cta { display: flex; align-items: center; gap: 10px; }
+.nav-cta .btn { padding: 9px 18px; font-size: 14px; }
+@media (max-width: 640px) { .nav-cta .nav-ghost { display: none; } .hbar { padding: 13px 18px; } }
 .open-app {
   font-size: 13.5px;
   font-weight: 600;
@@ -493,10 +498,16 @@ body.kdeck header, body.kdeck footer { display: none; }
 <div class="grain" aria-hidden="true"></div>
 
 <header>
-  <a class="mark" href="/">
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#16273E"/><rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/><rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/><rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/></svg>
-    <span>Bento<span class="slash">/</span>Suite</span>
-  </a>
+  <div class="hbar">
+    <a class="mark" href="/">
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#16273E"/><rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/><rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/><rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/></svg>
+      <span>Bento<span class="slash">/</span>Suite</span>
+    </a>
+    <div class="nav-cta">
+      <a class="btn ghost-btn nav-ghost" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download</a>
+      <a class="btn primary" href="/slides/">▶&nbsp; Try it</a>
+    </div>
+  </div>
 </header>
 
 <!-- ———————————————————— hero ———————————————————— -->
@@ -835,6 +846,14 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
   }, { threshold: 0.18, rootMargin: '0px 0px -40px 0px' })
   document.querySelectorAll('.rv:not(.in)').forEach((n) => io.observe(n))
+})()
+
+// sticky-header backdrop — fades in once past the hero's first sliver
+;(() => {
+  const h = document.querySelector('header')
+  const sync = () => h.classList.toggle('scrolled', scrollY > 24)
+  addEventListener('scroll', sync, { passive: true })
+  sync()
 })()
 
 // easter egg: ↑↑↓↓←→←→BA presents this page as a deck. Of course it does.
