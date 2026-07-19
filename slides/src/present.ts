@@ -218,44 +218,53 @@ export function startPresentation(
       if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, 1000)
     updateSpeaker()
-    // Try TRUE dual-screen: notes window on a second display, slides fullscreen
-    // on the primary. The popup was opened synchronously above (keeps the click
-    // gesture, avoids a popup-block); we now query screens async and reposition.
+    // Re-enter fullscreen SYNCHRONOUSLY here, still inside the S-key gesture, so
+    // the request isn't rejected for lost user-activation (the #1 macOS failure).
+    // Opening the popup drops us out of fullscreen; this puts the slides back on
+    // the presenter's screen. Then async-move the notes to a second display.
+    if (wasFullscreen) {
+      overlay.requestFullscreen?.({ navigationUI: 'hide' }).catch((e: any) =>
+        console.warn('[bento-speaker] sync re-fullscreen rejected:', e?.name, e?.message))
+    }
     void placeSpeaker(wasFullscreen)
   }
 
   /**
-   * With the Window Management permission and ≥2 displays, move the speaker
-   * popup to a second screen and fullscreen the slides on the presenter's
-   * screen. Everything degrades gracefully: single screen / denied permission /
-   * unsupported API → the popup stays put and the slides re-enter fullscreen on
-   * the current screen (so the show never ends — Escape is the only exit).
+   * Move the notes popup to a second display (Window Management permission).
+   * Heavily instrumented: with no two-monitor rig to test on, the console log is
+   * how we diagnose. Degrades gracefully — single screen / denied / unsupported
+   * keeps the notes visible on the current display. Slides fullscreen is handled
+   * synchronously in openSpeaker above (activation-safe).
    */
   const placeSpeaker = async (wasFullscreen: boolean) => {
-    let targetScreen: unknown = null
+    const log = (...a: unknown[]) => console.info('[bento-speaker]', ...a)
     try {
+      let perm = 'unknown'
+      try { perm = (await (navigator as any).permissions?.query?.({ name: 'window-management' }))?.state ?? 'no-api' } catch { perm = 'query-failed' }
       const getScreenDetails = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
-      if (getScreenDetails && speaker) {
-        const details = await getScreenDetails.call(window)
-        const screens: any[] = details.screens ?? []
-        if (screens.length > 1) {
-          const other = screens.find((s) => s !== details.currentScreen)
-            ?? screens.find((s) => !s.isPrimary) ?? screens[1]
-          try { speaker.moveTo(other.availLeft, other.availTop); speaker.resizeTo(other.availWidth, other.availHeight) } catch { /* clamped without permission */ }
-          targetScreen = details.currentScreen // fullscreen the slides here
-        }
+      log('permission:', perm, '· getScreenDetails:', !!getScreenDetails, '· wasFullscreen:', wasFullscreen)
+      if (!getScreenDetails) {
+        log('Window Management API unavailable — notes stay on this screen')
+        return
       }
-    } catch { /* permission denied / unsupported — fall back below */ }
-
-    if (wasFullscreen || targetScreen) {
-      window.focus()
-      try {
-        const opts: FullscreenOptions & { screen?: unknown } = { navigationUI: 'hide' }
-        if (targetScreen) opts.screen = targetScreen
-        await overlay.requestFullscreen?.(opts as FullscreenOptions)
-      } catch { enterFullscreen() }
+      const details = await getScreenDetails.call(window)
+      const screens: any[] = details.screens ?? []
+      log('screens:', screens.length, screens.map((s: any) => ({ label: s.label, primary: s.isPrimary, current: s === details.currentScreen, x: s.availLeft, y: s.availTop, w: s.availWidth, h: s.availHeight })))
+      if (screens.length > 1 && speaker) {
+        const other = screens.find((s) => s !== details.currentScreen) ?? screens.find((s) => !s.isPrimary) ?? screens[1]
+        try {
+          speaker.moveTo(other.availLeft, other.availTop)
+          speaker.resizeTo(Math.min(other.availWidth, 1400), Math.min(other.availHeight, 900))
+          log('moved notes → screen:', other.label, 'at', other.availLeft, other.availTop)
+        } catch (e: any) { console.warn('[bento-speaker] moveTo/resizeTo failed:', e?.message) }
+      } else {
+        log('single display — press F to fullscreen slides; drag the notes window where you want it')
+      }
+    } catch (e: any) {
+      console.warn('[bento-speaker] getScreenDetails denied/failed:', e?.name, e?.message, '— grant "window management" for this site to place notes on a 2nd screen')
+    } finally {
+      window.setTimeout(() => { openingSpeaker = false }, 500)
     }
-    window.setTimeout(() => { openingSpeaker = false }, 400)
   }
 
   // Real fullscreen (F toggles; Present enters it by default). The overlay

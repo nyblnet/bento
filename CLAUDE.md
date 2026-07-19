@@ -33,6 +33,16 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   cross-reload-recover, by design.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
+- `src/editor/clipboard.ts` (v0.9.9) — system-clipboard copy/paste. Bento content
+  is written as JSON tagged `__bento:"clip"` (kind elements|slides) with referenced
+  assets/fonts embedded, so it round-trips across decks/tabs; asset-key collisions
+  remap. Editor: ⌘C copies selected elements, or the current slide when nothing is
+  selected (→ `navigator.clipboard.writeText`); a document `paste` listener handles
+  external images (embed as data-URI image element), plain text (→ text element),
+  and Bento payloads (insert elements on the current slide / slides after it, fresh
+  ids). Pasted slides drop `stateOf`. Guarded to skip when a text field is focused.
+  Also v0.9.9: a `?` help overlay (editor.openHelp — shortcuts + tips, topbar ?
+  button) and richer toolbar tooltips.
 - `src/anim.ts` — in-house animation engine (no GSAP): to/fromTo tweens with
   channels opacity/y/scale/color/strokeDashoffset/attr{}/motionPath, delay/
   repeat/yoyo/ease, per-channel overwrite, killTweensOf/getTweensOf, manual
