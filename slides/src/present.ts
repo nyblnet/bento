@@ -141,19 +141,57 @@ export function startPresentation(
   // DIRECTLY on a second display (window.open left/top) — moving it after the
   // fact is what left the notes stranded behind the fullscreen slides.
   let screenLayout: { screens: any[]; currentScreen: any } | null = null
-  const primeScreens = () => {
-    const gsd = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
-    if (!gsd) { console.info('[bento-speaker] Window Management API unavailable — notes will open on this screen'); return }
-    gsd.call(window).then((d: any) => {
-      screenLayout = d
-      console.info('[bento-speaker] primed screens:', d.screens?.length, '· permission ok')
-      d.addEventListener?.('screenschange', () => { screenLayout = d })
-    }).catch((e: any) => console.warn('[bento-speaker] screen access denied:', e?.name, e?.message, '— grant “window management” in the site permissions (address-bar icon) to auto-place notes'))
-  }
+  let grantBtn: HTMLButtonElement | null = null
+  const hasWM = () => !!(window as unknown as { getScreenDetails?: unknown }).getScreenDetails
   const secondScreen = () => {
     const s = screenLayout
     if (!s || !Array.isArray(s.screens) || s.screens.length < 2) return null
     return s.screens.find((x) => x !== s.currentScreen) ?? s.screens.find((x) => !x.isPrimary) ?? s.screens[1]
+  }
+  // getScreenDetails() returns a LIVE object; we call it once (needs activation
+  // only to prompt) and keep it. Returns true if we now hold a layout.
+  const cacheScreens = async (): Promise<boolean> => {
+    const gsd = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
+    if (!gsd) return false
+    try {
+      screenLayout = await gsd.call(window)
+      console.info('[bento-speaker] screens ready:', screenLayout?.screens?.length)
+      return true
+    } catch (e: any) {
+      console.warn('[bento-speaker] getScreenDetails failed:', e?.name, e?.message)
+      return false
+    }
+  }
+  // A dedicated-gesture button to grant "window management" — the ONLY reliable
+  // way, since the S keypress activation is spent on window.open/fullscreen.
+  const showGrantButton = () => {
+    if (grantBtn || !hasWM()) return
+    const b = document.createElement('button')
+    b.className = 'bento-present-grant'
+    b.textContent = t('📺 Use a second screen for notes')
+    b.addEventListener('click', async () => {
+      const ok = await cacheScreens() // this click IS the activation → prompts once
+      grantBtn?.remove(); grantBtn = null
+      const msg = document.createElement('div')
+      msg.className = 'bento-present-toast'
+      msg.textContent = ok && secondScreen()
+        ? t('Second screen ready — press S for speaker notes')
+        : (ok ? t('Only one screen detected — notes will open in a window (S)') : t('Couldn’t access displays — notes will open in a window (S)'))
+      overlay.appendChild(msg)
+      window.setTimeout(() => msg.remove(), 4000)
+    })
+    overlay.appendChild(b)
+    grantBtn = b
+  }
+  // At present-start: if we can read the layout without a prompt (permission
+  // already granted), cache it; otherwise offer the grant button.
+  const setupSecondScreen = async () => {
+    if (!hasWM()) return
+    let state = 'prompt'
+    try { state = (await (navigator as unknown as { permissions?: { query?: (o: unknown) => Promise<{ state: string }> } }).permissions?.query?.({ name: 'window-management' as PermissionName }))?.state ?? 'prompt' } catch { /* no query api */ }
+    console.info('[bento-speaker] window-management permission:', state)
+    if (state === 'granted' && await cacheScreens()) return
+    if (state !== 'denied') showGrantButton()
   }
   const nextVisibleIndex = (from: number) => {
     for (let i = (isState(from) ? anchorOf(from) : from) + 1; i < doc.slides.length; i++) {
@@ -244,56 +282,21 @@ export function startPresentation(
       if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, 1000)
     updateSpeaker()
-    // Re-enter fullscreen SYNCHRONOUSLY here, still inside the S-key gesture, so
-    // the request isn't rejected for lost user-activation (the #1 macOS failure).
-    // Opening the popup drops us out of fullscreen; this puts the slides back on
-    // the presenter's screen. Then async-move the notes to a second display.
-    if (wasFullscreen) {
-      overlay.requestFullscreen?.({ navigationUI: 'hide' }).catch((e: any) =>
-        console.warn('[bento-speaker] sync re-fullscreen rejected:', e?.name, e?.message))
+    if (other) {
+      // Notes are on the second display. A popup on ANOTHER screen shouldn't
+      // drop this screen's fullscreen; if it did, the presenter can press F
+      // (the S activation is already spent on window.open, so we can't silently
+      // re-enter here). Nothing to do — the good path.
+      console.info('[bento-speaker] notes on 2nd screen; slides', document.fullscreenElement ? 'still fullscreen' : '→ press F for fullscreen')
+    } else if (wasFullscreen) {
+      // No second-screen placement (permission not granted / single screen) —
+      // the notes would sit hidden behind the fullscreen slides. Drop fullscreen
+      // so they're visible, and surface the one-click grant button.
+      console.info('[bento-speaker] no 2nd screen — revealing notes; offering the grant button')
+      document.exitFullscreen?.().catch(() => {})
+      showGrantButton()
     }
-    void placeSpeaker(wasFullscreen)
-  }
-
-  /**
-   * Move the notes popup to a second display (Window Management permission).
-   * Heavily instrumented: with no two-monitor rig to test on, the console log is
-   * how we diagnose. Degrades gracefully — single screen / denied / unsupported
-   * keeps the notes visible on the current display. Slides fullscreen is handled
-   * synchronously in openSpeaker above (activation-safe).
-   */
-  const placeSpeaker = async (wasFullscreen: boolean) => {
-    const log = (...a: unknown[]) => console.info('[bento-speaker]', ...a)
-    try {
-      let perm = 'unknown'
-      try { perm = (await (navigator as any).permissions?.query?.({ name: 'window-management' }))?.state ?? 'no-api' } catch { perm = 'query-failed' }
-      const getScreenDetails = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
-      log('permission:', perm, '· getScreenDetails:', !!getScreenDetails, '· wasFullscreen:', wasFullscreen)
-      if (!getScreenDetails) {
-        log('Window Management API unavailable — notes stay on this screen')
-        return
-      }
-      const details = await getScreenDetails.call(window)
-      screenLayout = details // cache so the NEXT open goes straight to screen 2
-      const screens: any[] = details.screens ?? []
-      log('screens:', screens.length, screens.map((s: any) => ({ label: s.label, primary: s.isPrimary, current: s === details.currentScreen, x: s.availLeft, y: s.availTop, w: s.availWidth, h: s.availHeight })))
-      if (screens.length > 1 && speaker) {
-        const other = screens.find((s) => s !== details.currentScreen) ?? screens.find((s) => !s.isPrimary) ?? screens[1]
-        try {
-          // move it even if we already opened there — corrects any clamp
-          speaker.moveTo(other.availLeft, other.availTop)
-          speaker.resizeTo(Math.min(other.availWidth, 1400), Math.min(other.availHeight, 900))
-          window.focus() // keep the presenter screen focused for fullscreen
-          log('placed notes → screen:', other.label, 'at', other.availLeft, other.availTop)
-        } catch (e: any) { console.warn('[bento-speaker] moveTo/resizeTo failed:', e?.message) }
-      } else {
-        log('single display — press F to fullscreen slides; drag the notes window where you want it')
-      }
-    } catch (e: any) {
-      console.warn('[bento-speaker] getScreenDetails denied/failed:', e?.name, e?.message, '— grant "window management" for this site to place notes on a 2nd screen')
-    } finally {
-      window.setTimeout(() => { openingSpeaker = false }, 500)
-    }
+    window.setTimeout(() => { openingSpeaker = false }, 500)
   }
 
   // Real fullscreen (F toggles; Present enters it by default). The overlay
@@ -317,10 +320,10 @@ export function startPresentation(
   }
   document.addEventListener('fullscreenchange', onFsChange)
   if (opts.fullscreen !== false) enterFullscreen()
-  // Fetch the screen layout now (prompts for the Window Management permission
-  // once, at present-start) so pressing S can open the notes straight onto a
-  // second display without an async round-trip.
-  primeScreens()
+  // Prepare second-screen support: cache the layout if the permission is already
+  // granted, otherwise show a one-click grant button (the S keypress can't prompt
+  // for it — its activation is spent on window.open/fullscreen).
+  void setupSecondScreen()
 
   const exit = () => {
     if (exited) return
