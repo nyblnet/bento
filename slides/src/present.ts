@@ -133,6 +133,10 @@ export function startPresentation(
   let speaker: Window | null = null
   let speakerTimer = 0
   let speakerStart = 0
+  // opening the speaker popup drops the main window out of OS fullscreen on most
+  // browsers; this guards the fullscreenchange handler so that bounce doesn't
+  // end the show (see onFsChange).
+  let openingSpeaker = false
   const nextVisibleIndex = (from: number) => {
     for (let i = (isState(from) ? anchorOf(from) : from) + 1; i < doc.slides.length; i++) {
       if (!isState(i)) return i
@@ -178,8 +182,12 @@ export function startPresentation(
       speaker.focus()
       return
     }
+    // guard the whole open + fullscreen-restore dance: the popup makes the
+    // browser leave fullscreen, and without this that would end the show
+    const wasFullscreen = document.fullscreenElement === overlay
+    openingSpeaker = true
     speaker = window.open('', 'bento-speaker', 'width=1080,height=640')
-    if (!speaker) return // popup blocked
+    if (!speaker) { openingSpeaker = false; return } // popup blocked
     ;(window as unknown as Record<string, unknown>).__bentoSpeaker = speaker // diagnostics
     const d = speaker.document
     d.title = `${doc.title} — ${t('Speaker view')}`
@@ -210,6 +218,18 @@ export function startPresentation(
       if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, 1000)
     updateSpeaker()
+    // If we were fullscreen, the popup just knocked us out of it. Put the slides
+    // back into fullscreen (best effort — may need re-activation) and keep the
+    // bounce from ending the show. Escape still exits via its own handler.
+    if (wasFullscreen) {
+      window.setTimeout(() => {
+        window.focus()
+        enterFullscreen()
+        window.setTimeout(() => { openingSpeaker = false }, 400)
+      }, 120)
+    } else {
+      openingSpeaker = false
+    }
   }
 
   // Real fullscreen (F toggles; Present enters it by default). The overlay
@@ -229,7 +249,7 @@ export function startPresentation(
   let wentFullscreen = false
   const onFsChange = () => {
     if (document.fullscreenElement === overlay) wentFullscreen = true
-    else if (wentFullscreen && !exited) exit()
+    else if (wentFullscreen && !exited && !openingSpeaker) exit()
   }
   document.addEventListener('fullscreenchange', onFsChange)
   if (opts.fullscreen !== false) enterFullscreen()
@@ -559,10 +579,10 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
     }
     if (fx.loop?.type === 'motion-path') {
       anim.to(node, {
-        motionPath: { path: fx.loop.path },
+        motionPath: { path: fx.loop.path, speeds: fx.loop.speeds },
         duration: fx.loop.duration,
         delay: fx.loop.delay ?? 0,
-        ease: 'none',
+        ease: fx.loop.ease ?? 'none',
         repeat: -1,
       })
     }
