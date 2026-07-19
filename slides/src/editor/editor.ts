@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Editor shell: topbar, slide sidebar, canvas, properties panel, keyboard
 // shortcuts, save & present wiring.
 
@@ -16,7 +18,7 @@ import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
 import { hasFileHandle, isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
-import { addVersion, clearRecovery, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
+import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { refreshScreensIfGranted } from '../screens'
 import { ICONS } from '../icons'
@@ -489,6 +491,13 @@ export class Editor {
     const pass = await this.promptPassword()
     if (pass === null) return
     setEncryptionPassword(pass)
+    // Purge any plaintext snapshots already written to IndexedDB before encryption
+    // was enabled — otherwise up to MAX_VERSIONS version snapshots + a recovery copy
+    // (full plaintext JSON, incl. collab keys) would linger ~30 days, defeating the
+    // encryption the user just turned on.
+    const docId = this.store.doc.docId
+    await clearRecovery(docId)
+    await clearVersions(docId)
     this.toast(t('Encrypted — remember this password; it cannot be recovered'))
     void this.save(true)
   }
