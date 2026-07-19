@@ -3,7 +3,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { applyChartPalette, defaultChart, uid, type ChartElement, type LineEnding, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
 import { grantScreens, screensCached, secondScreen, windowManagementSupported } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
@@ -327,7 +327,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table' }[el.type])
+    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type])
     this.opsRow([el])
 
     this.section(t('Arrange'))
@@ -397,6 +397,7 @@ export class PropsPanel {
     if (el.type === 'image') this.buildImageProps(el)
     if (el.type === 'chart') this.buildChartProps(el)
     if (el.type === 'table') this.buildTableProps(el)
+    if (el.type === 'media') this.buildMediaProps(el)
 
     this.buildPresentingProps(el)
 
@@ -1277,6 +1278,82 @@ export class PropsPanel {
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
     this.row(t('Corner radius'), this.number((el as any).radius, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin)))
+  }
+
+  private buildMediaProps(el: MediaElement) {
+    this.section(t('Source & playback'))
+
+    // source status: embedded (with size) / linked / none
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    if (!el.src) status.textContent = t('No source yet — choose a file or paste a URL.')
+    else if (el.src.startsWith('data:')) {
+      const kb = Math.round((el.src.length * 3) / 4 / 1024)
+      status.innerHTML = t('Embedded in the file') + ` · <b>${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB'}</b>`
+    } else status.textContent = t('Linked — the deck stays small but needs this URL to play.')
+    this.host.appendChild(status)
+
+    // replace / choose file (embeds; warns over budget)
+    const replace = document.createElement('button')
+    replace.className = 'ed-btn ed-btn-block'
+    replace.textContent = el.src ? t('Replace file…') : t('Choose file…')
+    replace.addEventListener('click', () => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = el.kind === 'audio' ? 'audio/*' : 'video/*'
+      input.addEventListener('change', () => {
+        const file = input.files?.[0]
+        if (!file) return
+        if (file.size > MEDIA_EMBED_BUDGET) {
+          const mb = Math.round(file.size / (1024 * 1024))
+          if (!confirm(t('This file is {mb} MB. Embedding makes the .bento.html large and slow to open and save. Embed anyway?', { mb }))) return
+        }
+        const reader = new FileReader()
+        reader.onload = () => this.mutate(el.id, (e) => { (e as MediaElement).src = String(reader.result) }, true)
+        reader.readAsDataURL(file)
+      })
+      input.click()
+    })
+    this.host.appendChild(replace)
+
+    // URL (reference) — clears an embed when set
+    const url = document.createElement('input')
+    url.type = 'text'
+    url.placeholder = t('…or paste a media URL')
+    url.value = el.src && !el.src.startsWith('data:') ? el.src : ''
+    url.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as MediaElement).src = url.value.trim() }, true))
+    this.row(t('URL'), url)
+
+    // playback
+    const toggle = (label: string, on: boolean, set: (v: boolean) => void) =>
+      this.row(label, this.select(['off', 'on'], on ? 'on' : 'off', (v) => set(v === 'on')))
+    toggle(t('Controls'), el.controls !== false, (v) => this.mutate(el.id, (e) => { (e as MediaElement).controls = v ? undefined : false }, true))
+    toggle(t('Autoplay'), !!el.autoplay, (v) => this.mutate(el.id, (e) => { (e as MediaElement).autoplay = v || undefined }, true))
+    toggle(t('Loop'), !!el.loop, (v) => this.mutate(el.id, (e) => { (e as MediaElement).loop = v || undefined }, true))
+    toggle(t('Muted'), !!el.muted, (v) => this.mutate(el.id, (e) => { (e as MediaElement).muted = v || undefined }, true))
+    const note = document.createElement('p')
+    note.className = 'ed-hint'
+    note.textContent = t('Autoplay runs only while presenting; browsers require “muted” for video to autoplay.')
+    this.host.appendChild(note)
+
+    if (el.kind === 'video') {
+      this.row(t('Fit'), this.select(['contain', 'cover', 'fill'], el.fit ?? 'contain', (v) =>
+        this.mutate(el.id, (e) => { (e as MediaElement).fit = v as MediaElement['fit'] }, true)))
+      this.row(t('Corner radius'), this.number(el.radius ?? 0, 1, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as MediaElement).radius = Math.max(v, 0) }, fin)))
+      const poster = document.createElement('input')
+      poster.type = 'text'
+      poster.placeholder = t('Poster image URL (optional)')
+      poster.value = el.poster && !el.poster.startsWith('data:') ? el.poster : ''
+      poster.addEventListener('change', () =>
+        this.mutate(el.id, (e) => {
+          const m = e as MediaElement
+          const v = poster.value.trim()
+          if (v) m.poster = v; else delete m.poster
+        }, true))
+      this.row(t('Poster'), poster)
+    }
   }
 
   // --- element ops --------------------------------------------------------------
