@@ -104,7 +104,56 @@ export function resetXform(el: Element) {
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-function samplePath(d: string): ((t: number) => { x: number; y: number }) | null {
+/** on-curve anchor points of a path (the last coord pair of each M/L/C/Q). */
+function onCurvePoints(d: string): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = []
+  const re = /([MLCQ])([^MLCQZmlcqz]*)/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(d))) {
+    const nums = (m[2].match(/-?\d*\.?\d+(?:e-?\d+)?/g) ?? []).map(Number)
+    if (nums.length >= 2) out.push({ x: nums[nums.length - 2], y: nums[nums.length - 1] })
+  }
+  return out
+}
+
+/**
+ * Warp time→arc-length so the element dwells at low-speed anchors and rushes
+ * at high-speed ones. `us` are the anchors' arc-length fractions (0..1),
+ * `speeds` their multipliers. Returns identity if the profile is uniform.
+ */
+function makeWarp(us: number[], speeds: number[]): (t: number) => number {
+  if (us.length < 2 || us.length !== speeds.length) return (t) => t
+  if (speeds.every((s) => Math.abs(s - speeds[0]) < 1e-3)) return (t) => t
+  const clampSp = (s: number) => Math.max(0.05, s)
+  const v = (u: number) => {
+    if (u <= us[0]) return clampSp(speeds[0])
+    if (u >= us[us.length - 1]) return clampSp(speeds[speeds.length - 1])
+    for (let i = 1; i < us.length; i++) {
+      if (u <= us[i]) {
+        const f = (u - us[i - 1]) / (us[i] - us[i - 1] || 1)
+        return clampSp(speeds[i - 1] + (speeds[i] - speeds[i - 1]) * f)
+      }
+    }
+    return clampSp(speeds[speeds.length - 1])
+  }
+  // cumulative traversal time T(u) = ∫ du/v ; normalise to [0,1], then invert
+  const M = 240
+  const T = new Float64Array(M + 1)
+  for (let j = 1; j <= M; j++) T[j] = T[j - 1] + (1 / M) / v((j - 0.5) / M)
+  const total = T[M] || 1
+  for (let j = 0; j <= M; j++) T[j] /= total
+  return (t) => {
+    t = Math.min(Math.max(t, 0), 1)
+    let lo = 0, hi = M
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (T[mid] < t) lo = mid + 1; else hi = mid }
+    if (lo === 0) return 0
+    const t0 = T[lo - 1], t1 = T[lo]
+    const f = (t - t0) / (t1 - t0 || 1)
+    return ((lo - 1) + f) / M
+  }
+}
+
+function samplePath(d: string, speeds?: number[]): ((t: number) => { x: number; y: number }) | null {
   const svg = document.createElementNS(SVG_NS, 'svg')
   svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden'
   const path = document.createElementNS(SVG_NS, 'path')
@@ -121,13 +170,32 @@ function samplePath(d: string): ((t: number) => { x: number; y: number }) | null
     const p = path.getPointAtLength((total * i) / N)
     pts.push({ x: p.x, y: p.y })
   }
+  // variable speed: locate each anchor's arc-length fraction (nearest sample),
+  // then build a time-warp from the per-anchor speed multipliers
+  let warp: (t: number) => number = (t) => t
+  if (speeds && speeds.length >= 2) {
+    const anchors = onCurvePoints(d)
+    if (anchors.length === speeds.length) {
+      const us = anchors.map((a) => {
+        let best = 0, bestD = Infinity
+        for (let i = 0; i <= N; i++) {
+          const dx = pts[i].x - a.x, dy = pts[i].y - a.y
+          const dd = dx * dx + dy * dy
+          if (dd < bestD) { bestD = dd; best = i }
+        }
+        return best / N
+      })
+      warp = makeWarp(us, speeds)
+    }
+  }
   svg.remove()
-  return (t) => {
-    const f = Math.min(Math.max(t, 0), 1) * N
+  const geom = (u: number) => {
+    const f = Math.min(Math.max(u, 0), 1) * N
     const i = Math.min(Math.floor(f), N - 1)
     const k = f - i
     return { x: pts[i].x + (pts[i + 1].x - pts[i].x) * k, y: pts[i].y + (pts[i + 1].y - pts[i].y) * k }
   }
+  return (t) => geom(warp(t))
 }
 
 // --- the tween -----------------------------------------------------------------
@@ -231,8 +299,9 @@ export class Tween {
           this.applies.push((p) => el.setAttribute(name, String(lerp(p))))
         }
       } else if (key === 'motionPath') {
-        const d = (toVal as { path: string }).path
-        const sample = samplePath(d)
+        const mp = toVal as { path: string; speeds?: number[] }
+        const d = mp.path
+        const sample = samplePath(d, mp.speeds)
         if (sample) {
           const x = xformOf(el)
           this.applies.push((p) => {

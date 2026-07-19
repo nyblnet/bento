@@ -43,7 +43,18 @@ export interface ElementBase {
     /** continuous looping animation */
     loop?:
       | { type: 'dash-march'; distance?: number; duration?: number }
-      | { type: 'motion-path'; path: string; duration: number; delay?: number }
+      | {
+          type: 'motion-path'
+          path: string
+          duration: number
+          delay?: number
+          /** easing over each lap (default 'none' = constant tempo) */
+          ease?: string
+          /** per-anchor speed multipliers (1 = normal, <1 dwells, >1 rushes);
+           *  length matches the path's anchor count. Warps the arc-length map
+           *  so the element can linger at some points and rush between others. */
+          speeds?: number[]
+        }
   }
   /** while presenting, clicking this element jumps to the slide with this id */
   link?: string

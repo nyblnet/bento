@@ -1179,7 +1179,12 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-share-peer .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-share-peer .where { color: var(--muted, #5d6b80); font-size: 11.5px; flex: none; }
+/* Live button status dot: always present — grey when dormant (not sharing),
+   amber+pulsing while connecting, green when live. The dot makes the on/off
+   state legible at a glance instead of the button looking inert. */
+.ed-btn-share,
 .ed-btn-live { position: relative; }
+.ed-btn-share::after,
 .ed-btn-live::after,
 .ed-btn-connecting::after {
   content: '';
@@ -1189,9 +1194,13 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #34a866;
+  background: #9aa4b2; /* dormant / not sharing */
 }
-.ed-btn-connecting::after { background: #d9a13b; }
+.ed-btn-share.ed-btn-connecting::after,
+.ed-btn-connecting::after { background: #d9a13b; animation: ed-live-pulse 1.1s ease-in-out infinite; }
+.ed-btn-share.ed-btn-live::after,
+.ed-btn-live::after { background: #34a866; animation: none; }
+@keyframes ed-live-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }
 
 /* about rows wrap instead of overflowing the dialog */
 .ed-about-row {

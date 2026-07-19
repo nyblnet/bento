@@ -40,6 +40,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   visually on canvas (`editor/patheditor.ts`): draggable anchors auto-smoothed
   Catmull-Rom→cubic bezier; the stored path is RELATIVE to the element's rest
   position (first anchor = rest position; committing moves the element there).
+  **Variable speed (v0.9.7)**: `fx.loop` motion-path takes `ease` (per-lap tempo,
+  panel dropdown) and `speeds[]` (per-anchor multipliers, one per anchor —
+  scroll a point in the path editor to set it; badge shows non-1 values). anim.ts
+  `samplePath(d, speeds)` warps time→arc-length: locate each anchor's arc-length
+  fraction (nearest sample), integrate 1/speed to a time LUT, invert — so the
+  element dwells at low-speed anchors and rushes at high ones. Uniform speeds =
+  identity (no cost); speeds omitted from the model unless they vary.
 - **File modes (v0.9.0)**: `doc.readonly` = PLAYER file (boots straight into
   the show; exit lands on a minimal card, never the editor; "Save read-only
   copy…" strips collab). Password encryption: the #bento-doc block can hold a
@@ -172,7 +179,11 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   synced on slidechanged, closed on present exit. Reveal's notes plugin is
   NOT used: its speaker window reloads the presentation URL in iframes,
   which boots the Bento EDITOR (a whole second app instance) — never
-  reintroduce it.
+  reintroduce it. GOTCHA (fixed v0.9.7): opening the speaker popup while in
+  real fullscreen makes the browser leave fullscreen, whose `fullscreenchange`
+  would call `exit()` and END the show — `openingSpeaker` guards onFsChange and
+  re-enters fullscreen. Escape stays a separate exit path, so the guard can't
+  strand the presenter.
 - **Animation robustness**: slide exit kills tweens AND restores model frames; a
   2.8s wall-clock settle guarantee lands entrances on starved render loops; never
   put entrance tweens on motion-path elements (transform conflict).
@@ -234,6 +245,14 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   `server/sync-worker/` (blind DO, ciphertext-only storage — verified;
   `npx wrangler dev --port 8787` + localStorage 'bento-sync-url' for local
   testing; NEVER pipe wrangler dev through `head` — SIGPIPE kills it).
+  **The DO MUST use the WebSocket Hibernation API** (`state.acceptWebSocket` +
+  `webSocketMessage`/`webSocketClose` handlers, `getWebSockets()` for fan-out,
+  per-socket state via `serializeAttachment`) — plain `server.accept()` keeps
+  the invocation alive for the whole connection and throws "Exceeded allowed
+  duration in Durable Objects free tier", which silently breaks ALL live
+  collab (the bug behind v0.9.7). The relay must be redeployed
+  (`wrangler deploy`) for worker changes to take effect — the app shell release
+  does NOT touch it.
   Undo under collab is snapshot-based and may revert concurrent remote
   edits to the same properties (documented LWW compromise).
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.

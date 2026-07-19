@@ -427,13 +427,27 @@ export class PropsPanel {
           this.mutate(el.id, (e) => { if (e.fx?.loop?.type === 'motion-path') e.fx.loop.path = path.value }, true))
         this.row(t('Path'), path)
 
+        // lap easing — the tempo of a whole lap (per-anchor speed is edited on canvas)
+        this.row(t('Lap easing'), this.labeledSelect(
+          [['none', t('Constant')], ['sine.inOut', t('Ease in-out')], ['power2.in', t('Ease in')], ['power2.out', t('Ease out')]],
+          (loop as { ease?: string }).ease ?? 'none',
+          (v) => this.mutate(el.id, (e) => {
+            const lp = e.fx?.loop
+            if (lp?.type !== 'motion-path') return
+            if (v === 'none') delete lp.ease; else lp.ease = v
+          }, true)))
+
         const editPath = document.createElement('button')
         editPath.className = 'ed-btn ed-btn-block'
         editPath.textContent = t('✎ Edit path on canvas')
-        editPath.title = t('Drag anchor points on the slide; double-click adds and removes points')
+        editPath.title = t('Drag points to reshape · double-click to add/remove · scroll a point to change its speed')
         editPath.addEventListener('click', () =>
           document.dispatchEvent(new CustomEvent('bento:edit-path', { detail: { id: el.id } })))
         this.host.appendChild(editPath)
+        const speedHint = document.createElement('p')
+        speedHint.className = 'ed-hint'
+        speedHint.textContent = t('Tip: on the canvas, scroll a point to make the element dwell there or rush past it.')
+        this.host.appendChild(speedHint)
       }
     }
 

@@ -126,6 +126,7 @@ export class PathEditor {
   private overlay: SVGSVGElement | null = null
   private hint: HTMLElement | null = null
   private pts: Pt[] = []
+  private speeds: number[] = [] // per-anchor speed multipliers, mirrors pts
   private elId = ''
   private scale = () => 1
   private dirty = false
@@ -159,6 +160,9 @@ export class PathEditor {
     if (this.pts.length === 1) this.pts.push({ x: cx + 160, y: cy })
     // A synthesized default line counts as an edit — Done should save it.
     if (rel.length < 2) this.dirty = true
+    // per-anchor speeds (mirror pts length; default uniform)
+    const savedSpeeds = (el.fx.loop as { speeds?: number[] }).speeds
+    this.speeds = this.pts.map((_, i) => (savedSpeeds && savedSpeeds.length === this.pts.length ? savedSpeeds[i] : 1))
 
     const svg = document.createElementNS(SVG_NS, 'svg')
     svg.classList.add('ed-pathedit')
@@ -172,7 +176,7 @@ export class PathEditor {
     this.hint = document.createElement('div')
     this.hint.className = 'ed-setbar ed-pathbar'
     this.hint.innerHTML =
-      '<span class="ed-setbar-label">Motion path — drag points · double-click path to insert · double-click point to remove · double-click canvas to append</span>'
+      '<span class="ed-setbar-label">Motion path — drag points · double-click path to insert · double-click point to remove · scroll a point to change its speed</span>'
     const done = document.createElement('button')
     done.className = 'ed-setchip active'
     done.textContent = 'Done'
@@ -204,6 +208,10 @@ export class PathEditor {
       const live = this.store.element(el.id)
       if (!live || live.fx?.loop?.type !== 'motion-path') return
       live.fx.loop.path = relPath
+      // persist per-anchor speeds only when they actually vary (keep the model clean)
+      const sp = this.speeds.slice(0, pts.length)
+      if (sp.length === pts.length && sp.some((s) => Math.abs(s - 1) > 1e-3)) live.fx.loop.speeds = sp
+      else delete live.fx.loop.speeds
       live.x = r(p0.x - live.w / 2)
       live.y = r(p0.y - live.h / 2)
     })
@@ -248,6 +256,9 @@ export class PathEditor {
     line.style.pointerEvents = 'none'
     svg.appendChild(line)
 
+    // keep the speeds array aligned with the anchors (defensive)
+    if (this.speeds.length !== this.pts.length) this.speeds = this.pts.map((_, i) => this.speeds[i] ?? 1)
+
     this.pts.forEach((p, i) => {
       const dot = mk('circle')
       dot.setAttribute('cx', String(p.x))
@@ -262,19 +273,51 @@ export class PathEditor {
 
         dot.append(Object.assign(mk('title'), { textContent: 'Start — also the element’s rest position' }))
       dot.addEventListener('mousedown', (ev) => this.dragAnchor(ev, i))
+      // scroll a point to change how fast the element moves through it
+      dot.addEventListener('wheel', (ev) => {
+        ev.preventDefault()
+        const step = ev.deltaY < 0 ? 0.1 : -0.1
+        this.speeds[i] = Math.round(Math.max(0.2, Math.min(4, (this.speeds[i] ?? 1) + step)) * 10) / 10
+        this.dirty = true
+        this.draw()
+      })
       svg.appendChild(dot)
+
+      // speed badge (only when it differs from normal, to avoid clutter)
+      if (Math.abs((this.speeds[i] ?? 1) - 1) > 1e-3) {
+        const label = mk('text')
+        label.setAttribute('x', String(p.x + 11 * k))
+        label.setAttribute('y', String(p.y - 9 * k))
+        label.setAttribute('font-size', String(12 * k))
+        label.setAttribute('font-weight', '700')
+        label.setAttribute('fill', '#31445c')
+        label.setAttribute('paint-order', 'stroke')
+        label.setAttribute('stroke', '#fff')
+        label.setAttribute('stroke-width', String(3 * k))
+        label.style.pointerEvents = 'none'
+        label.textContent = `${(this.speeds[i] ?? 1).toFixed(1)}×`
+        svg.appendChild(label)
+      }
     })
 
-    // live preview: a dot loops the path at the element's configured speed
-    const el = this.store.element(this.elId)
-    const dur = (el?.fx?.loop as any)?.duration ?? 3
+    // live preview: a dot loops the path at the element's configured speed —
+    // including per-anchor variable speed and lap easing, so edits are visible
+    const loop = this.store.element(this.elId)?.fx?.loop as
+      | { duration?: number; ease?: string }
+      | undefined
+    const dur = loop?.duration ?? 3
     const preview = mk('circle')
     preview.setAttribute('r', String(4.5 * k))
     preview.setAttribute('fill', '#f7a600')
     preview.style.pointerEvents = 'none'
     preview.classList.add('ed-pe-dot')
     svg.appendChild(preview)
-    anim.to(preview, { motionPath: { path: d }, duration: Math.max(dur, 0.5), ease: 'none', repeat: -1 })
+    anim.to(preview, {
+      motionPath: { path: d, speeds: this.speeds.slice() },
+      duration: Math.max(dur, 0.5),
+      ease: loop?.ease ?? 'none',
+      repeat: -1,
+    })
   }
 
   // --- interaction ------------------------------------------------------------
@@ -328,6 +371,7 @@ export class PathEditor {
       const idx = Number((target as SVGElement).dataset.idx)
       if (this.pts.length > 2) {
         this.pts.splice(idx, 1)
+        this.speeds.splice(idx, 1)
         this.dirty = true
       }
       this.draw()
@@ -344,12 +388,14 @@ export class PathEditor {
         if (dist < bestDist) { bestDist = dist; best = i }
       }
       this.pts.splice(best + 1, 0, p)
+      this.speeds.splice(best + 1, 0, (this.speeds[best] + (this.speeds[best + 1] ?? this.speeds[best])) / 2)
       this.dirty = true
       this.draw()
       return
     }
     // empty canvas: append to the end
     this.pts.push(p)
+    this.speeds.push(1)
     this.dirty = true
     this.draw()
   }

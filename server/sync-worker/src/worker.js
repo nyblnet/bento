@@ -36,14 +36,23 @@ export default {
       })
     }
     const id = env.ROOM.idFromName(m[1])
-    return env.ROOM.get(id).fetch(req)
+    // Surface DO failures as a readable body instead of an opaque CF 1101
+    // ("Worker threw exception") — the room path needs the SQLite storage
+    // backend, so a mis-provisioned migration shows up right here.
+    try {
+      return await env.ROOM.get(id).fetch(req)
+    } catch (e) {
+      return new Response('room error: ' + (e && e.stack ? e.stack : String(e)), {
+        status: 500,
+        headers: { 'content-type': 'text/plain' },
+      })
+    }
   },
 }
 
 export class Room {
   constructor(state) {
     this.state = state
-    this.sockets = new Map() // ws → { count, windowStart }
   }
 
   async fetch(req) {
@@ -60,19 +69,29 @@ export class Room {
     const since = Math.max(0, parseInt(url.searchParams.get('since') || '0', 10) || 0)
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair)
-    server.accept()
-    this.sockets.set(server, { count: 0, windowStart: Date.now() })
-    server.addEventListener('message', (ev) => {
-      this.onMessage(server, ev).catch(() => {})
-    })
-    const drop = () => this.sockets.delete(server)
-    server.addEventListener('close', drop)
-    server.addEventListener('error', drop)
+    // WebSocket Hibernation: the runtime owns the socket, so the Durable Object
+    // can be evicted from memory while connections stay open — it accrues no
+    // active duration while idle. This is what keeps a live relay within the DO
+    // free-tier duration limit (plain server.accept() keeps the invocation
+    // running for the whole connection and throws "Exceeded allowed duration").
+    // Per-socket rate-limit state rides on the socket's serialized attachment
+    // (in-memory Maps don't survive hibernation).
+    this.state.acceptWebSocket(server)
+    server.serializeAttachment({ count: 0, windowStart: Date.now() })
 
     await this.replay(server, since)
     await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
     return new Response(null, { status: 101, webSocket: client })
   }
+
+  // --- hibernation handlers (fire on wake; replace addEventListener) ---------
+  async webSocketMessage(ws, data) {
+    await this.onMessage(ws, data).catch(() => {})
+  }
+  webSocketClose(ws) {
+    try { ws.close() } catch { /* already closed */ }
+  }
+  webSocketError() { /* the runtime drops the socket; nothing to clean up */ }
 
   async replay(ws, since) {
     const seq = (await this.state.storage.get('seq')) || 0
@@ -98,19 +117,21 @@ export class Room {
     }
   }
 
-  async onMessage(ws, ev) {
-    if (typeof ev.data !== 'string' || ev.data.length > MAX_FRAME) return
-    const meta = this.sockets.get(ws)
-    if (!meta) return
+  async onMessage(ws, data) {
+    if (typeof data !== 'string' || data.length > MAX_FRAME) return
+    // rate-limit window lives on the socket attachment (survives hibernation)
+    const meta = ws.deserializeAttachment() || { count: 0, windowStart: Date.now() }
     const now = Date.now()
     if (now - meta.windowStart > RATE_WINDOW_MS) {
       meta.windowStart = now
       meta.count = 0
     }
-    if (++meta.count > RATE_BURST) return
+    meta.count++
+    ws.serializeAttachment(meta)
+    if (meta.count > RATE_BURST) return
     let f
     try {
-      f = JSON.parse(ev.data)
+      f = JSON.parse(data)
     } catch {
       return
     }
@@ -140,13 +161,11 @@ export class Room {
     }
 
     const text = JSON.stringify(out)
-    for (const [peer] of this.sockets) {
+    for (const peer of this.state.getWebSockets()) {
       if (peer === ws) continue
       try {
         peer.send(text)
-      } catch {
-        this.sockets.delete(peer)
-      }
+      } catch { /* runtime reaps dead sockets */ }
     }
     await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
   }

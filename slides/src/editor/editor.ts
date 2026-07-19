@@ -110,11 +110,15 @@ export class Editor {
     const tr = onlineTransport()
     if (!tr) {
       this.shareB.classList.remove('ed-btn-live', 'ed-btn-connecting')
+      this.shareB.title = t('Not sharing yet — click to start a live session')
       return
     }
     tr.onStatus = () => this.wireOnlineStatus()
     this.shareB.classList.toggle('ed-btn-live', tr.status === 'open')
     this.shareB.classList.toggle('ed-btn-connecting', tr.status !== 'open')
+    this.shareB.title = tr.status === 'open'
+      ? t('Live — this deck is being shared')
+      : t('Connecting to the live session…')
     if (this.shareWrap.classList.contains('open')) this.renderSharePanel()
   }
 
@@ -505,6 +509,9 @@ export class Editor {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) this.renderSharePanel()
     }, t('Live collaboration — work on this deck together'))
+    // stable hook for the status dot (grey dormant / amber connecting / green live)
+    this.shareB.classList.add('ed-btn-share')
+    this.shareB.title = t('Not sharing yet — click to start a live session')
     const panel = div('ed-menu ed-share-pop')
     wrap.append(this.shareB, panel)
     document.addEventListener('pointerdown', (ev) => {
