@@ -450,17 +450,24 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       }
       const inert = opts.liveMedia ? '' : ';pointer-events:none'
       if (el.kind === 'audio') {
+        // The native <audio controls> is an opinionated pill with its own
+        // surface and a fixed intrinsic height (~54px). Don't wrap it in a
+        // SECOND background — that reads as a doubled box. Just centre it and
+        // clip to the element's own radius. (A too-short box was the "funny
+        // shape" bug; authors should size the box ≥ the control's height.)
         const audio = document.createElement('audio')
         if (el.src) audio.src = resolveAsset(doc, el.src)
         audio.controls = el.controls !== false
         audio.loop = !!el.loop
         audio.preload = 'metadata'
         audio.dataset.autoplay = el.autoplay ? '1' : ''
-        audio.style.cssText = 'width:100%;display:block' + inert
+        audio.style.cssText = `width:100%;display:block;border-radius:${radius}px` + inert
         const wrap = document.createElement('div')
-        wrap.style.cssText = `width:100%;height:100%;display:flex;align-items:center;padding:0 6px;box-sizing:border-box;border-radius:${radius}px;background:#eef2f7`
-        if (!el.src) { wrap.style.color = '#93a2b6'; wrap.style.fontSize = '13px'; wrap.style.justifyContent = 'center'; wrap.textContent = '♪ ' + 'No audio source' }
-        else wrap.appendChild(audio)
+        wrap.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:${radius}px`
+        if (!el.src) {
+          wrap.style.cssText += ';background:#eef2f7;color:#93a2b6;font-size:13px'
+          wrap.textContent = '♪ ' + 'No audio source'
+        } else wrap.appendChild(audio)
         node.appendChild(wrap)
         break
       }
