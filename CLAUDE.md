@@ -33,6 +33,16 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   cross-reload-recover, by design.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
+  **Dynamic fields (v0.9.12)**: text resolves `{{page}}`, `{{pages}}`, `{{title}}`,
+  `{{date}}`, `{{time}}` tokens at render time (`resolveFields`); page/pages take a
+  zero-pad width (`{{page:2}}`→"06"). `renderSlide` auto-fills `RenderOpts.fields`
+  via `fieldContext(doc,slide)` (page = 1-based position among NON-state slides).
+  The MODEL stores the raw token; only output is resolved, so inserting/removing
+  slides re-numbers everything. Editing gotcha: the canvas renders resolved, but
+  `canvas.startTextEdit` swaps the token BACK to raw `el.html` while editing so
+  authors edit the field, not the computed value. The starter deck's furniture +
+  ghost numerals use `{{page:2}}` (they can't drift). Groundwork for the office
+  suite's field/cross-reference system.
 - `src/editor/clipboard.ts` (v0.9.9) — system-clipboard copy/paste. Bento content
   is written as JSON tagged `__bento:"clip"` (kind elements|slides) with referenced
   assets/fonts embedded, so it round-trips across decks/tabs; asset-key collisions

@@ -810,6 +810,12 @@ export class SlideCanvas {
     this.commitTextEdit()
     const inner = node.querySelector<HTMLElement>('.bento-text-inner')
     if (!inner) return
+    // fields ({{page}} etc.) render resolved; while editing, show the RAW token
+    // so the author edits the field, not the computed value
+    const model = this.store.element(node.dataset.elId ?? '')
+    if (model?.type === 'text' && typeof model.html === 'string' && model.html.includes('{{')) {
+      inner.innerHTML = model.html
+    }
     this.editing = node
     node.classList.add('bento-editing')
     inner.contentEditable = 'true'
