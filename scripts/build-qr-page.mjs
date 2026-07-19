@@ -6,14 +6,16 @@
 //
 //   node scripts/build-qr-page.mjs [outFile]   (default: site/q/index.html)
 
-import { execFileSync } from 'node:child_process'
 import { deflateRawSync } from 'node:zlib'
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
+// qrcode is a devDependency of the slides package (scripts/ has no node_modules
+// of its own); resolve it from there instead of shelling out to `npx`.
+const QRCode = createRequire(join(root, 'slides/package.json'))('qrcode')
 const out = process.argv[2] ?? join(root, 'site/q/index.html')
 
 // the deck that fits in a QR — text + flat shapes only (the projector
@@ -44,11 +46,10 @@ const payload = deflateRawSync(JSON.stringify(doc), { level: 9 })
 const url = `https://bento.page/q#${payload}`
 console.log(`qr payload: ${payload.length} chars (${url.length} total in QR)`)
 
-// QR SVG via the qrcode npm package CLI (cached by npx after first run)
-const tmp = join(tmpdir(), `bento-qr-${process.pid}.svg`)
-execFileSync('npx', ['--yes', 'qrcode', '-t', 'svg', '-e', 'M', '-o', tmp, url], { stdio: 'inherit' })
-let svg = readFileSync(tmp, 'utf8')
-rmSync(tmp)
+// QR SVG generated IN-PROCESS via the qrcode module (a devDependency). The
+// old path shelled out to `npx --yes qrcode`, which re-resolved the package
+// from the registry every run and reliably HUNG the release when npx stalled.
+let svg = await QRCode.toString(url, { type: 'svg', errorCorrectionLevel: 'M' })
 svg = svg.replace(/<\?xml[^>]*\?>/, '')
 
 let html = readFileSync(join(root, 'site-src/q.html'), 'utf8')
