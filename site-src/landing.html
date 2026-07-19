@@ -506,13 +506,13 @@ body.kdeck header, body.kdeck footer { display: none; }
   </div>
   <div class="wrap">
     <div>
-      <div class="kicker rv in">Bento / Suite</div>
+      <div class="kicker rv in">Bento / Suite · local-first, AI-native</div>
       <hr class="hairline rv in" style="max-width:220px">
-      <h1 class="rv in">The file is<br>the <span class="accent">software.</span></h1>
-      <p class="sub rv in d1">A presentation is <b>one HTML file</b> — deck, viewer and editor together. Open it anywhere. Edit it. Present it. <b>It saves itself.</b></p>
+      <h1 class="rv in">Goodbye, boring<br><span class="accent">corporate decks.</span></h1>
+      <p class="sub rv in d1">Hello, the web — <b>animation, video, live charts</b>, real design — in <b>one HTML file</b> that's the document, the editor and the player at once. Drop in a tired PowerPoint and let <b>AI rebuild it for the modern web</b>; perfect the details in the editor. No account, no cloud. <b>It saves itself.</b></p>
       <div class="ctas rv in d2">
         <a class="btn primary" href="/slides/">▶&nbsp; Try it in your browser</a>
-        <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download <small>one file · ~400 KB</small></a>
+        <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download <small>one file · ~470 KB</small></a>
       </div>
       <div class="chips rv in d3" style="margin-top:0">
         <span class="chip"><b>Slides</b> — the first app, here now</span>
@@ -535,8 +535,8 @@ body.kdeck header, body.kdeck footer { display: none; }
     <div class="ghost" aria-hidden="true">01</div>
     <div class="kicker rv">Everything ships inside</div>
     <hr class="hairline rv" style="max-width:220px">
-    <h2 class="rv">Software with nothing to install, break, or&nbsp;expire.</h2>
-    <p class="lede rv d1">No account. No cloud. No “please update to open this”. A Bento deck is an ordinary HTML file that carries its own viewer, presenter and editor — and your document, as <b>readable JSON you can open in any text editor</b>.</p>
+    <h2 class="rv">The file <span class="accent">is</span> the software.</h2>
+    <p class="lede rv d1">No account. No cloud. No “please update to open this”. A Bento deck is an ordinary HTML file that carries its own viewer, presenter and editor — and your document, as <b>readable JSON you can open in any text editor</b>. Nothing to install, break, or expire.</p>
     <div class="cards">
       <div class="card rv"><div class="tick"></div><h3>View-source honest</h3><p>Your data sits in a plain, legible block at the top of the file. No binary formats, no lock-in — ever.</p></div>
       <div class="card rv d1"><div class="tick" style="background:var(--steel)"></div><h3>Fonts &amp; assets travel</h3><p>Typefaces, images and charts are embedded. A deck looks the same on any machine, forever.</p></div>
@@ -738,10 +738,10 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
         <span class="tip"><span class="dot"></span>Q4 · momentum <b>+975%</b></span>
       </div>
       <div>
-        <div class="kicker rv">Data with a pulse</div>
+        <div class="kicker rv">Alive on the slide</div>
         <hr class="hairline rv" style="max-width:220px">
-        <h2 class="rv">Charts, built&nbsp;in.</h2>
-        <p class="lede rv d1">Bar, line, pie, scatter — drawn by Bento's own engine, <b>live while you present</b>: tooltips, zooming, and data that morphs when a bar chart becomes a pie.</p>
+        <h2 class="rv">Charts, video &amp;&nbsp;sound.</h2>
+        <p class="lede rv d1">Bar, line, pie, scatter — drawn by Bento's own engine, <b>live while you present</b>: tooltips, zooming, and data that morphs when a bar chart becomes a pie. Drop in <b>video and audio</b> too — they play right on the slide, autoplay on cue, no third-party embed. Short clips ride inside the file; big ones link out, so it stays lean.</p>
       </div>
     </div>
   </div>
@@ -751,10 +751,10 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
 <section>
   <div class="wrap">
     <div class="ghost" aria-hidden="true">06</div>
-    <div class="kicker rv">Together, live</div>
+    <div class="kicker rv">Together, live · enterprise-grade</div>
     <hr class="hairline rv" style="max-width:220px">
-    <h2 class="rv">Collaboration without<br>a cloud account.</h2>
-    <p class="lede rv d1">Start a live session and <b>the file itself is the invitation</b> — anyone who opens a copy joins, edits merge in real time, and offline work merges back when they return. Keys live in your file, not on our servers: <b>the relay only ever sees ciphertext.</b></p>
+    <h2 class="rv">More private than the&nbsp;cloud.<br>Not less.</h2>
+    <p class="lede rv d1">Start a live session and <b>the file itself is the invitation</b> — anyone who opens a copy joins, edits merge in real time, offline work merges back on return. Keys live in your file, never our servers, so <b>the relay only ever sees ciphertext</b> — there's no database of your slides to breach. And access is real <b>cryptographic RBAC</b>: a read-only copy is signed to <i>read</i> but not <i>write</i>, enforced at the edge by signatures — not a permissions checkbox someone can misconfigure.</p>
     <div class="presence rv d1" aria-hidden="true">
       <div class="avatar a1">A</div><div class="avatar a2">B</div><div class="avatar a3">C</div>
       <div class="avatar live-chip"><span class="pulse"></span> Live — 3 connected</div>
@@ -762,8 +762,8 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
     <div class="chips rv d2">
       <span class="chip"><b>E2EE</b> — AES-GCM, keys never leave your file</span>
       <span class="chip"><b>Blind relay</b> — stores ciphertext, learns nothing</span>
+      <span class="chip"><b>Cryptographic RBAC</b> — read-only enforced by signatures, no server to trust</span>
       <span class="chip"><b>Offline forks merge</b> — both ways, precisely</span>
-      <span class="chip"><b>Character-level</b> text merging</span>
     </div>
     <div class="ctas rv d3" style="margin: 34px 0 0">
       <a class="btn live" href="/guestbook/"><span class="pulse"></span> Join the public Guestbook <small style="opacity:.85">— one live deck, everyone</small></a>
