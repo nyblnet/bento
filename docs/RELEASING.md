@@ -57,7 +57,9 @@ verify the manifest signature against the public key embedded in every shell.
    node scripts/publish-site.mjs "landing: copy tweak"        # add --gallery to regen decks
    ```
 
-   Preview any publish first with `--dry`.
+   Preview any publish first with `--dry`. `publish-site.mjs` also re-seeds the
+   live **guestbook daemon** onto the freshly-published shell as a best-effort
+   final step (see below) — no separate command needed.
 
 5. Also attach `site/releases/slides/Bento_Slides.bento.html` to a GitHub
    Release for the tag — download counts, release-watch notifications, and a
@@ -103,3 +105,30 @@ before starting a share session.
 The relay stores ONLY ciphertext (room-key-encrypted frames) and a hash of
 the room key; there are no secrets to manage server-side. Rooms self-delete
 after ~30 idle days — the file is the durable artifact.
+
+## The guestbook daemon and the shell (why the guestbook can lag)
+
+`bento.page/guestbook.bento.html` is **NOT served from the static site** — a
+separate Cloudflare daemon (`server/guestbook-daemon/`) serves it from KV so it
+can archive/roll epochs. `release.mjs` re-shells the *static*
+`site/guestbook.bento.html` (only the KV-empty fallback), so a shell release does
+**not** by itself update what visitors see — the daemon keeps serving the deck in
+its KV until it's re-seeded. (Tell: the plain URL shows an old app-hash while
+`?cb=1` — GitHub Pages — shows the new one.)
+
+`scripts/reseed-guestbook.mjs` closes the gap and `publish-site.mjs` runs it
+automatically after every push:
+
+- It fetches the daemon's **own** current deck, so the live room + walls are
+  preserved (the walls live in the relay room; the KV deck only carries the
+  shell + creds), re-shells that doc onto the fresh shell, and `PUT`s it back to
+  `/guestbook-admin/seed`.
+- Idempotent — a no-op when the daemon already serves the current shell.
+- Best-effort — needs the admin bearer key at `working/guestbook-admin-key.txt`
+  (gitignored); a missing key or unreachable daemon is a warning, never a failed
+  publish. Run it by hand any time with `node scripts/reseed-guestbook.mjs`
+  (`--dry` to preview).
+
+An epoch **roll** (fresh room + blank walls) is a separate, deliberate act
+(`build-guestbook.mjs` locally, or `POST /guestbook-admin/roll`) — re-seeding
+never rolls.

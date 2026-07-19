@@ -106,3 +106,16 @@ const ver = (() => {
   } catch { return '?' }
 })()
 console.log(`\n✓ published to bento-site @ ${head} (app v${ver})`)
+
+// ---- keep the LIVE guestbook daemon on the freshly-published shell ---------
+// bento.page/guestbook.bento.html is served by the Cloudflare daemon from KV,
+// not from this static tree — so a new shell doesn't reach it until the daemon
+// is re-seeded. This round-trips the daemon's own current deck onto the fresh
+// shell (walls preserved) and is a no-op when it's already current. Best-effort:
+// the script exits 0 on any problem (no key / daemon down), so publish never
+// fails on it.
+try {
+  run('node', [join(root, 'scripts/reseed-guestbook.mjs')])
+} catch (e) {
+  console.warn(`⚠ guestbook daemon re-seed step errored (non-fatal): ${e.message ?? e}`)
+}
