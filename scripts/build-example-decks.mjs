@@ -455,7 +455,16 @@ function deckOrbital() {
       mono(96, 170, '01 · THE THESIS', CYAN),
       text({ x: 96, y: 210, w: 900, h: 300, html: 'Every satellite is<br>a sensor. Nobody<br>reads the sky.', fontSize: 76, fontWeight: 800, color: '#EAF4FF', lineHeight: 1.1, fontFamily: IN, fx: { enter: 'fade-up' } }),
       text({ x: 96, y: 540, w: 620, h: 80, html: 'Twelve thousand spacecraft stream telemetry into archives nobody opens. We turn that exhaust into signal.', fontSize: 17, color: DIM, lineHeight: 1.6, fx: { enter: 'fade-up', order: 2 } }),
-      star(1100, 500, 5, 19, 2),
+      // Satellites tracking the ring (center 1190,490 · r 310). Each dot's rest
+      // center sits on the ring at its phase (top-left = center − w/2); orbit()
+      // sweeps it around from there. Varied dur/squash = they spread out and
+      // move at different speeds. Ring is mostly off the right edge, so dots on
+      // the far side pass off-canvas — a "coming over the limb" feel.
+      shape('ellipse', { x: 876.5, y: 486.5, w: 7, h: 7, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, Math.PI, 0.95), duration: 22 } } }),
+      shape('ellipse', { x: 967.3, y: 267.3, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 5 * Math.PI / 4, 0.92), duration: 27 } } }),
+      shape('ellipse', { x: 1186.5, y: 176.5, w: 7, h: 7, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, -Math.PI / 2, 0.98), duration: 18 } } }),
+      shape('ellipse', { x: 935.7, y: 668.7, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 0.8 * Math.PI, 0.9), duration: 30 } } }),
+      shape('ellipse', { x: 1405.7, y: 267.3, w: 7, h: 7, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, -Math.PI / 4, 1.0), duration: 24 } } }),
     ],
   })
 
@@ -534,7 +543,6 @@ function deckOrbital() {
             colorStops: [{ offset: 0, color: 'rgba(56,225,255,0.35)' }, { offset: 1, color: 'rgba(56,225,255,0)' }] } },
           symbol: 'circle', symbolSize: 8, itemStyle: { color: CYAN } }],
       }, fx: { enter: 'fade-up' } }),
-      star(1130, 150, 5, 21, 1),
     ],
   })
 
@@ -546,7 +554,6 @@ function deckOrbital() {
       shape('ellipse', { x: 620, y: 40, w: 44, h: 44, fill: MAG, fillGradient: GRAD_MG, shadow: glow('rgba(255,79,163,0.8)', 26), fx: { loop: { type: 'motion-path', path: orbit(300, -Math.PI / 2, 1), duration: 18 } } }),
       text({ id: 'orb-word', x: 140, y: 300, w: 1000, h: 110, html: 'JOIN THE SWEEP', fontSize: 66, fontWeight: 800, color: '#EAF4FF', align: 'center', letterSpacing: 16, fontFamily: IN, shadow: glow('rgba(255,79,163,0.3)', 40) }),
       mono(390, 430, 'ORBITAL.EXAMPLE · GROUND STATION OPEN HOUSE FRIDAYS', 'rgba(178,196,224,0.5)'),
-      star(200, 160, 6, 18, 2), star(1040, 520, 7, 22, 4),
     ],
   })
 
