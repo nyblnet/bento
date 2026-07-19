@@ -10,6 +10,12 @@ nothing: the file *is* the software.
 feature tour. Or grab a designed template from the
 [gallery](https://bento.page/) and make it yours.
 
+**Download the app:** grab the single `Bento_Slides.bento.html` from the
+[GitHub Releases](https://github.com/nyblnet/bento/releases) page or straight
+from [bento.page](https://bento.page/releases/slides/Bento_Slides.bento.html)
+(~470 KB, no account, no installer). Open it in any modern browser and it *is*
+the editor. Save, and it rewrites itself with your deck inside.
+
 ## Why this exists
 
 Office documents used to be things you *had*. Now they're things you rent —
@@ -37,6 +43,24 @@ company keeps its servers on. Bento takes the other path:
 | **Signed self-updates** | Releases are ECDSA-signed and offered in-app. Updating writes a *new* file — the old one stays as your rollback. No server ever touches your documents. |
 | **Everything else** | Speaker view, comments, layouts, hidden interactive states, hover reveals, motion paths, PDF export, page sizes, 8 UI languages — in a ~400 KB shell. |
 
+## Use it with AI
+
+Because the document is plain JSON living in one plaintext block near the top
+of the file, any assistant that can read and write a file can edit your deck —
+no plugin, no API. Two ways in:
+
+- **File harnesses** edit the `#bento-doc` JSON in place:
+  [Claude Code](https://claude.com/claude-code), Cursor, Aider, or any agent
+  with filesystem access. Claude Code users get a packaged `bento-deck` skill.
+- **Chat round-trip** for any chatbot: copy the document JSON out (*About →
+  Copy document JSON*), let the assistant rewrite it, paste it back.
+
+**It works fully offline with local open-weight models** — point
+[Ollama](https://ollama.com), llama.cpp, or LM Studio at the deck and nothing
+leaves your machine. The agent guide is a single page you can drop into any
+model's context: [bento.page/agents.md](https://bento.page/agents.md) (also in
+this repo at [docs/agents.md](docs/agents.md)).
+
 ## Architecture in one paragraph
 
 `slides/src/model.ts` defines the JSON document model; one renderer
@@ -63,12 +87,15 @@ deep dive: [docs/architecture.md](docs/architecture.md).
   a collaborator's concurrent edit to the same property; editing is
   desktop-first (phones view and present well).
 
-## Building
+## Build from source
+
+Node 20+ and npm are all you need — the app is a single-page build with no
+backend to stand up.
 
 ```bash
 cd slides
 npm install
-npm run dev            # dev server
+npm run dev            # dev server (http://localhost:5199)
 npm run build:single   # → dist-single/Bento_Slides.bento.html (the product)
 ```
 
@@ -76,11 +103,32 @@ npm run build:single   # → dist-single/Bento_Slides.bento.html (the product)
 locally so the signing key never leaves the maintainer's machine — see
 [docs/RELEASING.md](docs/RELEASING.md).
 
-## Status
+## Where to read more
 
-**Bento/Slides** is the first app of Bento/Suite — Docs and Sheets are
-coming. The current release lives on [bento.page](https://bento.page) and
-reaches every existing file through the signed update channel.
+- [CLAUDE.md](CLAUDE.md) — the deep architecture + development guide (also what
+  AI agents read to work in this repo).
+- [docs/architecture.md](docs/architecture.md) — how a `.bento.html` file is
+  built, the on-disk format, and the runtime layout.
+- [docs/format.md](docs/format.md) — the normative `bento/slides` document-model
+  spec (every element type, slide/state/layout shape, and collab fields).
+- [docs/collab-design.md](docs/collab-design.md) — the CRDT, E2EE relay, and
+  signed-write RBAC design + threat model.
+- [docs/agents.md](docs/agents.md) — the document format, for AI agents.
+- [CHANGELOG.md](CHANGELOG.md) — the version history.
+- **Layout:** `slides/` is the app (source in `slides/src/`);
+  `server/sync-worker/` is the blind relay; `docs/` and `scripts/` are the
+  guides and build tooling.
+
+Contributions welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Found a
+security issue? See [SECURITY.md](SECURITY.md).
+
+## Roadmap
+
+**Bento/Slides** is the first app of Bento/Suite — a PowerPoint alternative,
+shipping now. **Docs** (`bento/docs`) and **Sheets** (`bento/sheets`) follow,
+each as its own self-contained `.bento.html` distributable. The current release
+lives on [bento.page](https://bento.page) and reaches every existing file
+through the signed update channel.
 
 ## License
 

@@ -174,6 +174,14 @@ The saved `.bento.html` format changes by **one additive optional field**:
 }
 ```
 
+> **Shipped:** the version-vector `vv` sketched here was superseded by
+> stamping the whole CRDT state under `collab.sync` (`SyncStateJSON`) — that,
+> not a bare vv, is what a rejoining offline fork restores to merge two-way.
+> The live `collab` shape also carries `key`/`on`/`writerPub`/`writerPriv`/
+> `role` (see `BentoDoc['collab']` in `model.ts` and the Signed-writes section
+> below). The single-additive-field spirit holds: it's still one optional
+> `collab` object the format never requires to open.
+
 - The document JSON in the file is always the *compacted merged state* — a
   file never needs the op log to open. Every invariant we shipped
   (plaintext block, splice contract, AI round-trip, old updaters) is

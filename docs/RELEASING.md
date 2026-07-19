@@ -121,14 +121,14 @@ automatically after every push:
 
 - It fetches the daemon's **own** current deck, so the live room + walls are
   preserved (the walls live in the relay room; the KV deck only carries the
-  shell + creds), re-shells that doc onto the fresh shell, and `PUT`s it back to
-  `/guestbook-admin/seed`.
+  shell + creds), re-shells that doc onto the fresh shell, and `PUT`s it back
+  through the daemon's maintainer-only admin endpoint.
 - Idempotent — a no-op when the daemon already serves the current shell.
-- Best-effort — needs the admin bearer key at `working/guestbook-admin-key.txt`
-  (gitignored); a missing key or unreachable daemon is a warning, never a failed
-  publish. Run it by hand any time with `node scripts/reseed-guestbook.mjs`
-  (`--dry` to preview).
+- Best-effort — needs the maintainer's local admin bearer token (kept in a
+  gitignored working file, never committed); a missing token or unreachable
+  daemon is a warning, never a failed publish. Run it by hand any time with
+  `node scripts/reseed-guestbook.mjs` (`--dry` to preview).
 
-An epoch **roll** (fresh room + blank walls) is a separate, deliberate act
-(`build-guestbook.mjs` locally, or `POST /guestbook-admin/roll`) — re-seeding
-never rolls.
+An epoch **roll** (fresh room + blank walls) is a separate, deliberate
+maintainer action (`build-guestbook.mjs` locally, or the daemon's admin roll
+endpoint) — re-seeding never rolls.
