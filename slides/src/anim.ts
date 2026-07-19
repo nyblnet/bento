@@ -1,7 +1,7 @@
 // Bento's animation engine — the in-house replacement for GSAP, sized to
 // exactly what the presenter and editor use:
 //   anim.to / anim.fromTo(target, vars) with channels:
-//     opacity, y (translate px), scale, color, strokeDashoffset,
+//     opacity, x / y (translate px), scale, color, strokeDashoffset,
 //     attr: { fill, stop-color, offset, x1..y2, … }  (colors interpolate),
 //     motionPath: { path }  (translate along an SVG path, relative),
 //     plain numeric props on non-element targets (countUp state objects)
@@ -271,6 +271,11 @@ export class Tween {
         const f = from.opacity ?? parseFloat(getComputedStyle(el).opacity) ?? 1
         const lerp = lerper(Number(f), Number(toVal))
         this.applies.push((p) => { el.style.opacity = String(lerp(p)) })
+      } else if (key === 'x') {
+        const xf = xformOf(el)
+        const f = Number(from.x ?? xf.x)
+        const lerp = lerper(f, Number(toVal))
+        this.applies.push((p) => { xf.x = lerp(p) as number; writeXform(el) })
       } else if (key === 'y') {
         const x = xformOf(el)
         const f = Number(from.y ?? x.y)

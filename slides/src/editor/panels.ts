@@ -132,10 +132,11 @@ export class PropsPanel {
    * live show can put speaker notes on a second screen. It CANNOT be requested
    * during present — the S keypress activation is spent on window.open /
    * fullscreen — so this is where it belongs: in the panel, before you present.
+   * Rendered inline under the "Speaker notes" section (same concern), no header
+   * of its own.
    */
   private buildPresenterDisplay() {
     if (!windowManagementSupported()) return
-    this.section(t('Presenter display'))
     const btn = document.createElement('button')
     btn.className = 'ed-btn ed-btn-block'
     const status = document.createElement('p')
@@ -200,8 +201,6 @@ export class PropsPanel {
       hint.innerHTML = t('<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).')
       this.host.appendChild(hint)
     }
-
-    this.buildPresenterDisplay()
 
     // interactivity: naming, state-of, hover focus
     this.section(t('Interactivity'))
@@ -316,6 +315,8 @@ export class PropsPanel {
     notesHint.className = 'ed-hint'
     notesHint.innerHTML = t('Press <b>S</b> while presenting to open the speaker view — these notes beside the current and next slide, with a timer.')
     this.host.appendChild(notesHint)
+    // second-screen grant lives here too — notes go to the other display when set
+    this.buildPresenterDisplay()
   }
 
   private buildMultiPanel(els: SlideElement[]) {
@@ -416,8 +417,9 @@ export class PropsPanel {
       }, true)
 
     this.row(t('Enter'), this.select(
-      ['none', 'fade', 'fade-up'], el.fx?.enter ?? 'none',
-      (v) => setFx({ enter: v === 'none' ? undefined : (v as 'fade' | 'fade-up') })))
+      ['none', 'fade', 'fade-up', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'],
+      el.fx?.enter ?? 'none',
+      (v) => setFx({ enter: v === 'none' ? undefined : (v as NonNullable<typeof el.fx>['enter']) })))
     this.row(t('Count up'), this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
       (v) => setFx({ countUp: v === 'on' ? true : undefined })))

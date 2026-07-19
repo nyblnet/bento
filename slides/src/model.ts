@@ -25,8 +25,9 @@ export interface ElementBase {
   shadow?: ShadowSpec | ShadowSpec[]
   /** presentation effects, run in present mode only */
   fx?: {
-    /** entrance animation when the slide is shown */
-    enter?: 'fade-up' | 'fade'
+    /** entrance animation when the slide is shown. fade-* nudge ~16px; slide-*
+     *  sweep ~120px in from an edge (slide-left starts to the right, etc.) */
+    enter?: 'fade-up' | 'fade' | 'fade-down' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down'
     /** stagger step within the entrance sequence; equal values enter together */
     order?: number
     /** animate numeric parts of the text from 0 to their final value */
