@@ -54,12 +54,12 @@ if (doGallery) {
 }
 
 // ---- gate: example decks MUST embed the shell being published --------------
-// The gallery templates and the 404 deck EMBED the shell, so they have to be
-// rebuilt whenever the shell changes (release.mjs does this). Enforce it: hash
+// The gallery templates, the 404 deck AND the guestbook EMBED the shell, so
+// they have to be rebuilt/re-shelled whenever the shell changes (release.mjs
+// does this — the guestbook is re-shelled in place, preserving its room). Hash
 // the shell's app payload (the bento/deflate-b64 blocks) and refuse to publish
-// if any example deck carries a different one — otherwise a stale gallery would
-// ship on top of a fresh shell. (The guestbook is intentionally excluded — it's
-// managed by its own daemon/epochs and may lag.)
+// if any embedded-shell deck carries a different one — otherwise a stale deck
+// would ship on top of a fresh shell.
 const shellFile = join(site, 'releases/slides/Bento_Slides.bento.html')
 if (existsSync(shellFile)) {
   const appHash = (file) => {
@@ -71,6 +71,7 @@ if (existsSync(shellFile)) {
   const decks = [
     ...(existsSync(galleryDir) ? readdirSync(galleryDir).filter((f) => f.endsWith('.bento.html')).map((f) => join(galleryDir, f)) : []),
     join(site, '404.bento.html'),
+    join(site, 'guestbook.bento.html'),
   ].filter(existsSync)
   const stale = decks.filter((d) => appHash(d) !== shellHash)
   if (stale.length) {

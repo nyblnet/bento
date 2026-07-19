@@ -22,6 +22,7 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spliceDoc } from './guestbook-deck.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
@@ -121,10 +122,23 @@ execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/ind
 // delete that file and re-release.
 const guestbook = join(root, 'working/guestbook-live/guestbook.bento.html')
 if (existsSync(guestbook)) {
+  // RE-SHELL the current epoch onto the freshly-built shell (don't just copy a
+  // deck that may embed an old shell). The document — room creds, docId, wall
+  // seed — is shell-independent, so re-splicing it into the new shell keeps the
+  // SAME live room and walls while updating the runtime. This is why the
+  // guestbook never lags a release. (An epoch ROLL, with fresh creds, is a
+  // separate deliberate act: scripts/build-guestbook.mjs / the daemon.)
+  const freshShell = readFileSync(join(site, 'releases/slides/Bento_Slides.bento.html'), 'utf8')
+  const gbHtml = readFileSync(guestbook, 'utf8')
+  const m = gbHtml.match(/<script type="application\/bento\+json" id="bento-doc">\s*([\s\S]*?)\s*<\/script>/)
+  if (!m) throw new Error('guestbook: no #bento-doc block in working/guestbook-live/')
+  const gbDoc = JSON.parse(m[1].replace(/\\u003c/g, '<'))
+  const reshelled = spliceDoc(freshShell, gbDoc)
+  writeFileSync(guestbook, reshelled) // keep the working epoch file on the fresh shell too
   cpSync(guestbook, join(site, 'guestbook.bento.html'))
   mkdirSync(join(site, 'guestbook'), { recursive: true })
   cpSync(join(root, 'site-src/guestbook.html'), join(site, 'guestbook/index.html'))
-  console.log('guestbook: shipped current epoch')
+  console.log(`guestbook: re-shelled current epoch onto the fresh shell (room ${gbDoc.collab?.room?.split('/').pop() ?? '?'})`)
 } else {
   console.log('guestbook: not armed (working/guestbook-live/ empty) — skipped')
 }
