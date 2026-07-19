@@ -11,6 +11,47 @@ export interface RenderOpts {
   svgAsImage?: boolean
   /** hide empty placeholder text entirely — present mode and print */
   hidePlaceholders?: boolean
+  /** dynamic-field values ({{page}} etc.) for this slide; auto-filled by renderSlide */
+  fields?: FieldContext
+}
+
+/** Values dynamic field tokens resolve against, computed per slide. */
+export interface FieldContext { page: number; pages: number; title: string; date: Date }
+
+/** Field context for a slide: page = 1-based position among non-state slides. */
+export function fieldContext(doc: BentoDoc, slide: Slide): FieldContext {
+  const idx = doc.slides.indexOf(slide)
+  const upto = idx < 0 ? doc.slides : doc.slides.slice(0, idx + 1)
+  return {
+    page: upto.filter((s) => !s.stateOf).length,
+    pages: doc.slides.filter((s) => !s.stateOf).length,
+    title: doc.title,
+    date: new Date(),
+  }
+}
+
+const escapeFieldText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/**
+ * Resolve dynamic field tokens in text: {{page}}, {{pages}}, {{title}},
+ * {{date}}, {{time}}. page/pages take an optional zero-pad width — {{page:2}}
+ * → "06". The MODEL stores the raw token; only rendered output is resolved, so
+ * inserting/removing slides re-numbers everything automatically. Groundwork for
+ * the wider office suite (fields/cross-references).
+ */
+export function resolveFields(html: string, ctx?: FieldContext): string {
+  if (!ctx || html.indexOf('{{') < 0) return html
+  const pad = (n: number, arg?: string) => { const w = parseInt(arg ?? '', 10); return w > 0 ? String(n).padStart(w, '0') : String(n) }
+  return html.replace(/\{\{\s*(page|pages|title|date|time)(?::([^}]*))?\s*\}\}/gi, (_m, name: string, arg?: string) => {
+    switch (name.toLowerCase()) {
+      case 'page': return pad(ctx.page, arg)
+      case 'pages': return pad(ctx.pages, arg)
+      case 'title': return escapeFieldText(ctx.title)
+      case 'date': return escapeFieldText(ctx.date.toLocaleDateString())
+      case 'time': return escapeFieldText(ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      default: return ''
+    }
+  })
 }
 
 /** Resolve "asset:<key>" references against the document's asset table. */
@@ -355,7 +396,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
-      inner.innerHTML = sanitizeHtml(el.html)
+      inner.innerHTML = sanitizeHtml(resolveFields(el.html, opts.fields))
       // layout placeholder: prompt while empty (editor), gone while presenting
       const isEmpty = !inner.textContent?.trim() && !el.html.includes('<img')
       if (el.placeholder && isEmpty) {
@@ -434,7 +475,8 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   surface.style.width = `${doc.size.width}px`
   surface.style.height = `${doc.size.height}px`
   surface.style.background = slide.background
-  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, opts))
+  const fields = opts.fields ?? fieldContext(doc, slide)
+  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, { ...opts, fields }))
   return surface
 }
 

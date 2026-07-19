@@ -84,10 +84,11 @@ const title = (html: string, p: Partial<TextElement> = {}): TextElement =>
     fontSize: 54, fontWeight: 900, fontFamily: DISPLAY, color: INK, lineHeight: 1.06, ...p,
   })
 
-/** Content-slide furniture: index numeral + hairline rule. */
-const furniture = (index: string, dark: boolean): SlideElement[] => [
+/** Content-slide furniture: auto page numeral ({{page}}) + hairline rule.
+ *  The {{page:2}} field re-numbers itself as slides are inserted/removed. */
+const furniture = (dark: boolean): SlideElement[] => [
   text({
-    x: 1024, y: 54, w: 160, h: 26, html: index, align: 'right',
+    x: 1024, y: 54, w: 160, h: 26, html: '{{page:2}}', align: 'right',
     fontSize: 13, fontWeight: 700, letterSpacing: 2,
     color: dark ? 'rgba(185,196,212,0.5)' : 'rgba(30,42,58,0.4)',
   }),
@@ -97,10 +98,11 @@ const furniture = (index: string, dark: boolean): SlideElement[] => [
   }),
 ]
 
-/** 300px ghost numeral (paper slides) — editorial depth, sits behind content. */
-const ghost = (n: string): TextElement =>
+/** 300px ghost numeral (paper slides) — editorial depth, sits behind content.
+ *  Also the auto page number, so it can never drift out of sync. */
+const ghost = (): TextElement =>
   text({
-    x: 780, y: -30, w: 420, h: 340, html: n, align: 'right',
+    x: 780, y: -30, w: 420, h: 340, html: '{{page:2}}', align: 'right',
     fontSize: 300, fontWeight: 900, fontFamily: DISPLAY, color: 'rgba(13,27,46,0.05)',
   })
 
@@ -415,9 +417,9 @@ export function starterDoc(): BentoDoc {
           { at: 0, color: 'rgba(255,158,138,0.07)' },
           { at: 1, color: 'rgba(94,118,153,0.05)' },
         ]),
-        ghost('02'),
+        ghost(),
         kicker('ONE FILE', { color: PEACH_DEEP }),
-        ...furniture('02', false),
+        ...furniture(false),
         title('Everything ships inside.'),
         shape('rect', {
           x: 84, y: 208, w: 444, h: 420, radius: 26, fill: 'transparent',
@@ -532,7 +534,7 @@ export function starterDoc(): BentoDoc {
       elements: [
         dots(false),
         kicker('LIVE DATA', { color: PEACH_DEEP }),
-        ...furniture('05', false),
+        ...furniture(false),
         title('Charts with a pulse.'),
         shape('rect', { id: T_C, x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' } }),
         { ...defaultChart(barOption()), id: CHART_MAIN, x: 96, y: 220, w: 780, h: 410, preset: 'bar' },
@@ -571,7 +573,7 @@ export function starterDoc(): BentoDoc {
       elements: [
         dots(false),
         kicker('LIVE DATA', { color: PEACH_DEEP }),
-        ...furniture('05', false),
+        ...furniture(false),
         title('Same chart. New shape.'),
         shape('rect', { id: T_C, x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' } }),
         { ...defaultChart(pieOption()), id: CHART_MAIN, x: 96, y: 220, w: 780, h: 410, preset: 'pie' },
@@ -603,11 +605,12 @@ export function starterDoc(): BentoDoc {
       notes:
         'Tables are first-class — a real HTML table rendered the same in the editor, here, and in print. ' +
         'Double-click a cell to edit, Tab moves across and Enter down, drag the dividers to resize columns. ' +
-        '“Make a chart from this table” in the panel turns the numbers into a bar chart in one click.',
+        'The little chart on the right is LIVE-LINKED to the table — edit a Signups cell and it updates instantly. ' +
+        '(“Make a chart from this table” in the panel builds a linked chart like it in one click.)',
       elements: [
         dots(false),
         kicker('STRUCTURED DATA', { color: PEACH_DEEP }),
-        ...furniture('06', false),
+        ...furniture(false),
         title('Facts, lined up.'),
         shape('rect', {
           id: T_C, x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF',
@@ -637,16 +640,32 @@ export function starterDoc(): BentoDoc {
         }),
         shape('rect', { id: T_A, x: 944, y: 222, w: 44, h: 6, radius: 3, fill: PEACH }),
         text({
-          x: 944, y: 248, w: 216, h: 250,
-          html: '<b>Double-click a cell</b> to edit — Tab across, Enter down.<br><br>Drag the dividers to resize columns.',
-          fontSize: 16.5, fontWeight: 500, color: MIST, lineHeight: 1.7,
+          x: 944, y: 244, w: 216, h: 20, html: 'SIGNUPS · LIVE',
+          fontSize: 11, fontWeight: 700, letterSpacing: 2, color: STEEL_SOFT,
+        }),
+        // a small chart LINKED to the table (source) — editing a cell updates it
+        defaultChart(
+          {
+            color: [PEACH, STEEL],
+            grid: { left: 6, right: 12, top: 12, bottom: 22, containLabel: true },
+            xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'], axisLabel: { color: MIST } },
+            yAxis: { type: 'value', axisLabel: { color: 'rgba(182,193,210,0.55)' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } },
+            series: [{ type: 'bar', name: 'Signups', data: [1204, 3880, 9140, 21500], itemStyle: { borderRadius: [4, 4, 0, 0] } }],
+            tooltip: { trigger: 'axis' },
+          },
+          { id: 'sd-tbl-chart', x: 922, y: 272, w: 260, h: 214, preset: 'bar', source: { tableId: 'sd-table' }, fx: { enter: 'fade-up', order: 2 } },
+        ),
+        text({
+          x: 944, y: 500, w: 216, h: 60,
+          html: '<b>Edit the table</b> — this chart tracks it, live.',
+          fontSize: 14.5, fontWeight: 500, color: MIST, lineHeight: 1.5,
         }),
         shape('rect', {
-          id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: STEEL, fillGradient: GRAD_STEEL,
+          id: T_B, x: 944, y: 586, w: 216, h: 44, radius: 22, fill: STEEL, fillGradient: GRAD_STEEL,
           stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
         }),
         text({
-          x: 944, y: 574, w: 216, h: 28, html: 'One tap → a chart', fontSize: 17, fontWeight: 700,
+          x: 944, y: 598, w: 216, h: 24, html: '🔗 Live-linked', fontSize: 15, fontWeight: 700,
           color: '#FFFFFF', align: 'center',
         }),
       ],
@@ -665,7 +684,7 @@ export function starterDoc(): BentoDoc {
           { at: 1, color: 'rgba(62,86,120,0.18)' },
         ]),
         kicker('STORY WITH DATA'),
-        ...furniture('07', true),
+        ...furniture(true),
         title('Momentum you can feel.', { color: '#FFFFFF', w: 700 }),
         text({
           x: 800, y: 96, w: 384, h: 110, html: '+975%', fontSize: 92, fontWeight: 900,
@@ -687,9 +706,9 @@ export function starterDoc(): BentoDoc {
         'Paths are stored relative to the element, so you can drag the whole flow around.',
       elements: [
         dots(false),
-        ghost('07'),
+        ghost(),
         kicker('MOTION', { color: PEACH_DEEP }),
-        ...furniture('08', false),
+        ...furniture(false),
         title('Lines that lead the eye.'),
         // the flow: a dashed path with a dot riding it, milestones as nodes
         shape('path', {
@@ -781,7 +800,7 @@ export function starterDoc(): BentoDoc {
               { at: 1, color: 'rgba(94,118,153,0.16)' },
             ]),
             kicker('INTERACTIVE STATES'),
-            ...furniture('09', true),
+            ...furniture(true),
             title('One cast. Three scenes.', { color: '#FFFFFF' }),
             ...scene.blocks.map((b) => shape('rect', { shadow: { y: 12, blur: 30, color: 'rgba(0,0,0,0.35)' }, ...b } as Partial<ShapeElement>)),
             text({
@@ -827,7 +846,7 @@ export function starterDoc(): BentoDoc {
           { at: 1, color: 'rgba(255,158,138,0.12)' },
         ]),
         kicker('FOCUS'),
-        ...furniture('10', true),
+        ...furniture(true),
         title('Point, and the room dims.', { color: '#FFFFFF' }),
         shape('rect', { id: T_D, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         // card 1 — one file
@@ -872,9 +891,9 @@ export function starterDoc(): BentoDoc {
         '⌘B/I/U work too, backslash escapes, and ⌘Z right after a conversion restores your literal characters.',
       elements: [
         dots(false),
-        ghost('10'),
+        ghost(),
         kicker('WRITING', { color: PEACH_DEEP }),
-        ...furniture('11', false),
+        ...furniture(false),
         title('Type markdown, get typography.'),
         shape('rect', { id: T_A, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         shape('rect', { id: T_C, x: 96, y: 228, w: 520, h: 372, radius: 18, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.10)' } }),

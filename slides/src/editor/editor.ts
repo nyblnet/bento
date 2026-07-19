@@ -226,10 +226,14 @@ export class Editor {
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
     const helpB = btn('<b class="ed-help-q">?</b>', '', () => this.openHelp(), t('Shortcuts & tips (?)'))
     helpB.classList.add('ed-btn-help')
-    actions.append(helpB, undoB, redoB, pdfB, this.shareDropdown(), saveB, this.saveDropdown())
-
     this.avatarsBox = div('ed-avatars')
-    bar.append(logo, this.updatesB, title, this.dirtyDot, this.avatarsBox, insert, actions)
+    // Intuitive grouping: LEFT = the document (identity · title · save-state ·
+    // undo/redo history) · CENTRE = insert tools · RIGHT = output & sharing
+    // (print · collaborators · Live · Save · more) with help pinned to the corner.
+    const history = div('ed-group ed-group-history')
+    history.append(undoB, redoB)
+    actions.append(pdfB, this.avatarsBox, this.shareDropdown(), saveB, this.saveDropdown(), helpB)
+    bar.append(logo, this.updatesB, title, this.dirtyDot, history, insert, actions)
 
     // main area
     const main = div('ed-main')
