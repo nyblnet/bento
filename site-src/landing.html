@@ -390,14 +390,21 @@ section:not(.paper) .card p { color: var(--mist); }
 .gp-signal .hr { left: 9%; right: 9%; top: 22%; height: 1.5px; background: rgba(239, 237, 228, 0.7); }
 .gp-signal .t { left: 8.5%; top: 27%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 42px; line-height: 0.94; color: #EFEDE4; text-shadow: 0 2px 14px rgba(20, 19, 16, 0.45); }
 .gp-signal .bar { left: 9%; bottom: 13%; width: 27%; height: 12%; background: #E8442E; }
-/* terra poster — split cover, photo panel right */
+/* terra poster — split cover, photo panel right (mirrors the deck's ter-cover slide:
+   headline on white, goat-vase photo owns the right edge, two vessel pills straddle
+   the seam, faint celadon orbs drift behind) */
 .gp-terra { background: #F7F5F0; }
-.gp-terra .panel { right: 0; top: 0; width: 37%; height: 100%; background: url(__PH_VASE2__) center/cover; }
-.gp-terra .k { left: 8.5%; top: 13%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.22em; color: #C96F4A; }
-.gp-terra .t { left: 8%; top: 27%; max-width: 48%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 24px; line-height: 1.06; color: #2A2724; }
-.gp-terra .v1 { right: 29%; top: 16%; width: 14%; height: 48%; border-radius: 999px; background: url(__PH_VASE1__) center/cover; border: 3px solid #C96F4A; box-shadow: 0 10px 24px rgba(42, 39, 36, 0.3); }
-.gp-terra .v2 { right: 35%; bottom: 7%; width: 11%; height: 36%; border-radius: 999px; background: url(__PH_VASE3__) center/cover; border: 3px solid #D9C9B4; box-shadow: 0 8px 20px rgba(42, 39, 36, 0.25); }
-.gp-terra .v3 { right: 31%; top: 47%; width: 6.5%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(15deg, #8D9376, #6F755C); box-shadow: 0 6px 14px rgba(42, 39, 36, 0.3); }
+.gp-terra .panel { right: 0; top: 0; width: 37.5%; height: 100%; background: url(__PH_VASE2__) 50% 60%/cover; }
+.gp-terra .shade { right: 0; top: 0; width: 37.5%; height: 100%; background: rgba(42, 39, 36, 0.08); }
+.gp-terra .orb { border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(141, 147, 118, 0.20), rgba(141, 147, 118, 0.05) 70%); }
+.gp-terra .o1 { left: 24%; top: 14%; width: 33%; aspect-ratio: 1; }
+.gp-terra .o2 { left: 41%; top: 34%; width: 22%; aspect-ratio: 1; }
+.gp-terra .k { left: 7.5%; top: 12.5%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.22em; color: #C96F4A; }
+.gp-terra .t { left: 7%; top: 20%; max-width: 46%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 24px; line-height: 1.05; color: #2A2724; }
+.gp-terra .sub { left: 7.5%; top: 60%; font-size: 8px; line-height: 1.5; color: rgba(42, 39, 36, 0.55); }
+.gp-terra .foot { left: 7.5%; bottom: 9%; font-size: 7px; font-weight: 600; letter-spacing: 0.18em; color: rgba(42, 39, 36, 0.5); }
+.gp-terra .v1 { right: 29%; top: 15.3%; width: 14.8%; height: 39%; border-radius: 999px; background: url(__PH_VASE1__) center/cover; border: 2.5px solid #C96F4A; box-shadow: 0 10px 24px rgba(42, 39, 36, 0.3); }
+.gp-terra .v2 { right: 37%; top: 61%; width: 11%; height: 28%; border-radius: 999px; background: url(__PH_VASE3__) center/cover; border: 2.5px solid #D9C9B4; box-shadow: 0 8px 20px rgba(42, 39, 36, 0.25); }
 /* orbital poster */
 .gp-orbital { background: #05060E url(__PH_STARS__) center 65%/cover; }
 .gp-orbital .ov { inset: 0; background: rgba(5, 6, 14, 0.5); }
@@ -573,10 +580,13 @@ body.kdeck header, body.kdeck footer { display: none; }
       </div>
       <div class="gcard rv d1">
         <a class="gposter gp-terra" href="/gallery/terra-premium-product.bento.html" target="_blank" rel="noopener" aria-label="Open the Terra template in a new tab">
-          <span class="panel"></span>
+          <span class="o1 orb"></span><span class="o2 orb"></span>
+          <span class="panel"></span><span class="shade"></span>
           <span class="k">TERRA OBJECTS — COLLECTION N°4</span>
           <span class="t">Quiet things,<br>well made.</span>
-          <span class="v1"></span><span class="v2"></span><span class="v3"></span>
+          <span class="sub">Thrown, glazed and fired<br>in one workshop.</span>
+          <span class="foot">SPRING 2026 · EDITION OF 41</span>
+          <span class="v1"></span><span class="v2"></span>
         </a>
         <div class="gmeta">
           <div><h3>Terra</h3><p>Premium minimal — warm neutrals, morphing product cards.</p></div>
