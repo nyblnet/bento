@@ -35,14 +35,21 @@ verify the manifest signature against the public key embedded in every shell.
 2. Commit, tag: `git tag vX.Y.Z`.
 3. `node scripts/release.mjs` — builds, signs, assembles `./site/`
    (CNAME, landing page, live demo, download, signed manifest).
-4. Publish `./site/` to the public site repo:
+4. Publish `./site/` to the public site repo — one step:
 
    ```sh
-   rsync -a --delete --exclude .git site/ ../bento-site/
-   git -C ../bento-site add -A
-   git -C ../bento-site commit -m "release vX.Y.Z"
-   git -C ../bento-site push
+   node scripts/publish-site.mjs "release vX.Y.Z"
    ```
+
+   This mirrors the assembled `site/` tree into `../bento-site` (or
+   `$BENTO_SITE_DIR`) and pushes it. `site/` is the single source of truth: its
+   **authored** files (landing `index.html`, the guestbook page, `agents.md`,
+   config) are tracked in *this* repo so cross-session drift is visible in git;
+   its **generated** artifacts (signed shell, manifest, gallery decks,
+   `*.bento.html` demos) are gitignored here and rebuilt by `release.mjs`.
+   For a content-only change (no new app version) you can regenerate the gallery
+   and publish without cutting a release: `node scripts/publish-site.mjs
+   "landing copy tweak" --gallery`. Preview first with `--dry`.
 
 5. Also attach `site/releases/slides/Bento_Slides.bento.html` to a GitHub
    Release for the tag — download counts, release-watch notifications, and a

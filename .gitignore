@@ -9,6 +9,13 @@ testing/
 # os cruft
 .DS_Store
 *.tsbuildinfo
-site/
+# site/ is the assembled deploy tree (mirrors the bento-site repo). Track the
+# AUTHORED web sources here — landing, guestbook page, docs, config — so cross-
+# session drift (e.g. the guestbook icon, gallery imagery) is visible in git and
+# never silently reverts. The heavy GENERATED artifacts are rebuilt/published by
+# scripts/publish-site.mjs and stay out of git:
+site/*.bento.html
+site/gallery/
+site/releases/
 working/
 .dev.vars

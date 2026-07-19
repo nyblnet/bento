@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Guestbook — one live deck, everyone — bento.page</title>
+<meta name="description" content="A public experiment: one presentation file that everyone edits together, live, end-to-end encrypted. Open the file and you're in the room.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316273E'/%3E%3Crect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/%3E%3Crect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/%3E%3C/svg%3E">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { min-height: 100vh; background: #0D1B2E; color: rgba(182,193,210,0.92); font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: grid; place-items: center; padding: 48px 24px; }
+.card { max-width: 660px; }
+.kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.3em; color: #FF9E8A; }
+h1 { font-family: Fraunces, Georgia, serif; font-weight: 900; color: #fff; font-size: clamp(40px, 7vw, 66px); line-height: 1; margin: 16px 0 20px; }
+p { line-height: 1.7; margin-bottom: 16px; }
+b { color: #fff; font-weight: 600; }
+ul { margin: 0 0 18px 1.2em; line-height: 1.9; }
+.btn { display: inline-block; padding: 15px 30px; border-radius: 999px; font-weight: 700; color: #0D1B2E; text-decoration: none; background: linear-gradient(180deg, #FFB29B, #ED8266); box-shadow: 0 10px 26px rgba(0,0,0,0.4), 0 0 42px rgba(255,238,214,0.22); }
+.ghost { display: inline-block; margin-left: 12px; padding: 14px 24px; border-radius: 999px; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,0.3); font-weight: 600; }
+.fine { margin-top: 24px; font-size: 13px; line-height: 1.7; color: rgba(182,193,210,0.55); }
+.fine a { color: rgba(182,193,210,0.8); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="kicker">A PUBLIC EXPERIMENT</div>
+  <h1>One deck. Everyone.</h1>
+  <p>The Guestbook is a single presentation file that <b>everyone edits at
+  once, live</b>. There is no login and no server that can read it — the
+  encryption keys travel inside the file, so opening it <i>is</i> joining it.
+  Leave a note on a wall, watch strangers' cursors wander, take a copy home.</p>
+  <ul>
+    <li><b>Add, don't wipe.</b> Be kind. Anything goes except cruelty.</li>
+    <li><b>It resets on a schedule</b> — fresh keys, blank walls. Beautiful
+        epochs get archived; everything else evaporates.</li>
+    <li>Your saved copy keeps working forever, offline. That's the product.</li>
+  </ul>
+  <a class="btn" href="/guestbook.bento.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:7px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Open the Guestbook</a>
+  <a class="ghost" href="/guestbook.bento.html" download="Guestbook.bento.html">⤓ Download</a>
+  <p class="fine">Under the hood this is stock Bento collaboration — E2EE
+  (AES-GCM), a <a href="/">blind relay</a> that stores ciphertext, and a CRDT
+  that merges everyone's edits. Nothing special was built for this page.
+  Set your name via the <b>Live</b> button so your cursor has one.</p>
+</div>
+</body>
+</html>
