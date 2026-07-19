@@ -415,4 +415,8 @@ export const zhHant: Catalog = {
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "從表格產生圖表後會保持關聯 — 編輯表格，圖表隨之更新。",
   "Your work auto-saves; restore earlier versions from About → Version history.": "你的工作會自動儲存；可從「關於 → 版本歷程」還原較早的版本。",
   "Slide copied — ⌘V in any deck to paste it": "已複製投影片 — 在任意簡報中按 ⌘V 貼上",
+  "📺 Use a second screen for notes": "📺 用第二個螢幕顯示備註",
+  "Second screen ready — press S for speaker notes": "第二個螢幕已就緒 — 按 S 顯示演講者備註",
+  "Only one screen detected — notes will open in a window (S)": "僅偵測到一個螢幕 — 備註將在視窗中開啟（S）",
+  "Couldn’t access displays — notes will open in a window (S)": "無法存取顯示器 — 備註將在視窗中開啟（S）",
 }

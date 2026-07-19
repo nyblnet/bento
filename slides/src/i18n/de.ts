@@ -415,4 +415,8 @@ export const de: Catalog = {
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Aus einer Tabelle ein Diagramm erstellen — es bleibt verknüpft: Tabelle bearbeiten, Diagramm aktualisiert sich.",
   "Your work auto-saves; restore earlier versions from About → Version history.": "Deine Arbeit wird automatisch gespeichert; frühere Versionen unter Über → Versionsverlauf wiederherstellen.",
   "Slide copied — ⌘V in any deck to paste it": "Folie kopiert — ⌘V in einer beliebigen Präsentation zum Einfügen",
+  "📺 Use a second screen for notes": "📺 Zweiten Bildschirm für Notizen nutzen",
+  "Second screen ready — press S for speaker notes": "Zweiter Bildschirm bereit — S für die Referentenansicht",
+  "Only one screen detected — notes will open in a window (S)": "Nur ein Bildschirm erkannt — Notizen öffnen in einem Fenster (S)",
+  "Couldn’t access displays — notes will open in a window (S)": "Kein Zugriff auf Bildschirme — Notizen öffnen in einem Fenster (S)",
 }
