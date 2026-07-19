@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help — Bento Slides — bento.page</title>
+<meta name="description" content="How to use Bento Slides: elements, morph, charts, tables, media, presenting, live collaboration, building with AI, and keyboard shortcuts.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316273E'/%3E%3Crect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/%3E%3Crect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#0D1B2E; --panel:#16273E; --panel2:#1B2F49; --line:rgba(182,193,210,.16);
+  --text:rgba(196,206,221,.92); --dim:rgba(182,193,210,.62); --white:#F4F6F9;
+  --peach:#FF9E8A; --peach2:#ED8266; --steel:#5E7699; --bone:#F0EBE0;
+  --fr:Fraunces,Georgia,'Times New Roman',serif;
+  --in:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--ink);color:var(--text);font-family:var(--in);line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--peach)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+/* header */
+header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,27,46,.86);backdrop-filter:blur(10px);z-index:10}
+.bar{display:flex;align-items:center;gap:16px;height:60px}
+.mark{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--white);font-weight:800;font-size:18px;letter-spacing:-.01em}
+.mark svg{border-radius:6px}
+.bar .spacer{flex:1}
+.bar a.nav{color:var(--dim);text-decoration:none;font-weight:600;font-size:14px}
+.bar a.nav:hover{color:var(--white)}
+.cta{background:linear-gradient(180deg,#FFB29B,#ED8266);color:#0D1B2E !important;padding:9px 18px;border-radius:999px;font-weight:700;font-size:14px;text-decoration:none}
+
+/* hero */
+.hero{padding:64px 0 40px;border-bottom:1px solid var(--line)}
+.kick{font-size:12px;font-weight:700;letter-spacing:.28em;color:var(--peach)}
+h1{font-family:var(--fr);font-weight:900;color:var(--white);font-size:clamp(40px,6vw,64px);line-height:1.02;margin:14px 0 16px}
+.lede{font-size:19px;max-width:60ch;color:var(--dim)}
+
+/* layout: toc + content */
+.grid{display:grid;grid-template-columns:220px 1fr;gap:56px;padding:48px 0 96px;align-items:start}
+nav.toc{position:sticky;top:84px}
+nav.toc h4{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--steel);margin:0 0 10px}
+nav.toc a{display:block;color:var(--dim);text-decoration:none;font-size:14px;padding:5px 0;border-left:2px solid transparent;padding-left:12px;margin-left:-14px}
+nav.toc a:hover{color:var(--white)}
+
+section.doc{margin:0 0 52px;scroll-margin-top:84px}
+section.doc h2{font-family:var(--fr);color:var(--white);font-weight:800;font-size:28px;margin:0 0 8px;display:flex;align-items:center;gap:12px}
+section.doc h2 .ix{font-family:var(--in);font-size:13px;font-weight:800;color:var(--peach);background:rgba(255,158,138,.12);border-radius:8px;width:30px;height:30px;display:grid;place-items:center;flex:none}
+section.doc h3{color:var(--white);font-weight:700;font-size:16px;margin:22px 0 4px}
+section.doc p{margin:8px 0}
+section.doc ul{margin:8px 0 8px 4px;list-style:none}
+section.doc li{padding:5px 0 5px 22px;position:relative}
+section.doc li::before{content:"";position:absolute;left:2px;top:14px;width:7px;height:7px;border-radius:2px;background:var(--peach2)}
+b,strong{color:var(--white);font-weight:600}
+code{font-family:var(--mono);font-size:.86em;background:rgba(94,118,153,.18);padding:2px 6px;border-radius:5px;color:var(--bone)}
+kbd{font-family:var(--in);font-size:12px;font-weight:600;background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--white);white-space:nowrap}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:16px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.card h3{margin:0 0 4px}
+.card p{font-size:14px;color:var(--dim);margin:0}
+.card .g{font-size:18px;margin-bottom:6px;display:block}
+
+.note{background:var(--panel);border-left:3px solid var(--peach2);border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:14.5px}
+.note b{color:var(--peach)}
+
+table.keys{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+table.keys td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.keys td:first-child{width:170px;white-space:nowrap}
+table.keys tr:last-child td{border-bottom:none}
+
+footer{border-top:1px solid var(--line);padding:32px 0;color:var(--dim);font-size:14px}
+footer a{color:var(--dim)}
+@media(max-width:760px){.grid{grid-template-columns:1fr;gap:0}nav.toc{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <a class="mark" href="/">
+      <svg width="26" height="26" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#16273E"/><rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/><rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/><rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/></svg>
+      Bento<span style="color:var(--dim);font-weight:500">/Help</span>
+    </a>
+    <div class="spacer"></div>
+    <a class="nav" href="/agents.md">For AI agents</a>
+    <a class="cta" href="/slides/">Open the editor ↗</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <div class="kick">BENTO SLIDES</div>
+    <h1>Everything you need to<br>build a deck.</h1>
+    <p class="lede">Bento Slides is one HTML file that is the document, the viewer and the editor at once. Open it, edit it, present it — it saves itself. Here's how each piece works.</p>
+  </div>
+</div>
+
+<div class="wrap grid">
+  <nav class="toc">
+    <h4>On this page</h4>
+    <a href="#start">Quick start</a>
+    <a href="#elements">Adding content</a>
+    <a href="#morph">Morph</a>
+    <a href="#data">Charts &amp; tables</a>
+    <a href="#media">Video &amp; audio</a>
+    <a href="#interactive">Interactivity</a>
+    <a href="#present">Presenting</a>
+    <a href="#collab">Live collaboration</a>
+    <a href="#save">Saving &amp; history</a>
+    <a href="#ai">Build with AI</a>
+    <a href="#keys">Keyboard shortcuts</a>
+  </nav>
+
+  <main>
+    <section class="doc" id="start">
+      <h2><span class="ix">1</span>Quick start</h2>
+      <p>A Bento deck is a single <code>.bento.html</code> file. There's nothing to install and no account to create.</p>
+      <ul>
+        <li><b>Open</b> the file in any modern browser — it boots straight into the editor.</li>
+        <li><b>Edit</b> on the canvas: click to select, drag to move, drag the handles to resize. Double-click text to type.</li>
+        <li><b>Present</b> with the round ▶ button (bottom-left) or <kbd>F5</kbd> — real fullscreen, arrow keys to advance.</li>
+        <li><b>Save</b> with <kbd>⌘S</kbd>. The file rewrites itself with your changes; your work also auto-saves as you go.</li>
+      </ul>
+      <div class="note">The whole app travels <b>inside</b> the file. Email it, drop it in Drive, keep it on a USB stick — whoever opens it gets the deck <i>and</i> the editor, offline, forever.</div>
+    </section>
+
+    <section class="doc" id="elements">
+      <h2><span class="ix">2</span>Adding content</h2>
+      <p>The toolbar across the top adds elements to the current slide:</p>
+      <div class="cards">
+        <div class="card"><span class="g">T</span><h3>Text</h3><p>Double-click to edit. Type <code>**bold**</code>, <code>*italic*</code>, <code>`code`</code> and <code>- </code> bullets — they format as you go. <kbd>⌘B</kbd>/<kbd>⌘I</kbd>/<kbd>⌘U</kbd> too.</p></div>
+        <div class="card"><span class="g">◇</span><h3>Shape</h3><p>Rectangles, ellipses, triangles, lines and paths. Solid or gradient fills, line arrows and dots, corner radius, shadows.</p></div>
+        <div class="card"><span class="g">▦</span><h3>Image</h3><p>Choose a file or just paste one (<kbd>⌘V</kbd>) onto the canvas. Images embed in the file so it stays self-contained.</p></div>
+        <div class="card"><span class="g">▶</span><h3>Media</h3><p>Video and audio. Short clips embed; for big ones, paste a hosted URL to keep the file small. <a href="#media">More below.</a></p></div>
+        <div class="card"><span class="g">▤</span><h3>Table</h3><p>A real table — edit cells inline, <kbd>Tab</kbd> between them. Style presets, and a one-click bridge to turn it into a chart.</p></div>
+        <div class="card"><span class="g">▥</span><h3>Chart</h3><p>Bar, line, pie, scatter — drawn by Bento's own engine. Edit it visually or link it live to a table. <a href="#data">More below.</a></p></div>
+      </div>
+      <p>The left panel holds your slides; the right panel shows the properties of whatever you've selected — position, colour, typography, effects. Press <kbd>[</kbd> or <kbd>]</kbd> to collapse either panel.</p>
+    </section>
+
+    <section class="doc" id="morph">
+      <h2><span class="ix">3</span>Morph — the signature move</h2>
+      <p>Give an element the <b>same name (id)</b> on two consecutive slides and set the later slide's transition to <b>Morph</b> — the element glides between its two positions, sizes and colours when you advance. It's how the best Bento decks feel alive.</p>
+      <ul>
+        <li>The easy way: <b>duplicate a slide</b>, then move, resize or recolour things. The shared elements already have matching ids, so they morph automatically.</li>
+        <li>Set a slide's transition to <b>Morph</b> in the Slide panel (or copy a slide that already uses it).</li>
+        <li>Keep a logo or header at the same id across every slide and it stays put while everything else changes.</li>
+      </ul>
+    </section>
+
+    <section class="doc" id="data">
+      <h2><span class="ix">4</span>Charts &amp; tables</h2>
+      <h3>Charts</h3>
+      <p>Add a chart, then shape it in the right panel: type, series, colours, a second Y-axis, per-axis min/max, and an editable data grid. Charts are <b>live while you present</b> — tooltips, wheel-zoom, and a data morph when a bar chart becomes a pie.</p>
+      <h3>Tables → charts, linked</h3>
+      <p>Turn a table into a chart from the table panel, and the two stay <b>linked</b>: edit the table's numbers and the chart updates itself. Perfect for a slide that shows the figures and the trend side by side.</p>
+    </section>
+
+    <section class="doc" id="media">
+      <h2><span class="ix">5</span>Video &amp; audio</h2>
+      <p>Add <b>Media</b> from the toolbar and pick a video or audio file. Bento uses a <b>hybrid</b> approach so your file never balloons:</p>
+      <ul>
+        <li><b>Small clips embed</b> in the <code>.bento.html</code> — fully self-contained, plays offline.</li>
+        <li><b>Large files:</b> when a clip is big, Bento offers to keep it as a <b>link</b> instead — paste a hosted URL in the panel and the deck stays small (it just needs the network to play).</li>
+        <li><b>Playback</b> options: controls, loop, muted, and <b>autoplay</b>. Autoplay runs only while presenting, and browsers require a video to be muted to autoplay.</li>
+        <li><b>Poster</b> (video): a still image shown before playback.</li>
+      </ul>
+      <div class="note"><b>Tip:</b> embed a short logo sting or a 10-second demo; link a full recording. A 2-minute video embedded as data can make a 100&nbsp;MB file that's slow to open and save.</div>
+    </section>
+
+    <section class="doc" id="interactive">
+      <h2><span class="ix">6</span>Interactivity</h2>
+      <ul>
+        <li><b>Links &amp; state slides:</b> give an element a link to another slide. A <b>state slide</b> is a hidden variant reached only by clicking — arrow keys skip it, <kbd>←</kbd> returns to the parent. Great for "click to drill in" without cluttering the linear story.</li>
+        <li><b>Hover reveal:</b> swap content in place when the pointer is over an element.</li>
+        <li><b>Loops:</b> a dashed line that marches, or an element that follows a motion path you draw on the canvas — with variable speed per point.</li>
+        <li><b>Comments:</b> the 💬 tool (<kbd>C</kbd>) pins a comment to an element or a spot. Comments live in the file but never show in present or print.</li>
+      </ul>
+    </section>
+
+    <section class="doc" id="present">
+      <h2><span class="ix">7</span>Presenting</h2>
+      <ul>
+        <li>Start from the round <b>▶</b> button (fullscreen) or the small one beside it (tab-fill, for screen-sharing a window). <kbd>F</kbd> toggles fullscreen; <kbd>Esc</kbd> ends the show.</li>
+        <li><b>Speaker view</b> (<kbd>S</kbd>): current + next slide, your notes, and a timer — in a separate window.</li>
+        <li><b>Second screen:</b> in the Slide panel's <b>Speaker notes</b> section, enable "Use a second screen for notes" once (grant the browser's window permission). Then pressing <kbd>S</kbd> puts the notes on your other display automatically.</li>
+        <li>Write <b>speaker notes</b> per slide — they travel in the file and double as the talk track.</li>
+      </ul>
+    </section>
+
+    <section class="doc" id="collab">
+      <h2><span class="ix">8</span>Live collaboration</h2>
+      <p>Click <b>Live</b> to start a session — then <b>the file itself is the invitation</b>. Anyone who opens a copy joins the room; edits merge in real time, and offline changes merge back when they return.</p>
+      <ul>
+        <li><b>End-to-end encrypted:</b> the keys live inside your file. The relay only ever sees ciphertext — it can't read your deck.</li>
+        <li><b>No account, no cloud:</b> sharing is just sharing the file.</li>
+        <li>Set your name via the Live popover so your cursor has one. "Rotate keys" revokes old copies.</li>
+      </ul>
+    </section>
+
+    <section class="doc" id="save">
+      <h2><span class="ix">9</span>Saving &amp; version history</h2>
+      <ul>
+        <li><kbd>⌘S</kbd> rewrites the file in place (or downloads a copy the first time, depending on your browser).</li>
+        <li><b>Auto-save</b> keeps a local safety net as you work — if a tab crashes, you're offered a restore on reopen.</li>
+        <li><b>Version history:</b> About → Version history lists earlier local snapshots; restore any one (it's undoable).</li>
+        <li><b>Read-only copy</b> and <b>password protection</b> are in the Save menu / About for hand-out and private decks.</li>
+      </ul>
+    </section>
+
+    <section class="doc" id="ai">
+      <h2><span class="ix">10</span>Build with AI</h2>
+      <p>Because the document is plain JSON inside the file, any AI can author or edit a deck. Drop the <code>.bento.html</code> into a chat or project (Cowork, Codex, Gemini, a ChatGPT project) and ask, or point a coding agent at it on disk.</p>
+      <p>The recipe an assistant should read first is <a href="/agents.md">bento.page/agents.md</a> — it maps your material to the right feature so you get a real deck, not a wall of text. Claude Code users get it as the <b>bento-deck</b> skill.</p>
+    </section>
+
+    <section class="doc" id="keys">
+      <h2><span class="ix">11</span>Keyboard shortcuts</h2>
+      <table class="keys">
+        <tr><td><kbd>⌘S</kbd></td><td>Save</td></tr>
+        <tr><td><kbd>⌘Z</kbd> · <kbd>⌘⇧Z</kbd></td><td>Undo · redo</td></tr>
+        <tr><td><kbd>⌘C</kbd> · <kbd>⌘V</kbd></td><td>Copy · paste elements — or the whole slide when nothing is selected (works across decks)</td></tr>
+        <tr><td><kbd>⌘D</kbd></td><td>Duplicate the selection</td></tr>
+        <tr><td><kbd>⌘G</kbd> · <kbd>⌘⇧G</kbd></td><td>Group · ungroup</td></tr>
+        <tr><td><kbd>⌘B</kbd> · <kbd>⌘I</kbd> · <kbd>⌘U</kbd></td><td>Bold · italic · underline (while editing text)</td></tr>
+        <tr><td><kbd>C</kbd></td><td>Comment mode</td></tr>
+        <tr><td><kbd>[</kbd> · <kbd>]</kbd></td><td>Collapse the left · right panel</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Shortcuts &amp; tips</td></tr>
+        <tr><td><kbd>F5</kbd></td><td>Present</td></tr>
+        <tr><td><kbd>F</kbd></td><td>Toggle fullscreen while presenting</td></tr>
+        <tr><td><kbd>S</kbd></td><td>Speaker view</td></tr>
+        <tr><td><kbd>←</kbd> · <kbd>→</kbd></td><td>Previous · next slide</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>End the show</td></tr>
+      </table>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">
+    <a href="/">bento.page</a> · <a href="/agents.md">agents.md</a> · <a href="/slides/">Open the editor</a><br>
+    One file — deck, viewer and editor together.
+  </div>
+</footer>
+</body>
+</html>

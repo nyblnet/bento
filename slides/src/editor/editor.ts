@@ -1315,6 +1315,14 @@ export class Editor {
       t('Your work auto-saves; restore earlier versions from About → Version history.'),
     ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
     tips.appendChild(ul); box.appendChild(tips)
+    const more = div('ed-help-more')
+    const link = document.createElement('a')
+    link.href = 'https://bento.page/help'
+    link.target = '_blank'
+    link.rel = 'noopener'
+    link.textContent = t('Full guide at bento.page/help →')
+    more.appendChild(link)
+    box.appendChild(more)
     overlay.appendChild(box)
     const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true) }
     const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); close() } }
