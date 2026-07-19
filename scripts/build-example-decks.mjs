@@ -461,13 +461,15 @@ function deckOrbital() {
 
   const s2b = slide({
     id: 'orb-earth', background: VOID, transition: 'fade',
-    notes: 'The evidence beat: a real night-Earth photograph (Tokyo at night, ISS Expedition 64 — NASA JSC Gateway to Astronaut Photography of Earth, public domain) full-bleed under a slow ken-burns drift. One scrim, one line. Photographs read as truth in a deck full of neon — use exactly one.',
+    notes: 'The live-view beat: a real Earth-from-the-ISS clip (Expedition 65, NASA — public domain) plays full-bleed, muted and looping, and AUTOPLAYS the moment you present. Demonstrates the VIDEO media element embedded self-contained in the file (~290 KB, trimmed + downscaled from the 4K original with ffmpeg). One scrim, one line, a HUD “live” tag. On the editor canvas the clip shows its poster frame (inert); it only plays in present.',
     elements: [
-      img({ asset: 'ph-earth', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.1, duration: 24 } } }),
-      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.38)', fillGradient: grad(180, [0, 'rgba(5,6,14,0.15)'], [1, 'rgba(5,6,14,0.8)']) }),
+      media({ kind: 'video', src: mediaFile('earth.mp4', 'video/mp4'), poster: mediaFile('earth-poster.jpg', 'image/jpeg'), x: 0, y: 0, w: 1280, h: 720, fit: 'cover', controls: false, muted: true, autoplay: true, loop: true }),
+      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.30)', fillGradient: grad(180, [0, 'rgba(5,6,14,0.32)'], [0.5, 'rgba(5,6,14,0.05)'], [1, 'rgba(5,6,14,0.82)']) }),
       mono(96, 84, '01b · THE VIEW FROM 400 KM', CYAN),
-      text({ x: 96, y: 460, w: 1000, h: 180, html: 'The ground is<br>already glowing.', fontSize: 64, fontWeight: 800, color: '#EAF4FF', lineHeight: 1.08, fontFamily: IN, shadow: { y: 2, blur: 30, color: 'rgba(0,0,0,0.6)' }, fx: { enter: 'fade-up' } }),
-      mono(96, 648, 'TOKYO AT NIGHT · ISS EXPEDITION 64 · NASA — PUBLIC DOMAIN', 'rgba(178,196,224,0.45)', 10),
+      shape('ellipse', { x: 1004, y: 90, w: 10, h: 10, fill: MAG, shadow: glow('rgba(255,79,163,0.9)', 10) }),
+      mono(1024, 84, 'LIVE FEED', MAG, 12),
+      text({ x: 96, y: 452, w: 1000, h: 180, html: 'Live from<br>low orbit.', fontSize: 66, fontWeight: 800, color: '#EAF4FF', lineHeight: 1.06, fontFamily: IN, shadow: { y: 2, blur: 30, color: 'rgba(0,0,0,0.6)' }, fx: { enter: 'fade-up' } }),
+      mono(96, 648, 'EARTH FROM THE ISS · EXPEDITION 65 (4K) · NASA — PUBLIC DOMAIN', 'rgba(178,196,224,0.5)', 10),
     ],
   })
 
@@ -551,7 +553,7 @@ function deckOrbital() {
   return doc({
     title: 'Orbital — dark immersive template',
     assets: {
-      'ph-earth': photo('orbital-earth.jpg'), 'ph-stars': photo('orbital-stars.jpg'),
+      'ph-stars': photo('orbital-stars.jpg'),
       'ph-cubesats': photo('orbital-cubesats.jpg'), 'ph-jwst': photo('orbital-jwst.jpg'),
       'font-spacemono': fontFile('SpaceMono-400-latin.woff2'),
       'font-spacemono-bold': fontFile('SpaceMono-700-latin.woff2'),

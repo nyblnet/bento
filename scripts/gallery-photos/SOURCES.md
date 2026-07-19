@@ -92,3 +92,8 @@ Spot-checked at full brightness — no visible artefacts. Same frames/crops.
   `scripts/build-example-decks.mjs`** (native WAV, no external source), so it is
   original work released into the **public domain**. Embedded in the Picnic
   deck cover to demonstrate the audio media element.
+- `gallery-media/earth.mp4` + `earth-poster.jpg` — a ~6 s clip trimmed and
+  downscaled (ffmpeg: 1000px, H.264, no audio, ~290 KB) from NASA's *Earth from
+  Space in 4K – Expedition 65 Edition* (nasa_id `jsc2022m000172…`,
+  images.nasa.gov — **public domain**). Embedded in the Orbital deck as a
+  muted, autoplaying, looping video (the "view from 400 km" slide).
