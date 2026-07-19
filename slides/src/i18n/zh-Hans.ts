@@ -419,4 +419,12 @@ export const zhHans: Catalog = {
   "Second screen ready — press S for speaker notes": "第二块屏幕已就绪 — 按 S 显示演讲者备注",
   "Only one screen detected — notes will open in a window (S)": "仅检测到一块屏幕 — 备注将在窗口中打开（S）",
   "Couldn’t access displays — notes will open in a window (S)": "无法访问显示器 — 备注将在窗口中打开（S）",
+  "Presenter display": "演讲者显示",
+  "✓ Second screen enabled": "✓ 已启用第二块屏幕",
+  "Speaker notes will open on your second display when you press S.": "按 S 时演讲者备注将在第二块屏幕上打开。",
+  "Use a second screen for notes": "用第二块屏幕显示备注",
+  "Only one display detected — connect another, then enable it here.": "仅检测到一块屏幕 — 连接另一块后在此启用。",
+  "Enable this once so pressing S in a show sends notes to your other display.": "启用一次后，放映时按 S 即可把备注发送到另一块屏幕。",
+  "Requesting…": "正在请求…",
+  "Couldn’t access displays — allow “window management” in the browser’s site permissions.": "无法访问显示器 — 请在浏览器的站点权限中允许“窗口管理”。",
 }

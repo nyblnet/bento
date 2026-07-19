@@ -419,4 +419,12 @@ export const zhHant: Catalog = {
   "Second screen ready — press S for speaker notes": "第二個螢幕已就緒 — 按 S 顯示演講者備註",
   "Only one screen detected — notes will open in a window (S)": "僅偵測到一個螢幕 — 備註將在視窗中開啟（S）",
   "Couldn’t access displays — notes will open in a window (S)": "無法存取顯示器 — 備註將在視窗中開啟（S）",
+  "Presenter display": "演講者顯示",
+  "✓ Second screen enabled": "✓ 已啟用第二個螢幕",
+  "Speaker notes will open on your second display when you press S.": "按 S 時演講者備註將在第二個螢幕上開啟。",
+  "Use a second screen for notes": "用第二個螢幕顯示備註",
+  "Only one display detected — connect another, then enable it here.": "僅偵測到一個螢幕 — 連接另一個後在此啟用。",
+  "Enable this once so pressing S in a show sends notes to your other display.": "啟用一次後，放映時按 S 即可把備註傳送到另一個螢幕。",
+  "Requesting…": "正在請求…",
+  "Couldn’t access displays — allow “window management” in the browser’s site permissions.": "無法存取顯示器 — 請在瀏覽器的網站權限中允許「視窗管理」。",
 }

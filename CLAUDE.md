@@ -222,13 +222,16 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   real fullscreen makes the browser leave fullscreen, whose `fullscreenchange`
   would call `exit()` and END the show — `openingSpeaker` guards onFsChange and
   re-enters fullscreen. Escape stays a separate exit path, so the guard can't
-  strand the presenter. **Dual-screen (v0.9.8)**: `placeSpeaker` opens the popup
-  synchronously (keeps the click gesture, avoids a popup-block), then async
-  `getScreenDetails()` (Window Management permission) moves it to a second
-  display and fullscreens the slides on the presenter's screen via
-  `requestFullscreen({screen})`. Single-screen / denied / unsupported all
-  degrade to the same-screen re-fullscreen path. Needs a real two-monitor rig
-  for final QA.
+  strand the presenter. **Dual-screen (v0.9.14)**: the Window Management
+  permission CANNOT be requested during present — the S keypress activation is
+  spent on window.open/requestFullscreen. So `src/screens.ts` holds the shared
+  layout and the **editor's Slide panel** ("Presenter display" section) grants
+  it via a dedicated click BEFORE presenting (`grantScreens`), caching the live
+  ScreenDetails; the editor also `refreshScreensIfGranted()` at boot. present.ts
+  `openSpeaker` reads `secondScreen()` synchronously and opens the notes popup
+  directly on that display's coords; if none is set up it drops fullscreen so
+  the notes aren't hidden. (The old in-present grant pill was removed.) Needs a
+  real two-monitor rig for final QA.
 - **Animation robustness**: slide exit kills tweens AND restores model frames; a
   2.8s wall-clock settle guarantee lands entrances on starved render loops; never
   put entrance tweens on motion-path elements (transform conflict).

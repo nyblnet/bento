@@ -17,6 +17,7 @@ import { startPresentation } from '../present'
 import { hasFileHandle, isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
+import { refreshScreensIfGranted } from '../screens'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
 import { disconnectOnline, joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
@@ -66,6 +67,7 @@ export class Editor {
     })
     this.wireAutosave()
     this.wirePaste()
+    void refreshScreensIfGranted() // re-enable 2nd-screen notes if granted earlier
     store.on('doc', () => this.syncLinkedCharts())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })

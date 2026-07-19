@@ -8,6 +8,7 @@ import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
+import { secondScreen } from './screens'
 import { t } from './i18n'
 
 const MORPH_DURATION = 0.65
@@ -137,62 +138,10 @@ export function startPresentation(
   // browsers; this guards the fullscreenchange handler so that bounce doesn't
   // end the show (see onFsChange).
   let openingSpeaker = false
-  // Screen layout, cached at present-start so we can open the speaker popup
-  // DIRECTLY on a second display (window.open left/top) — moving it after the
-  // fact is what left the notes stranded behind the fullscreen slides.
-  let screenLayout: { screens: any[]; currentScreen: any } | null = null
-  let grantBtn: HTMLButtonElement | null = null
-  const hasWM = () => !!(window as unknown as { getScreenDetails?: unknown }).getScreenDetails
-  const secondScreen = () => {
-    const s = screenLayout
-    if (!s || !Array.isArray(s.screens) || s.screens.length < 2) return null
-    return s.screens.find((x) => x !== s.currentScreen) ?? s.screens.find((x) => !x.isPrimary) ?? s.screens[1]
-  }
-  // getScreenDetails() returns a LIVE object; we call it once (needs activation
-  // only to prompt) and keep it. Returns true if we now hold a layout.
-  const cacheScreens = async (): Promise<boolean> => {
-    const gsd = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
-    if (!gsd) return false
-    try {
-      screenLayout = await gsd.call(window)
-      console.info('[bento-speaker] screens ready:', screenLayout?.screens?.length)
-      return true
-    } catch (e: any) {
-      console.warn('[bento-speaker] getScreenDetails failed:', e?.name, e?.message)
-      return false
-    }
-  }
-  // A dedicated-gesture button to grant "window management" — the ONLY reliable
-  // way, since the S keypress activation is spent on window.open/fullscreen.
-  const showGrantButton = () => {
-    if (grantBtn || !hasWM()) return
-    const b = document.createElement('button')
-    b.className = 'bento-present-grant'
-    b.textContent = t('📺 Use a second screen for notes')
-    b.addEventListener('click', async () => {
-      const ok = await cacheScreens() // this click IS the activation → prompts once
-      grantBtn?.remove(); grantBtn = null
-      const msg = document.createElement('div')
-      msg.className = 'bento-present-toast'
-      msg.textContent = ok && secondScreen()
-        ? t('Second screen ready — press S for speaker notes')
-        : (ok ? t('Only one screen detected — notes will open in a window (S)') : t('Couldn’t access displays — notes will open in a window (S)'))
-      overlay.appendChild(msg)
-      window.setTimeout(() => msg.remove(), 4000)
-    })
-    overlay.appendChild(b)
-    grantBtn = b
-  }
-  // At present-start: if we can read the layout without a prompt (permission
-  // already granted), cache it; otherwise offer the grant button.
-  const setupSecondScreen = async () => {
-    if (!hasWM()) return
-    let state = 'prompt'
-    try { state = (await (navigator as unknown as { permissions?: { query?: (o: unknown) => Promise<{ state: string }> } }).permissions?.query?.({ name: 'window-management' as PermissionName }))?.state ?? 'prompt' } catch { /* no query api */ }
-    console.info('[bento-speaker] window-management permission:', state)
-    if (state === 'granted' && await cacheScreens()) return
-    if (state !== 'denied') showGrantButton()
-  }
+  // Second-screen placement is set up in the EDITOR (properties panel) before
+  // presenting — that's where the Window Management permission is granted via a
+  // dedicated gesture, and the layout is cached in ../screens. Here we just read
+  // the chosen display synchronously when the notes open.
   const nextVisibleIndex = (from: number) => {
     for (let i = (isState(from) ? anchorOf(from) : from) + 1; i < doc.slides.length; i++) {
       if (!isState(i)) return i
@@ -289,12 +238,12 @@ export function startPresentation(
       // re-enter here). Nothing to do — the good path.
       console.info('[bento-speaker] notes on 2nd screen; slides', document.fullscreenElement ? 'still fullscreen' : '→ press F for fullscreen')
     } else if (wasFullscreen) {
-      // No second-screen placement (permission not granted / single screen) —
-      // the notes would sit hidden behind the fullscreen slides. Drop fullscreen
-      // so they're visible, and surface the one-click grant button.
-      console.info('[bento-speaker] no 2nd screen — revealing notes; offering the grant button')
+      // No second display set up — the notes would sit hidden behind the
+      // fullscreen slides, so drop fullscreen to reveal them. (To send notes to
+      // a second screen automatically, enable it in the editor's Slide panel
+      // before presenting.)
+      console.info('[bento-speaker] no 2nd screen — revealing notes in a window')
       document.exitFullscreen?.().catch(() => {})
-      showGrantButton()
     }
     window.setTimeout(() => { openingSpeaker = false }, 500)
   }
@@ -320,10 +269,6 @@ export function startPresentation(
   }
   document.addEventListener('fullscreenchange', onFsChange)
   if (opts.fullscreen !== false) enterFullscreen()
-  // Prepare second-screen support: cache the layout if the permission is already
-  // granted, otherwise show a one-click grant button (the S keypress can't prompt
-  // for it — its activation is spent on window.open/fullscreen).
-  void setupSecondScreen()
 
   const exit = () => {
     if (exited) return
@@ -536,15 +481,27 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
     // node would fight it and freeze the dot off its path
     if (fx.loop?.type === 'motion-path') return
     if (fx.enter) {
+      // directional entrances: fade-* nudge 16px, slide-* sweep 120px from an
+      // edge. x needs the x transform channel (added to anim.ts).
+      const D = 120
+      const from = { opacity: 0, x: 0, y: 0 }
+      if (fx.enter === 'fade-up') from.y = 16
+      else if (fx.enter === 'fade-down') from.y = -16
+      else if (fx.enter === 'slide-left') from.x = D // starts to the right, slides in leftward
+      else if (fx.enter === 'slide-right') from.x = -D
+      else if (fx.enter === 'slide-up') from.y = D
+      else if (fx.enter === 'slide-down') from.y = -D
+      const slide = fx.enter.startsWith('slide-')
       anim.fromTo(
         node,
-        { opacity: 0, y: fx.enter === 'fade-up' ? 16 : 0 },
+        from,
         {
           opacity: el.opacity,
+          x: 0,
           y: 0,
-          duration: 0.55,
+          duration: slide ? 0.75 : 0.55,
           delay: 0.12 + Math.min(step, 24) * 0.05,
-          ease: 'power2.out',
+          ease: slide ? 'power3.out' : 'power2.out',
         },
       )
     }
