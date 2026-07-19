@@ -449,4 +449,13 @@ export const it: Catalog = {
   "This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)": "Questo {kind} è di {mb} MB. Incorporarlo lo mantiene nel .bento.html ma rende il file grande e lento da aprire e salvare.\n\nIncorporare comunque? (Annulla, poi incolla un URL ospitato nel pannello per mantenere il deck leggero.)",
   "URL": "URL",
   "…or paste a media URL": "…oppure incolla un URL multimediale",
+  // signed writes: viewer + presentation package (v0.9.18)
+  "A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).": "Un visualizzatore live: segue questa sessione condivisa e mostra le modifiche in tempo reale, ma non può mai cambiare il deck (lo impone il relay — la sola lettura non è solo questione di fiducia).",
+  "A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.": "Una consegna sigillata: apre direttamente la presentazione — solo visualizzazione e presentazione, senza editor né sessione live.",
+  "Presentation package saved — it opens straight into the show": "Pacchetto di presentazione salvato — apre direttamente la presentazione",
+  "Read-only copy saved — it follows the live session, view only": "Copia in sola lettura salvata — segue la sessione live, solo visualizzazione",
+  "Read-only — viewing this live session. You can watch and present, but not edit.": "Sola lettura — stai guardando questa sessione live. Puoi vedere e presentare, ma non modificare.",
+  "Save as presentation package…": "Salva come pacchetto di presentazione…",
+  "This is a presentation package — view and present only.": "Questo è un pacchetto di presentazione — solo visualizzazione e presentazione.",
+  "Turn on live sharing first — a read-only copy follows the session": "Attiva prima la condivisione live — una copia in sola lettura segue la sessione",
 }

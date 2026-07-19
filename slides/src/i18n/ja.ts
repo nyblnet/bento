@@ -449,4 +449,13 @@ export const ja: Catalog = {
   "This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)": "この {kind} は {mb} MB です。埋め込むと .bento.html 内に保持されますが、ファイルが大きくなり、開閉や保存が遅くなります。\n\nそれでも埋め込みますか？（キャンセルして、デッキを小さく保つためにパネルでホスト URL を貼り付けてください。）",
   "URL": "URL",
   "…or paste a media URL": "…またはメディア URL を貼り付け",
+  // signed writes: viewer + presentation package (v0.9.18)
+  "A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).": "ライブビューア：この共有セッションに追従し、変更をリアルタイムで表示しますが、デッキを変更することはできません（リレーが強制します — 読み取り専用は単なる自主ルールではありません）。",
+  "A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.": "封印された配布用：直接プレゼンを開きます — 閲覧とプレゼンのみ、エディターもライブセッションもありません。",
+  "Presentation package saved — it opens straight into the show": "プレゼンテーションパッケージを保存しました — 直接プレゼンが開きます",
+  "Read-only copy saved — it follows the live session, view only": "読み取り専用コピーを保存しました — ライブセッションに追従し、閲覧のみです",
+  "Read-only — viewing this live session. You can watch and present, but not edit.": "読み取り専用 — このライブセッションを閲覧中です。閲覧とプレゼンはできますが、編集はできません。",
+  "Save as presentation package…": "プレゼンテーションパッケージとして保存…",
+  "This is a presentation package — view and present only.": "これはプレゼンテーションパッケージです — 閲覧とプレゼンのみ。",
+  "Turn on live sharing first — a read-only copy follows the session": "先にライブ共有をオンにしてください — 読み取り専用コピーはセッションに追従します",
 }

@@ -449,4 +449,13 @@ export const de: Catalog = {
   "This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)": "Dieses {kind} ist {mb} MB groß. Das Einbetten behält es in der .bento.html, macht die Datei aber groß und langsam beim Öffnen und Speichern.\n\nTrotzdem einbetten? (Abbrechen, dann eine gehostete URL im Bedienfeld einfügen, damit das Deck klein bleibt.)",
   "URL": "URL",
   "…or paste a media URL": "…oder eine Medien-URL einfügen",
+  // signed writes: viewer + presentation package (v0.9.18)
+  "A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).": "Ein Live-Betrachter: folgt dieser geteilten Sitzung und zeigt Änderungen in Echtzeit, kann das Deck aber nie ändern (vom Relay erzwungen — Nur-Lesen ist nicht bloß Ehrensache).",
+  "A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.": "Eine versiegelte Ausgabe: öffnet direkt die Präsentation — nur Ansehen und Präsentieren, kein Editor, keine Live-Sitzung.",
+  "Presentation package saved — it opens straight into the show": "Präsentationspaket gespeichert — es öffnet direkt die Präsentation",
+  "Read-only copy saved — it follows the live session, view only": "Nur-Lese-Kopie gespeichert — sie folgt der Live-Sitzung, nur zum Ansehen",
+  "Read-only — viewing this live session. You can watch and present, but not edit.": "Nur-Lesen — Sie betrachten diese Live-Sitzung. Ansehen und präsentieren, aber nicht bearbeiten.",
+  "Save as presentation package…": "Als Präsentationspaket speichern…",
+  "This is a presentation package — view and present only.": "Dies ist ein Präsentationspaket — nur ansehen und präsentieren.",
+  "Turn on live sharing first — a read-only copy follows the session": "Zuerst Live-Freigabe einschalten — eine Nur-Lese-Kopie folgt der Sitzung",
 }

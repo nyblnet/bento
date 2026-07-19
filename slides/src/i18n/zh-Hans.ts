@@ -449,4 +449,13 @@ export const zhHans: Catalog = {
   "This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)": "此 {kind} 为 {mb} MB。嵌入会将其保留在 .bento.html 中，但会使文件变大，打开和保存变慢。\n\n仍要嵌入吗？（取消后在面板中粘贴托管 URL，以保持演示文稿小巧。）",
   "URL": "URL",
   "…or paste a media URL": "…或粘贴媒体 URL",
+  // signed writes: viewer + presentation package (v0.9.18)
+  "A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).": "实时查看器：跟随此共享会话并实时显示编辑，但永远无法更改演示文稿（由中继强制执行——只读不只是靠自觉）。",
+  "A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.": "密封的分发件：直接打开放映——仅供查看和演示，没有编辑器，没有实时会话。",
+  "Presentation package saved — it opens straight into the show": "演示文稿包已保存——它直接打开放映",
+  "Read-only copy saved — it follows the live session, view only": "只读副本已保存——它跟随实时会话，仅供查看",
+  "Read-only — viewing this live session. You can watch and present, but not edit.": "只读——您正在查看此实时会话。可以观看和演示，但不能编辑。",
+  "Save as presentation package…": "另存为演示文稿包…",
+  "This is a presentation package — view and present only.": "这是一个演示文稿包——仅供查看和演示。",
+  "Turn on live sharing first — a read-only copy follows the session": "请先开启实时共享——只读副本会跟随该会话",
 }

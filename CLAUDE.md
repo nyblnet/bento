@@ -80,6 +80,28 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   fraction (nearest sample), integrate 1/speed to a time LUT, invert — so the
   element dwells at low-speed anchors and rushes at high ones. Uniform speeds =
   identity (no cost); speeds omitted from the model unless they vary.
+- **Signed writes / read-only tiers (v0.9.18)**: three file modes now, split
+  from the old conflated `readonly`. (1) **Presentation package** = `doc.readonly`
+  (unchanged: PLAYER file, present-only, collab stripped) — "Save as
+  presentation package…". (2) **Read-only live viewer** = `collab.role:'reader'`
+  + `writerPriv` stripped — "Save read-only copy…" (shown only when sharing is
+  on); boots the editor in a locked state (`store.readOnly` no-ops commit; remote
+  ops apply via session's direct state.apply+emit, NOT commit, so live updates
+  still land; `editor.enterReaderMode` hides the insert group + Moveable handles,
+  shows a pulsing banner; canvas text/cell edits early-return). (3) **Writer**
+  (default). ENFORCEMENT is cryptographic, not honour-system: `collab` gains an
+  ECDSA P-256 writer keypair (`writerPub` in every copy, `writerPriv` only in
+  writers) SEPARATE from the symmetric `key` (read cap). `mintCollab` is ASYNC
+  now and the room id COMMITS to the pubkey — `w`+b64url(sha256(pubRaw)) — so the
+  blind relay pins the writer key trustlessly (legacy rooms are `r`+random,
+  stay permissive). OnlineTransport signs op batches + snapshots (ECDSA over the
+  ciphertext `${i}.${d}`); the relay (server/sync-worker) verifies the
+  commitment at connect and DROPS any persisted frame lacking a valid sig →
+  readers (no priv) can't write. Client signs on the old relay too (extra fields
+  ignored) so there was no breakage window; **relay must be `wrangler deploy`d**
+  for enforcement (done). Async-mint ripple: `session.ensureCollab` (new docs
+  only, never auto-connected), startSharing/rotateKeys/saveAsNewDeck await.
+  Full spec + threat model in docs/collab-design.md.
 - **File modes (v0.9.0)**: `doc.readonly` = PLAYER file (boots straight into
   the show; exit lands on a minimal card, never the editor; "Save read-only
   copy…" strips collab). Password encryption: the #bento-doc block can hold a
