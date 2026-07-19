@@ -162,7 +162,7 @@ each kind of content to the feature built for it:
 - **text**: `html` (inline `<b> <i> <br>` ok), `fontSize`, `fontFamily`,
   `fontWeight`, `color`, `align` (`left|center|right`), `valign`,
   `lineHeight`, optional `letterSpacing`.
-- **shape**: `shape` = `rect|ellipse|triangle|line|path`, `fill`, `stroke`,
+- **shape**: `shape` = `rect|ellipse|triangle|arrow|line|path`, `fill`, `stroke`,
   `strokeWidth`, `radius` (rect corner). Optional `fillGradient`
   `{angle, stops:[{at:0..1, color}]}` (CSS-convention angle). Lines take
   their color from `fill` and draw horizontally across the box (rotate for

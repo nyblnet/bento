@@ -177,7 +177,7 @@ The data block holds one JSON object. Sketch of the current shape — see
 BentoDoc
 ├─ format: "bento/slides"
 ├─ title
-├─ size: { width: 1600, height: 900 }
+├─ size: { width: 1280, height: 720 }   ← canonical 16:9; per-doc, presets in the slide panel
 ├─ theme: { fontFamily, … }
 ├─ present?: { slideNumber?, controls?, progress? }
 ├─ assets?: { key → data URI }        ← images, fonts; referenced as "asset:key"
@@ -200,15 +200,28 @@ BentoDoc
       │         lineStart?/lineEnd? (none|arrow|dot|bar) · d?/pathBox? (path kind)
       ├─ image: src ("asset:key" or data URI) · fit · radius
       ├─ svg:   asset?/markup? · css? (scoped per element at render)
-      └─ chart: preset? · option  ← PURE-JSON ECharts option (template-string
-                                     formatters only — functions can't serialize)
+      ├─ chart: preset? · option · source? ← ECharts-SHAPED pure-JSON option
+      │         (template-string formatters only — functions can't serialize);
+      │         drawn by the in-house charts-lite engine; source={tableId}
+      │         binds it live to a table element
+      ├─ table: columns[{w}] · rows[{cells[{html,align?,color?,bg?,bold?}]}]
+      │         · header · style{headerBg,zebra?,borderColor,cellPad…,radius…}
+      │         ← a real HTML <table>, rendered by the shared renderer
+      └─ media: kind (video|audio) · src (data URI | URL | "asset:key")
+                · poster? fit? radius? · controls/autoplay/loop/muted
+                ← autoplay fires in present mode only
 ```
+
+Text also resolves dynamic-field tokens at render time — `{{page}}`,
+`{{pages}}`, `{{title}}`, `{{date}}`, `{{time}}` (page/pages take a zero-pad
+width, `{{page:2}}`) — so page numbering re-flows when slides move. The MODEL
+stores the raw token; only the rendered output is resolved.
 
 `fx` carries all presentation behavior:
 
 | Field | Meaning |
 |---|---|
-| `enter: 'fade' \| 'fade-up'`, `order` | staggered entrance; equal `order` values enter together |
+| `enter: 'fade' \| 'fade-up' \| 'fade-down' \| 'slide-left/right/up/down'`, `order` | staggered entrance; equal `order` values enter together |
 | `countUp` | numbers in the text animate 0 → final |
 | `ambient: 'kenburns'`, `ken: {dir, scale, duration}` | photo drift loop, or one-shot zoom-in/out settle |
 | `loop: {type:'dash-march', …}` | marching dashed strokes |
@@ -218,8 +231,8 @@ Interactivity is composed from three primitives, all plain data: element
 `link` (click → jump to slide id), slide `stateOf` (hidden variants reached by
 links, morphing on shared element ids), and `showOnHover` sets with slide
 `hover` (in-slide hover reveals). Charts on either side of a morph with the
-same element id additionally animate their *data* (ECharts universal
-transition).
+same element id additionally animate their *data* — the in-house chart engine
+tweens the option's numeric leaves (a bar⇄pie type change stages a fade+sweep).
 
 ## 5. Runtime organization
 
@@ -231,7 +244,7 @@ flowchart TB
     STORE["store.ts<br/>doc · selection · undo/redo (JSON snapshots)"]
     RENDER["render.ts<br/>single model→DOM renderer"]
     ANIM["anim.ts<br/>in-house tween engine"]
-    CHARTS["charts.ts<br/>ECharts: SSR snapshots + live mounts"]
+    CHARTS["charts.ts<br/>in-house engine: SVG snapshots + live mounts"]
     PRESENT["present.ts<br/>Reveal overlay · morph · fx · states · hover"]
     ED["editor/*<br/>editor · canvas (Moveable/Selecto) · panels<br/>patheditor · markdown"]
 
@@ -350,3 +363,11 @@ its registers defend its edits, the room's replay fills in what it missed.
 "Duplicate as new deck" re-mints identity for genuinely new documents.
 The relay never sees plaintext, and every saved copy stays a complete,
 standalone document (sync is a layer beside the file, never a replacement).
+
+**Signed writes (v0.9.18).** `doc.collab` gained an ECDSA P-256 writer keypair
+(`writerPub` in every copy, `writerPriv` in writer copies only) SEPARATE from
+the symmetric read key. The room id COMMITS to the pubkey (`w`+b64url(sha256))
+so the blind relay pins the writer key trustlessly and DROPS mutating frames
+without a valid signature — a read-only copy is a writer copy with `writerPriv`
+stripped, enforced at the edge, not by client courtesy. Legacy `r`-rooms stay
+permissive. Full design + threat model: `collab-design.md`.

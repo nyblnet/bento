@@ -133,7 +133,8 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   Scripting: `window.bento.updates.{version,check,build,apply}`.
 - `src/i18n.ts` + `src/i18n/*.ts` — internationalization: ~1KB t() with
   ENGLISH-STRING-AS-KEY (gettext style; missing key = English fallback),
-  {placeholder} interpolation, catalogs compiled in (ja, zh-Hans, es, fr, de);
+  {placeholder} interpolation, catalogs compiled in (ja, zh-Hans, zh-Hant, es,
+  fr, de, it — 7 locales + English fallback = 8 UI languages);
   locale follows the VIEWER (navigator.language; localStorage 'bento-lang'
   override; picker in About rebuilds the workspace). Language never enters the
   document format. select() localizes DISPLAY labels only (values stay model
