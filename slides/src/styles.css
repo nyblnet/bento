@@ -631,6 +631,9 @@ html, body {
 }
 .ed-help-tips { margin: 4px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--ink, #26303e); }
 .ed-help-tips li { margin: 3px 0; }
+.ed-help-more { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line, rgba(30,42,58,0.12)); text-align: center; }
+.ed-help-more a { color: var(--accent, #ED8266); font-weight: 600; font-size: 13px; text-decoration: none; }
+.ed-help-more a:hover { text-decoration: underline; }
 
 /* --- auto-save: recovery banner, saved tag, version history --------------- */
 .ed-recover {

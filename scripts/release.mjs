@@ -102,6 +102,10 @@ writeFileSync(
 mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
 cpSync(join(root, 'skills/bento-deck/SKILL.md'), join(site, 'skills/bento-deck/SKILL.md'))
 
+// /help — the user-facing guide (linked from the editor's ? overlay).
+mkdirSync(join(site, 'help'), { recursive: true })
+cpSync(join(root, 'site-src/help.html'), join(site, 'help/index.html'))
+
 // 404 — of course it's a deck (see build-404-deck.mjs + site-src/404.html).
 execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
 cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
