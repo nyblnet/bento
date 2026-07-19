@@ -4,7 +4,7 @@
 import type { Store } from '../store'
 import {
   FORMAT_VERSION,
-  applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultTable, defaultText,
+  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultTable, defaultText,
   instantiateLayout, layoutElementIds, newDocId, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
@@ -182,7 +182,7 @@ export class Editor {
       this.shapeDropdown(),
       btn(ICONS.image, t('Image'), () => this.pickImage()),
       btn(ICONS.table, t('Table'), () => this.canvas.insert(defaultTable())),
-      btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
+      btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme)))),
     )
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))

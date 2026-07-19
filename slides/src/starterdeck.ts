@@ -287,6 +287,9 @@ export function starterDoc(): BentoDoc {
   const doc = newDoc()
   doc.title = 'Bento Slides Showcase'
   doc.theme.fontFamily = BODY
+  doc.theme.accent = PEACH
+  // new charts (＋ Chart, table→chart) inherit the deck's midnight-&-peach family
+  doc.theme.chartPalette = [PEACH, STEEL, PEACH_SOFT, STEEL_SOFT, MIST, PEACH_DEEP]
   doc.fonts = [
     { family: 'Fraunces', asset: 'font-fraunces-900', weight: '900' },
     { family: 'Instrument Sans', asset: 'font-instrument', weight: '400 700' },
