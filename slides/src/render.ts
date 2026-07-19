@@ -11,6 +11,9 @@ export interface RenderOpts {
   svgAsImage?: boolean
   /** hide empty placeholder text entirely — present mode and print */
   hidePlaceholders?: boolean
+  /** media (video/audio) accepts pointer input — PRESENT only. On the editor
+   *  canvas it stays inert so its native controls don't swallow selection. */
+  liveMedia?: boolean
   /** dynamic-field values ({{page}} etc.) for this slide; auto-filled by renderSlide */
   fields?: FieldContext
 }
@@ -423,6 +426,62 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       img.draggable = false
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
+      break
+    }
+    case 'media': {
+      const radius = el.radius ?? 0
+      if (opts.svgAsImage) {
+        // thumbnails: a cheap still — poster (video) or an icon chip, never a
+        // live media element.
+        const still = document.createElement('div')
+        still.style.cssText = `width:100%;height:100%;border-radius:${radius}px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:${el.kind === 'video' ? '#0b0f14' : '#e7edf4'}`
+        if (el.kind === 'video' && el.poster) {
+          const img = document.createElement('img')
+          img.src = resolveAsset(doc, el.poster)
+          img.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};display:block`
+          still.appendChild(img)
+        } else {
+          still.style.color = el.kind === 'video' ? '#ffffff' : '#5e7699'
+          still.style.fontSize = '24px'
+          still.textContent = el.kind === 'video' ? '▶' : '♪'
+        }
+        node.appendChild(still)
+        break
+      }
+      const inert = opts.liveMedia ? '' : ';pointer-events:none'
+      if (el.kind === 'audio') {
+        const audio = document.createElement('audio')
+        if (el.src) audio.src = resolveAsset(doc, el.src)
+        audio.controls = el.controls !== false
+        audio.loop = !!el.loop
+        audio.preload = 'metadata'
+        audio.dataset.autoplay = el.autoplay ? '1' : ''
+        audio.style.cssText = 'width:100%;display:block' + inert
+        const wrap = document.createElement('div')
+        wrap.style.cssText = `width:100%;height:100%;display:flex;align-items:center;padding:0 6px;box-sizing:border-box;border-radius:${radius}px;background:#eef2f7`
+        if (!el.src) { wrap.style.color = '#93a2b6'; wrap.style.fontSize = '13px'; wrap.style.justifyContent = 'center'; wrap.textContent = '♪ ' + 'No audio source' }
+        else wrap.appendChild(audio)
+        node.appendChild(wrap)
+        break
+      }
+      const video = document.createElement('video')
+      if (el.src) video.src = resolveAsset(doc, el.src)
+      if (el.poster) video.poster = resolveAsset(doc, el.poster)
+      video.controls = el.controls !== false
+      video.loop = !!el.loop
+      video.muted = el.muted !== false
+      video.playsInline = true
+      video.preload = 'metadata'
+      video.dataset.autoplay = el.autoplay ? '1' : ''
+      video.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};border-radius:${radius}px;display:block;background:#0b0f14` + inert
+      if (!el.src) {
+        const ph = document.createElement('div')
+        ph.style.cssText = `width:100%;height:100%;border-radius:${radius}px;display:flex;align-items:center;justify-content:center;background:#0b0f14;color:#8fa0b6;font-size:14px`
+        ph.textContent = '▶ No video source'
+        node.appendChild(ph)
+      } else {
+        node.appendChild(video)
+      }
       break
     }
     case 'chart': {

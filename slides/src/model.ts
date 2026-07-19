@@ -230,8 +230,31 @@ export interface TableElement extends ElementBase {
   style: TableStyle
 }
 
+/**
+ * Audio or video. Hybrid storage: `src` is a data: URI (embedded — travels
+ * inside the .bento.html), an external URL / relative path (referenced — keeps
+ * the file small but needs the network / a sibling file), or "asset:<key>".
+ * The editor embeds small clips and warns above MEDIA_EMBED_BUDGET, offering a
+ * URL instead. Autoplay only fires in PRESENT mode (never on the canvas or in
+ * thumbnails).
+ */
+export interface MediaElement extends ElementBase {
+  type: 'media'
+  kind: 'video' | 'audio'
+  src: string
+  /** video only: a still shown before playback (data:/asset:/URL) */
+  poster?: string
+  /** video only: fit within the element box */
+  fit?: 'contain' | 'cover' | 'fill'
+  radius?: number
+  autoplay?: boolean
+  loop?: boolean
+  muted?: boolean
+  controls?: boolean
+}
+
 export type SlideElement =
-  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement
+  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while
@@ -555,6 +578,35 @@ export function defaultImage(src: string, partial: Partial<ImageElement> = {}): 
     src,
     fit: 'contain',
     radius: 0,
+    ...partial,
+  }
+}
+
+/** Soft ceiling for embedding media as a data URI (bytes). Above this the
+ *  editor warns — a big embed makes the .bento.html slow to open and save. */
+export const MEDIA_EMBED_BUDGET = 8 * 1024 * 1024 // 8 MB
+
+export function defaultMedia(
+  kind: 'video' | 'audio',
+  src: string,
+  partial: Partial<MediaElement> = {},
+): MediaElement {
+  const audio = kind === 'audio'
+  return {
+    id: uid('m'),
+    type: 'media',
+    kind,
+    x: 440, y: 210,
+    w: audio ? 460 : 560, h: audio ? 56 : 315,
+    rotation: 0, opacity: 1,
+    src,
+    fit: 'contain',
+    radius: audio ? 12 : 8,
+    controls: true,
+    // video defaults muted so present-mode autoplay is permitted by browsers
+    muted: !audio,
+    loop: false,
+    autoplay: false,
     ...partial,
   }
 }

@@ -43,7 +43,7 @@ export function startPresentation(
     // Morph slides swap instantly; the Flip animation supplies the motion.
     section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
     if (slide.stateOf) section.dataset.bentoState = '1' // dimmed in overview
-    const surface = renderSlide(slide, doc, { hidePlaceholders: true })
+    const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
     // reveal slides start with only the default hover set visible
     if (slide.hover?.type === 'reveal') applyRevealSet(surface, slide.hover.default ?? null, slide.hover.default)
     section.appendChild(surface)
@@ -273,6 +273,7 @@ export function startPresentation(
   const exit = () => {
     if (exited) return
     exited = true
+    pauseMediaIn(slidesEl) // stop any playing clip before teardown
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     const last = deck.getIndices().h
     try {
@@ -385,6 +386,8 @@ export function startPresentation(
     wireHoverFocus(doc.slides[toIdx], to)
     if (from) disposeLiveCharts(doc.slides[fromIdx], from)
     mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
+    if (from) pauseMediaIn(from)
+    startMediaIn(to)
     updateSpeaker()
   }) as any)
 
@@ -414,10 +417,27 @@ export function startPresentation(
       restartSvgAnimations(first)
       wireHoverFocus(doc.slides[startIndex], first)
       mountLiveCharts(doc.slides[startIndex], first)
+      startMediaIn(first)
     }
   })
 
   return { exit }
+}
+
+// --- media playback -----------------------------------------------------------
+
+// Autoplay is intentionally NOT set at render time (it would fire on the editor
+// canvas and in every thumbnail). Present mode starts flagged media on entry
+// and pauses everything on exit so a paused clip doesn't keep playing off-slide.
+function startMediaIn(section: HTMLElement) {
+  section.querySelectorAll<HTMLMediaElement>('video[data-autoplay="1"], audio[data-autoplay="1"]').forEach((m) => {
+    try { m.currentTime = 0 } catch { /* not seekable yet */ }
+    void m.play().catch(() => { /* blocked (e.g. un-muted video) — leave paused */ })
+  })
+}
+
+function pauseMediaIn(section: HTMLElement) {
+  section.querySelectorAll<HTMLMediaElement>('video, audio').forEach((m) => { m.pause() })
 }
 
 // --- live charts --------------------------------------------------------------

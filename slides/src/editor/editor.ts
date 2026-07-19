@@ -4,7 +4,8 @@
 import type { Store } from '../store'
 import {
   FORMAT_VERSION,
-  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultTable, defaultText,
+  MEDIA_EMBED_BUDGET,
+  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, layoutElementIds, newDocId, syncLinkedChart, uid,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
 } from '../model'
@@ -193,6 +194,8 @@ export class Editor {
       this.shapeDropdown(),
       btn(ICONS.image, t('Image'), () => this.pickImage(),
         t('Add an image — or just paste one (⌘V) straight onto the slide')),
+      btn(ICONS.media, t('Media'), () => this.pickMedia(),
+        t('Add video or audio — small clips embed in the file; for big ones, paste a hosted URL in the panel to keep the deck small')),
       btn(ICONS.table, t('Table'), () => this.canvas.insert(defaultTable()),
         t('Add a table — edit cells inline; turn it into a live chart from the panel')),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
@@ -991,6 +994,53 @@ export class Editor {
       reader.readAsDataURL(file)
     })
     input.click()
+  }
+
+  // --- insert media (video / audio) --------------------------------------------------
+
+  private pickMedia() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/*,audio/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const kind: 'video' | 'audio' = file.type.startsWith('audio') ? 'audio' : 'video'
+      if (file.size > MEDIA_EMBED_BUDGET) {
+        const mb = Math.round(file.size / (1024 * 1024))
+        const ok = confirm(t(
+          'This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)',
+          { kind, mb },
+        ))
+        if (!ok) { this.insertMedia(kind, ''); return } // empty element → panel URL field
+      }
+      const reader = new FileReader()
+      reader.onload = () => this.insertMedia(kind, String(reader.result))
+      reader.readAsDataURL(file)
+    })
+    input.click()
+  }
+
+  /** Insert a media element, sizing video to its intrinsic aspect when known. */
+  private insertMedia(kind: 'video' | 'audio', src: string) {
+    const { width: dw, height: dh } = this.store.doc.size
+    if (kind === 'audio' || !src) {
+      const w = kind === 'audio' ? 460 : 560
+      const h = kind === 'audio' ? 56 : 315
+      this.canvas.insert(defaultMedia(kind, src, { w, h, x: (dw - w) / 2, y: (dh - h) / 2 }))
+      return
+    }
+    const probe = document.createElement('video')
+    const place = (w: number, h: number) =>
+      this.canvas.insert(defaultMedia('video', src, { w: Math.round(w), h: Math.round(h), x: (dw - w) / 2, y: (dh - h) / 2 }))
+    probe.preload = 'metadata'
+    probe.onloadedmetadata = () => {
+      const ar = probe.videoWidth && probe.videoHeight ? probe.videoWidth / probe.videoHeight : 16 / 9
+      const w = Math.min(dw * 0.6, 640)
+      place(w, w / ar)
+    }
+    probe.onerror = () => place(560, 315)
+    probe.src = src
   }
 
   // --- present & save ------------------------------------------------------------------
