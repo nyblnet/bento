@@ -266,6 +266,86 @@ verified names — layered ON TOP of the existing protocol (a signature field
 in frames), relay still blind, local-first files unchanged. Nothing shipped
 today constrains that design.
 
+## Signed writes — enforced read-only (v0.9.18)
+
+The relay's only gate today is `?tok = SHA-256(key)` — possession of the room
+key proves the right to *read and write*. That means "read-only" could only
+ever be a client-side courtesy: a viewer must hold the key to decrypt, and
+holding the key means being able to encrypt and send too. **Signed writes**
+split that single capability into two, so read-only becomes something the
+relay ENFORCES — while the relay stays blind to content.
+
+### The two capabilities
+
+- **Content key** (`collab.key`, symmetric AES-GCM, unchanged): the READ
+  capability. Every copy — writers and viewers — carries it. `?tok` still
+  proves possession so the relay won't even fan ciphertext to a stranger.
+- **Writer keypair** (ECDSA P-256, new): the WRITE capability. Minted once
+  per room at creation. `collab.writerPub` (raw SPKI, base64url) travels in
+  EVERY copy; `collab.writerPriv` (PKCS#8/JWK) travels ONLY in writer copies.
+  A **read-only copy is a writer copy with `writerPriv` stripped.**
+
+### Binding the pubkey to the room (trustless, no TOFU)
+
+The relay must know a room's writer pubkey without trusting the client that
+presents it — a viewer legitimately holds the room id, so first-writer TOFU
+would let a viewer pin *their own* key and become the writer. So the room id
+**commits** to the pubkey:
+
+    room name = "w" + base64url(SHA-256(writerPubRaw))      (new, signed)
+    room name = "r" + base64url(random)                     (legacy, v0.8–0.9.17)
+
+The leading char is the scheme selector. On connect a client passes
+`?w=<writerPubRaw>`; the relay checks `"w"+b64url(sha256(w)) === roomName`
+before pinning it. A viewer passes the same (correct) pubkey — it's public and
+in the file — but cannot forge signatures without the private half.
+
+### What is signed, and how
+
+Only the frames that mutate what a joiner sees are signed: **op batches**
+(`{p:1}`) and **snapshots** (`{snap:1}`). Ephemeral frames (hello / need /
+presence / bye) pass unsigned. The signature is ECDSA-P256/SHA-256 over the
+UTF-8 of `` `${i}.${d}` `` (iv + ciphertext, both base64url) and rides in a new
+envelope field `g`. **Encrypt-then-sign**: the signature covers ciphertext, so
+the relay verifies authorship without decrypting — blindness preserved. AES-GCM
+already gives key-holders content integrity; `g` adds *authorization*.
+
+### Relay enforcement (`w`-rooms only)
+
+    on connect (w-room):  require ?w, verify "w"+b64url(sha256(w)) == name,
+                          store `w` in DO storage (like `tok`; commitment-safe)
+    on {p:1} / {snap:1}:  require valid `g` over `${i}.${d}` vs stored `w`,
+                          else DROP the frame (no persist, no fan-out)
+    on ephemeral frames:  unchanged
+    on r-rooms:           unchanged (permissive) — legacy files keep working
+
+### Rollout & backward-compat (the reason to ship now)
+
+- **Client first, relay second, no breakage window.** New clients mint `w`
+  rooms and sign ops. The *current* relay ignores the extra `w`/`g` fields and
+  the `w` room name — so signed-scheme files work on the old relay
+  (permissively) until the new relay deploys and enforcement lights up.
+- **Legacy `r` rooms stay permissive forever** — existing shared files never
+  break. `rotateKeys()` mints a fresh (now `w`) room, i.e. rotation upgrades a
+  deck to enforced.
+- **Shipping the protocol now, before the read-only UX, is the point:** every
+  room created from here on is signed, so when "read-only viewer" and the
+  "presentation package" rename land, they need NO protocol change and break
+  NO existing session — read-only is just "save without `writerPriv`."
+
+### Threat model / limits
+
+- Enforcement is at the **relay**. Same-machine tab sync (BroadcastChannel)
+  can't be gated there — but same machine = same trust domain, so read-only is
+  cooperative locally (editing UI disabled), enforced over the network.
+- A malicious *relay* could still withhold/reorder frames or serve a stale
+  snapshot; it cannot forge writer ops (no private key) nor read content.
+  Optional client-side `g` verification (defence against a hostile relay
+  injecting old ciphertext) is a later, additive hardening — not required for
+  the read-only guarantee.
+- `writerPriv` in a writer file is only as protected as the file. Anyone with
+  a writer copy can write — expected: the writer file *is* the write cap.
+
 ## Offline mode
 
 A viewer-side hard switch (localStorage `bento-offline`, toggle in About)

@@ -37,20 +37,54 @@ export function mintRoomKey(): string {
   return b64u.enc(bytes)
 }
 
+const EC = { name: 'ECDSA', namedCurve: 'P-256' } as const
+const SIGN_ALG = { name: 'ECDSA', hash: 'SHA-256' } as const
+
+/** Import a writer private key (PKCS#8, base64url) for signing op frames. */
+export async function importSignKey(privB64: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey('pkcs8', b64u.dec(privB64) as BufferSource, EC, false, ['sign'])
+}
+
+/** ECDSA-P256/SHA-256 signature over `${i}.${d}`, base64url. */
+export async function signFrame(key: CryptoKey, i: string, d: string): Promise<string> {
+  const sig = await crypto.subtle.sign(SIGN_ALG, key, new TextEncoder().encode(`${i}.${d}`))
+  return b64u.enc(new Uint8Array(sig))
+}
+
+export type CollabCreds = {
+  room: string
+  key: string
+  on: boolean
+  writerPub: string
+  writerPriv: string
+  role: 'writer'
+}
+
 /**
  * Fresh collaboration credentials, minted at DOCUMENT CREATION and LIVE by
  * default (on:true): the moment identity and keys exist, any copy of the
  * file joins the same room — "send first" needs no ceremony. "Stop sharing"
  * in the Live popover turns it off; Offline mode hard-blocks regardless.
- * The room id is random — never derived from docId — so distinct sharing
- * lineages can never collide on a room (and the relay learns nothing about
- * document identity). Everyone else READS the room from the file; only
- * minting is random.
+ *
+ * Signed-writes scheme (v0.9.18+): the room id is the COMMITMENT to a fresh
+ * ECDSA writer pubkey — `w` + base64url(SHA-256(writerPubRaw)) — so the relay
+ * can pin the writer key trustlessly (a viewer holds the room id but can't
+ * substitute their own key). `key` is the separate symmetric READ capability.
+ * Async because keypair generation is. See docs/collab-design.md.
  */
-export function mintCollab(): { room: string; key: string; on: boolean } {
-  const id = new Uint8Array(12)
-  crypto.getRandomValues(id)
-  return { room: `${syncHost()}/d/r${b64u.enc(id)}`, key: mintRoomKey(), on: true }
+export async function mintCollab(): Promise<CollabCreds> {
+  const kp = (await crypto.subtle.generateKey(EC, true, ['sign', 'verify'])) as CryptoKeyPair
+  const pubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))
+  const privPk = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey))
+  const commit = new Uint8Array(await crypto.subtle.digest('SHA-256', pubRaw as BufferSource))
+  return {
+    room: `${syncHost()}/d/w${b64u.enc(commit)}`,
+    key: mintRoomKey(),
+    on: true,
+    writerPub: b64u.enc(pubRaw),
+    writerPriv: b64u.enc(privPk),
+    role: 'writer',
+  }
 }
 
 /** dev override for the relay host (e.g. ws://localhost:8787) */
@@ -70,6 +104,8 @@ export class OnlineTransport implements Transport {
   onStatus: ((s: OnlineStatus) => void) | null = null
   private ws: WebSocket | null = null
   private key: CryptoKey | null = null
+  /** writer signing key — null for readers (they can decrypt but not author). */
+  private signKey: CryptoKey | null = null
   private queue: string[] = []
   private closed = false
   private backoff = 800
@@ -93,6 +129,8 @@ export class OnlineTransport implements Transport {
       /** replay done: (actor,seq) pairs the room holds; return true to upload a snapshot */
       onReady: (seen: Set<string>, seq: number) => boolean
     },
+    private writerPub?: string,
+    private writerPriv?: string,
   ) {
     void docId
     this.init(room)
@@ -109,7 +147,12 @@ export class OnlineTransport implements Transport {
     ])
     const tokDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', raw as BufferSource))
     const tok = b64u.enc(tokDigest.slice(0, 18))
-    this.url = `${room}?tok=${tok}`
+    // writers sign op frames; readers omit the key and the relay drops their
+    // writes. The pubkey (`w`) rides on the URL so the relay can pin+verify.
+    if (this.writerPriv) {
+      try { this.signKey = await importSignKey(this.writerPriv) } catch { this.signKey = null }
+    }
+    this.url = `${room}?tok=${tok}` + (this.writerPub ? `&w=${this.writerPub}` : '')
     this.connect()
   }
 
@@ -229,7 +272,9 @@ export class OnlineTransport implements Transport {
       const snap = this.hooks.getSnapshot()
       const text = await this.encrypt(JSON.stringify(snap))
       if (text && this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ snap: 1, q, i: text.i, d: text.d }))
+        const env: Record<string, unknown> = { snap: 1, q, i: text.i, d: text.d }
+        if (this.signKey) env.g = await signFrame(this.signKey, text.i, text.d)
+        this.ws.send(JSON.stringify(env))
       }
     } finally {
       this.snapInFlight = false
@@ -252,7 +297,12 @@ export class OnlineTransport implements Transport {
     void (async () => {
       const enc = await this.encrypt(JSON.stringify(frame))
       if (!enc) return
-      const env = frame.t === 'ops' ? { p: 1, ...enc } : enc
+      let env: Record<string, unknown> = enc
+      if (frame.t === 'ops') {
+        env = { p: 1, ...enc }
+        // sign the ciphertext so the relay verifies authorship while blind.
+        if (this.signKey) env.g = await signFrame(this.signKey, enc.i, enc.d)
+      }
       const text = JSON.stringify(env)
       if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(text)
       else {
@@ -306,12 +356,15 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
       return new NullTransport()
     }
     active?.close()
+    // readers carry writerPub (to name the room's writer key) but never the
+    // private half — so their op frames go unsigned and the relay drops them.
+    const priv = collab.role === 'reader' ? undefined : collab.writerPriv
     active = new OnlineTransport(collab.room, collab.key, docId, onFrame, {
       onSnap: (doc, state) => session.applySnapshot(doc, state),
       getSnapshot: () => session.snapshot(),
       onOpen: () => session.hello(),
       onReady: (seen) => session.onRelayReady(seen),
-    })
+    }, collab.writerPub, priv)
     return active
   })
   return active
@@ -319,13 +372,14 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
 
 /** flip sharing on and connect — the "Start live session" action.
  * Credentials already exist (minted at creation); this only arms them. */
-export function startSharing(session: SyncSession, store: Store): OnlineTransport | null {
+export async function startSharing(session: SyncSession, store: Store): Promise<OnlineTransport | null> {
   if (offlineEnabled()) return null
   if (active) return active
-  store.commit(() => {
-    if (!store.doc.collab) store.doc.collab = mintCollab()
-    store.doc.collab.on = true
-  })
+  if (!store.doc.collab) {
+    const creds = await mintCollab()
+    store.commit(() => { store.doc.collab = creds })
+  }
+  store.commit(() => { store.doc.collab!.on = true })
   return joinFromDoc(session, store)
 }
 
@@ -357,10 +411,10 @@ export function stopSharing(session: SyncSession, store: Store) {
 
 /** revocation: mint a fresh room + key. Every previously sent copy loses
  * access; only copies saved AFTER this can join future sessions. */
-export function rotateKeys(session: SyncSession, store: Store) {
+export async function rotateKeys(session: SyncSession, store: Store) {
   stopSharing(session, store)
+  const fresh = await mintCollab()
   store.commit(() => {
-    const fresh = mintCollab()
     const sync = store.doc.collab?.sync
     store.doc.collab = sync ? { ...fresh, sync } : fresh
   })

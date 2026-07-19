@@ -173,7 +173,7 @@ if (location.hash === '#present') {
     transports: () => session.transportKinds,
     /** start an online session (mints doc.collab, connects the relay) */
     share: () => {
-      startSharing(session, store)
+      void startSharing(session, store)
       return store.doc.collab
     },
     unshare: () => stopSharing(session, store),

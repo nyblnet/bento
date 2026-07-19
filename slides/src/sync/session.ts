@@ -157,8 +157,10 @@ export class SyncSession {
     this.bornWithCollab = !!doc.collab
     this.explicitShare = false
     // credentials are minted AT CREATION: any copy of the file can join once
-    // it is live (on:true by default). See eligibility gate above.
-    if (!doc.collab) doc.collab = mintCollab()
+    // it is live (on:true by default). Minting is async now (the writer
+    // keypair) — fine because a freshly-minted doc is never auto-connected, so
+    // the sub-frame gap before collab lands touches nothing. See eligibility.
+    if (!doc.collab) void this.ensureCollab()
     const saved = doc.collab?.sync
     if (saved && saved.v === SYNC_V) {
       // this file was saved during/after a shared session: restore the CRDT
@@ -187,6 +189,15 @@ export class SyncSession {
       this.pushPresence()
       this.sweepPeers()
     }, HEARTBEAT_MS)
+  }
+
+  /** Mint collab credentials (incl. the writer keypair) for a doc created
+   *  without them. Direct mutation (no undo entry), guarded against a race with
+   *  a real collab arriving via loadDoc. */
+  private async ensureCollab() {
+    if (this.store.doc.collab) return
+    const creds = await mintCollab()
+    if (!this.store.doc.collab) this.store.doc.collab = creds
   }
 
   /** register a factory for an additional transport (online relay) and connect it */
