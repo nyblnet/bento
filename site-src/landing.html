@@ -388,13 +388,18 @@ section:not(.paper) .card p { color: var(--mist); }
   transition: color 0.2s, border-color 0.2s, transform 0.2s;
 }
 .gbtn:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); transform: translateY(-1px); }
-/* signal poster — red duotone photo, bone masthead */
+/* signal poster — mirrors sig-cover: full-bleed press photo under an ink scrim,
+   bone masthead + hairline, a towering Fraunces-black title, and the red date bar
+   (OCT 12—14 reversed to bone) with the programme line to its right */
 .gp-signal { background: #141310 url(__PH_PRESS__) center/cover; }
 .gp-signal .ov { inset: 0; background: rgba(20, 19, 16, 0.62); }
-.gp-signal .k { left: 9%; top: 11%; font-size: 8.5px; font-weight: 700; letter-spacing: 0.26em; color: #EFEDE4; }
-.gp-signal .hr { left: 9%; right: 9%; top: 22%; height: 1.5px; background: rgba(239, 237, 228, 0.7); }
-.gp-signal .t { left: 8.5%; top: 27%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 42px; line-height: 0.94; color: #EFEDE4; text-shadow: 0 2px 14px rgba(20, 19, 16, 0.45); }
-.gp-signal .bar { left: 9%; bottom: 13%; width: 27%; height: 12%; background: #E8442E; }
+.gp-signal .k { left: 7.5%; top: 11.5%; font-size: 8px; font-weight: 700; letter-spacing: 0.22em; color: #EFEDE4; }
+.gp-signal .hr { left: 7.5%; right: 7.5%; top: 16.5%; height: 1.5px; background: rgba(239, 237, 228, 0.7); }
+.gp-signal .t { left: 6.5%; top: 18.5%; font-family: Fraunces, Georgia, serif; font-weight: 900; font-size: 56px; line-height: 0.92; color: #EFEDE4; text-shadow: 0 2px 14px rgba(20, 19, 16, 0.45); }
+.gp-signal .bar { left: 7.5%; top: 72%; width: 25%; height: 12.5%; background: #E8442E; }
+.gp-signal .oct { left: 7.5%; width: 25%; top: 76.2%; text-align: center; font-family: 'Instrument Sans', sans-serif; font-weight: 800; font-size: 12.5px; letter-spacing: 0.08em; color: #EFEDE4; }
+.gp-signal .sub { left: 35%; right: 7%; top: 73%; font-size: 8px; line-height: 1.5; color: rgba(239, 237, 228, 0.85); }
+.gp-signal .foot { left: 7.5%; right: 7.5%; bottom: 7.5%; font-size: 6.5px; font-weight: 600; letter-spacing: 0.14em; color: rgba(239, 237, 228, 0.6); }
 /* terra poster — split cover, photo panel right (mirrors the deck's ter-cover slide:
    headline on white, goat-vase photo owns the right edge, two vessel pills straddle
    the seam, faint celadon orbs drift behind) */
@@ -410,14 +415,19 @@ section:not(.paper) .card p { color: var(--mist); }
 .gp-terra .foot { left: 7.5%; bottom: 9%; font-size: 7px; font-weight: 600; letter-spacing: 0.18em; color: rgba(42, 39, 36, 0.5); }
 .gp-terra .v1 { right: 29%; top: 15.3%; width: 14.8%; height: 39%; border-radius: 999px; background: url(__PH_VASE1__) center/cover; border: 2.5px solid #C96F4A; box-shadow: 0 10px 24px rgba(42, 39, 36, 0.3); }
 .gp-terra .v2 { right: 37%; top: 61%; width: 11%; height: 28%; border-radius: 999px; background: url(__PH_VASE3__) center/cover; border: 2.5px solid #D9C9B4; box-shadow: 0 8px 20px rgba(42, 39, 36, 0.25); }
-/* orbital poster */
-.gp-orbital { background: #05060E url(__PH_STARS__) center 65%/cover; }
-.gp-orbital .ov { inset: 0; background: rgba(5, 6, 14, 0.5); }
-.gp-orbital .ring { left: 50%; top: 50%; width: 52%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 1.5px solid #38E1FF; border-radius: 50%; box-shadow: 0 0 34px rgba(56, 225, 255, 0.35), inset 0 0 26px rgba(56, 225, 255, 0.12); }
-.gp-orbital .t { left: 0; right: 0; top: 50%; transform: translateY(-58%); font-weight: 800; font-size: 21px; letter-spacing: 0.5em; text-indent: 0.5em; text-align: center; color: #F2F6FF; }
-.gp-orbital .moon { left: 63%; top: 13%; width: 7%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(140deg, #8F7BF7, #38B6FF); }
-.gp-orbital .s1, .gp-orbital .s2, .gp-orbital .s3 { width: 3px; height: 3px; border-radius: 50%; background: rgba(178, 196, 224, 0.8); }
-.gp-orbital .s1 { left: 14%; top: 30%; } .gp-orbital .s2 { left: 84%; top: 62%; } .gp-orbital .s3 { left: 24%; top: 78%; }
+/* orbital poster — mirrors orb-cover: sunlit-Earth-from-ISS photo on the void
+   under a top/bottom-dark scrim, a cyan orbit ring centred a touch high, a glowing
+   cyan→violet dot riding the top of the ring, the letter-spaced ORBITAL wordmark
+   across the ring's middle (wider than the ring), and two mono readouts below */
+.gp-orbital { background: #05060E url(__PH_STARS__) center 62%/cover; }
+.gp-orbital .ov { inset: 0; background: linear-gradient(180deg, rgba(5, 6, 14, 0.72) 0%, rgba(5, 6, 14, 0.3) 46%, rgba(5, 6, 14, 0.78) 100%); }
+.gp-orbital .ring { left: 50%; top: 44%; width: 34%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 1.5px solid #38E1FF; border-radius: 50%; box-shadow: 0 0 30px rgba(56, 225, 255, 0.38), inset 0 0 22px rgba(56, 225, 255, 0.12); }
+.gp-orbital .dot { left: 50%; top: 13.5%; width: 6%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: linear-gradient(140deg, #38E1FF, #7A5CFF); box-shadow: 0 0 16px rgba(56, 225, 255, 0.85); }
+.gp-orbital .t { left: 0; right: 0; top: 44%; transform: translateY(-52%); font-family: 'Instrument Sans', sans-serif; font-weight: 800; font-size: 27px; letter-spacing: 0.34em; text-indent: 0.34em; text-align: center; color: #EAF4FF; text-shadow: 0 0 18px rgba(56, 225, 255, 0.4); }
+.gp-orbital .sub { left: 0; right: 0; top: 55.5%; text-align: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 6px; letter-spacing: 0.16em; color: rgba(178, 196, 224, 0.62); }
+.gp-orbital .foot { left: 0; right: 0; bottom: 9%; text-align: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 6px; letter-spacing: 0.18em; color: rgba(178, 196, 224, 0.42); }
+.gp-orbital .s1, .gp-orbital .s2, .gp-orbital .s3 { width: 2.5px; height: 2.5px; border-radius: 50%; background: rgba(233, 246, 255, 0.9); box-shadow: 0 0 5px rgba(120, 215, 255, 0.85); }
+.gp-orbital .s1 { left: 16%; top: 26%; } .gp-orbital .s2 { left: 83%; top: 60%; } .gp-orbital .s3 { left: 26%; top: 76%; }
 /* picnic poster — scrapbook: kodachrome under the sunshine wash, hard-shadow
    stickers a few degrees askew, a polaroid pinned lower-centre (mirrors the
    pic-cover slide: title top-left, blue tile + pink dot + green wedge, date tag) */
@@ -585,6 +595,9 @@ body.kdeck header, body.kdeck footer { display: none; }
           <span class="hr"></span>
           <span class="t">Loud<br>letters.</span>
           <span class="bar"></span>
+          <span class="oct">OCT 12—14</span>
+          <span class="sub">Three days on typography, grids, and the confidence to be simple.</span>
+          <span class="foot">HALL 6 · MAKETOWN · TICKETS AT THE DOOR · PHOTO: LIBRARY OF CONGRESS, 1942</span>
         </a>
         <div class="gmeta">
           <div><h3>Signal</h3><p>Editorial type — one paper, one ink, one violent red.</p></div>
@@ -615,10 +628,12 @@ body.kdeck header, body.kdeck footer { display: none; }
       <div class="gcard rv d1">
         <a class="gposter gp-orbital" href="/gallery/orbital-dark-immersive.bento.html" target="_blank" rel="noopener" aria-label="Open the Orbital template in a new tab">
           <span class="ov"></span>
-          <span class="ring"></span>
-          <span class="t">ORBITAL</span>
-          <span class="moon"></span>
           <span class="s1"></span><span class="s2"></span><span class="s3"></span>
+          <span class="ring"></span>
+          <span class="dot"></span>
+          <span class="t">ORBITAL</span>
+          <span class="sub">LOW-ORBIT DATA · A FICTIONAL COMPANY FOR A REAL TEMPLATE</span>
+          <span class="foot">— PRESS → TO ENTER THE SYSTEM —</span>
         </a>
         <div class="gmeta">
           <div><h3>Orbital</h3><p>Dark immersive — neon systems with clickable states.</p></div>
