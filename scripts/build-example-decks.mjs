@@ -106,6 +106,18 @@ const orbit = (r, phase = 0, squash = 0.6) => {
   return `M0,0 L${pts.slice(1).join(' L')} Z`
 }
 
+// organic wander (Lissajous): different x/y frequencies trace a smooth figure-8
+// instead of a mechanical circle. Path is relative to rest and closed (returns
+// to start). fx/fy must be integers so the curve closes cleanly.
+const drift = (ax, ay, fx, fy, px = 0, py = 0) => {
+  const N = 72, x0 = ax * Math.sin(px), y0 = ay * Math.sin(py), pts = []
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * Math.PI * 2
+    pts.push(`${(ax * Math.sin(fx * t + px) - x0).toFixed(1)},${(ay * Math.sin(fy * t + py) - y0).toFixed(1)}`)
+  }
+  return `M0,0 L${pts.slice(1).join(' L')} Z`
+}
+
 const doc = (o) => ({
   format: 'bento/slides', version: 1, title: o.title,
   size: { width: 1280, height: 720 },
@@ -259,25 +271,32 @@ function deckTerra() {
   const GRAD_CLAY = grad(20, [0, '#D97E58'], [1, '#B85C38'])
   const GRAD_SAND = grad(0, [0, '#E3D5C2'], [1, '#CDBBA1'])
   const GRAD_MOSS = grad(15, [0, '#8D9376'], [1, '#6F755C'])
+  const GRAD_MOSS_LIT = grad(20, [0, '#AEB394'], [1, '#7E846A'])
   const kick = (x, y, s) => text({ x, y, w: 600, h: 22, html: s, fontSize: 12, fontWeight: 600, letterSpacing: 5, color: CLAY })
 
   const s1 = slide({
     id: 'ter-cover', background: WHITE, transition: 'none',
     notes: 'TEMPLATE — “Terra”, premium product-brand deck. The commerce classic: a SPLIT COVER — copy breathes on white, a full-height product photograph owns the right edge (ken-burns drift), and two photo pills straddle the seam. The three “vessels” morph into the collection grid on slide 3.',
     elements: [
+      // big, soft celadon glaze orbs — glide right across the panel on slow,
+      // gently-curved arcs (wide flat ellipses), sitting BEHIND the type and the
+      // product photo so they pass behind everything: layered ambient depth
+      shape('ellipse', { x: 278, y: 108, w: 384, h: 384, opacity: 0.13, fill: '#8D9376', fillGradient: GRAD_MOSS, shadow: { blur: 64, color: 'rgba(141,147,118,0.20)' }, fx: { loop: { type: 'motion-path', path: orbit(320, Math.PI / 2, 0.16), duration: 44 } } }),
+      shape('ellipse', { id: 'ter-c', x: 535, y: 305, w: 250, h: 250, opacity: 0.16, fill: '#8D9376', fillGradient: GRAD_MOSS_LIT, shadow: { blur: 52, color: 'rgba(141,147,118,0.18)' }, fx: { loop: { type: 'motion-path', path: orbit(300, -Math.PI / 2, 0.20), duration: 38 } } }),
+      shape('ellipse', { x: 584, y: 139, w: 192, h: 192, opacity: 0.18, fill: '#8D9376', fillGradient: GRAD_MOSS_LIT, shadow: { blur: 44, color: 'rgba(141,147,118,0.18)' }, fx: { loop: { type: 'motion-path', path: orbit(340, Math.PI / 2, 0.13), duration: 33 } } }),
       img({ asset: 'ph-vase-goat', x: 800, y: 0, w: 480, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.06, duration: 20 } } }),
       shape('rect', { x: 800, y: 0, w: 480, h: 720, fill: 'rgba(42,39,36,0.08)' }),
       kick(96, 96, 'TERRA OBJECTS — COLLECTION Nº4'),
       text({ x: 90, y: 150, w: 700, h: 260, html: 'Quiet things,<br>well made.', fontSize: 92, fontFamily: FR, fontWeight: 900, color: CHAR, lineHeight: 1.02 }),
       text({ x: 96, y: 430, w: 480, h: 80, html: 'Thrown, glazed and fired in one workshop.<br>Forty-one objects. No two alike.', fontSize: 17, color: SOFT, lineHeight: 1.6, fx: { enter: 'fade-up', order: 1 } }),
-      shape('rect', { id: 'ter-a', x: 700, y: 110, w: 190, h: 280, radius: 95, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.28)' } }),
-      img({ asset: 'ph-vase-jay', x: 707, y: 117, w: 176, h: 266, radius: 88, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 } } }),
-      shape('rect', { id: 'ter-b', x: 646, y: 440, w: 140, h: 200, radius: 70, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.22)' } }),
-      img({ asset: 'ph-vase-classic', x: 652, y: 446, w: 128, h: 188, radius: 64, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 } } }),
-      // the third "glaze" — a translucent celadon bead that drifts slowly in
-      // the cream negative space (opacity + a small motion-path loop). Reads as
-      // a deliberate accent rather than a flat dot stuck on the split seam.
-      shape('ellipse', { id: 'ter-c', x: 612, y: 250, w: 72, h: 72, opacity: 0.55, fill: '#6F755C', fillGradient: GRAD_MOSS, shadow: { y: 10, blur: 24, color: 'rgba(42,39,36,0.14)' }, fx: { loop: { type: 'motion-path', path: orbit(12, -Math.PI / 2, 0.85), duration: 8 } } }),
+      // the two vessel pills slide in from the right edge (from behind the
+      // product photo), staggered; each pill + its photo share order so they
+      // travel together. The photos keep their ken-burns (scale) — the slide
+      // uses the x channel, so the two coexist.
+      shape('rect', { id: 'ter-a', x: 700, y: 110, w: 190, h: 280, radius: 95, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.28)' }, fx: { enter: 'slide-left', order: 2 } }),
+      img({ asset: 'ph-vase-jay', x: 707, y: 117, w: 176, h: 266, radius: 88, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 }, enter: 'slide-left', order: 2 } }),
+      shape('rect', { id: 'ter-b', x: 646, y: 440, w: 140, h: 200, radius: 70, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.22)' }, fx: { enter: 'slide-left', order: 3 } }),
+      img({ asset: 'ph-vase-classic', x: 652, y: 446, w: 128, h: 188, radius: 64, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 }, enter: 'slide-left', order: 3 } }),
       text({ x: 96, y: 620, w: 500, h: 22, html: 'SPRING 2026 · EDITION OF 41', fontSize: 11, fontWeight: 600, letterSpacing: 4, color: SOFT }),
       text({ x: 900, y: 668, w: 360, h: 20, html: 'MET MUSEUM OPEN ACCESS · CC0', fontSize: 9, fontWeight: 600, letterSpacing: 3, color: 'rgba(247,245,240,0.75)', align: 'right' }),
     ],
@@ -385,15 +404,26 @@ function deckOrbital() {
     shadow: glow('rgba(56,225,255,0.5)', 10),
     fx: { loop: { type: 'motion-path', path: orbit(14 + size * 2, phase), duration: dur } },
   })
+  // A satellite in low orbit: a small craft (a glowing dash) that tracks a wide,
+  // shallow arc across the sky — the tiny `squash` flattens the orbit ellipse to
+  // an edge-on pass, so it sweeps in from one edge, arcs over the limb, and exits
+  // the other (then loops round the far side). Slow, phase-offset so the sky is
+  // never crowded; rides behind the ring + wordmark. Beats aimless floating dots.
+  const satellite = (x, y, rx, squash, dur, phase) => shape('ellipse', {
+    x, y, w: 3, h: 3, fill: 'rgba(233,246,255,1)',
+    shadow: glow('rgba(120,215,255,0.9)', 6),
+    fx: { loop: { type: 'motion-path', path: orbit(rx, phase, squash), duration: dur } },
+  })
 
   const s1 = slide({
     id: 'orb-cover', background: VOID, transition: 'none',
-    notes: 'TEMPLATE — “Orbital”, immersive dark-tech deck. Style family: void black, one luminous gradient, particles in slow orbit — over REAL sky: the backdrop is the Milky Way shot from the ISS (NASA, public domain), dimmed under a scrim so the type stays lit. The ring and wordmark morph through the whole deck.',
+    notes: 'TEMPLATE — “Orbital”, immersive dark-tech deck. Style family: void black, one luminous gradient — over REAL sky: the backdrop is a sunlit Earth from the ISS (NASA, public domain; ISS007-E-10807), the sun flaring at the top behind the orbit dot, dimmed under a scrim (image opacity 0.6) so the type stays lit. Three satellites track wide low-orbit arcs across the sky behind the ring. The ring and wordmark morph through the whole deck.',
     elements: [
       img({ asset: 'ph-stars', x: 0, y: 0, w: 1280, h: 720, opacity: 0.6, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.09, duration: 28 } } }),
       shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.45)', fillGradient: grad(180, [0, 'rgba(5,6,14,0.6)'], [0.55, 'rgba(5,6,14,0.25)'], [1, 'rgba(5,6,14,0.7)']) }),
-      star(180, 140, 6, 17, 0), star(1050, 120, 4, 21, 2), star(940, 560, 8, 19, 4),
-      star(220, 540, 5, 23, 1), star(640, 90, 4, 25, 3), star(1160, 400, 6, 15, 5),
+      satellite(560, 168, 540, 0.14, 44, Math.PI / 2),
+      satellite(1340, 240, 700, 0.15, 54, 0),
+      satellite(-60, 300, 860, 0.10, 62, Math.PI),
       shape('ellipse', { id: 'orb-ring', x: 440, y: 120, w: 400, h: 400, fill: 'rgba(0,0,0,0)', stroke: CYAN, strokeWidth: 2, shadow: glow('rgba(56,225,255,0.45)', 60) }),
       shape('ellipse', { x: 610, y: 90, w: 60, h: 60, fill: CYAN, fillGradient: GRAD_CY, shadow: glow('rgba(56,225,255,0.8)', 30), fx: { loop: { type: 'motion-path', path: orbit(200, -Math.PI / 2, 1), duration: 14 } } }),
       text({ id: 'orb-word', x: 140, y: 260, w: 1000, h: 130, html: 'ORBITAL', fontSize: 110, fontWeight: 800, color: '#EAF4FF', align: 'center', letterSpacing: 30, fontFamily: IN, shadow: glow('rgba(56,225,255,0.35)', 40) }),
@@ -417,31 +447,39 @@ function deckOrbital() {
 
   const s2b = slide({
     id: 'orb-earth', background: VOID, transition: 'fade',
-    notes: 'The evidence beat: a real night-Earth photograph (ISS Expedition 40, NASA — public domain) full-bleed under a slow ken-burns drift. One scrim, one line. Photographs read as truth in a deck full of neon — use exactly one.',
+    notes: 'The evidence beat: a real night-Earth photograph (Tokyo at night, ISS Expedition 64 — NASA JSC Gateway to Astronaut Photography of Earth, public domain) full-bleed under a slow ken-burns drift. One scrim, one line. Photographs read as truth in a deck full of neon — use exactly one.',
     elements: [
       img({ asset: 'ph-earth', x: 0, y: 0, w: 1280, h: 720, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.1, duration: 24 } } }),
       shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.38)', fillGradient: grad(180, [0, 'rgba(5,6,14,0.15)'], [1, 'rgba(5,6,14,0.8)']) }),
       mono(96, 84, '01b · THE VIEW FROM 400 KM', CYAN),
       text({ x: 96, y: 460, w: 1000, h: 180, html: 'The ground is<br>already glowing.', fontSize: 64, fontWeight: 800, color: '#EAF4FF', lineHeight: 1.08, fontFamily: IN, shadow: { y: 2, blur: 30, color: 'rgba(0,0,0,0.6)' }, fx: { enter: 'fade-up' } }),
-      mono(96, 648, 'ISS EXPEDITION 40 · NASA — PUBLIC DOMAIN', 'rgba(178,196,224,0.45)', 10),
+      mono(96, 648, 'TOKYO AT NIGHT · ISS EXPEDITION 64 · NASA — PUBLIC DOMAIN', 'rgba(178,196,224,0.45)', 10),
     ],
   })
 
   const s3 = slide({
     id: 'orb-system', background: DEEP, transition: 'fade',
-    notes: 'The “system map”. Click a node → a hidden STATE slide zooms that subsystem (link + stateOf). This is the deck’s interactive centrepiece — extend it by duplicating the state slide.',
+    notes: 'The “system map” — a clickable data pipeline: INGEST → CORE → MODEL, with dashes marching along the links (telemetry flowing) and a satellite orbiting the core. Nodes stagger in on entry. Click a node → a hidden STATE slide zooms that subsystem (link + stateOf). Extend it by duplicating a state slide.',
     elements: [
       mono(96, 84, '02 · THE CONSTELLATION — CLICK A NODE'),
-      shape('ellipse', { x: 490, y: 210, w: 300, h: 300, fill: 'rgba(0,0,0,0)', stroke: 'rgba(56,225,255,0.35)', strokeWidth: 1.5, strokeStyle: 'dashed', fx: { loop: { type: 'dash-march', distance: 40, duration: 6 } } }),
-      shape('ellipse', { x: 590, y: 310, w: 100, h: 100, fill: VOID, stroke: CYAN, strokeWidth: 2, fillGradient: GRAD_CY, shadow: glow('rgba(56,225,255,0.7)', 50) }),
-      text({ x: 590, y: 345, w: 100, h: 30, html: '<b>CORE</b>', fontSize: 14, color: '#051018', align: 'center', fontFamily: MONO }),
-      shape('ellipse', { id: 'orb-n1', x: 330, y: 180, w: 74, h: 74, fill: DEEP, stroke: VIOLET, strokeWidth: 2, shadow: glow('rgba(122,92,255,0.5)', 30), link: 'orb-state-ingest' }),
-      text({ x: 300, y: 262, w: 134, h: 24, html: 'INGEST', fontSize: 12, letterSpacing: 3, color: DIM, align: 'center', fontFamily: MONO }),
-      shape('ellipse', { id: 'orb-n2', x: 880, y: 200, w: 74, h: 74, fill: DEEP, stroke: MAG, strokeWidth: 2, shadow: glow('rgba(255,79,163,0.45)', 30), link: 'orb-state-model' }),
-      text({ x: 850, y: 282, w: 134, h: 24, html: 'MODEL', fontSize: 12, letterSpacing: 3, color: DIM, align: 'center', fontFamily: MONO }),
-      shape('line', { x: 404, y: 250, w: 190, h: 4, fill: 'rgba(120,150,190,0.5)', strokeWidth: 1.5, strokeStyle: 'dotted', lineEnd: 'arrow' }),
-      shape('line', { x: 690, y: 268, w: 190, h: 4, fill: 'rgba(120,150,190,0.5)', strokeWidth: 1.5, strokeStyle: 'dotted', lineEnd: 'arrow' }),
-      text({ x: 96, y: 560, w: 800, h: 60, html: 'Hidden state slides answer the click — arrow keys skip them,<br>so the linear story stays clean.', fontSize: 15, color: 'rgba(178,196,224,0.45)', lineHeight: 1.5 }),
+      // orbit ring + a satellite riding it (keeps the map alive)
+      shape('ellipse', { x: 500, y: 220, w: 280, h: 280, fill: 'rgba(0,0,0,0)', stroke: 'rgba(56,225,255,0.30)', strokeWidth: 1.5, strokeStyle: 'dashed', fx: { loop: { type: 'dash-march', distance: 40, duration: 7 } } }),
+      shape('ellipse', { x: 636, y: 216, w: 8, h: 8, fill: CYAN, fillGradient: GRAD_CY, shadow: glow('rgba(56,225,255,0.85)', 16), fx: { loop: { type: 'motion-path', path: orbit(140, -Math.PI / 2, 1), duration: 12 } } }),
+      // links: dashes march INGEST → CORE → MODEL, tips exactly on the node/core edges
+      shape('line', { x: 342, y: 359, w: 238, h: 2, fill: 'rgba(132,186,236,0.9)', strokeWidth: 2, strokeStyle: 'dashed', lineEnd: 'arrow', fx: { loop: { type: 'dash-march', distance: 24, duration: 1.6 } } }),
+      shape('line', { x: 700, y: 359, w: 238, h: 2, fill: 'rgba(132,186,236,0.9)', strokeWidth: 2, strokeStyle: 'dashed', lineEnd: 'arrow', fx: { loop: { type: 'dash-march', distance: 24, duration: 1.6 } } }),
+      // CORE
+      shape('ellipse', { x: 580, y: 300, w: 120, h: 120, fill: VOID, fillGradient: GRAD_CY, stroke: CYAN, strokeWidth: 2, shadow: glow('rgba(56,225,255,0.7)', 55), fx: { enter: 'fade-up', order: 0 } }),
+      text({ x: 580, y: 351, w: 120, h: 30, html: '<b>CORE</b>', fontSize: 15, color: '#04141c', align: 'center', fontFamily: MONO, letterSpacing: 2, fx: { enter: 'fade-up', order: 0 } }),
+      // INGEST node (left) — outer ring + inner glow dot + label, all click-linked
+      shape('ellipse', { id: 'orb-n1', x: 258, y: 318, w: 84, h: 84, fill: DEEP, stroke: VIOLET, strokeWidth: 2, shadow: glow('rgba(122,92,255,0.55)', 34), link: 'orb-state-ingest', fx: { enter: 'fade-up', order: 1 } }),
+      shape('ellipse', { x: 286, y: 346, w: 28, h: 28, fill: VIOLET, fillGradient: GRAD_MG, shadow: glow('rgba(122,92,255,0.85)', 14), link: 'orb-state-ingest', fx: { enter: 'fade-up', order: 1 } }),
+      text({ x: 233, y: 416, w: 134, h: 24, html: 'INGEST', fontSize: 12, letterSpacing: 3, color: DIM, align: 'center', fontFamily: MONO, link: 'orb-state-ingest', fx: { enter: 'fade-up', order: 1 } }),
+      // MODEL node (right)
+      shape('ellipse', { id: 'orb-n2', x: 938, y: 318, w: 84, h: 84, fill: DEEP, stroke: MAG, strokeWidth: 2, shadow: glow('rgba(255,79,163,0.5)', 34), link: 'orb-state-model', fx: { enter: 'fade-up', order: 2 } }),
+      shape('ellipse', { x: 966, y: 346, w: 28, h: 28, fill: MAG, shadow: glow('rgba(255,79,163,0.85)', 14), link: 'orb-state-model', fx: { enter: 'fade-up', order: 2 } }),
+      text({ x: 913, y: 416, w: 134, h: 24, html: 'MODEL', fontSize: 12, letterSpacing: 3, color: DIM, align: 'center', fontFamily: MONO, link: 'orb-state-model', fx: { enter: 'fade-up', order: 2 } }),
+      text({ x: 96, y: 566, w: 900, h: 60, html: 'Hidden state slides answer the click — arrow keys skip them,<br>so the linear story stays clean.', fontSize: 15, color: 'rgba(178,196,224,0.45)', lineHeight: 1.5, fx: { enter: 'fade', order: 3 } }),
     ],
   })
 
@@ -459,8 +497,8 @@ function deckOrbital() {
       shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(0,0,0,0)', link: 'orb-system' }),
     ],
   })
-  const st1 = stateBase('orb-state-ingest', 'INGEST', '4.2 TB of telemetry per orbit,<br>deduplicated at the edge.', VIOLET, 'ph-aurora', 'AURORA FROM THE ISS, EXPEDITION 30 · NASA — PUBLIC DOMAIN')
-  const st2 = stateBase('orb-state-model', 'MODEL', 'Anomaly scores in 90 seconds —<br>before the next ground pass.', MAG, 'ph-dragon', 'DRAGON ENDEAVOUR & THE MILKY WAY, EXPEDITION 71 · NASA — PUBLIC DOMAIN')
+  const st1 = stateBase('orb-state-ingest', 'INGEST', '4.2 TB of telemetry per orbit,<br>deduplicated at the edge.', VIOLET, 'ph-cubesats', 'CUBESATS DEPLOYED FROM THE ISS, EXPEDITION 72 · NASA — PUBLIC DOMAIN')
+  const st2 = stateBase('orb-state-model', 'MODEL', 'Anomaly scores in 90 seconds —<br>before the next ground pass.', MAG, 'ph-jwst', 'JAMES WEBB PRIMARY MIRROR · NASA/MSFC — PUBLIC DOMAIN')
 
   const s4 = slide({
     id: 'orb-growth', background: VOID, transition: 'fade',
@@ -486,10 +524,8 @@ function deckOrbital() {
 
   const s5 = slide({
     id: 'orb-end', background: VOID, transition: 'morph',
-    notes: 'The ring comes home to center; the wordmark grows back. A heavily-scrimmed nebula (Hubble, Lagoon Nebula — public domain) drifts underneath: texture, not decoration. Loops keep breathing after the morph settles.',
+    notes: 'The ring comes home to center; the wordmark grows back on pure void black. Loops keep breathing after the morph settles.',
     elements: [
-      img({ asset: 'ph-nebula', x: 0, y: 0, w: 1280, h: 720, opacity: 0.5, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.12, duration: 30 } } }),
-      shape('rect', { x: 0, y: 0, w: 1280, h: 720, fill: 'rgba(5,6,14,0.72)' }),
       shape('ellipse', { id: 'orb-ring', x: 340, y: 60, w: 600, h: 600, fill: 'rgba(0,0,0,0)', stroke: MAG, strokeWidth: 2, shadow: glow('rgba(255,79,163,0.4)', 80) }),
       shape('ellipse', { x: 620, y: 40, w: 44, h: 44, fill: MAG, fillGradient: GRAD_MG, shadow: glow('rgba(255,79,163,0.8)', 26), fx: { loop: { type: 'motion-path', path: orbit(300, -Math.PI / 2, 1), duration: 18 } } }),
       text({ id: 'orb-word', x: 140, y: 300, w: 1000, h: 110, html: 'JOIN THE SWEEP', fontSize: 66, fontWeight: 800, color: '#EAF4FF', align: 'center', letterSpacing: 16, fontFamily: IN, shadow: glow('rgba(255,79,163,0.3)', 40) }),
@@ -501,9 +537,8 @@ function deckOrbital() {
   return doc({
     title: 'Orbital — dark immersive template',
     assets: {
-      'ph-earth': photo('orbital-earth.jpg'), 'ph-nebula': photo('orbital-nebula.jpg'),
-      'ph-stars': photo('orbital-stars.jpg'), 'ph-aurora': photo('orbital-aurora.jpg'),
-      'ph-dragon': photo('orbital-dragon.jpg'),
+      'ph-earth': photo('orbital-earth.jpg'), 'ph-stars': photo('orbital-stars.jpg'),
+      'ph-cubesats': photo('orbital-cubesats.jpg'), 'ph-jwst': photo('orbital-jwst.jpg'),
       'font-spacemono': fontFile('SpaceMono-400-latin.woff2'),
       'font-spacemono-bold': fontFile('SpaceMono-700-latin.woff2'),
     },
