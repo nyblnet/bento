@@ -9,6 +9,10 @@ testing/
 # os cruft
 .DS_Store
 *.tsbuildinfo
+
+# wrangler local dev state (cache + captured request metadata, R2/KV blobs) —
+# never commit; the daemon subdir lacked its own ignore and leaked one in
+.wrangler/
 # site/ is the fully GENERATED deploy tree (release.mjs assembles it, then
 # scripts/publish-site.mjs mirrors it into the bento-site repo). Never edit it
 # by hand — the authored sources live in site-src/ (landing/guestbook/404/qr
