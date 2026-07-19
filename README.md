@@ -81,3 +81,11 @@ locally so the signing key never leaves the maintainer's machine — see
 **Bento/Slides** is the first app of Bento/Suite — Docs and Sheets are
 coming. The current release lives on [bento.page](https://bento.page) and
 reaches every existing file through the signed update channel.
+
+## License
+
+Bento is open source under the [MIT License](LICENSE) — all software here is
+MIT, © 2026 The Bento/Suite authors. Bundled runtime components (reveal.js,
+Moveable, Selecto) are MIT; the embedded typefaces (Fraunces, Instrument Sans)
+are OFL; gallery imagery is public-domain (see
+`scripts/gallery-photos/SOURCES.md`). Each component keeps its own license.

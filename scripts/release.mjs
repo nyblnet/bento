@@ -102,6 +102,9 @@ writeFileSync(
 mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
 cpSync(join(root, 'skills/bento-deck/SKILL.md'), join(site, 'skills/bento-deck/SKILL.md'))
 
+// MIT license — travels to the public site repo so the published tree carries it.
+cpSync(join(root, 'LICENSE'), join(site, 'LICENSE'))
+
 // /help — the user-facing guide (linked from the editor's ? overlay).
 mkdirSync(join(site, 'help'), { recursive: true })
 cpSync(join(root, 'site-src/help.html'), join(site, 'help/index.html'))
