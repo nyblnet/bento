@@ -25,8 +25,11 @@ SHELL_URL = "https://bento.page/releases/slides/Bento_Slides.bento.html"
 ORIGIN_FALLBACK = "https://nyblnet.github.io/bento-site"
 # relay host baked into newly minted epochs
 SYNC_HOST = "wss://sync.bento.page"
-# automatic roll cadence in hours; 0 = manual rolls only (admin endpoint)
-ROLL_HOURS = "0"
+# automatic roll cadence in hours; 0 = manual rolls only (admin endpoint).
+# 24 = daily roll (the archivist cron fires daily at 01:00 UTC, so sub-24 is a
+# no-op). Daily during launch to cap spam exposure on the unmoderated wall;
+# relax to 168 (weekly) once traffic settles.
+ROLL_HOURS = "24"
 
 # secrets (set with `npx wrangler secret put ADMIN_KEY`):
 #   ADMIN_KEY — bearer for /guestbook-admin/*
