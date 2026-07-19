@@ -218,18 +218,44 @@ export function startPresentation(
       if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, 1000)
     updateSpeaker()
-    // If we were fullscreen, the popup just knocked us out of it. Put the slides
-    // back into fullscreen (best effort — may need re-activation) and keep the
-    // bounce from ending the show. Escape still exits via its own handler.
-    if (wasFullscreen) {
-      window.setTimeout(() => {
-        window.focus()
-        enterFullscreen()
-        window.setTimeout(() => { openingSpeaker = false }, 400)
-      }, 120)
-    } else {
-      openingSpeaker = false
+    // Try TRUE dual-screen: notes window on a second display, slides fullscreen
+    // on the primary. The popup was opened synchronously above (keeps the click
+    // gesture, avoids a popup-block); we now query screens async and reposition.
+    void placeSpeaker(wasFullscreen)
+  }
+
+  /**
+   * With the Window Management permission and ≥2 displays, move the speaker
+   * popup to a second screen and fullscreen the slides on the presenter's
+   * screen. Everything degrades gracefully: single screen / denied permission /
+   * unsupported API → the popup stays put and the slides re-enter fullscreen on
+   * the current screen (so the show never ends — Escape is the only exit).
+   */
+  const placeSpeaker = async (wasFullscreen: boolean) => {
+    let targetScreen: unknown = null
+    try {
+      const getScreenDetails = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
+      if (getScreenDetails && speaker) {
+        const details = await getScreenDetails.call(window)
+        const screens: any[] = details.screens ?? []
+        if (screens.length > 1) {
+          const other = screens.find((s) => s !== details.currentScreen)
+            ?? screens.find((s) => !s.isPrimary) ?? screens[1]
+          try { speaker.moveTo(other.availLeft, other.availTop); speaker.resizeTo(other.availWidth, other.availHeight) } catch { /* clamped without permission */ }
+          targetScreen = details.currentScreen // fullscreen the slides here
+        }
+      }
+    } catch { /* permission denied / unsupported — fall back below */ }
+
+    if (wasFullscreen || targetScreen) {
+      window.focus()
+      try {
+        const opts: FullscreenOptions & { screen?: unknown } = { navigationUI: 'hide' }
+        if (targetScreen) opts.screen = targetScreen
+        await overlay.requestFullscreen?.(opts as FullscreenOptions)
+      } catch { enterFullscreen() }
     }
+    window.setTimeout(() => { openingSpeaker = false }, 400)
   }
 
   // Real fullscreen (F toggles; Present enters it by default). The overlay

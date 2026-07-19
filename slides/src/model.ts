@@ -177,6 +177,8 @@ export interface ChartElement extends ElementBase {
   /** preset key the panel offers to re-seed from (bar/line/pie/scatter) */
   preset?: string
   option: Record<string, unknown>
+  /** live data binding: xAxis labels + series values track this table element */
+  source?: { tableId: string }
 }
 
 /** One cell of a table. `html` is the same sanitized inline subset as text. */
@@ -428,6 +430,51 @@ export function deriveChartPalette(accent: string): string[] {
     hslToHex(h, s, Math.max(28, l - 16)),                                         // accent deep
     hslToHex(coolH, Math.max(24, s * 0.55), Math.max(26, l - 6)),                // cool deep
   ]
+}
+
+// --- table → chart data extraction (shared by creation + live binding) -------
+
+const stripCell = (html: string) =>
+  html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').replace(/,/g, '').trim()
+
+/** First column = x labels; each mostly-numeric column after = a data series. */
+export function tableChartColumns(table: TableElement): { labels: string[]; cols: Array<{ name: string; data: number[]; isPct: boolean }> } {
+  const bodyRows = table.header ? table.rows.slice(1) : table.rows
+  const headerRow = table.header ? table.rows[0] : null
+  const labels = bodyRows.map((r) => stripCell(r.cells[0]?.html ?? ''))
+  const cols: Array<{ name: string; data: number[]; isPct: boolean }> = []
+  for (let c = 1; c < table.columns.length; c++) {
+    const raw = bodyRows.map((r) => r.cells[c]?.html ?? '')
+    const parsed = raw.map((h) => parseFloat(stripCell(h)))
+    if (parsed.filter((n) => !Number.isNaN(n)).length < Math.ceil(bodyRows.length / 2)) continue
+    cols.push({
+      name: headerRow ? stripCell(headerRow.cells[c]?.html ?? '') : '',
+      data: parsed.map((n) => (Number.isNaN(n) ? 0 : n)),
+      isPct: /%/.test(headerRow ? stripCell(headerRow.cells[c]?.html ?? '') : '') ||
+        raw.filter((h) => /%/.test(h)).length >= Math.ceil(bodyRows.length / 2),
+    })
+  }
+  return { labels, cols }
+}
+
+/**
+ * Push a linked table's current values into a chart's option IN PLACE,
+ * preserving the chart's styling/axis config (only xAxis labels + each series'
+ * data change). Returns true if anything changed. Series map to numeric columns
+ * by position; extra series/columns are left untouched.
+ */
+export function syncLinkedChart(chart: ChartElement, table: TableElement): boolean {
+  const before = JSON.stringify(chart.option)
+  const { labels, cols } = tableChartColumns(table)
+  const opt = chart.option as { xAxis?: any; series?: any }
+  if (opt.xAxis && !Array.isArray(opt.xAxis) && typeof opt.xAxis === 'object') opt.xAxis.data = labels
+  const series: any[] = Array.isArray(opt.series) ? opt.series : opt.series ? [opt.series] : []
+  series.forEach((s, i) => {
+    if (!s || !cols[i]) return
+    if (s.type === 'pie') s.data = labels.map((name, j) => ({ name, value: cols[i].data[j] ?? 0 }))
+    else s.data = cols[i].data
+  })
+  return JSON.stringify(chart.option) !== before
 }
 
 export function chartColorsFor(theme: BentoDoc['theme']): string[] {
