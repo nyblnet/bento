@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Self-extracting shell: compress the built runtime so the file on disk is
 // ~half the size, with zero feature loss.
 //

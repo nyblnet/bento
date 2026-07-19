@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Self-update: a shipped Bento file asks the release origin whether a newer
 // app shell exists — automatically at launch (per-browser opt-out in the
 // About dialog) or on demand — and rebuilds itself as "same document, newer

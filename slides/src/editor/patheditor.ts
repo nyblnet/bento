@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Visual motion-path editing. The path of an fx.loop 'motion-path' is edited
 // as draggable anchor points on the canvas; segments are auto-smoothed
 // (Catmull-Rom → cubic bezier) so authors never manage control handles.

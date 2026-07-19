@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // "This QR code is a presentation" — builds site/q/index.html from
 // site-src/q.html: composes a tiny deck, deflates it into a base64url
 // payload (the QR encodes URL#payload — the deck literally lives in the

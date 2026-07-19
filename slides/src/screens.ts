@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Shared Window Management state.
 //
 // Granting the browser's "window management" permission needs a DEDICATED user

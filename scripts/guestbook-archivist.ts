@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Headless guestbook archivist: joins the room READ-ONLY (sends nothing),
 // replays the encrypted op log through the real CRDT engine, and writes an
 // archive file containing what people actually signed — not the pristine

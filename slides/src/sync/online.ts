@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // bento-sync online transport — E2EE WebSocket to the blind relay
 // (server/sync-worker). Every session frame is AES-GCM encrypted with the
 // room key from doc.collab.key; the relay sees ciphertext, fan-out routing,

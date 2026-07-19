@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // The editing canvas: renders the current slide at fit-to-window scale and
 // wires Moveable (drag/resize/rotate/snap) + Selecto (click & rubber-band
 // selection) + contenteditable text editing on top of it.

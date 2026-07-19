@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // bento-sync relay — the first (and only) Bento server code. One Durable
 // Object per docId room. The relay is BLIND by design:
 //

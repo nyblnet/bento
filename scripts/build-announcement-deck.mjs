@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // U1: the launch announcement IS a deck. This file becomes the Show HN link
 // target and the press kit. PRIVATE until launch — built into working/, not
 // wired into release.mjs (wire it at T-0, e.g. to site/hello.bento.html).

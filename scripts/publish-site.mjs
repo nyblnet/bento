@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // The ONE publish step for bento.page.
 //
 // `site/` is the assembled deploy tree: AUTHORED sources (landing, guestbook

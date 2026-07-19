@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Keep the LIVE guestbook daemon on the current shell.
 //
 // bento.page/guestbook.bento.html is served by the Cloudflare daemon from its

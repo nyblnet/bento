@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // The guestbook deck definition, shared by the local builder
 // (scripts/build-guestbook.mjs) and the Cloudflare daemon
 // (server/guestbook-daemon/) so epochs look identical wherever they are

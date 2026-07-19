@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // U2: the public guestbook deck — one live-collab file anyone can open and
 // sign. Minting fresh credentials IS the reset mechanism ("epochs, not
 // moderation" — see working/guestbook-design.md). The deck definition lives

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Right-hand properties panel. Shows slide properties when nothing is
 // selected, element properties otherwise. Bursts of 'input' events collapse
 // into a single undo checkpoint.

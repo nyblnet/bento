@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // bento-sync session — the bridge between the CRDT engine (crdt.ts) and the
 // running editor. Owns: the differ hook on the store, transports (same-machine
 // BroadcastChannel always; an online relay transport can be added), presence,

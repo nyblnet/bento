@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Boot sequence. Order matters: capture the pristine document BEFORE any DOM
 // mutation — the captured copy is what gets re-serialized on save.
 

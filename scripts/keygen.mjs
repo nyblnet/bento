@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // One-time: generate the Bento release signing keypair (ECDSA P-256).
 //
 //   node scripts/keygen.mjs [key-file]

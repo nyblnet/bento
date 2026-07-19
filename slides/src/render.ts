@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 

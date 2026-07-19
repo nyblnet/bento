@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // The 404 page's punchline: a tiny, fully working deck. Spliced from the
 // built shell like the gallery decks; template:true so every open is fresh.
 //

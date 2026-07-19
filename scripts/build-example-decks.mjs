@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // The gallery decks — four distinct art directions distilled from
 // Awwwards Site-of-the-Year style FAMILIES (immersive dark tech,
 // editorial typography, premium minimal commerce, playful toy-like).

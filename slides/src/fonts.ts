@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Font utilities: the curated system-stack choices offered in the editor,
 // and @font-face injection for fonts embedded in the document's asset table.
 
