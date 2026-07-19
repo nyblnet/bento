@@ -582,6 +582,61 @@ html, body {
 }
 .ed-chart-json.ed-invalid { border-color: #c9302c; outline: 1px solid #c9302c; }
 
+/* --- visual chart editor -------------------------------------------------- */
+.ed-series-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0;
+}
+.ed-series-row .ed-series-name { flex: 1 1 auto; min-width: 0; }
+.ed-series-row select { flex: 0 0 auto; }
+.ed-series-row input[type='text'],
+.ed-series-row select {
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 6px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--ink, #1e2a3a);
+}
+.ed-series-row input[type='color'] { flex: 0 0 auto; width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+.ed-series-row .ed-pie-val { width: 62px; height: 26px; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: 12px; }
+.ed-series-rm { flex: 0 0 auto; color: #9aa4b2; }
+.ed-series-rm:hover { color: #c9302c; }
+.ed-chart-add { margin: 4px 0 2px; }
+.ed-chart-add .ed-btn { width: 100%; justify-content: center; font-size: 12px; }
+.ed-axis-range { display: flex; gap: 6px; }
+.ed-axis-range input { width: 100%; height: 26px; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: 12px; }
+.ed-chart-grid-wrap { overflow-x: auto; margin: 2px 0; }
+.ed-chart-grid { border-collapse: collapse; width: 100%; }
+.ed-chart-grid th {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7a8494;
+  text-align: left;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+.ed-chart-grid td { padding: 1px 2px; }
+.ed-chart-grid input {
+  width: 100%;
+  min-width: 52px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0 5px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--ink, #1e2a3a);
+}
+.ed-chart-grid td:first-child input { font-weight: 600; }
+.ed-chart-grid .ed-btn-icon { padding: 2px; color: #9aa4b2; }
+.ed-chart-grid .ed-btn-icon:hover { color: #c9302c; }
+
 /* inline code spans inside text elements — editor, present and print alike */
 .bento-el-text code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
