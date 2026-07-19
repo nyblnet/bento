@@ -49,6 +49,9 @@ the console.
    - **every cover / divider** → at least one ambient motion
    - **repeated chrome / logo** → keep its `id` stable across slides so it
      morphs in place
+   - a **demo clip / recording / soundbite** → a **media** element
+     (`kind: video|audio`); embed short clips as a data URI, link big ones by
+     URL to keep the file small
 4. **Author** using the schema. Keep the full schema and copy-paste recipes
    open: **fetch https://bento.page/agents.md** (it has the element shapes,
    the morph/chart/state/ken-burns snippets, and the gotchas). Respect one
@@ -74,6 +77,10 @@ the console.
   should animate together. Different ids = no morph (elements just cut).
 - **Images/fonts must be embedded** as data URIs in `doc.assets` and
   referenced by `"asset:<key>"` — the file stays self-contained.
+- **Media:** a `media` element (`kind: video|audio`) embeds short clips as a
+  data URI in `src` (self-contained) or references a URL for big files (keeps
+  the deck small). `autoplay` runs only in present mode and needs `muted:true`
+  for video. Don't embed large videos — they bloat the file.
 - **Never regenerate `docId`** when editing; it is the document's identity.
 - `template:true` → every open mints a fresh deck; `readonly:true` → the
   file boots straight into the show with no editor.

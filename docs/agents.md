@@ -1,4 +1,16 @@
-# Bento for AI agents
+# Bento Slides — for AI agents
+
+**Guide version `__APP_VERSION__`** · document format `bento/slides` (v1). This
+guide matches the Bento Slides shell of the same version. A deck's `#bento-doc`
+JSON is always the source of truth — if it was written by a newer shell it may
+carry features beyond this guide; unknown keys are ignored, never fatal.
+
+> **Bento is a suite.** Slides is the first app. **Docs** (`bento/docs`) and
+> **Sheets** (`bento/sheets`) follow, each shipping as its own self-contained
+> distributable — `Bento_Slides.bento.html`, `Bento_Docs.bento.html`,
+> `Bento_Sheets.bento.html` — with its own agent guide at
+> `bento.page/<app>/agents.md`. **This guide covers Slides only.** Before you
+> edit a file, check its `"format"` and use the matching guide.
 
 *Drop this file into your context (or point your harness at it) and you can
 author and edit Bento presentations directly. Also published at
@@ -48,6 +60,7 @@ each kind of content to the feature built for it:
 | a **headline number** | big text + `fx:{countUp:true}` | the count-up earns attention |
 | **every cover / section divider** | at least **one ambient motion** (ken-burns, an orbiting accent) | a still cover is a missed first impression |
 | **repeated chrome / a logo** | keep its `id` stable across slides | it morphs in place instead of popping on every slide |
+| a **demo clip / recording / soundbite** | a **media** element (embed short, link long) | a live video/audio beats a screenshot of one |
 
 ### Copy-paste recipes
 
@@ -103,6 +116,14 @@ each kind of content to the feature built for it:
 { "id":"htitle","type":"text","x":96,"y":460,"w":1000,"h":180,"html":"On top of the photo.","fontSize":76,"fontWeight":800,"color":"#fff","align":"left","valign":"top","lineHeight":1.05,"rotation":0,"opacity":1,"fx":{"enter":"fade-up"} }
 ```
 (Embed the image as a data URI in `doc.assets` under key `hero`, then reference `"asset:hero"` — the file must stay self-contained.)
+
+**Video — embed a short clip, or link a big one** (autoplay is present-only; `muted` required to autoplay):
+```json
+// embedded — self-contained, keep it small (a few MB at most):
+{ "id":"clip","type":"media","kind":"video","src":"data:video/mp4;base64,AAAA…","x":220,"y":120,"w":840,"h":472,"rotation":0,"opacity":1,"controls":true,"muted":true,"autoplay":true,"loop":true,"fit":"cover","radius":8 }
+// linked — deck stays tiny; needs the URL at play time (give it a poster):
+{ "id":"clip","type":"media","kind":"video","src":"https://cdn.example.com/demo.mp4","poster":"asset:demo-poster","x":220,"y":120,"w":840,"h":472,"rotation":0,"opacity":1,"controls":true }
+```
 
 ### Before you finish — self-audit
 
@@ -166,6 +187,14 @@ each kind of content to the feature built for it:
   grids — NOT for numeric trends (use a chart).
 - **svg**: `asset` or `markup` for static artwork. Prefer composing rects/
   texts/paths — those stay editable and can morph.
+- **media**: `kind: video|audio`, `src` = data URI (embedded — travels in the
+  file), an external URL / relative path (referenced — keeps the file small,
+  needs the network at play time), or `"asset:<key>"`. Video also takes
+  `poster`, `fit: cover|contain|fill`, `radius`. Playback flags: `controls`,
+  `autoplay`, `loop`, `muted`. **Autoplay fires only in present mode**, and
+  browsers require `muted:true` for a video to autoplay. **Embed only SHORT
+  clips** — a big data URI bloats the file and makes it slow to open/save;
+  host large media and reference its URL instead.
 
 ## The rules that make decks feel designed
 
@@ -208,6 +237,9 @@ each kind of content to the feature built for it:
   distributable templates; remove it for a personal deck).
 - Charts degrade gracefully but exotic ECharts config is ignored — keep
   options minimal.
+- **Media size**: embedding a large video as a data URI can push the file into
+  the tens of MB and make it slow to open and save. Embed only short clips;
+  otherwise host the file and put its URL in `media.src`.
 
 Working examples of everything above: the template decks at
 [bento.page](https://bento.page) — open one and read its JSON block.
