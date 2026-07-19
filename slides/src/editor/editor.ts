@@ -4,7 +4,7 @@
 import type { Store } from '../store'
 import {
   FORMAT_VERSION,
-  applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultText,
+  applyLayout, builtinLayouts, defaultChart, defaultImage, defaultShape, defaultTable, defaultText,
   instantiateLayout, layoutElementIds, newDocId, uid,
   type ShapeKind, type Slide, type SlideElement,
 } from '../model'
@@ -181,6 +181,7 @@ export class Editor {
       btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true)),
       this.shapeDropdown(),
       btn(ICONS.image, t('Image'), () => this.pickImage()),
+      btn(ICONS.table, t('Table'), () => this.canvas.insert(defaultTable())),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(CHART_PRESETS.bar()))),
     )
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),

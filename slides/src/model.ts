@@ -168,7 +168,56 @@ export interface ChartElement extends ElementBase {
   option: Record<string, unknown>
 }
 
-export type SlideElement = TextElement | ShapeElement | ImageElement | SvgElement | ChartElement
+/** One cell of a table. `html` is the same sanitized inline subset as text. */
+export interface TableCell {
+  html: string
+  align?: 'left' | 'center' | 'right'
+  /** per-cell overrides (default from the table's style) */
+  color?: string
+  bg?: string
+  bold?: boolean
+}
+
+export interface TableRow {
+  cells: TableCell[]
+}
+
+/** Table-wide look. Cohesion lives here; cells carry only overrides. */
+export interface TableStyle {
+  headerBg: string
+  headerColor: string
+  /** stripe colour for alternate body rows; absent = no zebra */
+  zebra?: string
+  borderColor: string
+  borderWidth: number
+  cellPadX: number
+  cellPadY: number
+  fontSize: number
+  fontFamily?: string
+  /** default body-cell text colour */
+  color: string
+  /** outer corner radius (px) */
+  radius: number
+}
+
+/**
+ * A data table rendered as a real HTML <table> (table-layout: fixed) by the
+ * shared renderer — identical on the editor canvas, thumbnails, present and
+ * print. Column widths are fractional weights, normalised at render. Morphs
+ * as a box (position/size + style colours); cell CONTENT does not morph.
+ */
+export interface TableElement extends ElementBase {
+  type: 'table'
+  /** fractional column weights; length = column count */
+  columns: Array<{ w: number }>
+  rows: TableRow[]
+  /** treat row 0 as a styled header row */
+  header: boolean
+  style: TableStyle
+}
+
+export type SlideElement =
+  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while
@@ -325,6 +374,36 @@ export function defaultChart(option: Record<string, unknown>, partial: Partial<C
     rotation: 0, opacity: 1,
     preset: 'bar',
     option,
+    ...partial,
+  }
+}
+
+export function defaultTable(partial: Partial<TableElement> = {}): TableElement {
+  const cell = (html: string): TableCell => ({ html })
+  return {
+    id: uid('tbl'),
+    type: 'table',
+    x: 240, y: 220, w: 800, h: 260,
+    rotation: 0, opacity: 1,
+    header: true,
+    columns: [{ w: 1 }, { w: 1 }, { w: 1 }],
+    rows: [
+      { cells: [cell('Column A'), cell('Column B'), cell('Column C')] },
+      { cells: [cell('Row 1'), cell('—'), cell('—')] },
+      { cells: [cell('Row 2'), cell('—'), cell('—')] },
+    ],
+    style: {
+      headerBg: '#1E2A3A',
+      headerColor: '#FFFFFF',
+      zebra: 'rgba(30,42,58,0.05)',
+      borderColor: 'rgba(30,42,58,0.14)',
+      borderWidth: 1,
+      cellPadX: 16,
+      cellPadY: 11,
+      fontSize: 18,
+      color: '#1E2A3A',
+      radius: 10,
+    },
     ...partial,
   }
 }

@@ -1383,3 +1383,18 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
   color: #0D1B2E;
   background: linear-gradient(180deg, #FFB29B, #ED8266);
 }
+
+/* ————— tables ————— */
+.bento-el-table { overflow: visible; }
+.bento-el-table .bento-cell-inner { min-height: 1em; }
+/* editor-only affordances */
+.ed-root .bento-el-table td { cursor: text; }
+.bento-col-handle { border-radius: 3px; }
+.bento-col-handle:hover { background: rgba(94, 118, 153, 0.35); }
+.bento-el-table.bento-editing td { cursor: text; }
+
+/* table properties: steppers + toggle */
+.ed-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.ed-stepper .ed-btn-icon { width: 24px; height: 24px; line-height: 1; font-size: 15px; padding: 0; }
+.ed-stepper-val { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
+input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: pointer; }

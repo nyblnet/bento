@@ -101,6 +101,21 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   glyphs, image cutouts); panel offers presets (subtle/soft/elevated/glow),
   non-matching values show as 'custom'. Present-mode Reveal CONTROLS (corner
   arrows) default OFF (doc.present.controls re-enables).
+- **Tables (v0.9.3)**: `table` element — a real HTML `<table>` (table-layout
+  fixed) rendered by the shared render.ts (`renderTableHtml`), identical in
+  editor/thumb/present/print. Model: `columns` fractional weights, `rows` of
+  `{cells:[{html,align?,color?,bg?,bold?}]}`, `header` bool, `style` object
+  (headerBg/Color, zebra, borderColor/Width, cellPad X/Y, fontSize, color,
+  radius). Cells edit on canvas via contentEditable (canvas.ts editCellAt/
+  commitCellEdit, mirroring text edit; Tab/Enter navigate, Tab off the end
+  appends a row). Column widths drag via `.bento-col-handle` overlays
+  (updateTableHandles/startColResize — live DOM update during drag, commit on
+  release; needs real-mouse QA like Moveable). Panel: row/col steppers, header
+  toggle, style presets (Lined/Zebra/Boxed/Minimal), colours, and a
+  table→chart bridge (buildTableProps/tableToChart: first column = labels,
+  first numeric column = series). Morphs as a BOX (cell content does not
+  morph); under collab `rows` is a whole-value LWW register (concurrent
+  different-cell edits are last-writer-wins — documented limitation).
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
   era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are
