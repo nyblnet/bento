@@ -1,7 +1,7 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
-import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement } from './model'
+import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { chartSnapshotSvg } from './charts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -282,6 +282,51 @@ export function sanitizeHtml(html: string): string {
 const VALIGN: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }
 
 /**
+ * Render a table element as a real HTML <table> string (table-layout: fixed).
+ * Column widths are fractional weights normalised to %. Cells carry data-r /
+ * data-c so the editor can target them for in-cell editing.
+ */
+export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
+  const st = el.style
+  const esc = (s: string) => s.replace(/"/g, '&quot;')
+  const totalW = el.columns.reduce((s, c) => s + (c.w || 0), 0) || 1
+  const cols = el.columns
+    .map((c) => `<col style="width:${(((c.w || 0) / totalW) * 100).toFixed(4)}%">`)
+    .join('')
+  const font = esc(st.fontFamily || doc.theme.fontFamily)
+  const border = st.borderWidth ? `border:${st.borderWidth}px solid ${st.borderColor};` : ''
+  const rowsHtml = el.rows
+    .map((row, r) => {
+      const isHeader = el.header && r === 0
+      const bodyIndex = el.header ? r - 1 : r
+      const stripe = !isHeader && st.zebra && bodyIndex % 2 === 1 ? st.zebra : ''
+      const cells = row.cells
+        .map((cell, c) => {
+          const align = cell.align || 'left'
+          const bg = cell.bg || (isHeader ? st.headerBg : stripe || 'transparent')
+          const color = cell.color || (isHeader ? st.headerColor : st.color)
+          const weight = cell.bold || isHeader ? 700 : 400
+          return (
+            `<td data-r="${r}" data-c="${c}" style="${border}padding:${st.cellPadY}px ${st.cellPadX}px;` +
+            `text-align:${align};vertical-align:middle;color:${color};background:${bg};` +
+            `font-weight:${weight};overflow:hidden;word-break:break-word;">` +
+            `<div class="bento-cell-inner">${sanitizeHtml(cell.html || '') || '<br>'}</div></td>`
+          )
+        })
+        .join('')
+      return `<tr data-r="${r}">${cells}</tr>`
+    })
+    .join('')
+  const radius = st.radius ? `border-radius:${st.radius}px;overflow:hidden;` : ''
+  return (
+    `<div class="bento-table-wrap" style="width:100%;height:100%;${radius}">` +
+    `<table class="bento-table" style="width:100%;height:100%;border-collapse:collapse;` +
+    `table-layout:fixed;font-family:${font};font-size:${st.fontSize}px;line-height:1.3;">` +
+    `<colgroup>${cols}</colgroup>${rowsHtml}</table></div>`
+  )
+}
+
+/**
  * Render one element. The wrapper carries data-el-id (edit-time selection)
  * and data-flip-id (GSAP Flip morph matching across slides).
  */
@@ -326,6 +371,10 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
     }
     case 'shape':
       node.appendChild(shapeSvg(el))
+      break
+    case 'table':
+      node.dataset.table = '1'
+      node.innerHTML = renderTableHtml(el, doc)
       break
     case 'image': {
       const img = document.createElement('img')

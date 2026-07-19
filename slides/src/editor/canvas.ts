@@ -6,7 +6,7 @@ import Moveable from 'moveable'
 import Selecto from 'selecto'
 import type { Store } from '../store'
 import { t } from '../i18n'
-import { uid, type SlideElement } from '../model'
+import { uid, type SlideElement, type TableElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
 import { PathEditor } from './patheditor'
@@ -26,6 +26,8 @@ export class SlideCanvas {
   private zoom = 1
   private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
+  /** when editing a table cell, which cell (else null → text element edit) */
+  private editingCell: { r: number; c: number } | null = null
   private pathEditor!: PathEditor
   private comments!: CommentsUI
 
@@ -109,8 +111,10 @@ export class SlideCanvas {
     }, true)
 
     this.stage.addEventListener('dblclick', (ev) => {
-      const el = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-text')
-      if (el) this.startTextEdit(el)
+      const textEl = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-text')
+      if (textEl) { this.startTextEdit(textEl); return }
+      const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
+      if (td) this.editCellFromTd(td)
     })
 
     new ResizeObserver(() => this.relayout()).observe(wrap)
@@ -501,6 +505,79 @@ export class SlideCanvas {
     // Keep Selecto's continue-select memory in lockstep with the store —
     // otherwise shift-click resurrects targets from a previously shown slide.
     this.selecto.setSelectedTargets(targets)
+    this.updateTableHandles()
+  }
+
+  // --- column resize handles (single selected table) --------------------------
+
+  /** Show draggable dividers on the boundaries of a lone selected table. */
+  private updateTableHandles() {
+    this.surface?.querySelectorAll('.bento-col-handle').forEach((h) => h.remove())
+    if (this.editing) return
+    const ids = this.store.selection
+    if (ids.length !== 1) return
+    const el = this.store.element(ids[0])
+    if (!el || el.type !== 'table' || el.columns.length < 2) return
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    if (!node) return
+    const total = el.columns.reduce((s, c) => s + (c.w || 0), 0) || 1
+    let acc = 0
+    for (let i = 0; i < el.columns.length - 1; i++) {
+      acc += el.columns[i].w || 0
+      const handle = document.createElement('div')
+      handle.className = 'bento-col-handle'
+      handle.style.cssText =
+        `position:absolute;top:0;height:${el.h}px;width:11px;` +
+        `left:${(acc / total) * el.w - 5.5}px;cursor:col-resize;z-index:5;`
+      handle.addEventListener('pointerdown', (ev) => this.startColResize(ev, el.id, i))
+      node.appendChild(handle)
+    }
+  }
+
+  /** Drag a column divider: adjust the two adjacent weights, commit on release. */
+  private startColResize(ev: PointerEvent, id: string, i: number) {
+    ev.preventDefault()
+    ev.stopPropagation()
+    const el = this.store.element(id)
+    if (!el || el.type !== 'table') return
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+    if (!node) return
+    const startX = ev.clientX
+    const w0 = el.columns[i].w || 0
+    const w1 = el.columns[i + 1].w || 0
+    const pair = w0 + w1
+    const min = pair * 0.12
+    const cols = node.querySelectorAll<HTMLElement>('col')
+    const handles = [...node.querySelectorAll<HTMLElement>('.bento-col-handle')]
+    const total = el.columns.reduce((s, c) => s + (c.w || 0), 0) || 1
+    let live0 = w0
+    let live1 = w1
+    const onMove = (e: PointerEvent) => {
+      const dFrac = ((e.clientX - startX) / this.scale / el.w) * total
+      live0 = Math.min(Math.max(w0 + dFrac, min), pair - min)
+      live1 = pair - live0
+      // live DOM update only — no store write until release
+      if (cols[i]) cols[i].style.width = `${(live0 / total) * 100}%`
+      if (cols[i + 1]) cols[i + 1].style.width = `${(live1 / total) * 100}%`
+      let a = 0
+      for (let k = 0; k < el.columns.length - 1; k++) {
+        a += k === i ? live0 : k === i + 1 ? live1 : el.columns[k].w || 0
+        if (handles[k]) handles[k].style.left = `${(a / total) * el.w - 5.5}px`
+      }
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      this.store.commit(() => {
+        const tb = this.store.element(id) as TableElement
+        if (tb?.columns[i] && tb.columns[i + 1]) {
+          tb.columns[i].w = live0
+          tb.columns[i + 1].w = live1
+        }
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   // --- moveable -------------------------------------------------------------
@@ -689,6 +766,15 @@ export class SlideCanvas {
         return
       }
       if (this.editing) {
+        // editing a table cell: clicking a DIFFERENT cell switches to it
+        if (this.editingCell) {
+          const td = (target as HTMLElement)?.closest?.<HTMLElement>('td[data-c]')
+          if (td && this.editing.contains(td)) {
+            const already = Number(td.dataset.r) === this.editingCell.r && Number(td.dataset.c) === this.editingCell.c
+            if (!already) { this.editCellFromTd(td); e.stop(); return }
+            return // same cell: let contentEditable place the caret
+          }
+        }
         // clicking outside the text being edited commits it; inside, do nothing
         if (!this.editing.contains(target)) this.commitTextEdit()
         e.stop()
@@ -776,6 +862,7 @@ export class SlideCanvas {
   commitTextEdit() {
     const node = this.editing
     if (!node) return
+    if (this.editingCell) { this.commitCellEdit(node); return }
     this.editing = null
     this.onTextEditChange?.(undefined)
     const inner = node.querySelector<HTMLElement>('.bento-text-inner')
@@ -795,6 +882,110 @@ export class SlideCanvas {
     } else {
       this.syncTargets()
     }
+  }
+
+  // --- table cell editing -----------------------------------------------------
+
+  /** Enter cell editing from a clicked/dbl-clicked <td> (re-queries fresh). */
+  private editCellFromTd(td: HTMLElement) {
+    const tableNode = td.closest<HTMLElement>('.bento-el-table')
+    const id = tableNode?.dataset.elId
+    if (!id) return
+    this.editCellAt(id, Number(td.dataset.r), Number(td.dataset.c))
+  }
+
+  /** Commit any current edit, then edit cell (r,c) of table `id`. */
+  private editCellAt(id: string, r: number, c: number) {
+    this.commitTextEdit()
+    const td = this.surface?.querySelector<HTMLElement>(
+      `[data-el-id="${CSS.escape(id)}"] td[data-r="${r}"][data-c="${c}"]`)
+    if (!td) return
+    const node = td.closest<HTMLElement>('.bento-el-table')
+    const inner = td.querySelector<HTMLElement>('.bento-cell-inner')
+    if (!node || !inner) return
+    this.editing = node
+    this.editingCell = { r, c }
+    node.classList.add('bento-editing')
+    inner.contentEditable = 'true'
+    inner.focus()
+    document.getSelection()?.selectAllChildren(inner)
+    this.syncTargets()
+    this.onTextEditChange?.(id)
+
+    inner.addEventListener('keydown', (ev) => {
+      ev.stopPropagation()
+      if (ev.key === 'Escape') { ev.preventDefault(); this.commitTextEdit(); return }
+      if (ev.key === 'Tab') { ev.preventDefault(); this.moveCell(ev.shiftKey ? -1 : 1, 'cell'); return }
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); this.moveCell(1, 'row'); return }
+      if (ev.metaKey || ev.ctrlKey) {
+        if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) { if (undoAutoformat()) ev.preventDefault(); return }
+        const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
+        if (cmd) { ev.preventDefault(); document.execCommand(cmd) }
+      }
+    })
+    inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() })
+    inner.addEventListener('paste', (ev) => {
+      const text = ev.clipboardData?.getData('text/plain')
+      if (!text) return
+      ev.preventDefault()
+      document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
+    })
+    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })
+  }
+
+  private commitCellEdit(node: HTMLElement) {
+    const cell = this.editingCell!
+    const id = node.dataset.elId
+    this.editing = null
+    this.editingCell = null
+    this.onTextEditChange?.(undefined)
+    node.classList.remove('bento-editing')
+    const inner = node.querySelector<HTMLElement>(
+      `td[data-r="${cell.r}"][data-c="${cell.c}"] .bento-cell-inner`)
+    if (!inner || !id) return
+    inner.contentEditable = 'false'
+    const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
+    const el = this.store.element(id)
+    if (el && el.type === 'table' && el.rows[cell.r]?.cells[cell.c] && el.rows[cell.r].cells[cell.c].html !== html) {
+      this.store.commit(() => {
+        const tb = this.store.element(id) as TableElement
+        if (tb.rows[cell.r]?.cells[cell.c]) tb.rows[cell.r].cells[cell.c].html = html
+      })
+    } else {
+      this.syncTargets()
+    }
+  }
+
+  /** Tab/Enter navigation between cells; Tab off the last cell appends a row. */
+  private moveCell(dir: 1 | -1, mode: 'cell' | 'row') {
+    const cur = this.editingCell
+    const id = this.editing?.dataset.elId
+    if (!cur || !id) return
+    const el = this.store.element(id)
+    if (!el || el.type !== 'table') return
+    const nCols = el.columns.length
+    const nRows = el.rows.length
+    let r = cur.r
+    let c = cur.c
+    if (mode === 'row') {
+      if (r + dir < 0 || r + dir >= nRows) { this.commitTextEdit(); return }
+      r += dir
+    } else {
+      const idx = r * nCols + c + dir
+      if (idx < 0) { this.commitTextEdit(); return }
+      if (idx >= nRows * nCols) {
+        this.commitTextEdit()
+        this.store.commit(() => {
+          const tb = this.store.element(id) as TableElement
+          tb.rows.push({ cells: tb.columns.map(() => ({ html: '' })) })
+        })
+        this.editCellAt(id, nRows, 0)
+        return
+      }
+      r = Math.floor(idx / nCols)
+      c = idx % nCols
+    }
+    this.editCellAt(id, r, c)
   }
 
   get isEditingText() {

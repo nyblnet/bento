@@ -34,7 +34,9 @@ the console.
    is it a stat? a table? a process? a definition to expand? a photo?
 3. **Map material → feature (do NOT default to bullet text).** This is the
    step that makes it a Bento deck rather than a slideshow of paragraphs:
-   - numbers / %, quantities, "A vs B", **any table** → a **chart** element
+   - numbers to compare visually (trend, magnitude, share) → a **chart** element
+   - a comparison / spec / pricing / feature grid → a **table** element
+     (`columns` weights + `rows` of `cells` + a `style` object)
    - consecutive slides about the **same thing changing** → **morph**: give
      shared elements the same `id` on both slides + `transition:"morph"` on
      the later one (Bento's signature move — reach for it liberally)

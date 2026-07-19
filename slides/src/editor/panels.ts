@@ -3,7 +3,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { uid, type ChartElement, type LineEnding, type ShapeElement, type Slide, type SlideElement, type TextElement, type TransitionKind } from '../model'
+import { defaultChart, uid, type ChartElement, type LineEnding, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
@@ -286,7 +286,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart' }[el.type])
+    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table' }[el.type])
     this.opsRow([el])
 
     this.section(t('Arrange'))
@@ -355,6 +355,7 @@ export class PropsPanel {
     if (el.type === 'shape') this.buildShapeProps(el)
     if (el.type === 'image') this.buildImageProps(el)
     if (el.type === 'chart') this.buildChartProps(el)
+    if (el.type === 'table') this.buildTableProps(el)
 
     this.buildPresentingProps(el)
 
@@ -802,6 +803,116 @@ export class PropsPanel {
     this.host.appendChild(ta)
   }
 
+  private buildTableProps(el: TableElement) {
+    const stepper = (label: string, count: number, onDelta: (d: number) => void) => {
+      const wrap = document.createElement('div')
+      wrap.className = 'ed-stepper'
+      const minus = this.opBtn('−', t('Remove'), () => onDelta(-1))
+      const val = document.createElement('span')
+      val.className = 'ed-stepper-val'
+      val.textContent = String(count)
+      const plus = this.opBtn('+', t('Add'), () => onDelta(1))
+      wrap.append(minus, val, plus)
+      this.row(label, wrap)
+    }
+    const cols = el.columns.length
+    const rows = el.rows.length
+    stepper(t('Columns'), cols, (d) => this.mutate(el.id, (e) => {
+      const tb = e as TableElement
+      if (d > 0) { tb.columns.push({ w: 1 }); tb.rows.forEach((r) => r.cells.push({ html: '' })) }
+      else if (tb.columns.length > 1) { tb.columns.pop(); tb.rows.forEach((r) => r.cells.pop()) }
+    }, true))
+    stepper(t('Rows'), rows, (d) => this.mutate(el.id, (e) => {
+      const tb = e as TableElement
+      const minRows = tb.header ? 2 : 1
+      if (d > 0) tb.rows.push({ cells: tb.columns.map(() => ({ html: '' })) })
+      else if (tb.rows.length > minRows) tb.rows.pop()
+    }, true))
+
+    this.row(t('Header row'), this.toggle(el.header, (v) => this.mutate(el.id, (e) => {
+      (e as TableElement).header = v
+    }, true)))
+
+    // one-tap looks that all work within the fixed-grid renderer
+    const st = el.style
+    const preset = st.borderWidth && st.zebra ? 'Boxed'
+      : st.borderWidth ? 'Lined'
+      : st.zebra ? 'Zebra'
+      : 'Minimal'
+    this.section(t('Style'))
+    this.row(t('Preset'), this.select(['Lined', 'Zebra', 'Boxed', 'Minimal'], preset, (v) =>
+      this.mutate(el.id, (e) => {
+        const s = (e as TableElement).style
+        s.borderWidth = v === 'Lined' || v === 'Boxed' ? 1 : 0
+        s.zebra = v === 'Zebra' || v === 'Boxed' ? 'rgba(30,42,58,0.05)' : undefined
+        if (v === 'Minimal') { s.headerBg = 'transparent'; s.headerColor = s.color }
+        else if (s.headerBg === 'transparent') { s.headerBg = '#1E2A3A'; s.headerColor = '#FFFFFF' }
+      }, true)))
+
+    this.row(t('Header fill'), this.colorAlpha(st.headerBg, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as TableElement).style.headerBg = v }, fin)))
+    this.row(t('Header text'), this.colorAlpha(st.headerColor, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as TableElement).style.headerColor = v }, fin)))
+    this.row(t('Text'), this.colorAlpha(st.color, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as TableElement).style.color = v }, fin)))
+    this.row(t('Grid lines'), this.colorAlpha(st.borderColor, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as TableElement).style.borderColor = v }, fin)))
+
+    const grid = document.createElement('div')
+    grid.className = 'ed-grid2'
+    grid.append(
+      this.mini(t('Font'), st.fontSize, (v) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.fontSize = Math.max(v, 6) }, true)),
+      this.mini(t('Radius'), st.radius, (v) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.radius = Math.max(v, 0) }, true)),
+      this.mini(t('Pad X'), st.cellPadX, (v) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.cellPadX = Math.max(v, 0) }, true)),
+      this.mini(t('Pad Y'), st.cellPadY, (v) => this.mutate(el.id, (e) =>
+        { (e as TableElement).style.cellPadY = Math.max(v, 0) }, true)),
+    )
+    this.host.appendChild(grid)
+
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Double-click a cell to edit. Tab moves across, Enter down.')
+    this.host.appendChild(hint)
+
+    const toChart = document.createElement('button')
+    toChart.className = 'ed-btn ed-btn-block'
+    toChart.textContent = t('Make a chart from this table →')
+    toChart.title = t('Create a bar chart from the numbers in this table (first column = labels)')
+    toChart.addEventListener('click', () => this.tableToChart(el))
+    this.host.appendChild(toChart)
+  }
+
+  /** Bridge: build a bar chart from a table's numeric columns and insert it. */
+  private tableToChart(el: TableElement) {
+    const bodyRows = el.header ? el.rows.slice(1) : el.rows
+    const strip = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').trim()
+    const labels = bodyRows.map((r) => strip(r.cells[0]?.html ?? ''))
+    // find the first body column (after labels) that parses as numbers
+    let dataCol = -1
+    for (let c = 1; c < el.columns.length; c++) {
+      if (bodyRows.some((r) => !Number.isNaN(parseFloat(strip(r.cells[c]?.html ?? ''))))) { dataCol = c; break }
+    }
+    if (dataCol < 0) { this.toast(t('No numeric column found to chart')); return }
+    const nums = bodyRows.map((r) => parseFloat(strip(r.cells[dataCol]?.html ?? '')) || 0)
+    const headerRow = el.header ? el.rows[0] : null
+    const seriesName = headerRow ? strip(headerRow.cells[dataCol]?.html ?? '') : ''
+    const option = {
+      xAxis: { type: 'category', data: labels },
+      yAxis: { type: 'value' },
+      series: [{ type: 'bar', name: seriesName, data: nums, itemStyle: { color: '#5E7699' } }],
+      tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+    }
+    const chart = defaultChart(option, {
+      x: el.x, y: Math.min(el.y + el.h + 24, 480), w: Math.max(el.w, 640), h: 300, preset: 'bar',
+    })
+    this.store.commit(() => this.store.slide.elements.push(chart))
+    this.store.select([chart.id])
+    this.toast(t('Chart created from table'))
+  }
+
   private buildImageProps(el: SlideElement) {
     this.section(t('Image'))
     this.row(t('Fit'), this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
@@ -1127,6 +1238,15 @@ export class PropsPanel {
     }
     sel.addEventListener('change', () => onChange(sel.value))
     return sel
+  }
+
+  private toggle(value: boolean, onChange: (v: boolean) => void): HTMLElement {
+    const cb = document.createElement('input')
+    cb.type = 'checkbox'
+    cb.className = 'ed-toggle'
+    cb.checked = value
+    cb.addEventListener('change', () => onChange(cb.checked))
+    return cb
   }
 
   private opBtn(icon: string, title: string, onClick: () => void): HTMLElement {

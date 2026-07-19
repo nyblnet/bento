@@ -86,8 +86,10 @@ const TOOLING_COMMENT = `<!--
   MAKE A GREAT DECK, NOT JUST A CORRECT ONE
   Bento's whole point is motion + interactivity. A wall of text slides wastes
   it. When the source material contains ↓, reach for the feature:
-  · numbers / %, quantities, "A vs B", any table  →  a CHART element
-      (preset bar|line|pie|scatter). Never list data as bullet text.
+  · numbers to compare visually (trend, magnitude, share)  →  a CHART
+      element (preset bar|line|pie|scatter). Never list data as bullet text.
+  · a comparison / spec / pricing / feature grid  →  a TABLE element
+      (columns[] + rows[] of cells + a style object). Not a pile of textboxes.
   · consecutive slides about the SAME thing changing (before/after, process
     steps, a metric across stages)  →  give the shared elements the SAME id
     on both slides and set the later slide's transition to "morph". This is

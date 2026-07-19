@@ -39,7 +39,8 @@ each kind of content to the feature built for it:
 
 | When the material is… | Reach for | Why |
 |---|---|---|
-| numbers, %, quantities, "A vs B", **any table** | a **chart** element | data as bars/lines reads instantly; as bullets it doesn't |
+| numbers to **compare visually** (trend, magnitude, share) | a **chart** element | bars/lines read instantly |
+| a **comparison / spec / pricing / feature grid** (rows × columns of labels + values) | a **table** element | structured cells beat 20 hand-placed text boxes; it styles cohesively |
 | consecutive slides about the **same thing changing** (before/after, process steps, a metric across stages) | **morph**: same element `id` on both slides + `transition:"morph"` on the later one | the shared elements glide; this is Bento's signature and is *almost always missed* |
 | a point to **drill into** (a definition, "click to see how", a sub-topic) | a **state slide** (`stateOf` + element `link`) | keeps the linear story clean; the detail is one click away |
 | a **hero / full-slide image** | full-bleed image + scrim rect + text, with **ken-burns** | static photos feel dead; a slow drift feels intentional |
@@ -70,6 +71,20 @@ each kind of content to the feature built for it:
   "series":[{"type":"bar","data":[420,780,1300,2450],"itemStyle":{"color":"#141310"},"barWidth":90}],
   "tooltip":{"trigger":"item","formatter":"{b}: {c}"} },
   "fx":{"enter":"fade-up"} }
+```
+
+**A comparison table** — a real HTML table; cells are the same inline-html subset as text:
+```json
+{ "id":"tbl1","type":"table","x":240,"y":220,"w":800,"h":260,"rotation":0,"opacity":1,
+  "header":true,
+  "columns":[{"w":1.4},{"w":1},{"w":1}],
+  "rows":[
+    { "cells":[{"html":"Plan"},{"html":"Price","align":"right"},{"html":"Seats","align":"right"}] },
+    { "cells":[{"html":"Team"},{"html":"$29"},{"html":"5"}] },
+    { "cells":[{"html":"Business"},{"html":"$79"},{"html":"25"}] } ],
+  "style":{"headerBg":"#1E2A3A","headerColor":"#fff","zebra":"rgba(30,42,58,0.05)",
+    "borderColor":"rgba(30,42,58,0.14)","borderWidth":1,"cellPadX":16,"cellPadY":11,
+    "fontSize":18,"color":"#1E2A3A","radius":10} }
 ```
 
 **A state slide reached by clicking a node** — parent slide has the clickable element, the state lives adjacent:
@@ -140,6 +155,12 @@ each kind of content to the feature built for it:
   objects coerce to 0 — only pie takes `{name,value}`); per-item bar colors
   are unsupported, color by series; template formatters only (`{b}`, `{c}`,
   `{d}`), never functions.
+- **table**: `columns` (array of `{w}` fractional weights), `rows` (array of
+  `{cells:[{html, align?, color?, bg?, bold?}]}`), `header` (bool — row 0 is
+  the header), and a `style` object (`headerBg`, `headerColor`, `zebra?`,
+  `borderColor`, `borderWidth`, `cellPadX`, `cellPadY`, `fontSize`, `color`,
+  `radius`). Renders as a real HTML table. Use for comparison/spec/pricing
+  grids — NOT for numeric trends (use a chart).
 - **svg**: `asset` or `markup` for static artwork. Prefer composing rects/
   texts/paths — those stay editable and can morph.
 
