@@ -361,6 +361,19 @@ export interface BentoDoc {
     key: string
     on?: boolean
     sync?: import('./sync/crdt').SyncStateJSON
+    /**
+     * Signed writes (v0.9.18+): the WRITE capability is an ECDSA P-256 keypair,
+     * distinct from the symmetric `key` (the READ capability). `writerPub`
+     * (raw, base64url) travels in EVERY copy so the relay can verify authorship;
+     * `writerPriv` (PKCS#8, base64url) travels ONLY in writer copies. A
+     * read-only copy is a writer copy with `writerPriv` stripped — the relay
+     * (for `w`-scheme rooms) then drops any op it tries to send. Absent on
+     * legacy `r`-scheme rooms, which stay permissive. See docs/collab-design.md.
+     */
+    writerPub?: string
+    writerPriv?: string
+    /** 'reader' = this copy is a live viewer: receives updates, never sends. */
+    role?: 'writer' | 'reader'
   }
   /**
    * Template file (.dotx-style): every OPEN instantiates a fresh document —

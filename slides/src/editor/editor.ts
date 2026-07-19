@@ -496,10 +496,10 @@ export class Editor {
     })
   }
 
-  private saveAsNewDeck() {
+  private async saveAsNewDeck() {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.docId = newDocId()
-    clone.collab = mintCollab()
+    clone.collab = await mintCollab()
     this.store.replaceDoc(clone)
     this.toast(t('This is now a new deck — save it under a new name'))
     void this.save(true)
@@ -618,16 +618,16 @@ export class Editor {
       note(t('Work on this deck together, live.'))
       note(t('Any copy of this file can join once sharing is on — send it before or after, both work.'))
       note(t('Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
-      action(t('Start live session'), true, () => {
+      action(t('Start live session'), true, async () => {
         if (!this.session) return
         this.session.enableSharing()
-        startSharing(this.session, this.store)
+        await startSharing(this.session, this.store)
         this.wireOnlineStatus()
         this.renderSharePanel()
       })
-      action(t('Rotate keys — cut off previously sent copies'), false, () => {
+      action(t('Rotate keys — cut off previously sent copies'), false, async () => {
         if (!this.session) return
-        rotateKeys(this.session, this.store)
+        await rotateKeys(this.session, this.store)
         this.toast(t('New keys minted — only copies saved from now on can join'))
         this.renderSharePanel()
       })
