@@ -449,4 +449,13 @@ export const fr: Catalog = {
   "This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)": "Ce {kind} fait {mb} Mo. L’intégrer le conserve dans le .bento.html mais rend le fichier volumineux et lent à ouvrir et enregistrer.\n\nIntégrer quand même ? (Annulez, puis collez une URL hébergée dans le panneau pour garder le deck léger.)",
   "URL": "URL",
   "…or paste a media URL": "…ou collez une URL de média",
+  // signed writes: viewer + presentation package (v0.9.18)
+  "A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).": "Un lecteur en direct : il suit cette session partagée et affiche les modifications en temps réel, mais ne peut jamais modifier le deck (imposé par le relais — la lecture seule n’est pas qu’une question de confiance).",
+  "A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.": "Une remise scellée : elle ouvre directement la présentation — lecture et présentation uniquement, sans éditeur ni session en direct.",
+  "Presentation package saved — it opens straight into the show": "Paquet de présentation enregistré — il ouvre directement la présentation",
+  "Read-only copy saved — it follows the live session, view only": "Copie en lecture seule enregistrée — elle suit la session en direct, en lecture seule",
+  "Read-only — viewing this live session. You can watch and present, but not edit.": "Lecture seule — vous regardez cette session en direct. Vous pouvez voir et présenter, mais pas modifier.",
+  "Save as presentation package…": "Enregistrer comme paquet de présentation…",
+  "This is a presentation package — view and present only.": "Ceci est un paquet de présentation — lecture et présentation uniquement.",
+  "Turn on live sharing first — a read-only copy follows the session": "Activez d’abord le partage en direct — une copie en lecture seule suit la session",
 }

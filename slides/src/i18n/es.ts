@@ -449,4 +449,13 @@ export const es: Catalog = {
   "This {kind} is {mb} MB. Embedding keeps it inside the .bento.html but makes the file large and slow to open and save.\n\nEmbed anyway? (Cancel, then paste a hosted URL in the panel to keep the deck small.)": "Este {kind} pesa {mb} MB. Incrustarlo lo mantiene dentro del .bento.html pero hace que el archivo sea grande y lento de abrir y guardar.\n\n¿Incrustar de todos modos? (Cancela y pega una URL alojada en el panel para mantener la presentación ligera.)",
   "URL": "URL",
   "…or paste a media URL": "…o pega una URL multimedia",
+  // signed writes: viewer + presentation package (v0.9.18)
+  "A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).": "Un visor en vivo: sigue esta sesión compartida y muestra los cambios en tiempo real, pero nunca puede modificar la presentación (lo impone el relay: el solo lectura no es solo cuestión de confianza).",
+  "A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.": "Una entrega sellada: abre directamente la presentación — solo ver y presentar, sin editor, sin sesión en vivo.",
+  "Presentation package saved — it opens straight into the show": "Paquete de presentación guardado — abre directamente la presentación",
+  "Read-only copy saved — it follows the live session, view only": "Copia de solo lectura guardada — sigue la sesión en vivo, solo para ver",
+  "Read-only — viewing this live session. You can watch and present, but not edit.": "Solo lectura — estás viendo esta sesión en vivo. Puedes ver y presentar, pero no editar.",
+  "Save as presentation package…": "Guardar como paquete de presentación…",
+  "This is a presentation package — view and present only.": "Esto es un paquete de presentación — solo ver y presentar.",
+  "Turn on live sharing first — a read-only copy follows the session": "Primero activa el uso compartido en vivo — una copia de solo lectura sigue la sesión",
 }
