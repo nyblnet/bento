@@ -330,8 +330,14 @@ export class PropsPanel {
     this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type])
     this.opsRow([el])
 
-    this.section(t('Arrange'))
-    this.arrangeRows([el])
+    // Lead with the element's OWN controls — the reason it was selected —
+    // then geometry, effects, arrange, and finally present-time behaviour.
+    if (el.type === 'text') this.buildTextProps(el)
+    if (el.type === 'shape') this.buildShapeProps(el)
+    if (el.type === 'image') this.buildImageProps(el)
+    if (el.type === 'chart') this.buildChartProps(el)
+    if (el.type === 'table') this.buildTableProps(el)
+    if (el.type === 'media') this.buildMediaProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -355,6 +361,7 @@ export class PropsPanel {
         else e.role = v
       }, true)))
 
+    this.section(t('Effects'))
     const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0]
       ?? (el.shadow ? 'custom' : 'none')
     this.row(t('Shadow'), this.select(
@@ -392,12 +399,8 @@ export class PropsPanel {
     })
 
 
-    if (el.type === 'text') this.buildTextProps(el)
-    if (el.type === 'shape') this.buildShapeProps(el)
-    if (el.type === 'image') this.buildImageProps(el)
-    if (el.type === 'chart') this.buildChartProps(el)
-    if (el.type === 'table') this.buildTableProps(el)
-    if (el.type === 'media') this.buildMediaProps(el)
+    this.section(t('Arrange'))
+    this.arrangeRows([el])
 
     this.buildPresentingProps(el)
 
@@ -1273,7 +1276,7 @@ export class PropsPanel {
   }
 
   private buildImageProps(el: SlideElement) {
-    this.section(t('Image'))
+    this.section(t('Fit & corners'))
     this.row(t('Fit'), this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
     this.row(t('Corner radius'), this.number((el as any).radius, 1, (v, fin) =>
