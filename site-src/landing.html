@@ -418,16 +418,20 @@ section:not(.paper) .card p { color: var(--mist); }
 .gp-orbital .moon { left: 63%; top: 13%; width: 7%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(140deg, #8F7BF7, #38B6FF); }
 .gp-orbital .s1, .gp-orbital .s2, .gp-orbital .s3 { width: 3px; height: 3px; border-radius: 50%; background: rgba(178, 196, 224, 0.8); }
 .gp-orbital .s1 { left: 14%; top: 30%; } .gp-orbital .s2 { left: 84%; top: 62%; } .gp-orbital .s3 { left: 24%; top: 78%; }
-/* picnic poster — scrapbook: kodachrome under the sunshine wash */
+/* picnic poster — scrapbook: kodachrome under the sunshine wash, hard-shadow
+   stickers a few degrees askew, a polaroid pinned lower-centre (mirrors the
+   pic-cover slide: title top-left, blue tile + pink dot + green wedge, date tag) */
 .gp-picnic { background: #FFD43A url(__PH_FAIRWIDE__) center/cover; }
-.gp-picnic .ov { inset: 0; background: rgba(255, 212, 58, 0.55); }
-.gp-picnic .t { left: 8%; top: 22%; font-weight: 900; font-size: 34px; line-height: 0.98; letter-spacing: -0.01em; color: #201A31; }
-.gp-picnic .sub { left: 8.5%; bottom: 13%; max-width: 40%; font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #201A31; transform: rotate(-2deg); }
-.gp-picnic .c1 { right: 10%; top: 14%; width: 17%; aspect-ratio: 1; border-radius: 50%; background: #FF7BAC; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; }
-.gp-picnic .c2 { right: 31%; top: 48%; width: 13%; aspect-ratio: 1; border-radius: 26%; background: #4DC9F0; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; transform: rotate(-8deg); }
-.gp-picnic .c3 { right: 9%; bottom: 10%; width: 15%; aspect-ratio: 1.1; clip-path: polygon(50% 0, 100% 100%, 0 100%); background: #7BE382; filter: drop-shadow(4px 5px 0 rgba(32, 26, 49, 0.9)); }
-.gp-picnic .pol { left: 47%; top: 42%; width: 17%; height: 46%; border-radius: 7px; background: #fff; border: 2.5px solid #201A31; box-shadow: 4px 5px 0 #201A31; transform: rotate(-5deg); }
-.gp-picnic .polp { left: 48.6%; top: 47%; width: 13.8%; height: 32%; border-radius: 3px; background: url(__PH_FAIR__) center/cover; transform: rotate(-5deg); }
+.gp-picnic .ov { inset: 0; background: rgba(255, 212, 58, 0.5); }
+.gp-picnic .t { left: 7%; top: 15%; font-weight: 900; font-size: 34px; line-height: 0.92; letter-spacing: -0.01em; color: #201A31; transform: rotate(-2deg); }
+.gp-picnic .sub { left: 7.5%; top: 62%; max-width: 38%; font-size: 10.5px; font-weight: 700; line-height: 1.3; color: #201A31; transform: rotate(-2deg); }
+.gp-picnic .date { right: 7%; top: 47%; font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em; color: #201A31; transform: rotate(3deg); }
+.gp-picnic .c1 { right: 8%; top: 11%; width: 18%; aspect-ratio: 1; border-radius: 50%; background: #FF7BAC; border: 2.5px solid #201A31; box-shadow: 5px 6px 0 #201A31; transform: rotate(4deg); }
+.gp-picnic .c2 { left: 43%; top: 13%; width: 15%; aspect-ratio: 1; border-radius: 24%; background: #4DC9F0; border: 2.5px solid #201A31; box-shadow: 5px 6px 0 #201A31; transform: rotate(-8deg); }
+.gp-picnic .c3 { right: 7%; top: 56%; width: 15%; aspect-ratio: 1.12; clip-path: polygon(50% 0, 100% 100%, 0 100%); background: #7BE382; filter: drop-shadow(5px 6px 0 rgba(32, 26, 49, 0.95)); transform: rotate(7deg); }
+.gp-picnic .pol { left: 48%; top: 50%; width: 19%; height: 42%; border-radius: 8px; background: #fff; border: 2.5px solid #201A31; box-shadow: 5px 6px 0 #201A31; transform: rotate(-5deg); }
+.gp-picnic .polp { left: 49.5%; top: 53%; width: 16%; height: 30%; border-radius: 3px; background: url(__PH_FAIR__) center/cover; transform: rotate(-5deg); }
+.gp-picnic .cap { left: 48%; top: 84.5%; width: 19%; text-align: center; font-size: 8px; font-weight: 800; color: #201A31; transform: rotate(-5deg); }
 
 /* code vignette — the honest document */
 .codebox {
@@ -504,6 +508,7 @@ body.kdeck header, body.kdeck footer { display: none; }
       <span>Bento<span class="slash">/</span>Suite</span>
     </a>
     <div class="nav-cta">
+      <a class="btn ghost-btn nav-ghost" href="/help">Help</a>
       <a class="btn ghost-btn nav-ghost" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download</a>
       <a class="btn primary" href="/slides/">▶&nbsp; Try it</a>
     </div>
@@ -626,10 +631,11 @@ body.kdeck header, body.kdeck footer { display: none; }
       <div class="gcard rv d2">
         <a class="gposter gp-picnic" href="/gallery/picnic-playful.bento.html" target="_blank" rel="noopener" aria-label="Open the Pixel Picnic template in a new tab">
           <span class="ov"></span>
-          <span class="t">PIXEL<br>PICNIC</span>
-          <span class="sub">a two-day jam for gloriously useless websites</span>
-          <span class="pol"></span><span class="polp"></span>
           <span class="c1"></span><span class="c2"></span><span class="c3"></span>
+          <span class="pol"></span><span class="polp"></span><span class="cap">last picnic!!</span>
+          <span class="t">PIXEL<br>PICNIC</span>
+          <span class="sub">a two-day jam for games,<br>toys &amp; useless websites</span>
+          <span class="date">AUG 22–23</span>
         </a>
         <div class="gmeta">
           <div><h3>Pixel Picnic</h3><p>Playful — stickers, wobbles, hard zero-blur shadows.</p></div>
@@ -818,6 +824,7 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
     <div class="ctas rv d1" style="margin-top:44px">
       <a class="btn primary" href="/slides/">▶&nbsp; Try it in your browser</a>
       <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download the app</a>
+      <a class="btn ghost-btn" href="/help">Help &amp; guide</a>
     </div>
     <p class="fine rv d2">Free · no account · the download <em>is</em> the product</p>
   </div>
@@ -830,7 +837,7 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
     <div><b>Open source, MIT.</b> All of Bento's software is MIT-licensed, © 2026 The Bento/Suite authors — auditable and forkable.
       <!-- Source-repo link goes live with the public repo; to enable, replace this comment with: · <a href="REPO_URL" style="color:var(--peach,#FF9E8A);font-weight:600;text-decoration:none">GitHub &#8599;</a> -->
     </div>
-    <div><a href="/help" style="color:var(--peach,#FF9E8A);font-weight:600;text-decoration:none">Help &amp; guide</a> · <a href="/agents.md" style="color:var(--mist);text-decoration:none">agents.md</a> · <a href="/guestbook/" style="color:var(--mist);text-decoration:none">the Guestbook</a></div>
+    <div><a href="/agents.md" style="color:var(--mist);text-decoration:none">agents.md</a> · <a href="/guestbook/" style="color:var(--mist);text-decoration:none">the Guestbook</a></div>
     <div>© 2026 bento.page · <b>Bento/Slides</b> is the first app of Bento/Suite — <b>Bento/Docs</b> and <b>Bento/Sheets</b> are coming soon.</div>
   </div>
 </footer>
