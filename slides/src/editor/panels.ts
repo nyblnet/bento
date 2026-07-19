@@ -3,7 +3,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { defaultChart, uid, type ChartElement, type LineEnding, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { applyChartPalette, defaultChart, uid, type ChartElement, type LineEnding, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
@@ -778,7 +778,7 @@ export class PropsPanel {
       this.mutate(el.id, (e) => {
         const c = e as ChartElement
         c.preset = v
-        c.option = CHART_PRESETS[v]()
+        c.option = applyChartPalette(CHART_PRESETS[v](), this.store.doc.theme)
       }, true)))
 
     const hint = document.createElement('p')
@@ -888,23 +888,31 @@ export class PropsPanel {
   /** Bridge: build a bar chart from a table's numeric columns and insert it. */
   private tableToChart(el: TableElement) {
     const bodyRows = el.header ? el.rows.slice(1) : el.rows
-    const strip = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').trim()
+    // strip markup + entities + thousands separators so "1,204" / "+222%" parse
+    const strip = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').replace(/,/g, '').trim()
+    const num = (html: string) => parseFloat(strip(html))
     const labels = bodyRows.map((r) => strip(r.cells[0]?.html ?? ''))
-    // find the first body column (after labels) that parses as numbers
-    let dataCol = -1
-    for (let c = 1; c < el.columns.length; c++) {
-      if (bodyRows.some((r) => !Number.isNaN(parseFloat(strip(r.cells[c]?.html ?? ''))))) { dataCol = c; break }
-    }
-    if (dataCol < 0) { this.toast(t('No numeric column found to chart')); return }
-    const nums = bodyRows.map((r) => parseFloat(strip(r.cells[dataCol]?.html ?? '')) || 0)
     const headerRow = el.header ? el.rows[0] : null
-    const seriesName = headerRow ? strip(headerRow.cells[dataCol]?.html ?? '') : ''
-    const option = {
+    // every column after the labels that is mostly numeric becomes its own series
+    const cols: number[] = []
+    for (let c = 1; c < el.columns.length; c++) {
+      const parsed = bodyRows.map((r) => num(r.cells[c]?.html ?? '')).filter((n) => !Number.isNaN(n))
+      if (parsed.length >= Math.ceil(bodyRows.length / 2)) cols.push(c)
+    }
+    if (!cols.length) { this.toast(t('No numeric column found to chart')); return }
+    const series = cols.map((c) => ({
+      type: 'bar',
+      name: headerRow ? strip(headerRow.cells[c]?.html ?? '') : '',
+      data: bodyRows.map((r) => { const n = num(r.cells[c]?.html ?? ''); return Number.isNaN(n) ? 0 : n }),
+    }))
+    const option: Record<string, unknown> = {
       xAxis: { type: 'category', data: labels },
       yAxis: { type: 'value' },
-      series: [{ type: 'bar', name: seriesName, data: nums, itemStyle: { color: '#5E7699' } }],
-      tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+      series,
+      tooltip: { trigger: 'axis' },
     }
+    if (series.length > 1) option.legend = { bottom: 0 }
+    applyChartPalette(option, this.store.doc.theme)
     const chart = defaultChart(option, {
       x: el.x, y: Math.min(el.y + el.h + 24, 480), w: Math.max(el.w, 640), h: 300, preset: 'bar',
     })

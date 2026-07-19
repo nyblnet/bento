@@ -91,7 +91,13 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   (host exposes `__bentoChart`). Unknown option keys are ignored gracefully —
   exotic ECharts configs degrade, don't crash. Bar/line series data must be
   PLAIN NUMBERS ({value,itemStyle} item objects coerce to 0 — only pie takes
-  {name,value}); per-item bar colors unsupported, color by series. Shapes:
+  {name,value}); per-item bar colors unsupported, color by series. New charts
+  (＋ Chart, preset switch, table→chart) inherit the deck's palette:
+  `applyChartPalette` (model.ts) bakes `option.color` from `doc.theme.chartPalette`
+  (optional format field; the starter deck declares peach/steel) or, absent that,
+  `deriveChartPalette(accent)` (accent + a cool HSL counterpart, each tinted).
+  tableToChart makes ONE series per numeric column (commas/`%` stripped, blanks→0,
+  first column = x labels). Shapes:
   `strokeStyle` solid/dashed/dotted (legacy `strokeDash` still honoured);
   line shapes have `lineStart`/`lineEnd` tips (arrow/dot/bar) rendered as
   per-instance svg markers (sized in strokeWidth units, endpoints inset);
