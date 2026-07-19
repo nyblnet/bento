@@ -42,6 +42,34 @@ cover:
 |---|---|---|
 | signal-press2.jpg | Library of Congress FSA/OWI master TIFF (fsa 8d22695, 4802×5113) | Marjory Collins, "Pressroom of the New York Times" — freshly printed papers off the press, 1942, FSA/OWI — public domain (rendered from the master TIFF at 2600 px; scan border + caption strip cropped). NOTE: LoC's IIIF `full/` endpoint tops out at the 962×1024 service copy — pull `…/master/pnp/fsa/…u.tif` for real resolution. |
 
+Added 2026-07-18 (v6 — sharpness pass):
+
+Several originals were technically high-res but the PHOTOGRAPHS were soft (ISS
+night shots motion-blur during the long exposure; the 8d22695 press frame had a
+shallow depth of field). Replaced the blurry ones with similar-composition but
+tack-sharp frames:
+
+| file | replaces | source | credit / provenance |
+|---|---|---|---|
+| orbital-earth.jpg | iss034e005935 | Wikimedia Commons / NASA (`ISS064-E-37584`, "View of Earth") | Tokyo at night from the ISS, Expedition 64 — dense city lights radiating around Tokyo Bay — public domain (NASA JSC "Gateway to Astronaut Photography of Earth"; Commons licence = pd). 16:9 centre crop; 3200 px, q90. |
+| orbital-stars.jpg | iss062e081621 | Wikimedia Commons / NASA (`ISS007-E-10807`, "Iss007e10807_darker") | ISS Expedition 7 — a sunlit Earth from orbit: the Sun flaring over the limb with sunglint on the ocean and clouds casting long shadows — public domain (NASA; the Commons file is a brightness-darkened derivative, no added rights). Rotated +1.3° (CCW) to level the horizon — measured by fitting the airglow limb — then inward-cropped to drop the rotation wedges; 16:9 top-biased crop (keeps the Sun); 3200 px, q90. (Alternates rendered & considered, all ISS/NASA public domain: iss072e807123 moonlit Italy, iss072e725406 aurora — kept in scratchpad if a different mood is wanted.) |
+| signal-press2.jpg | 8d22695 (shallow DoF) | Library of Congress FSA/OWI master TIFF (fsa 8d22713, 4832×4824) | Marjory Collins, New York Times rotary press — a pressman at the press, the newspaper type sharp on the plate cylinder, 1942, FSA/OWI — public domain (master TIFF, 16:9 crop, 2600 px; scan border + caption strip cropped). |
+
+(The dimmed hidden-state backdrops — aurora, dragon — and the naturally-diffuse
+nebula were left as-is: they render at 0.5–0.55 opacity under heavy scrims where
+softness reads as texture.)
+
+Added 2026-07-19 (v7 — Orbital subsystem backdrops, all public domain NASA):
+the aurora/dragon/nebula slots were repurposed and renamed to match their new
+content:
+
+| file | used by | source | credit / provenance |
+|---|---|---|---|
+| orbital-cubesats.jpg | INGEST state slide | Wikimedia Commons / NASA (`iss072e352045`) | A trio of CubeSats ejected into orbit from the ISS deployer, Expedition 72 — public domain (NASA JSC). 16:9 crop, 2600 px. |
+| orbital-jwst.jpg | MODEL state slide | Wikimedia Commons / NASA (`James Webb Primary Mirror`) | The gold JWST primary-mirror segments in test, with an engineer for scale — public domain (NASA/MSFC/David Higginbotham). 16:9 crop, 2600 px. |
+
+(The closing slide's backdrop image was dropped — it now sits on pure void black — so `orbital-nightglobe.jpg` / the `eo20/night_limb` NASA globe is no longer used.)
+
 Embedded webfont (`scripts/gallery-fonts/`, used by the Orbital deck):
 
 | file | source | licence |
