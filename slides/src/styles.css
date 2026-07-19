@@ -582,6 +582,23 @@ html, body {
 }
 .ed-chart-json.ed-invalid { border-color: #c9302c; outline: 1px solid #c9302c; }
 
+/* --- help overlay + help button ------------------------------------------- */
+.ed-btn-help .ed-help-q { font-size: 15px; font-weight: 800; line-height: 1; }
+.ed-help-box { max-width: 480px; }
+.ed-help-sec { margin: 10px 0; }
+.ed-help-sec h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted, #8a94a4); margin: 0 0 6px;
+}
+.ed-help-row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: baseline; padding: 3px 0; font-size: 13px; }
+.ed-help-row kbd {
+  font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--chrome-2, #f4f1ea); border: 1px solid var(--line, #e7e1d2);
+  border-radius: 5px; padding: 2px 6px; color: var(--ink, #1e2a3a); white-space: nowrap; justify-self: start;
+}
+.ed-help-tips { margin: 4px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--ink, #26303e); }
+.ed-help-tips li { margin: 3px 0; }
+
 /* --- auto-save: recovery banner, saved tag, version history --------------- */
 .ed-recover {
   position: fixed;

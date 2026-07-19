@@ -16,6 +16,7 @@ import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
 import { hasFileHandle, isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
+import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
 import { disconnectOnline, joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
@@ -37,7 +38,6 @@ export class Editor {
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
   private thumbTimer = 0
-  private clipboard: SlideElement[] = []
   private presenting = false
   private updatesB!: HTMLElement
   private avatarsBox!: HTMLElement
@@ -65,6 +65,7 @@ export class Editor {
       if (store.dirty) ev.preventDefault()
     })
     this.wireAutosave()
+    this.wirePaste()
     store.on('doc', () => this.syncLinkedCharts())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
@@ -185,11 +186,15 @@ export class Editor {
 
     const insert = div('ed-group')
     insert.append(
-      btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true)),
+      btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true),
+        t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
       this.shapeDropdown(),
-      btn(ICONS.image, t('Image'), () => this.pickImage()),
-      btn(ICONS.table, t('Table'), () => this.canvas.insert(defaultTable())),
-      btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme)))),
+      btn(ICONS.image, t('Image'), () => this.pickImage(),
+        t('Add an image — or just paste one (⌘V) straight onto the slide')),
+      btn(ICONS.table, t('Table'), () => this.canvas.insert(defaultTable()),
+        t('Add a table — edit cells inline; turn it into a live chart from the panel')),
+      btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
+        t('Add a chart — edit it visually or link it to a table so it updates live')),
     )
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))
@@ -219,7 +224,9 @@ export class Editor {
     const redoB = btn(ICONS.redo, '', () => this.store.redo(), t('Redo (⇧⌘Z)'))
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), t('Save — rewrite this file in place (⌘S)'))
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
-    actions.append(undoB, redoB, pdfB, this.shareDropdown(), saveB, this.saveDropdown())
+    const helpB = btn('<b class="ed-help-q">?</b>', '', () => this.openHelp(), t('Shortcuts & tips (?)'))
+    helpB.classList.add('ed-btn-help')
+    actions.append(helpB, undoB, redoB, pdfB, this.shareDropdown(), saveB, this.saveDropdown())
 
     this.avatarsBox = div('ed-avatars')
     bar.append(logo, this.updatesB, title, this.dirtyDot, this.avatarsBox, insert, actions)
@@ -993,6 +1000,77 @@ export class Editor {
     }, { fullscreen })
   }
 
+  // --- paste: external objects + cross-deck elements/slides ---------------------
+
+  private wirePaste() {
+    document.addEventListener('paste', (ev: ClipboardEvent) => {
+      if (this.presenting) return
+      const a = document.activeElement as HTMLElement | null
+      if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return // text edit owns it
+      const dt = ev.clipboardData
+      if (!dt) return
+      // 1) an image from the OS clipboard (screenshot, copied picture…)
+      const imgItem = [...dt.items].find((it) => it.kind === 'file' && it.type.startsWith('image/'))
+      if (imgItem) {
+        const file = imgItem.getAsFile()
+        if (file) { ev.preventDefault(); this.pasteImageFile(file); return }
+      }
+      const text = dt.getData('text/plain')
+      // 2) Bento elements / slides copied from this or another deck
+      const clip = parseClip(text)
+      if (clip?.kind === 'elements') {
+        ev.preventDefault()
+        let added: SlideElement[] = []
+        this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
+        this.store.select(added.map((e) => e.id))
+        this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
+        return
+      }
+      if (clip?.kind === 'slides') {
+        ev.preventDefault()
+        const at = this.store.currentIndex + 1
+        let made: Slide[] = []
+        this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
+        this.rebuildSidebar()
+        this.store.goTo(at)
+        this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
+        return
+      }
+      // 3) plain text → a text element
+      if (text && text.trim()) {
+        ev.preventDefault()
+        const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+        const { width } = this.store.doc.size
+        const el = defaultText({ html: esc, x: Math.round(width / 2 - 300), y: 260, w: 600 })
+        this.store.commit(() => this.store.slide.elements.push(el))
+        this.store.select([el.id])
+        this.toast(t('Text pasted'))
+      }
+    })
+  }
+
+  private pasteImageFile(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const src = String(reader.result)
+      const place = (w: number, h: number) => {
+        const { width, height } = this.store.doc.size
+        const el = defaultImage(src, { x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h, fit: 'contain' })
+        this.store.commit(() => this.store.slide.elements.push(el))
+        this.store.select([el.id])
+        this.toast(t('Image pasted'))
+      }
+      const img = new Image()
+      img.onload = () => {
+        let w = img.naturalWidth || 400, h = img.naturalHeight || 300
+        const sc = Math.min(1, 640 / w, 480 / h); place(Math.round(w * sc), Math.round(h * sc))
+      }
+      img.onerror = () => place(400, 300)
+      img.src = src
+    }
+    reader.readAsDataURL(file)
+  }
+
   // --- live table→chart binding -------------------------------------------------
 
   private tableSig = ''
@@ -1134,6 +1212,61 @@ export class Editor {
     document.body.appendChild(overlay)
   }
 
+  /** Shortcuts + tips overlay (press ? or the topbar help button). */
+  private openHelp() {
+    document.querySelector('.ed-about-overlay')?.remove()
+    const overlay = div('ed-about-overlay')
+    const box = div('ed-about ed-help-box')
+    const h = document.createElement('h2')
+    h.textContent = t('Shortcuts & tips')
+    box.appendChild(h)
+    const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'
+    const section = (title: string, rows: Array<[string, string]>) => {
+      const sec = div('ed-help-sec')
+      const st = document.createElement('h3'); st.textContent = title; sec.appendChild(st)
+      for (const [k, d] of rows) {
+        const r = div('ed-help-row')
+        r.innerHTML = `<kbd></kbd><span></span>`
+        r.querySelector('kbd')!.textContent = k
+        r.querySelector('span')!.textContent = d
+        sec.appendChild(r)
+      }
+      box.appendChild(sec)
+    }
+    section(t('Editing'), [
+      [`${mod}S`, t('Save')],
+      [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
+      [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
+      [`${mod}D`, t('Duplicate selection')],
+      [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
+      ['C', t('Comment mode')],
+      ['?', t('This help')],
+    ])
+    section(t('Presenting'), [
+      ['F5', t('Present')],
+      ['F', t('Toggle fullscreen while presenting')],
+      ['S', t('Speaker view — notes on a second screen if you have one')],
+      ['← · →', t('Previous · next slide')],
+      ['Esc', t('End the show')],
+    ])
+    const tips = div('ed-help-sec')
+    const tt = document.createElement('h3'); tt.textContent = t('Good to know'); tips.appendChild(tt)
+    const ul = document.createElement('ul'); ul.className = 'ed-help-tips'
+    for (const tip of [
+      t('Paste an image or text straight onto the canvas with ⌘V.'),
+      t('Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.'),
+      t('Make a chart from a table and it stays linked — edit the table, the chart updates.'),
+      t('Your work auto-saves; restore earlier versions from About → Version history.'),
+    ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
+    tips.appendChild(ul); box.appendChild(tips)
+    overlay.appendChild(box)
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true) }
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); close() } }
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) close() })
+    document.addEventListener('keydown', onKey, true)
+    document.body.appendChild(overlay)
+  }
+
   private savedTimer = 0
   private flashSaved() {
     let tag = document.querySelector<HTMLElement>('.ed-autosaved')
@@ -1206,6 +1339,11 @@ export class Editor {
       }
       if (inField) return
 
+      if (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) {
+        ev.preventDefault()
+        this.openHelp()
+        return
+      }
       if (!mod && ev.key.toLowerCase() === 'c') {
         ev.preventDefault()
         this.canvas.toggleCommentMode()
@@ -1234,19 +1372,19 @@ export class Editor {
         return
       }
       if (mod && ev.key.toLowerCase() === 'c') {
+        // Copy to BOTH the in-app clipboard (fast, same session) and the system
+        // clipboard as a Bento payload (works across decks/tabs). Elements when
+        // any are selected; otherwise the current slide.
         if (this.store.selection.length) {
-          this.clipboard = JSON.parse(JSON.stringify(this.store.selectedElements))
+          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => {})
+        } else {
+          void navigator.clipboard?.writeText?.(serializeSlides([this.store.slide], this.store.doc)).catch(() => {})
+          this.toast(t('Slide copied — ⌘V in any deck to paste it'))
         }
         return
       }
-      if (mod && ev.key.toLowerCase() === 'v') {
-        if (this.clipboard.length) {
-          const clones = this.clipboard.map((el) => cloneElement(el))
-          this.store.commit(() => this.store.slide.elements.push(...clones))
-          this.store.select(clones.map((c) => c.id))
-        }
-        return
-      }
+      // ⌘V is handled by the document 'paste' listener (wirePaste) so it can
+      // also receive images and cross-deck payloads.
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
         if (this.store.selection.length) {
           ev.preventDefault()
