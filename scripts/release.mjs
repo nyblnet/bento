@@ -92,7 +92,12 @@ execFileSync('node', [join(root, 'scripts/build-landing.mjs'), join(site, 'index
 execFileSync('node', [join(root, 'scripts/build-example-decks.mjs'), join(site, 'gallery')], { stdio: 'inherit' })
 
 // The agent guide — the runnable version of the "designed for AI" claim.
-cpSync(join(root, 'docs/agents.md'), join(site, 'agents.md'))
+// Stamp the current shell version so the guide declares which feature set it
+// matches (agents can compare it to a deck written by a newer shell).
+writeFileSync(
+  join(site, 'agents.md'),
+  readFileSync(join(root, 'docs/agents.md'), 'utf8').replace(/__APP_VERSION__/g, version),
+)
 // The harness skill (Cowork / Claude Code), fetchable + droppable.
 mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
 cpSync(join(root, 'skills/bento-deck/SKILL.md'), join(site, 'skills/bento-deck/SKILL.md'))

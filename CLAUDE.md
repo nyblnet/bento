@@ -180,6 +180,22 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   first numeric column = series). Morphs as a BOX (cell content does not
   morph); under collab `rows` is a whole-value LWW register (concurrent
   different-cell edits are last-writer-wins — documented limitation).
+- **Media (v0.9.16)**: `media` element (`kind` video|audio) mirrors image.
+  HYBRID storage — `src` is a data: URI (embedded, self-contained), an external
+  URL/relative path (referenced, small file), or `asset:`; the editor embeds
+  picked files and `confirm()`s above `MEDIA_EMBED_BUDGET` (8MB, model.ts),
+  offering a URL instead (browser file-pickers give bytes not a path, so
+  "reference a local file" isn't possible — the URL field is the escape hatch).
+  render.ts: real `<video>`/`<audio>` on canvas+present, a cheap poster/icon
+  still in thumbnails (`svgAsImage`). Media is `pointer-events:none` on the
+  canvas (gated by the `liveMedia` RenderOpt, present-only) so its native
+  controls don't swallow Selecto selection. **Autoplay is NEVER set at render
+  time** (would fire on the canvas and in every thumbnail) — present.ts
+  `startMediaIn`/`pauseMediaIn` play flagged clips (`data-autoplay="1"`) on
+  slide-enter and pause on exit/teardown; browsers need `muted` for video
+  autoplay so `defaultMedia` mutes video. Panel 'Source & playback'
+  (buildMediaProps): embedded/linked status+size, Choose/Replace file, URL,
+  controls/autoplay/loop/muted, and (video) fit/corner/poster.
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
   era sequences), hover = focus-group, motion = fx.loop. Opaque `svg` elements are
