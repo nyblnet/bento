@@ -137,6 +137,24 @@ export function startPresentation(
   // browsers; this guards the fullscreenchange handler so that bounce doesn't
   // end the show (see onFsChange).
   let openingSpeaker = false
+  // Screen layout, cached at present-start so we can open the speaker popup
+  // DIRECTLY on a second display (window.open left/top) — moving it after the
+  // fact is what left the notes stranded behind the fullscreen slides.
+  let screenLayout: { screens: any[]; currentScreen: any } | null = null
+  const primeScreens = () => {
+    const gsd = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
+    if (!gsd) { console.info('[bento-speaker] Window Management API unavailable — notes will open on this screen'); return }
+    gsd.call(window).then((d: any) => {
+      screenLayout = d
+      console.info('[bento-speaker] primed screens:', d.screens?.length, '· permission ok')
+      d.addEventListener?.('screenschange', () => { screenLayout = d })
+    }).catch((e: any) => console.warn('[bento-speaker] screen access denied:', e?.name, e?.message, '— grant “window management” in the site permissions (address-bar icon) to auto-place notes'))
+  }
+  const secondScreen = () => {
+    const s = screenLayout
+    if (!s || !Array.isArray(s.screens) || s.screens.length < 2) return null
+    return s.screens.find((x) => x !== s.currentScreen) ?? s.screens.find((x) => !x.isPrimary) ?? s.screens[1]
+  }
   const nextVisibleIndex = (from: number) => {
     for (let i = (isState(from) ? anchorOf(from) : from) + 1; i < doc.slides.length; i++) {
       if (!isState(i)) return i
@@ -186,8 +204,16 @@ export function startPresentation(
     // browser leave fullscreen, and without this that would end the show
     const wasFullscreen = document.fullscreenElement === overlay
     openingSpeaker = true
-    speaker = window.open('', 'bento-speaker', 'width=1080,height=640')
-    if (!speaker) { openingSpeaker = false; return } // popup blocked
+    // Open DIRECTLY on the second display when we know its coordinates — the
+    // reliable path. (Opening centred then moveTo left the window behind the
+    // fullscreen slides on macOS.)
+    const other = secondScreen()
+    const features = other
+      ? `left=${other.availLeft},top=${other.availTop},width=${Math.min(other.availWidth, 1600)},height=${Math.min(other.availHeight, 1000)}`
+      : 'width=1080,height=640'
+    speaker = window.open('', 'bento-speaker', features)
+    if (!speaker) { openingSpeaker = false; console.warn('[bento-speaker] popup blocked — allow pop-ups for this site'); return }
+    console.info('[bento-speaker] opened on', other ? `2nd screen "${other.label}"` : 'this screen', '·', features)
     ;(window as unknown as Record<string, unknown>).__bentoSpeaker = speaker // diagnostics
     const d = speaker.document
     d.title = `${doc.title} — ${t('Speaker view')}`
@@ -248,14 +274,17 @@ export function startPresentation(
         return
       }
       const details = await getScreenDetails.call(window)
+      screenLayout = details // cache so the NEXT open goes straight to screen 2
       const screens: any[] = details.screens ?? []
       log('screens:', screens.length, screens.map((s: any) => ({ label: s.label, primary: s.isPrimary, current: s === details.currentScreen, x: s.availLeft, y: s.availTop, w: s.availWidth, h: s.availHeight })))
       if (screens.length > 1 && speaker) {
         const other = screens.find((s) => s !== details.currentScreen) ?? screens.find((s) => !s.isPrimary) ?? screens[1]
         try {
+          // move it even if we already opened there — corrects any clamp
           speaker.moveTo(other.availLeft, other.availTop)
           speaker.resizeTo(Math.min(other.availWidth, 1400), Math.min(other.availHeight, 900))
-          log('moved notes → screen:', other.label, 'at', other.availLeft, other.availTop)
+          window.focus() // keep the presenter screen focused for fullscreen
+          log('placed notes → screen:', other.label, 'at', other.availLeft, other.availTop)
         } catch (e: any) { console.warn('[bento-speaker] moveTo/resizeTo failed:', e?.message) }
       } else {
         log('single display — press F to fullscreen slides; drag the notes window where you want it')
@@ -288,6 +317,10 @@ export function startPresentation(
   }
   document.addEventListener('fullscreenchange', onFsChange)
   if (opts.fullscreen !== false) enterFullscreen()
+  // Fetch the screen layout now (prompts for the Window Management permission
+  // once, at present-start) so pressing S can open the notes straight onto a
+  // second display without an async round-trip.
+  primeScreens()
 
   const exit = () => {
     if (exited) return
