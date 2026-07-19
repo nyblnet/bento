@@ -15,9 +15,9 @@
 // Never let system-font defaults show: every text sets a face on purpose.
 
 import {
-  newDoc, uid, defaultText, defaultShape, defaultChart,
+  newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable,
   type BentoDoc, type Slide, type SlideElement, type TextElement, type ShapeElement,
-  type SvgElement,
+  type SvgElement, type TableElement,
 } from './model'
 import { FRAUNCES_900, INSTRUMENT_VAR } from './fontdata'
 
@@ -594,7 +594,62 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 6 · MOMENTUM (line-chart hero) ─────────────────────────────────────
+    // ── 6 · TABLES (real HTML table) ───────────────────────────────────────
+    slide({
+      background: PAPER,
+      notes:
+        'Tables are first-class — a real HTML table rendered the same in the editor, here, and in print. ' +
+        'Double-click a cell to edit, Tab moves across and Enter down, drag the dividers to resize columns. ' +
+        '“Make a chart from this table” in the panel turns the numbers into a bar chart in one click.',
+      elements: [
+        dots(false),
+        kicker('STRUCTURED DATA', { color: PEACH_DEEP }),
+        ...furniture('06', false),
+        title('Facts, lined up.'),
+        shape('rect', {
+          id: T_C, x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF',
+          stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' },
+        }),
+        {
+          ...defaultTable(),
+          id: 'sd-table', x: 100, y: 240, w: 772, h: 370, header: true,
+          columns: [{ w: 1.5 }, { w: 1 }, { w: 1 }],
+          rows: [
+            { cells: [{ html: 'Quarter' }, { html: 'Signups', align: 'right' }, { html: 'Growth', align: 'right' }] },
+            { cells: [{ html: 'Q1' }, { html: '1,204', align: 'right' }, { html: '—', align: 'right' }] },
+            { cells: [{ html: 'Q2' }, { html: '3,880', align: 'right' }, { html: '+222%', align: 'right' }] },
+            { cells: [{ html: 'Q3' }, { html: '9,140', align: 'right' }, { html: '+136%', align: 'right' }] },
+            { cells: [{ html: 'Q4' }, { html: '21,500', align: 'right' }, { html: '+135%', align: 'right' }] },
+          ],
+          style: {
+            headerBg: INK, headerColor: '#FFFFFF', zebra: 'rgba(30,42,58,0.05)',
+            borderColor: 'rgba(30,42,58,0.10)', borderWidth: 1,
+            cellPadX: 18, cellPadY: 12, fontSize: 18, color: '#26303E', radius: 12,
+          },
+          fx: { enter: 'fade-up', order: 1 },
+        } as TableElement,
+        shape('rect', {
+          id: T_D, x: 920, y: 196, w: 264, h: 458, radius: 18, fill: PANEL,
+          shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.18)' },
+        }),
+        shape('rect', { id: T_A, x: 944, y: 222, w: 44, h: 6, radius: 3, fill: PEACH }),
+        text({
+          x: 944, y: 248, w: 216, h: 250,
+          html: '<b>Double-click a cell</b> to edit — Tab across, Enter down.<br><br>Drag the dividers to resize columns.',
+          fontSize: 16.5, fontWeight: 500, color: MIST, lineHeight: 1.7,
+        }),
+        shape('rect', {
+          id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: STEEL, fillGradient: GRAD_STEEL,
+          stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
+        }),
+        text({
+          x: 944, y: 574, w: 216, h: 28, html: 'One tap → a chart', fontSize: 17, fontWeight: 700,
+          color: '#FFFFFF', align: 'center',
+        }),
+      ],
+    }),
+
+    // ── 7 · MOMENTUM (line-chart hero) ─────────────────────────────────────
     slide({
       notes:
         'A chart as scenery: full-width live area chart on ink. Drag horizontally inside it to zoom — ' +
@@ -607,7 +662,7 @@ export function starterDoc(): BentoDoc {
           { at: 1, color: 'rgba(62,86,120,0.18)' },
         ]),
         kicker('STORY WITH DATA'),
-        ...furniture('06', true),
+        ...furniture('07', true),
         title('Momentum you can feel.', { color: '#FFFFFF', w: 700 }),
         text({
           x: 800, y: 96, w: 384, h: 110, html: '+975%', fontSize: 92, fontWeight: 900,
@@ -621,7 +676,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 7 · MOTION & LINES ─────────────────────────────────────────────────
+    // ── 8 · MOTION & LINES ─────────────────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -631,7 +686,7 @@ export function starterDoc(): BentoDoc {
         dots(false),
         ghost('07'),
         kicker('MOTION', { color: PEACH_DEEP }),
-        ...furniture('07', false),
+        ...furniture('08', false),
         title('Lines that lead the eye.'),
         // the flow: a dashed path with a dot riding it, milestones as nodes
         shape('path', {
@@ -666,7 +721,7 @@ export function starterDoc(): BentoDoc {
     }),
 
 
-    // ── 8 · CHOREOGRAPHY (base + two hidden states) ───────────────────────
+    // ── 9 · CHOREOGRAPHY (base + two hidden states) ───────────────────────
     ...(() => {
       type Scene = {
         id: string; step: string; label: string; chip: string; to: string
@@ -723,7 +778,7 @@ export function starterDoc(): BentoDoc {
               { at: 1, color: 'rgba(94,118,153,0.16)' },
             ]),
             kicker('INTERACTIVE STATES'),
-            ...furniture('08', true),
+            ...furniture('09', true),
             title('One cast. Three scenes.', { color: '#FFFFFF' }),
             ...scene.blocks.map((b) => shape('rect', { shadow: { y: 12, blur: 30, color: 'rgba(0,0,0,0.35)' }, ...b } as Partial<ShapeElement>)),
             text({
@@ -756,7 +811,7 @@ export function starterDoc(): BentoDoc {
       )
     })(),
 
-    // ── 9 · HOVER FOCUS ────────────────────────────────────────────────────
+    // ── 10 · HOVER FOCUS ────────────────────────────────────────────────────
     slide({
       hover: { type: 'focus-group', dim: 0.22 },
       notes:
@@ -769,7 +824,7 @@ export function starterDoc(): BentoDoc {
           { at: 1, color: 'rgba(255,158,138,0.12)' },
         ]),
         kicker('FOCUS'),
-        ...furniture('09', true),
+        ...furniture('10', true),
         title('Point, and the room dims.', { color: '#FFFFFF' }),
         shape('rect', { id: T_D, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         // card 1 — one file
@@ -806,7 +861,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 10 · MARKDOWN ───────────────────────────────────────────────────────
+    // ── 11 · MARKDOWN ───────────────────────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -816,7 +871,7 @@ export function starterDoc(): BentoDoc {
         dots(false),
         ghost('10'),
         kicker('WRITING', { color: PEACH_DEEP }),
-        ...furniture('10', false),
+        ...furniture('11', false),
         title('Type markdown, get typography.'),
         shape('rect', { id: T_A, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
         shape('rect', { id: T_C, x: 96, y: 228, w: 520, h: 372, radius: 18, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.10)' } }),
@@ -839,7 +894,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 11 · CLOSE ─────────────────────────────────────────────────────────
+    // ── 12 · CLOSE ─────────────────────────────────────────────────────────
     slide({
       notes:
         'The cast reassembles into the logo. Press Esc — this deck is already your copy of the app: ' +
