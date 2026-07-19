@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // Local auto-save + lightweight version history, backed by IndexedDB.
 //
 // Two concerns, one store:
@@ -82,6 +84,14 @@ export async function getRecovery(docId: string): Promise<Snapshot | null> {
 
 export async function clearRecovery(docId: string): Promise<void> {
   await tx(RECOVERY, 'readwrite', (s) => s.delete(docId))
+}
+
+/** Delete every version-history snapshot for a docId. Used when a deck is
+ *  encrypted: the plaintext snapshots written before encryption was enabled must
+ *  not linger in IndexedDB (they'd defeat the encryption the user just turned on). */
+export async function clearVersions(docId: string): Promise<void> {
+  const all = await listVersions(docId)
+  await Promise.all(all.map((v) => tx(VERSIONS, 'readwrite', (s) => s.delete(v.id!))))
 }
 
 export async function addVersion(doc: BentoDoc): Promise<void> {
