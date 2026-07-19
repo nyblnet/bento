@@ -18,7 +18,8 @@
 // Destination repo: $BENTO_SITE_DIR, else ../bento-site beside this repo.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -50,6 +51,36 @@ if (doGallery) {
   if (!existsSync(shell)) die('--gallery needs a built shell — run `npm run build:single` first')
   console.log('• regenerating gallery decks → site/gallery/')
   run('node', [join(root, 'scripts/build-example-decks.mjs'), join(site, 'gallery')])
+}
+
+// ---- gate: example decks MUST embed the shell being published --------------
+// The gallery templates and the 404 deck EMBED the shell, so they have to be
+// rebuilt whenever the shell changes (release.mjs does this). Enforce it: hash
+// the shell's app payload (the bento/deflate-b64 blocks) and refuse to publish
+// if any example deck carries a different one — otherwise a stale gallery would
+// ship on top of a fresh shell. (The guestbook is intentionally excluded — it's
+// managed by its own daemon/epochs and may lag.)
+const shellFile = join(site, 'releases/slides/Bento_Slides.bento.html')
+if (existsSync(shellFile)) {
+  const appHash = (file) => {
+    const blocks = [...readFileSync(file, 'utf8').matchAll(/type="bento\/deflate-b64"[^>]*>([A-Za-z0-9+/=]+)</g)].map((m) => m[1])
+    return blocks.length ? createHash('sha256').update(blocks.join('')).digest('hex') : null
+  }
+  const shellHash = appHash(shellFile)
+  const galleryDir = join(site, 'gallery')
+  const decks = [
+    ...(existsSync(galleryDir) ? readdirSync(galleryDir).filter((f) => f.endsWith('.bento.html')).map((f) => join(galleryDir, f)) : []),
+    join(site, '404.bento.html'),
+  ].filter(existsSync)
+  const stale = decks.filter((d) => appHash(d) !== shellHash)
+  if (stale.length) {
+    die(
+      'example decks are on a DIFFERENT shell than the release — rebuild them\n' +
+      '  with `node scripts/release.mjs` (or `publish-site.mjs … --gallery`) first:\n' +
+      stale.map((d) => '    · ' + d.slice(site.length + 1)).join('\n'),
+    )
+  }
+  console.log(`• shell-consistency gate: ${decks.length} example deck(s) embed the released shell ✓`)
 }
 
 // ---- mirror site/ → dest (authoritative; never touches dest/.git) ----------
