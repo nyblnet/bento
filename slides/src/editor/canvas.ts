@@ -806,6 +806,7 @@ export class SlideCanvas {
   // --- text editing -----------------------------------------------------------
 
   startTextEdit(node: HTMLElement) {
+    if (this.store.readOnly) return // live viewer — no inline editing
     if (this.editing === node) return
     this.commitTextEdit()
     const inner = node.querySelector<HTMLElement>('.bento-text-inner')
@@ -902,6 +903,7 @@ export class SlideCanvas {
 
   /** Commit any current edit, then edit cell (r,c) of table `id`. */
   private editCellAt(id: string, r: number, c: number) {
+    if (this.store.readOnly) return // live viewer — no inline editing
     this.commitTextEdit()
     const td = this.surface?.querySelector<HTMLElement>(
       `[data-el-id="${CSS.escape(id)}"] td[data-r="${r}"][data-c="${c}"]`)
