@@ -60,6 +60,7 @@ const CHART_MAIN = 'sd-main-chart'
 
 const S_CHARTS = 'sd-s-charts'
 const S_CHARTS_PIE = 'sd-s-charts-pie'
+const S_CHARTS_SCATTER = 'sd-s-charts-scatter'
 const S_CHOREO = 'sd-s-choreo'
 const S_CHOREO_2 = 'sd-s-choreo-2'
 const S_CHOREO_3 = 'sd-s-choreo-3'
@@ -237,6 +238,27 @@ const trendOption = () => ({
     },
     data: [8, 9, 12, 14, 19, 24, 30, 38, 47, 58, 71, 86],
   }],
+})
+
+const scatterOption = () => ({
+  color: [PEACH, STEEL],
+  textStyle: { fontFamily: 'Instrument Sans' },
+  tooltip: { trigger: 'item' },
+  legend: { bottom: 0, textStyle: { color: '#6B7280' } },
+  grid: { left: 52, right: 24, top: 24, bottom: 56 },
+  xAxis: {
+    type: 'value', name: 'Reach',
+    axisLine: { lineStyle: { color: '#D8D2C4' } }, axisTick: { show: false },
+    axisLabel: { color: '#6B7280' }, splitLine: { lineStyle: { color: '#EAE4D6' } },
+  },
+  yAxis: {
+    type: 'value', name: 'Engagement',
+    axisLabel: { color: '#6B7280' }, splitLine: { lineStyle: { color: '#EAE4D6' } },
+  },
+  series: [
+    { type: 'scatter', name: 'Owned', symbolSize: 15, data: [[12, 8], [20, 15], [28, 12], [35, 26], [44, 22]] },
+    { type: 'scatter', name: 'Paid', symbolSize: 15, data: [[52, 34], [63, 40], [71, 52], [82, 61], [92, 74]] },
+  ],
 })
 
 // --- the deck ---------------------------------------------------------------
@@ -589,7 +611,43 @@ export function starterDoc(): BentoDoc {
           stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
         }),
         text({
-          x: 944, y: 574, w: 216, h: 28, html: '← Back to bars', fontSize: 17, fontWeight: 700,
+          x: 944, y: 574, w: 216, h: 28, html: 'See the spread →', fontSize: 17, fontWeight: 700,
+          color: '#FFFFFF', align: 'center',
+        }),
+        shape('rect', {
+          id: 'sd-hit-charts', x: 944, y: 560, w: 216, h: 52, radius: 26,
+          fill: 'rgba(0,0,0,0)', link: S_CHARTS_SCATTER,
+        }),
+      ],
+    }),
+    slide({
+      id: S_CHARTS_SCATTER,
+      stateOf: S_CHARTS,
+      background: PAPER,
+      name: 'scatter',
+      notes:
+        'A third hidden state — the same chart element id becomes a SCATTER plot (bar⇄pie⇄scatter all morph in place). ' +
+        'Two clusters show a reach↔engagement correlation. Click to cycle back to the bars.',
+      elements: [
+        dots(false),
+        kicker('LIVE DATA', { color: PEACH_DEEP }),
+        ...furniture(false),
+        title('And a scatter, in place.'),
+        shape('rect', { id: T_C, x: 72, y: 196, w: 828, h: 458, radius: 20, fill: '#FFFFFF', stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.10)' } }),
+        { ...defaultChart(scatterOption()), id: CHART_MAIN, x: 96, y: 220, w: 780, h: 410, preset: 'scatter' },
+        shape('rect', { id: T_D, x: 920, y: 196, w: 264, h: 458, radius: 18, fill: PANEL, shadow: { y: 14, blur: 34, color: 'rgba(30,42,58,0.18)' } }),
+        shape('rect', { id: T_A, x: 944, y: 222, w: 44, h: 6, radius: 3, fill: PEACH }),
+        text({
+          x: 944, y: 248, w: 216, h: 210,
+          html: 'Same chart element — a <b>third form</b>. Each dot is a campaign: reach across, engagement up.',
+          fontSize: 16.5, fontWeight: 500, color: MIST, lineHeight: 1.7,
+        }),
+        shape('rect', {
+          id: T_B, x: 944, y: 560, w: 216, h: 52, radius: 26, fill: STEEL, fillGradient: GRAD_STEEL,
+          stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
+        }),
+        text({
+          x: 944, y: 574, w: 216, h: 28, html: '↺ Back to bars', fontSize: 17, fontWeight: 700,
           color: '#FFFFFF', align: 'center',
         }),
         shape('rect', {
@@ -643,30 +701,38 @@ export function starterDoc(): BentoDoc {
           x: 944, y: 244, w: 216, h: 20, html: 'SIGNUPS · LIVE',
           fontSize: 11, fontWeight: 700, letterSpacing: 2, color: STEEL_SOFT,
         }),
-        // a small chart LINKED to the table (source) — editing a cell updates it
+        // a small DUAL-AXIS chart LINKED to the table (source): Signups bars on
+        // the left axis, Growth % as a line on the right axis. Editing a cell
+        // updates it (series map to numeric columns by position).
         defaultChart(
           {
             color: [PEACH, STEEL],
-            grid: { left: 6, right: 12, top: 12, bottom: 22, containLabel: true },
+            grid: { left: 48, right: 42, top: 16, bottom: 26 },
             xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'], axisLabel: { color: MIST } },
-            yAxis: { type: 'value', axisLabel: { color: 'rgba(182,193,210,0.55)' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } },
-            series: [{ type: 'bar', name: 'Signups', data: [1204, 3880, 9140, 21500], itemStyle: { borderRadius: [4, 4, 0, 0] } }],
+            yAxis: [
+              { type: 'value', axisLabel: { color: 'rgba(182,193,210,0.5)' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } },
+              { type: 'value', name: 'Growth', axisLabel: { color: 'rgba(182,193,210,0.5)', formatter: '{value}%' }, splitLine: { show: false } },
+            ],
+            series: [
+              { type: 'bar', name: 'Signups', yAxisIndex: 0, data: [1204, 3880, 9140, 21500], itemStyle: { borderRadius: [4, 4, 0, 0] } },
+              { type: 'line', name: 'Growth', yAxisIndex: 1, data: [0, 222, 136, 135], smooth: true, symbol: 'circle', symbolSize: 5, lineStyle: { width: 2 } },
+            ],
             tooltip: { trigger: 'axis' },
           },
-          { id: 'sd-tbl-chart', x: 922, y: 272, w: 260, h: 214, preset: 'bar', source: { tableId: 'sd-table' }, fx: { enter: 'fade-up', order: 2 } },
+          { id: 'sd-tbl-chart', x: 922, y: 266, w: 262, h: 224, preset: 'bar', source: { tableId: 'sd-table' }, fx: { enter: 'fade-up', order: 2 } },
         ),
         text({
-          x: 944, y: 500, w: 216, h: 60,
-          html: '<b>Edit the table</b> — this chart tracks it, live.',
-          fontSize: 14.5, fontWeight: 500, color: MIST, lineHeight: 1.5,
+          x: 944, y: 504, w: 216, h: 56,
+          html: '<b>Edit the table</b> — bars and the growth line track it, live.',
+          fontSize: 14, fontWeight: 500, color: MIST, lineHeight: 1.5,
         }),
         shape('rect', {
-          id: T_B, x: 944, y: 586, w: 216, h: 44, radius: 22, fill: STEEL, fillGradient: GRAD_STEEL,
+          id: T_B, x: 944, y: 588, w: 216, h: 42, radius: 21, fill: STEEL, fillGradient: GRAD_STEEL,
           stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1,
         }),
         text({
-          x: 944, y: 598, w: 216, h: 24, html: '🔗 Live-linked', fontSize: 15, fontWeight: 700,
-          color: '#FFFFFF', align: 'center',
+          x: 944, y: 600, w: 216, h: 22, html: 'LIVE-LINKED', fontSize: 13, fontWeight: 700,
+          letterSpacing: 2, color: '#FFFFFF', align: 'center',
         }),
       ],
     }),
