@@ -25,7 +25,13 @@ b { color: #fff; font-weight: 600; }
 #stage { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center; overflow: hidden; }
 #stage .el { position: absolute; }
 #exit { position: fixed; top: 16px; right: 20px; z-index: 60; color: rgba(255,255,255,0.6); background: none; border: 1px solid rgba(255,255,255,0.3); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 12px; }
-#hint { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 60; color: rgba(255,255,255,0.45); font-size: 12px; letter-spacing: 0.08em; }
+#hint { position: fixed; bottom: 82px; left: 50%; transform: translateX(-50%); z-index: 60; color: rgba(255,255,255,0.45); font-size: 12px; letter-spacing: 0.08em; transition: opacity 0.5s; pointer-events: none; }
+#hint.gone { opacity: 0; }
+#navbar { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 60; display: none; align-items: center; gap: 14px; padding: 6px 10px; background: rgba(13,27,46,0.55); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#stagewrap.on #navbar { display: flex; }
+#navbar button { width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.85); font-size: 24px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: inherit; padding: 0; }
+#navbar button:active { background: rgba(255,158,138,0.28); border-color: #FF9E8A; }
+#counter { min-width: 54px; text-align: center; font-size: 13px; letter-spacing: 0.08em; color: rgba(255,255,255,0.72); font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -47,7 +53,7 @@ b { color: #fff; font-weight: 600; }
     <div class="qcap">scan it — the slides are inside the squares</div>
   </div>
 </div>
-<div id="stagewrap"><div id="stage"></div><button id="exit">esc</button><div id="hint">→ next · ← back</div></div>
+<div id="stagewrap"><div id="stage"></div><button id="exit">esc</button><div id="hint">Tap or swipe to advance</div><div id="navbar"><button id="navprev" aria-label="Previous slide">‹</button><span id="counter"></span><button id="navnext" aria-label="Next slide">›</button></div></div>
 <script>
 const FALLBACK = '__PAYLOAD__'
 const b64ToBytes = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
@@ -58,6 +64,7 @@ async function loadDoc() {
   return JSON.parse(await new Response(stream).text())
 }
 const stage = document.getElementById('stage'), wrapEl = document.getElementById('stagewrap')
+const hintEl = document.getElementById('hint'), counterEl = document.getElementById('counter')
 let doc = null, idx = 0
 function fit() {
   const s = Math.min(innerWidth / 1280, innerHeight / 720) * 0.96
@@ -65,6 +72,7 @@ function fit() {
 }
 function render() {
   const sl = doc.slides[idx]
+  counterEl.textContent = `${idx + 1} / ${doc.slides.length}`
   stage.style.background = sl.background || '#000'
   stage.innerHTML = ''
   for (const el of sl.elements || []) {
@@ -87,18 +95,41 @@ function render() {
 }
 async function start() {
   if (!doc) doc = await loadDoc()
-  idx = 0; wrapEl.classList.add('on'); fit(); render()
+  idx = 0; hintEl.classList.remove('gone'); wrapEl.classList.add('on'); fit(); render()
 }
 function stop() { wrapEl.classList.remove('on') }
+// shared nav — keydown, tap, swipe and buttons all funnel through these
+function next() { hintEl.classList.add('gone'); idx < doc.slides.length - 1 ? (idx++, render()) : stop() }
+function prev() { hintEl.classList.add('gone'); if (idx > 0) { idx--; render() } }
 document.getElementById('play').onclick = start
 document.getElementById('exit').onclick = stop
+document.getElementById('navprev').onclick = prev
+document.getElementById('navnext').onclick = next
 addEventListener('resize', fit)
 addEventListener('keydown', (e) => {
   if (!wrapEl.classList.contains('on')) return
   if (e.key === 'Escape') stop()
-  else if (e.key === 'ArrowRight' || e.key === ' ') idx < doc.slides.length - 1 ? (idx++, render()) : stop()
-  else if (e.key === 'ArrowLeft' && idx > 0) { idx--; render() }
+  else if (e.key === 'ArrowRight' || e.key === ' ') next()
+  else if (e.key === 'ArrowLeft') prev()
 })
+// tap-to-advance: left third → back, elsewhere → forward (skip controls/links)
+wrapEl.addEventListener('click', (e) => {
+  if (e.target.closest('a,button,#exit')) return
+  if (swiped) { swiped = false; return }
+  if (e.clientX < innerWidth / 3) prev(); else next()
+})
+// swipe (ported from the shell's present.ts)
+let swiped = false, touchX = 0, touchY = 0
+wrapEl.addEventListener('touchstart', (e) => {
+  touchX = e.touches[0].clientX; touchY = e.touches[0].clientY
+}, { passive: true })
+wrapEl.addEventListener('touchend', (e) => {
+  const t = e.changedTouches[0]; if (!t) return
+  const dx = t.clientX - touchX, dy = t.clientY - touchY
+  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.2) return // a tap or a scroll
+  swiped = true; setTimeout(() => { swiped = false }, 400) // suppress the synthetic click
+  dx < 0 ? next() : prev()
+}, { passive: true })
 if (location.hash.length > 1) start()
 </script>
 </body>
