@@ -597,7 +597,7 @@ function deckPicnic() {
       // build-example-decks.mjs, so it's unambiguously public domain. Demos the
       // media element's embed path: the sound travels inside the .bento.html.
       text({ x: 130, y: 556, w: 360, h: 26, html: '▶ press play — the picnic jingle', fontSize: 15, fontWeight: 800, color: INK, rotation: -1 }),
-      media({ id: 'pic-jingle', kind: 'audio', src: mediaFile('chime.wav', 'audio/wav'), x: 130, y: 588, w: 300, h: 56, radius: 999, controls: true }),
+      media({ id: 'pic-jingle', kind: 'audio', src: mediaFile('chime.wav', 'audio/wav'), x: 130, y: 588, w: 300, h: 56, controls: true }),
       text({ x: 130, y: 682, w: 700, h: 20, html: 'PHOTOS: JACK DELANO, 1941 · LIBRARY OF CONGRESS — PUBLIC DOMAIN', fontSize: 9, fontWeight: 700, letterSpacing: 2, color: 'rgba(32,26,49,0.55)' }),
     ],
   })

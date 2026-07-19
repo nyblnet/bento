@@ -458,4 +458,10 @@ export const zhHans: Catalog = {
   "Save as presentation package…": "另存为演示文稿包…",
   "This is a presentation package — view and present only.": "这是一个演示文稿包——仅供查看和演示。",
   "Turn on live sharing first — a read-only copy follows the session": "请先开启实时共享——只读副本会跟随该会话",
+  // media insert menu (v0.9.20)
+  "Video or audio file…": "视频或音频文件…",
+  "Video from a link…": "从链接添加视频…",
+  "Audio from a link…": "从链接添加音频…",
+  "Add video or audio — from a file (embeds it) or a link (stays a URL)": "添加视频或音频 — 从文件（嵌入）或链接（保留为 URL）",
+  "Paste the {kind} URL — it stays a link, the file is not embedded:": "粘贴 {kind} URL — 它保留为链接，文件不会被嵌入：",
 }
