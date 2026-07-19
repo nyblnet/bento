@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
 // bento-guestbook-daemon — the sustainable home of the public guestbook.
 // Storage: Workers KV (R2 is not enabled on this account; KV fits — values
 // are ~500 KB against a 25 MB limit, archives pruned to the newest 90).
@@ -192,6 +194,12 @@ export default {
           m.epoch = doc.guestbookEpoch ?? 0
           m.killed = false
           m.seededAt = new Date().toISOString()
+          // Anchor the roll clock on first seed so ROLL_HOURS is measured from
+          // now, not from epoch 0 — otherwise a freshly-seeded guestbook (no
+          // lastRoll) rolls on the very next cron tick, wiping the seeded room.
+          // Only set it if absent: re-seeds (every publish) must NOT reset the
+          // cadence, and a real roll() sets its own lastRoll.
+          if (!m.lastRoll) m.lastRoll = new Date().toISOString()
           await putMeta(env, m)
           return json({ seeded: true, epoch: m.epoch, bytes: body.length })
         }
