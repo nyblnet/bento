@@ -28,16 +28,16 @@ import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport,
 
 const i18nT = t
 
-const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; draw?: 'line' | 'path' | 'connector' | 'free' | 'poly' }> = [
-  { kind: 'rect', label: 'Rectangle', icon: ICONS.rect },
-  { kind: 'ellipse', label: 'Ellipse', icon: ICONS.ellipse },
-  { kind: 'triangle', label: 'Triangle', icon: ICONS.triangle },
-  { kind: 'arrow', label: 'Arrow', icon: ICONS.arrow },
-  { kind: 'line', label: 'Line', icon: ICONS.line, draw: 'line' },
-  { kind: 'path', label: 'Curved line', icon: ICONS.curve, draw: 'path' },
-  { kind: 'line', label: 'Connector', icon: ICONS.connector, draw: 'connector' },
-  { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free' },
-  { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly' },
+const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; draw?: 'line' | 'path' | 'connector' | 'free' | 'poly'; tip: string }> = [
+  { kind: 'rect', label: 'Rectangle', icon: ICONS.rect, tip: 'A rectangle — rounded corners, fills, gradients and shadows in the panel' },
+  { kind: 'ellipse', label: 'Ellipse', icon: ICONS.ellipse, tip: 'An ellipse or circle' },
+  { kind: 'triangle', label: 'Triangle', icon: ICONS.triangle, tip: 'A triangle' },
+  { kind: 'arrow', label: 'Arrow', icon: ICONS.arrow, tip: 'A solid arrow shape' },
+  { kind: 'line', label: 'Line', icon: ICONS.line, draw: 'line', tip: 'Drag on the slide to draw a straight line — drag its endpoints to adjust' },
+  { kind: 'path', label: 'Curved line', icon: ICONS.curve, draw: 'path', tip: 'Drag to draw a curve — then drag its points; double-click to add or remove one' },
+  { kind: 'line', label: 'Connector', icon: ICONS.connector, draw: 'connector', tip: 'Drag between two elements — the ends snap on and re-route when they move' },
+  { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free', tip: 'Draw by hand — the stroke smooths into an editable curve' },
+  { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
 
 export class Editor {
@@ -201,6 +201,7 @@ export class Editor {
     logo.addEventListener('click', () => this.openAbout())
     const title = document.createElement('input')
     title.className = 'ed-title'
+    title.title = t('Deck title — shown in the tab, on {{title}} fields, and as the suggested file name')
     title.value = this.store.doc.title
     title.spellcheck = false
     title.addEventListener('change', () => {
@@ -509,7 +510,7 @@ export class Editor {
     clone.readonly = true
     delete clone.collab // a sealed package must not join (or leak) the live room
     try {
-      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'presentonly' })
       if (ok) this.toast(t('Presentation package saved — it opens straight into the show'))
     } catch {
       this.toast(t('Saving failed'))
@@ -532,7 +533,7 @@ export class Editor {
     delete clone.collab.ownerPriv // v2: neither the owner key…
     delete clone.collab.invite //    …nor any invite (delegation) material
     try {
-      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' })
       if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
     } catch {
       this.toast(t('Saving failed'))
@@ -558,7 +559,7 @@ export class Editor {
     delete clone.collab!.ownerPriv
     clone.collab!.on = true
     try {
-      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' })
       if (ok) this.toast(t('Editor copy saved — recipients join live with edit access'))
     } catch {
       this.toast(t('Saving failed'))
@@ -683,7 +684,7 @@ export class Editor {
     delete clone.collab // instances mint their own credentials
     delete (clone as { docId?: string }).docId
     try {
-      const ok = await writeUpdatedFileAs(serializeFile(clone), clone)
+      const ok = await writeUpdatedFileAs(serializeFile(clone), clone, { suffix: 'template' })
       if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
     } catch (err) {
       console.error(err)
@@ -957,7 +958,7 @@ export class Editor {
         // (or click to drop a default); other shapes insert straight away.
         if (item.draw) { this.canvas.armDraw(item.draw); return }
         this.canvas.insert(defaultShape(item.kind))
-      })
+      }, t(item.tip))
       menu.appendChild(b)
     }
     wrap.append(trigger, menu)
