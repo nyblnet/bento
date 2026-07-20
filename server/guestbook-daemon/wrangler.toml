@@ -29,7 +29,7 @@ SYNC_HOST = "wss://sync.bento.page"
 # 24 = daily roll (the archivist cron fires daily at 01:00 UTC, so sub-24 is a
 # no-op). Daily during launch to cap spam exposure on the unmoderated wall;
 # relax to 168 (weekly) once traffic settles.
-ROLL_HOURS = "24"
+ROLL_HOURS = "0"
 
 # secrets (set with `npx wrangler secret put ADMIN_KEY`):
 #   ADMIN_KEY — bearer for /guestbook-admin/*
