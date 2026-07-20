@@ -82,6 +82,13 @@ export class Room {
   constructor(state) {
     this.state = state
     this.verifyKey = null // imported writer pubkey, cached for this wake
+    // Keepalive: auto-reply "pong" to a client "ping" WITHOUT waking the DO, so
+    // idle connections aren't reaped by edge/proxy idle timeouts — the usual
+    // cause of "connects and drops" on hibernated WebSockets. Costs no active
+    // duration; retained across hibernation. Set here so every wake re-applies it.
+    try {
+      state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
+    } catch { /* older runtime without auto-response — clients still reconnect */ }
   }
 
   /** Valid writer signature over `${i}.${d}` for a signed room? */
@@ -181,6 +188,9 @@ export class Room {
 
   async onMessage(ws, data) {
     if (typeof data !== 'string' || data.length > MAX_FRAME) return
+    // keepalive fallback: if the runtime auto-response isn't active this reaches
+    // us — reply "pong" so a pinging client never mistakes a live socket for dead.
+    if (data === 'ping') { try { ws.send('pong') } catch { /* gone */ } return }
     // rate-limit window lives on the socket attachment (survives hibernation)
     const meta = ws.deserializeAttachment() || { count: 0, windowStart: Date.now() }
     const now = Date.now()

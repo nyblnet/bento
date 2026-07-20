@@ -9,6 +9,47 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [1.0.2] — 2026-07-20
+
+- **Live-collab stability**: WebSocket keepalive (client ping + relay auto-pong,
+  hibernation-safe) so idle connections stop getting reaped — fixes the
+  frequent connect/drop churn. Client also detects a dead socket fast and
+  reconnects instead of hanging. (Relay redeployed.)
+- **Presenter view** overhaul: the speaker window is now a full presenter
+  surface — nav bar (first/prev/next/last + counter), clickable thumbnail rail,
+  all-slides grid, black-screen toggle, and keyboard control from the window
+  itself. It opens from a launcher button by the present controls (or the Slide
+  panel) and persists so present mode adopts it.
+- **Window Management permission removed** — no prompt; the speaker window opens
+  on the current display and you drag it to a second screen. Fixes the macOS
+  "notes land on the wrong monitor" bug by keeping open-notes and go-fullscreen
+  as two separate gestures.
+- **Canvas slide navigation**: arrow keys and the scroll wheel move between
+  slides when nothing is selected (arrows still nudge a selected element).
+- **Readable default text**: new text boxes and tables pick a colour that reads
+  on the current slide, so they're never invisible on a dark deck.
+- **Lines, curves & connectors**: lines and curves now edit with direct endpoint
+  / anchor handles (no more box-resize-and-rotate); double-click a curve to add
+  or remove points. Draw them by dragging on the canvas. New **connectors** snap
+  their ends to elements and re-route automatically when those elements move.
+- **Document properties**: `doc.meta` (author/company/subject/event/keywords),
+  editable in About, usable as `{{author}}` / `{{company}}` / `{{subject}}` /
+  `{{event}}` field tokens in any text.
+- **Entrance speed**: per-element `fx.enterDur` ("Enter secs" in the panel).
+- Live-collab UI hardening: the presence avatar strip caps at a few + a "+N"
+  pill, the Live panel's people list scrolls, and join/leave toasts hush in a
+  crowded room — so a busy shared deck can't break the topbar.
+
+## [1.0.1] — 2026-07-20
+
+- Cap the live-collaboration presence UI (topbar avatars, Live panel list,
+  join/leave toasts) so a crowded room can't overflow the interface.
+
+## [1.0.0] — 2026-07-20
+
+- First 1.0 release. MIT-licensed; feature-complete slides app (charts, tables,
+  media, morph, E2EE collab, i18n) with the signed self-update channel.
+
 ## [0.9.20] — 2026-07
 
 - Audio: render the native control as-is; add an "insert media from a link"

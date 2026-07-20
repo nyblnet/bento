@@ -8,7 +8,7 @@ import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
-  instantiateLayout, layoutElementIds, newDocId, syncLinkedChart, uid,
+  instantiateLayout, isLightBg, layoutElementIds, newDocId, readableInk, syncLinkedChart, uid,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
 } from '../model'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, offlineEnabled, setAutoCheck, setOffline } from '../update'
@@ -20,19 +20,24 @@ import { startPresentation } from '../present'
 import { hasFileHandle, isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
-import { refreshScreensIfGranted } from '../screens'
+import { openSpeakerWindow, speakerIdleBody } from '../screens'
+import { borderPoint, boxCenter, lineEndpoints, setLineEndpoints, sideMidpoint } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
 import { disconnectOnline, joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 
 const i18nT = t
 
-const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string }> = [
+const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; draw?: 'line' | 'path' | 'connector' | 'free' | 'poly' }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect },
   { kind: 'ellipse', label: 'Ellipse', icon: ICONS.ellipse },
   { kind: 'triangle', label: 'Triangle', icon: ICONS.triangle },
   { kind: 'arrow', label: 'Arrow', icon: ICONS.arrow },
-  { kind: 'line', label: 'Line', icon: ICONS.line },
+  { kind: 'line', label: 'Line', icon: ICONS.line, draw: 'line' },
+  { kind: 'path', label: 'Curved line', icon: ICONS.curve, draw: 'path' },
+  { kind: 'line', label: 'Connector', icon: ICONS.connector, draw: 'connector' },
+  { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free' },
+  { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly' },
 ]
 
 export class Editor {
@@ -70,8 +75,8 @@ export class Editor {
     })
     this.wireAutosave()
     this.wirePaste()
-    void refreshScreensIfGranted() // re-enable 2nd-screen notes if granted earlier
     store.on('doc', () => this.syncLinkedCharts())
+    store.on('doc', () => this.syncConnectors())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -214,13 +219,13 @@ export class Editor {
 
     const insert = div('ed-group ed-insert')
     insert.append(
-      btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ y: 120 + Math.random() * 200 }), true),
+      btn(ICONS.text, t('Text'), () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true),
         t('Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type')),
       this.shapeDropdown(),
       btn(ICONS.image, t('Image'), () => this.pickImage(),
         t('Add an image — or just paste one (⌘V) straight onto the slide')),
       this.mediaDropdown(),
-      btn(ICONS.table, t('Table'), () => this.canvas.insert(defaultTable()),
+      btn(ICONS.table, t('Table'), () => this.canvas.insert(this.newTable()),
         t('Add a table — edit cells inline; turn it into a live chart from the panel')),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
         t('Add a chart — edit it visually or link it to a table so it updates live')),
@@ -282,7 +287,12 @@ export class Editor {
     tabFab.innerHTML = ICONS.window
     tabFab.title = t('Present in this tab — handy for testing or sharing a window')
     tabFab.addEventListener('click', () => this.present(false, false))
-    fabs.append(fsFab, tabFab)
+    const spkFab = document.createElement('button')
+    spkFab.className = 'ed-fab ed-fab-small'
+    spkFab.innerHTML = ICONS.presenter
+    spkFab.title = t('Open the speaker view — notes, controls and thumbnails in a separate window (drag it to a second screen)')
+    spkFab.addEventListener('click', () => this.openSpeakerView())
+    fabs.append(fsFab, tabFab, spkFab)
     canvasWrap.appendChild(fabs)
     this.props = div('ed-props')
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
@@ -299,6 +309,7 @@ export class Editor {
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
+    this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
@@ -725,8 +736,10 @@ export class Editor {
     for (const item of SHAPE_MENU) {
       const b = btn(item.icon, t(item.label), () => {
         wrap.classList.remove('open')
-        const partial = item.kind === 'line' ? { h: 4, w: 400, strokeWidth: 3 } : {}
-        this.canvas.insert(defaultShape(item.kind, partial))
+        // line / curve / connector arm a draw tool — drag on the canvas to draw
+        // (or click to drop a default); other shapes insert straight away.
+        if (item.draw) { this.canvas.armDraw(item.draw); return }
+        this.canvas.insert(defaultShape(item.kind))
       })
       menu.appendChild(b)
     }
@@ -1138,7 +1151,30 @@ export class Editor {
     probe.src = src
   }
 
+  /** A fresh table styled to read on the CURRENT slide — on a dark background the
+   *  default dark body text / hairline borders would be invisible, so flip them
+   *  light (the header keeps its own dark-bg + white text, which reads on both). */
+  private newTable(): TableElement {
+    const tbl = defaultTable()
+    if (!isLightBg(this.store.slide.background)) {
+      tbl.style.color = readableInk(this.store.slide.background)
+      tbl.style.zebra = 'rgba(255,255,255,0.06)'
+      tbl.style.borderColor = 'rgba(255,255,255,0.16)'
+    }
+    return tbl
+  }
+
   // --- present & save ------------------------------------------------------------------
+
+  /** Open the speaker view now (a launcher twin of the Slide-panel button) so it
+   *  can be placed on a second screen before presenting — present mode adopts it. */
+  openSpeakerView() {
+    const w = openSpeakerWindow(
+      `${this.store.doc.title} — ${t('Speaker view')}`,
+      speakerIdleBody(this.store.doc.title, t('Notes, controls and slide thumbnails appear here when you start presenting. Drag this window to your second display.')),
+    )
+    if (!w) this.toast(t('Couldn’t open the speaker view — allow pop-ups for this site.'))
+  }
 
   present(fromStart = false, fullscreen = true) {
     if (this.presenting) return
@@ -1192,7 +1228,7 @@ export class Editor {
         ev.preventDefault()
         const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
         const { width } = this.store.doc.size
-        const el = defaultText({ html: esc, x: Math.round(width / 2 - 300), y: 260, w: 600 })
+        const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
         this.store.commit(() => this.store.slide.elements.push(el))
         this.store.select([el.id])
         this.toast(t('Text pasted'))
@@ -1243,6 +1279,36 @@ export class Editor {
     }
     // the triggering table edit already dirtied the doc + drives collab/autosave;
     // each replica derives identically from the synced table, so just re-render.
+    if (changed) this.canvas.render()
+  }
+
+  /** Re-route connectors (line shapes anchored to elements via from/to) when
+   *  anything on the slide moves. Derived, not committed — every replica computes
+   *  the same endpoints from the element boxes (mirrors syncLinkedCharts). */
+  private syncConnectors() {
+    const slide = this.store.slide
+    const byId = new Map(slide.elements.map((e) => [e.id, e]))
+    let changed = false
+    for (const el of slide.elements) {
+      if (el.type !== 'shape' || el.shape !== 'line') continue
+      const c = el as import('../model').ShapeElement
+      if (!c.from && !c.to) continue
+      if (c.from && !byId.has(c.from.el)) { delete c.from; changed = true }
+      if (c.to && !byId.has(c.to.el)) { delete c.to; changed = true }
+      if (!c.from && !c.to) continue
+      const [a, b] = lineEndpoints(c)
+      const fromBox = c.from ? byId.get(c.from.el) : null
+      const toBox = c.to ? byId.get(c.to.el) : null
+      // explicit side → pin to that side's midpoint; 'auto' → nearest border
+      const end = (box: SlideElement, side: 'auto' | 'top' | 'right' | 'bottom' | 'left' | undefined, toward: { x: number; y: number }) =>
+        side && side !== 'auto' ? sideMidpoint(box, side) : borderPoint(box, toward)
+      const na = fromBox ? end(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
+      const nb = toBox ? end(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
+      if (Math.hypot(na.x - a.x, na.y - a.y) > 0.5 || Math.hypot(nb.x - b.x, nb.y - b.y) > 0.5) {
+        setLineEndpoints(c, na, nb)
+        changed = true
+      }
+    }
     if (changed) this.canvas.render()
   }
 
@@ -1555,6 +1621,14 @@ export class Editor {
         }
         return
       }
+      // nothing selected → arrows walk slides (Left/Up = prev, Right/Down = next);
+      // when an element IS selected they nudge it (branch below). inField already
+      // returned above, so this never fires mid text/cell edit.
+      if (ev.key.startsWith('Arrow') && !this.store.selection.length && !this.canvas.isPathEditing) {
+        ev.preventDefault()
+        this.store.goToLinear(ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? -1 : 1)
+        return
+      }
       if (ev.key.startsWith('Arrow') && this.store.selection.length) {
         ev.preventDefault()
         const step = ev.shiftKey ? 10 : 1
@@ -1577,18 +1651,19 @@ export class Editor {
         return
       }
       if (ev.key === 'Escape') {
-        if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
+        if (this.canvas.isDrawing) this.canvas.cancelDraw()
+        else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
         else this.store.select([])
         return
       }
       if (ev.key === 'PageDown') {
         ev.preventDefault()
-        this.store.goTo(this.store.currentIndex + 1)
+        this.store.goToLinear(1)
         return
       }
       if (ev.key === 'PageUp') {
         ev.preventDefault()
-        this.store.goTo(this.store.currentIndex - 1)
+        this.store.goToLinear(-1)
       }
     })
   }
@@ -1766,6 +1841,36 @@ export class Editor {
     })
     langRow.append(document.createTextNode(t('Language') + ' '), langSel)
     box.appendChild(langRow)
+
+    // Document properties → fillable {{author}} {{company}} {{subject}} {{event}} fields
+    const metaWrap = div('ed-about-row ed-about-meta-wrap')
+    const metaTitle = document.createElement('div')
+    metaTitle.className = 'ed-about-h'
+    metaTitle.textContent = t('Document properties')
+    metaWrap.appendChild(metaTitle)
+    const metaHint = document.createElement('p')
+    metaHint.className = 'ed-hint'
+    metaHint.innerHTML = t('Type <b>{{author}}</b>, <b>{{company}}</b>, <b>{{subject}}</b> or <b>{{event}}</b> in any text box and it fills in from here — everywhere at once. Handy for title slides and footers.')
+    metaWrap.appendChild(metaHint)
+    const ensureMeta = () => (this.store.doc.meta ??= {})
+    const metaField = (label: string, get: () => string, set: (v: string) => void) => {
+      const row = div('ed-about-meta')
+      const l = document.createElement('label')
+      l.textContent = label
+      const inp = document.createElement('input')
+      inp.type = 'text'
+      inp.value = get()
+      inp.addEventListener('change', () => this.store.commit(() => set(inp.value.trim())))
+      row.append(l, inp)
+      metaWrap.appendChild(row)
+    }
+    metaField(t('Title'), () => this.store.doc.title, (v) => { this.store.doc.title = v || 'Untitled' })
+    metaField(t('Author'), () => this.store.doc.meta?.author ?? '', (v) => { ensureMeta().author = v })
+    metaField(t('Company'), () => this.store.doc.meta?.company ?? '', (v) => { ensureMeta().company = v })
+    metaField(t('Subject'), () => this.store.doc.meta?.subject ?? '', (v) => { ensureMeta().subject = v })
+    metaField(t('Event'), () => this.store.doc.meta?.event ?? '', (v) => { ensureMeta().event = v })
+    metaField(t('Keywords'), () => this.store.doc.meta?.keywords ?? '', (v) => { ensureMeta().keywords = v })
+    box.appendChild(metaWrap)
 
     // AI round-trip: the document is the interchange unit
     const aiRow = div('ed-about-row')

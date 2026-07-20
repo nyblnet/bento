@@ -112,6 +112,13 @@ export class OnlineTransport implements Transport {
   private closed = false
   private backoff = 800
   private url = ''
+  // heartbeat: ping the relay (which auto-responds "pong" without waking the DO)
+  // so idle connections stay alive; if a pong doesn't come back before the next
+  // tick, treat the socket as dead and reconnect instead of waiting for a TCP
+  // timeout that can take minutes.
+  private pingTimer: ReturnType<typeof setInterval> | null = null
+  private awaitingPong = false
+  private static readonly PING_MS = 25_000
   /**
    * Replay bookmark — MEMORY ONLY, deliberately: it is valid only alongside
    * the in-memory CRDT state it was earned with. A fresh join replays from
@@ -188,19 +195,44 @@ export class OnlineTransport implements Transport {
       this.replaySeen = new Set()
       this.setStatus('open')
       for (const text of this.queue.splice(0)) ws.send(text)
+      this.startHeartbeat(ws)
       this.hooks.onOpen()
     }
     ws.onmessage = (ev) => {
-      this.onEnvelope(String(ev.data)).catch(() => {})
+      const data = String(ev.data)
+      if (data === 'pong') { this.awaitingPong = false; return } // keepalive reply
+      this.onEnvelope(data).catch(() => {})
     }
     const drop = () => {
       if (this.ws !== ws) return
+      this.stopHeartbeat()
       this.ws = null
       this.setStatus('closed')
       this.retry()
     }
     ws.onclose = drop
     ws.onerror = drop
+  }
+
+  private startHeartbeat(ws: WebSocket) {
+    this.stopHeartbeat()
+    this.awaitingPong = false
+    this.pingTimer = setInterval(() => {
+      if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) return
+      if (this.awaitingPong) {
+        // no pong since the last ping → the socket is dead (half-open); force a
+        // close so onclose fires and we reconnect, rather than hanging silently.
+        try { ws.close() } catch { /* already gone */ }
+        return
+      }
+      this.awaitingPong = true
+      try { ws.send('ping') } catch { /* send failed → onclose will handle it */ }
+    }, OnlineTransport.PING_MS)
+  }
+
+  private stopHeartbeat() {
+    if (this.pingTimer) { clearInterval(this.pingTimer); this.pingTimer = null }
+    this.awaitingPong = false
   }
 
   private retry() {
@@ -316,6 +348,7 @@ export class OnlineTransport implements Transport {
 
   close() {
     this.closed = true
+    this.stopHeartbeat()
     this.ws?.close()
     this.ws = null
     this.setStatus('closed')

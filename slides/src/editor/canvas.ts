@@ -8,10 +8,15 @@ import Moveable from 'moveable'
 import Selecto from 'selecto'
 import type { Store } from '../store'
 import { t } from '../i18n'
-import { uid, type SlideElement, type TableElement } from '../model'
+import { defaultShape, readableInk, uid, type ShapeElement, type SlideElement, type TableElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
 import { PathEditor } from './patheditor'
+import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors } from './lineedit'
+import { simplifyPoints } from './patheditor'
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+type DrawKind = 'line' | 'path' | 'connector' | 'free' | 'poly'
 import { CommentsUI } from './comments'
 import type { Peer } from '../sync/session'
 
@@ -31,6 +36,8 @@ export class SlideCanvas {
   /** when editing a table cell, which cell (else null → text element edit) */
   private editingCell: { r: number; c: number } | null = null
   private pathEditor!: PathEditor
+  private lineEditor!: LineEditor
+  private drawOverlay: HTMLElement | null = null
   private comments!: CommentsUI
 
   constructor(
@@ -49,9 +56,27 @@ export class SlideCanvas {
     this.buildZoomBar()
     // pinch / ctrl+wheel zooms like every design tool
     this.scroller.addEventListener('wheel', (ev) => {
-      if (!ev.ctrlKey && !ev.metaKey) return
+      if (ev.ctrlKey || ev.metaKey) {
+        ev.preventDefault()
+        this.setZoom(this.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12))
+        return
+      }
+      // plain wheel → walk slides, but only when the slide can't be panned (it
+      // fits, i.e. not zoomed to overflow) and nothing is being edited. A distance
+      // threshold + cooldown makes one trackpad swipe advance exactly one slide.
+      if (!this.onSlideNav || this.editing || this.editingCell || this.isPathEditing) return
+      const s = this.scroller
+      if (s.scrollHeight > s.clientHeight + 1 || s.scrollWidth > s.clientWidth + 1) return // pannable → let it scroll
+      if (Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) return // horizontal intent
       ev.preventDefault()
-      this.setZoom(this.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12))
+      const now = Date.now()
+      if (now < this.wheelNavCooldown) return
+      this.wheelNavAccum += ev.deltaY
+      if (Math.abs(this.wheelNavAccum) < 40) return
+      const dir = this.wheelNavAccum > 0 ? 1 : -1
+      this.wheelNavAccum = 0
+      this.wheelNavCooldown = now + 400
+      this.onSlideNav(dir)
     }, { passive: false })
 
     // Control box lives INSIDE the scaled host with rootContainer at body:
@@ -88,8 +113,29 @@ export class SlideCanvas {
     this.wireMoveable()
     this.wireSelecto()
 
+    // Pin the scroller during Moveable gestures: snap guidelines can overflow
+    // the stage and grow the scroll area, which made the slide jump around
+    // mid-drag. Any scroll while a gesture is live is snapped straight back.
+    let gestureLock = false
+    let lockL = 0
+    let lockT = 0
+    this.scroller.addEventListener('scroll', () => {
+      if (gestureLock) {
+        this.scroller.scrollLeft = lockL
+        this.scroller.scrollTop = lockT
+      }
+    })
+    const lockScroll = () => { gestureLock = true; lockL = this.scroller.scrollLeft; lockT = this.scroller.scrollTop }
+    const unlockScroll = () => { gestureLock = false }
+    for (const e of ['dragStart', 'resizeStart', 'rotateStart', 'dragGroupStart', 'resizeGroupStart', 'rotateGroupStart'])
+      (this.moveable as unknown as { on: (e: string, f: () => void) => void }).on(e, lockScroll)
+    for (const e of ['dragEnd', 'resizeEnd', 'rotateEnd', 'dragGroupEnd', 'resizeGroupEnd', 'rotateGroupEnd'])
+      (this.moveable as unknown as { on: (e: string, f: () => void) => void }).on(e, unlockScroll)
+
     this.pathEditor = new PathEditor(this.scaleHost, store, () => this.syncTargets())
     this.pathEditor.setScaleGetter(() => this.scale)
+    this.lineEditor = new LineEditor(this.scaleHost, store)
+    this.lineEditor.setScaleGetter(() => this.scale)
     document.addEventListener('bento:edit-path', ((ev: CustomEvent) => {
       this.startPathEdit(ev.detail.id)
     }) as EventListener)
@@ -185,6 +231,9 @@ export class SlideCanvas {
 
   /** notified when the comment tool arms/disarms (topbar button state) */
   onCommentModeChange: ((on: boolean) => void) | null = null
+  onSlideNav: ((dir: 1 | -1) => void) | null = null
+  private wheelNavAccum = 0
+  private wheelNavCooldown = 0
   private commentCleanup: (() => void) | null = null
 
   get isCommentMode() {
@@ -489,7 +538,13 @@ export class SlideCanvas {
   }
 
   private syncTargets() {
-    const targets = this.editing || this.pathEditor?.active ? [] : this.selectedNodes()
+    // A single selected line/curve/connector is edited with endpoint handles
+    // (LineEditor), not Moveable's box — grab an end and drag it.
+    const sel = this.store.selectedElements
+    const lineLike = sel.length === 1 && isLineLike(sel[0]) && !this.editing && !this.pathEditor.active
+    if (lineLike) this.lineEditor.attach(sel[0].id)
+    else this.lineEditor.detach()
+    const targets = this.editing || this.pathEditor?.active || lineLike ? [] : this.selectedNodes()
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -1000,6 +1055,225 @@ export class SlideCanvas {
 
   get isEditingText() {
     return !!this.editing
+  }
+
+  get isDrawing() {
+    return !!this.drawOverlay
+  }
+
+  /** Arm a draw tool: line/curve/connector drag start→end (click = default);
+   *  'free' captures the pointer trail; 'poly' click-places vertices — click
+   *  near the first point (or double-click) to close the shape. Connector ends
+   *  SNAP to visible anchor points (side midpoints + centre) on the element
+   *  under the cursor and anchor there (auto-reroute afterwards). Esc cancels. */
+  armDraw(kind: DrawKind) {
+    this.cancelDraw()
+    const { width, height } = this.store.doc.size
+    const ov = document.createElement('div')
+    ov.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;z-index:60;cursor:crosshair`
+    const svg = document.createElementNS(SVG_NS, 'svg')
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+    svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none'
+    const preview = document.createElementNS(SVG_NS, 'path')
+    preview.setAttribute('fill', 'none')
+    preview.setAttribute('stroke', '#2f6df6')
+    const dots = document.createElementNS(SVG_NS, 'g')
+    svg.append(preview, dots)
+    ov.appendChild(svg)
+    this.scaleHost.appendChild(ov)
+    this.drawOverlay = ov
+    const k = () => 1 / this.scale
+    const toSlide = (ev: MouseEvent) => {
+      const r = this.scaleHost.getBoundingClientRect()
+      return { x: (ev.clientX - r.left) / this.scale, y: (ev.clientY - r.top) / this.scale }
+    }
+    const setPreview = (d: string) => {
+      preview.setAttribute('stroke-width', String(3 * k()))
+      preview.setAttribute('stroke-dasharray', `${6 * k()} ${4 * k()}`)
+      preview.setAttribute('d', d)
+    }
+    type Pt = { x: number; y: number }
+    type Snap = { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left'; pt: Pt } | null
+    const anchorsFor = (id: string) => {
+      const e = this.store.slide.elements.find((x) => x.id === id)!
+      return [
+        { side: 'top' as const, pt: { x: e.x + e.w / 2, y: e.y } },
+        { side: 'right' as const, pt: { x: e.x + e.w, y: e.y + e.h / 2 } },
+        { side: 'bottom' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h } },
+        { side: 'left' as const, pt: { x: e.x, y: e.y + e.h / 2 } },
+        { side: 'auto' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h / 2 } },
+      ]
+    }
+    // visible anchor points on the element under the cursor (connector tool)
+    const showAnchors = (p: Pt | null) => {
+      dots.innerHTML = ''
+      if (kind !== 'connector' || !p) return
+      const id = this.elementAt(p, 12 * Math.max(k(), 1))
+      if (!id) return
+      for (const a of anchorsFor(id)) {
+        const c = document.createElementNS(SVG_NS, 'circle')
+        c.setAttribute('cx', String(a.pt.x))
+        c.setAttribute('cy', String(a.pt.y))
+        c.setAttribute('r', String(5 * k()))
+        c.setAttribute('fill', '#2f6df6')
+        c.setAttribute('stroke', '#fff')
+        c.setAttribute('stroke-width', String(1.5 * k()))
+        dots.appendChild(c)
+      }
+    }
+    const snap = (p: Pt): { a: Snap; pt: Pt } => {
+      if (kind !== 'connector') return { a: null, pt: p }
+      const id = this.elementAt(p, 12 * Math.max(k(), 1))
+      if (!id) return { a: null, pt: p }
+      let best: Snap = null
+      let bd = 30 * Math.max(k(), 1)
+      for (const cand of anchorsFor(id)) {
+        const d = Math.hypot(p.x - cand.pt.x, p.y - cand.pt.y)
+        if (d < bd) { bd = d; best = { el: id, side: cand.side, pt: cand.pt } }
+      }
+      return best ? { a: best, pt: best.pt } : { a: { el: id, side: 'auto', pt: p }, pt: p }
+    }
+
+    if (kind === 'poly') {
+      const verts: Pt[] = []
+      const redraw = (cur?: Pt) => {
+        if (!verts.length) return setPreview('')
+        let d = `M ${verts[0].x} ${verts[0].y}` + verts.slice(1).map((v) => ` L ${v.x} ${v.y}`).join('')
+        if (cur) d += ` L ${cur.x} ${cur.y}`
+        setPreview(d)
+      }
+      const finish = () => {
+        if (verts.length >= 3) {
+          const el = defaultShape('path', { fill: this.store.doc.theme.accent, stroke: 'transparent', strokeWidth: 0 }) as ShapeElement
+          setPathAnchors(el, verts, { closed: true, straight: true })
+          this.insert(el)
+        }
+        this.cancelDraw()
+      }
+      ov.addEventListener('mousedown', (ev: MouseEvent) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        const p = toSlide(ev)
+        if (verts.length >= 3 && Math.hypot(p.x - verts[0].x, p.y - verts[0].y) < 16 * Math.max(k(), 1)) return finish()
+        verts.push(p)
+        redraw(p)
+      })
+      ov.addEventListener('mousemove', (ev: MouseEvent) => redraw(toSlide(ev)))
+      ov.addEventListener('dblclick', (ev: MouseEvent) => { ev.preventDefault(); finish() })
+      return
+    }
+
+    if (kind === 'free') {
+      ov.addEventListener('mousedown', (down: MouseEvent) => {
+        down.preventDefault()
+        down.stopPropagation()
+        const raw: Pt[] = [toSlide(down)]
+        const move = (e: MouseEvent) => {
+          raw.push(toSlide(e))
+          setPreview('M ' + raw.map((p) => `${p.x} ${p.y}`).join(' L '))
+        }
+        const up = () => {
+          window.removeEventListener('mousemove', move)
+          window.removeEventListener('mouseup', up)
+          const pts = simplifyPoints(raw, 3)
+          if (pts.length >= 2) {
+            const el = defaultShape('path', { fill: 'transparent', stroke: readableInk(this.store.slide.background), strokeWidth: 3 }) as ShapeElement
+            setPathAnchors(el, pts.length > 2 ? pts : [pts[0], { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }, pts[1]])
+            this.insert(el)
+          }
+          this.cancelDraw()
+        }
+        window.addEventListener('mousemove', move)
+        window.addEventListener('mouseup', up)
+      })
+      return
+    }
+
+    // line / curve / connector: drag start → end
+    ov.addEventListener('mousemove', (ev: MouseEvent) => {
+      if (!(ev.buttons & 1)) showAnchors(toSlide(ev))
+    })
+    ov.addEventListener('mousedown', (down: MouseEvent) => {
+      down.preventDefault()
+      down.stopPropagation()
+      const s0 = snap(toSlide(down))
+      const start = s0.pt
+      const move = (e: MouseEvent) => {
+        const p = toSlide(e)
+        const sn = snap(p)
+        showAnchors(p)
+        setPreview(kind === 'path' ? this.curveBowD(start, sn.pt) : `M ${start.x} ${start.y} L ${sn.pt.x} ${sn.pt.y}`)
+      }
+      const up = (e: MouseEvent) => {
+        window.removeEventListener('mousemove', move)
+        window.removeEventListener('mouseup', up)
+        const sn = snap(toSlide(e))
+        const short = Math.hypot(sn.pt.x - start.x, sn.pt.y - start.y) < 8
+        const end = short ? { x: start.x + 320, y: start.y } : sn.pt
+        this.createDrawn(kind, start, end, s0.a ?? undefined, short ? undefined : sn.a ?? undefined)
+        this.cancelDraw()
+      }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+    })
+  }
+
+  cancelDraw() {
+    this.drawOverlay?.remove()
+    this.drawOverlay = null
+  }
+
+  /** SVG path 'd' for a gentle bow between two points (curve preview + default). */
+  private curveBowD(a: { x: number; y: number }, b: { x: number; y: number }): string {
+    const mx = (a.x + b.x) / 2
+    const my = (a.y + b.y) / 2
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy) || 1
+    const off = len * 0.2
+    return `M ${a.x} ${a.y} Q ${mx - (dy / len) * off} ${my + (dx / len) * off} ${b.x} ${b.y}`
+  }
+
+  /** Topmost non-line element whose box contains pt (for connector anchoring).
+   *  `pad` forgives near-misses just outside the border. */
+  private elementAt(pt: { x: number; y: number }, pad = 0): string | null {
+    const els = this.store.slide.elements
+    for (let i = els.length - 1; i >= 0; i--) {
+      const e = els[i]
+      if (e.type === 'shape' && (e.shape === 'line' || e.shape === 'path')) continue
+      if (pt.x >= e.x - pad && pt.x <= e.x + e.w + pad && pt.y >= e.y - pad && pt.y <= e.y + e.h + pad) return e.id
+    }
+    return null
+  }
+
+  private createDrawn(
+    kind: DrawKind,
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    fromA?: { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left' },
+    toA?: { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left' },
+  ) {
+    const ink = readableInk(this.store.slide.background)
+    if (kind === 'path') {
+      const el = defaultShape('path', { fill: 'transparent', stroke: ink, strokeWidth: 3 }) as ShapeElement
+      const mx = (a.x + b.x) / 2
+      const my = (a.y + b.y) / 2
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len = Math.hypot(dx, dy) || 1
+      const off = len * 0.2
+      setPathAnchors(el, [a, { x: mx - (dy / len) * off, y: my + (dx / len) * off }, b])
+      this.insert(el)
+      return
+    }
+    const el = defaultShape('line', { h: 4, strokeWidth: 3, fill: ink }) as ShapeElement
+    setLineEndpoints(el, a, b)
+    if (kind === 'connector') {
+      el.lineEnd = 'arrow'
+      if (fromA) el.from = { el: fromA.el, side: fromA.side }
+      if (toA) el.to = { el: toA.el, side: toA.side }
+    }
+    this.insert(el)
   }
 
   /** Insert an element, select it, and (for text) drop straight into editing. */

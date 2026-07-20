@@ -167,7 +167,12 @@ each kind of content to the feature built for it:
   `{angle, stops:[{at:0..1, color}]}` (CSS-convention angle). Lines take
   their color from `fill` and draw horizontally across the box (rotate for
   vertical); `strokeStyle: solid|dashed|dotted`; tips `lineStart`/`lineEnd`
-  = `arrow|dot|bar`.
+  = `arrow|dot|bar`. A `path` is a free vector: `d` (SVG path data) +
+  `pathBox` `[x,y,w,h]` authoring viewBox, stretched into the element box;
+  for a **curved line** set `fill:"transparent"` + a `stroke` + `strokeWidth`.
+  A **connector** is a `line` (or `path`) with `from`/`to: {el, side}` — its ends
+  follow those elements and re-route when they move (side `"auto"` picks the
+  nearest border). Make sure a shape's colour contrasts with its slide background.
 - **image**: `src` = data URI or `"asset:<key>"` into `doc.assets`,
   `fit: cover|contain|fill`, `radius`. Embed images as data URIs in
   `doc.assets` and reference them — the file must stay self-contained.
@@ -224,6 +229,16 @@ each kind of content to the feature built for it:
 - One accent color; 2 typefaces max. `theme` sets deck defaults.
 - Fonts: `doc.fonts` (`{family, asset, weight}`) + woff2 data URIs in
   `doc.assets` if you need embedded faces; otherwise stick to system stacks.
+
+## Dynamic fields (tokens in text `html`)
+
+Put these tokens in any text element's `html`; they resolve at render time (the
+model keeps the raw token, so numbering/props update automatically):
+`{{page}}`, `{{pages}}` (position among non-state slides; zero-pad with
+`{{page:2}}`→"06"), `{{title}}`, `{{date}}`, `{{time}}`, and the document
+properties `{{author}}`, `{{company}}`, `{{subject}}`, `{{event}}`. Set the
+props in an optional top-level `"meta": {author, company, subject, event,
+keywords}` object — great for title slides and footers that fill from one place.
 
 ## Gotchas
 

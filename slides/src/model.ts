@@ -149,6 +149,21 @@ export interface ShapeElement extends ElementBase {
   d?: string
   /** path only: [x, y, w, h] viewBox the path was authored in */
   pathBox?: [number, number, number, number]
+  /**
+   * Connector anchoring (line/path only): the start (`from`) and/or end (`to`)
+   * of the shape follow another element. The geometry is DERIVED — the editor's
+   * syncConnectors() recomputes the endpoint on that element's border toward the
+   * other end whenever anything moves. A dangling ref (element deleted) is
+   * dropped and the endpoint becomes free.
+   */
+  from?: ConnectorEnd
+  to?: ConnectorEnd
+}
+
+/** One anchored end of a connector. `side:'auto'` picks the nearest border. */
+export interface ConnectorEnd {
+  el: string
+  side?: 'auto' | 'top' | 'right' | 'bottom' | 'left'
 }
 
 export interface ImageElement extends ElementBase {
@@ -318,6 +333,19 @@ export interface BentoDoc {
    */
   docId: string
   title: string
+  /**
+   * Optional document properties for template fields ({{author}}, {{company}},
+   * {{subject}}, {{event}}) and general provenance. All optional → old files
+   * simply lack it and every token resolves to empty. `title` stays top-level
+   * (load-bearing) and remains the source of {{title}}.
+   */
+  meta?: {
+    author?: string
+    company?: string
+    subject?: string
+    event?: string
+    keywords?: string
+  }
   /** slide coordinate space, px */
   size: { width: number; height: number }
   theme: {
@@ -404,6 +432,23 @@ export const uid = (prefix = 'el') =>
 
 export const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
+/** True when a background reads as light (so it wants dark text on top). Accepts
+ *  a #rrggbb hex; for a gradient/CSS string it samples the first hex it finds and
+ *  falls back to "light" (the safe assumption for the model's dark default ink). */
+export function isLightBg(bg: string): boolean {
+  const hex = /#([0-9a-fA-F]{6})/.exec(bg || '')
+  if (!hex) return true
+  const n = parseInt(hex[1], 16)
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.55 // sRGB relative luminance
+}
+
+/** A text colour that stays legible on the given background — new text/tables use
+ *  this so a fresh element is never invisible on a dark deck. */
+export function readableInk(bg: string): string {
+  return isLightBg(bg) ? '#1E2A3A' : '#F5F7FA'
+}
 
 export function defaultText(partial: Partial<TextElement> = {}): TextElement {
   return {
