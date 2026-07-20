@@ -32,6 +32,10 @@ export interface PresenceInfo {
   sel: string[]
   /** element id currently being text-edited (in-text presence) */
   editing?: string
+  /** v2 fine-grained: the key this copy signs with — key-bound identity */
+  pub?: string
+  /** capability of this copy, derived locally from its collab material */
+  role?: 'owner' | 'editor' | 'viewer'
 }
 
 export interface Peer extends PresenceInfo {
@@ -345,12 +349,28 @@ export class SyncSession {
     } catch {
       /* storage unavailable */
     }
+    // key-bound identity (v2): which key this copy signs with + its capability.
+    // The device key is minted by the transport on first connect; until then a
+    // member's pub is simply absent from presence (it fills in on reconnect).
+    const c = this.store.doc.collab
+    let pub: string | undefined
+    let role: 'owner' | 'editor' | 'viewer' | undefined
+    if (c) {
+      if (c.role === 'reader') role = 'viewer'
+      else if (c.v === 2 && c.ownerPriv) { role = 'owner'; pub = c.owner }
+      else if (c.v === 2 && c.invite) {
+        role = 'editor'
+        try { pub = JSON.parse(localStorage.getItem(`bento-member-${this.store.doc.docId}`) ?? 'null')?.pub } catch { /* absent */ }
+      } else if (c.writerPriv) { role = 'editor'; pub = c.writerPub }
+    }
     return {
       name,
       color: actorColor(this.actor),
       slide: this.store.slide?.id ?? '',
       sel: this.store.selection.slice(),
       ...(this.editingEl ? { editing: this.editingEl } : {}),
+      ...(pub ? { pub } : {}),
+      ...(role ? { role } : {}),
     }
   }
 
