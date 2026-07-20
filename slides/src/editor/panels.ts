@@ -279,7 +279,7 @@ export class PropsPanel {
     const notesHint = document.createElement('p')
     notesHint.className = 'ed-hint'
     notesHint.innerHTML =
-      t('Open the <b>speaker view</b> — the button below the slide, or <b>S</b> while presenting — for a separate window with these notes, the current and next slide, a timer, a thumbnail rail to jump anywhere, and a black-screen key. Move it to a second screen and present as usual.') +
+      t('Open the <b>speaker view</b> — in the Slideshow menu at the bottom right, or <b>S</b> while presenting — for a separate window with these notes, the current and next slide, a timer, a thumbnail rail to jump anywhere, and a black-screen key. Move it to a second screen and present as usual.') +
       (isMacOS() ? ' ' + t('On macOS, open it BEFORE you go fullscreen — otherwise it lands on the slides’ screen.') : '')
     this.host.appendChild(notesHint)
   }

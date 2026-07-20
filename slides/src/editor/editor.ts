@@ -275,27 +275,35 @@ export class Editor {
     const main = div('ed-main')
     this.sidebar = div('ed-sidebar')
     const canvasWrap = div('ed-canvas-wrap')
-    // presenting is a canvas action: a floating pair over the work area —
-    // the big one goes fullscreen, the small one fills this tab (testing,
-    // sharing a window, projector quirks)
-    const fabs = div('ed-present-fabs')
-    const fsFab = document.createElement('button')
-    fsFab.className = 'ed-fab'
-    fsFab.innerHTML = ICONS.play
-    fsFab.title = t('Present fullscreen — F toggles fullscreen, S opens speaker view, Esc ends')
-    fsFab.addEventListener('click', () => this.present(false, true))
-    const tabFab = document.createElement('button')
-    tabFab.className = 'ed-fab ed-fab-small'
-    tabFab.innerHTML = ICONS.window
-    tabFab.title = t('Present in this tab — handy for testing or sharing a window')
-    tabFab.addEventListener('click', () => this.present(false, false))
-    const spkFab = document.createElement('button')
-    spkFab.className = 'ed-fab ed-fab-small'
-    spkFab.innerHTML = ICONS.presenter
-    spkFab.title = t('Open the speaker view — notes, controls and thumbnails in a separate window (drag it to a second screen)')
-    spkFab.addEventListener('click', () => this.openSpeakerView())
-    fabs.append(fsFab, tabFab, spkFab)
-    canvasWrap.appendChild(fabs)
+    // presenting lives in ONE split pill beside the zoom control: the main
+    // half starts the fullscreen show; its menu holds tab-fill and speaker view.
+    const pill = div('ed-dropdown ed-present-pill')
+    const showB = btn(ICONS.slideshow, t('Slideshow'), () => this.present(false, true),
+      t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends'))
+    showB.classList.add('ed-pill-main')
+    const caret = btn('<span class="ed-caret">▾</span>', '', () => pill.classList.toggle('open'),
+      t('More ways to present'))
+    caret.classList.add('ed-pill-caret')
+    const pmenu = div('ed-menu')
+    const pItem = (label: string, title: string, onClick: () => void) => {
+      const b = btn('', label, () => { pill.classList.remove('open'); onClick() }, title)
+      pmenu.appendChild(b)
+    }
+    pItem(t('Present in this tab'), t('Fills this tab instead of going fullscreen — handy for testing or sharing a window'), () => this.present(false, false))
+    pItem(t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen'), () => this.openSpeakerView())
+    pill.append(showB, caret, pmenu)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!pill.contains(ev.target as Node)) pill.classList.remove('open')
+    })
+    // shared bottom-right cluster: [Slideshow pill] [zoom pill] — the canvas
+    // appends its zoombar to canvasWrap; we adopt it into the cluster below.
+    const corner = div('ed-corner-br')
+    corner.appendChild(pill)
+    canvasWrap.appendChild(corner)
+    queueMicrotask(() => {
+      const zb = canvasWrap.querySelector('.ed-zoombar')
+      if (zb) corner.appendChild(zb)
+    })
     this.props = div('ed-props')
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
@@ -650,10 +658,11 @@ export class Editor {
       panel.appendChild(e)
       return e
     }
-    const action = (label: string, primary: boolean, onClick: () => void) => {
+    const action = (label: string, primary: boolean, onClick: () => void, title = '') => {
       const b = document.createElement('button')
       b.className = primary ? 'ed-btn ed-btn-primary ed-share-btn' : 'ed-btn ed-share-btn'
       b.textContent = label
+      if (title) b.title = title
       b.addEventListener('click', onClick)
       panel.appendChild(b)
       return b
@@ -663,6 +672,7 @@ export class Editor {
     const nameRow = div('ed-share-name')
     const nameLabel = document.createElement('label')
     nameLabel.textContent = t('Your name')
+    nameRow.title = t('Shown next to your cursor and in the People list — stored only in this browser.')
     const nameInput = document.createElement('input')
     nameInput.type = 'text'
     nameInput.placeholder = t('Guest')
@@ -756,11 +766,14 @@ export class Editor {
     // turns the live session on so whoever opens it lands in the room with you.
     const canWrite = !!cme && cme.role !== 'reader'
     if (canWrite) {
-      action(t('Invite to edit — save a copy to send…'), true, () => void this.inviteToEdit())
-      action(t('Share view-only copy…'), false, () => void this.saveReaderCopy())
-      action(t('Export present-only file…'), false, () => void this.savePresentationPackage())
-      action(t('Share as template…'), false, () => void this.saveAsTemplate())
-        .title = t('A reusable starter: everyone who opens it gets their own fresh, independent deck.')
+      action(t('Invite to edit — save a copy to send…'), true, () => void this.inviteToEdit(),
+        t('Saves a copy that edits this deck live with you. You stay the owner and can remove them later from the People list.'))
+      action(t('Share view-only copy…'), false, () => void this.saveReaderCopy(),
+        t('A live viewer: it follows every edit as it happens but can never change the deck — the relay enforces it.'))
+      action(t('Export present-only file…'), false, () => void this.savePresentationPackage(),
+        t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
+      action(t('Share as template…'), false, () => void this.saveAsTemplate(),
+        t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
       note(t('Whoever opens your copy joins this deck live. Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
     } else {
       note(t('This is a view-only copy — it follows the live session but can’t change the deck.'))
@@ -768,15 +781,17 @@ export class Editor {
 
     // advanced session controls, deliberately quiet at the bottom
     if (canWrite) {
+      panel.appendChild(div('ed-share-sep'))
       if (on) {
         action(t('Stop sharing'), false, () => {
           if (!this.session) return
           stopSharing(this.session, this.store)
           this.wireOnlineStatus()
           this.renderSharePanel()
-        })
+        }, t('Disconnect this deck from the live session. Copies keep their last state and can rejoin if you go live again.'))
       } else {
-        action(t('Go live without sharing a copy'), false, () => void this.goLive().then(() => this.renderSharePanel()))
+        action(t('Go live without sharing a copy'), false, () => void this.goLive().then(() => this.renderSharePanel()),
+          t('Connect to the live session now — copies you sent earlier will meet you there.'))
       }
       action(t('Reset access — cut off every copy sent so far'), false, async () => {
         if (!this.session) return
@@ -784,7 +799,7 @@ export class Editor {
         await rotateKeys(this.session, this.store)
         this.toast(t('Access reset — only copies saved from now on can join'))
         this.renderSharePanel()
-      })
+      }, t('Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.'))
     }
   }
 
