@@ -102,6 +102,7 @@ footer a{color:var(--dim)}
     <a href="#start">Quick start</a>
     <a href="#elements">Adding content</a>
     <a href="#morph">Morph</a>
+    <a href="#motion">Motion &amp; effects</a>
     <a href="#data">Charts &amp; tables</a>
     <a href="#media">Video &amp; audio</a>
     <a href="#interactive">Interactivity</a>
@@ -149,8 +150,29 @@ footer a{color:var(--dim)}
       </ul>
     </section>
 
+    <section class="doc" id="motion">
+      <h2><span class="ix">4</span>Motion &amp; effects</h2>
+      <p>The cinematic touches — photos that slowly drift, elements that fly in, numbers that count up — all live in the right panel's <b>Presenting</b> section. Select an element, then:</p>
+      <h3>Ken Burns — the slow drift on photos</h3>
+      <p>That living, breathing quality on full-bleed images is <b>ambient motion</b>. Select an image → <b>Presenting → Ambient → Ken&nbsp;Burns</b>, then choose the style and pace:</p>
+      <ul>
+        <li><b>Drift</b> — an endless, gentle pan-and-zoom that loops forever. The default, and what makes a cover photo feel alive like a video.</li>
+        <li><b>Zoom in / Zoom out</b> — a one-shot push or pull that settles as the slide arrives, for a deliberate reveal.</li>
+        <li><b>Zoom %</b> sets how far it travels; <b>Zoom secs</b> sets how long — a big number gives a slow, luxurious move.</li>
+      </ul>
+      <h3>Entrances — how elements arrive</h3>
+      <p>Give an element an <b>Enter</b> animation and it animates in as the slide appears — <b>fade</b>, <b>fade up/down</b>, or <b>slide</b> in from any edge. Two knobs shape the choreography:</p>
+      <ul>
+        <li><b>Order</b> — the stagger. Lower order arrives first; give several elements the <i>same</i> order and they enter together (reveal a diagram band-by-band).</li>
+        <li><b>Enter secs</b> — the speed. Lower is snappier, higher is more languid.</li>
+      </ul>
+      <h3>Count-up</h3>
+      <p>Turn on <b>Count&nbsp;up</b> for a text element containing a number and it rolls from 0 to its value as the slide enters — the easy way to make a statistic land.</p>
+      <div class="note">Two more motion tricks live elsewhere: <b><a href="#morph">Morph</a></b> (§3) glides an element between slides, and <b><a href="#interactive">Loops</a></b> — a marching dashed line or an element following a motion path you draw — give endless movement like an orbiting dot.</div>
+    </section>
+
     <section class="doc" id="data">
-      <h2><span class="ix">4</span>Charts &amp; tables</h2>
+      <h2><span class="ix">5</span>Charts &amp; tables</h2>
       <h3>Charts</h3>
       <p>Add a chart, then shape it in the right panel: type, series, colours, a second Y-axis, per-axis min/max, and an editable data grid. Charts are <b>live while you present</b> — tooltips, wheel-zoom, and a data morph when a bar chart becomes a pie.</p>
       <h3>Tables → charts, linked</h3>
@@ -158,7 +180,7 @@ footer a{color:var(--dim)}
     </section>
 
     <section class="doc" id="media">
-      <h2><span class="ix">5</span>Video &amp; audio</h2>
+      <h2><span class="ix">6</span>Video &amp; audio</h2>
       <p>Add <b>Media</b> from the toolbar and pick a video or audio file. Bento uses a <b>hybrid</b> approach so your file never balloons:</p>
       <ul>
         <li><b>Small clips embed</b> in the <code>.bento.html</code> — fully self-contained, plays offline.</li>
@@ -170,7 +192,7 @@ footer a{color:var(--dim)}
     </section>
 
     <section class="doc" id="interactive">
-      <h2><span class="ix">6</span>Interactivity</h2>
+      <h2><span class="ix">7</span>Interactivity</h2>
       <ul>
         <li><b>Links &amp; state slides:</b> give an element a link to another slide. A <b>state slide</b> is a hidden variant reached only by clicking — arrow keys skip it, <kbd>←</kbd> returns to the parent. Great for "click to drill in" without cluttering the linear story.</li>
         <li><b>Hover reveal:</b> swap content in place when the pointer is over an element.</li>
@@ -180,7 +202,7 @@ footer a{color:var(--dim)}
     </section>
 
     <section class="doc" id="present">
-      <h2><span class="ix">7</span>Presenting</h2>
+      <h2><span class="ix">8</span>Presenting</h2>
       <ul>
         <li>Start from the round <b>▶</b> button (fullscreen) or the small one beside it (tab-fill, for screen-sharing a window). <kbd>F</kbd> toggles fullscreen; <kbd>Esc</kbd> ends the show.</li>
         <li><b>Speaker view</b> (<kbd>S</kbd>): current + next slide, your notes, and a timer — in a separate window.</li>
@@ -190,7 +212,7 @@ footer a{color:var(--dim)}
     </section>
 
     <section class="doc" id="collab">
-      <h2><span class="ix">8</span>Live collaboration</h2>
+      <h2><span class="ix">9</span>Live collaboration</h2>
       <p>Click <b>Live</b> to start a session — then <b>the file itself is the invitation</b>. Anyone who opens a copy joins the room; edits merge in real time, and offline changes merge back when they return.</p>
       <ul>
         <li><b>End-to-end encrypted:</b> the keys live inside your file. The relay only ever sees ciphertext — it can't read your deck.</li>
@@ -200,7 +222,7 @@ footer a{color:var(--dim)}
     </section>
 
     <section class="doc" id="save">
-      <h2><span class="ix">9</span>Saving &amp; version history</h2>
+      <h2><span class="ix">10</span>Saving &amp; version history</h2>
       <ul>
         <li><kbd>⌘S</kbd> rewrites the file in place (or downloads a copy the first time, depending on your browser).</li>
         <li><b>Auto-save</b> keeps a local safety net as you work — if a tab crashes, you're offered a restore on reopen.</li>
@@ -210,13 +232,13 @@ footer a{color:var(--dim)}
     </section>
 
     <section class="doc" id="ai">
-      <h2><span class="ix">10</span>Build with AI</h2>
+      <h2><span class="ix">11</span>Build with AI</h2>
       <p>Because the document is plain JSON inside the file, any AI can author or edit a deck. Drop the <code>.bento.html</code> into a chat or project (Cowork, Codex, Gemini, a ChatGPT project) and ask, or point a coding agent at it on disk.</p>
       <p>The recipe an assistant should read first is <a href="/agents.md">bento.page/agents.md</a> — it maps your material to the right feature so you get a real deck, not a wall of text. Claude Code users get it as the <b>bento-deck</b> skill.</p>
     </section>
 
     <section class="doc" id="keys">
-      <h2><span class="ix">11</span>Keyboard shortcuts</h2>
+      <h2><span class="ix">12</span>Keyboard shortcuts</h2>
       <table class="keys">
         <tr><td><kbd>⌘S</kbd></td><td>Save</td></tr>
         <tr><td><kbd>⌘Z</kbd> · <kbd>⌘⇧Z</kbd></td><td>Undo · redo</td></tr>
