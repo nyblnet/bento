@@ -94,6 +94,7 @@ export const fr: Catalog = {
   "Link to": "Lier à",
   "Loop": "Boucle",
   "Loop secs": "Secondes de boucle",
+  "Enter secs": "Secondes d'entrée",
   "Medium": "Medium",
   "Morph id:": "Id de morph :",
   "Name": "Nom",

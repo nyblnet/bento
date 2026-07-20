@@ -94,6 +94,7 @@ export const zhHant: Catalog = {
   "Link to": "連結到",
   "Loop": "循環",
   "Loop secs": "循環秒數",
+  "Enter secs": "入場秒數",
   "Medium": "中等",
   "Morph id:": "變形 id：",
   "Name": "名稱",

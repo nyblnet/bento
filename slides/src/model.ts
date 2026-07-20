@@ -30,6 +30,9 @@ export interface ElementBase {
     /** entrance animation when the slide is shown. fade-* nudge ~16px; slide-*
      *  sweep ~120px in from an edge (slide-left starts to the right, etc.) */
     enter?: 'fade-up' | 'fade' | 'fade-down' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down'
+    /** entrance duration in seconds; omitted = the per-kind default
+     *  (slide-* 0.75s, fade-* 0.55s). Lower = snappier, higher = more languid. */
+    enterDur?: number
     /** stagger step within the entrance sequence; equal values enter together */
     order?: number
     /** animate numeric parts of the text from 0 to their final value */

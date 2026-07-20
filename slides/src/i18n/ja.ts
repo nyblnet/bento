@@ -94,6 +94,7 @@ export const ja: Catalog = {
   "Link to": "リンク先",
   "Loop": "ループ",
   "Loop secs": "ループ秒",
+  "Enter secs": "登場秒",
   "Medium": "ミディアム",
   "Morph id:": "モーフ id:",
   "Name": "名前",
