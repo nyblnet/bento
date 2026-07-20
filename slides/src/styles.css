@@ -1219,14 +1219,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-avatars {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin: 0 2px;
+  margin: 0 6px 0 2px;
+  flex-shrink: 0;
 }
 .ed-avatar {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.75);
+  border: 2px solid rgba(255, 255, 255, 0.85);
   color: #16273e;
   font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   display: flex;
@@ -1235,9 +1235,25 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   cursor: pointer;
   padding: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  /* overlap into a coin-stack so N avatars stay bounded in width */
+  margin-left: -7px;
+}
+.ed-avatars .ed-avatar:first-child {
+  margin-left: 0;
 }
 .ed-avatar:hover {
   transform: translateY(-1px);
+  z-index: 1;
+}
+/* the "+N" overflow pill — widens to fit the count, opens the Live panel */
+.ed-avatar-more {
+  width: auto;
+  min-width: 24px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: #4a5a72;
+  color: #fff;
+  font-size: 10.5px;
 }
 .ed-remote-layer {
   position: absolute;
@@ -1291,7 +1307,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   text-align: center;
   line-height: 1.35;
 }
-.ed-share-peers { display: flex; flex-direction: column; gap: 2px; }
+.ed-share-peers { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
 .ed-share-peer {
   display: flex;
   align-items: center;

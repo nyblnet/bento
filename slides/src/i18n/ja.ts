@@ -256,6 +256,7 @@ export const ja: Catalog = {
   "Offline — reconnecting…": "オフライン — 再接続中…",
   "Save the file and send a copy — opening it joins this session automatically.": "ファイルを保存してコピーを送ってください — 開くだけでこのセッションに参加できます。",
   "{n} connected": "{n} 人が接続中",
+  "{n} more — click to see everyone": "他 {n} 人 — クリックで全員を表示",
   "Any copy of this file can join once sharing is on — send it before or after, both work.": "共有をオンにすると、このファイルのどのコピーからでも参加できます — 送るのは前でも後でも構いません。",
   "Rotate keys — cut off previously sent copies": "キーを更新 — 送付済みコピーのアクセスを遮断",
   "New keys minted — only copies saved from now on can join": "新しいキーを発行しました — 今後保存したコピーのみ参加できます",

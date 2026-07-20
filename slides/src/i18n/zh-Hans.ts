@@ -256,6 +256,7 @@ export const zhHans: Catalog = {
   "Offline — reconnecting…": "离线 — 正在重连…",
   "Save the file and send a copy — opening it joins this session automatically.": "保存文件并发送副本 — 打开即可自动加入此会话。",
   "{n} connected": "{n} 人已连接",
+  "{n} more — click to see everyone": "还有 {n} 人 — 点击查看全部",
   "Any copy of this file can join once sharing is on — send it before or after, both work.": "开启共享后，此文件的任何副本都能加入 — 先发后发都可以。",
   "Rotate keys — cut off previously sent copies": "轮换密钥 — 切断此前发出的副本",
   "New keys minted — only copies saved from now on can join": "已生成新密钥 — 只有此后保存的副本才能加入",

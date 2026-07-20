@@ -86,13 +86,17 @@ export class Editor {
       this.renderAvatars()
       this.canvas.setRemotePeers(session.peers())
       if (this.shareWrap.classList.contains('open')) this.renderSharePanel()
-      // presence arrivals/departures get a quiet heads-up
+      // presence arrivals/departures get a quiet heads-up — but in a crowded
+      // room (or when joining one, where every existing peer looks like a fresh
+      // arrival), the per-peer toasts would storm. Stay silent past a threshold.
       const now = new Map(session.peers().map((p) => [p.actor, p.name]))
-      for (const [actor, name] of now) {
-        if (!known.has(actor)) this.toast(t('{name} joined', { name }))
-      }
-      for (const [actor, name] of known) {
-        if (!now.has(actor)) this.toast(t('{name} left', { name }))
+      if (now.size <= 8) {
+        for (const [actor, name] of now) {
+          if (!known.has(actor)) this.toast(t('{name} joined', { name }))
+        }
+        for (const [actor, name] of known) {
+          if (!now.has(actor)) this.toast(t('{name} left', { name }))
+        }
       }
       known = now
     })
@@ -134,7 +138,14 @@ export class Editor {
   private renderAvatars() {
     if (!this.session) return
     this.avatarsBox.innerHTML = ''
-    for (const peer of this.session.peers()) {
+    const peers = this.session.peers()
+    // cap the strip so a crowded room can't blow out the topbar — show a few
+    // overlapping avatars, then a "+N" pill that opens the Live panel (which
+    // lists everyone, scrollable). Without this, N peers = N×28px of hard width.
+    // MAX=3 keeps the strip < 100px so even a 1280px laptop topbar never
+    // overflows (4+ clips the corner controls at that width — measured).
+    const MAX = 3
+    for (const peer of peers.slice(0, MAX)) {
       const chip = document.createElement('button')
       chip.className = 'ed-avatar'
       chip.style.background = peer.color
@@ -149,6 +160,18 @@ export class Editor {
         if (i >= 0) this.store.goTo(i)
       })
       this.avatarsBox.appendChild(chip)
+    }
+    const extra = peers.length - MAX
+    if (extra > 0) {
+      const more = document.createElement('button')
+      more.className = 'ed-avatar ed-avatar-more'
+      more.textContent = `+${extra}`
+      more.title = t('{n} more — click to see everyone', { n: extra })
+      more.addEventListener('click', () => {
+        this.shareWrap.classList.add('open')
+        this.renderSharePanel()
+      })
+      this.avatarsBox.appendChild(more)
     }
   }
 
