@@ -266,7 +266,9 @@ export class Editor {
     // (print · collaborators · Live · Save · more) with help pinned to the corner.
     const history = div('ed-group ed-group-history')
     history.append(undoB, redoB)
-    actions.append(pdfB, this.avatarsBox, this.shareDropdown(), saveB, this.saveDropdown(), helpB)
+    const saveGroup = div('ed-split')
+    saveGroup.append(saveB, this.saveDropdown())
+    actions.append(pdfB, this.avatarsBox, this.shareDropdown(), saveGroup, helpB)
     bar.append(logo, this.updatesB, title, this.dirtyDot, history, insert, actions)
 
     // main area
@@ -429,10 +431,11 @@ export class Editor {
   private saveDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     const menu = div('ed-menu ed-save-menu')
-    const trigger = btn(ICONS.download, '', () => {
+    const trigger = btn('<span class="ed-caret">▾</span>', '', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) rebuild()
-    }, t('Save as… — copy, new deck, template, password'))
+    }, t('Save as… — copy, new deck, password'))
+    trigger.classList.add('ed-split-caret')
     const item = (label: string, title: string, onClick: () => void) => {
       const b = document.createElement('button')
       b.className = 'ed-btn'
@@ -452,11 +455,8 @@ export class Editor {
         t('A backup of this deck for yourself — same deck, same live session.'),
         () => void this.save(true))
       item(t('Duplicate as new deck…'),
-        t('Same content, brand-new document — its own identity and keys; it will never sync with this one.'),
+        t('A separate deck for you — same content, new identity; it never syncs with this one.'),
         () => this.saveAsNewDeck())
-      item(t('Save as template…'),
-        t('Everyone who opens a template gets a fresh, independent deck of their own.'),
-        () => void this.saveAsTemplate())
       if (isEncryptionActive()) {
         item(t('Change password…'),
           t('Pick a new password for this file — takes effect on the next save.'),
@@ -759,6 +759,8 @@ export class Editor {
       action(t('Invite to edit — save a copy to send…'), true, () => void this.inviteToEdit())
       action(t('Share view-only copy…'), false, () => void this.saveReaderCopy())
       action(t('Export present-only file…'), false, () => void this.savePresentationPackage())
+      action(t('Share as template…'), false, () => void this.saveAsTemplate())
+        .title = t('A reusable starter: everyone who opens it gets their own fresh, independent deck.')
       note(t('Whoever opens your copy joins this deck live. Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
     } else {
       note(t('This is a view-only copy — it follows the live session but can’t change the deck.'))
