@@ -761,9 +761,44 @@ export class Editor {
     const peers = this.session?.peers() ?? []
     const cme = this.store.doc.collab
     const iAmOwner = !!(cme?.v === 2 && cme.ownerPriv && cme.owner)
+    const roleLabel = (r?: string) => r === 'owner' ? t('Owner') : r === 'viewer' ? t('Viewer') : r === 'editor' ? t('Editor') : ''
+    // short, readable key fingerprint — the same rendering everywhere, so two
+    // people can compare codes over a call to verify an identity out-of-band
+    const fp = (pub?: string) => pub ? pub.slice(0, 4) + '·' + pub.slice(4, 8) + '·' + pub.slice(8, 12) : ''
+    // YOUR identity on this device: which key this copy signs with + its role.
+    // Per-device by design — the same person on another machine is a separate
+    // key (and roster entry) the owner can admit or remove independently.
+    if (cme) {
+      let myPub: string | undefined
+      let myRole: 'owner' | 'editor' | 'viewer' | undefined
+      if (cme.role === 'reader') myRole = 'viewer'
+      else if (cme.v === 2 && cme.ownerPriv) { myRole = 'owner'; myPub = cme.owner }
+      else if (cme.v === 2 && cme.invite) {
+        myRole = 'editor'
+        try { myPub = JSON.parse(localStorage.getItem(`bento-member-${this.store.doc.docId}`) ?? 'null')?.pub } catch { /* absent */ }
+      } else if (cme.writerPriv) { myRole = 'editor'; myPub = cme.writerPub }
+      if (myRole) {
+        const label = div('ed-share-label')
+        label.textContent = t('People')
+        panel.appendChild(label)
+        const me = div('ed-share-peer ed-share-me')
+        const who = document.createElement('span')
+        who.className = 'who'
+        let myName = t('Guest')
+        try { myName = localStorage.getItem('bento-author') || myName } catch { /* ok */ }
+        who.textContent = `${myName} (${t('you')})`
+        const where = document.createElement('span')
+        where.className = 'where'
+        where.textContent = [roleLabel(myRole), fp(myPub)].filter(Boolean).join(' · ')
+        me.title = myPub
+          ? t('Your key on THIS device: {fp}. Another device counts as a new person until the owner removes it.', { fp: fp(myPub) })
+          : t('View-only copy — it holds no signing key.')
+        me.append(who, where)
+        panel.appendChild(me)
+      }
+    }
     if (peers.length) {
       const list = div('ed-share-peers')
-      const roleLabel = (r?: string) => r === 'owner' ? t('Owner') : r === 'viewer' ? t('Viewer') : r === 'editor' ? t('Editor') : ''
       for (const peer of peers) {
         const row = document.createElement('button')
         row.className = 'ed-share-peer'
@@ -774,12 +809,11 @@ export class Editor {
         who.className = 'who'
         who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
         // a pub-carrying peer's name is bound to its signing key, not just typed
-        if (peer.pub) who.title = t('Key-verified identity') + ` · ${peer.pub.slice(0, 12)}…`
+        if (peer.pub) who.title = t('Key-verified identity') + ` · ${fp(peer.pub)}`
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
-        const rl = roleLabel(peer.role)
-        where.textContent = [rl, idx >= 0 ? t('slide {n}', { n: idx + 1 }) : ''].filter(Boolean).join(' · ')
+        where.textContent = [roleLabel(peer.role), idx >= 0 ? t('slide {n}', { n: idx + 1 }) : ''].filter(Boolean).join(' · ')
         row.append(dot, who, where)
         row.title = t('{name} — on slide {n} (click to follow)', { name: peer.name, n: idx + 1 })
         row.addEventListener('click', () => {
