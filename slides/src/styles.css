@@ -61,11 +61,15 @@ html, body {
 .ed-title:hover { border-color: var(--line); }
 .ed-title:focus { border-color: var(--blue); outline: none; background: #fff; }
 
+/* unsaved-changes dot — badges the SAVE button's corner (amber when dirty) */
 .ed-dirty {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: transparent; margin-left: -4px; flex: none;
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: transparent; pointer-events: none;
 }
 .ed-dirty.on { background: var(--accent); }
+.ed-split > .ed-btn:first-child { position: relative; }
 
 .ed-group { display: flex; align-items: center; gap: 6px; }
 .ed-group-right { margin-left: auto; }

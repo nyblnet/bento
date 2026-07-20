@@ -215,7 +215,7 @@ export class Editor {
       }
     })
     this.dirtyDot = div('ed-dirty')
-    this.dirtyDot.title = t('Unsaved changes')
+    this.dirtyDot.title = t('Unsaved changes — ⌘S saves this file in place')
 
     const insert = div('ed-group ed-insert')
     insert.append(
@@ -257,6 +257,7 @@ export class Editor {
     const undoB = btn(ICONS.undo, '', () => this.store.undo(), t('Undo (⌘Z)'))
     const redoB = btn(ICONS.redo, '', () => this.store.redo(), t('Redo (⇧⌘Z)'))
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), t('Save — rewrite this file in place (⌘S)'))
+    saveB.appendChild(this.dirtyDot) // the amber unsaved-changes dot lives ON Save
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
     const helpB = btn('<b class="ed-help-q">?</b>', '', () => this.openHelp(), t('Shortcuts & tips (?)'))
     helpB.classList.add('ed-btn-help')
@@ -269,7 +270,7 @@ export class Editor {
     const saveGroup = div('ed-split')
     saveGroup.append(saveB, this.saveDropdown())
     actions.append(pdfB, this.avatarsBox, this.shareDropdown(), saveGroup, this.languageDropdown(), helpB)
-    bar.append(logo, this.updatesB, title, this.dirtyDot, history, insert, actions)
+    bar.append(logo, this.updatesB, title, history, insert, actions)
 
     // main area
     const main = div('ed-main')
@@ -1711,7 +1712,7 @@ export class Editor {
   private savedTimer = 0
   private flashSaved() {
     let tag = document.querySelector<HTMLElement>('.ed-autosaved')
-    if (!tag) { tag = div('ed-autosaved'); this.dirtyDot.after(tag) }
+    if (!tag) { tag = div('ed-autosaved'); document.querySelector('.ed-topbar .ed-title')?.after(tag) }
     tag.textContent = t('Saved')
     tag.classList.add('show')
     clearTimeout(this.savedTimer)
