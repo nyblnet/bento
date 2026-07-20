@@ -309,10 +309,10 @@ function deckTerra() {
       // product photo), staggered; each pill + its photo share order so they
       // travel together. The photos keep their ken-burns (scale) — the slide
       // uses the x channel, so the two coexist.
-      shape('rect', { id: 'ter-a', x: 700, y: 110, w: 190, h: 280, radius: 95, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.28)' }, fx: { enter: 'slide-left', order: 2 } }),
-      img({ asset: 'ph-vase-jay', x: 707, y: 117, w: 176, h: 266, radius: 88, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 }, enter: 'slide-left', order: 2 } }),
-      shape('rect', { id: 'ter-b', x: 646, y: 440, w: 140, h: 200, radius: 70, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.22)' }, fx: { enter: 'slide-left', order: 3 } }),
-      img({ asset: 'ph-vase-classic', x: 652, y: 446, w: 128, h: 188, radius: 64, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 }, enter: 'slide-left', order: 3 } }),
+      shape('rect', { id: 'ter-a', x: 700, y: 110, w: 190, h: 280, radius: 95, fill: CLAY, fillGradient: GRAD_CLAY, shadow: { y: 24, blur: 50, color: 'rgba(42,39,36,0.28)' }, fx: { enter: 'slide-down', order: 2 } }),
+      img({ asset: 'ph-vase-jay', x: 707, y: 117, w: 176, h: 266, radius: 88, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.03, duration: 12 }, enter: 'slide-down', order: 2 } }),
+      shape('rect', { id: 'ter-b', x: 646, y: 440, w: 140, h: 200, radius: 70, fill: SAND, fillGradient: GRAD_SAND, shadow: { y: 18, blur: 40, color: 'rgba(42,39,36,0.22)' }, fx: { enter: 'slide-up', order: 3 } }),
+      img({ asset: 'ph-vase-classic', x: 652, y: 446, w: 128, h: 188, radius: 64, fx: { ambient: 'kenburns', ken: { dir: 'drift', scale: 1.035, duration: 15 }, enter: 'slide-up', order: 3 } }),
       text({ x: 96, y: 620, w: 500, h: 22, html: 'SPRING 2026 · EDITION OF 41', fontSize: 11, fontWeight: 600, letterSpacing: 4, color: SOFT }),
       text({ x: 900, y: 668, w: 360, h: 20, html: 'MET MUSEUM OPEN ACCESS · CC0', fontSize: 9, fontWeight: 600, letterSpacing: 3, color: 'rgba(247,245,240,0.75)', align: 'right' }),
     ],
