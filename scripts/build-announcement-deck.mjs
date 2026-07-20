@@ -67,9 +67,10 @@ const s1 = slide({
   elements: [
     ...tiles({ x: 950, y: 110, w: 200, h: 200 }, { x: 1064, y: 340, w: 120, h: 180 }, { x: 900, y: 380, w: 120, h: 120 }),
     kick(96, 96, 'SHOW HN — BENTO/SUITE'),
-    text({ x: 88, y: 150, w: 880, h: 340, html: 'This announcement<br>is the product.', fontSize: 96, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1.02 }),
-    text({ x: 96, y: 470, w: 700, h: 90, html: 'You are inside a <b>.bento.html</b> file — a presentation that carries its own editor, presenter and format. One file. No install. No account.', fontSize: 20, color: MIST, lineHeight: 1.6, fx: { enter: 'fade-up', order: 1 } }),
-    text({ x: 96, y: 640, w: 1000, h: 24, html: '→ ADVANCE · ESC OPENS THE EDITOR ON THIS VERY FILE', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: 'rgba(255,158,138,0.85)', fx: { enter: 'fade-up', order: 2 } }),
+    text({ x: 88, y: 150, w: 880, h: 300, html: 'This announcement<br>is the product.', fontSize: 96, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1.02 }),
+    text({ x: 96, y: 402, w: 1040, h: 48, html: 'The boring deck is dead. One file killed it.', fontSize: 27, fontFamily: FR, fontWeight: 900, color: PEACH, lineHeight: 1.1, fx: { enter: 'fade-up', order: 1 } }),
+    text({ x: 96, y: 476, w: 760, h: 90, html: 'You are inside a <b>.bento.html</b> file — a presentation that carries its own editor, presenter and format. One file. No install. No account.', fontSize: 20, color: MIST, lineHeight: 1.6, fx: { enter: 'fade-up', order: 2 } }),
+    text({ x: 96, y: 644, w: 1000, h: 24, html: '→ ADVANCE · ESC OPENS THE EDITOR ON THIS VERY FILE', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: 'rgba(255,158,138,0.85)', fx: { enter: 'fade-up', order: 3 } }),
   ],
 })
 
@@ -79,7 +80,7 @@ const s2 = slide({
   elements: [
     ...tiles({ x: 96, y: 120, w: 110, h: 110 }, { x: 226, y: 120, w: 70, h: 110 }, { x: 316, y: 120, w: 64, h: 64 }),
     text({ x: 90, y: 280, w: 1100, h: 160, html: 'One file is the app.', fontSize: 84, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1 }),
-    text({ x: 96, y: 440, w: 1000, h: 130, html: 'Deck, viewer, presenter, editor, fonts, images, charts — all inside one ~400 KB HTML file that <b>saves itself</b>. Email it, AirDrop it, archive it for a decade. Every copy is the complete product.', fontSize: 21, color: MIST, lineHeight: 1.65, fx: { enter: 'fade-up' } }),
+    text({ x: 96, y: 440, w: 1000, h: 130, html: 'Deck, viewer, presenter, editor, fonts, images, charts — all inside one ~470 KB HTML file that <b>saves itself</b>. Email it, AirDrop it, archive it for a decade. Every copy is the complete product.', fontSize: 21, color: MIST, lineHeight: 1.65, fx: { enter: 'fade-up' } }),
     text({ x: 96, y: 640, w: 900, h: 24, html: 'NOTHING TO INSTALL · NOTHING TO EXPIRE · WORKS FROM file://', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: MIST_DIM, fx: { enter: 'fade-up', order: 2 } }),
   ],
 })
@@ -103,15 +104,20 @@ const s3 = slide({
 
 const s4 = slide({
   id: 'an-collab', background: INK, transition: 'fade',
-  notes: 'Collaboration without accounts: keys are minted client-side at document creation and live in the file. The relay stores ciphertext and learns nothing — its source is about one file, read it. Offline edits merge back through our own CRDT (character-level text merging included), verified by a convergence rig across hundreds of thousands of checks.',
+  notes: 'Collaboration without accounts: keys are minted client-side at document creation and live in the file. The relay stores ciphertext and learns nothing. Read-only copies are CRYPTOGRAPHICALLY signed to read-not-write — the room id commits to an ECDSA writer public key, and the blind relay drops any unsigned mutating frame at the edge. Enforced, not an honour-system flag; no permissions table to misconfigure. Offline edits merge back through our own CRDT (character-level text merging), verified by a convergence rig across hundreds of thousands of checks.',
   elements: [
     kick(96, 96, 'TOGETHER, LIVE'),
-    text({ x: 90, y: 140, w: 1100, h: 200, html: 'The file is<br>the invitation.', fontSize: 76, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1.02 }),
-    text({ x: 96, y: 360, w: 1000, h: 90, html: 'Start a live session and send the file — anyone who opens a copy joins. <b>E2EE</b>, keys never leave the file, and offline edits merge back both ways when people return.', fontSize: 20, color: MIST, lineHeight: 1.6, fx: { enter: 'fade-up' } }),
-    ...[['E2EE', 'AES-GCM, keys in your file'], ['BLIND RELAY', 'stores ciphertext, learns nothing'], ['OWN CRDT', 'char-level merges, fuzz-tested']].map(([h, b], i) => [
-      rect({ x: 96 + i * 372, y: 490, w: 340, h: 120, fill: PANEL, radius: 16, fx: { enter: 'fade-up', order: i + 1 } }),
-      text({ x: 120 + i * 372, y: 512, w: 292, h: 30, html: h, fontSize: 14, fontWeight: 800, letterSpacing: 3, color: PEACH, fx: { enter: 'fade-up', order: i + 1 } }),
-      text({ x: 120 + i * 372, y: 546, w: 292, h: 50, html: b, fontSize: 15, color: MIST, lineHeight: 1.45, fx: { enter: 'fade-up', order: i + 1 } }),
+    text({ x: 90, y: 140, w: 1100, h: 180, html: 'The file is<br>the invitation.', fontSize: 76, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1.02 }),
+    text({ x: 96, y: 350, w: 1080, h: 120, html: 'Start a live session and send the file — anyone who opens a copy joins. <b>E2EE</b>, keys never leave the file, offline edits merge both ways — and read-only copies are <b>cryptographically</b> signed to read-not-write, enforced at the relay, not by courtesy.', fontSize: 20, color: MIST, lineHeight: 1.55, fx: { enter: 'fade-up' } }),
+    ...[
+      ['E2EE', 'AES-GCM; keys live in your file'],
+      ['BLIND RELAY', 'stores ciphertext, learns nothing'],
+      ['SIGNED WRITES', 'read-only enforced by ECDSA'],
+      ['OWN CRDT', 'char-level merges, fuzz-tested'],
+    ].map(([h, b], i) => [
+      rect({ x: 96 + i * 278, y: 500, w: 254, h: 118, fill: PANEL, radius: 16, fx: { enter: 'fade-up', order: i + 1 } }),
+      text({ x: 120 + i * 278, y: 522, w: 206, h: 28, html: h, fontSize: 13, fontWeight: 800, letterSpacing: 2, color: PEACH, fx: { enter: 'fade-up', order: i + 1 } }),
+      text({ x: 120 + i * 278, y: 552, w: 206, h: 56, html: b, fontSize: 14, color: MIST, lineHeight: 1.4, fx: { enter: 'fade-up', order: i + 1 } }),
     ]).flat(),
   ],
 })
@@ -141,15 +147,16 @@ const s6 = slide({
 
 const s7 = slide({
   id: 'an-honest', background: PANEL, transition: 'fade',
-  notes: 'The honest slide. Undo during live collab is snapshot-based and can revert a collaborator’s concurrent edit to the same property (documented LWW compromise). Editing is desktop-first; phones view and present well. Fullscreen needs a user gesture. Files grow with embedded images. We would rather you hear it from us.',
+  notes: 'The honest slide. Undo during live collab is snapshot-based (LWW) and can revert a collaborator’s concurrent same-property edit — the CRDT still keeps everyone converged. Editing is desktop-first; phones view and present beautifully. Morph only animates elements that share an id across slides — a deliberate idiom, not automatic magic-move. Presence names are claims, not proofs; a named-identity SSO roster is roadmap (the read/write RBAC IS cryptographic, the identity layer is not yet). We would rather you hear it from us.',
   elements: [
     kick(96, 96, 'WHAT IT DOESN’T DO (YET)'),
     text({ x: 90, y: 140, w: 1000, h: 110, html: 'The honest slide.', fontSize: 64, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1 }),
-    text({ x: 96, y: 280, w: 1040, h: 300, fontSize: 20, color: MIST, lineHeight: 1.9, fx: { enter: 'fade-up' }, html:
-      '· Undo during live collab is snapshot-based — it can revert a peer’s concurrent edit<br>' +
-      '· Editing is desktop-first; phones are for viewing and presenting<br>' +
-      '· Fullscreen needs a user gesture; some embeds deny it (we degrade to tab mode)<br>' +
-      '· Files grow with embedded images — no optimizer yet<br>' +
+    text({ x: 96, y: 280, w: 1060, h: 320, fontSize: 20, color: MIST, lineHeight: 1.85, fx: { enter: 'fade-up' }, html:
+      '· Undo under live collab is snapshot-based (LWW) — it can revert a peer’s concurrent edit<br>' +
+      '· Editing is desktop-first; phones view and present beautifully<br>' +
+      '· Morph only animates elements that <b>share an id</b> across slides — not automatic “magic move”<br>' +
+      '· Presence names are claims, not proofs — named-identity SSO is on the roadmap<br>' +
+      '· Files grow with embedded images and video — no optimizer yet<br>' +
       '· Docs and Sheets don’t exist yet. Slides came first.' }),
     text({ x: 96, y: 620, w: 1000, h: 30, html: 'TRADE-OFFS ARE DESIGN. WE’D RATHER DISCLOSE THAN DISAPPOINT.', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: 'rgba(255,158,138,0.7)', fx: { enter: 'fade-up', order: 2 } }),
   ],
@@ -161,7 +168,7 @@ const s8 = slide({
   elements: [
     ...tiles({ x: 540, y: 90, w: 200, h: 200 }, { x: 464, y: 210, w: 120, h: 180 }, { x: 700, y: 230, w: 120, h: 120 }),
     text({ x: 140, y: 360, w: 1000, h: 130, html: 'One file. Yours. Forever.', fontSize: 74, fontFamily: FR, fontWeight: 900, color: '#fff', align: 'center', lineHeight: 1 }),
-    text({ x: 140, y: 500, w: 1000, h: 60, html: '<b>bento.page</b> — the site &nbsp;·&nbsp; <b>bento.page/slides</b> — the app &nbsp;·&nbsp; the gallery — decks to steal', fontSize: 19, color: MIST, align: 'center', lineHeight: 1.6, fx: { enter: 'fade-up' } }),
+    text({ x: 140, y: 494, w: 1000, h: 60, html: '<b>bento.page</b> — site + gallery &nbsp;·&nbsp; <b>bento.page/slides</b> — the app &nbsp;·&nbsp; <b>MIT</b> — github.com/nyblnet/bento', fontSize: 18, color: MIST, align: 'center', lineHeight: 1.6, fx: { enter: 'fade-up' } }),
     text({ x: 140, y: 600, w: 1000, h: 30, html: 'PRESS ESC AND SAVE A COPY — THIS ANNOUNCEMENT IS NOW YOUR DECK. FRESH IDENTITY INCLUDED.', fontSize: 12, fontWeight: 700, letterSpacing: 2.5, color: 'rgba(255,158,138,0.85)', align: 'center', fx: { enter: 'fade-up', order: 2 } }),
   ],
 })
