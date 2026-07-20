@@ -369,3 +369,101 @@ The five invariants that already define the format survive untouched:
 plaintext `#bento-doc`, the splice contract, ids-as-identity, pure-data
 documents (ops are data too — no code ever travels the sync channel), and
 "any saved file opens alone, forever."
+
+---
+
+# Roadmap: fine-grained access control (v1.0.3) and the SSO path
+
+*Design agreed pre-launch. Goal: per-person capability without giving up the
+three core promises — the relay stays blind, there are no accounts, and the
+file remains the read capability.*
+
+## Today's model (v1.0.2) in one line
+
+The FILE is the capability: one symmetric read key (everyone in the room) and
+ONE SHARED writer keypair (every writer copy carries the same `writerPriv`).
+Two tiers, doc-wide; revocation only by rotating the whole room.
+
+## Phase 1 — per-person identity (the foundation)
+
+Replace the shared writer key with one keypair per participant; the room
+owner becomes the root of trust.
+
+- **Owner**: the deck creator's device mints a personal ECDSA P-256 keypair at
+  creation; the room id commits to the OWNER's pubkey (same `w`+hash scheme).
+- **Certificates**: the owner signs small statements — `{memberPub, role,
+  expiry}` — "this key may write / comment". Certs are data, not identity: no
+  names, no PII in the clear.
+- **Invites**: a shared copy carries a PRE-SIGNED one-time invite token (owner
+  signs the hash of an invite secret embedded in that copy). First open: the
+  joiner's device mints its own keypair and redeems the token → certified at
+  the copy's role, with the owner OFFLINE. The file stays the invitation.
+- **Relay change**: verify each mutating frame's signature against ANY
+  currently-certified key (cert chain: owner key → member cert → frame sig)
+  instead of the single pinned writer key. Still blind: it sees pubkeys, role
+  bits, expiries, ciphertext — never names.
+- **Revocation**: the owner publishes a signed revocation for ONE key; that
+  person loses write in seconds. Nobody else re-keys, no files re-sent.
+  "Rotate keys" remains the nuclear option.
+- **Attribution**: ops are author-signed → presence names and history become
+  key-bound proofs, closing the "names are claims" limitation.
+
+### UX (People panel)
+
+Live popover → People panel: members listed with key-bound name + role; the
+owner gets a role dropdown and a Remove button per member. Joining feels
+identical to today (open file → you're in).
+
+## Phase 2 — roles and scope (client-enforced)
+
+The relay cannot read ops (ciphertext), so fine enforcement is split:
+
+- Relay keeps enforcing the coarse write/no-write boundary at the edge.
+- Cert claims carry role (`commenter`) and optional scope (`slides: [...]`).
+  Every replica verifies on APPLY: an op from a commenter key touching anything
+  but `Slide.comments`, or outside its slide scope, is deterministically
+  dropped by all peers. Convergence holds because the rule is a pure function
+  of (signed author, op target). Weaker than edge enforcement, still
+  cryptographic — the honest price of a blind relay; say so in security.md.
+- **Soft locks first**: advisory per-slide/element locks via presence ("Ana is
+  editing slide 4") — no security claim, most of the practical value.
+- Suggest-mode (track changes) is a model feature (pending-change objects),
+  not crypto.
+
+## Phase 3 — SSO / enterprise (org-anchored trust)
+
+Same protocol; only WHO SIGNS CERTS changes.
+
+- **Org gateway**: a small separate Worker (self-hostable by the enterprise —
+  the only identity-touching component). User signs in via IdP (OIDC/SAML);
+  gateway verifies the token and issues a SPLIT certificate:
+  - public envelope (relay-visible): `{pubkey, role, expiry, orgSig}` — no PII;
+  - encrypted payload (room-key, peers only): `{name, email, groups}` →
+    verified identities in the People panel.
+- **Org rooms**: the doc's collab block declares a trust anchor — "certs signed
+  by org key O are writers" — so any employee joins without per-person invites.
+- **Offboarding follows the directory**: certs are short-lived and renew
+  against the IdP; leave the company → renewal fails → write access dies.
+- **Audit**: author-signed, identity-bound ops → a decryptable, verifiable
+  who-changed-what log the relay never holds.
+- **Read remains possession-based** by default (file = read capability, same
+  trust as an emailed attachment). Full SSO-gated READ = per-member key
+  wrapping + rotation on offboard — explicit org-policy opt-in, LAST, because
+  it trades away "the file opens forever" for those docs.
+
+## Compatibility hooks to ship EARLY (cheap, non-breaking)
+
+1. Version-tag the collab block (`collab.v`) so v-next rooms coexist with
+   legacy `w`/`r` rooms (the w/r precedent proves the pattern).
+2. Keep the relay's signature check table-driven (pinned-key = a one-entry
+   cert table) so the cert chain is a lookup swap, not a rewrite.
+3. Reserve field names now: `collab.owner`, `collab.certs`, `collab.invite`,
+   `cert.{pub,role,scope,exp,sig}`, `collab.trust` (org anchor).
+
+## Sequencing
+
+per-person keys + roster + revocation → soft locks → commenter role →
+per-cell table merges + per-actor undo (engine, orthogonal) → hard scope →
+org gateway/SSO → key-wrapped read. Sub-document sharing (readers who can
+only SEE some slides) needs per-section key hierarchies — parked for the
+Docs/Sheets era.
