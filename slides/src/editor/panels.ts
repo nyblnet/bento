@@ -425,7 +425,15 @@ export class PropsPanel {
     this.row(t('Enter'), this.select(
       ['none', 'fade', 'fade-up', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'],
       el.fx?.enter ?? 'none',
-      (v) => setFx({ enter: v === 'none' ? undefined : (v as NonNullable<typeof el.fx>['enter']) })))
+      (v) => setFx(v === 'none'
+        ? { enter: undefined, enterDur: undefined }
+        : { enter: v as NonNullable<typeof el.fx>['enter'] })))
+    if (el.fx?.enter) {
+      // per-kind default (slide-* 0.75s, fade-* 0.55s); lower = snappier
+      this.row(t('Enter secs'), this.number(
+        el.fx.enterDur ?? (el.fx.enter.startsWith('slide-') ? 0.75 : 0.55), 0.05,
+        (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }))
+    }
     this.row(t('Count up'), this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
       (v) => setFx({ countUp: v === 'on' ? true : undefined })))

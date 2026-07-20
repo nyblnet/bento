@@ -94,6 +94,7 @@ export const it: Catalog = {
   "Link to": "Collega a",
   "Loop": "Loop",
   "Loop secs": "Secondi loop",
+  "Enter secs": "Secondi entrata",
   "Medium": "Medio",
   "Morph id:": "Id morph:",
   "Name": "Nome",

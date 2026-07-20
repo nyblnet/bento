@@ -94,6 +94,7 @@ export const zhHans: Catalog = {
   "Link to": "链接到",
   "Loop": "循环",
   "Loop secs": "循环秒数",
+  "Enter secs": "入场秒数",
   "Medium": "中等",
   "Morph id:": "变形 id：",
   "Name": "名称",

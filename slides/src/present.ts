@@ -521,7 +521,7 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
           opacity: el.opacity,
           x: 0,
           y: 0,
-          duration: slide ? 0.75 : 0.55,
+          duration: fx.enterDur ?? (slide ? 0.75 : 0.55),
           delay: 0.12 + Math.min(step, 24) * 0.05,
           ease: slide ? 'power3.out' : 'power2.out',
         },
