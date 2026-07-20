@@ -10,7 +10,7 @@ import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
-import { secondScreen } from './screens'
+import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
 
 const MORPH_DURATION = 0.65
@@ -98,6 +98,24 @@ export function startPresentation(
   }
   const visibleIndex = (i: number) => doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
   const visibleTotal = doc.slides.filter((s) => !s.stateOf).length
+  // real slide indices that appear in linear navigation (states are excluded) —
+  // the presenter-view thumbnail rail and grid iterate this.
+  const railIndices = doc.slides.map((_, i) => i).filter((i) => !isState(i))
+  const goFirst = () => deck.slide(railIndices[0] ?? 0, 0)
+  const goLast = () => deck.slide(railIndices[railIndices.length - 1] ?? 0, 0)
+
+  // ——— black-screen (audience blackout; presenter keeps notes) ———
+  let blacked = false
+  const blackout = document.createElement('div')
+  blackout.className = 'bento-blackout'
+  blackout.hidden = true
+  overlay.appendChild(blackout)
+  const setBlack = (on: boolean) => {
+    blacked = on
+    blackout.hidden = !on
+    updateSpeakerControls()
+  }
+  const toggleBlack = () => setBlack(!blacked)
 
   let exited = false
   const deck = new Reveal(revealEl, {
@@ -140,6 +158,13 @@ export function startPresentation(
   // browsers; this guards the fullscreenchange handler so that bounce doesn't
   // end the show (see onFsChange).
   let openingSpeaker = false
+  // Reveal reports valid indices only after initialize(). The speaker view can
+  // be opened (from the editor) before that, so gate any deck.getIndices() read
+  // and re-populate once the deck is ready.
+  let deckReady = false
+  // true when we adopted a speaker window the EDITOR opened — we drive it but
+  // must not close it on exit (it lives beyond this present session).
+  let speakerAdopted = false
   // Second-screen placement is set up in the EDITOR (properties panel) before
   // presenting — that's where the Window Management permission is granted via a
   // dedicated gesture, and the layout is cached in ../screens. Here we just read
@@ -167,8 +192,31 @@ export function startPresentation(
     }
     return frame
   }
+  // Cheap, one-shot update of just the controls (highlight, counter, button
+  // states) — called on every slidechange AND on black toggle without re-rendering
+  // the (expensive) current/next slides or the thumbnail rail.
+  const updateSpeakerControls = () => {
+    if (!speaker || speaker.closed || !deckReady) return
+    const d = speaker.document
+    const cur = deck.getIndices().h
+    const anchor = isState(cur) ? anchorOf(cur) : cur
+    const count = d.querySelector('.sv-count')
+    if (count) count.textContent = `${visibleIndex(cur)} / ${visibleTotal}`
+    d.querySelectorAll<HTMLElement>('.sv-thumb').forEach((th) => {
+      const on = Number(th.dataset.idx) === anchor
+      th.classList.toggle('current', on)
+      if (on && th.closest('.sv-rail')) th.scrollIntoView({ block: 'nearest', inline: 'center' })
+    })
+    const nav = (k: string) => d.querySelector<HTMLButtonElement>(`.sv-btn[data-nav="${k}"]`)
+    nav('prev')?.toggleAttribute('disabled', !hasPrev())
+    nav('first')?.toggleAttribute('disabled', !hasPrev())
+    nav('next')?.toggleAttribute('disabled', !hasNext())
+    nav('last')?.toggleAttribute('disabled', !hasNext())
+    nav('black')?.classList.toggle('active', blacked)
+  }
   const updateSpeaker = () => {
     if (!speaker || speaker.closed) return
+    if (!deckReady) return // opened pre-init — populated on ready
     const d = speaker.document
     const cur = deck.getIndices().h
     const nxt = nextVisibleIndex(cur)
@@ -181,8 +229,7 @@ export function startPresentation(
     nxtBox.appendChild(d.importNode(svSlide(nxt, 300), true))
     const notes = d.querySelector('.sv-notes')
     if (notes) notes.textContent = doc.slides[cur]?.notes || t('— no notes for this slide —')
-    const count = d.querySelector('.sv-count')
-    if (count) count.textContent = `${visibleIndex(cur)} / ${visibleTotal}`
+    updateSpeakerControls()
   }
   const openSpeaker = () => {
     if (speaker && !speaker.closed) {
@@ -193,58 +240,127 @@ export function startPresentation(
     // browser leave fullscreen, and without this that would end the show
     const wasFullscreen = document.fullscreenElement === overlay
     openingSpeaker = true
-    // Open DIRECTLY on the second display when we know its coordinates — the
-    // reliable path. (Opening centred then moveTo left the window behind the
-    // fullscreen slides on macOS.)
-    const other = secondScreen()
-    const features = other
-      ? `left=${other.availLeft},top=${other.availTop},width=${Math.min(other.availWidth, 1600)},height=${Math.min(other.availHeight, 1000)}`
-      : 'width=1080,height=640'
-    speaker = window.open('', 'bento-speaker', features)
+    // ADOPT a window the editor already opened (the clean two-gesture path:
+    // opened in its own gesture, never fought fullscreen for this click's
+    // activation, never trapped in the fullscreen Space). Only open a fresh one —
+    // on THIS display — when none was pre-opened (e.g. S pressed mid-show).
+    const pre = speakerWindow()
+    if (pre) {
+      speaker = pre
+      speakerAdopted = true
+    } else {
+      speaker = window.open('', 'bento-speaker', 'width=1200,height=800')
+      speakerAdopted = false
+    }
     if (!speaker) { openingSpeaker = false; console.warn('[bento-speaker] popup blocked — allow pop-ups for this site'); return }
-    console.info('[bento-speaker] opened on', other ? `2nd screen "${other.label}"` : 'this screen', '·', features)
+    setSpeakerWindow(speaker)
     ;(window as unknown as Record<string, unknown>).__bentoSpeaker = speaker // diagnostics
     const d = speaker.document
     d.title = `${doc.title} — ${t('Speaker view')}`
-    for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
+    if (!d.head.querySelector('style')) { // already styled when adopting an editor window
+      for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
+    }
     d.body.className = 'bento-speaker'
+    const navBtn = (k: string, glyph: string, label: string) =>
+      `<button class="sv-btn" data-nav="${k}" title="${label}" aria-label="${label}">${glyph}</button>`
     d.body.innerHTML =
-      `<div class="sv-top"><div class="sv-timer" title="${t('Click to reset')}">00:00</div>` +
-      '<div class="sv-clock"></div><div class="sv-count"></div></div>' +
-      '<div class="sv-main"><div class="sv-current"></div>' +
-      `<div class="sv-side"><div><div class="sv-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
-      `<div class="sv-notes-wrap"><div class="sv-label">${t('Notes')}</div><div class="sv-notes"></div></div></div></div>`
+      `<div class="sv-top">` +
+        `<div class="sv-timer" title="${t('Click to reset')}">00:00</div>` +
+        `<div class="sv-clock"></div>` +
+        `<div class="sv-count"></div>` +
+        `<div class="sv-ctrls">` +
+          navBtn('first', '⇤', t('First slide')) +
+          navBtn('prev', '‹', t('Previous')) +
+          navBtn('next', '›', t('Next')) +
+          navBtn('last', '⇥', t('Last slide')) +
+          navBtn('black', '■', t('Black screen (B)')) +
+          navBtn('grid', '▦', t('All slides (G)')) +
+        `</div>` +
+      `</div>` +
+      `<div class="sv-main">` +
+        `<div class="sv-current"></div>` +
+        `<div class="sv-side">` +
+          `<div class="sv-next-wrap"><div class="sv-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
+          `<div class="sv-notes-wrap"><div class="sv-label">${t('Notes')}</div><div class="sv-notes"></div></div>` +
+        `</div>` +
+      `</div>` +
+      `<div class="sv-rail"></div>` +
+      `<div class="sv-grid" hidden><div class="sv-grid-inner"></div></div>`
+
     speakerStart = performance.now()
     d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
     clearInterval(speakerTimer)
     speakerTimer = window.setInterval(() => {
-      if (!speaker || speaker.closed) {
-        clearInterval(speakerTimer)
-        return
-      }
+      if (!speaker || speaker.closed) { clearInterval(speakerTimer); return }
       const el = speaker.document.querySelector('.sv-timer')
       if (el) {
-        const t = Math.floor((performance.now() - speakerStart) / 1000)
-        const mm = String(Math.floor(t / 60)).padStart(2, '0')
-        const ss = String(t % 60).padStart(2, '0')
-        el.textContent = `${mm}:${ss}`
+        const s = Math.floor((performance.now() - speakerStart) / 1000)
+        el.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
       }
       const clock = speaker.document.querySelector('.sv-clock')
       if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, 1000)
+
+    // a clickable thumbnail: an imported slide render inside a button, badged
+    // with its slide number; clicking jumps the live show there.
+    const thumb = (idx: number, w: number): HTMLElement => {
+      const b = d.createElement('button')
+      b.className = 'sv-thumb'
+      b.dataset.idx = String(idx)
+      b.appendChild(d.importNode(svSlide(idx, w), true))
+      const num = d.createElement('span')
+      num.className = 'sv-thumb-n'
+      num.textContent = String(visibleIndex(idx))
+      b.appendChild(num)
+      b.addEventListener('click', () => { deck.slide(idx, 0); toggleGrid(false) })
+      return b
+    }
+
+    const rail = d.querySelector('.sv-rail')!
+    for (const idx of railIndices) rail.appendChild(thumb(idx, 150))
+
+    // all-slides grid overlay — built lazily on first open (cheap for small decks,
+    // but a big deck shouldn't pay for it unless the presenter asks).
+    const grid = d.querySelector('.sv-grid') as HTMLElement
+    const gridInner = d.querySelector('.sv-grid-inner')!
+    let gridBuilt = false
+    const toggleGrid = (on?: boolean) => {
+      const show = on ?? grid.hasAttribute('hidden')
+      if (show && !gridBuilt) { for (const idx of railIndices) gridInner.appendChild(thumb(idx, 240)); gridBuilt = true }
+      grid.toggleAttribute('hidden', !show)
+      if (show) updateSpeakerControls()
+    }
+    grid.addEventListener('click', (ev) => { if (ev.target === grid) toggleGrid(false) })
+
+    const doNav = (k: string) => {
+      if (k === 'first') goFirst()
+      else if (k === 'prev') goPrev()
+      else if (k === 'next') goNext()
+      else if (k === 'last') goLast()
+      else if (k === 'black') toggleBlack()
+      else if (k === 'grid') toggleGrid()
+    }
+    d.querySelectorAll<HTMLButtonElement>('.sv-btn[data-nav]').forEach((b) => {
+      b.addEventListener('click', () => doNav(b.dataset.nav!))
+    })
+
+    // drive the show FROM the speaker window (its keys fire in its own document)
+    d.addEventListener('keydown', (ev: KeyboardEvent) => {
+      const k = ev.key
+      if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' || k === 'n') { ev.preventDefault(); goNext() }
+      else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'p') { ev.preventDefault(); goPrev() }
+      else if (k === 'Home') { ev.preventDefault(); goFirst() }
+      else if (k === 'End') { ev.preventDefault(); goLast() }
+      else if (k === 'b' || k === 'B') { ev.preventDefault(); toggleBlack() }
+      else if (k === 'g' || k === 'G') { ev.preventDefault(); toggleGrid() }
+      else if (k === 'Escape' && !grid.hasAttribute('hidden')) { ev.preventDefault(); toggleGrid(false) }
+    })
+
     updateSpeaker()
-    if (other) {
-      // Notes are on the second display. A popup on ANOTHER screen shouldn't
-      // drop this screen's fullscreen; if it did, the presenter can press F
-      // (the S activation is already spent on window.open, so we can't silently
-      // re-enter here). Nothing to do — the good path.
-      console.info('[bento-speaker] notes on 2nd screen; slides', document.fullscreenElement ? 'still fullscreen' : '→ press F for fullscreen')
-    } else if (wasFullscreen) {
-      // No second display set up — the notes would sit hidden behind the
-      // fullscreen slides, so drop fullscreen to reveal them. (To send notes to
-      // a second screen automatically, enable it in the editor's Slide panel
-      // before presenting.)
-      console.info('[bento-speaker] no 2nd screen — revealing notes in a window')
+    if (!speakerAdopted && wasFullscreen) {
+      // A fresh window on THIS display sits behind the fullscreen slides — drop
+      // fullscreen so the notes are visible. (Open notes from the Slide panel and
+      // drag them to a second screen to keep the slides fullscreen.)
       document.exitFullscreen?.().catch(() => {})
     }
     window.setTimeout(() => { openingSpeaker = false }, 500)
@@ -271,6 +387,10 @@ export function startPresentation(
   }
   document.addEventListener('fullscreenchange', onFsChange)
   if (opts.fullscreen !== false) enterFullscreen()
+  // If the editor already opened notes on the second screen, go live on that
+  // existing window now — no new window.open, so fullscreen above kept this
+  // click's activation and the notes were never trapped in the fullscreen Space.
+  if (speakerWindow()) openSpeaker()
 
   const exit = () => {
     if (exited) return
@@ -288,7 +408,17 @@ export function startPresentation(
     document.removeEventListener('keydown', onKeydown, true)
     document.removeEventListener('fullscreenchange', onFsChange)
     clearInterval(speakerTimer)
-    if (speaker && !speaker.closed) speaker.close()
+    if (speaker && !speaker.closed) {
+      if (speakerAdopted) {
+        // editor-owned window — leave it open, reset to the idle placeholder so
+        // it's ready for the next run instead of freezing on the last slide
+        paintSpeaker(speaker, `${doc.title} — ${t('Speaker view')}`,
+          speakerIdleBody(doc.title, t('Presentation ended. Start it again to bring these notes back to life.')))
+      } else {
+        speaker.close()
+        setSpeakerWindow(null)
+      }
+    }
     onExit(last)
   }
 
@@ -406,7 +536,10 @@ export function startPresentation(
   })
 
   deck.initialize().then(() => {
+    deckReady = true
     if (startIndex > 0) deck.slide(startIndex, 0)
+    // if the speaker view was opened before init (macOS reorder), fill it now
+    updateSpeaker()
     // late layout: fonts/images that finish loading after init can change
     // the measured size, and the boot viewport may still be settling
     window.addEventListener('resize', onResize)

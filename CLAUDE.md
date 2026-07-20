@@ -33,10 +33,15 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   cross-reload-recover, by design.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
-  **Dynamic fields (v0.9.12)**: text resolves `{{page}}`, `{{pages}}`, `{{title}}`,
-  `{{date}}`, `{{time}}` tokens at render time (`resolveFields`); page/pages take a
-  zero-pad width (`{{page:2}}`→"06"). `renderSlide` auto-fills `RenderOpts.fields`
-  via `fieldContext(doc,slide)` (page = 1-based position among NON-state slides).
+  **Dynamic fields (v0.9.12, doc-props v1.0.2)**: text resolves `{{page}}`,
+  `{{pages}}`, `{{title}}`, `{{date}}`, `{{time}}` plus the document-property
+  tokens `{{author}}`, `{{company}}`, `{{subject}}`, `{{event}}` at render time
+  (`resolveFields`); page/pages take a zero-pad width (`{{page:2}}`→"06"). The
+  doc-props live in optional `doc.meta` (`{author,company,subject,event,keywords}`
+  — additive, backward-compatible; old files lack it and tokens resolve empty)
+  and are edited in the About dialog's "Document properties" section (title stays
+  top-level). `renderSlide` auto-fills `RenderOpts.fields` via `fieldContext(doc,
+  slide)` (page = 1-based position among NON-state slides).
   The MODEL stores the raw token; only output is resolved, so inserting/removing
   slides re-numbers everything. Editing gotcha: the canvas renders resolved, but
   `canvas.startTextEdit` swaps the token BACK to raw `el.html` while editing so
@@ -252,25 +257,34 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
 - **Hover content is in-slide, not states**: `showOnHover` sets + slide
   `hover:'reveal'` (with a default set) swap content on pointer-over. Editor previews
   one set at a time. Rule of thumb: click → state slide; hover → reveal set.
-- **Speaker view**: OUR OWN popup (present.ts openSpeaker, S key) — current +
-  next slide via renderSlide, notes, elapsed timer (click resets) + clock,
-  synced on slidechanged, closed on present exit. Reveal's notes plugin is
-  NOT used: its speaker window reloads the presentation URL in iframes,
-  which boots the Bento EDITOR (a whole second app instance) — never
-  reintroduce it. GOTCHA (fixed v0.9.7): opening the speaker popup while in
-  real fullscreen makes the browser leave fullscreen, whose `fullscreenchange`
-  would call `exit()` and END the show — `openingSpeaker` guards onFsChange and
-  re-enters fullscreen. Escape stays a separate exit path, so the guard can't
-  strand the presenter. **Dual-screen (v0.9.14)**: the Window Management
-  permission CANNOT be requested during present — the S keypress activation is
-  spent on window.open/requestFullscreen. So `src/screens.ts` holds the shared
-  layout and the **editor's Slide panel** ("Presenter display" section) grants
-  it via a dedicated click BEFORE presenting (`grantScreens`), caching the live
-  ScreenDetails; the editor also `refreshScreensIfGranted()` at boot. present.ts
-  `openSpeaker` reads `secondScreen()` synchronously and opens the notes popup
-  directly on that display's coords; if none is set up it drops fullscreen so
-  the notes aren't hidden. (The old in-present grant pill was removed.) Needs a
-  real two-monitor rig for final QA.
+- **Speaker view (presenter view)**: OUR OWN popup (present.ts openSpeaker) —
+  a PowerPoint-style presenter surface: elapsed timer (click resets) + clock,
+  current + next slide (renderSlide/svSlide), notes, a **nav bar** (first/prev/
+  next/last + live counter), a **black-screen** toggle (`.bento-blackout` over
+  the audience overlay), a clickable **thumbnail rail** (all non-state slides,
+  current highlighted + scrolled into view), and a lazy **all-slides grid**
+  overlay. The popup has its OWN keydown handler (its keys fire in its own
+  document) so the presenter drives the whole show from it: ←/→/space/PageUp-Dn,
+  Home/End, B (black), G (grid), Esc (close grid). `updateSpeakerControls()`
+  refreshes highlight/counter/button-state cheaply on every slidechange; the
+  expensive current/next re-render only in `updateSpeaker`. Reveal's notes plugin
+  is NOT used (it reloads the URL in an iframe → boots a whole second editor).
+  **Two-window lifecycle (`src/screens.ts`)**: the speaker window OUTLIVES a
+  present session. The editor opens it (its own user gesture) via the FAB beside
+  the present buttons, or `editor.openSpeakerView()`; present mode ADOPTS the
+  existing window (`speakerWindow()`), so "open the notes" and "go fullscreen"
+  are two SEPARATE gestures and neither steals the other's activation. That is
+  the whole fix for the macOS bug where a popup opened *after* fullscreen got
+  trapped in the slides' exclusive fullscreen Space on the wrong monitor — open
+  it FIRST, drag it to the second screen, then present (the Slide-panel notes
+  hint says this, and warns on macOS via `isMacOS()`). Present closes a window it
+  opened itself on exit; an ADOPTED (editor-owned) window is left open and reset
+  to an idle placeholder (`speakerIdleBody`). A 1s poll (`watchSpeaker`) clears
+  the ref + fires `onSpeakerWindowChange` when the popup is closed manually.
+  `deckReady` gates `deck.getIndices()` reads (the window can open pre-init).
+  **Window Management API was REMOVED (v1.0.2)** — no more permission prompt; the
+  window opens on the current display and the presenter drags it over. `openingSpeaker`
+  still guards `onFsChange` against the fullscreen bounce ending the show.
 - **Animation robustness**: slide exit kills tweens AND restores model frames; a
   2.8s wall-clock settle guarantee lands entrances on starved render loops; never
   put entrance tweens on motion-path elements (transform conflict).
@@ -339,9 +353,43 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   duration in Durable Objects free tier", which silently breaks ALL live
   collab (the bug behind v0.9.7). The relay must be redeployed
   (`wrangler deploy`) for worker changes to take effect — the app shell release
-  does NOT touch it.
+  does NOT touch it. **Keepalive (v1.0.2)**: idle WebSockets get reaped by edge/
+  proxy idle timeouts, causing frequent connect/drop churn. The DO sets
+  `setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping','pong'))` (a
+  fallback `data==='ping'` branch in `onMessage` covers older runtimes), and the
+  client (`OnlineTransport`) pings every 25s + reconnects fast if a pong is
+  missed. The relay change is backward-compatible (old clients never ping), so
+  deploy the relay BEFORE shipping a pinging client or the client would falsely
+  reconnect-storm against a non-ponging relay.
   Undo under collab is snapshot-based and may revert concurrent remote
   edits to the same properties (documented LWW compromise).
+- **Canvas slide nav (v1.0.2)**: with NOTHING selected (and not text/cell/path
+  editing), arrow keys walk slides and a plain wheel over `.ed-scroll` walks
+  slides (threshold 40px + 400ms cooldown so a trackpad swipe = one slide; skips
+  when the slide is zoomed/pannable). When an element IS selected, arrows still
+  nudge it. `store.goToLinear(±1)` skips interactive states; PageUp/Dn route
+  through it too. Wheel hook is `canvas.onSlideNav`; ⌘/ctrl+wheel still zooms.
+- **Readable default text (v1.0.2)**: new text/tables get a colour that reads on
+  the CURRENT slide — `readableInk(slide.background)` (luminance test, dark bg →
+  light ink `#F5F7FA`, else `#1E2A3A`); `editor.newTable()` also flips a dark
+  slide's table borders/zebra light. Fixes invisible-on-dark-deck text.
+- **Lines, curves & connectors (v1.0.2)** — `editor/lineedit.ts`. A selected
+  line/curve is edited with DIRECT handles (not Moveable's box): `LineEditor`
+  attaches from `canvas.syncTargets` when a single line/path shape is selected,
+  hides Moveable, and shows draggable ENDPOINT handles (line) or ANCHOR handles
+  (curve — double-click the body to add a point, a point to remove); dragging the
+  body moves the whole thing. Geometry conversions: line ⇄ two endpoints
+  (box centre ± ½w along rotation); path ⇄ anchors (pathBox normalised to
+  [0,0,w,h], `d` = Catmull-Rom via patheditor's `anchorsToPath`). The overlay is
+  `pointer-events:none` with only handles interactive. **Drawing**: the Shape menu's
+  Line/Curved line/Connector ARM a draw tool (`canvas.armDraw`) — drag on the
+  canvas to draw (a crosshair overlay captures the gesture), click to drop a
+  default. **Connectors** are `line` shapes with `from`/`to: {el, side}` refs
+  (model.ts `ConnectorEnd`); a connector's end that lands on an element anchors
+  to it, and `editor.syncConnectors()` (on the `doc` event, mirrors
+  syncLinkedCharts — derive-not-commit, re-renders) recomputes each anchored
+  endpoint on the element's border toward the other end whenever anything moves.
+  Dragging an endpoint by hand detaches that end. Dangling refs are dropped.
 - `src/editor/` — vanilla-TS editor. Moveable + Selecto handle manipulation.
   Interaction modifiers: Shift = keep-ratio resize / axis-locked drag / 15°
   rotate snap; Alt/Option = resize from CENTER (deep-select exempts
@@ -425,7 +473,7 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
-  PLAINTEXT #bento-doc → splash → payloads last. Shell ~373KB (was 1.33MB).
+  PLAINTEXT #bento-doc → splash → payloads last. Shell ~478KB (was 1.33MB).
   SPLICE CONTRACT (old updaters are frozen code): #bento-doc stays plaintext/
   same id, file survives DOMParser→splice→outerHTML, no stray script-close —
   release.mjs runs a conformance GATE before signing every release.

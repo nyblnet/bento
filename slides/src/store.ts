@@ -135,6 +135,15 @@ export class Store {
     this.emit('selection')
   }
 
+  /** Step forward/back one slide, skipping interactive states (stateOf) the way
+   *  linear presentation does. dir = +1 next, -1 prev. */
+  goToLinear(dir: 1 | -1) {
+    const slides = this.doc.slides
+    for (let i = this.currentIndex + dir; i >= 0 && i < slides.length; i += dir) {
+      if (!slides[i].stateOf) { this.goTo(i); return }
+    }
+  }
+
   select(ids: string[]) {
     this.selection = ids
     this.emit('selection')

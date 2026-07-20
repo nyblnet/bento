@@ -1,51 +1,95 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento/Suite authors
-// Shared Window Management state.
-//
-// Granting the browser's "window management" permission needs a DEDICATED user
-// gesture — it can't ride the S keypress during present (that activation is
-// already spent on window.open / requestFullscreen). So the editor grants it
-// from the properties panel BEFORE presenting, we cache the LIVE ScreenDetails
-// object here, and present mode reads the second-screen coordinates
-// synchronously when the speaker view opens.
+// The speaker-notes window. It outlives any single present session: the editor
+// opens it (its own user gesture) BEFORE presenting, and present mode adopts it.
+// Opening the notes and going fullscreen are then two separate gestures, so
+// neither steals the other's activation (the macOS second-screen fix). The
+// window opens on the current display; the presenter drags it to a second
+// screen — we deliberately do NOT request the "window management" permission.
 
-let cached: { screens: any[]; currentScreen: any } | null = null
-
-export function windowManagementSupported(): boolean {
-  return typeof (window as unknown as { getScreenDetails?: unknown }).getScreenDetails === 'function'
+/** macOS is the platform whose exclusive fullscreen Space traps a popup opened
+ *  after the slides go fullscreen — so notes must be opened first there. */
+export function isMacOS(): boolean {
+  const uaData = (navigator as unknown as { userAgentData?: { platform?: string } }).userAgentData
+  if (uaData?.platform) return uaData.platform === 'macOS'
+  return /Mac/i.test(navigator.platform || navigator.userAgent || '')
 }
 
-export function screensCached(): boolean {
-  return !!cached
+// --- speaker-notes window (shared editor↔present) ---------------------------
+
+let speakerWin: Window | null = null
+let speakerWatch = 0
+let onSpeakerChange: (() => void) | null = null
+
+/** Notified whenever the speaker window opens or closes — including when the
+ *  user closes the popup manually — so the editor panel can refresh its button. */
+export function onSpeakerWindowChange(cb: (() => void) | null): void {
+  onSpeakerChange = cb
 }
 
-/** Call INSIDE a user gesture. Prompts once if needed, then caches the live
- *  details object (it auto-updates as displays change). */
-export async function grantScreens(): Promise<{ ok: boolean; screens: number }> {
-  const gsd = (window as unknown as { getScreenDetails?: () => Promise<any> }).getScreenDetails
-  if (!gsd) return { ok: false, screens: 0 }
-  try {
-    cached = await gsd.call(window)
-    return { ok: true, screens: cached?.screens?.length ?? 1 }
-  } catch {
-    return { ok: false, screens: 0 }
+// Poll for an externally-closed popup (there is no reliable cross-window close
+// event); clear our reference and notify so the UI doesn't go stale.
+function watchSpeaker(): void {
+  clearInterval(speakerWatch)
+  if (!speakerWin) return
+  speakerWatch = window.setInterval(() => {
+    if (!speakerWin || speakerWin.closed) {
+      speakerWin = null
+      clearInterval(speakerWatch)
+      onSpeakerChange?.()
+    }
+  }, 1000)
+}
+
+/** The live speaker-notes window, or null if none is open. */
+export function speakerWindow(): Window | null {
+  return speakerWin && !speakerWin.closed ? speakerWin : null
+}
+
+/** Register (or clear) the speaker window — present mode uses this when it opens
+ *  its own, so the editor panel reflects the state and later opens don't dup. */
+export function setSpeakerWindow(w: Window | null): void {
+  speakerWin = w
+  watchSpeaker()
+}
+
+/** Copy the app's <style>s and set the body of a speaker window. */
+export function paintSpeaker(w: Window, title: string, bodyHtml: string): void {
+  const d = w.document
+  d.title = title
+  if (!d.head.querySelector('style')) {
+    for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
   }
+  d.body.className = 'bento-speaker'
+  d.body.innerHTML = bodyHtml
 }
 
-/** At load: if the permission is already granted from a prior session, cache
- *  the layout without a prompt so present mode Just Works. */
-export async function refreshScreensIfGranted(): Promise<void> {
-  if (cached || !windowManagementSupported()) return
-  try {
-    const state = (await (navigator as unknown as { permissions?: { query?: (o: unknown) => Promise<{ state: string }> } })
-      .permissions?.query?.({ name: 'window-management' as PermissionName }))?.state
-    if (state === 'granted') await grantScreens()
-  } catch { /* query unsupported — the panel button remains the path */ }
+/** A generous default popup size for the current display. */
+function speakerFeatures(): string {
+  const w = Math.min(1200, Math.max(800, Math.round((screen.availWidth || 1440) * 0.72)))
+  const h = Math.min(820, Math.max(560, Math.round((screen.availHeight || 900) * 0.78)))
+  return `width=${w},height=${h}`
 }
 
-/** The display to put speaker notes on, or null if there isn't a usable second one. */
-export function secondScreen(): any | null {
-  const s = cached
-  if (!s || !Array.isArray(s.screens) || s.screens.length < 2) return null
-  return s.screens.find((x) => x !== s.currentScreen) ?? s.screens.find((x) => !x.isPrimary) ?? s.screens[1]
+/** Open (or focus) the speaker-notes window on the current display and paint it.
+ *  MUST be called inside a user gesture (window.open). The presenter drags it to
+ *  a second screen. Returns null if the popup was blocked. */
+export function openSpeakerWindow(title: string, bodyHtml: string): Window | null {
+  if (speakerWin && !speakerWin.closed) {
+    speakerWin.focus()
+    paintSpeaker(speakerWin, title, bodyHtml)
+    return speakerWin
+  }
+  const w = window.open('', 'bento-speaker', speakerFeatures())
+  if (!w) return null
+  paintSpeaker(w, title, bodyHtml)
+  speakerWin = w
+  watchSpeaker()
+  return w
+}
+
+/** The idle placeholder shown before a presentation drives the window. */
+export function speakerIdleBody(title: string, message: string): string {
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
+  return `<div class="sv-idle"><div class="sv-idle-title">${esc(title)}</div><p class="sv-idle-msg">${esc(message)}</p></div>`
 }

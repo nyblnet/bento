@@ -98,6 +98,11 @@ export function samplePathAnchors(d: string): Pt[] {
   }
 }
 
+/** Reduce a raw pointer trail to editable anchors (freeform drawing). */
+export function simplifyPoints(pts: Pt[], eps = 3): Pt[] {
+  return rdp(pts, eps)
+}
+
 function rdp(pts: Pt[], eps: number): Pt[] {
   if (pts.length <= 2) return pts.slice()
   const a = pts[0]

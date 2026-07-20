@@ -21,17 +21,25 @@ export interface RenderOpts {
 }
 
 /** Values dynamic field tokens resolve against, computed per slide. */
-export interface FieldContext { page: number; pages: number; title: string; date: Date }
+export interface FieldContext {
+  page: number; pages: number; title: string; date: Date
+  author: string; company: string; subject: string; event: string
+}
 
 /** Field context for a slide: page = 1-based position among non-state slides. */
 export function fieldContext(doc: BentoDoc, slide: Slide): FieldContext {
   const idx = doc.slides.indexOf(slide)
   const upto = idx < 0 ? doc.slides : doc.slides.slice(0, idx + 1)
+  const m = doc.meta ?? {}
   return {
     page: upto.filter((s) => !s.stateOf).length,
     pages: doc.slides.filter((s) => !s.stateOf).length,
     title: doc.title,
     date: new Date(),
+    author: m.author ?? '',
+    company: m.company ?? '',
+    subject: m.subject ?? '',
+    event: m.event ?? '',
   }
 }
 
@@ -39,21 +47,26 @@ const escapeFieldText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&
 
 /**
  * Resolve dynamic field tokens in text: {{page}}, {{pages}}, {{title}},
- * {{date}}, {{time}}. page/pages take an optional zero-pad width — {{page:2}}
+ * {{date}}, {{time}}, plus the document-property fields {{author}}, {{company}},
+ * {{subject}}, {{event}}. page/pages take an optional zero-pad width — {{page:2}}
  * → "06". The MODEL stores the raw token; only rendered output is resolved, so
- * inserting/removing slides re-numbers everything automatically. Groundwork for
- * the wider office suite (fields/cross-references).
+ * inserting/removing slides re-numbers everything and editing doc properties
+ * updates every slide automatically. Groundwork for the wider office suite.
  */
 export function resolveFields(html: string, ctx?: FieldContext): string {
   if (!ctx || html.indexOf('{{') < 0) return html
   const pad = (n: number, arg?: string) => { const w = parseInt(arg ?? '', 10); return w > 0 ? String(n).padStart(w, '0') : String(n) }
-  return html.replace(/\{\{\s*(page|pages|title|date|time)(?::([^}]*))?\s*\}\}/gi, (_m, name: string, arg?: string) => {
+  return html.replace(/\{\{\s*(page|pages|title|date|time|author|company|subject|event)(?::([^}]*))?\s*\}\}/gi, (_m, name: string, arg?: string) => {
     switch (name.toLowerCase()) {
       case 'page': return pad(ctx.page, arg)
       case 'pages': return pad(ctx.pages, arg)
       case 'title': return escapeFieldText(ctx.title)
       case 'date': return escapeFieldText(ctx.date.toLocaleDateString())
       case 'time': return escapeFieldText(ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      case 'author': return escapeFieldText(ctx.author)
+      case 'company': return escapeFieldText(ctx.company)
+      case 'subject': return escapeFieldText(ctx.subject)
+      case 'event': return escapeFieldText(ctx.event)
       default: return ''
     }
   })
