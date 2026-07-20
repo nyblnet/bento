@@ -1536,6 +1536,9 @@ export class PropsPanel {
     row.className = 'ed-row'
     const span = document.createElement('span')
     span.textContent = label
+    // baseline discoverability: every control answers "what is this?" on hover;
+    // controls with a richer, specific tooltip keep their own
+    if (!input.title) input.title = label
     row.append(span, input)
     this.host.appendChild(row)
   }

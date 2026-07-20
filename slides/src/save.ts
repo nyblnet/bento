@@ -176,9 +176,9 @@ export async function serializeAuto(doc: BentoDoc): Promise<string> {
   return serializeDocInto(pristine, doc)
 }
 
-export function suggestedFileName(doc: BentoDoc): string {
+export function suggestedFileName(doc: BentoDoc, suffix = ''): string {
   const base = doc.title.replace(/[^\w\d-]+/g, '_').replace(/^_+|_+$/g, '') || 'Untitled'
-  return `${base}.bento.html`
+  return `${base}${suffix ? `-${suffix}` : ''}.bento.html`
 }
 
 // --- writing to disk --------------------------------------------------------
@@ -194,10 +194,10 @@ let fileHandle: FsFileHandle | null = null
 
 const hasFsAccess = () => typeof (window as any).showSaveFilePicker === 'function'
 
-async function pickHandle(doc: BentoDoc): Promise<FsFileHandle | null> {
+async function pickHandle(doc: BentoDoc, suffix = ''): Promise<FsFileHandle | null> {
   try {
     return await (window as any).showSaveFilePicker({
-      suggestedName: suggestedFileName(doc),
+      suggestedName: suggestedFileName(doc, suffix),
       types: [{ description: 'Bento Slides', accept: { 'text/html': ['.html'] } }],
     })
   } catch (err: any) {
@@ -260,14 +260,21 @@ export async function writeUpdatedFile(html: string): Promise<void> {
  * or anywhere else). Returns false if cancelled. Keeps the picked handle so
  * subsequent ⌘S saves go to the same place.
  */
-export async function writeUpdatedFileAs(html: string, doc: BentoDoc): Promise<boolean> {
+export async function writeUpdatedFileAs(
+  html: string,
+  doc: BentoDoc,
+  opts: { suffix?: string; keepHandle?: boolean } = {},
+): Promise<boolean> {
   if (!hasFsAccess()) {
-    downloadFile(html, suggestedFileName(doc))
+    downloadFile(html, suggestedFileName(doc, opts.suffix))
     return true
   }
-  const handle = await pickHandle(doc)
+  const handle = await pickHandle(doc, opts.suffix)
   if (!handle) return false
-  fileHandle = handle
+  // Share/export artifacts must NOT become the ⌘S target — otherwise the next
+  // save would overwrite e.g. a view-only copy with the FULL document (owner
+  // keys included). Only an explicit keepHandle retargets in-place saving.
+  if (opts.keepHandle) fileHandle = handle
   await writeHandle(handle, html)
   return true
 }

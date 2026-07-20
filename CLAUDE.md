@@ -363,6 +363,24 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   reconnect-storm against a non-ponging relay.
   Undo under collab is snapshot-based and may revert concurrent remote
   edits to the same properties (documented LWW compromise).
+  **Fine-grained access v2 (v1.0.3, collab.v=2)**: the room id commits to an
+  OWNER pubkey; `mintCollab` mints owner keys; "Invite to edit…" saves a copy
+  carrying an owner-signed INVITE keypair (`mintInvite`); each device mints its
+  own member key (localStorage `bento-member-<docId>`, never in the file) and
+  joins via the owner→invite→member signature chain, verified PER SOCKET by the
+  relay (wire params + sig texts in docs/collab-design.md "Phase 1 wire
+  format"). Presence carries pub+role → key-bound People panel with per-member
+  Remove (owner-signed `rev.${pub}`; client stands down on seeing its own key
+  revoked). Reader copies strip ownerPriv+invite+writerPriv. Legacy rooms
+  unchanged; deploy the relay BEFORE a client that depends on new verification.
+  **Guestbook is a v2 room now**: public deck carries a PUBLIC writer invite
+  (anyone writes, individually keyed); the OWNER deck lives in gitignored
+  working/guestbook-live/guestbook-owner.bento.html (moderation = open it →
+  People → Remove). Daemon ROLL_HOURS=0 — rolls are manual (re-mint would
+  orphan the held owner file); build-guestbook.mjs emits public + owner decks.
+  **Share exports** (invite/viewonly/presentonly/template) pass a filename
+  suffix and NEVER retain the FSA handle (`writeUpdatedFileAs` opts.keepHandle
+  — retaining it made a later ⌘S overwrite the export with the full doc).
 - **Canvas slide nav (v1.0.2)**: with NOTHING selected (and not text/cell/path
   editing), arrow keys walk slides and a plain wheel over `.ed-scroll` walks
   slides (threshold 40px + 400ms cooldown so a trackpad swipe = one slide; skips

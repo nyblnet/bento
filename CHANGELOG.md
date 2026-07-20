@@ -9,6 +9,33 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [1.0.3] — unreleased
+
+- **Fine-grained collaboration (per-person keys).** New decks mint an OWNER
+  key; "Invite to edit…" saves a copy carrying an owner-signed invite, and
+  every opening device joins with its own key. The People panel shows
+  key-verified names, roles and fingerprints (including your own identity),
+  and the owner can REMOVE one person — cryptographic revocation enforced by
+  the relay, nobody else disturbed. Legacy decks keep working; "Reset access"
+  upgrades them.
+- **The public guestbook is owner-moderated now** (same scheme, public invite);
+  daily auto-roll is off — moderation replaces blanking.
+- **Menus rebuilt around one rule — Save is for you, Share is for others.**
+  A split [Save|▾] button (with the unsaved-changes dot on its corner) holds
+  copy/duplicate/password plus Version history and the JSON round-trip; the
+  Share panel holds invite/view-only/present-only/template with People and
+  session controls. Icons and tooltips everywhere; a language globe in the
+  topbar replaces the About picker.
+- **Slideshow controls**: one split pill beside the zoom control — Slideshow
+  (fullscreen), Present in this tab, Open speaker view.
+- **Share exports name themselves** (-invite / -viewonly / -presentonly /
+  -template) and no longer hijack the ⌘S target — previously a later save
+  could overwrite an exported copy with the full document.
+- **Canvas stability**: element drags can no longer make the slide jump
+  (scrollbar appearance reflow fixed); connector anchor points are visible and
+  snap; freeform and polygon drawing tools join line/curve/connector.
+- All new UI strings translated across the 7 locale catalogs.
+
 ## [1.0.2] — 2026-07-20
 
 - **Live-collab stability**: WebSocket keepalive (client ping + relay auto-pong,

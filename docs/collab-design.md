@@ -372,11 +372,36 @@ documents (ops are data too — no code ever travels the sync channel), and
 
 ---
 
-# Roadmap: fine-grained access control (v1.0.3) and the SSO path
+# Fine-grained access control (Phase 1 SHIPPED in v1.0.3) and the SSO path
 
-*Design agreed pre-launch. Goal: per-person capability without giving up the
-three core promises — the relay stays blind, there are no accounts, and the
-file remains the read capability.*
+*Phase 1 below is IMPLEMENTED and live (client + relay). Phases 2–3 remain
+roadmap. Goal: per-person capability without giving up the three core
+promises — the relay stays blind, there are no accounts, and the file remains
+the read capability.*
+
+## Phase 1 wire format (as shipped)
+
+- Room id: `w` + b64url(SHA-256(ownerPubRaw)) — commits to the OWNER key.
+- Writer connect params: `?w=<signingPub>` plus, for members, the chain
+  `&o=<ownerPub>&ivp=<invitePub>&ivr=writer&ive=<expiryMs|0>&ivs=<ownerSigOverInvite>&dg=<inviteSigOverMemberPub>`.
+  Signature texts: invite = `inv.${ivp}.${ivr}.${ive}`, delegation =
+  `dlg.${memberPub}`, revocation = `rev.${pub}`.
+- The relay pins the verified key PER SOCKET and checks every persisted
+  frame's `g` against it. Direct (hash-matching) keys cover the owner and
+  legacy 1.0.2 shared-writer rooms unchanged.
+- Revocation: owner sends `{ctl:'revoke', p, o, g}`; the relay stores `p` in a
+  `rev` set, closes matching sockets, fans out `{ctl:'revoked', p}` (clients
+  seeing their own key stand down permanently), and refuses future connects/
+  writes for revoked member OR invite keys.
+- Member device keys live in localStorage (`bento-member-<docId>`), never in
+  the file. Presence carries `pub` + derived `role` → key-bound names in the
+  People panel; the owner gets per-member Remove.
+- The public guestbook runs this scheme: an owner-signed PUBLIC invite in the
+  served deck (anyone writes, individually keyed), owner deck held privately
+  for moderation; daemon auto-roll disabled (a re-mint would orphan the held
+  owner file).
+- Known Phase-1 gaps (protocol-ready, no UI): expiring invites and
+  invite-LINEAGE revocation (today: remove per-device, or Reset access).
 
 ## Today's model (v1.0.2) in one line
 

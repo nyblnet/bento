@@ -139,10 +139,18 @@ silent.
 These are deliberate design trade-offs, not oversights. Disclosing them is the
 point.
 
-- **Presence names are claims, not proofs.** Within a shared-key room, the name
-  shown next to a cursor is self-asserted. Binding names to identities
-  (per-user signing keys + an SSO roster) is designed and on the roadmap; it is
-  **not shipped**. Share room keys with people you'd trust with the file.
+- **Names are key-bound in v1.0.3 rooms; identity is per-device.** Each
+  member device signs with its own key, shown as a fingerprint in the People
+  list — so "Ana" is provably the same Ana as yesterday, and the owner can
+  revoke one device without touching anyone else. What this is NOT yet: proof
+  of legal identity (an SSO roster binding keys to directory accounts is
+  roadmap). Legacy shared-key rooms keep the old claim-based names.
+- **The owner's saved file is the admin capability.** `ownerPriv` lives only in
+  the owner's copy: lose that file and the deck keeps working, but nobody can
+  mint invites or revoke members any more (recovery = Reset access from any
+  writer copy of a legacy room, or re-sharing a fresh deck). Keep a backup of
+  your owner file as you would a password. Member keys need no backup — they
+  are disposable by design (rejoin via the invite; the owner re-admits).
 - **The room key is a read capability.** Anyone you give the file to can read
   the live session and the document. That's the model — the file *is* the
   invitation.
