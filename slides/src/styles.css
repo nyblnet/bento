@@ -1420,24 +1420,64 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-share-btn:not(.ed-btn-primary):hover { background: var(--chrome-2, #e8ebf1); }
 .ed-share-btn { width: 100%; text-align: center; }
 
-/* Save is a split button: [ Save |▾] one visual unit */
+/* Save is a split button: [ Save |▾] one visual unit. The caret button is
+   NESTED inside the .ed-dropdown wrapper, so stretch through the wrapper. */
 .ed-split { display: inline-flex; align-items: stretch; }
 .ed-split > .ed-btn:first-child {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-radius: 8px 0 0 8px;
   border: 1px solid var(--line);
   border-right: none;
   background: var(--chrome, #f2f4f8);
 }
+.ed-split .ed-dropdown { display: flex; align-items: stretch; }
 .ed-split-caret {
-  border-top-left-radius: 0 !important;
-  border-bottom-left-radius: 0 !important;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0 8px 8px 0;
   border: 1px solid var(--line);
   background: var(--chrome, #f2f4f8);
-  padding: 6px 6px;
+  padding: 6px 7px;
 }
-.ed-split > .ed-btn:hover { background: var(--chrome-2, #e8ebf1); }
+.ed-split .ed-btn:hover { background: var(--chrome-2, #e8ebf1); }
 .ed-caret { font-size: 10px; line-height: 1; }
+
+/* quiet divider between share actions and advanced session controls */
+.ed-share-sep { height: 1px; background: var(--line); margin: 2px 0; }
+
+/* bottom-right cluster: [Slideshow pill] [zoom pill] */
+.ed-corner-br {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 11;
+}
+.ed-corner-br .ed-zoombar { position: static; }
+.ed-present-pill {
+  display: inline-flex;
+  align-items: stretch;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
+  overflow: visible;
+}
+.ed-present-pill .ed-pill-main {
+  border-radius: 999px 0 0 999px;
+  padding: 6px 10px 6px 14px;
+  font-weight: 600;
+}
+.ed-present-pill .ed-pill-caret {
+  border-radius: 0 999px 999px 0;
+  border-left: 1px solid var(--line);
+  padding: 6px 10px 6px 7px;
+}
+.ed-present-pill .ed-btn:hover { background: var(--chrome, #f2f4f8); }
+/* its menu drops UP (the pill sits at the bottom edge) */
+.ed-present-pill .ed-menu { top: auto; bottom: calc(100% + 6px); left: auto; right: 0; }
 
 .ed-share-peers { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
 .ed-share-peer {
@@ -1602,44 +1642,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 
 /* floating present buttons, bottom-LEFT of the work area (zoombar owns the
    right corner); side by side so neither ever covers the slide above */
-.ed-present-fabs {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  z-index: 11;
-}
-.ed-fab {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: none;
-  background: #16273e;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgb(20 30 45 / 0.28);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-.ed-fab:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 9px 24px rgb(20 30 45 / 0.34);
-}
-.ed-fab svg { width: 20px; height: 20px; }
-.ed-fab-small {
-  width: 32px;
-  height: 32px;
-  background: #fff;
-  color: #45566b;
-  border: 1px solid var(--line);
-  box-shadow: 0 3px 10px rgb(20 30 45 / 0.14);
-}
-.ed-fab-small svg { width: 15px; height: 15px; }
+
 
 /* right panel: no horizontal scrollbar, ever */
 .ed-props {

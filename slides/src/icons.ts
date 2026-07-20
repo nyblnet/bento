@@ -32,6 +32,7 @@ export const ICONS = {
   connector: svg('<circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="5" r="2.4"/><path d="M7 17 L 17 7"/>'),
   freeform: svg('<path d="M3 17 C 6 7, 9 21, 12 12 S 18 4, 21 9"/>'),
   polygon: svg('<polygon points="12 3 21 10 17 20 7 20 3 10"/>'),
+  slideshow: svg('<rect x="3" y="4" width="18" height="12" rx="2"/><polygon points="10 7.5 15 10 10 12.5" fill="currentColor" stroke="none"/><line x1="12" y1="16" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/>'),
   share: svg('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17.5" cy="10.5" r="2.4"/><path d="M15.8 15.6c1.9.3 3.6 1.6 4.4 3.9"/>'),
   table: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14.5" x2="21" y2="14.5"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>'),
   // shape menu entries
