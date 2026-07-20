@@ -6,7 +6,7 @@ compatibility_date = "2026-06-01"
 # Serves the current guestbook epoch from R2 (shadows GitHub Pages for this
 # one path — apex must be proxied/orange-cloud) + the admin surface.
 routes = [
-  { pattern = "bento.page/guestbook.bento.html", zone_name = "bento.page" },
+  { pattern = "bento.page/guestbook.bento.html*", zone_name = "bento.page" },
   { pattern = "bento.page/guestbook-admin/*", zone_name = "bento.page" },
 ]
 
