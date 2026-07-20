@@ -453,20 +453,40 @@ function deckOrbital() {
     notes: 'Ring morphs off-center and shrinks; the wordmark docks top-left. Big statements sit on the darkness — no boxes needed.',
     elements: [
       text({ id: 'orb-word', x: 96, y: 70, w: 300, h: 40, html: 'ORBITAL', fontSize: 22, fontWeight: 800, color: DIM, letterSpacing: 10, fontFamily: IN }),
+      // Faint violet body inside the ring — reads the "earth" as a lit planet the
+      // constellation orbits (slide-2 only, no morph id, sits behind ring + sats).
+      shape('ellipse', { x: 930, y: 230, w: 520, h: 520, fill: 'rgba(122,92,255,0.06)', shadow: glow('rgba(122,92,255,0.28)', 90) }),
       shape('ellipse', { id: 'orb-ring', x: 880, y: 180, w: 620, h: 620, fill: 'rgba(0,0,0,0)', stroke: VIOLET, strokeWidth: 2, shadow: glow('rgba(122,92,255,0.4)', 70) }),
       mono(96, 170, '01 · THE THESIS', CYAN),
       text({ x: 96, y: 210, w: 900, h: 300, html: 'Every satellite is<br>a sensor. Nobody<br>reads the sky.', fontSize: 76, fontWeight: 800, color: '#EAF4FF', lineHeight: 1.1, fontFamily: IN, fx: { enter: 'fade-up' } }),
       text({ x: 96, y: 540, w: 620, h: 80, html: 'Twelve thousand spacecraft stream telemetry into archives nobody opens. We turn that exhaust into signal.', fontSize: 17, color: DIM, lineHeight: 1.6, fx: { enter: 'fade-up', order: 2 } }),
-      // Satellites tracking the ring (center 1190,490 · r 310). Each dot's rest
-      // center sits on the ring at its phase (top-left = center − w/2); orbit()
-      // sweeps it around from there. Varied dur/squash = they spread out and
-      // move at different speeds. Ring is mostly off the right edge, so dots on
-      // the far side pass off-canvas — a "coming over the limb" feel.
-      shape('ellipse', { x: 876.5, y: 486.5, w: 7, h: 7, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, Math.PI, 0.95), duration: 22 } } }),
-      shape('ellipse', { x: 967.3, y: 267.3, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 5 * Math.PI / 4, 0.92), duration: 27 } } }),
-      shape('ellipse', { x: 1186.5, y: 176.5, w: 7, h: 7, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, -Math.PI / 2, 0.98), duration: 18 } } }),
-      shape('ellipse', { x: 935.7, y: 668.7, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 0.8 * Math.PI, 0.9), duration: 30 } } }),
-      shape('ellipse', { x: 1405.7, y: 267.3, w: 7, h: 7, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, -Math.PI / 4, 1.0), duration: 24 } } }),
+      // ── Starlink-style mega-constellation: three orbital shells around the
+      // violet earth-ring (centre 1190,490). Each shell = evenly phased dots on
+      // one radius sharing a duration, so the lane reads as a coordinated train;
+      // shells differ in radius + squash (inclination) + speed. Rest centre sits
+      // on the shell circle at its phase; orbit() sweeps it round (far/right side
+      // passes off-canvas — over-the-limb feel). No morph ids (slide-2 only).
+      // shell 1 · inner (r250, incline 0.55, 19s)
+      shape('ellipse', { x: 1062, y: 703.5, w: 6, h: 6, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(250, 120 * Math.PI / 180, 0.55), duration: 19 } } }),
+      shape('ellipse', { x: 946, y: 552.2, w: 5, h: 5, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(250, 165 * Math.PI / 180, 0.55), duration: 19 } } }),
+      shape('ellipse', { x: 970.5, y: 362, w: 6, h: 6, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(250, 210 * Math.PI / 180, 0.55), duration: 19 } } }),
+      shape('ellipse', { x: 1122.3, y: 245.5, w: 6, h: 6, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(250, 255 * Math.PI / 180, 0.55), duration: 19 } } }),
+      shape('ellipse', { x: 1312.5, y: 271, w: 5, h: 5, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(250, 300 * Math.PI / 180, 0.55), duration: 19 } } }),
+      shape('ellipse', { x: 1428.5, y: 422.3, w: 6, h: 6, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(250, 345 * Math.PI / 180, 0.55), duration: 19 } } }),
+      // shell 2 · mid, on the ring (r310, near face-on 0.92, 25s)
+      shape('ellipse', { x: 995.6, y: 730.8, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 128 * Math.PI / 180, 0.92), duration: 25 } } }),
+      shape('ellipse', { x: 890.5, y: 577.6, w: 6, h: 6, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 163 * Math.PI / 180, 0.92), duration: 25 } } }),
+      shape('ellipse', { x: 891.7, y: 390.7, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 198 * Math.PI / 180, 0.92), duration: 25 } } }),
+      shape('ellipse', { x: 1000.4, y: 239.4, w: 6, h: 6, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 233 * Math.PI / 180, 0.92), duration: 25 } } }),
+      shape('ellipse', { x: 1175.7, y: 176.7, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 268 * Math.PI / 180, 0.92), duration: 25 } } }),
+      shape('ellipse', { x: 1355.8, y: 227, w: 6, h: 6, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 303 * Math.PI / 180, 0.92), duration: 25 } } }),
+      shape('ellipse', { x: 1473.9, y: 370.4, w: 7, h: 7, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(310, 338 * Math.PI / 180, 0.92), duration: 25 } } }),
+      // shell 3 · outer, edge-on (r372, incline 0.32, 31s) — a couple tinted violet
+      shape('ellipse', { x: 858.5, y: 661.6, w: 6, h: 6, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(372, 152 * Math.PI / 180, 0.32), duration: 31 } } }),
+      shape('ellipse', { x: 830.8, y: 381.8, w: 5, h: 5, fill: VIOLET, shadow: glow('rgba(122,92,255,0.9)', 14), fx: { loop: { type: 'motion-path', path: orbit(372, 196.5 * Math.PI / 180, 0.32), duration: 31 } } }),
+      shape('ellipse', { x: 1006.7, y: 161.6, w: 6, h: 6, fill: CYAN, shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(372, 241 * Math.PI / 180, 0.32), duration: 31 } } }),
+      shape('ellipse', { x: 1286.9, y: 129, w: 5, h: 5, fill: '#E9F6FF', shadow: glow('rgba(56,225,255,0.85)', 14), fx: { loop: { type: 'motion-path', path: orbit(372, 285.5 * Math.PI / 180, 0.32), duration: 31 } } }),
+      shape('ellipse', { x: 1509.2, y: 301, w: 6, h: 6, fill: VIOLET, shadow: glow('rgba(122,92,255,0.9)', 14), fx: { loop: { type: 'motion-path', path: orbit(372, 330 * Math.PI / 180, 0.32), duration: 31 } } }),
     ],
   })
 
