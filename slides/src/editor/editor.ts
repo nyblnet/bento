@@ -268,7 +268,7 @@ export class Editor {
     history.append(undoB, redoB)
     const saveGroup = div('ed-split')
     saveGroup.append(saveB, this.saveDropdown())
-    actions.append(pdfB, this.avatarsBox, this.shareDropdown(), saveGroup, helpB)
+    actions.append(pdfB, this.avatarsBox, this.shareDropdown(), saveGroup, this.languageDropdown(), helpB)
     bar.append(logo, this.updatesB, title, this.dirtyDot, history, insert, actions)
 
     // main area
@@ -281,16 +281,16 @@ export class Editor {
     const showB = btn(ICONS.slideshow, t('Slideshow'), () => this.present(false, true),
       t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends'))
     showB.classList.add('ed-pill-main')
-    const caret = btn('<span class="ed-caret">▾</span>', '', () => pill.classList.toggle('open'),
+    const caret = btn('<span class="ed-caret">▴</span>', '', () => pill.classList.toggle('open'),
       t('More ways to present'))
     caret.classList.add('ed-pill-caret')
     const pmenu = div('ed-menu')
-    const pItem = (label: string, title: string, onClick: () => void) => {
-      const b = btn('', label, () => { pill.classList.remove('open'); onClick() }, title)
+    const pItem = (icon: string, label: string, title: string, onClick: () => void) => {
+      const b = btn(icon, label, () => { pill.classList.remove('open'); onClick() }, title)
       pmenu.appendChild(b)
     }
-    pItem(t('Present in this tab'), t('Fills this tab instead of going fullscreen — handy for testing or sharing a window'), () => this.present(false, false))
-    pItem(t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen'), () => this.openSpeakerView())
+    pItem(ICONS.window, t('Present in this tab'), t('Fills this tab instead of going fullscreen — handy for testing or sharing a window'), () => this.present(false, false))
+    pItem(ICONS.presenter, t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen'), () => this.openSpeakerView())
     pill.append(showB, caret, pmenu)
     document.addEventListener('pointerdown', (ev) => {
       if (!pill.contains(ev.target as Node)) pill.classList.remove('open')
@@ -444,10 +444,11 @@ export class Editor {
       if (wrap.classList.contains('open')) rebuild()
     }, t('Save as… — copy, new deck, password'))
     trigger.classList.add('ed-split-caret')
-    const item = (label: string, title: string, onClick: () => void) => {
+    const item = (icon: string, label: string, title: string, onClick: () => void) => {
       const b = document.createElement('button')
       b.className = 'ed-btn'
-      b.textContent = label
+      if (icon) b.innerHTML = icon
+      b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
       b.title = title
       b.addEventListener('click', () => {
         wrap.classList.remove('open')
@@ -459,17 +460,17 @@ export class Editor {
       menu.textContent = ''
       // FILE operations only — everything that goes to OTHER PEOPLE lives in
       // the Share panel (one mental model: Save = for me, Share = for others).
-      item(t('Save a copy…'),
+      item(ICONS.copy, t('Save a copy…'),
         t('A backup of this deck for yourself — same deck, same live session.'),
         () => void this.save(true))
-      item(t('Duplicate as new deck…'),
+      item(ICONS.plus, t('Duplicate as new deck…'),
         t('A separate deck for you — same content, new identity; it never syncs with this one.'),
         () => this.saveAsNewDeck())
       if (isEncryptionActive()) {
-        item(t('Change password…'),
+        item(ICONS.lock, t('Change password…'),
           t('Pick a new password for this file — takes effect on the next save.'),
           () => void this.setFilePassword())
-        item(t('Remove password'),
+        item(ICONS.lock, t('Remove password'),
           t('Stop encrypting this file — the next save writes it as plain, readable JSON again.'),
           () => {
             setEncryptionPassword(null)
@@ -477,10 +478,22 @@ export class Editor {
             void this.save(false)
           })
       } else {
-        item(t('Encrypt with password…'),
+        item(ICONS.lock, t('Encrypt with password…'),
           t('Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.'),
           () => void this.setFilePassword())
       }
+      // the document AS DATA — history and the AI/JSON round-trip live with
+      // the other file operations now (they were buried in the About dialog)
+      menu.appendChild(div('ed-menu-sep'))
+      item(ICONS.history, t('Version history…'),
+        t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
+        () => void this.openVersionHistory())
+      item(ICONS.code, t('Copy document JSON'),
+        t('Copies this deck as plain JSON — paste it into an AI chat or any tool, then bring the edited JSON back here.'),
+        () => void this.copyDocJson())
+      item(ICONS.code, t('Replace from JSON…'),
+        t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
+        () => this.openReplaceJson())
     }
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
@@ -549,6 +562,54 @@ export class Editor {
     } catch {
       this.toast(t('Saving failed'))
     }
+  }
+
+  private async copyDocJson() {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(this.store.doc))
+      this.toast(t('Document JSON copied'))
+    } catch {
+      this.toast(t('Couldn’t access the clipboard'))
+    }
+  }
+
+  /** Paste-and-apply document JSON (the counterpart of Copy document JSON). */
+  private openReplaceJson() {
+    document.querySelector('.ed-about-overlay')?.remove()
+    const overlay = div('ed-about-overlay')
+    const box = div('ed-about')
+    const h = document.createElement('div')
+    h.className = 'ed-about-h'
+    h.textContent = t('Replace from JSON')
+    const ta = document.createElement('textarea')
+    ta.className = 'ed-about-json'
+    ta.rows = 8
+    ta.placeholder = t('Paste document JSON here…')
+    const row = div('ed-about-row')
+    const applyB = document.createElement('button')
+    applyB.className = 'ed-btn ed-btn-primary'
+    applyB.textContent = t('Apply')
+    applyB.addEventListener('click', () => {
+      const ok = (window as unknown as { bento?: { loadDoc?: (j: string) => boolean } }).bento?.loadDoc?.(ta.value)
+      if (ok) {
+        this.toast(t('Document replaced — ⌘Z undoes'))
+        overlay.remove()
+      } else {
+        ta.style.borderColor = '#C0392B'
+        applyB.textContent = t('Invalid document JSON')
+        setTimeout(() => { applyB.textContent = t('Apply') }, 1800)
+      }
+    })
+    const cancelB = document.createElement('button')
+    cancelB.className = 'ed-btn'
+    cancelB.textContent = t('Cancel')
+    cancelB.addEventListener('click', () => overlay.remove())
+    row.append(applyB, cancelB)
+    box.append(h, ta, row)
+    overlay.appendChild(box)
+    overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove() })
+    document.body.appendChild(overlay)
+    ta.focus()
   }
 
   /** Set or change the encryption password (double-entry dialog). */
@@ -658,10 +719,11 @@ export class Editor {
       panel.appendChild(e)
       return e
     }
-    const action = (label: string, primary: boolean, onClick: () => void, title = '') => {
+    const action = (icon: string, label: string, primary: boolean, onClick: () => void, title = '') => {
       const b = document.createElement('button')
       b.className = primary ? 'ed-btn ed-btn-primary ed-share-btn' : 'ed-btn ed-share-btn'
-      b.textContent = label
+      if (icon) b.innerHTML = icon
+      b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
       if (title) b.title = title
       b.addEventListener('click', onClick)
       panel.appendChild(b)
@@ -766,13 +828,13 @@ export class Editor {
     // turns the live session on so whoever opens it lands in the room with you.
     const canWrite = !!cme && cme.role !== 'reader'
     if (canWrite) {
-      action(t('Invite to edit — save a copy to send…'), true, () => void this.inviteToEdit(),
+      action(ICONS.share, t('Invite to edit — save a copy to send…'), true, () => void this.inviteToEdit(),
         t('Saves a copy that edits this deck live with you. You stay the owner and can remove them later from the People list.'))
-      action(t('Share view-only copy…'), false, () => void this.saveReaderCopy(),
+      action(ICONS.eye, t('Share view-only copy…'), false, () => void this.saveReaderCopy(),
         t('A live viewer: it follows every edit as it happens but can never change the deck — the relay enforces it.'))
-      action(t('Export present-only file…'), false, () => void this.savePresentationPackage(),
+      action(ICONS.slideshow, t('Export present-only file…'), false, () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
-      action(t('Share as template…'), false, () => void this.saveAsTemplate(),
+      action(ICONS.template, t('Share as template…'), false, () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
       note(t('Whoever opens your copy joins this deck live. Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
     } else {
@@ -783,17 +845,17 @@ export class Editor {
     if (canWrite) {
       panel.appendChild(div('ed-share-sep'))
       if (on) {
-        action(t('Stop sharing'), false, () => {
+        action(ICONS.stop, t('Stop sharing'), false, () => {
           if (!this.session) return
           stopSharing(this.session, this.store)
           this.wireOnlineStatus()
           this.renderSharePanel()
         }, t('Disconnect this deck from the live session. Copies keep their last state and can rejoin if you go live again.'))
       } else {
-        action(t('Go live without sharing a copy'), false, () => void this.goLive().then(() => this.renderSharePanel()),
+        action(ICONS.live, t('Go live without sharing a copy'), false, () => void this.goLive().then(() => this.renderSharePanel()),
           t('Connect to the live session now — copies you sent earlier will meet you there.'))
       }
-      action(t('Reset access — cut off every copy sent so far'), false, async () => {
+      action(ICONS.key, t('Reset access — cut off every copy sent so far'), false, async () => {
         if (!this.session) return
         if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return
         await rotateKeys(this.session, this.store)
@@ -820,6 +882,31 @@ export class Editor {
     const c = this.store.doc.collab
     if (c?.v === 2 && c.ownerPriv) return this.saveEditorCopy()
     await this.save(true)
+  }
+
+  /** Globe → locale picker. UI language follows the VIEWER, never the file. */
+  private languageDropdown(): HTMLElement {
+    const wrap = div('ed-dropdown')
+    const trigger = btn(ICONS.globe, '', () => wrap.classList.toggle('open'), t('Language'))
+    const menu = div('ed-menu ed-lang-menu')
+    for (const c of LOCALE_CHOICES) {
+      const b = btn('', c.label, () => {
+        wrap.classList.remove('open')
+        setLocale(c.code)
+        this.build()
+        this.rebuildSidebar()
+      })
+      if (c.code === locale()) b.classList.add('ed-lang-on')
+      menu.appendChild(b)
+    }
+    // right-anchor so the menu never overflows the window edge
+    menu.style.left = 'auto'
+    menu.style.right = '0'
+    wrap.append(trigger, menu)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    })
+    return wrap
   }
 
   private shapeDropdown(): HTMLElement {
@@ -1916,25 +2003,6 @@ export class Editor {
     offRow.append(offCb, document.createTextNode(' ' + t('Offline mode — block all network features (updates, online collaboration)')))
     box.appendChild(offRow)
 
-    const langRow = document.createElement('label')
-    langRow.className = 'ed-about-auto'
-    const langSel = document.createElement('select')
-    for (const c of LOCALE_CHOICES) {
-      const o = document.createElement('option')
-      o.value = c.code
-      o.textContent = c.label
-      if (c.code === locale()) o.selected = true
-      langSel.appendChild(o)
-    }
-    langSel.addEventListener('change', () => {
-      setLocale(langSel.value)
-      close()
-      this.build()
-      this.rebuildSidebar()
-    })
-    langRow.append(document.createTextNode(t('Language') + ' '), langSel)
-    box.appendChild(langRow)
-
     // Document properties → fillable {{author}} {{company}} {{subject}} {{event}} fields
     const metaWrap = div('ed-about-row ed-about-meta-wrap')
     const metaTitle = document.createElement('div')
@@ -1964,59 +2032,6 @@ export class Editor {
     metaField(t('Event'), () => this.store.doc.meta?.event ?? '', (v) => { ensureMeta().event = v })
     metaField(t('Keywords'), () => this.store.doc.meta?.keywords ?? '', (v) => { ensureMeta().keywords = v })
     box.appendChild(metaWrap)
-
-    // AI round-trip: the document is the interchange unit
-    const aiRow = div('ed-about-row')
-    const copyB = document.createElement('button')
-    copyB.className = 'ed-btn'
-    copyB.textContent = t('Copy document JSON')
-    copyB.title = t('Copies this deck as plain JSON — paste it into an AI chat or any tool, then bring the edited JSON back here.')
-    copyB.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(JSON.stringify(this.store.doc))
-        copyB.textContent = t('Copied ✓')
-        setTimeout(() => { copyB.textContent = t('Copy document JSON') }, 1600)
-      } catch {
-        this.toast(t('Couldn’t access the clipboard'))
-      }
-    })
-    const replB = document.createElement('button')
-    replB.className = 'ed-btn'
-    replB.textContent = t('Replace document from JSON…')
-    replB.addEventListener('click', () => {
-      if (box.querySelector('.ed-about-json')) return
-      const ta = document.createElement('textarea')
-      ta.className = 'ed-about-json'
-      ta.rows = 5
-      ta.placeholder = t('Paste document JSON here…')
-      const applyB = document.createElement('button')
-      applyB.className = 'ed-btn ed-btn-primary'
-      applyB.textContent = t('Apply')
-      applyB.addEventListener('click', () => {
-        const ok = (window as any).bento?.loadDoc
-          ? (window as any).bento.loadDoc(ta.value)
-          : false
-        if (ok) {
-          this.toast(t('Document replaced — ⌘Z undoes'))
-          close()
-        } else {
-          ta.style.borderColor = '#C0392B'
-          applyB.textContent = t('Invalid document JSON')
-          setTimeout(() => { applyB.textContent = t('Apply') }, 1800)
-        }
-      })
-      box.insertBefore(ta, fine)
-      box.insertBefore(applyB, fine)
-      ta.focus()
-    })
-    const verB = document.createElement('button')
-    verB.className = 'ed-btn'
-    verB.textContent = t('Version history…')
-    verB.title = t('Restore an earlier auto-saved version of this deck (kept locally in this browser).')
-    verB.addEventListener('click', () => { close(); void this.openVersionHistory() })
-    aiRow.append(copyB, replB, verB)
-    box.appendChild(aiRow)
-
 
     const fine = div('ed-about-fine')
     fine.innerHTML =

@@ -1415,10 +1415,15 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-share-btn:not(.ed-btn-primary) {
   background: var(--chrome, #f2f4f8);
   border: 1px solid var(--line);
-  justify-content: center;
 }
 .ed-share-btn:not(.ed-btn-primary):hover { background: var(--chrome-2, #e8ebf1); }
-.ed-share-btn { width: 100%; text-align: center; }
+.ed-share-btn { width: 100%; justify-content: flex-start; text-align: left; }
+.ed-share-btn svg { flex: none; }
+
+/* divider usable in any dropdown menu */
+.ed-menu-sep { height: 1px; background: var(--line); margin: 3px 2px; }
+.ed-lang-on { font-weight: 700; }
+.ed-lang-on::after { content: ' ✓'; color: var(--accent-ink); }
 
 /* Save is a split button: [ Save |▾] one visual unit. The caret button is
    NESTED inside the .ed-dropdown wrapper, so stretch through the wrapper. */
