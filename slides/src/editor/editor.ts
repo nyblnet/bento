@@ -290,7 +290,7 @@ export class Editor {
       pmenu.appendChild(b)
     }
     pItem(ICONS.window, t('Present in this tab'), t('Fills this tab instead of going fullscreen — handy for testing or sharing a window'), () => this.present(false, false))
-    pItem(ICONS.presenter, t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen'), () => this.openSpeakerView())
+    pItem(ICONS.presenter, t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen. On macOS, open it before going fullscreen.'), () => this.openSpeakerView())
     pill.append(showB, caret, pmenu)
     document.addEventListener('pointerdown', (ev) => {
       if (!pill.contains(ev.target as Node)) pill.classList.remove('open')
@@ -821,22 +821,24 @@ export class Editor {
         : `● ${t('Connecting…')}`
       status.classList.toggle('ok', tr!.status === 'open')
     } else {
-      status.textContent = t('Not live yet — sharing a copy turns it on')
+      status.textContent = `○ ${t('Not live — turns on when you share')}`
     }
 
     // SHARE ACTIONS — sharing IS files: each button saves a copy to send, and
-    // turns the live session on so whoever opens it lands in the room with you.
+    // turns the live session on. Labels stay short; the tooltips explain.
     const canWrite = !!cme && cme.role !== 'reader'
     if (canWrite) {
-      action(ICONS.share, t('Invite to edit — save a copy to send…'), true, () => void this.inviteToEdit(),
-        t('Saves a copy that edits this deck live with you. You stay the owner and can remove them later from the People list.'))
-      action(ICONS.eye, t('Share view-only copy…'), false, () => void this.saveReaderCopy(),
-        t('A live viewer: it follows every edit as it happens but can never change the deck — the relay enforces it.'))
-      action(ICONS.slideshow, t('Export present-only file…'), false, () => void this.savePresentationPackage(),
+      const label = div('ed-share-label')
+      label.textContent = t('Share a copy')
+      panel.appendChild(label)
+      action(ICONS.share, t('Invite to edit…'), true, () => void this.inviteToEdit(),
+        t('Saves a copy to send. Whoever opens it edits this deck live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'))
+      action(ICONS.eye, t('View-only copy…'), false, () => void this.saveReaderCopy(),
+        t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
+      action(ICONS.slideshow, t('Present-only file…'), false, () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
-      action(ICONS.template, t('Share as template…'), false, () => void this.saveAsTemplate(),
+      action(ICONS.template, t('Template…'), false, () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
-      note(t('Whoever opens your copy joins this deck live. Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
     } else {
       note(t('This is a view-only copy — it follows the live session but can’t change the deck.'))
     }
@@ -852,10 +854,10 @@ export class Editor {
           this.renderSharePanel()
         }, t('Disconnect this deck from the live session. Copies keep their last state and can rejoin if you go live again.'))
       } else {
-        action(ICONS.live, t('Go live without sharing a copy'), false, () => void this.goLive().then(() => this.renderSharePanel()),
-          t('Connect to the live session now — copies you sent earlier will meet you there.'))
+        action(ICONS.live, t('Go live'), false, () => void this.goLive().then(() => this.renderSharePanel()),
+          t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'))
       }
-      action(ICONS.key, t('Reset access — cut off every copy sent so far'), false, async () => {
+      action(ICONS.key, t('Reset access…'), false, async () => {
         if (!this.session) return
         if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return
         await rotateKeys(this.session, this.store)

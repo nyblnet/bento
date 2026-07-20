@@ -1391,9 +1391,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   min-width: 250px;
   max-width: 290px;
   padding: 12px;
-  gap: 9px;
+  gap: 7px;
   right: 0;
   left: auto;
+}
+.ed-share-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-top: 3px;
 }
 .ed-share-note {
   font-size: 12px;
