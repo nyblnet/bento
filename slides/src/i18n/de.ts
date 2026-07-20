@@ -256,6 +256,7 @@ export const de: Catalog = {
   "Offline — reconnecting…": "Offline — Verbindung wird wiederhergestellt…",
   "Save the file and send a copy — opening it joins this session automatically.": "Datei speichern und eine Kopie senden — beim Öffnen tritt sie dieser Sitzung automatisch bei.",
   "{n} connected": "{n} verbunden",
+  "{n} more — click to see everyone": "{n} weitere — zum Anzeigen aller klicken",
   "Any copy of this file can join once sharing is on — send it before or after, both work.": "Jede Kopie dieser Datei kann beitreten, sobald das Teilen aktiv ist — vorher oder nachher gesendet, beides funktioniert.",
   "Rotate keys — cut off previously sent copies": "Schlüssel erneuern — bereits versandte Kopien aussperren",
   "New keys minted — only copies saved from now on can join": "Neue Schlüssel erzeugt — nur ab jetzt gespeicherte Kopien können beitreten",
