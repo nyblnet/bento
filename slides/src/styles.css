@@ -1496,6 +1496,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-present-pill .ed-menu { top: auto; bottom: calc(100% + 6px); left: auto; right: 0; }
 
 .ed-share-peers { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+.ed-share-me {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: var(--chrome, #f2f4f8);
+  font-size: 12.5px;
+}
+.ed-share-me .who { font-weight: 600; }
+.ed-share-me .where { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .ed-share-peer {
   display: flex;
   align-items: center;
