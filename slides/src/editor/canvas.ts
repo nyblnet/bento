@@ -125,8 +125,18 @@ export class SlideCanvas {
         this.scroller.scrollTop = lockT
       }
     })
-    const lockScroll = () => { gestureLock = true; lockL = this.scroller.scrollLeft; lockT = this.scroller.scrollTop }
-    const unlockScroll = () => { gestureLock = false }
+    const lockScroll = () => {
+      gestureLock = true
+      lockL = this.scroller.scrollLeft
+      lockT = this.scroller.scrollTop
+      // the REAL jump culprit: a scrollbar APPEARING mid-drag (guideline overflow)
+      // shrinks the client box and re-centres the stage. If no bar is showing at
+      // gesture start, forbid overflow for the drag so one can never appear.
+      // (scrollbar-gutter covers the vertical bar; this covers horizontal too.)
+      const s = this.scroller
+      if (s.scrollHeight <= s.clientHeight && s.scrollWidth <= s.clientWidth) s.style.overflow = 'hidden'
+    }
+    const unlockScroll = () => { gestureLock = false; this.scroller.style.overflow = '' }
     for (const e of ['dragStart', 'resizeStart', 'rotateStart', 'dragGroupStart', 'resizeGroupStart', 'rotateGroupStart'])
       (this.moveable as unknown as { on: (e: string, f: () => void) => void }).on(e, lockScroll)
     for (const e of ['dragEnd', 'resizeEnd', 'rotateEnd', 'dragGroupEnd', 'resizeGroupEnd', 'rotateGroupEnd'])

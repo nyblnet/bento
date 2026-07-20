@@ -223,6 +223,9 @@ html, body {
   inset: 0;
   overflow: auto;
   display: flex;
+  /* classic (non-overlay) scrollbars: reserve the gutter so a bar appearing
+     mid-drag can't shrink the client box and shove the centred stage around */
+  scrollbar-gutter: stable both-edges;
 }
 
 .ed-stage {
