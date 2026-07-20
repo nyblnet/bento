@@ -432,7 +432,7 @@ export class Editor {
     const trigger = btn(ICONS.download, '', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) rebuild()
-    }, t('More ways to save — copy, new deck, template, read-only, encrypted'))
+    }, t('Save as… — copy, new deck, template, password'))
     const item = (label: string, title: string, onClick: () => void) => {
       const b = document.createElement('button')
       b.className = 'ed-btn'
@@ -446,31 +446,17 @@ export class Editor {
     }
     const rebuild = () => {
       menu.textContent = ''
-      item(t('Save a copy'),
-        t('Pick a new file, leave this one untouched — a copy of a shared deck joins the same live session.'),
+      // FILE operations only — everything that goes to OTHER PEOPLE lives in
+      // the Share panel (one mental model: Save = for me, Share = for others).
+      item(t('Save a copy…'),
+        t('A backup of this deck for yourself — same deck, same live session.'),
         () => void this.save(true))
-      item(t('Save as new deck…'),
+      item(t('Duplicate as new deck…'),
         t('Same content, brand-new document — its own identity and keys; it will never sync with this one.'),
         () => this.saveAsNewDeck())
       item(t('Save as template…'),
-        t('Saves a template copy: everyone who opens it gets a fresh, independent deck with its own identity and keys.'),
+        t('Everyone who opens a template gets a fresh, independent deck of their own.'),
         () => void this.saveAsTemplate())
-      item(t('Save as presentation package…'),
-        t('A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.'),
-        () => void this.savePresentationPackage())
-      // v2 (fine-grained) owner: sharing edit access mints an INVITE — the
-      // copy carries a delegation key, never the owner's private key, so the
-      // owner can later revoke this copy's lineage without re-keying the room.
-      if (this.store.doc.collab?.v === 2 && this.store.doc.collab.ownerPriv) {
-        item(t('Share editor copy…'),
-          t('A copy others edit live with you. It carries an owner-signed invite — you stay the owner and can revoke it later without cutting anyone else off.'),
-          () => void this.saveEditorCopy())
-      }
-      if (sharingOn(this.store)) {
-        item(t('Save read-only copy…'),
-          t('A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).'),
-          () => void this.saveReaderCopy())
-      }
       if (isEncryptionActive()) {
         item(t('Change password…'),
           t('Pick a new password for this file — takes effect on the next save.'),
@@ -512,9 +498,10 @@ export class Editor {
    *  key + writer PUBKEY (so the relay knows the room's writer) but drops the
    *  writer PRIVATE key — the relay then rejects any op it tries to send. */
   private async saveReaderCopy() {
+    await this.goLive() // a viewer copy follows the live session — make sure there is one
     const c = this.store.doc.collab
     if (!c?.room || !c.key) {
-      this.toast(t('Turn on live sharing first — a read-only copy follows the session'))
+      this.toast(t('This deck has no live session to follow'))
       return
     }
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
@@ -536,6 +523,7 @@ export class Editor {
    *  chain — so the owner can later revoke this invite (cutting off every copy
    *  descended from it) or a single member key, without re-keying the room. */
   private async saveEditorCopy() {
+    await this.goLive()
     const c = this.store.doc.collab
     if (!(c?.room && c.key && c.v === 2 && c.ownerPriv)) {
       this.toast(t('Only the deck owner can mint editor invites'))
@@ -638,10 +626,10 @@ export class Editor {
   private shareDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     this.shareWrap = wrap
-    this.shareB = btn(ICONS.share, t('Live'), () => {
+    this.shareB = btn(ICONS.share, t('Share'), () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) this.renderSharePanel()
-    }, t('Live collaboration — work on this deck together'))
+    }, t('Share — invite people to edit, send view-only copies, see who’s here'))
     // stable hook for the status dot (grey dormant / amber connecting / green live)
     this.shareB.classList.add('ed-btn-share')
     this.shareB.title = t('Not sharing yet — click to start a live session')
@@ -750,41 +738,71 @@ export class Editor {
       return
     }
 
+    // status line: one glance = am I live, with how many people
     const tr = onlineTransport()
-    if (!sharingOn(this.store) || !tr) {
-      note(t('Work on this deck together, live.'))
-      note(t('Any copy of this file can join once sharing is on — send it before or after, both work.'))
-      note(t('Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
-      action(t('Start live session'), true, async () => {
-        if (!this.session) return
-        this.session.enableSharing()
-        await startSharing(this.session, this.store)
-        this.wireOnlineStatus()
-        this.renderSharePanel()
-      })
-      action(t('Rotate keys — cut off previously sent copies'), false, async () => {
-        if (!this.session) return
-        await rotateKeys(this.session, this.store)
-        this.toast(t('New keys minted — only copies saved from now on can join'))
-        this.renderSharePanel()
-      })
-    } else {
-      const status = note('', 'ed-share-status')
+    const on = sharingOn(this.store) && !!tr
+    const status = note('', 'ed-share-status')
+    if (on) {
       const n = (this.session?.peers().length ?? 0) + 1
-      status.textContent =
-        tr.status === 'open'
-          ? `● ${t('Live')} — ${t('{n} connected', { n })}`
-          : `● ${t('Offline — reconnecting…')}`
-      status.classList.toggle('ok', tr.status === 'open')
-      note(t('Save the file and send a copy — opening it joins this session automatically.'))
-      note(t('Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
-      action(t('Stop sharing'), false, () => {
+      status.textContent = tr!.status === 'open'
+        ? `● ${t('Live')} — ${t('{n} connected', { n })}`
+        : `● ${t('Connecting…')}`
+      status.classList.toggle('ok', tr!.status === 'open')
+    } else {
+      status.textContent = t('Not live yet — sharing a copy turns it on')
+    }
+
+    // SHARE ACTIONS — sharing IS files: each button saves a copy to send, and
+    // turns the live session on so whoever opens it lands in the room with you.
+    const canWrite = !!cme && cme.role !== 'reader'
+    if (canWrite) {
+      action(t('Invite to edit — save a copy to send…'), true, () => void this.inviteToEdit())
+      action(t('Share view-only copy…'), false, () => void this.saveReaderCopy())
+      action(t('Export present-only file…'), false, () => void this.savePresentationPackage())
+      note(t('Whoever opens your copy joins this deck live. Everything is end-to-end encrypted — the relay only ever sees ciphertext.'))
+    } else {
+      note(t('This is a view-only copy — it follows the live session but can’t change the deck.'))
+    }
+
+    // advanced session controls, deliberately quiet at the bottom
+    if (canWrite) {
+      if (on) {
+        action(t('Stop sharing'), false, () => {
+          if (!this.session) return
+          stopSharing(this.session, this.store)
+          this.wireOnlineStatus()
+          this.renderSharePanel()
+        })
+      } else {
+        action(t('Go live without sharing a copy'), false, () => void this.goLive().then(() => this.renderSharePanel()))
+      }
+      action(t('Reset access — cut off every copy sent so far'), false, async () => {
         if (!this.session) return
-        stopSharing(this.session, this.store)
-        this.wireOnlineStatus()
+        if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return
+        await rotateKeys(this.session, this.store)
+        this.toast(t('Access reset — only copies saved from now on can join'))
         this.renderSharePanel()
       })
     }
+  }
+
+  /** Turn the live session on (idempotent). Sharing a copy calls this first, so
+   *  "share" is one action for users — no separate start-a-session step. */
+  private async goLive() {
+    if (!this.session || offlineEnabled()) return
+    this.session.enableSharing()
+    await startSharing(this.session, this.store)
+    this.wireOnlineStatus()
+  }
+
+  /** "Invite to edit": ONE button for every copy type. v2 owners mint a
+   *  revocable invite; legacy decks and member copies pass their own
+   *  capability along (a copy of the file IS the invite there). */
+  private async inviteToEdit() {
+    await this.goLive()
+    const c = this.store.doc.collab
+    if (c?.v === 2 && c.ownerPriv) return this.saveEditorCopy()
+    await this.save(true)
   }
 
   private shapeDropdown(): HTMLElement {
