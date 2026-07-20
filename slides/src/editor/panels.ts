@@ -195,12 +195,8 @@ export class PropsPanel {
         this.store.slide.stateOf = stateSel.value || undefined
         this.store.emit('slides')
       }, true))
+    stateSel.title = t('A state is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.')
     this.row(t('State of'), stateSel)
-    const stateHint = document.createElement('p')
-    stateHint.className = 'ed-hint'
-    stateHint.innerHTML =
-      t('A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.')
-    this.host.appendChild(stateHint)
 
     if (slide.stateOf) {
       const sync = document.createElement('button')
@@ -275,13 +271,9 @@ export class PropsPanel {
     notes.value = slide.notes
     notes.addEventListener('input', () => this.edit(() => { this.store.slide.notes = notes.value }, false))
     notes.addEventListener('change', () => this.edit(() => { this.store.slide.notes = notes.value }, true))
+    notes.title = t('Shown in the speaker view (Slideshow menu, or S while presenting).') +
+      (isMacOS() ? ' ' + t('On macOS, open the speaker view before going fullscreen.') : '')
     this.host.appendChild(notes)
-    const notesHint = document.createElement('p')
-    notesHint.className = 'ed-hint'
-    notesHint.innerHTML =
-      t('Open the <b>speaker view</b> — in the Slideshow menu at the bottom right, or <b>S</b> while presenting — for a separate window with these notes, the current and next slide, a timer, a thumbnail rail to jump anywhere, and a black-screen key. Move it to a second screen and present as usual.') +
-      (isMacOS() ? ' ' + t('On macOS, open it BEFORE you go fullscreen — otherwise it lands on the slides’ screen.') : '')
-    this.host.appendChild(notesHint)
   }
 
   private buildMultiPanel(els: SlideElement[]) {
