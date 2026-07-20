@@ -1411,6 +1411,34 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   text-align: center;
   line-height: 1.35;
 }
+/* share actions read as BUTTONS at rest, not hover-reveal text */
+.ed-share-btn:not(.ed-btn-primary) {
+  background: var(--chrome, #f2f4f8);
+  border: 1px solid var(--line);
+  justify-content: center;
+}
+.ed-share-btn:not(.ed-btn-primary):hover { background: var(--chrome-2, #e8ebf1); }
+.ed-share-btn { width: 100%; text-align: center; }
+
+/* Save is a split button: [ Save |▾] one visual unit */
+.ed-split { display: inline-flex; align-items: stretch; }
+.ed-split > .ed-btn:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border: 1px solid var(--line);
+  border-right: none;
+  background: var(--chrome, #f2f4f8);
+}
+.ed-split-caret {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border: 1px solid var(--line);
+  background: var(--chrome, #f2f4f8);
+  padding: 6px 6px;
+}
+.ed-split > .ed-btn:hover { background: var(--chrome-2, #e8ebf1); }
+.ed-caret { font-size: 10px; line-height: 1; }
+
 .ed-share-peers { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
 .ed-share-peer {
   display: flex;
