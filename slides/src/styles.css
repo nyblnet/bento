@@ -1435,6 +1435,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-share-peer .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-share-peer .where { color: var(--muted, #5d6b80); font-size: 11.5px; flex: none; }
+.ed-share-peer .kick {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 5px;
+  color: #a0323c;
+  font-size: 12px;
+}
+.ed-share-peer .kick:hover { background: rgba(160, 50, 60, 0.12); }
 /* Live button status dot: always present — grey when dormant (not sharing),
    amber+pulsing while connecting, green when live. The dot makes the on/off
    state legible at a glance instead of the button looking inert. */

@@ -694,10 +694,16 @@ export class Editor {
     nameRow.append(nameLabel, nameInput)
     panel.appendChild(nameRow)
 
-    // who's here, live — colored dot, name, slide; click follows
+    // People: colored dot, key-bound name, role, slide; click follows. The
+    // OWNER (v2) also gets a Remove button per member — a signed revocation of
+    // that device's key: the relay drops its writes and refuses its reconnects,
+    // nobody else is disturbed (see docs/collab-design.md roadmap).
     const peers = this.session?.peers() ?? []
+    const cme = this.store.doc.collab
+    const iAmOwner = !!(cme?.v === 2 && cme.ownerPriv && cme.owner)
     if (peers.length) {
       const list = div('ed-share-peers')
+      const roleLabel = (r?: string) => r === 'owner' ? t('Owner') : r === 'viewer' ? t('Viewer') : r === 'editor' ? t('Editor') : ''
       for (const peer of peers) {
         const row = document.createElement('button')
         row.className = 'ed-share-peer'
@@ -707,15 +713,32 @@ export class Editor {
         const who = document.createElement('span')
         who.className = 'who'
         who.textContent = peer.editing ? `${peer.name} ✏️` : peer.name
+        // a pub-carrying peer's name is bound to its signing key, not just typed
+        if (peer.pub) who.title = t('Key-verified identity') + ` · ${peer.pub.slice(0, 12)}…`
         const where = document.createElement('span')
         where.className = 'where'
         const idx = this.store.doc.slides.findIndex((s) => s.id === peer.slide)
-        where.textContent = idx >= 0 ? t('slide {n}', { n: idx + 1 }) : ''
+        const rl = roleLabel(peer.role)
+        where.textContent = [rl, idx >= 0 ? t('slide {n}', { n: idx + 1 }) : ''].filter(Boolean).join(' · ')
         row.append(dot, who, where)
         row.title = t('{name} — on slide {n} (click to follow)', { name: peer.name, n: idx + 1 })
         row.addEventListener('click', () => {
           if (idx >= 0) this.store.goTo(idx)
         })
+        if (iAmOwner && peer.pub && peer.pub !== cme!.owner) {
+          const kick = document.createElement('span')
+          kick.className = 'kick'
+          kick.textContent = '✕'
+          kick.title = t('Remove {name} — revokes this device’s access; everyone else is unaffected', { name: peer.name })
+          kick.addEventListener('click', async (ev) => {
+            ev.stopPropagation()
+            if (!confirm(t('Remove {name} from this deck? Their copy drops to read-only.', { name: peer.name }))) return
+            const tr = onlineTransport()
+            const ok = tr && (await tr.revokeKey(peer.pub!, cme!.owner!, cme!.ownerPriv!))
+            this.toast(ok ? t('{name} was removed', { name: peer.name }) : t('Couldn’t reach the live session'))
+          })
+          row.appendChild(kick)
+        }
         list.appendChild(row)
       }
       panel.appendChild(list)
