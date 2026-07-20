@@ -394,10 +394,16 @@ owner becomes the root of trust.
 - **Certificates**: the owner signs small statements — `{memberPub, role,
   expiry}` — "this key may write / comment". Certs are data, not identity: no
   names, no PII in the clear.
-- **Invites**: a shared copy carries a PRE-SIGNED one-time invite token (owner
-  signs the hash of an invite secret embedded in that copy). First open: the
-  joiner's device mints its own keypair and redeems the token → certified at
-  the copy's role, with the owner OFFLINE. The file stays the invitation.
+- **Invites — delegation chain, not secrets**: sharing a copy mints an INVITE
+  KEYPAIR; the owner signs `{invPub, role, expiry}` and the copy carries the
+  invite's PRIVATE half + that signature. First open: the joiner's device mints
+  its own keypair and signs it with the invite key — the chain
+  `owner → invite → member` is pure signatures, verifiable by the relay while
+  the owner is OFFLINE. (A secret-redemption scheme would hand the secret to
+  the relay, letting it certify its own key — the delegation chain never
+  exposes private material, so the blind relay still cannot forge writes.)
+  The file stays the invitation; revoking the invite key cuts off every copy
+  descended from it, revoking a member key cuts off one device.
 - **Relay change**: verify each mutating frame's signature against ANY
   currently-certified key (cert chain: owner key → member cert → frame sig)
   instead of the single pinned writer key. Still blind: it sees pubkeys, role
