@@ -407,6 +407,26 @@ export interface BentoDoc {
     writerPriv?: string
     /** 'reader' = this copy is a live viewer: receives updates, never sends. */
     role?: 'writer' | 'reader'
+    /**
+     * Fine-grained access (v1.0.3+, `v: 2`): per-person keys. The room id
+     * commits to the OWNER's pubkey. A member copy carries an INVITE — an
+     * owner-signed delegation keypair — and each device mints its own identity
+     * key (kept in localStorage, never in the file); the chain
+     * owner → invite → member is what the blind relay verifies. `ownerPriv`
+     * travels ONLY in the owner's own copy. See docs/collab-design.md roadmap.
+     */
+    v?: number
+    owner?: string
+    ownerPriv?: string
+    invite?: {
+      pub: string
+      priv: string
+      role: 'writer' | 'commenter'
+      /** unix ms expiry; 0/absent = no expiry */
+      exp?: number
+      /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
+      sig: string
+    }
   }
   /**
    * Template file (.dotx-style): every OPEN instantiates a fresh document —

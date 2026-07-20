@@ -92,20 +92,33 @@ export class Room {
   }
 
   /** Valid writer signature over `${i}.${d}` for a signed room? */
-  async verifySig(f) {
-    if (typeof f.g !== 'string') return false
-    if (!this.verifyKey) {
-      const w = await this.state.storage.get('w')
-      if (!w) return false
-      try {
-        this.verifyKey = await crypto.subtle.importKey('raw', b64uDec(w), EC_VERIFY, false, ['verify'])
-      } catch { return false }
+  /** Import-and-cache a raw P-256 pubkey (b64url) for this wake. */
+  async pubKey(pubB64) {
+    this.keyCache ??= new Map()
+    let k = this.keyCache.get(pubB64)
+    if (!k) {
+      k = await crypto.subtle.importKey('raw', b64uDec(pubB64), EC_VERIFY, false, ['verify'])
+      this.keyCache.set(pubB64, k)
     }
+    return k
+  }
+
+  async verifyWith(pubB64, sigB64, text) {
     try {
       return await crypto.subtle.verify(
-        SIG_ALG, this.verifyKey, b64uDec(f.g), new TextEncoder().encode(`${f.i}.${f.d}`),
+        SIG_ALG, await this.pubKey(pubB64), b64uDec(sigB64), new TextEncoder().encode(text),
       )
     } catch { return false }
+  }
+
+  /** Frame signature against THIS SOCKET's certified key (v1.0.3: the verify
+   *  key is per-socket — owner, legacy shared writer, or a chain-certified
+   *  member all pin their own key at connect). */
+  async verifySig(f, ws) {
+    if (typeof f.g !== 'string') return false
+    const meta = ws.deserializeAttachment() || {}
+    if (!meta.w) return false
+    return this.verifyWith(meta.w, f.g, `${f.i}.${f.d}`)
   }
 
   async fetch(req) {
@@ -119,20 +132,43 @@ export class Room {
     if (saved === undefined) await this.state.storage.put('tok', tok)
     else if (saved !== tok) return new Response('forbidden', { status: 403 })
 
-    // Signed rooms: the room name commits to the writer pubkey. Verify the
-    // presented ?w= against the commitment before pinning it, so the pinned
-    // key can't be substituted by a viewer.
+    // Signed rooms: the room name commits to a pubkey (v1.0.2: the shared
+    // writer key; v1.0.3: the OWNER key). A writer socket presents ?w= (the key
+    // it will sign frames with) and proves it either DIRECTLY (hash matches the
+    // commitment — owner / legacy shared writer) or via a CHAIN (member: the
+    // owner-signed invite + the invite-signed delegation of the member key).
+    // The verified key is pinned PER SOCKET; no ?w= at all = read-only socket.
     const name = url.pathname.match(/^\/d\/([A-Za-z0-9._-]{1,80})$/)?.[1] || ''
+    if ((await this.state.storage.get('name')) === undefined) await this.state.storage.put('name', name)
     const signed = name[0] === 'w'
+    let sockW = null
     if (signed) {
       const w = url.searchParams.get('w') || ''
-      if (!/^[A-Za-z0-9_-]{80,200}$/.test(w)) return new Response('bad writer key', { status: 400 })
-      if ('w' + (await sha256b64u(b64uDec(w))) !== name) {
-        return new Response('writer key does not match room', { status: 403 })
+      if (w) {
+        if (!/^[A-Za-z0-9_-]{80,200}$/.test(w)) return new Response('bad writer key', { status: 400 })
+        const rev = (await this.state.storage.get('rev')) || []
+        let ok = 'w' + (await sha256b64u(b64uDec(w))) === name
+        if (!ok) {
+          // chain: o (owner pub) must match the commitment; ivs = owner's sig
+          // over the invite; dg = invite's sig over this member key. Expired or
+          // revoked links (member key OR invite key) are refused.
+          const o = url.searchParams.get('o') || ''
+          const ivp = url.searchParams.get('ivp') || ''
+          const ivr = url.searchParams.get('ivr') || ''
+          const ive = parseInt(url.searchParams.get('ive') || '0', 10) || 0
+          const ivs = url.searchParams.get('ivs') || ''
+          const dg = url.searchParams.get('dg') || ''
+          ok = !!(o && ivp && ivs && dg)
+            && ivr === 'writer'
+            && (!ive || Date.now() < ive)
+            && !rev.includes(ivp)
+            && 'w' + (await sha256b64u(b64uDec(o))) === name
+            && (await this.verifyWith(o, ivs, `inv.${ivp}.${ivr}.${ive}`))
+            && (await this.verifyWith(ivp, dg, `dlg.${w}`))
+        }
+        if (!ok || rev.includes(w)) return new Response('forbidden', { status: 403 })
+        sockW = w
       }
-      const savedW = await this.state.storage.get('w')
-      if (savedW === undefined) await this.state.storage.put('w', w)
-      else if (savedW !== w) return new Response('forbidden', { status: 403 })
     }
 
     const since = Math.max(0, parseInt(url.searchParams.get('since') || '0', 10) || 0)
@@ -146,7 +182,7 @@ export class Room {
     // Per-socket rate-limit state rides on the socket's serialized attachment
     // (in-memory Maps don't survive hibernation).
     this.state.acceptWebSocket(server)
-    server.serializeAttachment({ count: 0, windowStart: Date.now(), signed })
+    server.serializeAttachment({ count: 0, windowStart: Date.now(), signed, w: sockW })
 
     await this.replay(server, since)
     await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
@@ -207,13 +243,36 @@ export class Room {
     } catch {
       return
     }
+    // owner-signed revocation: cut off ONE member key (or a whole invite
+    // lineage) without re-keying the room. Plaintext control frame — it names
+    // only pubkeys, never content. Live sockets on the revoked key are closed.
+    if (f.ctl === 'revoke' && typeof f.p === 'string' && typeof f.o === 'string' && typeof f.g === 'string') {
+      const name = (await this.state.storage.get('name')) || ''
+      if ('w' + (await sha256b64u(b64uDec(f.o))) !== name) return
+      if (!(await this.verifyWith(f.o, f.g, `rev.${f.p}`))) return
+      const rev = (await this.state.storage.get('rev')) || []
+      if (!rev.includes(f.p)) await this.state.storage.put('rev', [...rev, f.p])
+      const note = JSON.stringify({ ctl: 'revoked', p: f.p })
+      for (const peer of this.state.getWebSockets()) {
+        const m = peer.deserializeAttachment() || {}
+        try { peer.send(note) } catch { /* gone */ }
+        if (m.w === f.p) { try { peer.close(1008, 'revoked') } catch { /* gone */ } }
+      }
+      return
+    }
     if (typeof f.i !== 'string' || typeof f.d !== 'string') return
+    // defense in depth: a revoked key's socket may outlive the close (or the
+    // revocation may land on another wake) — its writes must still die here.
+    if (meta.w && (f.p === 1 || f.snap === 1)) {
+      const rev = (await this.state.storage.get('rev')) || []
+      if (rev.includes(meta.w)) return
+    }
 
     // Signed rooms: a persisted frame (op batch / snapshot) must carry a valid
     // writer signature, else DROP it — this is what enforces read-only. A
     // reader (no private key) can still send ephemeral frames (presence).
     if (meta.signed && (f.p === 1 || f.snap === 1)) {
-      if (!(await this.verifySig(f))) return
+      if (!(await this.verifySig(f, ws))) return
     }
 
     const out = { i: f.i, d: f.d }

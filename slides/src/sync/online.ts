@@ -53,12 +53,60 @@ export async function signFrame(key: CryptoKey, i: string, d: string): Promise<s
   return b64u.enc(new Uint8Array(sig))
 }
 
+/** Sign an arbitrary string with a b64url PKCS#8 private key (cert chains). */
+export async function signText(privB64: string, text: string): Promise<string> {
+  const key = await importSignKey(privB64)
+  const sig = await crypto.subtle.sign(SIGN_ALG, key, new TextEncoder().encode(text))
+  return b64u.enc(new Uint8Array(sig))
+}
+
+async function mintKeypair(): Promise<{ pub: string; priv: string }> {
+  const kp = (await crypto.subtle.generateKey(EC, true, ['sign', 'verify'])) as CryptoKeyPair
+  return {
+    pub: b64u.enc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))),
+    priv: b64u.enc(new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey))),
+  }
+}
+
+export type CollabInvite = { pub: string; priv: string; role: 'writer' | 'commenter'; exp?: number; sig: string }
+
+/** Owner-signed invite: a delegation keypair whose private half rides in the
+ *  shared copy. Chain: owner signs `inv.${pub}.${role}.${exp||0}`; a joining
+ *  device later signs its own pubkey with the invite key (`dlg.${memberPub}`).
+ *  The relay verifies both signatures and never sees private material — so a
+ *  blind relay still cannot certify its own key. */
+export async function mintInvite(ownerPrivB64: string, role: 'writer' | 'commenter' = 'writer', exp = 0): Promise<CollabInvite> {
+  const kp = await mintKeypair()
+  const sig = await signText(ownerPrivB64, `inv.${kp.pub}.${role}.${exp}`)
+  return { pub: kp.pub, priv: kp.priv, role, ...(exp ? { exp } : {}), sig }
+}
+
+/** This device's member identity for a doc — minted once, kept in localStorage,
+ *  NEVER in the file (the file travels; a device key must not). */
+export async function deviceIdentity(docId: string): Promise<{ pub: string; priv: string }> {
+  const k = `bento-member-${docId}`
+  try {
+    const saved = localStorage.getItem(k)
+    if (saved) return JSON.parse(saved)
+  } catch { /* storage unavailable → ephemeral identity */ }
+  const id = await mintKeypair()
+  try { localStorage.setItem(k, JSON.stringify(id)) } catch { /* ephemeral */ }
+  return id
+}
+
+/** Auth material for the relay connection. Exactly one shape applies:
+ *  direct (owner or legacy shared-writer key) or chain (member via invite). */
+export type AuthSpec =
+  | { kind: 'direct'; pub: string; priv?: string }
+  | { kind: 'chain'; owner: string; invite: CollabInvite; docId: string }
+
 export type CollabCreds = {
   room: string
   key: string
   on: boolean
-  writerPub: string
-  writerPriv: string
+  v: number
+  owner: string
+  ownerPriv: string
   role: 'writer'
 }
 
@@ -75,16 +123,18 @@ export type CollabCreds = {
  * Async because keypair generation is. See docs/collab-design.md.
  */
 export async function mintCollab(): Promise<CollabCreds> {
-  const kp = (await crypto.subtle.generateKey(EC, true, ['sign', 'verify'])) as CryptoKeyPair
-  const pubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))
-  const privPk = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey))
-  const commit = new Uint8Array(await crypto.subtle.digest('SHA-256', pubRaw as BufferSource))
+  // v2 (fine-grained): the room id commits to the OWNER's pubkey. The creator's
+  // copy holds ownerPriv; shared copies carry owner-signed INVITES instead, and
+  // each joining device mints its own member key (see mintInvite/deviceIdentity).
+  const kp = await mintKeypair()
+  const commit = new Uint8Array(await crypto.subtle.digest('SHA-256', b64u.dec(kp.pub) as BufferSource))
   return {
     room: `${syncHost()}/d/w${b64u.enc(commit)}`,
     key: mintRoomKey(),
     on: true,
-    writerPub: b64u.enc(pubRaw),
-    writerPriv: b64u.enc(privPk),
+    v: 2,
+    owner: kp.pub,
+    ownerPriv: kp.priv,
     role: 'writer',
   }
 }
@@ -119,6 +169,9 @@ export class OnlineTransport implements Transport {
   private pingTimer: ReturnType<typeof setInterval> | null = null
   private awaitingPong = false
   private static readonly PING_MS = 25_000
+  /** the key THIS socket signs with (owner / legacy writer / device) — used to
+   *  recognise our own revocation and to attribute presence */
+  myPub: string | null = null
   /**
    * Replay bookmark — MEMORY ONLY, deliberately: it is valid only alongside
    * the in-memory CRDT state it was earned with. A fresh join replays from
@@ -138,12 +191,13 @@ export class OnlineTransport implements Transport {
       /** replay done: (actor,seq) pairs the room holds; return true to upload a snapshot */
       onReady: (seen: Set<string>, seq: number) => boolean
     },
-    private writerPub?: string,
-    private writerPriv?: string,
+    private auth?: AuthSpec,
   ) {
-    void docId
+    this.docId = docId
     this.init(room)
   }
+
+  private docId = ''
 
   /** (actor,seq) pairs seen in the current connection's replay */
   private replaySeen = new Set<string>()
@@ -156,12 +210,27 @@ export class OnlineTransport implements Transport {
     ])
     const tokDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', raw as BufferSource))
     const tok = b64u.enc(tokDigest.slice(0, 18))
-    // writers sign op frames; readers omit the key and the relay drops their
-    // writes. The pubkey (`w`) rides on the URL so the relay can pin+verify.
-    if (this.writerPriv) {
-      try { this.signKey = await importSignKey(this.writerPriv) } catch { this.signKey = null }
+    // Writers sign op frames; readers omit auth and the relay drops their
+    // writes. Two writer shapes: DIRECT (the presented `w` key hash-matches the
+    // room commitment — the owner, or a legacy shared-writer copy) and CHAIN
+    // (a member: `w` = this device's key, plus the owner-signed invite and the
+    // invite-signed delegation of the device key — verified by the relay).
+    const a = this.auth
+    if (a?.kind === 'direct') {
+      if (a.priv) { try { this.signKey = await importSignKey(a.priv) } catch { this.signKey = null } }
+      this.myPub = a.pub
+      this.url = `${room}?tok=${tok}&w=${a.pub}`
+    } else if (a?.kind === 'chain') {
+      const id = await deviceIdentity(this.docId)
+      try { this.signKey = await importSignKey(id.priv) } catch { this.signKey = null }
+      this.myPub = id.pub
+      const iv = a.invite
+      const dg = await signText(iv.priv, `dlg.${id.pub}`)
+      this.url = `${room}?tok=${tok}&w=${id.pub}&o=${a.owner}` +
+        `&ivp=${iv.pub}&ivr=${iv.role}&ive=${iv.exp ?? 0}&ivs=${iv.sig}&dg=${dg}`
+    } else {
+      this.url = `${room}?tok=${tok}`
     }
-    this.url = `${room}?tok=${tok}` + (this.writerPub ? `&w=${this.writerPub}` : '')
     this.connect()
   }
 
@@ -242,10 +311,19 @@ export class OnlineTransport implements Transport {
   }
 
   private async onEnvelope(text: string) {
-    let env: { i?: string; d?: string; q?: number; snap?: number; ctl?: string }
+    let env: { i?: string; d?: string; q?: number; snap?: number; ctl?: string; p?: string }
     try {
       env = JSON.parse(text)
     } catch {
+      return
+    }
+    // the owner revoked a key; if it's OURS, stand down for good (the relay
+    // refuses our reconnects anyway — don't retry into a wall of 403s)
+    if (env.ctl === 'revoked') {
+      if (env.p && env.p === this.myPub) {
+        console.info('[bento-sync] this copy’s access was revoked by the owner')
+        this.close()
+      }
       return
     }
     if (env.ctl === 'ack' || env.ctl === 'ready') {
@@ -353,6 +431,16 @@ export class OnlineTransport implements Transport {
     this.ws = null
     this.setStatus('closed')
   }
+
+  /** OWNER action: revoke one member key (or an invite key — cutting off every
+   *  copy descended from that invite). Signed `rev.${pub}`; the relay stores it,
+   *  drops that key's future writes/joins, and fans out a `revoked` note. */
+  async revokeKey(pub: string, ownerPub: string, ownerPriv: string): Promise<boolean> {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false
+    const g = await signText(ownerPriv, `rev.${pub}`)
+    this.ws.send(JSON.stringify({ ctl: 'revoke', p: pub, o: ownerPub, g }))
+    return true
+  }
 }
 
 // --- share/join glue --------------------------------------------------------
@@ -391,15 +479,25 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
       return new NullTransport()
     }
     active?.close()
-    // readers carry writerPub (to name the room's writer key) but never the
-    // private half — so their op frames go unsigned and the relay drops them.
-    const priv = collab.role === 'reader' ? undefined : collab.writerPriv
+    // Auth shape per copy: reader → none (unsigned, relay drops writes);
+    // v2 owner → direct with ownerPriv; v2 member → invite chain (device key
+    // minted per-machine); legacy → the shared writer key pair.
+    let auth: AuthSpec | undefined
+    if (collab.role !== 'reader') {
+      if (collab.v === 2 && collab.owner && collab.ownerPriv) {
+        auth = { kind: 'direct', pub: collab.owner, priv: collab.ownerPriv }
+      } else if (collab.v === 2 && collab.owner && collab.invite) {
+        auth = { kind: 'chain', owner: collab.owner, invite: collab.invite, docId }
+      } else if (collab.writerPub) {
+        auth = { kind: 'direct', pub: collab.writerPub, priv: collab.writerPriv }
+      }
+    }
     active = new OnlineTransport(collab.room, collab.key, docId, onFrame, {
       onSnap: (doc, state) => session.applySnapshot(doc, state),
       getSnapshot: () => session.snapshot(),
       onOpen: () => session.hello(),
       onReady: (seen) => session.onRelayReady(seen),
-    }, collab.writerPub, priv)
+    }, auth)
     return active
   })
   return active

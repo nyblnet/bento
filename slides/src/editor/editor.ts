@@ -24,7 +24,7 @@ import { openSpeakerWindow, speakerIdleBody } from '../screens'
 import { borderPoint, boxCenter, lineEndpoints, setLineEndpoints, sideMidpoint } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, LOCALE_CHOICES } from '../i18n'
-import { disconnectOnline, joinFromDoc, mintCollab, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 
 const i18nT = t
 
@@ -458,6 +458,14 @@ export class Editor {
       item(t('Save as presentation package…'),
         t('A sealed hand-out: it opens straight into the show — viewing and presenting only, no editor, no live session.'),
         () => void this.savePresentationPackage())
+      // v2 (fine-grained) owner: sharing edit access mints an INVITE — the
+      // copy carries a delegation key, never the owner's private key, so the
+      // owner can later revoke this copy's lineage without re-keying the room.
+      if (this.store.doc.collab?.v === 2 && this.store.doc.collab.ownerPriv) {
+        item(t('Share editor copy…'),
+          t('A copy others edit live with you. It carries an owner-signed invite — you stay the owner and can revoke it later without cutting anyone else off.'),
+          () => void this.saveEditorCopy())
+      }
       if (sharingOn(this.store)) {
         item(t('Save read-only copy…'),
           t('A live viewer: it follows this shared session and shows edits as they happen, but can never change the deck (the relay enforces it — read-only is not just honour-system).'),
@@ -512,9 +520,36 @@ export class Editor {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.collab = { ...c, role: 'reader', on: true, sync: undefined }
     delete clone.collab.writerPriv // the muzzle — no write capability travels
+    delete clone.collab.ownerPriv // v2: neither the owner key…
+    delete clone.collab.invite //    …nor any invite (delegation) material
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
       if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
+    } catch {
+      this.toast(t('Saving failed'))
+    }
+  }
+
+  /** v2 share-with-edit-access: the copy carries an owner-signed INVITE (a
+   *  delegation keypair) instead of the owner's private key. Every device that
+   *  opens it mints its OWN member key and joins via the owner→invite→member
+   *  chain — so the owner can later revoke this invite (cutting off every copy
+   *  descended from it) or a single member key, without re-keying the room. */
+  private async saveEditorCopy() {
+    const c = this.store.doc.collab
+    if (!(c?.room && c.key && c.v === 2 && c.ownerPriv)) {
+      this.toast(t('Only the deck owner can mint editor invites'))
+      return
+    }
+    this.canvas.commitTextEdit()
+    this.session?.stampInto(this.store.doc) // copies rejoin as true forks
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    clone.collab!.invite = await mintInvite(c.ownerPriv, 'writer')
+    delete clone.collab!.ownerPriv
+    clone.collab!.on = true
+    try {
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone)
+      if (ok) this.toast(t('Editor copy saved — recipients join live with edit access'))
     } catch {
       this.toast(t('Saving failed'))
     }
