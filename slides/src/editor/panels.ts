@@ -12,6 +12,69 @@ import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
 
+// Hover help for panel rows, keyed by the RAW English label (translated at
+// render). A missing entry means no tooltip — better silence than an echo.
+// i18n NOTE: both the keys (row labels) and the values here reach t() as
+// VARIABLES — literal-extraction sweeps must treat this table as in-use
+// catalog keys, never prune them.
+const ROW_TIPS: Record<string, string> = {
+  'Page size': 'Deck-wide slide size. Elements keep their positions — changing size reframes the canvas, never rescales your art.',
+  'Width': 'Custom slide width in pixels',
+  'Height': 'Custom slide height in pixels',
+  'Background': 'This slide’s background colour',
+  'Transition': 'How this slide enters. Morph animates elements that share ids with the previous slide.',
+  'Name': 'A friendly name for this slide — shown in link pickers and state badges',
+  'Hover': 'What hovering does while presenting: reveal swaps content sets; focus-group dims the other groups',
+  'Hover dim': 'How strongly the non-hovered groups fade (focus-group mode)',
+  'Default set': 'The hover set everyone sees before any hover happens',
+  'Preview set': 'Which hover set to show on the canvas while you edit',
+  'Role': 'What this text IS in a layout (title, body…) — applying a layout matches elements by role',
+  'Shadow': 'Drop-shadow presets — the shadow follows the element’s real shape, corners and transparency',
+  'Color': 'Colour with opacity — pick with the swatch, the % field is transparency',
+  'Enter': 'Entrance animation when the slide appears (plays on non-morph entries; equal order = together)',
+  'Enter secs': 'How long the entrance takes, in seconds',
+  'Count up': 'Numbers in this text count up from zero when the slide enters',
+  'Ambient': 'Continuous motion while the slide is on screen — Ken Burns drift or zoom',
+  'Zoom': 'Ken Burns direction — drift, settle out, or settle in',
+  'Zoom %': 'How far the Ken Burns zoom travels',
+  'Zoom secs': 'How long one Ken Burns pass takes',
+  'Loop': 'A repeating animation: marching dashes along strokes, or motion along a drawn path',
+  'Loop secs': 'Seconds per lap of the loop',
+  'Path': 'The motion path — edit it as draggable points on the canvas',
+  'Lap easing': 'Tempo across one lap — ease-in-out dwells at the ends, linear is constant',
+  'Show on hover': 'Puts this element in a hover set — visible only while that set is active',
+  'Group': 'Presentation group — with focus-group hover, the other groups dim',
+  'Link to': 'Clicking this element during the show jumps to the chosen slide',
+  'Font': 'Typeface for this text',
+  'Size (pt)': 'Font size in points',
+  'Weight': 'Font weight — 400 regular, 700 bold',
+  'Align': 'Horizontal text alignment',
+  'V-align': 'Vertical alignment inside the box',
+  'Line height': 'Line spacing as a multiple of the font size',
+  'Fill style': 'Solid colour or a linear gradient',
+  'Fill': 'Fill colour with opacity — for lines this IS the line colour',
+  'Grad. angle': 'Gradient direction in degrees (CSS convention: 0° points up)',
+  'Stroke': 'Outline colour',
+  'Stroke width': 'Outline thickness in pixels',
+  'Line style': 'Solid, dashed or dotted stroke',
+  'Start tip': 'Decoration at the line’s start — arrow, dot or bar',
+  'End tip': 'Decoration at the line’s end — arrow, dot or bar',
+  'Corner radius': 'How rounded the corners are, in pixels',
+  'Type': 'Chart type — switching bar⇄pie animates the data across',
+  'Legend': 'Show the series legend above the chart',
+  'Second axis': 'Adds a right-hand value axis — assign series to it in the list below',
+  'Header row': 'Style the first row as a header',
+  'Preset': 'Quick table looks — Lined, Zebra, Boxed, Minimal',
+  'Header fill': 'Header row background colour',
+  'Header text': 'Header row text colour',
+  'Text': 'Table text colour',
+  'Grid lines': 'Colour of the lines between cells',
+  'Fit': 'How the media fills its box — cover crops to fill, contain letterboxes',
+  'URL': 'Link a hosted file instead of embedding — keeps the deck small',
+  'Poster': 'Preview image shown before the video plays',
+  'State of': 'Makes this slide a hidden state of another — reached by clicked links, skipped by arrow keys',
+}
+
 export class PropsPanel {
   private burst = false
 
@@ -138,7 +201,7 @@ export class PropsPanel {
     const { width: dw, height: dh } = this.store.doc.size
     const presetKey =
       Object.entries(PropsPanel.PAGE_PRESETS).find(([, s]) => s.w === dw && s.h === dh)?.[0] ?? 'Custom…'
-    this.row(t('Page size'), this.select(
+    this.row('Page size', this.select(
       [...Object.keys(PropsPanel.PAGE_PRESETS), 'Custom…'],
       presetKey,
       (v) => {
@@ -148,14 +211,14 @@ export class PropsPanel {
       },
     ))
     if (presetKey === 'Custom…') {
-      this.row(t('Width'), this.number(dw, 10, (v, fin) =>
+      this.row('Width', this.number(dw, 10, (v, fin) =>
         this.edit(() => { this.store.doc.size.width = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
-      this.row(t('Height'), this.number(dh, 10, (v, fin) =>
+      this.row('Height', this.number(dh, 10, (v, fin) =>
         this.edit(() => { this.store.doc.size.height = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
     }
-    this.row(t('Background'), this.color(slide.background, (v, fin) =>
+    this.row('Background', this.color(slide.background, (v, fin) =>
       this.edit(() => { this.store.slide.background = v }, fin)))
-    this.row(t('Transition'), this.select(
+    this.row('Transition', this.select(
       ['none', 'fade', 'slide', 'zoom', 'morph'],
       slide.transition,
       (v) => this.edit(() => { this.store.slide.transition = v as TransitionKind }, true),
@@ -175,7 +238,7 @@ export class PropsPanel {
     name.value = slide.name ?? ''
     name.addEventListener('change', () =>
       this.edit(() => { this.store.slide.name = name.value || undefined }, true))
-    this.row(t('Name'), name)
+    this.row('Name', name)
 
     const stateSel = document.createElement('select')
     const optNone = document.createElement('option')
@@ -196,7 +259,7 @@ export class PropsPanel {
         this.store.emit('slides')
       }, true))
     stateSel.title = t('A state is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.')
-    this.row(t('State of'), stateSel)
+    this.row('State of', stateSel)
 
     if (slide.stateOf) {
       const sync = document.createElement('button')
@@ -207,7 +270,7 @@ export class PropsPanel {
       this.host.appendChild(sync)
     }
 
-    this.row(t('Hover'), this.select(
+    this.row('Hover', this.select(
       ['none', 'focus-group', 'reveal'],
       slide.hover?.type ?? 'none',
       (v) => this.edit(() => {
@@ -216,7 +279,7 @@ export class PropsPanel {
           : { ...(this.store.slide.hover ?? {}), type: v as 'focus-group' | 'reveal' }
       }, true)))
     if (slide.hover?.type === 'focus-group') {
-      this.row(t('Hover dim'), this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
+      this.row('Hover dim', this.number(slide.hover.dim ?? 0.15, 0.01, (v, fin) =>
         this.edit(() => { if (this.store.slide.hover) this.store.slide.hover.dim = Math.min(Math.max(v, 0), 1) }, fin)))
     }
     if (slide.hover?.type === 'reveal') {
@@ -227,9 +290,9 @@ export class PropsPanel {
       defIn.value = slide.hover.default ?? ''
       defIn.addEventListener('change', () =>
         this.edit(() => { if (this.store.slide.hover) this.store.slide.hover.default = defIn.value || undefined }, true))
-      this.row(t('Default set'), defIn)
+      this.row('Default set', defIn)
       if (sets.length) {
-        this.row(t('Preview set'), this.select(sets, this.store.hoverPreview ?? slide.hover.default ?? sets[0], (v) => {
+        this.row('Preview set', this.select(sets, this.store.hoverPreview ?? slide.hover.default ?? sets[0], (v) => {
           this.store.hoverPreview = v
           this.store.emit('current') // re-render canvas without touching the doc
         }))
@@ -310,7 +373,7 @@ export class PropsPanel {
     )
     this.host.appendChild(geo)
 
-    this.row(t('Role'), this.select(
+    this.row('Role', this.select(
       ['none', 'title', 'subtitle', 'body', 'kicker'],
       el.role ?? 'none',
       (v) => this.mutate(el.id, (e) => {
@@ -321,7 +384,7 @@ export class PropsPanel {
     this.section(t('Effects'))
     const current = Object.entries(SHADOW_PRESETS).find(([, p]) => JSON.stringify(p) === JSON.stringify(el.shadow))?.[0]
       ?? (el.shadow ? 'custom' : 'none')
-    this.row(t('Shadow'), this.select(
+    this.row('Shadow', this.select(
       [...(current === 'custom' ? ['custom'] : []), 'none', ...Object.keys(SHADOW_PRESETS)],
       current,
       (v) => this.mutate(el.id, (e) => {
@@ -352,7 +415,7 @@ export class PropsPanel {
         this.mini(t('Blur'), sh.blur, (v) => setShadow(i, { blur: Math.max(v, 0) })),
       )
       this.host.appendChild(grid)
-      this.row(t('Color'), this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
+      this.row('Color', this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
     })
 
 
@@ -377,7 +440,7 @@ export class PropsPanel {
         else e.fx = fx
       }, true)
 
-    this.row(t('Enter'), this.select(
+    this.row('Enter', this.select(
       ['none', 'fade', 'fade-up', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'],
       el.fx?.enter ?? 'none',
       (v) => setFx(v === 'none'
@@ -385,14 +448,14 @@ export class PropsPanel {
         : { enter: v as NonNullable<typeof el.fx>['enter'] })))
     if (el.fx?.enter) {
       // per-kind default (slide-* 0.75s, fade-* 0.55s); lower = snappier
-      this.row(t('Enter secs'), this.number(
+      this.row('Enter secs', this.number(
         el.fx.enterDur ?? (el.fx.enter.startsWith('slide-') ? 0.75 : 0.55), 0.05,
         (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }))
     }
-    this.row(t('Count up'), this.select(
+    this.row('Count up', this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
       (v) => setFx({ countUp: v === 'on' ? true : undefined })))
-    this.row(t('Ambient'), this.select(
+    this.row('Ambient', this.select(
       ['none', 'kenburns'], el.fx?.ambient ?? 'none',
       (v) => setFx(v === 'none' ? { ambient: undefined, ken: undefined } : { ambient: 'kenburns' })))
     if (el.fx?.ambient === 'kenburns') {
@@ -400,7 +463,7 @@ export class PropsPanel {
       const dir = ken.dir ?? 'drift'
       const setKen = (patch: Partial<NonNullable<NonNullable<SlideElement['fx']>['ken']>>) =>
         setFx({ ken: { ...ken, ...patch } })
-      this.row(t('Zoom'), this.select(
+      this.row('Zoom', this.select(
         ['drift', 'zoom-out', 'zoom-in'],
         dir === 'out' ? 'zoom-out' : dir === 'in' ? 'zoom-in' : 'drift',
         (v) => {
@@ -408,17 +471,17 @@ export class PropsPanel {
           // give each style its natural pace when switching
           setFx({ ken: d === 'drift' ? undefined : { dir: d, scale: 1.06, duration: 2.5 } })
         }))
-      this.row(t('Zoom %'), this.number(
+      this.row('Zoom %', this.number(
         Math.round(((ken.scale ?? (dir === 'drift' ? 1.1 : 1.06)) - 1) * 100), 1,
         (v, fin) => { if (fin) setKen({ scale: 1 + Math.min(Math.max(v, 0), 100) / 100 }) }))
-      this.row(t('Zoom secs'), this.number(
+      this.row('Zoom secs', this.number(
         ken.duration ?? (dir === 'drift' ? 26 : 2.5), 0.1,
         (v, fin) => { if (fin) setKen({ duration: Math.max(v, 0.1) }) }))
     }
 
     // continuous loop animation
     const loop = el.fx?.loop
-    this.row(t('Loop'), this.select(
+    this.row('Loop', this.select(
       ['none', 'dash-march', 'motion-path'],
       loop?.type ?? 'none',
       (v) => setFx({
@@ -427,7 +490,7 @@ export class PropsPanel {
           : { type: 'motion-path', path: (loop as any)?.path ?? 'M 0 0 L 100 0', duration: (loop as any)?.duration ?? 3 },
       })))
     if (loop) {
-      this.row(t('Loop secs'), this.number(loop.duration ?? 2, 0.1, (v, fin) =>
+      this.row('Loop secs', this.number(loop.duration ?? 2, 0.1, (v, fin) =>
         this.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin)))
       if (loop.type === 'motion-path') {
         const path = document.createElement('input')
@@ -436,10 +499,10 @@ export class PropsPanel {
         path.title = t('SVG path the element travels along, relative to its position')
         path.addEventListener('change', () =>
           this.mutate(el.id, (e) => { if (e.fx?.loop?.type === 'motion-path') e.fx.loop.path = path.value }, true))
-        this.row(t('Path'), path)
+        this.row('Path', path)
 
         // lap easing — the tempo of a whole lap (per-anchor speed is edited on canvas)
-        this.row(t('Lap easing'), this.labeledSelect(
+        this.row('Lap easing', this.labeledSelect(
           [['none', t('Constant')], ['sine.inOut', t('Ease in-out')], ['power2.in', t('Ease in')], ['power2.out', t('Ease out')]],
           (loop as { ease?: string }).ease ?? 'none',
           (v) => this.mutate(el.id, (e) => {
@@ -477,7 +540,7 @@ export class PropsPanel {
       this.store.hoverPreview = soh.value || null
       this.store.emit('current')
     })
-    this.row(t('Show on hover'), soh)
+    this.row('Show on hover', soh)
 
     // group tag (hover focus & interaction targeting)
     const group = document.createElement('input')
@@ -489,7 +552,7 @@ export class PropsPanel {
         if (group.value) e.group = group.value
         else delete e.group
       }, true))
-    this.row(t('Group'), group)
+    this.row('Group', group)
 
     // link → slide picker
     const sel = document.createElement('select')
@@ -509,7 +572,7 @@ export class PropsPanel {
         if (sel.value) e.link = sel.value
         else delete e.link
       }, true))
-    this.row(t('Link to'), sel)
+    this.row('Link to', sel)
 
     // one-click interactivity: duplicate this slide as a hidden state
     // (element ids preserved ⇒ it morphs) and link this element to it
@@ -612,21 +675,21 @@ export class PropsPanel {
     hint.className = 'ed-hint'
     hint.innerHTML = t('While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.')
     this.host.appendChild(hint)
-    this.row(t('Font'), this.fontSelect(el))
+    this.row('Font', this.fontSelect(el))
     // Shown in POINTS (the unit office users know); the model stores slide-space
     // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
-    this.row(t('Size (pt)'), this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+    this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
       this.mutate(el.id, (e) => {
         (e as TextElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
       }, fin)))
-    this.row(t('Weight'), this.weightSelect(el))
-    this.row(t('Color'), this.color(el.color, (v, fin) =>
+    this.row('Weight', this.weightSelect(el))
+    this.row('Color', this.color(el.color, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin)))
-    this.row(t('Align'), this.select(['left', 'center', 'right'], el.align, (v) =>
+    this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).align = v as TextElement['align'] }, true)))
-    this.row(t('V-align'), this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+    this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true)))
-    this.row(t('Line height'), this.number(el.lineHeight, 0.05, (v, fin) =>
+    this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(v, 0.5) }, fin)))
 
     const embed = document.createElement('button')
@@ -703,7 +766,7 @@ export class PropsPanel {
   private buildShapeProps(el: ShapeElement) {
     this.section(t('Fill & stroke'))
     const grad = el.fillGradient
-    this.row(t('Fill style'), this.select(['solid', 'gradient'], grad ? 'gradient' : 'solid', (v) =>
+    this.row('Fill style', this.select(['solid', 'gradient'], grad ? 'gradient' : 'solid', (v) =>
       this.mutate(el.id, (e) => {
         const s = e as ShapeElement
         if (v === 'gradient') {
@@ -721,10 +784,10 @@ export class PropsPanel {
       }, true)))
 
     if (!grad) {
-      this.row(t('Fill'), this.colorAlpha(el.fill, (v, fin) =>
+      this.row('Fill', this.colorAlpha(el.fill, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin)))
     } else {
-      this.row(t('Grad. angle'), this.number(grad.angle, 1, (v, fin) =>
+      this.row('Grad. angle', this.number(grad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
           const g = (e as ShapeElement).fillGradient
           if (g) g.angle = v
@@ -772,11 +835,11 @@ export class PropsPanel {
       this.host.appendChild(add)
     }
 
-    this.row(t('Stroke'), this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
+    this.row('Stroke', this.colorAlpha(el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
-    this.row(t('Stroke width'), this.number(el.strokeWidth, 0.5, (v, fin) =>
+    this.row('Stroke width', this.number(el.strokeWidth, 0.5, (v, fin) =>
       this.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin)))
-    this.row(t('Line style'), this.select(
+    this.row('Line style', this.select(
       ['solid', 'dashed', 'dotted'],
       el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
       (v) => this.mutate(el.id, (e) => {
@@ -786,13 +849,13 @@ export class PropsPanel {
       }, true)))
     if (el.shape === 'line') {
       const ENDINGS = ['none', 'arrow', 'dot', 'bar']
-      this.row(t('Start tip'), this.select(ENDINGS, el.lineStart ?? 'none', (v) =>
+      this.row('Start tip', this.select(ENDINGS, el.lineStart ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineStart = v === 'none' ? undefined : (v as LineEnding) }, true)))
-      this.row(t('End tip'), this.select(ENDINGS, el.lineEnd ?? 'none', (v) =>
+      this.row('End tip', this.select(ENDINGS, el.lineEnd ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineEnd = v === 'none' ? undefined : (v as LineEnding) }, true)))
     }
     if (el.shape === 'rect') {
-      this.row(t('Corner radius'), this.number(el.radius, 1, (v, fin) =>
+      this.row('Corner radius', this.number(el.radius, 1, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin)))
     }
   }
@@ -837,7 +900,7 @@ export class PropsPanel {
       linkRow.append(label, unlink)
       this.host.appendChild(linkRow)
     }
-    this.row(t('Type'), this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
+    this.row('Type', this.select(Object.keys(CHART_PRESETS), el.preset ?? 'bar', (v) =>
       this.mutate(el.id, (e) => {
         const c = e as ChartElement
         c.preset = v
@@ -884,10 +947,10 @@ export class PropsPanel {
     const yAxis: any[] = Array.isArray(opt.yAxis) ? opt.yAxis : opt.yAxis ? [opt.yAxis] : [{ type: 'value' }]
     const twoAxes = yAxis.length > 1
 
-    this.row(t('Legend'), this.toggle(!!opt.legend, (on) =>
+    this.row('Legend', this.toggle(!!opt.legend, (on) =>
       this.editOption(el.id, (o) => { if (on) o.legend = { bottom: 0 }; else delete o.legend })))
 
-    this.row(t('Second axis'), this.toggle(twoAxes, (on) => this.editOption(el.id, (o) => {
+    this.row('Second axis', this.toggle(twoAxes, (on) => this.editOption(el.id, (o) => {
       const ss: any[] = Array.isArray(o.series) ? o.series : o.series ? [o.series] : []
       if (on) {
         const first = Array.isArray(o.yAxis) ? (o.yAxis[0] ?? {}) : (o.yAxis ?? {})
@@ -1115,7 +1178,7 @@ export class PropsPanel {
       else if (tb.rows.length > minRows) tb.rows.pop()
     }, true))
 
-    this.row(t('Header row'), this.toggle(el.header, (v) => this.mutate(el.id, (e) => {
+    this.row('Header row', this.toggle(el.header, (v) => this.mutate(el.id, (e) => {
       (e as TableElement).header = v
     }, true)))
 
@@ -1126,7 +1189,7 @@ export class PropsPanel {
       : st.zebra ? 'Zebra'
       : 'Minimal'
     this.section(t('Style'))
-    this.row(t('Preset'), this.select(['Lined', 'Zebra', 'Boxed', 'Minimal'], preset, (v) =>
+    this.row('Preset', this.select(['Lined', 'Zebra', 'Boxed', 'Minimal'], preset, (v) =>
       this.mutate(el.id, (e) => {
         const s = (e as TableElement).style
         s.borderWidth = v === 'Lined' || v === 'Boxed' ? 1 : 0
@@ -1135,13 +1198,13 @@ export class PropsPanel {
         else if (s.headerBg === 'transparent') { s.headerBg = '#1E2A3A'; s.headerColor = '#FFFFFF' }
       }, true)))
 
-    this.row(t('Header fill'), this.colorAlpha(st.headerBg, (v, fin) =>
+    this.row('Header fill', this.colorAlpha(st.headerBg, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TableElement).style.headerBg = v }, fin)))
-    this.row(t('Header text'), this.colorAlpha(st.headerColor, (v, fin) =>
+    this.row('Header text', this.colorAlpha(st.headerColor, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TableElement).style.headerColor = v }, fin)))
-    this.row(t('Text'), this.colorAlpha(st.color, (v, fin) =>
+    this.row('Text', this.colorAlpha(st.color, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TableElement).style.color = v }, fin)))
-    this.row(t('Grid lines'), this.colorAlpha(st.borderColor, (v, fin) =>
+    this.row('Grid lines', this.colorAlpha(st.borderColor, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TableElement).style.borderColor = v }, fin)))
 
     const grid = document.createElement('div')
@@ -1242,9 +1305,9 @@ export class PropsPanel {
 
   private buildImageProps(el: SlideElement) {
     this.section(t('Fit & corners'))
-    this.row(t('Fit'), this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
+    this.row('Fit', this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
-    this.row(t('Corner radius'), this.number((el as any).radius, 1, (v, fin) =>
+    this.row('Corner radius', this.number((el as any).radius, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin)))
   }
 
@@ -1291,7 +1354,7 @@ export class PropsPanel {
     url.value = el.src && !el.src.startsWith('data:') ? el.src : ''
     url.addEventListener('change', () =>
       this.mutate(el.id, (e) => { (e as MediaElement).src = url.value.trim() }, true))
-    this.row(t('URL'), url)
+    this.row('URL', url)
 
     // playback
     const toggle = (label: string, on: boolean, set: (v: boolean) => void) =>
@@ -1306,9 +1369,9 @@ export class PropsPanel {
     this.host.appendChild(note)
 
     if (el.kind === 'video') {
-      this.row(t('Fit'), this.select(['contain', 'cover', 'fill'], el.fit ?? 'contain', (v) =>
+      this.row('Fit', this.select(['contain', 'cover', 'fill'], el.fit ?? 'contain', (v) =>
         this.mutate(el.id, (e) => { (e as MediaElement).fit = v as MediaElement['fit'] }, true)))
-      this.row(t('Corner radius'), this.number(el.radius ?? 0, 1, (v, fin) =>
+      this.row('Corner radius', this.number(el.radius ?? 0, 1, (v, fin) =>
         this.mutate(el.id, (e) => { (e as MediaElement).radius = Math.max(v, 0) }, fin)))
       const poster = document.createElement('input')
       poster.type = 'text'
@@ -1320,7 +1383,7 @@ export class PropsPanel {
           const v = poster.value.trim()
           if (v) m.poster = v; else delete m.poster
         }, true))
-      this.row(t('Poster'), poster)
+      this.row('Poster', poster)
     }
   }
 
@@ -1535,10 +1598,11 @@ export class PropsPanel {
     const row = document.createElement('label')
     row.className = 'ed-row'
     const span = document.createElement('span')
-    span.textContent = label
-    // baseline discoverability: every control answers "what is this?" on hover;
-    // controls with a richer, specific tooltip keep their own
-    if (!input.title) input.title = label
+    span.textContent = t(label)
+    // real help on hover (label + control): looked up by the RAW English label;
+    // rows without an entry get no tooltip — never a useless label echo
+    const tip = ROW_TIPS[label]
+    if (tip && !input.title) row.title = t(tip)
     row.append(span, input)
     this.host.appendChild(row)
   }
