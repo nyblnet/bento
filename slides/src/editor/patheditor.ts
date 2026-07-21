@@ -212,6 +212,11 @@ export class PathEditor {
   private elId = ''
   private scale = () => 1
   private dirty = false
+  // Manual double-click detection for nodes: the DOM `dblclick` can't be used on
+  // anchors because selecting one redraws the overlay between the two clicks
+  // (destroying the shared target), so we track the last node mousedown here.
+  private lastDown = { idx: -2, t: 0 }
+  private suppressDbl = false
 
   constructor(
     private scaleHost: HTMLElement,
@@ -263,6 +268,7 @@ export class PathEditor {
     svg.addEventListener('dblclick', (ev) => this.onDblClick(ev))
     // click empty space to deselect (hide handles)
     svg.addEventListener('mousedown', (ev) => {
+      this.suppressDbl = false // fresh gesture on empty canvas — clear any stale suppress
       if (ev.target === svg && this.selected !== null) { this.selected = null; this.draw() }
     })
     this.scaleHost.appendChild(svg)
@@ -471,9 +477,33 @@ export class PathEditor {
     return { x: (ev.clientX - rect.left) / s, y: (ev.clientY - rect.top) / s }
   }
 
+  /** Remove waypoint `idx` (keeps at least two), keeping speeds + selection aligned. */
+  private removeNode(idx: number) {
+    if (this.nodes.length <= 2) return
+    this.nodes.splice(idx, 1)
+    this.speeds.splice(idx, 1)
+    if (this.selected !== null) {
+      if (this.selected === idx) this.selected = null
+      else if (this.selected > idx) this.selected--
+    }
+    this.dirty = true
+    this.draw()
+  }
+
   private dragAnchor(down: MouseEvent, idx: number) {
     down.stopPropagation()
     down.preventDefault()
+    // Second mousedown on the same node within the double-click window = remove.
+    // (We detect it here rather than via the DOM `dblclick`, which the
+    //  select-redraw below would otherwise defeat — see `lastDown`.)
+    if (idx === this.lastDown.idx && down.timeStamp - this.lastDown.t < 400) {
+      this.lastDown.idx = -2
+      this.suppressDbl = true // swallow the trailing DOM dblclick so it can't also insert
+      this.removeNode(idx)
+      return
+    }
+    this.lastDown = { idx, t: down.timeStamp }
+    this.suppressDbl = false // fresh gesture — any stale suppress is void
     // selecting a waypoint reveals its handles
     if (this.selected !== idx) { this.selected = idx; this.draw() }
     const startPt = this.toSlide(down)
@@ -568,23 +598,15 @@ export class PathEditor {
   private onDblClick(ev: MouseEvent) {
     ev.preventDefault()
     ev.stopPropagation()
+    // A double-click that already removed a node (handled in dragAnchor) must not
+    // fall through and insert a point where the node used to be.
+    if (this.suppressDbl) { this.suppressDbl = false; return }
     const target = ev.target as Element
     const q = this.toSlide(ev)
-    if (target.classList.contains('ed-pe-anchor')) {
-      // remove (keep at least two)
-      const idx = Number((target as SVGElement).dataset.idx)
-      if (this.nodes.length > 2) {
-        this.nodes.splice(idx, 1)
-        this.speeds.splice(idx, 1)
-        if (this.selected !== null) {
-          if (this.selected === idx) this.selected = null
-          else if (this.selected > idx) this.selected--
-        }
-        this.dirty = true
-      }
-      this.draw()
-      return
-    }
+    // Node removal is handled manually in dragAnchor (the select-redraw defeats a
+    // DOM dblclick on the anchor); a dblclick that still lands on a node is a
+    // stale target after that redraw — ignore it rather than mis-insert.
+    if (target.classList.contains('ed-pe-anchor')) return
     if (target.classList.contains('ed-pe-hit')) {
       // insert on the nearest segment via de Casteljau split — the split
       // preserves the trajectory shape EXACTLY (sub-pixel), and the three

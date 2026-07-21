@@ -30,7 +30,17 @@ pre-1.0.
   without changing its shape. Because the path is now stored as explicit cubics,
   the old sample-and-re-smooth round-trip drift is gone: a motion path is
   byte-stable across open/save, and existing decks reopen unchanged. Per-anchor
-  speed (scroll a point) and the live preview dot are preserved.
+  speed (scroll a point) and the live preview dot are preserved. Double-clicking
+  a waypoint to remove it is detected directly on the point's mousedown (the
+  select-on-click redraw would otherwise defeat the browser's dblclick, which
+  needs both clicks on the same element) — so remove now works whether or not the
+  point was already selected.
+
+- **Help: the `?` overlay now documents lines, curves & motion paths.** New
+  "Lines & curves" and "Motion paths" sections spell out the gestures — draw from
+  the Shape menu, drag points, click a point for bézier handles, Alt for a sharp
+  corner, double-click to add/remove a point, scroll a motion-path point to set
+  its speed.
 
 ## [1.0.6] — 2026-07-21
 

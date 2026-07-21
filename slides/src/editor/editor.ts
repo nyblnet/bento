@@ -1677,6 +1677,20 @@ export class Editor {
       ['C', t('Comment mode')],
       ['?', t('This help')],
     ])
+    section(t('Lines & curves'), [
+      [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
+      [t('Drag a point'), t('Move an endpoint or anchor; drag the body to move the whole line')],
+      [t('Click a point'), t('Reveal its bézier handles for a precise curve')],
+      [`${t('Alt')}-${t('drag')}`, t('Break a smooth point into a sharp corner')],
+      [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
+    ])
+    section(t('Motion paths'), [
+      [t('Presenting ▸ Loop'), t('Give an element a motion-path loop, then Edit path on canvas')],
+      [t('Drag points'), t('Shape the trajectory — the first point is the element’s rest spot')],
+      [t('Click a point'), t('Reveal bézier handles; Alt-drag one for a sharp corner')],
+      [t('Double-click'), t('Add a point on the path; double-click a point to remove it')],
+      [t('Scroll a point'), t('Set how fast the element moves through that point')],
+    ])
     section(t('Presenting'), [
       ['F5', t('Present')],
       ['F', t('Toggle fullscreen while presenting')],
