@@ -209,9 +209,12 @@ header.scrolled { background: rgba(10, 15, 25, 0.72); backdrop-filter: blur(14px
 .btn.ghost-btn { color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); }
 .btn.ghost-btn:hover { background: rgba(255, 255, 255, 0.06); transform: translateY(-2px); }
 .btn.live { color: #fff; border: 1px solid rgba(255, 255, 255, 0.32); background: rgba(255, 255, 255, 0.04); }
-/* secondary tier — visibly smaller than the primary CTA pair above them */
-.btn.sm { padding: 10px 20px; font-size: 13.5px; font-weight: 600; gap: 8px; }
+/* secondary tier — visibly smaller than the primary CTA pair above them,
+   and laid out as a MATCHED PAIR: equal width, centred content. */
+.btn.sm { padding: 10px 18px; font-size: 13.5px; font-weight: 600; gap: 8px; }
 .btn.sm .pulse { width: 8px; height: 8px; }
+.ctas-sec { max-width: 440px; }
+.ctas-sec .btn.sm { flex: 1 1 0; justify-content: center; }
 .btn.live:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.55); transform: translateY(-2px); }
 .btn.live .pulse { width: 9px; height: 9px; border-radius: 50%; background: #34a866; animation: pulse 2.2s ease-in-out infinite; }
 /* Guestbook pill: never wrap to two lines — shed the gloss, then the long
@@ -592,8 +595,8 @@ body.kdeck header, body.kdeck footer { display: none; }
         <a class="btn primary" href="/slides/">▶&nbsp; Try it in your browser</a>
         <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download <small class="dl-note">one file · ~__SHELL_KB__ KB</small></a>
       </div>
-      <div class="ctas rv in d3" style="margin:0 0 44px;gap:10px">
-        <a class="btn live sm" href="/guestbook/"><span class="pulse"></span><span class="gb-full">Join the public Guestbook</span><span class="gb-short">Guestbook</span></a>
+      <div class="ctas ctas-sec rv in d3" style="margin:0 0 44px;gap:10px">
+        <a class="btn live sm" href="/guestbook/"><span class="pulse"></span><span class="gb-full">Join the Guestbook</span><span class="gb-short">Guestbook</span></a>
         <a class="btn live sm" href="#get-skill"><span style="color:var(--peach)">✦</span><span class="gb-full">Get the AI skill</span><span class="gb-short">AI skill</span></a>
       </div>
       <div class="chips rv in d3" style="margin-top:0">
