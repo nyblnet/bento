@@ -20,6 +20,18 @@ pre-1.0.
   points and re-smoothed on every drag — lossy, drifting, no real handles. The
   new model parses the path's actual control points and round-trips losslessly.
 
+- **Hybrid bezier motion paths.** The "Edit path on canvas" motion-path editor
+  (the trajectory a presenting element loops along) now uses the same exact
+  cubic-bezier core. It stays SIMPLE by default — drop and drag waypoints and
+  the path auto-smooths, exactly as before — but selecting a waypoint reveals
+  its in/out control handles, and dragging one flips that point to "manual" for
+  a precise arc or a sharp corner (Alt) while untouched points keep
+  auto-smoothing. Inserting a point (double-click the path) splits the curve
+  without changing its shape. Because the path is now stored as explicit cubics,
+  the old sample-and-re-smooth round-trip drift is gone: a motion path is
+  byte-stable across open/save, and existing decks reopen unchanged. Per-anchor
+  speed (scroll a point) and the live preview dot are preserved.
+
 ## [1.0.6] — 2026-07-21
 
 - **Fix: topbar menus were icon-only on narrow screens.** The responsive rule

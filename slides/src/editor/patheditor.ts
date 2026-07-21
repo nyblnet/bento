@@ -1,18 +1,31 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento/Suite authors
-// Visual motion-path editing. The path of an fx.loop 'motion-path' is edited
-// as draggable anchor points on the canvas; segments are auto-smoothed
-// (Catmull-Rom → cubic bezier) so authors never manage control handles.
-// A preview dot runs the loop live while editing.
+// Visual motion-path editing — HYBRID bezier. The path of an fx.loop
+// 'motion-path' is a set of draggable waypoints. By default a waypoint stays
+// AUTO: its in/out tangents are auto-computed (Catmull-Rom) so the trajectory
+// stays smooth with zero handle wrangling — the same simple feel as before.
+// Selecting a waypoint REVEALS its two bezier control handles; the moment you
+// drag one, that waypoint becomes MANUAL — its tangents are then stored
+// explicitly (exact cubics, no re-sampling, no drift) and no longer
+// auto-recomputed, giving precise arcs and sharp corners (Alt = break smooth
+// into a corner). Untouched waypoints keep auto-smoothing. A preview dot runs
+// the loop live while editing.
+//
+// Because the trajectory is now stored as explicit cubics (via bezier.ts,
+// shared with the shape-curve editor) the lossy sample→re-smooth round-trip of
+// the old Catmull-Rom editor is gone: a path survives open→save byte-stable.
 //
 // Model contract: the stored path is RELATIVE to the element's rest position
 // (first point 0,0 — the element translates along it). The editor shows it
 // anchored at the element's centre; dragging the first anchor moves the
-// element itself.
+// element itself. Per-anchor `speeds[]` stays 1:1 with the waypoints through
+// every insert/remove/split (serializeBezier emits one on-curve point per
+// node, so anim.ts onCurvePoints/samplePath still line the speeds up exactly).
 
 import { anim } from '../anim'
 import { t } from '../i18n'
 import type { Store } from '../store'
+import { type BezNode, type Pt as BPt, handleLen, mirrorHandle, nearestT, parseBezier, serializeBezier, splitSegment } from './bezier'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -130,11 +143,72 @@ function perpDist(p: Pt, a: Pt, b: Pt): number {
   return Math.abs(dx * (a.y - p.y) - (a.x - p.x) * dy) / len
 }
 
+// --- hybrid bezier node model ------------------------------------------------
+// A waypoint carries a point plus (when MANUAL) explicit in/out handles. Auto
+// waypoints leave the handles undefined and let `autoHandles` derive Catmull-Rom
+// tangents at serialize time, so an auto path is byte-identical to the old
+// anchorsToPath output (backward compatible with every saved deck).
+
+interface WNode extends BezNode {
+  /** handles are explicit (the user dragged one) rather than auto-smoothed */
+  manual?: boolean
+}
+
+/** Catmull-Rom tangents for waypoint i — EXACTLY what anchorsToPath emits:
+ *  out = P + (Pnext − Pprev)/6, in = P − (Pnext − Pprev)/6 (ends clamped). */
+function autoHandles(pts: BPt[], i: number): { in?: BPt; out?: BPt } {
+  const n = pts.length
+  const prev = pts[Math.max(0, i - 1)]
+  const next = pts[Math.min(n - 1, i + 1)]
+  const dx = (next.x - prev.x) / 6
+  const dy = (next.y - prev.y) / 6
+  const p = pts[i]
+  return {
+    in: i > 0 ? { x: p.x - dx, y: p.y - dy } : undefined,
+    out: i < n - 1 ? { x: p.x + dx, y: p.y + dy } : undefined,
+  }
+}
+
+/** Resolve every node's handles: manual nodes keep theirs, auto nodes get
+ *  Catmull-Rom tangents. Result feeds serializeBezier / de Casteljau / preview. */
+function effectiveNodes(nodes: WNode[]): BezNode[] {
+  const pts = nodes.map((n) => n.p)
+  return nodes.map((n, i) => {
+    if (n.manual) return { p: { ...n.p }, in: n.in && { ...n.in }, out: n.out && { ...n.out } }
+    const a = autoHandles(pts, i)
+    return { p: { ...n.p }, in: a.in, out: a.out }
+  })
+}
+
+/** Serialize hybrid nodes to an SVG path (M/C, open). */
+function nodesToPath(nodes: WNode[]): string {
+  return serializeBezier(effectiveNodes(nodes), false)
+}
+
+/** Decide manual vs auto for freshly parsed nodes. A path with no curve
+ *  commands (a bare polyline like the "M 0 0 L 100 0" default) is all-auto —
+ *  it carries no bezier intent. When it DOES have curves, a node counts as auto
+ *  only if its handles still sit on the Catmull-Rom tangents (so legacy
+ *  Catmull-Rom motion paths reopen as fully auto and keep the simple feel;
+ *  hand-tuned handles reopen as manual and are preserved exactly). */
+function classifyNodes(nodes: BezNode[], hadCurves: boolean): WNode[] {
+  const pts = nodes.map((n) => n.p)
+  return nodes.map((n, i) => {
+    if (!hadCurves) return { p: n.p }
+    const a = autoHandles(pts, i)
+    const near = (p?: BPt, q?: BPt): boolean =>
+      (!p && !q) || (!!p && !!q && Math.hypot(p.x - q.x, p.y - q.y) < 0.6)
+    const auto = near(n.in, a.in) && near(n.out, a.out)
+    return auto ? { p: n.p } : { p: n.p, in: n.in, out: n.out, manual: true }
+  })
+}
+
 export class PathEditor {
   private overlay: SVGSVGElement | null = null
   private hint: HTMLElement | null = null
-  private pts: Pt[] = []
-  private speeds: number[] = [] // per-anchor speed multipliers, mirrors pts
+  private nodes: WNode[] = [] // slide coords
+  private speeds: number[] = [] // per-anchor speed multipliers, mirrors nodes
+  private selected: number | null = null
   private elId = ''
   private scale = () => 1
   private dirty = false
@@ -159,18 +233,27 @@ export class PathEditor {
     if (!el || el.fx?.loop?.type !== 'motion-path') return
     this.elId = elId
     this.dirty = false
+    this.selected = null
     const cx = el.x + el.w / 2
     const cy = el.y + el.h / 2
-    const rel = samplePathAnchors(el.fx.loop.path)
-    this.pts = rel.length
-      ? rel.map((p) => ({ x: p.x + cx, y: p.y + cy }))
-      : [{ x: cx, y: cy }, { x: cx + 160, y: cy }]
-    if (this.pts.length === 1) this.pts.push({ x: cx + 160, y: cy })
-    // A synthesized default line counts as an edit — Done should save it.
-    if (rel.length < 2) this.dirty = true
-    // per-anchor speeds (mirror pts length; default uniform)
+    // Parse the ACTUAL control points (exact, no re-sampling) and anchor at the
+    // element centre. The stored path is relative (first point ~0,0).
+    const raw = el.fx.loop.path
+    const hadCurves = /[cq]/i.test(raw)
+    const parsed = parseBezier(raw).nodes
+    let nodes = classifyNodes(parsed, hadCurves)
+    if (nodes.length < 2) {
+      // synthesize a default straight line (auto) — counts as an edit
+      nodes = [{ p: { x: 0, y: 0 } }, { p: { x: 160, y: 0 } }]
+      this.dirty = true
+    }
+    // path-local → slide coords (add the element centre to points + handles)
+    const shift = (p?: BPt): BPt | undefined => (p ? { x: p.x + cx, y: p.y + cy } : undefined)
+    this.nodes = nodes.map((n) => ({ p: shift(n.p)!, in: shift(n.in), out: shift(n.out), manual: n.manual }))
+    // per-anchor speeds (mirror node count; default uniform)
     const savedSpeeds = (el.fx.loop as { speeds?: number[] }).speeds
-    this.speeds = this.pts.map((_, i) => (savedSpeeds && savedSpeeds.length === this.pts.length ? savedSpeeds[i] : 1))
+    this.speeds = this.nodes.map((_, i) =>
+      savedSpeeds && savedSpeeds.length === this.nodes.length ? savedSpeeds[i] : 1)
 
     const svg = document.createElementNS(SVG_NS, 'svg')
     svg.classList.add('ed-pathedit')
@@ -178,13 +261,17 @@ export class PathEditor {
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
     svg.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;overflow:visible;z-index:50`
     svg.addEventListener('dblclick', (ev) => this.onDblClick(ev))
+    // click empty space to deselect (hide handles)
+    svg.addEventListener('mousedown', (ev) => {
+      if (ev.target === svg && this.selected !== null) { this.selected = null; this.draw() }
+    })
     this.scaleHost.appendChild(svg)
     this.overlay = svg
 
     this.hint = document.createElement('div')
     this.hint.className = 'ed-setbar ed-pathbar'
     this.hint.innerHTML =
-      `<span class="ed-setbar-label">${t('Motion path — drag points · double-click path to insert · double-click point to remove · scroll a point to change its speed')}</span>`
+      `<span class="ed-setbar-label">${t('Motion path — drag points · click a point for bezier handles · double-click path to insert · double-click point to remove · scroll a point to change its speed')}</span>`
     const done = document.createElement('button')
     done.className = 'ed-setchip active'
     done.textContent = t('Done')
@@ -195,30 +282,36 @@ export class PathEditor {
     this.draw()
   }
 
-  /** Persist: element rest position ← first anchor; path stored relative. */
+  /** Persist: element rest position ← first anchor; path stored relative as
+   *  explicit cubics (byte-stable round-trip). */
   commit() {
     if (!this.overlay) return
     const el = this.store.element(this.elId)
-    const pts = this.pts
+    const nodes = this.nodes
     const dirty = this.dirty
     this.cancel()
-    // Nothing was touched: keep the original path byte-for-byte. The anchor
-    // set is a sampled approximation of the curve, so writing it back on a
-    // no-op edit would still subtly reshape hand-authored beziers.
+    // Nothing was touched: keep the original path byte-for-byte (no reshape).
     if (!dirty) {
       this.onExit()
       return
     }
-    if (!el || el.fx?.loop?.type !== 'motion-path' || pts.length < 2) return
-    const p0 = pts[0]
-    const relPath = anchorsToPath(pts.map((p) => ({ x: p.x - p0.x, y: p.y - p0.y })))
+    if (!el || el.fx?.loop?.type !== 'motion-path' || nodes.length < 2) return
+    const p0 = nodes[0].p
+    // re-relativise to the first anchor, then serialize resolved cubics
+    const rel: WNode[] = nodes.map((n) => ({
+      p: { x: n.p.x - p0.x, y: n.p.y - p0.y },
+      in: n.in && { x: n.in.x - p0.x, y: n.in.y - p0.y },
+      out: n.out && { x: n.out.x - p0.x, y: n.out.y - p0.y },
+      manual: n.manual,
+    }))
+    const relPath = nodesToPath(rel)
     this.store.commit(() => {
       const live = this.store.element(el.id)
       if (!live || live.fx?.loop?.type !== 'motion-path') return
       live.fx.loop.path = relPath
       // persist per-anchor speeds only when they actually vary (keep the model clean)
-      const sp = this.speeds.slice(0, pts.length)
-      if (sp.length === pts.length && sp.some((s) => Math.abs(s - 1) > 1e-3)) live.fx.loop.speeds = sp
+      const sp = this.speeds.slice(0, nodes.length)
+      if (sp.length === nodes.length && sp.some((s) => Math.abs(s - 1) > 1e-3)) live.fx.loop.speeds = sp
       else delete live.fx.loop.speeds
       live.x = r(p0.x - live.w / 2)
       live.y = r(p0.y - live.h / 2)
@@ -233,6 +326,7 @@ export class PathEditor {
     this.overlay = null
     this.hint?.remove()
     this.hint = null
+    this.selected = null
   }
 
   // --- rendering -------------------------------------------------------------
@@ -243,7 +337,10 @@ export class PathEditor {
     anim.killTweensOf(svg.querySelectorAll('.ed-pe-dot'))
     svg.innerHTML = ''
     const k = 1 / this.scale()
-    const d = anchorsToPath(this.pts)
+    // keep the speeds array aligned with the nodes (defensive)
+    if (this.speeds.length !== this.nodes.length) this.speeds = this.nodes.map((_, i) => this.speeds[i] ?? 1)
+    const eff = effectiveNodes(this.nodes)
+    const d = serializeBezier(eff, false)
 
     const mk = (tag: string) => document.createElementNS(SVG_NS, tag)
     // wide invisible hit area for inserting on the curve
@@ -264,21 +361,59 @@ export class PathEditor {
     line.style.pointerEvents = 'none'
     svg.appendChild(line)
 
-    // keep the speeds array aligned with the anchors (defensive)
-    if (this.speeds.length !== this.pts.length) this.speeds = this.pts.map((_, i) => this.speeds[i] ?? 1)
+    // control handles for the SELECTED waypoint (revealed on demand). Auto
+    // waypoints show their computed tangents; grabbing one makes it manual.
+    if (this.selected !== null && this.selected < this.nodes.length) {
+      const i = this.selected
+      const e = eff[i]
+      for (const which of ['in', 'out'] as const) {
+        const h = e[which]
+        if (!h) continue
+        const stem = mk('line')
+        stem.setAttribute('x1', String(e.p.x))
+        stem.setAttribute('y1', String(e.p.y))
+        stem.setAttribute('x2', String(h.x))
+        stem.setAttribute('y2', String(h.y))
+        stem.setAttribute('stroke', '#8aa9e6')
+        stem.setAttribute('stroke-width', String(1 * k))
+        stem.style.pointerEvents = 'none'
+        svg.appendChild(stem)
+        const hd = mk('circle')
+        hd.setAttribute('cx', String(h.x))
+        hd.setAttribute('cy', String(h.y))
+        hd.setAttribute('r', String(4.5 * k))
+        hd.setAttribute('fill', '#5b8def')
+        hd.setAttribute('stroke', '#fff')
+        hd.setAttribute('stroke-width', String(1.5 * k))
+        hd.classList.add('ed-pe-handle')
+        hd.style.cssText = 'cursor:crosshair;pointer-events:all'
+        hd.addEventListener('mousedown', (ev) => this.dragHandle(ev, i, which))
+        svg.appendChild(hd)
+      }
+    }
 
-    this.pts.forEach((p, i) => {
-      const dot = mk('circle')
-      dot.setAttribute('cx', String(p.x))
-      dot.setAttribute('cy', String(p.y))
-      dot.setAttribute('r', String((i === 0 ? 8 : 6.5) * k))
-      dot.setAttribute('fill', i === 0 ? '#f7a600' : '#fff')
-      dot.setAttribute('stroke', '#31445c')
-      dot.setAttribute('stroke-width', String(1.6 * k))
+    this.nodes.forEach((n, i) => {
+      const p = n.p
+      const sel = i === this.selected
+      // manual corner waypoints render as squares (like the shape editor)
+      const dot = mk(n.manual && n.corner ? 'rect' : 'circle')
+      const rad = (i === 0 ? 8 : 6.5) * k
+      if (n.manual && n.corner) {
+        dot.setAttribute('x', String(p.x - rad))
+        dot.setAttribute('y', String(p.y - rad))
+        dot.setAttribute('width', String(rad * 2))
+        dot.setAttribute('height', String(rad * 2))
+      } else {
+        dot.setAttribute('cx', String(p.x))
+        dot.setAttribute('cy', String(p.y))
+        dot.setAttribute('r', String(rad))
+      }
+      dot.setAttribute('fill', i === 0 ? '#f7a600' : sel ? '#5b8def' : '#fff')
+      dot.setAttribute('stroke', sel ? '#2f6df6' : '#31445c')
+      dot.setAttribute('stroke-width', String((sel ? 2.4 : 1.6) * k))
       dot.classList.add('ed-pe-anchor')
       dot.dataset.idx = String(i)
       if (i === 0)
-
         dot.append(Object.assign(mk('title'), { textContent: 'Start — also the element’s rest position' }))
       dot.addEventListener('mousedown', (ev) => this.dragAnchor(ev, i))
       // scroll a point to change how fast the element moves through it
@@ -339,26 +474,73 @@ export class PathEditor {
   private dragAnchor(down: MouseEvent, idx: number) {
     down.stopPropagation()
     down.preventDefault()
+    // selecting a waypoint reveals its handles
+    if (this.selected !== idx) { this.selected = idx; this.draw() }
     const startPt = this.toSlide(down)
-    const orig = { ...this.pts[idx] }
+    const n = this.nodes[idx]
+    const orig = { p: { ...n.p }, in: n.in && { ...n.in }, out: n.out && { ...n.out } }
+    let moved = false
     let lastTs = 0
     const move = (ev: MouseEvent) => {
       const p = this.toSlide(ev)
-      if (p.x !== startPt.x || p.y !== startPt.y) this.dirty = true
-      this.pts[idx] = { x: orig.x + p.x - startPt.x, y: orig.y + p.y - startPt.y }
+      const dx = p.x - startPt.x
+      const dy = p.y - startPt.y
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) { moved = true; this.dirty = true }
+      n.p = { x: orig.p.x + dx, y: orig.p.y + dy }
+      // manual handles travel rigidly with the point (auto ones recompute)
+      if (n.manual) {
+        if (orig.in) n.in = { x: orig.in.x + dx, y: orig.in.y + dy }
+        if (orig.out) n.out = { x: orig.out.x + dx, y: orig.out.y + dy }
+      }
       // first anchor = element rest position: give live feedback on the node
       if (idx === 0) {
         const el = this.store.element(this.elId)
         const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(this.elId)}"]`)
         if (el && node) {
-          node.style.left = `${this.pts[0].x - el.w / 2}px`
-          node.style.top = `${this.pts[0].y - el.h / 2}px`
+          node.style.left = `${n.p.x - el.w / 2}px`
+          node.style.top = `${n.p.y - el.h / 2}px`
         }
       }
       if (ev.timeStamp - lastTs > 30) {
         lastTs = ev.timeStamp
         this.draw()
       }
+    }
+    const up = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      // Alt-click (no drag) toggles a manual waypoint between smooth and corner
+      if (!moved && ev.altKey) this.makeCorner(idx)
+      this.draw()
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
+  /** Drag a control handle: the waypoint becomes MANUAL (its tangents freeze at
+   *  their current auto values, then this handle moves). Smooth nodes mirror the
+   *  opposite handle; Alt breaks symmetry into a corner. */
+  private dragHandle(down: MouseEvent, idx: number, which: 'in' | 'out') {
+    down.stopPropagation()
+    down.preventDefault()
+    const n = this.nodes[idx]
+    if (!n.manual) {
+      // bake the current auto tangents so nothing jumps, then go manual
+      const a = autoHandles(this.nodes.map((m) => m.p), idx)
+      n.in = a.in
+      n.out = a.out
+      n.manual = true
+    }
+    const other = which === 'in' ? 'out' : 'in'
+    const oppLen = handleLen(n.p, n[other])
+    const move = (ev: MouseEvent) => {
+      const p = this.toSlide(ev)
+      n[which] = p
+      this.dirty = true
+      if (ev.altKey) n.corner = true // Alt breaks smooth symmetry into a corner
+      // smooth node: mirror the opposite handle's direction, keep its length
+      if (!n.corner && n[other]) n[other] = mirrorHandle(n.p, p, oppLen)
+      this.draw()
     }
     const up = () => {
       window.removeEventListener('mousemove', move)
@@ -369,42 +551,83 @@ export class PathEditor {
     window.addEventListener('mouseup', up)
   }
 
+  /** Toggle a waypoint's corner flag (making it manual first so the handles are
+   *  explicit and can diverge). */
+  private makeCorner(idx: number) {
+    const n = this.nodes[idx]
+    if (!n.manual) {
+      const a = autoHandles(this.nodes.map((m) => m.p), idx)
+      n.in = a.in
+      n.out = a.out
+      n.manual = true
+    }
+    n.corner = !n.corner
+    this.dirty = true
+  }
+
   private onDblClick(ev: MouseEvent) {
     ev.preventDefault()
     ev.stopPropagation()
     const target = ev.target as Element
-    const p = this.toSlide(ev)
+    const q = this.toSlide(ev)
     if (target.classList.contains('ed-pe-anchor')) {
       // remove (keep at least two)
       const idx = Number((target as SVGElement).dataset.idx)
-      if (this.pts.length > 2) {
-        this.pts.splice(idx, 1)
+      if (this.nodes.length > 2) {
+        this.nodes.splice(idx, 1)
         this.speeds.splice(idx, 1)
+        if (this.selected !== null) {
+          if (this.selected === idx) this.selected = null
+          else if (this.selected > idx) this.selected--
+        }
         this.dirty = true
       }
       this.draw()
       return
     }
     if (target.classList.contains('ed-pe-hit')) {
-      // insert into the nearest segment
+      // insert on the nearest segment via de Casteljau split — the split
+      // preserves the trajectory shape EXACTLY (sub-pixel), and the three
+      // involved nodes become manual so their frozen handles hold that shape.
+      const eff = effectiveNodes(this.nodes)
       let best = 0
-      let bestDist = Infinity
-      for (let i = 0; i < this.pts.length - 1; i++) {
-        const mx = (this.pts[i].x + this.pts[i + 1].x) / 2
-        const my = (this.pts[i].y + this.pts[i + 1].y) / 2
-        const dist = Math.hypot(p.x - mx, p.y - my)
-        if (dist < bestDist) { bestDist = dist; best = i }
+      let bestT = 0.5
+      let bestD = Infinity
+      for (let i = 0; i < eff.length - 1; i++) {
+        const a = eff[i]
+        const b = eff[i + 1]
+        const c1 = a.out ?? a.p
+        const c2 = b.in ?? b.p
+        const t = nearestT(a.p, c1, c2, b.p, q)
+        const pt = cubicPoint(a.p, c1, c2, b.p, t)
+        const dd = (pt.x - q.x) ** 2 + (pt.y - q.y) ** 2
+        if (dd < bestD) { bestD = dd; best = i; bestT = t }
       }
-      this.pts.splice(best + 1, 0, p)
-      this.speeds.splice(best + 1, 0, (this.speeds[best] + (this.speeds[best + 1] ?? this.speeds[best])) / 2)
+      const split = splitSegment(eff[best], eff[best + 1], bestT)
+      this.nodes[best] = { p: eff[best].p, in: eff[best].in, out: split.a.out, manual: true, corner: this.nodes[best].corner }
+      this.nodes[best + 1] = { p: eff[best + 1].p, in: split.b.in, out: eff[best + 1].out, manual: true, corner: this.nodes[best + 1].corner }
+      this.nodes.splice(best + 1, 0, { p: split.mid.p, in: split.mid.in, out: split.mid.out, manual: true })
+      const sA = this.speeds[best] ?? 1
+      const sB = this.speeds[best + 1] ?? sA
+      this.speeds.splice(best + 1, 0, (sA + sB) / 2)
+      if (this.selected !== null && this.selected > best) this.selected++
       this.dirty = true
       this.draw()
       return
     }
-    // empty canvas: append to the end
-    this.pts.push(p)
+    // empty canvas: append an auto waypoint at the end
+    this.nodes.push({ p: q })
     this.speeds.push(1)
     this.dirty = true
     this.draw()
+  }
+}
+
+/** Evaluate the cubic p0→p3 (controls c1,c2) at t — for insert hit-testing. */
+function cubicPoint(p0: BPt, c1: BPt, c2: BPt, p3: BPt, t: number): BPt {
+  const u = 1 - t
+  return {
+    x: u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p3.x,
+    y: u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p3.y,
   }
 }
