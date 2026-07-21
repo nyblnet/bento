@@ -16,7 +16,7 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   across the element box (vertical lines = rotation), keep 96px side margins
   (x ≤ 1184 for right-most content).
 - `src/save.ts` — the self-save trick: clone the document at boot (`capturePristine`),
-  swap the `#bento-doc` data block, re-serialize. JSON is `<`-escaped (`<`) so it can
+  swap the `#bento-doc` data block, re-serialize. JSON is `<`-escaped (`\u003c`) so it can
   never contain `</script>`. File System Access API first, download fallback.
 - `src/autosave.ts` (v0.9.8) — auto-save + local version history, IndexedDB
   (`bento-autosave`, two stores: `recovery` single-latest-per-docId, `versions`
@@ -491,7 +491,7 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
-  PLAINTEXT #bento-doc → splash → payloads last. Shell ~478KB (was 1.33MB).
+  PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).
   SPLICE CONTRACT (old updaters are frozen code): #bento-doc stays plaintext/
   same id, file survives DOMParser→splice→outerHTML, no stray script-close —
   release.mjs runs a conformance GATE before signing every release.
