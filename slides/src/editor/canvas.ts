@@ -13,6 +13,7 @@ import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
 import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors } from './lineedit'
+import { BezierEditor, isCurve } from './beziereditor'
 import { simplifyPoints } from './patheditor'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -37,6 +38,7 @@ export class SlideCanvas {
   private editingCell: { r: number; c: number } | null = null
   private pathEditor!: PathEditor
   private lineEditor!: LineEditor
+  private bezierEditor!: BezierEditor
   private drawOverlay: HTMLElement | null = null
   private comments!: CommentsUI
 
@@ -146,6 +148,8 @@ export class SlideCanvas {
     this.pathEditor.setScaleGetter(() => this.scale)
     this.lineEditor = new LineEditor(this.scaleHost, store)
     this.lineEditor.setScaleGetter(() => this.scale)
+    this.bezierEditor = new BezierEditor(this.scaleHost, store)
+    this.bezierEditor.setScaleGetter(() => this.scale)
     document.addEventListener('bento:edit-path', ((ev: CustomEvent) => {
       this.startPathEdit(ev.detail.id)
     }) as EventListener)
@@ -157,7 +161,7 @@ export class SlideCanvas {
     // Capture phase so it wins over Selecto AND Moveable's control-box area,
     // which otherwise swallows clicks over the current selection.
     document.addEventListener('mousedown', (ev) => {
-      if (!ev.altKey || ev.button !== 0 || this.pathEditor.active) return
+      if (!ev.altKey || ev.button !== 0 || this.pathEditor.active || this.bezierEditor.active) return
       // Alt on a resize/rotate handle means center-scale, not deep-select
       if (ev.target instanceof Element && ev.target.closest('.moveable-control-box')) return
       const r = this.scaleHost.getBoundingClientRect()
@@ -551,10 +555,16 @@ export class SlideCanvas {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
     const sel = this.store.selectedElements
-    const lineLike = sel.length === 1 && isLineLike(sel[0]) && !this.editing && !this.pathEditor.active
-    if (lineLike) this.lineEditor.attach(sel[0].id)
-    else this.lineEditor.detach()
-    const targets = this.editing || this.pathEditor?.active || lineLike ? [] : this.selectedNodes()
+    const one = sel.length === 1 && !this.editing && !this.pathEditor.active ? sel[0] : null
+    // Curves get true bezier handles (BezierEditor); lines and straight polygons
+    // keep endpoint/anchor handles (LineEditor).
+    const curve = !!one && isCurve(one)
+    const lineLike = !!one && !curve && isLineLike(one)
+    if (curve) { this.bezierEditor.attach(one!.id); this.lineEditor.detach() }
+    else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
+    else { this.lineEditor.detach(); this.bezierEditor.detach() }
+    const handled = curve || lineLike
+    const targets = this.editing || this.pathEditor?.active || handled ? [] : this.selectedNodes()
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
