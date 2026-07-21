@@ -93,7 +93,7 @@ deep dive: [docs/architecture.md](docs/architecture.md).
   document. Signature + hash + version monotonicity are verified in-app.
 - Known trade-offs: undo during live collab is snapshot-based and can revert
   a collaborator's concurrent edit to the same property; editing is
-  desktop-first (phones view and present well).
+  desktop-first (phones view and present well with gesture support).
 
 ## Build from source
 
