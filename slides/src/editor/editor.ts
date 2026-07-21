@@ -1655,6 +1655,9 @@ export class Editor {
     const h = document.createElement('h2')
     h.textContent = t('Shortcuts & tips')
     box.appendChild(h)
+    // sections flow into two balanced columns (title + footer stay full-width)
+    const cols = div('ed-help-cols')
+    box.appendChild(cols)
     const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'
     const section = (title: string, rows: Array<[string, string]>) => {
       const sec = div('ed-help-sec')
@@ -1666,7 +1669,7 @@ export class Editor {
         r.querySelector('span')!.textContent = d
         sec.appendChild(r)
       }
-      box.appendChild(sec)
+      cols.appendChild(sec)
     }
     section(t('Editing'), [
       [`${mod}S`, t('Save')],
@@ -1707,7 +1710,7 @@ export class Editor {
       t('Make a chart from a table and it stays linked — edit the table, the chart updates.'),
       t('Your work auto-saves; restore earlier versions from About → Version history.'),
     ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
-    tips.appendChild(ul); box.appendChild(tips)
+    tips.appendChild(ul); cols.appendChild(tips)
     const more = div('ed-help-more')
     const link = document.createElement('a')
     link.href = 'https://bento.page/help'

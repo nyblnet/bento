@@ -645,8 +645,12 @@ option { background: #fff; color: #1e2a3a; }
 
 /* --- help overlay + help button ------------------------------------------- */
 .ed-btn-help .ed-help-q { font-size: 15px; font-weight: 800; line-height: 1; }
-.ed-help-box { max-width: 480px; }
-.ed-help-sec { margin: 10px 0; }
+.ed-help-box { width: 640px; max-width: 92vw; }
+/* two balanced columns so the (now longer) list stays short vertically */
+.ed-help-cols { column-count: 2; column-gap: 30px; }
+.ed-help-sec { margin: 0 0 14px; break-inside: avoid; }
+/* one column when there isn't room for two (narrow / phone) */
+@media (max-width: 560px) { .ed-help-cols { column-count: 1; } }
 .ed-help-sec h3 {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--muted, #8a94a4); margin: 0 0 6px;
