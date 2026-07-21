@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: dropdowns rendered blank on iOS Safari.** WebKit draws a `<select>`'s
+  chosen value as empty text when any ancestor sets `user-select: none` — which
+  `.ed-root` does for the whole drag-driven UI. Form fields (`select`, `input`,
+  `textarea`, contenteditable) now restore `user-select: auto` explicitly.
+
 - **Skill renamed `bento-deck` → `bento-slides`** and moved into a Claude Code
   plugin marketplace at the repo root (`/plugin marketplace add nyblnet/bento`,
   then `/plugin install bento-slides@bento`). Also published as a claude.ai

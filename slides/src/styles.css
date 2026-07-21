@@ -32,6 +32,13 @@ html, body {
   flex-direction: column;
   user-select: none;
 }
+/* iOS Safari (WebKit) renders a <select>'s chosen value as BLANK text when any
+   ancestor sets user-select:none — restore it on form fields app-wide. Inputs
+   and textareas need it too or the iOS text-selection caret misbehaves. */
+select, option, input, textarea, [contenteditable='true'] {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
 
 /* ————— topbar ————— */
 
