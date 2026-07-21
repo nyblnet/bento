@@ -39,6 +39,17 @@ select, option, input, textarea, [contenteditable='true'] {
   -webkit-user-select: auto;
   user-select: auto;
 }
+/* The editor chrome is light-only. Without this, dark-mode phones render
+   NATIVE form controls dark (and Chrome-on-Android may force-darken the whole
+   page) while our ink stays dark — dark-on-dark, i.e. "blank" dropdowns.
+   Pair with the color-scheme meta in index.html; the explicit background/color
+   below keeps contrast even under a force-dark engine that ignores both. */
+:root { color-scheme: only light; }
+select, .ed-row input, .ed-row textarea {
+  background: #fff;
+  color: var(--ink-2, #1e2a3a);
+}
+option { background: #fff; color: #1e2a3a; }
 
 /* ————— topbar ————— */
 
