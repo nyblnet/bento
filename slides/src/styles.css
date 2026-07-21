@@ -1636,6 +1636,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 @media (max-width: 1200px) {
   .ed-topbar .ed-btn > span { display: none; } /* icons + tooltips take over */
   .ed-topbar .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
+  /* …but NEVER inside an open dropdown/menu — those items are text; hiding
+     their labels left icon-only mystery menus on phones. */
+  .ed-topbar .ed-menu .ed-btn > span,
+  .ed-topbar .ed-menu button > span { display: inline; }
   .ed-topbar { gap: 6px; padding: 8px 8px; }
 }
 @media (max-width: 760px) {

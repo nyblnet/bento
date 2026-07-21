@@ -9,6 +9,14 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [1.0.6] — 2026-07-21
+
+- **Fix: topbar menus were icon-only on narrow screens.** The responsive rule
+  that collapses topbar button labels to icons below 1200px also hid the label
+  of every item INSIDE the dropdown menus (Save, language, shapes, media) —
+  on phones they rendered as icon-only mystery lists. Menu items are exempt
+  now; only the bar-level buttons collapse.
+
 ## [1.0.5] — 2026-07-21
 
 - **Fix: dropdowns unreadable on dark-mode phones.** The app never declared a
