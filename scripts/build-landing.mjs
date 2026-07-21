@@ -8,7 +8,7 @@
 //
 //   node scripts/build-landing.mjs [outPath]     (default: site/index.html)
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -38,7 +38,21 @@ for (const [ph, file] of [
   ['__PH_FAIRWIDE__', 'fairwide.jpg'],
 ]) html = html.replace(ph, thumb(file))
 
-if (/__(FRAUNCES|INSTRUMENT|PH_[A-Z0-9]+)__/.test(html)) {
+// Download-pill size claim: measured from the actual shell the download link
+// serves, so it can never drift from the real file. Prefer the released copy
+// (release.mjs writes it before calling this script); fall back to the local
+// build. Rounded to the nearest 10 KB to match the "~" approximate style.
+const shellFile = [
+  join(root, 'site/releases/slides/Bento_Slides.bento.html'),
+  join(root, 'slides/dist-single/Bento_Slides.bento.html'),
+].find(existsSync)
+if (!shellFile) {
+  throw new Error('no built shell found to size the Download pill — cut a release or run `npm run build:single` first')
+}
+const shellKB = Math.round(statSync(shellFile).size / 1024 / 10) * 10
+html = html.replace('__SHELL_KB__', String(shellKB))
+
+if (/__(FRAUNCES|INSTRUMENT|PH_[A-Z0-9]+|SHELL_KB)__/.test(html)) {
   throw new Error('unreplaced placeholder in landing template')
 }
 
