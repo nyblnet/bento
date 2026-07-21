@@ -39,7 +39,7 @@ block-beta
   chrome["hdr"]:3
   notice["NOTICE"]:4
   doc["#bento-doc — THE DOCUMENT (0 → n MB)"]:14
-  js["runtime JS — app + Reveal + Moveable/Selecto + ECharts (1.17 MB)"]:26
+  js["runtime JS — app + Reveal + Moveable/Selecto + charts-lite (~560 KB)"]:26
   css["CSS (62 KB)"]:6
   splash["splash"]:3
 
@@ -72,7 +72,7 @@ else is the fixed *shell*. Skeleton of the actual markup
   </script>
 
   <!-- ═══ THE RUNTIME ═══ viewer + presenter + editor, one inlined bundle -->
-  <script type="module">/* ≈1.17 MB minified JS */</script>
+  <script type="module">/* ≈560 KB minified JS */</script>
   <style>/* ≈62 KB minified CSS — editor chrome, present overlay, print rules */</style>
   <style>/* splash CSS — paints before the bundle parses */</style>
 </head>
@@ -83,19 +83,22 @@ else is the fixed *shell*. Skeleton of the actual markup
 </html>
 ```
 
-Layout and sizes, in file order (byte offsets measured on the 1.24 MB shell;
-they shift with the data block's size — the *order* is fixed):
+Layout and sizes, in file order — illustrative figures for the *uncompressed*
+runtime (the shipped shell is DEFLATE-compressed, see the v0.7.0 note above; the
+*order* is what's fixed, byte offsets shift with the data block's size):
 
-| # | Part | Offset (shell) | ≈ size (raw) | What it is |
-|---|---|---|---|---|
-| 1 | Head chrome | 0 | 0.7 KB | doctype, metas, favicon, title |
-| 2 | NOTICE comment | 653 | 2 KB | bundled-library license notices |
-| 3 | **`#bento-doc` data block** | 2,825 | **0 → *n* MB** | **the document** — JSON, `<` escaped; assets are data URIs, so image-heavy decks dominate the file |
-| 4 | Runtime JS | 2,854 | 1.17 MB | app (~120 KB) + Reveal.js + Moveable/Selecto family + ECharts/zrender (~610 KB) |
-| 5 | Runtime CSS | 1,124,504 | 62 KB | editor + present + print styles |
-| 6 | Splash CSS + body mounts | 1,186,508 | 2 KB | splash `<style>`/`<div>`, `#app` mount |
+| # | Part | ≈ size (raw) | What it is |
+|---|---|---|---|
+| 1 | Head chrome | 0.7 KB | doctype, metas, favicon, title |
+| 2 | NOTICE comment | 2 KB | bundled-library license notices |
+| 3 | **`#bento-doc` data block** | **0 → *n* MB** | **the document** — JSON, `<` escaped; assets are data URIs, so image-heavy decks dominate the file |
+| 4 | Runtime JS | ~560 KB | app (~120 KB) + Reveal.js + Moveable/Selecto family + charts-lite (in-house SVG charts, replaced ECharts in v0.7.0) |
+| 5 | Runtime CSS | 62 KB | editor + present + print styles |
+| 6 | Splash CSS + body mounts | 2 KB | splash `<style>`/`<div>`, `#app` mount |
 
-Whole shell: 1.24 MB raw, ≈392 KB gzipped, before any document content.
+Once DEFLATE-compressed for shipping, the whole shell is well under 600 KB on
+disk before any document content (≈558 KB in the current build; it grows slowly
+as features land — the v0.7.0 note records the compression milestone).
 
 Two hard rules keep the file well-formed:
 
@@ -181,7 +184,7 @@ BentoDoc
 ├─ theme: { fontFamily, … }
 ├─ present?: { slideNumber?, controls?, progress? }
 ├─ assets?: { key → data URI }        ← images, fonts; referenced as "asset:key"
-├─ fonts?: [{ family, assetKey }]     ← @font-face injected at boot
+├─ fonts?: [{ family, asset, weight?, style? }]  ← @font-face injected at boot
 ├─ layouts?: Slide[]                  ← templates; instantiation KEEPS element ids (lineage → morph continuity)
 └─ slides: Slide[]                 ← linear order; states sit right after their parent
    ├─ id                           ← stable; morph matches elements ACROSS slides by element id

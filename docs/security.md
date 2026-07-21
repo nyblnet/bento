@@ -174,7 +174,7 @@ point.
 None of the above asks for trust. The relevant code is small and public:
 
 - [`server/sync-worker/src/worker.js`](../server/sync-worker/src/worker.js) —
-  the entire relay (~250 lines): ciphertext storage, token check, signature
+  the entire relay (~300 lines): ciphertext storage, token check, signature
   verification.
 - [`slides/src/sync/online.ts`](../slides/src/sync/online.ts) — client E2EE,
   key minting, frame signing.

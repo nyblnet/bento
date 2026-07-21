@@ -13,7 +13,7 @@ feature tour. Or grab a designed template from the
 **Download the app:** grab the single `Bento_Slides.bento.html` from the
 [GitHub Releases](https://github.com/nyblnet/bento/releases) page or straight
 from [bento.page](https://bento.page/releases/slides/Bento_Slides.bento.html)
-(~470 KB, no account, no installer). Open it in any modern browser and it *is*
+(~560 KB, no account, no installer). Open it in any modern browser and it *is*
 the editor. Save, and it rewrites itself with your deck inside.
 
 ## Why this exists
@@ -41,7 +41,7 @@ company keeps its servers on. Bento takes the other path:
 | **Charts, built in** | Bar / line / pie / scatter drawn by our own dependency-free engine, live during presentations: tooltips, zoom, and data that morphs when a bar chart becomes a pie. |
 | **Designed for AI** | The document is plain JSON in the file, so agents edit `.bento.html` files in place and chatbots round-trip the JSON (`window.bento.loadDoc`). See [docs/agents.md](docs/agents.md). |
 | **Signed self-updates** | Releases are ECDSA-signed and offered in-app. Updating writes a *new* file — the old one stays as your rollback. No server ever touches your documents. |
-| **Everything else** | Speaker view, comments, layouts, hidden interactive states, hover reveals, motion paths, PDF export, page sizes, 8 UI languages — in a ~400 KB shell. |
+| **Everything else** | Speaker view, comments, layouts, hidden interactive states, hover reveals, motion paths, PDF export, page sizes, 8 UI languages — in a ~560 KB shell. |
 
 ## Use it with AI
 
@@ -71,7 +71,7 @@ this repo at [docs/agents.md](docs/agents.md)).
 DOM). Animation is an in-house engine (`anim.ts`), charts are in-house
 (`charts.ts`), collaboration is an in-house CRDT (`sync/crdt.ts` — pure
 data, fuzz-tested by `scripts/test-sync.ts` across hundreds of thousands of
-convergence checks). The shell compresses to ~400 KB with the document block
+convergence checks). The shell compresses to ~560 KB with the document block
 left as plaintext so old files and outside tools can always splice it. The
 deep dive: [docs/architecture.md](docs/architecture.md).
 
@@ -97,7 +97,7 @@ backend to stand up.
 ```bash
 cd slides
 npm install
-npm run dev            # dev server (http://localhost:5199)
+npm run dev            # dev server (http://localhost:5173)
 npm run build:single   # → dist-single/Bento_Slides.bento.html (the product)
 ```
 

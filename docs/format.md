@@ -1,7 +1,7 @@
 # The `bento/slides` document format
 
 *Normative reference for the JSON document model, current as of Bento Slides
-**v0.9.20** (format version `1`). The authoritative source is
+**v1.0.6** (format version `1`). The authoritative source is
 [`slides/src/model.ts`](../slides/src/model.ts) — this document tracks it. If
 the two disagree, the code wins; please file that as a docs bug.*
 
@@ -44,7 +44,7 @@ dry reference of every field.
   references (image/media URLs) are allowed but break the offline guarantee;
   embedded `data:`/`asset:` sources keep it intact.
 
-When writing the JSON into the file block, **escape every `<` as `<`** so
+When writing the JSON into the file block, **escape every `<` as `\u003c`** so
 the string `</script>` can never appear and terminate the block.
 
 ---
