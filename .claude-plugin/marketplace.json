@@ -1,0 +1,14 @@
+{
+  "name": "bento",
+  "owner": { "name": "The Bento/Suite authors", "url": "https://bento.page" },
+  "plugins": [
+    {
+      "name": "bento-slides",
+      "source": "./plugins/bento-slides",
+      "description": "Author Bento presentations — self-contained .bento.html decks with morph transitions, live charts and speaker notes. Starts from nothing: downloads the latest Bento app automatically.",
+      "homepage": "https://bento.page",
+      "license": "MIT",
+      "keywords": ["slides", "presentation", "deck", "bento", "powerpoint"]
+    }
+  ]
+}

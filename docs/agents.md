@@ -15,12 +15,24 @@ carry features beyond this guide; unknown keys are ignored, never fatal.
 *Drop this file into your context (or point your harness at it) and you can
 author and edit Bento presentations directly. Also published at
 [bento.page/agents.md](https://bento.page/agents.md). For **Claude Code**,
-install the packaged skill once and it triggers automatically (or via
-`/bento-deck`):*
+install the packaged **bento-slides** skill once and it triggers automatically
+(or via `/bento-slides`) — it can even download the latest Bento app itself,
+so a deck can be authored from an empty folder:*
+
+```
+/plugin marketplace add nyblnet/bento
+/plugin install bento-slides@bento
+```
+
+*…or as a plain personal skill:*
 
 ```bash
-mkdir -p ~/.claude/skills/bento-deck && curl -fsSL https://bento.page/skills/bento-deck/SKILL.md -o ~/.claude/skills/bento-deck/SKILL.md
+mkdir -p ~/.claude/skills/bento-slides && curl -fsSL https://bento.page/skills/bento-slides/SKILL.md -o ~/.claude/skills/bento-slides/SKILL.md
 ```
+
+*(claude.ai / Claude Desktop: upload
+[bento.page/skills/bento-slides.zip](https://bento.page/skills/bento-slides.zip)
+under Settings → Skills.)*
 
 A Bento deck (`*.bento.html`) is a self-contained HTML file. The document
 lives in ONE plaintext block near the top:
@@ -139,6 +151,10 @@ each kind of content to the feature built for it:
 - [ ] **Speaker notes** written on each slide (they travel in the file and double as the talk track)?
 
 ## Minimal valid document
+
+Start from this skeleton when creating a deck from scratch. `size` and
+`theme` (including `fontFamily`) are **required** — the app will not boot
+without them — and elements should carry the full field set shown.
 
 ```json
 {

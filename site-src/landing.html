@@ -779,10 +779,15 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
       </div>
       <div class="card" style="grid-column:1/-1">
         <div class="tick"></div>
-        <h3>Claude Code? Install the <code>bento-deck</code> skill</h3>
-        <p>One command adds the skill. After that Claude Code reaches for it on its own whenever you ask for a deck — or run <code>/bento-deck</code> — and it edits the <code>.bento.html</code> in place, mapping your material to charts, morphs and state slides instead of flat bullets.</p>
-        <div class="cmd">mkdir -p ~/.claude/skills/bento-deck &amp;&amp; curl -fsSL https://bento.page/skills/bento-deck/SKILL.md -o ~/.claude/skills/bento-deck/SKILL.md</div>
-        <p style="margin-top:11px;font-size:13.5px;color:#5a6b82">No restart needed. Scope it to one project with <code>.claude/skills/bento-deck/</code> instead, and re-run the command any time to update.</p>
+        <h3>Get the <code>bento-slides</code> skill</h3>
+        <p>Install once and your assistant handles the rest — it even <b>downloads the latest Bento app by itself</b>, so "make me a deck about…" goes from a blank folder to a finished, opened <code>.bento.html</code> in one pass. It triggers automatically whenever you ask for slides (or run <code>/bento-slides</code>).</p>
+        <p style="margin:14px 0 4px"><b>Claude Code</b> — from the plugin store:</p>
+        <div class="cmd">/plugin marketplace add nyblnet/bento
+/plugin install bento-slides@bento</div>
+        <p style="margin:10px 0 4px;font-size:13.5px;color:#5a6b82">…or as a plain personal skill, one line:</p>
+        <div class="cmd">mkdir -p ~/.claude/skills/bento-slides &amp;&amp; curl -fsSL https://bento.page/skills/bento-slides/SKILL.md -o ~/.claude/skills/bento-slides/SKILL.md</div>
+        <p style="margin:14px 0 0"><b>Claude.ai &amp; Claude Desktop</b> — <a href="/skills/bento-slides.zip" download style="color:#C25B3F;font-weight:600">download the skill (.zip)</a>, then upload it under <i>Settings → Skills</i>.</p>
+        <p style="margin:10px 0 0"><b>ChatGPT · Codex · Gemini</b> — no install needed: attach <a href="/agents.md" style="color:#C25B3F;font-weight:600">bento.page/agents.md</a> to a ChatGPT project, drop it beside your deck as <code>AGENTS.md</code> for Codex, or add it to a Gem.</p>
       </div>
     </div>
   </div>

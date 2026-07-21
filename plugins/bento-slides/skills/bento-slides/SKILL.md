@@ -1,12 +1,14 @@
 ---
-name: bento-deck
+name: bento-slides
 description: >-
-  Author and edit Bento presentations — single-file .bento.html decks whose
-  document is plain JSON in a "#bento-doc" script block. Use when creating or
-  improving a Bento slide deck from source material: it maps content to the
-  right feature (charts, morph transitions, state slides, ken-burns, motion
-  paths) instead of producing static text slides, then writes the document
-  JSON in place. Full schema + recipes at https://bento.page/agents.md.
+  Create and edit Bento presentations — single-file .bento.html decks whose
+  document is plain JSON in a "#bento-doc" script block. Use whenever the user
+  wants a slide deck or presentation: starting from NOTHING (it downloads the
+  latest Bento app from bento.page automatically), from source material, or by
+  improving an existing .bento.html. Maps content to the right feature
+  (charts, morph transitions, state slides, ken-burns, motion paths) instead
+  of static text slides, then writes the document JSON in place. Full schema +
+  recipes at https://bento.page/agents.md.
 ---
 
 # Authoring Bento decks
@@ -21,9 +23,39 @@ JSON in a single block:
 You edit **that block only**, in place. Escape every `<` in the JSON as
 `<` so it can never contain a literal `</script>`. Leave the rest of the
 file (the compressed runtime) untouched. In a chat context instead, the user
-copies the JSON out (*About → Copy document JSON*) and pastes your replacement
-back (*Replace document from JSON*); `window.bento.loadDoc(json)` does it from
-the console.
+copies the JSON out (*Save ▾ → Copy document JSON*) and pastes your
+replacement back (*Save ▾ → Replace from JSON…*); `window.bento.loadDoc(json)`
+does it from the console.
+
+## Starting from nothing
+
+The user does NOT need Bento installed — the app ships inside every deck.
+When there is no `.bento.html` to edit, fetch the latest signed release
+yourself and author into it:
+
+```bash
+# name the file after the deck's topic, e.g. Q4_Review.bento.html
+curl -fsSL https://bento.page/releases/slides/Bento_Slides.bento.html -o "<Topic>.bento.html"
+```
+
+(Windows without curl: `iwr https://bento.page/releases/slides/Bento_Slides.bento.html -OutFile <Topic>.bento.html`.)
+
+Then verify the download contains `id="bento-doc"`, and **replace** that
+block's JSON (it ships with a showcase deck — discard it) with your document.
+Rules for a fresh document:
+
+- **Fetch https://bento.page/agents.md BEFORE authoring** and start from its
+  "Minimal valid document" skeleton. `size` and `theme` (including
+  `theme.fontFamily`) are **required** — the app will not boot without them.
+- **Fully specify element fields** as the skeleton shows (shapes need
+  `stroke`/`strokeWidth`; text needs `fontFamily`/`align`/`valign`) — missing
+  fields render wrong or not at all.
+- **Omit `docId` and `collab` entirely**: the app mints a fresh identity and
+  dormant collaboration credentials on first open.
+
+When done, offer to open it (`open` / `xdg-open` / `start`) — the file boots
+straight into the editor with the finished deck. Aim for one pass from
+request to opened deck.
 
 ## Workflow
 
@@ -81,7 +113,8 @@ the console.
   data URI in `src` (self-contained) or references a URL for big files (keeps
   the deck small). `autoplay` runs only in present mode and needs `muted:true`
   for video. Don't embed large videos — they bloat the file.
-- **Never regenerate `docId`** when editing; it is the document's identity.
+- **Never regenerate `docId`** when editing an existing deck; it is the
+  document's identity. (Fresh decks omit it — the app mints one.)
 - `template:true` → every open mints a fresh deck; `readonly:true` → the
   file boots straight into the show with no editor.
 
