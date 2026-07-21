@@ -64,6 +64,7 @@ section.doc li{padding:5px 0 5px 22px;position:relative}
 section.doc li::before{content:"";position:absolute;left:2px;top:14px;width:7px;height:7px;border-radius:2px;background:var(--peach2)}
 b,strong{color:var(--white);font-weight:600}
 code{font-family:var(--mono);font-size:.86em;background:rgba(94,118,153,.18);padding:2px 6px;border-radius:5px;color:var(--bone)}
+pre.cmd{font-family:var(--mono);font-size:13px;line-height:1.6;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:14px 0;overflow-x:auto;color:var(--white)}
 kbd{font-family:var(--in);font-size:12px;font-weight:600;background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--white);white-space:nowrap}
 
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:16px 0}
@@ -245,7 +246,14 @@ footer a{color:var(--dim)}
     <section class="doc" id="ai">
       <h2><span class="ix">11</span>Build with AI</h2>
       <p>Because the document is plain JSON inside the file, any AI can author or edit a deck. Drop the <code>.bento.html</code> into a chat or project (Cowork, Codex, Gemini, a ChatGPT project) and ask, or point a coding agent at it on disk.</p>
-      <p>The recipe an assistant should read first is <a href="/agents.md">bento.page/agents.md</a> — it maps your material to the right feature so you get a real deck, not a wall of text. Claude Code users get it as the <b>bento-deck</b> skill.</p>
+      <p>The recipe an assistant should read first is <a href="/agents.md">bento.page/agents.md</a> — it maps your material to the right feature so you get a real deck, not a wall of text.</p>
+
+      <h3>The Claude Code skill</h3>
+      <p>Claude Code can install the <b>bento-deck</b> skill so it authors decks with the right features automatically. Add it with one command:</p>
+      <pre class="cmd">mkdir -p ~/.claude/skills/bento-deck
+curl -fsSL https://bento.page/skills/bento-deck/SKILL.md \
+  -o ~/.claude/skills/bento-deck/SKILL.md</pre>
+      <p>No restart needed. From then on it triggers on its own whenever you ask for a deck, or you can run <code>/bento-deck</code> to invoke it directly. To scope it to a single project, use <code>.claude/skills/bento-deck/</code> instead; re-run the command any time to pull the latest version.</p>
     </section>
 
     <section class="doc" id="keys">

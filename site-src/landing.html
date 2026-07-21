@@ -282,6 +282,13 @@ section:not(.paper) .lede b { color: #fff; }
   font-size: 13px; line-height: 1.5; color: #33465e; font-style: italic;
 }
 .card code { background: rgba(13, 27, 46, 0.07); border-radius: 4px; padding: 1px 5px; font-size: 12.5px; font-family: ui-monospace, Menlo, monospace; }
+.card .cmd {
+  margin: 12px 0 4px; padding: 13px 15px; border-radius: 10px;
+  background: #0D1B2E; color: #E7ECF3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.card .cmd code { background: rgba(255,255,255,0.12); color: #FFC7B8; }
 .card .num { color: var(--peach); font-weight: 800; font-style: normal; }
 section:not(.paper) .card { background: var(--panel); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35); }
 section:not(.paper) .card h3 { color: #fff; }
@@ -768,7 +775,14 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
       <div class="card">
         <div class="tick"></div>
         <h3>The <code>agents.md</code> recipe</h3>
-        <p>One page the model reads first. It maps your material to the right feature (numbers → a <b>chart</b>, a comparison → a <b>table</b>, “before/after” → a <b>morph</b>, a drill-down → a <b>state slide</b>), so you get a real deck, not a wall of text. Claude Code users get it as the <b>bento-deck</b> skill.</p>
+        <p>One page the model reads first. It maps your material to the right feature (numbers → a <b>chart</b>, a comparison → a <b>table</b>, “before/after” → a <b>morph</b>, a drill-down → a <b>state slide</b>), so you get a real deck, not a wall of text.</p>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="tick"></div>
+        <h3>Claude Code? Install the <code>bento-deck</code> skill</h3>
+        <p>One command adds the skill. After that Claude Code reaches for it on its own whenever you ask for a deck — or run <code>/bento-deck</code> — and it edits the <code>.bento.html</code> in place, mapping your material to charts, morphs and state slides instead of flat bullets.</p>
+        <div class="cmd">mkdir -p ~/.claude/skills/bento-deck &amp;&amp; curl -fsSL https://bento.page/skills/bento-deck/SKILL.md -o ~/.claude/skills/bento-deck/SKILL.md</div>
+        <p style="margin-top:11px;font-size:13.5px;color:#5a6b82">No restart needed. Scope it to one project with <code>.claude/skills/bento-deck/</code> instead, and re-run the command any time to update.</p>
       </div>
     </div>
   </div>
