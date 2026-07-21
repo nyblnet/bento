@@ -8,7 +8,7 @@
 //
 //   node scripts/build-landing.mjs [outPath]     (default: site/index.html)
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -59,3 +59,13 @@ if (/__(FRAUNCES|INSTRUMENT|PH_[A-Z0-9]+|SHELL_KB)__/.test(html)) {
 mkdirSync(dirname(out), { recursive: true })
 writeFileSync(out, html)
 console.log(`landing → ${out} (${Math.round(html.length / 1024)} KB, self-contained)`)
+
+// Static site-root assets that travel with the landing: the social share card
+// (og:image) plus robots/sitemap. Copied into the same directory as the page.
+const siteDir = dirname(out)
+for (const f of ['og.png', 'robots.txt', 'sitemap.xml']) {
+  const src = join(root, 'site-src', f)
+  if (!existsSync(src)) throw new Error(`missing site-src/${f}`)
+  copyFileSync(src, join(siteDir, f))
+}
+console.log(`  + og.png, robots.txt, sitemap.xml → ${siteDir}`)
