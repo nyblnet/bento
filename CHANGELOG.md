@@ -9,7 +9,7 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
-## [1.0.3] — unreleased
+## [1.0.3] — 2026-07-21
 
 - **Fine-grained collaboration (per-person keys).** New decks mint an OWNER
   key; "Invite to edit…" saves a copy carrying an owner-signed invite, and
