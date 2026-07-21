@@ -1,7 +1,7 @@
 # bento-guestbook-daemon
 
 The sustainable home of the public guestbook (see `working/guestbook-design.md`):
-a Cloudflare Worker that serves the current epoch from R2, archives the live
+a Cloudflare Worker that serves the current epoch from Workers KV, archives the live
 room daily (read-only CRDT replay), and rolls epochs with fresh credentials.
 
 ## One-time setup
