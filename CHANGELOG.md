@@ -9,6 +9,16 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [1.0.5] — 2026-07-21
+
+- **Fix: dropdowns unreadable on dark-mode phones.** The app never declared a
+  color scheme, so dark-mode Android/iOS rendered NATIVE form controls dark
+  (and Chrome-on-Android could force-darken the page) while the ink stayed
+  dark — dark-on-dark "blank" dropdowns. The shell now declares
+  `color-scheme: only light` (meta + CSS) and form fields carry explicit
+  light background/ink. The 1.0.4 iOS `user-select` fix remains as the
+  second half of the story.
+
 ## [1.0.4] — 2026-07-21
 
 - **Fix: dropdowns rendered blank on iOS Safari.** WebKit draws a `<select>`'s
