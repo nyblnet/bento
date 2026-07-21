@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://bento.page" title="bento.page — try it in your browser">
+    <img src="docs/assets/bento-logo.svg" alt="Bento" width="96" height="96">
+  </a>
+</p>
+
 # [Bento — the office suite that fits in a file](https://bento.page/)
 
 **This PowerPoint alternative is a single HTML file.** A Bento deck carries
