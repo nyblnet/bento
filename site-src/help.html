@@ -248,12 +248,17 @@ footer a{color:var(--dim)}
       <p>Because the document is plain JSON inside the file, any AI can author or edit a deck. Drop the <code>.bento.html</code> into a chat or project (Cowork, Codex, Gemini, a ChatGPT project) and ask, or point a coding agent at it on disk.</p>
       <p>The recipe an assistant should read first is <a href="/agents.md">bento.page/agents.md</a> — it maps your material to the right feature so you get a real deck, not a wall of text.</p>
 
-      <h3>The Claude Code skill</h3>
-      <p>Claude Code can install the <b>bento-deck</b> skill so it authors decks with the right features automatically. Add it with one command:</p>
-      <pre class="cmd">mkdir -p ~/.claude/skills/bento-deck
-curl -fsSL https://bento.page/skills/bento-deck/SKILL.md \
-  -o ~/.claude/skills/bento-deck/SKILL.md</pre>
-      <p>No restart needed. From then on it triggers on its own whenever you ask for a deck, or you can run <code>/bento-deck</code> to invoke it directly. To scope it to a single project, use <code>.claude/skills/bento-deck/</code> instead; re-run the command any time to pull the latest version.</p>
+      <h3>The <b>bento-slides</b> skill</h3>
+      <p>Install the skill once and your assistant authors decks with the right features automatically — it even <b>downloads the latest Bento app by itself</b>, so you can go from an empty folder to a finished, opened deck in one ask. It triggers whenever you request slides, or run <code>/bento-slides</code> directly.</p>
+      <p><b>Claude Code</b> — from the plugin store:</p>
+      <pre class="cmd">/plugin marketplace add nyblnet/bento
+/plugin install bento-slides@bento</pre>
+      <p>…or as a plain personal skill (no restart needed; re-run to update; use <code>.claude/skills/…</code> to scope it to one project):</p>
+      <pre class="cmd">mkdir -p ~/.claude/skills/bento-slides
+curl -fsSL https://bento.page/skills/bento-slides/SKILL.md \
+  -o ~/.claude/skills/bento-slides/SKILL.md</pre>
+      <p><b>Claude.ai &amp; Claude Desktop</b> — <a href="/skills/bento-slides.zip" download>download the skill (.zip)</a> and upload it under <i>Settings → Skills</i>.</p>
+      <p><b>ChatGPT · Codex · Gemini</b> — no install: attach <a href="/agents.md">bento.page/agents.md</a> to a ChatGPT project, drop it beside your deck as <code>AGENTS.md</code> for Codex, or add it to a Gem.</p>
     </section>
 
     <section class="doc" id="keys">

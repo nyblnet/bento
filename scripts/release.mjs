@@ -101,9 +101,16 @@ writeFileSync(
   join(site, 'agents.md'),
   readFileSync(join(root, 'docs/agents.md'), 'utf8').replace(/__APP_VERSION__/g, version),
 )
-// The harness skill (Cowork / Claude Code), fetchable + droppable.
+// The harness skill (canonical home: the Claude Code plugin at
+// plugins/bento-slides). Published three ways: the raw SKILL.md (curl
+// one-liner), a claude.ai-uploadable zip (must contain bento-slides/SKILL.md,
+// folder-inside-zip), and a compat copy at the old bento-deck URL.
+const skillSrc = join(root, 'plugins/bento-slides/skills/bento-slides/SKILL.md')
+mkdirSync(join(site, 'skills/bento-slides'), { recursive: true })
+cpSync(skillSrc, join(site, 'skills/bento-slides/SKILL.md'))
 mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
-cpSync(join(root, 'skills/bento-deck/SKILL.md'), join(site, 'skills/bento-deck/SKILL.md'))
+cpSync(skillSrc, join(site, 'skills/bento-deck/SKILL.md'))
+execFileSync('zip', ['-q', '-X', '-o', 'bento-slides.zip', 'bento-slides/SKILL.md'], { cwd: join(site, 'skills') })
 
 // MIT license — travels to the public site repo so the published tree carries it.
 cpSync(join(root, 'LICENSE'), join(site, 'LICENSE'))

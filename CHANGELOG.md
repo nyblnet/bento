@@ -9,6 +9,16 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [Unreleased]
+
+- **Skill renamed `bento-deck` → `bento-slides`** and moved into a Claude Code
+  plugin marketplace at the repo root (`/plugin marketplace add nyblnet/bento`,
+  then `/plugin install bento-slides@bento`). Also published as a claude.ai
+  uploadable zip (`bento.page/skills/bento-slides.zip`); the old
+  `skills/bento-deck/SKILL.md` URL keeps serving the current skill. The skill
+  now bootstraps from nothing: it downloads the latest signed release itself,
+  so "make me a deck" works in an empty folder.
+
 ## [1.0.3] — 2026-07-21
 
 - **Fine-grained collaboration (per-person keys).** New decks mint an OWNER
