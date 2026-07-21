@@ -14,9 +14,13 @@ carry features beyond this guide; unknown keys are ignored, never fatal.
 
 *Drop this file into your context (or point your harness at it) and you can
 author and edit Bento presentations directly. Also published at
-[bento.page/agents.md](https://bento.page/agents.md). For a harness
-(Claude Code / Cowork), the packaged skill is at
-[bento.page/skills/bento-deck/SKILL.md](https://bento.page/skills/bento-deck/SKILL.md).*
+[bento.page/agents.md](https://bento.page/agents.md). For **Claude Code**,
+install the packaged skill once and it triggers automatically (or via
+`/bento-deck`):*
+
+```bash
+mkdir -p ~/.claude/skills/bento-deck && curl -fsSL https://bento.page/skills/bento-deck/SKILL.md -o ~/.claude/skills/bento-deck/SKILL.md
+```
 
 A Bento deck (`*.bento.html`) is a self-contained HTML file. The document
 lives in ONE plaintext block near the top:
