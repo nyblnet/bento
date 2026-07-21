@@ -1,10 +1,19 @@
 {
   "name": "bento-slides",
   "description": "Author Bento presentations — self-contained .bento.html decks with morph transitions, live charts and speaker notes. Starts from nothing: downloads the latest Bento app automatically.",
-  "version": "1.0.3",
-  "author": { "name": "The Bento/Suite authors", "url": "https://bento.page" },
+  "version": "1.0.4",
+  "author": {
+    "name": "The Bento/Suite authors",
+    "url": "https://bento.page"
+  },
   "homepage": "https://bento.page",
   "repository": "https://github.com/nyblnet/bento",
   "license": "MIT",
-  "keywords": ["slides", "presentation", "deck", "bento", "powerpoint"]
+  "keywords": [
+    "slides",
+    "presentation",
+    "deck",
+    "bento",
+    "powerpoint"
+  ]
 }

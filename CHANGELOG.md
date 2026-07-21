@@ -9,7 +9,7 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
-## [Unreleased]
+## [1.0.4] — 2026-07-21
 
 - **Fix: dropdowns rendered blank on iOS Safari.** WebKit draws a `<select>`'s
   chosen value as empty text when any ancestor sets `user-select: none` — which
