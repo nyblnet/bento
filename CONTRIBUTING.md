@@ -14,7 +14,7 @@ run and no account to create — the whole app builds to one HTML file.
 git clone https://github.com/nyblnet/bento.git
 cd bento/slides
 npm install
-npm run dev            # dev server at http://localhost:5199
+npm run dev            # dev server at http://localhost:5173
 ```
 
 The current app lives in `slides/`. Common commands (run from `slides/`):
@@ -23,7 +23,7 @@ The current app lives in `slides/`. Common commands (run from `slides/`):
 |---|---|
 | `npm run dev` | Vite dev server with hot reload. |
 | `npm run build:single` | Produces the shippable `dist-single/Bento_Slides.bento.html` — one file with the runtime, editor, and an empty document block. |
-| `node scripts/test-sync.ts` | The CRDT convergence rig. Run it after **any** change to `slides/src/sync/crdt.ts`; it has caught many ordering bugs. `SEEDS`, `STEPS`, and `ACTORS` env vars tune the fuzzing. |
+| `node ../scripts/test-sync.ts` | The CRDT convergence rig. Run it after **any** change to `slides/src/sync/crdt.ts`; it has caught many ordering bugs. `SEEDS`, `STEPS`, and `ACTORS` env vars tune the fuzzing. |
 
 ## Where things live
 

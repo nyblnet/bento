@@ -21,7 +21,7 @@ JSON in a single block:
 ```
 
 You edit **that block only**, in place. Escape every `<` in the JSON as
-`<` so it can never contain a literal `</script>`. Leave the rest of the
+`\u003c` so it can never contain a literal `</script>`. Leave the rest of the
 file (the compressed runtime) untouched. In a chat context instead, the user
 copies the JSON out (*Save ▾ → Copy document JSON*) and pastes your
 replacement back (*Save ▾ → Replace from JSON…*); `window.bento.loadDoc(json)`

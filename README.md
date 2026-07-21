@@ -4,7 +4,7 @@
   </a>
 </p>
 
-# Bento — the office suite that fits in a file
+# [Bento — the office suite that fits in a file](https://bento.page/)
 
 **This PowerPoint alternative is a single HTML file.** A Bento deck carries
 its own viewer, presenter, and editor inside the document — open it in any
@@ -39,7 +39,7 @@ company keeps its servers on. Bento takes the other path:
 
 ## What's inside
 
-| | |
+| Feature | Description |
 |---|---|
 | **Morph presenting** | Elements that share an id animate between slides — position, size, color, even gradients. Duplicate a slide, rearrange, and the motion designs itself. |
 | **Live collaboration** | E2EE (AES-GCM) with keys that live in your file, never on a server. The file itself is the invitation: anyone who opens a copy joins. Offline edits merge back precisely — our own CRDT, character-level text merging included. |
@@ -103,7 +103,7 @@ backend to stand up.
 ```bash
 cd slides
 npm install
-npm run dev            # dev server (http://localhost:5199)
+npm run dev            # dev server (http://localhost:5173)
 npm run build:single   # → dist-single/Bento_Slides.bento.html (the product)
 ```
 
