@@ -33,6 +33,7 @@ company keeps its servers on. Bento takes the other path:
 
 ## What's inside
 
+| Feature | Description |
 |---|---|
 | **Morph presenting** | Elements that share an id animate between slides — position, size, color, even gradients. Duplicate a slide, rearrange, and the motion designs itself. |
 | **Live collaboration** | E2EE (AES-GCM) with keys that live in your file, never on a server. The file itself is the invitation: anyone who opens a copy joins. Offline edits merge back precisely — our own CRDT, character-level text merging included. |
