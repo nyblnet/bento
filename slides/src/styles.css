@@ -496,6 +496,9 @@ option { background: #fff; color: #1e2a3a; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* tall dialogs (long help, version history) must scroll, not overflow the viewport */
+  max-height: 88vh;
+  overflow-y: auto;
 }
 .ed-about-head {
   display: flex;
