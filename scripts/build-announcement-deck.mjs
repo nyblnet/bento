@@ -63,14 +63,14 @@ const tiles = (a, b, c) => [
 
 const s1 = slide({
   id: 'an-cover', background: INK, transition: 'none',
-  notes: 'Hello, Hacker News. You are not reading a blog post about the product — you are inside it. This file is a complete, editable Bento deck: press Escape at any point and you are in the editor. Arrow keys to continue.',
+  notes: 'Hello, Hacker News. You did not open a blog post about the product — you opened the product. This file booted the actual Bento editor with the announcement loaded as a live, editable deck. Press the Slideshow button (bottom-left of the canvas) to watch it play with morphs, arrow-key through the slides to read, or click anything to edit. It is a template, so saving mints you your own copy.',
   elements: [
     ...tiles({ x: 950, y: 110, w: 200, h: 200 }, { x: 1064, y: 340, w: 120, h: 180 }, { x: 900, y: 380, w: 120, h: 120 }),
     kick(96, 96, 'SHOW HN — BENTO/SUITE'),
     text({ x: 88, y: 150, w: 880, h: 300, html: 'This announcement<br>is the product.', fontSize: 96, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1.02 }),
     text({ x: 96, y: 402, w: 1040, h: 48, html: 'The boring deck is dead. One file killed it.', fontSize: 27, fontFamily: FR, fontWeight: 900, color: PEACH, lineHeight: 1.1, fx: { enter: 'fade-up', order: 1 } }),
-    text({ x: 96, y: 476, w: 760, h: 90, html: 'You are inside a <b>.bento.html</b> file — a presentation that carries its own editor, presenter and format. One file. No install. No account.', fontSize: 20, color: MIST, lineHeight: 1.6, fx: { enter: 'fade-up', order: 2 } }),
-    text({ x: 96, y: 644, w: 1000, h: 24, html: '→ ADVANCE · ESC OPENS THE EDITOR ON THIS VERY FILE', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: 'rgba(255,158,138,0.85)', fx: { enter: 'fade-up', order: 3 } }),
+    text({ x: 96, y: 476, w: 820, h: 90, html: 'You opened a <b>.bento.html</b> file and it booted its own editor — you are in the actual app, with this announcement loaded as a live deck. One file. No install. No account.', fontSize: 20, color: MIST, lineHeight: 1.6, fx: { enter: 'fade-up', order: 2 } }),
+    text({ x: 96, y: 644, w: 1080, h: 24, html: '▶ PRESS SLIDESHOW TO WATCH IT PLAY&nbsp;&nbsp;·&nbsp;&nbsp;← → TO READ&nbsp;&nbsp;·&nbsp;&nbsp;CLICK ANYTHING TO EDIT — IT’S ALREADY YOURS', fontSize: 12, fontWeight: 700, letterSpacing: 2.5, color: 'rgba(255,158,138,0.85)', fx: { enter: 'fade-up', order: 3 } }),
   ],
 })
 
@@ -80,7 +80,7 @@ const s2 = slide({
   elements: [
     ...tiles({ x: 96, y: 120, w: 110, h: 110 }, { x: 226, y: 120, w: 70, h: 110 }, { x: 316, y: 120, w: 64, h: 64 }),
     text({ x: 90, y: 280, w: 1100, h: 160, html: 'One file is the app.', fontSize: 84, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1 }),
-    text({ x: 96, y: 440, w: 1000, h: 130, html: 'Deck, viewer, presenter, editor, fonts, images, charts — all inside one ~470 KB HTML file that <b>saves itself</b>. Email it, AirDrop it, archive it for a decade. Every copy is the complete product.', fontSize: 21, color: MIST, lineHeight: 1.65, fx: { enter: 'fade-up' } }),
+    text({ x: 96, y: 440, w: 1000, h: 130, html: 'Deck, viewer, presenter, editor, fonts, images, charts — all inside one ~560 KB HTML file that <b>saves itself</b>. Email it, AirDrop it, archive it for a decade. Every copy is the complete product.', fontSize: 21, color: MIST, lineHeight: 1.65, fx: { enter: 'fade-up' } }),
     text({ x: 96, y: 640, w: 900, h: 24, html: 'NOTHING TO INSTALL · NOTHING TO EXPIRE · WORKS FROM file://', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: MIST_DIM, fx: { enter: 'fade-up', order: 2 } }),
   ],
 })
@@ -104,15 +104,15 @@ const s3 = slide({
 
 const s4 = slide({
   id: 'an-collab', background: INK, transition: 'fade',
-  notes: 'Collaboration without accounts: keys are minted client-side at document creation and live in the file. The relay stores ciphertext and learns nothing. Read-only copies are CRYPTOGRAPHICALLY signed to read-not-write — the room id commits to an ECDSA writer public key, and the blind relay drops any unsigned mutating frame at the edge. Enforced, not an honour-system flag; no permissions table to misconfigure. Offline edits merge back through our own CRDT (character-level text merging), verified by a convergence rig across hundreds of thousands of checks.',
+  notes: 'Collaboration without accounts, now per-person. New decks mint an owner key; "Invite to edit" carries an owner-signed invite, and each device that opens it mints its OWN key and joins via that signature chain. The blind relay verifies the chain per socket and drops unsigned writes — so read-only copies cannot write and the owner can REMOVE any one person, all cryptographically enforced, no permissions table to misconfigure. The People panel shows key-verified identities with fingerprints. The relay itself stores only ciphertext and learns nothing. Offline edits merge back through our own CRDT (character-level text merging), verified by a convergence rig across hundreds of thousands of checks.',
   elements: [
     kick(96, 96, 'TOGETHER, LIVE'),
     text({ x: 90, y: 140, w: 1100, h: 180, html: 'The file is<br>the invitation.', fontSize: 76, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1.02 }),
-    text({ x: 96, y: 350, w: 1080, h: 120, html: 'Start a live session and send the file — anyone who opens a copy joins. <b>E2EE</b>, keys never leave the file, offline edits merge both ways — and read-only copies are <b>cryptographically</b> signed to read-not-write, enforced at the relay, not by courtesy.', fontSize: 20, color: MIST, lineHeight: 1.55, fx: { enter: 'fade-up' } }),
+    text({ x: 96, y: 350, w: 1080, h: 120, html: 'Start a live session and send the file — anyone who opens a copy joins. <b>E2EE</b>, keys never leave the file, offline edits merge both ways. Access is <b>per-person</b>: each device holds its own key, read-only copies can’t write, and the owner can remove anyone — enforced at the blind relay, not by courtesy.', fontSize: 20, color: MIST, lineHeight: 1.55, fx: { enter: 'fade-up' } }),
     ...[
       ['E2EE', 'AES-GCM; keys live in your file'],
       ['BLIND RELAY', 'stores ciphertext, learns nothing'],
-      ['SIGNED WRITES', 'read-only enforced by ECDSA'],
+      ['PER-PERSON RBAC', 'own key each; owner revokes'],
       ['OWN CRDT', 'char-level merges, fuzz-tested'],
     ].map(([h, b], i) => [
       rect({ x: 96 + i * 278, y: 500, w: 254, h: 118, fill: PANEL, radius: 16, fx: { enter: 'fade-up', order: i + 1 } }),
@@ -126,9 +126,9 @@ const s5 = slide({
   id: 'an-ai', background: PAPER, transition: 'fade',
   notes: 'Full disclosure: an AI agent designed and wrote this deck — and the four templates in the gallery — by editing the JSON directly. The recipe your agent needs is one markdown file: bento.page/agents.md. If you never touch AI, nothing here ever will either.',
   elements: [
-    kick(96, 96, 'DESIGNED FOR AI · ENTIRELY OPTIONAL', PEACH_DEEP),
+    kick(96, 96, 'BUILT FOR AI · WORKS WITHOUT IT', PEACH_DEEP),
     text({ x: 90, y: 140, w: 1100, h: 200, html: 'An agent wrote<br>this deck.', fontSize: 76, fontFamily: FR, fontWeight: 900, color: INK, lineHeight: 1.02 }),
-    text({ x: 96, y: 370, w: 1000, h: 130, html: 'The document is plain JSON in the file, so agents edit <b>.bento.html</b> files in place and chatbots round-trip the JSON. No converters, no uploads, no .pptx archaeology — this deck and the whole template gallery were authored that way.', fontSize: 20, color: INK_SOFT, lineHeight: 1.6, fx: { enter: 'fade-up' } }),
+    text({ x: 96, y: 370, w: 1000, h: 130, html: 'The document is plain JSON in the file, so agents edit <b>.bento.html</b> files in place and chatbots round-trip the JSON. No converters, no uploads, no .pptx to wrestle — this deck and the whole template gallery were authored that way. There’s a Claude Code skill (<b>bento-slides</b>) that even fetches the app itself.', fontSize: 20, color: INK_SOFT, lineHeight: 1.55, fx: { enter: 'fade-up' } }),
     rect({ x: 96, y: 540, w: 620, h: 70, fill: INK, radius: 35, fx: { enter: 'fade-up', order: 2 } }),
     text({ x: 96, y: 562, w: 620, h: 30, html: 'bento.page/agents.md — the recipe for your agent', fontSize: 17, fontWeight: 600, color: TILE, align: 'center', fx: { enter: 'fade-up', order: 2 } }),
   ],
@@ -147,7 +147,7 @@ const s6 = slide({
 
 const s7 = slide({
   id: 'an-honest', background: PANEL, transition: 'fade',
-  notes: 'The honest slide. Undo during live collab is snapshot-based (LWW) and can revert a collaborator’s concurrent same-property edit — the CRDT still keeps everyone converged. Editing is desktop-first; phones view and present beautifully. Morph only animates elements that share an id across slides — a deliberate idiom, not automatic magic-move. Presence names are claims, not proofs; a named-identity SSO roster is roadmap (the read/write RBAC IS cryptographic, the identity layer is not yet). We would rather you hear it from us.',
+  notes: 'The honest slide. Undo during live collab is snapshot-based (LWW) and can revert a collaborator’s concurrent same-property edit — the CRDT still keeps everyone converged. Editing is desktop-first; phones view and present beautifully. Morph only animates elements that share an id across slides — a deliberate idiom, not automatic magic-move. Identities are key-bound, not human-verified — the People panel proves "same key," and SSO name-mapping is the one roadmap piece (the RBAC and revocation are already cryptographic). We would rather you hear it from us.',
   elements: [
     kick(96, 96, 'WHAT IT DOESN’T DO (YET)'),
     text({ x: 90, y: 140, w: 1000, h: 110, html: 'The honest slide.', fontSize: 64, fontFamily: FR, fontWeight: 900, color: '#fff', lineHeight: 1 }),
@@ -155,7 +155,7 @@ const s7 = slide({
       '· Undo under live collab is snapshot-based (LWW) — it can revert a peer’s concurrent edit<br>' +
       '· Editing is desktop-first; phones view and present beautifully<br>' +
       '· Morph only animates elements that <b>share an id</b> across slides — not automatic “magic move”<br>' +
-      '· Presence names are claims, not proofs — named-identity SSO is on the roadmap<br>' +
+      '· Identities are key-bound, not human-verified — SSO name-mapping is on the roadmap<br>' +
       '· Files grow with embedded images and video — no optimizer yet<br>' +
       '· Docs and Sheets don’t exist yet. Slides came first.' }),
     text({ x: 96, y: 620, w: 1000, h: 30, html: 'TRADE-OFFS ARE DESIGN. WE’D RATHER DISCLOSE THAN DISAPPOINT.', fontSize: 12, fontWeight: 700, letterSpacing: 3, color: 'rgba(255,158,138,0.7)', fx: { enter: 'fade-up', order: 2 } }),

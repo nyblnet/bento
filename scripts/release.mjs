@@ -126,6 +126,11 @@ cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
 // /q — "this QR code is a presentation" (deck lives in the URL fragment).
 execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/index.html')], { stdio: 'inherit' })
 
+// /hello.bento.html — the launch announcement, itself a Bento deck (U1). This
+// is the Show HN link target: opening it boots the editor with the pitch
+// loaded as a live, editable template deck.
+execFileSync('node', [join(root, 'scripts/build-announcement-deck.mjs'), join(site, 'hello.bento.html')], { stdio: 'inherit' })
+
 // The Guestbook (U2) — ships only once an epoch has been minted into
 // working/guestbook-live/ (scripts/build-guestbook.mjs). Kill switch:
 // delete that file and re-release.
