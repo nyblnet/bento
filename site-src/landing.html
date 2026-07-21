@@ -195,6 +195,12 @@ header.scrolled { background: rgba(10, 15, 25, 0.72); backdrop-filter: blur(14px
 .btn.live { color: #fff; border: 1px solid rgba(255, 255, 255, 0.32); background: rgba(255, 255, 255, 0.04); }
 .btn.live:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.55); transform: translateY(-2px); }
 .btn.live .pulse { width: 9px; height: 9px; border-radius: 50%; background: #34a866; animation: pulse 2.2s ease-in-out infinite; }
+/* Guestbook pill: never wrap to two lines — shed the gloss, then the long
+   label, as the viewport narrows (short label swaps in below 380px). */
+.btn.live { white-space: nowrap; }
+.gb-short { display: none; }
+@media (max-width: 520px) { .btn.live .gb-note { display: none; } }
+@media (max-width: 380px) { .btn.live .gb-full { display: none; } .btn.live .gb-short { display: inline; } }
 .btn small { font-weight: 500; opacity: 0.75; font-size: 12.5px; }
 
 /* the living mark — three tiles that morph like the deck's cast */
@@ -556,7 +562,7 @@ body.kdeck header, body.kdeck footer { display: none; }
         <a class="btn ghost-btn" href="/releases/slides/Bento_Slides.bento.html" download="Bento_Slides.bento.html">⤓&nbsp; Download <small>one file · ~470 KB</small></a>
       </div>
       <div class="ctas rv in d3" style="margin:0 0 40px">
-        <a class="btn live" href="/guestbook/"><span class="pulse"></span> Join the public Guestbook <small style="opacity:.85">· one live deck, everyone</small></a>
+        <a class="btn live" href="/guestbook/"><span class="pulse"></span><span class="gb-full">Join the public Guestbook</span><span class="gb-short">Guestbook</span><small class="gb-note" style="opacity:.85">· one live deck, everyone</small></a>
       </div>
       <div class="chips rv in d3" style="margin-top:0">
         <span class="chip"><b>Slides</b> · the first app, here now</span>
@@ -819,7 +825,7 @@ window.bento.loadDoc(json) <span class="c">// write, undoable</span></div>
       <span class="chip"><b>CRDT engine</b>: offline forks reconcile both ways, conflict-free</span>
     </div>
     <div class="ctas rv d3" style="margin: 34px 0 0">
-      <a class="btn live" href="/guestbook/"><span class="pulse"></span> Join the public Guestbook <small style="opacity:.85">· one live deck, everyone</small></a>
+      <a class="btn live" href="/guestbook/"><span class="pulse"></span><span class="gb-full">Join the public Guestbook</span><span class="gb-short">Guestbook</span><small class="gb-note" style="opacity:.85">· one live deck, everyone</small></a>
     </div>
   </div>
 </section>
