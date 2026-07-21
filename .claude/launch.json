@@ -41,6 +41,18 @@
       "port": 5197
     },
     {
+      "name": "serve-site-src",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5192",
+        "--directory",
+        "site-src"
+      ],
+      "port": 5192
+    },
+    {
       "name": "serve-site",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
