@@ -645,7 +645,7 @@ option { background: #fff; color: #1e2a3a; }
 
 /* --- help overlay + help button ------------------------------------------- */
 .ed-btn-help .ed-help-q { font-size: 15px; font-weight: 800; line-height: 1; }
-.ed-help-box { width: 640px; max-width: 92vw; }
+.ed-help-box { width: 700px; max-width: 92vw; }
 /* two hand-placed columns so the (now longer) list stays short vertically */
 .ed-help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; align-items: start; }
 .ed-help-col { min-width: 0; }
