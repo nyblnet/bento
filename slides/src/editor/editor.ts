@@ -1655,8 +1655,16 @@ export class Editor {
     const h = document.createElement('h2')
     h.textContent = t('Shortcuts & tips')
     box.appendChild(h)
+    // Two explicit columns, placed by hand for balance + theme: LEFT = general
+    // shortcuts & tips, RIGHT = the line/curve/path pointer-editing features.
+    // (Auto column-count balanced poorly with these chunky, unsplittable sections.)
+    const cols = div('ed-help-cols')
+    box.appendChild(cols)
+    const colL = div('ed-help-col')
+    const colR = div('ed-help-col')
+    cols.append(colL, colR)
     const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'
-    const section = (title: string, rows: Array<[string, string]>) => {
+    const section = (col: HTMLElement, title: string, rows: Array<[string, string]>) => {
       const sec = div('ed-help-sec')
       const st = document.createElement('h3'); st.textContent = title; sec.appendChild(st)
       for (const [k, d] of rows) {
@@ -1666,9 +1674,9 @@ export class Editor {
         r.querySelector('span')!.textContent = d
         sec.appendChild(r)
       }
-      box.appendChild(sec)
+      col.appendChild(sec)
     }
-    section(t('Editing'), [
+    section(colL, t('Editing'), [
       [`${mod}S`, t('Save')],
       [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
       [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
@@ -1677,7 +1685,21 @@ export class Editor {
       ['C', t('Comment mode')],
       ['?', t('This help')],
     ])
-    section(t('Presenting'), [
+    section(colR, t('Lines & curves'), [
+      [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
+      [t('Drag a point'), t('Move an endpoint or anchor; drag the body to move the whole line')],
+      [t('Click a point'), t('Reveal its bézier handles for a precise curve')],
+      [`${t('Alt')}-${t('drag')}`, t('Break a smooth point into a sharp corner')],
+      [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
+    ])
+    section(colR, t('Motion paths'), [
+      [t('Presenting ▸ Loop'), t('Give an element a motion-path loop, then Edit path on canvas')],
+      [t('Drag points'), t('Shape the trajectory — the first point is the element’s rest spot')],
+      [t('Click a point'), t('Reveal bézier handles; Alt-drag one for a sharp corner')],
+      [t('Double-click'), t('Add a point on the path; double-click a point to remove it')],
+      [t('Scroll a point'), t('Set how fast the element moves through that point')],
+    ])
+    section(colL, t('Presenting'), [
       ['F5', t('Present')],
       ['F', t('Toggle fullscreen while presenting')],
       ['S', t('Speaker view — notes on a second screen if you have one')],
@@ -1693,7 +1715,7 @@ export class Editor {
       t('Make a chart from a table and it stays linked — edit the table, the chart updates.'),
       t('Your work auto-saves; restore earlier versions from About → Version history.'),
     ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
-    tips.appendChild(ul); box.appendChild(tips)
+    tips.appendChild(ul); colL.appendChild(tips)
     const more = div('ed-help-more')
     const link = document.createElement('a')
     link.href = 'https://bento.page/help'

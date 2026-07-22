@@ -75,16 +75,34 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   (click → slide id) and `group`; slides can set `hover:'focus-group'` (dim other
   groups). Present arrows are handled capture-phase (focus-proof). Editing UI for
   fx/link lives in the panel's "Presenting" section. Motion-path loops are edited
-  visually on canvas (`editor/patheditor.ts`): draggable anchors auto-smoothed
-  Catmull-Rom→cubic bezier; the stored path is RELATIVE to the element's rest
-  position (first anchor = rest position; committing moves the element there).
+  visually on canvas (`editor/patheditor.ts`) — a HYBRID bezier editor built on
+  the shared `editor/bezier.ts` core (same exact-cubic engine as the shape-curve
+  editor). Waypoints are AUTO by default: their in/out tangents are auto-computed
+  (Catmull-Rom, byte-identical to the old `anchorsToPath`) so simple "arc through
+  these points" editing needs no handles. Selecting a waypoint REVEALS its bezier
+  control handles; dragging one flips that node to MANUAL — its tangents freeze
+  (baked from the current auto values, then dragged; smooth mirrors the opposite,
+  Alt breaks into a corner) and are stored explicitly, no longer auto-recomputed.
+  Untouched waypoints stay auto. Double-click the path inserts via de Casteljau
+  `splitSegment` (sub-pixel shape preservation; the 3 involved nodes go manual);
+  double-click a node removes it. On open, a path is parsed EXACTLY (no
+  re-sampling) and each node classified auto/manual by comparing its handles to
+  the Catmull-Rom tangents (legacy Catmull-Rom decks reopen fully auto; a bare
+  polyline is all-auto) — so the lossy sample→re-smooth round-trip drift is gone
+  and a path is byte-stable across open/save. The stored path is RELATIVE to the
+  element's rest position (first anchor = rest position; committing moves the
+  element there), serialized as explicit M/C cubics.
   **Variable speed (v0.9.7)**: `fx.loop` motion-path takes `ease` (per-lap tempo,
   panel dropdown) and `speeds[]` (per-anchor multipliers, one per anchor —
   scroll a point in the path editor to set it; badge shows non-1 values). anim.ts
   `samplePath(d, speeds)` warps time→arc-length: locate each anchor's arc-length
   fraction (nearest sample), integrate 1/speed to a time LUT, invert — so the
   element dwells at low-speed anchors and rushes at high ones. Uniform speeds =
-  identity (no cost); speeds omitted from the model unless they vary.
+  identity (no cost); speeds omitted from the model unless they vary. `speeds`
+  stays 1:1 with the waypoints through every insert/remove/split because
+  `serializeBezier` emits exactly one on-curve point per node (so anim.ts
+  `onCurvePoints` recovers the same anchor list); split interpolates the new
+  anchor's speed from its neighbours.
 - **Signed writes / read-only tiers (v0.9.18)**: three file modes now, split
   from the old conflated `readonly`. (1) **Presentation package** = `doc.readonly`
   (unchanged: PLAYER file, present-only, collab stripped) — "Save as
