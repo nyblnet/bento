@@ -645,47 +645,25 @@ option { background: #fff; color: #1e2a3a; }
 
 /* --- help overlay + help button ------------------------------------------- */
 .ed-btn-help .ed-help-q { font-size: 15px; font-weight: 800; line-height: 1; }
-.ed-help-box { width: 700px; max-width: 92vw; padding: 24px 26px; gap: 0; }
-/* header: brand serif title + a full-width hairline separating it from the grid */
-.ed-help-box > h2 {
-  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
-  font-size: 23px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink);
-  margin: 0 0 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
-}
-/* two hand-placed columns, divided by a centered hairline */
-.ed-help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: start; margin-top: 16px; }
+.ed-help-box { width: 640px; max-width: 92vw; }
+/* two hand-placed columns so the (now longer) list stays short vertically */
+.ed-help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; align-items: start; }
 .ed-help-col { min-width: 0; }
-.ed-help-col:first-child { padding-right: 28px; }
-.ed-help-col:last-child { padding-left: 28px; border-left: 1px solid var(--line); }
-.ed-help-sec { margin: 0 0 16px; }
-.ed-help-sec:last-child { margin-bottom: 0; }
+.ed-help-sec { margin: 0 0 14px; }
 /* one column when there isn't room for two (narrow / phone) */
-@media (max-width: 560px) {
-  .ed-help-cols { grid-template-columns: 1fr; }
-  .ed-help-col:last-child { padding-left: 0; border-left: 0; }
-  .ed-help-col:first-child { padding-right: 0; }
-}
+@media (max-width: 560px) { .ed-help-cols { grid-template-columns: 1fr; } }
 .ed-help-sec h3 {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--muted); margin: 0 0 8px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted, #8a94a4); margin: 0 0 6px;
 }
-.ed-help-sec h3::before {
-  content: ''; width: 6px; height: 6px; border-radius: 2px;
-  background: var(--accent); flex: none;
-}
-.ed-help-row { display: grid; grid-template-columns: 132px 1fr; gap: 12px; align-items: baseline; padding: 4px 0; font-size: 13px; line-height: 1.45; }
-.ed-help-row span { color: var(--ink-2); }
-/* keycap-styled shortcut keys — a slightly heavier bottom edge reads as a key */
+.ed-help-row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: baseline; padding: 3px 0; font-size: 13px; }
 .ed-help-row kbd {
-  font: 600 11.5px ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: var(--chrome); border: 1px solid var(--line);
-  border-bottom: 2px solid #d5dbe4; box-shadow: 0 1px 0 rgb(15 23 36 / 0.02);
-  border-radius: 6px; padding: 2px 7px; color: var(--ink-2); white-space: nowrap; justify-self: start;
+  font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--chrome-2, #f4f1ea); border: 1px solid var(--line, #e7e1d2);
+  border-radius: 5px; padding: 2px 6px; color: var(--ink, #1e2a3a); white-space: nowrap; justify-self: start;
 }
-.ed-help-tips { margin: 2px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
-.ed-help-tips li { margin: 4px 0; }
-.ed-help-tips li::marker { color: var(--accent); }
+.ed-help-tips { margin: 4px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--ink, #26303e); }
+.ed-help-tips li { margin: 3px 0; }
 .ed-help-more { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line, rgba(30,42,58,0.12)); text-align: center; }
 .ed-help-more a { color: var(--accent, #ED8266); font-weight: 600; font-size: 13px; text-decoration: none; }
 .ed-help-more a:hover { text-decoration: underline; }
