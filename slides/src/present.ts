@@ -751,11 +751,24 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
       }
     }
     if (fx.loop?.type === 'dash-march') {
-      const target = node.querySelector('path, line, rect, ellipse, polygon')
+      const target = node.querySelector('path, line, rect, ellipse, polygon') as SVGElement | null
       if (target) {
+        // Seamless marching ants: the offset must travel a WHOLE number of
+        // dash+gap periods, or the pattern snaps back mid-cycle each loop and
+        // reads as an incomplete/janky loop. Snap the requested distance to
+        // the nearest whole multiple of the element's dasharray period.
+        const da = target.getAttribute('stroke-dasharray') || getComputedStyle(target).strokeDasharray || ''
+        const parts = da.split(/[\s,]+/).map(parseFloat).filter((n) => n > 0)
+        const period = parts.reduce((a, b) => a + b, 0)
+        let travel = fx.loop.distance ?? 18
+        if (period > 0) {
+          // SVG doubles an odd-count dasharray, so one visual period is 2× then.
+          const unit = parts.length % 2 ? period * 2 : period
+          travel = Math.max(1, Math.round(travel / unit)) * unit
+        }
         anim.fromTo(
           target,
-          { strokeDashoffset: fx.loop.distance ?? 18 },
+          { strokeDashoffset: travel },
           { strokeDashoffset: 0, duration: fx.loop.duration ?? 1.4, ease: 'none', repeat: -1 },
         )
       }
