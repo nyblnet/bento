@@ -19,6 +19,17 @@ pre-1.0.
   first update still needs you to overwrite the file you have open in the save
   dialog; after that it's automatic.)
 
+- **Editable morph id.** Elements now carry an optional `morphId` that
+  overrides which element they morph into across slides, so two
+  independently-created elements can be paired without the duplicate-a-slide
+  dance. The element panel gains a **Morph** section: a "Morph id" field (set it
+  back to the element's own id to clear the override) and a "Pair with" picker
+  that adopts another slide element's key. `id` stays the stable identity —
+  selection, connectors, comments and live-collab node identity are untouched —
+  and the default morph (elements sharing an `id`) is unchanged, so existing
+  decks behave identically. Same-slide key collisions are rejected inline.
+>>>>>>> main
+
 - **True bezier curve editing.** Selecting a curve now shows real pen-tool
   control handles (in/out tangents) on each anchor — drag a handle to bend the
   curve exactly. Smooth anchors mirror the opposite handle; Alt breaks a corner.

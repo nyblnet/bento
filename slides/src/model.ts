@@ -9,8 +9,18 @@ export const FORMAT_VERSION = 1
 export type TransitionKind = 'none' | 'fade' | 'slide' | 'zoom' | 'morph'
 
 export interface ElementBase {
-  /** Stable id. Elements sharing an id across adjacent slides morph into each other. */
+  /** Stable per-slide identity: `data-el-id`, selection, connector/comment
+   *  anchors, and the CRDT node key. Also the DEFAULT morph key — elements
+   *  sharing an id across adjacent slides morph into each other (the
+   *  duplicate-a-slide idiom). Never mutate it to re-pair a morph; set
+   *  `morphId` instead so identity stays stable. */
   id: string
+  /** Optional morph-key override. When set, this element morphs with elements
+   *  whose effective morph key (`morphId ?? id`) matches — letting two
+   *  independently-created elements on different slides be paired without
+   *  touching either's `id`. Omitted = fall back to `id` (the common case).
+   *  Must not collide with another element's effective key on the SAME slide. */
+  morphId?: string
   x: number
   y: number
   w: number

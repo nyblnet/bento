@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Morph": "モーフ",
+  "Morph id": "モーフ id",
+  "Pair with": "ペア設定",
+  "(pick an element)": "（要素を選択）",
+  "Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.": "<code>{id}</code> としてモーフし、自身の id を上書きします。<code>{own}</code> に戻すと解除されます。",
+  "Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.": "同じモーフ id を持つ要素はスライド間で相互にモーフします。これを変更（または下で選択）して、別のスライドの要素とペアにできます。",
+  "Morph id can’t be empty.": "モーフ id は空にできません。",
+  "Another element on this slide already uses that morph id.": "このスライドの別の要素がすでにそのモーフ id を使用しています。",
   "<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).": "<b>モーフ</b>は、このスライドと前のスライドの両方にある要素をアニメーションします（スライドを複製してから配置を変えてみてください）。",
   "A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.": "<b>ステート</b>は矢印キーの流れに現れません — リンクされた要素のクリックで到達します。共有 id の要素はステート間でモーフします。",
   "A deck needs at least one slide": "デッキには最低1枚のスライドが必要です",
