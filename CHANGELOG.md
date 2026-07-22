@@ -9,6 +9,14 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [Unreleased]
+
+- **Fix: dash-march loop was janky / looked incomplete.** The marching-ants
+  animation moved `strokeDashoffset` by a fixed distance that wasn't a whole
+  multiple of the stroke's dash+gap period, so the pattern snapped back
+  mid-cycle on every repeat. The offset travel now snaps to a whole number of
+  dash periods, making the loop seamless.
+
 ## [1.0.6] — 2026-07-21
 
 - **Fix: topbar menus were icon-only on narrow screens.** The responsive rule
