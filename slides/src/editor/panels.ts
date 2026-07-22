@@ -423,11 +423,111 @@ export class PropsPanel {
     this.arrangeRows([el])
 
     this.buildPresentingProps(el)
+    this.buildMorphProps(el)
+  }
 
-    const morph = document.createElement('p')
-    morph.className = 'ed-hint'
-    morph.innerHTML = `${t('Morph id:')} <code>${el.id}</code>`
-    this.host.appendChild(morph)
+  /**
+   * Morph section. The morph key is `morphId ?? id`: by default an element
+   * morphs with same-id elements on adjacent slides (the duplicate-a-slide
+   * idiom), but setting a `morphId` re-targets the pairing WITHOUT mutating
+   * `id` (which stays the stable identity used by selection, connectors,
+   * comments and the CRDT). The text field edits the key directly; the picker
+   * adopts another slide element's key. Writing the element's own id clears
+   * the override.
+   */
+  private buildMorphProps(el: SlideElement) {
+    this.section(t('Morph'))
+    const effective = el.morphId || el.id
+
+    const warn = document.createElement('p')
+    warn.className = 'ed-hint ed-morph-warn'
+    warn.style.display = 'none'
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.value = effective
+    input.spellcheck = false
+    input.addEventListener('change', () => {
+      const err = this.setMorphId(el, input.value)
+      if (err) { warn.textContent = err; warn.style.display = ''; input.value = effective }
+    })
+    this.row('Morph id', input)
+
+    const targets = this.morphTargets(el)
+    if (targets.length) {
+      const sel = document.createElement('select')
+      const none = document.createElement('option')
+      none.value = ''
+      none.textContent = t('(pick an element)')
+      sel.appendChild(none)
+      for (const tgt of targets) {
+        const o = document.createElement('option')
+        o.value = tgt.key
+        o.textContent = tgt.label
+        if (tgt.key === effective) o.selected = true
+        sel.appendChild(o)
+      }
+      sel.addEventListener('change', () => {
+        if (!sel.value) return
+        const err = this.setMorphId(el, sel.value)
+        if (err) { warn.textContent = err; warn.style.display = '' }
+      })
+      this.row('Pair with', sel)
+    }
+
+    this.host.appendChild(warn)
+
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.innerHTML = el.morphId
+      ? t('Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.', { id: effective, own: el.id })
+      : t('Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.')
+    this.host.appendChild(hint)
+  }
+
+  /** Set or clear an element's morph-key override. Writing the element's own
+   *  id clears it. Returns an inline error message, or null on success. */
+  private setMorphId(el: SlideElement, raw: string): string | null {
+    const clean = raw.trim().replace(/[^A-Za-z0-9._-]/g, '')
+    if (!clean) return t('Morph id can’t be empty.')
+    const next = clean === el.id ? undefined : clean
+    const effective = next ?? el.id
+    const clash = this.store.slide.elements.some(
+      (e) => e.id !== el.id && (e.morphId || e.id) === effective)
+    if (clash) return t('Another element on this slide already uses that morph id.')
+    this.mutate(el.id, (e) => {
+      if (next === undefined) delete e.morphId
+      else e.morphId = next
+    }, true)
+    return null
+  }
+
+  /** Distinct morph keys present on OTHER slides, each with a readable label,
+   *  for the "Pair with" picker. Skips keys that already sit on this slide
+   *  (they'd collide) and our own default key. */
+  private morphTargets(el: SlideElement): Array<{ key: string; label: string }> {
+    const here = new Set(
+      this.store.slide.elements.filter((e) => e.id !== el.id).map((e) => e.morphId || e.id))
+    const seen = new Map<string, string>()
+    this.store.doc.slides.forEach((s, i) => {
+      if (s.id === this.store.slide.id) return
+      for (const e of s.elements) {
+        const key = e.morphId || e.id
+        if (key === el.id || here.has(key) || seen.has(key)) continue
+        seen.set(key, `${t('Slide')} ${i + 1} · ${this.morphElDesc(e)}`)
+      }
+    })
+    return [...seen].map(([key, label]) => ({ key, label }))
+  }
+
+  /** Short human label for an element in the morph picker. */
+  private morphElDesc(e: SlideElement): string {
+    if (e.type === 'text') {
+      const txt = (e as TextElement).html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      if (txt) return `"${txt.slice(0, 24)}"`
+    }
+    // Capitalize to hit the existing insert-menu catalog keys (Text/Image/…).
+    return t(e.type.charAt(0).toUpperCase() + e.type.slice(1))
   }
 
   /** fx + link — how the element behaves while presenting. */
