@@ -33,6 +33,17 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   cross-reload-recover, by design.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
   Reveal sections. Elements carry `data-el-id` (editing) and `data-flip-id` (morph).
+  **Morph key (v1.0.7)**: `data-flip-id = el.morphId || el.id`. `id` stays the
+  stable identity (selection, connector/comment anchors, CRDT node key); the
+  DEFAULT morph key is still `id` (the duplicate-a-slide idiom, old files have no
+  `morphId`), but an optional `morphId` re-targets the pairing WITHOUT mutating
+  `id` — so two independently-created elements on different slides can morph. This
+  one line is the whole engine change; everything downstream reads `data-flip-id`.
+  Edited in the panel's Morph section (`panels.ts buildMorphProps`): a "Morph id"
+  field (writing the element's own id clears the override) + a "Pair with" picker
+  that adopts another slide element's key; both reject a key that would collide
+  with another element's effective key on the SAME slide (present.ts maps by flip
+  id, so same-slide dupes would break pairing).
   **Dynamic fields (v0.9.12, doc-props v1.0.2)**: text resolves `{{page}}`,
   `{{pages}}`, `{{title}}`, `{{date}}`, `{{time}}` plus the document-property
   tokens `{{author}}`, `{{company}}`, `{{subject}}`, `{{event}}` at render time
