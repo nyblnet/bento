@@ -438,6 +438,7 @@ option { background: #fff; color: #1e2a3a; }
   padding: 8px 10px;
 }
 .ed-hint code { font-size: 10.5px; word-break: break-all; }
+.ed-morph-warn { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
 
 .ed-btn-update {
   background: #FF9E8A !important;

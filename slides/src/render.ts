@@ -387,13 +387,15 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
 
 /**
  * Render one element. The wrapper carries data-el-id (edit-time selection)
- * and data-flip-id (GSAP Flip morph matching across slides).
+ * and data-flip-id (morph matching across slides). The flip id is the
+ * element's `morphId` when set, else its `id` — so morph pairing can be
+ * re-targeted without disturbing the stable identity used everywhere else.
  */
 export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
   const node = document.createElement('div')
   node.className = `bento-el bento-el-${el.type}`
   node.dataset.elId = el.id
-  node.dataset.flipId = el.id
+  node.dataset.flipId = el.morphId || el.id
   if (el.link) node.dataset.link = el.link
   if (el.group) node.dataset.group = el.group
   if (el.showOnHover) node.dataset.showOnHover = el.showOnHover
