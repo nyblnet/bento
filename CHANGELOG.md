@@ -28,7 +28,6 @@ pre-1.0.
   selection, connectors, comments and live-collab node identity are untouched —
   and the default morph (elements sharing an `id`) is unchanged, so existing
   decks behave identically. Same-slide key collisions are rejected inline.
->>>>>>> main
 
 - **True bezier curve editing.** Selecting a curve now shows real pen-tool
   control handles (in/out tangents) on each anchor — drag a handle to bend the
