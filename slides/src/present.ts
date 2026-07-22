@@ -123,6 +123,13 @@ export function startPresentation(
     width: doc.size.width,
     height: doc.size.height,
     margin: 0,
+    // Reveal's default maxScale is 2.0 — on a 1280-wide deck that caps the show
+    // at 2560px and letterboxes it in the middle of large displays (a 4K/5K/8K
+    // screen shows a small centred slide). Bento content is vector/text, so it
+    // upscales crisply: allow it to fill any display. minScale stays generous
+    // for tiny embeds.
+    minScale: 0.1,
+    maxScale: 100,
     center: false,
     hash: false,
     history: false,
