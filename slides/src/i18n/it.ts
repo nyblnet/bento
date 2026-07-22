@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Reduce motion (M)": "Riduci il movimento (M)",
   "Morph": "Morph",
   "Morph id": "Id morph",
   "Pair with": "Abbina a",

@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Reduce motion (M)": "モーションを減らす (M)",
   "Morph": "モーフ",
   "Morph id": "モーフ id",
   "Pair with": "ペア設定",

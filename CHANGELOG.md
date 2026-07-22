@@ -9,6 +9,17 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [Unreleased]
+
+- **Reduce motion during a presentation.** A calmer show for motion sensitivity,
+  a laggy projector, or a weak machine. It honours the OS *prefers-reduced-motion*
+  setting automatically; the presenter can also toggle it with **M** (or the ⏸
+  button in speaker view). When on, slide transitions cut instantly and every
+  animation — morph, entrance staggers, count-ups, dash-march / motion-path loops,
+  ken-burns — is skipped, so elements just show their final state. It's a
+  viewer/presenter preference (persisted per browser), never written into the
+  document.
+
 ## [1.0.7] — 2026-07-22
 
 - **In-place update keeps its handle.** When a deck opened *without* a File

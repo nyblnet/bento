@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Reduce motion (M)": "减少动态效果 (M)",
   "Morph": "变形",
   "Morph id": "变形 id",
   "Pair with": "配对",

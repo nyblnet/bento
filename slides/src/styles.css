@@ -590,6 +590,11 @@ option { background: #fff; color: #1e2a3a; }
   --r-overlay-element-fg-color: 0, 0, 0;
 }
 .bento-present-overlay .reveal .slides section { padding: 0; }
+/* Reduced motion (M / speaker toggle / OS prefers-reduced-motion): JS fx are
+   skipped in present.ts; this neutralises CSS-driven motion too — Reveal's
+   slide transitions cut instantly and svg keyframe animations don't play. */
+.bento-present-overlay.reduce-motion .reveal .slides section { transition: none !important; }
+.bento-present-overlay.reduce-motion .bento-el-svg * { animation: none !important; }
 /* dual-screen: one-click permission grant + transient toast */
 .bento-present-grant {
   position: fixed;

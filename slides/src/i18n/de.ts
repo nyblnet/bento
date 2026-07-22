@@ -4,6 +4,7 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Reduce motion (M)": "Bewegung reduzieren (M)",
   "Morph": "Morph",
   "Morph id": "Morph-ID",
   "Pair with": "Verknüpfen mit",
