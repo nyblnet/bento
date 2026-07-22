@@ -9,7 +9,7 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
-## [Unreleased]
+## [1.0.7] — 2026-07-22
 
 - **In-place update keeps its handle.** When a deck opened *without* a File
   System Access handle (e.g. double-clicked from disk) is updated via "Update
