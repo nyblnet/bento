@@ -37,6 +37,40 @@ const b64u = {
 const meta = async (env) => JSON.parse((await env.STORE.get(META, 'text')) ?? '{}')
 const putMeta = (env, m) => env.STORE.put(META, JSON.stringify(m, null, 2))
 
+// ——— v2 room minting (mirrors scripts/build-guestbook.mjs) ————————————————
+// A v2 room commits its id to an OWNER pubkey and carries an owner-signed
+// writer INVITE, so anyone who opens the public deck mints their own device key
+// and writes — with the relay ENFORCING the signature chain. (A v1 `r` room is
+// permissive: anyone with the file writes, unverified.) The daemon mints
+// server-side, so the owner PRIVATE key is stashed in KV (owner/current) rather
+// than a local owner deck — recoverable if an epoch ever needs People→Remove
+// moderation; at the launch roll cadence spam auto-clears regardless.
+const EC = { name: 'ECDSA', namedCurve: 'P-256' }
+const SIG = { name: 'ECDSA', hash: 'SHA-256' }
+const rnd = (n) => { const b = new Uint8Array(n); crypto.getRandomValues(b); return b }
+async function keypair() {
+  const kp = await crypto.subtle.generateKey(EC, true, ['sign', 'verify'])
+  return {
+    pub: b64u.enc(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))),
+    priv: b64u.enc(new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey))),
+    key: kp.privateKey,
+  }
+}
+async function mintV2Collab(host) {
+  const ownerKp = await keypair()
+  const inviteKp = await keypair()
+  const inviteSig = b64u.enc(new Uint8Array(await crypto.subtle.sign(
+    SIG, ownerKp.key, new TextEncoder().encode(`inv.${inviteKp.pub}.writer.0`))))
+  const commit = b64u.enc(new Uint8Array(await crypto.subtle.digest('SHA-256', b64u.dec(ownerKp.pub))))
+  const key = b64u.enc(rnd(32))
+  const collab = {
+    room: `${host}/d/w${commit}`, key, on: true, v: 2, owner: ownerKp.pub,
+    invite: { pub: inviteKp.pub, priv: inviteKp.priv, role: 'writer', sig: inviteSig },
+  }
+  const owner = { room: collab.room, key, owner: ownerKp.pub, ownerPriv: ownerKp.priv, invitePub: inviteKp.pub }
+  return { collab, owner }
+}
+
 // ——— archivist: read-only join, replay, return the room's real doc ———————
 async function captureRoom(env) {
   const shellText = await env.STORE.get(CURRENT, 'text')
@@ -125,8 +159,7 @@ async function roll(env) {
   const prevDoc = extractDoc(curText)
   const epoch = (prevDoc.guestbookEpoch ?? 0) + 1
   const fonts = { fraunces: prevDoc.assets['font-fraunces'], instrument: prevDoc.assets['font-instrument'] }
-  const rnd = (n) => { const b = new Uint8Array(n); crypto.getRandomValues(b); return b }
-  const collab = { room: `${env.SYNC_HOST}/d/r${b64u.enc(rnd(12))}`, key: b64u.enc(rnd(32)), on: true }
+  const { collab, owner } = await mintV2Collab(env.SYNC_HOST)
   const doc = buildGuestbookDoc({ epoch, docId: crypto.randomUUID(), collab, fonts })
 
   // 3 · splice into a FRESH shell (so epochs pick up app releases too)
@@ -135,12 +168,17 @@ async function roll(env) {
   const spliced = spliceDoc(await shellResp.text(), doc)
   await env.STORE.put(CURRENT, spliced)
 
+  // Stash the owner private key (this is a v2 room minted server-side with no
+  // local owner deck). Never served publicly; retrievable by an admin to
+  // reconstruct an owner deck for People→Remove moderation of this epoch.
+  await env.STORE.put('owner/current', JSON.stringify({ epoch, ...owner }, null, 2))
+
   const m = await meta(env)
   m.epoch = epoch
   m.lastRoll = new Date().toISOString()
   m.killed = false
   await putMeta(env, m)
-  return { epoch, archived, size: spliced.length }
+  return { epoch, room: collab.room, archived, size: spliced.length }
 }
 
 // ——— entrypoints ————————————————————————————————————————————————————
