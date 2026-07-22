@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const it: Catalog = {
+  "Morph": "Morph",
+  "Morph id": "Id morph",
+  "Pair with": "Abbina a",
+  "(pick an element)": "(scegli un elemento)",
+  "Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.": "Si trasforma come <code>{id}</code>, sovrascrivendo il proprio id. Riportalo a <code>{own}</code> per rimuoverlo.",
+  "Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.": "Gli elementi che condividono un id morph si trasformano tra loro tra le diapositive. Cambia questo (o scegli sotto) per abbinarlo a un elemento di un’altra diapositiva.",
+  "Morph id can’t be empty.": "L’id morph non può essere vuoto.",
+  "Another element on this slide already uses that morph id.": "Un altro elemento di questa diapositiva usa già quell’id morph.",
   "<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).": "<b>Morph</b> anima gli elementi presenti sia in questa diapositiva sia nella precedente (duplica una diapositiva e sposta gli elementi).",
   "A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.": "Uno <b>stato</b> è escluso dal flusso delle frecce — vi si arriva facendo clic su un elemento collegato. Gli id condivisi si trasformano tra stati.",
   "A deck needs at least one slide": "Una presentazione richiede almeno una diapositiva",
