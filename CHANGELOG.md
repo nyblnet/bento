@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **In-place update keeps its handle.** When a deck opened *without* a File
+  System Access handle (e.g. double-clicked from disk) is updated via "Update
+  this file…", Bento now keeps the handle the save-picker grants — so this and
+  every later update rewrite the file in place silently, instead of re-prompting
+  each time. (A double-clicked file gives the browser no handle on open, so the
+  first update still needs you to overwrite the file you have open in the save
+  dialog; after that it's automatic.)
+
 - **True bezier curve editing.** Selecting a curve now shows real pen-tool
   control handles (in/out tangents) on each anchor — drag a handle to bend the
   curve exactly. Smooth anchors mirror the opposite handle; Alt breaks a corner.

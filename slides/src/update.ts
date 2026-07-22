@@ -181,10 +181,17 @@ export async function applyUpdate(release: ReleaseInfo, doc: BentoDoc): Promise<
 export const canUpdateInPlace = hasFileHandle
 
 /**
- * Update the file on disk. With a held handle: download a backup of the
- * current version first, then overwrite in place — a reload then boots the
- * new app with this document. Without one: a save picker lets the user point
- * at the file they have open (or anywhere). Returns false if cancelled.
+ * Update the file on disk, then a reload boots the new app with this document.
+ *
+ * With a held handle: download a backup of the current version first, then
+ * overwrite the file in place silently.
+ *
+ * Without a handle (e.g. the file was double-clicked open — the browser grants
+ * no handle on open): use a save picker AND KEEP the resulting handle, so this
+ * update and every later one can rewrite the file in place. The picker can't
+ * default to the open file's location without a handle, so the caller must tell
+ * the user to overwrite the file they have open; once they do, it is a one-time
+ * grant. Returns false if the picker was cancelled.
  */
 export async function applyUpdateInPlace(release: ReleaseInfo, doc: BentoDoc): Promise<boolean> {
   const html = await buildUpdatedFile(release, doc)
@@ -194,5 +201,5 @@ export async function applyUpdateInPlace(release: ReleaseInfo, doc: BentoDoc): P
     await writeUpdatedFile(html)
     return true
   }
-  return writeUpdatedFileAs(html, doc)
+  return writeUpdatedFileAs(html, doc, { keepHandle: true })
 }
