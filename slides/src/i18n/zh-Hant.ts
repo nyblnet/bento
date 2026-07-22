@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Morph": "變形",
+  "Morph id": "變形 id",
+  "Pair with": "配對",
+  "(pick an element)": "（選擇一個元素）",
+  "Morphs as <code>{id}</code>, overriding its own id. Set it back to <code>{own}</code> to clear.": "以 <code>{id}</code> 變形，覆蓋其自身 id。設回 <code>{own}</code> 即可清除。",
+  "Elements sharing a morph id morph into each other across slides. Change this (or pick below) to pair with an element on another slide.": "共享同一變形 id 的元素會在投影片之間相互變形。變更此項（或在下方選擇）以與其他投影片上的元素配對。",
+  "Morph id can’t be empty.": "變形 id 不能為空。",
+  "Another element on this slide already uses that morph id.": "此投影片上的另一個元素已在使用該變形 id。",
   "<b>Morph</b> animates elements that appear on both this slide and the previous one (copy a slide, then move things around).": "<b>變形</b>會為同時出現在此投影片與上一張的元素製作動畫（複製一張投影片，然後移動內容試試）。",
   "A <b>state</b> is hidden from arrow-key flow — viewers reach it by clicking a linked element. Shared element ids morph between states.": "<b>狀態</b>不會出現在方向鍵流程中 — 觀眾透過點按連結元素到達。共享 id 的元素會在狀態間變形。",
   "A deck needs at least one slide": "簡報至少需要一張投影片",
