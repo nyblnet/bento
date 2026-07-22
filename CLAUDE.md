@@ -85,7 +85,17 @@ One HTML file = the document + viewer + editor. See `README.md` for the vision.
   out/in are one-shot settles per slide entry), `loop` dash-march/motion-path), `link`
   (click → slide id) and `group`; slides can set `hover:'focus-group'` (dim other
   groups). Present arrows are handled capture-phase (focus-proof). Editing UI for
-  fx/link lives in the panel's "Presenting" section. Motion-path loops are edited
+  fx/link lives in the panel's "Presenting" section.
+  **Reduced motion (v1.0.8)**: a VIEWER/PRESENTER preference (localStorage
+  `bento-reduce-motion` 'on'/'off', default = OS `prefers-reduced-motion`),
+  never in the doc — mirrors how locale is viewer-scoped. Toggle with `M` or the
+  ⏸ speaker-view button (`setReduceMotion`/`toggleReduceMotion`). When on, the
+  fx call sites in `slidechanged`/init are gated OFF (no runMorph/runEnterFx/
+  runAmbientFx/restartSvgAnimations — elements render at their final frame,
+  count-ups show final values) and the `.reduce-motion` overlay class kills
+  CSS motion (Reveal section transitions + svg keyframe animations). Toggling
+  mid-show re-settles the current slide: kill tweens + applyElementFrame, and
+  replay enter/ambient fx if motion came back on. Motion-path loops are edited
   visually on canvas (`editor/patheditor.ts`) — a HYBRID bezier editor built on
   the shared `editor/bezier.ts` core (same exact-cubic engine as the shape-curve
   editor). Waypoints are AUTO by default: their in/out tangents are auto-computed
