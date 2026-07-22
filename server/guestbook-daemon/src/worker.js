@@ -215,6 +215,14 @@ export default {
           const list = await env.STORE.list({ prefix: 'archives/' })
           return json({ ...m, archives: list.keys.map((k) => k.name) })
         }
+        if (action === 'owner') {
+          // The current epoch's OWNER credentials (incl. ownerPriv) — for
+          // building a moderation deck on demand. Gated by ADMIN_KEY above; the
+          // owner key never appears in the public deck. See scripts/guestbook-owner-deck.mjs.
+          const raw = await env.STORE.get('owner/current', 'text')
+          if (!raw) return json({ error: 'no owner creds stashed yet — roll once first' }, 404)
+          return new Response(raw, { headers: { 'content-type': 'application/json' } })
+        }
         if (action === 'snapshot' && req.method === 'POST') return json(await snapshot(env))
         if (action === 'roll' && req.method === 'POST') return json(await roll(env))
         if (action === 'kill' && req.method === 'POST') {
@@ -246,7 +254,7 @@ export default {
           if (!obj) return json({ error: 'not found' }, 404)
           return new Response(obj, { headers: { 'content-type': 'text/html; charset=utf-8' } })
         }
-        return json({ error: 'unknown action', actions: ['status', 'POST snapshot', 'POST roll', 'POST kill', 'PUT seed', 'archives/<key>'] }, 404)
+        return json({ error: 'unknown action', actions: ['status', 'owner', 'POST snapshot', 'POST roll', 'POST kill', 'PUT seed', 'archives/<key>'] }, 404)
       } catch (e) {
         return json({ error: String(e) }, 500)
       }
