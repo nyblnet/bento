@@ -11,11 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Fix: dash-march loop was janky / looked incomplete.** The marching-ants
-  animation moved `strokeDashoffset` by a fixed distance that wasn't a whole
-  multiple of the stroke's dash+gap period, so the pattern snapped back
-  mid-cycle on every repeat. The offset travel now snaps to a whole number of
-  dash periods, making the loop seamless.
+- **True bezier curve editing.** Selecting a curve now shows real pen-tool
+  control handles (in/out tangents) on each anchor — drag a handle to bend the
+  curve exactly. Smooth anchors mirror the opposite handle; Alt breaks a corner.
+  Double-click a segment to insert an anchor (a de Casteljau split that
+  preserves the shape), double-click an anchor to remove it. Replaces the old
+  Catmull-Rom anchor editing, which sampled the rendered curve into approximate
+  points and re-smoothed on every drag — lossy, drifting, no real handles. The
+  new model parses the path's actual control points and round-trips losslessly.
 
 ## [1.0.6] — 2026-07-21
 
