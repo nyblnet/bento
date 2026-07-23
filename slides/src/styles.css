@@ -1592,23 +1592,6 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
     opacity: 1;
   }
 }
-/* first-load flourish: translucent peach circles drift from across the whole
-   canvas toward the Slideshow pill while the neon runner is active. The stream
-   is built + trajected in editor.ts (startSlideshowHintParticles); it sits below
-   the pill cluster (z 11) so circles fall in behind the button. */
-.ed-hint-particles {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 6;
-}
-.ed-hint-particle {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle at center, rgb(255 158 138 / 0.5), rgb(255 158 138 / 0) 70%);
-  will-change: transform, opacity;
-}
 .ed-present-pill .ed-pill-main {
   border-radius: 999px 0 0 999px;
   padding: 6px 10px 6px 14px;
