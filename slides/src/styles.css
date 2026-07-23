@@ -1531,19 +1531,46 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
   overflow: visible;
 }
-/* first-run nudge: a coral halo pulses out from the pill to point out how to
-   start a show. Coral (saturated peach) reads far better than pale peach on the
-   light-grey canvas. Spread with a modest blur so the outline is soft-edged
-   (not a hard ring, but not the big muddy bloom either). A few laps, then it
-   settles; retired for good once they present (JS). */
-@keyframes ed-hint-pulse {
-  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 12px 0 rgb(255 107 74 / 0.55); }
-  70%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 16px 40px rgb(255 107 74 / 0); }
-  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 12px 0 rgb(255 107 74 / 0); }
+/* first-run nudge: a neon coral "runner" light chases around the pill's edge to
+   point out how to start a show. A conic-gradient ring (masked to just the
+   border with the padding-box exclude trick) rotates via @property
+   --ed-runner-a, so a bright coral comet with a hot tip runs the perimeter; a
+   drop-shadow gives it the neon glow. A few laps, then it fades and settles;
+   retired for good once they present (JS). */
+@property --ed-runner-a {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
 }
-.ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 1.8s ease-out 7; }
+.ed-present-pill.ed-hint-pulse { position: relative; }
+.ed-present-pill.ed-hint-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 3px;
+  background: conic-gradient(from var(--ed-runner-a),
+    rgb(255 107 74 / 0)    0deg,
+    rgb(255 107 74 / 0)    225deg,
+    rgb(255 107 74 / 0.55) 300deg,
+    rgb(255 160 130 / 1)   345deg,
+    rgb(255 244 238 / 1)   357deg,
+    rgb(255 107 74 / 0)    360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: drop-shadow(0 0 2px rgb(255 140 110 / 0.95)) drop-shadow(0 0 7px rgb(255 107 74 / 0.6));
+  pointer-events: none;
+  animation: ed-runner 1.3s linear 5, ed-runner-fade 6.5s ease-out 1 forwards;
+}
+@keyframes ed-runner { to { --ed-runner-a: 360deg; } }
+@keyframes ed-runner-fade { 0% { opacity: 0; } 4%, 86% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .ed-present-pill.ed-hint-pulse { animation: none; box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 10px 3px rgb(255 107 74 / 0.5); }
+  .ed-present-pill.ed-hint-pulse::after {
+    animation: none;
+    background: rgb(255 107 74 / 0.85);
+    opacity: 1;
+  }
 }
 .ed-present-pill .ed-pill-main {
   border-radius: 999px 0 0 999px;
