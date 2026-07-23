@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Reduced motion: on": "Bewegung reduziert: an",
+  "Reduced motion: off": "Bewegung reduziert: aus",
+  "Reduce motion — pause animations (also honours your OS setting)": "Bewegung reduzieren — Animationen pausieren (berücksichtigt auch die OS-Einstellung)",
   "Reduce motion (M)": "Bewegung reduzieren (M)",
   "Morph": "Morph",
   "Morph id": "Morph-ID",

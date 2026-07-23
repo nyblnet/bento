@@ -241,10 +241,25 @@ export function startPresentation(
     nav('reduce')?.classList.toggle('active', reduceMotion)
   }
 
+  // A brief centred pill so a keypress (M) gives visible confirmation — the
+  // audience overlay otherwise changes silently.
+  let toastTimer = 0
+  const flashPresentMsg = (text: string) => {
+    let el = overlay.querySelector<HTMLElement>('.bento-present-toast')
+    if (!el) { el = document.createElement('div'); el.className = 'bento-present-toast'; overlay.appendChild(el) }
+    el.textContent = text
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show') // restart the fade
+    clearTimeout(toastTimer)
+    toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
+  }
+
   const setReduceMotion = (on: boolean, persist = true) => {
     reduceMotion = on
     if (persist) { try { localStorage.setItem('bento-reduce-motion', on ? 'on' : 'off') } catch { /* storage off */ } }
     overlay.classList.toggle('reduce-motion', on)
+    // Toast only on an explicit toggle (M / speaker button), not the silent
+    // OS-preference follow or the initial state.
+    if (persist) flashPresentMsg(on ? t('Reduced motion: on') : t('Reduced motion: off'))
     // Re-settle the CURRENT slide: kill any running tweens and restore final
     // frames (a killed entrance would otherwise strand an element at opacity 0);
     // if motion is back on, replay this slide's entrance + ambient fx.

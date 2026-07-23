@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Reduced motion: on": "モーション軽減：オン",
+  "Reduced motion: off": "モーション軽減：オフ",
+  "Reduce motion — pause animations (also honours your OS setting)": "モーションを減らす — アニメーションを一時停止（OS設定にも従います）",
   "Reduce motion (M)": "モーションを減らす (M)",
   "Morph": "モーフ",
   "Morph id": "モーフ id",
