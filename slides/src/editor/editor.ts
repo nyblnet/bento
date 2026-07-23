@@ -1703,6 +1703,7 @@ export class Editor {
       ['F5', t('Present')],
       ['F', t('Toggle fullscreen while presenting')],
       ['S', t('Speaker view — notes on a second screen if you have one')],
+      ['M', t('Reduce motion — pause animations (also honours your OS setting)')],
       ['← · →', t('Previous · next slide')],
       ['Esc', t('End the show')],
     ])

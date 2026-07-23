@@ -4,6 +4,9 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Reduced motion: on": "減少動態效果：開",
+  "Reduced motion: off": "減少動態效果：關",
+  "Reduce motion — pause animations (also honours your OS setting)": "減少動態效果 — 暫停動畫（也遵循系統設定）",
   "Reduce motion (M)": "減少動態效果 (M)",
   "Morph": "變形",
   "Morph id": "變形 id",
