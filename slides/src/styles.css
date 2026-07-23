@@ -1531,16 +1531,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
   overflow: visible;
 }
-/* first-run nudge: a crisp peach halo converges INWARD onto the pill to draw
-   the eye to how to start a show. Appears as a wide faint ring, rushes in and
-   brightens as it lands on the pill, then a quick fade so each lap loops clean.
-   Spread only, zero blur — it hugs the pill's shape and stays sharp. A few
-   laps, then it settles; retired for good once they present (JS). */
+/* first-run nudge: a crisp peach halo pulses out from the pill to point out how
+   to start a show. Spread only, zero blur — it hugs the pill's shape and stays
+   sharp (a big blurred bloom just goes muddy). A few laps, then it settles;
+   retired for good once they present (JS). */
 @keyframes ed-hint-pulse {
-  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 44px rgb(255 158 138 / 0); }
-  20%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 36px rgb(255 158 138 / 0.55); }
-  75%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 4px  rgb(255 158 138 / 0.60); }
-  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 2px  rgb(255 158 138 / 0); }
+  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(255 158 138 / 0.60); }
+  70%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 40px rgb(255 158 138 / 0); }
+  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(255 158 138 / 0); }
 }
 .ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 1.8s ease-out 7; }
 @media (prefers-reduced-motion: reduce) {
