@@ -283,6 +283,9 @@ export class Editor {
     const showB = btn(ICONS.slideshow, t('Slideshow'), () => this.present(false, true),
       t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends'))
     showB.classList.add('ed-pill-main')
+    // First-run nudge: newcomers don't always spot how to start a show — pulse
+    // the Slideshow pill until they've presented once (flag set in present()).
+    try { if (!localStorage.getItem('bento-slideshow-hinted')) pill.classList.add('ed-hint-pulse') } catch { /* storage off */ }
     const caret = btn('<span class="ed-caret">▴</span>', '', () => pill.classList.toggle('open'),
       t('More ways to present'))
     caret.classList.add('ed-pill-caret')
@@ -1396,6 +1399,9 @@ export class Editor {
 
   present(fromStart = false, fullscreen = true) {
     if (this.presenting) return
+    // They've found the slideshow — retire the first-run pulse for good.
+    try { localStorage.setItem('bento-slideshow-hinted', '1') } catch { /* storage off */ }
+    document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
     this.canvas.commitTextEdit()
     this.presenting = true
     startPresentation(this.store.doc, fromStart ? 0 : this.store.currentIndex, (last) => {
@@ -1927,14 +1933,29 @@ export class Editor {
     const box = div('ed-about')
 
     const head = div('ed-about-head')
+    // The logo/wordmark links home (new tab) — a gentle route back to the site.
     head.innerHTML =
+      `<a class="ed-about-logo" href="https://bento.page" target="_blank" rel="noopener">` +
       `<svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
       `<rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>` +
       `<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>` +
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
-      `</svg><div><b>Bento<span style="color:#FF9E8A">/</span>Slides</b><span>v${APP_VERSION} · format v${FORMAT_VERSION}</span></div>`
+      `</svg><div><b>Bento<span style="color:#FF9E8A">/</span>Slides</b><span>v${APP_VERSION} · format v${FORMAT_VERSION}</span></div>` +
+      `</a>`
+    head.querySelector('a')?.setAttribute('title', t('Visit bento.page (opens in a new tab)'))
     box.appendChild(head)
+
+    // Engagement nudge back to the site (templates / gallery / agent guide).
+    const promo = div('ed-about-promo')
+    promo.innerHTML = t(
+      'New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.',
+      {
+        home: '<a href="https://bento.page" target="_blank" rel="noopener">bento.page</a>',
+        gh: '<a href="https://github.com/nyblnet/bento" target="_blank" rel="noopener">GitHub</a>',
+      },
+    )
+    box.appendChild(promo)
 
     const status = div('ed-about-status')
     status.textContent =
