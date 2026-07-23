@@ -1532,12 +1532,12 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   overflow: visible;
 }
 /* first-run nudge: a neon-blue "runner" light chases around the pill's edge to
-   point out how to start a show. Two SVG strokes (built in editor.ts) animate
+   point out how to start a show. An SVG stroke (built in editor.ts) animates
    stroke-dashoffset, which is ARC-LENGTH based — so the light keeps a constant
    speed around the straights and the rounded caps alike (a conic gradient would
-   rush the curves). A soft, wider, blurred stroke rides behind the bright line
-   for a moving glow. A few laps, then the whole thing fades; retired for good
-   once they present (JS removes .ed-hint-pulse). */
+   rush the curves). The neon comes from a tight drop-shadow on the crisp line
+   (a wide blurred stroke behind just read as a muddy smear). A few laps, then
+   it fades; retired for good once they present (JS removes .ed-hint-pulse). */
 .ed-present-pill.ed-hint-pulse { position: relative; }
 .ed-hint-runner {
   position: absolute;
@@ -1563,18 +1563,12 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   animation: ed-runner-dash 2.2s linear 5;
 }
 .ed-hint-runner-line {
-  stroke: #A9CBFF;
-  stroke-width: 2;
+  stroke: #7FB0FF;
+  stroke-width: 2.25;
   stroke-dasharray: 15 85; /* one bright segment; pathLength=100 normalizes it */
-  filter: drop-shadow(0 0 2px #5B8DEF);
+  filter: drop-shadow(0 0 2.5px rgb(91 141 239 / 0.85));
 }
-.ed-hint-runner-glow {
-  stroke: #5B8DEF;
-  stroke-width: 6;
-  stroke-dasharray: 24 76; /* a touch longer + blurred = the glow behind */
-  filter: blur(3px);
-  opacity: 0.6;
-}
+.ed-hint-runner-glow { stroke: none; } /* glow now lives in the line's drop-shadow */
 @keyframes ed-runner-dash { to { stroke-dashoffset: -100; } }
 @keyframes ed-runner-fade { 0% { opacity: 0; } 4%, 86% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
