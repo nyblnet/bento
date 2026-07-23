@@ -296,7 +296,12 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
     const r = ranges[a] ?? r0
     return G.y + G.h - ((v - r.lo) / (r.hi - r.lo || 1)) * G.h
   }
-  const baseOf = (a = 0) => yOf((ranges[a] ?? r0).lo, a)
+  // baseline for bars / area fill = the ZERO line, clamped into the axis range
+  // (so bars grow up/down from zero, not from the range floor — the negatives fix)
+  const baseOf = (a = 0) => {
+    const r = ranges[a] ?? r0
+    return yOf(Math.min(Math.max(0, r.lo), r.hi), a)
+  }
 
   // shared gridlines at k evenly spaced rows; labels on the matching side(s)
   for (let j = 0; j < k; j++) {
@@ -358,9 +363,10 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
       const data: number[] = (s.data ?? []).slice(i0, i0 + nCat).map((v: unknown) => num(v, 0))
       data.forEach((v, i) => {
         const x = G.x + band * i + (band - groupW) / 2 + barW * si
-        const hv = (base - yOf(v, ax)) * sweep
+        // grow the bar from the zero baseline toward the value (up for +, down for -)
+        const tip = base + (yOf(v, ax) - base) * sweep
         const r = elNS('rect', {
-          x: x + 1, y: base - hv, width: Math.max(1, barW - 2), height: Math.max(0, hv),
+          x: x + 1, y: Math.min(base, tip), width: Math.max(1, barW - 2), height: Math.max(0, Math.abs(tip - base)),
           rx: Math.min(radius, barW / 2), fill: color,
         })
         ;(r as any).__cat = i
