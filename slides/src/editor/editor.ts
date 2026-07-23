@@ -331,6 +331,10 @@ export class Editor {
 
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
+    // First-load flourish: peach circles drift from across the canvas toward the
+    // Slideshow pill while the neon-runner nudge is active. Deferred so layout
+    // (pill + canvas rects) is settled before we trajectory the stream.
+    requestAnimationFrame(() => this.startSlideshowHintParticles(pill, canvasWrap))
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
@@ -1403,6 +1407,56 @@ export class Editor {
       speakerIdleBody(this.store.doc.title, t('Notes, controls and slide thumbnails appear here when you start presenting. Drag this window to your second display.')),
     )
     if (!w) this.toast(t('Couldn’t open the speaker view — allow pop-ups for this site.'))
+  }
+
+  /** First-load flourish: while the neon-runner nudge is active, stream
+   *  translucent peach circles from across the whole canvas so they drift down
+   *  and converge on the Slideshow pill — a second, softer "look here" cue.
+   *  Runs only when the hint is showing; skipped under reduced-motion. */
+  private startSlideshowHintParticles(pill: HTMLElement, host: HTMLElement) {
+    if (!pill.classList.contains('ed-hint-pulse')) return
+    try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) return } catch { /* no matchMedia */ }
+    // wait for layout so the pill has real coordinates to aim at
+    if (!pill.getBoundingClientRect().width) {
+      requestAnimationFrame(() => this.startSlideshowHintParticles(pill, host))
+      return
+    }
+    const layer = document.createElement('div')
+    layer.className = 'ed-hint-particles'
+    host.appendChild(layer)
+
+    const PEACH = 'rgb(255 158 138)' // = wordmark slash #FF9E8A
+    const spawn = () => {
+      const hostR = host.getBoundingClientRect()
+      const pillR = pill.getBoundingClientRect()
+      const tx = pillR.left + pillR.width / 2 - hostR.left
+      const ty = pillR.top + pillR.height / 2 - hostR.top
+      const sx = Math.random() * hostR.width                     // anywhere across the width
+      const sy = Math.random() * Math.max(40, ty - 40)           // above the button
+      const size = 16 + Math.random() * 42
+      const c = document.createElement('div')
+      c.className = 'ed-hint-particle'
+      c.style.left = `${sx}px`
+      c.style.top = `${sy}px`
+      c.style.width = c.style.height = `${size}px`
+      c.style.background = `radial-gradient(circle at center, ${PEACH.replace(')', ' / 0.5)')}, ${PEACH.replace(')', ' / 0)')} 70%)`
+      layer.appendChild(c)
+      const a = c.animate([
+        { transform: 'translate(-50%,-50%) scale(0.35)', opacity: 0 },
+        { transform: 'translate(-50%,-50%) scale(1)', opacity: 0.5, offset: 0.25 },
+        { opacity: 0.4, offset: 0.6 },
+        { transform: `translate(${tx - sx}px, ${ty - sy}px) translate(-50%,-50%) scale(0.1)`, opacity: 0 },
+      ], { duration: 1600 + Math.random() * 1000, easing: 'cubic-bezier(.35,0,.6,1)' })
+      a.onfinish = () => c.remove()
+    }
+
+    const stop = () => { clearInterval(iv); setTimeout(() => layer.remove(), 2800) }
+    const iv = setInterval(() => {
+      if (!pill.isConnected || !pill.classList.contains('ed-hint-pulse')) stop()
+      else spawn()
+    }, 190)
+    // hard stop after the runner's window even if the class lingers (e.g. hover)
+    setTimeout(stop, 6000)
   }
 
   present(fromStart = false, fullscreen = true) {
