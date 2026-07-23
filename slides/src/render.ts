@@ -148,6 +148,15 @@ export function gradientLineCoords(angle: number) {
   return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy }
 }
 
+/** CSS linear-gradient() from a GradientFill. CSS angle convention matches the
+ *  model (0deg = bottom->top, 90deg = left->right), so pass angle straight. */
+export function cssLinearGradient(g: NonNullable<ShapeElement['fillGradient']>): string {
+  const stops = g.stops
+    .map((s) => `${s.color} ${Math.round(Math.min(Math.max(s.at, 0), 1) * 100)}%`)
+    .join(', ')
+  return `linear-gradient(${g.angle}deg, ${stops})`
+}
+
 /** Materialize a GradientFill as a <defs> gradient; returns its url() ref. */
 function gradientRef(svg: SVGSVGElement, g: NonNullable<ShapeElement['fillGradient']>): string {
   const id = `bento-grad-${gradSeq++}`
@@ -411,7 +420,15 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.fontSize = `${el.fontSize}px`
       inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
       inner.style.fontWeight = String(el.fontWeight)
-      inner.style.color = el.color
+      const cg = el.colorGradient
+      if (cg && cg.stops && cg.stops.length) {
+        inner.style.backgroundImage = cssLinearGradient(cg)
+        inner.style.setProperty('-webkit-background-clip', 'text')
+        inner.style.setProperty('background-clip', 'text')
+        inner.style.color = 'transparent'
+      } else {
+        inner.style.color = el.color
+      }
       inner.style.textAlign = el.align
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
