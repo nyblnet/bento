@@ -1556,17 +1556,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   inset: -1px;
   border-radius: inherit;
   padding: 3px;
-  background: conic-gradient(from var(--ed-runner-a),
-    rgb(255 107 74 / 0)    0deg,
-    rgb(255 107 74 / 0)    225deg,
-    rgb(255 107 74 / 0.55) 300deg,
-    rgb(255 160 130 / 1)   345deg,
-    rgb(255 244 238 / 1)   357deg,
-    rgb(255 107 74 / 0)    360deg);
+  background: conic-gradient(from var(--ed-runner-a),      /* peach = wordmark slash #FF9E8A */
+    rgb(255 158 138 / 0)    0deg,
+    rgb(255 158 138 / 0)    225deg,
+    rgb(255 158 138 / 0.55) 300deg,
+    rgb(255 184 168 / 1)    345deg,
+    rgb(255 244 238 / 1)    357deg,
+    rgb(255 158 138 / 0)    360deg);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-  filter: drop-shadow(0 0 2px rgb(255 140 110 / 0.95)) drop-shadow(0 0 7px rgb(255 107 74 / 0.6));
+  filter: drop-shadow(0 0 2px rgb(255 170 152 / 0.95)) drop-shadow(0 0 7px rgb(255 158 138 / 0.6));
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.5s ease;           /* fade OUT on mouse-leave */
@@ -1582,13 +1582,13 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   animation: ed-runner 1.3s linear 5, ed-runner-fade 6.5s ease-out 1 forwards;
 }
 @keyframes ed-runner { to { --ed-runner-a: 360deg; } }
-@keyframes ed-runner-fade { 0% { opacity: 0; } 4%, 86% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ed-runner-fade { 0% { opacity: 0; } 10%, 86% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .ed-present-pill::after { transition: none; }
   .ed-present-pill.ed-hint-pulse::after,
   .ed-present-pill:hover::after {
     animation: none;
-    background: rgb(255 107 74 / 0.85);
+    background: rgb(255 158 138 / 0.85);
     opacity: 1;
   }
 }
