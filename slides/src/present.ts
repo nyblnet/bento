@@ -117,6 +117,24 @@ export function startPresentation(
   }
   const toggleBlack = () => setBlack(!blacked)
 
+  // ——— reduced motion (a VIEWER/PRESENTER preference, never in the doc) ———
+  // Defaults to the OS 'prefers-reduced-motion'; an explicit toggle (M, or the
+  // speaker view) overrides it and persists per browser. When on, slide
+  // transitions cut instantly and every fx animation (morph, entrances,
+  // count-ups, loops, ken-burns) is skipped — elements just show their final
+  // state. The '.reduce-motion' class also neutralises CSS motion (svg
+  // animations, Reveal's section transitions). Mirrors how locale/auto-check
+  // are viewer prefs that never enter the document format.
+  const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  const readMotionPref = (): boolean | null => {
+    try {
+      const v = localStorage.getItem('bento-reduce-motion')
+      return v === 'on' ? true : v === 'off' ? false : null
+    } catch { return null }
+  }
+  let reduceMotion = readMotionPref() ?? reduceQuery.matches
+  overlay.classList.toggle('reduce-motion', reduceMotion)
+
   let exited = false
   const deck = new Reveal(revealEl, {
     embedded: true,
@@ -220,7 +238,51 @@ export function startPresentation(
     nav('next')?.toggleAttribute('disabled', !hasNext())
     nav('last')?.toggleAttribute('disabled', !hasNext())
     nav('black')?.classList.toggle('active', blacked)
+    nav('reduce')?.classList.toggle('active', reduceMotion)
   }
+
+  // A brief centred pill so a keypress (M) gives visible confirmation — the
+  // audience overlay otherwise changes silently.
+  let toastTimer = 0
+  const flashPresentMsg = (text: string) => {
+    let el = overlay.querySelector<HTMLElement>('.bento-present-toast')
+    if (!el) { el = document.createElement('div'); el.className = 'bento-present-toast'; overlay.appendChild(el) }
+    el.textContent = text
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show') // restart the fade
+    clearTimeout(toastTimer)
+    toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
+  }
+
+  const setReduceMotion = (on: boolean, persist = true) => {
+    reduceMotion = on
+    if (persist) { try { localStorage.setItem('bento-reduce-motion', on ? 'on' : 'off') } catch { /* storage off */ } }
+    overlay.classList.toggle('reduce-motion', on)
+    // Toast only on an explicit toggle (M / speaker button), not the silent
+    // OS-preference follow or the initial state.
+    if (persist) flashPresentMsg(on ? t('Reduced motion: on') : t('Reduced motion: off'))
+    // Re-settle the CURRENT slide: kill any running tweens and restore final
+    // frames (a killed entrance would otherwise strand an element at opacity 0);
+    // if motion is back on, replay this slide's entrance + ambient fx.
+    if (deckReady) {
+      const cur = deck.getIndices().h
+      const section = slidesEl.children[cur] as HTMLElement | undefined
+      const slide = doc.slides[cur]
+      if (section && slide) {
+        anim.killTweensOf(section.querySelectorAll('.bento-el'))
+        for (const el of slide.elements) {
+          const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+          if (node) { applyElementFrame(node, el); resetXform(node) }
+        }
+        if (!on) { runEnterFx(slide, section); runAmbientFx(slide, section); restartSvgAnimations(section) }
+      }
+    }
+    updateSpeakerControls()
+  }
+  const toggleReduceMotion = () => setReduceMotion(!reduceMotion)
+  // Follow later OS changes ONLY while the user hasn't set an explicit choice.
+  const onMotionQuery = (e: MediaQueryListEvent) => { if (readMotionPref() === null) setReduceMotion(e.matches, false) }
+  reduceQuery.addEventListener?.('change', onMotionQuery)
+
   const updateSpeaker = () => {
     if (!speaker || speaker.closed) return
     if (!deckReady) return // opened pre-init — populated on ready
@@ -282,6 +344,7 @@ export function startPresentation(
           navBtn('last', '⇥', t('Last slide')) +
           navBtn('black', '■', t('Black screen (B)')) +
           navBtn('grid', '▦', t('All slides (G)')) +
+          navBtn('reduce', '⏸', t('Reduce motion (M)')) +
         `</div>` +
       `</div>` +
       `<div class="sv-main">` +
@@ -346,6 +409,7 @@ export function startPresentation(
       else if (k === 'last') goLast()
       else if (k === 'black') toggleBlack()
       else if (k === 'grid') toggleGrid()
+      else if (k === 'reduce') toggleReduceMotion()
     }
     d.querySelectorAll<HTMLButtonElement>('.sv-btn[data-nav]').forEach((b) => {
       b.addEventListener('click', () => doNav(b.dataset.nav!))
@@ -360,6 +424,7 @@ export function startPresentation(
       else if (k === 'End') { ev.preventDefault(); goLast() }
       else if (k === 'b' || k === 'B') { ev.preventDefault(); toggleBlack() }
       else if (k === 'g' || k === 'G') { ev.preventDefault(); toggleGrid() }
+      else if (k === 'm' || k === 'M') { ev.preventDefault(); toggleReduceMotion() }
       else if (k === 'Escape' && !grid.hasAttribute('hidden')) { ev.preventDefault(); toggleGrid(false) }
     })
 
@@ -414,6 +479,7 @@ export function startPresentation(
     window.removeEventListener('resize', onResize)
     document.removeEventListener('keydown', onKeydown, true)
     document.removeEventListener('fullscreenchange', onFsChange)
+    reduceQuery.removeEventListener?.('change', onMotionQuery)
     clearInterval(speakerTimer)
     if (speaker && !speaker.closed) {
       if (speakerAdopted) {
@@ -451,6 +517,12 @@ export function startPresentation(
       ev.preventDefault()
       ev.stopPropagation()
       toggleFullscreen()
+      return
+    }
+    if (ev.key === 'm' || ev.key === 'M') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      toggleReduceMotion()
       return
     }
     const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
@@ -518,10 +590,12 @@ export function startPresentation(
       from &&
       ((forward && doc.slides[toIdx]?.transition === 'morph') ||
         (!forward && doc.slides[fromIdx]?.transition === 'morph'))
-    if (morphing) runMorph(doc, from!, to, fromIdx, toIdx)
-    else runEnterFx(doc.slides[toIdx], to)
-    runAmbientFx(doc.slides[toIdx], to)
-    restartSvgAnimations(to)
+    if (morphing) { if (!reduceMotion) runMorph(doc, from!, to, fromIdx, toIdx) }
+    else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to)
+    if (!reduceMotion) {
+      runAmbientFx(doc.slides[toIdx], to)
+      restartSvgAnimations(to)
+    }
     wireHoverFocus(doc.slides[toIdx], to)
     if (from) disposeLiveCharts(doc.slides[fromIdx], from)
     mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
@@ -554,9 +628,11 @@ export function startPresentation(
     setTimeout(onResize, 600)
     const first = slidesEl.children[startIndex] as HTMLElement | undefined
     if (first) {
-      runEnterFx(doc.slides[startIndex], first)
-      runAmbientFx(doc.slides[startIndex], first)
-      restartSvgAnimations(first)
+      if (!reduceMotion) {
+        runEnterFx(doc.slides[startIndex], first)
+        runAmbientFx(doc.slides[startIndex], first)
+        restartSvgAnimations(first)
+      }
       wireHoverFocus(doc.slides[startIndex], first)
       mountLiveCharts(doc.slides[startIndex], first)
       startMediaIn(first)

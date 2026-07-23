@@ -4,6 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Reduced motion: on": "減少動態效果：開",
+  "Reduced motion: off": "減少動態效果：關",
+  "Reduce motion — pause animations (also honours your OS setting)": "減少動態效果 — 暫停動畫（也遵循系統設定）",
+  "Reduce motion (M)": "減少動態效果 (M)",
   "Visit bento.page (opens in a new tab)": "造訪 bento.page（在新分頁開啟）",
   "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "第一次用 Bento？在 {home} 查看範本、圖庫和 AI 編輯指南 — 也歡迎到 {gh} 按 ⭐。",
   "Morph": "變形",

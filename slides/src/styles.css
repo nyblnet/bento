@@ -609,6 +609,11 @@ option { background: #fff; color: #1e2a3a; }
   --r-overlay-element-fg-color: 0, 0, 0;
 }
 .bento-present-overlay .reveal .slides section { padding: 0; }
+/* Reduced motion (M / speaker toggle / OS prefers-reduced-motion): JS fx are
+   skipped in present.ts; this neutralises CSS-driven motion too — Reveal's
+   slide transitions cut instantly and svg keyframe animations don't play. */
+.bento-present-overlay.reduce-motion .reveal .slides section { transition: none !important; }
+.bento-present-overlay.reduce-motion .bento-el-svg * { animation: none !important; }
 /* dual-screen: one-click permission grant + transient toast */
 .bento-present-grant {
   position: fixed;
@@ -1373,6 +1378,24 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   background: #000;
 }
 .bento-blackout[hidden] { display: none; }
+
+/* transient confirmation pill in present mode (e.g. Reduced motion on/off) */
+.bento-present-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  z-index: 61;
+  background: rgb(20 30 45 / 0.82);
+  color: #fff;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.bento-present-toast.show { opacity: 1; }
 
 /* --- live collaboration ----------------------------------------------- */
 .ed-avatars {

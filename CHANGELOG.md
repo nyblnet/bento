@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Reduce motion during a presentation.** A calmer show for motion sensitivity,
+  a laggy projector, or a weak machine. It honours the OS *prefers-reduced-motion*
+  setting automatically; the presenter can also toggle it with **M** (or the ⏸
+  button in speaker view). When on, slide transitions cut instantly and every
+  animation — morph, entrance staggers, count-ups, dash-march / motion-path loops,
+  ken-burns — is skipped, so elements just show their final state. It's a
+  viewer/presenter preference (persisted per browser), never written into the
+  document.
 - **Fix: live edits no longer lose focus when a collaborator changes something.**
   A remote collab op used to trigger a full canvas repaint that tore down the
   text (or table-cell) node you were typing in — stealing focus and resetting

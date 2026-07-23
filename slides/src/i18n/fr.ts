@@ -4,6 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "Reduced motion: on": "Animations réduites : activées",
+  "Reduced motion: off": "Animations réduites : désactivées",
+  "Reduce motion — pause animations (also honours your OS setting)": "Réduire les animations — met en pause les animations (respecte aussi le réglage du système)",
+  "Reduce motion (M)": "Réduire les animations (M)",
   "Visit bento.page (opens in a new tab)": "Visiter bento.page (nouvel onglet)",
   "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "Nouveau sur Bento ? Trouvez des modèles, la galerie et le guide d’édition par IA sur {home} — ou mettez une ⭐ sur {gh}.",
   "Morph": "Morph",
