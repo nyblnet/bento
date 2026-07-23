@@ -9,6 +9,17 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [Unreleased]
+
+- **Fix: live edits no longer lose focus when a collaborator changes something.**
+  A remote collab op used to trigger a full canvas repaint that tore down the
+  text (or table-cell) node you were typing in — stealing focus and resetting
+  the caret. The canvas now defers the repaint while an inline edit is in
+  progress (a burst of remote ops coalesces into one repaint), and catches up
+  the instant the edit commits. Your edit is untouched; everyone else's changes
+  still land — you just see them when you finish typing. (The most-reported
+  rough edge from the Show HN launch.)
+
 ## [1.0.7] — 2026-07-22
 
 - **In-place update keeps its handle.** When a deck opened *without* a File
