@@ -9,6 +9,20 @@ below opens files from every earlier version, and unknown fields are preserved.
 This project's versions roughly follow semantic-ish `0.MINOR.PATCH` while it is
 pre-1.0.
 
+## [Unreleased]
+
+- **Fix: charts with negative values now baseline at zero.** A bar/line chart
+  whose data crosses zero drew everything from the bottom of the plot — negative
+  bars pointed up and the x-axis was pinned to the floor. Bars now grow from the
+  zero line (positive up, negative down), and the x-axis line sits at zero so
+  values dip below it. All-positive charts are unchanged.
+
+- **Fix: two-finger pinch no longer breaks selection on mobile Safari.** A pinch
+  over the canvas started a rubber-band marquee and, combined with the page
+  zoom, threw the selection box off and could crash the page. Multi-touch
+  gestures are now ignored by the marquee and the page pinch-zoom is suppressed
+  over the canvas; single-touch scroll and selection are unaffected.
+
 ## [1.0.7] — 2026-07-22
 
 - **In-place update keeps its handle.** When a deck opened *without* a File
