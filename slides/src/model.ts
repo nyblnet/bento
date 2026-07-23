@@ -117,6 +117,10 @@ export interface TextElement extends ElementBase {
   lineHeight: number
   /** px; optional tracking for letter-spaced caps labels */
   letterSpacing?: number
+  /** Outline / hollow glyphs via -webkit-text-stroke. `fill:'none'` makes the
+   *  interior transparent (the classic hollow section-break word); default keeps
+   *  the solid `color` fill and just adds an outline. */
+  textStroke?: { width: number; color: string; fill?: string }
   /**
    * Layout placeholder prompt ("Click to add title"). While the element's
    * html is empty: the editor shows this dimmed; present and print hide the
