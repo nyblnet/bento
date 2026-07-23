@@ -412,6 +412,11 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
       inner.style.fontWeight = String(el.fontWeight)
       inner.style.color = el.color
+      const ts = el.textStroke
+      if (ts && ts.width) {
+        inner.style.setProperty('-webkit-text-stroke', `${ts.width}px ${ts.color}`)
+        if (ts.fill === 'none') inner.style.color = 'transparent'
+      }
       inner.style.textAlign = el.align
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
