@@ -1425,15 +1425,15 @@ export class Editor {
     layer.className = 'ed-hint-particles'
     host.appendChild(layer)
 
-    // a "magic" palette — soft but vivid shades (peach leads, on-brand)
+    // a "magic" palette — muted, dusty pastels (each hue desaturated toward grey)
     const PALETTE = [
-      '255 158 138', // peach (wordmark slash)
-      '255 122 162', // rose
-      '255 201 120', // amber
-      '182 150 255', // lavender
-      '124 198 255', // sky
-      '128 231 199', // mint
-      '226 140 245', // magenta
+      '230 177 166', // peach (wordmark slash, muted)
+      '230 157 183', // rose
+      '230 201 164', // amber
+      '190 178 225', // lavender
+      '166 199 225', // sky
+      '168 217 200', // mint
+      '214 173 220', // magenta
     ]
     const spawn = () => {
       const hostR = host.getBoundingClientRect()
