@@ -111,6 +111,13 @@ export class SlideCanvas {
       selectByClick: true,
       selectFromInside: false,
       toggleContinueSelect: 'shift',
+      // A two-finger pinch (mobile Safari) must not start a marquee — it throws
+      // off the selection box and has crashed the page. Only single-touch drags
+      // rubber-band; the browser keeps its own gesture.
+      dragCondition: (e) => {
+        const touches = (e?.inputEvent as TouchEvent | undefined)?.touches
+        return !touches || touches.length <= 1
+      },
       // Marquee selects only elements it fully contains (clicking still
       // selects whatever is under the cursor via selectByClick).
       hitRate: 100,
@@ -118,6 +125,15 @@ export class SlideCanvas {
 
     this.wireMoveable()
     this.wireSelecto()
+
+    // Mobile Safari: a two-finger pinch over the canvas zooms the PAGE, which
+    // (mid-marquee) throws Selecto's coordinates off and has crashed the page.
+    // Swallow multi-touch gestures on the canvas — the editor has its own zoom,
+    // and page-pinch-zooming an editor surface is never what you want. Single
+    // touch (scroll / marquee) is untouched. Non-passive so preventDefault works.
+    const swallowPinch = (ev: TouchEvent) => { if (ev.touches.length > 1) ev.preventDefault() }
+    this.scroller.addEventListener('touchstart', swallowPinch, { passive: false })
+    this.scroller.addEventListener('touchmove', swallowPinch, { passive: false })
 
     // Pin the scroller during Moveable gestures: snap guidelines can overflow
     // the stage and grow the scroll area, which made the slide jump around
