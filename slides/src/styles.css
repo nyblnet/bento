@@ -1531,19 +1531,21 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
   overflow: visible;
 }
-/* first-run nudge: a neon coral "runner" light chases around the pill's edge to
-   point out how to start a show. A conic-gradient ring (masked to just the
-   border with the padding-box exclude trick) rotates via @property
-   --ed-runner-a, so a bright coral comet with a hot tip runs the perimeter; a
-   drop-shadow gives it the neon glow. A few laps, then it fades and settles;
-   retired for good once they present (JS). */
+/* a neon coral "runner" light chases around the pill's edge — as a first-run
+   nudge to show how to start a show, AND on hover as an ongoing affordance. A
+   conic-gradient ring (masked to just the border with the padding-box exclude
+   trick) rotates via @property --ed-runner-a, so a bright coral comet with a
+   hot tip runs the perimeter; a drop-shadow gives it the neon glow.
+   First run: a few laps then it fades (JS drops .ed-hint-pulse when the fade
+   ends, so hover takes over cleanly). Hover: loops while the pointer's over. */
 @property --ed-runner-a {
   syntax: '<angle>';
   inherits: false;
   initial-value: 0deg;
 }
-.ed-present-pill.ed-hint-pulse { position: relative; }
-.ed-present-pill.ed-hint-pulse::after {
+.ed-present-pill { position: relative; }
+.ed-present-pill.ed-hint-pulse::after,
+.ed-present-pill:hover::after {
   content: '';
   position: absolute;
   inset: -1px;
@@ -1561,12 +1563,18 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
           mask-composite: exclude;
   filter: drop-shadow(0 0 2px rgb(255 140 110 / 0.95)) drop-shadow(0 0 7px rgb(255 107 74 / 0.6));
   pointer-events: none;
+}
+.ed-present-pill.ed-hint-pulse::after {
   animation: ed-runner 1.3s linear 5, ed-runner-fade 6.5s ease-out 1 forwards;
+}
+.ed-present-pill:hover::after {            /* hover always loops; wins while hovering */
+  animation: ed-runner 1.3s linear infinite;
 }
 @keyframes ed-runner { to { --ed-runner-a: 360deg; } }
 @keyframes ed-runner-fade { 0% { opacity: 0; } 4%, 86% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .ed-present-pill.ed-hint-pulse::after {
+  .ed-present-pill.ed-hint-pulse::after,
+  .ed-present-pill:hover::after {
     animation: none;
     background: rgb(255 107 74 / 0.85);
     opacity: 1;

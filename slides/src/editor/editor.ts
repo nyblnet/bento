@@ -283,9 +283,17 @@ export class Editor {
     const showB = btn(ICONS.slideshow, t('Slideshow'), () => this.present(false, true),
       t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends'))
     showB.classList.add('ed-pill-main')
-    // First-run nudge: newcomers don't always spot how to start a show — pulse
-    // the Slideshow pill until they've presented once (flag set in present()).
+    // First-run nudge: newcomers don't always spot how to start a show — run the
+    // neon runner around the Slideshow pill until they've presented once (flag
+    // set in present()). Hover replays it any time (CSS :hover). When the
+    // first-run laps finish fading, drop the class + set the flag so hover takes
+    // over cleanly (a lingering class would replay the finite run on mouse-out).
     try { if (!localStorage.getItem('bento-slideshow-hinted')) pill.classList.add('ed-hint-pulse') } catch { /* storage off */ }
+    pill.addEventListener('animationend', (e) => {
+      if ((e as AnimationEvent).animationName !== 'ed-runner-fade') return
+      pill.classList.remove('ed-hint-pulse')
+      try { localStorage.setItem('bento-slideshow-hinted', '1') } catch { /* storage off */ }
+    })
     const caret = btn('<span class="ed-caret">▴</span>', '', () => pill.classList.toggle('open'),
       t('More ways to present'))
     caret.classList.add('ed-pill-caret')
