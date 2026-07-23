@@ -1425,7 +1425,16 @@ export class Editor {
     layer.className = 'ed-hint-particles'
     host.appendChild(layer)
 
-    const PEACH = 'rgb(255 158 138)' // = wordmark slash #FF9E8A
+    // a "magic" palette — soft but vivid shades (peach leads, on-brand)
+    const PALETTE = [
+      '255 158 138', // peach (wordmark slash)
+      '255 122 162', // rose
+      '255 201 120', // amber
+      '182 150 255', // lavender
+      '124 198 255', // sky
+      '128 231 199', // mint
+      '226 140 245', // magenta
+    ]
     const spawn = () => {
       const hostR = host.getBoundingClientRect()
       const pillR = pill.getBoundingClientRect()
@@ -1434,17 +1443,18 @@ export class Editor {
       const sx = Math.random() * hostR.width                     // anywhere across the width
       const sy = Math.random() * Math.max(40, ty - 40)           // above the button
       const size = 16 + Math.random() * 42
+      const rgb = PALETTE[Math.floor(Math.random() * PALETTE.length)]
       const c = document.createElement('div')
       c.className = 'ed-hint-particle'
       c.style.left = `${sx}px`
       c.style.top = `${sy}px`
       c.style.width = c.style.height = `${size}px`
-      c.style.background = `radial-gradient(circle at center, ${PEACH.replace(')', ' / 0.5)')}, ${PEACH.replace(')', ' / 0)')} 70%)`
+      c.style.background = `radial-gradient(circle at center, rgb(${rgb} / 0.9), rgb(${rgb} / 0) 70%)`
       layer.appendChild(c)
       const a = c.animate([
         { transform: 'translate(-50%,-50%) scale(0.35)', opacity: 0 },
-        { transform: 'translate(-50%,-50%) scale(1)', opacity: 0.5, offset: 0.25 },
-        { opacity: 0.4, offset: 0.6 },
+        { transform: 'translate(-50%,-50%) scale(1)', opacity: 0.85, offset: 0.25 },
+        { opacity: 0.7, offset: 0.6 },
         { transform: `translate(${tx - sx}px, ${ty - sy}px) translate(-50%,-50%) scale(0.1)`, opacity: 0 },
       ], { duration: 1600 + Math.random() * 1000, easing: 'cubic-bezier(.35,0,.6,1)' })
       a.onfinish = () => c.remove()
@@ -1453,8 +1463,8 @@ export class Editor {
     const stop = () => { clearInterval(iv); setTimeout(() => layer.remove(), 2800) }
     const iv = setInterval(() => {
       if (!pill.isConnected || !pill.classList.contains('ed-hint-pulse')) stop()
-      else spawn()
-    }, 190)
+      else { spawn(); if (Math.random() < 0.6) spawn() }   // denser stream
+    }, 120)
     // hard stop after the runner's window even if the class lingers (e.g. hover)
     setTimeout(stop, 6000)
   }
