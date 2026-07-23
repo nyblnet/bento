@@ -35,6 +35,12 @@ export interface ElementBase {
    * white glow.
    */
   shadow?: ShadowSpec | ShadowSpec[]
+  /** Gaussian blur ON this element, in px. Composed into the SAME CSS `filter`
+   *  as `shadow` (both apply). Survives PDF/print, unlike backdrop blur. */
+  blur?: number
+  /** CSS mix-blend-mode for this element ('screen' for neon light glows,
+   *  'multiply'/'overlay' for editorial duotones). Omitted/'' = normal. */
+  blend?: string
   /** presentation effects, run in present mode only */
   fx?: {
     /** entrance animation when the slide is shown. fade-* nudge ~16px; slide-*

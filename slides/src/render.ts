@@ -129,9 +129,10 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   node.style.transform = el.rotation ? `rotate(${el.rotation}deg)` : ''
   node.style.opacity = String(el.opacity)
   const shadows = Array.isArray(el.shadow) ? el.shadow : el.shadow ? [el.shadow] : []
-  node.style.filter = shadows.length
-    ? shadows.map((s) => `drop-shadow(${s.x ?? 0}px ${s.y ?? 0}px ${s.blur}px ${s.color})`).join(' ')
-    : ''
+  const parts = shadows.map((s) => `drop-shadow(${s.x ?? 0}px ${s.y ?? 0}px ${s.blur}px ${s.color})`)
+  if (el.blur) parts.push(`blur(${el.blur}px)`)
+  node.style.filter = parts.length ? parts.join(' ') : ''
+  node.style.mixBlendMode = el.blend || ''
 }
 
 // Gradient ids must be unique per rendered instance: the same element renders
