@@ -35,6 +35,12 @@ export interface ElementBase {
    * white glow.
    */
   shadow?: ShadowSpec | ShadowSpec[]
+  /** Gaussian blur ON this element, in px. Composed into the SAME CSS `filter`
+   *  as `shadow` (both apply). Survives PDF/print, unlike backdrop blur. */
+  blur?: number
+  /** CSS mix-blend-mode for this element ('screen' for neon light glows,
+   *  'multiply'/'overlay' for editorial duotones). Omitted/'' = normal. */
+  blend?: string
   /** Frosted-glass backdrop blur behind this element, in px (0/undefined = off).
    *  Screen-only: browser print/PDF drops backdrop-filter (pair with a
    *  translucent `fill` so PDFs show a graceful flat panel). */
@@ -121,6 +127,10 @@ export interface TextElement extends ElementBase {
   lineHeight: number
   /** px; optional tracking for letter-spaced caps labels */
   letterSpacing?: number
+  /** Outline / hollow glyphs via -webkit-text-stroke. `fill:'none'` makes the
+   *  interior transparent (the classic hollow section-break word); default keeps
+   *  the solid `color` fill and just adds an outline. */
+  textStroke?: { width: number; color: string; fill?: string }
   /**
    * Layout placeholder prompt ("Click to add title"). While the element's
    * html is empty: the editor shows this dimmed; present and print hide the
