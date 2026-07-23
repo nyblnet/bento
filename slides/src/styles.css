@@ -508,6 +508,25 @@ option { background: #fff; color: #1e2a3a; }
 }
 .ed-about-head b { font-size: 15px; display: block; }
 .ed-about-head span { font-size: 11.5px; color: var(--muted); }
+/* logo/wordmark links home — keep it looking like the logo, not a link */
+.ed-about-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
+}
+.ed-about-logo:hover { opacity: 0.82; }
+/* engagement line back to the site */
+.ed-about-promo {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: -2px 0 2px;
+}
+.ed-about-promo a { color: var(--blue); text-decoration: none; }
+.ed-about-promo a:hover { text-decoration: underline; }
 .ed-about-row { display: flex; gap: 8px; }
 .ed-about-status {
   min-height: 18px;
@@ -1511,6 +1530,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border-radius: 999px;
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
   overflow: visible;
+}
+/* first-run nudge: an expanding ring draws the eye to how to start a show.
+   Runs a few times then settles; retired for good once they present (JS). */
+@keyframes ed-hint-pulse {
+  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(91 141 239 / 0.55); }
+  70%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 11px rgb(91 141 239 / 0); }
+  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(91 141 239 / 0); }
+}
+.ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 1.8s ease-out 4; }
+@media (prefers-reduced-motion: reduce) {
+  .ed-present-pill.ed-hint-pulse { animation: none; box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 3px rgb(91 141 239 / 0.5); }
 }
 .ed-present-pill .ed-pill-main {
   border-radius: 999px 0 0 999px;

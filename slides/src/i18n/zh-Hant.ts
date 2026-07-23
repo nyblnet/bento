@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Visit bento.page (opens in a new tab)": "造訪 bento.page（在新分頁開啟）",
+  "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "第一次用 Bento？在 {home} 查看範本、圖庫和 AI 編輯指南 — 也歡迎到 {gh} 按 ⭐。",
   "Morph": "變形",
   "Morph id": "變形 id",
   "Pair with": "配對",

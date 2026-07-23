@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "Visit bento.page (opens in a new tab)": "Visiter bento.page (nouvel onglet)",
+  "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "Nouveau sur Bento ? Trouvez des modèles, la galerie et le guide d’édition par IA sur {home} — ou mettez une ⭐ sur {gh}.",
   "Morph": "Morph",
   "Morph id": "Id de morph",
   "Pair with": "Associer à",
