@@ -1531,32 +1531,18 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
   overflow: visible;
 }
-/* first-run nudge: a peach ring ripples out across the canvas to point out how
-   to start a show. A thin ::after circle grows from the pill (border stays
-   crisp because we animate size, not scale). A few laps, then it settles;
-   retired for good once they present (JS). */
-.ed-present-pill.ed-hint-pulse { position: relative; }
-.ed-present-pill.ed-hint-pulse::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 60px;
-  height: 60px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 2.5px solid rgb(255 158 138 / 0.7);
-  pointer-events: none;
-  z-index: -1;
-  animation: ed-hint-pulse 2.2s ease-out 6;
-}
+/* first-run nudge: a big peach glow blooms out from the pill to point out how
+   to start a show. Soft box-shadow bloom that grows to a canvas-wide spread,
+   staying visible well into the large phase before fading. A few laps, then it
+   settles; retired for good once they present (JS). */
 @keyframes ed-hint-pulse {
-  0%   { width: 60px;   height: 60px;   opacity: 0; }
-  12%  { opacity: 0.75; }
-  100% { width: 1100px; height: 1100px; opacity: 0; }
+  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 40px 0    rgb(255 158 138 / 0.55); }
+  55%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 90px 320px rgb(255 158 138 / 0.28); }
+  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 120px 620px rgb(255 158 138 / 0); }
 }
+.ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 2.4s ease-out 6; }
 @media (prefers-reduced-motion: reduce) {
-  .ed-present-pill.ed-hint-pulse::after { animation: none; width: 60px; height: 60px; opacity: 0.6; }
+  .ed-present-pill.ed-hint-pulse { animation: none; box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 60px 20px rgb(255 158 138 / 0.5); }
 }
 .ed-present-pill .ed-pill-main {
   border-radius: 999px 0 0 999px;
