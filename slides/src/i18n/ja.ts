@@ -4,6 +4,10 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Reduced motion: on": "モーション軽減：オン",
+  "Reduced motion: off": "モーション軽減：オフ",
+  "Reduce motion — pause animations (also honours your OS setting)": "モーションを減らす — アニメーションを一時停止（OS設定にも従います）",
+  "Reduce motion (M)": "モーションを減らす (M)",
   "Visit bento.page (opens in a new tab)": "bento.page を開く（新しいタブ）",
   "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "Bento は初めてですか？テンプレート、ギャラリー、AI編集ガイドは {home} でどうぞ — {gh} で ⭐ もぜひ。",
   "Morph": "モーフ",
