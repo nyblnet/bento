@@ -10,9 +10,11 @@ routes = [
   { pattern = "bento.page/guestbook-admin/*", zone_name = "bento.page" },
 ]
 
-# Daily archivist snapshot. Cron is UTC: 01:00 UTC ≈ 09:00 HKT.
+# Archivist snapshot + (if due) epoch roll. LAUNCH PHASE: every 30 min so the
+# room time-shards under load and spam auto-clears. Revert to ["0 1 * * *"]
+# (daily) after launch. Cron is UTC.
 [triggers]
-crons = ["0 1 * * *"]
+crons = ["*/30 * * * *"]
 
 [[kv_namespaces]]
 binding = "STORE"
@@ -26,10 +28,12 @@ ORIGIN_FALLBACK = "https://nyblnet.github.io/bento-site"
 # relay host baked into newly minted epochs
 SYNC_HOST = "wss://sync.bento.page"
 # automatic roll cadence in hours; 0 = manual rolls only (admin endpoint).
-# 24 = daily roll (the archivist cron fires daily at 01:00 UTC, so sub-24 is a
-# no-op). Daily during launch to cap spam exposure on the unmoderated wall;
-# relax to 168 (weekly) once traffic settles.
-ROLL_HOURS = "0"
+# The scheduled handler can only roll as often as the cron above fires, so this
+# must be ≤ the cron interval to take effect. LAUNCH PHASE: 0.5 = every 30 min
+# (matches the */30 cron) to time-shard the room and auto-clear spam. Revert to
+# "0" (manual) after launch — and re-arm a v2 owner-moderated epoch locally
+# (build-guestbook + seed) to restore People→Remove moderation.
+ROLL_HOURS = "0.5"
 
 # secrets (set with `npx wrangler secret put ADMIN_KEY`):
 #   ADMIN_KEY — bearer for /guestbook-admin/*
