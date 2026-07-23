@@ -1531,18 +1531,18 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
   overflow: visible;
 }
-/* first-run nudge: a big peach glow blooms out from the pill to point out how
-   to start a show. Soft box-shadow bloom that grows to a canvas-wide spread,
-   staying visible well into the large phase before fading. A few laps, then it
-   settles; retired for good once they present (JS). */
+/* first-run nudge: a crisp peach halo pulses out from the pill to point out how
+   to start a show. Spread only, zero blur — it hugs the pill's shape and stays
+   sharp (a big blurred bloom just goes muddy). A few laps, then it settles;
+   retired for good once they present (JS). */
 @keyframes ed-hint-pulse {
-  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 40px 0    rgb(255 158 138 / 0.55); }
-  55%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 90px 320px rgb(255 158 138 / 0.28); }
-  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 120px 620px rgb(255 158 138 / 0); }
+  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(255 158 138 / 0.60); }
+  70%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 40px rgb(255 158 138 / 0); }
+  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(255 158 138 / 0); }
 }
-.ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 2.4s ease-out 6; }
+.ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 1.8s ease-out 7; }
 @media (prefers-reduced-motion: reduce) {
-  .ed-present-pill.ed-hint-pulse { animation: none; box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 60px 20px rgb(255 158 138 / 0.5); }
+  .ed-present-pill.ed-hint-pulse { animation: none; box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 3px rgb(255 158 138 / 0.55); }
 }
 .ed-present-pill .ed-pill-main {
   border-radius: 999px 0 0 999px;
