@@ -1534,13 +1534,13 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* first-run nudge: an expanding ring draws the eye to how to start a show.
    Runs a few times then settles; retired for good once they present (JS). */
 @keyframes ed-hint-pulse {
-  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(91 141 239 / 0.55); }
-  70%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 11px rgb(91 141 239 / 0); }
-  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(91 141 239 / 0); }
+  0%   { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(255 158 138 / 0.60); }
+  70%  { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 18px rgb(255 158 138 / 0); }
+  100% { box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 0 rgb(255 158 138 / 0); }
 }
-.ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 1.8s ease-out 4; }
+.ed-present-pill.ed-hint-pulse { animation: ed-hint-pulse 1.8s ease-out 7; }
 @media (prefers-reduced-motion: reduce) {
-  .ed-present-pill.ed-hint-pulse { animation: none; box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 3px rgb(91 141 239 / 0.5); }
+  .ed-present-pill.ed-hint-pulse { animation: none; box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), 0 0 0 3px rgb(255 158 138 / 0.55); }
 }
 .ed-present-pill .ed-pill-main {
   border-radius: 999px 0 0 999px;
