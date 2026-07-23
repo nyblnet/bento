@@ -297,6 +297,22 @@ export class Editor {
     pItem(ICONS.window, t('Present in this tab'), t('Fills this tab instead of going fullscreen — handy for testing or sharing a window'), () => this.present(false, false))
     pItem(ICONS.presenter, t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen. On macOS, open it before going fullscreen.'), () => this.openSpeakerView())
     pill.append(showB, caret, pmenu)
+    // Neon "runner" overlay for the first-run nudge: two SVG strokes (a soft
+    // glow behind a bright line) that chase the pill's border via animated
+    // stroke-dashoffset — arc-length based, so the light keeps a CONSTANT speed
+    // around the straights and rounded caps alike. Always in the DOM; CSS shows
+    // it only while .ed-hint-pulse is set (removed in present()).
+    const SVGNS = 'http://www.w3.org/2000/svg'
+    const runner = document.createElementNS(SVGNS, 'svg')
+    runner.setAttribute('class', 'ed-hint-runner')
+    runner.setAttribute('aria-hidden', 'true')
+    for (const cls of ['ed-hint-runner-glow', 'ed-hint-runner-line']) {
+      const r = document.createElementNS(SVGNS, 'rect')
+      r.setAttribute('class', cls)
+      r.setAttribute('pathLength', '100')
+      runner.appendChild(r)
+    }
+    pill.appendChild(runner)
     document.addEventListener('pointerdown', (ev) => {
       if (!pill.contains(ev.target as Node)) pill.classList.remove('open')
     })

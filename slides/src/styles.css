@@ -1531,46 +1531,55 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
   overflow: visible;
 }
-/* first-run nudge: a neon coral "runner" light chases around the pill's edge to
-   point out how to start a show. A conic-gradient ring (masked to just the
-   border with the padding-box exclude trick) rotates via @property
-   --ed-runner-a, so a bright coral comet with a hot tip runs the perimeter; a
-   drop-shadow gives it the neon glow. A few laps, then it fades and settles;
-   retired for good once they present (JS). */
-@property --ed-runner-a {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
+/* first-run nudge: a neon-blue "runner" light chases around the pill's edge to
+   point out how to start a show. Two SVG strokes (built in editor.ts) animate
+   stroke-dashoffset, which is ARC-LENGTH based — so the light keeps a constant
+   speed around the straights and the rounded caps alike (a conic gradient would
+   rush the curves). A soft, wider, blurred stroke rides behind the bright line
+   for a moving glow. A few laps, then the whole thing fades; retired for good
+   once they present (JS removes .ed-hint-pulse). */
 .ed-present-pill.ed-hint-pulse { position: relative; }
-.ed-present-pill.ed-hint-pulse::after {
-  content: '';
+.ed-hint-runner {
   position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 3px;
-  background: conic-gradient(from var(--ed-runner-a),
-    rgb(255 107 74 / 0)    0deg,
-    rgb(255 107 74 / 0)    225deg,
-    rgb(255 107 74 / 0.55) 300deg,
-    rgb(255 160 130 / 1)   345deg,
-    rgb(255 244 238 / 1)   357deg,
-    rgb(255 107 74 / 0)    360deg);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  filter: drop-shadow(0 0 2px rgb(255 140 110 / 0.95)) drop-shadow(0 0 7px rgb(255 107 74 / 0.6));
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
   pointer-events: none;
-  animation: ed-runner 1.3s linear 5, ed-runner-fade 6.5s ease-out 1 forwards;
+  display: none;
 }
-@keyframes ed-runner { to { --ed-runner-a: 360deg; } }
+.ed-present-pill.ed-hint-pulse .ed-hint-runner {
+  display: block;
+  animation: ed-runner-fade 11s ease-out 1 forwards;
+}
+.ed-hint-runner rect {
+  x: 2.5px;
+  y: 2.5px;
+  width: calc(100% - 5px);
+  height: calc(100% - 5px);
+  ry: 50%;                 /* rx follows -> stadium caps that match the pill */
+  fill: none;
+  stroke-linecap: round;
+  animation: ed-runner-dash 2.2s linear 5;
+}
+.ed-hint-runner-line {
+  stroke: #A9CBFF;
+  stroke-width: 2;
+  stroke-dasharray: 15 85; /* one bright segment; pathLength=100 normalizes it */
+  filter: drop-shadow(0 0 2px #5B8DEF);
+}
+.ed-hint-runner-glow {
+  stroke: #5B8DEF;
+  stroke-width: 6;
+  stroke-dasharray: 24 76; /* a touch longer + blurred = the glow behind */
+  filter: blur(3px);
+  opacity: 0.6;
+}
+@keyframes ed-runner-dash { to { stroke-dashoffset: -100; } }
 @keyframes ed-runner-fade { 0% { opacity: 0; } 4%, 86% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .ed-present-pill.ed-hint-pulse::after {
-    animation: none;
-    background: rgb(255 107 74 / 0.85);
-    opacity: 1;
-  }
+  .ed-present-pill.ed-hint-pulse .ed-hint-runner { animation: none; opacity: 1; }
+  .ed-hint-runner rect { animation: none; stroke-dasharray: none; }
 }
 .ed-present-pill .ed-pill-main {
   border-radius: 999px 0 0 999px;
