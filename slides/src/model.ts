@@ -41,6 +41,10 @@ export interface ElementBase {
   /** CSS mix-blend-mode for this element ('screen' for neon light glows,
    *  'multiply'/'overlay' for editorial duotones). Omitted/'' = normal. */
   blend?: string
+  /** Frosted-glass backdrop blur behind this element, in px (0/undefined = off).
+   *  Screen-only: browser print/PDF drops backdrop-filter (pair with a
+   *  translucent `fill` so PDFs show a graceful flat panel). */
+  backdropFilter?: number
   /** presentation effects, run in present mode only */
   fx?: {
     /** entrance animation when the slide is shown. fade-* nudge ~16px; slide-*
