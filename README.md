@@ -6,6 +6,8 @@
 
 # [Bento — the office suite that fits in a file](https://bento.page/)
 
+[English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+
 **This PowerPoint alternative is a single HTML file.** A Bento deck carries
 its own viewer, presenter, and editor inside the document — open it in any
 browser, edit it, present it, send it. The person you send it to needs
