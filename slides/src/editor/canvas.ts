@@ -36,6 +36,10 @@ export class SlideCanvas {
   private editing: HTMLElement | null = null
   /** when editing a table cell, which cell (else null → text element edit) */
   private editingCell: { r: number; c: number } | null = null
+  /** a repaint arrived (e.g. a remote collab op) while an inline edit was in
+   *  progress and was deferred so it wouldn't tear the edited node out from
+   *  under the caret; flushed when the edit commits. */
+  private pendingRender = false
   private pathEditor!: PathEditor
   private lineEditor!: LineEditor
   private bezierEditor!: BezierEditor
@@ -445,7 +449,13 @@ export class SlideCanvas {
   }
 
   render() {
-    this.commitTextEdit()
+    // Don't repaint out from under an in-progress inline edit. A remote collab
+    // op landing must NOT tear down the text/cell node you're typing in — that
+    // steals focus and resets the caret (the #1 rough edge reported at launch).
+    // Defer the repaint and catch up the instant the edit commits; a burst of
+    // remote ops coalesces into a single repaint then.
+    if (this.editing) { this.pendingRender = true; return }
+    this.pendingRender = false
     if (this.pathEditor?.active) this.pathEditor.cancel() // doc changed under us
     const slide = this.store.slide
     const next = renderSlide(slide, this.store.doc)
@@ -982,6 +992,14 @@ export class SlideCanvas {
     } else {
       this.syncTargets()
     }
+    this.flushPendingRender()
+  }
+
+  /** Run a repaint that was deferred while an inline edit was in progress (a
+   *  remote op that arrived mid-edit). No-op when nothing is pending. Runs
+   *  after the commit above, so the repaint reflects the merged model. */
+  private flushPendingRender() {
+    if (this.pendingRender) { this.pendingRender = false; this.render() }
   }
 
   // --- table cell editing -----------------------------------------------------
@@ -1055,6 +1073,7 @@ export class SlideCanvas {
     } else {
       this.syncTargets()
     }
+    this.flushPendingRender()
   }
 
   /** Tab/Enter navigation between cells; Tab off the last cell appends a row. */

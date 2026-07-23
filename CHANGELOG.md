@@ -11,6 +11,15 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: live edits no longer lose focus when a collaborator changes something.**
+  A remote collab op used to trigger a full canvas repaint that tore down the
+  text (or table-cell) node you were typing in — stealing focus and resetting
+  the caret. The canvas now defers the repaint while an inline edit is in
+  progress (a burst of remote ops coalesces into one repaint), and catches up
+  the instant the edit commits. Your edit is untouched; everyone else's changes
+  still land — you just see them when you finish typing. (The most-reported
+  rough edge from the Show HN launch.)
+
 - **Fix: charts with negative values now baseline at zero.** A bar/line chart
   whose data crosses zero drew everything from the bottom of the plot — negative
   bars pointed up and the x-axis was pinned to the floor. Bars now grow from the
