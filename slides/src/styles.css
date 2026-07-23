@@ -1537,15 +1537,20 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
    trick) rotates via @property --ed-runner-a, so a bright coral comet with a
    hot tip runs the perimeter; a drop-shadow gives it the neon glow.
    First run: a few laps then it fades (JS drops .ed-hint-pulse when the fade
-   ends, so hover takes over cleanly). Hover: loops while the pointer's over. */
+   ends, so hover takes over cleanly). Hover: loops while the pointer's over,
+   then fades out on leave.
+   The runner layer is ALWAYS present (invisible at rest) so its opacity can
+   transition out on mouse-leave — a disappearing ::after can't fade. Its spin
+   is animation-play-state: paused while idle, so there's no cost when it isn't
+   showing, and on leave it freezes in place (paused holds the angle) and fades
+   rather than snapping back to 0deg. */
 @property --ed-runner-a {
   syntax: '<angle>';
   inherits: false;
   initial-value: 0deg;
 }
 .ed-present-pill { position: relative; }
-.ed-present-pill.ed-hint-pulse::after,
-.ed-present-pill:hover::after {
+.ed-present-pill::after {
   content: '';
   position: absolute;
   inset: -1px;
@@ -1563,16 +1568,23 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
           mask-composite: exclude;
   filter: drop-shadow(0 0 2px rgb(255 140 110 / 0.95)) drop-shadow(0 0 7px rgb(255 107 74 / 0.6));
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;           /* fade OUT on mouse-leave */
+  animation: ed-runner 1.3s linear infinite;
+  animation-play-state: paused;            /* idle until hover/hint runs it */
+}
+.ed-present-pill:hover::after {
+  opacity: 1;
+  transition: opacity 0.15s ease;          /* fade IN quick */
+  animation-play-state: running;
 }
 .ed-present-pill.ed-hint-pulse::after {
   animation: ed-runner 1.3s linear 5, ed-runner-fade 6.5s ease-out 1 forwards;
 }
-.ed-present-pill:hover::after {            /* hover always loops; wins while hovering */
-  animation: ed-runner 1.3s linear infinite;
-}
 @keyframes ed-runner { to { --ed-runner-a: 360deg; } }
 @keyframes ed-runner-fade { 0% { opacity: 0; } 4%, 86% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
+  .ed-present-pill::after { transition: none; }
   .ed-present-pill.ed-hint-pulse::after,
   .ed-present-pill:hover::after {
     animation: none;
