@@ -132,6 +132,13 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   node.style.filter = shadows.length
     ? shadows.map((s) => `drop-shadow(${s.x ?? 0}px ${s.y ?? 0}px ${s.blur}px ${s.color})`).join(' ')
     : ''
+  if (el.backdropFilter) {
+    const bf = `blur(${el.backdropFilter}px)`
+    node.style.backdropFilter = bf
+    node.style.setProperty('-webkit-backdrop-filter', bf)
+  } else {
+    node.style.backdropFilter = ''
+  }
 }
 
 // Gradient ids must be unique per rendered instance: the same element renders

@@ -35,6 +35,10 @@ export interface ElementBase {
    * white glow.
    */
   shadow?: ShadowSpec | ShadowSpec[]
+  /** Frosted-glass backdrop blur behind this element, in px (0/undefined = off).
+   *  Screen-only: browser print/PDF drops backdrop-filter (pair with a
+   *  translucent `fill` so PDFs show a graceful flat panel). */
+  backdropFilter?: number
   /** presentation effects, run in present mode only */
   fx?: {
     /** entrance animation when the slide is shown. fade-* nudge ~16px; slide-*
