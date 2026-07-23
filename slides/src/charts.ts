@@ -296,7 +296,9 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
     const r = ranges[a] ?? r0
     return G.y + G.h - ((v - r.lo) / (r.hi - r.lo || 1)) * G.h
   }
-  const baseOf = (a = 0) => yOf((ranges[a] ?? r0).lo, a)
+  // baseline for bars/area = the ZERO line (clamped into the plot), not the
+  // axis low — so bars grow from zero and negative values dip below it.
+  const baseOf = (a = 0) => Math.max(G.y, Math.min(G.y + G.h, yOf(0, a)))
 
   // shared gridlines at k evenly spaced rows; labels on the matching side(s)
   for (let j = 0; j < k; j++) {
@@ -308,8 +310,11 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
   if (d.yAxes[0]?.name) svg.appendChild(text(G.x - 8, G.y - 9, d.yAxes[0].name, d.axisLabel, d.font, 11, 'end'))
   if (ranges[1] && d.yAxes[1]?.name) svg.appendChild(text(G.x + G.w + 8, G.y - 9, d.yAxes[1].name, d.axisLabel, d.font, 11, 'start'))
 
-  // x axis line
-  svg.appendChild(elNS('line', { x1: G.x, y1: G.y + G.h, x2: G.x + G.w, y2: G.y + G.h, stroke: d.axisLine, 'stroke-width': 1 }))
+  // x axis line — drawn at the ZERO position (clamped). For all-positive data
+  // that's the bottom (as before); when the range crosses zero it sits AT zero,
+  // so negative values dip below the axis instead of the axis pinning to the floor.
+  const xAxisY = baseOf(0)
+  svg.appendChild(elNS('line', { x1: G.x, y1: xAxisY, x2: G.x + G.w, y2: xAxisY, stroke: d.axisLine, 'stroke-width': 1 }))
 
   if (scatters.length && !d.categories.length) {
     // value x-axis (scatter)
@@ -358,9 +363,11 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
       const data: number[] = (s.data ?? []).slice(i0, i0 + nCat).map((v: unknown) => num(v, 0))
       data.forEach((v, i) => {
         const x = G.x + band * i + (band - groupW) / 2 + barW * si
-        const hv = (base - yOf(v, ax)) * sweep
+        // grow from the zero baseline: positive up, negative down
+        const vy = yOf(v, ax)
+        const hv = Math.abs(base - vy) * sweep
         const r = elNS('rect', {
-          x: x + 1, y: base - hv, width: Math.max(1, barW - 2), height: Math.max(0, hv),
+          x: x + 1, y: vy <= base ? base - hv : base, width: Math.max(1, barW - 2), height: Math.max(0, hv),
           rx: Math.min(radius, barW / 2), fill: color,
         })
         ;(r as any).__cat = i

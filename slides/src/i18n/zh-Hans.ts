@@ -8,6 +8,8 @@ export const zhHans: Catalog = {
   "Reduced motion: off": "减少动态效果：关",
   "Reduce motion — pause animations (also honours your OS setting)": "减少动态效果 — 暂停动画（也遵循系统设置）",
   "Reduce motion (M)": "减少动态效果 (M)",
+  "Visit bento.page (opens in a new tab)": "访问 bento.page（在新标签页打开）",
+  "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "第一次用 Bento？在 {home} 查看模板、图库和 AI 编辑指南 — 也欢迎到 {gh} 点 ⭐。",
   "Morph": "变形",
   "Morph id": "变形 id",
   "Pair with": "配对",
