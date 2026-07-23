@@ -8,6 +8,8 @@ export const it: Catalog = {
   "Reduced motion: off": "Movimento ridotto: disattivato",
   "Reduce motion — pause animations (also honours your OS setting)": "Riduci il movimento — mette in pausa le animazioni (rispetta anche l’impostazione del sistema)",
   "Reduce motion (M)": "Riduci il movimento (M)",
+  "Visit bento.page (opens in a new tab)": "Visita bento.page (si apre in una nuova scheda)",
+  "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "Nuovo su Bento? Trovi modelli, la galleria e la guida all’editing con IA su {home} — o metti una ⭐ su {gh}.",
   "Morph": "Morph",
   "Morph id": "Id morph",
   "Pair with": "Abbina a",

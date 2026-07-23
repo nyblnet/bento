@@ -129,9 +129,17 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   node.style.transform = el.rotation ? `rotate(${el.rotation}deg)` : ''
   node.style.opacity = String(el.opacity)
   const shadows = Array.isArray(el.shadow) ? el.shadow : el.shadow ? [el.shadow] : []
-  node.style.filter = shadows.length
-    ? shadows.map((s) => `drop-shadow(${s.x ?? 0}px ${s.y ?? 0}px ${s.blur}px ${s.color})`).join(' ')
-    : ''
+  const parts = shadows.map((s) => `drop-shadow(${s.x ?? 0}px ${s.y ?? 0}px ${s.blur}px ${s.color})`)
+  if (el.blur) parts.push(`blur(${el.blur}px)`)
+  node.style.filter = parts.length ? parts.join(' ') : ''
+  node.style.mixBlendMode = el.blend || ''
+  if (el.backdropFilter) {
+    const bf = `blur(${el.backdropFilter}px)`
+    node.style.backdropFilter = bf
+    node.style.setProperty('-webkit-backdrop-filter', bf)
+  } else {
+    node.style.backdropFilter = ''
+  }
 }
 
 // Gradient ids must be unique per rendered instance: the same element renders
@@ -146,6 +154,15 @@ export function gradientLineCoords(angle: number) {
   const dx = Math.sin(rad) / 2
   const dy = -Math.cos(rad) / 2
   return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy }
+}
+
+/** CSS linear-gradient() from a GradientFill. CSS angle convention matches the
+ *  model (0deg = bottom->top, 90deg = left->right), so pass angle straight. */
+export function cssLinearGradient(g: NonNullable<ShapeElement['fillGradient']>): string {
+  const stops = g.stops
+    .map((s) => `${s.color} ${Math.round(Math.min(Math.max(s.at, 0), 1) * 100)}%`)
+    .join(', ')
+  return `linear-gradient(${g.angle}deg, ${stops})`
 }
 
 /** Materialize a GradientFill as a <defs> gradient; returns its url() ref. */
@@ -411,7 +428,21 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.fontSize = `${el.fontSize}px`
       inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
       inner.style.fontWeight = String(el.fontWeight)
-      inner.style.color = el.color
+      const cg = el.colorGradient
+      if (cg && cg.stops && cg.stops.length) {
+        inner.style.backgroundImage = cssLinearGradient(cg)
+        inner.style.setProperty('-webkit-background-clip', 'text')
+        inner.style.setProperty('background-clip', 'text')
+        inner.style.color = 'transparent'
+      } else {
+        inner.style.color = el.color
+      }
+      // text-stroke composes on top: outline the glyphs (over gradient or solid fill)
+      const ts = el.textStroke
+      if (ts && ts.width) {
+        inner.style.setProperty('-webkit-text-stroke', `${ts.width}px ${ts.color}`)
+        if (ts.fill === 'none') inner.style.color = 'transparent'
+      }
       inner.style.textAlign = el.align
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
