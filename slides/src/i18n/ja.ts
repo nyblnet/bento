@@ -4,6 +4,8 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Visit bento.page (opens in a new tab)": "bento.page を開く（新しいタブ）",
+  "New to Bento? Find templates, the gallery and the AI editing guide at {home} — or ⭐ it on {gh}.": "Bento は初めてですか？テンプレート、ギャラリー、AI編集ガイドは {home} でどうぞ — {gh} で ⭐ もぜひ。",
   "Morph": "モーフ",
   "Morph id": "モーフ id",
   "Pair with": "ペア設定",
