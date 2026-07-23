@@ -1181,6 +1181,8 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   #bento-print { display: block; }
   @page { size: 1600px 900px; margin: 0; }
   #bento-print .bp-page {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
     width: 1600px;
     height: 900px;
     overflow: hidden;

@@ -112,6 +112,8 @@ export interface TextElement extends ElementBase {
   fontFamily: string
   fontWeight: number
   color: string
+  /** When set (and stops non-empty), painted into the glyphs; wins over `color`. */
+  colorGradient?: GradientFill
   align: 'left' | 'center' | 'right'
   valign: 'top' | 'middle' | 'bottom'
   lineHeight: number
