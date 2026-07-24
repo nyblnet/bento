@@ -1,7 +1,21 @@
 # Bento — self-contained office documents
 
 One HTML file = the document + viewer + editor. See `README.md` for the vision.
-`slides/` is the first app (PowerPoint replacement); docs and sheets come later.
+`slides/` is the first app (PowerPoint replacement); **Bento Spaces**
+(Notion/notes-like) and **Bento Dash** (data/spreadsheet) are starting —
+names provisional.
+
+## Multi-app coordination (read first when working beyond slides/)
+
+- `docs/PLATFORM.md` — invariants EVERY Bento app must honor (splice contract,
+  docId, format additivity, collab, signed updates). Breaking these bricks
+  shipped files.
+- `docs/PARALLEL-WORK.md` — ownership zones + branch/merge discipline for the
+  many parallel agents/tools working on this repo. Kernel-zone changes are
+  serialized, never parallelized.
+- `docs/DECISIONS.md` — append-only decision log. Read before non-trivial
+  work; append when you settle something other agents could contradict.
+- `AGENTS.md` — the tool-agnostic contract (Codex/Antigravity read this).
 
 ## Architecture (slides/)
 
