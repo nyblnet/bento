@@ -1,7 +1,7 @@
 {
   "name": "bento-slides",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.8",
   "license": "MIT",
   "type": "module",
   "scripts": {

@@ -11,6 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.0.8] — 2026-07-24
+
 - **Reduce motion during a presentation.** A calmer show for motion sensitivity,
   a laggy projector, or a weak machine. It honours the OS *prefers-reduced-motion*
   setting automatically; the presenter can also toggle it with **M** (or the ⏸
@@ -19,6 +21,24 @@ pre-1.0.
   ken-burns — is skipped, so elements just show their final state. It's a
   viewer/presenter preference (persisted per browser), never written into the
   document.
+
+- **Gradient text.** Text can take a multi-stop linear gradient fill (angle +
+  colour stops), painted into the glyphs — edited in the Typography panel.
+
+- **Outlined & hollow text.** A text outline (width + colour) with an optional
+  hollow interior — the classic outlined section-break word.
+
+- **Element blur & blend modes.** Any element can take a Gaussian blur and a CSS
+  blend mode (screen for neon light glows, multiply/overlay for editorial
+  duotones), in the Effects panel.
+
+- **Frosted-glass panels.** Elements can blur what's behind them
+  (backdrop-filter). Screen-only — pair with a translucent fill so PDF/print
+  show a graceful flat panel.
+
+- **First-run Slideshow hint.** New editors get a peach neon-runner cue tracing
+  the Slideshow button until they present once (and again on hover); the About
+  dialog now links back to bento.page.
 - **Fix: live edits no longer lose focus when a collaborator changes something.**
   A remote collab op used to trigger a full canvas repaint that tore down the
   text (or table-cell) node you were typing in — stealing focus and resetting
