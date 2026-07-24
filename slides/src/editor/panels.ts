@@ -418,6 +418,28 @@ export class PropsPanel {
       this.row('Color', this.colorAlpha(sh.color, (v, fin) => setShadow(i, { color: v }, fin)))
     })
 
+    // Blur (on the element) / frosted-glass backdrop (behind it) / blend mode —
+    // available on any element. 0 clears blur/backdrop; 'normal' clears blend.
+    const fxGrid = document.createElement('div')
+    fxGrid.className = 'ed-grid2'
+    fxGrid.append(
+      this.mini(t('Blur'), el.blur ?? 0, (v) => this.mutate(el.id, (e) => {
+        if (v > 0) e.blur = v
+        else delete e.blur
+      }, true)),
+      this.mini(t('Backdrop'), el.backdropFilter ?? 0, (v) => this.mutate(el.id, (e) => {
+        if (v > 0) e.backdropFilter = v
+        else delete e.backdropFilter
+      }, true)),
+    )
+    this.host.appendChild(fxGrid)
+    this.row('Blend', this.select(
+      ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference', 'exclusion'],
+      el.blend || 'normal',
+      (v) => this.mutate(el.id, (e) => {
+        if (v === 'normal') delete e.blend
+        else e.blend = v
+      }, true)))
 
     this.section(t('Arrange'))
     this.arrangeRows([el])
@@ -783,14 +805,103 @@ export class PropsPanel {
         (e as TextElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
       }, fin)))
     this.row('Weight', this.weightSelect(el))
-    this.row('Color', this.color(el.color, (v, fin) =>
-      this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin)))
+    // Text fill: a solid colour, or a multi-stop gradient painted into the glyphs.
+    const tgrad = el.colorGradient
+    this.row('Fill style', this.select(['solid', 'gradient'], tgrad ? 'gradient' : 'solid', (v) =>
+      this.mutate(el.id, (e) => {
+        const tx = e as TextElement
+        if (v === 'gradient') {
+          const base = parseColor(tx.color)
+          tx.colorGradient ??= {
+            angle: 90,
+            stops: [
+              { at: 0, color: combineColor(base.hex, Math.max(base.a, 1)) },
+              { at: 1, color: '#5B8DEF' },
+            ],
+          }
+        } else {
+          delete tx.colorGradient
+        }
+      }, true)))
+    if (!tgrad) {
+      this.row('Color', this.color(el.color, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin)))
+    } else {
+      this.row('Grad. angle', this.number(tgrad.angle, 1, (v, fin) =>
+        this.mutate(el.id, (e) => {
+          const g = (e as TextElement).colorGradient
+          if (g) g.angle = v
+        }, fin)))
+      tgrad.stops.forEach((stop, i) => {
+        const wrap = document.createElement('div')
+        wrap.className = 'ed-gradstop'
+        const at = this.number(Math.round(stop.at * 100), 1, (v, fin) =>
+          this.mutate(el.id, (e) => {
+            const g = (e as TextElement).colorGradient
+            if (g?.stops[i]) g.stops[i].at = Math.min(Math.max(v / 100, 0), 1)
+          }, fin))
+        at.title = t('Position %')
+        const color = this.colorAlpha(stop.color, (v, fin) =>
+          this.mutate(el.id, (e) => {
+            const g = (e as TextElement).colorGradient
+            if (g?.stops[i]) g.stops[i].color = v
+          }, fin))
+        wrap.append(at, color)
+        if (tgrad.stops.length > 2) {
+          const del = document.createElement('button')
+          del.className = 'ed-btn ed-btn-icon'
+          del.textContent = '✕'
+          del.title = t('Remove stop')
+          del.addEventListener('click', () =>
+            this.mutate(el.id, (e) => {
+              const g = (e as TextElement).colorGradient
+              if (g && g.stops.length > 2) g.stops.splice(i, 1)
+            }, true))
+          wrap.appendChild(del)
+        }
+        this.row(`Stop ${i + 1}`, wrap)
+      })
+      const addStop = document.createElement('button')
+      addStop.className = 'ed-btn ed-btn-block'
+      addStop.textContent = t('＋ Add stop')
+      addStop.addEventListener('click', () =>
+        this.mutate(el.id, (e) => {
+          const g = (e as TextElement).colorGradient
+          if (!g) return
+          const mid = g.stops[Math.floor(g.stops.length / 2)]
+          g.stops.push({ at: 0.5, color: mid?.color ?? '#808080' })
+          g.stops.sort((a, b) => a.at - b.at)
+        }, true))
+      this.host.appendChild(addStop)
+    }
     this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).align = v as TextElement['align'] }, true)))
     this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
       this.mutate(el.id, (e) => { (e as TextElement).valign = v as TextElement['valign'] }, true)))
     this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
       this.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(v, 0.5) }, fin)))
+
+    // Outline / hollow glyphs via -webkit-text-stroke. Width 0 = off; 'hollow'
+    // makes the glyph interior transparent (the classic outlined section word).
+    const ts = el.textStroke
+    this.row('Outline', this.number(ts?.width ?? 0, 0.5, (v, fin) =>
+      this.mutate(el.id, (e) => {
+        const tx = e as TextElement
+        if (v > 0) tx.textStroke = { color: '#1E2A3A', ...(tx.textStroke ?? {}), width: v }
+        else delete tx.textStroke
+      }, fin)))
+    if (ts && ts.width) {
+      this.row('Outline color', this.colorAlpha(ts.color, (v, fin) =>
+        this.mutate(el.id, (e) => {
+          const g = (e as TextElement).textStroke
+          if (g) g.color = v
+        }, fin)))
+      this.row('Interior', this.select(['filled', 'hollow'], ts.fill === 'none' ? 'hollow' : 'filled', (v) =>
+        this.mutate(el.id, (e) => {
+          const g = (e as TextElement).textStroke
+          if (g) { if (v === 'hollow') g.fill = 'none'; else delete g.fill }
+        }, true)))
+    }
 
     const embed = document.createElement('button')
     embed.className = 'ed-btn ed-btn-block'

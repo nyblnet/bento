@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const de: Catalog = {
+  "Backdrop": "Hintergrund",
+  "Blend": "Mischmodus",
+  "Outline": "Kontur",
+  "Outline color": "Konturfarbe",
+  "Interior": "Innenfläche",
+  "filled": "gefüllt",
+  "hollow": "hohl",
   "Reduced motion: on": "Bewegung reduziert: an",
   "Reduced motion: off": "Bewegung reduziert: aus",
   "Reduce motion — pause animations (also honours your OS setting)": "Bewegung reduzieren — Animationen pausieren (berücksichtigt auch die OS-Einstellung)",

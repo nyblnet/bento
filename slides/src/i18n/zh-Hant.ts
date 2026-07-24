@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Backdrop": "背景模糊",
+  "Blend": "混合模式",
+  "Outline": "外框",
+  "Outline color": "外框顏色",
+  "Interior": "內部",
+  "filled": "填滿",
+  "hollow": "空心",
   "Reduced motion: on": "減少動態效果：開",
   "Reduced motion: off": "減少動態效果：關",
   "Reduce motion — pause animations (also honours your OS setting)": "減少動態效果 — 暫停動畫（也遵循系統設定）",
