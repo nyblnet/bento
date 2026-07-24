@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Backdrop": "背景ぼかし",
+  "Blend": "描画モード",
+  "Outline": "縁取り",
+  "Outline color": "縁取りの色",
+  "Interior": "内側",
+  "filled": "塗りつぶし",
+  "hollow": "中抜き",
   "Reduced motion: on": "モーション軽減：オン",
   "Reduced motion: off": "モーション軽減：オフ",
   "Reduce motion — pause animations (also honours your OS setting)": "モーションを減らす — アニメーションを一時停止（OS設定にも従います）",

@@ -4,6 +4,13 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Backdrop": "背景模糊",
+  "Blend": "混合模式",
+  "Outline": "描边",
+  "Outline color": "描边颜色",
+  "Interior": "内部",
+  "filled": "填充",
+  "hollow": "空心",
   "Reduced motion: on": "减少动态效果：开",
   "Reduced motion: off": "减少动态效果：关",
   "Reduce motion — pause animations (also honours your OS setting)": "减少动态效果 — 暂停动画（也遵循系统设置）",
