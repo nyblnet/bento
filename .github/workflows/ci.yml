@@ -1,0 +1,55 @@
+# CI validation gates — validate, never release.
+#
+# Every PR and every push to main runs: typecheck, the single-file build,
+# the splice conformance gate (scripts/shell-gate.mjs — same code the local
+# release runs before signing), and the CRDT convergence rig at CI depth.
+#
+# Deliberately absent: signing, publishing, deploying. Releases are cut
+# locally so the signing key never leaves the maintainer's machine and the
+# signed bytes are the served bytes (docs/RELEASING.md). Keep it that way —
+# do not add secrets or release steps to this workflow.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # ≥23.6 required: the sync rig runs TypeScript via native type
+          # stripping (node scripts/test-sync.ts).
+          node-version: 24
+          cache: npm
+          cache-dependency-path: slides/package-lock.json
+
+      - name: Install
+        working-directory: slides
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: slides
+        run: node_modules/.bin/tsc -b
+
+      - name: Build single-file shell
+        working-directory: slides
+        run: npm run build:single
+
+      - name: Splice conformance gate
+        run: node scripts/shell-gate.mjs slides/dist-single/Bento_Slides.bento.html
+
+      - name: CRDT convergence rig
+        # 40 seeds locally; deeper on CI where the seconds are free.
+        run: SEEDS=300 node scripts/test-sync.ts
