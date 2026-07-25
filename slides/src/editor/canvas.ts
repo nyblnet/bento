@@ -197,9 +197,10 @@ export class SlideCanvas {
       if (textEl) { this.startTextEdit(textEl); return }
       const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
       if (td) { this.editCellFromTd(td); return }
-      // math is edited in the panel (like media/chart): jump focus to its source
-      const mathEl = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-math')
-      if (mathEl) document.querySelector<HTMLTextAreaElement>('.ed-math-src')?.focus()
+      // math is edited in the panel (like media/chart): jump focus to its
+      // source. Through the editor, which un-collapses the panel first — a
+      // field inside a collapsed panel cannot take focus.
+      if ((ev.target as HTMLElement).closest('.bento-el-math')) this.onEditMath?.()
     })
 
     new ResizeObserver(() => this.relayout()).observe(wrap)
@@ -269,6 +270,9 @@ export class SlideCanvas {
   /** notified when the comment tool arms/disarms (topbar button state) */
   onCommentModeChange: ((on: boolean) => void) | null = null
   onSlideNav: ((dir: 1 | -1) => void) | null = null
+  /** double-click on a math element — the editor opens the panel and focuses
+   *  its LaTeX field (math has no on-canvas editing) */
+  onEditMath: (() => void) | null = null
   private wheelNavAccum = 0
   private wheelNavCooldown = 0
   private commentCleanup: (() => void) | null = null

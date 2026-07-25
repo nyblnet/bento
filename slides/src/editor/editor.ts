@@ -7,8 +7,7 @@ import type { Store } from '../store'
 import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
-  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
-  centerInDoc, defaultMath,
+  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMath, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, readableInk, syncLinkedChart, uid,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
 } from '../model'
@@ -340,6 +339,7 @@ export class Editor {
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
+    this.canvas.onEditMath = () => this.focusMathSource()
     this.panel = new PropsPanel(this.props, this.store)
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
@@ -1348,6 +1348,9 @@ export class Editor {
     const trigger = btn(ICONS.math, t('Math'), () => wrap.classList.toggle('open'),
       t('Add a LaTeX equation — the math engine loads once, then the formula bakes into the file'))
     const menu = div('ed-menu')
+    // i18n NOTE: `label` reaches t() as a VARIABLE — the two literals below are
+    // live catalog keys (same situation as panels.ts ROW_TIPS); a literal
+    // extraction sweep must not prune them.
     const item = (label: string, mode: 'equation' | 'note') => {
       menu.appendChild(btn(ICONS.math, t(label), () => { wrap.classList.remove('open'); this.insertMath(mode) }))
     }
@@ -1360,13 +1363,23 @@ export class Editor {
     return wrap
   }
 
-  /** Insert a math element, centered on the slide, and open its panel so the
-   *  author starts typing LaTeX right away (baking is panel-driven). Ink picks
-   *  up the slide's readable default, like new text and tables. */
+  /** Insert a math element and put the caret in its LaTeX field, so the author
+   *  starts typing right away (baking is panel-driven). Ink picks up the
+   *  slide's readable default, like new text and tables. */
   private insertMath(mode: 'equation' | 'note') {
-    const el = defaultMath(mode, { color: readableInk(this.store.slide.background) })
-    this.canvas.insert(centerInDoc(el, this.store.doc.size))
-    document.querySelector<HTMLTextAreaElement>('.ed-math-src')?.focus()
+    this.canvas.insert(defaultMath(mode, { color: readableInk(this.store.slide.background) }))
+    this.focusMathSource()
+  }
+
+  /**
+   * Focus the selected math element's LaTeX field, opening whatever is in the
+   * way first. The properties panel may be collapsed — phones boot that way and
+   * `]` collapses it — and a field inside a collapsed panel silently refuses
+   * focus, so inserting an equation would look like nothing happened.
+   */
+  focusMathSource() {
+    if (this.props.classList.contains('ed-collapsed')) this.togglePanel('right')
+    this.panel.focusMathSource()
   }
 
   /** Insert a media element that REFERENCES a URL (not embedded). */
@@ -1747,6 +1760,12 @@ export class Editor {
       [`${t('Alt')}-${t('drag')}`, t('Break a smooth point into a sharp corner')],
       [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
     ])
+    section(colR, t('Math'), [
+      [t('Math ▾'), t('Insert an equation, or a note mixing prose with $…$ math')],
+      [t('Double-click'), t('Edit the LaTeX in the panel — math has no on-canvas editing')],
+      [t('Morph'), t('Give two equations the same morph key and their symbols travel between slides')],
+      [t('Morph hints'), t('Force a pairing the automatic match cannot guess')],
+    ])
     section(colR, t('Motion paths'), [
       [t('Presenting ▸ Loop'), t('Give an element a motion-path loop, then Edit path on canvas')],
       [t('Drag points'), t('Shape the trajectory — the first point is the element’s rest spot')],
@@ -2109,9 +2128,9 @@ export class Editor {
     autoRow.append(autoCb, document.createTextNode(' ' + t('Check for updates automatically at launch')))
     box.appendChild(autoRow)
 
-    // the hard no-network switch: blocks update checks AND online
-    // collaboration for this browser. Same-machine tab sync is not
-    // networking and stays on.
+    // the hard no-network switch: blocks update checks, online collaboration
+    // and the one-time math-engine download for this browser. Same-machine tab
+    // sync is not networking and stays on.
     const offRow = document.createElement('label')
     offRow.className = 'ed-about-auto'
     const offCb = document.createElement('input')
