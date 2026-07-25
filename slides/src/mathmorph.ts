@@ -32,6 +32,7 @@
 
 import { anim } from './anim'
 import type { MathElement } from './model'
+import { mathAlignX } from './render'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -111,18 +112,22 @@ function hrefOf(el: Element): string {
 }
 
 /**
- * Reproduce the `xMidYMid meet` viewBox mapping render.ts applies (the SVG is
- * sized `width:100%;height:100%` inside the element box), as a matrix taking
- * viewBox coordinates to slide coordinates.
+ * Reproduce the `<preserveAspectRatio> meet` viewBox mapping render.ts applies
+ * (the SVG is sized `width:100%;height:100%` inside the element box), as a
+ * matrix taking viewBox coordinates to slide coordinates.
+ *
+ * `alignX` must match what render.ts wrote on the node — it is derived from the
+ * same `mathAlignX` helper, which is why that one is exported.
  */
-function viewBoxToSlide(svg: SVGSVGElement, frame: Frame): Mat | null {
+function viewBoxToSlide(svg: SVGSVGElement, frame: Frame, alignX: 'xMin' | 'xMid' | 'xMax'): Mat | null {
   const vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).filter(Boolean).map(Number)
   if (vb.length !== 4 || vb.some((v) => !Number.isFinite(v))) return null
   const [minX, minY, vw, vh] = vb
   if (vw <= 0 || vh <= 0) return null
   const k = Math.min(frame.w / vw, frame.h / vh)
-  const dx = frame.x + (frame.w - vw * k) / 2
-  const dy = frame.y + (frame.h - vh * k) / 2
+  const slack = frame.w - vw * k
+  const dx = frame.x + (alignX === 'xMin' ? 0 : alignX === 'xMax' ? slack : slack / 2)
+  const dy = frame.y + (frame.h - vh * k) / 2 // always YMid
   // translate(dx,dy) · scale(k) · translate(-minX,-minY)
   return mul(mul([1, 0, 0, 1, dx, dy], [k, 0, 0, k, 0, 0]), [1, 0, 0, 1, -minX, -minY])
 }
@@ -150,7 +155,7 @@ export function glyphAtoms(el: MathElement, frame: Frame): Atom[] | null {
   }
   if (!svg) return null
 
-  const root = viewBoxToSlide(svg, frame)
+  const root = viewBoxToSlide(svg, frame, mathAlignX(el.align || 'center'))
   if (!root) return null
 
   // glyph outlines live in <defs> and are referenced by <use href="#id">

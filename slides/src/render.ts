@@ -432,6 +432,18 @@ export function scopeMathIds(markup: string): string {
 }
 let mathScopeSeq = 0
 
+/**
+ * The `preserveAspectRatio` x-alignment token for a math element's `align`.
+ *
+ * Exported because mathmorph.ts has to place glyphs in slide coordinates
+ * WITHOUT measuring the DOM, which means reproducing this exact mapping. If the
+ * two ever disagree, morphing glyphs start their travel offset from where the
+ * formula is actually painted.
+ */
+export function mathAlignX(align: 'left' | 'center' | 'right'): 'xMin' | 'xMid' | 'xMax' {
+  return align === 'left' ? 'xMin' : align === 'right' ? 'xMax' : 'xMid'
+}
+
 const VALIGN: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }
 
 /**
@@ -665,18 +677,21 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // gradient/marker counters above guard against).
       node.style.display = 'flex'
       node.style.alignItems = 'center'
-      node.style.justifyContent = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'
       if (el.baked) {
         const box = document.createElement('div')
         box.className = 'bento-math-eq'
-        box.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:inherit'
+        box.style.cssText = 'width:100%;height:100%;display:block'
         box.innerHTML = scopeMathIds(sanitizeMath(el.baked))
         const svg = box.querySelector('svg')
         if (svg) {
-          // Fill the element box preserving aspect. The mapping is the standard
-          // xMidYMid meet transform, which mathmorph.ts reproduces exactly to
-          // place glyphs in slide coordinates without measuring the DOM.
-          svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+          // Fill the element box preserving aspect. Alignment rides on
+          // preserveAspectRatio, NOT on flexbox: the svg is sized 100%/100% of
+          // a 100%/100% box, so there is never free space for justify-content
+          // to distribute — the formula's position inside its box is decided
+          // entirely by this attribute. mathmorph.ts reproduces the same
+          // mapping to place glyphs in slide coordinates without measuring the
+          // DOM, so the two MUST agree (see mathAlignX there).
+          svg.setAttribute('preserveAspectRatio', `${mathAlignX(align)}YMid meet`)
           svg.removeAttribute('width')
           svg.removeAttribute('height')
           svg.style.cssText = 'width:100%;height:100%;display:block;overflow:visible'
