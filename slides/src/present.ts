@@ -672,8 +672,11 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
     if (el.type !== 'chart') continue
     const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
     if (!node) continue
-    // a matching chart on the other side of a morph: animate its data over
-    const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
+    // a matching chart on the other side of a morph: animate its data over.
+    // Pair on the MORPH key (`morphId ?? id`), the same key the element morph
+    // uses — otherwise a morphId-paired chart moves but its data snaps.
+    const key = morphKey(el)
+    const fromEl = fromSlide?.elements.find((e) => morphKey(e) === key && e.type === 'chart')
     const dispose = mountChart(el, node, fromEl && fromEl.type === 'chart' ? fromEl.option : undefined)
     handles.push(() => {
       dispose()
