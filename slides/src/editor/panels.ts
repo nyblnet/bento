@@ -71,6 +71,8 @@ const ROW_TIPS: Record<string, string> = {
   'Header text': 'Header row text colour',
   'Text': 'Table text colour',
   'Grid lines': 'Colour of the lines between cells',
+  'Mode': 'A standalone equation, or prose in the deck’s fonts with $…$ math inline',
+  'Size': 'Display sets the formula large and centred; inline sizes it like running text',
   'Fit': 'How the media fills its box — cover crops to fill, contain letterboxes',
   'URL': 'Link a hosted file instead of embedding — keeps the deck small',
   'Poster': 'Preview image shown before the video plays',
@@ -79,6 +81,10 @@ const ROW_TIPS: Record<string, string> = {
 
 export class PropsPanel {
   private burst = false
+  /** Bake generation for math elements. On the PANEL rather than in
+   *  buildMathProps' closure: a commit rebuilds the panel, so a bake started
+   *  before that rebuild must be cancellable by one started after it. */
+  private mathBakeSeq = 0
 
   constructor(
     private host: HTMLElement,
@@ -127,6 +133,25 @@ export class PropsPanel {
     mutate()
     this.store.touch()
     if (final) this.burst = false
+  }
+
+  /**
+   * Focus the selected math element's LaTeX field.
+   *
+   * Math has no on-canvas editing (like charts and media, it is edited here),
+   * so double-clicking one and inserting one both land on this. The field can
+   * exist and still be unfocusable: its accordion section may be folded shut
+   * from an earlier session. Opening it via the header's own click handler
+   * keeps the persisted open-state honest. Returns false when there is no math
+   * field to focus — the caller has already had to un-collapse the panel.
+   */
+  focusMathSource(): boolean {
+    const ta = this.host.querySelector<HTMLTextAreaElement>('.ed-math-src')
+    if (!ta) return false
+    const body = ta.closest<HTMLElement>('.ed-section-body')
+    if (body?.style.display === 'none') (body.previousElementSibling as HTMLElement | null)?.click()
+    ta.focus()
+    return true
   }
 
   private rebuild(force = false) {
@@ -1630,14 +1655,13 @@ export class PropsPanel {
     // screen. `source` survives, so re-baking is one keystroke away.
     // (`rebake` is declared below — the listener only ever fires after that.)
     modeSel.addEventListener('change', () => {
-      this.mutate(el.id, (e) => {
-        const x = e as MathElement
+      flushPendingEdit((x) => {
         x.mode = modeSel.value as MathElement['mode']
         delete x.baked
-      }, true)
+      })
       rebake(true)
     })
-    this.row(t('Mode'), modeSel)
+    this.row('Mode', modeSel)
 
     // source textarea — LaTeX (equation) or prose + $…$ (note)
     const ta = document.createElement('textarea')
@@ -1665,40 +1689,72 @@ export class PropsPanel {
     err.className = 'ed-hint ed-math-err'
     this.host.appendChild(err)
 
+    /*
+     * The panel's own nodes are resolved FRESH on every use rather than
+     * captured, because this panel does not outlive a commit.
+     *
+     * A discrete control (Mode, Size, a morph hint) commits, and a commit
+     * rebuilds the panel SYNCHRONOUSLY — `isActiveEditFocus` defers a rebuild
+     * for text fields only, never for a <select>. So by the time the bake such
+     * a handler kicked off resolves, the `preview`/`err` built above are
+     * detached, and writing to them puts "Loading the math engine…" and every
+     * bake ERROR on nodes nobody can see. That is invisible failure on the one
+     * path (mode switch) that also drops `baked` first, leaving the author
+     * staring at a placeholder with no explanation.
+     *
+     * Fresh lookups are correct only while the panel still shows THIS element,
+     * though: select another equation with a bake in flight and the live
+     * `.ed-math-src` holds the OTHER element's LaTeX, which rebake would then
+     * write into this one. So when the panel has moved on, fall back to the
+     * nodes we were built with — detached, so the writes land nowhere, which
+     * is exactly right.
+     */
+    const showingThis = () => {
+      const sel = this.store.selectedElements
+      return sel.length === 1 && sel[0].id === el.id
+    }
+    const mine = <T extends HTMLElement>(sel: string, fallback: T): T =>
+      (showingThis() ? this.host.querySelector<T>(sel) : null) ?? fallback
+    const errLine = () => mine('.ed-math-err', err)
+    const previewBox = () => mine('.ed-math-preview', preview)
+
     // Bake the current textarea source and store it. Reads LIVE element state
     // (mode/display/tags) so it stays correct across rebuilds. Must only ever
     // be invoked from a genuine user event — see the note above.
     // Colour is NOT an input: the inlined SVG paints currentColor, so changing
     // the ink never re-bakes.
-    let seq = 0
-    const clearStatus = () => { err.classList.remove('ed-math-busy'); err.textContent = '' }
+    const clearStatus = () => { const e = errLine(); e.classList.remove('ed-math-busy'); e.textContent = '' }
     const rebake = async (final: boolean) => {
       const live = this.store.element(el.id)
       if (!live || live.type !== 'math') return
       const m = live as MathElement
-      const source = ta.value
-      const my = ++seq
+      const source = liveSource()
+      // The sequence counter lives on the PANEL, not in this closure, so a bake
+      // started by an older closure (whose panel a commit has already replaced)
+      // is cancelled by the newer one rather than racing it to write `baked`.
+      const my = ++this.mathBakeSeq
       // The first bake of a session downloads ~2MB of engine; without this the
       // panel just sits there. Once loaded (or cached in IndexedDB) baking is
       // instant and the line never appears.
       const busy = !mathjaxLoaded()
-      err.classList.toggle('ed-math-busy', busy)
-      err.textContent = busy ? t('Loading the math engine…') : ''
+      const status = errLine()
+      status.classList.toggle('ed-math-busy', busy)
+      status.textContent = busy ? t('Loading the math engine…') : ''
       try {
         if (m.mode === 'note') {
           const baked = await bakeMathCell(source)
-          if (my !== seq) return
+          if (my !== this.mathBakeSeq) return
           clearStatus()
-          preview.innerHTML = scopeMathIds(sanitizeMath(baked))
+          previewBox().innerHTML = scopeMathIds(sanitizeMath(baked))
           this.mutate(el.id, (e) => { const x = e as MathElement; x.source = source; x.baked = baked }, final)
         } else {
           const { svg } = await bakeEquation(source, {
             display: m.display !== false,
             tags: m.morphTags,
           })
-          if (my !== seq) return
+          if (my !== this.mathBakeSeq) return
           clearStatus()
-          preview.innerHTML = scopeMathIds(sanitizeMath(svg))
+          previewBox().innerHTML = scopeMathIds(sanitizeMath(svg))
           const aspect = intrinsicAspect(svg)
           this.mutate(el.id, (e) => {
             const x = e as MathElement
@@ -1711,12 +1767,28 @@ export class PropsPanel {
           }, final)
         }
       } catch (ex) {
-        if (my !== seq) return
-        err.classList.remove('ed-math-busy')
-        err.textContent = (ex as Error).message || t('Could not render this math.')
+        if (my !== this.mathBakeSeq) return
+        const line = errLine()
+        line.classList.remove('ed-math-busy')
+        line.textContent = (ex as Error).message || t('Could not render this math.')
       }
     }
     let timer: number | undefined
+    /** The source as the author last left it — the live field while this panel
+     *  still shows this element, else the one we were built with. */
+    const liveSource = () => mine('.ed-math-src', ta).value
+    /**
+     * Commit a discrete change together with any typing the 350ms debounce has
+     * not flushed yet. Without this, clicking Mode mid-sentence rebuilds the
+     * panel from the model's OLDER source and the half-typed formula is gone
+     * from the field — while the orphaned timer later writes it back to the
+     * model, leaving field and document disagreeing.
+     */
+    const flushPendingEdit = (patch: (x: MathElement) => void) => {
+      window.clearTimeout(timer)
+      const source = liveSource()
+      this.mutate(el.id, (e) => { const x = e as MathElement; x.source = source; patch(x) }, true)
+    }
     ta.addEventListener('input', () => {
       window.clearTimeout(timer)
       timer = window.setTimeout(() => rebake(false), 350)
@@ -1725,8 +1797,8 @@ export class PropsPanel {
 
     // equation: display (large, centred) vs inline (text-height) sizing
     if (!note) {
-      this.row(t('Size'), this.select(['display', 'inline'], el.display !== false ? 'display' : 'inline', (v) => {
-        this.mutate(el.id, (e) => { (e as MathElement).display = v === 'display' }, true)
+      this.row('Size', this.select(['display', 'inline'], el.display !== false ? 'display' : 'inline', (v) => {
+        flushPendingEdit((x) => { x.display = v === 'display' })
         rebake(true)
       }))
     } else {
@@ -1744,20 +1816,32 @@ export class PropsPanel {
       for (const c of FONT_CHOICES) add(c.label, c.stack)
       sel.addEventListener('change', () =>
         this.mutate(el.id, (e) => { (e as MathElement).fontFamily = sel.value }, true))
-      this.row(t('Font'), sel)
+      this.row('Font', sel)
+
+      // Prose size + spacing, in the model like every other element's type —
+      // never inherited, or the deck would render at the viewer's browser
+      // default. Points on screen, slide-space px in the model, exactly as the
+      // text panel does it. No re-bake: the baked spans size themselves in
+      // `ex`, so the formulas track the prose automatically.
+      this.row('Size (pt)', this.number(Math.round((el.fontSize ?? 20) * 0.75 * 10) / 10, 1, (v, fin) =>
+        this.mutate(el.id, (e) => {
+          (e as MathElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
+        }, fin)))
+      this.row('Line height', this.number(el.lineHeight ?? 1.5, 0.05, (v, fin) =>
+        this.mutate(el.id, (e) => { (e as MathElement).lineHeight = Math.max(v, 0.5) }, fin)))
     }
 
     // alignment
-    this.row(t('Align'), this.select(['left', 'center', 'right'], el.align || (note ? 'left' : 'center'), (v) =>
+    this.row('Align', this.select(['left', 'center', 'right'], el.align || (note ? 'left' : 'center'), (v) =>
       this.mutate(el.id, (e) => { (e as MathElement).align = v as MathElement['align'] }, true)))
 
     // ink colour — a live CSS property on the inlined SVG, so no re-bake
-    this.row(t('Color'), this.color(el.color || '#1E2A3A', (v, fin) => {
-      preview.style.color = v
+    this.row('Color', this.color(el.color || '#1E2A3A', (v, fin) => {
+      previewBox().style.color = v
       this.mutate(el.id, (e) => { (e as MathElement).color = v }, fin)
     }))
 
-    if (!note) this.buildMathMorphTags(el, rebake)
+    if (!note) this.buildMathMorphTags(el, rebake, flushPendingEdit)
   }
 
   /**
@@ -1767,7 +1851,11 @@ export class PropsPanel {
    * be inferred — "this term BECOMES that one" when the two share no symbols.
    * Tag the same name on both slides and those glyphs travel into each other.
    */
-  private buildMathMorphTags(el: MathElement, rebake: (final: boolean) => void) {
+  private buildMathMorphTags(
+    el: MathElement,
+    rebake: (final: boolean) => void,
+    flushPendingEdit: (patch: (x: MathElement) => void) => void,
+  ) {
     const tags = el.morphTags ?? []
     this.section(t('Morph hints'))
 
@@ -1777,11 +1865,12 @@ export class PropsPanel {
     this.host.appendChild(hint)
 
     const write = (next: Array<{ tex: string; tag: string }>) => {
-      this.mutate(el.id, (e) => {
-        const m = e as MathElement
+      // through flushPendingEdit, so editing a hint mid-formula does not
+      // rebuild the panel from a source the debounce has not written yet
+      flushPendingEdit((m) => {
         if (next.length) m.morphTags = next
         else delete m.morphTags
-      }, true)
+      })
       rebake(true) // tags are resolved into the markup at bake time
     }
 
