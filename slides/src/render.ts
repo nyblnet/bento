@@ -376,7 +376,36 @@ const MATH_ATTRS = new Set([
   'style', 'role', 'aria-label', 'aria-hidden', 'focusable', 'data-c',
   'data-mml-node', 'data-mjx-texclass', 'text-anchor', 'font-size',
   'font-family', 'xmlns', 'xmlns:xlink',
+  // author morph hints, baked onto glyphs by mathjax.applyMorphTags. mathmorph
+  // reads them off the RAW `baked` string rather than the rendered DOM, so
+  // dropping them here would not break morphing today — but the rendered markup
+  // must stay a faithful subset of what was baked, or that stops being true the
+  // moment anything reads a tag off the canvas.
+  'data-bento-tag',
 ])
+
+const SVG_NS_URI = 'http://www.w3.org/2000/svg'
+/** The only inline-style properties a baked note needs: bakeMathCell sizes each
+ *  inline formula so it sits on the prose baseline, and nothing else. */
+const MATH_STYLE_PROPS = new Set(['height', 'vertical-align', 'display', 'margin'])
+
+/**
+ * Is this `style` value safe to keep?
+ *
+ * SVG nodes keep theirs subject to the usual url()/expression screen — MathJax
+ * styles its own output and the set of properties it uses is not ours to guess.
+ * The HTML wrappers (`span`/`div`) are held to a property allowlist instead:
+ * they exist purely for inline sizing, and a free-form style on them is how a
+ * hostile deck would float an invisible `position:fixed` layer over the editor.
+ */
+function safeMathStyle(el: Element, value: string): boolean {
+  if (/url\s*\(|expression|javascript:/i.test(value)) return false
+  if (el.namespaceURI === SVG_NS_URI) return true
+  return value.split(';').every((decl) => {
+    const prop = decl.split(':')[0].trim().toLowerCase()
+    return !prop || MATH_STYLE_PROPS.has(prop)
+  })
+}
 
 /** Sanitize baked math markup down to the SVG subset MathJax emits. */
 export function sanitizeMath(markup: string): string {
@@ -402,7 +431,7 @@ export function sanitizeMath(markup: string): string {
           }
           // no event handlers, no unknown attributes
           if (name.startsWith('on') || !MATH_ATTRS.has(name)) el.removeAttribute(attr.name)
-          else if (name === 'style' && /url\s*\(|expression|javascript:/i.test(attr.value)) el.removeAttribute(attr.name)
+          else if (name === 'style' && !safeMathStyle(el, attr.value)) el.removeAttribute(attr.name)
         }
         walk(el)
       } else if (child.nodeType !== Node.TEXT_NODE) {
