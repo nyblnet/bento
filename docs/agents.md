@@ -77,6 +77,7 @@ each kind of content to the feature built for it:
 | **every cover / section divider** | at least **one ambient motion** (ken-burns, an orbiting accent) | a still cover is a missed first impression |
 | **repeated chrome / a logo** | keep its `id` stable across slides | it morphs in place instead of popping on every slide |
 | a **demo clip / recording / soundbite** | a **media** element (embed short, link long) | a live video/audio beats a screenshot of one |
+| a **formula / derivation** | a **math** element — and put consecutive steps of one derivation on morph-linked slides | the symbols travel between the steps instead of the formula crossfading; see the caveat below before you write one |
 
 ### Copy-paste recipes
 
@@ -220,6 +221,23 @@ without them — and elements should carry the full field set shown.
   browsers require `muted:true` for a video to autoplay. **Embed only SHORT
   clips** — a big data URI bloats the file and makes it slow to open/save;
   host large media and reference its URL instead.
+- **math**: `mode: equation|note`, `source` (LaTeX, or prose with inline
+  `$…$`), `baked` (the rendered SVG markup). ⚠️ **`source` alone displays
+  nothing.** `baked` is what renders, and producing it needs MathJax — there is
+  NO engine at view time to fall back on, so an element with `source` and no
+  `baked` is an empty placeholder. **Never invent `baked` markup by hand.**
+  Your options, in order:
+  1. Bake it: `node scripts/bake-math.mjs <list>.tex.mjs` runs the app's own
+     baker in a headless browser and writes the markup out, plus a report of
+     how many glyphs pair between consecutive formulas (a low number means that
+     step will crossfade rather than morph symbol by symbol). See
+     `scripts/lightclock-deck.tex.mjs` for the input shape and
+     `scripts/build-lightclock-deck.mjs` for a deck that consumes it.
+  2. Edit around it: changing an existing element's frame, colour or `morphTags`
+     is safe — leave `baked` untouched. Changing `source` without re-baking is
+     not; the two would disagree.
+  3. Hand it back: say the formula needs baking and let the author add it in the
+     editor (Σ Math in the toolbar), which bakes as they type.
 
 ## The rules that make decks feel designed
 
