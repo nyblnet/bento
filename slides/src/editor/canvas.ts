@@ -196,7 +196,10 @@ export class SlideCanvas {
       const textEl = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-text')
       if (textEl) { this.startTextEdit(textEl); return }
       const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
-      if (td) this.editCellFromTd(td)
+      if (td) { this.editCellFromTd(td); return }
+      // math is edited in the panel (like media/chart): jump focus to its source
+      const mathEl = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-math')
+      if (mathEl) document.querySelector<HTMLTextAreaElement>('.ed-math-src')?.focus()
     })
 
     new ResizeObserver(() => this.relayout()).observe(wrap)

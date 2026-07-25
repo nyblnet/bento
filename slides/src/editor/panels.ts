@@ -5,7 +5,9 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, morphKey, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, morphKey, uid, type ChartElement, type LineEnding, type MathElement, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { bakeEquation, bakeMathCell } from '../mathjax'
+import { sanitizeMath, scopeMathIds } from '../render'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
@@ -347,7 +349,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type])
+    this.section({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', math: el.type === 'math' && el.mode === 'note' ? 'Math note' : 'Equation', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type])
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —
@@ -358,6 +360,7 @@ export class PropsPanel {
     if (el.type === 'chart') this.buildChartProps(el)
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
+    if (el.type === 'math') this.buildMathProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -1596,6 +1599,203 @@ export class PropsPanel {
         }, true))
       this.row('Poster', poster)
     }
+  }
+
+  /** width/height of a baked formula's viewBox, or 0 when unreadable. */
+  private static aspectOf(svg: string): number {
+    const m = /viewBox="([^"]+)"/.exec(svg)
+    if (!m) return 0
+    const n = m[1].split(/[\s,]+/).map(Number)
+    return n.length === 4 && n[2] > 0 && n[3] > 0 ? n[2] / n[3] : 0
+  }
+
+  private buildMathProps(el: MathElement) {
+    const note = el.mode === 'note'
+    const intrinsicAspect = PropsPanel.aspectOf
+
+    // mode switch — labelled (Equation / Math note)
+    const modeSel = document.createElement('select')
+    for (const [val, label] of [['equation', t('Equation')], ['note', t('Math note')]] as const) {
+      const o = document.createElement('option')
+      o.value = val; o.textContent = label; o.selected = el.mode === val
+      modeSel.appendChild(o)
+    }
+    modeSel.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as MathElement).mode = modeSel.value as MathElement['mode'] }, true))
+    this.row(t('Mode'), modeSel)
+
+    // source textarea — LaTeX (equation) or prose + $…$ (note)
+    const ta = document.createElement('textarea')
+    ta.className = 'ed-math-src'
+    ta.rows = note ? 4 : 2
+    ta.spellcheck = false
+    ta.placeholder = note ? t('Text with $inline$ and $$display$$ math…') : 'e.g. \\int_0^\\infty e^{-x}\\,dx = 1'
+    ta.value = el.source
+    this.host.appendChild(ta)
+
+    // Live preview + error line. The preview shows the ALREADY-baked output;
+    // it is NEVER baked during panel construction. This is load-bearing:
+    // baking commits (writes src/html), a commit fires a 'doc' event, and a
+    // 'doc' event rebuilds this panel — so baking-on-build would loop
+    // bake→commit→rebuild→bake and freeze the editor. Baking runs ONLY from the
+    // user-input handlers below (typing, or a display/color change). Any other
+    // panel interaction (Morph, Arrange, Position…) rebuilds this panel and
+    // simply re-shows the existing preview — no bake, no commit.
+    const preview = document.createElement('div')
+    preview.className = 'ed-math-preview'
+    preview.style.color = el.color || '#1E2A3A'
+    if (el.baked) preview.innerHTML = scopeMathIds(sanitizeMath(el.baked))
+    this.host.appendChild(preview)
+    const err = document.createElement('p')
+    err.className = 'ed-hint ed-math-err'
+    this.host.appendChild(err)
+
+    // Bake the current textarea source and store it. Reads LIVE element state
+    // (mode/display/tags) so it stays correct across rebuilds. Must only ever
+    // be invoked from a genuine user event — see the note above.
+    // Colour is NOT an input: the inlined SVG paints currentColor, so changing
+    // the ink never re-bakes.
+    let seq = 0
+    const rebake = async (final: boolean) => {
+      const live = this.store.element(el.id)
+      if (!live || live.type !== 'math') return
+      const m = live as MathElement
+      const source = ta.value
+      const my = ++seq
+      err.textContent = ''
+      try {
+        if (m.mode === 'note') {
+          const baked = await bakeMathCell(source)
+          if (my !== seq) return
+          preview.innerHTML = scopeMathIds(sanitizeMath(baked))
+          this.mutate(el.id, (e) => { const x = e as MathElement; x.source = source; x.baked = baked }, final)
+        } else {
+          const { svg } = await bakeEquation(source, {
+            display: m.display !== false,
+            tags: m.morphTags,
+          })
+          if (my !== seq) return
+          preview.innerHTML = scopeMathIds(sanitizeMath(svg))
+          const aspect = intrinsicAspect(svg)
+          this.mutate(el.id, (e) => {
+            const x = e as MathElement
+            x.source = source
+            x.baked = svg
+            if (aspect) {
+              x.aspect = aspect
+              // Keep the box on the formula's own aspect so a long expression
+              // does not render as a sliver inside a stale frame. Height is the
+              // anchor — authors size equations by how tall the type should be.
+              x.w = Math.round(x.h * aspect)
+            }
+          }, final)
+        }
+      } catch (ex) {
+        if (my !== seq) return
+        err.textContent = (ex as Error).message || t('Could not render this math.')
+      }
+    }
+    let timer: number | undefined
+    ta.addEventListener('input', () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => rebake(false), 350)
+    })
+    ta.addEventListener('change', () => { window.clearTimeout(timer); rebake(true) })
+
+    // equation: display (large, centred) vs inline (text-height) sizing
+    if (!note) {
+      this.row(t('Size'), this.select(['display', 'inline'], el.display !== false ? 'display' : 'inline', (v) => {
+        this.mutate(el.id, (e) => { (e as MathElement).display = v === 'display' }, true)
+        rebake(true)
+      }))
+    } else {
+      // note mode: prose font
+      const sel = document.createElement('select')
+      const current = el.fontFamily ?? ''
+      const add = (label: string, value: string) => {
+        const o = document.createElement('option')
+        o.value = value; o.textContent = label; o.style.fontFamily = value || 'inherit'
+        o.selected = firstFamily(current) === firstFamily(value) || (value === '' && current === '')
+        sel.appendChild(o)
+      }
+      add(t('theme default'), '')
+      for (const f of this.store.doc.fonts ?? []) add(`${f.family} (embedded)`, f.family)
+      for (const c of FONT_CHOICES) add(c.label, c.stack)
+      sel.addEventListener('change', () =>
+        this.mutate(el.id, (e) => { (e as MathElement).fontFamily = sel.value }, true))
+      this.row(t('Font'), sel)
+    }
+
+    // alignment
+    this.row(t('Align'), this.select(['left', 'center', 'right'], el.align || (note ? 'left' : 'center'), (v) =>
+      this.mutate(el.id, (e) => { (e as MathElement).align = v as MathElement['align'] }, true)))
+
+    // ink colour — a live CSS property on the inlined SVG, so no re-bake
+    this.row(t('Color'), this.color(el.color || '#1E2A3A', (v, fin) => {
+      preview.style.color = v
+      this.mutate(el.id, (e) => { (e as MathElement).color = v }, fin)
+    }))
+
+    if (!note) this.buildMathMorphTags(el, rebake)
+  }
+
+  /**
+   * Morph hints. Two equations on morph-linked slides already pair their symbols
+   * automatically (longest common subsequence over glyphs), which handles
+   * rearranging an equation. Tags are the escape hatch for the case that cannot
+   * be inferred — "this term BECOMES that one" when the two share no symbols.
+   * Tag the same name on both slides and those glyphs travel into each other.
+   */
+  private buildMathMorphTags(el: MathElement, rebake: (final: boolean) => void) {
+    const tags = el.morphTags ?? []
+    this.section(t('Morph hints'))
+
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Symbols pair automatically. Add a hint only to force a pairing — give the same tag to a sub-expression on both slides.')
+    this.host.appendChild(hint)
+
+    const write = (next: Array<{ tex: string; tag: string }>) => {
+      this.mutate(el.id, (e) => {
+        const m = e as MathElement
+        if (next.length) m.morphTags = next
+        else delete m.morphTags
+      }, true)
+      rebake(true) // tags are resolved into the markup at bake time
+    }
+
+    tags.forEach((entry, i) => {
+      const row = document.createElement('div')
+      row.className = 'ed-tag-row'
+      const tex = document.createElement('input')
+      tex.type = 'text'
+      tex.value = entry.tex
+      tex.placeholder = t('sub-expression, e.g. a^2')
+      const tag = document.createElement('input')
+      tag.type = 'text'
+      tag.value = entry.tag
+      tag.placeholder = t('tag')
+      tag.className = 'ed-tag-name'
+      const del = document.createElement('button')
+      del.className = 'ed-mini'
+      del.textContent = '×'
+      del.title = t('Remove hint')
+      const commit = () => {
+        const next = tags.map((x, j) => (j === i ? { tex: tex.value, tag: tag.value } : x))
+        write(next.filter((x) => x.tex.trim() && x.tag.trim()))
+      }
+      tex.addEventListener('change', commit)
+      tag.addEventListener('change', commit)
+      del.addEventListener('click', () => write(tags.filter((_, j) => j !== i)))
+      row.append(tex, tag, del)
+      this.host.appendChild(row)
+    })
+
+    const add = document.createElement('button')
+    add.className = 'ed-mini'
+    add.textContent = t('＋ Morph hint')
+    add.addEventListener('click', () => write([...tags, { tex: '', tag: `t${tags.length + 1}` }]))
+    this.host.appendChild(add)
   }
 
   // --- element ops --------------------------------------------------------------

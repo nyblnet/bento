@@ -6,6 +6,11 @@ node_modules
 dist/
 dist-single/
 
+# locally-downloaded MathJax engine for dev/testing only (fetched from cdnjs;
+# in production it is served from bento.page/vendor and NEVER bundled) — see
+# slides/src/mathjax.ts. Do not commit the 2MB blob.
+slides/public/vendor/
+
 # local test decks — never committed (may contain confidential content)
 testing/
 

@@ -299,8 +299,55 @@ export interface MediaElement extends ElementBase {
   controls?: boolean
 }
 
+/**
+ * A LaTeX math element. Two modes:
+ *   - 'equation' — a standalone formula. `source` is LaTeX; `baked` is the
+ *     self-contained <svg> markup MathJax produced for it.
+ *   - 'note'     — prose in the deck's fonts with inline `$…$` / `$$…$$` math;
+ *     `source` is the prose+math text, `baked` is the baked output (escaped
+ *     prose + inline <svg> math spans).
+ *
+ * Baking runs in the EDITOR only (lazy MathJax, see mathjax.ts). Viewing needs
+ * zero runtime and zero network — the baked SVG travels in the file.
+ *
+ * The baked artifact is MARKUP, not a data: URI, and render.ts inlines it after
+ * scoping every glyph id per instance (the `bento-grad-` counter idiom). That
+ * is what makes per-symbol morphing possible (mathmorph.ts addresses individual
+ * glyph nodes — an <img> is opaque) and lets ink stay a live CSS property:
+ * MathJax paints `currentColor`, so `color` needs no re-bake and tweens during
+ * a morph exactly like text colour.
+ *
+ * The field is `baked`, NOT `html`: sync/crdt.ts routes any property literally
+ * named `html` into the character-level text RGA, which would interleave two
+ * replicas' baked output into structurally invalid markup. As `baked` it is a
+ * plain LWW register — the whole artifact replaces atomically.
+ */
+export interface MathElement extends ElementBase {
+  type: 'math'
+  mode: 'equation' | 'note'
+  source: string
+  /** baked <svg> markup (equation) or prose+<svg> html (note) */
+  baked?: string
+  /** intrinsic aspect of the baked equation, used to auto-fit the element box */
+  aspect?: number
+  /** equation: display (large, centered) vs inline sizing */
+  display?: boolean
+  /** ink colour — inherited by the inlined SVG, never baked in */
+  color?: string
+  /** note mode: prose font (defaults to the theme font) */
+  fontFamily?: string
+  align?: 'left' | 'center' | 'right'
+  /**
+   * Optional per-symbol morph hints. Each entry pairs a TeX sub-expression with
+   * a stable tag; two equations that tag the same sub-expression morph those
+   * glyphs into each other even when the automatic LCS match would not pair
+   * them (manim's TransformMatchingTex). Absent = fully automatic.
+   */
+  morphTags?: Array<{ tex: string; tag: string }>
+}
+
 export type SlideElement =
-  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement
+  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement | MathElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while
@@ -745,6 +792,33 @@ export function defaultMedia(
     autoplay: false,
     ...partial,
   }
+}
+
+export function defaultMath(
+  mode: 'equation' | 'note' = 'equation',
+  partial: Partial<MathElement> = {},
+): MathElement {
+  const note = mode === 'note'
+  return {
+    id: uid('math'),
+    type: 'math',
+    mode,
+    // caller re-centres against the real deck size; these suit the 1280×720 default
+    x: note ? 360 : 440, y: note ? 280 : 300,
+    w: note ? 560 : 400, h: note ? 160 : 120,
+    rotation: 0, opacity: 1,
+    source: '',
+    display: !note,
+    align: note ? 'left' : 'center',
+    ...partial,
+  }
+}
+
+/** Centre a freshly-created element in the deck's page box. */
+export function centerInDoc<T extends SlideElement>(el: T, size: { width: number; height: number }): T {
+  el.x = Math.round((size.width - el.w) / 2)
+  el.y = Math.round((size.height - el.h) / 2)
+  return el
 }
 
 export function emptySlide(partial: Partial<Slide> = {}): Slide {

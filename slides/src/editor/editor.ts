@@ -8,6 +8,7 @@ import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
+  centerInDoc, defaultMath,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, readableInk, syncLinkedChart, uid,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
 } from '../model'
@@ -235,6 +236,7 @@ export class Editor {
         t('Add a table — edit cells inline; turn it into a live chart from the panel')),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
         t('Add a chart — edit it visually or link it to a table so it updates live')),
+      this.mathDropdown(),
     )
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))
@@ -1339,6 +1341,32 @@ export class Editor {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
     })
     return wrap
+  }
+
+  private mathDropdown(): HTMLElement {
+    const wrap = div('ed-dropdown')
+    const trigger = btn(ICONS.math, t('Math'), () => wrap.classList.toggle('open'),
+      t('Add a LaTeX equation — the math engine loads once, then the formula bakes into the file'))
+    const menu = div('ed-menu')
+    const item = (label: string, mode: 'equation' | 'note') => {
+      menu.appendChild(btn(ICONS.math, t(label), () => { wrap.classList.remove('open'); this.insertMath(mode) }))
+    }
+    item('Equation', 'equation')
+    item('Math note (text + equations)', 'note')
+    wrap.append(trigger, menu)
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    })
+    return wrap
+  }
+
+  /** Insert a math element, centered on the slide, and open its panel so the
+   *  author starts typing LaTeX right away (baking is panel-driven). Ink picks
+   *  up the slide's readable default, like new text and tables. */
+  private insertMath(mode: 'equation' | 'note') {
+    const el = defaultMath(mode, { color: readableInk(this.store.slide.background) })
+    this.canvas.insert(centerInDoc(el, this.store.doc.size))
+    document.querySelector<HTMLTextAreaElement>('.ed-math-src')?.focus()
   }
 
   /** Insert a media element that REFERENCES a URL (not embedded). */

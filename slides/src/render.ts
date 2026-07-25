@@ -356,6 +356,75 @@ export function sanitizeHtml(html: string): string {
   return out.innerHTML
 }
 
+// --- baked math ---------------------------------------------------------------
+
+// Baked math is markup that reaches innerHTML, so it is sanitized on the way in
+// exactly like text html — a deck can arrive from a collaborator, an invite
+// link or a downloaded file, and none of those are trusted input. The allowed
+// set is deliberately just what MathJax's SVG output uses.
+const MATH_TAGS = new Set([
+  'SVG', 'G', 'PATH', 'USE', 'DEFS', 'RECT', 'LINE', 'POLYGON', 'CIRCLE',
+  'ELLIPSE', 'TEXT', 'TSPAN', 'TITLE', 'DESC', 'SPAN', 'BR', 'DIV',
+])
+// `href`/`xlink:href` are allowed but validated below: only same-document
+// fragment refs (`#glyph-id`) survive, never a URL.
+const MATH_ATTRS = new Set([
+  'd', 'transform', 'viewbox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2',
+  'y2', 'rx', 'ry', 'cx', 'cy', 'r', 'points', 'fill', 'stroke', 'stroke-width',
+  'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity',
+  'fill-opacity', 'stroke-opacity', 'preserveaspectratio', 'id', 'class',
+  'style', 'role', 'aria-label', 'aria-hidden', 'focusable', 'data-c',
+  'data-mml-node', 'data-mjx-texclass', 'text-anchor', 'font-size',
+  'font-family', 'xmlns', 'xmlns:xlink',
+])
+
+/** Sanitize baked math markup down to the SVG subset MathJax emits. */
+export function sanitizeMath(markup: string): string {
+  const tpl = document.createElement('template')
+  tpl.innerHTML = markup
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const el = child as Element
+        if (!MATH_TAGS.has(el.tagName.toUpperCase())) { el.remove(); continue }
+        for (const attr of Array.from(el.attributes)) {
+          const name = attr.name.toLowerCase()
+          if (name === 'href' || name === 'xlink:href') {
+            // fragment refs only — blocks javascript:, data: and remote fetches
+            if (!/^#[\w.:-]+$/.test(attr.value)) el.removeAttribute(attr.name)
+            continue
+          }
+          // no event handlers, no unknown attributes
+          if (name.startsWith('on') || !MATH_ATTRS.has(name)) el.removeAttribute(attr.name)
+          else if (name === 'style' && /url\s*\(|expression|javascript:/i.test(attr.value)) el.removeAttribute(attr.name)
+        }
+        walk(el)
+      } else if (child.nodeType !== Node.TEXT_NODE) {
+        child.remove()
+      }
+    }
+  }
+  walk(tpl.content)
+  const out = document.createElement('div')
+  out.appendChild(tpl.content.cloneNode(true))
+  return out.innerHTML
+}
+
+/**
+ * Rewrite glyph-def ids so an inlined formula never cross-resolves with another
+ * copy of itself. MathJax numbers its defs per typeset call (`MJX-1-TEX-I-…`),
+ * so two formulas — or the same formula drawn on the canvas, in a thumbnail and
+ * in the present overlay at once — collide on `<use href="#…">`, which resolves
+ * document-wide to the FIRST match. Same fix the gradient/marker counters use.
+ */
+export function scopeMathIds(markup: string): string {
+  const prefix = `m${(mathScopeSeq++).toString(36)}-`
+  return markup
+    .replace(/\bid="([^"]+)"/g, (_m, id: string) => `id="${prefix}${id}"`)
+    .replace(/\b(xlink:href|href)="#([^"]+)"/g, (_m, attr: string, id: string) => `${attr}="#${prefix}${id}"`)
+}
+let mathScopeSeq = 0
+
 const VALIGN: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }
 
 /**
@@ -550,6 +619,71 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (csvg) {
         csvg.setAttribute('preserveAspectRatio', 'none')
         csvg.style.cssText = 'width:100%;height:100%;display:block'
+      }
+      break
+    }
+    case 'math': {
+      // Ink is a live CSS property: the baked SVG paints `currentColor`, so a
+      // colour change needs no re-bake and tweens during a morph. `color` is
+      // set on the host node so both modes (and the inline spans inside a
+      // note) inherit the same value.
+      // (the editor stamps a readableInk() colour at insert time, so the
+      // constant here only ever backstops hand-written/imported documents)
+      node.style.color = el.color || '#1E2A3A'
+      const align = el.align || (el.mode === 'note' ? 'left' : 'center')
+
+      if (el.mode === 'note') {
+        // prose in the deck's font + inline baked <svg> math spans
+        const inner = document.createElement('div')
+        inner.className = 'bento-math-note'
+        inner.style.cssText = 'width:100%;height:100%'
+        inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+        inner.style.textAlign = align
+        if (el.baked) {
+          inner.innerHTML = scopeMathIds(sanitizeMath(el.baked))
+        } else if (!opts.hidePlaceholders) {
+          inner.textContent = 'Math note'
+          inner.style.opacity = '0.38'
+        } else {
+          node.style.display = 'none'
+        }
+        node.appendChild(inner)
+        break
+      }
+
+      // equation: the baked SVG, INLINED (not an <img>) so its glyph nodes stay
+      // addressable — that is what per-symbol morphing needs. Glyph-def ids are
+      // rewritten per element instance, so the canvas/thumbnail/present triple
+      // render never cross-resolves a `<use href="#…">` (the same collision the
+      // gradient/marker counters above guard against).
+      node.style.display = 'flex'
+      node.style.alignItems = 'center'
+      node.style.justifyContent = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'
+      if (el.baked) {
+        const box = document.createElement('div')
+        box.className = 'bento-math-eq'
+        box.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:inherit'
+        box.innerHTML = scopeMathIds(sanitizeMath(el.baked))
+        const svg = box.querySelector('svg')
+        if (svg) {
+          // Fill the element box preserving aspect. The mapping is the standard
+          // xMidYMid meet transform, which mathmorph.ts reproduces exactly to
+          // place glyphs in slide coordinates without measuring the DOM.
+          svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+          svg.removeAttribute('width')
+          svg.removeAttribute('height')
+          svg.style.cssText = 'width:100%;height:100%;display:block;overflow:visible'
+          if (el.source) svg.setAttribute('aria-label', el.source)
+          svg.setAttribute('role', 'math')
+        }
+        node.appendChild(box)
+      } else if (opts.hidePlaceholders) {
+        node.style.display = 'none'
+      } else {
+        const ph = document.createElement('div')
+        ph.style.cssText = 'opacity:0.38;font-size:14px;color:#5e7699'
+        ph.textContent = 'Equation'
+        node.appendChild(ph)
       }
       break
     }

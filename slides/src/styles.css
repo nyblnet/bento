@@ -440,6 +440,48 @@ option { background: #fff; color: #1e2a3a; }
 .ed-hint code { font-size: 10.5px; word-break: break-all; }
 .ed-morph-warn { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
 
+/* Math element source + live preview */
+.ed-math-src {
+  width: 100%;
+  margin: 4px 0 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+}
+.ed-math-preview {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  margin-bottom: 6px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: auto;
+}
+.ed-math-preview svg { max-width: 100%; max-height: 120px; height: auto; }
+.ed-math-err:empty { display: none; }
+.ed-math-err { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
+
+/* Morph-hint rows: sub-expression, tag name, remove */
+.ed-tag-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 24px;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.ed-tag-row input { min-width: 0; }
+.ed-tag-row .ed-tag-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* Baked math inside a note: inline spans flow with the prose. Ink is inherited
+   from the element (the SVG paints currentColor), never baked in. */
+.bento-math-inline { display: inline-block; }
+.bento-math-inline svg { height: 100%; width: auto; vertical-align: baseline; }
+.bento-math-note { overflow: auto; }
+/* Transient per-symbol morph overlay — purely presentational, never printed. */
+@media print { .bento-math-morph { display: none !important; } }
+
 .ed-btn-update {
   background: #FF9E8A !important;
   color: #0D1B2E !important;
