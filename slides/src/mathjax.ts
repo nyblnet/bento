@@ -350,10 +350,23 @@ export async function bakeMathCell(source: string): Promise<string> {
   return out
 }
 
+/** Index of the next UNESCAPED `delim` at or after `from`, or -1. A backslash
+ *  escapes the character after it, so `\$` inside a formula stays a literal
+ *  dollar (which is what it means in LaTeX) instead of closing the run early. */
+function findClose(src: string, from: number, delim: string): number {
+  for (let i = from; i <= src.length - delim.length; i++) {
+    if (src[i] === '\\') { i++; continue }
+    if (src.startsWith(delim, i)) return i
+  }
+  return -1
+}
+
 /**
  * Split prose into text runs and math runs. `$$…$$` is display math, `$…$` is
- * inline; a backslash-escaped `\$` is a literal dollar and never opens a run
- * (mirroring the markdown escape convention in editor/markdown.ts).
+ * inline; a backslash-escaped `\$` is a literal dollar and never opens OR
+ * closes a run (mirroring the markdown escape convention in
+ * editor/markdown.ts). In a text run the escape is consumed; inside a formula
+ * it is passed through to MathJax, which renders `\$` as a dollar sign.
  */
 export function splitMath(src: string): Array<{ text: string; tex?: string; display: boolean }> {
   const out: Array<{ text: string; tex?: string; display: boolean }> = []
@@ -366,7 +379,7 @@ export function splitMath(src: string): Array<{ text: string; tex?: string; disp
     if (c === '$') {
       const display = src[i + 1] === '$'
       const open = display ? 2 : 1
-      const close = src.indexOf(display ? '$$' : '$', i + open)
+      const close = findClose(src, i + open, display ? '$$' : '$')
       if (close > i + open) {
         pushText()
         out.push({ text: '', tex: src.slice(i + open, close), display })
