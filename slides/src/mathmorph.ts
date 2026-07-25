@@ -320,6 +320,10 @@ export function morphMath(
   size: { width: number; height: number },
   opts: MathMorphOpts,
 ): (() => void) | null {
+  // Each element IS its own frame — MathElement extends ElementBase, so it
+  // already carries the {x,y,w,h} that glyphAtoms needs to place glyphs in
+  // slide coordinates. Both sides come straight from the model; nothing is
+  // measured off the DOM.
   const atomsA = glyphAtoms(from, from)
   const atomsB = glyphAtoms(to, to)
   if (!atomsA || !atomsB) return null
@@ -329,6 +333,11 @@ export function morphMath(
 
   const inkFrom = from.color || '#1E2A3A'
   const inkTo = to.color || '#1E2A3A'
+  // The overlay replaces the element for the duration, so it has to honour the
+  // element's own opacity too — otherwise a half-faded equation pops to full
+  // ink for the length of the morph and snaps back.
+  const alphaFrom = from.opacity ?? 1
+  const alphaTo = to.opacity ?? 1
 
   const overlay = document.createElementNS(SVG_NS, 'svg')
   // Spans the whole slide so glyphs travelling between two element boxes are
@@ -370,7 +379,7 @@ export function morphMath(
     const B = atomsB[ib]
     // Draw the INCOMING outline the whole way: the shapes are the same glyph,
     // and starting from the outgoing one would pop on any font-size change.
-    const node = path(B.d, A.m, inkFrom, 1)
+    const node = path(B.d, A.m, inkFrom, alphaFrom)
     const state = { p: 0 }
     targets.push(node, state)
     anim.to(state, {
@@ -388,12 +397,15 @@ export function morphMath(
         attr: { fill: inkTo }, duration: opts.duration, ease: opts.ease,
       })
     }
+    if (alphaFrom !== alphaTo) {
+      anim.fromTo(node, { opacity: alphaFrom }, { opacity: alphaTo, duration: opts.duration, ease: opts.ease })
+    }
   }
 
   // 2. dropped glyphs fade out where they stood
   atomsA.forEach((A, i) => {
     if (matched.has(i)) return
-    const node = path(A.d, A.m, inkFrom, 1)
+    const node = path(A.d, A.m, inkFrom, alphaFrom)
     targets.push(node)
     anim.to(node, { opacity: 0, duration: opts.duration * 0.55, ease: 'power2.out' })
   })
@@ -404,7 +416,7 @@ export function morphMath(
     const node = path(B.d, B.m, inkTo, 0)
     targets.push(node)
     anim.to(node, {
-      opacity: 1,
+      opacity: alphaTo,
       duration: opts.duration * 0.5,
       delay: opts.duration * 0.5,
       ease: 'power2.out',
@@ -435,5 +447,10 @@ export function canMorphMath(a: unknown, b: unknown): a is MathElement {
   return !!ma && !!mb &&
     ma.type === 'math' && mb.type === 'math' &&
     ma.mode === 'equation' && mb.mode === 'equation' &&
-    !!ma.baked && !!mb.baked
+    !!ma.baked && !!mb.baked &&
+    // Hover-revealed elements are shown/hidden by writing opacity onto the
+    // NODE (present.applyRevealSet), which the overlay knows nothing about — a
+    // hidden formula would paint all its glyphs across the transition. The box
+    // morph handles those correctly because it animates the node itself.
+    !ma.showOnHover && !mb.showOnHover
 }
