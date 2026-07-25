@@ -87,6 +87,14 @@ function parseTransform(src: string | null): Mat {
   return out
 }
 
+/** Rotation by `deg` about a pivot, in slide coordinates. */
+function rotateAbout(deg: number, cx: number, cy: number): Mat {
+  const r = (deg * Math.PI) / 180
+  const cos = Math.cos(r)
+  const sin = Math.sin(r)
+  return mul(mul([1, 0, 0, 1, cx, cy], [cos, sin, -sin, cos, 0, 0]), [1, 0, 0, 1, -cx, -cy])
+}
+
 /** One drawable glyph: its outline, where it sits, and how to pair it. */
 interface Atom {
   /** unicode codepoint hex from `data-c` — the identity used for matching */
@@ -355,6 +363,29 @@ export function morphMath(
   const alphaFrom = from.opacity ?? 1
   const alphaTo = to.opacity ?? 1
 
+  // Rotation is deliberately kept OUT of the atom matrices. Component-wise lerp
+  // of two matrices — what the travel tween does — is exact for translate+scale
+  // and ONLY for that: blend two rotations that way and 0°→180° passes through
+  // the zero matrix (every glyph collapses to a point and re-expands mirrored),
+  // 0°→90° through a 45° turn scaled by cos45°. So placement stays unrotated and
+  // the turn is re-applied per frame about the interpolated centre — rigid at
+  // every t, exact at both ends. The pivot is the box CENTRE because that is
+  // what applyElementFrame uses at rest, and the overlay has to coincide with
+  // the real element the instant it hands back.
+  //
+  // The angle is lerped LINEARLY rather than along the shortest arc, matching
+  // runMorph — a rotated equation and a rotated rectangle on the same slide must
+  // turn together. Change both or neither.
+  const rotA = from.rotation ?? 0
+  const rotB = to.rotation ?? 0
+  const spin = rotA !== 0 || rotB !== 0
+  const cAx = from.x + from.w / 2
+  const cAy = from.y + from.h / 2
+  const cBx = to.x + to.w / 2
+  const cBy = to.y + to.h / 2
+  const spinA = spin ? rotateAbout(rotA, cAx, cAy) : null
+  const spinB = spin ? rotateAbout(rotB, cBx, cBy) : null
+
   const overlay = document.createElementNS(SVG_NS, 'svg')
   // Spans the whole slide so glyphs travelling between two element boxes are
   // never clipped by either one.
@@ -395,7 +426,7 @@ export function morphMath(
     const B = atomsB[ib]
     // Draw the INCOMING outline the whole way: the shapes are the same glyph,
     // and starting from the outgoing one would pop on any font-size change.
-    const node = path(B.d, A.m, inkFrom, alphaFrom)
+    const node = path(B.d, spinA ? mul(spinA, A.m) : A.m, inkFrom, alphaFrom)
     const state = { p: 0 }
     targets.push(node, state)
     anim.to(state, {
@@ -404,7 +435,14 @@ export function morphMath(
       ease: opts.ease,
       onUpdate() {
         const t = state.p
-        setMat(node, A.m.map((v, k) => v + (B.m[k] - v) * t) as Mat)
+        const m = A.m.map((v, k) => v + (B.m[k] - v) * t) as Mat
+        setMat(node, spin
+          ? mul(rotateAbout(
+              rotA + (rotB - rotA) * t,
+              cAx + (cBx - cAx) * t,
+              cAy + (cBy - cAy) * t,
+            ), m)
+          : m)
       },
     })
     // ink travels with the glyph — the `attr` channel interpolates colours
@@ -421,7 +459,7 @@ export function morphMath(
   // 2. dropped glyphs fade out where they stood
   atomsA.forEach((A, i) => {
     if (matched.has(i)) return
-    const node = path(A.d, A.m, inkFrom, alphaFrom)
+    const node = path(A.d, spinA ? mul(spinA, A.m) : A.m, inkFrom, alphaFrom)
     targets.push(node)
     anim.to(node, { opacity: 0, duration: opts.duration * 0.55, ease: 'power2.out' })
   })
@@ -429,7 +467,7 @@ export function morphMath(
   // 3. new glyphs fade in where they land, after the travellers have settled
   atomsB.forEach((B, i) => {
     if (matchedB.has(i)) return
-    const node = path(B.d, B.m, inkTo, 0)
+    const node = path(B.d, spinB ? mul(spinB, B.m) : B.m, inkTo, 0)
     targets.push(node)
     anim.to(node, {
       opacity: alphaTo,
