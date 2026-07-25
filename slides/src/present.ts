@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Present mode: a fullscreen Reveal.js overlay generated from the model.
-// Slides marked transition:'morph' use GSAP Flip to animate elements whose
-// ids match across the two slides (PowerPoint "Morph" behaviour).
+// Slides marked transition:'morph' animate elements whose morph keys match
+// across the two slides (PowerPoint "Morph" behaviour). Baked equations go
+// further and morph symbol-by-symbol — see mathmorph.ts.
 
 import Reveal from 'reveal.js'
 import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
-import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
+import type { BentoDoc, GradientFill, MathElement, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey } from './model'
+import { canMorphMath, morphMath } from './mathmorph'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
@@ -568,6 +570,9 @@ export function startPresentation(
     if (!to) return
     const fromIdx = from ? [...slidesEl.children].indexOf(from) : -1
     const toIdx = [...slidesEl.children].indexOf(to)
+    // Tear down any math-morph overlay still in flight — navigating fast must
+    // not leave a half-travelled formula painted over the new slide.
+    flushMorphCleanup()
     if (from) {
       // Kill the outgoing slide's tweens, then restore model frames —
       // a tween killed during its delay would otherwise leave the element
@@ -917,6 +922,14 @@ function wireHoverFocus(slide: Slide, section: HTMLElement) {
 
 // --- morph ------------------------------------------------------------------
 
+/** Teardowns for transient morph overlays (math), flushed on every slide
+ *  change and when the show ends. */
+const morphCleanup: Array<() => void> = []
+
+export function flushMorphCleanup() {
+  while (morphCleanup.length) morphCleanup.pop()!()
+}
+
 function elementsById(root: HTMLElement): Map<string, HTMLElement> {
   const map = new Map<string, HTMLElement>()
   root.querySelectorAll<HTMLElement>('[data-flip-id]').forEach((n) => {
@@ -1000,7 +1013,28 @@ function runMorph(
   // own via translate+scale about the top-left corner (scale mode like
   // PowerPoint: text scales instead of reflowing mid-morph). Rotating morphs
   // pivot slightly differently than center-origin — rare and acceptable.
+  // Equations morph symbol-by-symbol instead of as a box — the symbols travel
+  // to their new places, dropped terms fade out where they stood, new ones fade
+  // in where they land. Anything mathmorph declines (unbaked, unparseable, no
+  // glyphs in common) falls through to the ordinary box morph below.
+  const mathMorphed = new Set<HTMLElement>()
   for (const node of matchedTo) {
+    const id = node.dataset.flipId!
+    const a = fromModel.get(id)
+    const b = toModel.get(id)
+    if (!canMorphMath(a, b)) continue
+    const mount = node.parentElement
+    if (!mount) continue
+    const teardown = morphMath(a, b as MathElement, node, mount, doc.size,
+      { duration: MORPH_DURATION, ease: MORPH_EASE })
+    if (teardown) {
+      mathMorphed.add(node)
+      morphCleanup.push(teardown)
+    }
+  }
+
+  for (const node of matchedTo) {
+    if (mathMorphed.has(node)) continue
     const id = node.dataset.flipId!
     const a = fromModel.get(id)
     const b = toModel.get(id)

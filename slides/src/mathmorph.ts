@@ -1,0 +1,382 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento/Suite authors
+//
+// Per-symbol ("manim style") morphing between two baked equations.
+//
+// The generic element morph in present.ts moves a whole box: it translates and
+// scales the node from the outgoing frame to the incoming one. For a formula
+// that reads as a crossfade of two pictures. What an audience wants to see is
+// the SYMBOLS move — `a²` sliding across the `=` to the other side, a cancelled
+// term fading out where it stood, a new factor appearing in place.
+//
+// That is only possible because a baked formula is stored as SVG MARKUP rather
+// than an opaque <img>: every glyph is an addressable node carrying `data-c`
+// (its unicode codepoint). The algorithm is:
+//
+//   1. Walk both formulas' markup, accumulating SVG transforms, to get a flat
+//      list of glyph "atoms" — codepoint + outline + the exact matrix placing
+//      it in SLIDE coordinates (derived from the element frame, so no DOM
+//      measuring is needed; both frames are already in the document model,
+//      which is the same discipline the rest of runMorph follows).
+//   2. Pair atoms: author-supplied tag runs first (`data-bento-tag`, baked from
+//      MathElement.morphTags), then a longest-common-subsequence diff over the
+//      codepoint sequence for everything still unpaired.
+//   3. Draw every atom as a plain <path> into one transient overlay SVG spanning
+//      the slide, and tween each path's matrix. Paired atoms travel; dropped
+//      atoms fade out where they were; new atoms fade in where they land.
+//
+// Working in an overlay (rather than transforming the live glyph nodes) keeps
+// the real elements untouched, needs no id-scoping games, and means a failure
+// anywhere degrades to "no overlay" — the caller falls back to the ordinary box
+// morph and nothing is worse than before.
+
+import { anim } from './anim'
+import type { MathElement } from './model'
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+/** 2D affine matrix, SVG order: [a, b, c, d, e, f]. */
+type Mat = [number, number, number, number, number, number]
+
+const IDENT: Mat = [1, 0, 0, 1, 0, 0]
+
+function mul(m: Mat, n: Mat): Mat {
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ]
+}
+
+/** Parse an SVG `transform` attribute (the translate/scale/matrix subset
+ *  MathJax emits) into a single matrix. */
+function parseTransform(src: string | null): Mat {
+  if (!src) return IDENT
+  let out = IDENT
+  const re = /(matrix|translate|scale|rotate)\s*\(([^)]*)\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(src))) {
+    const n = m[2].split(/[\s,]+/).filter(Boolean).map(Number)
+    if (n.some((v) => !Number.isFinite(v))) continue
+    switch (m[1]) {
+      case 'matrix':
+        if (n.length === 6) out = mul(out, n as unknown as Mat)
+        break
+      case 'translate':
+        out = mul(out, [1, 0, 0, 1, n[0] ?? 0, n[1] ?? 0])
+        break
+      case 'scale':
+        out = mul(out, [n[0] ?? 1, 0, 0, n[1] ?? n[0] ?? 1, 0, 0])
+        break
+      case 'rotate': {
+        const r = ((n[0] ?? 0) * Math.PI) / 180
+        const cos = Math.cos(r)
+        const sin = Math.sin(r)
+        // rotate(a, cx, cy) — translate to the pivot, rotate, translate back
+        if (n.length >= 3) out = mul(out, [1, 0, 0, 1, n[1], n[2]])
+        out = mul(out, [cos, sin, -sin, cos, 0, 0])
+        if (n.length >= 3) out = mul(out, [1, 0, 0, 1, -n[1], -n[2]])
+        break
+      }
+    }
+  }
+  return out
+}
+
+/** One drawable glyph: its outline, where it sits, and how to pair it. */
+interface Atom {
+  /** unicode codepoint hex from `data-c` — the identity used for matching */
+  c: string
+  /** path outline data */
+  d: string
+  /** glyph-space → slide-space matrix */
+  m: Mat
+  /** optional author tag (`data-bento-tag`) — pairs before the LCS pass */
+  tag?: string
+}
+
+interface Frame { x: number; y: number; w: number; h: number }
+
+/**
+ * Reproduce the `xMidYMid meet` viewBox mapping render.ts applies (the SVG is
+ * sized `width:100%;height:100%` inside the element box), as a matrix taking
+ * viewBox coordinates to slide coordinates.
+ */
+function viewBoxToSlide(svg: SVGSVGElement, frame: Frame): Mat | null {
+  const vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).filter(Boolean).map(Number)
+  if (vb.length !== 4 || vb.some((v) => !Number.isFinite(v))) return null
+  const [minX, minY, vw, vh] = vb
+  if (vw <= 0 || vh <= 0) return null
+  const k = Math.min(frame.w / vw, frame.h / vh)
+  const dx = frame.x + (frame.w - vw * k) / 2
+  const dy = frame.y + (frame.h - vh * k) / 2
+  // translate(dx,dy) · scale(k) · translate(-minX,-minY)
+  return mul(mul([1, 0, 0, 1, dx, dy], [k, 0, 0, k, 0, 0]), [1, 0, 0, 1, -minX, -minY])
+}
+
+/**
+ * Flatten one baked formula into positioned glyph atoms.
+ * Returns null when the markup is not a usable MathJax SVG — callers then fall
+ * back to the ordinary box morph.
+ */
+export function glyphAtoms(el: MathElement, frame: Frame): Atom[] | null {
+  if (!el.baked) return null
+  let svg: SVGSVGElement | null
+  try {
+    const doc = new DOMParser().parseFromString(el.baked, 'image/svg+xml')
+    if (doc.querySelector('parsererror')) return null
+    svg = doc.querySelector('svg')
+  } catch {
+    return null
+  }
+  if (!svg) return null
+
+  const root = viewBoxToSlide(svg, frame)
+  if (!root) return null
+
+  // glyph outlines live in <defs> and are referenced by <use href="#id">
+  const paths = new Map<string, string>()
+  svg.querySelectorAll('path[id]').forEach((p) => {
+    const d = p.getAttribute('d')
+    if (d) paths.set(p.getAttribute('id')!, d)
+  })
+
+  const atoms: Atom[] = []
+  const walk = (node: Element, acc: Mat, tag: string | undefined) => {
+    for (const child of Array.from(node.children)) {
+      const name = child.tagName.toLowerCase()
+      if (name === 'defs') continue
+      const here = mul(acc, parseTransform(child.getAttribute('transform')))
+      const childTag = child.getAttribute('data-bento-tag') || tag
+      if (name === 'use') {
+        const href = child.getAttribute('href') || child.getAttribute('xlink:href') || ''
+        const d = paths.get(href.replace(/^#/, ''))
+        const c = child.getAttribute('data-c')
+        if (d && c) atoms.push({ c, d, m: here, tag: childTag })
+        continue
+      }
+      if (name === 'rect') {
+        // MathJax draws fraction bars, radicals and \overline as filled rects;
+        // synthesize an outline so they travel with everything else.
+        const x = Number(child.getAttribute('x') || 0)
+        const y = Number(child.getAttribute('y') || 0)
+        const w = Number(child.getAttribute('width') || 0)
+        const h = Number(child.getAttribute('height') || 0)
+        if (w > 0 && h > 0) {
+          atoms.push({
+            c: `rect:${Math.round(w)}x${Math.round(h)}`,
+            d: `M${x} ${y}h${w}v${h}h${-w}Z`,
+            m: here,
+            tag: childTag,
+          })
+        }
+        continue
+      }
+      walk(child, here, childTag)
+    }
+  }
+  walk(svg, root, undefined)
+  return atoms.length ? atoms : null
+}
+
+/**
+ * Pair atoms between two formulas.
+ *
+ * Author tags win: glyphs the author marked with the same tag on both sides are
+ * zipped in order, so "this term becomes that term" survives even when the
+ * shapes share no characters. Everything left over is matched by a longest
+ * common subsequence over codepoints, which is what makes the common case —
+ * rearranging an equation — line up with no authoring at all.
+ */
+export function pairAtoms(a: Atom[], b: Atom[]): Array<[number, number]> {
+  const pairs: Array<[number, number]> = []
+  const usedA = new Set<number>()
+  const usedB = new Set<number>()
+
+  const byTag = (list: Atom[]) => {
+    const m = new Map<string, number[]>()
+    list.forEach((at, i) => {
+      if (!at.tag) return
+      const arr = m.get(at.tag)
+      if (arr) arr.push(i)
+      else m.set(at.tag, [i])
+    })
+    return m
+  }
+  const tagsA = byTag(a)
+  const tagsB = byTag(b)
+  for (const [tag, idxA] of tagsA) {
+    const idxB = tagsB.get(tag)
+    if (!idxB) continue
+    // zip positionally; a longer run on either side leaves the remainder to
+    // fade, which reads correctly for "this expands into that"
+    for (let i = 0; i < Math.min(idxA.length, idxB.length); i++) {
+      pairs.push([idxA[i], idxB[i]])
+      usedA.add(idxA[i])
+      usedB.add(idxB[i])
+    }
+  }
+
+  // LCS over the remaining codepoint sequences
+  const ra = a.map((_, i) => i).filter((i) => !usedA.has(i))
+  const rb = b.map((_, i) => i).filter((i) => !usedB.has(i))
+  const n = ra.length
+  const m = rb.length
+  if (n && m) {
+    // classic DP table; formulas are tens of glyphs, so this stays trivial
+    const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = a[ra[i]].c === b[rb[j]].c
+          ? dp[i + 1][j + 1] + 1
+          : Math.max(dp[i + 1][j], dp[i][j + 1])
+      }
+    }
+    let i = 0
+    let j = 0
+    while (i < n && j < m) {
+      if (a[ra[i]].c === b[rb[j]].c) {
+        pairs.push([ra[i], rb[j]])
+        i++
+        j++
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) i++
+      else j++
+    }
+  }
+  return pairs
+}
+
+export interface MathMorphOpts {
+  duration: number
+  ease: string
+}
+
+/**
+ * Morph one baked equation into another, symbol by symbol.
+ *
+ * `toNode` is the incoming element's rendered node; `mount` is the slide-space
+ * container both frames are expressed in. Returns a teardown function, or null
+ * when the pair cannot be morphed this way (unbaked, unparseable, or nothing
+ * matched) — the caller then leaves the element to the ordinary box morph.
+ */
+export function morphMath(
+  from: MathElement,
+  to: MathElement,
+  toNode: HTMLElement,
+  mount: HTMLElement,
+  size: { width: number; height: number },
+  opts: MathMorphOpts,
+): (() => void) | null {
+  const atomsA = glyphAtoms(from, from)
+  const atomsB = glyphAtoms(to, to)
+  if (!atomsA || !atomsB) return null
+
+  const pairs = pairAtoms(atomsA, atomsB)
+  if (!pairs.length) return null
+
+  const inkFrom = from.color || '#1E2A3A'
+  const inkTo = to.color || '#1E2A3A'
+
+  const overlay = document.createElementNS(SVG_NS, 'svg')
+  // Spans the whole slide so glyphs travelling between two element boxes are
+  // never clipped by either one.
+  overlay.setAttribute('class', 'bento-math-morph')
+  overlay.style.cssText =
+    'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:5'
+  // The mount is the `.bento-slide` surface: exactly size.width × size.height
+  // CSS px before Reveal's own scaling, so a 100%/100% overlay with a matching
+  // viewBox maps 1:1 onto slide coordinates.
+  overlay.setAttribute('viewBox', `0 0 ${size.width} ${size.height}`)
+  overlay.setAttribute('preserveAspectRatio', 'none')
+
+  const matched = new Set<number>()
+  const matchedB = new Set<number>()
+  const setMat = (node: SVGElement, m: Mat) =>
+    node.setAttribute('transform', `matrix(${m.map((v) => +v.toFixed(4)).join(' ')})`)
+
+  const path = (d: string, m: Mat, fill: string, opacity: number) => {
+    const p = document.createElementNS(SVG_NS, 'path')
+    p.setAttribute('d', d)
+    p.setAttribute('fill', fill)
+    p.setAttribute('stroke', 'none')
+    p.style.opacity = String(opacity)
+    setMat(p, m)
+    overlay.appendChild(p)
+    return p
+  }
+
+  // 1. paired glyphs travel from their old placement to their new one
+  for (const [ia, ib] of pairs) {
+    matched.add(ia)
+    matchedB.add(ib)
+    const A = atomsA[ia]
+    const B = atomsB[ib]
+    // Draw the INCOMING outline the whole way: the shapes are the same glyph,
+    // and starting from the outgoing one would pop on any font-size change.
+    const node = path(B.d, A.m, inkFrom, 1)
+    const state = { p: 0 }
+    anim.to(state, {
+      p: 1,
+      duration: opts.duration,
+      ease: opts.ease,
+      onUpdate() {
+        const t = state.p
+        setMat(node, A.m.map((v, k) => v + (B.m[k] - v) * t) as Mat)
+      },
+    })
+    // ink travels with the glyph — the `attr` channel interpolates colours
+    if (inkFrom !== inkTo) {
+      anim.fromTo(node, { attr: { fill: inkFrom } }, {
+        attr: { fill: inkTo }, duration: opts.duration, ease: opts.ease,
+      })
+    }
+  }
+
+  // 2. dropped glyphs fade out where they stood
+  atomsA.forEach((A, i) => {
+    if (matched.has(i)) return
+    const node = path(A.d, A.m, inkFrom, 1)
+    anim.to(node, { opacity: 0, duration: opts.duration * 0.55, ease: 'power2.out' })
+  })
+
+  // 3. new glyphs fade in where they land, after the travellers have settled
+  atomsB.forEach((B, i) => {
+    if (matchedB.has(i)) return
+    const node = path(B.d, B.m, inkTo, 0)
+    anim.to(node, {
+      opacity: 1,
+      duration: opts.duration * 0.5,
+      delay: opts.duration * 0.5,
+      ease: 'power2.out',
+    })
+  })
+
+  // The real element stays hidden until the overlay finishes, then takes over.
+  const inner = toNode.firstElementChild as HTMLElement | null
+  if (inner) inner.style.visibility = 'hidden'
+  mount.appendChild(overlay)
+
+  let done = false
+  const finish = () => {
+    if (done) return
+    done = true
+    anim.killTweensOf(overlay.querySelectorAll('path'))
+    overlay.remove()
+    if (inner) inner.style.visibility = ''
+  }
+  const timer = window.setTimeout(finish, opts.duration * 1000 + 60)
+  return () => { window.clearTimeout(timer); finish() }
+}
+
+/** True when this pair should morph symbol-by-symbol rather than as a box. */
+export function canMorphMath(a: unknown, b: unknown): a is MathElement {
+  const ma = a as MathElement
+  const mb = b as MathElement
+  return !!ma && !!mb &&
+    ma.type === 'math' && mb.type === 'math' &&
+    ma.mode === 'equation' && mb.mode === 'equation' &&
+    !!ma.baked && !!mb.baked
+}
