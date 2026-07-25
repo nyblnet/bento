@@ -166,8 +166,10 @@ export function glyphAtoms(el: MathElement, frame: Frame): Atom[] | null {
   })
 
   const atoms: Atom[] = []
+  let bail = false
   const walk = (node: Element, acc: Mat, tag: string | undefined) => {
     for (const child of Array.from(node.children)) {
+      if (bail) return
       const name = child.tagName.toLowerCase()
       if (name === 'defs') continue
       const here = mul(acc, parseTransform(child.getAttribute('transform')))
@@ -196,12 +198,26 @@ export function glyphAtoms(el: MathElement, frame: Frame): Atom[] | null {
         }
         continue
       }
+      // A drawable this walker cannot turn into an atom. That is NOT survivable
+      // by ignoring it: the real element is hidden for the whole morph, so ink
+      // missing from the overlay simply vanishes mid-transition. Give up and let
+      // the caller fall back to the box morph, which is always correct.
+      if (UNSUPPORTED.has(name)) { bail = true; return }
       walk(child, here, childTag)
     }
   }
   walk(svg, root, undefined)
+  if (bail) return null
   return atoms.length ? atoms : null
 }
+
+/** Ink-producing SVG elements with no atom representation. `path` counts: glyph
+ *  outlines live in <defs> (skipped above) and are drawn via <use>, so a path
+ *  reached by the walk is a directly-drawn mark — what MathJax emits when it is
+ *  configured with fontCache:'none' rather than our 'local'. */
+const UNSUPPORTED = new Set([
+  'path', 'line', 'polygon', 'polyline', 'circle', 'ellipse', 'text', 'image', 'foreignobject',
+])
 
 /**
  * Pair atoms between two formulas.
