@@ -233,7 +233,10 @@ names provisional.
   `currentColor`): no re-bake on colour change, and colour tweens across a
   morph. Baked markup is NOT trusted — decks arrive from collaborators and
   invite links — so it passes `sanitizeMath()` (allowlist of MathJax's SVG
-  output; href/xlink:href restricted to same-document fragment refs).
+  output; href/xlink:href restricted to same-document fragment refs; `style`
+  survives on SVG nodes but the HTML wrappers are held to a four-property
+  allowlist, since those exist only for inline sizing and a free-form style on
+  them is how a deck would float a `position:fixed` layer over the editor).
   GOTCHAS, all found against real tex-svg output, all silent failures:
   XMLSerializer may not keep the `xlink:` prefix and can emit `ns1:href` —
   baking normalizes glyph refs to plain SVG 2 `href` and every consumer ignores
@@ -248,14 +251,28 @@ names provisional.
   align/colour + Morph hints) — canvas double-click focuses the source field.
   The panel must NEVER bake during construction: baking commits, a commit fires
   `doc`, and `doc` rebuilds the panel → bake→commit→rebuild→bake freezes the
-  editor. Bake only from real user-input handlers.
+  editor. Bake only from real user-input handlers — but EVERY input that changes
+  the artifact must re-bake, mode included: `baked` holds one mode's output and
+  the two are not interchangeable (note markup rendered through the equation
+  branch picks the first inline `<svg>` out of the prose and inflates it).
+  `align` rides on the svg's `preserveAspectRatio`, NOT on flexbox: the svg is
+  100%/100% of a 100%/100% box, so there is never free space for justify-content
+  — and mathmorph.ts must derive the same token (`render.mathAlignX`, shared for
+  exactly this reason) or glyphs start their travel offset from where the
+  formula is actually painted.
 - **Per-symbol math morph (`src/mathmorph.ts`)**: two equations on morph-linked
   slides morph SYMBOL BY SYMBOL (manim style), not as a box. `glyphAtoms()`
   walks both formulas' markup accumulating SVG transforms → each glyph's outline
   plus the matrix placing it in SLIDE coords (derived from the model frames and
-  the `xMidYMid meet` viewBox mapping render.ts applies — no DOM measuring, same
-  discipline as the rest of runMorph; MathJax fraction bars are `<rect>`s and are
-  synthesized into outlines so they travel too). `pairAtoms()` pairs author tags
+  the `<align>YMid meet` viewBox mapping render.ts applies — no DOM measuring,
+  same discipline as the rest of runMorph; MathJax fraction bars are `<rect>`s
+  and are synthesized into outlines so they travel too). The walk handles `use`
+  and `rect` ONLY and BAILS on any other drawable (a bare `path`, `line`,
+  `text`…): the real element is hidden for the whole morph, so ink missing from
+  the overlay would simply vanish — declining and falling back to the box morph
+  is the only safe answer. Same reason the overlay honours element `opacity` and
+  `canMorphMath` declines `showOnHover` elements (those are hidden by writing
+  opacity onto the NODE, which the overlay knows nothing about). `pairAtoms()` pairs author tags
   first (`data-bento-tag`, baked in from `MathElement.morphTags` by matching the
   hint's own glyph sequence as a contiguous run — no MathJax extension needed),
   then LCS over codepoints, **then a shape-matching pass over the leftovers,
@@ -268,7 +285,9 @@ names provisional.
   on a trailing delay. Anything it declines (unbaked, unparseable, no glyphs in
   common, either side not an equation) returns null → ordinary box morph, so the
   worst case is the previous behaviour. Overlays are torn down via
-  `flushMorphCleanup()` on every slide change.
+  `flushMorphCleanup()` on every slide change AND on present-mode exit — miss
+  the exit and the teardowns outlive the show, only running on the NEXT
+  presentation's first slide change.
   Note-mode and cross-type pairs (math↔text) morph as a box, like tables.
 - `src/charts.ts` — charts-lite, OUR OWN engine (ECharts removed for size:
   it was 630KB = 47% of the shell; git history has the integration). Same
@@ -614,7 +633,7 @@ names provisional.
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
-  PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).
+  PLAINTEXT #bento-doc → splash → payloads last. Shell ~590KB (was 1.33MB).
   SPLICE CONTRACT (old updaters are frozen code): #bento-doc stays plaintext/
   same id, file survives DOMParser→splice→outerHTML, no stray script-close —
   release.mjs runs a conformance GATE before signing every release.
