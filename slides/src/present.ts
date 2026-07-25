@@ -1045,7 +1045,6 @@ function runMorph(
     if (!a || !b) continue
     if (a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && (a.rotation ?? 0) === (b.rotation ?? 0)) continue
     const state = { p: 0 }
-    node.style.transformOrigin = '0 0'
     anim.to(state, {
       p: 1,
       duration: MORPH_DURATION,
@@ -1057,13 +1056,19 @@ function runMorph(
         const w = a.w + (b.w - a.w) * p
         const h = a.h + (b.h - a.h) * p
         const r = (a.rotation ?? 0) + ((b.rotation ?? 0) - (a.rotation ?? 0)) * p
+        // The node is laid out at the TO frame and pivots about its own centre —
+        // transform-origin's default, and exactly what applyElementFrame relies
+        // on at rest — so the offset is the CENTRE delta, not the top-left one.
+        // Pivoting about the top-left instead (as this did) made p=1 disagree
+        // with the rest transform, so every rotated morph snapped on its last
+        // frame, and a tween killed mid-flight stranded `transform-origin: 0 0`
+        // on the node. Identical arithmetic when rotation is 0.
         node.style.transform =
-          `translate(${x - b.x}px, ${y - b.y}px)` +
+          `translate(${x + w / 2 - b.x - b.w / 2}px, ${y + h / 2 - b.y - b.h / 2}px)` +
           (r ? ` rotate(${r}deg)` : '') +
           ` scale(${w / Math.max(b.w, 0.01)}, ${h / Math.max(b.h, 0.01)})`
       },
       onComplete() {
-        node.style.transformOrigin = ''
         node.style.transform = b.rotation ? `rotate(${b.rotation}deg)` : ''
         resetXform(node)
       },
