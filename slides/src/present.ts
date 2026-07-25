@@ -471,6 +471,10 @@ export function startPresentation(
     if (exited) return
     exited = true
     pauseMediaIn(slidesEl) // stop any playing clip before teardown
+    // Exiting mid-morph must not leave overlay teardowns queued: they would
+    // outlive the show and only run on the NEXT presentation's first slide
+    // change, holding the dead overlay (and its tweens) alive until then.
+    flushMorphCleanup()
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     const last = deck.getIndices().h
     try {
