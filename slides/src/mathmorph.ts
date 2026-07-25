@@ -100,6 +100,16 @@ interface Atom {
 
 interface Frame { x: number; y: number; w: number; h: number }
 
+/** A glyph reference, whatever prefix the markup happens to use. Baking
+ *  normalizes these to plain `href`, but decks baked by an older build (or by
+ *  a serializer that invented a prefix) must still resolve. */
+function hrefOf(el: Element): string {
+  for (const attr of Array.from(el.attributes)) {
+    if (attr.name.toLowerCase().replace(/^[^:]*:/, '') === 'href') return attr.value
+  }
+  return ''
+}
+
 /**
  * Reproduce the `xMidYMid meet` viewBox mapping render.ts applies (the SVG is
  * sized `width:100%;height:100%` inside the element box), as a matrix taking
@@ -124,11 +134,17 @@ function viewBoxToSlide(svg: SVGSVGElement, frame: Frame): Mat | null {
  */
 export function glyphAtoms(el: MathElement, frame: Frame): Atom[] | null {
   if (!el.baked) return null
+  // Parsed as HTML, deliberately. Strict XML parsing rejects the whole document
+  // on any well-formedness slip — a stray duplicate xmlns from whichever
+  // serializer baked the deck is enough — and a rejected parse would silently
+  // downgrade every formula to a box morph. The HTML parser is lenient, applies
+  // the SVG foreign-content rules (so `viewBox` keeps its casing), and is the
+  // same path sanitizeMath already takes.
   let svg: SVGSVGElement | null
   try {
-    const doc = new DOMParser().parseFromString(el.baked, 'image/svg+xml')
-    if (doc.querySelector('parsererror')) return null
-    svg = doc.querySelector('svg')
+    const tpl = document.createElement('template')
+    tpl.innerHTML = el.baked
+    svg = tpl.content.querySelector('svg')
   } catch {
     return null
   }
@@ -152,7 +168,7 @@ export function glyphAtoms(el: MathElement, frame: Frame): Atom[] | null {
       const here = mul(acc, parseTransform(child.getAttribute('transform')))
       const childTag = child.getAttribute('data-bento-tag') || tag
       if (name === 'use') {
-        const href = child.getAttribute('href') || child.getAttribute('xlink:href') || ''
+        const href = hrefOf(child)
         const d = paths.get(href.replace(/^#/, ''))
         const c = child.getAttribute('data-c')
         if (d && c) atoms.push({ c, d, m: here, tag: childTag })
@@ -240,10 +256,39 @@ export function pairAtoms(a: Atom[], b: Atom[]): Array<[number, number]> {
     while (i < n && j < m) {
       if (a[ra[i]].c === b[rb[j]].c) {
         pairs.push([ra[i], rb[j]])
+        usedA.add(ra[i])
+        usedB.add(rb[j])
         i++
         j++
       } else if (dp[i + 1][j] >= dp[i][j + 1]) i++
       else j++
+    }
+  }
+
+  // LCS is order-preserving, so symbols that SWAP sides can never both be kept:
+  // in `a² + b² = c²` → `c² − b² = a²` it pairs the shared middle and gives up
+  // on `a` and `c`, which would then fade out and in rather than trading places
+  // — losing precisely the effect this whole module exists for. A second pass
+  // therefore matches leftovers purely by shape, nearest pair first (manim's
+  // TransformMatchingShapes), which is order-free and makes the swap visible.
+  const leftA = a.map((_, i) => i).filter((i) => !usedA.has(i))
+  const leftB = b.map((_, i) => i).filter((i) => !usedB.has(i))
+  if (leftA.length && leftB.length) {
+    const cand: Array<[number, number, number]> = []
+    for (const i of leftA) {
+      for (const j of leftB) {
+        if (a[i].c !== b[j].c) continue
+        const dx = a[i].m[4] - b[j].m[4]
+        const dy = a[i].m[5] - b[j].m[5]
+        cand.push([dx * dx + dy * dy, i, j])
+      }
+    }
+    cand.sort((p, q) => p[0] - q[0])
+    for (const [, i, j] of cand) {
+      if (usedA.has(i) || usedB.has(j)) continue
+      pairs.push([i, j])
+      usedA.add(i)
+      usedB.add(j)
     }
   }
   return pairs

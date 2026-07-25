@@ -217,10 +217,41 @@ function typeset(tex: string, api: MathJaxSvgApi, display: boolean): BakedMath {
   // Strip the container's inline sizing/vertical-align off the root — the host
   // owns layout and re-applies what it needs; keep the intrinsic viewBox.
   svg.removeAttribute('style')
+  // MathJax writes xmlns as a literal attribute, and the element is already IN
+  // the SVG namespace — some serializers then emit the declaration twice,
+  // producing markup that is not well-formed XML. Drop the literal one and let
+  // the serializer declare the namespace itself, exactly once.
+  svg.removeAttribute('xmlns')
+  normalizeHrefs(svg)
   // Ink is NOT baked: MathJax already paints stroke/fill `currentColor`, and an
   // inlined <svg> inherits it, so colour stays a live CSS property.
   const markup = new XMLSerializer().serializeToString(svg)
   return { svg: markup, heightEx, valign }
+}
+
+const XLINK_NS = 'http://www.w3.org/1999/xlink'
+
+/**
+ * Rewrite MathJax's SVG 1.1 `xlink:href` glyph references to plain SVG 2
+ * `href`, and drop the now-unused xlink namespace.
+ *
+ * This matters more than it looks. XMLSerializer only keeps the `xlink:` prefix
+ * if that prefix is bound in scope; otherwise it invents one and emits
+ * `ns1:href="#…"`. Downstream code that looks for `href` or `xlink:href` by
+ * qualified name then misses it — the sanitizer would drop the attribute as
+ * unknown and every glyph would vanish. Normalising here means the stored
+ * markup has exactly one spelling, whatever the serializer felt like doing.
+ */
+function normalizeHrefs(root: SVGElement) {
+  for (const node of [root, ...Array.from(root.querySelectorAll('*'))]) {
+    for (const attr of Array.from(node.attributes)) {
+      if (attr.localName === 'href' && attr.namespaceURI === XLINK_NS) {
+        node.setAttribute('href', attr.value)
+        node.removeAttributeNS(XLINK_NS, 'href')
+      }
+      if (attr.localName === 'xlink' && attr.value === XLINK_NS) node.removeAttribute(attr.name)
+    }
+  }
 }
 
 /** Bake a standalone equation into self-contained SVG markup.
@@ -255,13 +286,15 @@ function applyMorphTags(
   api: MathJaxSvgApi,
   display: boolean,
 ): string {
-  let doc: Document
+  // HTML parsing, for the same leniency reason as mathmorph.glyphAtoms
+  let host: HTMLTemplateElement
   try {
-    doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
-    if (doc.querySelector('parsererror')) return markup
+    host = document.createElement('template')
+    host.innerHTML = markup
   } catch {
     return markup
   }
+  const doc = host.content
   const uses = Array.from(doc.querySelectorAll('use[data-c]'))
   if (!uses.length) return markup
   const seq = uses.map((u) => u.getAttribute('data-c')!)
@@ -272,8 +305,9 @@ function applyMorphTags(
     let needle: string[]
     try {
       const sub = typeset(tex, api, display)
-      const subDoc = new DOMParser().parseFromString(sub.svg, 'image/svg+xml')
-      needle = Array.from(subDoc.querySelectorAll('use[data-c]')).map((u) => u.getAttribute('data-c')!)
+      const subHost = document.createElement('template')
+      subHost.innerHTML = sub.svg
+      needle = Array.from(subHost.content.querySelectorAll('use[data-c]')).map((u) => u.getAttribute('data-c')!)
     } catch {
       continue // an unparseable hint is ignored, never fatal
     }

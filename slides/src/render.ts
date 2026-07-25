@@ -389,7 +389,13 @@ export function sanitizeMath(markup: string): string {
         if (!MATH_TAGS.has(el.tagName.toUpperCase())) { el.remove(); continue }
         for (const attr of Array.from(el.attributes)) {
           const name = attr.name.toLowerCase()
-          if (name === 'href' || name === 'xlink:href') {
+          // Ignore any namespace prefix: baking normalizes glyph refs to plain
+          // `href`, but a deck baked by an older build can carry `xlink:href`
+          // or a serializer-invented `ns1:href`. This template parses as HTML,
+          // where such a name has NO namespace and localName is the whole
+          // string — so compare the part after the prefix, or every glyph
+          // reference gets dropped as unknown and the formula renders blank.
+          if (name.replace(/^[^:]*:/, '') === 'href') {
             // fragment refs only — blocks javascript:, data: and remote fetches
             if (!/^#[\w.:-]+$/.test(attr.value)) el.removeAttribute(attr.name)
             continue
@@ -421,7 +427,8 @@ export function scopeMathIds(markup: string): string {
   const prefix = `m${(mathScopeSeq++).toString(36)}-`
   return markup
     .replace(/\bid="([^"]+)"/g, (_m, id: string) => `id="${prefix}${id}"`)
-    .replace(/\b(xlink:href|href)="#([^"]+)"/g, (_m, attr: string, id: string) => `${attr}="#${prefix}${id}"`)
+    // any prefix, or none — a serializer may have invented one (`ns1:href`)
+    .replace(/\b((?:[\w-]+:)?href)="#([^"]+)"/g, (_m, attr: string, id: string) => `${attr}="#${prefix}${id}"`)
 }
 let mathScopeSeq = 0
 
