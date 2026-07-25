@@ -6,7 +6,7 @@
 
 import type { Store } from '../store'
 import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, morphKey, uid, type ChartElement, type LineEnding, type MathElement, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
-import { bakeEquation, bakeMathCell } from '../mathjax'
+import { bakeEquation, bakeMathCell, mathjaxLoaded } from '../mathjax'
 import { sanitizeMath, scopeMathIds } from '../render'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
@@ -1671,17 +1671,24 @@ export class PropsPanel {
     // Colour is NOT an input: the inlined SVG paints currentColor, so changing
     // the ink never re-bakes.
     let seq = 0
+    const clearStatus = () => { err.classList.remove('ed-math-busy'); err.textContent = '' }
     const rebake = async (final: boolean) => {
       const live = this.store.element(el.id)
       if (!live || live.type !== 'math') return
       const m = live as MathElement
       const source = ta.value
       const my = ++seq
-      err.textContent = ''
+      // The first bake of a session downloads ~2MB of engine; without this the
+      // panel just sits there. Once loaded (or cached in IndexedDB) baking is
+      // instant and the line never appears.
+      const busy = !mathjaxLoaded()
+      err.classList.toggle('ed-math-busy', busy)
+      err.textContent = busy ? t('Loading the math engine…') : ''
       try {
         if (m.mode === 'note') {
           const baked = await bakeMathCell(source)
           if (my !== seq) return
+          clearStatus()
           preview.innerHTML = scopeMathIds(sanitizeMath(baked))
           this.mutate(el.id, (e) => { const x = e as MathElement; x.source = source; x.baked = baked }, final)
         } else {
@@ -1690,6 +1697,7 @@ export class PropsPanel {
             tags: m.morphTags,
           })
           if (my !== seq) return
+          clearStatus()
           preview.innerHTML = scopeMathIds(sanitizeMath(svg))
           const aspect = intrinsicAspect(svg)
           this.mutate(el.id, (e) => {
@@ -1704,6 +1712,7 @@ export class PropsPanel {
         }
       } catch (ex) {
         if (my !== seq) return
+        err.classList.remove('ed-math-busy')
         err.textContent = (ex as Error).message || t('Could not render this math.')
       }
     }

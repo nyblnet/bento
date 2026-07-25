@@ -463,6 +463,9 @@ option { background: #fff; color: #1e2a3a; }
 .ed-math-preview svg { max-width: 100%; max-height: 120px; height: auto; }
 .ed-math-err:empty { display: none; }
 .ed-math-err { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
+/* Same line, neutral styling: it doubles as the "downloading the engine" status
+   for the one bake per session that has to wait on the network. */
+.ed-math-err.ed-math-busy { color: inherit; background: none; opacity: 0.7; }
 
 /* Morph-hint rows: sub-expression, tag name, remove */
 .ed-tag-row {

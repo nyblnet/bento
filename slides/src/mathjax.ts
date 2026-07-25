@@ -120,6 +120,12 @@ function currentApi(): MathJaxSvgApi | null {
   return mj && typeof mj.tex2svg === 'function' ? mj : null
 }
 
+/** True once the engine is live and baking is instant. The editor uses this to
+ *  say "loading…" for the one bake that has to wait on a ~2MB download. */
+export function mathjaxLoaded(): boolean {
+  return !!currentApi()
+}
+
 /** Fetch the engine from the first candidate that answers. Errors are collected
  *  so a total failure reports something actionable rather than the last 404. */
 async function fetchEngine(): Promise<string> {
