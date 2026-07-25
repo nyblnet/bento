@@ -1620,8 +1620,23 @@ export class PropsPanel {
       o.value = val; o.textContent = label; o.selected = el.mode === val
       modeSel.appendChild(o)
     }
-    modeSel.addEventListener('change', () =>
-      this.mutate(el.id, (e) => { (e as MathElement).mode = modeSel.value as MathElement['mode'] }, true))
+    // Switching mode MUST re-bake: `baked` holds the other mode's artifact, and
+    // the two are not interchangeable. Rendering note markup through the
+    // equation branch picks the first inline <svg> out of the prose and blows it
+    // up to fill the box; the reverse renders an equation at its raw `ex` size.
+    // `baked` is dropped in the SAME commit rather than left to be overwritten,
+    // so that a bake which never lands (offline, engine unreachable) leaves the
+    // honest placeholder instead of silently keeping the wrong artifact on
+    // screen. `source` survives, so re-baking is one keystroke away.
+    // (`rebake` is declared below — the listener only ever fires after that.)
+    modeSel.addEventListener('change', () => {
+      this.mutate(el.id, (e) => {
+        const x = e as MathElement
+        x.mode = modeSel.value as MathElement['mode']
+        delete x.baked
+      }, true)
+      rebake(true)
+    })
     this.row(t('Mode'), modeSel)
 
     // source textarea — LaTeX (equation) or prose + $…$ (note)
