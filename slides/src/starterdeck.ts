@@ -1020,7 +1020,7 @@ export function starterDoc(): BentoDoc {
         }),
         equation({
           id: EQ, x: 281, y: 287, w: 718, h: 132,
-          source: 'a^2 + b^2 = c^2', baked: EQ_PYTHAGORAS, aspect: 5.442,
+          source: 'a^2 + b^2 = c^2', baked: EQ_PYTHAGORAS,
         }),
         shape('rect', { id: T_B, x: 96, y: 486, w: 6, h: 96, radius: 3, fill: STEEL }),
         equation({
@@ -1058,7 +1058,7 @@ export function starterDoc(): BentoDoc {
         }),
         equation({
           id: EQ, x: 281, y: 287, w: 718, h: 132,
-          source: 'c^2 = a^2 + b^2', baked: EQ_SOLVED, aspect: 5.442,
+          source: 'c^2 = a^2 + b^2', baked: EQ_SOLVED,
         }),
         shape('rect', { id: T_B, x: 96, y: 486, w: 6, h: 96, radius: 3, fill: PEACH }),
         text({
@@ -1098,7 +1098,7 @@ export function starterDoc(): BentoDoc {
         // separately-created elements morph while each keeps its own identity.
         equation({
           id: 'sd-eq-root', morphId: EQ, x: 334, y: 287, w: 612, h: 132,
-          source: 'c = \\sqrt{a^2 + b^2}', baked: EQ_ROOT, aspect: 4.635,
+          source: 'c = \\sqrt{a^2 + b^2}', baked: EQ_ROOT,
         }),
         shape('rect', { id: T_B, x: 96, y: 486, w: 6, h: 96, radius: 3, fill: PEACH_DEEP }),
         text({

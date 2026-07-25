@@ -1696,13 +1696,10 @@ export class PropsPanel {
             const x = e as MathElement
             x.source = source
             x.baked = svg
-            if (aspect) {
-              x.aspect = aspect
-              // Keep the box on the formula's own aspect so a long expression
-              // does not render as a sliver inside a stale frame. Height is the
-              // anchor — authors size equations by how tall the type should be.
-              x.w = Math.round(x.h * aspect)
-            }
+            // Keep the box on the formula's own aspect so a long expression
+            // does not render as a sliver inside a stale frame. Height is the
+            // anchor — authors size equations by how tall the type should be.
+            if (aspect) x.w = Math.round(x.h * aspect)
           }, final)
         }
       } catch (ex) {

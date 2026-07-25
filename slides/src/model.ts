@@ -328,8 +328,6 @@ export interface MathElement extends ElementBase {
   source: string
   /** baked <svg> markup (equation) or prose+<svg> html (note) */
   baked?: string
-  /** intrinsic aspect of the baked equation, used to auto-fit the element box */
-  aspect?: number
   /** equation: display (large, centered) vs inline sizing */
   display?: boolean
   /** ink colour — inherited by the inlined SVG, never baked in */
