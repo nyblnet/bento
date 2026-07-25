@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 //
 // Per-symbol ("manim style") morphing between two baked equations.
 //

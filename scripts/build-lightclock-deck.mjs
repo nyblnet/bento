@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 //
 // «The Light Clock» — the example deck for Bento's math elements.
 //

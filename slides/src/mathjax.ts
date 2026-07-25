@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
 // Lazy LaTeX → SVG baker. MathJax's tex-svg component (~680KB gz) is FAR bigger
 // than the whole compressed shell, so it is NEVER bundled. It is fetched on
 // demand — in the EDITOR only, the first time an author touches math — used to

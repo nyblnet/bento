@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 //
 // The LaTeX behind the Light Clock example deck, in one list so the baker can
 // read it without importing the deck (see scripts/bake-math.mjs).

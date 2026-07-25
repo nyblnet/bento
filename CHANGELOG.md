@@ -27,6 +27,30 @@ pre-1.0.
   ordinary decks, and a self-hosted relay without blob storage keeps working —
   it just falls back to the old inline-only behaviour.
 
+- **Mathematics, and equations that move.** There is a new **Math** element
+  (Σ in the toolbar), in two flavours: a standalone equation written in LaTeX,
+  or a note — ordinary prose in your deck's own fonts with formulas set inline
+  between `$…$`. It is a proper element rather than LaTeX hidden inside a text
+  box, so nobody has to learn LaTeX to edit the rest of the slide.
+
+  The reason it exists is the next part. Put two equations on slides linked by
+  a **morph** transition and they animate *symbol by symbol*: a term that
+  crosses the equals sign visibly travels there, a factor you pull out front
+  slides into place, and anything with no counterpart fades. A derivation
+  becomes something an audience can follow, instead of eight slides of
+  formulas crossfading into each other. Matching is automatic; **Morph hints**
+  in the panel are there for the rare pairing it cannot guess — telling it that
+  `2L/c` on one slide *becomes* `Δt'` on the next, when the two share no
+  symbols at all.
+
+  Your finished file needs nothing to display maths: the rendered formula is
+  baked into the deck, so viewing and presenting work with no download and no
+  network, the same as every other Bento file. The typesetting engine is
+  fetched once *while you are authoring*, and only then — it is far too large
+  to ship in every deck. It is checked against a fingerprint built into the
+  app before it is allowed to run, from every source including our own, and
+  Offline mode blocks it like everything else.
+
 ## [1.0.9] — 2026-07-25
 
 - **Fix: large text could silently kill live collaboration.** A text box of

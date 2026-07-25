@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 // Baked math for the starter deck's derivation slides.
 //
 // These are MathJax tex-svg outputs, baked once at authoring time and stored

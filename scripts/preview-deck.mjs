@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 //
 // Screenshot every slide of a built .bento.html with the app's REAL renderer,
 // so a generated deck can be eyeballed without opening it by hand.

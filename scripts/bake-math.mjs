@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 //
 // Bake LaTeX into the SVG markup a MathElement carries, OUTSIDE the editor —
 // the piece a deck generator otherwise cannot produce (see docs/agents.md:
@@ -193,7 +193,7 @@ try {
     .map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`)
     .join('\n')
   writeFileSync(outPath, `// SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 //
 // GENERATED — do not edit. Baked MathJax ${'3.2.2'} output for the formulas in
 // ${input.replace(/\\/g, '/')}.

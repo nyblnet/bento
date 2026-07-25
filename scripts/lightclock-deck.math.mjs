@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The Bento/Suite authors
+// Copyright (c) 2026 The Bento authors
 //
 // GENERATED — do not edit. Baked MathJax 3.2.2 output for the formulas in
 // scripts/lightclock-deck.tex.mjs.
