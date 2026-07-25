@@ -45,6 +45,7 @@ company keeps its servers on. Bento takes the other path:
 | **Live collaboration** | E2EE (AES-GCM) with keys that live in your file, never on a server. The file itself is the invitation: anyone who opens a copy joins. Offline edits merge back precisely — our own CRDT, character-level text merging included. |
 | **A blind relay** | The optional sync relay ([`server/sync-worker/`](server/sync-worker/)) stores ciphertext and learns nothing. Read the source; it's about one file. |
 | **Charts, built in** | Bar / line / pie / scatter drawn by our own dependency-free engine, live during presentations: tooltips, zoom, and data that morphs when a bar chart becomes a pie. |
+| **Math that moves** | LaTeX equations and prose+math notes. Two equations on morph-linked slides animate *symbol by symbol* — a term crossing the equals sign visibly travels there. The engine is authoring-only and hash-pinned; viewing needs no runtime and no network. |
 | **Designed for AI** | The document is plain JSON in the file, so agents edit `.bento.html` files in place and chatbots round-trip the JSON (`window.bento.loadDoc`). See [docs/agents.md](docs/agents.md). |
 | **Signed self-updates** | Releases are ECDSA-signed and offered in-app. Updating writes a *new* file — the old one stays as your rollback. No server ever touches your documents. |
 | **Everything else** | Speaker view, comments, layouts, hidden interactive states, hover reveals, motion paths, PDF export, page sizes, 8 UI languages — in a ~560 KB shell. |
@@ -91,6 +92,10 @@ deep dive: [docs/architecture.md](docs/architecture.md).
   enterprise identity would need signed frames (designed, not built).
 - Update checks fetch a static manifest and send nothing about you or your
   document. Signature + hash + version monotonicity are verified in-app.
+- The MathJax engine (authoring only, never bundled, never needed to view a
+  deck) is fetched once and executed only if it matches a SHA-256 pinned in
+  the app — verified on fetch and on cache read, from every source including
+  our own. Offline mode blocks it like everything else.
 - Known trade-offs: undo during live collab is snapshot-based and can revert
   a collaborator's concurrent edit to the same property; editing is
   desktop-first (phones view and present well).

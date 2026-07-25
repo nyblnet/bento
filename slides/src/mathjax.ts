@@ -9,6 +9,9 @@
 // with offline on and nothing cached, baking fails gracefully (the panel
 // surfaces the message) and any already-baked math still displays.
 //
+// Every byte that reaches the script tag is checked against a pinned sha256
+// first — from the network AND from the cache. See ENGINE_SHA256.
+//
 // Why markup and not a data: URI <img> — an <img> is opaque. Storing the SVG
 // as markup lets render.ts inline it (ids scoped per instance, exactly like the
 // gradient/marker counters) which buys three things a data: URI cannot:
@@ -19,6 +22,10 @@
 
 import { offlineEnabled } from './update'
 
+/** The pinned engine build. Every candidate source must deliver exactly these
+ *  bytes — see ENGINE_SHA256. */
+export const MATHJAX_VERSION = '3.2.2'
+
 /** Engine sources, tried in order. bento.page is preferred (same origin as the
  *  app's own update channel, versioned with it); the official MathJax build on
  *  jsDelivr is the fallback so a locally-served or freshly-cloned checkout
@@ -26,8 +33,28 @@ import { offlineEnabled } from './update'
  *  (mirrors update.ts 'bento-update-url'). */
 const MATHJAX_URLS = [
   'https://bento.page/vendor/tex-svg.js',
-  'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js',
+  `https://cdn.jsdelivr.net/npm/mathjax@${MATHJAX_VERSION}/es5/tex-svg.js`,
 ]
+
+/**
+ * SHA-256 of mathjax@3.2.2's `es5/tex-svg.js`, taken from the npm tarball
+ * (jsDelivr, cdnjs and unpkg all serve that same file byte-for-byte).
+ *
+ * This pin is not optional book-keeping. The engine is ~2MB of third-party JS
+ * that we execute in the app's OWN origin — the origin holding decrypted deck
+ * content, the collab room key and the ECDSA owner/writer/member private keys.
+ * update.ts refuses to apply the app's own code without an ECDSA signature and
+ * a sha256 match; fetching a CDN blob and running it unchecked would be a much
+ * bigger hole than the one that guards. So: no source is trusted, including
+ * bento.page, the localStorage override and the local /vendor copy (update.ts
+ * verifies its dev override too — an override changes WHERE code comes from,
+ * never WHETHER it is checked). A mismatch is treated as a dead source; the
+ * next candidate is tried and a total failure reports the mismatch by name.
+ *
+ * Bumping MATHJAX_VERSION means recomputing this — scripts/fetch-mathjax.mjs
+ * prints the hash of whatever it downloaded, and verifies against this pin.
+ */
+export const ENGINE_SHA256 = 'd4295dc33744836935c1399feece5159577b34c5c8ffb9f1c6324cd82e03a882'
 
 const isLocalDev = (): boolean => {
   try {
@@ -56,9 +83,11 @@ const engineUrls = (): string[] => {
 // --- tiny IndexedDB cache for the engine JS text -------------------------
 const DB_NAME = 'bento-mathjax'
 const STORE = 'engine'
-// One cache slot: the engine is interchangeable across sources, so a copy
-// fetched from any candidate URL satisfies a later boot that would have picked
-// a different one (and a source going away never strands a cached engine).
+// One cache slot, unversioned: every source must deliver the SAME pinned
+// bytes, so a copy fetched from any candidate URL satisfies a later boot that
+// would have picked a different one (and a source going away never strands a
+// cached engine). Bumping the pin needs no migration either — the old entry
+// simply fails verification on read and is refetched.
 const CACHE_KEY = 'tex-svg'
 let dbPromise: Promise<IDBDatabase | null> | null = null
 
@@ -126,8 +155,20 @@ export function mathjaxLoaded(): boolean {
   return !!currentApi()
 }
 
-/** Fetch the engine from the first candidate that answers. Errors are collected
- *  so a total failure reports something actionable rather than the last 404. */
+/** Hex SHA-256 of a UTF-8 string. */
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Does this text hash to the pinned engine build? */
+export async function isPinnedEngine(js: string): Promise<boolean> {
+  return (await sha256Hex(js)) === ENGINE_SHA256
+}
+
+/** Fetch the engine from the first candidate that answers with the PINNED
+ *  bytes. Errors are collected so a total failure reports something actionable
+ *  rather than the last 404. */
 async function fetchEngine(): Promise<string> {
   const urls = engineUrls()
   const failures: string[] = []
@@ -136,8 +177,14 @@ async function fetchEngine(): Promise<string> {
       const res = await fetch(url, { cache: 'force-cache' })
       if (!res.ok) { failures.push(`${url} → ${res.status}`); continue }
       const js = await res.text()
-      // A tiny response is a login/redirect page, not the engine.
+      // A tiny response is a login/redirect page, not the engine. (Cheap
+      // pre-check; the hash below is the real gate — unpkg has been observed
+      // answering 200 with a 21-byte "Internal Server Error".)
       if (js.length < 10000) { failures.push(`${url} → not the engine`); continue }
+      if (!(await isPinnedEngine(js))) {
+        failures.push(`${url} → wrong bytes (expected MathJax ${MATHJAX_VERSION}, sha256 ${ENGINE_SHA256.slice(0, 12)}…)`)
+        continue
+      }
       return js
     } catch (ex) {
       failures.push(`${url} → ${(ex as Error).message}`)
@@ -155,7 +202,12 @@ export function ensureMathjax(): Promise<MathJaxSvgApi> {
   if (readyPromise) return readyPromise
 
   readyPromise = (async () => {
+    // The cache is re-verified on every read, not just on write: IndexedDB is
+    // same-origin storage like any other, so a cached engine is only as
+    // trustworthy as the last thing that could write to it. Hashing 2MB costs
+    // a few ms against a 2MB download.
     let js = await idbGet(CACHE_KEY)
+    if (js && !(await isPinnedEngine(js))) js = null
     if (!js) {
       if (offlineEnabled()) {
         throw new Error('Math engine unavailable offline')

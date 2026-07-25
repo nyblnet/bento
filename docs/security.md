@@ -121,18 +121,46 @@ honour-system flag and not a permissions table someone can misconfigure.**
 > shared files keep working unchanged. Rotating keys upgrades a deck to an
 > enforced `w`-room.
 
+## The math engine
+
+Baking LaTeX needs MathJax, which is ~2MB — bigger than the whole Bento shell.
+It is therefore **never bundled**: the first time you insert math, the editor
+downloads the engine once and caches it in IndexedDB. This is the only
+third-party fetch Bento makes, and three properties bound it:
+
+- **Authoring only.** Viewing and presenting a deck with math need no engine
+  and no network — the rendered SVG is baked into the file. A reader never
+  fetches anything.
+- **Pinned and verified.** The engine is executed only if its SHA-256 matches
+  the hash baked into the app ([`ENGINE_SHA256`](../slides/src/mathjax.ts)),
+  checked on every network fetch *and* on every read back out of the cache. No
+  source is trusted — not the CDN, not `bento.page`, not a local `/vendor`
+  copy, not the dev URL override. A mismatch is treated as a dead source. This
+  is the same stance as the update channel: an override changes *where* code
+  comes from, never *whether* it is checked.
+- **Offline-switchable.** With offline mode on and nothing cached, baking
+  fails with a message and already-baked math still displays.
+
+The request itself is a bare GET for a static file and carries nothing about
+you or your document. Why it matters that the bytes are verified: the engine
+runs in the app's own origin, alongside your decrypted document and your collab
+keys — an unchecked CDN blob would be a bigger hole than the signed-update
+machinery closes.
+
 ## Offline mode — nothing leaves this computer
 
 An **Offline switch** (in the About dialog) hard-blocks every network touch:
-the update check *and* the relay transport are refused before they open a
-socket ([`joinFromDoc`](../slides/src/sync/online.ts) returns early;
-same-machine tab sync over BroadcastChannel is not networking and stays on).
+the update check, the relay transport *and* the math-engine download are
+refused before they open a socket ([`joinFromDoc`](../slides/src/sync/online.ts)
+returns early; same-machine tab sync over BroadcastChannel is not networking
+and stays on).
 
 There is no telemetry, no analytics, no phone-home. Even with offline mode
-*off*, the update check is a bare GET for a signed release manifest — it
-carries **no identifier about you or your document**. Offline mode is the "no
-cloud, provably" story: flip it on and you can watch the network tab stay
-silent.
+*off*, the only outbound requests are those three, and none carries **any
+identifier about you or your document**: the update check is a bare GET for a
+signed release manifest, the math engine a bare GET for a hash-pinned static
+file, and the relay only ever sees ciphertext. Offline mode is the "no cloud,
+provably" story: flip it on and you can watch the network tab stay silent.
 
 ## Limitations, stated up front
 
