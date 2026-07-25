@@ -24,11 +24,15 @@ names provisional.
   with): four 'sd-tile-*' elements morph through EVERY slide (the id-continuity
   demo), one deliberate 'fade' beat exists because entrance staggers/count-ups
   only run on non-morph entries, charts slide + hidden pie state demo the
-  bar⇄pie data morph, speaker notes double as the feature tour. Gotchas learned
-  building it: line shapes take their color from `fill` (not `stroke` — the
-  stroke attr is what morphs tween), and the renderer draws lines horizontally
-  across the element box (vertical lines = rotation), keep 96px side margins
-  (x ≤ 1184 for right-most content).
+  bar⇄pie data morph, three MATH slides run one equation through a derivation
+  so the per-symbol morph is visible (`a²+b²=c²` → `c²=a²+b²` pairs 8/8 glyphs;
+  the third equation uses a different id + `morphId` on purpose, exercising the
+  "Pair with" path), speaker notes double as the feature tour. Its baked math
+  lives in `src/starterdeck.math.ts` just to keep this file readable. Gotchas
+  learned building it: line shapes take their color from `fill` (not `stroke` —
+  the stroke attr is what morphs tween), and the renderer draws lines
+  horizontally across the element box (vertical lines = rotation), keep 96px
+  side margins (x ≤ 1184 for right-most content).
 - `src/save.ts` — the self-save trick: clone the document at boot (`capturePristine`),
   swap the `#bento-doc` data block, re-serialize. JSON is `<`-escaped (`\u003c`) so it can
   never contain `</script>`. File System Access API first, download fallback.
@@ -200,6 +204,72 @@ names provisional.
   translate at render time); keys must match source EXACTLY (validate with the
   extraction/diff script pattern in git history); setLocale('x-pseudo') audits
   unswept strings. New UI strings must be added to ALL catalogs.
+- **Math (v1.0.8)**: a dedicated `math` element (model.ts) — NOT inline in text
+  cells (that would confuse authors who don't know LaTeX). Two modes: `equation`
+  (standalone LaTeX) and `note` (prose in the deck's fonts with inline
+  `$…$`/`$$…$$`). `source` is what the author typed; `baked` is the MathJax
+  output. The field is `baked`, NOT `html` — sync/crdt.ts routes any property
+  literally named `html` into the character-level text RGA with no element-type
+  guard, so concurrent editors would interleave two different bakes into invalid
+  markup; as `baked` it is a plain LWW register.
+  `src/mathjax.ts` is the LAZY baker: MathJax tex-svg (~680KB gz, bigger than
+  the whole shell) is NEVER bundled — fetched on demand in the EDITOR only
+  (first math insert), cached in its own IndexedDB (`bento-mathjax`, ONE slot:
+  the engine is interchangeable across sources), gated by the update.ts offline
+  switch. Source order: localStorage 'bento-mathjax-url' → `/vendor/tex-svg.js`
+  when on localhost (`npm run fetch-mathjax` puts it there, gitignored) →
+  bento.page/vendor → **the official MathJax build on jsDelivr** (bento.page
+  does not host it yet, so the CDN fallback is what makes a fresh checkout
+  work). Loaded via <script> Blob URL (non-static so Rollup won't bundle it)
+  with fontCache:'local' + typeset:false. VIEWING/presenting needs ZERO runtime
+  and ZERO network — the baked SVG travels in the file.
+  **Baked math is MARKUP, not a data: URI** — that is the load-bearing choice.
+  An <img> is opaque, which makes per-symbol morphing impossible and forces ink
+  to be baked in. render.ts inlines the markup after `scopeMathIds()` rewrites
+  every glyph-def id with a per-instance prefix (MathJax numbers defs per
+  typeset call, so the canvas/thumbnail/present triple render would otherwise
+  cross-resolve `<use href="#…">` — the same collision the gradient/marker
+  counters guard). Ink is therefore a live CSS property (MathJax paints
+  `currentColor`): no re-bake on colour change, and colour tweens across a
+  morph. Baked markup is NOT trusted — decks arrive from collaborators and
+  invite links — so it passes `sanitizeMath()` (allowlist of MathJax's SVG
+  output; href/xlink:href restricted to same-document fragment refs).
+  GOTCHAS, all found against real tex-svg output, all silent failures:
+  XMLSerializer may not keep the `xlink:` prefix and can emit `ns1:href` —
+  baking normalizes glyph refs to plain SVG 2 `href` and every consumer ignores
+  any prefix (matching on the qualified name blanks every glyph); MathJax writes
+  `xmlns` as a literal attribute on an element already in the SVG namespace, so
+  serializers emit it twice and the result is not well-formed XML — the literal
+  attribute is dropped at bake time and both parse sites use LENIENT HTML
+  parsing (a strict DOMParser rejection silently downgrades every formula to a
+  box morph).
+  Insert via the topbar Σ dropdown (editor.ts mathDropdown); edited in the panel
+  (panels.ts buildMathProps: source textarea + live preview + mode/size/font/
+  align/colour + Morph hints) — canvas double-click focuses the source field.
+  The panel must NEVER bake during construction: baking commits, a commit fires
+  `doc`, and `doc` rebuilds the panel → bake→commit→rebuild→bake freezes the
+  editor. Bake only from real user-input handlers.
+- **Per-symbol math morph (`src/mathmorph.ts`)**: two equations on morph-linked
+  slides morph SYMBOL BY SYMBOL (manim style), not as a box. `glyphAtoms()`
+  walks both formulas' markup accumulating SVG transforms → each glyph's outline
+  plus the matrix placing it in SLIDE coords (derived from the model frames and
+  the `xMidYMid meet` viewBox mapping render.ts applies — no DOM measuring, same
+  discipline as the rest of runMorph; MathJax fraction bars are `<rect>`s and are
+  synthesized into outlines so they travel too). `pairAtoms()` pairs author tags
+  first (`data-bento-tag`, baked in from `MathElement.morphTags` by matching the
+  hint's own glyph sequence as a contiguous run — no MathJax extension needed),
+  then LCS over codepoints, **then a shape-matching pass over the leftovers,
+  nearest pair first**. That last pass matters: LCS is order-preserving, so
+  symbols that SWAP sides can never both be paired, and `a²+b²=c²` → `c²−b²=a²`
+  would fade `a` and `c` instead of trading them (5/8 → 7/8 pairs with it).
+  Every atom is drawn as a plain `<path>` into ONE transient overlay `<svg>`
+  spanning the slide (so travelling glyphs are never clipped by either element
+  box) and its matrix is tweened; paired travel, dropped fade out, new fade in
+  on a trailing delay. Anything it declines (unbaked, unparseable, no glyphs in
+  common, either side not an equation) returns null → ordinary box morph, so the
+  worst case is the previous behaviour. Overlays are torn down via
+  `flushMorphCleanup()` on every slide change.
+  Note-mode and cross-type pairs (math↔text) morph as a box, like tables.
 - `src/charts.ts` — charts-lite, OUR OWN engine (ECharts removed for size:
   it was 630KB = 47% of the shell; git history has the integration). Same
   3-function API (CHART_PRESETS/mountChart/chartSnapshotSvg) interpreting the
@@ -559,6 +629,9 @@ names provisional.
 - `npm run dev` (in slides/) — dev server; `.claude/launch.json` has `slides-dev` (:5199)
   and `serve-built` (:5198, serves dist-single).
 - `npm run build:single` — the shippable `dist-single/Bento_Slides.bento.html`.
+- `npm run fetch-mathjax` (in slides/) — downloads MathJax tex-svg into the
+  gitignored `slides/public/vendor/` so `npm run dev` bakes math with NO
+  network. Optional: without it the app falls back to the CDN at runtime.
 - In-page scripting/testing API: `window.bento` → `{ doc, serialize() }`.
 
 ## Testing gotcha
