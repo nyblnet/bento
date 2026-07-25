@@ -1043,8 +1043,9 @@ export function starterDoc(): BentoDoc {
       notes:
         'Same equation, both sides swapped. a and c trade places and you can SEE them travel — ' +
         'Bento pairs glyphs by shape, so a symbol that moves is animated to its new home rather than ' +
-        'faded out and back in. The + becoming a − is a genuine change, so that one does fade. ' +
-        'Nothing here was choreographed: both slides just carry the same morph key on the equation.',
+        'faded out and back in. Every one of the eight symbols is matched here; a term with no partner ' +
+        'on the other side would fade instead. Nothing was choreographed — both slides just carry the ' +
+        'same morph key on the equation.',
       elements: [
         dots(false),
         ghost(),
