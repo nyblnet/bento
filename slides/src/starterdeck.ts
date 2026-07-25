@@ -17,10 +17,11 @@
 // Never let system-font defaults show: every text sets a face on purpose.
 
 import {
-  newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable,
-  type BentoDoc, type Slide, type SlideElement, type TextElement, type ShapeElement,
+  newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable, defaultMath,
+  type BentoDoc, type MathElement, type Slide, type SlideElement, type TextElement, type ShapeElement,
   type SvgElement, type TableElement,
 } from './model'
+import { EQ_PYTHAGORAS, EQ_ROOT, EQ_SOLVED, NOTE_PYTHAGORAS } from './starterdeck.math'
 import { FRAUNCES_900, INSTRUMENT_VAR } from './fontdata'
 
 /** Display face — embedded in the file (see fontdata.ts). */
@@ -57,6 +58,9 @@ const T_C = 'sd-tile-c' // paper/white
 const T_D = 'sd-tile-d' // ink panel / card
 const TITLE = 'sd-title'
 const KICKER = 'sd-kicker'
+/** Morph key shared by the three derivation equations — the last one carries it
+ *  as a `morphId` so it can keep its own id (the panel's "Pair with"). */
+const EQ = 'sd-eq'
 const GLOW = 'sd-glow'
 const CHART_MAIN = 'sd-main-chart'
 
@@ -74,6 +78,12 @@ const text = (p: Partial<TextElement>): TextElement =>
 
 const shape = (kind: Parameters<typeof defaultShape>[0], p: Partial<ShapeElement>): ShapeElement =>
   ({ ...defaultShape(kind), stroke: 'transparent', strokeWidth: 0, ...p }) as ShapeElement
+
+/** A baked equation. `baked` is MathJax output stored verbatim (see
+ *  starterdeck.math.ts); `source` is kept so the panel can re-edit it, and
+ *  `color` is a live CSS property — the SVG paints currentColor. */
+const equation = (p: Partial<MathElement>): MathElement =>
+  ({ ...defaultMath('equation'), color: INK, ...p }) as MathElement
 
 const kicker = (label: string, p: Partial<TextElement> = {}): TextElement =>
   text({
@@ -984,7 +994,128 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 12 · CLOSE ─────────────────────────────────────────────────────────
+    // ── 12 · MATHEMATICS ───────────────────────────────────────────────────
+    // Three slides sharing one layout so the ONLY thing that changes is the
+    // equation — which is the point: symbols travel between slides instead of
+    // the formula crossfading. The equation carries one morph key across all
+    // three (EQ), exactly like the tile cast.
+    slide({
+      background: PAPER,
+      notes:
+        'Math is a real element, not LaTeX buried in a text box — press ＋ Math in the toolbar. ' +
+        'The engine loads once while you author, bakes the formula into the file as SVG, and is then ' +
+        'gone: viewing and presenting need no engine and no network. Watch the next two slides — the ' +
+        'symbols MOVE. Bento matches glyphs between the two formulas and tweens each one, so a term ' +
+        'crossing the equals sign visibly travels there.',
+      elements: [
+        dots(false),
+        ghost(),
+        kicker('MATHEMATICS', { color: PEACH_DEEP }),
+        ...furniture(false),
+        title('Formulas that move.'),
+        shape('rect', { id: T_A, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
+        shape('rect', {
+          id: T_C, x: 96, y: 236, w: 1088, h: 214, radius: 18, fill: '#FFFFFF',
+          stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.10)' },
+        }),
+        equation({
+          id: EQ, x: 281, y: 287, w: 718, h: 132,
+          source: 'a^2 + b^2 = c^2', baked: EQ_PYTHAGORAS, aspect: 5.442,
+        }),
+        shape('rect', { id: T_B, x: 96, y: 486, w: 6, h: 96, radius: 3, fill: STEEL }),
+        equation({
+          id: 'sd-eq-note', mode: 'note', x: 128, y: 486, w: 700, h: 96,
+          source: 'For a right triangle the legs $a$ and $b$ and the hypotenuse $c$ satisfy $a^2 + b^2 = c^2$.',
+          baked: NOTE_PYTHAGORAS, align: 'left', display: false,
+          fontFamily: BODY, color: INK_SOFT,
+        }),
+        shape('rect', { id: T_D, x: 1044, y: 486, w: 140, h: 96, radius: 18, fill: PANEL }),
+        text({
+          x: 1044, y: 512, w: 140, h: 46, html: 'baked<br>into the file',
+          fontSize: 13, fontWeight: 600, color: MIST, align: 'center', lineHeight: 1.5,
+        }),
+      ],
+    }),
+
+    // ── 13 · MATH · rearrange ──────────────────────────────────────────────
+    slide({
+      background: PAPER,
+      notes:
+        'Same equation, both sides swapped. a and c trade places and you can SEE them travel — ' +
+        'Bento pairs glyphs by shape, so a symbol that moves is animated to its new home rather than ' +
+        'faded out and back in. The + becoming a − is a genuine change, so that one does fade. ' +
+        'Nothing here was choreographed: both slides just carry the same morph key on the equation.',
+      elements: [
+        dots(false),
+        ghost(),
+        kicker('MATHEMATICS', { color: PEACH_DEEP }),
+        ...furniture(false),
+        title('Rearrange it — the symbols travel.'),
+        shape('rect', { id: T_A, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
+        shape('rect', {
+          id: T_C, x: 96, y: 236, w: 1088, h: 214, radius: 18, fill: '#FFFFFF',
+          stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.10)' },
+        }),
+        equation({
+          id: EQ, x: 281, y: 287, w: 718, h: 132,
+          source: 'c^2 = a^2 + b^2', baked: EQ_SOLVED, aspect: 5.442,
+        }),
+        shape('rect', { id: T_B, x: 96, y: 486, w: 6, h: 96, radius: 3, fill: PEACH }),
+        text({
+          x: 128, y: 492, w: 700, h: 84,
+          html: 'Watch <b>a</b> and <b>c</b> swap sides. Matching is automatic; the panel’s ' +
+            '<b>Morph hints</b> only exist for the rare pairing it cannot guess.',
+          fontSize: 17, fontWeight: 500, color: INK_SOFT, lineHeight: 1.6,
+        }),
+        shape('rect', { id: T_D, x: 1044, y: 486, w: 140, h: 96, radius: 18, fill: STEEL }),
+        text({
+          x: 1044, y: 512, w: 140, h: 46, html: 'glyphs<br>matched',
+          fontSize: 13, fontWeight: 600, color: '#FFFFFF', align: 'center', lineHeight: 1.5,
+        }),
+      ],
+    }),
+
+    // ── 14 · MATH · solve ──────────────────────────────────────────────────
+    slide({
+      background: PAPER,
+      notes:
+        'The last step introduces a radical. Symbols that persist travel, the squared exponent on c is ' +
+        'dropped and fades out, and the root fades in where it lands. This equation deliberately uses a ' +
+        'DIFFERENT element id with a morphId pointing at the others — the panel’s “Pair with” picker — ' +
+        'so two independently-created formulas morph without either one changing identity.',
+      elements: [
+        dots(false),
+        ghost(),
+        kicker('MATHEMATICS', { color: PEACH_DEEP }),
+        ...furniture(false),
+        title('Solve it — same morph, new symbols.'),
+        shape('rect', { id: T_A, x: 96, y: 186, w: 64, h: 6, radius: 3, fill: PEACH }),
+        shape('rect', {
+          id: T_C, x: 96, y: 236, w: 1088, h: 214, radius: 18, fill: '#FFFFFF',
+          stroke: CARD_STROKE, strokeWidth: 1.5, shadow: { y: 12, blur: 30, color: 'rgba(30,42,58,0.10)' },
+        }),
+        // NOTE the different id + morphId: this is the "Pair with" idiom — two
+        // separately-created elements morph while each keeps its own identity.
+        equation({
+          id: 'sd-eq-root', morphId: EQ, x: 334, y: 287, w: 612, h: 132,
+          source: 'c = \\sqrt{a^2 + b^2}', baked: EQ_ROOT, aspect: 4.635,
+        }),
+        shape('rect', { id: T_B, x: 96, y: 486, w: 6, h: 96, radius: 3, fill: PEACH_DEEP }),
+        text({
+          x: 128, y: 492, w: 760, h: 84,
+          html: 'Type LaTeX in the panel; the preview bakes as you type. Ink is a live colour — ' +
+            'the baked SVG paints <i>currentColor</i>, so it even tweens across a morph.',
+          fontSize: 17, fontWeight: 500, color: INK_SOFT, lineHeight: 1.6,
+        }),
+        shape('rect', { id: T_D, x: 1044, y: 486, w: 140, h: 96, radius: 18, fill: PEACH }),
+        text({
+          x: 1044, y: 512, w: 140, h: 46, html: 'zero runtime<br>to view',
+          fontSize: 13, fontWeight: 600, color: INK, align: 'center', lineHeight: 1.5,
+        }),
+      ],
+    }),
+
+    // ── 15 · CLOSE ─────────────────────────────────────────────────────────
     slide({
       notes:
         'The cast reassembles into the logo. Press Esc — this deck is already your copy of the app: ' +
