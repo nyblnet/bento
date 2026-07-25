@@ -334,6 +334,18 @@ export interface MathElement extends ElementBase {
   color?: string
   /** note mode: prose font (defaults to the theme font) */
   fontFamily?: string
+  /**
+   * note mode: prose size in slide px, like TextElement.fontSize. Carried in
+   * the MODEL rather than left to inherit, for the same reason every other
+   * element pins its type size — an element whose size comes from the viewer's
+   * browser default is not a document that renders the same in 2036. Inline
+   * formulas are sized in `ex`, so they follow this automatically.
+   * An EQUATION ignores it: its size is its box (the svg fills the frame
+   * preserving aspect), which is why the panel only offers it for notes.
+   */
+  fontSize?: number
+  /** note mode: line spacing as a multiple of the font size */
+  lineHeight?: number
   align?: 'left' | 'center' | 'right'
   /**
    * Optional per-symbol morph hints. Each entry pairs a TeX sub-expression with
@@ -801,22 +813,17 @@ export function defaultMath(
     id: uid('math'),
     type: 'math',
     mode,
-    // caller re-centres against the real deck size; these suit the 1280×720 default
+    // placed like every other default* element: coordinates that suit the
+    // 1280×720 default page, nudged by the author from there
     x: note ? 360 : 440, y: note ? 280 : 300,
     w: note ? 560 : 400, h: note ? 160 : 120,
     rotation: 0, opacity: 1,
     source: '',
     display: !note,
     align: note ? 'left' : 'center',
+    ...(note ? { fontSize: 20, lineHeight: 1.5 } : {}),
     ...partial,
   }
-}
-
-/** Centre a freshly-created element in the deck's page box. */
-export function centerInDoc<T extends SlideElement>(el: T, size: { width: number; height: number }): T {
-  el.x = Math.round((size.width - el.w) / 2)
-  el.y = Math.round((size.height - el.h) / 2)
-  return el
 }
 
 export function emptySlide(partial: Partial<Slide> = {}): Slide {

@@ -1027,6 +1027,9 @@ export function starterDoc(): BentoDoc {
           id: 'sd-eq-note', mode: 'note', x: 128, y: 486, w: 700, h: 96,
           source: 'For a right triangle the legs $a$ and $b$ and the hypotenuse $c$ satisfy $a^2 + b^2 = c^2$.',
           baked: NOTE_PYTHAGORAS, align: 'left', display: false,
+          // sized to sit with the 17px captions on the sibling slides; the
+          // inline formulas are in `ex`, so they follow this
+          fontSize: 17, lineHeight: 1.6,
           fontFamily: BODY, color: INK_SOFT,
         }),
         shape('rect', { id: T_D, x: 1044, y: 486, w: 140, h: 96, radius: 18, fill: PANEL }),

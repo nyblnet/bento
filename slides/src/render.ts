@@ -6,6 +6,11 @@
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey } from './model'
 import { chartSnapshotSvg } from './charts'
+// Only for empty-element PROMPTS ("Equation", "Math note"), which are editor
+// chrome that happens to be drawn by the renderer — they are hidden in present
+// and print (hidePlaceholders) and never enter the document. Nothing the model
+// carries is translated here; language stays out of the format.
+import { t } from './i18n'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -407,8 +412,33 @@ function safeMathStyle(el: Element, value: string): boolean {
   })
 }
 
+/**
+ * Sanitized markup, keyed by the raw `baked` string.
+ *
+ * A formula is re-rendered constantly — the canvas on every doc event, plus one
+ * sidebar thumbnail per slide, plus the present overlay — and each pass parses
+ * and walks ~10-20KB of glyph markup for a result that only changes when the
+ * author re-bakes. Charts sidestep the same cost with a snapshot cache; this is
+ * that, for math. Bounded so a long editing session cannot grow it without end
+ * (every keystroke bakes a new string): oldest-first eviction, insertion-
+ * ordered by Map.
+ */
+const mathSanitizeCache = new Map<string, string>()
+const MATH_CACHE_MAX = 64
+
 /** Sanitize baked math markup down to the SVG subset MathJax emits. */
 export function sanitizeMath(markup: string): string {
+  const hit = mathSanitizeCache.get(markup)
+  if (hit !== undefined) return hit
+  const clean = sanitizeMathUncached(markup)
+  if (mathSanitizeCache.size >= MATH_CACHE_MAX) {
+    mathSanitizeCache.delete(mathSanitizeCache.keys().next().value as string)
+  }
+  mathSanitizeCache.set(markup, clean)
+  return clean
+}
+
+function sanitizeMathUncached(markup: string): string {
   const tpl = document.createElement('template')
   tpl.innerHTML = markup
   const walk = (node: Node) => {
@@ -686,11 +716,17 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         inner.className = 'bento-math-note'
         inner.style.cssText = 'width:100%;height:100%'
         inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+        // Type size comes from the MODEL, like every other element. Left to
+        // inherit it would resolve against the viewer's browser default, so the
+        // same file would render differently on two machines — and the inline
+        // formulas, sized in `ex`, would drift with it.
+        inner.style.fontSize = `${el.fontSize ?? 20}px`
+        inner.style.lineHeight = String(el.lineHeight ?? 1.5)
         inner.style.textAlign = align
         if (el.baked) {
           inner.innerHTML = scopeMathIds(sanitizeMath(el.baked))
         } else if (!opts.hidePlaceholders) {
-          inner.textContent = 'Math note'
+          inner.textContent = t('Math note')
           inner.style.opacity = '0.38'
         } else {
           node.style.display = 'none'
@@ -733,7 +769,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       } else {
         const ph = document.createElement('div')
         ph.style.cssText = 'opacity:0.38;font-size:14px;color:#5e7699'
-        ph.textContent = 'Equation'
+        ph.textContent = t('Equation')
         node.appendChild(ph)
       }
       break

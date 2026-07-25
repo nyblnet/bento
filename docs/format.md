@@ -129,7 +129,7 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
 
 The element `type` discriminant is one of: `text`, `shape`, `image`, `svg`,
-`chart`, `table`, `media`.
+`chart`, `table`, `media`, `math`.
 
 ### `text`
 
@@ -225,6 +225,48 @@ takes `poster?` (`data:`/`asset:`/URL), `fit?` (`contain|cover|fill`),
 - Embed only **short** clips. The editor warns above `MEDIA_EMBED_BUDGET`
   (8 MB) and offers a URL instead — a big data URI makes the file slow to open
   and save.
+
+### `math`
+
+`type: "math"` — LaTeX, in one of two `mode`s:
+
+- `"equation"` — a standalone formula. `source` is the LaTeX the author typed.
+- `"note"` — prose in the deck's fonts with inline `$…$` / block `$$…$$` math.
+  `source` is the whole prose+math text.
+
+`baked` is the rendered artifact: self-contained `<svg>` markup for an
+equation, escaped prose with inline `<svg>` spans for a note. **Viewing needs
+no engine and no network** — the baked SVG travels in the file. Baking happens
+in the editor only (MathJax is fetched on demand, never bundled; see
+[security.md](security.md#the-math-engine)).
+
+Other fields: `display?` (equation: large/centred vs text-height sizing),
+`color?` (ink), `align?`, and for notes `fontFamily?`, `fontSize?` (slide px,
+like `text.fontSize`), `lineHeight?`. Plus `morphTags?`, below.
+
+- **`baked` is markup, NOT a `data:` URI.** That is load-bearing: an `<img>` is
+  opaque, so per-symbol morphing would be impossible and the ink would have to
+  be baked in. As inlined markup, glyphs are addressable and they paint
+  `currentColor` — so `color` changes need no re-bake and tween across a morph.
+- **The field is `baked`, not `html`.** Anything named `html` is routed into the
+  character-level text CRDT, which would interleave two replicas' output into
+  invalid markup. As `baked` it is a plain last-writer-wins register.
+- Baked markup is **not trusted** (decks arrive from collaborators and invite
+  links): the renderer sanitizes it to the SVG subset MathJax emits, and
+  rewrites glyph ids per instance so two copies cannot cross-resolve.
+- **Per-symbol morph.** Two `equation` elements sharing a morph key across a
+  morph transition animate symbol by symbol — matched glyphs travel, dropped
+  ones fade out, new ones fade in. Matching is automatic (author tags, then a
+  longest-common-subsequence over glyphs, then nearest same-glyph pairs).
+  `morphTags?: Array<{ tex, tag }>` forces a pairing the automatic match cannot
+  infer: give the same `tag` to a sub-expression on both slides. Tags are
+  resolved into the markup at bake time, so presenting still needs no engine.
+  Notes, and math paired with a non-math element, morph as a box.
+
+Generators: `source` alone is NOT enough to display — an element with no
+`baked` renders as an empty placeholder, because there is no engine at view
+time to fall back on. Write both, or open the deck in the editor once so it
+bakes.
 
 ---
 

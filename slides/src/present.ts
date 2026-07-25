@@ -1014,9 +1014,10 @@ function runMorph(
   // Geometry straight from the model — no DOM measuring needed (both sides'
   // frames are in the doc), so the outgoing section's Reveal styling is
   // irrelevant. Each matched node animates from the from-slide's frame to its
-  // own via translate+scale about the top-left corner (scale mode like
-  // PowerPoint: text scales instead of reflowing mid-morph). Rotating morphs
-  // pivot slightly differently than center-origin — rare and acceptable.
+  // own by translating and scaling about its own CENTRE — the origin
+  // applyElementFrame already relies on at rest, so the last frame of the
+  // morph and the resting transform agree (scale mode like PowerPoint: text
+  // scales instead of reflowing mid-morph).
   // Equations morph symbol-by-symbol instead of as a box — the symbols travel
   // to their new places, dropped terms fade out where they stood, new ones fade
   // in where they land. Anything mathmorph declines (unbaked, unparseable, no

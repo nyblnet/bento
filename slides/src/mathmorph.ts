@@ -192,6 +192,12 @@ export function glyphAtoms(el: MathElement, frame: Frame): Atom[] | null {
       if (name === 'rect') {
         // MathJax draws fraction bars, radicals and \overline as filled rects;
         // synthesize an outline so they travel with everything else.
+        // The identity below is the rounded SIZE, so a bar only pairs with one
+        // of the same width: a fraction whose numerator gains a term gets a
+        // wider bar, and that bar fades out/in while the symbols around it
+        // travel. Pairing bars of different widths instead would tween a
+        // rectangle into a visibly different rectangle, which reads worse than
+        // the fade — so this stays deliberate, not an oversight.
         const x = Number(child.getAttribute('x') || 0)
         const y = Number(child.getAttribute('y') || 0)
         const w = Number(child.getAttribute('width') || 0)
@@ -234,7 +240,8 @@ const UNSUPPORTED = new Set([
  * zipped in order, so "this term becomes that term" survives even when the
  * shapes share no characters. Everything left over is matched by a longest
  * common subsequence over codepoints, which is what makes the common case —
- * rearranging an equation — line up with no authoring at all.
+ * rearranging an equation — line up with no authoring at all, and then by a
+ * greedy nearest-first pass that catches the symbols LCS had to drop.
  */
 export function pairAtoms(a: Atom[], b: Atom[]): Array<[number, number]> {
   const pairs: Array<[number, number]> = []
@@ -297,9 +304,14 @@ export function pairAtoms(a: Atom[], b: Atom[]): Array<[number, number]> {
   // LCS is order-preserving, so symbols that SWAP sides can never both be kept:
   // in `a² + b² = c²` → `c² − b² = a²` it pairs the shared middle and gives up
   // on `a` and `c`, which would then fade out and in rather than trading places
-  // — losing precisely the effect this whole module exists for. A second pass
-  // therefore matches leftovers purely by shape, nearest pair first (manim's
-  // TransformMatchingShapes), which is order-free and makes the swap visible.
+  // — losing precisely the effect this whole module exists for. A final pass
+  // therefore pairs the leftovers WITHOUT regard to order: still same-glyph
+  // only (a codepoint never morphs into a different one — that would read as a
+  // mistake, not a move), but greedy nearest-first, so each symbol travels to
+  // the closest place the same symbol ends up. That is what makes a swap
+  // visible. Distance is between the atoms' translation components, which is
+  // where the glyph sits — the linear part is uniform scaling from the viewBox
+  // mapping, so it cannot reorder the candidates.
   const leftA = a.map((_, i) => i).filter((i) => !usedA.has(i))
   const leftB = b.map((_, i) => i).filter((i) => !usedB.has(i))
   if (leftA.length && leftB.length) {
