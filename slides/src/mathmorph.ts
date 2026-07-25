@@ -339,6 +339,10 @@ export function morphMath(
 
   const matched = new Set<number>()
   const matchedB = new Set<number>()
+  // Every tween target, so teardown can kill ALL of them. The travel tweens
+  // drive plain state objects (not the nodes), so killing by node alone would
+  // leave them ticking against a detached overlay after a fast slide change.
+  const targets: unknown[] = []
   const setMat = (node: SVGElement, m: Mat) =>
     node.setAttribute('transform', `matrix(${m.map((v) => +v.toFixed(4)).join(' ')})`)
 
@@ -363,6 +367,7 @@ export function morphMath(
     // and starting from the outgoing one would pop on any font-size change.
     const node = path(B.d, A.m, inkFrom, 1)
     const state = { p: 0 }
+    targets.push(node, state)
     anim.to(state, {
       p: 1,
       duration: opts.duration,
@@ -384,6 +389,7 @@ export function morphMath(
   atomsA.forEach((A, i) => {
     if (matched.has(i)) return
     const node = path(A.d, A.m, inkFrom, 1)
+    targets.push(node)
     anim.to(node, { opacity: 0, duration: opts.duration * 0.55, ease: 'power2.out' })
   })
 
@@ -391,6 +397,7 @@ export function morphMath(
   atomsB.forEach((B, i) => {
     if (matchedB.has(i)) return
     const node = path(B.d, B.m, inkTo, 0)
+    targets.push(node)
     anim.to(node, {
       opacity: 1,
       duration: opts.duration * 0.5,
@@ -408,7 +415,7 @@ export function morphMath(
   const finish = () => {
     if (done) return
     done = true
-    anim.killTweensOf(overlay.querySelectorAll('path'))
+    for (const t of targets) anim.killTweensOf(t)
     overlay.remove()
     if (inner) inner.style.visibility = ''
   }
