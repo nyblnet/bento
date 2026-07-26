@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The bento logo (docs/assets/bento-logo.svg, 32-unit grid) scaled into the
+     adaptive-icon safe zone: slate, coral, cream on the navy background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#5E7699"
+        android:pathData="M36.15,30.9 h4.2 a5.25,5.25 0 0 1 5.25,5.25 v35.7 a5.25,5.25 0 0 1 -5.25,5.25 h-4.2 a5.25,5.25 0 0 1 -5.25,-5.25 v-35.7 a5.25,5.25 0 0 1 5.25,-5.25 z" />
+    <path
+        android:fillColor="#FF9E8A"
+        android:pathData="M55.05,30.9 h16.8 a5.25,5.25 0 0 1 5.25,5.25 v10.5 a5.25,5.25 0 0 1 -5.25,5.25 h-16.8 a5.25,5.25 0 0 1 -5.25,-5.25 v-10.5 a5.25,5.25 0 0 1 5.25,-5.25 z" />
+    <path
+        android:fillColor="#F0EBE0"
+        android:pathData="M55.05,56.1 h16.8 a5.25,5.25 0 0 1 5.25,5.25 v10.5 a5.25,5.25 0 0 1 -5.25,5.25 h-16.8 a5.25,5.25 0 0 1 -5.25,-5.25 v-10.5 a5.25,5.25 0 0 1 5.25,-5.25 z" />
+</vector>

@@ -1,0 +1,14 @@
+{
+  "name": "bento-native",
+  "private": true,
+  "description": "npm facade over the native shells' Makefiles — see native/README.md",
+  "scripts": {
+    "deck": "scripts/fetch-deck.sh",
+    "icons": "python3 scripts/gen_icons.py",
+    "build:apk": "make -C android release",
+    "build:aab": "make -C android bundle",
+    "build:ipa": "make -C ios archive",
+    "run:android": "make -C android run",
+    "run:ios": "make -C ios run"
+  }
+}

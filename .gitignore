@@ -26,3 +26,14 @@ working/
 
 # make-og.mjs intermediate (the SVG rasterised into site-src/og.png)
 scripts/.cache/
+
+# native wrapper apps (native/)
+native/*/build/
+native/android/.gradle/
+native/android/app/build/
+native/android/local.properties
+native/android/keystore.properties
+native/ios/Bento/Resources/bento.html
+native/android/app/src/main/assets/bento.html
+*.xcuserdatad/
+native/PR-BODY.md
