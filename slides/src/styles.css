@@ -343,6 +343,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-stage .bento-el { cursor: grab; }
 .ed-stage .bento-el:active { cursor: grabbing; }
+.ed-stage .bento-el-ghost-cut {
+  pointer-events: none;
+  user-select: none;
+  filter: saturate(0.55);
+}
 .ed-stage .bento-editing { cursor: text; }
 .ed-stage .bento-editing .bento-text-inner {
   cursor: text;

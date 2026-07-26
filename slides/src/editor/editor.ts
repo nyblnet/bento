@@ -29,6 +29,11 @@ import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport,
 
 const i18nT = t
 
+type GhostCutState = {
+  slideId: string
+  ids: string[]
+}
+
 /** Per-BROWSER, not per-deck: whether the "this browser can't rewrite files"
  *  notice has been acknowledged. It is a property of the browser. */
 const SAVE_NOTICE_KEY = 'bento-save-notice'
@@ -60,6 +65,7 @@ export class Editor {
   private session: import('../sync/session').SyncSession | null = null
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
+  private ghostCut: GhostCutState | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
   private panelW = { left: 188, right: 236 }
 
@@ -70,8 +76,8 @@ export class Editor {
     this.build()
     this.wireKeyboard()
     store.on('slides', () => this.rebuildSidebar())
-    store.on('current', () => this.highlightSidebar())
-    store.on('doc', () => this.scheduleThumbs())
+    store.on('current', () => { this.highlightSidebar(); this.syncGhostCutCanvas() })
+    store.on('doc', () => { this.scheduleThumbs(); this.pruneGhostCut() })
     store.on('dirty', () => {
       this.dirtyDot.classList.toggle('on', store.dirty)
     })
@@ -1473,11 +1479,88 @@ export class Editor {
 
   // --- paste: external objects + cross-deck elements/slides ---------------------
 
+  private syncGhostCutCanvas() {
+    const ids = this.ghostCut?.slideId === this.store.slide.id ? this.ghostCut.ids : []
+    this.canvas.setGhostCutIds(ids)
+  }
+
+  private pruneGhostCut() {
+    const ghost = this.ghostCut
+    if (!ghost) return
+    const slide = this.store.doc.slides.find((s) => s.id === ghost.slideId)
+    if (!slide) { this.cancelGhostCut(); return }
+    const live = new Set(slide.elements.map((e) => e.id))
+    const ids = ghost.ids.filter((id) => live.has(id))
+    if (!ids.length) { this.cancelGhostCut(); return }
+    if (ids.length !== ghost.ids.length) {
+      this.ghostCut = { ...ghost, ids }
+      this.syncGhostCutCanvas()
+    }
+  }
+
+  private cancelGhostCut() {
+    if (!this.ghostCut) return
+    this.ghostCut = null
+    this.canvas.setGhostCutIds([])
+  }
+
+  private startGhostCut() {
+    if (this.store.readOnly) return
+    const ids = this.store.selectedElements.map((e) => e.id)
+    if (!ids.length) return
+    this.ghostCut = { slideId: this.store.slide.id, ids }
+    this.store.select([])
+    this.syncGhostCutCanvas()
+  }
+
+  private completeGhostCutMove(): boolean {
+    const ghost = this.ghostCut
+    if (!ghost) return false
+    const source = this.store.doc.slides.find((s) => s.id === ghost.slideId)
+    if (!source) { this.cancelGhostCut(); return true }
+    const ids = new Set(ghost.ids)
+    const moving = source.elements.filter((e) => ids.has(e.id))
+    if (!moving.length) { this.cancelGhostCut(); return true }
+    const minX = Math.min(...moving.map((e) => e.x))
+    const minY = Math.min(...moving.map((e) => e.y))
+    const maxX = Math.max(...moving.map((e) => e.x + e.w))
+    const maxY = Math.max(...moving.map((e) => e.y + e.h))
+    const pointer = this.canvas.lastPointerOnSlide()
+    const fallback = {
+      x: Math.round((this.store.doc.size.width - (maxX - minX)) / 2),
+      y: Math.round((this.store.doc.size.height - (maxY - minY)) / 2),
+    }
+    const target = pointer ?? fallback
+    const dx = target.x - minX
+    const dy = target.y - minY
+    const targetSlide = this.store.slide
+
+    this.ghostCut = null
+    this.canvas.setGhostCutIds([])
+    this.store.commit(() => {
+      for (const el of moving) {
+        el.x = Math.round((el.x + dx) * 10) / 10
+        el.y = Math.round((el.y + dy) * 10) / 10
+      }
+      if (source !== targetSlide) {
+        source.elements = source.elements.filter((e) => !ids.has(e.id))
+        targetSlide.elements.push(...moving)
+      }
+    })
+    this.store.select(moving.map((e) => e.id))
+    return true
+  }
+
   private wirePaste() {
     document.addEventListener('paste', (ev: ClipboardEvent) => {
       if (this.presenting) return
       const a = document.activeElement as HTMLElement | null
       if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return // text edit owns it
+      if (this.ghostCut) {
+        ev.preventDefault()
+        this.completeGhostCutMove()
+        return
+      }
       const dt = ev.clipboardData
       if (!dt) return
       // 1) an image from the OS clipboard (screenshot, copied picture…)
@@ -1941,6 +2024,7 @@ export class Editor {
       }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
+        this.cancelGhostCut()
         const els = this.store.selectedElements
         if (ev.shiftKey) this.panel.ungroup(els)
         else this.panel.group(els)
@@ -1948,20 +2032,29 @@ export class Editor {
       }
       if (mod && ev.key.toLowerCase() === 'z') {
         ev.preventDefault()
+        this.cancelGhostCut()
         ev.shiftKey ? this.store.redo() : this.store.undo()
         return
       }
       if (mod && ev.key.toLowerCase() === 'y') {
         ev.preventDefault()
+        this.cancelGhostCut()
         this.store.redo()
         return
       }
       if (mod && ev.key.toLowerCase() === 'd') {
         ev.preventDefault()
+        this.cancelGhostCut()
         this.duplicateSelection()
         return
       }
+      if (mod && ev.key.toLowerCase() === 'x') {
+        ev.preventDefault()
+        this.startGhostCut()
+        return
+      }
       if (mod && ev.key.toLowerCase() === 'c') {
+        this.cancelGhostCut()
         // Copy to BOTH the in-app clipboard (fast, same session) and the system
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
@@ -1976,6 +2069,11 @@ export class Editor {
       // ⌘V is handled by the document 'paste' listener (wirePaste) so it can
       // also receive images and cross-deck payloads.
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
+        if (this.ghostCut) {
+          ev.preventDefault()
+          this.cancelGhostCut()
+          return
+        }
         if (this.store.selection.length) {
           ev.preventDefault()
           const ids = new Set(this.store.selection)
@@ -2016,7 +2114,8 @@ export class Editor {
         return
       }
       if (ev.key === 'Escape') {
-        if (this.canvas.isDrawing) this.canvas.cancelDraw()
+        if (this.ghostCut) this.cancelGhostCut()
+        else if (this.canvas.isDrawing) this.canvas.cancelDraw()
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
         else this.store.select([])
         return
