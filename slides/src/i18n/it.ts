@@ -948,4 +948,6 @@ export const it: Catalog = {
   "{n} pictures still uploading…": "{n} immagini in caricamento…",
   "Not rendered: {what}": "Non visualizzata: {what}",
   "no space just inside the $ signs": "nessuno spazio subito dentro i segni $",
+  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "Attiva Ghost Cut (Ctrl/Cmd+X sposta gli elementi; Esc annulla)",
+  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "Se attivato, Ctrl/Cmd+X rende semitrasparenti gli elementi selezionati finché Ctrl/Cmd+V non li sposta. Escape annulla.",
 }

@@ -948,4 +948,6 @@ export const ja: Catalog = {
   "{n} pictures still uploading…": "画像{n}枚をアップロード中…",
   "Not rendered: {what}": "表示できません: {what}",
   "no space just inside the $ signs": "$ 記号のすぐ内側に空白を入れないでください",
+  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "Ghost Cutを有効にする（Ctrl/Cmd+Xで要素を移動、Escでキャンセル）",
+  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "有効にすると、Ctrl/Cmd+Xで選択した要素が半透明になり、Ctrl/Cmd+Vで移動します。Escapeでキャンセルできます。",
 }

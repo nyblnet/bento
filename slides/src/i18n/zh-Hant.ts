@@ -948,4 +948,6 @@ export const zhHant: Catalog = {
   "{n} pictures still uploading…": "{n} 張圖片上傳中…",
   "Not rendered: {what}": "未能呈現：{what}",
   "no space just inside the $ signs": "$ 符號內側不要緊貼空格",
+  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "啟用幽靈剪下（Ctrl/Cmd+X 移動元素；Esc 取消）",
+  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "啟用後，按 Ctrl/Cmd+X 會讓選取的元素變成半透明，按 Ctrl/Cmd+V 將其移動。按 Escape 取消。",
 }

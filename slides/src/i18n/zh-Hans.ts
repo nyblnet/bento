@@ -948,4 +948,6 @@ export const zhHans: Catalog = {
   "{n} pictures still uploading…": "{n} 张图片上传中…",
   "Not rendered: {what}": "未能渲染：{what}",
   "no space just inside the $ signs": "$ 符号内侧不要紧挨空格",
+  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "启用幽灵剪切（Ctrl/Cmd+X 移动元素；Esc 取消）",
+  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "启用后，按 Ctrl/Cmd+X 会使选中的元素变为半透明，按 Ctrl/Cmd+V 将其移动。按 Escape 取消。",
 }

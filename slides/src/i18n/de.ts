@@ -948,4 +948,6 @@ export const de: Catalog = {
   "{n} pictures still uploading…": "{n} Bilder werden noch hochgeladen…",
   "Not rendered: {what}": "Nicht gerendert: {what}",
   "no space just inside the $ signs": "kein Leerzeichen direkt innerhalb der $-Zeichen",
+  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "Ghost Cut aktivieren (Strg/Cmd+X verschiebt Elemente; Esc bricht ab)",
+  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "Wenn aktiviert, werden ausgewählte Elemente durch Strg/Cmd+X ausgeblendet dargestellt, bis Strg/Cmd+V sie verschiebt. Escape bricht ab.",
 }

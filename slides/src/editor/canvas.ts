@@ -53,6 +53,8 @@ export class SlideCanvas {
    *  to stand down for it, or every scroll the zoom makes is snapped back. */
   private pinching = false
   private zoomLabel: HTMLElement | null = null
+  private ghostCutIds = new Set<string>()
+  private lastSlidePoint: { x: number; y: number } | null = null
   private editing: HTMLElement | null = null
   /** The listeners of the CURRENT inline edit (text box or table cell), so
    *  they die with it. Without this a node that was edited, committed with
@@ -134,6 +136,10 @@ export class SlideCanvas {
       this.wheelNavCooldown = now + 400
       this.onSlideNav(dir)
     }, { passive: false })
+    this.scroller.addEventListener('mousemove', (ev) => {
+      const pt = this.clientToSlidePoint(ev.clientX, ev.clientY)
+      if (pt) this.lastSlidePoint = pt
+    })
 
     // Middle-button drag pans. Until now the scrollbars were the only way to
     // move a zoomed slide, which puts the control at the edge of the screen
@@ -595,6 +601,25 @@ export class SlideCanvas {
   zoomOut() { this.setZoom(this.zoom / 1.25) }
   zoomReset() { this.setZoom(1) }
 
+  lastPointerOnSlide() {
+    return this.lastSlidePoint ? { ...this.lastSlidePoint } : null
+  }
+
+  private clientToSlidePoint(clientX: number, clientY: number): { x: number; y: number } | null {
+    const r = this.scaleHost.getBoundingClientRect()
+    const x = Math.round((clientX - r.left) / this.scale)
+    const y = Math.round((clientY - r.top) / this.scale)
+    const { width, height } = this.store.doc.size
+    if (x < 0 || y < 0 || x > width || y > height) return null
+    return { x, y }
+  }
+
+  setGhostCutIds(ids: string[]) {
+    this.ghostCutIds = new Set(ids)
+    this.applyGhostCutClasses()
+    this.syncTargets()
+  }
+
   private buildZoomBar() {
     const bar = document.createElement('div')
     bar.className = 'ed-zoombar'
@@ -870,6 +895,7 @@ export class SlideCanvas {
         if (node.dataset.showOnHover !== active) node.style.display = 'none'
       }
     }
+    this.applyGhostCutClasses(next)
     this.renderSetBar(sets)
     if (this.surface) this.surface.replaceWith(next)
     else this.scaleHost.appendChild(next)
@@ -877,6 +903,18 @@ export class SlideCanvas {
     this.relayout()
     this.syncTargets()
     this.drawRemote()
+  }
+
+  private applyGhostCutClasses(root = this.surface) {
+    if (!root) return
+    for (const node of root.querySelectorAll<HTMLElement>('.bento-el')) {
+      const id = node.dataset.elId
+      const el = id ? this.store.slide.elements.find((e) => e.id === id) : null
+      const baseOpacity = el?.opacity ?? 1
+      const ghosted = !!id && this.ghostCutIds.has(id)
+      node.classList.toggle('bento-el-ghost-cut', ghosted)
+      node.style.opacity = String(ghosted ? baseOpacity * 0.35 : baseOpacity)
+    }
   }
 
   // --- collaborator presence (colored outlines + name tags) -----------------
@@ -976,7 +1014,7 @@ export class SlideCanvas {
     if (!this.surface) return []
     return this.store.selection
       .map((id) => this.surface!.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`))
-      .filter((n): n is HTMLElement => !!n)
+      .filter((n): n is HTMLElement => !!n && !this.ghostCutIds.has(n.dataset.elId ?? ''))
   }
 
   private syncTargets() {
@@ -996,7 +1034,7 @@ export class SlideCanvas {
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
-          (n) => !targets.includes(n),
+          (n) => !targets.includes(n) && !this.ghostCutIds.has(n.dataset.elId ?? ''),
         )
       : []
     this.moveable.elementGuidelines = others
@@ -1310,7 +1348,7 @@ export class SlideCanvas {
     this.selecto.on('selectEnd', (e) => {
       const ids = (e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
-        .filter((id): id is string => !!id)
+        .filter((id): id is string => !!id && !this.ghostCutIds.has(id))
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()
