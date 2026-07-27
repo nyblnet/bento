@@ -109,7 +109,7 @@ export const pt: Catalog = {
   "Hover dim": "Escurecer no hover",
   "Hover set:": "Conjunto de hover:",
   "Image": "Imagem",
-  "Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.": "Inclui reveal.js, Moveable, Selecto (MIT) · fontes Fraunces + Instrument Sans (OFL-1.1) — os avisos completos viajam no código-fonte deste arquivo.",
+  "Includes reveal.js, PptxGenJS, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.": "Inclui reveal.js, PptxGenJS, Moveable, Selecto (MIT) · fontes Fraunces + Instrument Sans (OFL-1.1) — os avisos completos viajam no código-fonte deste arquivo.",
   "Insert slide here": "Inserir slide aqui",
   "Interactivity": "Interatividade",
   "Invalid document JSON": "JSON de documento inválido",

@@ -14,6 +14,7 @@ import {
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
+import { buildPptx } from '../export/pptx'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
@@ -607,6 +608,9 @@ export class Editor {
       item(ICONS.plus, t('Duplicate as new deck…'),
         t('A separate deck for you — same content, new identity; it never syncs with this one.'),
         () => this.saveAsNewDeck())
+      item(ICONS.slideshow, t('Export editable PowerPoint (.pptx)'),
+        t('Export editable PowerPoint (.pptx)'),
+        () => void this.exportPptx())
       if (isEncryptionActive()) {
         item(ICONS.lock, t('Change password…'),
           t('Pick a new password for this file — takes effect on the next save.'),
@@ -1626,6 +1630,24 @@ export class Editor {
     setTimeout(() => window.print(), 250)
   }
 
+  /** Export model elements as native Office objects where possible. Complex
+   * vectors stay crisp as SVG objects and unsupported interaction is reported
+   * after download instead of silently disappearing. */
+  private async exportPptx() {
+    this.canvas.commitTextEdit()
+    this.toast(t('Building editable PowerPoint…'))
+    try {
+      const { report } = await buildPptx(this.store.doc)
+      this.toast(report.warnings.length
+        ? t('PowerPoint exported — {n} compatibility notes', { n: report.warnings.length })
+        : t('Editable PowerPoint exported'))
+      if (report.warnings.length) console.info('bento/slides PowerPoint export report', report)
+    } catch (error) {
+      console.error('PowerPoint export failed', error)
+      this.toast(t('PowerPoint export failed — see console'))
+    }
+  }
+
   // --- insert image ------------------------------------------------------------------
 
   private pickImage() {
@@ -2602,7 +2624,7 @@ export class Editor {
     const fine = div('ed-about-fine')
     fine.innerHTML =
       `${t('Checks contact the release server and send nothing about you or this document — no ids, no telemetry.')}<br>` +
-      t('Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.')
+      t('Includes reveal.js, PptxGenJS, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.')
     box.appendChild(fine)
 
     overlay.appendChild(box)

@@ -53,14 +53,19 @@ const modRe = /<script type="module"[^>]*>([\s\S]*?)<\/script>/
 const mod = html.match(modRe)
 if (!mod) throw new Error('module script not found')
 
-// the FIRST big <style> is the app css; the splash <style> lives in body
+// The app CSS follows the inline module in Vite's single-file output. Search
+// only after that module: bundled dependencies can contain literal <style>
+// strings (for example spreadsheet XML), which are not HTML style elements.
 const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/
-const headPart = html.slice(0, html.indexOf('</head>'))
-const styleM = headPart.match(styleRe)
+const moduleEnd = (mod.index ?? 0) + mod[0].length
+const styleM = html.slice(moduleEnd, html.indexOf('</head>')).match(styleRe)
 if (!styleM) throw new Error('app stylesheet not found in head')
 
 const js = mod[1]
 const css = styleM[1]
+if (!css.includes('{') || css.trimStart().startsWith('<')) {
+  throw new Error('extracted app stylesheet does not look like CSS')
+}
 
 const b64 = (s) => deflateRawSync(Buffer.from(s, 'utf8'), { level: 9 }).toString('base64')
 const jsB64 = b64(js)

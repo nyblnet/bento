@@ -22,6 +22,7 @@ import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
 import { onlineTransport, startSharing, stopSharing } from './sync/online'
+import { buildPptx, type PptxExportOptions } from './export/pptx'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -182,6 +183,9 @@ if (location.hash === '#present') {
   },
   undo: () => store.undo(),
   redo: () => store.redo(),
+  /** Build/download an editable PowerPoint copy. Passing download:false keeps
+   * the Blob in-process for browser automation and integration tests. */
+  exportPptx: (options?: PptxExportOptions) => buildPptx(store.doc, options),
   get selection() {
     return store.selection.slice()
   },

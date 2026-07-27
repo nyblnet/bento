@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "moveable": "^0.53.0",
+    "pptxgenjs": "^4.0.1",
     "reveal.js": "^5.2.1",
     "selecto": "^1.26.3",
     "temml": "^0.13.3"

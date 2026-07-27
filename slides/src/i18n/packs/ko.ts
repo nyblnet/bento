@@ -115,7 +115,7 @@ export const strings: Catalog = {
   "Hover dim": "호버 시 흐리게",
   "Hover set:": "호버 세트:",
   "Image": "이미지",
-  "Includes reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.": "reveal.js, Moveable, Selecto (MIT) · Fraunces + Instrument Sans 서체 (OFL-1.1) 포함 — 전체 고지 사항은 이 파일의 소스에 함께 담겨 있습니다.",
+  "Includes reveal.js, PptxGenJS, Moveable, Selecto (MIT) · Fraunces + Instrument Sans typefaces (OFL-1.1) — full notices travel in this file’s source.": "reveal.js, PptxGenJS, Moveable, Selecto (MIT) · Fraunces + Instrument Sans 서체 (OFL-1.1) 포함 — 전체 고지 사항은 이 파일의 소스에 함께 담겨 있습니다.",
   "Insert slide here": "여기에 슬라이드 삽입",
   "Interactivity": "상호작용",
   "Invalid document JSON": "잘못된 문서 JSON",
