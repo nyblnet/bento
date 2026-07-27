@@ -164,15 +164,28 @@ if (ver === '?') {
   if (!exists) {
     // Notes come from the CHANGELOG section for this version, so the release
     // and the file in the repo can never drift apart.
-    let notes = 'See CHANGELOG.md.'
-    try {
-      const cl = readFileSync(join(root, 'CHANGELOG.md'), 'utf8')
+    //
+    // This used to degrade silently to a 'See CHANGELOG.md.' pointer when the
+    // section could not be found, which is how v1.0.11 shipped with no notes at
+    // all while every earlier release carried its entries. A contentless release
+    // is the same class of failure as a missing one, so it dies here for the
+    // same reason the gh check above does. Publishing is idempotent: fix the
+    // CHANGELOG and re-run.
+    const notes = (() => {
+      let cl
+      try { cl = readFileSync(join(root, 'CHANGELOG.md'), 'utf8') }
+      catch (e) { die(`site is published, but CHANGELOG.md could not be read from ${root} — the GitHub release for ${tag} was NOT created.\n  ${e.message}`) }
       const start = cl.indexOf(`## [${ver}]`)
-      const rest = cl.indexOf('\n## [', start + 1)
-      if (start >= 0) {
-        notes = cl.slice(cl.indexOf('\n', start) + 1, rest > 0 ? rest : undefined).trim()
+      if (start < 0) {
+        die(`site is published, but CHANGELOG.md has no '## [${ver}]' section — the GitHub release for ${tag} was NOT created.\n  Add the section, then re-run: node scripts/publish-site.mjs`)
       }
-    } catch { /* fall back to the pointer above */ }
+      const rest = cl.indexOf('\n## [', start + 1)
+      const body = cl.slice(cl.indexOf('\n', start) + 1, rest > 0 ? rest : undefined).trim()
+      if (!body) {
+        die(`site is published, but the '## [${ver}]' CHANGELOG section is empty — the GitHub release for ${tag} was NOT created.`)
+      }
+      return body
+    })()
     const intro = "Download the single file below and open it in any modern browser — it's the document, the viewer and the editor in one. Shipped files self-update through the signed release channel.\n\n"
     const notesFile = join(tmpdir(), `bento-release-${ver}.md`)
     writeFileSync(notesFile, intro + notes)
