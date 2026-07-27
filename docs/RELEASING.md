@@ -120,6 +120,7 @@ verify the manifest signature against the public key embedded in every shell.
    ```sh
    curl -s https://bento.page/releases/slides/manifest.json | head -c 200
    curl -s -o /dev/null -w '%{http_code}\n' https://bento.page/releases/slides/packs.json
+   gh release view vX.Y.Z --json body --jq '.body | length'
    ```
 
    - the served shell's sha256 matches the manifest AND the artifact you
@@ -127,6 +128,13 @@ verify the manifest signature against the public key embedded in every shell.
    - **the language-pack channel answers 200**. It is easy to publish a release
      whose packs never made it; the channel 404s silently and "Manage
      languages…" just shows nothing to add;
+   - **the GitHub release page shows the CHANGELOG entries**, not just the
+     download intro. `publish-site.mjs` now dies rather than degrading to a
+     bare pointer, but the release is what people arriving from the repo read,
+     and v1.0.11 published with only its two-line intro while every release
+     before it carried its entries — nobody noticed until a reader compared the
+     two pages. A body under ~1KB means the notes are missing; recover with
+     `gh release edit vX.Y.Z --notes-file <notes>`;
    - open the PREVIOUS version's file → About → Check for updates. It should
      offer the new version, show the inline notes, and the downloaded copy must
      boot with the document intact.
