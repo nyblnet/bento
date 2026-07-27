@@ -30,9 +30,38 @@ verify the manifest signature against the public key embedded in every shell.
 
 ## Cutting a release
 
+0. **Get the CHANGELOG right first — it is not just prose any more.** The
+   first FIVE bold lead-ins of the version's section become the `notes` in the
+   SIGNED manifest, which shipped files show inline in the About dialog while
+   the reader decides whether to update. So:
+   - lead with what the release IS (features), not the last thing merged —
+     entries otherwise sit in merge order and a stray fix ends up introducing
+     the release;
+   - write lead-ins that carry information on their own, since in the dialog
+     the lead-in is ALL the reader gets;
+   - drop entries for bugs introduced AND fixed inside the same unreleased
+     cycle. Check with `git merge-base --is-ancestor <fix-commit> <last-tag>`:
+     if the bug never shipped, announcing it tells people about breakage they
+     never had. The commit history is the record for those.
+
 1. Bump `slides/package.json` version (this becomes `APP_VERSION` in the
    shell and the manifest version — single source of truth).
-2. Commit, tag: `git tag vX.Y.Z`.
+2. Land it and tag. `main` is branch-protected and requires a pull request, so
+   the bump CANNOT be committed directly — open a small PR for it, merge, then
+   tag the merge commit:
+
+   ```sh
+   git tag vX.Y.Z <merge-sha>
+   ```
+
+   **Build from a clean checkout of that tag**, not from whatever the main
+   working tree happens to be on. Several sessions may have their own branches
+   and uncommitted work there, and `git checkout <tag> -- .` in the wrong tree
+   is destructive:
+
+   ```sh
+   git worktree add /tmp/rel vX.Y.Z --detach
+   ```
 3. `node scripts/release.mjs` — builds, signs, assembles `./site/`
    (CNAME, landing page, live demo, download, signed manifest, language packs
    + their signed index).
@@ -74,9 +103,33 @@ verify the manifest signature against the public key embedded in every shell.
    command to run. This used to be a manual step, and it was silently missed
    for v1.0.10 — the site was live and self-updating while the repo showed no
    release at all. Documentation didn't prevent that, so the check now does.
-6. Sanity check: open the PREVIOUS version's file, About (topbar logo) →
-   Check for updates → should offer the new version, and the downloaded copy
-   must boot with the document intact.
+6. **Push the tag.** `main` itself is usually already on the remote — merging
+   PRs through `gh` pushes as it goes — so the tag is the only ref outstanding:
+
+   ```sh
+   git push origin vX.Y.Z
+   ```
+
+   Do NOT use `git push origin main --tags`: it also pushes every local tag,
+   including scratch ones (a `backup/…` tag from a history rewrite escaped this
+   way and had to be deleted from the remote).
+
+7. **Verify against the LIVE channel, not the local build.** These are the
+   things no local gate can prove, and some are only exercisable once published:
+
+   ```sh
+   curl -s https://bento.page/releases/slides/manifest.json | head -c 200
+   curl -s -o /dev/null -w '%{http_code}\n' https://bento.page/releases/slides/packs.json
+   ```
+
+   - the served shell's sha256 matches the manifest AND the artifact you
+     actually tested — re-verify rather than assuming the rebuild is identical;
+   - **the language-pack channel answers 200**. It is easy to publish a release
+     whose packs never made it; the channel 404s silently and "Manage
+     languages…" just shows nothing to add;
+   - open the PREVIOUS version's file → About → Check for updates. It should
+     offer the new version, show the inline notes, and the downloaded copy must
+     boot with the document intact.
 
 ## Language packs
 
@@ -111,6 +164,31 @@ node scripts/publish-site.mjs "packs: fix the Korean plural forms"
 `publish-site.mjs` refuses to push if any published pack does not match its
 signed hash, if an indexed pack is missing, or if packs are staged with no
 index at all — an unsigned pack must never reach the CDN.
+
+### Testing the pack UI locally
+
+Point a shell at a local pack channel with the `bento-packs-url` localStorage
+override — but the local server must be **the same origin as the page**, because
+the pack fetch is a cross-origin XHR and `python -m http.server` sends no CORS
+headers. Serving the shell on one port and the packs on another silently yields
+"Nothing new right now" rather than an error, so it reads exactly like a working
+build with nothing to install. Serve both from one directory tree:
+
+```sh
+node scripts/build-i18n.mjs --packs /tmp/site/packs
+cp slides/dist-single/Bento_Slides.bento.html /tmp/site/
+```
+
+Then open the shell from that server and set the override to the same origin.
+
+### Adding a UI string
+
+New strings go in ALL core catalogs (`slides/src/i18n/*.ts`), and
+`slides/src/i18n/packed.ts` is GENERATED — regenerate it or CI fails:
+
+```sh
+node scripts/build-i18n.mjs
+```
 
 ## Rules
 
