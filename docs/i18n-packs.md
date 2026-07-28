@@ -434,15 +434,24 @@ but not yet on `main` — do not describe it as shipped.
 - [x] Removing a file's LAST pack now actually sticks — #96
 - [x] Hebrew (he) — the first RTL language — #100, completed and its four
       directional arrows flipped for RTL in #111
-- [x] **21 packs on `main`, all complete at 693/693** — #102–#120 added
-      nineteen in one batch (`id` and `ms` share #109), joining `he` and the
-      original `ko`. With the 9 bundled catalogs that is 30 languages:
+- [x] **22 packs — 21 on `main`, `tk` on *branch* `turkmen-lang-translation`**
+      — #102–#120 added nineteen in one batch (`id` and `ms` share #109),
+      joining `he` and the original `ko`; Turkmen followed. With the 9 bundled
+      catalogs that is 31 languages:
 
-      ar bn da fa fi he hi id ko ms nb nl pl ru sv th tl tr uk ur vi
+      ar bn da fa fi he hi id ko ms nb nl pl ru sv th tk tl tr uk ur vi
 
       Four are RTL (ar, fa, he, ur) and every one of them is a pack — the
       chrome-direction work landed before any of them, so each got mirrored
       chrome with no code change, which was the point of doing it that way.
+      Turkmen needed no code either, for the mirror-image reason: Latin-script
+      and LTR, so `RTL_LANGS` is untouched and base-language matching already
+      resolves `tk-TM` → `tk`. It is also the first pack with a named
+      translator: Mekan Soltanov (github.com/msoltanov).
+
+      The 21 were complete at 693/693 when they landed. The source has grown
+      since, so today they sit at 703/706, and `tk` — written against the
+      current source — is the only one at **706/706**. See the open item below.
 - [x] Korean completed — 662 → 693 in #129. It was first (#81) and therefore
       predated the Languages dialog, so 22 of its 32 gaps were that dialog
       entire: a Korean user opening "Manage languages…" read it in English.
@@ -456,8 +465,14 @@ but not yet on `main` — do not describe it as shipped.
       meanings = two keys"*.
 - [ ] A pack index live on the channel in the wild — needs an actual release
       cut, so "Available to add" stays empty until then.
-- [ ] **Native-speaker review of any pack.** All 21 are machine-drafted and
-      none has been reviewed; each file says so in its own header. Merging a
+- [ ] **Top the 21 older packs up, 703 → 706.** `Slide number`, `Progress bar`
+      and `Corner arrows` — the deck-wide presenting toggles — were added after
+      the #122 top-up, so every pack except `tk` shows those three in English.
+      Exactly the drift `packCoverage` exists to report, and the reason a pack
+      degrades per string rather than failing to load.
+- [ ] **Native-speaker review of any pack but `tk`.** The other 21 are
+      machine-drafted and unreviewed; each file says so in its own header.
+      `tk` names a translator who owns its wording instead. Merging a
       pack has never been a claim about its wording, and a pack can be
       corrected and re-released without cutting an app release, so review is
       continuous rather than a release blocker. #17 is a standing volunteer
