@@ -7,8 +7,13 @@ templates, and code.
 
 ## Getting set up
 
-You need **Node 20+** and npm (the build uses Vite 7). There is no backend to
-run and no account to create — the whole app builds to one HTML file.
+If you are using a Node version manager like [fnm](https://github.com/Schniz/fnm), you can do:
+
+```bash
+fnm use
+```
+This should bring in the right version of Node.js and npm. Alternatively, you can install **Node 20+** and npm (the build uses Vite 7).
+There is no backend to run and no account to create — the whole app builds to one HTML file.
 
 ```bash
 git clone https://github.com/nyblnet/bento.git
