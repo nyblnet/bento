@@ -58,6 +58,73 @@ them is markup a browser could paint first.
 
 ---
 
+## 2026-07-27 — bento/vault is the ORG service point, and the AI broker is what forces it
+
+**Supersedes the 2026-07-25 "personal server" entry.** Vault is not a personal
+document library. It is the **service point for a group of people and their
+documents**, self-hosted on hardware that group owns.
+
+The reframe came from subtraction. Of the five promises in the old entry, four
+were met or taken while it sat unbuilt: mobile reach went to `bento/tray` plus
+any existing File Provider (iCloud Drive, Dropbox), sharing went to the collab
+relay (the file IS the capability), per-device version history went to
+`kernel/src/autosave.ts`, and plain file sync was never ours. What survived
+personally was **search alone**, and it has since been narrowed by measurement:
+Spotlight indexes rendered HTML text, so the `#bento-doc` script block is
+invisible to it — but the save-time preview is ORDINARY MARKUP now (the
+thumbnails entry above), and markup indexes. Measured 2026-07-28 with
+`mdimport -d2 -t` on a deck saved from the current shell: the whole title slide
+comes back in `kMDItemTextContent`, and a token planted on slide two does not.
+**Page one is already searchable for free; the unmet need is FULL TEXT.** One
+real problem — now a smaller one — does not need a personal server.
+
+**The AI broker is the pillar that makes vault necessary rather than nice.** A
+self-contained document travels, so it can never carry a model credential — that
+is emailing your API key to everyone you share the deck with. `localStorage` is
+per-device, and under tray it is per-DOCUMENT (the origin is
+`bento-tray://<sha256 of path>`, `EditorViewController.swift`), so it degenerates
+into configuring a key per deck. The only place a credential can live once and
+serve a whole library is a server the group runs. **In-app AI is architecturally
+impossible without something vault-shaped**, and the same index serves both
+search and retrieval. Points a local model (Ollama on the same box) at the
+library without anything leaving the network, which is the existing README claim
+made real.
+
+**SSO gates distribution, never the file.** Once someone holds the bytes they
+open them forever, offline, with no server — that is the product, not a bug. SSO
+can gate access to the vault and the distribution of decryption keys (the
+`bento/enc` envelope and the owner→invite→member chain already exist for this).
+Revocation is therefore FORWARD-ONLY: a revoked member keeps what they already
+downloaded, exactly as `collab-design.md` already documents for devices. Say this
+before an enterprise security review discovers it.
+
+**The org profile deletes most of the hard design.** NAT traversal,
+hole-punching, WebRTC, the dead-drop and the portable relay twin all exist to
+serve one case: a personal laptop asleep behind a home NAT. A company vault is a
+box on a network with a hostname and a certificate, reached directly. So
+`relay-design.md` steps 2–5 and `vault-design.md` steps 2–4 are NOT v1.
+
+Corollary worth stating plainly: the org vault **is** a custody service, and that
+is correct — central custody is the point of centralising. The personal vault
+explicitly was not. Those were two products wearing one name; we are building the
+org one.
+
+**New invariant — AI is additive, never load-bearing.** Every app stays fully
+functional with no vault and no model, the same rule as "vault is optional". If
+an AI feature ever becomes required to edit, `PLATFORM.md` §1 is gone.
+
+**Sequencing: the org deployment is the DESTINATION, not the first build.**
+Architecturally this costs nothing — a single-user vault IS the org vault with
+one user: same index, same key chain, same broker. Build that, design toward
+multi-user, promise neither.
+
+**Licence:** the runtime stays MIT (`THIRD_PARTY_NOTICES.md` is embedded in every
+saved file, so copyleft on the shell would attach to every document a user
+emails). Vault is a separate repo with its licence chosen at commit #1. Never
+relicense slides.
+
+Design details in `docs/vault-design.md`.
+
 ## 2026-07-26 — File-manager thumbnails: a `<noscript>` render of page one, written at save time
 
 **Decided:** 2026-07-26. Kernel zone (`kernel/src/save.ts`), so it binds every

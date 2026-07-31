@@ -1,229 +1,184 @@
 # bento/vault — design
 
-*Design document, July 2026. Status: **proposed** — nothing built. Companion
-to `collab-design.md` (which solves a different problem: live multiplayer on
-one document) and to `PLATFORM.md` (the invariants every Bento app honours).*
+*Rewritten 2026-07-27. Status: **proposed** — nothing built. Supersedes the
+2026-07-25 "personal server" framing; see the decision log entry of the same
+date. Companion to `relay-design.md` (the rendezvous plumbing),
+`collab-design.md` (live multiplayer on one document) and `PLATFORM.md` (the
+invariants every Bento app honours).*
+
+> **"vault" is a working title.** Settle the name before anything ships under
+> it.
 
 ## What it is, in one sentence
 
-**Cloud services without a cloud**: your documents live on hardware you own,
-and vault gives you the things people go to clouds for — reachability from
-every device, search across everything, cross-document references, shareable
-links, version history — without any of it running on someone else's computer.
+**The box that remembers your documents after they leave.**
 
-This is explicitly **not** a sync service. Dropbox and iCloud are the wrong
-comparison; the closer references are Tailscale (coordination server plus
-direct connections) and a homelab Nextcloud that someone else made painless.
+A Bento file is complete on its own — it opens, edits and presents with nothing
+installed, and that is not changing. But a file that travels has no home
+address. It cannot be searched alongside its siblings, cannot hold a credential,
+and cannot call a model. Vault is a small server you run that holds the index of
+the documents you own, holds the keys, and brokers the calls a portable file
+structurally cannot make — while any document remains exportable as a standalone
+`.bento.html` at any moment.
 
-## Two products, not one
+## What it is not
 
-The single most important boundary in this document.
+- **Not a sync service.** Dropbox, iCloud Drive and Syncthing already do this,
+  and for most people they already deliver "my documents on every device" —
+  combined with `bento/tray` on iOS, that promise is met today with no Bento
+  infrastructure at all.
+- **Not a place documents live inside.** That is what Nextcloud is for.
+- **Not an access-control system.** It cannot recall a file already sent. Ever.
+  Any claim implying otherwise fails the first security review it meets.
+- **Not a RAG product.** Onyx CE is MIT-licensed, self-hostable and already
+  ships an MCP server; that ground is covered.
+- **Not required.** Every Bento app works fully, forever, with no vault.
 
-| | **bento/vault** | **bento relay** |
-|---|---|---|
-| What | The personal server: storage, index, search, services, clients | Rendezvous plumbing |
-| Runs on | Your desktop / NAS / homelab box | Cloudflare (hosted, for the masses) **or** self-hosted |
-| Knows | Everything — it holds your documents in the clear | Nothing — ciphertext and routing only |
-| Released | Its own train | Its own train |
+## Who it is for
 
-The relay is *infrastructure*, deliberately dumb. Vault is the *product*.
-Serious self-hosters run their own relay; everyone else uses the hosted one at
-`bento.page`. Either way they run the same vault.
+The individual and the organisation are the same software at different scales —
+same index, same owner→invite→member key chain, same broker — but they are not
+the same problem, and solving one does not deliver the other.
 
-The relay's own spec is `relay-design.md`. Note that **the relay is always in
-the path** — clients never speak to a vault directly, even when both run on
-the same box — so the vault never accepts an inbound connection.
+**Build for the individual first.** One person, several devices, a machine that
+is usually awake, who already runs Ollama and resents that their decks are
+scattered across three laptops. That is the smallest deployment that exercises
+every part of the design, and it is buildable by one maintainer.
 
-### The relay stays dumb — non-negotiable
+**The organisation is the destination, not the first release.** Architecturally
+this costs nothing: a single-user vault *is* the org vault with one user — same
+index, same key chain, same broker. Build that, design toward multi-user,
+promise neither.
 
-The relay does exactly three things:
+## The pillars, ranked on evidence
 
-1. **Rendezvous** — help two devices that trust each other find each other
-   through NAT (signalling for a direct connection; fall back to relaying
-   ciphertext when hole-punching fails).
-2. **Optional encrypted dead-drop** — hold ciphertext blobs with a TTL so a
-   phone can fetch a document while the home machine is asleep (see
-   *Availability*).
-3. **Presence** — which of my devices are reachable right now.
+### 1. The AI broker — the pillar that makes vault necessary
 
-It never sees plaintext, never indexes, never searches, never renders, never
-runs a model. **Every actual service runs on the personal server.**
+Everything else on this list is a convenience. This one is structural.
 
-The reason is not purity. If the hosted relay accretes features, the
-self-hosted relay can't match it, self-hosting silently becomes second-class,
-and we lose the audience this product is for. Keeping the relay tiny is also
-what makes maintaining two implementations affordable.
+A self-contained document travels, so **it can never carry a model credential** —
+that is emailing your API key to everyone you share the deck with. `localStorage`
+is per-device, and under tray it is per-*document* (the origin is
+`bento-tray://<sha256 of path>`, `EditorViewController.swift:55-58`), so it
+degenerates into configuring a key per deck. The only place a credential can live
+once and serve a whole library is a server the user runs.
 
-### Two implementations, because one runtime isn't self-hostable
+**In-app AI is architecturally impossible without something vault-shaped.** That
+is the argument, and it rests on credentials alone.
 
-The existing `server/sync-worker/` is Cloudflare-specific: Durable Object
-bindings, the WebSocket Hibernation API, and SQLite-backed DO classes. A
-homelabber cannot `docker run` that. `workerd` is the nominal answer but it is
-an unusual deployment and its parity on hibernation / SQLite-backed classes
-needs *testing*, not assuming.
+There is a second, weaker argument about browser origins that should be stated
+carefully because it is easy to get wrong. A page opened from `file://` sends
+`Origin: null`. Ollama's default allow-list *does* include `file://*`
+(`envconfig/config.go:100-106`) — so the common claim that Ollama simply refuses
+local files is **false as usually stated**. But `gin-contrib/cors` matches
+origins by exact string or regex (`config.go:128-140`), and `null` does not match
+`file://*`, so a real browser request from a saved deck is likely still refused.
+**This is reasoned, not measured** — verify it against a running Ollama before
+relying on it. Under tray the question does not arise: `bento-tray://…` is not in
+any default allow-list.
 
-So the relay ships twice:
+Keep the broker, build it off by default, and treat it as plumbing rather than a
+headline. Pointing an editor at a local model is commodity work: Collabora
+Online 26.04 added exactly this in July 2026, Nextcloud ships local-LLM
+integration out of the box, and LiteLLM already provides virtual keys, budgets
+and spend attribution as stock behaviour, not an add-on. "Configure a model
+once" is a base-URL field. What is ours is the format around it — a document
+that stays portable while something else holds the credential.
 
-- **Hosted**: Cloudflare Worker + DO (+ R2 for the dead-drop). The reference
-  deployment, what `bento.page` runs.
-- **Portable**: a plain Node or Go binary in a Docker image. One process, one
-  config file, no cloud account.
+### 2. Search over the library — narrowed to full text, and measured end to end
 
-Both implement the same wire protocol. This is affordable *only* because the
-relay is dumb — protect that.
+**Page one is already findable; everything after it is not.** This was measured
+on a real deck saved from `main`, not reasoned about.
 
-> **Action item, independent of vault:** the r/selfhosted copy already claims
-> the collab relay is self-hostable. Test that under standalone `workerd`
-> before anyone takes us up on it, and soften the claim or build the portable
-> twin.
+The document itself is invisible: content lives in `#bento-doc`, and text inside
+a `<script>` block is not indexed (control: the same phrase in `<body>` is found,
+in `<script>` it is not, while `grep` finds it instantly either way). What
+changed is that the save-time first-page preview is now ORDINARY MARKUP rather
+than a `<noscript>` (see the thumbnails entry of 2026-07-27 in `DECISIONS.md`,
+`kernel/src/save.ts`), and ordinary markup indexes.
 
-### Independent release trains force a negotiated protocol
+Measured with `mdimport -d2 -t` on a deck saved from the current shell:
+`kMDItemTextContent` is 330 characters, and the extracted title is the whole
+title slide — headline, body copy and all. A token planted on **slide two** does
+not appear at all. Probing the three structures in isolation confirms the switch
+cost nothing: plain markup, markup-plus-remover and `<noscript>` are all indexed.
 
-Today the app and the relay are deployed by the same person, so "deploy the
-relay before shipping the client" is a workable rule (and is written down in
-`CLAUDE.md`). **That rule dies here.** A self-hoster's relay might be a year
-old when a new vault client ships, and we have no way to make them upgrade.
+So the avenue that was flagged as untested is now answered, and it answers
+**smaller than hoped**. A deck is findable by its title slide today, for free,
+with no vault. What remains unserved is FULL-TEXT search — "find the deck where I
+showed Q3 churn" when Q3 churn is on slide fourteen. That is the real unmet need,
+it is narrower than "OS search does not see Bento files", and it is the need an
+index actually serves.
 
-Therefore, from the first commit:
+Extending the preview to carry every slide's text is the obvious cheap answer and
+is bounded: `PREVIEW_BUDGET` is 64KB, the preview tiers down under it, and
+anything written into a document is additive forever (`PLATFORM.md` §3). Whether
+a whole-deck text block belongs in a file whose preview exists for THUMBNAILS is
+a separate question from whether it would work — it would.
 
-- Every relay connection begins with a **capability handshake**: protocol
-  version plus a set of named capabilities (`rendezvous`, `deaddrop`,
-  `presence`). Clients degrade rather than fail — no dead-drop means "your
-  phone syncs when your desktop is awake", not an error dialog.
-- **Never remove or repurpose a wire field**; add. Unknown fields are ignored,
-  as everywhere else in Bento.
-- The client surfaces the relay's version and capabilities in the UI, so a
-  self-hoster can see *why* something is unavailable.
+### 3. Centralisation without SaaS — true, but a consequence, not a reason
 
-## Availability: the hard problem
+Docmost, AFFiNE, AppFlowy and Nextcloud all say "your data never leaves your
+servers" in those words, so self-hosting is table stakes rather than a
+distinguishing property. The first question on every thread will be "why not
+Nextcloud?", and the answer has to be about the **format** — a file that is its
+own application — not about whose hardware it sits on.
 
-A cloud is reachable because the server never sleeps. Your desktop closes its
-lid. This — not background execution — is the real constraint.
+### 4. SSO — demote
 
-Two deployment profiles, one protocol:
+**SSO gates distribution, never the file.** Once someone holds the bytes they
+open them forever, offline, with no server — that is the product, not a bug.
+What SSO can gate is access to the vault and the distribution of decryption keys
+(the `bento/enc` envelope and the owner→invite→member chain already exist for
+this). **Revocation is forward-only**: a revoked member keeps what they already
+downloaded, exactly as `collab-design.md` documents for devices. Say this in the
+first conversation, not the fifth.
 
-- **Always-on box** (NAS, homelab, VPS): no dead-drop needed. Devices reach
-  the vault directly via rendezvous. This is what serious self-hosters get,
-  and it is the ideologically clean path.
-- **Laptop-only** (most people): the hosted relay offers an **encrypted
-  dead-drop** — the vault pushes ciphertext blobs of recently-changed
-  documents, and phones fetch from there when the laptop is asleep. The relay
-  still cannot read anything; it is a cache, not a service.
+If identity ever ships, call it what it is: *key distribution and forward
+revocation*.
 
-The dead-drop is an *optional relay capability*, so the protocol does not
-depend on it and the self-hosted profile is not a degraded one.
+### 5. Backup and version history — cut it
 
-### Background execution: don't fight the platform
+The audience runs restic, borg, ZFS and git, and `kernel/src/autosave.ts`
+already ships version history. The one genuine gap — autosave's history is
+per-device IndexedDB and dies with the browser profile — is a feature of the
+vault, not a reason for it.
 
-Chrome freezes and discards background tabs; iOS suspends within seconds and
-grants only opportunistic `BGAppRefreshTask` windows; Android batches
-`WorkManager` jobs under Doze. Nothing reliable exists on any of them.
+## Licence
 
-The design consequence: **the protocol must be correct after an arbitrary,
-unbounded offline period.** No leases, no heartbeats, no "last seen"
-assumptions. Sync is triggered by foreground, by explicit action, and by
-pre-suspension flush (`freeze` / `pagehide` / `applicationDidEnterBackground`);
-anything the OS grants beyond that is a bonus that may never arrive.
-
-The desktop agent is the exception and the reason it exists: a real background
-process on a machine that is already awake.
-
-## Clients
-
-- **Desktop agent** — the heart of "set and forget". A tray app that watches a
-  folder, encrypts client-side, maintains the index, and serves the vault.
-  Leaning **Tauri** (small binary, tray, filesystem watching, settings UI in
-  one codebase), with the same core compiled **headless** for NAS/server use.
-- **Mobile** — *not* a background daemon; that fight is unwinnable. Use the
-  platform-sanctioned providers instead: **iOS File Provider extension** and
-  **Android DocumentsProvider (SAF)**. Documents appear in the system file
-  browser, the OS materialises them on demand and wakes the extension when the
-  user touches them. Plus sync-on-foreground in the app itself.
-- **Web** — the existing single-file apps, unchanged (see below).
-
-## The apps need no changes
-
-If the agent syncs a **folder**, then slides, spaces and dash require zero
-integration work. You save a `.bento.html` into `~/Bento` exactly as you do
-today and it is in the vault. The file remains the interface.
-
-This is deliberate: vault can be built entirely in parallel with the app
-fan-out, blocking nothing and coupling to no app's format.
-
-## Data model (sketch)
-
-- **Blobs**: content-addressed, client-side encrypted, chunked so a change
-  moves a delta rather than a whole document. R2 or any S3-compatible store
-  for the dead-drop; plain filesystem on the vault itself.
-- **Index**: the authority on what documents exist, their `docId`, titles,
-  timestamps, tags and references. Small enough to sync eagerly. Concurrent
-  device edits reconcile with LWW registers plus tombstones — **do not** reach
-  for the slides CRDT here; a file list is not a rich-text document.
-- **Identity**: reuse the shipped owner→invite→member key chain from
-  `collab-design.md`. A new device is paired the same way a collaborator is
-  invited; per-device keys never leave the device.
-
-## Search and local models
-
-The differentiator, and the reason to design the index for it from day one
-rather than retrofitting: a vault that indexes every document can answer
-questions across all of them **locally** — including via a local model
-(Ollama is already referenced in the README). "Find the deck where I showed Q3
-churn", "summarise these six notes."
-
-No cloud can offer this without taking your data. It also reframes mobile:
-the phone is not syncing a library, it is *querying your box* — far less data
-movement, and a query is a foreground action by definition, so the background
-problem evaporates.
-
-Implication for the index: store extracted plain text per document alongside
-the metadata, and leave room for an embedding vector per document (or per
-block) even if v1 only does keyword search.
+The runtime stays MIT, non-negotiable — `THIRD_PARTY_NOTICES.md` is embedded in
+every saved file, so copyleft on the shell would attach to every document a user
+emails. Vault is a **separate repo with its licence chosen at commit #1**. Never
+relicense slides.
 
 ## Invariants
 
 1. **Export always works.** Any document is exportable as a standalone
-   `.bento.html` from any client at any time. This is what keeps "your data is
-   a file you own" true while vault holds it. Without this we have built
-   Notion with extra steps.
-2. **The relay only ever sees ciphertext.** Both deployments, no exceptions.
-3. **Vault is optional.** Every Bento app works fully with no vault, forever.
-   Vault is a convenience over something that already functions alone.
-4. **Losing the vault loses convenience, not work** — the files are still
-   files.
-
-## Threat model (first pass)
-
-- **Hosted relay operator (us)** — sees ciphertext, blob sizes, timing, device
-  presence, and IPs. Cannot read documents, titles, or the index. Metadata
-  leakage is real and should be documented honestly, not hand-waved.
-- **Network attacker** — sees TLS. Rendezvous must not leak the index.
-- **Stolen device** — per-device keys are revocable via the existing
-  owner-signed revocation path; a revoked device loses access to future
-  content but obviously retains what it already had.
-- **Compromised vault host** — total loss for that user; the vault holds
-  plaintext by design. Document this plainly. Full-disk encryption is the
-  user's responsibility, as with any personal server.
-
-## Out of scope for v1
-
-Real-time collaboration through the vault (that is `collab-design.md`'s job
-and it already works), team/multi-user vaults, public web publishing, mobile
-editing beyond what the apps already do in a browser, and Windows/Linux
-desktop builds before macOS is proven.
+   `.bento.html` from any client at any time. Without this we have built Notion
+   with extra steps.
+2. **Vault is optional.** Every Bento app works fully with no vault, forever.
+3. **AI is additive, never load-bearing.** No app may require a vault or a model
+   to edit. If it ever does, `PLATFORM.md` §1 is gone.
+4. **No document makes an outbound call by default.** Opt-in per document, a
+   visible endpoint indicator, and a readable log of what was sent where.
+5. **The relay only ever sees ciphertext**, in every deployment.
+6. **Never remove a capability a release has already shipped.**
 
 ## Sequencing
 
-1. **Desktop agent, one folder, macOS, always-on-box profile.** No dead-drop,
-   no mobile. This alone delivers the promise for daily personal use and
-   proves the data model.
-2. **Relay: capability handshake + rendezvous**, hosted implementation first,
-   portable twin immediately after (not "later" — the second implementation is
-   what keeps the first honest).
-3. **iOS File Provider** against a data model the agent has already proven.
-4. **Dead-drop** for the laptop-only profile.
-5. Search, then local-model queries.
-6. Everything else.
+1. **Make the self-hosting claim true.** The r/selfhosted copy already says the
+   collab relay is self-hostable; that is untested under standalone `workerd`.
+   Fix it or soften it — a false self-hosting claim is the fastest way to lose
+   this audience.
+2. ~~Test the `<noscript>` search avenue before building any indexer.~~
+   **Done** (2026-07-28, §2): the preview left `<noscript>` for plain markup and
+   is indexed, so page one is already searchable with no server. The indexer's
+   job is therefore slides 2..n, not the library.
+3. **The index**, local and rebuildable from the files.
+4. **The broker**, off by default, framed as plumbing.
+5. **Vault as an MCP server** over the library, so existing agents can search and
+   edit decks with no bespoke integration on either side.
 
-Step 1 needs no changes to any Bento app, so it can proceed alongside the
-spaces/dash fan-out without contention.
+**Defer:** multi-user, SSO, RBAC, audit, the dead-drop, NAT traversal.
+**Never build:** a feature gate inside a document file, a cloud-only relay, a
+general RAG product, backups.
