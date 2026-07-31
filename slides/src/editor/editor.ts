@@ -2506,6 +2506,17 @@ export class Editor {
     )
     box.appendChild(promo)
 
+    const githubRow = div('ed-about-row')
+    const githubButton = document.createElement('a')
+    githubButton.className = 'ed-btn'
+    githubButton.href = 'https://github.com/nyblnet/bento'
+    githubButton.target = '_blank'
+    githubButton.rel = 'noopener'
+    githubButton.textContent = t('Open source repo on GitHub')
+    githubButton.title = t('Open the Bento source code repository in a new tab')
+    githubRow.appendChild(githubButton)
+    box.appendChild(githubRow)
+
     const status = div('ed-about-status')
     status.textContent =
       this.lastAutoCheck?.status === 'current'
