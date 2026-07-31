@@ -36,6 +36,7 @@ const CHOICES: LocaleChoice[] = [
   { code: 'fr', label: 'Français' },
   { code: 'it', label: 'Italiano' },
   { code: 'de', label: 'Deutsch' },
+  { code: 'ko', label: '한국어' },
   { code: 'pt', label: 'Português' },
 ]
 
