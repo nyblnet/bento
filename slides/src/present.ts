@@ -842,8 +842,35 @@ function settleGuarantee(pairs: Array<[HTMLElement, SlideElement]>) {
 function runCountUp(node: HTMLElement) {
   const inner = node.querySelector<HTMLElement>('.bento-text-inner') ?? node
   const final = inner.textContent ?? ''
-  const tokens = [...final.matchAll(/\d+(?:[.,]\d+)?/g)]
+  const tokens = [...final.matchAll(/-?\d[\d,\.]*/g)]
   if (!tokens.length) return
+
+  const normalize = (raw: string, decimalSep: '.' | ',', decimals: number): number => {
+    if (!raw.includes('.') && !raw.includes(',')) return Number(raw)
+    if (decimalSep === ',') {
+      const cleaned = decimals > 0 ? raw.replace(/\./g, '').replace(/,/g, '.') : raw.replace(/,/g, '')
+      return Number(cleaned)
+    }
+    const cleaned = raw.replace(/,/g, '')
+    return Number(cleaned)
+  }
+
+  const formatNumber = (value: number, decimals: number) => {
+    return new Intl.NumberFormat(navigator.language, {
+      useGrouping: true,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value)
+  }
+
+  const decimalsFrom = (raw: string, decimalSep: string) => {
+    const tail = raw.slice(raw.lastIndexOf(decimalSep) + 1)
+    if (!/^[0-9]+$/.test(tail)) return 0
+    if (decimalSep === ',' && !raw.includes('.') && tail.length === 3) return 0
+    if (decimalSep === ',' && raw.split(',').length > 2 && tail.length === 3) return 0
+    return tail.length
+  }
+
   const state = { p: 0 }
   anim.to(state, {
     p: 1,
@@ -855,9 +882,15 @@ function runCountUp(node: HTMLElement) {
       let last = 0
       for (const m of tokens) {
         out += final.slice(last, m.index)
-        const raw = m[0].replace(',', '.')
-        const decimals = raw.includes('.') ? raw.split('.')[1].length : 0
-        out += (parseFloat(raw) * state.p).toFixed(decimals)
+        const raw = m[0]
+        const lastDot = raw.lastIndexOf('.')
+        const lastComma = raw.lastIndexOf(',')
+        const decimalSep = lastDot > lastComma ? '.' : ','
+        const decimals = raw.includes('.') || raw.includes(',')
+          ? decimalsFrom(raw, decimalSep)
+          : 0
+        const value = normalize(raw, decimalSep as '.' | ',', decimals)
+        out += formatNumber(value * state.p, decimals)
         last = m.index! + m[0].length
       }
       inner.textContent = out + final.slice(last)
