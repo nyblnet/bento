@@ -36,19 +36,79 @@ structurally cannot make — while any document remains exportable as a standalo
 
 ## Who it is for
 
-The individual and the organisation are the same software at different scales —
-same index, same owner→invite→member key chain, same broker — but they are not
-the same problem, and solving one does not deliver the other.
+*Re-argued 2026-07-27 after three org-shaped capabilities surfaced that the
+first pass did not have in view. The earlier answer — "build for the individual,
+the organisation is the destination" — was reached before them and is restated
+here at full strength on both sides rather than quietly amended.*
 
-**Build for the individual first.** One person, several devices, a machine that
-is usually awake, who already runs Ollama and resents that their decks are
-scattered across three laptops. That is the smallest deployment that exercises
-every part of the design, and it is buildable by one maintainer.
+### The case for the organisation
 
-**The organisation is the destination, not the first release.** Architecturally
-this costs nothing: a single-user vault *is* the org vault with one user — same
-index, same key chain, same broker. Build that, design toward multi-user,
-promise neither.
+Four of the five things vault does are worth little to one person and a great
+deal to a company:
+
+- **Live data access.** A chart bound to the company's warehouse. An individual
+  has no warehouse.
+- **Retention archive.** Regulated retention is a compliance obligation, not a
+  preference. Individuals use Time Machine.
+- **Private release channel.** Controlling which build your people run is
+  meaningless at one seat.
+- **Central AI credential and spend control.** One person can put a key in an
+  environment variable.
+
+Only **search** is genuinely individual, and even there the value grows with the
+number of documents *other people* wrote.
+
+What these have in common is that they are properties of a *deployment*, not of
+a person: retention is a compliance obligation on an organisation, and a data
+connector is a platform capability. Both tend to arise where the documents
+cannot go into SaaS at all — the same constraint that makes self-hosting a
+requirement rather than a preference.
+
+### The case against
+
+The people actually using Bento today are individuals and very small groups, and
+every org-shaped pillar above implies the expensive part — **multi-user
+identity**: per-user query authorisation, per-user spend attribution, roles,
+audit. That, not the broker, is the real cost of serving organisations, and it
+is a maintenance surface a single maintainer carries indefinitely.
+
+And the org case is currently reasoning, not evidence: it was derived from the
+shape of the capabilities, not from a stated requirement.
+
+### The resolution
+
+The segment question does not decide what to *build* — it decides what to
+**promise**, what to **name**, and when to take on multi-user identity. On the
+build order these agree: the broker, the index and the archive are foundational
+and serve one user and fifty identically.
+
+So:
+
+1. **Ship single-user.** Promise nothing organisational.
+2. **But design the identity model multi-user from commit one.** Per-user query
+   authorisation and per-user spend attribution cannot be retrofitted — a
+   service-account-shaped broker has to be rewritten to become a
+   per-user-shaped one, and every deployed vault becomes a migration. This is
+   cheap now and brutal later, and it is the one place where "we'll do it when
+   someone asks" is the wrong answer.
+3. **The gate for building organisational features is a real stated
+   requirement**, not a count of pillars. One concrete retention or data
+   requirement from an actual deployment settles in a week what this document
+   cannot settle by argument.
+
+## What vault is, stated as a pattern
+
+Three capabilities arrived separately and turned out to be one shape. AI needed a
+credential the file cannot carry. Live data needs a credential *and* network reach
+the file cannot have. Key distribution needs an authority the file cannot be.
+
+**Vault is the broker for capabilities a travelling file structurally cannot
+hold.** That definition predicts rather than accumulates: it says what belongs in
+vault (anything requiring a secret, a private network, or an authority) and what
+does not (anything a file can do alone — which is everything else, and must stay
+that way).
+
+The mechanism is specified in `vault-broker.md`.
 
 ## The pillars, ranked on evidence
 
@@ -137,12 +197,79 @@ first conversation, not the fifth.
 If identity ever ships, call it what it is: *key distribution and forward
 revocation*.
 
-### 5. Backup and version history — cut it
+### 5. Live data access — the same pattern as the broker, and what makes dash real
 
-The audience runs restic, borg, ZFS and git, and `kernel/src/autosave.ts`
-already ships version history. The one genuine gap — autosave's history is
-per-device IndexedDB and dies with the browser profile — is a feature of the
-vault, not a reason for it.
+A chart bound to the company's warehouse. The credential and the network reach
+are both things a travelling file cannot have, so this is pillar 1 again with a
+different secret.
+
+**The invariant decides the design.** `PLATFORM.md` §1 forbids requiring a
+network to open, edit or present — so a bound document **must always carry its
+last fetched values as ordinary static data**. The connection only ever
+*refreshes*; it never *supplies*. Otherwise the VPN drops mid-presentation and
+the charts are empty.
+
+The consequence is worth choosing rather than discovering: if the file caches the
+values, emailing the deck emails the data. That is usually correct — it is a
+document, and documents contain their content — and it is what lets a bound
+dashboard render for a recipient with no login and no account. For genuinely
+sensitive sources a refresh-only mode is possible, at the cost of rendering
+nothing offline. Default to embedding; make the other mode explicit and visible.
+
+The seam already exists: `ChartElement.source?: { tableId }` (`model.ts:228`) with
+`syncLinkedChart` re-deriving on every `doc` event (`editor/editor.ts`). Give
+`TableElement` a `source` naming a vault query and the refresh path is built.
+
+Two things that bite if not decided up front — **named queries only** (a document
+references a query an admin registered; it never carries query text, or any deck
+anyone opens becomes an exfiltration tool), and **a vault refresh must be
+committed by one actor** under collab rather than derived per-replica, because
+two replicas fetching at different moments get different rows and diverge.
+Details in `vault-broker.md`.
+
+### 6. The private release channel — a consequence of minting shells
+
+If a vault mints shells carrying its own configuration, it is already an update
+channel, because `serializeWith(shell, doc)` (`kernel/src/save.ts`) re-splices
+the document into a *freshly fetched* shell and discards everything else. Shell
+configuration survives an update only if the update comes from the vault.
+
+That falls out as a feature rather than a cost: controlling which build your
+people run, staging rollouts, and not shipping an untested version on a Friday
+are ordinary organisational requirements. The machinery exists — `update.ts`
+already verifies a signed manifest and already supports being pointed elsewhere.
+What is new is a second trust anchor and the dual-signature scheme in
+`vault-broker.md`, which exists so a user can verify their employer shipped
+genuine unmodified Bento.
+
+### 7. Retention archive — reinstated, and distinguished from backup
+
+*This was previously cut outright. That was right about backup and wrong about
+archival, and the two are not the same product.*
+
+**Backup stays cut.** Copying bytes is solved by restic, borg, ZFS and object
+storage, and building it would be building a worse version of mature software.
+
+**Archival is different, and Bento is structurally better at it than anything
+else in this market.** The hard problem in regulated retention is not storing
+bytes for ten years — it is *being able to open them* in ten years. Every
+competitor's answer requires their software to still exist and still be licensed:
+a Confluence dump needs Confluence, a SharePoint archive needs SharePoint, a
+Notion export loses fidelity on the way out.
+
+A Bento archive renders itself, and carries a second guarantee underneath: even
+if browsers change beyond recognition, `#bento-doc` is plaintext JSON, so the
+content stays machine-readable without the runtime. Human-readable *and*
+machine-readable, with no vendor in the loop.
+
+This is cheap precisely because it is not a backup product: make the library a
+well-formed self-describing archive — one self-contained file per document,
+append-only, content-addressed, with a plaintext manifest — and let existing
+tools move the bytes. Shape in `vault-broker.md`.
+
+Unresolved: an encrypted deck archives as ciphertext, so retention of encrypted
+documents implies key escrow. That is an organisational decision with real
+consequences and must not be defaulted silently.
 
 ## Licence
 
@@ -163,6 +290,11 @@ relicense slides.
    visible endpoint indicator, and a readable log of what was sent where.
 5. **The relay only ever sees ciphertext**, in every deployment.
 6. **Never remove a capability a release has already shipped.**
+7. **A bound document always carries its last known values.** A vault connection
+   refreshes data; it never supplies it. A document whose charts are empty
+   without a network has broken invariant 2 by another route.
+8. **A document never carries query text, only a query name.** The vault decides
+   what a name means. Anything else makes every deck an exfiltration tool.
 
 ## Sequencing
 
@@ -175,10 +307,20 @@ relicense slides.
    is indexed, so page one is already searchable with no server. The indexer's
    job is therefore slides 2..n, not the library.
 3. **The index**, local and rebuildable from the files.
-4. **The broker**, off by default, framed as plumbing.
-5. **Vault as an MCP server** over the library, so existing agents can search and
+4. **The broker**, off by default, framed as plumbing — **with the per-user
+   authorisation model in place from the first commit** even though v1 has one
+   user. See "Who it is for": this is the single thing that cannot be retrofitted
+   without a migration on every deployed vault.
+5. **Live data access** on top of the broker, named queries only.
+6. **The archive shape** — append-only, content-addressed, self-describing. Cheap
+   once the index exists, and the pillar most likely to attract a real requirement.
+7. **Shell minting and the private release channel**, with dual signatures.
+8. **Vault as an MCP server** over the library, so existing agents can search and
    edit decks with no bespoke integration on either side.
 
-**Defer:** multi-user, SSO, RBAC, audit, the dead-drop, NAT traversal.
+**Defer:** SSO, RBAC, audit export, the dead-drop, NAT traversal.
+Note that *multi-user identity* moves from "defer" to "design now, ship later" —
+deferring the feature is fine, deferring the shape is not.
+
 **Never build:** a feature gate inside a document file, a cloud-only relay, a
-general RAG product, backups.
+general RAG product, backups, or a query path that accepts document-supplied SQL.

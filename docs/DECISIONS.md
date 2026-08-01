@@ -14,6 +14,55 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-07-28 — Vault is a capability broker; identity is multi-user from commit one
+
+**Refines the 2026-07-27 vault entry rather than superseding it.** Three
+capabilities arrived separately — AI, live data, key distribution — and are one
+shape: **vault brokers what a travelling file structurally cannot hold** (a
+secret, a private network, an authority). That definition is the test for what
+belongs in vault and what does not.
+
+Settled, with mechanism in `docs/vault-broker.md`:
+
+- **Vault configuration lives in the SHELL, never the document** — a second
+  plaintext `#bento-vault` block under the same splice contract. In the document
+  it would travel with the content and leak an internal hostname to anyone
+  emailed a deck. "Export for outside" strips it, visibly.
+- **A minted shell points its update channel at the vault.** Not a choice:
+  `serializeWith(shell, doc)` (`kernel/src/save.ts:322`) re-splices into a
+  freshly fetched shell and discards everything else, so shell config survives an
+  update only if the update comes from the vault. Needs a visible "return to
+  upstream" escape so a defunct vault cannot freeze former employees' files.
+- **Dual signatures.** Canonical runtime = the file minus `#bento-doc` and
+  `#bento-vault`; its sha256 must match upstream's signed manifest, and the vault
+  signs its config BOUND to that hash. A compromised vault can then redirect
+  endpoints but cannot ship modified editor code. Build in v1 — unaddable later.
+- **Documents carry a query NAME, never query text.** The vault maps names to
+  parameterised statements defined by an admin. Otherwise every deck anyone opens
+  is an exfiltration tool against the database.
+- **A bound document always carries its last known values.** A vault connection
+  refreshes data, never supplies it, or "works with no network" falls by another
+  route.
+- **A vault refresh is a COMMIT, not a derivation.** Linked charts derive
+  identically on every replica today; a fetch does not (two replicas fetching at
+  different moments get different rows). Extend `scripts/test-sync.ts` first.
+- **Archival is reinstated; backup stays cut.** Different products. Copying bytes
+  is solved; being able to OPEN them in ten years is not, and a Bento archive
+  renders itself and stays machine-readable as plaintext JSON with no vendor in
+  the loop. Vault produces the archive shape; restic moves it.
+
+**Who it serves, re-argued and resolved.** Three of the capabilities (live data,
+retention archive, private release channel) are properties of a DEPLOYMENT rather
+than a person, so the org case got stronger; the case against did not weaken,
+because it rests on maintenance surface — every org-shaped pillar implies
+multi-user identity, and that is what a single maintainer carries indefinitely.
+Resolution: this decides what we PROMISE, not what we build — broker, index and
+archive serve one user and fifty identically. Ship single-user and promise
+nothing organisational, **but design the identity model multi-user from the first
+commit**: per-user query authorisation and spend attribution cannot be retrofitted
+without migrating every deployed vault. The gate for building organisational
+features is a real stated requirement, not a count of pillars.
+
 ## 2026-07-27 — Thumbnails: plain markup plus a parser-blocking remover, NOT `<noscript>`
 
 **Supersedes the 2026-07-26 entry below** on the one point of where the preview
