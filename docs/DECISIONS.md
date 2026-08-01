@@ -22,7 +22,7 @@ shape: **vault brokers what a travelling file structurally cannot hold** (a
 secret, a private network, an authority). That definition is the test for what
 belongs in vault and what does not.
 
-Settled, with mechanism in `docs/vault-broker.md`:
+Settled:
 
 - **Vault configuration lives in the SHELL, never the document** — a second
   plaintext `#bento-vault` block under the same splice contract. In the document
@@ -151,7 +151,8 @@ before an enterprise security review discovers it.
 hole-punching, WebRTC, the dead-drop and the portable relay twin all exist to
 serve one case: a personal laptop asleep behind a home NAT. A company vault is a
 box on a network with a hostname and a certificate, reached directly. So
-`relay-design.md` steps 2–5 and `vault-design.md` steps 2–4 are NOT v1.
+`relay-design.md` steps 2–5 are NOT v1, and neither are the equivalent vault
+steps.
 
 Corollary worth stating plainly: the org vault **is** a custody service, and that
 is correct — central custody is the point of centralising. The personal vault
@@ -171,8 +172,6 @@ multi-user, promise neither.
 saved file, so copyleft on the shell would attach to every document a user
 emails). Vault is a separate repo with its licence chosen at commit #1. Never
 relicense slides.
-
-Design details in `docs/vault-design.md`.
 
 ## 2026-07-26 — File-manager thumbnails: a `<noscript>` render of page one, written at save time
 
@@ -461,7 +460,7 @@ self-hosted by serious users. Every actual service runs on the personal
 server; if the hosted relay ever accretes features, self-hosting becomes
 second-class and we lose the audience this is for.
 
-Consequences captured in `docs/vault-design.md`: the relay needs a portable
+Consequences: the relay needs a portable
 (Docker) implementation because the current Worker+DO+hibernation stack is not
 realistically self-hostable; independent release trains require a versioned
 capability handshake (we can no longer control deploy order); background

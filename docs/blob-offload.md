@@ -62,8 +62,7 @@ nothing correlates. Cheap now, awkward to retrofit.
 **Blobs move over HTTP, not the WebSocket.** `PUT /b/<room>/<key>` and
 `GET /b/<room>/<key>`, backed by R2. This sidesteps the 2 MB storage-value
 limit entirely, gives resumable multipart upload for free, and R2 charges no
-egress. It is also exactly the vault dead-drop primitive — build it once
-(`vault-design.md`).
+egress. It is also exactly the vault dead-drop primitive — build it once.
 
 **Upload before you emit.** An op must never reference a blob that is not yet
 fetchable. Belt and braces: a peer that receives a reference to an unknown
