@@ -9,8 +9,9 @@
 // pixels and typefaces along; asset-key collisions with different content are
 // remapped so nothing clobbers the target deck.
 
-import type { BentoDoc, Slide, SlideElement } from '../model'
+import type { BentoDoc, Slide, SlideElement, TextElement } from '../model'
 import { uid } from '../model'
+import { firstFamily } from '../fonts'
 
 export interface ClipPayload {
   __bento: 'clip'
@@ -32,28 +33,42 @@ function assetKeysOf(els: SlideElement[]): Set<string> {
   return keys
 }
 
-function collectAssets(els: SlideElement[], doc: BentoDoc): Record<string, string> {
+function fontsFor(els: SlideElement[], doc: BentoDoc): NonNullable<BentoDoc['fonts']> {
+  const families = new Set(
+    els
+      .filter((el): el is TextElement => el.type === 'text')
+      .map((el) => firstFamily(el.fontFamily)),
+  )
+  return (doc.fonts ?? []).filter((font) => families.has(firstFamily(font.family)))
+}
+
+function collectAssets(els: SlideElement[], fonts: NonNullable<BentoDoc['fonts']>, doc: BentoDoc): Record<string, string> {
   const out: Record<string, string> = {}
-  for (const k of assetKeysOf(els)) if (doc.assets?.[k] != null) out[k] = doc.assets[k]
+  const keys = assetKeysOf(els)
+  for (const font of fonts) keys.add(font.asset)
+  for (const k of keys) if (doc.assets?.[k] != null) out[k] = doc.assets[k]
   return out
 }
 
 export function serializeElements(els: SlideElement[], doc: BentoDoc): string {
+  const fonts = fontsFor(els, doc)
   const payload: ClipPayload = {
     __bento: 'clip', kind: 'elements',
     elements: JSON.parse(JSON.stringify(els)),
-    assets: collectAssets(els, doc),
+    assets: collectAssets(els, fonts, doc),
+    fonts,
   }
   return JSON.stringify(payload)
 }
 
 export function serializeSlides(slides: Slide[], doc: BentoDoc): string {
   const els = slides.flatMap((s) => s.elements)
+  const fonts = fontsFor(els, doc)
   const payload: ClipPayload = {
     __bento: 'clip', kind: 'slides',
     slides: JSON.parse(JSON.stringify(slides)),
-    assets: collectAssets(els, doc),
-    fonts: doc.fonts, // carry typefaces so pasted slides keep their look
+    assets: collectAssets(els, fonts, doc),
+    fonts,
   }
   return JSON.stringify(payload)
 }
@@ -75,6 +90,16 @@ function mergeAssets(payload: ClipPayload, doc: BentoDoc): Map<string, string> {
   return remap
 }
 
+/** Merge embedded-font records after their asset keys have been remapped. */
+function mergeFonts(payload: ClipPayload, doc: BentoDoc, remap: Map<string, string>) {
+  if (!payload.fonts?.length) return
+  doc.fonts = doc.fonts ?? []
+  for (const source of payload.fonts) {
+    if (doc.fonts.some((font) => font.family === source.family)) continue
+    doc.fonts.push({ ...source, asset: remap.get(source.asset) ?? source.asset })
+  }
+}
+
 function rewriteRefs(els: SlideElement[], remap: Map<string, string>) {
   if (!remap.size) return
   for (const el of els) {
@@ -89,6 +114,7 @@ function rewriteRefs(els: SlideElement[], remap: Map<string, string>) {
 /** Insert pasted elements onto a slide with fresh ids, nudged so they're visible. */
 export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide): SlideElement[] {
   const remap = mergeAssets(payload, doc)
+  mergeFonts(payload, doc, remap)
   const els: SlideElement[] = (payload.elements ?? []).map((e) => ({
     ...(JSON.parse(JSON.stringify(e)) as SlideElement),
     id: uid(e.type[0]),
@@ -102,10 +128,7 @@ export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide
 /** Insert pasted slides at `at` with fresh slide ids; merge assets + fonts. */
 export function insertSlides(payload: ClipPayload, doc: BentoDoc, at: number): Slide[] {
   const remap = mergeAssets(payload, doc)
-  if (payload.fonts?.length) {
-    doc.fonts = doc.fonts ?? []
-    for (const f of payload.fonts) if (!doc.fonts.some((g) => g.family === f.family)) doc.fonts.push(f)
-  }
+  mergeFonts(payload, doc, remap)
   const slides: Slide[] = (payload.slides ?? []).map((s) => {
     const copy = JSON.parse(JSON.stringify(s)) as Slide
     copy.id = uid('slide')

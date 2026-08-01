@@ -15,6 +15,11 @@ pre-1.0.
   the adjacent slides mounted while moving between them; morph transitions
   were unaffected.
 
+- **Copy and paste keeps embedded typefaces intact.** Pasting elements or
+  slides into another deck now carries the fonts they actually use — and only
+  those — remapping a colliding font asset without replacing the recipient's
+  bytes, so the pasted text keeps its face immediately.
+
 ## [1.0.12] — 2026-08-01
 
 - **A laser pointer while you present.** Press **L** in the slideshow and the

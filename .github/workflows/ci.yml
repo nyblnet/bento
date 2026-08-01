@@ -122,6 +122,11 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Clipboard embedded-font rig
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
+          node "$RUNNER_TEMP/test-clipboard.mjs"
+
       - name: CRDT convergence rig
         # 40 seeds locally; deeper on CI where the seconds are free.
         run: SEEDS=300 node scripts/test-sync.ts

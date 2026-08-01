@@ -25,6 +25,7 @@ import { borderPoint, boxCenter, lineEndpoints, setLineEndpoints, sideMidpoint }
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
+import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 
@@ -1895,6 +1896,7 @@ export class Editor {
         ev.preventDefault()
         let added: SlideElement[] = []
         this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
+        if (clip.fonts?.length) injectFonts(this.store.doc)
         this.store.select(added.map((e) => e.id))
         this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
         return
@@ -1904,6 +1906,7 @@ export class Editor {
         const at = this.store.currentIndex + 1
         let made: Slide[] = []
         this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
+        if (clip.fonts?.length) injectFonts(this.store.doc)
         this.rebuildSidebar()
         this.store.goTo(at)
         this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
