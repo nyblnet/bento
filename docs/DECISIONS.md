@@ -14,6 +14,53 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-02 — dash budgets BYTES with consent, not rows with a refusal
+
+**Supersedes the hard stop proposed in the dash design doc §3.2** (refuse at
+1,000,000 rows or 25 MB, on the importer and every other write path). The two
+guards it sat on top of are unchanged and are not optional.
+
+**What stands, because the failure past the budget is SILENT.** Measured at a
+539 MB file: the `#bento-doc` element still holds exactly one child text node,
+of length **zero**. `textContent` returns `''` — a string, no throw — so the
+workbook opens EMPTY, and self-save then re-splices whatever is in memory over
+the user's file. Unrecoverable loss caused by a successful parse of nothing. So,
+from the first commit that can save:
+
+1. `parseDoc` returns a tagged result, never `null`. Only an **absent or empty**
+   block boots the starter document.
+2. **Refuse to serialize if the boot parse did not succeed** — a hard error
+   surface offering "Save an untouched copy" and "Copy document JSON", with the
+   editor and autosave disabled.
+
+Those two are what prevent the data loss. The row cap was belt-and-braces on
+top of them, and it costs precisely the users who know what they are doing.
+
+**What changes:**
+
+- **Budget in BYTES, not rows.** 1M × 12 is 65 MB; 1M × 2 is ~10 MB and
+  comfortable. A row cap refuses workable files and admits unworkable ones.
+  Excel's 1,048,576 is a *structural* limit users have learned; ours would be a
+  proxy for a quantity we can measure directly.
+- **Warn, then take informed consent — never refuse.** Past the ceiling, say
+  what will actually break, in this browser, with numbers.
+- **The threshold scales with `canWriteInPlace()`** (`kernel/src/save.ts:470`).
+  With the File System Access API a save is an in-place write; without it —
+  Safari, Firefox, every iOS browser — every ⌘S downloads the whole file to
+  `~/Downloads`, so the practical ceiling is far lower. One global constant
+  cannot express that.
+- **Import offers an alternative, not a no**: the first N rows, an aggregate, or
+  the whole thing with the warning accepted.
+
+**The target is unchanged at 100,000 rows × ~12 columns (~6 MB)** — where the
+file emails under attachment limits, downloads in a second, round-trips as JSON
+per PLATFORM §7, and the 2.5 s autosave rewrites it imperceptibly. It is a
+target, not a cap.
+
+Compute is not the constraint and is not close: hand-written columnar JS over
+typed arrays, zero dependencies, single-threaded, measured on **10,000,000
+rows** — scan-sum 5.9 ms, filter+sum 10.6 ms, two-dimension group-by 11.5 ms.
+
 ## 2026-08-02 — `bento/dash` is settled, and it stands for DAta SHeets
 
 **Keep `bento/dash`.** The name contracts **DA**ta **SH**eets — the two halves
