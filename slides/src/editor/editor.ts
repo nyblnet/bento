@@ -1490,7 +1490,7 @@ export class Editor {
       t.textContent = i18nT('Apply layout to this slide')
       pick.appendChild(t)
     }
-    const sections: Array<[string, Slide[], boolean]> = [[t('Built-in'), builtinLayouts(), false]]
+    const sections: Array<[string, Slide[], boolean]> = [[t('Built-in'), builtinLayouts(doc.size), false]]
     if (doc.layouts?.length) sections.push([t('This document'), doc.layouts, true])
     for (const [label, layouts, custom] of sections) {
       const h = div('ed-layoutpick-h')

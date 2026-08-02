@@ -122,6 +122,13 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Built-in layout geometry rig
+        # The built-ins are drawn against 1600x900 while the model default is
+        # 1280x720, so they used to hang 200px off the right edge of a default
+        # deck. Nothing structural could see it — the fix is arithmetic, and so
+        # is the regression.
+        run: node scripts/test-layouts.ts
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"

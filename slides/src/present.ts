@@ -948,7 +948,12 @@ export function startPresentation(
       from &&
       ((forward && doc.slides[toIdx]?.transition === 'morph') ||
         (!forward && doc.slides[fromIdx]?.transition === 'morph'))
-    if (morphing) { if (!reduceMotion) runMorph(doc, from!, to, fromIdx, toIdx) }
+    if (morphing) {
+      if (!reduceMotion) {
+        runMorph(doc, from!, to, fromIdx, toIdx)
+        runMorphArrivalCountUps(doc.slides[fromIdx], doc.slides[toIdx], to)
+      }
+    }
     else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to)
     if (!reduceMotion) {
       runAmbientFx(doc.slides[toIdx], to)
@@ -1114,6 +1119,29 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
     if (fx.countUp) runCountUp(node)
   })
   settleGuarantee(entering.map(([el, node]) => [node, el]))
+}
+
+/**
+ * Count-ups on a MORPH arrival, for elements the morph did not carry over.
+ *
+ * Morph and entrance are mutually exclusive branches — an entrance tween on a
+ * morphing element would fight the morph — and `runCountUp` lived only on the
+ * entrance side, so `fx.countUp` on a slide reached by `transition:'morph'`
+ * silently rendered a static number. That is a combination the authoring guide
+ * actively recommends (a headline statistic on a slide that morphs its
+ * furniture in), so it failed quietly and often.
+ *
+ * A count-up element WITH a morph partner is already on screen showing its
+ * number as it flies in; restarting it from zero would be wrong. One with no
+ * partner is new on this slide, has no transform to fight, and is exactly what
+ * the author asked to count.
+ */
+function runMorphArrivalCountUps(from: Slide | undefined, to: Slide, section: HTMLElement) {
+  const carried = new Set((from?.elements ?? []).map((el) => el.morphId || el.id))
+  for (const [el, node] of fxNodes(to, section)) {
+    if (!el.fx!.countUp || el.showOnHover) continue
+    if (!carried.has(el.morphId || el.id)) runCountUp(node)
+  }
 }
 
 /**

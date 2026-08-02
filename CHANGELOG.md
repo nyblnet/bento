@@ -11,6 +11,28 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: count-up numbers work on morph slides.** `fx.countUp` was started only
+  by the entrance runner, and morph and entrances are mutually exclusive — so a
+  statistic on a slide reached by `transition:"morph"` silently rendered a
+  static number. Count-ups now also run on a morph arrival, for elements with
+  no morph partner on the previous slide; one that flew in already showing its
+  number does not restart from zero. This combination is one the authoring
+  guide actively recommends, so it failed quietly and often.
+
+- **Fix: the built-in layouts fit the slide.** They were drawn for a 1600×900
+  stage while the default deck is 1280×720, so applying *Title* put the title
+  box 160 px off the right edge and *Title + content* overflowed the bottom by
+  88 px. They are now scaled to the deck's own page size, which also makes them
+  correct for the custom sizes the slide panel offers.
+
+- **The agent authoring guide describes what the runtime actually does.**
+  `agents.md` gained the download URL, the real `fx.loop` parameters (and the
+  `strokeStyle` a dash-march needs to be visible), the chart option keys
+  charts-lite honours, `morphId`, layouts and `role`, column arithmetic for the
+  1280×720 canvas, and an accurate account of embedded fonts. Every gap here
+  was found by an agent authoring a deck from the guide alone, and every one of
+  them failed silently. Reported in detail by thinkbig1979.
+
 ## [1.0.13] — 2026-08-02
 
 - **Fix: fade, slide and zoom transitions animate again.** They had been

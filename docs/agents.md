@@ -34,6 +34,18 @@ mkdir -p ~/.claude/skills/bento-slides && curl -fsSL https://bento.page/skills/b
 [bento.page/skills/bento-slides.zip](https://bento.page/skills/bento-slides.zip)
 under Settings → Skills.)*
 
+**Working without the skill, from an empty folder?** Download the app itself —
+this is the file you write your document into:
+
+```bash
+curl -fsSL https://bento.page/releases/slides/Bento_Slides.bento.html -o "<Topic>.bento.html"
+```
+
+The downloaded file's `#bento-doc` block is **empty**. That is expected: opened
+in a browser it mints a fresh showcase deck to get a new user started, but on
+disk there is nothing to discard and nothing to copy from. Write your document
+into the empty block.
+
 A Bento deck (`*.bento.html`) is a self-contained HTML file. The document
 lives in ONE plaintext block near the top:
 
@@ -149,6 +161,12 @@ each kind of content to the feature built for it:
 - [ ] A drill-down that would work better as a **state slide**?
 - [ ] One accent colour, at most two typefaces, **96px** side margins (right-most x ≤ 1184)?
 - [ ] **Speaker notes** written on each slide (they travel in the file and double as the talk track)?
+- [ ] **Have you actually looked at it?** Open the deck and page through every
+      slide. Text overflowing its box, two elements crowding each other, a
+      heading that wrapped to three lines, a chart key that was silently
+      dropped — none of these are visible in the JSON, and all of them are
+      obvious on screen. This is the only check that catches what the others
+      cannot; a deck nobody rendered is not finished.
 
 ## Minimal valid document
 
@@ -204,6 +222,24 @@ without them — and elements should carry the full field set shown.
   scales (e.g. volume + a %), make `yAxis` an ARRAY of two `{type:"value"}`
   axes (give the 2nd `axisLabel:{formatter:"{value}%"}`) and point the odd
   series at it with `"yAxisIndex":1` — render it as a `line` over the bars.
+  **The engine is charts-lite, not ECharts** — it reads the option SHAPE and
+  ignores every key it does not implement, silently. What it honours:
+  - top level — `color`, `series`, `xAxis`, `yAxis`, `legend`, `grid`,
+    `tooltip`, `textStyle`, `dataZoom`
+  - any series — `type`, `name`, `data`, `yAxisIndex`, `itemStyle.color`
+  - bar — `itemStyle.borderRadius`
+  - line — `smooth`, `symbol`, `symbolSize`, `lineStyle.color`,
+    `lineStyle.width`, `areaStyle.color`
+  - pie — `radius`, `label.formatter` (or `label:false`),
+    `itemStyle.borderColor`, `itemStyle.borderWidth`
+  - axes — `type`, `data`, `min`, `max`, `axisLabel` (`fontSize`,
+    `fontWeight`, `color`, `formatter`), `axisLine`, `splitLine`
+  - legend — `show`, `top`, `bottom`, `textStyle.fontSize`,
+    `textStyle.fontWeight`
+
+  **`label` on a bar or line series does nothing** — value labels above bars
+  are pie-only. If you need the numbers visible on a cartesian chart, put them
+  in a table beside it, or use text elements.
 - **table**: `columns` (array of `{w}` fractional weights), `rows` (array of
   `{cells:[{html, align?, color?, bg?, bold?}]}`), `header` (bool — row 0 is
   the header), and a `style` object (`headerBg`, `headerColor`, `zebra?`,
@@ -227,13 +263,36 @@ without them — and elements should carry the full field set shown.
   elements whose `id` matches the previous slide — position, size, color,
   gradients. This is THE signature move: carry 2–4 ids through the deck and
   rearrange them per slide. Generators must emit deterministic ids.
+- **`morphId` decouples morph identity from `id`.** The real pairing key is
+  `morphId || id`, so an element can keep whatever `id` it likes and set
+  `"morphId": "running-head"` to morph against a differently-named element on
+  the next slide. For a generator this beats threading one id by hand through
+  every slide, and it lets two independently-created elements pair up. The key
+  must be unique **within** a slide. Plain shared `id` still works and is still
+  the simplest thing when you control both slides.
 - **Entrances**: `fx: { enter: "fade-up", order: 0 }` — equal `order` =
-  simultaneous. Entrance staggers only run on non-morph arrivals.
+  simultaneous. **Entrance staggers do not run on a morph arrival** — a
+  morphing element is already in motion and an entrance tween would fight it.
+  Count-ups are different: on a morph arrival they run for elements that have
+  **no** morph partner on the previous slide (a new statistic counts; one that
+  flew in already showing its number does not restart from zero). So a headline
+  number on a morph slide is fine as long as it is new to that slide.
 - **Ken-burns**: `fx: { ambient: "kenburns", ken: { dir: "drift|out|in",
   scale: 1.08, duration: 20 } }` — `drift` loops, `out`/`in` settle once on
   slide entry. For full-bleed photos: image at 0,0,1280,720 + a scrim rect
   + text on top. Never combine entrance tweens with motion-path loops.
-- **Loops**: `fx: { loop: { type: "dash-march" | "motion-path", ... } }`.
+- **Loops**: two shapes, both under `fx.loop`.
+  - `{ type: "dash-march", distance: 18, duration: 1.4 }` — marches the stroke
+    dashes along a shape. It animates `strokeDashoffset`, so it needs a
+    `stroke` **and** a dash pattern: set `strokeStyle: "dashed"` or `"dotted"`.
+    On a solid stroke the tween still runs and there is nothing to see.
+  - `{ type: "motion-path", path: "M0,0 C60,-40 140,40 200,0", duration: 6,
+    delay: 0, ease: "none", speeds: [1, 1] }` — drifts the element along a
+    path given RELATIVE to its resting position (the first anchor is where it
+    sits). `speeds` is optional, one multiplier per on-curve point, and lets
+    the element dwell in places and rush others; omit it for constant pace.
+    Never put an entrance tween on a motion-path element — they fight over the
+    same transform.
 - **Interactivity**: element `link: "<slide-id>"` jumps on click; a slide
   with `stateOf: "<parent-id>"` is a hidden variant reached only by links
   (arrow keys skip it, ← returns to parent). Give clickable things a padded
@@ -246,9 +305,50 @@ without them — and elements should carry the full field set shown.
 
 - Canonical canvas 1280×720 (`doc.size` can differ — read it first).
 - Keep 96 px side margins (right-most content x ≤ 1184).
+- **Column arithmetic, already done.** On 1280×720 inside 96 px margins the
+  content band is 1088 px wide. Use these rather than computing your own:
+
+  | Split | Width | `x` positions | Gutter |
+  |---|---|---|---|
+  | 2 columns | 528 | 96, 656 | 32 |
+  | 3 columns | 340 | 96, 470, 844 | 34 |
+  | 4 columns | 254 | 96, 374, 652, 930 | 24 |
+  | 60 / 40 (text + image) | 624 / 432 | 96, 752 | 32 |
+
+  Every row ends flush at x = 1184. Vertically, a title band of `y:72 h:84`
+  over content starting at `y:208` leaves 416 px of content height above a
+  96 px bottom margin.
 - One accent color; 2 typefaces max. `theme` sets deck defaults.
 - Fonts: `doc.fonts` (`{family, asset, weight}`) + woff2 data URIs in
   `doc.assets` if you need embedded faces; otherwise stick to system stacks.
+  **A `fontFamily` naming a face the document does not carry falls back
+  silently** to the next entry in the stack — there is no warning, and the deck
+  just looks like the fallback. Fonts belong to the DOCUMENT, not the app:
+  Instrument Sans and Fraunces appear in the starter deck and in several
+  templates because those files embed them in their own `doc.assets`, not
+  because the app provides them. So either embed the woff2 yourself, start from
+  a template that already carries the face, or name a system stack and mean it.
+  Always write a full stack (`"'Fraunces', Georgia, serif"`), never a bare
+  family name.
+
+## Layouts and `role`
+
+`doc.layouts` is a supported top-level key: an array of Slide-shaped templates
+the editor offers under *Apply layout*. Every deck also gets five built-ins
+(`layout-title`, `layout-title-content`, `layout-two-col`, `layout-section`,
+`layout-blank`), which are scaled to the deck's `doc.size` when applied.
+
+The part that matters when you are generating a deck is **`role`**. Any text
+element can carry `"role": "title" | "subtitle" | "body" | "kicker"`. Applying a
+layout matches donor to target by `id` first and then by `role` + `type`, so
+roles are what let someone restyle your deck later without re-typing it —
+content rides across, the layout supplies frame and typography. Setting them
+costs one key per element and makes a generated deck feel native to the editor.
+
+Two smaller things: a layout's text elements use `placeholder` (a dimmed prompt
+shown in the editor, hidden in present and print) rather than `html`, and
+slides instantiated from the same layout keep their element ids — which is
+exactly why their furniture morphs across a transition.
 
 ## Dynamic fields (tokens in text `html`)
 
@@ -270,8 +370,9 @@ keywords}` object — great for title slides and footers that fill from one plac
   presentation with no editor. Set it only on hand-out copies.
 - If `template: true` is set, every open mints a fresh document (that's for
   distributable templates; remove it for a personal deck).
-- Charts degrade gracefully but exotic ECharts config is ignored — keep
-  options minimal.
+- Charts degrade gracefully but anything outside the list in the **chart**
+  element type above is ignored, with no warning — keep options minimal and
+  check the rendered slide rather than trusting the JSON.
 - **Media size**: embedding a large video as a data URI can push the file into
   the tens of MB and make it slow to open and save. Embed only short clips;
   otherwise host the file and put its URL in `media.src`.
