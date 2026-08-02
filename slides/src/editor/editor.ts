@@ -343,6 +343,8 @@ export class Editor {
       insertD, insertMenu, moreD, moreMenu, slidesB, formatB, insert, actions, history,
       // order matters: this is the order they appear in the ⋯ menu
       demote: [redoB, commentB, pdfB, shareD, langD, helpB],
+      // filled in once the bar is fully assembled (formatB lands last)
+      authored: new Map(), homeOf: new Map(),
     }
 
     bar.append(logo, this.updatesB, title, this.fileChip, slidesB, insertD, history, insert, actions, moreD)
@@ -404,6 +406,20 @@ export class Editor {
     }
 
     actions.insertBefore(formatB, saveGroup)
+
+    // The authored desktop layout, captured once the bar is fully assembled.
+    // Unfolding REPLAYS this instead of guessing where each button belongs.
+    // Guessing is what the old restore did — everything except demote[0] went
+    // back to `actions` immediately before formatB — and it could not be right:
+    // Comment is authored into the INSERT group, so it changed groups entirely,
+    // and pdf/share/lang/help landed in a row after Save instead of interleaved
+    // with the avatars strip, leaving Save sitting after Help.
+    for (const g of [history, insert, actions]) {
+      this.phoneChrome.authored.set(g, [...g.children] as HTMLElement[])
+    }
+    for (const [g, kids] of this.phoneChrome.authored) {
+      for (const k of kids) this.phoneChrome.homeOf.set(k, g)
+    }
 
     // drive it now and whenever the query flips
     // Held on `this` deliberately: a MediaQueryList that nothing references can
@@ -548,6 +564,10 @@ export class Editor {
     slidesB: HTMLElement; formatB: HTMLElement
     insert: HTMLElement; actions: HTMLElement; history: HTMLElement
     demote: HTMLElement[]
+    /** each group's children in authored desktop order — replayed on unfold */
+    authored: Map<HTMLElement, HTMLElement[]>
+    /** which group each button was authored into */
+    homeOf: Map<HTMLElement, HTMLElement>
   } | null = null
 
   /**
@@ -602,10 +622,19 @@ export class Editor {
       // The save-as rows are a phone-only copy; on a wide screen the split
       // button's caret is back and owns that list again.
       for (const row of p.moreMenu.querySelectorAll('[data-phone-saveas]')) row.remove()
-      // back to their original homes, in their original order
-      for (const b of p.demote) {
-        if (b === p.demote[0]) p.history.appendChild(b)
-        else p.actions.insertBefore(b, p.formatB)
+      // Back to their authored homes, in their authored order.
+      //
+      // Both halves matter. Sending each button to the group it was authored
+      // into is what keeps Comment in the INSERT group instead of migrating it
+      // to actions; replaying the captured order is what stops pdf/share/lang/
+      // help from landing in a row and pushing Save past Help. Re-appending in
+      // order is deliberately not "insert before the sibling I remember" —
+      // that sibling may itself be demoted and not back yet.
+      for (const b of p.demote) p.homeOf.get(b)?.appendChild(b)
+      for (const [group, order] of p.authored) {
+        for (const child of order) {
+          if (child.parentElement === group) group.appendChild(child)
+        }
       }
       p.moreD.classList.remove('open')
       p.insertD.classList.remove('open')

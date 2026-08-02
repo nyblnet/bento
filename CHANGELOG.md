@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: the topbar came back in the wrong order after the window narrowed and
+  widened again.** Below 700px the bar folds its buttons into two menus, and
+  unfolding put them back by a rule rather than by memory — everything except
+  Redo went into the right-hand group, immediately before Format. So Comment
+  migrated out of the insert tools it belongs to, and Save ended up sitting
+  after Help. Each button now returns to the group it was authored into, in the
+  order the bar was built with.
+
 - **Fix: a deck opens where the browser refuses it storage.** With site data
   blocked, inside some embedded webviews, or in any sandboxed frame, a Bento
   file showed *"This file could not start"* and nothing else — because reading
