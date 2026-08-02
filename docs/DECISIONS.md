@@ -708,3 +708,56 @@ Consequence already implemented: each document gets its OWN origin
 (`bento-tray://<sha256 of path>`), because a shared origin would let one
 document read another's localStorage and IndexedDB — tolerable when every file
 is yours, a real leak between unrelated third-party apps.
+
+## 2026-08-02 — Agents get tools to measure and check, not a layout engine
+
+Issue #160 was an agent authoring a deck from `agents.md` alone; #194 split out
+its largest finding — that an agent cannot measure text, so every card, caption
+and two-line heading is a guess, and overflow and collisions all follow from
+that. The proposed remedies were `h: "auto"`, declarative layout containers,
+and a `validate()` call. We shipped the checking tools and deliberately did NOT
+build the layout engine.
+
+**`h: "auto"` is impossible, not merely unwise.** `h` is a required `number`
+that morph does arithmetic on — `a.h + (b.h - a.h) * p`, then `scale(h / b.h)`.
+A string there yields `height: "autopx"` (invalid CSS, silently dropped) and
+`scale(NaN)` in every SHIPPED copy of Bento, which is frozen code we can never
+fix. Any future auto-height must be an ADDITIVE flag (`autoHeight: true`) with
+`h` still holding the last resolved number, so old shells read a valid box.
+
+**Layout containers are declined for now.** A `layout: {type, gap, cols}`
+container resolved to concrete pixels would work — the file would stay
+absolute-pixel, so morph, the drag handles and old shells are untouched. It is
+declined because the hole it was proposed to fill is now filled: with
+`window.bento.measure()` an agent can compute a row or grid directly, and
+`agents.md` carries the column arithmetic pre-computed. Containers would make
+correct layout DECLARATIVE, not POSSIBLE — convenience, not capability.
+
+The cost is not the arithmetic, it is the semantics. Every element is draggable
+today and the model says where it is; inside a container, dragging a child must
+either be disabled (confusing, the handles are right there) or break it out
+(needs UI and a rule for what "out" means). That is more design work than
+`measure()` and `validate()` together were.
+
+If containers are ever built, note the constraint that makes them safe:
+resolution must be PURE GEOMETRY (gaps, weights, counts) so every replica
+derives the same answer, which is what lets `syncLinkedCharts` and
+`syncConnectors` derive-not-commit. The moment resolution measures text it
+becomes environment-dependent — a webfont that has loaded on one replica and
+not another gives different heights — and replicas LWW-fight over the geometry.
+That, not the layout maths, is the reason auto-height children are the hard case.
+
+**What shipped instead** (#193, #195, #197, #198): `measure()` sizes text from
+a spec, before the element exists; `validate()` reports what the runtime
+silently swallows; both go through the real renderer, and through ONE module,
+so they cannot disagree about whether a box fits. The unknown-key tables are
+generated from `model.ts` via the TypeScript AST and pinned in CI, because a
+validator that reports a real property as unknown is worse than none — an agent
+acting on that deletes working configuration.
+
+Also settled while here: on a morph arrival the rule is PER ELEMENT and turns
+on whether the element has a morph partner. With a partner it is already in
+motion, so `fx.enter` and `fx.countUp` are both skipped. With no partner it is
+new to the slide, has no tween to fight, and both run. Do not "simplify" this
+back into a blanket morph-vs-entrance branch; that blanket rule is what made
+count-ups silently dead and `slide-left` silently mean "rise 14px".
