@@ -9,8 +9,11 @@
 // else in the kernel is genuinely app-agnostic.
 //
 // Deliberately NOT a general "kernel init" — modules that need no config
-// (anim, autosave, charts) take none, so there is no import-order trap and
-// no false coupling for apps that skip a module.
+// (anim, charts) take none, so there is no import-order trap and no false
+// coupling for apps that skip a module. `autosave` is the one exception and
+// reads appConfig() LAZILY, inside openDb(), for exactly that reason: its
+// IndexedDB database is named per app, and resolving that at module scope
+// would make importing it before configureApp() throw.
 
 export interface AppConfig {
   /** Manifest `app` field this shell will accept — e.g. 'bento-slides'.

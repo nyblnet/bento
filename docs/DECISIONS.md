@@ -1113,3 +1113,45 @@ contract.
 `home/src/deckmeta.ts`, which reads a deck's title without executing it — the
 extension needs exactly that to label what it is about to save. The launcher UI
 and the recents store are superseded by the directory grant.
+## 2026-08-02 — One autosave database per app, migrated once
+
+`kernel/src/autosave.ts` used a single `DB_NAME = 'bento-autosave'` and a single
+`DB_VERSION` for every app. Two problems, and the second is the dangerous one.
+
+Snapshots from different apps piled into one store wherever they share an
+origin — `bento.page`, or any local server. bento/spaces has been writing into
+bento/slides' database since its scaffold landed (`spaces/src/main.ts` calls
+`putRecovery` on a 2.5s debounce).
+
+`DB_VERSION` was shared too, and that breaks in one direction only: a new app
+bumping it to 2 makes every ALREADY-SHIPPED shell of every other app throw
+`VersionError` on open and lose autosave entirely. Shipped shells are frozen
+code — 1.0.11 files are in the world and will go on opening version 1 forever.
+There is no way to reach them.
+
+**The name is `${appId}-autosave`.** `appId` is already `bento-slides` /
+`bento-spaces`, so this reads `bento-slides-autosave` with no doubled prefix
+and — deliberately — **no special case for the app that happened to be
+first**. An earlier draft grandfathered `bento-autosave` for slides to avoid
+orphaning data; carrying the data over is a better answer than a permanent
+exception, and each app now owns its own version line.
+
+**Migration copies, once, and never moves.** Renaming alone would silently drop
+every user's recovery snapshot and their whole version timeline — a visible
+feature emptying itself, which is a bug report, not a migration. It runs only
+into an empty target, so a second pass cannot duplicate the timeline or
+resurrect a snapshot the user deleted. The legacy database is left intact
+because shells already shipped keep writing to it, and the copy of the app the
+user opens next must still work; `pruneOld` ages its contents out on its own.
+
+Everything is copied, not just the running app's rows. Nothing in a snapshot
+records which app wrote it, and it does not need to: `docId` is a uuid, so
+another app's rows can never match a lookup. Filtering would mean guessing.
+
+`appConfig()` is read LAZILY inside `openDb()`. It throws before
+`configureApp()` runs, and a kernel module that explodes at import time
+depending on evaluation order is the trap `app.ts` exists to avoid — its header
+comment named autosave as config-free and is corrected in the same change.
+
+Rig: `scripts/test-autosave.ts`, run for both apps in CI. It fails against the
+old shared-name code (7/8), which is the property that makes it a gate.

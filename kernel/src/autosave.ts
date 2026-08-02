@@ -16,8 +16,32 @@
 // write-back stays encrypted.
 
 import type { KernelDoc } from './doc.ts'
+import { appConfig } from './app.ts'
 
-const DB_NAME = 'bento-autosave'
+/**
+ * One database PER APP.
+ *
+ * Every app used to share `bento-autosave`, which is two problems, not one.
+ * The visible one is that two apps' snapshots pile into one store wherever
+ * they share an origin — `bento.page`, or any local server. The dangerous one
+ * is `DB_VERSION`: it was shared too, so a new app bumping it to 2 would make
+ * every ALREADY-SHIPPED shell of every other app throw `VersionError` on open
+ * and lose autosave entirely. Files in the world are frozen code; they would
+ * go on opening version 1 forever and there is no way to reach them.
+ *
+ * `appId` is already `bento-slides` / `bento-spaces`, so this reads
+ * `bento-slides-autosave` — no doubled prefix, and no special case for the
+ * app that happened to be first. Each app now owns its own version line.
+ *
+ * Called lazily rather than at module scope: `appConfig()` throws before
+ * `configureApp()` runs, and a kernel module that explodes at import time
+ * depending on evaluation order is the import-order trap app.ts exists to
+ * avoid.
+ */
+const dbName = () => `${appConfig().appId}-autosave`
+
+/** The shared name every app wrote to before scoping. Read once, then left alone. */
+const LEGACY_DB_NAME = 'bento-autosave'
 const DB_VERSION = 1
 const RECOVERY = 'recovery'
 const VERSIONS = 'versions'
@@ -34,12 +58,12 @@ export interface Snapshot {
 
 let dbPromise: Promise<IDBDatabase | null> | null = null
 
-function openDb(): Promise<IDBDatabase | null> {
-  if (dbPromise) return dbPromise
-  dbPromise = new Promise((resolve) => {
+/** Open a database by name, creating this build's stores. */
+function open(name: string): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
     if (typeof indexedDB === 'undefined') { resolve(null); return }
     let req: IDBOpenDBRequest
-    try { req = indexedDB.open(DB_NAME, DB_VERSION) } catch { resolve(null); return }
+    try { req = indexedDB.open(name, DB_VERSION) } catch { resolve(null); return }
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(RECOVERY)) db.createObjectStore(RECOVERY, { keyPath: 'docId' })
@@ -50,7 +74,78 @@ function openDb(): Promise<IDBDatabase | null> {
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => resolve(null)
+    req.onblocked = () => resolve(null)
   })
+}
+
+/** Everything in one store of a database, or [] on any failure. */
+function readAll(db: IDBDatabase, store: string): Promise<Snapshot[]> {
+  return new Promise((resolve) => {
+    let t: IDBTransaction
+    try { t = db.transaction(store, 'readonly') } catch { resolve([]); return }
+    const req = t.objectStore(store).getAll()
+    req.onsuccess = () => resolve((req.result as Snapshot[]) ?? [])
+    req.onerror = () => resolve([])
+  })
+}
+
+/**
+ * Carry snapshots over from the shared database, ONCE, on first open.
+ *
+ * Renaming without this would silently drop every user's recovery snapshot and
+ * their whole version timeline — a visible feature quietly emptying itself,
+ * which is a bug report, not a migration.
+ *
+ * It COPIES rather than moves: shells already shipped go on writing to the old
+ * name forever, and deleting the source would break the copy of the app the
+ * user might open next. The cost is that the old database lingers; `pruneOld`
+ * ages its contents out on its own schedule.
+ *
+ * Everything is copied, not just this app's rows. Nothing in a snapshot records
+ * which app wrote it — and it does not need to: `docId` is a uuid, so another
+ * app's rows can never match a lookup here. Filtering would mean guessing.
+ */
+async function migrateLegacy(target: IDBDatabase, targetName: string): Promise<void> {
+  if (targetName === LEGACY_DB_NAME) return
+  // Only ever migrate INTO an empty database — a second pass would duplicate
+  // the version timeline, and a user who deleted a snapshot would see it return.
+  const existing = await readAll(target, RECOVERY)
+  if (existing.length) return
+  const legacy = await open(LEGACY_DB_NAME)
+  if (!legacy) return
+  try {
+    const [recovery, versions] = await Promise.all([
+      readAll(legacy, RECOVERY),
+      readAll(legacy, VERSIONS),
+    ])
+    if (!recovery.length && !versions.length) return
+    await new Promise<void>((resolve) => {
+      let t: IDBTransaction
+      try { t = target.transaction([RECOVERY, VERSIONS], 'readwrite') } catch { resolve(); return }
+      const rs = t.objectStore(RECOVERY)
+      const vs = t.objectStore(VERSIONS)
+      for (const r of recovery) rs.put(r)
+      // drop the old autoIncrement key so the target mints its own
+      for (const v of versions) { const { id: _id, ...rest } = v; vs.add(rest as Snapshot) }
+      t.oncomplete = () => resolve()
+      t.onerror = () => resolve()
+      t.onabort = () => resolve()
+    })
+  } finally {
+    legacy.close()
+  }
+}
+
+function openDb(): Promise<IDBDatabase | null> {
+  if (dbPromise) return dbPromise
+  dbPromise = (async () => {
+    let name: string
+    try { name = dbName() } catch { return null } // configureApp() never ran
+    const db = await open(name)
+    if (!db) return null
+    try { await migrateLegacy(db, name) } catch { /* best effort, never fatal */ }
+    return db
+  })()
   return dbPromise
 }
 

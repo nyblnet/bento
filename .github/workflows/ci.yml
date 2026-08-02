@@ -131,6 +131,19 @@ jobs:
         # throw when storage does.
         run: node scripts/test-storage.ts
 
+      - name: Autosave per-app database rig
+        # Every app shared one IndexedDB database AND one DB_VERSION, so spaces
+        # has been writing into slides' store, and a version bump by any new app
+        # would make every SHIPPED shell of every other app throw VersionError
+        # and lose autosave. Renaming without carrying the data over would empty
+        # a visible feature, so the migration is tested in both directions.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-autosave.ts --bundle --platform=node --format=esm \
+            --alias:fake-indexeddb/auto=./slides/node_modules/fake-indexeddb/auto/index.js \
+            --outfile="$RUNNER_TEMP/test-autosave.mjs"
+          BENTO_TEST_APP=bento-slides node "$RUNNER_TEMP/test-autosave.mjs"
+          BENTO_TEST_APP=bento-spaces node "$RUNNER_TEMP/test-autosave.mjs"
+
       - name: Publish deletion-gate rig
         # A publish assembles site/ for ONE app and mirrors it authoritatively.
         # Measured: a spaces-shaped site/ deleted 47 live files — the signed

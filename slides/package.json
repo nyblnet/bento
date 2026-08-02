@@ -19,6 +19,7 @@
   "devDependencies": {
     "@types/node": "^24.13.2",
     "@types/reveal.js": "^5.2.1",
+    "fake-indexeddb": "^6.2.5",
     "qrcode": "^1.5.4",
     "typescript": "~5.8.3",
     "vite": "^7.1.1",
