@@ -88,6 +88,41 @@ export class SlideCanvas {
       this.onSlideNav(dir)
     }, { passive: false })
 
+    // Middle-button drag pans. Until now the scrollbars were the only way to
+    // move a zoomed slide, which puts the control at the edge of the screen
+    // while the work is in the middle of it. Middle-drag is what design tools
+    // do, and unlike space-drag it cannot collide with typing a space.
+    //
+    // Capture phase, because Selecto is bound to this same scroller and would
+    // otherwise read the press as the start of a marquee.
+    this.scroller.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 1) return
+      ev.preventDefault() // suppress the OS autoscroll widget
+      ev.stopPropagation()
+      const fromX = ev.clientX
+      const fromY = ev.clientY
+      const atLeft = this.scroller.scrollLeft
+      const atTop = this.scroller.scrollTop
+      const restoreCursor = this.scroller.style.cursor
+      this.scroller.style.cursor = 'grabbing'
+      const move = (m: MouseEvent) => {
+        this.scroller.scrollLeft = atLeft - (m.clientX - fromX)
+        this.scroller.scrollTop = atTop - (m.clientY - fromY)
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', move, true)
+        window.removeEventListener('mouseup', up, true)
+        this.scroller.style.cursor = restoreCursor
+      }
+      // on window, so the pan survives the pointer leaving the canvas
+      window.addEventListener('mousemove', move, true)
+      window.addEventListener('mouseup', up, true)
+    }, true)
+    // X11 pastes the selection on middle-click release; the drag consumed it
+    this.scroller.addEventListener('auxclick', (ev) => {
+      if (ev.button === 1) ev.preventDefault()
+    })
+
     // Control box lives INSIDE the scaled host with rootContainer at body:
     // Moveable then works in slide-local coordinates (e.left/e.top are model
     // px), and `zoom` compensates the handles' visual size (set in relayout).
@@ -222,6 +257,19 @@ export class SlideCanvas {
     this.scale = this.fitScale * this.zoom
     this.stage.style.width = `${width * this.scale}px`
     this.stage.style.height = `${height * this.scale}px`
+    // Pan room. Scrolling used to stop dead at the slide's edges, so at high
+    // zoom a corner element could never be moved off the corner of the screen
+    // to be worked on. Half a viewport of padding once the stage outgrows the
+    // window is exactly enough for any point on the slide to reach the middle.
+    //
+    // None at all while the whole slide fits: padding there would put
+    // scrollbars on a view that needs none, and — because the plain-wheel
+    // slide-nav stands down whenever the canvas is pannable — would silently
+    // cost the wheel gesture that walks slides. clientWidth is the padding
+    // box, so writing padding here cannot disturb the fitScale computed above.
+    const padX = width * this.scale > availW ? Math.round(this.scroller.clientWidth / 2) : 0
+    const padY = height * this.scale > availH ? Math.round(this.scroller.clientHeight / 2) : 0
+    this.scroller.style.padding = padX || padY ? `${padY}px ${padX}px` : ''
     this.scaleHost.style.transform = `scale(${this.scale})`
     this.moveable.zoom = 1 / this.scale
     this.moveable.updateRect()

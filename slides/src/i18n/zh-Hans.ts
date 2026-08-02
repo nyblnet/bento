@@ -730,4 +730,9 @@ export const zhHans: Catalog = {
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} 是一个空的 Bento 副本，不是已保存的演示文稿。请单独打开它以创建。",
   "Fit height to text": "高度适应文本",
   "The text needs {need}px and the box is {have}px": "文本需要 {need}px，文本框为 {have}px",
+  "Canvas": "画布",
+  "Middle-drag": "中键拖动",
+  "scroll": "滚动",
+  "Pan the canvas, including past the edges of the slide": "平移画布，可以移动到幻灯片边缘之外",
+  "Zoom in and out": "放大与缩小",
 }

@@ -2367,6 +2367,10 @@ export class Editor {
       ['C', t('Comment mode')],
       ['?', t('This help')],
     ])
+    section(colL, t('Canvas'), [
+      [t('Middle-drag'), t('Pan the canvas, including past the edges of the slide')],
+      [`${mod}-${t('scroll')}`, t('Zoom in and out')],
+    ])
     section(colR, t('Lines & curves'), [
       [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
       [t('Drag a point'), t('Move an endpoint or anchor; drag the body to move the whole line')],

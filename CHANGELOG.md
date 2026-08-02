@@ -11,6 +11,18 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Pan the canvas by middle-dragging, and past the slide's edges.** The
+  scrollbars were the only way to move a zoomed slide, which puts the control
+  at the edge of the screen while the work is in the middle of it. Hold the
+  middle mouse button and drag to pan.
+
+  Scrolling also used to stop dead at the slide's edges, so at high zoom a
+  corner element could never be moved off the corner of the screen to work on
+  it. There is now half a screen of room beyond every edge once you zoom past
+  fit — enough for any point on the slide to reach the middle — and none at all
+  while the whole slide fits, so a view that needs no scrollbars still has
+  none. Asked for by gcgbarbosa.
+
 - **Fit height to text.** A text box that is too short lets its content spill
   over whatever sits below it, and one that is too tall throws off its
   alignment against everything beside it — neither is visible in the numbers.

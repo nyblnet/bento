@@ -728,4 +728,9 @@ export const pt: Catalog = {
   "Corner arrows": "Setas de canto",
   "Fit height to text": "Ajustar altura ao texto",
   "The text needs {need}px and the box is {have}px": "O texto precisa de {need}px e a caixa tem {have}px",
+  "Canvas": "Tela",
+  "Middle-drag": "Arrastar com o botão do meio",
+  "scroll": "rolagem",
+  "Pan the canvas, including past the edges of the slide": "Deslocar a tela, inclusive para além das bordas do slide",
+  "Zoom in and out": "Ampliar e reduzir",
 }

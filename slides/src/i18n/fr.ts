@@ -730,4 +730,9 @@ export const fr: Catalog = {
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} est une copie vierge de Bento, pas une présentation enregistrée. Ouvrez-la seule pour en commencer une.",
   "Fit height to text": "Ajuster la hauteur au texte",
   "The text needs {need}px and the box is {have}px": "Le texte nécessite {need}px et la boîte fait {have}px",
+  "Canvas": "Plan de travail",
+  "Middle-drag": "Glisser avec le bouton du milieu",
+  "scroll": "molette",
+  "Pan the canvas, including past the edges of the slide": "Déplacer le plan de travail, y compris au-delà des bords de la diapositive",
+  "Zoom in and out": "Zoomer et dézoomer",
 }
