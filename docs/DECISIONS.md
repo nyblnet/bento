@@ -761,3 +761,49 @@ motion, so `fx.enter` and `fx.countUp` are both skipped. With no partner it is
 new to the slide, has no tween to fight, and both run. Do not "simplify" this
 back into a blanket morph-vs-entrance branch; that blanket rule is what made
 count-ups silently dead and `slide-left` silently mean "rise 14px".
+
+## 2026-08-02 — Publishing one app may never delete another's artifacts
+
+`site/` is assembled for ONE app and mirrored into `bento-site` with
+`rsync -a --delete`, so anything that build did not write is removed from
+bento.page. Measured, not theorised: a cloned `release.mjs --app spaces`
+staged a spaces site, and a publish against a copy of the real published tree
+removed **47 live files** — `releases/slides/Bento_Slides.bento.html`,
+`releases/slides/manifest.json`, `packs.json`, all 22 signed language packs,
+`slides/index.html`, all four gallery decks, `guestbook/index.html` — with
+every existing gate reporting green.
+
+Shipped slides files check `releases/slides/manifest.json` at launch
+(`slides/src/main.ts`) and their pack channel at `releases/slides/packs.json`
+(`slides/src/packs.ts`). Both are frozen URLs in files already on disks, so a
+deletion takes those channels offline permanently, for every copy in the
+world, with no client-side repair. It is the one publish mistake with no way
+back.
+
+**Why nothing caught it: the existing gates are fail-OPEN.** The
+shell-consistency gate and the pack-index gate are both
+`if (existsSync(<path in site/>))` — an artifact that is *missing* skips the
+check instead of tripping it, and missing is exactly the dangerous case.
+PR #192's `--exclude guestbook.bento.html` is one hardcoded filename, not a
+mechanism; it must not be read as evidence that protection exists.
+
+**The gate is a deletion inventory of the DESTINATION, and it is fail-closed.**
+Before mirroring, walk the published tree and refuse if any path would
+disappear. If the destination cannot be inventoried at all, refuse — that is
+the case where we know least about what we are about to overwrite.
+Deliberate removal is `--allow-deletions`, which lists what it would drop.
+
+Deletions are singled out from changes on purpose. A changed file is a release
+doing its job; the one byte-change nobody can repair, a manifest going
+backwards, already has its own monotonicity gate.
+
+Gate on the published INVENTORY, not on `releases/*/manifest.json`. The
+deletion set included `slides/index.html`, the gallery, `agents.md`,
+`skills/`, `LICENSE`, `404.html`, `help/`, `q/`, `og.png`, `robots.txt` and
+`sitemap.xml` — none of which a manifest-shaped gate would have seen.
+
+Rig: `scripts/test-publish-gate.mjs`; shared logic `scripts/site-inventory.mjs`.
+This is the first half of the multi-app release work
+(`working/spaces-design.md` §6.1); per-app assembly — build one app, restore
+the others byte-identically from the published tree — is the second, and
+spaces cannot be released until both exist.

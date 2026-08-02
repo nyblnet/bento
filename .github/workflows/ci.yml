@@ -131,6 +131,14 @@ jobs:
         # throw when storage does.
         run: node scripts/test-storage.ts
 
+      - name: Publish deletion-gate rig
+        # A publish assembles site/ for ONE app and mirrors it authoritatively.
+        # Measured: a spaces-shaped site/ deleted 47 live files — the signed
+        # shell, the manifest, all 22 packs — with every other gate green,
+        # because those gates are `if (existsSync(...))` and skip when the
+        # artifact is missing. Shipped files cannot recover from that.
+        run: node scripts/test-publish-gate.mjs
+
       - name: Model key tables match the format
         # slides/src/modelkeys.generated.ts is derived from model.ts and drives
         # validate()'s unknown-key check. A stale copy would report real
