@@ -1339,3 +1339,66 @@ Consequences already implemented: `permissions` trimmed to `storage` (an unused
 `offscreen` would draw review questions it cannot answer), and content scripts
 narrowed from every `file:///*.html` to `file:///*.bento.html`, which is both
 correct and far easier to justify to a reviewer.
+## 2026-08-02 — No extension system: compact per-app runtimes instead
+
+The recurring proposal is an extension mechanism — sealed, separately signed
+units that bake into a file like language packs do, so a heavy optional feature
+ships on its own clock instead of riding the shell release. The immediate case
+was a PowerPoint exporter carrying a large vendored dependency. The wider case
+was that a mechanism built once would serve `bento/spaces` and `bento/dash` too.
+
+**Declined, for every app.** Bento ships small, self-contained runtimes per app.
+A feature is either core or it is a separate artifact — not a plug-in tier in
+between.
+
+This CONFIRMS rather than supersedes *"The pack carrier is generic; pack POLICY
+is not. This is not a plugin system."* (2026-07-26). That entry stands exactly
+as written: the carrier stays generic and reusable, and the reason to keep it
+that way is engineering hygiene, not a plugin system waiting to be finished.
+
+**The multi-app argument is the strongest evidence against, not for.** Bytes do
+not amortize across apps, they multiply: every app pays the host, the container
+and the per-app i18n for the machinery. Measured against real builds, the
+cheapest extension host costs more than the entire `bento/spaces` shell as it
+stands (10,052 B). Only review effort and one browser matrix amortize, and that
+was never the expensive half. Worse, neither unbuilt app wants it: their designs
+contain no extension-shaped feature, one of them independently ruled out
+shell-block work and forbids carried user code outright, and both solved their
+heaviest import/export payloads with browser primitives (`CompressionStream`,
+`DOMParser`) and no dependency at all. An abstraction with zero confirmed
+consumers, designed against two apps that do not exist yet, is the textbook case
+for not building it.
+
+**The economics invert once you follow the bytes.** An extension bakes into the
+FILE, so the user who exports pays the dependency *and* the machinery, while the
+user who never exports still pays the host. For the exporter that is worse than
+merging the dependency into core unchanged. The break-even against a first-party
+in-shell writer needs fewer than ~13% of users to ever use the feature — and for
+a PowerPoint replacement, PowerPoint interop is the adoption path, not a fringe.
+The same money buys far more as core: a first-party writer prototype targeting
+the same format came in roughly 35x smaller than the vendored library it would
+replace, using the same `CompressionStream` technique.
+
+**Three extension mechanisms already exist, and they are better.** The Claude
+Code plugin/skill channel extends Bento by RECIPE (`plugins/bento-slides/`) at
+zero shell bytes and on its own clock. The native host bridge
+(`tray/ios/Resources/bridge.js`) extends capability at the host, and reaches
+every file ever saved — including ones that predate it. The kernel facade
+pattern (`slides/src/charts.ts`, six lines over `kernel/src/charts.ts`) shares
+implementation by structural typing with no frozen surface at all. Each costs
+zero platform invariants. Reach for these before inventing a fourth.
+
+**What this does NOT decide.** Kernelizing the language-pack channel
+(`packs.ts` parameterised per app) is still wanted — both future apps list it as
+blocking, and it is unrelated to extensions. So are the defects found while
+looking: the offline switch does not gate pack fetches although `docs/security.md`
+says it does; the shell-block registry is single-slot, so a second registrant
+clobbers the first; and a block that fails to parse is skipped on read and then
+removed by the clear pass, which deletes it permanently on the next save. Fix
+those on their own merits.
+
+**What would reopen this.** A confirmed second consumer in a shipped app, a
+feature that genuinely cannot be core (a licence that forbids bundling, or bytes
+that dwarf the shell even after a first-party rewrite), or a demonstrated need
+for third-party authorship. Absent those, the answer to "should this be an
+extension?" is "should this be core, a separate artifact, or a skill?"
