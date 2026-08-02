@@ -726,4 +726,6 @@ export const pt: Catalog = {
   "Slide number": "Número do slide",
   "Progress bar": "Barra de progresso",
   "Corner arrows": "Setas de canto",
+  "Fit height to text": "Ajustar altura ao texto",
+  "The text needs {need}px and the box is {have}px": "O texto precisa de {need}px e a caixa tem {have}px",
 }

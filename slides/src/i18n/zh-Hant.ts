@@ -728,4 +728,6 @@ export const zhHant: Catalog = {
   "Opened {name} — ⌘S will save a copy": "已開啟 {name} — ⌘S 將儲存副本",
   "⌘S asks where to save, then rewrites that file in place": "⌘S 會先詢問儲存位置，然後直接覆寫該檔案",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} 是一個空的 Bento 副本，不是已儲存的簡報。請單獨開啟它以建立。",
+  "Fit height to text": "高度符合文字",
+  "The text needs {need}px and the box is {have}px": "文字需要 {need}px，文字方塊為 {have}px",
 }

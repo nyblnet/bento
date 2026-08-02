@@ -14,8 +14,9 @@ import {
 import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
-import { parseDoc, type BentoDoc } from './model'
+import { parseDoc, type BentoDoc, type TextElement } from './model'
 import { validateDoc, type ValidateOpts } from './validate'
+import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
 import { Store } from './store'
@@ -226,6 +227,27 @@ if (location.hash === '#present') {
    */
   validate(target?: BentoDoc, opts?: ValidateOpts) {
     return validateDoc(target ?? store.doc, opts)
+  },
+  /**
+   * How tall does this text need to be? The format is absolute pixels, so
+   * without a screen the height of a string is a guess — this answers it by
+   * rendering through the real renderer.
+   *
+   * Pass an element id to measure one that exists, or a spec
+   * ({html, w, fontSize, …}) to size text BEFORE creating the element, which
+   * is the point: an agent can lay a slide out correctly the first time
+   * instead of writing it, checking, and correcting.
+   *
+   * Returns {height, width, lines} — plus {fits, overflow} when you supply `h`.
+   */
+  measure(target: string | TextMeasureSpec, opts?: { doc?: BentoDoc }) {
+    const doc = opts?.doc ?? store.doc
+    if (typeof target !== 'string') return measureText(target, doc)
+    for (const s of doc.slides) {
+      const el = s.elements.find((e) => e.id === target && e.type === 'text')
+      if (el) return measureElement(el as TextElement, doc)
+    }
+    return null
   },
   /**
    * Self-update surface (all user/tooling-initiated, never automatic):

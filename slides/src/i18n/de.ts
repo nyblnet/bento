@@ -728,4 +728,6 @@ export const de: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} geöffnet — ⌘S speichert eine Kopie",
   "⌘S asks where to save, then rewrites that file in place": "⌘S fragt nach dem Speicherort und überschreibt diese Datei dann direkt",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} ist eine leere Kopie von Bento, keine gespeicherte Präsentation. Öffnen Sie die Datei einzeln, um eine zu beginnen.",
+  "Fit height to text": "Höhe an Text anpassen",
+  "The text needs {need}px and the box is {have}px": "Der Text braucht {need}px, das Feld ist {have}px hoch",
 }

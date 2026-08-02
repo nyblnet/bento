@@ -11,6 +11,18 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fit height to text.** A text box that is too short lets its content spill
+  over whatever sits below it, and one that is too tall throws off its
+  alignment against everything beside it — neither is visible in the numbers.
+  The Typography panel now has a button that sets the box to exactly the height
+  its text needs, and says what that is before you press it.
+
+  Underneath is `window.bento.measure()`, which answers the question the format
+  could not: how tall is this string at this width, in this font? Ask it with a
+  spec and you can size a box *before* creating the element, which is what
+  turns generating a deck from guess-then-correct into laying it out right the
+  first time. Requested by thinkbig1979 in #194.
+
 - **Entrance animations work on morph slides.** Setting an element to sweep in
   from the right on a morph slide gave you a small upward nudge instead: the
   morph supplied one fixed entrance for everything new on the slide, and

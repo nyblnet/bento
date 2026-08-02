@@ -7,6 +7,7 @@
 import type { Store } from '../store'
 import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
 import { resolveAsset } from '../render'
+import { measureElement } from '../measure'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
@@ -864,12 +865,40 @@ export class PropsPanel {
     return `slide ${linear}${s.name ? ` — ${s.name}` : ''}`
   }
 
+  /**
+   * "Fit height to text" — set `h` to exactly what the content needs.
+   *
+   * A box that is too short lets its text spill over whatever sits below, and
+   * one that is too tall throws off vertical alignment against its neighbours;
+   * neither is visible in the numbers. The button reports the delta so it is
+   * obvious whether anything was wrong before you press it.
+   */
+  private buildFitHeight(el: TextElement) {
+    if (!el.html?.trim()) return // nothing to measure yet
+    const m = measureElement(el, this.store.doc)
+    const delta = m.height - el.h
+    const fit = document.createElement('button')
+    fit.className = 'ed-btn ed-btn-block'
+    fit.textContent = t('Fit height to text')
+    fit.title = t('The text needs {need}px and the box is {have}px',
+      { need: String(m.height), have: String(el.h) })
+    if (delta === 0) fit.setAttribute('disabled', '')
+    fit.addEventListener('click', () => {
+      // measure again at click time — the text may have been edited since the
+      // panel was built, and a stale height is worse than no button
+      const fresh = measureElement(this.store.element(el.id) as TextElement, this.store.doc)
+      this.mutate(el.id, (e) => { e.h = fresh.height }, true)
+    })
+    this.host.appendChild(fit)
+  }
+
   private buildTextProps(el: TextElement) {
     this.section(t('Typography'))
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
     hint.innerHTML = t('While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.')
     this.host.appendChild(hint)
+    this.buildFitHeight(el)
     this.row('Font', this.fontSelect(el))
     // Shown in POINTS (the unit office users know); the model stores slide-space
     // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.

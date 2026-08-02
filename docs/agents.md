@@ -168,6 +168,29 @@ each kind of content to the feature built for it:
       obvious on screen. This is the only check that catches what the others
       cannot; a deck nobody rendered is not finished.
 
+### `window.bento.measure()` — size text before you place it
+
+The format is absolute pixels, which is what lets morph, the drag handles and
+the renderer work from one representation. The cost falls on you: the height of
+a string at a given width and font is not knowable from the JSON. Stop guessing
+and ask:
+
+```js
+window.bento.measure({ html: 'Long paragraph…', w: 600, fontSize: 28, lineHeight: 1.4 })
+// → { height: 236, width: 600, lines: 6 }
+```
+
+Pass a spec to size text **before** the element exists — which is the point, as
+it lets you lay a slide out correctly the first time. Pass an element id to
+measure one already in the deck, and include `h` in a spec to get `fits` and
+`overflow` back too. It renders through the real renderer, so the answer is
+what the slide will actually do, not an estimate.
+
+Use it for the arithmetic that used to be guesswork: stacking cards in a
+column, deciding whether a heading needs two lines or three, sizing a caption
+under a photo. In the editor, the same thing is a **Fit height to text** button
+in the Typography panel.
+
 ### `window.bento.validate()`
 
 Open the deck and run it in the browser console. It reports, in one pass, the

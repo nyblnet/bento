@@ -15,15 +15,16 @@
 // finding is advice, not a refusal. `parseDoc` remains the thing that decides
 // whether a document is loadable at all.
 //
-// Text overflow needs real layout, so it renders each slide off-screen with the
-// SAME renderer the editor and present mode use (`renderSlide`) and measures
-// what comes out. Anything else would measure a different deck than the one the
-// audience sees. Without a DOM (node tooling) the measured checks are skipped
-// and `measured` reports false, rather than guessing.
+// Text overflow needs real layout, so it goes through measure.ts — the same
+// path `window.bento.measure()` uses, which renders off-screen with the SAME
+// renderer the editor and present mode use. One path means the validator and
+// the measuring tool cannot disagree about whether a box fits its text. Without
+// a DOM (node tooling) the measured checks are skipped and `measured` reports
+// false, rather than guessing.
 
-import type { BentoDoc, Slide, SlideElement } from './model.ts'
+import type { BentoDoc, Slide, SlideElement, TextElement } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
-import { renderSlide } from './render.ts'
+import { measureElements } from './measure.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -306,42 +307,28 @@ function validateChart(
 }
 
 /**
- * Render every slide off-screen and measure what the text actually does.
+ * Measure every text element and report the ones that do not fit.
  *
- * Uses the shared renderer so the measurement is of the same DOM the audience
- * gets — a reimplementation here would drift from render.ts and start lying.
- * The host is visibility:hidden rather than display:none, because a
- * display:none subtree has no layout at all and every height would read 0.
+ * Goes through measure.ts, the same path `window.bento.measure()` uses, so the
+ * validator and the measuring tool can never disagree about whether a given
+ * box fits its text — which they would within a release if each had its own
+ * copy of the arithmetic.
  */
 function measureOverflow(doc: BentoDoc, add: (f: Finding) => void) {
-  const host = document.createElement('div')
-  host.setAttribute('data-bento-transient', '') // never captured into a save
-  host.style.cssText =
-    'position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none;contain:strict;'
-  document.body.appendChild(host)
-  try {
-    for (const slide of doc.slides) {
-      const surface = renderSlide(slide, doc)
-      host.appendChild(surface)
-      for (const el of slide.elements) {
-        if (el.type !== 'text') continue
-        const node = surface.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
-        const inner = node?.querySelector<HTMLElement>('.bento-text-inner')
-        if (!inner) continue
-        const need = inner.scrollHeight
-        // a placeholder with no content measures as one empty line — not overflow
-        if (!el.html?.trim()) continue
-        if (need > el.h + 1) {
-          add({
-            slide: slide.id, element: el.id, code: 'text-overflow', severity: 'warning',
-            path: 'h',
-            message: `Text needs ${Math.ceil(need)}px but the box is ${el.h}px tall — it overflows by ${Math.ceil(need - el.h)}px and will collide with whatever is below it.`,
-          })
-        }
-      }
-      surface.remove()
+  // a placeholder with no content measures as one empty line — not overflow
+  const targets: Array<{ slide: string; el: TextElement }> = []
+  for (const slide of doc.slides) {
+    for (const el of slide.elements) {
+      if (el.type === 'text' && el.html?.trim()) targets.push({ slide: slide.id, el })
     }
-  } finally {
-    host.remove()
   }
+  const measured = measureElements(targets.map((t) => t.el), doc)
+  measured.forEach((m, i) => {
+    const { slide, el } = targets[i]
+    if (m.fits !== false || m.overflow! <= 1) return
+    add({
+      slide, element: el.id, code: 'text-overflow', severity: 'warning', path: 'h',
+      message: `Text needs ${m.height}px but the box is ${el.h}px tall — it overflows by ${m.overflow}px (${m.lines} lines) and will collide with whatever is below it.`,
+    })
+  })
 }

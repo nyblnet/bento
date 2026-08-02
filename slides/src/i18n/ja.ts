@@ -728,4 +728,6 @@ export const ja: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} を開きました — ⌘S はコピーを保存します",
   "⌘S asks where to save, then rewrites that file in place": "⌘S は保存先を尋ねてから、そのファイルを上書き保存します",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} は保存済みのデッキではなく、空の Bento です。単独で開いて作成してください。",
+  "Fit height to text": "高さをテキストに合わせる",
+  "The text needs {need}px and the box is {have}px": "テキストには {need}px 必要で、ボックスは {have}px です",
 }
