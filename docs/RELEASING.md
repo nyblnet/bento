@@ -112,6 +112,19 @@ verify the manifest signature against the public key embedded in every shell.
    live **guestbook daemon** onto the freshly-published shell as a best-effort
    final step (see below) — no separate command needed.
 
+   > **Publish site-only changes from a tree whose `site/releases/` is current.**
+   > `site/` is local staging, and releases are assembled from a clean checkout
+   > of the tag (step 3) — so an everyday working tree can hold a months-old
+   > manifest while bento.page serves something far newer. Mirroring that would
+   > republish the older signed shell over the newer one and break the update
+   > channel for every deck already in the world.
+   >
+   > `publish-site.mjs` refuses this: it compares the staged manifest version
+   > against the live one and dies if the staged one is older. If you hit that,
+   > you are publishing from the wrong tree — use the release checkout, or
+   > refresh `site/releases/` from the live site first. `--allow-release-downgrade`
+   > exists only for a deliberate rollback.
+
 6. **The GitHub release is created for you** by `publish-site.mjs` — it makes
    the release for the tag, attaches
    `site/releases/slides/Bento_Slides.bento.html`, and takes the notes from

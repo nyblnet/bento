@@ -110,6 +110,66 @@ if (existsSync(packIndex)) {
   die(`language packs are staged at ${packsDir.slice(site.length + 1)} but packs.json is MISSING — an unsigned pack must never be published.\n  Fix: node scripts/sign-packs.mjs ${packsDir} --out ${packIndex}`)
 }
 
+// ---- the release channel may never go BACKWARDS ----------------------------
+//
+// `site/` is local staging, and the thing that fills its `releases/` is a
+// DIFFERENT process — release.mjs, run from a clean checkout of the tag, per
+// RELEASING.md. So an everyday working tree can easily hold a months-old
+// manifest while the live site serves something much newer. Mirroring that
+// with --delete republishes the old signed shell and manifest on top of the
+// new one.
+//
+// That is not a cosmetic regression. Every shipped deck checks this manifest
+// and enforces version monotonicity, so a downgrade takes the whole update
+// channel offline for files already in the world, and hands new visitors an
+// older app. It is the same lesson as the guestbook deletion above — "this
+// build didn't produce it" is not evidence it should be replaced — applied to
+// the one artifact nobody can repair from their side.
+//
+// Caught before it happened: a publish from a tree staged at 1.0.11 while
+// bento.page served 1.0.13.
+const manifestVersion = (file) => {
+  try {
+    const outer = JSON.parse(readFileSync(file, 'utf8'))
+    return JSON.parse(outer.payload).version ?? null
+  } catch { return null }
+}
+/** semver-ish compare, matching kernel/src/update.ts compareVersions */
+const cmpVersion = (a, b) => {
+  const pa = String(a).split('.').map(Number)
+  const pb = String(b).split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (d) return d < 0 ? -1 : 1
+  }
+  return 0
+}
+{
+  const localManifest = join(site, 'releases/slides/manifest.json')
+  const liveManifest = join(dest, 'releases/slides/manifest.json')
+  const local = manifestVersion(localManifest)
+  const live = manifestVersion(liveManifest)
+  if (local && live && cmpVersion(local, live) < 0) {
+    if (!args.includes('--allow-release-downgrade')) {
+      die(
+        `this tree would PUBLISH AN OLDER RELEASE than the one already live:\n` +
+        `    staged in site/ : ${local}\n` +
+        `    live on the site: ${live}\n` +
+        `  Every shipped deck checks this manifest and enforces version\n` +
+        `  monotonicity, so publishing ${local} over ${live} breaks updates for\n` +
+        `  files already in the world.\n\n` +
+        `  Releases are assembled from a clean checkout of the tag (RELEASING.md),\n` +
+        `  so this working tree's site/ is simply stale — it is not the release.\n` +
+        `  Publish from the release checkout, or refresh site/releases/ from the\n` +
+        `  live tree first. Deliberate rollback: --allow-release-downgrade.`,
+      )
+    }
+    console.log(`⚠ publishing ${local} OVER live ${live} — downgrade allowed explicitly`)
+  } else if (local && live && cmpVersion(local, live) > 0) {
+    console.log(`• release channel: ${live} → ${local}`)
+  }
+}
+
 // ---- mirror site/ → dest (authoritative; never touches dest/.git) ----------
 // NEVER DELETE WHAT THIS BUILD DID NOT PRODUCE.
 //
