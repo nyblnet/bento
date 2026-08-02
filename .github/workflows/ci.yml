@@ -147,6 +147,14 @@ jobs:
         # throw when storage does.
         run: node scripts/test-storage.ts
 
+      - name: App registry rig
+        # scripts/apps.mjs drives what a release builds, stages and signs. A
+        # release SIGNS, and the key never reaches CI, so the pipeline itself
+        # cannot be tested here — but the registry drifting from the tree can,
+        # and a wrong appId is silent: shipped shells verify it against their
+        # own configureApp() id and just stop updating.
+        run: node scripts/test-release-apps.mjs
+
       - name: Autosave per-app database rig
         # Every app shared one IndexedDB database AND one DB_VERSION, so spaces
         # has been writing into slides' store, and a version bump by any new app

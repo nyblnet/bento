@@ -33,7 +33,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
 const shellPath = args.find((a) => !a.startsWith('--'))
 if (!shellPath) {
-  console.error('Usage: node scripts/sign-release.mjs <shell.html> [--url U] [--version V] [--notes N] [--key K] [--out O]')
+  console.error('Usage: node scripts/sign-release.mjs <shell.html> [--app A] [--url U] [--version V] [--notes N] [--key K] [--out O]')
   process.exit(1)
 }
 const opt = (name, fallback) => {
@@ -41,7 +41,15 @@ const opt = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback
 }
 
+// The app this manifest is FOR. A shipped shell rejects a manifest signed for
+// another app even though the signing key is shared platform-wide
+// (kernel/src/update.ts checks it against appConfig().appId), so getting this
+// wrong ships an update channel that every file silently refuses.
+const app = opt('app', 'bento-slides')
 const version = opt('version', JSON.parse(readFileSync(join(root, 'slides/package.json'), 'utf8')).version)
+// Kept as the slides URL rather than derived from `app`: release.mjs passes
+// --url explicitly for every app, so a derivation here would be untested
+// cleverness on the one field a shipped file uses to FETCH its own update.
 const url = opt('url', 'https://bento.page/releases/slides/Bento_Slides.bento.html')
 const notes = opt('notes', '')
 // Per-version lead-ins, so a client can show exactly the versions it skipped.
@@ -60,7 +68,7 @@ const shell = readFileSync(shellPath)
 const sha256 = createHash('sha256').update(shell).digest('hex')
 
 const payload = JSON.stringify({
-  app: 'bento-slides',
+  app,
   version,
   sha256,
   url,

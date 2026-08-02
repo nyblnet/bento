@@ -1155,3 +1155,53 @@ comment named autosave as config-free and is corrected in the same change.
 
 Rig: `scripts/test-autosave.ts`, run for both apps in CI. It fails against the
 old shared-name code (7/8), which is the property that makes it a gate.
+
+## 2026-08-02 — A release seeds from what is published, and builds one app
+
+Second half of the multi-app release work (`working/spaces-design.md` §6.1).
+The first half made a destructive publish impossible; this one makes a
+non-destructive one possible.
+
+`release.mjs` was slides-shaped end to end: `rmSync(site)` then stage slides.
+One release builds ONE app, and `site/` is mirrored with `rsync --delete`, so
+every other app's signed shell, manifest and packs — fetched by shipped files
+at frozen URLs — were simply absent and would be deleted.
+
+**A release now SEEDS `site/` from the published tree and overwrites only what
+it built.** "Restore every untouched app byte-identically" becomes the default
+rather than a step someone remembers. It composes with the publish-time
+deletion gate: this fills the gap, that one refuses if a gap remains.
+
+Verified in both directions against a copy of the live tree: a spaces release
+leaves all 47 published files byte-identical and adds only `releases/spaces/`
+and `spaces/` (`diff -r` reports nothing but "Only in"); a slides release with
+spaces already published rebuilds slides and leaves spaces intact. Both report
+`deletion gate: none would be removed`.
+
+**Without a published tree, a release REFUSES** (`--allow-missing-published`
+for a genuinely first release). Continuing would stage a partial site whose
+publish deletes every other app; the gate would catch it, but failing here says
+what to do about it.
+
+**Site content has exactly one owner.** Landing, gallery, agent guide, skills,
+`/help`, `/q`, 404 and the guestbook are slides-derived — the gallery and 404
+decks literally embed the slides shell — so only a slides release rebuilds
+them. A spaces release must not regenerate them from a shell it did not build.
+`ownsSiteContent` says so, and the rig asserts exactly one app claims it.
+
+**Packs stay slides-only.** `build-i18n.mjs` and `sign-packs.mjs` are
+slides-hardcoded (§6.5) and spaces has no catalog, so a spaces release stages
+NO packs rather than unsigned ones — `publish-site.mjs` refuses unsigned packs,
+correctly.
+
+`sign-release.mjs` gains `--app`; it hardcoded `bento-slides`. This is the
+silent failure of the set: a shipped shell verifies the manifest's `app`
+against its own `configureApp()` id (`kernel/src/update.ts`), so a wrong value
+signs and publishes a channel every file quietly declines — nothing errors,
+updates just stop.
+
+The registry lives in `scripts/apps.mjs` with a rig, `test-release-apps.mjs`,
+because a release signs and the key never reaches CI: the pipeline is not
+CI-testable, but the registry drifting from the tree is. It pins `appId`
+against each app's own `configureApp()` call and the manifest URL against the
+path the release publishes to.

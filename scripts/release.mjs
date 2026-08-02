@@ -1,21 +1,31 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// Cut a bento/slides release: build the shell, sign the manifest, and
-// assemble the complete static site for bento.page into ./site/.
+// Cut a release for ONE app: build its shell, sign its manifest, and assemble
+// the complete static site for bento.page into ./site/.
 //
-//   node scripts/release.mjs [--no-build] [--key path]
+//   node scripts/release.mjs [--app slides|spaces] [--no-build] [--key path]
+//
+// ONE RELEASE BUILDS ONE APP, and `site/` is mirrored authoritatively — so the
+// site is SEEDED from the published tree first and this build overwrites only
+// what it produces. That is what keeps a spaces release from deleting slides'
+// signed shell, manifest and 22 language packs, which shipped files fetch by
+// frozen URL and could never recover. Without a published tree to restore
+// from, a release REFUSES (--allow-missing-published for the very first one).
 //
 // Output (publish ./site/ to GitHub Pages — see docs/RELEASING.md):
 //   site/
 //     CNAME                                  bento.page
 //     index.html                             placeholder landing page
-//     slides/index.html                      live demo (the shell itself)
-//     releases/slides/Bento_Slides.bento.html   the download
-//     releases/slides/manifest.json          signed update manifest
-//     releases/slides/packs/*.pack.json      language packs
+//     <app>/index.html                       live demo (the shell itself)
+//     releases/<app>/Bento_<App>.bento.html  the download
+//     releases/<app>/manifest.json           signed update manifest
+//     releases/slides/packs/*.pack.json      language packs (slides only today)
 //     releases/slides/packs.json             signed pack index (pins each
 //                                            pack's sha256)
+//   …plus the shared site — landing, gallery, agent guide, skills, /help, /q,
+//   404, guestbook — which is slides-derived and rebuilt only by a slides
+//   release; every other app leaves the published copies untouched.
 //
 // The bytes that get SIGNED are the bytes that get SERVED — everything is
 // staged from one local build, so the manifest sha256 always matches the
@@ -25,10 +35,11 @@
 
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
 import { gateShell } from './shell-gate.mjs'
+import { APPS } from './apps.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
@@ -37,27 +48,76 @@ const opt = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback
 }
 
-const version = JSON.parse(readFileSync(join(root, 'slides/package.json'), 'utf8')).version
-const shellSrc = join(root, 'slides/dist-single/Bento_Slides.bento.html')
+const appKey = opt('app', 'slides')
+const app = APPS[appKey]
+if (!app) {
+  console.error(`✗ unknown --app "${appKey}". Known: ${Object.keys(APPS).join(', ')}`)
+  process.exit(1)
+}
+
+const version = JSON.parse(readFileSync(join(root, `${app.dir}/package.json`), 'utf8')).version
+const shellSrc = join(root, `${app.dir}/dist-single/${app.shell}`)
 const site = join(root, 'site')
 
+/** The live tree, resolved exactly as publish-site.mjs resolves it. */
+const published = process.env.BENTO_SITE_DIR
+  ? resolve(process.env.BENTO_SITE_DIR)
+  : resolve(root, '..', 'bento-site')
+
 if (!args.includes('--no-build')) {
-  console.log(`Building v${version}…`)
-  execFileSync('npm', ['run', 'build:single'], { cwd: join(root, 'slides'), stdio: 'inherit' })
+  console.log(`Building ${app.appId} v${version}…`)
+  execFileSync('npm', ['run', 'build:single'], { cwd: join(root, app.dir), stdio: 'inherit' })
 }
 
 rmSync(site, { recursive: true, force: true })
-mkdirSync(join(site, 'releases/slides'), { recursive: true })
-mkdirSync(join(site, 'slides'), { recursive: true })
+mkdirSync(site, { recursive: true })
 
-cpSync(shellSrc, join(site, 'releases/slides/Bento_Slides.bento.html'))
-// The live demo IS the shell — opening it boots the editor with the starter deck.
-cpSync(shellSrc, join(site, 'slides/index.html'))
+// ---- seed from what is ALREADY PUBLISHED -----------------------------------
+//
+// `site/` is mirrored authoritatively with `rsync --delete`, so anything this
+// build does not stage is DELETED from bento.page. One release builds one app;
+// every other app's signed shell, manifest and packs are therefore missing —
+// and shipped files fetch those by frozen URL, so removing them takes their
+// update and pack channels offline permanently, with no client-side repair.
+//
+// Measured before this existed: a spaces-shaped `site/` removed 47 live files
+// with every gate green (docs/DECISIONS.md, 2026-08-02).
+//
+// So a release STARTS from the live tree and overwrites what it built. That
+// makes "restore every untouched app byte-identically" the default rather than
+// a step someone has to remember, and it composes with the publish-time
+// deletion gate: this fills the gap, that one refuses if a gap remains.
+if (existsSync(published)) {
+  cpSync(published, site, { recursive: true, filter: (src) => !src.split('/').includes('.git') })
+  const seeded = execFileSync('find', [site, '-type', 'f'], { encoding: 'utf8' }).trim().split('\n').length
+  console.log(`• seeded site/ from the published tree (${seeded} files) — this build overwrites what it produces`)
+} else if (args.includes('--allow-missing-published')) {
+  console.log(`⚠ no published tree at ${published} — building a site with ONLY this app's artifacts`)
+} else {
+  // Fail CLOSED. Continuing would stage a partial site whose publish deletes
+  // every other app; the deletion gate would catch it, but failing here says
+  // what to do about it.
+  console.error(
+    `✗ no published tree at ${published}, so this release cannot restore the apps it is not building.\n` +
+    `  Publishing a partial site/ deletes every other app's signed shell, manifest and packs\n` +
+    `  from bento.page, and shipped files fetch those by frozen URL.\n\n` +
+    `  Clone it beside this repo, or set BENTO_SITE_DIR.\n` +
+    `  First release ever, with nothing published yet: --allow-missing-published.`,
+  )
+  process.exit(1)
+}
+
+mkdirSync(join(site, `releases/${app.dir}`), { recursive: true })
+mkdirSync(join(site, app.dir), { recursive: true })
+
+cpSync(shellSrc, join(site, `releases/${app.dir}/${app.shell}`))
+// The live demo IS the shell — opening it boots the editor with the starter doc.
+cpSync(shellSrc, join(site, `${app.dir}/index.html`))
 
 // CONFORMANCE GATE — old updaters are frozen code; every release must
 // satisfy the splice contract they rely on. The gate itself lives in
 // scripts/shell-gate.mjs (shared with CI, which runs it on every PR build).
-gateShell(join(site, 'releases/slides/Bento_Slides.bento.html'))
+gateShell(join(site, `releases/${app.dir}/${app.shell}`))
 
 const key = opt('key', null)
 
@@ -150,28 +210,39 @@ if (notes) console.log(`  notes   ${notes.split('\n').length} line(s), spanning 
 else console.log('  notes   none — no CHANGELOG entry for this version')
 const signArgs = [
   join(root, 'scripts/sign-release.mjs'),
-  join(site, 'releases/slides/Bento_Slides.bento.html'),
-  '--out', join(site, 'releases/slides/manifest.json'),
+  join(site, `releases/${app.dir}/${app.shell}`),
+  '--app', app.appId,
+  '--version', version,
+  '--url', `https://bento.page/releases/${app.dir}/${app.shell}`,
+  '--out', join(site, `releases/${app.dir}/manifest.json`),
 ]
 if (notes) signArgs.push('--notes', notes)
 if (notesFrom) signArgs.push('--notes-from', JSON.stringify(notesFrom))
 if (key) signArgs.push('--key', key)
 execFileSync('node', signArgs, { stdio: 'inherit' })
 
-// Language packs: every non-core language, emitted from its catalog, staged
-// beside the shell and listed in packs.json — a SIGNED index (same envelope,
-// same offline key as the manifest) that pins each pack's sha256. The index is
-// what "Add language…" reads; nothing is trusted without it.
-// Both steps are no-ops until a pack catalog exists (docs/i18n-packs.md).
-const packsOut = join(site, 'releases/slides/packs')
-execFileSync('node', [join(root, 'scripts/build-i18n.mjs'), '--packs', packsOut], { stdio: 'inherit' })
-const packArgs = [
-  join(root, 'scripts/sign-packs.mjs'), packsOut,
-  '--out', join(site, 'releases/slides/packs.json'),
-  '--version', version,
-]
-if (key) packArgs.push('--key', key)
-execFileSync('node', packArgs, { stdio: 'inherit' })
+// Language packs, for the apps that have a signed channel. build-i18n.mjs and
+// sign-packs.mjs are slides-hardcoded end to end (docs/i18n-packs.md), so an
+// app without a catalog stages none rather than staging UNSIGNED ones —
+// publish-site.mjs refuses those outright, and it is right to.
+if (app.packs) {
+  // Language packs: every non-core language, emitted from its catalog, staged
+  // beside the shell and listed in packs.json — a SIGNED index (same envelope,
+  // same offline key as the manifest) that pins each pack's sha256. The index is
+  // what "Add language…" reads; nothing is trusted without it.
+  // Both steps are no-ops until a pack catalog exists (docs/i18n-packs.md).
+  const packsOut = join(site, 'releases/slides/packs')
+  execFileSync('node', [join(root, 'scripts/build-i18n.mjs'), '--packs', packsOut], { stdio: 'inherit' })
+  const packArgs = [
+    join(root, 'scripts/sign-packs.mjs'), packsOut,
+    '--out', join(site, 'releases/slides/packs.json'),
+    '--version', version,
+  ]
+  if (key) packArgs.push('--key', key)
+  execFileSync('node', packArgs, { stdio: 'inherit' })
+} else {
+  console.log(`packs: ${app.appId} has no signed pack channel yet — skipped`)
+}
 
 writeFileSync(join(site, 'CNAME'), 'bento.page\n')
 // The site is fully pre-built static — disable Jekyll so every file is served
@@ -179,84 +250,94 @@ writeFileSync(join(site, 'CNAME'), 'bento.page\n')
 // YAML front matter (e.g. skills/*/SKILL.md) into .html, 404-ing the .md URL.
 writeFileSync(join(site, '.nojekyll'), '')
 
-// The real landing page — assembled from site-src/landing.html with the
-// deck's embedded typefaces injected (scripts/build-landing.mjs).
-execFileSync('node', [join(root, 'scripts/build-landing.mjs'), join(site, 'index.html')], { stdio: 'inherit' })
+// ---- the bento.page site itself -------------------------------------------
+// Landing, gallery, agent guide, skills, /help, /q, 404 and the guestbook are
+// all SLIDES-derived today — the gallery decks and the 404 deck literally
+// embed the slides shell. A spaces release must not regenerate them from a
+// shell it did not build, so it leaves the seeded copies in place untouched.
+// When spaces gets its own landing slot, it gets its own entry here.
+if (app.ownsSiteContent) {
+  // The real landing page — assembled from site-src/landing.html with the
+  // deck's embedded typefaces injected (scripts/build-landing.mjs).
+  execFileSync('node', [join(root, 'scripts/build-landing.mjs'), join(site, 'index.html')], { stdio: 'inherit' })
 
-// The gallery — four template decks spliced from the same staged shell
-// (each carries template:true; opening one mints a fresh, independent deck).
-execFileSync('node', [join(root, 'scripts/build-example-decks.mjs'), join(site, 'gallery')], { stdio: 'inherit' })
+  // The gallery — four template decks spliced from the same staged shell
+  // (each carries template:true; opening one mints a fresh, independent deck).
+  execFileSync('node', [join(root, 'scripts/build-example-decks.mjs'), join(site, 'gallery')], { stdio: 'inherit' })
 
-// The agent guide — the runnable version of the "designed for AI" claim.
-// Stamp the current shell version so the guide declares which feature set it
-// matches (agents can compare it to a deck written by a newer shell).
-writeFileSync(
-  join(site, 'agents.md'),
-  readFileSync(join(root, 'docs/agents.md'), 'utf8').replace(/__APP_VERSION__/g, version),
-)
-// The harness skill (canonical home: the Claude Code plugin at
-// plugins/bento-slides). Published three ways: the raw SKILL.md (curl
-// one-liner), a claude.ai-uploadable zip (must contain bento-slides/SKILL.md,
-// folder-inside-zip), and a compat copy at the old bento-deck URL.
-const skillSrc = join(root, 'plugins/bento-slides/skills/bento-slides/SKILL.md')
-mkdirSync(join(site, 'skills/bento-slides'), { recursive: true })
-cpSync(skillSrc, join(site, 'skills/bento-slides/SKILL.md'))
-mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
-cpSync(skillSrc, join(site, 'skills/bento-deck/SKILL.md'))
-execFileSync('zip', ['-q', '-X', '-o', 'bento-slides.zip', 'bento-slides/SKILL.md'], { cwd: join(site, 'skills') })
+  // The agent guide — the runnable version of the "designed for AI" claim.
+  // Stamp the current shell version so the guide declares which feature set it
+  // matches (agents can compare it to a deck written by a newer shell).
+  writeFileSync(
+    join(site, 'agents.md'),
+    readFileSync(join(root, 'docs/agents.md'), 'utf8').replace(/__APP_VERSION__/g, version),
+  )
+  // The harness skill (canonical home: the Claude Code plugin at
+  // plugins/bento-slides). Published three ways: the raw SKILL.md (curl
+  // one-liner), a claude.ai-uploadable zip (must contain bento-slides/SKILL.md,
+  // folder-inside-zip), and a compat copy at the old bento-deck URL.
+  const skillSrc = join(root, 'plugins/bento-slides/skills/bento-slides/SKILL.md')
+  mkdirSync(join(site, 'skills/bento-slides'), { recursive: true })
+  cpSync(skillSrc, join(site, 'skills/bento-slides/SKILL.md'))
+  mkdirSync(join(site, 'skills/bento-deck'), { recursive: true })
+  cpSync(skillSrc, join(site, 'skills/bento-deck/SKILL.md'))
+  execFileSync('zip', ['-q', '-X', '-o', 'bento-slides.zip', 'bento-slides/SKILL.md'], { cwd: join(site, 'skills') })
 
-// MIT license — travels to the public site repo so the published tree carries it.
-cpSync(join(root, 'LICENSE'), join(site, 'LICENSE'))
+  // MIT license — travels to the public site repo so the published tree carries it.
+  cpSync(join(root, 'LICENSE'), join(site, 'LICENSE'))
 
-// /help — the user-facing guide (linked from the editor's ? overlay).
-mkdirSync(join(site, 'help'), { recursive: true })
-cpSync(join(root, 'site-src/help.html'), join(site, 'help/index.html'))
+  // /help — the user-facing guide (linked from the editor's ? overlay).
+  mkdirSync(join(site, 'help'), { recursive: true })
+  cpSync(join(root, 'site-src/help.html'), join(site, 'help/index.html'))
 
-// 404 — of course it's a deck (see build-404-deck.mjs + site-src/404.html).
-execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
-cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
+  // 404 — of course it's a deck (see build-404-deck.mjs + site-src/404.html).
+  execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
+  cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
 
-// /q — "this QR code is a presentation" (deck lives in the URL fragment).
-execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/index.html')], { stdio: 'inherit' })
+  // /q — "this QR code is a presentation" (deck lives in the URL fragment).
+  execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/index.html')], { stdio: 'inherit' })
 
-// /hello.bento.html — the launch announcement, itself a Bento deck (U1). This
-// is the Show HN link target: opening it boots the editor with the pitch
-// loaded as a live, editable template deck.
-execFileSync('node', [join(root, 'scripts/build-announcement-deck.mjs'), join(site, 'hello.bento.html')], { stdio: 'inherit' })
+  // /hello.bento.html — the launch announcement, itself a Bento deck (U1). This
+  // is the Show HN link target: opening it boots the editor with the pitch
+  // loaded as a live, editable template deck.
+  execFileSync('node', [join(root, 'scripts/build-announcement-deck.mjs'), join(site, 'hello.bento.html')], { stdio: 'inherit' })
 
-// The guestbook LANDING page is an authored source (site-src/guestbook.html),
-// tracked in this repo, so it ships on every release. It used to be written
-// only inside the `existsSync(guestbook)` branch below, which depends on a
-// GITIGNORED epoch file — so a release built from a clean checkout of the tag
-// (which is what RELEASING.md now tells you to do) produced a site/ with no
-// guestbook/index.html, and publish-site.mjs mirrors with `rsync --delete`.
-// That deleted the live landing page during the v1.0.12 publish. The deck below
-// genuinely needs the epoch; this page never did.
-mkdirSync(join(site, 'guestbook'), { recursive: true })
-cpSync(join(root, 'site-src/guestbook.html'), join(site, 'guestbook/index.html'))
+  // The guestbook LANDING page is an authored source (site-src/guestbook.html),
+  // tracked in this repo, so it ships on every release. It used to be written
+  // only inside the `existsSync(guestbook)` branch below, which depends on a
+  // GITIGNORED epoch file — so a release built from a clean checkout of the tag
+  // (which is what RELEASING.md now tells you to do) produced a site/ with no
+  // guestbook/index.html, and publish-site.mjs mirrors with `rsync --delete`.
+  // That deleted the live landing page during the v1.0.12 publish. The deck below
+  // genuinely needs the epoch; this page never did.
+  mkdirSync(join(site, 'guestbook'), { recursive: true })
+  cpSync(join(root, 'site-src/guestbook.html'), join(site, 'guestbook/index.html'))
 
-// The Guestbook DECK (U2) — ships only once an epoch has been minted into
-// working/guestbook-live/ (scripts/build-guestbook.mjs). Kill switch:
-// delete that file and re-release.
-const guestbook = join(root, 'working/guestbook-live/guestbook.bento.html')
-if (existsSync(guestbook)) {
-  // RE-SHELL the current epoch onto the freshly-built shell (don't just copy a
-  // deck that may embed an old shell). The document — room creds, docId, wall
-  // seed — is shell-independent, so re-splicing it into the new shell keeps the
-  // SAME live room and walls while updating the runtime. This is why the
-  // guestbook never lags a release. (An epoch ROLL, with fresh creds, is a
-  // separate deliberate act: scripts/build-guestbook.mjs / the daemon.)
-  const freshShell = readFileSync(join(site, 'releases/slides/Bento_Slides.bento.html'), 'utf8')
-  const gbHtml = readFileSync(guestbook, 'utf8')
-  const m = gbHtml.match(/<script type="application\/bento\+json" id="bento-doc">\s*([\s\S]*?)\s*<\/script>/)
-  if (!m) throw new Error('guestbook: no #bento-doc block in working/guestbook-live/')
-  const gbDoc = JSON.parse(m[1].replace(/\\u003c/g, '<'))
-  const reshelled = spliceDoc(freshShell, gbDoc)
-  writeFileSync(guestbook, reshelled) // keep the working epoch file on the fresh shell too
-  cpSync(guestbook, join(site, 'guestbook.bento.html'))
-  console.log(`guestbook: re-shelled current epoch onto the fresh shell (room ${gbDoc.collab?.room?.split('/').pop() ?? '?'})`)
+  // The Guestbook DECK (U2) — ships only once an epoch has been minted into
+  // working/guestbook-live/ (scripts/build-guestbook.mjs). Kill switch:
+  // delete that file and re-release.
+  const guestbook = join(root, 'working/guestbook-live/guestbook.bento.html')
+  if (existsSync(guestbook)) {
+    // RE-SHELL the current epoch onto the freshly-built shell (don't just copy a
+    // deck that may embed an old shell). The document — room creds, docId, wall
+    // seed — is shell-independent, so re-splicing it into the new shell keeps the
+    // SAME live room and walls while updating the runtime. This is why the
+    // guestbook never lags a release. (An epoch ROLL, with fresh creds, is a
+    // separate deliberate act: scripts/build-guestbook.mjs / the daemon.)
+    const freshShell = readFileSync(join(site, 'releases/slides/Bento_Slides.bento.html'), 'utf8')
+    const gbHtml = readFileSync(guestbook, 'utf8')
+    const m = gbHtml.match(/<script type="application\/bento\+json" id="bento-doc">\s*([\s\S]*?)\s*<\/script>/)
+    if (!m) throw new Error('guestbook: no #bento-doc block in working/guestbook-live/')
+    const gbDoc = JSON.parse(m[1].replace(/\\u003c/g, '<'))
+    const reshelled = spliceDoc(freshShell, gbDoc)
+    writeFileSync(guestbook, reshelled) // keep the working epoch file on the fresh shell too
+    cpSync(guestbook, join(site, 'guestbook.bento.html'))
+    console.log(`guestbook: re-shelled current epoch onto the fresh shell (room ${gbDoc.collab?.room?.split('/').pop() ?? '?'})`)
+  } else {
+    console.log('guestbook: not armed (working/guestbook-live/ empty) — skipped')
+  }
 } else {
-  console.log('guestbook: not armed (working/guestbook-live/ empty) — skipped')
+  console.log(`site content: owned by slides — left as published (${app.appId} release)`)
 }
 
 console.log(`\nSite assembled for v${version}:`)
