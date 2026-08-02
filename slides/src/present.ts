@@ -13,6 +13,7 @@ import { morphKey } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
+import { lsGet, lsSet } from '../../kernel/src/storage.ts'
 
 const MORPH_DURATION = 0.65
 const MORPH_EASE = 'power2.inOut'
@@ -413,7 +414,7 @@ export function startPresentation(
   const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   const readMotionPref = (): boolean | null => {
     try {
-      const v = localStorage.getItem('bento-reduce-motion')
+      const v = lsGet('bento-reduce-motion')
       return v === 'on' ? true : v === 'off' ? false : null
     } catch { return null }
   }
@@ -564,7 +565,7 @@ export function startPresentation(
 
   const setReduceMotion = (on: boolean, persist = true) => {
     reduceMotion = on
-    if (persist) { try { localStorage.setItem('bento-reduce-motion', on ? 'on' : 'off') } catch { /* storage off */ } }
+    if (persist) lsSet('bento-reduce-motion', on ? 'on' : 'off')
     overlay.classList.toggle('reduce-motion', on)
     if (on) clearLaserTrail()
     // Toast only on an explicit toggle (M / speaker button), not the silent

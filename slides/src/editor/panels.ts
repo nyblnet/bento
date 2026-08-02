@@ -13,6 +13,7 @@ import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
+import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 // Hover help for panel rows, keyed by the RAW English label (translated at
 // render). A missing entry means no tooltip — better silence than an echo.
@@ -181,7 +182,7 @@ export class PropsPanel {
    */
   private applyAccordion() {
     let openState: Record<string, boolean> = {}
-    try { openState = JSON.parse(localStorage.getItem('bento-panel-open') ?? '{}') } catch { /* defaults */ }
+    openState = lsJson<Record<string, boolean>>('bento-panel-open', {})
     const headers = [...this.host.querySelectorAll<HTMLElement>('.ed-section')]
     for (const h of headers) {
       const key = h.textContent ?? ''
@@ -204,7 +205,7 @@ export class PropsPanel {
         const nowClosed = h.classList.toggle('closed')
         body.style.display = nowClosed ? 'none' : ''
         openState[key] = !nowClosed
-        localStorage.setItem('bento-panel-open', JSON.stringify(openState))
+        lsSet('bento-panel-open', JSON.stringify(openState))
       })
     }
   }

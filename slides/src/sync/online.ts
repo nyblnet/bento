@@ -15,6 +15,7 @@ import type { BentoDoc } from '../model'
 import type { Op, SyncStateJSON } from './crdt'
 import type { Frame, RefusalCode, SyncSession, Transport } from './session'
 import { offlineEnabled } from '../update'
+import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
 
 export const DEFAULT_SYNC_HOST = 'wss://sync.bento.page'
 const SNAP_EVERY = 200 // ops between encrypted snapshot uploads
@@ -86,11 +87,11 @@ export async function mintInvite(ownerPrivB64: string, role: 'writer' | 'comment
 export async function deviceIdentity(docId: string): Promise<{ pub: string; priv: string }> {
   const k = `bento-member-${docId}`
   try {
-    const saved = localStorage.getItem(k)
+    const saved = lsGet(k)
     if (saved) return JSON.parse(saved)
   } catch { /* storage unavailable → ephemeral identity */ }
   const id = await mintKeypair()
-  try { localStorage.setItem(k, JSON.stringify(id)) } catch { /* ephemeral */ }
+  lsSet(k, JSON.stringify(id))
   return id
 }
 
@@ -142,7 +143,7 @@ export async function mintCollab(): Promise<CollabCreds> {
 /** dev override for the relay host (e.g. ws://localhost:8787) */
 export function syncHost(): string {
   try {
-    return localStorage.getItem('bento-sync-url') || DEFAULT_SYNC_HOST
+    return lsGet('bento-sync-url') || DEFAULT_SYNC_HOST
   } catch {
     return DEFAULT_SYNC_HOST
   }

@@ -28,6 +28,7 @@ import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, st
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 const i18nT = t
 
@@ -362,7 +363,7 @@ export class Editor {
     // hint merely plays — so it keeps nudging until it's used). Hover replays it
     // any time (CSS :hover). When the laps finish fading, just drop the class so
     // hover takes over cleanly (a lingering class would replay on mouse-out).
-    try { if (!localStorage.getItem('bento-slideshow-started')) pill.classList.add('ed-hint-pulse') } catch { /* storage off */ }
+    if (!lsGet('bento-slideshow-started')) pill.classList.add('ed-hint-pulse')
     pill.addEventListener('animationend', (e) => {
       if ((e as AnimationEvent).animationName !== 'ed-runner-fade') return
       pill.classList.remove('ed-hint-pulse')
@@ -450,7 +451,7 @@ export class Editor {
 
   private restorePanelWidths() {
     try {
-      const saved = JSON.parse(localStorage.getItem('bento-ed-panels') ?? '{}')
+      const saved = lsJson<Record<string, number>>('bento-ed-panels', {})
       for (const side of ['left', 'right'] as const) {
         const [min, max] = Editor.PANEL_BOUNDS[side]
         if (typeof saved[side] === 'number') this.panelW[side] = Math.min(max, Math.max(min, saved[side]))
@@ -500,7 +501,7 @@ export class Editor {
     handle.appendChild(toggle)
     queueMicrotask(() => this.updatePanelChevrons())
     const commit = () => {
-      localStorage.setItem('bento-ed-panels', JSON.stringify(this.panelW))
+      lsSet('bento-ed-panels', JSON.stringify(this.panelW))
       // thumbnails render at a width derived from the sidebar — refit them
       if (side === 'left') this.rebuildSidebar()
     }
@@ -1004,13 +1005,13 @@ export class Editor {
     nameInput.type = 'text'
     nameInput.placeholder = t('Guest')
     try {
-      nameInput.value = localStorage.getItem('bento-author') ?? ''
+      nameInput.value = lsGet('bento-author') ?? ''
     } catch {
       /* storage unavailable */
     }
     nameInput.addEventListener('change', () => {
       try {
-        localStorage.setItem('bento-author', nameInput.value.trim())
+        lsSet('bento-author', nameInput.value.trim())
       } catch {
         /* storage unavailable */
       }
@@ -1040,7 +1041,7 @@ export class Editor {
       else if (cme.v === 2 && cme.ownerPriv) { myRole = 'owner'; myPub = cme.owner }
       else if (cme.v === 2 && cme.invite) {
         myRole = 'editor'
-        try { myPub = JSON.parse(localStorage.getItem(`bento-member-${this.store.doc.docId}`) ?? 'null')?.pub } catch { /* absent */ }
+        myPub = lsJson<{ pub?: string } | null>(`bento-member-${this.store.doc.docId}`, null)?.pub
       } else if (cme.writerPriv) { myRole = 'editor'; myPub = cme.writerPub }
       if (myRole) {
         const label = div('ed-share-label')
@@ -1050,7 +1051,7 @@ export class Editor {
         const who = document.createElement('span')
         who.className = 'who'
         let myName = t('Guest')
-        try { myName = localStorage.getItem('bento-author') || myName } catch { /* ok */ }
+        myName = lsGet('bento-author') || myName
         who.textContent = `${myName} (${t('you')})`
         const where = document.createElement('span')
         where.className = 'where'
@@ -1856,7 +1857,7 @@ export class Editor {
   present(fromStart = false, fullscreen = true) {
     if (this.presenting) return
     // They've started a slideshow — retire the first-run nudge for good.
-    try { localStorage.setItem('bento-slideshow-started', '1') } catch { /* storage off */ }
+    lsSet('bento-slideshow-started', '1')
     document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
     this.canvas.commitTextEdit()
     this.presenting = true
@@ -2248,14 +2249,14 @@ export class Editor {
 
   private noticeIfCannotWriteInPlace() {
     if (canWriteInPlace()) return
-    if (localStorage.getItem(SAVE_NOTICE_KEY) === 'seen') return
+    if (lsGet(SAVE_NOTICE_KEY) === 'seen') return
     const bar = div('ed-recover')
     const msg = document.createElement('span')
     msg.textContent = t('This browser can’t rewrite files in place. ⌘S will download an updated copy instead — your work is also kept in this browser and offered back if you reopen.')
     const ok = document.createElement('button')
     ok.className = 'ed-btn ed-btn-primary'
     ok.textContent = t('Got it')
-    ok.addEventListener('click', () => { localStorage.setItem(SAVE_NOTICE_KEY, 'seen'); bar.remove() })
+    ok.addEventListener('click', () => { lsSet(SAVE_NOTICE_KEY, 'seen'); bar.remove() })
     bar.append(msg, ok)
     document.body.appendChild(bar)
   }

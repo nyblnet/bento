@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: a deck opens where the browser refuses it storage.** With site data
+  blocked, inside some embedded webviews, or in any sandboxed frame, a Bento
+  file showed *"This file could not start"* and nothing else — because reading
+  the `localStorage` property (not calling a method on it, merely reading it)
+  throws in those contexts, and the very first thing the app did was read your
+  saved language. One unreadable preference cost you the whole document.
+
+  Preferences now fall back to their defaults instead: the deck opens and
+  behaves as it would for a first-time visitor. Anything you change during the
+  session works normally; it just is not remembered.
+
 ## [1.0.14] — 2026-08-02
 
 - **Pan the canvas by dragging, and past the slide's edges.** The scrollbars

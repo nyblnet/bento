@@ -17,6 +17,9 @@
 // resolving at module scope would run against an empty registry and silently
 // fall everyone back to English. Registration also clears the memo.
 
+
+import { lsDel, lsGet, lsSet } from './storage.ts'
+
 export type Catalog = Record<string, string>
 export interface LocaleChoice { code: string; label: string }
 
@@ -170,7 +173,7 @@ const pseudo = (s: string): string =>
   '⟧'
 
 function resolve(): string {
-  const saved = localStorage.getItem('bento-lang')
+  const saved = lsGet('bento-lang')
   if (saved) return saved
   const nav = navigator.language || 'en'
   if (hasLocale(nav)) return nav
@@ -190,8 +193,8 @@ export const locale = (): string => activeLocale()
 
 /** Persist the override and switch. Callers re-render their own UI. */
 export function setLocale(code: string): void {
-  if (code === 'en') localStorage.removeItem('bento-lang')
-  else localStorage.setItem('bento-lang', code)
+  if (code === 'en') lsDel('bento-lang')
+  else lsSet('bento-lang', code)
   current = code
 }
 

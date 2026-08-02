@@ -122,6 +122,15 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Guarded storage rig
+        # localStorage's absence is hostile: reading the PROPERTY throws, so
+        # `if (localStorage)` is itself the crash and one bare read at module
+        # scope takes the whole file down before it paints. Measured in a
+        # sandboxed iframe. The rig simulates each failure mode and pins the
+        # regression: importing a module that reads storage on load must not
+        # throw when storage does.
+        run: node scripts/test-storage.ts
+
       - name: Model key tables match the format
         # slides/src/modelkeys.generated.ts is derived from model.ts and drives
         # validate()'s unknown-key check. A stale copy would report real

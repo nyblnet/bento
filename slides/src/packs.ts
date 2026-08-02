@@ -25,6 +25,7 @@ import { fetchPinned, verifySigned } from '../../kernel/src/update.ts'
 // Extension-explicit like the kernel imports above, so this module also loads
 // under plain node — scripts/test-packs.ts exercises the real thing.
 import { PACKED } from './i18n/packed.ts'
+import { lsGet } from '../../kernel/src/storage.ts'
 
 /**
  * Where the release channel publishes the pack index and the packs.
@@ -33,7 +34,7 @@ import { PACKED } from './i18n/packed.ts'
  * without a rebuild. (A URL, not pack data: nothing durable lives here.)
  */
 const channel = (): string =>
-  localStorage.getItem('bento-packs-url') ?? 'https://bento.page/releases/slides'
+  lsGet('bento-packs-url') ?? 'https://bento.page/releases/slides'
 
 export interface PackListing {
   lang: string
