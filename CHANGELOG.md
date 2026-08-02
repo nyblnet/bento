@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **`window.bento.validate()` — see what the runtime silently swallows.**
+  Almost everything that goes wrong in a generated deck fails quietly: a typo'd
+  property is ignored, a `dash-march` loop on a solid stroke animates nothing,
+  an entrance on a morph arrival never runs, and text overflows its box while
+  the JSON looks perfect. `validate()` reports all of it in one structured
+  pass, including text overflow measured against the real renderer. It only
+  reads — it never changes the document. Its first run found dead chart options
+  and two entrance animations that could never play in our own starter deck,
+  both now removed. Requested by thinkbig1979 in #194.
+
 - **Fix: count-up numbers work on morph slides.** `fx.countUp` was started only
   by the entrance runner, and morph and entrances are mutually exclusive — so a
   statistic on a slide reached by `transition:"morph"` silently rendered a

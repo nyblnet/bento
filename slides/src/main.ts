@@ -15,6 +15,7 @@ import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc } from './model'
+import { validateDoc, type ValidateOpts } from './validate'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
 import { Store } from './store'
@@ -215,6 +216,16 @@ if (location.hash === '#present') {
     if (!next) return false
     store.replaceDoc(next)
     return true
+  },
+  /**
+   * Report what the runtime would otherwise swallow: unknown keys, text that
+   * overflows its box, elements off the canvas, effects that can never run,
+   * broken links and asset refs, chart options charts-lite ignores. Read-only
+   * — it never changes the document. Pass a doc to check one you have not
+   * loaded; defaults to the open one.
+   */
+  validate(target?: BentoDoc, opts?: ValidateOpts) {
+    return validateDoc(target ?? store.doc, opts)
   },
   /**
    * Self-update surface (all user/tooling-initiated, never automatic):

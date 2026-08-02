@@ -168,6 +168,31 @@ each kind of content to the feature built for it:
       obvious on screen. This is the only check that catches what the others
       cannot; a deck nobody rendered is not finished.
 
+### `window.bento.validate()`
+
+Open the deck and run it in the browser console. It reports, in one pass, the
+things the runtime otherwise swallows in silence:
+
+```js
+const { ok, counts, findings } = window.bento.validate()
+findings.filter(f => f.severity !== 'info')
+```
+
+Each finding is `{code, severity, message, slide?, element?, path?}`. It checks
+unknown property names (a typo is ignored, so the styling just never applies),
+text that overflows its box (measured against the real renderer), elements off
+the canvas, entrances that can never run, `dash-march` without a dashed stroke,
+broken `link` and `asset:` references, duplicate ids and morph-key collisions,
+and chart options charts-lite does not implement.
+
+It only reads — it never changes the document, and a finding is advice, not a
+refusal. `severity: "info"` is deliberately quiet (a photo bleeding off the
+canvas is a design move, not a defect); `error` means something is broken, like
+a link to a slide that does not exist.
+
+This does not replace looking at the deck. It catches what is checkable; the
+rest — whether a slide is any good — still needs eyes.
+
 ## Minimal valid document
 
 Start from this skeleton when creating a deck from scratch. `size` and

@@ -122,6 +122,21 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Model key tables match the format
+        # slides/src/modelkeys.generated.ts is derived from model.ts and drives
+        # validate()'s unknown-key check. A stale copy would report real
+        # properties as unknown, and an agent acting on that deletes working
+        # configuration — so the generated file is committed and pinned here.
+        run: node scripts/build-modelkeys.mjs --check
+
+      - name: Document validation rig
+        # validate() is only useful if it is trusted: the rig proves the starter
+        # deck and a realistic chart stay silent, and that a deliberately broken
+        # deck trips every check.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-validate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-validate.mjs"
+          node "$RUNNER_TEMP/test-validate.mjs"
+
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is
         # 1280x720, so they used to hang 200px off the right edge of a default
