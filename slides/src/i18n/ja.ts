@@ -735,4 +735,6 @@ export const ja: Catalog = {
   "scroll": "スクロール",
   "Pan the canvas, including past the edges of the slide": "キャンバスを移動 — スライドの端を越えて動かせます",
   "Zoom in and out": "拡大・縮小",
+  "Space-drag": "スペース+ドラッグ",
+  "Pan as well, if your mouse has a middle button": "中ボタンのあるマウスでも移動できます",
 }

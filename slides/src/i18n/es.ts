@@ -735,4 +735,6 @@ export const es: Catalog = {
   "scroll": "rueda",
   "Pan the canvas, including past the edges of the slide": "Desplazar el lienzo, incluso más allá de los bordes de la diapositiva",
   "Zoom in and out": "Acercar y alejar",
+  "Space-drag": "Espacio + arrastrar",
+  "Pan as well, if your mouse has a middle button": "También desplaza, si tu ratón tiene botón central",
 }

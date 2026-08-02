@@ -43,6 +43,10 @@ export class SlideCanvas {
    *  progress and was deferred so it wouldn't tear the edited node out from
    *  under the caret; flushed when the edit commits. */
   private pendingRender = false
+  /** space is down and the canvas is armed to pan (see the keydown handler) */
+  private spaceHeld = false
+  /** a pan drag is in flight — keeps the grabbing cursor through a space release */
+  private panning = false
   private pathEditor!: PathEditor
   private lineEditor!: LineEditor
   private bezierEditor!: BezierEditor
@@ -96,31 +100,44 @@ export class SlideCanvas {
     // Capture phase, because Selecto is bound to this same scroller and would
     // otherwise read the press as the start of a marquee.
     this.scroller.addEventListener('mousedown', (ev) => {
-      if (ev.button !== 1) return
+      // Middle button, or left button while space is held — the two gestures
+      // every canvas tool offers. Space is the one most hands already know;
+      // middle-drag is the one that works when a hand is on the mouse, and the
+      // one #166 asked for. Neither exists on an Apple trackpad, which is why
+      // a plain two-finger scroll still pans once the slide is zoomed past fit.
+      // canGrabSpace is re-checked HERE, not just when space armed the pan: a
+      // keyup can be missed (a native dialog, focus leaving mid-hold), and a
+      // canvas stuck in pan mode would swallow the click that starts a text
+      // edit. The press itself is the last honest moment to ask.
+      if (ev.button !== 1 && !(ev.button === 0 && this.spaceHeld && this.canGrabSpace())) return
       ev.preventDefault() // suppress the OS autoscroll widget
       ev.stopPropagation()
-      const fromX = ev.clientX
-      const fromY = ev.clientY
-      const atLeft = this.scroller.scrollLeft
-      const atTop = this.scroller.scrollTop
-      const restoreCursor = this.scroller.style.cursor
-      this.scroller.style.cursor = 'grabbing'
-      const move = (m: MouseEvent) => {
-        this.scroller.scrollLeft = atLeft - (m.clientX - fromX)
-        this.scroller.scrollTop = atTop - (m.clientY - fromY)
-      }
-      const up = () => {
-        window.removeEventListener('mousemove', move, true)
-        window.removeEventListener('mouseup', up, true)
-        this.scroller.style.cursor = restoreCursor
-      }
-      // on window, so the pan survives the pointer leaving the canvas
-      window.addEventListener('mousemove', move, true)
-      window.addEventListener('mouseup', up, true)
+      this.startPan(ev)
     }, true)
     // X11 pastes the selection on middle-click release; the drag consumed it
     this.scroller.addEventListener('auxclick', (ev) => {
       if (ev.button === 1) ev.preventDefault()
+    })
+
+    // Space arms the pan. It is unbound in the editor otherwise, but it DOES
+    // page a scroll container by default, so the keydown has to be swallowed
+    // while we own it. Never while text is being edited or a panel field has
+    // focus — there a space is a space.
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key !== ' ' || ev.repeat || this.spaceHeld || !this.canGrabSpace()) return
+      ev.preventDefault()
+      this.spaceHeld = true
+      this.scroller.style.cursor = 'grab'
+    })
+    window.addEventListener('keyup', (ev) => {
+      if (ev.key !== ' ' || !this.spaceHeld) return
+      this.spaceHeld = false
+      if (!this.panning) this.scroller.style.cursor = ''
+    })
+    // Losing the window with space down would otherwise leave it stuck armed
+    window.addEventListener('blur', () => {
+      this.spaceHeld = false
+      if (!this.panning) this.scroller.style.cursor = ''
     })
 
     // Control box lives INSIDE the scaled host with rootContainer at body:
@@ -244,6 +261,52 @@ export class SlideCanvas {
     store.on('selection', () => this.syncTargets())
 
     this.render()
+  }
+
+  // --- panning ----------------------------------------------------------------
+
+  /**
+   * Is space free to mean "pan" right now? Not while any text is being edited
+   * on the canvas, and not while a panel field, the title or any other input
+   * has focus — in all of those a space is a character the user typed.
+   */
+  private canGrabSpace(): boolean {
+    if (this.editing || this.editingCell || this.isPathEditing) return false
+    const el = document.activeElement as HTMLElement | null
+    if (!el) return true
+    if (el.isContentEditable) return false
+    const tag = el.tagName
+    return tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT'
+  }
+
+  /**
+   * Drag the canvas from wherever it is now. Shared by both gestures so they
+   * cannot drift apart.
+   *
+   * The move/up listeners live on `window`: a pan that stops the moment the
+   * pointer crosses the panel edge would be useless precisely when panning
+   * matters, which is when the slide is bigger than the viewport.
+   */
+  private startPan(ev: MouseEvent) {
+    const fromX = ev.clientX
+    const fromY = ev.clientY
+    const atLeft = this.scroller.scrollLeft
+    const atTop = this.scroller.scrollTop
+    this.panning = true
+    this.scroller.style.cursor = 'grabbing'
+    const move = (m: MouseEvent) => {
+      this.scroller.scrollLeft = atLeft - (m.clientX - fromX)
+      this.scroller.scrollTop = atTop - (m.clientY - fromY)
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move, true)
+      window.removeEventListener('mouseup', up, true)
+      this.panning = false
+      // still armed if space is down, so keep the open hand rather than reset
+      this.scroller.style.cursor = this.spaceHeld ? 'grab' : ''
+    }
+    window.addEventListener('mousemove', move, true)
+    window.addEventListener('mouseup', up, true)
   }
 
   // --- layout & rendering ---------------------------------------------------

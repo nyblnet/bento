@@ -735,4 +735,6 @@ export const zhHans: Catalog = {
   "scroll": "滚动",
   "Pan the canvas, including past the edges of the slide": "平移画布，可以移动到幻灯片边缘之外",
   "Zoom in and out": "放大与缩小",
+  "Space-drag": "空格键+拖动",
+  "Pan as well, if your mouse has a middle button": "如果鼠标有中键，也可以平移",
 }

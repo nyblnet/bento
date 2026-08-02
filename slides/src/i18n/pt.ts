@@ -733,4 +733,6 @@ export const pt: Catalog = {
   "scroll": "rolagem",
   "Pan the canvas, including past the edges of the slide": "Deslocar a tela, inclusive para além das bordas do slide",
   "Zoom in and out": "Ampliar e reduzir",
+  "Space-drag": "Espaço + arrastar",
+  "Pan as well, if your mouse has a middle button": "Também desloca, se o rato tiver botão do meio",
 }

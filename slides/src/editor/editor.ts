@@ -2368,7 +2368,8 @@ export class Editor {
       ['?', t('This help')],
     ])
     section(colL, t('Canvas'), [
-      [t('Middle-drag'), t('Pan the canvas, including past the edges of the slide')],
+      [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
+      [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],
       [`${mod}-${t('scroll')}`, t('Zoom in and out')],
     ])
     section(colR, t('Lines & curves'), [

@@ -741,4 +741,6 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "scroll": ["スクロール","滚动","捲動","rueda","molette","Scrollen","scorrimento","rolagem"],
   "Pan the canvas, including past the edges of the slide": ["キャンバスを移動 — スライドの端を越えて動かせます","平移画布，可以移动到幻灯片边缘之外","平移畫布，可以移動到投影片邊緣之外","Desplazar el lienzo, incluso más allá de los bordes de la diapositiva","Déplacer le plan de travail, y compris au-delà des bords de la diapositive","Arbeitsfläche verschieben — auch über die Ränder der Folie hinaus","Sposta l’area di lavoro, anche oltre i bordi della diapositiva","Deslocar a tela, inclusive para além das bordas do slide"],
   "Zoom in and out": ["拡大・縮小","放大与缩小","放大與縮小","Acercar y alejar","Zoomer et dézoomer","Vergrößern und verkleinern","Ingrandisci e riduci","Ampliar e reduzir"],
+  "Space-drag": ["スペース+ドラッグ","空格键+拖动","空白鍵+拖曳","Espacio + arrastrar","Espace + glisser","Leertaste + ziehen","Spazio + trascina","Espaço + arrastar"],
+  "Pan as well, if your mouse has a middle button": ["中ボタンのあるマウスでも移動できます","如果鼠标有中键，也可以平移","如果滑鼠有中鍵，也可以平移","También desplaza, si tu ratón tiene botón central","Déplace aussi, si votre souris a un bouton du milieu","Verschiebt ebenfalls, wenn die Maus eine mittlere Taste hat","Sposta anche, se il mouse ha il tasto centrale","Também desloca, se o rato tiver botão do meio"],
 }

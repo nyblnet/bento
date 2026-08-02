@@ -735,4 +735,6 @@ export const de: Catalog = {
   "scroll": "Scrollen",
   "Pan the canvas, including past the edges of the slide": "Arbeitsfläche verschieben — auch über die Ränder der Folie hinaus",
   "Zoom in and out": "Vergrößern und verkleinern",
+  "Space-drag": "Leertaste + ziehen",
+  "Pan as well, if your mouse has a middle button": "Verschiebt ebenfalls, wenn die Maus eine mittlere Taste hat",
 }

@@ -735,4 +735,6 @@ export const zhHant: Catalog = {
   "scroll": "捲動",
   "Pan the canvas, including past the edges of the slide": "平移畫布，可以移動到投影片邊緣之外",
   "Zoom in and out": "放大與縮小",
+  "Space-drag": "空白鍵+拖曳",
+  "Pan as well, if your mouse has a middle button": "如果滑鼠有中鍵，也可以平移",
 }

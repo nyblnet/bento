@@ -735,4 +735,6 @@ export const fr: Catalog = {
   "scroll": "molette",
   "Pan the canvas, including past the edges of the slide": "Déplacer le plan de travail, y compris au-delà des bords de la diapositive",
   "Zoom in and out": "Zoomer et dézoomer",
+  "Space-drag": "Espace + glisser",
+  "Pan as well, if your mouse has a middle button": "Déplace aussi, si votre souris a un bouton du milieu",
 }

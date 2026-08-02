@@ -735,4 +735,6 @@ export const it: Catalog = {
   "scroll": "scorrimento",
   "Pan the canvas, including past the edges of the slide": "Sposta l’area di lavoro, anche oltre i bordi della diapositiva",
   "Zoom in and out": "Ingrandisci e riduci",
+  "Space-drag": "Spazio + trascina",
+  "Pan as well, if your mouse has a middle button": "Sposta anche, se il mouse ha il tasto centrale",
 }

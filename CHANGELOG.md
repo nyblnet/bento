@@ -11,10 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Pan the canvas by middle-dragging, and past the slide's edges.** The
-  scrollbars were the only way to move a zoomed slide, which puts the control
-  at the edge of the screen while the work is in the middle of it. Hold the
-  middle mouse button and drag to pan.
+- **Pan the canvas by dragging, and past the slide's edges.** The scrollbars
+  were the only way to move a zoomed slide, which puts the control at the edge
+  of the screen while the work is in the middle of it. **Hold space and drag**
+  to pan — the gesture nearly every canvas tool uses — or drag with the middle
+  mouse button if yours has one. On a trackpad a two-finger scroll already
+  panned once you were zoomed in, and still does.
 
   Scrolling also used to stop dead at the slide's edges, so at high zoom a
   corner element could never be moved off the corner of the screen to work on
