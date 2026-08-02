@@ -11,16 +11,7 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Fix: two gallery templates asked for a typeface they did not carry.** The
-  Orbital and Pixel Picnic templates set their text in Instrument Sans but
-  embedded no font at all, so every viewer without that typeface installed
-  silently got Helvetica Neue instead. They now carry the face — and only the
-  face they use, rather than every font the gallery has.
-
-  `validate()` gained the check that finds this class of bug (`font-not-embedded`).
-  It is worth having precisely because the failure is invisible to whoever made
-  the deck: they are the person most likely to have the typeface installed, so
-  it looks correct on the one machine that cannot detect the problem.
+## [1.0.14] — 2026-08-02
 
 - **Pan the canvas by dragging, and past the slide's edges.** The scrollbars
   were the only way to move a zoomed slide, which puts the control at the edge
@@ -36,52 +27,55 @@ pre-1.0.
   while the whole slide fits, so a view that needs no scrollbars still has
   none. Asked for by gcgbarbosa.
 
-- **Fit height to text.** A text box that is too short lets its content spill
-  over whatever sits below it, and one that is too tall throws off its
-  alignment against everything beside it — neither is visible in the numbers.
+- **Fit a text box to its text, in one click.** A box that is too short lets its
+  content spill over whatever sits below it, and one that is too tall throws off
+  its alignment against everything beside it — neither is visible in the numbers.
   The Typography panel now has a button that sets the box to exactly the height
-  its text needs, and says what that is before you press it.
+  its text needs, and tells you what that is before you press it.
 
   Underneath is `window.bento.measure()`, which answers the question the format
   could not: how tall is this string at this width, in this font? Ask it with a
-  spec and you can size a box *before* creating the element, which is what
-  turns generating a deck from guess-then-correct into laying it out right the
-  first time. Requested by thinkbig1979 in #194.
+  spec and you can size a box *before* creating the element, which is what turns
+  generating a deck from guess-then-correct into laying it out right the first
+  time. Requested by thinkbig1979.
 
-- **Entrance animations work on morph slides.** Setting an element to sweep in
-  from the right on a morph slide gave you a small upward nudge instead: the
-  morph supplied one fixed entrance for everything new on the slide, and
-  `fx.enter`'s direction, duration and order were discarded. An element that is
-  new to a morph slide now enters the way you asked. One that morphs in from
-  the previous slide still ignores `fx.enter` — it is already in motion, and an
-  entrance would fight the tween — and elements with no `fx.enter` keep the
-  automatic fade-and-rise, so nothing changes in a deck that did not ask for it.
+- **Entrances and count-ups now run on morph slides.** Both were skipped
+  wholesale on any slide reached by `transition:"morph"`, which the authoring
+  guide actively encourages — so a headline statistic rendered as a static
+  number, and an element told to sweep in from the right got a small upward
+  nudge instead.
 
-- **`window.bento.validate()` — see what the runtime silently swallows.**
-  Almost everything that goes wrong in a generated deck fails quietly: a typo'd
-  property is ignored, a `dash-march` loop on a solid stroke animates nothing,
-  an entrance on a morph arrival never runs, and text overflows its box while
-  the JSON looks perfect. `validate()` reports all of it in one structured
-  pass, including text overflow measured against the real renderer. It only
-  reads — it never changes the document. Its first run found dead configuration
-  in our own starter deck: three charts carrying a chart option the renderer
-  has never read, and two `fx.enter` declarations on a morph arrival, where the
-  morph supplies its own entrance and ignores them. Both now removed.
-  Requested by thinkbig1979 in #194.
-
-- **Fix: count-up numbers work on morph slides.** `fx.countUp` was started only
-  by the entrance runner, and morph and entrances are mutually exclusive — so a
-  statistic on a slide reached by `transition:"morph"` silently rendered a
-  static number. Count-ups now also run on a morph arrival, for elements with
-  no morph partner on the previous slide; one that flew in already showing its
-  number does not restart from zero. This combination is one the authoring
-  guide actively recommends, so it failed quietly and often.
+  The rule is now per element. One that morphs in from the previous slide is
+  already in motion and still ignores both. One that is **new** to the slide has
+  nothing to fight, so it counts up, and enters the way you asked — direction,
+  duration and order included. Elements with no `fx.enter` keep the automatic
+  fade-and-rise, so nothing changes in a deck that did not ask for it.
 
 - **Fix: the built-in layouts fit the slide.** They were drawn for a 1600×900
   stage while the default deck is 1280×720, so applying *Title* put the title
   box 160 px off the right edge and *Title + content* overflowed the bottom by
   88 px. They are now scaled to the deck's own page size, which also makes them
   correct for the custom sizes the slide panel offers.
+
+- **Check a deck for what the runtime silently swallows.** Almost everything
+  that goes wrong in a generated deck fails quietly: a typo'd property is
+  ignored, a `dash-march` loop on a solid stroke animates nothing, a typeface
+  the file never carried falls back to something else, and text overflows its
+  box while the JSON looks perfect. `window.bento.validate()` reports all of it
+  in one structured pass, including text overflow measured against the real
+  renderer. It only reads — it never changes the document.
+
+  Its first run found dead configuration in our own starter deck: three charts
+  carrying a chart option the renderer has never read, and two entrance
+  animations that could never play. Requested by thinkbig1979.
+
+- **Fix: two gallery templates asked for a typeface they did not carry.** The
+  Orbital and Pixel Picnic templates set their text in Instrument Sans but
+  embedded no font at all, so every viewer without that typeface installed
+  silently got Helvetica Neue instead. They now carry the face — and only the
+  face they use, rather than every font the gallery has. The failure was
+  invisible to us for the worst possible reason: whoever builds a template is
+  the person most likely to have its typeface installed.
 
 - **The agent authoring guide describes what the runtime actually does.**
   `agents.md` gained the download URL, the real `fx.loop` parameters (and the
