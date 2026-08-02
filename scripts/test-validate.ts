@@ -42,6 +42,8 @@ ok(!starter.findings.some((f) => f.code === 'unknown-key'),
   'the starter deck has no unknown keys — the generated key tables match the format it is written in')
 ok(!starter.findings.some((f) => f.code === 'chart-key-ignored'),
   'the starter deck has no dead chart options')
+ok(!starter.findings.some((f) => f.code === 'font-not-embedded'),
+  'the starter deck carries every typeface it names')
 ok(!starter.findings.some((f) => f.code === 'overridden-enter-fx'),
   'the starter deck has no entrance animations the morph would override')
 ok(starter.measured === false, 'measured is false without a DOM rather than silently skipping')
@@ -133,6 +135,32 @@ ok(!r.findings.some((f) => f.code === 'overridden-enter-fx' && f.element === 'fr
   'an entrance on an element NEW to a morph slide is not reported — it runs')
 ok(r.findings.some((f) => f.code === 'overridden-enter-fx' && f.element === 'dup'),
   'an entrance on an element that morphs in IS reported')
+
+// ------------------------------------------------- fonts named but not carried
+// The failure mode is invisible to whoever authored the deck, because they are
+// exactly the person with the typeface installed. Two gallery templates shipped
+// naming Instrument Sans and carrying nothing; on this machine they LOOKED
+// right. Only the document can be checked, never the local font list.
+const fontDoc = (fontFamily: string, fonts: unknown = null): BentoDoc => ({
+  ...clean, fonts,
+  theme: { accent: '#F7A600', fontFamily },
+} as any)
+const named = (d: BentoDoc) => validateDoc(d, { measure: false })
+  .findings.filter((f) => f.code === 'font-not-embedded')
+
+ok(named(fontDoc("'Instrument Sans', 'Helvetica Neue', sans-serif")).length === 1,
+  'a face named but not carried is reported')
+ok(named(fontDoc("'Instrument Sans', sans-serif",
+  [{ family: 'Instrument Sans', asset: 'font-instrument', weight: '100 900' }])).length === 0,
+  'the same face IS carried → no finding')
+for (const stack of [
+  'system-ui, sans-serif',
+  "'Helvetica Neue', Arial, sans-serif",
+  'Georgia, serif',
+  "ui-monospace, 'SF Mono', Menlo, monospace",
+]) {
+  ok(named(fontDoc(stack)).length === 0, `a system stack is not reported (${stack.split(',')[0]})`)
+}
 
 // ------------------------------------------------- chart false-positive guard
 // The shape the starter deck's own charts use. Every key here IS implemented,

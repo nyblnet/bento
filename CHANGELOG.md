@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: two gallery templates asked for a typeface they did not carry.** The
+  Orbital and Pixel Picnic templates set their text in Instrument Sans but
+  embedded no font at all, so every viewer without that typeface installed
+  silently got Helvetica Neue instead. They now carry the face — and only the
+  face they use, rather than every font the gallery has.
+
+  `validate()` gained the check that finds this class of bug (`font-not-embedded`).
+  It is worth having precisely because the failure is invisible to whoever made
+  the deck: they are the person most likely to have the typeface installed, so
+  it looks correct on the one machine that cannot detect the problem.
+
 - **Pan the canvas by dragging, and past the slide's edges.** The scrollbars
   were the only way to move a zoomed slide, which puts the control at the edge
   of the screen while the work is in the middle of it. **Hold space and drag**

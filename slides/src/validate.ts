@@ -79,6 +79,35 @@ const CHART_KEYS = {
   legend: ['show', 'top', 'bottom', 'textStyle', 'itemWidth', 'itemHeight', 'itemGap', 'data'],
 }
 
+/**
+ * Families a viewer's machine can be expected to resolve without the document
+ * carrying the bytes — generics, the CSS system keywords, and the faces that
+ * ship with mainstream desktop operating systems.
+ *
+ * Anything else named FIRST in a stack, and not in `doc.fonts`, is a face the
+ * document is asking for and does not have. On the author's machine that
+ * usually looks fine, because the author is exactly the person who has the
+ * typeface installed; everyone else silently gets the next entry in the stack.
+ * Two gallery templates shipped that way for months.
+ */
+const SYSTEM_FAMILIES = new Set([
+  'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui',
+  'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded',
+  '-apple-system', 'blinkmacsystemfont', 'segoe ui', 'roboto', 'helvetica',
+  'helvetica neue', 'arial', 'arial black', 'verdana', 'tahoma', 'trebuchet ms',
+  'georgia', 'times', 'times new roman', 'palatino', 'garamond', 'book antiqua',
+  'courier', 'courier new', 'menlo', 'monaco', 'consolas', 'sf mono',
+  'liberation mono', 'lucida console', 'impact', 'comic sans ms', 'cambria',
+  'calibri', 'candara', 'optima', 'futura', 'gill sans', 'avenir', 'avenir next',
+  'noto sans', 'noto serif', 'dejavu sans', 'pt sans', 'pt serif', 'emoji',
+])
+
+/** The first family in a CSS font stack, unquoted and lowercased. */
+function firstFamily(stack: string): string {
+  const first = stack.split(',')[0]?.trim() ?? ''
+  return first.replace(/^['"]|['"]$/g, '').trim().toLowerCase()
+}
+
 const morphKey = (el: SlideElement) => el.morphId || el.id
 
 /**
@@ -123,6 +152,19 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
         message: `Font "${f.family}" points at asset "${f.asset}", which is not in doc.assets — the face will not load and text falls back silently.` })
     }
   }
+  const embedded = new Set((doc.fonts ?? []).map((f) => f.family.trim().toLowerCase()))
+  const seenFallback = new Set<string>()
+  const checkFamily = (stack: string | undefined, where: Omit<Finding, 'code' | 'severity' | 'message'>) => {
+    if (!stack) return
+    const fam = firstFamily(stack)
+    if (!fam || embedded.has(fam) || SYSTEM_FAMILIES.has(fam)) return
+    // one finding per family — a deck sets the same stack on 40 elements
+    if (seenFallback.has(fam)) return
+    seenFallback.add(fam)
+    add({ ...where, code: 'font-not-embedded', severity: 'info',
+      message: `"${stack.split(',')[0].trim()}" is not in doc.fonts, so it renders only for viewers who happen to have it installed — everyone else silently gets the next family in the stack. Embed the woff2 in doc.assets and declare it in doc.fonts.` })
+  }
+  checkFamily(doc.theme?.fontFamily, { path: 'theme.fontFamily' })
 
   for (const slide of doc.slides) {
     const sid = slide.id
@@ -248,6 +290,8 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
             message: `${key} references asset "${ref.slice(6)}", which is not in doc.assets — nothing renders.` })
         }
       }
+
+      if (el.type === 'text') checkFamily((el as TextElement).fontFamily, at)
 
       // charts ---------------------------------------------------------------
       if (el.type === 'chart' && el.option) validateChart(el.option as any, at, add)

@@ -374,8 +374,11 @@ without them — and elements should carry the full field set shown.
 - Fonts: `doc.fonts` (`{family, asset, weight}`) + woff2 data URIs in
   `doc.assets` if you need embedded faces; otherwise stick to system stacks.
   **A `fontFamily` naming a face the document does not carry falls back
-  silently** to the next entry in the stack — there is no warning, and the deck
-  just looks like the fallback. Fonts belong to the DOCUMENT, not the app:
+  silently** to the next entry in the stack — there is no warning, and worse,
+  it will usually look right to *you*, because you are the one with the
+  typeface installed. Everyone else gets the fallback. `validate()` reports
+  this (`font-not-embedded`) precisely because you cannot see it locally.
+  Fonts belong to the DOCUMENT, not the app:
   Instrument Sans and Fraunces appear in the starter deck and in several
   templates because those files embed them in their own `doc.assets`, not
   because the app provides them. So either embed the woff2 yourself, start from
