@@ -14,6 +14,45 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-02 — `bento/dash` is settled, and it stands for DAta SHeets
+
+**Keep `bento/dash`.** The name contracts **DA**ta **SH**eets — the two halves
+of the app, the typed data model and the grid. It is not short for "dashboard";
+a dashboard is something the app can produce, not what it is.
+
+Recorded because the 2026-07-24 naming entry justifies it as "spreadsheet +
+tables + dashboards", which leads with the output surface and reads as
+mis-scoped. That framing is what caused the name to be re-opened and argued at
+length today. Don't re-open it without a new argument.
+
+This blocked the first commit that writes a `FORMAT` constant — PLATFORM §3
+puts the string into every saved file and there is no server to migrate
+anything — and it is now unblocked.
+
+**Weighed and set aside** (collisions verified live, not recalled):
+
+- `cells` — best suite fit, but it sounds like Ex**cel**. A replacement that
+  echoes the incumbent's name reads as derivative of it.
+- `views` — genuinely dual (a SQL view *and* a visual view), but it names
+  *looking* when the app's own boundary rule is *reckoning* ("does it
+  recalculate → dash").
+- `measures` — the BI term of art, and the convergent pick of two independent
+  root analyses, but "bento measures" parses as a verb clause.
+- `base` — its retirement reason above has **inverted**: it was dropped partly
+  for reading as "database, which this platform does not have", and dash now
+  is one. Set aside as flat rather than wrong; reconsider only if `dash` ever
+  proves to mis-signal in the field.
+- `figures` parses as a verb clause; `grid` collides with "bento grid", an
+  established UI design-trend phrase; `rows` is rows.com, a live "AI Data
+  Analyst" product; `calc` is LibreOffice Calc, and is clipped besides.
+
+**Namespace was deliberately down-weighted.** PyPI `dash` is Plotly's dataviz
+framework and npm `dash` is the cryptocurrency, but the app never ships as a
+bare word — it is `bento/dash`, at `bento.page/dash`, in
+`Bento_Dash.bento.html`. That is the mitigation the 2026-07-24 entry already
+prescribes for the crowded Bento namespace: always carry the `bento/<app>`
+form and the descriptor.
+
 ## 2026-07-28 — Vault is a capability broker; identity is multi-user from commit one
 
 **Refines the 2026-07-27 vault entry rather than superseding it.** Three

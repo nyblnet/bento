@@ -47,8 +47,10 @@ checks) before any release.
 
 ## 3. Document identity & format
 
-- `doc.type` names the format (`bento/slides`; provisionally `bento/spaces`,
-  `bento/dash`) with an integer format version.
+- `doc.format` names the format (`bento/slides`, `bento/spaces`; `bento/dash`
+  to come) with an integer format version in `doc.version`. The field is
+  `format` — `slides/src/model.ts` exports `FORMAT = 'bento/slides'` and writes
+  it as `format`, and every reader keys off that.
 - **Formats are additive.** Every version opens files from every earlier
   version; unknown fields are preserved, not stripped. Breaking reads of old
   files is not an option — there is no server to migrate them.
@@ -210,7 +212,7 @@ the document model, the renderer, the editor UX, starter documents, panels.
 A new Bento app is on-platform when it:
 
 - [ ] builds to ONE self-contained HTML file passing the §2 conformance gate
-- [ ] declares `doc.type` + format version; opens its own older files
+- [ ] declares `doc.format` + `doc.version`; opens its own older files
 - [ ] mints and preserves `docId` per §3
 - [ ] self-saves (FSA + download) and autosaves per §4
 - [ ] supports the `bento/enc` envelope per §4 (or explicitly documents why not yet)
