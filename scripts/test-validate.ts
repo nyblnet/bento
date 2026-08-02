@@ -89,10 +89,19 @@ const broken: BentoDoc = {
     {
       id: 's2', name: 'two', background: '#FFF', transition: 'morph', notes: '', elements: [
         // entrance on a morph arrival; also an unknown fx key
-        { id: 'e', type: 'text', x: 96, y: 100, w: 400, h: 80, rotation: 0, opacity: 1,
+        // an entrance on an element that MORPHS in (it shares 'dup' with the
+        // previous slide) — already in motion, so fx.enter is skipped. Also
+        // carries an unknown fx key.
+        { id: 'dup', type: 'text', x: 96, y: 100, w: 400, h: 80, rotation: 0, opacity: 1,
           html: 'x', fontSize: 20, fontFamily: 'system-ui', fontWeight: 400,
           color: '#111', align: 'left', valign: 'middle', lineHeight: 1.2,
           fx: { enter: 'fade-up', wobble: true } } as any,
+        // an entrance on an element that is NEW to this slide — nothing to
+        // fight, so it runs and must NOT be reported
+        { id: 'fresh', type: 'text', x: 96, y: 220, w: 400, h: 80, rotation: 0, opacity: 1,
+          html: 'y', fontSize: 20, fontFamily: 'system-ui', fontWeight: 400,
+          color: '#111', align: 'left', valign: 'middle', lineHeight: 1.2,
+          fx: { enter: 'slide-left' } } as any,
         // a chart with options charts-lite does not implement
         { id: 'c', type: 'chart', x: 600, y: 100, w: 400, h: 300, rotation: 0, opacity: 1,
           preset: 'bar',
@@ -120,6 +129,10 @@ ok(r.findings.some((f) => f.code === 'chart-key-ignored' && f.path === 'option.s
   'a label on a bar series is reported (it is read for pie only)')
 ok(r.findings.some((f) => f.code === 'unknown-key' && f.path === 'fx.wobble'),
   'an unknown key nested under fx is reported with its path')
+ok(!r.findings.some((f) => f.code === 'overridden-enter-fx' && f.element === 'fresh'),
+  'an entrance on an element NEW to a morph slide is not reported — it runs')
+ok(r.findings.some((f) => f.code === 'overridden-enter-fx' && f.element === 'dup'),
+  'an entrance on an element that morphs in IS reported')
 
 // ------------------------------------------------- chart false-positive guard
 // The shape the starter deck's own charts use. Every key here IS implemented,

@@ -11,6 +11,15 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Entrance animations work on morph slides.** Setting an element to sweep in
+  from the right on a morph slide gave you a small upward nudge instead: the
+  morph supplied one fixed entrance for everything new on the slide, and
+  `fx.enter`'s direction, duration and order were discarded. An element that is
+  new to a morph slide now enters the way you asked. One that morphs in from
+  the previous slide still ignores `fx.enter` — it is already in motion, and an
+  entrance would fight the tween — and elements with no `fx.enter` keep the
+  automatic fade-and-rise, so nothing changes in a deck that did not ask for it.
+
 - **`window.bento.validate()` — see what the runtime silently swallows.**
   Almost everything that goes wrong in a generated deck fails quietly: a typo'd
   property is ignored, a `dash-march` loop on a solid stroke animates nothing,

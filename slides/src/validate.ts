@@ -204,9 +204,13 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       }
 
       // effects that will not run -------------------------------------------
-      if (el.fx?.enter && isMorphArrival) {
+      // Only a MORPHING element loses its entrance: it is already travelling
+      // from its previous-slide frame, and an entrance tween would fight that.
+      // An element with no partner on the previous slide runs its fx.enter
+      // normally, so there is nothing to report.
+      if (el.fx?.enter && isMorphArrival && partners.has(mk)) {
         add({ ...at, code: 'overridden-enter-fx', severity: 'warning', path: 'fx.enter',
-          message: `On a morph arrival the morph supplies its own entrance — new elements fade and rise 14px — so fx.enter's direction, duration and order are all ignored here.` })
+          message: `This element morphs in from the previous slide, so it is already in motion and fx.enter is skipped. Give it a morph key that is new to this slide if you want it to enter instead.` })
       }
       if (el.fx?.enter && el.fx?.loop?.type === 'motion-path') {
         add({ ...at, code: 'entrance-on-motion-path', severity: 'warning', path: 'fx.enter',
