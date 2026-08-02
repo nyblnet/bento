@@ -296,12 +296,16 @@ without them — and elements should carry the full field set shown.
   must be unique **within** a slide. Plain shared `id` still works and is still
   the simplest thing when you control both slides.
 - **Entrances**: `fx: { enter: "fade-up", order: 0 }` — equal `order` =
-  simultaneous. **Entrance staggers do not run on a morph arrival** — a
-  morphing element is already in motion and an entrance tween would fight it.
-  Count-ups are different: on a morph arrival they run for elements that have
-  **no** morph partner on the previous slide (a new statistic counts; one that
-  flew in already showing its number does not restart from zero). So a headline
-  number on a morph slide is fine as long as it is new to that slide.
+  simultaneous. On a **morph arrival** the rule is per element, and it turns on
+  whether that element has a morph partner on the previous slide:
+  - **has a partner** → it morphs, and `fx.enter` and `fx.countUp` are both
+    skipped. It is already in motion and already showing its number; an
+    entrance would fight the tween and a count-up would restart from zero.
+  - **no partner** → it is new to the slide, so both run normally. Without an
+    `fx.enter` it gets an automatic fade-and-rise so nothing ever just pops in.
+
+  So a headline number, or a panel that sweeps in from the right, is fine on a
+  morph slide — just make sure it is new to that slide.
 - **Ken-burns**: `fx: { ambient: "kenburns", ken: { dir: "drift|out|in",
   scale: 1.08, duration: 20 } }` — `drift` loops, `out`/`in` settle once on
   slide entry. For full-bleed photos: image at 0,0,1280,720 + a scrim rect
