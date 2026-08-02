@@ -17,9 +17,11 @@ pre-1.0.
   an entrance on a morph arrival never runs, and text overflows its box while
   the JSON looks perfect. `validate()` reports all of it in one structured
   pass, including text overflow measured against the real renderer. It only
-  reads — it never changes the document. Its first run found dead chart options
-  and two entrance animations that could never play in our own starter deck,
-  both now removed. Requested by thinkbig1979 in #194.
+  reads — it never changes the document. Its first run found dead configuration
+  in our own starter deck: three charts carrying a chart option the renderer
+  has never read, and two `fx.enter` declarations on a morph arrival, where the
+  morph supplies its own entrance and ignores them. Both now removed.
+  Requested by thinkbig1979 in #194.
 
 - **Fix: count-up numbers work on morph slides.** `fx.countUp` was started only
   by the entrance runner, and morph and entrances are mutually exclusive — so a

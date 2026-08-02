@@ -42,8 +42,8 @@ ok(!starter.findings.some((f) => f.code === 'unknown-key'),
   'the starter deck has no unknown keys — the generated key tables match the format it is written in')
 ok(!starter.findings.some((f) => f.code === 'chart-key-ignored'),
   'the starter deck has no dead chart options')
-ok(!starter.findings.some((f) => f.code === 'dead-enter-fx'),
-  'the starter deck has no entrance animations that can never run')
+ok(!starter.findings.some((f) => f.code === 'overridden-enter-fx'),
+  'the starter deck has no entrance animations the morph would override')
 ok(starter.measured === false, 'measured is false without a DOM rather than silently skipping')
 
 // ------------------------------------------------------------- a clean deck
@@ -111,7 +111,7 @@ const codes = new Set(r.findings.map((f) => f.code))
 for (const expected of [
   'unknown-key', 'out-of-canvas', 'broken-link', 'duplicate-id',
   'morph-key-collision', 'dash-march-no-dash', 'missing-asset',
-  'dead-enter-fx', 'chart-key-ignored',
+  'overridden-enter-fx', 'chart-key-ignored',
 ]) {
   ok(codes.has(expected), `the broken deck trips ${expected}`)
 }

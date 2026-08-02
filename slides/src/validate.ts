@@ -205,8 +205,8 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
 
       // effects that will not run -------------------------------------------
       if (el.fx?.enter && isMorphArrival) {
-        add({ ...at, code: 'dead-enter-fx', severity: 'warning', path: 'fx.enter',
-          message: `This slide is a morph arrival, so entrance animations never run — a morphing element is already in motion. Drop fx.enter or change the transition.` })
+        add({ ...at, code: 'overridden-enter-fx', severity: 'warning', path: 'fx.enter',
+          message: `On a morph arrival the morph supplies its own entrance — new elements fade and rise 14px — so fx.enter's direction, duration and order are all ignored here.` })
       }
       if (el.fx?.enter && el.fx?.loop?.type === 'motion-path') {
         add({ ...at, code: 'entrance-on-motion-path', severity: 'warning', path: 'fx.enter',
