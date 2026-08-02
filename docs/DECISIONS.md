@@ -1205,3 +1205,56 @@ because a release signs and the key never reaches CI: the pipeline is not
 CI-testable, but the registry drifting from the tree is. It pins `appId`
 against each app's own `configureApp()` call and the manifest URL against the
 path the release publishes to.
+
+## 2026-08-03 — One bento/spaces file is one SPACE, and the reason is a save primitive
+
+Spaces is a tree of pages in ONE `.bento.html`, with links as same-document
+fragments (`#p/<pageId>`) resolved against a map built from the file's own
+`#bento-doc` block. Not one file per page with a folder as the workspace —
+the Obsidian shape — and not cross-file links.
+
+Five shapes were developed and each adversarially attacked. This records why
+the folder shape is **unbuildable on this platform**, rather than merely more
+expensive, because that is the part nobody should have to rediscover.
+
+**The write primitive does not exist.** Without the File System Access API —
+Chrome and Edge only — a save is a *download*. The page lands in the browser's
+download directory, outside the folder its relative links resolve against. So
+on Safari, Firefox and every iOS browser, the FIRST save of any page ejects it
+from its own workspace. No design gets around this; it is not a link problem.
+
+**On iOS a relative link returns the wrong answer, not an error.**
+`tray/ios/EditorViewController.swift` answers every request on a document's
+origin with that document's own bytes, so `href="./other.bento.html"` does not
+404 — it re-serves the space you are already in at a different URL. Silently
+wrong is worse than broken. Filed as a tray-zone request: 404 anything but
+`/index.html`.
+
+**Fragment routing is legal exactly where path routing is illegal.** Measured
+from an origin-null document: `history.pushState(s,'','#p/<id>')` succeeds,
+while `history.pushState(s,'','other.bento.html')` throws `SecurityError`. The
+grammar the one-file shape needs is the one the platform permits.
+
+**The folder shape buys no free OS search here.** `mdimport` on a shipped shell
+returns `kMDItemTextContent = "<<< Text content of 75 characters >>>"` —
+document text lives inside a `<script>` block and Spotlight cannot see it. True
+of slides today too. Cross-file discovery needs an index either way.
+
+**Prose is not the scale ceiling.** 2,000 pages / 26,000 blocks is a 5.2 MB
+file that parses in 3.4 ms. Images are the ceiling, which is a product-shaped
+limit, not a format one.
+
+What the file boundary also becomes, and this is the design rather than a side
+effect: the id scope, the link scope, the sharing boundary, the `docId` scope
+(hence autosave and version history), the undo scope, the encryption scope, and
+the save scope — every save rewrites the whole file.
+
+Accepted costs, unchanged: sharing is per-file so there is no per-page
+permission, and two people editing offline get two files and no merge until the
+CRDT is generic. The pressure valves are first-class — export a page as its own
+space, export a space as a markdown folder, import either.
+
+The library tier — many spaces, searched together — attaches at a named seam
+and is `bento/vault`'s job, which is optional by its own invariants 2 and 3.
+One space needs nothing installed, ever; a library is software you run, on a
+laptop or a 24/7 box or a cluster, the same artifact either way.
