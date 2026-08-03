@@ -207,6 +207,13 @@ jobs:
         # data on the first save). Both are asserted from both sides.
         run: node scripts/test-dash-model.ts
 
+      - name: bento/dash store + undo rig
+        # Undo is a patch log rather than document snapshots, which buys history
+        # that costs what the EDIT costs — and risks a failure a snapshot cannot
+        # have: an inverse that does not restore what it displaced. Every op is
+        # checked apply → undo → identical, because that failure is silent.
+        run: node scripts/test-dash-store.ts
+
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is
         # 1280x720, so they used to hang 200px off the right edge of a default
