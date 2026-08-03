@@ -139,7 +139,13 @@ const key = opt('key', null)
  */
 function changelogSections() {
   // Every released section, newest first: [{ version, heads }]
-  const cl = readFileSync(join(root, 'CHANGELOG.md'), 'utf8')
+  //
+  // Per-app first. The root CHANGELOG.md is slides' — it says so in its own
+  // first line — and its versions are 1.0.x, so a second app releasing 0.1.0
+  // matched nothing and shipped a manifest with no notes at all. An app with
+  // its own CHANGELOG.md uses it; everything else falls back to the root.
+  const appCl = join(root, `${app.dir}/CHANGELOG.md`)
+  const cl = readFileSync(existsSync(appCl) ? appCl : join(root, 'CHANGELOG.md'), 'utf8')
   const out = []
   const re = /^## \[(\d+\.\d+\.\d+)\][^\n]*$/gm
   const marks = [...cl.matchAll(re)]
