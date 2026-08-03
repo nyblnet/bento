@@ -32,7 +32,12 @@ async function report() {
   if (!s.folder) {
     lines.push('<b>No folder granted yet.</b> Choose the folder your decks live in.')
   } else if (s.permission === 'granted') {
-    lines.push(`<b class="ok">Folder: ${esc(s.folder)}</b> — decks in here save in place, with no dialog.`)
+    // Do not promise in-place saving while file access is off — that promise is
+    // false, and printing it under "nothing works until it is on" is worse than
+    // saying nothing.
+    lines.push(s.files === false
+      ? `<b>Folder: ${esc(s.folder)}</b> — ready, but nothing saves in place until file access is on.`
+      : `<b class="ok">Folder: ${esc(s.folder)}</b> — decks in here save in place, with no dialog.`)
   } else {
     lines.push(`<b class="bad">Folder: ${esc(s.folder)} — needs renewing.</b> ` +
       'The grant lapses whenever the extension restarts. Choose it again to restore it.')
