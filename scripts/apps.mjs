@@ -37,4 +37,13 @@ export const APPS = {
     // would not be (working/spaces-design.md §6.5).
     packs: false,
   },
+  dash: {
+    appId: 'bento-dash',
+    dir: 'dash',
+    shell: 'Bento_Dash.bento.html',
+    ownsSiteContent: false,
+    // Same reasoning as spaces: no pack catalog yet, and deferring the CATALOG
+    // is fine where deferring the CHANNEL would not be.
+    packs: false,
+  },
 }

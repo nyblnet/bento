@@ -1,0 +1,184 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   bento/dash — the whole interface. One stylesheet; it ships deflated. */
+
+:root {
+  --ink: #1e2a3a;
+  --muted: #64748b;
+  --line: #e3e8ef;
+  --line-strong: #cbd5e1;
+  --accent: #f7a600;
+  --bg: #ffffff;
+  --panel: #f8fafc;
+  --sel: #fff7e6;
+  --row-h: 30px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ————— top bar ————— */
+.dx-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex: 0 0 auto;
+  /* the notch: the app positions its own chrome and never asks the browser to pad it */
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+.dx-mark { font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
+.dx-mark span { color: #ff9e8a; }
+.dx-title {
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-width: 8ch;
+  flex: 1 1 auto;
+  background: transparent;
+  color: inherit;
+}
+.dx-title:hover { border-color: var(--line-strong); }
+.dx-title:focus { outline: none; border-color: var(--accent); background: #fff; }
+.dx-btn {
+  font: inherit;
+  padding: 5px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dx-btn:hover { background: var(--panel); border-color: var(--muted); }
+.dx-btn:active { transform: translateY(0.5px); }
+.dx-btn[disabled] { opacity: 0.45; cursor: default; }
+.dx-ver { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.dx-dirty { color: var(--accent); font-size: 18px; line-height: 1; }
+
+/* ————— findings: what import refused to decide ————— */
+.dx-findings {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: #fffbeb;
+  padding: 8px 12px;
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+}
+/* `display: grid` beats the [hidden] attribute's own display:none, so an
+   empty banner kept a visible strip of its background. Say it explicitly. */
+.dx-findings[hidden] { display: none; }
+.dx-findings b { font-weight: 650; }
+.dx-findings .dx-f { display: flex; gap: 8px; align-items: baseline; }
+.dx-findings .dx-dot { color: var(--accent); }
+
+/* ————— grid ————— */
+.dx-grid { flex: 1 1 auto; min-height: 0; position: relative; }
+.dg-scroll { position: absolute; inset: 0; overflow: auto; }
+.dg-table { position: relative; min-width: max-content; }
+/* the sizer is the ONLY absolutely-positioned region: header and totals stay in
+   flow so `position: sticky` resolves against the scroller */
+.dg-sizer { position: relative; }
+
+.dg-row { display: flex; position: absolute; height: var(--row-h); left: 0; }
+.dg-head-row,
+.dg-foot-row {
+  display: flex;
+  position: sticky;
+  z-index: 3;
+  height: var(--row-h);
+  background: var(--panel);
+}
+.dg-head-row { top: 0; border-bottom: 1px solid var(--line-strong); }
+.dg-foot-row { bottom: 0; border-top: 1px solid var(--line-strong); font-weight: 600; }
+
+.dg-cell {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  height: var(--row-h);
+  line-height: var(--row-h);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.dg-sizer .dg-row:nth-child(even) .dg-cell { background: #fcfdfe; }
+.dg-cell.dg-editing {
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  overflow: visible;
+  cursor: text;
+}
+.dg-cell.dg-noted { box-shadow: inset 2px 0 0 var(--accent); }
+
+.dg-h { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.dg-name { cursor: pointer; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; }
+.dg-name:hover { color: var(--accent); }
+.dg-type {
+  font: 500 10px/1.6 inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0 5px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.dg-type:hover { border-color: var(--accent); color: var(--ink); }
+.dg-warn {
+  color: #b45309;
+  background: #fef3c7;
+  border-radius: 50%;
+  width: 15px;
+  height: 15px;
+  text-align: center;
+  font: 700 11px/15px inherit;
+  flex: 0 0 auto;
+  cursor: help;
+}
+.dg-agg { color: var(--muted); font-weight: 400; font-size: 11px; text-transform: uppercase; }
+
+/* ————— gate: an unreadable document, and the way back out of it ————— */
+.dx-gate {
+  max-width: 34rem;
+  margin: 12vh auto;
+  padding: 0 1.5rem;
+}
+.dx-gate h1 { font-size: 20px; margin: 0 0 8px; }
+.dx-gate p { color: var(--muted); margin: 0 0 14px; }
+.dx-gate .dx-btn { margin-right: 8px; }
+.dx-gate code {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 12px 0;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 30vh;
+  overflow: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

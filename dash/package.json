@@ -1,0 +1,19 @@
+{
+  "name": "bento-dash",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:single": "tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Dash.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Dash.bento.html --generator bento-dash --title \"bento/dash\"",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.1",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

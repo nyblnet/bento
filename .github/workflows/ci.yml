@@ -50,6 +50,7 @@ jobs:
           cache-dependency-path: |
             slides/package-lock.json
             spaces/package-lock.json
+            dash/package-lock.json
 
       - name: Install
         working-directory: slides
@@ -108,6 +109,22 @@ jobs:
 
       - name: Splice conformance gate (spaces)
         run: node scripts/shell-gate.mjs spaces/dist-single/Bento_Spaces.bento.html
+
+      # dash: the data app — same pipeline, same gate.
+      - name: Install (dash)
+        working-directory: dash
+        run: npm ci
+
+      - name: Typecheck (dash)
+        working-directory: dash
+        run: node_modules/.bin/tsc -b
+
+      - name: Build single-file shell (dash)
+        working-directory: dash
+        run: npm run build:single
+
+      - name: Splice conformance gate (dash)
+        run: node scripts/shell-gate.mjs dash/dist-single/Bento_Dash.bento.html
 
       - name: Language pack verification rig
         # Packs come off the network, so the signature + hash-pin chain is the

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover: without it iOS insets the page from the notch and
+         home-indicator areas and paints the gap with the body background, so the
+         editor visibly stops short of the screen edges. The app fills the screen
+         and positions its own chrome; it never needs the browser to pad it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="only light" />
+    <meta name="generator" content="bento-dash" />
+    <title>bento/dash</title>
+    <!-- NOTICE
+      bento/dash — MIT licensed. https://bento.page
+      This file is the document, the viewer and the editor. The runtime is
+      open source; the document itself is the JSON block below.
+    -->
+    <script type="application/bento+json" id="bento-doc"></script>
+  </head>
+  <body>
+    <div id="bento-splash">
+      <div class="dash-splash-mark">bento<span>/</span>dash</div>
+    </div>
+    <style>
+      #bento-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        z-index: 9999;
+        transition: opacity 0.45s ease;
+        font: 600 20px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: #1e2a3a;
+      }
+      #bento-splash.done { opacity: 0; pointer-events: none; }
+      .dash-splash-mark span { color: #ff9e8a; }
+      @media (prefers-reduced-motion: reduce) {
+        #bento-splash { transition: none; }
+      }
+    </style>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
