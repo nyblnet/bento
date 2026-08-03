@@ -23,8 +23,15 @@ const files = s.files === true
     : row('meh', 'Local files — unknown',
         'This browser will not say. If saves still prompt, check <b>Allow access to file URLs</b>.')
 
+// The folder row must not promise in-place saving while the OTHER precondition
+// is failing. Seeing "decks in here save in place, with no dialog" directly
+// under "nothing works until file access is on" is two green-ish signals
+// contradicting each other, and the reassuring one is the false one.
 const folder = s.permission === 'granted'
-  ? row('ok', `Folder: ${esc(s.folder)}`, 'Decks in here save in place, with no dialog.')
+  ? row(s.files === false ? 'meh' : 'ok', `Folder: ${esc(s.folder)}`,
+      s.files === false
+        ? 'Ready, but nothing saves in place until local file access is on.'
+        : 'Decks in here save in place, with no dialog.')
   : s.folder
     ? row('bad', `Folder: ${esc(s.folder)} — needs renewing`,
         'The grant lapses whenever the extension restarts. One click in Settings restores it.')
