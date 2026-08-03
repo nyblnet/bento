@@ -11,6 +11,31 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Updating a file now suggests that file's own name.** When an update asks
+  where to save, the dialog is pre-filled with the name of the deck you have
+  open rather than one derived from its title — so a file called
+  `Q3-board.bento.html` no longer offers to save itself as
+  `Q3_Board_Review.bento.html`. The backup written alongside an in-place update
+  follows the same name. Where the save dialog opens is set by the browser and
+  can't be pointed at a folder by the page, but it now remembers the last place
+  you saved, so the second update onwards starts in the right directory.
+- **The starter deck is called "Bento Slides Showcase" again.** The lowercase
+  rebrand swept the deck's own title along with the app's, but a deck title is
+  a document name — it shows in the window title and becomes the suggested
+  filename — so it reads better in title case. The `bento/slides` wordmark is
+  unchanged.
+- **The screen stays awake while you present.** Phones and laptops used to dim
+  and lock partway through a talk if you left a slide up for a couple of
+  minutes. Bento now holds the screen on for the length of the show and lets go
+  when you exit — and takes the lock again if you switch away and come back.
+
+- **Safari and Firefox are told the truth about saving.** Those browsers (and
+  every browser on iPhone and iPad) can't rewrite a file in place — Bento hands
+  back an updated copy instead. The editor used to say the opposite in its
+  tooltips and only admit it in a passing message *after* the first save. It now
+  says what will actually happen before any work is at stake, once per browser,
+  and the Save button describes the real behaviour.
+
 ## [1.0.15] — 2026-08-03
 
 - **Fix: removing a formatting option no longer disconnects the people you are

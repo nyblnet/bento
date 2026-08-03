@@ -33,6 +33,8 @@ export class SlideCanvas {
   /** user zoom, multiplier on the fitted scale (1 = fit to window) */
   private zoom = 1
   private zoomLabel: HTMLElement | null = null
+  private ghostCutIds = new Set<string>()
+  private lastSlidePoint: { x: number; y: number } | null = null
   private editing: HTMLElement | null = null
   /** startTextEdit swapped the rendered form for raw source (a field or a
    *  formula), so commit must re-render even if the text is unchanged. */
@@ -91,6 +93,10 @@ export class SlideCanvas {
       this.wheelNavCooldown = now + 400
       this.onSlideNav(dir)
     }, { passive: false })
+    this.scroller.addEventListener('mousemove', (ev) => {
+      const pt = this.clientToSlidePoint(ev.clientX, ev.clientY)
+      if (pt) this.lastSlidePoint = pt
+    })
 
     // Middle-button drag pans. Until now the scrollbars were the only way to
     // move a zoomed slide, which puts the control at the edge of the screen
@@ -355,6 +361,37 @@ export class SlideCanvas {
   zoomOut() { this.setZoom(this.zoom / 1.25) }
   zoomReset() { this.setZoom(1) }
 
+  lastPointerOnSlide() {
+    return this.lastSlidePoint ? { ...this.lastSlidePoint } : null
+  }
+
+  private clientToSlidePoint(clientX: number, clientY: number): { x: number; y: number } | null {
+    const r = this.scaleHost.getBoundingClientRect()
+    const x = Math.round((clientX - r.left) / this.scale)
+    const y = Math.round((clientY - r.top) / this.scale)
+    const { width, height } = this.store.doc.size
+    if (x < 0 || y < 0 || x > width || y > height) return null
+    return { x, y }
+  }
+
+  setGhostCutIds(ids: string[]) {
+    this.ghostCutIds = new Set(ids)
+    this.applyGhostCutClasses()
+    this.syncTargets()
+  }
+
+  private applyGhostCutClasses(root = this.surface) {
+    if (!root) return
+    for (const node of root.querySelectorAll<HTMLElement>('.bento-el')) {
+      const id = node.dataset.elId
+      const el = id ? this.store.slide.elements.find((e) => e.id === id) : null
+      const baseOpacity = el?.opacity ?? 1
+      const ghosted = !!id && this.ghostCutIds.has(id)
+      node.classList.toggle('bento-el-ghost-cut', ghosted)
+      node.style.opacity = String(ghosted ? baseOpacity * 0.35 : baseOpacity)
+    }
+  }
+
   private buildZoomBar() {
     const bar = document.createElement('div')
     bar.className = 'ed-zoombar'
@@ -586,6 +623,7 @@ export class SlideCanvas {
     if (this.surface) this.surface.replaceWith(next)
     else this.scaleHost.appendChild(next)
     this.surface = next
+    this.applyGhostCutClasses(next)
     this.relayout()
     this.syncTargets()
     this.drawRemote()

@@ -1,0 +1,349 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2BC4CAEE80612EAC4413A76B /* DocumentBrowserViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E7C39BCF114CB2646EA3EC /* DocumentBrowserViewController.swift */; };
+		423459275C72259E90FC1B21 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BB3309458BD4D1DE2421C01 /* SceneDelegate.swift */; };
+		4AD07D041058D0B4B902192C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA469ED53B0995D1B9715CF9 /* AppDelegate.swift */; };
+		4D5A706C841F01739E466A16 /* EditorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530634A9D04AD13C8D928978 /* EditorViewController.swift */; };
+		4DF1627454FF5224C52AD443 /* BentoDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C9DEC658170621BC16EA72F /* BentoDocument.swift */; };
+		8EA8581D0F79B24634809FBC /* bridge.js in Resources */ = {isa = PBXBuildFile; fileRef = 1CF576860373E5BAE90C2DFA /* bridge.js */; };
+		CF6B181FCC445FF13EC4C2D1 /* starter.bento.html in Resources */ = {isa = PBXBuildFile; fileRef = C7FD526840011A886E214736 /* starter.bento.html */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1CF576860373E5BAE90C2DFA /* bridge.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = bridge.js; sourceTree = "<group>"; };
+		24E7C39BCF114CB2646EA3EC /* DocumentBrowserViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentBrowserViewController.swift; sourceTree = "<group>"; };
+		2BCDAD7C256B8C810B3A3AD1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4C9DEC658170621BC16EA72F /* BentoDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BentoDocument.swift; sourceTree = "<group>"; };
+		530634A9D04AD13C8D928978 /* EditorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewController.swift; sourceTree = "<group>"; };
+		6BB3309458BD4D1DE2421C01 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		8921171079894CE56F92D5E0 /* BentoHost.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BentoHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7FD526840011A886E214736 /* starter.bento.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = starter.bento.html; sourceTree = "<group>"; };
+		DA469ED53B0995D1B9715CF9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		09407ADB2BBE78616D4BFDB5 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				1CF576860373E5BAE90C2DFA /* bridge.js */,
+				C7FD526840011A886E214736 /* starter.bento.html */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		1092BF55049A66A555DB15FA = {
+			isa = PBXGroup;
+			children = (
+				97D714EF7BD8B9D4F641B1DD /* BentoHost */,
+				E0FD1EFB3133F69667CEF9A3 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		97D714EF7BD8B9D4F641B1DD /* BentoHost */ = {
+			isa = PBXGroup;
+			children = (
+				DA469ED53B0995D1B9715CF9 /* AppDelegate.swift */,
+				4C9DEC658170621BC16EA72F /* BentoDocument.swift */,
+				24E7C39BCF114CB2646EA3EC /* DocumentBrowserViewController.swift */,
+				530634A9D04AD13C8D928978 /* EditorViewController.swift */,
+				2BCDAD7C256B8C810B3A3AD1 /* Info.plist */,
+				6BB3309458BD4D1DE2421C01 /* SceneDelegate.swift */,
+				09407ADB2BBE78616D4BFDB5 /* Resources */,
+			);
+			path = BentoHost;
+			sourceTree = "<group>";
+		};
+		E0FD1EFB3133F69667CEF9A3 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8921171079894CE56F92D5E0 /* BentoHost.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6599173085273E356D5DBC3F /* BentoHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8108822556AD1AAD0D1B315A /* Build configuration list for PBXNativeTarget "BentoHost" */;
+			buildPhases = (
+				8B40FD279C2AC50A2A8D74F7 /* Stage starter shell */,
+				D5E1B0BF2B083040AEE34AC7 /* Sources */,
+				1BCF6E10B8CBE3A8B52E9C49 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BentoHost;
+			packageProductDependencies = (
+			);
+			productName = BentoHost;
+			productReference = 8921171079894CE56F92D5E0 /* BentoHost.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2255E520050331B4756D2D0D /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 2129B8895EA0A02B8319CB84 /* Build configuration list for PBXProject "BentoHost" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 1092BF55049A66A555DB15FA;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E0FD1EFB3133F69667CEF9A3 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6599173085273E356D5DBC3F /* BentoHost */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1BCF6E10B8CBE3A8B52E9C49 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8EA8581D0F79B24634809FBC /* bridge.js in Resources */,
+				CF6B181FCC445FF13EC4C2D1 /* starter.bento.html in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		8B40FD279C2AC50A2A8D74F7 /* Stage starter shell */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stage starter shell";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "SRC=\"$SRCROOT/../slides/dist-single/Bento_Slides.bento.html\"\nDST=\"$SRCROOT/BentoHost/Resources/starter.bento.html\"\nif [ -f \"$SRC\" ]; then\n  mkdir -p \"$(dirname \"$DST\")\" && cp \"$SRC\" \"$DST\"\nelif [ ! -f \"$DST\" ]; then\n  echo \"warning: no starter shell — run 'npm run build:single' in slides/; new-document creation will fail\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D5E1B0BF2B083040AEE34AC7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4AD07D041058D0B4B902192C /* AppDelegate.swift in Sources */,
+				4DF1627454FF5224C52AD443 /* BentoDocument.swift in Sources */,
+				2BC4CAEE80612EAC4413A76B /* DocumentBrowserViewController.swift in Sources */,
+				4D5A706C841F01739E466A16 /* EditorViewController.swift in Sources */,
+				423459275C72259E90FC1B21 /* SceneDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		122C3775B28A2C324AEED047 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = BentoHost/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = page.bento.host;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		4756CCF31997F409D7DDC5CE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		5568E1EB74985FEC60A50A3B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7617D8BBB55DA6334A3C3857 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = BentoHost/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = page.bento.host;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2129B8895EA0A02B8319CB84 /* Build configuration list for PBXProject "BentoHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4756CCF31997F409D7DDC5CE /* Debug */,
+				5568E1EB74985FEC60A50A3B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8108822556AD1AAD0D1B315A /* Build configuration list for PBXNativeTarget "BentoHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7617D8BBB55DA6334A3C3857 /* Debug */,
+				122C3775B28A2C324AEED047 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2255E520050331B4756D2D0D /* Project object */;
+}
