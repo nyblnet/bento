@@ -23,7 +23,7 @@
 // (2) an excluded path is still not a deletion, or every ordinary publish
 // without a guestbook deck would be blocked.
 
-import { plannedDeletions, groupDeletions, walk } from './site-inventory.mjs'
+import { plannedDeletions, groupDeletions, walk, supersededPacks } from './site-inventory.mjs'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -115,6 +115,40 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true })
 }
+
+// ---- superseded language packs are a REPLACEMENT, not a loss --------------
+// Every slides release retires all 22 of its predecessors — the version is in
+// the filename. If the gate counted those, it would fire on every release and
+// --allow-deletions would become reflex, which is precisely how the run with
+// real deletions gets waved through.
+const SLIDES_1014 = [
+  'index.html', 'CNAME', '.nojekyll', 'agents.md', 'LICENSE',
+  'releases/slides/Bento_Slides.bento.html',
+  'releases/slides/manifest.json',
+  'releases/slides/packs.json',
+  'releases/slides/packs/bento-slides-1.0.14-ko.pack.json',
+  'releases/slides/packs/bento-slides-1.0.14-ru.pack.json',
+  'slides/index.html',
+  'gallery/orbital-dark-immersive.bento.html',
+  'guestbook/index.html',
+  'guestbook.bento.html',
+  'skills/bento-slides/SKILL.md',
+]
+const superseded = supersededPacks(PUBLISHED, SLIDES_1014)
+ok(superseded.length === 2, `both older packs are recognised as superseded (got ${superseded.length})`)
+ok(plannedDeletions(PUBLISHED, SLIDES_1014, ['.git']).filter((p) => !superseded.includes(p)).length === 0,
+  'an ordinary slides release plans no deletions once superseded packs are excused')
+
+// …and the ways it must STILL trip.
+const droppedKorean = SLIDES_1014.filter((p) => !p.includes('-ko.'))
+ok(!supersededPacks(PUBLISHED, droppedKorean).some((p) => p.includes('-ko.')),
+  'a language this build no longer ships is NOT excused — dropping Korean is a real deletion')
+ok(supersededPacks(PUBLISHED, SPACES_STAGED).length === 0,
+  'a spaces release excuses no slides packs — it stages none of them')
+ok(supersededPacks(PUBLISHED, PUBLISHED).length === 0,
+  'a republish of the same versions excuses nothing (same version is not superseded)')
+ok(supersededPacks(PUBLISHED, ['releases/spaces/packs/bento-spaces-1.0.0-ko.pack.json']).length === 0,
+  "another app's pack for the same language does not excuse this app's")
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

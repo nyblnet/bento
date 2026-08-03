@@ -26,7 +26,7 @@ import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { gatePackIndex } from './sign-packs.mjs'
-import { walk, plannedDeletions, groupDeletions } from './site-inventory.mjs'
+import { walk, plannedDeletions, groupDeletions, supersededPacks } from './site-inventory.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const site = join(root, 'site')
@@ -226,7 +226,17 @@ if (!existsSync(join(site, 'guestbook.bento.html'))) {
     // about what we are about to overwrite, so it is the last place to guess.
     die(`cannot inventory the published site at ${dest} — refusing to mirror over it.\n  ${e.message}`)
   }
-  const deletions = plannedDeletions(published, walk(site), excluded)
+  const stagedFiles = walk(site)
+  // A release retires its own previous language packs by design — their names
+  // carry the version. Excusing exactly those keeps the gate meaningful; if it
+  // fired on every release, --allow-deletions would become the habit and the
+  // one run with real deletions would look like all the others.
+  const superseded = supersededPacks(published, stagedFiles)
+  if (superseded.length) {
+    console.log(`• ${superseded.length} superseded language pack(s) replaced by this build — not counted as deletions`)
+  }
+  const deletions = plannedDeletions(published, stagedFiles, excluded)
+    .filter((p) => !superseded.includes(p))
 
   if (deletions.length) {
     if (!args.includes('--allow-deletions')) {
