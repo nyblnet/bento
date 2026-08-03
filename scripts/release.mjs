@@ -34,7 +34,7 @@
 // rebuild producing different bytes than what was signed.)
 
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
@@ -232,6 +232,20 @@ if (app.packs) {
   // what "Add language…" reads; nothing is trusted without it.
   // Both steps are no-ops until a pack catalog exists (docs/i18n-packs.md).
   const packsOut = join(site, 'releases/slides/packs')
+  // Seeding restored the PREVIOUS release's packs, and this build is about to
+  // write its own beside them — leaving two files claiming the same language,
+  // which sign-packs refuses outright ("two packs claim \"ar\""). Their whole
+  // job is to be superseded, so clear this app's older ones first. Nothing
+  // else in the seeded tree is touched: the point of seeding is to preserve
+  // what THIS release does not build, and a stale pack of our own is not that.
+  if (existsSync(packsOut)) {
+    let dropped = 0
+    for (const f of readdirSync(packsOut)) {
+      const m = /^bento-slides-(\d+\.\d+\.\d+)-.+\.pack\.json$/.exec(f)
+      if (m && m[1] !== version) { rmSync(join(packsOut, f)); dropped++ }
+    }
+    if (dropped) console.log(`• cleared ${dropped} superseded language pack(s) from the seeded tree`)
+  }
   execFileSync('node', [join(root, 'scripts/build-i18n.mjs'), '--packs', packsOut], { stdio: 'inherit' })
   const packArgs = [
     join(root, 'scripts/sign-packs.mjs'), packsOut,
