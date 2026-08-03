@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bento Tray",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Save a Bento document back to the file you opened, without a destination prompt.",
   "minimum_chrome_version": "116",
   "permissions": [

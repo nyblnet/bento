@@ -122,6 +122,14 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: WebExtension package rig
+        # Validates the store package without writing it: every file the
+        # manifest names exists, every icon is the size it claims, no unexpected
+        # file is about to ship (probe/ is four capability probes — harmless to
+        # us, alarming to a reviewer), and no permission is declared but unused.
+        # A listing rejected for a missing 128px icon costs days of review.
+        run: node scripts/pack-webext.mjs --check
+
       - name: WebExtension background rig
         # The half that WRITES, and previously the untested half. Two properties
         # it must hold: the target file comes from sender.url (browser-stamped)

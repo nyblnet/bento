@@ -18,6 +18,24 @@ The last row is the one that matters: the copy and the export went elsewhere
 rather than overwriting the document being edited. An earlier build got that
 wrong and silently destroyed it.
 
+## Packaging
+
+```bash
+node scripts/pack-webext.mjs          # → dist/bento-tray-<version>.zip
+node scripts/pack-webext.mjs --check  # validate only (CI runs this)
+```
+
+It is an allow-list, not a recursive zip: `probe/`, `README.md` and `STORE.md`
+are in this directory and must not reach a listing — the probes especially,
+being four pages that open local files and talk across origins, which is
+harmless to us and alarming to a reviewer. It also checks every file the
+manifest names exists, every icon is the size it claims, and no permission is
+declared but unused. The output is byte-reproducible, so the uploaded package
+can be shown to be the reviewed one.
+
+Listing copy, permission justifications and the data-usage answers live in
+`STORE.md`.
+
 ## Distribution
 
 **The app stores are the main channel** — Chrome Web Store, Edge Add-ons, and
