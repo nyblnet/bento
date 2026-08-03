@@ -28,7 +28,7 @@
 // agent API. That is why this lands at commit one: retrofitting op-minting
 // means rewriting the store.
 
-import type { CellOverride, ColumnData, DashDoc, Measure, Sheet, Step, TableSheet } from './model.ts'
+import type { CellOverride, Column, ColumnData, DashDoc, Measure, Sheet, Step, TableSheet } from './model.ts'
 
 type Listener = () => void
 export type StoreEvent = 'doc' | 'view' | 'selection'
@@ -79,6 +79,12 @@ export type Patch =
     }
   | { op: 'deleteRows'; sheet: string; rids: number[] }
   | { op: 'setColumn'; sheet: string; col: string; patch: Record<string, unknown> }
+  /** `at` is the position; omitted appends. `data` is omitted for a FORMULA
+   *  column, which has no stored values — its numbers are derived from its
+   *  expression, so storing them would let a file carry a number that
+   *  disagrees with the formula that produced it. */
+  | { op: 'addColumn'; sheet: string; column: Column; at?: number; data?: ColumnData }
+  | { op: 'removeColumn'; sheet: string; col: string }
   | { op: 'reorderColumns'; sheet: string; order: string[] }
   | { op: 'setMeasure'; name: string; measure?: Measure; dropEmpty?: boolean }
   | { op: 'setTitle'; title: string }
@@ -298,6 +304,32 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
           rids: taken.map((r) => r.rid), at: taken.map((r) => r.at), values: restore,
         },
         touched: { sheet: p.sheet, rids: p.rids, structural: true },
+      }
+    }
+
+    case 'addColumn': {
+      const sheet = table(doc, p.sheet)
+      const at = p.at ?? sheet.columns.length
+      sheet.columns.splice(at, 0, p.column)
+      if (p.data) sheet.data[p.column.id] = p.data
+      return {
+        inverse: { op: 'removeColumn', sheet: p.sheet, col: p.column.id },
+        touched: { sheet: p.sheet, cols: [p.column.id], structural: true },
+      }
+    }
+
+    case 'removeColumn': {
+      const sheet = table(doc, p.sheet)
+      const at = sheet.columns.findIndex((c) => c.id === p.col)
+      if (at < 0) throw new Error(`no column ${p.col}`)
+      const [column] = sheet.columns.splice(at, 1)
+      const data = sheet.data[p.col]
+      delete sheet.data[p.col]
+      // the inverse carries the column AND its data, or undoing a delete
+      // returns an empty column — the same failure deleteRows had
+      return {
+        inverse: { op: 'addColumn', sheet: p.sheet, column, at, ...(data ? { data } : {}) },
+        touched: { sheet: p.sheet, cols: [p.col], structural: true },
       }
     }
 

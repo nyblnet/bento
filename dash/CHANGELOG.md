@@ -8,10 +8,27 @@ The format (`bento/dash`, version `1`) is additive and stable — every version
 below opens files from every earlier version, and unknown fields are preserved.
 There is no server, so a break here would be permanent.
 
-## [0.1.0] — 2026-08-03
+## [0.2.0] — 2026-08-03
 
-First release. A workbook is one self-contained HTML file: the data, the grid
-and the editor, opening from `file://` with no backend.
+First release. A workbook is one self-contained HTML file: the data, the grid,
+the formulas and the charts, opening from `file://` with no backend.
+
+- **One formula for a whole column.** A spreadsheet stores an expression per
+  cell, so a 100,000-row model with twelve computed columns carries 1.2 million
+  of them, each with range references that shift when you insert a row. Here it
+  is twelve strings. `#REF!` and the shifted-VLOOKUP cannot happen, because
+  there is no range to shift. About fifty functions, including `SUMIF`,
+  `COUNTIF` and aggregates you can mix into a row expression —
+  `Value / SUM(Value)` is a share-of-total column.
+
+- **Errors stay visible.** A division by zero reads `#DIV/0!`, a circular
+  reference reads `#CYCLE!`, and neither is quietly a zero — a total containing
+  silent zeros is wrong and looks right.
+
+- **Charts are bound to columns, never to a copy of the numbers.** Edit a cell
+  and the chart moves; nothing in the file can disagree with the table beside
+  it. A category with no data is drawn as a gap rather than as zero, because
+  "we sold nothing" and "we do not know" are different claims.
 
 - **Import the CSV somebody emailed you, and see what it decided.** Comma,
   semicolon or tab, quoted fields with commas and newlines inside them, a BOM,

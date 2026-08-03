@@ -94,6 +94,11 @@ roundTrip('setMeasure', {
   measure: { name: 'Revenue', expr: 'SUM(amount)', grain: 'sh1', additive: true },
 })
 roundTrip('setTitle', { op: 'setTitle', title: 'renamed' })
+roundTrip('addColumn', {
+  op: 'addColumn', sheet: 'sh1',
+  column: { id: 'computed', name: 'Computed', type: 'number', formula: 'amount * 2' },
+})
+roundTrip('removeColumn', { op: 'removeColumn', sheet: 'sh1', col: 'amount' })
 roundTrip('a multi-patch commit', [
   { op: 'setCells', sheet: 'sh1', col: 'amount', rids: [1], v: [1] },
   { op: 'setColumn', sheet: 'sh1', col: 'amount', patch: { unit: 'EUR' } },

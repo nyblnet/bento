@@ -22,6 +22,7 @@
 import { formatValue, alignFor, TYPE_LABEL } from './format.ts'
 import type { Column, ColumnType, TableSheet } from './model.ts'
 import { readCell, type Store } from './store.ts'
+import { recalc, isErr, type Vec } from './formula.ts'
 
 const ROW_H = 30
 const OVERSCAN = 8
@@ -64,8 +65,15 @@ export class Grid {
   private table!: HTMLElement
   private editing: { rid: number; col: string } | null = null
   private sort: { col: string; dir: 'asc' | 'desc' } | null = null
+  /** formula columns, recomputed on every document change. Never stored: the
+   *  document holds the EXPRESSION, and the values are derived from it, so a
+   *  file cannot carry a number that disagrees with its own formula. */
+  computed = new Map<string, Vec>()
+  cycles: string[] = []
   /** set by the app so a type change can be routed through one place */
   onRetype?: (col: Column) => void
+  /** double-clicking a computed cell edits the FORMULA, not the value */
+  onEditFormula?: (col: Column) => void
 
   constructor(opts: GridHost) {
     this.host = opts.el
@@ -124,7 +132,8 @@ export class Grid {
     return `${cols(s).map((c) => {
       const arrow = this.sort?.col === c.id ? (this.sort.dir === 'asc' ? ' ▲' : ' ▼') : ''
       return `<div class="dg-cell dg-h" style="width:${c.w ?? 130}px" data-col="${c.id}">` +
-        `<span class="dg-name" title="${esc(c.name)}">${esc(c.name)}${arrow}</span>` +
+        `<span class="dg-name" title="${esc(c.formula ? `= ${c.formula}` : c.name)}">${esc(c.name)}${arrow}</span>` +
+        (c.formula ? `<span class="dg-fx" title="${esc('= ' + c.formula)}">fx</span>` : '') +
         `<button class="dg-type" data-retype="${c.id}" title="${esc(TYPE_LABEL[c.type])} — click to change">${esc(TYPE_LABEL[c.type])}</button>` +
         (c.failed ? `<span class="dg-warn" title="${c.failed} value(s) could not be read as ${esc(TYPE_LABEL[c.type])}">!</span>` : '') +
         `</div>`
@@ -139,10 +148,11 @@ export class Grid {
       const spec = s.totals?.[c.id]
       if (!spec) return `<div class="dg-cell" style="width:${c.w ?? 130}px"></div>`
       const data = s.data[c.id]
+      const comp = this.computed.get(c.id)
       let acc = 0
       let seen = 0
       for (let i = 0; i < n; i++) {
-        const v = readCell(data, i)
+        const v = comp ? comp[i] : readCell(data, i)
         if (typeof v !== 'number') continue
         seen++
         if (spec === 'min') acc = seen === 1 ? v : Math.min(acc, v)
@@ -158,6 +168,13 @@ export class Grid {
   paint(): void {
     const s = this.sheet
     const n = rowCount(s)
+    if (s.columns.some((c) => c.formula)) {
+      // `now` is frozen from the document so TODAY() shows every reader the
+      // same date rather than each reader's own
+      const r = recalc(s, this.store.doc.modified)
+      this.computed = r.values
+      this.cycles = r.cycles
+    } else if (this.computed.size) { this.computed = new Map(); this.cycles = [] }
     this.table.style.height = `${n * ROW_H}px`
 
     // Only the visible slice exists. 100k x 6 would be 600,000 nodes, and that
@@ -173,10 +190,15 @@ export class Grid {
       body.push(`<div class="dg-row" data-rid="${rid}" style="top:${i * ROW_H}px">` +
         cols(s).map((c) => {
           const over = s.cells?.[`${c.id}:${rid}`]
-          const v = over && 'v' in over ? over.v : readCell(s.data[c.id], r)
+          const comp = this.computed.get(c.id)
+          const v = comp ? comp[r]
+            : over && 'v' in over ? over.v
+              : readCell(s.data[c.id], r)
           const note = over?.note ? ' dg-noted' : ''
-          return `<div class="dg-cell${note}" data-col="${c.id}" ` +
-            `style="width:${c.w ?? 130}px;text-align:${alignFor(c.type)}">${esc(formatValue(v, c))}</div>`
+          const bad = isErr(v) ? ' dg-err' : ''
+          const shown = isErr(v) ? String(v) : formatValue(v, c)
+          return `<div class="dg-cell${note}${bad}" data-col="${c.id}" ` +
+            `style="width:${c.w ?? 130}px;text-align:${alignFor(c.type)}">${esc(shown)}</div>`
         }).join('') + '</div>')
     }
     this.head.innerHTML = this.header()
@@ -227,6 +249,9 @@ export class Grid {
     const s = this.sheet
     const col = s.columns.find((c) => c.id === colId)
     if (!col || this.store.readOnly) return
+    // a computed column is defined by its expression; typing over one cell
+    // would be a value the formula immediately contradicts
+    if (col.formula) { this.onEditFormula?.(col); return }
     this.editing = { rid, col: colId }
     const r = dataRow(s, rid)
     const raw = readCell(s.data[colId], r)

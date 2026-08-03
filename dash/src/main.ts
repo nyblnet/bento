@@ -39,6 +39,8 @@ import { starterDoc } from './starter.ts'
 import { Grid } from './grid.ts'
 import { importDelimited } from './import.ts'
 import { TYPE_LABEL } from './format.ts'
+import { defaultBinding, renderChart, type ChartBinding } from './chart.ts'
+import { FUNCTIONS } from './formula.ts'
 
 configureApp({
   appId: 'bento-dash',
@@ -136,6 +138,8 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version'): vo
     `<span class="dx-mark">bento<span>/</span>dash</span>` +
     `<input class="dx-title" value="">` +
     `<span class="dx-dirty" hidden>•</span>` +
+    `<button class="dx-btn" data-act="formula">${t('＋ Formula column')}</button>` +
+    `<button class="dx-btn" data-act="chart">${t('＋ Chart')}</button>` +
     `<button class="dx-btn" data-act="import">${t('Import CSV…')}</button>` +
     `<button class="dx-btn" data-act="undo">${t('Undo')}</button>` +
     `<button class="dx-btn" data-act="export">${t('Export CSV')}</button>` +
@@ -143,7 +147,12 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version'): vo
     `<span class="dx-ver">v${APP_VERSION}</span>` +
     `</header>` +
     `<div class="dx-findings" hidden></div>` +
-    `<div class="dx-grid"></div>`
+    `<div class="dx-body"><div class="dx-grid"></div>` +
+    `<div class="dx-chart" hidden><div class="dx-chart-head">` +
+    `<span class="dx-chart-title"></span>` +
+    `<button class="dx-btn dx-chart-kind">${t('Bar')}</button>` +
+    `<button class="dx-btn dx-chart-close" title="${t('Hide chart')}">✕</button>` +
+    `</div><div class="dx-chart-body"></div></div></div>`
 
   const titleEl = app.querySelector<HTMLInputElement>('.dx-title')!
   const dirtyEl = app.querySelector<HTMLElement>('.dx-dirty')!
@@ -153,6 +162,44 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version'): vo
 
   const grid = new Grid({ el: app.querySelector<HTMLElement>('.dx-grid')!, store, sheetId: doc.sheets[0].id })
   grid.onRetype = (col) => retype(store, col)
+  grid.onEditFormula = (col) => editFormula(store, grid, col)
+
+  // --- chart: bound to columns, derived at render, never stored
+  const chartEl = app.querySelector<HTMLElement>('.dx-chart')!
+  const chartBody = app.querySelector<HTMLElement>('.dx-chart-body')!
+  const chartTitle = app.querySelector<HTMLElement>('.dx-chart-title')!
+  const kindBtn = app.querySelector<HTMLElement>('.dx-chart-kind')!
+  let binding: ChartBinding | null = null
+  let teardown: (() => void) | null = null
+  const KINDS: Array<ChartBinding['kind']> = ['bar', 'line', 'pie', 'scatter']
+
+  const drawChart = () => {
+    if (!binding || chartEl.hidden) return
+    teardown?.()
+    const sheet = grid.sheet
+    chartTitle.textContent = `${sheet.columns.find((c) => c.id === binding!.x)?.name ?? ''} · ` +
+      binding.series.map((id) => sheet.columns.find((c) => c.id === id)?.name ?? id).join(', ')
+    kindBtn.textContent = binding.kind[0].toUpperCase() + binding.kind.slice(1)
+    // hand the grid's freshly computed formula columns in, so the chart shows
+    // the numbers on screen rather than the raw columns underneath them
+    teardown = renderChart(chartBody, sheet, binding, grid.computed as Map<string, unknown[]>)
+  }
+  store.on('doc', drawChart)
+  kindBtn.addEventListener('click', () => {
+    if (!binding) return
+    binding.kind = KINDS[(KINDS.indexOf(binding.kind) + 1) % KINDS.length]
+    drawChart()
+  })
+  app.querySelector('.dx-chart-close')!.addEventListener('click', () => {
+    chartEl.hidden = true; teardown?.(); teardown = null
+  })
+  app.querySelector('[data-act="chart"]')!.addEventListener('click', () => {
+    binding = defaultBinding(grid.sheet)
+    if (!binding) { showFindings(findingsEl, [{ message: t('This sheet has no numeric column to chart yet.') }]); return }
+    chartEl.hidden = false
+    drawChart()
+  })
+  app.querySelector('[data-act="formula"]')!.addEventListener('click', () => addFormula(store, grid))
 
   const notes: Notice[] = []
   if (frozen) {
@@ -342,3 +389,36 @@ const esc = (s: string): string =>
 // and so a reader of this file sees both halves of the rule in one place
 void DOC_BUDGET_FSA
 void DOC_BUDGET_DOWNLOAD
+
+// --- formulas ---------------------------------------------------------------
+
+/**
+ * Add a computed column. One expression for the whole column, so inserting a
+ * row changes nothing and there is no range to fall out of date.
+ */
+function addFormula(store: Store, grid: Grid): void {
+  const sheet = grid.sheet
+  const names = sheet.columns.map((c) => (/\s/.test(c.name) ? `[${c.name}]` : c.name)).join(', ')
+  const expr = window.prompt(
+    `${t('Formula for a new column.')}\n\n${t('Columns')}: ${names}\n${t('Functions')}: ${FUNCTIONS.slice(0, 24).join(' ')}…\n\n` +
+    `${t('Example')}: Value * Probability`,
+    'Value * Probability',
+  )
+  if (!expr) return
+  const name = window.prompt(t('Column name'), t('Computed')) || t('Computed')
+  const id = `f-${Math.floor(Date.now() % 1e8).toString(36)}`
+  store.commit({
+    op: 'addColumn', sheet: sheet.id,
+    column: { id, name, type: 'number', formula: expr },
+  })
+}
+
+/** Double-clicking a computed cell edits the expression that produced it. */
+function editFormula(store: Store, grid: Grid, col: Column): void {
+  const expr = window.prompt(`${t('Formula for')} "${col.name}"`, col.formula ?? '')
+  if (expr === null) return
+  store.commit({
+    op: 'setColumn', sheet: grid.sheet.id, col: col.id,
+    patch: expr.trim() ? { formula: expr } : { formula: undefined },
+  })
+}

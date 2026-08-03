@@ -87,8 +87,45 @@ html, body {
 .dx-findings .dx-f { display: flex; gap: 8px; align-items: baseline; }
 .dx-findings .dx-dot { color: var(--accent); }
 
-/* ————— grid ————— */
-.dx-grid { flex: 1 1 auto; min-height: 0; position: relative; }
+/* ————— body: grid, and the chart beside it ————— */
+.dx-body { flex: 1 1 auto; min-height: 0; display: flex; }
+.dx-grid { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; }
+
+.dx-chart {
+  flex: 0 0 clamp(280px, 34%, 520px);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  min-width: 0;
+}
+.dx-chart[hidden] { display: none; }
+.dx-chart-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.dx-chart-title {
+  flex: 1 1 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dx-chart-head .dx-btn { padding: 3px 8px; font-size: 12px; }
+.dx-chart-body { flex: 1 1 auto; min-height: 0; padding: 6px; }
+.dx-chart-body svg { display: block; width: 100%; height: 100%; }
+
+/* stack on a phone rather than squeezing both */
+@media (max-width: 760px) {
+  .dx-body { flex-direction: column; }
+  .dx-chart { flex: 0 0 45%; border-left: 0; border-top: 1px solid var(--line); }
+}
 .dg-scroll { position: absolute; inset: 0; overflow: auto; }
 .dg-table { position: relative; min-width: max-content; }
 /* the sizer is the ONLY absolutely-positioned region: header and totals stay in
@@ -153,6 +190,15 @@ html, body {
   font: 700 11px/15px inherit;
   flex: 0 0 auto;
   cursor: help;
+}
+.dg-err { color: #b91c1c; background: #fef2f2; font-weight: 600; }
+.dg-fx {
+  font: 600 9px/1.6 inherit;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0 3px;
+  flex: 0 0 auto;
 }
 .dg-agg { color: var(--muted); font-weight: 400; font-size: 11px; text-transform: uppercase; }
 

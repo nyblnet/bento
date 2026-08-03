@@ -110,6 +110,33 @@ jobs:
       - name: Splice conformance gate (spaces)
         run: node scripts/shell-gate.mjs spaces/dist-single/Bento_Spaces.bento.html
 
+      - name: Spaces i18n packed table is current
+        # The per-locale catalogs are the source of truth; packed.ts is
+        # generated and is what ships inside every saved file. A core catalog
+        # cannot be corrected without a release, so an incomplete one fails the
+        # build rather than shipping a half-translated interface.
+        run: node scripts/build-spaces-i18n.mjs --check
+
+      - name: Spaces model rig
+        # Properties that fail SILENTLY, and that a shipped file cannot be
+        # talked out of once it exists:
+        #   · the load contract — an unreadable document must never be replaced
+        #     by an empty one;
+        #   · format additivity, and id repair derived from the BYTES, so two
+        #     readers of one file agree on every id (links key on them);
+        #   · untrusted html is parsed INERT — a detached div still loads what
+        #     it creates, which made the sanitizer its own vector on the OPEN
+        #     path;
+        #   · opening a document touches no network, so a mailed space cannot
+        #     carry a tracking pixel;
+        #   · an encrypted space is never snapshotted to IndexedDB in the clear;
+        #   · find and replace quote ONE number — what is counted is what
+        #     changes.
+        # The last four are source assertions: the behaviour needs a DOM, a
+        # failing request, IndexedDB and a clock, but every one of those
+        # mistakes is made in the source.
+        run: node scripts/test-spaces-model.ts
+
       # dash: the data app — same pipeline, same gate.
       - name: Install (dash)
         working-directory: dash
