@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bento Tray</title>
+<style>
+  body { font: 13.5px/1.5 -apple-system, system-ui, sans-serif; color: #1e2a3a; margin: 0; width: 290px; }
+  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
+  header img { width: 20px; height: 20px; border-radius: 5px; }
+  header b { font-size: 14px; }
+  .rows { padding: 0 14px 4px; }
+  .row { display: flex; gap: 8px; align-items: flex-start; padding: 7px 0; border-top: 1px solid #eceff3; }
+  .row:first-child { border-top: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: none; }
+  .ok { background: #2e9e5b } .bad { background: #c2453b } .meh { background: #c9a227 }
+  .t { flex: 1 }
+  .t b { display: block; font-weight: 600 }
+  .t span { color: #6b7a8d; font-size: 12.5px }
+  footer { padding: 10px 14px 13px; }
+  button { font: inherit; width: 100%; padding: 7px 10px; border: 1px solid #c8d0dc; border-radius: 8px; background: #fff; cursor: pointer; }
+  button:hover { background: #f5f7fa }
+  code { background: #eef1f5; padding: 1px 4px; border-radius: 4px; font-size: 12px }
+</style>
+<header><img src="../icons/icon-48.png" alt=""><b>Bento Tray</b></header>
+<div class="rows" id="rows"></div>
+<footer><button id="open">Settings…</button></footer>
+<script type="module" src="popup.js"></script>
