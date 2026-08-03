@@ -13,18 +13,18 @@ pre-1.0.
 
 ## [1.0.15] — 2026-08-03
 
-- **Fix: one collaborator's edit could crash everyone else in the room.**
-  Removing a property from an element travels as an op the receiving side
-  could not read, and every other participant's editor threw on arrival. The
-  person making the edit saw nothing wrong at all.
+- **Fix: removing a formatting option no longer disconnects the people you are
+  working with.** While a live session was running, taking something *away* —
+  switching a gradient fill back to solid, turning an outline off, ungrouping,
+  unlinking a chart from its table, clearing a click target — crashed everyone
+  else's copy of the deck. The person doing it saw nothing wrong; their
+  collaborators' sessions stopped applying changes.
 
-  Nothing exotic triggers it: ungrouping (⇧⌘G), switching a fill from gradient
-  back to solid, turning an outline off, unlinking a chart from its table, or
-  clearing a jump target. All five reproduced, all five fixed by one line.
-
-  The convergence rig never caught it because its generator only ever *assigns*
-  properties, so an op that removes one had simply never occurred in 45,000
-  checks. It generates removals now.
+  Removing a property is sent as an instruction with no value attached, and one
+  line of diagnostic code assumed a value was always there. Adding things was
+  always safe, which is why this survived: the convergence tests only ever
+  added, so an op that takes a property away had never once occurred in 45,000
+  checks. They generate removals now.
 
 - **"Save a copy…" and share exports remember their own folder.** The save
   picker used one identity for every kind of save, so it opened wherever you
