@@ -23,6 +23,7 @@ import { uid } from '../model'
 import { SyncState, SYNC_V, BLOB_INLINE_MAX, type Op } from './crdt'
 import { putBlob, getBlob, dataUriToBytes, bytesToDataUri, encodedSize, MAX_BLOB } from './blobs'
 import { mintCollab } from './online'
+import { lsGet, lsJson } from '../../../kernel/src/storage.ts'
 
 export interface PresenceInfo {
   name: string
@@ -520,7 +521,7 @@ export class SyncSession {
   private presence(): PresenceInfo {
     let name = 'Guest'
     try {
-      name = localStorage.getItem('bento-author') || 'Guest'
+      name = lsGet('bento-author') || 'Guest'
     } catch {
       /* storage unavailable */
     }
@@ -535,7 +536,7 @@ export class SyncSession {
       else if (c.v === 2 && c.ownerPriv) { role = 'owner'; pub = c.owner }
       else if (c.v === 2 && c.invite) {
         role = 'editor'
-        try { pub = JSON.parse(localStorage.getItem(`bento-member-${this.store.doc.docId}`) ?? 'null')?.pub } catch { /* absent */ }
+        pub = lsJson<{ pub?: string } | null>(`bento-member-${this.store.doc.docId}`, null)?.pub
       } else if (c.writerPriv) { role = 'editor'; pub = c.writerPub }
     }
     return {

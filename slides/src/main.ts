@@ -9,10 +9,14 @@ import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, downloadFile,
   suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword,
+  registerPreview,
 } from './save'
+import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
-import { i18nApi, t } from './i18n'
-import { parseDoc, type BentoDoc } from './model'
+import { i18nApi, t, applyDirection } from './i18n'
+import { parseDoc, type BentoDoc, type TextElement } from './model'
+import { validateDoc, type ValidateOpts } from './validate'
+import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
 import { Store } from './store'
@@ -29,7 +33,20 @@ configureApp({
   manifestUrl: 'https://bento.page/releases/slides/manifest.json',
 })
 
+// Every save writes a static rendering of page one into the shell, so file
+// managers thumbnail the deck instead of the boot splash (src/preview.ts).
+// Registered before capturePristine only for tidiness — nothing serializes
+// this early — but it must be registered before the first save.
+registerPreview((doc) => buildSlidePreview(doc as BentoDoc))
+
 capturePristine()
+
+// Chrome direction follows the VIEWER's language (Arabic/Hebrew/… get an RTL
+// interface). Deliberately AFTER capturePristine: saves re-serialize the
+// pristine clone, so the dir/lang attributes never reach a saved file — the
+// same viewer-scoped rule as 'bento-lang' and reduced motion. The DOCUMENT
+// never mirrors; styles.css pins every slide surface back to direction: ltr.
+applyDirection()
 
 // --- boot gates: password-encrypted files, read-only player files -----------
 
@@ -200,6 +217,37 @@ if (location.hash === '#present') {
     if (!next) return false
     store.replaceDoc(next)
     return true
+  },
+  /**
+   * Report what the runtime would otherwise swallow: unknown keys, text that
+   * overflows its box, elements off the canvas, effects that can never run,
+   * broken links and asset refs, chart options charts-lite ignores. Read-only
+   * — it never changes the document. Pass a doc to check one you have not
+   * loaded; defaults to the open one.
+   */
+  validate(target?: BentoDoc, opts?: ValidateOpts) {
+    return validateDoc(target ?? store.doc, opts)
+  },
+  /**
+   * How tall does this text need to be? The format is absolute pixels, so
+   * without a screen the height of a string is a guess — this answers it by
+   * rendering through the real renderer.
+   *
+   * Pass an element id to measure one that exists, or a spec
+   * ({html, w, fontSize, …}) to size text BEFORE creating the element, which
+   * is the point: an agent can lay a slide out correctly the first time
+   * instead of writing it, checking, and correcting.
+   *
+   * Returns {height, width, lines} — plus {fits, overflow} when you supply `h`.
+   */
+  measure(target: string | TextMeasureSpec, opts?: { doc?: BentoDoc }) {
+    const doc = opts?.doc ?? store.doc
+    if (typeof target !== 'string') return measureText(target, doc)
+    for (const s of doc.slides) {
+      const el = s.elements.find((e) => e.id === target && e.type === 'text')
+      if (el) return measureElement(el as TextElement, doc)
+    }
+    return null
   },
   /**
    * Self-update surface (all user/tooling-initiated, never automatic):

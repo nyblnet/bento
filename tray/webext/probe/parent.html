@@ -1,0 +1,109 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Probe — handle across origins (home side)</title>
+<style>
+  body { font: 15px/1.6 -apple-system, system-ui, sans-serif; max-width: 44rem; margin: 4vh auto; padding: 0 1.4rem; color: #1e2a3a; }
+  h1 { font-size: 20px; margin-bottom: .2rem; }
+  .sub { color: #586a80; margin-top: 0; }
+  .step { margin: 1.1rem 0; padding-left: .9rem; border-left: 3px solid #f7a600; }
+  b { color: #7a5200; }
+  button { font: inherit; padding: .5rem 1rem; border: 1px solid #c8d0dc; border-radius: 8px; background: #fff; cursor: pointer; }
+  button:hover:not(:disabled) { background: #f5f7fa; }
+  button:disabled { opacity: .5; cursor: default; }
+  #log { background: #f5f7fa; border-radius: 8px; padding: .9rem; white-space: pre-wrap; font: 12.5px/1.5 ui-monospace, monospace; margin-top: 1rem; }
+  .warn { background: #fff6e5; border: 1px solid #f0d9a8; border-radius: 8px; padding: .8rem 1rem; }
+  code { background: #eef1f5; padding: 1px 4px; border-radius: 4px; font-size: 12.5px; }
+</style>
+
+<h1>Does a file handle survive a cross-origin <code>postMessage</code>?</h1>
+<p class="sub">
+  This is the question that decides whether <b>bento/home</b> can hand a deck to an
+  isolated runner origin. If the handle arrives unusable, the whole per-document-origin
+  design is dead and we need a different one.
+</p>
+
+<div class="warn">
+  <b>Pick a throwaway file.</b> The optional write test rewrites the file you choose
+  with byte-identical content. Copy a deck first, or use any scratch file.
+  Everything before that step is read-only.
+</div>
+
+<div class="step">
+  <b>Step 1.</b> Pick a file here, on <span id="origin-a"></span>.<br>
+  <button id="pick">Pick a file…</button>
+</div>
+
+<div class="step">
+  <b>Step 2.</b> Send the handle to a window on a <em>different</em> origin
+  (<span id="origin-b"></span>) and let it report what it can do.<br>
+  <button id="send" disabled>Open the runner and send the handle</button>
+</div>
+
+<div id="log">Waiting…</div>
+
+<script type="module">
+const RUNNER = location.origin.replace(/:\d+$/, ':5302') + '/probe/runner.html'
+const logEl = document.getElementById('log')
+logEl.textContent = ''
+const log = (...a) => { logEl.textContent += a.join(' ') + '\n' }
+
+document.getElementById('origin-a').textContent = location.origin
+document.getElementById('origin-b').textContent = new URL(RUNNER).origin
+
+let handle = null
+
+document.getElementById('pick').onclick = async () => {
+  try {
+    ;[handle] = await window.showOpenFilePicker()
+    log('PICKED   ' + handle.name)
+    const perm = await handle.requestPermission({ mode: 'readwrite' })
+    log('         requestPermission here → ' + perm)
+    if (perm !== 'granted') {
+      log('\nSTOP: write access was refused on THIS origin, so the cross-origin')
+      log('      question cannot be asked. Are you in a normal browser window?')
+      return
+    }
+    document.getElementById('send').disabled = false
+    log('\nReady. Step 2 sends it across.')
+  } catch (e) {
+    log('PICK FAILED  ' + e.name + ': ' + e.message)
+  }
+}
+
+document.getElementById('send').onclick = () => {
+  const target = new URL(RUNNER).origin
+  const win = window.open(RUNNER, '_blank')
+  if (!win) { log('Pop-up blocked — allow pop-ups and retry.'); return }
+  log('\nOpened ' + target + ', waiting for it to say it is ready…')
+
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== target) return
+    if (ev.data?.type === 'ready') {
+      // CONTROL FIRST. A plain object proves the channel itself works, so if
+      // the handle then fails to arrive we know it is the handle that was
+      // refused and not the plumbing. Without this the two are
+      // indistinguishable from here, and they mean opposite things.
+      win.postMessage({ type: 'ping' }, target)
+      log('SENT     control ping → ' + target)
+      try {
+        win.postMessage({ type: 'handle', handle }, target)
+        log('SENT     handle → ' + target)
+        log('\nNote: postMessage succeeding here only means the handle was')
+        log('SERIALISED. Whether it can be DESERIALISED on the other origin is')
+        log('the actual question — read the runner window, not this one.')
+      } catch (e) {
+        // A structured-clone failure lands here: the handle could not even be
+        // serialised for another origin.
+        log('SEND FAILED  ' + e.name + ': ' + e.message)
+        log('\nVERDICT: handles cannot cross origins. Per-document origins are out.')
+      }
+    }
+    // The runner echoes its log here, so the whole run reads in one window.
+    if (ev.data?.type === 'log') log('  [runner] ' + ev.data.line)
+    if (ev.data?.type === 'verdict') {
+      log('\n———— VERDICT (' + (ev.data.ok ? 'PASS' : 'FAIL') + ') ————')
+      log(ev.data.text)
+    }
+  })
+}
+</script>

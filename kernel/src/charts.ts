@@ -82,7 +82,27 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 
 // --- option digestion -------------------------------------------------------
 
-interface YAxisCfg { name?: string; min?: number; max?: number; formatter?: string }
+interface TextCfg {
+  color: string
+  size: number
+  weight: string | number
+}
+
+interface YAxisCfg {
+  name?: string
+  min?: number
+  max?: number
+  formatter?: string
+  label: TextCfg
+}
+
+interface LegendCfg extends TextCfg {
+  itemWidth: number
+  itemHeight: number
+  itemGap: number
+  top?: number
+  bottom: number
+}
 
 interface Digest {
   w: number; h: number
@@ -92,8 +112,10 @@ interface Digest {
   categories: string[]
   isPie: boolean
   grid: { x: number; y: number; w: number; h: number }
-  legend: null | { color: string }
-  axisLabel: string; axisLine: string; splitLine: string
+  legend: null | LegendCfg
+  xAxisLabel: TextCfg
+  axisLine: { color: string; width: number }
+  splitLine: { color: string; width: number }
   yAxes: YAxisCfg[]      // 1 or 2 value axes; series pick one via yAxisIndex
   tooltipTrigger: 'axis' | 'item' | null
   zoomable: boolean
@@ -104,36 +126,93 @@ function digest(option: Opt, w: number, h: number): Digest {
   const series: Opt[] = Array.isArray(option?.series) ? option.series : option?.series ? [option.series] : []
   const isPie = series.some((s) => s?.type === 'pie')
   const g = option?.grid ?? {}
-  const legend = option?.legend ? { color: option.legend?.textStyle?.color ?? '#6B7280' } : null
-  const legendH = legend ? 24 : 0
+  const legendRaw = option?.legend
+  const legend: LegendCfg | null = legendRaw ? {
+    color: legendRaw?.textStyle?.color ?? '#6B7280',
+    size: num(legendRaw?.textStyle?.fontSize, 12),
+    weight: fontWeight(legendRaw?.textStyle?.fontWeight),
+    itemWidth: num(legendRaw?.itemWidth, 14),
+    itemHeight: num(legendRaw?.itemHeight, 10),
+    itemGap: num(legendRaw?.itemGap, 16),
+    top: typeof legendRaw?.top === 'number' ? legendRaw.top : undefined,
+    bottom: num(legendRaw?.bottom, 0),
+  } : null
+  const legendH = legend ? Math.max(legend.itemHeight, legend.size) + 12 : 0
+  const xRaw = option?.xAxis ?? {}
+  const xLabelRaw = xRaw?.axisLabel ?? {}
   const yRaw: Opt[] = Array.isArray(option?.yAxis) ? option.yAxis : option?.yAxis ? [option.yAxis] : [{}]
   const yAxes: YAxisCfg[] = yRaw.slice(0, 2).map((a: Opt) => ({
     name: typeof a?.name === 'string' ? a.name : undefined,
     min: typeof a?.min === 'number' ? a.min : undefined,
     max: typeof a?.max === 'number' ? a.max : undefined,
     formatter: typeof a?.axisLabel?.formatter === 'string' ? a.axisLabel.formatter : undefined,
+    label: {
+      color: a?.axisLabel?.color ?? xLabelRaw?.color ?? '#6B7280',
+      size: num(a?.axisLabel?.fontSize, 12),
+      weight: fontWeight(a?.axisLabel?.fontWeight),
+    },
   }))
-  if (!yAxes.length) yAxes.push({})
+  if (!yAxes.length) {
+    yAxes.push({
+      label: {
+        color: xLabelRaw?.color ?? '#6B7280',
+        size: 12,
+        weight: 400,
+      },
+    })
+  }
   const twoAxes = !isPie && yAxes.length > 1
+  const pieTop = legend?.top !== undefined ? legend.top + legendH : 0
+  const pieBottom = legend && legend.top === undefined ? legend.bottom + legendH : 0
+  // A cartesian plot has to make room for the legend too, not just a pie.
+  //
+  // The legend's height now follows its own font size, so a big legend gets
+  // taller — but the default bottom inset is a fixed 44px, sized for the old
+  // 12px legend. Past roughly 20px the legend simply grew into the x-axis
+  // labels and the two overlapped. Only ever visible on a chart that does NOT
+  // set `grid` explicitly, which is why a chart authored with generous margins
+  // looks fine and the default one does not.
+  //
+  // An EXPLICIT grid value always wins: someone who wrote `grid.bottom` meant
+  // it, and silently enlarging their inset would be its own bug. This only
+  // raises the DEFAULT, and only by however much the legend actually outgrew
+  // the space that default assumed.
+  const legendPad = Math.max(0, legendH - 12) // 12px legend == the old default
+  const gridBottom = g.bottom !== undefined
+    ? num(g.bottom, 44)
+    : 44 + (legend && legend.top === undefined ? legendPad : 0)
+  const gridTop = g.top !== undefined
+    ? num(g.top, 24)
+    : 24 + (legend?.top !== undefined ? legendPad : 0)
   const grid = isPie
-    ? { x: 0, y: 0, w, h: h - legendH }
+    ? { x: 0, y: pieTop, w, h: Math.max(0, h - pieTop - pieBottom) }
     : {
         x: num(g.left, 48),
-        y: num(g.top, 24),
+        y: gridTop,
         w: w - num(g.left, 48) - num(g.right, twoAxes ? 56 : 16),
-        h: h - num(g.top, 24) - num(g.bottom, 44),
+        h: Math.max(0, h - gridTop - gridBottom),
       }
   return {
     w, h,
     font: option?.textStyle?.fontFamily ?? 'sans-serif',
     colors: Array.isArray(option?.color) && option.color.length ? option.color : PALETTE,
     series, isPie,
-    categories: (option?.xAxis?.data ?? []).map(String),
+    categories: (xRaw?.data ?? []).map(String),
     grid,
     legend,
-    axisLabel: option?.xAxis?.axisLabel?.color ?? yRaw[0]?.axisLabel?.color ?? '#6B7280',
-    axisLine: option?.xAxis?.axisLine?.lineStyle?.color ?? 'rgba(110,120,135,0.45)',
-    splitLine: yRaw[0]?.splitLine?.lineStyle?.color ?? 'rgba(110,120,135,0.15)',
+    xAxisLabel: {
+      color: xLabelRaw?.color ?? yAxes[0].label.color,
+      size: num(xLabelRaw?.fontSize, 12),
+      weight: fontWeight(xLabelRaw?.fontWeight),
+    },
+    axisLine: {
+      color: xRaw?.axisLine?.lineStyle?.color ?? 'rgba(110,120,135,0.45)',
+      width: num(xRaw?.axisLine?.lineStyle?.width, 1),
+    },
+    splitLine: {
+      color: yRaw[0]?.splitLine?.lineStyle?.color ?? 'rgba(110,120,135,0.15)',
+      width: num(yRaw[0]?.splitLine?.lineStyle?.width, 1),
+    },
     yAxes,
     tooltipTrigger: option?.tooltip ? (option.tooltip.trigger === 'item' ? 'item' : 'axis') : null,
     zoomable: Array.isArray(option?.dataZoom) && option.dataZoom.length > 0,
@@ -142,6 +221,9 @@ function digest(option: Opt, w: number, h: number): Digest {
 }
 
 const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+
+const fontWeight = (v: unknown): string | number =>
+  typeof v === 'string' || typeof v === 'number' ? v : 400
 
 /** Nice tick values for a 0..max (or min..max) range. */
 function niceTicks(min: number, max: number, target = 5): number[] {
@@ -203,10 +285,37 @@ function elNS<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string
   return n
 }
 
-function text(x: number, y: number, s: string, fill: string, font: string, size = 12, anchor = 'middle'): SVGTextElement {
-  const t = elNS('text', { x, y, fill, 'font-size': size, 'text-anchor': anchor, 'font-family': font })
+function text(
+  x: number,
+  y: number,
+  s: string,
+  fill: string,
+  font: string,
+  size = 12,
+  anchor = 'middle',
+  weight: string | number = 400,
+): SVGTextElement {
+  const t = elNS('text', {
+    x,
+    y,
+    fill,
+    'font-size': size,
+    'font-weight': weight,
+    'text-anchor': anchor,
+    'font-family': font,
+  })
   t.textContent = s
   return t
+}
+
+function estimatedTextWidth(value: string, fontSize: number): number {
+  let units = 0
+  for (const character of value) {
+    if (/\s/u.test(character)) units += 0.35
+    else if ((character.codePointAt(0) ?? 0) > 0x2ff) units += 1
+    else units += 0.58
+  }
+  return units * fontSize
 }
 
 let gradSeq = 0
@@ -249,18 +358,41 @@ function renderChart(option: Opt, w: number, h: number, sweep = 1, view: View = 
 }
 
 function renderLegend(svg: SVGSVGElement, d: Digest) {
+  const legend = d.legend!
   const pie = d.series.find((s) => s?.type === 'pie')
   const items: Array<{ name: string; color: string }> = pie
     ? (pie.data ?? []).map((p: Opt, i: number) => ({ name: String(p?.name ?? i), color: d.colors[i % d.colors.length] }))
     : d.series.map((s, i) => ({ name: String(s?.name ?? `Series ${i + 1}`), color: typeof s?.itemStyle?.color === 'string' ? s.itemStyle.color : typeof s?.lineStyle?.color === 'string' ? s.lineStyle.color : d.colors[i % d.colors.length] }))
-  const iw = items.map((it) => 14 + 5 + it.name.length * 6.6 + 16)
-  const total = iw.reduce((a, b) => a + b, 0)
+  const labelWidths = items.map((item) => estimatedTextWidth(item.name, legend.size))
+  const itemWidths = labelWidths.map((labelWidth) => legend.itemWidth + 8 + labelWidth)
+  const total = itemWidths.reduce((a, b) => a + b, 0) + legend.itemGap * Math.max(0, items.length - 1)
   let x = Math.max(8, (d.w - total) / 2)
-  const y = d.h - 12
+  const rowHeight = Math.max(legend.itemHeight, legend.size)
+  // Keep the legacy 10px safe area for bottom legends. Existing presets
+  // explicitly use bottom: 0 and previously rendered with this inset.
+  const rowTop = legend.top ?? d.h - legend.bottom - rowHeight - 10
+  const markerY = rowTop + (rowHeight - legend.itemHeight) / 2
+  const baselineY = rowTop + rowHeight / 2 + legend.size * 0.35
   for (let i = 0; i < items.length; i++) {
-    svg.appendChild(elNS('rect', { x, y: y - 9, width: 14, height: 10, rx: 3, fill: items[i].color }))
-    svg.appendChild(text(x + 19, y, items[i].name, d.legend!.color, d.font, 12, 'start'))
-    x += iw[i]
+    svg.appendChild(elNS('rect', {
+      x,
+      y: markerY,
+      width: legend.itemWidth,
+      height: legend.itemHeight,
+      rx: Math.min(3, legend.itemHeight / 2),
+      fill: items[i].color,
+    }))
+    svg.appendChild(text(
+      x + legend.itemWidth + 8,
+      baselineY,
+      items[i].name,
+      legend.color,
+      d.font,
+      legend.size,
+      'start',
+      legend.weight,
+    ))
+    x += itemWidths[i] + (i < items.length - 1 ? legend.itemGap : 0)
   }
 }
 
@@ -311,18 +443,58 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
   // shared gridlines at k evenly spaced rows; labels on the matching side(s)
   for (let j = 0; j < k; j++) {
     const y = G.y + G.h - (j / Math.max(1, k - 1)) * G.h
-    svg.appendChild(elNS('line', { x1: G.x, y1: y, x2: G.x + G.w, y2: y, stroke: d.splitLine, 'stroke-width': 1 }))
-    svg.appendChild(text(G.x - 8, y + 4, r0.labels[j], d.axisLabel, d.font, 12, 'end'))
-    if (ranges[1]) svg.appendChild(text(G.x + G.w + 8, y + 4, ranges[1].labels[j], d.axisLabel, d.font, 12, 'start'))
+    svg.appendChild(elNS('line', {
+      x1: G.x,
+      y1: y,
+      x2: G.x + G.w,
+      y2: y,
+      stroke: d.splitLine.color,
+      'stroke-width': d.splitLine.width,
+    }))
+    const leftLabel = d.yAxes[0].label
+    svg.appendChild(text(
+      G.x - 8,
+      y + leftLabel.size * 0.35,
+      r0.labels[j],
+      leftLabel.color,
+      d.font,
+      leftLabel.size,
+      'end',
+      leftLabel.weight,
+    ))
+    if (ranges[1]) {
+      const rightLabel = d.yAxes[1].label
+      svg.appendChild(text(
+        G.x + G.w + 8,
+        y + rightLabel.size * 0.35,
+        ranges[1].labels[j],
+        rightLabel.color,
+        d.font,
+        rightLabel.size,
+        'start',
+        rightLabel.weight,
+      ))
+    }
   }
-  if (d.yAxes[0]?.name) svg.appendChild(text(G.x - 8, G.y - 9, d.yAxes[0].name, d.axisLabel, d.font, 11, 'end'))
-  if (ranges[1] && d.yAxes[1]?.name) svg.appendChild(text(G.x + G.w + 8, G.y - 9, d.yAxes[1].name, d.axisLabel, d.font, 11, 'start'))
+  if (d.yAxes[0]?.name) {
+    svg.appendChild(text(G.x - 8, G.y - 9, d.yAxes[0].name, d.xAxisLabel.color, d.font, 11, 'end'))
+  }
+  if (ranges[1] && d.yAxes[1]?.name) {
+    svg.appendChild(text(G.x + G.w + 8, G.y - 9, d.yAxes[1].name, d.xAxisLabel.color, d.font, 11, 'start'))
+  }
 
   // x axis line — drawn at the ZERO position (clamped). For all-positive data
   // that's the bottom (as before); when the range crosses zero it sits AT zero,
   // so negative values dip below the axis instead of the axis pinning to the floor.
   const xAxisY = baseOf(0)
-  svg.appendChild(elNS('line', { x1: G.x, y1: xAxisY, x2: G.x + G.w, y2: xAxisY, stroke: d.axisLine, 'stroke-width': 1 }))
+  svg.appendChild(elNS('line', {
+    x1: G.x,
+    y1: xAxisY,
+    x2: G.x + G.w,
+    y2: xAxisY,
+    stroke: d.axisLine.color,
+    'stroke-width': d.axisLine.width,
+  }))
 
   if (scatters.length && !d.categories.length) {
     // value x-axis (scatter)
@@ -333,7 +505,16 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
     const xOf = (v: number) => G.x + ((v - vx0) / (vx1 - vx0)) * G.w
     for (const tv of xt) {
       if (tv < vx0 || tv > vx1) continue
-      svg.appendChild(text(xOf(tv), G.y + G.h + 18, fmt(tv), d.axisLabel, d.font, 12))
+      svg.appendChild(text(
+        xOf(tv),
+        G.y + G.h + d.xAxisLabel.size + 6,
+        fmt(tv),
+        d.xAxisLabel.color,
+        d.font,
+        d.xAxisLabel.size,
+        'middle',
+        d.xAxisLabel.weight,
+      ))
     }
     scatters.forEach((s, si) => {
       const color = typeof s?.itemStyle?.color === 'string' ? s.itemStyle.color : d.colors[si % d.colors.length]
@@ -355,7 +536,16 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
   const step = Math.ceil(nCat / Math.max(1, Math.floor(G.w / 56)))
   cats.forEach((c, i) => {
     if (i % step) return
-    svg.appendChild(text(G.x + band * (i + 0.5), G.y + G.h + 18, c, d.axisLabel, d.font, 12))
+    svg.appendChild(text(
+      G.x + band * (i + 0.5),
+      G.y + G.h + d.xAxisLabel.size + 6,
+      c,
+      d.xAxisLabel.color,
+      d.font,
+      d.xAxisLabel.size,
+      'middle',
+      d.xAxisLabel.weight,
+    ))
   })
 
   // bars
@@ -421,8 +611,9 @@ function renderCartesian(svg: SVGSVGElement, d: Digest, sweep: number, view: Vie
     }
     svg.appendChild(line)
     if (s.symbol !== 'none') {
+      const symbolRadius = num(s.symbolSize, 7) / 2
       pts.forEach(([cx, cy], i) => {
-        const c = elNS('circle', { cx, cy, r: 3.5, fill: stroke, opacity: sweep })
+        const c = elNS('circle', { cx, cy, r: symbolRadius, fill: stroke, opacity: sweep })
         ;(c as any).__cat = i
         ;(c as any).__tip = { title: cats[i], rows: [{ name: String(s.name ?? ''), value: fmt(data[i]), color: stroke }] }
         svg.appendChild(c)
@@ -446,8 +637,8 @@ function renderPie(svg: SVGSVGElement, d: Digest, _option: Opt, sweep: number) {
     name: String(p?.name ?? i), value: Math.max(0, num(p?.value, 0)),
   }))
   const total = data.reduce((a, b) => a + b.value, 0) || 1
-  const cx = d.grid.w / 2
-  const cy = d.grid.h / 2
+  const cx = d.grid.x + d.grid.w / 2
+  const cy = d.grid.y + d.grid.h / 2
   const R = Math.min(d.grid.w, d.grid.h) / 2
   const [ri, ro] = (Array.isArray(s.radius) ? s.radius : ['0%', s.radius ?? '70%']).map(
     (r: string | number) => (typeof r === 'string' ? (parseFloat(r) / 100) * R : r),

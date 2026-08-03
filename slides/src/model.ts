@@ -756,6 +756,24 @@ export function internAsset(doc: BentoDoc, src: string): string {
  *  editor warns — a big embed makes the .bento.html slow to open and save. */
 export const MEDIA_EMBED_BUDGET = 8 * 1024 * 1024 // 8 MB
 
+/**
+ * Hard ceiling for the static first-page preview every save writes into the
+ * shell (src/preview.ts), in bytes of serialized markup.
+ *
+ * Unlike MEDIA_EMBED_BUDGET this is not a warning the author can wave through
+ * — there is no author in the loop, it is spent silently on every ⌘S, and it
+ * is spent on a THUMBNAIL. A text page costs 2–5 KB. The thing that can blow
+ * up is a full-bleed photo, whose data URI would be duplicated: once in the
+ * document, once in the preview.
+ *
+ * 64 KB is ~10% of the shipped shell (~640 KB compressed): invisible against a
+ * file that size, and enough for a real page plus a logo or an icon-sized
+ * image. Measured: the starter deck's page one costs 25 KB (2.6% of it). Over
+ * it, preview.ts degrades — first dropping raster payloads, then falling back
+ * to a title card — rather than growing the file.
+ */
+export const PREVIEW_BUDGET = 64 * 1024 // 64 KB
+
 export function defaultMedia(
   kind: 'video' | 'audio',
   src: string,
@@ -825,9 +843,48 @@ const bar = (id: string, frame: { x: number; y: number; w: number; h: number }):
   rotation: 0, opacity: 1, fill: '#F7A600', stroke: 'transparent', strokeWidth: 0, radius: 2,
 })
 
-/** The layouts every document offers out of the box (not persisted until edited). */
-export function builtinLayouts(): Slide[] {
-  return [
+/**
+ * The canvas the built-in layout geometry below is authored against.
+ *
+ * It is NOT the model default (1280x720) — these layouts were drawn for a
+ * 1600x900 stage, so on a default deck every one of them used to hang off the
+ * right edge (`lt-title` ran to x=1440 on a 1280-wide slide) and the
+ * title+content body overflowed the bottom by 88px. `builtinLayouts(size)`
+ * scales them to the deck instead, which also makes them correct for the
+ * custom page sizes the slide panel offers.
+ */
+const LAYOUT_BASE = { width: 1600, height: 900 }
+
+/** Rescale a built-in layout from LAYOUT_BASE onto an arbitrary canvas. */
+function scaleLayout(ly: Slide, sx: number, sy: number): Slide {
+  // Type scales with the SMALLER axis: on a squarer canvas the limiting
+  // dimension is what decides whether a heading still fits its box.
+  const st = Math.min(sx, sy)
+  return {
+    ...ly,
+    elements: ly.elements.map((el) => {
+      const next = {
+        ...el,
+        x: Math.round(el.x * sx), y: Math.round(el.y * sy),
+        w: Math.round(el.w * sx), h: Math.round(el.h * sy),
+      } as SlideElement
+      if (next.type === 'text') {
+        const txt = next as TextElement
+        if (txt.fontSize) txt.fontSize = Math.max(8, Math.round(txt.fontSize * st))
+        if (txt.letterSpacing) txt.letterSpacing = Math.round(txt.letterSpacing * st * 10) / 10
+      }
+      return next
+    }),
+  }
+}
+
+/**
+ * The layouts every document offers out of the box (not persisted until edited).
+ * Pass the deck's page size to get geometry that fits it; omit it only when the
+ * caller just wants the element ids.
+ */
+export function builtinLayouts(size?: { width: number; height: number }): Slide[] {
+  const base: Slide[] = [
     {
       id: 'layout-title', name: 'Title', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
         bar('lt-bar', { x: 160, y: 380, w: 72, h: 8 }),
@@ -868,6 +925,10 @@ export function builtinLayouts(): Slide[] {
     },
     { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
   ]
+  if (!size || (size.width === LAYOUT_BASE.width && size.height === LAYOUT_BASE.height)) return base
+  const sx = size.width / LAYOUT_BASE.width
+  const sy = size.height / LAYOUT_BASE.height
+  return base.map((ly) => scaleLayout(ly, sx, sy))
 }
 
 /** A fresh slide from a layout — new slide id, element ids KEPT (lineage). */

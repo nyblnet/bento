@@ -7,8 +7,13 @@ templates, and code.
 
 ## Getting set up
 
-You need **Node 20+** and npm (the build uses Vite 7). There is no backend to
-run and no account to create — the whole app builds to one HTML file.
+If you are using a Node version manager like [fnm](https://github.com/Schniz/fnm), you can do:
+
+```bash
+fnm use
+```
+This should bring in the right version of Node.js and npm. Alternatively, you can install **Node 20+** and npm (the build uses Vite 7).
+There is no backend to run and no account to create — the whole app builds to one HTML file.
 
 ```bash
 git clone https://github.com/nyblnet/bento.git
@@ -83,6 +88,39 @@ If you touch the boot, save, or build path, keep these invariants intact — the
 release process gates on them. The details are in
 [docs/architecture.md](docs/architecture.md).
 
+## Before you build something substantial
+
+**Check what's already in flight, and claim it.** Bento moves fast and several
+things are usually half-built at once — twice now, contributors have written
+thousands of lines that duplicated work already open as a PR. That is our
+fault, not theirs, so:
+
+1. Skim [open pull requests](https://github.com/nyblnet/bento/pulls) and the
+   pinned **What's in flight** issue.
+2. For anything beyond a small fix, open an issue (or a
+   [Discussion](https://github.com/nyblnet/bento/discussions) under *Ideas*)
+   saying what you plan to do, before you write it. A maintainer will tell you
+   quickly if it clashes with something unreleased or with a platform
+   invariant.
+
+That second step matters most for changes that touch
+[docs/PLATFORM.md](docs/PLATFORM.md) §1–2 — the single-file promise and the
+splice contract. Those are the two rules the project will not bend, and a
+change that breaks them cannot be merged however good the code is.
+
+## AI-assisted contributions
+
+They're welcome — the maintainer uses AI on this repo too. Two conditions:
+
+- **You have read and understood what you're submitting**, and you can answer
+  questions about it. Review it as if you had written every line, because as
+  far as the project is concerned, you did.
+- **Commits are authored under your own name**, not a bot identity.
+
+An AI will happily produce something locally coherent that violates a rule
+stated plainly in `docs/PLATFORM.md`. Checking your change against that file is
+worth more than any amount of polish.
+
 ## Pull requests
 
 - Branch off `main` and keep PRs focused — one concern per PR is easier to
@@ -98,10 +136,16 @@ release process gates on them. The details are in
 - Please don't bump the version or cut releases in a PR — releases are signed
   and cut locally by a maintainer (see [docs/RELEASING.md](docs/RELEASING.md)).
 
-## Reporting bugs & ideas
+## Questions, bugs & ideas
 
-Open a GitHub issue. For bugs, include your browser and OS, what you expected,
-what happened, and — when you can — a minimal `.bento.html` that reproduces it.
+- **Questions and help** — [Discussions →
+  Q&A](https://github.com/nyblnet/bento/discussions/categories/q-a). Answers
+  there are searchable and help the next person with the same question.
+- **Ideas and feature requests** — [Discussions →
+  Ideas](https://github.com/nyblnet/bento/discussions/categories/ideas).
+- **Bugs** — open a GitHub issue. Include your browser and OS, what you
+  expected, what happened, and — when you can — a minimal `.bento.html` that
+  reproduces it.
 
 Security issues are different: please **do not** open a public issue. Follow
 [SECURITY.md](SECURITY.md) instead.

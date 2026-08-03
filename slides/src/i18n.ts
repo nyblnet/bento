@@ -18,7 +18,10 @@
 //     node scripts/build-i18n.mjs
 //
 import { PACKED, PACKED_LOCALES } from './i18n/packed'
-import { registerI18n } from '../../kernel/src/i18n.ts'
+import { PACK_BLOCK_TYPE, readPacksFromShell, refreshPacksForVersion, shellBlocksForPacks } from './packs'
+import { registerShellBlocks } from '../../kernel/src/save.ts'
+import { registerUpdatePrepare } from '../../kernel/src/update.ts'
+import { registerI18n, locale as localeCode } from '../../kernel/src/i18n.ts'
 import type { LocaleChoice } from '../../kernel/src/i18n.ts'
 
 export type { Catalog } from '../../kernel/src/i18n.ts'
@@ -55,7 +58,76 @@ registerI18n({
   choices: CHOICES,
 })
 
-/** Kept as a const export for call sites that read it directly. */
+// Packs embedded in this file, registered before the first t() — the same
+// module-evaluation-order guarantee that makes the facade own registration.
+// A pack lives in the FILE and nowhere else (see ./packs.ts for why).
+readPacksFromShell()
+
+// Every save re-declares the file's packs, so staging one is enough to make
+// it travel and dropping it is enough to remove it. The type is declared here
+// so the kernel clears pack blocks even when the list is empty — removing the
+// file's last pack must actually remove it.
+registerShellBlocks(shellBlocksForPacks, [PACK_BLOCK_TYPE])
+
+// A self-update fetches a NEW shell and re-splices this document into it. The
+// block provider above already carries the file's packs across; this also
+// brings them UP TO the new version, so a translated deck doesn't drift back
+// toward English one release at a time. Best effort — see refreshPacksForVersion.
+registerUpdatePrepare(async (version) => { await refreshPacksForVersion(version) })
+
+/**
+ * The BUNDLED locales only. Call sites that need the live list — including any
+ * language an installed pack added — must use `localeChoices()` instead: this
+ * const is frozen at import and can never grow.
+ */
 export const LOCALE_CHOICES = CHOICES
 
 export { t, locale, setLocale, i18nApi, localeChoices } from '../../kernel/src/i18n.ts'
+
+// --- writing direction -------------------------------------------------------
+//
+// Direction is a property of the VIEWER's language, exactly like the language
+// itself: it follows navigator.language / the 'bento-lang' override and NEVER
+// enters the document format. A deck authored in Cairo must open in Chicago
+// looking byte-identical — only the chrome around it turns around.
+//
+// Base-language matching (not a full locale table) so a runtime language pack
+// (docs/i18n-packs.md) adding Arabic or Hebrew gets an RTL chrome for free,
+// with no release: 'ar', 'ar-EG' and 'he-IL' all resolve here.
+const RTL_LANGS = new Set([
+  'ar', // Arabic
+  'he', // Hebrew
+  'fa', // Persian
+  'ur', // Urdu
+  'ps', // Pashto
+  'sd', // Sindhi
+  'ug', // Uyghur
+  'yi', // Yiddish
+  'dv', // Divehi
+  'ckb', // Central Kurdish
+  'ku', // Kurdish (Sorani conventions)
+  'nqo', // N'Ko
+])
+
+/** Does this locale (default: the active one) write right-to-left? */
+export function isRtl(code?: string): boolean {
+  return RTL_LANGS.has((code ?? localeCode()).split('-')[0])
+}
+
+/**
+ * Point the CHROME at the viewer's writing direction.
+ *
+ * Set on <html> so body-mounted chrome (dialogs, menus, popovers, toasts)
+ * turns around with the editor. Everything that draws the DOCUMENT is pinned
+ * back to `direction: ltr` in styles.css — the slide surface carries absolute
+ * x/y model coordinates, so mirroring it would move every element of every
+ * existing deck. See the "never mirror the document" block there.
+ *
+ * Safe to call any time AFTER capturePristine(): saves re-serialize the
+ * pristine boot clone, so this attribute can never reach a saved file.
+ */
+export function applyDirection(): void {
+  const el = document.documentElement
+  el.dir = isRtl() ? 'rtl' : 'ltr'
+  el.lang = localeCode()
+}

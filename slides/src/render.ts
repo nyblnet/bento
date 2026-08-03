@@ -473,7 +473,11 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
             `<td data-r="${r}" data-c="${c}" style="${border}padding:${st.cellPadY}px ${st.cellPadX}px;` +
             `text-align:${align};vertical-align:middle;color:${color};background:${bg};` +
             `font-weight:${weight};overflow:hidden;word-break:break-word;">` +
-            `<div class="bento-cell-inner">${sanitizeHtml(cell.html || '') || '<br>'}</div></td>`
+            // dir="auto" per cell for the same reason text elements carry it:
+            // a table of Arabic terms is otherwise laid out as if it were
+            // English. Per cell, so a bilingual table stays correct in both
+            // columns.
+            `<div class="bento-cell-inner" dir="auto">${sanitizeHtml(cell.html || '') || '<br>'}</div></td>`
           )
         })
         .join('')
@@ -512,6 +516,14 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       node.style.justifyContent = VALIGN[el.valign]
       const inner = document.createElement('div')
       inner.className = 'bento-text-inner'
+      // Base direction from the text itself. Without it every box is LTR, and
+      // Arabic/Hebrew/Persian/Urdu render with their neutral characters in the
+      // wrong place — a trailing full stop jumps to the head of the line, and
+      // mixed-language runs reorder. PER ELEMENT, not per document: one deck
+      // can hold an Arabic heading and an English caption and both are right.
+      // This is about the CONTENT the author typed; it says nothing about the
+      // editor's own language.
+      inner.dir = 'auto'
       inner.style.fontSize = `${el.fontSize}px`
       inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
       inner.style.fontWeight = String(el.fontWeight)

@@ -17,11 +17,21 @@ on:
     branches: [main]
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  # Cancel superseded runs on PR branches — only the tip matters there. NOT on
-  # main: every merge commit is a distinct state, and the post-merge run is the
-  # safety net for interaction bugs between PRs merged close together. Four
-  # merges in a few minutes once left two merge commits only partly verified.
+  # PR branches share one group per ref, so a new push collapses onto the tip —
+  # only the tip matters there. Pushes to main get a group PER COMMIT, because
+  # every merge commit is a distinct state and the post-merge run is the safety
+  # net for interaction bugs between PRs merged close together.
+  #
+  # Per-commit, NOT merely cancel-in-progress:false — that setting alone does
+  # not queue every run. GitHub keeps at most ONE pending run per group, so a
+  # third push cancels the PENDING one instead of lining up behind it; it
+  # protects the run in progress, not the queue. Merging 19 PRs in a row that
+  # way cancelled 17 runs on main and left those merge commits unbuilt, and the
+  # "four merges in a few minutes" incident this setting was meant to fix was
+  # the same failure. A unique group per commit is what actually guarantees it.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  # Moot on main now — each commit is alone in its group — but kept truthful:
+  # superseded PR-branch runs still collapse.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
@@ -50,6 +60,21 @@ jobs:
         # packed.ts is generated from them and is what actually ships. A stale
         # packed.ts would silently ship yesterday's translations.
         run: node scripts/build-i18n.mjs --check
+
+      - name: Language coverage
+        # Core catalogs ship inside every saved file and cannot be corrected
+        # without a release, so they must be complete. Packs are downloadable
+        # and re-publishable on their own, so they get a floor and a report.
+        run: node scripts/test-i18n-coverage.mjs
+
+      - name: Language packs build and index cleanly
+        # Emits every pack and builds the index payload WITHOUT signing (--dry
+        # writes nothing and needs no key — signing stays local, see the header).
+        # Catches a malformed pack catalog (missing label, duplicate language,
+        # wrong app) here rather than mid-release.
+        run: |
+          node scripts/build-i18n.mjs --packs "$RUNNER_TEMP/packs"
+          node scripts/sign-packs.mjs "$RUNNER_TEMP/packs" --dry
 
       - name: Typecheck
         working-directory: slides
@@ -83,6 +108,117 @@ jobs:
 
       - name: Splice conformance gate (spaces)
         run: node scripts/shell-gate.mjs spaces/dist-single/Bento_Spaces.bento.html
+
+      - name: Language pack verification rig
+        # Packs come off the network, so the signature + hash-pin chain is the
+        # only thing between a hostile channel and the strings in the UI.
+        # Tampered pack, tampered index, unsigned index — each must be refused.
+        run: node scripts/test-packs.ts
+
+      - name: First-page preview rig
+        # Every save writes a static render of page one for file-manager
+        # thumbnails. Two decisions in that path fail silently: an encrypted
+        # deck must never carry one, and author content must never reach the
+        # file carrying a script tag.
+        run: node scripts/test-preview.ts
+
+      - name: WebExtension background rig
+        # The half that WRITES, and previously the untested half. Two properties
+        # it must hold: the target file comes from sender.url (browser-stamped)
+        # and never from the page, and nothing is carried between messages,
+        # because an MV3 service worker is evicted mid-save and state across that
+        # gap fails intermittently on nobody's machine but the user's.
+        run: node scripts/test-webext-background.ts
+
+      - name: WebExtension bridge rig
+        # tray/webext decides, per save, whether to write in place or hand back
+        # to the browser's own picker. Wrong in the permissive direction it
+        # overwrites the open document with no dialog — which it did once. The
+        # decision is pure logic over an options bag, so it is checkable here
+        # rather than by reloading an extension and pressing Cmd-S.
+        run: node scripts/test-webext-bridge.ts
+
+      - name: Save-intent rig
+        # A host polyfilling showSaveFilePicker sees only the options bag, and
+        # must tell "overwrite the open document" from "make a second file" from
+        # that alone. It could not, and a browser extension overwrote a deck.
+        # `id` is the signal; if the three purposes ever collapse to one value
+        # every host silently loses the distinction.
+        run: node scripts/test-savepurpose.ts
+
+      - name: Guarded storage rig
+        # localStorage's absence is hostile: reading the PROPERTY throws, so
+        # `if (localStorage)` is itself the crash and one bare read at module
+        # scope takes the whole file down before it paints. Measured in a
+        # sandboxed iframe. The rig simulates each failure mode and pins the
+        # regression: importing a module that reads storage on load must not
+        # throw when storage does.
+        run: node scripts/test-storage.ts
+
+      - name: App registry rig
+        # scripts/apps.mjs drives what a release builds, stages and signs. A
+        # release SIGNS, and the key never reaches CI, so the pipeline itself
+        # cannot be tested here — but the registry drifting from the tree can,
+        # and a wrong appId is silent: shipped shells verify it against their
+        # own configureApp() id and just stop updating.
+        run: node scripts/test-release-apps.mjs
+
+      - name: Autosave per-app database rig
+        # Every app shared one IndexedDB database AND one DB_VERSION, so spaces
+        # has been writing into slides' store, and a version bump by any new app
+        # would make every SHIPPED shell of every other app throw VersionError
+        # and lose autosave. Renaming without carrying the data over would empty
+        # a visible feature, so the migration is tested in both directions.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-autosave.ts --bundle --platform=node --format=esm \
+            --alias:fake-indexeddb/auto=./slides/node_modules/fake-indexeddb/auto/index.js \
+            --outfile="$RUNNER_TEMP/test-autosave.mjs"
+          BENTO_TEST_APP=bento-slides node "$RUNNER_TEMP/test-autosave.mjs"
+          BENTO_TEST_APP=bento-spaces node "$RUNNER_TEMP/test-autosave.mjs"
+
+      - name: Publish deletion-gate rig
+        # A publish assembles site/ for ONE app and mirrors it authoritatively.
+        # Measured: a spaces-shaped site/ deleted 47 live files — the signed
+        # shell, the manifest, all 22 packs — with every other gate green,
+        # because those gates are `if (existsSync(...))` and skip when the
+        # artifact is missing. Shipped files cannot recover from that.
+        run: node scripts/test-publish-gate.mjs
+
+      - name: Model key tables match the format
+        # slides/src/modelkeys.generated.ts is derived from model.ts and drives
+        # validate()'s unknown-key check. A stale copy would report real
+        # properties as unknown, and an agent acting on that deletes working
+        # configuration — so the generated file is committed and pinned here.
+        run: node scripts/build-modelkeys.mjs --check
+
+      - name: Document validation rig
+        # validate() is only useful if it is trusted: the rig proves the starter
+        # deck and a realistic chart stay silent, and that a deliberately broken
+        # deck trips every check.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-validate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-validate.mjs"
+          node "$RUNNER_TEMP/test-validate.mjs"
+
+      - name: Built-in layout geometry rig
+        # The built-ins are drawn against 1600x900 while the model default is
+        # 1280x720, so they used to hang 200px off the right edge of a default
+        # deck. Nothing structural could see it — the fix is arithmetic, and so
+        # is the regression.
+        run: node scripts/test-layouts.ts
+
+      - name: Clipboard embedded-font rig
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
+          node "$RUNNER_TEMP/test-clipboard.mjs"
+
+      - name: CRDT property-removal rig
+        # Removing a property travels as a `set` op with `v` ABSENT, and the
+        # receiving replica threw on it: JSON.stringify(undefined) is undefined,
+        # and a debug line sliced it. Live in shipped files. The convergence rig
+        # missed it through 300 seeds because its generator assigns properties
+        # and never removes one — a property-based rig only explores the
+        # mutations it was taught.
+        run: node scripts/test-crdt-delprop.ts
 
       - name: CRDT convergence rig
         # 40 seeds locally; deeper on CI where the seconds are free.

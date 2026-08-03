@@ -184,7 +184,7 @@ const barOption = () => ({
   grid: { left: 48, right: 16, top: 24, bottom: 56 },
   xAxis: {
     type: 'category', data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-    axisLine: { lineStyle: { color: '#D8D2C4' } }, axisTick: { show: false },
+    axisLine: { lineStyle: { color: '#D8D2C4' } },
     axisLabel: { color: '#6B7280' },
   },
   yAxis: { type: 'value', axisLabel: { color: '#6B7280' }, splitLine: { lineStyle: { color: '#EAE4D6' } } },
@@ -219,7 +219,6 @@ const trendOption = () => ({
     type: 'category',
     data: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     axisLine: { lineStyle: { color: 'rgba(185,196,212,0.25)' } },
-    axisTick: { show: false },
     axisLabel: { color: 'rgba(185,196,212,0.8)' },
   },
   yAxis: {
@@ -252,7 +251,7 @@ const scatterOption = () => ({
   grid: { left: 52, right: 24, top: 24, bottom: 56 },
   xAxis: {
     type: 'value', name: 'Reach',
-    axisLine: { lineStyle: { color: '#D8D2C4' } }, axisTick: { show: false },
+    axisLine: { lineStyle: { color: '#D8D2C4' } },
     axisLabel: { color: '#6B7280' }, splitLine: { lineStyle: { color: '#EAE4D6' } },
   },
   yAxis: {
@@ -755,7 +754,6 @@ export function starterDoc(): BentoDoc {
             borderColor: 'rgba(30,42,58,0.10)', borderWidth: 1,
             cellPadX: 18, cellPadY: 12, fontSize: 18, color: '#26303E', radius: 12,
           },
-          fx: { enter: 'fade-up', order: 1 },
         } as TableElement,
         shape('rect', {
           id: T_D, x: 920, y: 196, w: 264, h: 458, radius: 18, fill: PANEL,
@@ -774,9 +772,16 @@ export function starterDoc(): BentoDoc {
             color: [PEACH, STEEL],
             grid: { left: 48, right: 42, top: 16, bottom: 26 },
             xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'], axisLabel: { color: MIST } },
+            // MIST, not a half-transparent MIST. The engine used to ignore a
+            // y-axis's own label colour and reuse the x-axis one, so these read
+            // as MIST however they were written; once charts started honouring
+            // each axis, the declared 50% alpha became visible and dropped
+            // these numbers to 3.17:1 on the #16273E panel — under AA. The deck
+            // had been tuned against the old behaviour, so it now says what it
+            // always looked like: 8.28:1.
             yAxis: [
-              { type: 'value', axisLabel: { color: 'rgba(182,193,210,0.5)' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } },
-              { type: 'value', name: 'Growth', axisLabel: { color: 'rgba(182,193,210,0.5)', formatter: '{value}%' }, splitLine: { show: false } },
+              { type: 'value', axisLabel: { color: MIST }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } },
+              { type: 'value', name: 'Growth', axisLabel: { color: MIST, formatter: '{value}%' }, splitLine: { show: false } },
             ],
             series: [
               { type: 'bar', name: 'Signups', yAxisIndex: 0, data: [1204, 3880, 9140, 21500], itemStyle: { borderRadius: [4, 4, 0, 0] } },
@@ -784,7 +789,7 @@ export function starterDoc(): BentoDoc {
             ],
             tooltip: { trigger: 'axis' },
           },
-          { id: 'sd-tbl-chart', x: 922, y: 266, w: 262, h: 224, preset: 'bar', source: { tableId: 'sd-table' }, fx: { enter: 'fade-up', order: 2 } },
+          { id: 'sd-tbl-chart', x: 922, y: 266, w: 262, h: 224, preset: 'bar', source: { tableId: 'sd-table' } },
         ),
         text({
           x: 944, y: 504, w: 216, h: 56,

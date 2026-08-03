@@ -30,15 +30,82 @@ verify the manifest signature against the public key embedded in every shell.
 
 ## Cutting a release
 
+0. **Get the CHANGELOG right first — it is not just prose any more.** The
+   first FIVE bold lead-ins of the version's section become the `notes` in the
+   SIGNED manifest, which shipped files show inline in the About dialog while
+   the reader decides whether to update. So:
+   - lead with what the release IS (features), not the last thing merged —
+     entries otherwise sit in merge order and a stray fix ends up introducing
+     the release;
+   - write lead-ins that carry information on their own, since in the dialog
+     the lead-in is ALL the reader gets;
+   - drop entries for bugs introduced AND fixed inside the same unreleased
+     cycle. Check with `git merge-base --is-ancestor <fix-commit> <last-tag>`:
+     if the bug never shipped, announcing it tells people about breakage they
+     never had. The commit history is the record for those.
+
 1. Bump `slides/package.json` version (this becomes `APP_VERSION` in the
    shell and the manifest version — single source of truth).
-2. Commit, tag: `git tag vX.Y.Z`.
-3. `node scripts/release.mjs` — builds, signs, assembles `./site/`
-   (CNAME, landing page, live demo, download, signed manifest).
-4. Publish `./site/` to the public site repo — one step:
+2. Land it and tag. `main` is branch-protected and requires a pull request, so
+   the bump CANNOT be committed directly — open a small PR for it, merge, then
+   tag the merge commit:
+
+   ```sh
+   git tag vX.Y.Z <merge-sha>
+   ```
+
+   **Build from a clean checkout of that tag**, not from whatever the main
+   working tree happens to be on. Several sessions may have their own branches
+   and uncommitted work there, and `git checkout <tag> -- .` in the wrong tree
+   is destructive:
+
+   ```sh
+   git worktree add /tmp/rel vX.Y.Z --detach
+   ```
+3. **Push the tag now, before publishing.** The GitHub release is created *for*
+   a tag, so the tag must exist on the remote before step 5 can run — publishing
+   first leaves the site live with no release, which is what happened cutting
+   v1.0.12:
+
+   ```sh
+   git push origin vX.Y.Z
+   ```
+
+   Do NOT use `git push origin main --tags`: it also pushes every local tag,
+   including scratch ones (a `backup/…` tag from a history rewrite escaped this
+   way and had to be deleted from the remote).
+
+4. `node scripts/release.mjs [--app slides|spaces]` — builds, signs, assembles
+   `./site/` (CNAME, landing page, live demo, download, signed manifest,
+   language packs + their signed index). `--app` defaults to `slides`.
+
+   **One release builds one app.** `site/` is mirrored authoritatively, so the
+   script SEEDS it from the published tree first and overwrites only what this
+   build produces — that is what stops a spaces release from deleting slides'
+   signed shell, manifest and 22 language packs, which shipped files fetch by
+   frozen URL and cannot recover.
+
+   It therefore needs the published tree beside this repo (`../bento-site`, or
+   `BENTO_SITE_DIR`) and **refuses without one**. Pull it before releasing, or
+   you will restore a stale copy of every app you are not building. The very
+   first release of a brand-new site is the one exception:
+   `--allow-missing-published`.
+
+   The shared site — landing, gallery, agent guide, skills, `/help`, `/q`, 404,
+   guestbook — is slides-derived and rebuilt only by a slides release. Every
+   other app leaves the published copies untouched.
+5. Publish `./site/` to the public site repo — one step:
 
    ```sh
    node scripts/publish-site.mjs "release vX.Y.Z"
+   ```
+
+   **From a `/tmp` build worktree, set the destination explicitly.** The script
+   resolves `../bento-site` relative to the repo root, so from `/tmp/rel` it
+   looks for `/private/tmp/bento-site` and stops:
+
+   ```sh
+   BENTO_SITE_DIR=~/devel/bento-site node scripts/publish-site.mjs "release vX.Y.Z"
    ```
 
    This mirrors the assembled `site/` tree into `../bento-site` (or
@@ -61,7 +128,20 @@ verify the manifest signature against the public key embedded in every shell.
    live **guestbook daemon** onto the freshly-published shell as a best-effort
    final step (see below) — no separate command needed.
 
-5. **The GitHub release is created for you** by `publish-site.mjs` — it makes
+   > **Publish site-only changes from a tree whose `site/releases/` is current.**
+   > `site/` is local staging, and releases are assembled from a clean checkout
+   > of the tag (step 3) — so an everyday working tree can hold a months-old
+   > manifest while bento.page serves something far newer. Mirroring that would
+   > republish the older signed shell over the newer one and break the update
+   > channel for every deck already in the world.
+   >
+   > `publish-site.mjs` refuses this: it compares the staged manifest version
+   > against the live one and dies if the staged one is older. If you hit that,
+   > you are publishing from the wrong tree — use the release checkout, or
+   > refresh `site/releases/` from the live site first. `--allow-release-downgrade`
+   > exists only for a deliberate rollback.
+
+6. **The GitHub release is created for you** by `publish-site.mjs` — it makes
    the release for the tag, attaches
    `site/releases/slides/Bento_Slides.bento.html`, and takes the notes from
    this version's CHANGELOG section (so the two can't drift). It is idempotent:
@@ -73,14 +153,122 @@ verify the manifest signature against the public key embedded in every shell.
    command to run. This used to be a manual step, and it was silently missed
    for v1.0.10 — the site was live and self-updating while the repo showed no
    release at all. Documentation didn't prevent that, so the check now does.
-6. Sanity check: open the PREVIOUS version's file, About (topbar logo) →
-   Check for updates → should offer the new version, and the downloaded copy
-   must boot with the document intact.
+7. **Verify against the LIVE channel, not the local build.** These are the
+   things no local gate can prove, and some are only exercisable once published:
+
+   ```sh
+   curl -s https://bento.page/releases/slides/manifest.json | head -c 200
+   curl -s -o /dev/null -w '%{http_code}\n' https://bento.page/releases/slides/packs.json
+   gh release view vX.Y.Z --json body --jq '.body | length'
+   ```
+
+   - the served shell's sha256 matches the manifest AND the artifact you
+     actually tested — re-verify rather than assuming the rebuild is identical;
+   - **the language-pack channel answers 200**. It is easy to publish a release
+     whose packs never made it; the channel 404s silently and "Manage
+     languages…" just shows nothing to add;
+   - **the GitHub release page shows the CHANGELOG entries**, not just the
+     download intro. `publish-site.mjs` now dies rather than degrading to a
+     bare pointer, but the release is what people arriving from the repo read,
+     and v1.0.11 published with only its two-line intro while every release
+     before it carried its entries — nobody noticed until a reader compared the
+     two pages. A body under ~1KB means the notes are missing; recover with
+     `gh release edit vX.Y.Z --notes-file <notes>`;
+   - open the PREVIOUS version's file → About → Check for updates. It should
+     offer the new version, show the inline notes, and the downloaded copy must
+     boot with the document intact.
+
+## Language packs
+
+`release.mjs` also emits every non-core language pack
+(`scripts/build-i18n.mjs --packs`) into `site/releases/slides/packs/` and signs
+an INDEX over them at `site/releases/slides/packs.json`
+(`scripts/sign-packs.mjs`) — same envelope, same offline key and the same
+signing code as the manifest (`scripts/sign-payload.mjs`). The index pins each
+pack's sha256; shipped files verify the index signature once and then hash each
+downloaded pack against it. Design and payload shape: `docs/i18n-packs.md`.
+
+Both steps are no-ops until a pack catalog exists, so nothing changes for a
+release with no packs.
+
+Preview what would be signed, without the key and without writing anything:
+
+```sh
+node scripts/build-i18n.mjs --packs /tmp/packs
+node scripts/sign-packs.mjs /tmp/packs --dry     # prints the exact payload
+```
+
+Re-publishing packs **without cutting an app release** is supported and is the
+reason the index is its own artifact (a corrected translation is not a new app
+version). Re-emit, re-sign the index, publish:
+
+```sh
+node scripts/sign-packs.mjs site/releases/slides/packs \
+  --out site/releases/slides/packs.json --version <app version>
+node scripts/publish-site.mjs "packs: fix the Korean plural forms"
+```
+
+`publish-site.mjs` refuses to push if any published pack does not match its
+signed hash, if an indexed pack is missing, or if packs are staged with no
+index at all — an unsigned pack must never reach the CDN.
+
+**Between releases, re-emit only the packs you mean to change.** Packs are keyed
+on the ENGLISH SOURCE STRING, so a pack rebuilt from `main` is keyed to `main` —
+not to the shell people are actually running. Rename a UI string after a release
+and every rebuilt pack silently swaps the old key for the new one, while the
+shipped shell still asks for the old. The pack verifies, installs, and drops
+that string to English in every language at once.
+
+This is not hypothetical: adding Turkmen on 2026-08-01 rebuilt all 22 packs, and
+the diff against the published set was exactly one key per pack — `#168` had
+renamed "restore earlier versions from **About** → Version history" to
+"**Save** → Version history". Publishing the rebuilt set would have regressed
+that string across 21 languages in exchange for adding one.
+
+So the safe republish is surgical: copy in only the pack(s) that changed, leave
+the rest byte-identical, and re-sign the index over all of them (the index pins
+each pack's own sha256, so a mixed set is fine). Confirm it before pushing:
+
+```sh
+node scripts/publish-site.mjs --dry "packs: …"   # change set must be ONLY what you intend
+```
+
+Check which key the LIVE shell actually uses before assuming a rename is safe —
+inflate the `bento-rt` payload of the published shell and grep for the string.
+A pack added this way carries the newer key and lacks the older one, so its own
+first release shows that one string in English until the shell catches up. That
+is the right trade for a NEW language and the wrong one for an existing pack.
+
+### Testing the pack UI locally
+
+Point a shell at a local pack channel with the `bento-packs-url` localStorage
+override — but the local server must be **the same origin as the page**, because
+the pack fetch is a cross-origin XHR and `python -m http.server` sends no CORS
+headers. Serving the shell on one port and the packs on another silently yields
+"Nothing new right now" rather than an error, so it reads exactly like a working
+build with nothing to install. Serve both from one directory tree:
+
+```sh
+node scripts/build-i18n.mjs --packs /tmp/site/packs
+cp slides/dist-single/Bento_Slides.bento.html /tmp/site/
+```
+
+Then open the shell from that server and set the override to the same origin.
+
+### Adding a UI string
+
+New strings go in ALL core catalogs (`slides/src/i18n/*.ts`), and
+`slides/src/i18n/packed.ts` is GENERATED — regenerate it or CI fails:
+
+```sh
+node scripts/build-i18n.mjs
+```
 
 ## Rules
 
 - Never edit files on `gh-pages` by hand — the manifest signature covers the
   shell's exact bytes; any drift bricks the update check (integrity refusal).
+  The same holds for `packs.json` and everything under `packs/`.
 - Version only goes up. Shipped files refuse manifests that aren't strictly
   newer than themselves (downgrade-replay protection), so a "rollback" is a
   new higher version that reverts the code.

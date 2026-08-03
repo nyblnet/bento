@@ -1,0 +1,27 @@
+<!--
+  bento/tray iOS app icon — the mark from tray-logo.svg, full bleed.
+
+  No corner radius: iOS applies its own squircle mask, and a rounded rect drawn
+  inside one shows as a seam along every edge.
+
+  The navy rim is WIDER here than in the logo (4.2 units against 3.6) because
+  the mask eats it unevenly — at 3.0 the band thinned out at the middle of each
+  edge while staying fat at the corners, which reads as a mistake rather than a
+  frame. 4.2 survives masking as an even rim down to the 40px notification size.
+
+  This is the SOURCE. The build consumes a 1024x1024 PNG export of it at
+  ../ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png — one copy, kept
+  where the asset catalog needs it, and the same file App Store Connect wants
+  (opaque, no alpha). After editing this file, re-export:
+
+    chrome --headless --screenshot=<dest> --window-size=1024,1024 \
+           --default-background-color=00000000 tray-icon.svg
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 32 32"
+     role="img" aria-label="Bento Tray">
+  <rect width="32" height="32" fill="#16273E"/>
+  <rect x="4.2" y="4.2" width="23.6" height="23.6" rx="4.8" fill="#F0EBE0"/>
+  <rect x="6.800" y="6.800" width="5.855" height="18.400" rx="2.091" fill="#5E7699"/>
+  <rect x="14.327" y="6.800" width="10.873" height="8.364" rx="2.091" fill="#FF9E8A"/>
+  <rect x="14.327" y="16.836" width="10.873" height="8.364" rx="2.091" fill="#16273E"/>
+</svg>

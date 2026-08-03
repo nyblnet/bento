@@ -733,7 +733,10 @@ export class SyncState {
       ;(this.pending[nodeId] ??= []).push(op)
       return
     }
-    dbg(nodeId, `set ${op.k}@${op.l},${op.a} APPLY ${JSON.stringify(op.v).slice(0, 40)}`)
+    // NB: v === undefined means "delete the key" (handled below), and
+    // JSON.stringify(undefined) is undefined — String() keeps this debug
+    // line from throwing on every property REMOVAL.
+    dbg(nodeId, `set ${op.k}@${op.l},${op.a} APPLY ${String(JSON.stringify(op.v)).slice(0, 40)}`)
     if (op.el && op.k === 'html') {
       const gen = this.txt[op.el]
       if (gen && cmpReg([op.l, op.a], gen.sd) < 0) {

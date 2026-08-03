@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: without it iOS insets the page from the notch and
+         home-indicator areas and paints the gap with the body background, so the
+         editor visibly stops short of the screen edges. The app fills the screen
+         and positions its own chrome; it never needs the browser to pad it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- The editor UI is light-only. Declaring it opts out of Chrome-on-
          Android's auto-darkening (which force-inverts pages and breaks form
          controls) and keeps native <select>/<input> rendering light on

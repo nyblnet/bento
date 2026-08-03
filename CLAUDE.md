@@ -32,6 +32,41 @@ names provisional.
 - `src/save.ts` — the self-save trick: clone the document at boot (`capturePristine`),
   swap the `#bento-doc` data block, re-serialize. JSON is `<`-escaped (`\u003c`) so it can
   never contain `</script>`. File System Access API first, download fallback.
+- `src/preview.ts` + kernel `registerPreview` — **static first-page preview for
+  file-manager thumbnails**. Thumbnailers (iOS Files, macOS QuickLook/Finder,
+  Bento Tray) render HTML with JS OFF, so every deck used to thumbnail as the
+  same boot splash. Every save now writes a still render of page one into the
+  shell as a plain `[data-bento-preview]` element, followed IMMEDIATELY by a
+  parser-blocking `<script data-bento-preview>` that deletes both. The
+  thumbnailer keeps the preview (it runs no script); the reader never sees it
+  (the remover executes before the browser paints — measured: at removal
+  `readyState` is `loading` and `getEntriesByType('paint')` is EMPTY). **NOT
+  `<noscript>`** — that was v1 and it does nothing on iOS, whose thumbnailer
+  runs no script AND does not render `<noscript>` (probe: red default / green
+  from inline script / blue in noscript renders RED). Anything between host and
+  remover is markup a browser could paint, so the gate asserts the ordering.
+  A QLThumbnailProvider extension does NOT work — registers fine, never
+  launches, because iOS owns `public.html`; nor does
+  `NSURLThumbnailDictionaryKey`, silently dropped for local files.
+  Reuses `renderSlide` with `svgAsImage:true` (svg → one `<img>`,
+  media → poster/icon still) + `hidePlaceholders`; `staticize()` strips active
+  elements, runtime data-attrs and `on*`, and INLINES the few `.bento-*` rules
+  from styles.css (the runtime CSS ships deflated and is never inflated in
+  this mode). Fits an unknown viewport with
+  `transform:scale(calc(min(100vw,<aspect>vh)/<w>px))` — `<svg><foreignObject>`
+  was tried and is MANGLED by QuickLook's WebKit; verify with `qlmanage -t`,
+  not Chrome alone (Chrome 150's `--blink-settings=scriptEnabled=false` kills
+  `--screenshot`; use CDP `Emulation.setScriptExecutionDisabled`). GOTCHAS:
+  never strip `id` from the render — svg gradients/markers paint through
+  document-global `url(#…)`; the removal of an existing preview is
+  UNCONDITIONAL (replace-never-append: `capturePristine` already holds the last
+  save's copy, and a newly-encrypted deck must LOSE its preview).
+  **Encrypted decks NEVER get a preview** (`previewAllowed` = no password flag
+  AND body is not a `bento/enc` envelope) — a plaintext title slide beside the
+  ciphertext is the leak the password exists to prevent. `PREVIEW_BUDGET`
+  (64KB, model.ts) tiers the output: full → images dropped for tinted boxes →
+  title card. Guards: `scripts/test-preview.ts` + shell-gate's
+  preview-carrying-shell invariant. Full rationale in docs/DECISIONS.md.
 - `src/autosave.ts` (v0.9.8) — auto-save + local version history, IndexedDB
   (`bento-autosave`, two stores: `recovery` single-latest-per-docId, `versions`
   capped timeline). Editor debounces (2.5s) on `doc` events: writes a recovery
@@ -225,6 +260,12 @@ names provisional.
   `yAxisIndex` (0/1). renderCartesian computes a range per axis, shares gridline
   rows (2nd axis labels on the right, its own nice scale via `fixedTicks`), and
   honours per-axis `min`/`max` + `axisLabel.formatter` ('{value}%'). **Visual
+  text styling**: charts-lite honours `legend.textStyle.fontSize/fontWeight`,
+  legend marker size/gap and numeric `top`/`bottom`, x/y
+  `axisLabel.fontSize/fontWeight`, axis and split-line widths, and line-series
+  `symbolSize`. Legend measurement treats CJK characters as full-width so
+  localized series names do not overlap.
+  **Visual
   chart editor** (panels.ts buildChartProps): structured UI over the option —
   Type, Legend + Second-axis toggles, a Series list (name · bar/line · left/right
   axis · colour · remove), per-axis min/max, and an editable categories×series
@@ -318,7 +359,11 @@ names provisional.
   current highlighted + scrolled into view), and a lazy **all-slides grid**
   overlay. The popup has its OWN keydown handler (its keys fire in its own
   document) so the presenter drives the whole show from it: ←/→/space/PageUp-Dn,
-  Home/End, B (black), G (grid), Esc (close grid). `updateSpeakerControls()`
+  Home/End, B (black), G (grid), L (laser pointer), Esc (close grid). The laser
+  is local presenter-session state, rendered through a pointer-transparent
+  layer, and never enters the document or collaboration model. `L` is handled
+  in both audience and speaker documents because popup key events do not cross
+  windows. `updateSpeakerControls()`
   refreshes highlight/counter/button-state cheaply on every slidechange; the
   expensive current/next re-render only in `updateSpeaker`. Reveal's notes plugin
   is NOT used (it reloads the URL in an iframe → boots a whole second editor).
@@ -534,10 +579,12 @@ names provisional.
 4. **Never let a literal `</script>` into the bundle** — `save.ts` builds it by
    concatenation; the data block JSON escapes `<`.
 5. Reveal's `.reveal-viewport` paints white; the present overlay CSS overrides it black.
-6. **svg-element CSS must be scoped** (`render.ts scopeCss`) — svg `<style>` applies
+6. **Reveal uses `distance < viewDistance`** — `1` mounts only the current section.
+   Keep it at least `2` so fade, slide, and zoom have adjacent sections to animate.
+7. **svg-element CSS must be scoped** (`render.ts scopeCss`) — svg `<style>` applies
    document-wide, so one diagram's animation/dim rules would leak into every other
    svg on the page (CSS animations with fill modes even beat later static rules).
-7. Tiny text labels make unusable click targets when scaled down — interactive
+8. Tiny text labels make unusable click targets when scaled down — interactive
    controls get padded transparent `link` overlay rects, not links on the text itself.
 
 - **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
@@ -545,11 +592,16 @@ names provisional.
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
   PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).
+  The loader's injected `<style>` carries `data-bento-transient` and
+  `serializeBody` (kernel/src/save.ts) strips marked nodes from the clone —
+  `capturePristine()` clones the LIVE document, so without that the inflated
+  CSS was saved back as plaintext and re-appended each boot (+100KB per save,
+  forever). Anything injected before the pristine capture must be marked.
   SPLICE CONTRACT (old updaters are frozen code): #bento-doc stays plaintext/
   same id, file survives DOMParser→splice→outerHTML, no stray script-close —
   release.mjs runs a conformance GATE before signing every release.
 - **AI round-trip**: the DOCUMENT is the interchange unit (chat AIs can't emit
-  1MB+ files). About → "Copy document JSON" / "Replace document from JSON…"
+  1MB+ files). Save → "Copy document JSON" / "Replace from JSON…"
   (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
   shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
   Agent harnesses edit files in place; chat AIs round-trip the JSON.

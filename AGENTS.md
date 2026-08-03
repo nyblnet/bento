@@ -45,18 +45,23 @@ are in `docs/DECISIONS.md` — don't reopen them.
 4. **After any change to `slides/src/sync/crdt.ts`, run
    `node scripts/test-sync.ts`.** The convergence rig has caught 15+ ordering
    bugs; a green typecheck means nothing for CRDT correctness.
-5. **New UI strings go into ALL i18n catalogs** (ja, zh-Hans, zh-Hant, es, fr,
+5. **A password-protected deck never carries a plaintext preview of page one.**
+   Saves write a static first-page render into the shell for file-manager
+   thumbnails (`kernel/src/save.ts`, `slides/src/preview.ts`); `bento/enc` decks
+   are vetoed and any existing preview is stripped. Run
+   `node scripts/test-preview.ts` after touching that path.
+6. **New UI strings go into ALL i18n catalogs** (ja, zh-Hans, zh-Hant, es, fr,
    de, it). English-string-as-key; never call `t()` in module-level consts.
-6. **Never edit `site/`** — it's generated. Sources are `site-src/` and the
+7. **Never edit `site/`** — it's generated. Sources are `site-src/` and the
    `scripts/build-*.mjs` tooling. Same for `dist-single/`.
-7. **No AI co-author trailers on commits** (no `Co-Authored-By: Claude` or
+8. **No AI co-author trailers on commits** (no `Co-Authored-By: Claude` or
    similar), and no bot identities in git history.
-8. **Releases are cut locally by the maintainer only.** Never touch signing
+9. **Releases are cut locally by the maintainer only.** Never touch signing
    keys (`~/.bento/release-key.json`), never attempt to release, publish, or
    deploy from an agent session unless the maintainer explicitly asks.
-9. **External PRs get provenance checks** before merge (`gh api users/<login>`)
+10. **External PRs get provenance checks** before merge (`gh api users/<login>`)
    — AI-agent/bot contributions are not merged.
-10. **Verify before claiming done**: typecheck, build, and exercise the change
+11. **Verify before claiming done**: typecheck, build, and exercise the change
     in a browser when it's user-visible. Report failures honestly.
 
 ## Commands
@@ -68,6 +73,8 @@ npm run dev            # dev server (see .claude/launch.json for ports)
 npm run build:single   # → dist-single/Bento_Slides.bento.html (the product)
 node_modules/.bin/tsc -b            # typecheck
 node ../scripts/test-sync.ts        # CRDT convergence rig (SEEDS/STEPS/ACTORS env)
+node ../scripts/test-preview.ts     # first-page preview rig (encryption veto, output safety)
+node ../scripts/shell-gate.mjs dist-single/Bento_Slides.bento.html   # splice conformance
 ```
 
 ## Repo layout

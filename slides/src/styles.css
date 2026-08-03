@@ -31,6 +31,10 @@ html, body {
   display: flex;
   flex-direction: column;
   user-select: none;
+  /* Nothing in this column may leak sideways. Without this, a topbar wider than
+     the viewport turned into DOCUMENT scroll — on a phone the bar needed 681px
+     of a 402px screen, so swiping the toolbar dragged the whole canvas off. */
+  overflow: hidden;
 }
 /* iOS Safari (WebKit) renders a <select>'s chosen value as BLANK text when any
    ancestor sets user-select:none — restore it on form fields app-wide. Inputs
@@ -51,13 +55,61 @@ select, .ed-row input, .ed-row textarea {
 }
 option { background: #fff; color: #1e2a3a; }
 
+/* ————— THE DOCUMENT NEVER MIRRORS —————————————————————————————————————————
+   An Arabic/Hebrew viewer gets an RTL *chrome* (i18n.ts applyDirection sets
+   dir on <html>). The DOCUMENT must be immune to that: slide elements carry
+   absolute x/y model coordinates, so a mirrored surface would move every
+   element of every existing deck, and the same file would look different
+   depending on who opened it — a format-level bug, far worse than an
+   unmirrored panel.
+
+   So every surface that draws slide content is pinned back to LTR:
+
+   - .bento-slide is the SHARED root of the canvas stage, sidebar thumbnails,
+     present sections, print pages and the speaker view's frames (render.ts
+     renderSlide), so this one rule covers all four surfaces at once. The
+     containers are pinned too, belt and braces, because they also carry
+     positioned chrome of their own.
+   - .ed-scroll additionally protects the canvas COORDINATE MATH: direction
+     changes what scrollLeft means (0 at the right edge, negative leftwards),
+     and canvas.ts reads/writes scrollLeft to centre and to pin the stage
+     during Moveable gestures. Pinned, none of that math can shift.
+   - .moveable-control-box is mounted with rootContainer: document.body, i.e.
+     outside the canvas subtree — it needs its own pin.
+
+   Text INSIDE elements still resolves its own direction per element, from the
+   content the author typed (render.ts sets dir="auto"). That is the content
+   half of RTL and is unaffected by any of this. */
+.bento-slide,
+.bento-thumb-surface,
+.ed-scroll,
+.bento-present-overlay,
+.moveable-control-box,
+#bento-print {
+  direction: ltr;
+}
+
 /* ————— topbar ————— */
 
 .ed-topbar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
+  /* viewport-fit=cover puts the page under the rounded corners, the Dynamic
+     Island and the home indicator, so fixed chrome has to inset ITSELF or its
+     end buttons sit under the curve. env(safe-area-inset-*) is the only handle
+     the platform gives — there is no corner-radius API — and it already encodes
+     corners, island and indicator together.
+     Each max() also lists var(--tray-safe-*). Inside a WKWebView host,
+     env(safe-area-inset-*) reads 0px even when the device genuinely has insets
+     (measured: native 62/0/34/0, CSS 0px), so bento/tray publishes the real
+     numbers under those names. In a browser the variables are undefined, resolve
+     to 0px, and env() does the work as normal.
+     max() keeps the normal padding on every device that reports 0. The
+     BACKGROUND still bleeds to the edge; only the content is inset, which is
+     the point: colour to the edge, controls out of the curve. */
+  padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(14px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+           8px max(14px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
   background: #fff;
   border-bottom: 1px solid var(--line);
   z-index: 20;
@@ -79,10 +131,32 @@ option { background: #fff; color: #1e2a3a; }
 .ed-title:hover { border-color: var(--line); }
 .ed-title:focus { border-color: var(--blue); outline: none; background: #fff; }
 
+/* The file this deck is open AS — quieter than the deck title beside it.
+   Shows the BASE name only: every Bento file ends in ".bento.html", so the
+   extension is the one part that identifies nothing (a first attempt truncated
+   from the right and rendered "…tml", which is worse than showing nothing).
+   Never shrinks — it competed with the title input and squeezed it to "Bento S"
+   — and it leaves the bar entirely at the same width the button labels do. */
+.ed-filechip {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--sunk, rgba(127, 127, 127, .08));
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  cursor: default;
+}
+.ed-filechip[hidden] { display: none; }
+@media (max-width: 1200px) { .ed-filechip { display: none; } }
+
 /* unsaved-changes dot — badges the SAVE button's corner (amber when dirty) */
 .ed-dirty {
   position: absolute;
-  top: 3px; right: 3px;
+  top: 3px; inset-inline-end: 3px;
   width: 7px; height: 7px; border-radius: 50%;
   background: transparent; pointer-events: none;
 }
@@ -90,7 +164,7 @@ option { background: #fff; color: #1e2a3a; }
 .ed-split > .ed-btn:first-child { position: relative; }
 
 .ed-group { display: flex; align-items: center; gap: 6px; }
-.ed-group-right { margin-left: auto; }
+.ed-group-right { margin-inline-start: auto; }
 
 .ed-btn {
   display: inline-flex;
@@ -123,7 +197,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   display: none;
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  inset-inline-start: 0;
   flex-direction: column;
   background: #fff;
   border: 1px solid var(--line);
@@ -133,7 +207,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 50;
   min-width: 150px;
 }
-.ed-dropdown.open .ed-menu { display: flex; }
+/* DIRECT child, not any descendant. Phone chrome demotes whole dropdown
+   widgets (Share, Language) into the ⋯ menu, so a descendant selector opened
+   their menus too — ⋯ came up with the entire language list already unrolled
+   inside it. Every .ed-menu is appended straight onto its own .ed-dropdown, so
+   scoping to `>` is exact. */
+.ed-dropdown.open > .ed-menu { display: flex; }
 .ed-menu .ed-btn { justify-content: flex-start; width: 100%; }
 
 /* ————— main layout ————— */
@@ -152,7 +231,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   align-items: center;
   gap: 10px;
   background: #fff;
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
 }
 
 .ed-thumb {
@@ -170,7 +249,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-thumb.drop { border-color: var(--blue); }
 .ed-thumb-num {
   position: absolute;
-  top: 4px; left: 4px;
+  top: 4px; inset-inline-start: 4px;
   z-index: 2;
   font-size: 10px;
   font-weight: 600;
@@ -181,7 +260,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-thumb-tools {
   position: absolute;
-  right: 4px; top: 4px;
+  inset-inline-end: 4px; top: 4px;
   z-index: 2;
   display: none;
   gap: 2px;
@@ -259,10 +338,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   border-radius: 2px;
 }
 
-/* zoom controls, bottom-right of the canvas */
+/* zoom controls, bottom-end corner of the canvas */
 .ed-zoombar {
   position: absolute;
-  right: 14px;
+  inset-inline-end: 14px;
   bottom: 14px;
   display: flex;
   align-items: center;
@@ -364,7 +443,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   flex: none;
   overflow-y: auto;
   background: #fff;
-  border-left: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
   padding: 14px;
 }
 
@@ -494,7 +573,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   justify-content: center;
 }
 .ed-about {
-  width: 360px;
+  /* 440 rather than 360: release notes ride inline in the manifest now, and a
+     narrower box turned every bullet into two wrapped lines. The calc() keeps
+     a real gutter on a 375px phone, where the editor boots panels-collapsed. */
+  width: min(440px, calc(100vw - 24px));
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 18px 50px rgb(15 23 36 / 0.3);
@@ -552,6 +634,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-about-new { font-weight: 600; }
 .ed-about-notes {
+  align-self: stretch;
   color: var(--muted);
   background: var(--chrome);
   border-radius: 8px;
@@ -560,6 +643,47 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   max-height: 140px;
   overflow: auto;
 }
+
+/* ————— "an update is available" card —————
+   This is the one moment in the dialog where the user has a decision to make,
+   so it is grouped and given room instead of being five loose children of the
+   status block. Before: the notes sat in a 140px porthole inside a dialog that
+   was itself scrolling, and the three actions stacked vertically underneath —
+   so a five-bullet changelog read as one line plus two scrollbars. */
+.ed-about-update {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid #FF9E8A;
+  border-radius: 10px;
+}
+.ed-about-release {
+  color: var(--ink-2);
+  background: var(--chrome);
+  border-radius: 8px;
+  padding: 9px 12px;
+  line-height: 1.5;
+  /* Its OWN scroll region, sized off the viewport. release.mjs caps the notes
+     at five bullets plus an "…and N more" line, which fits here whole at any
+     normal window height; anything longer scrolls HERE, not the whole dialog. */
+  max-height: min(300px, 42vh);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.ed-about-release > div + div { margin-top: 5px; }
+/* hanging indent: a wrapped bullet lines up under its own text, not the marker */
+.ed-about-note {
+  padding-inline-start: 14px;
+  text-indent: -14px;
+}
+.ed-about-note::before { content: '•\00a0'; }
+.ed-about-more { color: var(--muted); font-style: italic; }
+/* wrap instead of stacking: three actions fit in one or two rows */
+.ed-about-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ed-about-actions .ed-btn { max-width: 100%; }
 .ed-about-json {
   width: 100%;
   font: 11px/1.4 ui-monospace, Menlo, monospace;
@@ -622,6 +746,51 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   --r-overlay-element-fg-color: 0, 0, 0;
 }
 .bento-present-overlay .reveal .slides section { padding: 0; }
+/* Presenter laser: viewport-level so its screen-space size stays constant at
+   every Reveal scale. The visual layer stays pointer-transparent so slide
+   links, hover effects, charts and media remain interactive while it is armed. */
+.bento-laser-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 59;
+  pointer-events: none;
+}
+.bento-present-overlay.laser-over-slide .bento-slide,
+.bento-present-overlay.laser-over-slide .bento-slide * { cursor: none !important; }
+.bento-laser-trail {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bento-laser-trail-segment {
+  fill: none;
+  stroke-linecap: butt;
+  vector-effect: non-scaling-stroke;
+}
+.bento-laser-trail-segment.halo { stroke: rgb(255 255 255 / 0.9); }
+.bento-laser-trail-segment.core { stroke: #ef252f; }
+.bento-laser-trail-segment.tail-tip { stroke: none; }
+.bento-laser-trail-segment.tail-tip.halo { fill: rgb(255 255 255 / 0.9); }
+.bento-laser-trail-segment.tail-tip.core { fill: #ef252f; }
+.bento-laser-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid rgb(255 255 255 / 0.94);
+  border-radius: 50%;
+  background: #ef252f;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55), 0 0 10px rgb(239 37 47 / 0.9);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.08s linear;
+}
+.bento-laser-dot.visible { opacity: 1; }
+.bento-present-overlay.reduce-motion .bento-laser-trail { display: none; }
+.bento-present-overlay.reduce-motion .bento-laser-dot { transition: none; }
 /* Reduced motion (M / speaker toggle / OS prefers-reduced-motion): JS fx are
    skipped in present.ts; this neutralises CSS-driven motion too — Reveal's
    slide transitions cut instantly and svg keyframe animations don't play. */
@@ -700,7 +869,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   background: var(--chrome-2, #f4f1ea); border: 1px solid var(--line, #e7e1d2);
   border-radius: 5px; padding: 2px 6px; color: var(--ink, #1e2a3a); white-space: nowrap; justify-self: start;
 }
-.ed-help-tips { margin: 4px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--ink, #26303e); }
+.ed-help-tips { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.5; color: var(--ink, #26303e); }
 .ed-help-tips li { margin: 3px 0; }
 .ed-help-more { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line, rgba(30,42,58,0.12)); text-align: center; }
 .ed-help-more a { color: var(--accent, #ED8266); font-weight: 600; font-size: 13px; text-decoration: none; }
@@ -762,7 +931,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 10px;
-  text-align: left;
+  text-align: start;
   padding: 9px 12px;
   border: 1px solid var(--line, #e7e1d2);
   border-radius: 8px;
@@ -824,7 +993,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #7a8494;
-  text-align: left;
+  text-align: start;
   padding: 2px 4px;
   white-space: nowrap;
 }
@@ -895,11 +1064,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-btn-armed:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 
 /* collapsible panel sections */
-.ed-sec-toggle { cursor: pointer; user-select: none; position: relative; padding-left: 14px; }
+.ed-sec-toggle { cursor: pointer; user-select: none; position: relative; padding-inline-start: 14px; }
 .ed-sec-toggle::before {
   content: '';
   position: absolute;
-  left: 1px;
+  inset-inline-start: 1px;
   top: 50%;
   width: 0; height: 0;
   border-left: 5px solid currentColor;
@@ -1030,7 +1199,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-comment-entries { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .ed-comment-entry b { font-size: 12.5px; }
-.ed-comment-entry .ed-comment-time { font-size: 11px; color: var(--muted); margin-left: 5px; }
+.ed-comment-entry .ed-comment-time { font-size: 11px; color: var(--muted); margin-inline-start: 5px; }
 .ed-comment-entry p { margin: 2px 0 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
 .ed-comment-reply {
   width: 100%;
@@ -1048,7 +1217,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-thumb-cmt {
   position: absolute;
   bottom: 5px;
-  right: 5px;
+  inset-inline-end: 5px;
   z-index: 2;
   width: 9px;
   height: 9px;
@@ -1111,7 +1280,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-layoutpick-del {
   position: absolute;
   top: -7px;
-  right: -7px;
+  inset-inline-end: -7px;
   width: 18px;
   height: 18px;
   border: none;
@@ -1414,7 +1583,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-avatars {
   display: flex;
   align-items: center;
-  margin: 0 6px 0 2px;
+  margin-inline: 2px 6px;
   flex-shrink: 0;
 }
 .ed-avatar {
@@ -1431,10 +1600,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   padding: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   /* overlap into a coin-stack so N avatars stay bounded in width */
-  margin-left: -7px;
+  margin-inline-start: -7px;
 }
 .ed-avatars .ed-avatar:first-child {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .ed-avatar:hover {
   transform: translateY(-1px);
@@ -1480,8 +1649,8 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   max-width: 290px;
   padding: 12px;
   gap: 7px;
-  right: 0;
-  left: auto;
+  inset-inline-end: 0;
+  inset-inline-start: auto;
 }
 .ed-share-label {
   font-size: 10.5px;
@@ -1516,7 +1685,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--line);
 }
 .ed-share-btn:not(.ed-btn-primary):hover { background: var(--chrome-2, #e8ebf1); }
-.ed-share-btn { width: 100%; justify-content: flex-start; text-align: left; }
+.ed-share-btn { width: 100%; justify-content: flex-start; text-align: start; }
 .ed-share-btn svg { flex: none; }
 
 /* divider usable in any dropdown menu */
@@ -1528,9 +1697,12 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
    NESTED inside the .ed-dropdown wrapper, so stretch through the wrapper. */
 .ed-split { display: inline-flex; align-items: stretch; }
 .ed-split > .ed-btn:first-child {
-  border-radius: 8px 0 0 8px;
+  border-start-start-radius: 8px;
+  border-end-start-radius: 8px;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
   border: 1px solid var(--line);
-  border-right: none;
+  border-inline-end: none;
   background: var(--chrome, #f2f4f8);
 }
 .ed-split .ed-dropdown { display: flex; align-items: stretch; }
@@ -1538,7 +1710,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   height: 100%;
   display: inline-flex;
   align-items: center;
-  border-radius: 0 8px 8px 0;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
   border: 1px solid var(--line);
   background: var(--chrome, #f2f4f8);
   padding: 6px 7px;
@@ -1549,11 +1724,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* quiet divider between share actions and advanced session controls */
 .ed-share-sep { height: 1px; background: var(--line); margin: 2px 0; }
 
-/* bottom-right cluster: [Slideshow pill] [zoom pill] */
+/* bottom-end cluster: [Slideshow pill] [zoom pill] */
 .ed-corner-br {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
+  /* the present/zoom cluster sits in the corner most likely to be clipped.
+     Kept LOGICAL (inset-inline-end, not right) so the cluster still lands in
+     the correct corner under RTL — ar/fa/he/ur ship as language packs. */
+  inset-inline-end: max(14px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
+  bottom: max(14px, env(safe-area-inset-bottom), var(--tray-safe-bottom, 0px));
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1631,18 +1809,26 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   }
 }
 .ed-present-pill .ed-pill-main {
-  border-radius: 999px 0 0 999px;
-  padding: 6px 10px 6px 14px;
+  border-start-start-radius: 999px;
+  border-end-start-radius: 999px;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  padding-block: 6px;
+  padding-inline: 14px 10px;
   font-weight: 600;
 }
 .ed-present-pill .ed-pill-caret {
-  border-radius: 0 999px 999px 0;
-  border-left: 1px solid var(--line);
-  padding: 6px 10px 6px 7px;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-start-end-radius: 999px;
+  border-end-end-radius: 999px;
+  border-inline-start: 1px solid var(--line);
+  padding-block: 6px;
+  padding-inline: 7px 10px;
 }
 .ed-present-pill .ed-btn:hover { background: var(--chrome, #f2f4f8); }
 /* its menu drops UP (the pill sits at the bottom edge) */
-.ed-present-pill .ed-menu { top: auto; bottom: calc(100% + 6px); left: auto; right: 0; }
+.ed-present-pill .ed-menu { top: auto; bottom: calc(100% + 6px); inset-inline-start: auto; inset-inline-end: 0; }
 
 .ed-share-peers { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
 .ed-share-me {
@@ -1655,7 +1841,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 12.5px;
 }
 .ed-share-me .who { font-weight: 600; }
-.ed-share-me .where { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ed-share-me .where { margin-inline-start: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .ed-share-peer {
   display: flex;
   align-items: center;
@@ -1667,7 +1853,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 12.5px;
   color: var(--ink);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   width: 100%;
 }
 .ed-share-peer:hover { background: rgba(94, 118, 153, 0.1); }
@@ -1701,7 +1887,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   content: '';
   position: absolute;
   top: 3px;
-  right: 3px;
+  inset-inline-end: 3px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -1720,7 +1906,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-about-row .ed-btn {
   max-width: 100%;
   white-space: normal;
-  text-align: left;
+  text-align: start;
 }
 .ed-about-meta-wrap { flex-direction: column; align-items: stretch; gap: 5px; }
 .ed-about-h { font-weight: 700; font-size: 13px; margin: 2px 0; }
@@ -1767,11 +1953,76 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
      their labels left icon-only mystery menus on phones. */
   .ed-topbar .ed-menu .ed-btn > span,
   .ed-topbar .ed-menu button > span { display: inline; }
-  .ed-topbar { gap: 6px; padding: 8px 8px; }
+  /* keep the safe-area insets — a bare padding here would undo them */
+  .ed-topbar {
+    gap: 6px;
+    padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(8px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+             8px max(8px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
+  }
 }
 @media (max-width: 760px) {
-  .ed-topbar { gap: 4px; padding: 6px 6px; }
+  .ed-topbar {
+    gap: 4px;
+    padding: max(6px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+             6px max(6px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
+  }
   .ed-logo > b { display: none; } /* mark only — the icon is the brand */
+}
+
+/* --- phones: the bar cannot fit, so most of it moves into menus -----------
+   Hiding labels is not enough — 17 icon buttons at 36px plus gaps is an
+   irreducible ~684px floor. Under 700px (the same threshold the JS uses to
+   collapse both panels) applyPhoneChrome() REPARENTS the low-priority controls
+   into "＋" and "⋯" dropdowns, leaving: logo · title · ☰ · ＋ · undo · format ·
+   save · ⋯ . Labels come back inside menus via the 1200px rule above. */
+/* the phone-only controls exist in the DOM at every width; only the query shows
+   them, so applyPhoneChrome never has to create or destroy anything */
+.ed-phone-only { display: none; }
+@media (max-width: 700px) {
+  .ed-phone-only { display: inline-flex; }
+  /* HIG touch targets — a 36px icon is a mis-tap on glass */
+  .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
+  .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
+  .ed-title { flex: 0 1 90px; }
+
+  /* Panels become OVERLAY DRAWERS. As flex siblings the 188px sidebar left a
+     214px canvas on a 402px screen — the thing you are editing became the
+     smallest thing on screen. */
+  .ed-sidebar, .ed-props {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 40;
+    box-shadow: 0 0 40px rgb(15 23 36 / 0.18);
+    background: var(--chrome, #fff);
+  }
+  .ed-sidebar { left: 0; }
+  .ed-props { right: 0; }
+  .ed-sidebar.ed-collapsed, .ed-props.ed-collapsed { box-shadow: none; }
+  .ed-main { position: relative; }
+  /* the 16px resizer chevrons are replaced by real buttons in the bar */
+  .ed-panel-toggle { display: none; }
+  /* Save stays one tap; its save-AS caret does not fit beside a 44px target
+     and is the least-used half. The list it opens is not lost — editor.ts
+     appends it to the bottom of ⋯ while phone chrome is on. */
+  .ed-topbar .ed-split-caret { display: none; }
+  /* ⋯ now carries the demoted buttons AND that list, so it can outgrow the
+     screen in BOTH directions.
+     Down: without a bound it runs off the bottom, and a dropdown is absolutely
+     positioned, so nothing else can scroll it back into reach.
+     Sideways: these menus open from buttons in the right half of a 402px bar,
+     and a start-anchored menu grows AWAY from the screen — ⋯ sits at x≈374, so
+     even the old six short rows were partly cut off. Anchoring to the end grows
+     them inward instead. */
+  .ed-topbar .ed-menu {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 96px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ed-title { min-width: 0; }
 }
 
 /* panel collapse chevrons live ON the resizer strips, not in the topbar */
@@ -1798,26 +2049,29 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   box-shadow: 0 1px 4px rgba(20, 30, 45, 0.12);
 }
 .ed-panel-toggle:hover { color: var(--ink); border-color: #b9c3d2; }
-.ed-save-menu {
-  right: 0;
-  left: auto;
-  min-width: 190px;
+/* menus that hang off a topbar control at the END of the bar open toward the
+   bar's start, so they can never overflow the window edge — in either
+   direction (the language menu sets the same anchoring from JS). */
+.ed-save-menu, .ed-lang-menu {
+  inset-inline-end: 0;
+  inset-inline-start: auto;
 }
+.ed-save-menu { min-width: 190px; }
 .ed-save-menu .ed-btn { font-size: 12.5px; }
 /* when the adjacent panel is collapsed the chevron pins fully on-screen,
    docked to the edge like a drawer pull */
 .ed-sidebar.ed-collapsed + .ed-resizer .ed-panel-toggle {
-  left: 0;
+  inset-inline-start: 0;
   transform: translateY(-50%);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
 }
 .ed-resizer:has(+ .ed-props.ed-collapsed) .ed-panel-toggle {
-  left: auto;
-  right: 0;
+  inset-inline-start: auto;
+  inset-inline-end: 0;
   transform: translateY(-50%);
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
 }
 
 /* floating present buttons, bottom-LEFT of the work area (zoombar owns the
@@ -1954,3 +2208,68 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 .ed-stepper .ed-btn-icon { width: 24px; height: 24px; line-height: 1; font-size: 15px; padding: 0; }
 .ed-stepper-val { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
 input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: pointer; }
+
+/* Languages dialog: built-in vs installed packs vs available to add. */
+.ed-lang-manage { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 2px; }
+.ed-lang-sec {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); margin: 12px 0 4px;
+}
+.ed-lang-row {
+  display: flex; align-items: center; gap: 10px; justify-content: space-between;
+  padding: 7px 0; border-bottom: 1px solid var(--line);
+}
+.ed-lang-row:last-child { border-bottom: 0; }
+.ed-lang-txt { display: flex; flex-direction: column; min-width: 0; }
+.ed-lang-txt b { font-size: 13px; font-weight: 600; }
+.ed-lang-txt span { font-size: 11.5px; color: var(--muted); }
+.ed-lang-blurb { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin: -2px 0 6px; }
+.ed-lang-search {
+  width: 100%; margin: 4px 0 6px; padding: 7px 10px; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+}
+.ed-lang-scroll {
+  max-height: 240px; overflow-y: auto;
+  /* Keep the row's action button clear of the scrollbar — without this the
+     Add button sits flush against it. The stable gutter stops the list
+     shifting sideways when the bar appears or goes. */
+  padding-right: 12px; scrollbar-gutter: stable;
+}
+.ed-lang-acts { display: flex; gap: 6px; flex: 0 0 auto; }
+.ed-lang-acts .ed-btn { white-space: nowrap; }
+.ed-lang-warn {
+  font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  background: var(--bg); border-left: 2px solid var(--line);
+  padding: 5px 8px; margin: 0 0 6px; border-radius: 0 5px 5px 0;
+}
+
+/* ————— RTL chrome: the marks that don't flip themselves ————————————————————
+   Logical properties turn the LAYOUT around on their own. These are the few
+   glyphs that encode a direction in their SHAPE, so they have to be flipped by
+   hand. Every selector here is chrome — none of it can reach a slide, which
+   stays LTR-pinned (see the top of this file).
+
+   The speaker view (.sv-*) is deliberately absent: it is a separate window
+   sitting beside the projected show, and it never carries a dir attribute. */
+
+/* Accordion disclosure: a CSS triangle drawn with border-left, pointing "right"
+   at rest. Open (rotated 90°) points down either way; closed must point the way
+   the panel reads. */
+[dir="rtl"] .ed-sec-toggle.closed::before { transform: translateY(-50%) rotate(180deg); }
+
+/* Undo/redo arrows curl back toward where the text came from. */
+[dir="rtl"] .ed-group-history .ed-btn svg { transform: scaleX(-1); }
+
+/* The comment thread's "you are <name>" link rides the far edge of the head. */
+[dir="rtl"] .ed-comment-me { float: left; }
+
+/* Coordinates, sizes and JSON are LTR content whatever the interface language:
+   a base-RTL context renders "-5" as "5-" and reorders a JSON line's brackets.
+   Panel prose and every text field the user writes words into are untouched. */
+[dir="rtl"] .ed-row input[type='number'],
+[dir="rtl"] .ed-mini input,
+[dir="rtl"] .ed-axis-range input,
+[dir="rtl"] .ed-about-json,
+[dir="rtl"] .ed-chart-json {
+  direction: ltr;
+}
