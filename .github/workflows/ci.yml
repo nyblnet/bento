@@ -211,6 +211,15 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
           node "$RUNNER_TEMP/test-clipboard.mjs"
 
+      - name: CRDT property-removal rig
+        # Removing a property travels as a `set` op with `v` ABSENT, and the
+        # receiving replica threw on it: JSON.stringify(undefined) is undefined,
+        # and a debug line sliced it. Live in shipped files. The convergence rig
+        # missed it through 300 seeds because its generator assigns properties
+        # and never removes one — a property-based rig only explores the
+        # mutations it was taught.
+        run: node scripts/test-crdt-delprop.ts
+
       - name: CRDT convergence rig
         # 40 seeds locally; deeper on CI where the seconds are free.
         run: SEEDS=300 node scripts/test-sync.ts
