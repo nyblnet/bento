@@ -11,6 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.0.16] — 2026-08-03
+
 - **Fix: the slide could open off-centre, pushed to one side and clipped.**
   Most likely on a deck whose page is larger than the default — a 1600×900 deck
   outgrows the editing canvas at zoom levels where a 1280×720 one still fits.
