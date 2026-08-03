@@ -332,7 +332,19 @@ export class SlideCanvas {
     // box, so writing padding here cannot disturb the fitScale computed above.
     const padX = width * this.scale > availW ? Math.round(this.scroller.clientWidth / 2) : 0
     const padY = height * this.scale > availH ? Math.round(this.scroller.clientHeight / 2) : 0
+    // Changing the pan room moves the stage within the scroll canvas by exactly
+    // that much, so changing it without compensating TELEPORTS the view. The
+    // first relayout that turns padding on leaves the scroll at 0 — which is now
+    // half a viewport of empty canvas, with the slide shoved off to the side and
+    // clipped. setZoom re-centres afterwards and hid this; every OTHER route in
+    // (opening a deck whose stage already overflows, a window resize, toggling a
+    // panel) does not. Reported on a 1600x900 deck, whose stage outgrows the
+    // canvas at ordinary zooms where the 1280x720 default still fits.
+    const wasX = parseFloat(this.scroller.style.paddingLeft) || 0
+    const wasY = parseFloat(this.scroller.style.paddingTop) || 0
     this.scroller.style.padding = padX || padY ? `${padY}px ${padX}px` : ''
+    if (padX !== wasX) this.scroller.scrollLeft += padX - wasX
+    if (padY !== wasY) this.scroller.scrollTop += padY - wasY
     this.scaleHost.style.transform = `scale(${this.scale})`
     this.moveable.zoom = 1 / this.scale
     this.moveable.updateRect()

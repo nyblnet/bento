@@ -11,6 +11,15 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: the slide could open off-centre, pushed to one side and clipped.**
+  Most likely on a deck whose page is larger than the default — a 1600×900 deck
+  outgrows the editing canvas at zoom levels where a 1280×720 one still fits.
+  The canvas gained room to pan past the slide's edges in 1.0.14, and turning
+  that room on moved the slide within the scrollable area without moving the
+  view with it, so you were left looking at the empty margin beside your slide.
+  Clicking the zoom percentage snapped it back, because that was the one action
+  that re-centred. The view now stays put across any re-layout.
+
 ## [1.0.15] — 2026-08-03
 
 - **Fix: removing a formatting option no longer disconnects the people you are
