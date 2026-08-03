@@ -214,6 +214,14 @@ jobs:
         # checked apply → undo → identical, because that failure is silent.
         run: node scripts/test-dash-store.ts
 
+      - name: bento/dash import rig
+        # Import is where a data tool does its damage, because every mistake is
+        # SILENT: the file opens, the grid fills, the totals compute, and the
+        # numbers are wrong. Two guards matter most and are checked from both
+        # sides — an undecidable date order is REFUSED rather than guessed, and
+        # the decimal convention is decided per COLUMN from the whole column.
+        run: node scripts/test-dash-import.ts
+
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is
         # 1280x720, so they used to hang 200px off the right edge of a default
