@@ -199,6 +199,14 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-validate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-validate.mjs"
           node "$RUNNER_TEMP/test-validate.mjs"
 
+      - name: bento/dash model rig
+        # The format is permanent — additive forever, no server to migrate a
+        # single file. Two failures are unrecoverable once files exist: dropping
+        # a field this build does not recognise, and letting anything but an
+        # ABSENT block reach the starter document (which then overwrites live
+        # data on the first save). Both are asserted from both sides.
+        run: node scripts/test-dash-model.ts
+
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is
         # 1280x720, so they used to hang 200px off the right edge of a default
