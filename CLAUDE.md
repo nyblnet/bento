@@ -523,8 +523,12 @@ names provisional.
   all (verified against pre-change code too) — resize behavior needs a
   real mouse. Present: real fullscreen via overlay.requestFullscreen at start +
   F toggle (denied requests degrade to tab-fill — that IS the testing/
-  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling: labels
-  collapse to icons <1200px, the wordmark collapses to the mark <760px.
+  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling — and by
+  MEASURING, not width breakpoints (zoom/OS text scale/locale width made px
+  queries clip the bar): editor.ts fitTopbar() steps down tier classes while
+  the bar overflows (ed-bar-compact hides labels, ed-bar-tight the wordmark,
+  ed-bar-fold folds into menus via applyPhoneChrome), driven by a Resize- +
+  MutationObserver on the bar.
   Panel show/hide lives ON the resizer strips as chevron tabs (docked
   flush to the screen edge when collapsed); phones (<700px) boot with
   both panels collapsed (canvas-first; chevrons/[/] bring them back).
