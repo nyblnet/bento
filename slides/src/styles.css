@@ -151,7 +151,7 @@ option { background: #fff; color: #1e2a3a; }
   cursor: default;
 }
 .ed-filechip[hidden] { display: none; }
-@media (max-width: 1200px) { .ed-filechip { display: none; } }
+.ed-topbar.ed-bar-compact .ed-filechip { display: none; }
 
 /* unsaved-changes dot — badges the SAVE button's corner (amber when dirty) */
 .ed-dirty {
@@ -1945,45 +1945,73 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 12.5px;
 }
 
-/* --- responsive topbar: labels give way, never a scrollbar ---------------- */
+/* --- responsive topbar: labels give way, never a scrollbar ----------------
+   The tiers are CLASSES, not width breakpoints. editor.ts fitTopbar()
+   MEASURES the bar and steps down a tier while it still overflows. Width
+   breakpoints were wrong here because the same buttons need a different
+   amount of room at the same viewport width (OS text scaling, browser zoom,
+   wider translations, the update chip or the avatar strip appearing), and
+   every one of those cases used to clip the end of the bar.
+   ed-bar-compact hides button labels, ed-bar-tight drops the wordmark,
+   ed-bar-fold moves buttons into menus (applyPhoneChrome). */
 .ed-topbar { min-width: 0; }
 .ed-topbar .ed-group { flex-shrink: 0; }
 .ed-logo { flex-shrink: 0; }
 .ed-title { flex: 0 1 220px; min-width: 48px; }
-@media (max-width: 1200px) {
-  .ed-topbar .ed-btn > span { display: none; } /* icons + tooltips take over */
-  .ed-topbar .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
-  /* …but NEVER inside an open dropdown/menu — those items are text; hiding
-     their labels left icon-only mystery menus on phones. */
-  .ed-topbar .ed-menu .ed-btn > span,
-  .ed-topbar .ed-menu button > span { display: inline; }
-  /* keep the safe-area insets — a bare padding here would undo them */
-  .ed-topbar {
-    gap: 6px;
-    padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(8px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
-             8px max(8px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
-  }
+.ed-topbar.ed-bar-compact .ed-btn > span { display: none; } /* icons + tooltips take over */
+.ed-topbar.ed-bar-compact .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
+/* …but NEVER inside an open dropdown/menu — those items are text; hiding
+   their labels left icon-only mystery menus on phones. */
+.ed-topbar.ed-bar-compact .ed-menu .ed-btn > span,
+.ed-topbar.ed-bar-compact .ed-menu button > span { display: inline; }
+/* keep the safe-area insets — a bare padding here would undo them */
+.ed-topbar.ed-bar-compact {
+  gap: 6px;
+  padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(8px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+           8px max(8px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
 }
-@media (max-width: 760px) {
-  .ed-topbar {
-    gap: 4px;
-    padding: max(6px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
-             6px max(6px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
-  }
-  .ed-logo > b { display: none; } /* mark only — the icon is the brand */
+.ed-topbar.ed-bar-tight {
+  gap: 4px;
+  padding: max(6px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+           6px max(6px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
+}
+.ed-topbar.ed-bar-tight .ed-logo > b { display: none; } /* mark only — the icon is the brand */
+
+/* --- fold: the bar cannot fit, so most of it moves into menus -------------
+   Hiding labels is not enough — 17 icon buttons at 36px plus gaps is an
+   irreducible ~684px floor. When even the tight tier overflows (every phone,
+   and a desktop window under heavy zoom or huge system text) fitTopbar adds
+   ed-bar-fold and applyPhoneChrome() REPARENTS the low-priority controls
+   into "＋" and "⋯" dropdowns, leaving: logo · title · ☰ · ＋ · undo · format ·
+   save · ⋯ . Labels come back inside menus via the compact rule above. */
+/* the phone-only controls exist in the DOM at every width; only the fold class
+   shows them, so applyPhoneChrome never has to create or destroy anything */
+.ed-phone-only { display: none; }
+.ed-topbar.ed-bar-fold .ed-phone-only { display: inline-flex; }
+/* Save stays one tap; its save-AS caret does not fit beside the fold's small
+   set of buttons and is the least-used half. The list it opens is not lost —
+   editor.ts appends it to the bottom of ⋯ while the fold is on. */
+.ed-topbar.ed-bar-fold .ed-split-caret { display: none; }
+/* ⋯ carries the demoted buttons AND that list, so it can outgrow the
+   screen in BOTH directions.
+   Down: without a bound it runs off the bottom, and a dropdown is absolutely
+   positioned, so nothing else can scroll it back into reach.
+   Sideways: these menus open from buttons in the right half of a 402px bar,
+   and a start-anchored menu grows AWAY from the screen — ⋯ sits at x≈374, so
+   even the old six short rows were partly cut off. Anchoring to the end grows
+   them inward instead. */
+.ed-topbar.ed-bar-fold .ed-menu {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 96px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* --- phones: the bar cannot fit, so most of it moves into menus -----------
-   Hiding labels is not enough — 17 icon buttons at 36px plus gaps is an
-   irreducible ~684px floor. Under 700px (the same threshold the JS uses to
-   collapse both panels) applyPhoneChrome() REPARENTS the low-priority controls
-   into "＋" and "⋯" dropdowns, leaving: logo · title · ☰ · ＋ · undo · format ·
-   save · ⋯ . Labels come back inside menus via the 1200px rule above. */
-/* the phone-only controls exist in the DOM at every width; only the query shows
-   them, so applyPhoneChrome never has to create or destroy anything */
-.ed-phone-only { display: none; }
+/* --- phones proper: viewport-scoped chrome that is about TOUCH and small
+   screens, not about whether the bar fits, so it stays a media query */
 @media (max-width: 700px) {
-  .ed-phone-only { display: inline-flex; }
   /* HIG touch targets — a 36px icon is a mis-tap on glass */
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
@@ -2006,26 +2034,6 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   .ed-main { position: relative; }
   /* the 16px resizer chevrons are replaced by real buttons in the bar */
   .ed-panel-toggle { display: none; }
-  /* Save stays one tap; its save-AS caret does not fit beside a 44px target
-     and is the least-used half. The list it opens is not lost — editor.ts
-     appends it to the bottom of ⋯ while phone chrome is on. */
-  .ed-topbar .ed-split-caret { display: none; }
-  /* ⋯ now carries the demoted buttons AND that list, so it can outgrow the
-     screen in BOTH directions.
-     Down: without a bound it runs off the bottom, and a dropdown is absolutely
-     positioned, so nothing else can scroll it back into reach.
-     Sideways: these menus open from buttons in the right half of a 402px bar,
-     and a start-anchored menu grows AWAY from the screen — ⋯ sits at x≈374, so
-     even the old six short rows were partly cut off. Anchoring to the end grows
-     them inward instead. */
-  .ed-topbar .ed-menu {
-    inset-inline-start: auto;
-    inset-inline-end: 0;
-    max-width: calc(100vw - 16px);
-    max-height: calc(100dvh - 96px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
   .ed-title { min-width: 0; }
 }
 
