@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
 import { isMacOS } from '../screens'
@@ -410,7 +410,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
+    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —
@@ -421,6 +421,7 @@ export class PropsPanel {
     if (el.type === 'chart') this.buildChartProps(el)
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
+    if (el.type === 'code') this.buildCodeProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -1077,6 +1078,64 @@ export class PropsPanel {
     input.click()
   }
 
+  private embedGrammar(el: CodeElement) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const fileName = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'Embedded Grammar'
+        const contents = JSON.parse(String(reader.result))
+        const name = contents['name']
+        const assetId = `grammar:${name}`
+        this.store.commit(() => {
+          const doc = this.store.doc
+          doc.assets = { ...(doc.assets ?? {}), [assetId]: JSON.stringify(contents) }
+          this.mutate(el.id, (e) => {
+            const el = e as CodeElement
+            el.grammarName = name
+            el.grammarAssetId = assetId
+          }, true)
+        })
+        this.toast(`"Grammar ${fileName}" embedded into this file`)
+      }
+      reader.readAsText(file)
+    })
+    input.click()
+  }
+
+  private embedTheme(el: CodeElement) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const fileName = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'Embedded Theme'
+        const contents = JSON.parse(String(reader.result))
+        const name = contents['name']
+        const assetId = `theme:${name}`
+        this.store.commit(() => {
+          const doc = this.store.doc
+          doc.assets = { ...(doc.assets ?? {}), [assetId]: JSON.stringify(contents) }
+          this.mutate(el.id, (e) => {
+            const el = e as CodeElement
+            el.themeAssetId = assetId
+            el.themeName = name
+          }, true)
+        })
+        this.toast(`"Theme ${fileName}" embedded into this file`)
+      }
+      reader.readAsText(file)
+    })
+    input.click()
+  }
+
   private buildShapeProps(el: ShapeElement) {
     this.section(t('Fill & stroke'))
     const grad = el.fillGradient
@@ -1713,6 +1772,32 @@ export class PropsPanel {
         }, true))
       this.row('Poster', poster)
     }
+  }
+
+  private buildCodeProps(el: CodeElement) {
+    this.section(t('Code'))
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    const assets = this.store.doc.assets ?? {}
+    const grammar = el.grammarAssetId ? assets[el.grammarAssetId] : ''
+    const theme = el.themeAssetId ? assets[el.themeAssetId] : ''
+    if (!grammar) status.textContent = t('Pick a TextMate language')
+    else if (!theme) status.textContent = t('Pick a TextMate theme')
+    // Grammar
+    const embedGrammar = document.createElement('button')
+    embedGrammar.className = 'ed-btn ed-btn-block'
+    embedGrammar.textContent = t('＋ Add TextMate Grammar')
+    embedGrammar.title = t('Bundle a TextMate Grammar and use it here')
+    embedGrammar.addEventListener('click', () => this.embedGrammar(el))
+    this.host.appendChild(embedGrammar)
+    // Theme
+    const embedTheme = document.createElement('button')
+    embedTheme.className = 'ed-btn ed-btn-block'
+    embedTheme.textContent = t('＋ Add TextMate Theme')
+    embedTheme.title = t('Bundle a TextMate Theme and use it here')
+    embedTheme.addEventListener('click', () => this.embedTheme(el))
+    this.host.appendChild(embedTheme)
+    this.host.appendChild(status)
   }
 
   // --- element ops --------------------------------------------------------------

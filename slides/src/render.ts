@@ -7,6 +7,7 @@ import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElem
 import { morphKey } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
+import { renderCode } from './code'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -375,7 +376,7 @@ function tagSymbols(mathml: string): string {
     if (!txt) continue
     const n = seen.get(txt) ?? 0
     seen.set(txt, n + 1)
-    ;(leaf as HTMLElement).dataset.sym = `${txt}#${n}`
+      ; (leaf as HTMLElement).dataset.sym = `${txt}#${n}`
   }
   return tpl.innerHTML
 }
@@ -674,6 +675,29 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
           svg.prepend(style)
         }
       }
+      break
+    }
+    case 'code': {
+      node.style.display = 'flex'
+      node.style.flexDirection = 'column'
+      node.style.justifyContent = VALIGN[el.valign]
+      const inner = document.createElement('div')
+      inner.className = 'bento-text-inner'
+      inner.dir = 'auto'
+      inner.style.fontSize = `${el.fontSize}px`
+      inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+      inner.style.textAlign = el.align
+      inner.style.lineHeight = String(el.lineHeight)
+      inner.style.width = '100%'
+      const content = renderCode(el, doc)
+      content.then((html: string | undefined) => {
+        if (html) {
+          inner.innerHTML = html
+        } else {
+          inner.innerText = el.content
+        }
+      })
+      node.appendChild(inner)
       break
     }
   }

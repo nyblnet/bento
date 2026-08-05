@@ -1010,7 +1010,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 /* inline code spans inside text elements — editor, present and print alike */
 .bento-el-text code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Berkeley Mono, Menlo, Consolas, monospace;
   font-size: 0.9em;
   background: rgb(127 127 127 / 0.16);
   padding: 0 0.28em;
@@ -2267,4 +2267,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 [dir="rtl"] .ed-about-json,
 [dir="rtl"] .ed-chart-json {
   direction: ltr;
+}
+
+/* Code */
+pre.shiki {
+  padding: 2rem;
 }
