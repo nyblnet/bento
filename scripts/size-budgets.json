@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 135168,
-      "//": "132 KiB. The tracker took spaces from 73 KB. Headroom is deliberate: the shell is mostly a zlib block and zlib differs across node versions \u2014 the same commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 141312,
+      "//": "138 KiB. Raised from 132: the view controls (layout, group-by, sort) and the board's markdown export cost ~3.4 KB compressed \u2014 the sort engine, three popovers and 13 strings \u00d7 8 locales, which is most of it. Headroom is deliberate: the shell is mostly a zlib block and zlib differs across node versions \u2014 one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }

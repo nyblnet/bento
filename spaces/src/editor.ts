@@ -16,7 +16,8 @@ import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
-  reorderPages, columnMoves, ISSUE_FIELDS, type DropAim, type FieldSpec, type ViewFilter,
+  reorderPages, columnMoves, ISSUE_FIELDS,
+  type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
@@ -341,10 +342,11 @@ export class Editor {
     return wrap
   }
 
-  private menuItem(icon: IconName, label: string, hint: string, onClick: () => void): HTMLElement {
+  private menuItem(icon: IconName, label: string, hint: string, onClick: () => void, selected = false): HTMLElement {
     const b = document.createElement('button')
-    b.className = 'sp-dditem'
+    b.className = 'sp-dditem' + (selected ? ' sp-sel' : '')
     b.type = 'button'
+    if (selected) b.setAttribute('aria-current', 'true')
     b.setAttribute('role', 'menuitem')
     b.innerHTML = `<span class="sp-result-ico">${ICONS[icon]}</span>` +
       `<span class="sp-result-txt"><strong>${escapeHtml(label)}</strong>` +
@@ -886,6 +888,20 @@ export class Editor {
       })
       const fb = v.querySelector<HTMLElement>('[data-view-filter]')
       fb?.addEventListener('click', () => this.openViewFilter(v.dataset.blockId!, fb))
+      const lb = v.querySelector<HTMLElement>('[data-view-layout]')
+      lb?.addEventListener('click', () => this.toggleViewLayout(v.dataset.blockId!))
+      const gb = v.querySelector<HTMLElement>('[data-view-group]')
+      gb?.addEventListener('click', () => this.openViewGroup(v.dataset.blockId!, gb))
+      const sb = v.querySelector<HTMLElement>('[data-view-sort]')
+      sb?.addEventListener('click', () => this.openViewSort(v.dataset.blockId!, sb))
+
+      // A SORTED BOARD HAS NO HAND ORDER TO DROP INTO. The sort decides where a
+      // card sits, so offering a drop position would write an order into
+      // doc.pages that the very next paint discards — a gesture that appears to
+      // do nothing, and a stray undo step. The column still accepts the card;
+      // only the position within it stops being a question.
+      const sorted = Array.isArray((vb as { sort?: unknown } | undefined)?.sort)
+        && ((vb as { sort?: unknown[] }).sort!).length > 0
 
       for (const btn of v.querySelectorAll<HTMLElement>('[data-set-field]')) {
         btn.addEventListener('click', (e) => {
@@ -932,8 +948,9 @@ export class Editor {
         col.addEventListener('dragover', (e) => {
           if (!e.dataTransfer?.types.includes('text/bento-issue')) return
           e.preventDefault()
-          const aim = this.aimAt(col, e.clientY)
           col.classList.add('sp-drop')
+          if (sorted) return
+          const aim = this.aimAt(col, e.clientY)
           if (aim.before) col.querySelector(`[data-issue="${CSS.escape(aim.before)}"]`)?.classList.add('sp-dropbefore')
           else col.classList.add('sp-dropend')
         })
@@ -941,7 +958,7 @@ export class Editor {
           const moved = e.dataTransfer?.getData('text/bento-issue')
           if (!moved) return
           e.preventDefault()
-          const aim = this.aimAt(col, e.clientY)
+          const aim = sorted ? null : this.aimAt(col, e.clientY)
           marks()
           this.dropIssue(moved, groupKey, col.dataset.group!, aim)
         })
@@ -966,7 +983,7 @@ export class Editor {
    *
    * Both halves are ONE commit, because one drag is one user action.
    */
-  private dropIssue(pageId: string, key: string, optId: string, aim: DropAim): void {
+  private dropIssue(pageId: string, key: string, optId: string, aim: DropAim | null): void {
     const s = this.store
     const page = s.index.page.get(pageId)
     const f = fieldByKey(s.doc, key)
@@ -976,10 +993,13 @@ export class Editor {
     // The no-op test is about the COLUMN, not the page array — those are
     // different orders the moment a board has two columns, and judging by page
     // adjacency let a drop that visibly did nothing rewrite doc.pages.
+    //
+    // A null aim is a SORTED board: there is no position to land in, so the
+    // drop is only ever the value change.
     const cards = [...document.querySelectorAll<HTMLElement>(`.sp-col[data-group="${CSS.escape(optId)}"] .sp-issue[data-issue]`)]
       .map((c) => c.dataset.issue!)
-    const moves = columnMoves(cards, pageId, aim)
-    const order = moves ? reorderPages(s.doc.pages, pageId, aim) : null
+    const moves = !!aim && columnMoves(cards, pageId, aim)
+    const order = moves && aim ? reorderPages(s.doc.pages, pageId, aim) : null
     if (!setting && !order) return
 
     s.commit(() => {
@@ -1018,6 +1038,119 @@ export class Editor {
     this.paintPage()
   }
 
+  /**
+   * A small menu anchored to a button — a bottom sheet on a phone.
+   *
+   * Four of these had grown the same twelve lines of boilerplate (build, trap,
+   * sheet-or-place, dismiss on a click away), which is three copies too many
+   * for something whose dismissal behaviour has to be identical everywhere:
+   * a menu that closes differently from the one beside it reads as a bug.
+   */
+  private popover(anchor: HTMLElement, build: (pop: HTMLElement) => void): void {
+    this.closeOverlay()
+    const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
+    pop.setAttribute('role', 'menu')
+    this.trapAndClose(pop)
+    build(pop)
+    this.overlay = pop
+    document.body.append(pop)
+    if (this.isDrawer()) pop.classList.add('sp-sheet-in')
+    else place(pop, anchor)
+    const away = (ev: MouseEvent) => {
+      if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
+    }
+    setTimeout(() => document.addEventListener('mousedown', away), 0)
+  }
+
+  /**
+   * Edit a key on a `view` block — layout, groupBy, sort.
+   *
+   * The same discipline as editViewFilter: an edit that says "the default"
+   * DELETES the key rather than storing it, so a view somebody switched to a
+   * list and back is byte-identical to one that was never touched, and a file
+   * written before this control existed stays that way.
+   */
+  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort', value: unknown): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    s.commit(() => {
+      const rec = b as unknown as Record<string, unknown>
+      if (value === undefined || value === null) delete rec[key]
+      else rec[key] = value
+    }, { scope: 'page' })
+    this.paintPage()
+  }
+
+  /** Board ⇄ list. `board` is the default, so it is stored as an ABSENT key. */
+  private toggleViewLayout(blockId: string): void {
+    const b = this.store.block(blockId)
+    const now = String((b as { layout?: unknown } | undefined)?.layout ?? 'board')
+    this.editView(blockId, 'layout', now === 'list' ? undefined : 'list')
+  }
+
+  /**
+   * Which field the columns come from.
+   *
+   * Only fields with declared options are offered. A board's columns ARE the
+   * option list — grouping by a free-text field would make one column per
+   * distinct string, which is a pivot table wearing a board's clothes.
+   */
+  private openViewGroup(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    const now = String((b as { groupBy?: unknown }).groupBy ?? 'status')
+    const groupable = fieldsOf(s.doc).filter((f) => f.options?.length)
+    this.popover(anchor, (pop) => {
+      for (const f of groupable) {
+        pop.append(this.menuItem('board', f.label, '', () => {
+          this.closeOverlay()
+          // `status` is the default the renderer assumes, so choosing it clears
+          // the key instead of writing what absence already means
+          this.editView(blockId, 'groupBy', f.key === 'status' ? undefined : f.key)
+        }, f.key === now))
+      }
+      if (!groupable.length) pop.append(el('div', 'sp-fgroup', t('No field here has options to group by')))
+    })
+  }
+
+  /**
+   * The order. One key, though the format holds a list — see fields.ts.
+   *
+   * "Manual order" is the ABSENCE of a sort, not a sort called manual: it is
+   * the page order, which is the order somebody arranged by dragging, and it
+   * has to be reachable from here or a board is one click away from being
+   * un-arrangeable forever.
+   */
+  private openViewSort(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    const cur = (Array.isArray((b as { sort?: unknown }).sort)
+      ? ((b as { sort?: ViewSort[] }).sort ?? [])[0] : undefined) as ViewSort | undefined
+    this.popover(anchor, (pop) => {
+      pop.append(this.menuItem('grip', t('Manual order'), '', () => {
+        this.closeOverlay()
+        this.editView(blockId, 'sort', undefined)
+      }, !cur))
+      pop.append(el('div', 'sp-fgroup', t('Sort')))
+      for (const f of fieldsOf(s.doc)) {
+        const mine = cur?.key === f.key
+        // clicking the field you are already sorted by REVERSES it — the second
+        // thing you want after "sort by priority" is "…the other way", and a
+        // separate direction control for a one-key sort is a control nobody
+        // finds
+        const dir: 'asc' | 'desc' = mine && cur?.dir !== 'desc' ? 'desc' : 'asc'
+        const hint = mine ? (cur?.dir === 'desc' ? t('Ascending') : t('Descending')) : ''
+        pop.append(this.menuItem('arrowDown', f.label, hint, () => {
+          this.closeOverlay()
+          this.editView(blockId, 'sort', [dir === 'asc' ? { key: f.key } : { key: f.key, dir }])
+        }, mine))
+      }
+    })
+  }
+
   /** Toggle one value of one field in a view's filter. */
   private toggleViewValue(blockId: string, key: string, id: string): void {
     this.editViewFilter(blockId, (f) => {
@@ -1044,12 +1177,8 @@ export class Editor {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
-    this.closeOverlay()
-    const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
-    pop.setAttribute('role', 'menu')
-    this.trapAndClose(pop)
     const cur = ((b as { filter?: ViewFilter }).filter ?? {}) as ViewFilter
-
+    this.popover(anchor, (pop) => {
     for (const f of fieldsOf(s.doc)) {
       if (!f.options?.length) continue
       pop.append(el('div', 'sp-fgroup', f.label))
@@ -1076,21 +1205,12 @@ export class Editor {
         pop.append(item)
       }
     }
-    const clear = this.menuItem('trash', t('Clear filter'), '', () => {
+    pop.append(this.menuItem('trash', t('Clear filter'), '', () => {
       this.closeOverlay()
       // unknown keys survive: this clears what this build put there
       this.editViewFilter(blockId, (f) => { delete f.is; delete f.open })
+    }))
     })
-    pop.append(clear)
-
-    this.overlay = pop
-    document.body.append(pop)
-    if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
-    const away = (ev: MouseEvent) => {
-      if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
-    }
-    setTimeout(() => document.addEventListener('mousedown', away), 0)
   }
 
   /**

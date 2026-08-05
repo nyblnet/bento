@@ -1299,6 +1299,7 @@ in the ruling below. It is still unimplemented, and now it is not free: a
 stored sort and a hand-dragged order contradict each other, and which one wins
 is a format decision, not a rendering detail. Whoever needs sort settles that
 first. Until then a `sort` key round-trips untouched and is ignored.
+*(SETTLED 2026-08-06 — see "A sorted board is a different question" below.)*
 
 **Why the filter is two keys.** `is` (a field's values) and `open` (a phase).
 A filter language grows without limit and can never shrink — every operator is
@@ -1320,6 +1321,53 @@ tracker's main screen, so every card carries a status BUTTON that opens the
 same picker the issue's own header strip opens, through the same writer
 (`editor.applyField` → `fields.propHtml`). There is exactly one place where
 `value` and `html` are written, and there must stay exactly one.
+
+## 2026-08-06 — A sorted board is a different question, and it never eats the hand order
+
+**Decision.** `sort?: ViewSort[]` on the `view` block ships, where
+`ViewSort = { key, dir?: 'asc'|'desc' }`. Absent means the page order. The entry
+above deferred this until somebody settled which of a stored sort and a
+hand-dragged order wins; this is that settlement, and it also makes `layout` and
+`groupBy` reachable, which they were not.
+
+**A sort never overwrites the manual order — it OVERRIDES it, for as long as it
+is there.** The two orders live in different places: the hand order is
+`doc.pages`, the sort is a key on one block. Nothing about sorting a view
+touches the page array, so clearing the sort returns the board to exactly the
+arrangement it had, and a second view of the same issues sorted differently
+takes nothing away from the first. That is the whole reason the contradiction
+dissolves rather than needing a winner: they were never competing for the same
+storage. "Manual order" is the first item in the Sort menu because it is the
+absence of a sort, not a sort called manual.
+
+**A sorted board stops offering positional drops.** With a sort in force the
+order within a column is computed, so a drop position would write into
+`doc.pages` an order the next paint discards — a gesture that appears to do
+nothing and leaves an undo step behind. The column still highlights and still
+accepts the card (the value change is real); only the insertion point stops
+being offered. `dropIssue` takes a null aim for exactly this.
+
+**Ordering rules, because each one is silently wrong the other way.** A select
+sorts by its DECLARED position — "Backlog, Todo, In progress, Done" is a
+direction, and alphabetising it throws away the only thing the list was saying.
+An UNSET value sorts last in BOTH directions: it is not the smallest value, it
+is the absence of one, and flipping the direction must not promote every blank
+to the top. A value a NEWER build wrote has no declared seat and sorts after
+everything this build knows, rather than leading a board with a status nobody
+here can read. Ties keep the page order (a stable sort), so a hand-arranged
+board still reads that way within each band. A sort key naming a field this
+build has no schema for is skipped and the view SAYS SO — the same honesty rule
+`unknownFilterKeys` already carries.
+
+**An ARRAY holding one entry.** The editor only ever writes one key; the format
+takes a list because that is the shape already published in the ruling below,
+and because a second key can be added later without touching a file, where
+widening a scalar afterwards could not be done at all.
+
+**Storing a default is storing a lie.** Choosing Board, or grouping by `status`,
+or Manual order DELETES the key rather than writing what absence already means,
+so a view somebody switched to a list and back is byte-identical to one that was
+never touched — the same rule the filter already followed.
 
 ## 2026-08-05 — An issue is a page: the tracker format for bento/spaces
 

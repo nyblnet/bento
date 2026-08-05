@@ -15,8 +15,12 @@ import {
 import { clearVersions, clearRecovery } from '../../kernel/src/autosave.ts'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { inertBody, esc } from './sanitize'
-import { SPEC, mdLayout } from './blocks'
+import { SPEC, mdLayout, type MdCtx } from './blocks'
+import {
+  issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
+} from './fields'
 import type { Store } from './store'
+import type { Block } from './model'
 
 export interface AboutHooks {
   store: Store
@@ -233,6 +237,47 @@ export function openAbout({ store, onRepaint, onSaveCopy, onImport }: AboutHooks
  */
 export function toMarkdown(store: Store): string {
   const out: string[] = []
+  const ctx: MdCtx = {
+    titleOf: (id) => store.index.page.get(id)?.title,
+    // DERIVED THE SAME WAY THE SCREEN DERIVES IT — same filter, same sort, same
+    // grouping — so the file you download is the board you were looking at. A
+    // second traversal here is how an export starts quietly disagreeing with
+    // the app.
+    rowsOf: (b: Block) => {
+      const doc = store.doc
+      const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
+      const grouped = String((b as { layout?: unknown }).layout ?? 'board') !== 'list'
+      const field = fieldByKey(doc, groupKey)
+      const rows = sortRows(
+        doc,
+        issuesOf(doc).filter((r) => passesFilter(doc, r.values, (b as { filter?: unknown }).filter)),
+        (b as { sort?: unknown }).sort)
+      // the board's column order, so an export reads top-to-bottom the way the
+      // board reads left-to-right
+      const order = new Map((field?.options ?? []).map((o, i) => [o.id, i]))
+      const seat = (r: (typeof rows)[number]) =>
+        order.get(String(r.values.get(groupKey) ?? '')) ?? Number.MAX_SAFE_INTEGER
+      const ordered = grouped
+        ? rows.map((r, i) => ({ r, i })).sort((a, c) => (seat(a.r) - seat(c.r)) || (a.i - c.i)).map((x) => x.r)
+        : rows
+      return ordered.map((r) => ({
+        id: r.page.id,
+        title: r.page.title,
+        group: grouped
+          ? (optionOf(field, r.values.get(groupKey))?.label ?? t('Other'))
+          : undefined,
+        // the same chips the card shows, in the same words
+        fields: fieldsOf(doc)
+          .filter((f) => f.key !== groupKey)
+          .map((f) => {
+            const v = r.values.get(f.key)
+            if (v === undefined || v === null || v === '') return ''
+            return optionOf(f, v)?.label ?? (Array.isArray(v) ? v.join(', ') : String(v))
+          })
+          .filter(Boolean).join(' · '),
+      }))
+    },
+  }
   const walk = (parent: string, depth: number) => {
     for (const page of store.index.children.get(parent) ?? []) {
       out.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${page.title}`, '')
@@ -247,9 +292,7 @@ export function toMarkdown(store: Store): string {
         // it is declared. An UNKNOWN type — a file written by a newer build —
         // falls through to its text, which is the honest default.
         const spec = SPEC.get(b.type)
-        const lines = spec?.toMd
-          ? spec.toMd(b, text, indent, (id) => store.index.page.get(id)?.title)
-          : [text]
+        const lines = spec?.toMd ? spec.toMd(b, text, indent, ctx) : [text]
         // PER LINE, not per returned element. A spec returns ELEMENTS, and an
         // element can hold newlines: a code block's body is one multi-line
         // string, and htmlToMd turns <br> into a newline in ordinary text. Any

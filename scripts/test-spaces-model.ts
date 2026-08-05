@@ -35,6 +35,7 @@ import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
+  sortRows, unknownSortKeys, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import { planUpdatePage } from '../spaces/src/agent.ts'
@@ -520,7 +521,8 @@ for (const [label, input, err] of [
   { const b: Block = { id: 'x', type: 'callout', tone: 'caution' }; spec.init!(b); ok(b.tone === 'caution', 'init never overwrites a tone that is already there') }
 
   const md = (b: Partial<Block>, text = 'x') =>
-    spec.toMd!({ id: 'c', type: 'callout', ...b } as Block, text, '', () => undefined).join('\n')
+    spec.toMd!({ id: 'c', type: 'callout', ...b } as Block, text, '',
+      { titleOf: () => undefined, rowsOf: () => [] }).join('\n')
   ok(md({ tone: 'warning' }) === '> [!WARNING]\n> x', 'a callout exports as a GitHub alert')
   ok(md({}) === '> [!NOTE]\n> x', 'an absent tone exports as NOTE')
   ok(md({ tone: 'success' }) === '> [!SUCCESS]\n> x',
@@ -1332,8 +1334,111 @@ for (const [label, input, err] of [
     'the board refuses to wire itself in a locked space or in reading view')
   ok(/const own = opts\.editable && field && propBlockOf/.test(ren),
     'the renderer emits a card status BUTTON only for an editable document')
-  ok(/if \(opts\.editable\) \{\s*const on = /.test(ren),
-    '…and the view controls likewise, so a reader and a printout get neither')
+  // …and EVERY view control likewise. Pinned as "each control name appears
+  // between the editable guard and the head being mounted", rather than to one
+  // line of the block — this assertion used to name the first statement inside
+  // the guard, so adding a control above it broke the test without breaking
+  // anything, and adding one BELOW the guard would have broken the app without
+  // breaking the test.
+  const guarded = ren.slice(ren.indexOf('if (opts.editable) {'), ren.indexOf('host.appendChild(head)'))
+  const controls = ['viewLayout', 'viewGroup', 'viewSort', 'viewOpen', 'viewFilter']
+  ok(guarded.length > 0 && controls.every((c) => guarded.includes(c)),
+    `…and the view controls likewise, so a reader and a printout get neither (${
+      controls.filter((c) => !guarded.includes(c)).join(', ') || 'all inside the guard'})`)
+  // the whole point of the guard is that it is the ONLY place they are made
+  ok(controls.every((c) => (ren.split(c).length - 1) === (guarded.split(c).length - 1)),
+    'no view control is created outside that guard')
+}
+
+// ---- a view's ORDER --------------------------------------------------------
+// The properties that go wrong silently: a sort that reorders a board somebody
+// arranged by hand, a blank promoted to the top when the direction flips, and a
+// select sorted into alphabetical order, which throws away the one thing a
+// status list was telling you.
+{
+  const doc = { fields: DEFAULT_FIELDS } as unknown as SpacesDoc
+  const row = (id: string, v: Record<string, unknown>): IssueRow =>
+    ({ page: { id, title: id, blocks: [] } as Page, values: new Map(Object.entries(v)) })
+
+  const rows = [
+    row('a', { status: 'done', estimate: 3 }),
+    row('b', { status: 'backlog', estimate: 1 }),
+    row('c', { status: 'doing' }),
+    row('d', { status: 'todo', estimate: 2 }),
+  ]
+  const ids = (rs: IssueRow[]) => rs.map((r) => r.page.id).join('')
+
+  ok(sortRows(doc, rows, undefined) === rows,
+    'no sort returns the SAME array — a view nobody sorted keeps the page order it had')
+  ok(sortRows(doc, rows, []) === rows, 'and so does an empty one')
+  ok(ids(sortRows(doc, rows, [{ key: 'status' }])) === 'bdca',
+    'a select sorts by its DECLARED order (backlog, todo, doing, done), never alphabetically')
+  ok(ids(sortRows(doc, rows, [{ key: 'status', dir: 'desc' }])) === 'acdb',
+    '…and reverses on request')
+  ok(ids(sortRows(doc, rows, [{ key: 'estimate' }])) === 'bdac',
+    'a number sorts numerically, with the one that has none at the end')
+
+  // the one that bites: absence is not a small value
+  const asc = sortRows(doc, rows, [{ key: 'estimate' }])
+  const desc = sortRows(doc, rows, [{ key: 'estimate', dir: 'desc' }])
+  ok(asc[asc.length - 1].page.id === 'c' && desc[desc.length - 1].page.id === 'c',
+    'an UNSET value sorts last in BOTH directions — a blank estimate is not the cheapest issue')
+
+  // ties keep the page order, so a hand-arranged board still reads that way
+  // inside each band
+  const tied = [row('x', { status: 'todo' }), row('y', { status: 'todo' }), row('z', { status: 'todo' })]
+  ok(ids(sortRows(doc, tied, [{ key: 'status' }])) === 'xyz', 'ties are stable — page order survives')
+
+  // additivity: a key from a newer build is skipped and SAID SO, never guessed
+  ok(sortRows(doc, rows, [{ key: 'sprint' }]) === rows,
+    'a sort key this build has no field for changes nothing')
+  ok(unknownSortKeys(doc, [{ key: 'sprint' }, { key: 'status' }]).join() === 'sprint',
+    '…and is reported, so the view can say the order is not the one its author asked for')
+  ok(unknownSortKeys(doc, undefined).length === 0 && unknownSortKeys(doc, 'nonsense').length === 0,
+    'a malformed sort reports nothing rather than throwing — it came out of a file someone sent you')
+
+  // a value a newer build wrote has no declared seat: it goes last, not first
+  const newer = [row('m', { status: 'todo' }), row('n', { status: 'blocked' })]
+  ok(ids(sortRows(doc, newer, [{ key: 'status' }])) === 'mn',
+    'a status from a newer build sorts after every one this build knows')
+}
+
+// ---- what a board and a field EXPORT ---------------------------------------
+// The readable `html` on a prop block is the whole reason the format degrades
+// instead of vanishing. The exporter is its most important consumer and was the
+// one place ignoring it.
+{
+  const propSpec = SPEC.get('prop')!
+  const ctx = { titleOf: () => undefined, rowsOf: () => [] }
+  const line = propSpec.toMd!(
+    { id: 'b', type: 'prop', key: 'status', value: 'doing', html: 'Status: In progress' } as Block,
+    'Status: In progress', '', ctx)[0]
+  ok(line === '**Status:** In progress',
+    `a field exports the words a reader can use, not the option id (got ${line})`)
+  ok(!line.includes('doing'), '…and the raw value does not appear at all')
+
+  // a schema whose label holds a colon, and a prop whose html is not the
+  // expected shape: emitted whole rather than split at a guess
+  const odd = propSpec.toMd!({ id: 'b', type: 'prop', key: 'k', value: 'v', html: 'plain' } as Block,
+    'plain', '', ctx)[0]
+  ok(odd === '**plain**', `an unexpected readable form is exported whole (got ${odd})`)
+
+  const viewSpec = SPEC.get('view')!
+  const md = viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', {
+    titleOf: () => undefined,
+    rowsOf: () => [
+      { id: 'p1', title: 'First', group: 'Todo', fields: 'High' },
+      { id: 'p2', title: 'Second', group: 'Todo', fields: '' },
+      { id: 'p3', title: 'Third', group: 'Done', fields: '' },
+    ],
+  }).join('\n')
+  ok(md.includes('[First](#p/p1)') && md.includes('[Third](#p/p3)'),
+    'a board exports its ISSUES, each one a link back to its page')
+  ok(md.includes('**Todo**') && md.includes('**Done**'), '…grouped as the board groups them')
+  ok(md.indexOf('**Todo**') < md.indexOf('**Done**'), '…in the board\'s column order')
+  ok(md.includes('[First](#p/p1) — High'), '…carrying the same chips the card shows')
+  ok(viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', ctx).join('\n').includes('_No issues._'),
+    'an empty board says so rather than exporting a bare heading')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

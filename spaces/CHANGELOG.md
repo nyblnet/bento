@@ -70,6 +70,32 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   the API cannot put anything in a file that the app itself could not have
   written.
 
+- **A board can be a list, grouped by any field, in any order.** The view's
+  controls were two buttons; they are five. **Board ⇄ List** switches the shape —
+  the list has always rendered, but nothing in the app could produce one, so a
+  view could hold a layout you could not undo. **Group** picks the field the
+  columns come from. **Sort** orders by any field, and clicking the field you
+  are already sorted by reverses it; **Manual order** is always the first item,
+  because a board somebody arranged by dragging must be one click from getting
+  that order back. A select sorts by its declared order, never alphabetically —
+  "Backlog, Todo, In progress, Done" is a direction — and an unset value sorts
+  last in both directions, because a blank estimate is not the cheapest issue.
+  A sorted board still accepts a dragged card; it just stops pretending you can
+  choose where in the column it lands.
+
+- **Fixed: a field exported as `status: doing`.** Every field block carries a
+  readable form — "Status: In progress" — which is the whole reason the format
+  degrades instead of vanishing for an older build, a thumbnailer or a grep. The
+  Markdown export was the one consumer ignoring it, and published the internal
+  option id to the audience with no schema to look it up in. It now exports
+  **Status:** In progress.
+
+- **Fixed: a board exported as the word "Issues".** Downloading a tracker as
+  Markdown gave you the view's title in italics and nothing else. A board now
+  exports its issues — grouped as the board groups them, in the board's column
+  order, each one a link back to its page, carrying the same chips the card
+  shows — with the same filter and sort the screen is using applied.
+
 - **A new space opens with a tracker in it.** The starter space gains a
   **Tracker** page — a board, and five issues nested under it that explain
   themselves: open a card and you are in an ordinary page with fields along the

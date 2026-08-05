@@ -139,5 +139,7 @@ pages are one document rather than one file each.
   and a token RGA over `html`, which is the same shape — but genericizing it is
   its own project, and PLATFORM §10 permits shipping without collab rather than
   with a half-secure version.
-- **Tables, embeds, and databases.** Deliberate: the format is permanent, so a
-  block type ships when its model is right, not when its UI is ready.
+- **Tables and embeds.** Deliberate: the format is permanent, so a block type
+  ships when its model is right, not when its UI is ready. (Databases DID ship —
+  as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a
+  `view` block is a board or a list of them. `src/fields.ts` is the core.)

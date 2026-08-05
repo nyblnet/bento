@@ -16,7 +16,8 @@ import { t } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE } from './blocks'
 import {
   fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
-  passesFilter, filterCount, unknownFilterKeys, type FieldSpec,
+  passesFilter, filterCount, unknownFilterKeys,
+  sortRows, unknownSortKeys, type ViewSort, type FieldSpec,
 } from './fields'
 import { ICONS, type IconName } from './icons'
 
@@ -570,8 +571,9 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
+  const sort = (b as { sort?: unknown }).sort
   const all = issuesOf(doc)
-  const rows = all.filter((r) => passesFilter(doc, r.values, filter))
+  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
 
   const head = document.createElement('div')
   head.className = 'sp-view-head'
@@ -587,22 +589,48 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   // chip: a reader, a printout and a locked space get the view, not the buttons
   // that change what it holds.
   if (opts.editable) {
+    const btn = (attr: string, label: string, title: string, on = false): HTMLButtonElement => {
+      const el2 = document.createElement('button')
+      el2.type = 'button'
+      el2.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
+      el2.dataset[attr] = '1'
+      el2.textContent = label
+      el2.title = title
+      el2.setAttribute('aria-label', title)
+      return el2
+    }
+
+    // LAYOUT. Both shapes have always rendered; only the board was reachable,
+    // so a view block could hold `layout:'list'` that nothing in the app could
+    // produce or undo. One button, because there are two of them and a menu to
+    // choose between two things is a menu too many.
+    const asList = layout === 'list'
+    const layoutB = btn('viewLayout', asList ? t('List') : t('Board'),
+      asList ? t('Show as a board') : t('Show as a list'))
+
+    // GROUP BY. Only fields with declared options: a board's columns ARE the
+    // option list, so grouping by a free-text field would make one column per
+    // distinct string and call it a board.
+    const groupB = btn('viewGroup', field ? `${t('Group')} · ${field.label}` : t('Group'),
+      t('Choose the field the columns come from'))
+
+    const sortKey = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+    const sortField = sortKey && fieldByKey(doc, sortKey.key)
+    const sortB = btn('viewSort',
+      sortField ? `${t('Sort')} · ${sortField.label}` : t('Sort'),
+      t('Choose the order'), !!sortField)
+
     const on = !!(filter as { open?: unknown } | undefined)?.open
-    const openB = document.createElement('button')
-    openB.type = 'button'
-    openB.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
-    openB.dataset.viewOpen = '1'
-    openB.textContent = t('Open only')
+    const openB = btn('viewOpen', t('Open only'), t('Open only'), on)
     openB.setAttribute('aria-pressed', String(on))
-    const filterB = document.createElement('button')
-    filterB.type = 'button'
-    filterB.className = 'sp-btn sp-view-btn'
-    filterB.dataset.viewFilter = '1'
     const n = filterCount(filter)
     // the count rather than a list of chips: what matters is that the view is
     // narrowed at all, and the popover says by what
-    filterB.textContent = n ? `${t('Filter')} · ${n}` : t('Filter')
-    head.append(openB, filterB)
+    const filterB = btn('viewFilter', n ? `${t('Filter')} · ${n}` : t('Filter'), t('Filter'), !!n)
+
+    // a LIST has no columns, so the field the columns would come from is not a
+    // question it can be asked
+    head.append(layoutB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -613,6 +641,16 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     const note = document.createElement('p')
     note.className = 'sp-view-empty'
     note.textContent = t('A filter here is newer than this build and was not applied.')
+    host.appendChild(note)
+  }
+  // Same rule, same honesty: a sort key naming a field this build has no schema
+  // for is skipped, and the order you are looking at is not the one the author
+  // asked for. Silently showing a different order is the failure additivity
+  // trades for.
+  if (unknownSortKeys(doc, sort).length) {
+    const note = document.createElement('p')
+    note.className = 'sp-view-empty'
+    note.textContent = t('A sort here is newer than this build and was not applied.')
     host.appendChild(note)
   }
 
