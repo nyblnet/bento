@@ -421,25 +421,34 @@ export class Editor {
       for (const k of kids) this.phoneChrome.homeOf.set(k, g)
     }
 
-    // drive it now and whenever the query flips
-    // Held on `this` deliberately: a MediaQueryList that nothing references can
-    // be collected along with its listener, and the bar then never unfolds when
-    // the window grows — the CSS flips but the JS half silently stops.
-    this.phoneQuery = window.matchMedia('(max-width: 700px)')
+    // drive it now and whenever the bar's size or content changes.
     // build() has just re-authored the bar, so whatever folding state a PREVIOUS
     // bar was in no longer describes this DOM. Without this reset a rebuild on a
     // phone (switching language, say) would early-return on `true === true` and
     // leave the freshly authored DESKTOP bar in place — overflowing, with Save
     // off-screen again.
     this.phoneChromeOn = null
-    this.applyPhoneChrome(this.phoneQuery.matches)
-    this.phoneQuery.addEventListener('change', (e) => this.applyPhoneChrome(e.matches))
-    // ...and on plain resize as well. matchMedia's change event is the correct
-    // signal but not a universally reliable one — it does not fire at all under
-    // CDP-driven viewport changes, and a phone ROTATING is exactly this path.
-    // applyPhoneChrome early-returns when the state is unchanged, so calling it
-    // on every resize costs a comparison.
-    window.addEventListener('resize', () => this.applyPhoneChrome(window.innerWidth <= 700))
+    this.topbar = bar
+    this.fitTopbar()
+    // A ResizeObserver on the bar itself is the primary width signal. It fires
+    // for every viewport change (matchMedia change events do not fire at all
+    // under CDP-driven viewport changes, and a phone ROTATING is exactly this
+    // path); the plain resize listener is belt and braces on top. fitTopbar
+    // is idempotent, so the overlap costs a few reads.
+    this.barRO?.disconnect()
+    this.barRO = new ResizeObserver(() => this.fitTopbar())
+    this.barRO.observe(bar)
+    window.addEventListener('resize', () => this.fitTopbar())
+    // The bar's CONTENT changes width too, at a constant viewport (avatars
+    // join, the update chip appears, the file chip fills in, the "Saved" tag
+    // flashes), and each of these used to clip the end of the bar. fitTopbar
+    // drops the records its own mutations queue, so this cannot loop.
+    this.barMO?.disconnect()
+    this.barMO = new MutationObserver(() => this.fitTopbar())
+    this.barMO.observe(bar, {
+      childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['style', 'hidden'],
+    })
 
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
@@ -571,11 +580,13 @@ export class Editor {
   } | null = null
 
   /**
-   * Fold the topbar into menus on a phone, and unfold it again on a wide
-   * window. REPARENTS the existing buttons rather than building phone copies:
-   * a duplicate would need its own listeners and would desync from live state
-   * (the dirty dot lives ON the save button; the comment button carries an
-   * armed class). Moving a node keeps all of that by construction.
+   * Fold the topbar into menus, and unfold it again when there is room.
+   * Driven by fitTopbar (every phone, plus any window where even the icon
+   * tier overflows). REPARENTS the existing buttons rather than building
+   * phone copies: a duplicate would need its own listeners and would desync
+   * from live state (the dirty dot lives ON the save button; the comment
+   * button carries an armed class). Moving a node keeps all of that by
+   * construction.
    */
   private applyPhoneChrome(on: boolean) {
     const p = this.phoneChrome
@@ -642,7 +653,59 @@ export class Editor {
   }
 
   private phoneChromeOn: boolean | null = null
-  private phoneQuery: MediaQueryList | null = null
+  private topbar: HTMLElement | null = null
+  private barRO: ResizeObserver | null = null
+  private barMO: MutationObserver | null = null
+
+  /**
+   * Size the topbar by MEASURING it, not by width breakpoints. Breakpoints
+   * in px were wrong here: browser zoom, OS text scaling, wider translations
+   * and live content (avatars, the update chip) all change how much room the
+   * same buttons need at the same viewport width, and each of those cases
+   * used to clip the end of the bar. Instead, start from the widest layout
+   * and step down a tier while the bar still overflows its own box. First
+   * ed-bar-compact hides the button labels, then ed-bar-tight drops the
+   * wordmark, then ed-bar-fold moves buttons into menus (applyPhoneChrome).
+   */
+  private fitTopbar() {
+    const bar = this.topbar
+    if (!bar || !bar.isConnected) return
+    const tiers = ['ed-bar-compact', 'ed-bar-tight', 'ed-bar-fold']
+    // Phones fold unconditionally. The 700px media query is also what turns
+    // the panels into overlay drawers, and the folded bar belongs with it.
+    if (window.innerWidth <= 700) {
+      bar.classList.add(...tiers)
+      this.applyPhoneChrome(true)
+      this.barMO?.takeRecords()
+      return
+    }
+    // Re-fitting starts by unfolding, which reparents buttons and would slam
+    // shut a dropdown the user is reading. Skip while one is open; the next
+    // resize or content change runs this again.
+    if (bar.querySelector('.ed-dropdown.open')) return
+    // scrollWidth counts content that sticks out of the padding box even with
+    // overflow visible, so "scrollWidth > clientWidth" IS the clipped-buttons
+    // condition (ed-root clips whatever leaks). The 1px slack absorbs
+    // subpixel rounding at fractional zoom levels.
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // The title input is the bar's only shrinkable item, so flexbox crushes
+    // it toward its 48px floor before anything overflows. Waiting for hard
+    // overflow would mean full button labels beside an unusable title, so
+    // step down while the title is squeezed badly, not only on true overflow.
+    const title = bar.querySelector<HTMLElement>('.ed-title')
+    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 120)
+    bar.classList.remove(...tiers)
+    this.applyPhoneChrome(false)
+    if (cramped()) bar.classList.add('ed-bar-compact')
+    if (cramped()) bar.classList.add('ed-bar-tight')
+    if (overflow()) {
+      bar.classList.add('ed-bar-fold')
+      this.applyPhoneChrome(true)
+    }
+    // the class flips and reparenting above queued mutation records of their
+    // own; drop them, or the observer re-runs this forever
+    this.barMO?.takeRecords()
+  }
 
   togglePanel(side: 'left' | 'right') {
     const el = side === 'left' ? this.sidebar : this.props
