@@ -911,3 +911,14 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   .sp-issue { box-shadow: none; }
   .sp-prop-val { background: none; }
 }
+
+/* Journal: the day strip above an entry's title. Quiet by default — it is
+   navigation, not content — and the date reads at the weight of a subtitle. */
+.sp-jnav { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.sp-jdate { font-size: 13px; color: var(--sp-dim); }
+.sp-jstep {
+  border: 0; background: none; cursor: pointer; color: var(--sp-dim);
+  font: inherit; font-size: 13px; line-height: 1; padding: 3px 6px; border-radius: 6px;
+}
+.sp-jstep:hover { background: var(--sp-hover); color: var(--sp-ink); }
+.sp-jtoday { margin-inline-start: 2px; }

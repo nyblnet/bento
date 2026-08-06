@@ -103,6 +103,19 @@ export interface Page {
   icon?: string
   /** flat, pre-order; nesting via Block.parent */
   blocks: Block[]
+  /**
+   * This page IS the daily entry for an ISO `YYYY-MM-DD` date.
+   *
+   * The DATE, not the title, is what makes a journal a journal — see
+   * src/journal.ts. Logseq derives the same thing from a formatted page title
+   * and their tracker carries the data loss that follows when the format
+   * changes; a title is display and this is data. Absent on every other page,
+   * so a build that predates journals renders an ordinary page and round-trips
+   * the field untouched.
+   */
+  journal?: string
+  /** the one page daily entries hang from, so the sidebar stays a tree */
+  journalHome?: boolean
   /** out of the sidebar, still searchable and linkable, and ENUMERATED at
    *  share time — an author archived a page precisely because it was sensitive */
   archived?: boolean

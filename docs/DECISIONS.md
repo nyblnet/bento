@@ -14,6 +14,44 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-06 — A journal entry is a page with a DATE on it, and the date is never the title
+
+**Decision.** `page.journal` holds an ISO `YYYY-MM-DD`. That field, not the
+page title, is what makes a page a daily entry. The title starts as the same
+ISO string and the author may rename it freely.
+
+**Why not Logseq's model.** Logseq derives a journal from its page title,
+formatted by `:journal/page-title-format`. Their own tracker carries the
+consequence — "Changing journal filename format causes blank journals and data
+loss" (logseq/logseq#4019) — because the moment the format changes, yesterday's
+journals stop being journals. A title is display; a date is data. Three things
+follow from separating them, and none are available to a title-derived design:
+the FILE is locale-neutral (a space written in Tokyo shows a Lisbon reader their
+own format, because the label is rendered through `Intl` at display time and
+never stored, per PLATFORM §8); search, grep and the Markdown export all see
+`2026-08-06`, which sorts and is unambiguous in every locale; and a build that
+predates journals renders an ordinary page and round-trips the field untouched.
+
+**Created on demand, never one page per day.** Logseq makes a journal page every
+day you open the app — on a filesystem that is a cheap empty file. A space is
+ONE file people mail to each other, so a page per unopened day is permanent
+weight for nothing.
+
+**Entries sort by DATE in `doc.pages`, not by creation.** Inserting each new
+entry after the Journal page gives reverse-creation order, which looks sorted
+until someone backfills yesterday. Found by looking at the sidebar in a browser
+after the node rig was already green.
+
+**The date arithmetic is the whole risk, and it fails on other people's
+machines.** `toISOString().slice(0,10)` is UTC, so "today" is the wrong day for
+hours at a time outside Greenwich; `+ 86_400_000` is not a day on the two DST
+boundaries each year; `new Date('2026-08-06')` is UTC midnight by spec. A
+digit-shaped non-date like `2026-13-99` must be REJECTED rather than formatted,
+because every Date-based formatter silently rolls it into some other real day.
+`scripts/test-spaces-journal.ts` runs in five timezones in CI, including
+Australia/Lord_Howe's half-hour DST offset — a date test that runs in one
+timezone has not been run.
+
 ## 2026-08-06 — One CRDT engine, two document shapes, and the shape is never on the wire
 
 **Decision.** `kernel/src/sync/crdt.ts` takes a `DocShape` at construction: two

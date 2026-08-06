@@ -20,8 +20,11 @@ import {
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
-import { t } from './i18n'
+import { t, locale } from './i18n'
 import { openAbout } from './about'
+import {
+  todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
+} from './journal'
 import { canWriteInPlace } from '../../kernel/src/save.ts'
 import { ICONS, type IconName } from './icons'
 import { internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, blobToDataUri } from './assets'
@@ -179,6 +182,7 @@ export class Editor {
       keep?: (b: HTMLButtonElement) => void
     }> = [
       { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
+      { icon: 'book', label: t("Today's journal"), hint: '⌘⇧J', run: () => this.openJournal() },
       { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
       { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
         run: () => this.makeIssue() },
@@ -500,7 +504,7 @@ export class Editor {
       const ico = el('span', 'sp-tree-ico')
       ico.innerHTML = pageIcon(page.icon)
       const label = document.createElement('span')
-      label.textContent = page.title || t('Untitled')
+      label.textContent = this.pageLabel(page)
       a.append(ico, label)
       a.draggable = true
       a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
@@ -551,7 +555,7 @@ export class Editor {
         const ico = el('span', 'sp-tree-ico')
         ico.innerHTML = pageIcon(page.icon)
         const label = document.createElement('span')
-        label.textContent = page.title || t('Untitled')
+        label.textContent = this.pageLabel(page)
         a.append(ico, label)
         a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
         const un = document.createElement('button')
@@ -594,6 +598,53 @@ export class Editor {
       if (parent) page.parent = parent
       else delete page.parent
     })
+  }
+
+  /**
+   * The reader's own name for a page.
+   *
+   * An entry stores its title as the ISO date — locale-neutral in the file, the
+   * same for every reader, and what search and the Markdown export see. The
+   * SIDEBAR shows it in the reader's own format, because "2026-08-06" is a key
+   * and "Thu 6 Aug" is a date. An entry the author has RENAMED keeps its name:
+   * the rename was the point.
+   */
+  pageLabel(page: { title: string; journal?: unknown }): string {
+    if (isJournal(page as never) && page.title === page.journal) {
+      return journalShort(String(page.journal), locale())
+    }
+    return page.title || t('Untitled')
+  }
+
+  /**
+   * Open a day's entry, creating it if this is the first note of the day.
+   *
+   * ONE COMMIT for the whole plan (the Journal page and the entry, when both
+   * are new), so ⌘Z takes back "I opened today's journal" in a single step
+   * rather than leaving a stray empty parent behind.
+   */
+  openJournal(iso = todayISO()): void {
+    const s = this.store
+    if (s.readOnly) return
+    const plan = planJournal(s.doc, iso)
+    if (plan.add.length) {
+      s.commit(() => {
+        for (const { page, after } of plan.add) {
+          const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
+          if (at >= 0) s.doc.pages.splice(at + 1, 0, page)
+          else s.doc.pages.push(page)
+        }
+      })
+    }
+    s.goToPage(plan.page.id)
+    this.status(journalLabel(iso, locale()))
+  }
+
+  /** The day before or after the entry in view. */
+  stepJournal(n: number): void {
+    const cur = this.store.page
+    if (!cur || !isJournal(cur)) return
+    this.openJournal(stepDay(String(cur.journal), n))
   }
 
   newPage(parent?: string): void {
@@ -639,6 +690,50 @@ export class Editor {
       pick.setAttribute('aria-label', t('Change this page\'s icon'))
       pick.addEventListener('click', () => this.openIconPicker(page.id, pick))
       inner.prepend(pick)
+    }
+
+    // A DAY HAS A DAY EITHER SIDE OF IT. Without this, reaching yesterday means
+    // finding it in the sidebar, which is the one navigation a journal should
+    // never need. The strip carries the reader's own long-form date because the
+    // title above it is the ISO key, and a date nobody can read at a glance is
+    // not much of a journal.
+    if (inner && isJournal(page)) {
+      const iso = String(page.journal)
+      const nav = el('div', 'sp-jnav')
+      const step = (n: number, glyph: string, title: string) => {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.className = 'sp-jstep'
+        b.textContent = glyph
+        b.title = title
+        b.setAttribute('aria-label', title)
+        b.addEventListener('click', () => this.stepJournal(n))
+        return b
+      }
+      nav.append(step(-1, '‹', t('The day before')), step(1, '›', t('The day after')))
+      if (iso !== todayISO()) {
+        const today = document.createElement('button')
+        today.type = 'button'
+        today.className = 'sp-jstep sp-jtoday'
+        today.textContent = t('Today')
+        today.addEventListener('click', () => this.openJournal())
+        nav.append(today)
+      }
+      inner.prepend(nav)
+
+      // THE HEADING READS AS A DATE, not as a key. The title is stored as the
+      // ISO string so the file is locale-neutral and sorts — but "2026-08-01"
+      // as a page's own H1 is a filename, not a day.
+      //
+      // Slides solves the same shape for dynamic fields by swapping the RAW
+      // token back while editing, and that is deliberately NOT copied here: a
+      // `{{page}}` token is something the author means to keep, whereas an ISO
+      // date is a key nobody wants to type. Someone renaming an entry starts
+      // from the date they can read and appends to it — which is the rename
+      // they were going to make anyway. The date itself lives in `journal` and
+      // is untouched by any of it, so a renamed entry is still that day's.
+      const h = inner.querySelector<HTMLElement>('[data-page-title]')
+      if (h && page.title === iso) h.textContent = journalLabel(iso, locale())
     }
 
     if (trail.length) {
@@ -1661,6 +1756,7 @@ export class Editor {
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
     // `[` collapses the page list, as in slides. Bare, not modified: it only
     // reaches here when nothing is being edited (the text path returns above,
     // where `[` is the page-link trigger).

@@ -89,6 +89,24 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   `[object Object]` and reported success. It now refuses, as does `newIssue` and
   `updatePage` for the same argument.
 
+- **Daily notes.** `⌘⇧J` opens today's journal — a page per day, made the first
+  time you write in it rather than one for every day you happen to open the
+  file. Arrows either side of the date walk to yesterday and tomorrow, and the
+  entries nest under a **Journal** page, newest first, however out of order you
+  wrote them.
+
+  An entry is an ordinary page, so it searches, links, back-links, prints and
+  exports like everything else — and you can rename one to "Monday — sprint
+  kickoff" without it ceasing to be that day's. The date, not the title, is
+  what makes it a journal. Logseq derives the same thing from a formatted page
+  title, and their tracker carries the data loss that follows when the format
+  changes.
+
+  The date is stored as `2026-08-06` and SHOWN in your own language and format —
+  Japanese readers see 2026年8月6日木曜日, German readers Donnerstag, 6. August
+  2026, from the same file. `bento.journal()` opens today's for an agent, and
+  `bento.journal('2026-08-06')` any day's.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

@@ -88,6 +88,7 @@ export function starterDoc(): SpacesDoc {
           b('bullet', '<a href="#p/sd-tracker">Tracker</a> — the same pages, on a board'),
           b('bullet', '<a href="#p/sd-limits">Sharing &amp; limits</a> — what this file can and cannot do'),
           b('p', 'The sidebar holds the whole tree. Drag a page onto another to nest it.'),
+          b('p', 'And <code>⌘⇧J</code> opens today\u2019s journal — a page per day, made when you first write in it.'),
         ],
       },
       {
