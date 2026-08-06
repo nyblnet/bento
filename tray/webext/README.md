@@ -130,13 +130,31 @@ declines. Correct, but it means the extension only covers `.bento.html` files.
 ## The matching problem
 
 A page gives us `/Users/…/Decks/Q3.bento.html`. A `FileSystemDirectoryHandle`
-knows its own **name** but not its path, and nothing in the API exposes one — so
-the two cannot be compared directly.
+knows its own **name** but not its path, so the grant and the sender cannot be
+compared directly. Resolution is two steps, and the second is the one that
+matters:
 
-`findByName` searches the granted tree (depth-limited) and requires **exactly one
-match**. Unambiguous in the ordinary case; when it is ambiguous it declines and
-the native picker takes over. Declining costs a prompt, guessing costs somebody's
-file.
+1. find files in the granted tree with the sender's file **name**, and require
+   exactly one — ambiguity is declined, never guessed at;
+2. ask the directory to **`resolve()`** that candidate, which returns its path
+   segments *relative to the grant*, and require the sender's own path to end
+   with them.
+
+**Step 1 alone was wrong, and shipped that way.** A name match is not an
+identity match. With the grant at `~/Documents` holding
+`~/Documents/Clients/Q3.bento.html`, opening a working copy at
+`~/Desktop/Q3.bento.html` produced exactly one hit — the sender's own copy is
+outside the grant, so it is not a second hit and the ambiguity guard cannot
+fire. A save then wrote the Desktop document over the Clients one and never
+wrote the file being edited. No attacker required.
+
+**Residual, stated plainly because the API cannot close it.** Nothing exposes
+the grant's absolute path, so step 2 verifies a relative *suffix*, not a full
+path. A page deliberately placed at `<somewhere-else>/Clients/Q3.bento.html`
+still matches a grant containing `Clients/Q3.bento.html`. That is far narrower
+than a bare filename — it requires reproducing the victim's folder structure —
+but it is not nothing, and it is why the content-script match stays limited
+rather than covering every local HTML file.
 
 ## Trying it
 
