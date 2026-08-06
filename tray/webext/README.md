@@ -99,7 +99,12 @@ you choose*, so they fall through to the native picker untouched.
 | `src/page-bridge.js` | MAIN | overrides `showSaveFilePicker`; decides in-place vs native |
 | `src/relay.js` | ISOLATED | pure relay, no logic — the two worlds cannot reach each other |
 | `src/background.js` | service worker | holds the grant; matches the file; writes |
+| `src/status.js` | shared | the two preconditions, read by both surfaces below |
+| `src/popup.html/js` | toolbar | says whether a save will land, before one is attempted |
 | `src/options.html/js` | extension page | where the folder is granted (needs a gesture) |
+
+The popup and the options page read the same `status.js`, so they cannot tell
+the user different stories about whether the next ⌘S will prompt.
 
 Both content-script halves are required: an isolated world can talk to the
 extension but not touch page globals; a MAIN world can define
