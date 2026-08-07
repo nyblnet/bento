@@ -2496,13 +2496,21 @@ export class Editor {
   }
 
   private savedTimer = 0
+  private savedHideTimer = 0
   private flashSaved(message = t('Saved')) {
     let tag = document.querySelector<HTMLElement>('.ed-autosaved')
     if (!tag) { tag = div('ed-autosaved'); document.querySelector('.ed-topbar .ed-title')?.after(tag) }
     tag.textContent = message
+    // hidden while idle: at opacity 0 the tag still held its width, so after
+    // the first backup the title permanently lost the space this text needs
+    tag.hidden = false
+    void tag.offsetWidth // paint a frame at opacity 0 so the fade-in runs
     tag.classList.add('show')
     clearTimeout(this.savedTimer)
+    clearTimeout(this.savedHideTimer)
     this.savedTimer = window.setTimeout(() => tag!.classList.remove('show'), 1400)
+    // leave layout only after the 0.25s fade-out has finished
+    this.savedHideTimer = window.setTimeout(() => { tag!.hidden = true }, 1700)
   }
 
   async save(forcePicker: boolean) {
