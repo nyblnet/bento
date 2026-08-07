@@ -14,7 +14,8 @@
     "moveable": "^0.53.0",
     "reveal.js": "^5.2.1",
     "selecto": "^1.26.3",
-    "temml": "^0.13.3"
+    "temml": "^0.13.3",
+    "shiki": "4.3.1"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
