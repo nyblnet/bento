@@ -183,6 +183,8 @@ export class OnlineTransport implements Transport {
   readonly kind = 'online'
   status: OnlineStatus = 'connecting'
   onStatus: ((s: OnlineStatus) => void) | null = null
+  /** Optional hook for unrecognized control frames (e.g. broadcast presence). */
+  onCtl: ((env: Record<string, unknown>) => void) | null = null
   private ws: WebSocket | null = null
   private key: CryptoKey | null = null
   /** writer signing key — null for readers (they can decrypt but not author). */
@@ -517,6 +519,12 @@ export class OnlineTransport implements Transport {
       }
       return
     }
+    // Pass through control frames the transport doesn't recognise so callers
+    // (e.g. the broadcast presenter) can react to new relay messages without
+    // us having to know them in advance.
+    if (env.ctl && this.onCtl) {
+      this.onCtl(env as Record<string, unknown>)
+    }
     if (!env.i || !env.d || !this.key) return
     let payload: unknown
     try {
@@ -617,6 +625,320 @@ export class OnlineTransport implements Transport {
     this.ws.send(JSON.stringify({ ctl: 'revoke', p: pub, o: ownerPub, g }))
     return true
   }
+
+  /** Send a signed broadcast nav frame over this open transport. Used when the
+   *  collab socket is reused as the broadcast owner socket. */
+  async sendNav(signerPriv: string, n: number): Promise<boolean> {
+    return sendNav(this.ws, signerPriv, n)
+  }
+
+  /** Send a signed broadcast laser frame over this open transport. */
+  async sendLaser(signerPriv: string, p: string | null): Promise<boolean> {
+    return sendLaser(this.ws, signerPriv, p)
+  }
+
+  /** Send a signed broadcast black-screen frame over this open transport. */
+  async sendBlack(signerPriv: string, on: boolean): Promise<boolean> {
+    return sendBlack(this.ws, signerPriv, on)
+  }
+}
+
+// --- live slide broadcast ---------------------------------------------------
+
+export type BroadcastCreds = {
+  /** Full WebSocket URL the broadcast socket connects to, e.g. wss://host/d/w<commit>. */
+  room: string
+  /** Room name extracted from the URL, e.g. w<commit>. */
+  roomName: string
+  /** Possession-proof token derived from the room key. */
+  tok: string
+  /** Relay origin used to build viewer links (respects bento-sync-url override). */
+  relay: string
+  /** Public key this socket authenticates with (owner-bound `?w=`). */
+  signerPub: string
+  /** Private key that signs nav frames (`nav.${n}`). */
+  signerPriv: string
+  /** True when the local copy is the owner of the broadcast room. */
+  isOwner: boolean
+}
+
+export type BroadcastHandlers = {
+  onNav?: (n: number) => void
+  onPresence?: (n: number) => void
+  onState?: (s: BroadcastSocketState) => void
+  onLaser?: (p: string | null) => void
+  onBlack?: (on: boolean) => void
+}
+
+export type BroadcastSocketState = 'connecting' | 'open' | 'closed'
+
+/**
+ * Lightweight read-only (optionally owner-bound) WebSocket for live slide
+ * broadcast. Reuses the same backoff + heartbeat constants as OnlineTransport.
+ * Ignores everything except `{ctl:'nav'}` and `{ctl:'presence'}` frames, so it
+ * safely replays ciphertext noise from case-1 collab rooms.
+ */
+export class BroadcastSocket {
+  private ws: WebSocket | null = null
+  private closed = false
+  private backoff = 800
+  private pingTimer: ReturnType<typeof setInterval> | null = null
+  private awaitingPong = false
+  private static readonly PING_MS = 25_000
+
+  constructor(
+    private room: string,
+    private tok: string,
+    private handlers: BroadcastHandlers,
+    /** When provided, the socket authenticates as the room owner (?w=pub) and
+     *  can send signed nav frames. When omitted, it is a read-only viewer socket. */
+    private pub?: string,
+  ) {}
+
+  get state(): BroadcastSocketState {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return 'open'
+    if (this.closed) return 'closed'
+    return 'connecting'
+  }
+
+  connect() {
+    if (this.closed) return
+    this.setState('connecting')
+    let ws: WebSocket
+    try {
+      const url = this.pub
+        ? `${this.room}?tok=${this.tok}&w=${this.pub}&since=0`
+        : `${this.room}?tok=${this.tok}&since=0`
+      ws = new WebSocket(url)
+    } catch {
+      this.retry()
+      return
+    }
+    this.ws = ws
+    ws.onopen = () => {
+      this.backoff = 800
+      this.setState('open')
+      this.startHeartbeat(ws)
+    }
+    ws.onmessage = (ev) => {
+      const data = String(ev.data)
+      if (data === 'pong') { this.awaitingPong = false; return }
+      this.onMessage(data).catch(() => {})
+    }
+    const drop = () => {
+      if (this.ws !== ws) return
+      this.stopHeartbeat()
+      this.ws = null
+      this.setState('closed')
+      this.retry()
+    }
+    ws.onclose = drop
+    ws.onerror = drop
+  }
+
+  private setState(s: BroadcastSocketState) {
+    this.handlers.onState?.(s)
+  }
+
+  private startHeartbeat(ws: WebSocket) {
+    this.stopHeartbeat()
+    this.awaitingPong = false
+    this.pingTimer = setInterval(() => {
+      if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) return
+      if (this.awaitingPong) {
+        // no pong since the last ping → the socket is dead (half-open); force a
+        // close so onclose fires and we reconnect, rather than hanging silently.
+        try { ws.close() } catch { /* already gone */ }
+        return
+      }
+      this.awaitingPong = true
+      try { ws.send('ping') } catch { /* send failed → onclose will handle it */ }
+    }, BroadcastSocket.PING_MS)
+  }
+
+  private stopHeartbeat() {
+    if (this.pingTimer) { clearInterval(this.pingTimer); this.pingTimer = null }
+    this.awaitingPong = false
+  }
+
+  private retry() {
+    if (this.closed) return
+    setTimeout(() => this.connect(), this.backoff)
+    this.backoff = Math.min(this.backoff * 1.8, 30000)
+  }
+
+  private async onMessage(text: string) {
+    let env: { ctl?: string; n?: number } & Record<string, unknown>
+    try {
+      env = JSON.parse(text)
+    } catch {
+      return
+    }
+    if (env.ctl === 'nav' && Number.isInteger(env.n) && env.n! > 0) {
+      this.handlers.onNav?.(env.n as number)
+      return
+    }
+    if (env.ctl === 'presence' && Number.isInteger(env.n) && env.n! >= 0) {
+      this.handlers.onPresence?.(env.n as number)
+      return
+    }
+    if (env.ctl === 'laser') {
+      if (env.off === 1) { this.handlers.onLaser?.(null); return }
+      if (typeof env.p === 'string') { this.handlers.onLaser?.(env.p); return }
+    }
+    if (env.ctl === 'black' && (env.on === 1 || env.on === 0)) {
+      this.handlers.onBlack?.(env.on === 1)
+      return
+    }
+    // Deliberately ignore everything else: collab ciphertext, unknown ctl frames.
+  }
+
+  /** Sign and send a nav frame over this socket. */
+  async sendNav(priv: string, n: number): Promise<boolean> {
+    return sendNav(this.ws, priv, n)
+  }
+
+  /** Sign and send a laser frame over this socket. */
+  async sendLaser(priv: string, p: string | null): Promise<boolean> {
+    return sendLaser(this.ws, priv, p)
+  }
+
+  /** Sign and send a black-screen frame over this socket. */
+  async sendBlack(priv: string, on: boolean): Promise<boolean> {
+    return sendBlack(this.ws, priv, on)
+  }
+
+  close() {
+    this.closed = true
+    this.stopHeartbeat()
+    this.ws?.close()
+    this.ws = null
+  }
+
+  destroy() {
+    this.close()
+    this.handlers = {}
+  }
+}
+
+/** Sign and send a nav frame over any open WebSocket. */
+export async function sendNav(ws: WebSocket | null, signerPriv: string, n: number): Promise<boolean> {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false
+  const g = await signText(signerPriv, `nav.${n}`)
+  ws.send(JSON.stringify({ ctl: 'nav', n, g }))
+  return true
+}
+
+/** Sign and send a laser frame over any open WebSocket. */
+export async function sendLaser(ws: WebSocket | null, signerPriv: string, p: string | null): Promise<boolean> {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false
+  if (p === null) {
+    const g = await signText(signerPriv, 'laser.off')
+    ws.send(JSON.stringify({ ctl: 'laser', off: 1, g }))
+  } else {
+    const g = await signText(signerPriv, 'laser.' + p)
+    ws.send(JSON.stringify({ ctl: 'laser', p, g }))
+  }
+  return true
+}
+
+/** Sign and send a black-screen frame over any open WebSocket. */
+export async function sendBlack(ws: WebSocket | null, signerPriv: string, on: boolean): Promise<boolean> {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false
+  const g = await signText(signerPriv, 'black.' + (on ? 'on' : 'off'))
+  ws.send(JSON.stringify({ ctl: 'black', on: on ? 1 : 0, g }))
+  return true
+}
+
+/** Full URL a broadcast copy connects to. */
+export function viewerUrl(roomName: string, tok: string, relay: string): string {
+  return `${relay}/d/${roomName}?tok=${tok}`
+}
+
+/** Full connection URL for a set of broadcast credentials. */
+export function broadcastLink(creds: BroadcastCreds): string {
+  return viewerUrl(creds.roomName, creds.tok, creds.relay)
+}
+
+/** Extract the room name (e.g. w<commit>) from a full relay WebSocket URL. */
+function roomNameFromUrl(roomUrl: string): string {
+  try {
+    return new URL(roomUrl.replace(/^ws/, 'http')).pathname.replace(/^\/d\//, '')
+  } catch {
+    return ''
+  }
+}
+
+/** Relay origin a room URL lives on (ws://host or wss://host). */
+function relayFromUrl(roomUrl: string): string {
+  try {
+    return new URL(roomUrl.replace(/^ws/, 'http')).origin.replace(/^http/, 'ws')
+  } catch {
+    return syncHost()
+  }
+}
+
+/**
+ * Resolve broadcast credentials for a document.
+ *
+ * Case 1: the deck already has a signed collab room and this copy holds the
+ * owner key (v2 `ownerPriv` or legacy `writerPriv`). Reuses that room and the
+ * token derived from `collab.key`.
+ *
+ * Case 2: everything else. Reads/caches a broadcast-only owner keypair in
+ * localStorage under `bento-broadcast-<docId>`. Per-machine by design — the
+ * private key never leaves the device.
+ */
+export async function resolveBroadcastCreds(doc: BentoDoc, docId: string): Promise<BroadcastCreds> {
+  const c = doc.collab
+  // Case 1 reuses an EXISTING room — the copy must point at the relay that
+  // room lives on, not the builder's current syncHost() (they can differ when
+  // a deck's room was minted on a local/override relay). Case 2 mints on
+  // syncHost(), so that stays the fallback.
+  const relay = c?.room ? relayFromUrl(c.room) : syncHost()
+  // Case 1: owner-signing copy of a signed room.
+  if (c?.room && c.key && ((c.v === 2 && c.ownerPriv) || c.writerPriv)) {
+    const raw = b64u.dec(c.key)
+    const tokDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', raw as BufferSource))
+    const tok = b64u.enc(tokDigest.slice(0, 18))
+    const signerPub = (c.v === 2 && c.owner) ? c.owner : c.writerPub!
+    return {
+      room: c.room,
+      roomName: roomNameFromUrl(c.room),
+      tok,
+      relay,
+      signerPub,
+      signerPriv: (c.v === 2 && c.ownerPriv) ? c.ownerPriv : c.writerPriv!,
+      isOwner: true,
+    }
+  }
+  // Case 2: mint/cache a device-local broadcast-only owner keypair.
+  const k = `bento-broadcast-${docId}`
+  let saved: { pub: string; priv: string; room: string; tok: string } | null = null
+  try {
+    const raw = lsGet(k)
+    if (raw) saved = JSON.parse(raw)
+  } catch { /* storage unavailable → mint ephemeral */ }
+  if (!saved) {
+    const id = await mintKeypair()
+    const commit = new Uint8Array(await crypto.subtle.digest('SHA-256', b64u.dec(id.pub) as BufferSource))
+    const room = `${syncHost()}/d/w${b64u.enc(commit)}`
+    const key = mintRoomKey()
+    const rawKey = b64u.dec(key)
+    const tokDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', rawKey as BufferSource))
+    const tok = b64u.enc(tokDigest.slice(0, 18))
+    saved = { pub: id.pub, priv: id.priv, room, tok }
+    try { lsSet(k, JSON.stringify(saved)) } catch { /* storage unavailable */ }
+  }
+  return {
+    room: saved.room,
+    roomName: roomNameFromUrl(saved.room),
+    tok: saved.tok,
+    relay,
+    signerPub: saved.pub,
+    signerPriv: saved.priv,
+    isOwner: true,
+  }
 }
 
 // --- share/join glue --------------------------------------------------------
@@ -685,6 +1007,9 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
 export async function startSharing(session: SyncSession, store: Store): Promise<OnlineTransport | null> {
   if (offlineEnabled()) return null
   if (active) return active
+  // a broadcast copy carries no room/key and must never become a live-collab
+  // session (old shells that ignore collab.broadcast boot it as a normal deck)
+  if (store.doc.collab?.broadcast) return null
   if (!store.doc.collab) {
     const creds = await mintCollab()
     store.commit(() => { store.doc.collab = creds })
