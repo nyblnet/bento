@@ -38,6 +38,7 @@ export const ICONS = {
   lock: svg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11 V8 a4 4 0 0 1 8 0 v3"/>'),
   key: svg('<circle cx="8" cy="16" r="4"/><path d="M11 13 L20 4"/><path d="M15 9 l3 3"/>'),
   live: svg('<circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><path d="M7.5 16.5 a6.4 6.4 0 0 1 0-9"/><path d="M16.5 7.5 a6.4 6.4 0 0 1 0 9"/><path d="M5 19 a10 10 0 0 1 0-14"/><path d="M19 5 a10 10 0 0 1 0 14"/>'),
+  broadcast: svg('<path d="M12 20V4"/><path d="M4.5 8.5a11 11 0 0 1 15 0"/><path d="M7.5 12.5a7 7 0 0 1 9 0"/><circle cx="12" cy="20" r="2" fill="currentColor" stroke="none"/>'),
   stop: svg('<rect x="7" y="7" width="10" height="10" rx="1.5"/>'),
   globe: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12 h18"/><ellipse cx="12" cy="12" rx="4.2" ry="9"/>'),
   code: svg('<polyline points="8 6 4 12 8 18"/><polyline points="16 6 20 12 16 18"/>'),

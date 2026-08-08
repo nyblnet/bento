@@ -27,7 +27,7 @@ import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, is
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
-import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, resolveBroadcastCreds, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 const i18nT = t
@@ -810,6 +810,23 @@ export class Editor {
     }
   }
 
+  /** A live broadcast hand-out: opens straight into the show and follows the
+   *  presenter's slide changes in real time. Carries only the broadcast room,
+   *  token and relay — no owner key, no symmetric key, no CRDT state. */
+  private async saveBroadcastCopy() {
+    const creds = await resolveBroadcastCreds(this.store.doc, this.store.doc.docId)
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    clone.docId = newDocId()
+    delete clone.readonly
+    clone.collab = { on: false, broadcast: { room: creds.roomName, tok: creds.tok, relay: creds.relay } }
+    try {
+      const ok = await writeUpdatedFileAs(serializeFile(clone), clone, { suffix: 'broadcast', keepHandle: false })
+      if (ok) this.toast(t('Broadcast copy saved — viewers open it and their slides follow yours'))
+    } catch {
+      this.toast(t('Saving failed'))
+    }
+  }
+
   /** A live viewer: follows the shared session read-only. Keeps the room + read
    *  key + writer PUBKEY (so the relay knows the room's writer) but drops the
    *  writer PRIVATE key — the relay then rejects any op it tries to send. */
@@ -1166,6 +1183,8 @@ export class Editor {
         t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
       action(ICONS.slideshow, t('Present-only file…'), false, () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
+      action(ICONS.broadcast, t('Broadcast copy…'), false, () => void this.saveBroadcastCopy(),
+        t('A live broadcast hand-out — opens into the show and follows your slides in real time.'))
       action(ICONS.template, t('Template…'), false, () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
     } else {

@@ -432,10 +432,17 @@ export interface BentoDoc {
    * fork and merge both ways. Never transmitted as sync ops.
    */
   collab?: {
-    room: string
-    key: string
+    room?: string
+    key?: string
     on?: boolean
     sync?: import('./sync/crdt').SyncStateJSON
+    /**
+     * Live slide broadcast credentials: a read-only copy that boots straight
+     * into present-follow mode. Old shells ignore this field. The copy carries
+     * only the room name, connect token, and relay origin — no signing key, no
+     * symmetric key, no CRDT state.
+     */
+    broadcast?: { room: string; tok: string; relay: string }
     /**
      * Signed writes (v0.9.18+): the WRITE capability is an ECDSA P-256 keypair,
      * distinct from the symmetric `key` (the READ capability). `writerPub`
