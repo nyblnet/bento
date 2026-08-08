@@ -1,0 +1,28 @@
+# bento platform Worker — Cloudflare Workers Builds config.
+#
+# This file exists ONLY so an automated `wrangler deploy` (run by Workers
+# Builds on every push — see platform/README.md "Automatic deploys") knows
+# the entry point and which PRE-EXISTING R2 bucket / D1 database to attach.
+# It does not create those resources — create the bucket and the database by
+# hand in the CF dashboard first (same as always), then fill their real
+# names/id in below and commit. This mirrors the existing convention in
+# server/sync-worker/wrangler.toml and server/guestbook-daemon/wrangler.toml:
+# bindings are plain config (not secret), API keys/tokens are not — those
+# stay out of this file and are set with `wrangler secret put` if ever needed.
+#
+# The manual "paste dist/worker.js into Quick Edit" path (platform/README.md)
+# still works and does not read this file at all — it's a separate, simpler
+# deploy mechanism for ad hoc use, kept as a fallback.
+
+name = "bento-platform"
+main = "src/index.ts"
+compatibility_date = "2026-08-08"
+
+[[r2_buckets]]
+binding = "DOCS"
+bucket_name = "REPLACE_WITH_YOUR_R2_BUCKET_NAME"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "REPLACE_WITH_YOUR_D1_DATABASE_NAME"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

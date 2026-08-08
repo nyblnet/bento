@@ -14,6 +14,46 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-08 — `platform/` gets a wrangler.toml after all — for automated deploys, not for creating resources
+
+**Supersedes** the "No wrangler.toml, by explicit choice" paragraph in the
+entry directly below (same day — the plan changed within the same session,
+not later). Manual Quick Edit paste still exists and still works; it's
+demoted to a documented fallback.
+
+**Decision.** `platform/worker/wrangler.toml` is committed, and Cloudflare
+Workers Builds is connected to this repo so `wrangler deploy` runs
+automatically on every push. The file declares `name`/`main`/
+`compatibility_date` plus `[[r2_buckets]]`/`[[d1_databases]]` blocks that
+point at a bucket/database by name/id.
+
+**Why the reversal.** The original "no wrangler.toml" choice was aimed at one
+thing: don't let a CLI/config file create or own the R2 bucket and D1
+database — those stay dashboard-created, by hand, always. But conflating
+that with "no config file at all" also blocked automated builds, since
+`wrangler deploy` (what Workers Builds runs) cannot bundle+deploy without
+*some* config naming an entry point. The distinction that actually mattered
+was never "no wrangler.toml" — it was "wrangler never provisions a
+resource." A `wrangler.toml` that only *points at* an already-existing
+bucket/database (by name/id, not by creating one) satisfies that without
+giving up automatic deploys.
+
+**Precedent already in this repo.** `server/sync-worker/wrangler.toml` and
+`server/guestbook-daemon/wrangler.toml` already commit real bucket/KV/DO
+names in plaintext — this isn't a new pattern, just one `platform/` hadn't
+adopted yet. Binding names/ids are config, not secrets; anything actually
+secret is set with `wrangler secret put` and never enters the file.
+
+**What Workers Builds actually runs.** Root directory `platform/worker`;
+build command `node ci-build.mjs` (builds `slides/` fresh, then
+`platform/build/split-shell.mjs` — the same generated
+`src/generated/shell.ts` the manual path needs); deploy command the default
+`npx wrangler deploy`, which bundles `src/index.ts` with its **own** bundler
+— `platform/worker/build.mjs`'s esbuild bundle (→ `dist/worker.js`) is a
+second, independent bundling path kept only for the manual-paste fallback,
+not reused here. Verified locally: `npx wrangler deploy --dry-run` against
+placeholder binding values bundles cleanly and resolves both bindings.
+
 ## 2026-08-08 — A new `platform/` zone: hosting decks behind a Worker, no wrangler.toml
 
 **Decision.** `platform/` is a new ownership zone (`docs/PARALLEL-WORK.md` §1):
