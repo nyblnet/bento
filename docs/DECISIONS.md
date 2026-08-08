@@ -14,6 +14,46 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-08 — A new `platform/` zone: hosting decks behind a Worker, no wrangler.toml
+
+**Decision.** `platform/` is a new ownership zone (`docs/PARALLEL-WORK.md` §1):
+a Cloudflare Worker + R2 + D1 that stores `bento/slides` doc JSON and serves
+it spliced into a built shell — `GET /d/:id` returns a real, editable
+`.bento.html` page. It only ever *consumes* a built `slides/` shell as an
+artifact; it must never edit `slides/`, `kernel/`, or `server/`.
+
+**No wrangler.toml, by explicit choice.** Deployment is manual through the CF
+dashboard (Quick Edit paste of a bundled `dist/worker.js`, bindings added by
+hand, D1 schema run via the dashboard Console tab) — not `wrangler deploy`.
+Anyone extending this Worker should keep it deployable that way rather than
+reaching for wrangler config as the path of least resistance.
+
+**Splicing is string concatenation against a build-time split, not a
+per-request DOM operation.** `kernel/src/save.ts`'s splice (clone → swap
+`#bento-doc` block → `outerHTML`) needs a live DOM, which a Worker doesn't
+have. `platform/build/split-shell.mjs` splits a built shell into
+`SHELL_HEAD`/`SHELL_TAIL` once; the Worker serves `HEAD + escape(json) +
+TAIL`. The `<` → `<` escape is copied verbatim from `save.ts`'s
+`serializeBody`, and `platform/worker/test/splice.test.mjs` re-derives
+`scripts/shell-gate.mjs`'s adversarial-payload invariants against this split
+shape specifically — that test must keep passing if either escape rule
+changes.
+
+**svg elements are rejected on ingest, not sanitized.** Text/table `html`
+already gets a strict tag/attribute allowlist at render time
+(`slides/src/render.ts` `sanitizeHtml`) regardless of what's stored, so the
+platform doesn't need to re-defend that path. Raw `svg` markup has no such
+allowlist anywhere in the renderer, and a real sanitizer for arbitrary SVG is
+enough work that a half-built version would be worse than an honest refusal.
+Revisit if/when a Workers-`HTMLRewriter`-based SVG sanitizer lands.
+
+**Scope of this PR is the backend spine only**: create → store → view →
+present (`#present` — existing shell behavior, untouched) → download. The
+outline-schema compiler (chat-AI structured output → good Bento) and the
+paste/review/placeholder-upload UI are follow-up PRs; `POST /api/decks`
+accepts a complete doc JSON directly for now. Full rationale and the
+deferred-items list: `platform/README.md` "Known gaps".
+
 ## 2026-08-06 — One CRDT engine, two document shapes, and the shape is never on the wire
 
 **Decision.** `kernel/src/sync/crdt.ts` takes a `DocShape` at construction: two
