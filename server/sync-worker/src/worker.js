@@ -40,7 +40,10 @@ const IDLE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 // constant and cannot be: it needs chunked ops or content-addressed blobs
 // (docs/relay-design.md, "Wire efficiency").
 const MAX_FRAME = 1_900_000
-const RATE_BURST = 200 // frames per window per socket
+// 400 fits a 30fps broadcast laser stroke (300 frames/10s) with nav headroom;
+// the count limiter is an abuse guard, not a precision meter — laser control
+// frames are ~60 bytes, so the byte budget is the real cap for those.
+const RATE_BURST = 400 // frames per window per socket
 const RATE_WINDOW_MS = 10_000
 // Bytes a single socket may persist per window. Frame COUNT alone is not a
 // budget when a single frame can approach 2 MB.
@@ -378,6 +381,7 @@ export class Room {
     server.serializeAttachment({ count: 0, windowStart: Date.now(), signed, w: sockW })
 
     await this.replay(server, since)
+    await this.broadcastPresence()
     await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
     return new Response(null, { status: 101, webSocket: client })
   }
@@ -387,15 +391,25 @@ export class Room {
     await this.onMessage(ws, data).catch(() => {})
   }
   webSocketClose(ws) {
+    try { this.broadcastPresence(ws) } catch { /* display-only */ }
     try { ws.close() } catch { /* already closed */ }
   }
-  webSocketError() { /* the runtime drops the socket; nothing to clean up */ }
+  webSocketError(ws) {
+    try { this.broadcastPresence(ws) } catch { /* display-only */ }
+  }
 
   async replay(ws, since) {
-    const seq = (await this.state.storage.get('seq')) || 0
-    const snap = await this.state.storage.get('snap')
     let from = since
     try {
+      // lastNav is the FIRST await: a live nav fanned out mid-replay can only
+      // interleave at a later await, so the joiner always gets the stored
+      // value before any live one.
+      const lastNav = await this.state.storage.get('lastNav')
+      if (Number.isInteger(lastNav)) ws.send(JSON.stringify({ ctl: 'nav', n: lastNav }))
+      const lastBlack = await this.state.storage.get('lastBlack')
+      if (lastBlack === 1) ws.send(JSON.stringify({ ctl: 'black', on: 1 }))
+      const seq = (await this.state.storage.get('seq')) || 0
+      const snap = await this.state.storage.get('snap')
       if (snap && (since === 0 || snap.q >= since)) {
         ws.send(JSON.stringify({ snap: 1, q: snap.q, i: snap.i, d: snap.d }))
         from = snap.q
@@ -413,6 +427,19 @@ export class Room {
     } catch {
       /* socket died mid-replay */
     }
+  }
+
+  async broadcastPresence(skipWs) {
+    const name = (await this.state.storage.get('name')) || ''
+    let viewers = 0
+    for (const s of this.state.getWebSockets()) {
+      if (s === skipWs) continue
+      const m = s.deserializeAttachment() || {}
+      if (m.signed && m.w && 'w' + (await sha256b64u(b64uDec(m.w))) === name) continue
+      viewers++
+    }
+    const note = JSON.stringify({ ctl: 'presence', n: viewers })
+    for (const s of this.state.getWebSockets()) { try { s.send(note) } catch { /* gone */ } }
   }
 
   async onMessage(ws, data) {
@@ -462,6 +489,74 @@ export class Room {
         try { peer.send(note) } catch { /* gone */ }
         if (m.w === f.p) { try { peer.close(1008, 'revoked') } catch { /* gone */ } }
       }
+      return
+    }
+    if (f.ctl === 'nav' && Number.isInteger(f.n) && f.n > 0 && f.n < 1e6 && typeof f.g === 'string') {
+      const meta = ws.deserializeAttachment() || {}
+      // owner-bound socket only: the socket's pinned key must BE the room's
+      // committed owner key (a member/chain socket's key never hash-matches).
+      if (!meta.signed || !meta.w) return
+      const name = (await this.state.storage.get('name')) || ''
+      if ('w' + (await sha256b64u(b64uDec(meta.w))) !== name) return
+      if (!(await this.verifyWith(meta.w, f.g, `nav.${f.n}`))) return
+      await this.state.storage.put('lastNav', f.n)
+      const note = JSON.stringify({ ctl: 'nav', n: f.n })
+      for (const peer of this.state.getWebSockets()) {
+        if (peer === ws) continue
+        try { peer.send(note) } catch { /* gone */ }
+      }
+      // re-push presence: the presenter's first nav (sent at arm time) is the
+      // signal that a show started — viewers who connected before the arm
+      // would otherwise never reach the presenter's badge (connect/close
+      // pushes already happened)
+      await this.broadcastPresence()
+      await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
+      return
+    }
+    if (f.ctl === 'laser' && typeof f.g === 'string') {
+      const meta = ws.deserializeAttachment() || {}
+      if (!meta.signed || !meta.w) return
+      const name = (await this.state.storage.get('name')) || ''
+      if ('w' + (await sha256b64u(b64uDec(meta.w))) !== name) return
+      let sigText
+      if (f.off === 1) {
+        sigText = 'laser.off'
+      } else if (
+        typeof f.p === 'string' &&
+        /^[0-9.,]{3,32}$/.test(f.p) &&
+        f.p.indexOf(',') > 0 &&
+        f.p.indexOf(',') === f.p.lastIndexOf(',')
+      ) {
+        sigText = 'laser.' + f.p
+      } else {
+        return
+      }
+      if (!(await this.verifyWith(meta.w, f.g, sigText))) return
+      const note = f.off === 1
+        ? JSON.stringify({ ctl: 'laser', off: 1 })
+        : JSON.stringify({ ctl: 'laser', p: f.p })
+      for (const peer of this.state.getWebSockets()) {
+        if (peer === ws) continue
+        try { peer.send(note) } catch { /* gone */ }
+      }
+      await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
+      return
+    }
+    if (f.ctl === 'black' && (f.on === 1 || f.on === 0) && typeof f.g === 'string') {
+      const meta = ws.deserializeAttachment() || {}
+      if (!meta.signed || !meta.w) return
+      const name = (await this.state.storage.get('name')) || ''
+      if ('w' + (await sha256b64u(b64uDec(meta.w))) !== name) return
+      const on = f.on === 1
+      const sigText = 'black.' + (on ? 'on' : 'off')
+      if (!(await this.verifyWith(meta.w, f.g, sigText))) return
+      await this.state.storage.put('lastBlack', on ? 1 : 0)
+      const note = JSON.stringify({ ctl: 'black', on: f.on })
+      for (const peer of this.state.getWebSockets()) {
+        if (peer === ws) continue
+        try { peer.send(note) } catch { /* gone */ }
+      }
+      await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
       return
     }
     if (typeof f.i !== 'string' || typeof f.d !== 'string') return
