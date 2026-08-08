@@ -2141,3 +2141,33 @@ too, at the single point where it returns.
 payload 72KB → 79KB). Most of it is the finding messages, which are the
 product: a code with no explanation is not actionable. Anyone tempted to shrink
 this should shorten prose, not drop checks.
+
+## 2026-08-08 — Broadcast channel grows laser + black-screen control frames
+
+**Decision.** The live-broadcast control channel (previously one frame type:
+owner-signed `{ctl:'nav',n,g}`) now also carries `{ctl:'laser',p,g}` /
+`{ctl:'laser',off:1,g}` (slide-fraction point `p='x,y'` at ≤10fps, sig over
+`laser.${p}` / `laser.off`) and `{ctl:'black',on:1|0,g}` (sig over
+`black.on`/`black.off`, persisted as `lastBlack` and replayed to late joiners,
+unlike laser which is transient by design). The presenter's laser became
+hold-to-draw (L arms, pointer-down draws) so the channel stays event-shaped:
+silence between strokes, ~100 frames per 10s stroke — inside the relay's
+per-socket rate budget (RATE_BURST 200/10s) with nav headroom. The relay
+changes are backward-compatible: old copies ignore unknown ctl frames, and the
+new blocks return before the collab path. Details: docs/broadcast-plan.md,
+server/sync-worker/src/worker.js, slides/src/present.ts.
+
+## 2026-08-09 — Broadcast copies can be re-pointed at another broadcaster (?b=)
+
+**Decision.** A broadcast copy is bound to the exporter's room (its embedded
+`{room,tok,relay}`), and the relay's per-room trust-on-first-use token means
+the room alone is not a capability — the token must come along. When the
+exporter can't present (e.g. a collaborator exported the client copy and the
+owner takes over), the copy now accepts `?b=<viewer url>` on its own URL:
+everything after `?b=` is the owner's broadcast link (relay + room + tok),
+parsed in `broadcastMode` (slides/src/main.ts) and overriding the embedded
+creds. The copy stays a passive viewer — it still carries no signing key, so
+re-pointing grants view access only, exactly the trust of sharing the
+broadcast link itself. Malformed overrides fall back to the embedded room.
+No relay change. The no-code alternative remains: the owner re-exports a
+fresh broadcast copy from their own deck.
