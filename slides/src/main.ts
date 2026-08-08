@@ -23,7 +23,7 @@ import { Store } from './store'
 import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
-import { onlineTransport, startSharing, stopSharing } from './sync/online'
+import { onlineTransport, startSharing, stopSharing, BroadcastSocket, syncHost } from './sync/online'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -101,8 +101,144 @@ async function passwordGate() {
 }
 
 function bootWith(doc: BentoDoc) {
-  if (doc.readonly) playerMode(doc)
+  if (doc.collab?.broadcast) broadcastMode(doc)
+  else if (doc.readonly) playerMode(doc)
   else editorMode(doc)
+}
+
+/**
+ * Broadcast copies boot straight into a locked follow-mode: the embedded
+ * document renders through the real present overlay, and a read-only broadcast
+ * socket drives navigation from the presenter's speaker view.
+ */
+function broadcastMode(doc: BentoDoc) {
+  document.title = `${doc.title} — ${appConfig().appName}`
+  if (doc.fonts?.length) injectFonts(doc)
+  document.getElementById('bento-splash')?.remove()
+
+  // The broadcast copy carries only the room name, token and relay — build the
+  // same read-only viewer URL the relay design expects.
+  let creds = doc.collab!.broadcast!
+  // ?b=<viewer url> re-points this copy at ANOTHER broadcaster's room — e.g.
+  // the owner takes over a presentation the exporter can't do. The relay's
+  // auth is a per-room trust-on-first-use token, so the room alone is not
+  // enough: the token (and relay) must come along. The owner's broadcast link
+  // already carries all three; everything after ?b= is that link, raw.
+  const b = location.href.indexOf('?b=')
+  if (b >= 0) {
+    try {
+      const u = new URL(location.href.slice(b + 3))
+      const room = u.pathname.split('/').pop() || ''
+      const tok = u.searchParams.get('tok') || ''
+      if (room && tok) {
+        creds = { room: u.origin + u.pathname, tok, relay: u.origin }
+      }
+    } catch { /* malformed override → keep the embedded room */ }
+  }
+  const relay = (creds.relay ?? syncHost()).replace(/\/+$/, '')
+  const roomUrl = creds.room.startsWith('wss://') || creds.room.startsWith('ws://')
+    ? creds.room
+    : `${relay}/d/${creds.room}`
+
+  let viewers = 0
+  let firstNav = false
+  let lastState: import('./sync/online').BroadcastSocketState = 'connecting'
+
+  const chip = document.createElement('div')
+  chip.className = 'bento-broadcast-chip'
+  chip.style.cssText =
+    `position:fixed; top:12px; right:12px; z-index:100000;` +
+    `background:rgba(15,19,24,0.78); color:#e8eaed;` +
+    `backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);` +
+    `border:1px solid rgba(255,255,255,0.08); border-radius:8px;` +
+    `padding:8px 12px; font-family:system-ui,sans-serif;` +
+    `font-size:13px; line-height:1.35; pointer-events:none;` +
+    `text-align:right; max-width:min(50vw,260px);`
+  const statusLine = document.createElement('div')
+  statusLine.style.fontWeight = '500'
+  const titleLine = document.createElement('div')
+  titleLine.style.cssText = 'opacity:0.72; font-size:11px; margin-top:2px;'
+  titleLine.textContent = doc.title
+  chip.append(statusLine, titleLine)
+
+  const updateChip = () => {
+    if (lastState === 'connecting') {
+      statusLine.textContent = t('Connecting…')
+    } else if (lastState === 'closed') {
+      statusLine.textContent = t('Broadcast ended')
+    } else if (!firstNav) {
+      statusLine.textContent = t('Waiting for presenter')
+    } else {
+      statusLine.textContent = t('Live · N viewers').replace('N', String(viewers))
+    }
+    const overlay = document.querySelector<HTMLElement>('.bento-present-overlay')
+    if (overlay && chip.parentElement !== overlay) overlay.appendChild(chip)
+  }
+
+  // Map a 1-based presenter-visible slide number to the index of the n-th
+  // non-state slide. If n is stale/out of range, clamp to the last slide;
+  // a non-positive number clamps to the first slide.
+  const slideIndexFromVisible = (n: number): number => {
+    if (n <= 0) return 0
+    let seen = 0
+    let lastNonState = 0
+    for (let i = 0; i < doc.slides.length; i++) {
+      if (!doc.slides[i].stateOf) {
+        lastNonState = i
+        seen++
+        if (seen === n) return i
+      }
+    }
+    // stale copy: clamp to the last non-state slide (never a hidden state)
+    return lastNonState
+  }
+
+  const exitCard = (lastIndex: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    void lastIndex
+    const card = document.createElement('div')
+    card.className = 'ed-player'
+    card.innerHTML =
+      `<div class="ed-playercard"><h1>${doc.title.replace(/</g, '&lt;')}</h1>` +
+      `<p>${t('Broadcast ended')}</p></div>`
+    document.body.appendChild(card)
+  }
+
+  const session = startPresentation(doc, 0, exitCard)
+  updateChip()
+
+  const socket = new BroadcastSocket(roomUrl, creds.tok, {
+    onNav: (n) => {
+      firstNav = true
+      session.goTo(slideIndexFromVisible(n))
+      updateChip()
+    },
+    onPresence: (n) => {
+      viewers = n
+      updateChip()
+    },
+    onLaser: (p) => {
+      session.setRemoteLaser(p)
+    },
+    onBlack: (on) => {
+      session.setBlack(on)
+    },
+    onState: (s) => {
+      lastState = s
+      if (s === 'closed') {
+        // A re-present will send a fresh lastNav replay on reconnect; until then
+        // the copy should read "Waiting for presenter" rather than stale "Live".
+        firstNav = false
+        viewers = 0
+        session.setRemoteLaser(null)
+        session.setBlack(false)
+      }
+      updateChip()
+    },
+  })
+  socket.connect()
+
+  ;(window as any).bento = { format: doc.format, doc }
 }
 
 /**
