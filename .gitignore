@@ -35,3 +35,8 @@ scripts/.cache/
 # rename must not be able to unignore them again.
 **/*.xcodeproj/
 **/Resources/starter.bento.html
+
+# platform/: the split shell (SHELL_HEAD/SHELL_TAIL) is generated from a built
+# slides shell by platform/build/split-shell.mjs — never hand-edited, never
+# committed. Regenerate after every slides build you intend to serve.
+platform/worker/src/generated/

@@ -1,0 +1,17 @@
+{
+  "name": "bento-platform-worker",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs",
+    "test": "node test/splice.test.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260101.0",
+    "esbuild": "^0.28.1",
+    "typescript": "~5.8.3"
+  }
+}
