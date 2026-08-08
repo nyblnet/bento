@@ -20,9 +20,9 @@ compatibility_date = "2026-08-08"
 
 [[r2_buckets]]
 binding = "DOCS"
-bucket_name = "REPLACE_WITH_YOUR_R2_BUCKET_NAME"
+bucket_name = "bento-platform"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "REPLACE_WITH_YOUR_D1_DATABASE_NAME"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_name = "bento-platform"
+database_id = "9408e034-8812-402a-ac21-42bd78f9f24f"
