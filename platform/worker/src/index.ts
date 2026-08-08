@@ -4,6 +4,7 @@
 // The platform Worker. Routes:
 //
 //   GET  /                    paste-and-create demo page (demo.ts)
+//   POST /api/compile         outline JSON -> compiled bento/slides doc JSON (no storage)
 //   POST /api/decks           create a deck: { doc } -> { id, editToken }
 //   GET  /api/decks/:id       fetch a deck's doc JSON (Authorization: Bearer <editToken>)
 //   PATCH /api/decks/:id      replace a deck's doc JSON (same auth)
@@ -19,6 +20,8 @@ import { spliceDoc, SHELL_VERSION } from './splice.ts'
 import { validateIncomingDoc } from './validate.ts'
 import { createDeck, getDeckDoc, checkEditToken, replaceDeckDoc, putAsset, getAsset } from './store.ts'
 import { renderDemoPage } from './demo.ts'
+import { parseOutline } from './compile/schema.ts'
+import { compileOutline } from './compile/compile.ts'
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -64,6 +67,29 @@ async function handleCreate(req: Request, env: Env): Promise<Response> {
   if (!result.ok) return json({ errors: result.errors }, { status: 422 })
   const { id, editToken } = await createDeck(env, result.doc!)
   return json({ id, editToken, url: `/d/${id}` }, { status: 201 })
+}
+
+async function handleCompile(req: Request): Promise<Response> {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const outlineInput = (body as { outline?: unknown })?.outline
+  const parsed = parseOutline(outlineInput)
+  if (!parsed.ok) return json({ errors: parsed.errors }, { status: 422 })
+
+  const doc = compileOutline(parsed.outline!)
+  // Defense in depth: the compiled doc must itself pass the same ingest gate
+  // a hand-pasted doc would (validate.ts) — a compiler bug that emitted an
+  // svg element or a bad image src should fail loudly here, not ship.
+  const result = validateIncomingDoc(doc)
+  if (!result.ok) {
+    console.error('compileOutline produced an invalid doc', result.errors)
+    return json({ error: 'internal error: compiled doc failed validation' }, { status: 500 })
+  }
+  return json({ doc: result.doc })
 }
 
 async function handleGetDoc(req: Request, env: Env, id: string): Promise<Response> {
@@ -139,6 +165,10 @@ export default {
 
     try {
       if (parts.length === 0 && req.method === 'GET') return html(renderDemoPage())
+
+      if (parts[0] === 'api' && parts[1] === 'compile' && parts.length === 2 && req.method === 'POST') {
+        return handleCompile(req)
+      }
 
       if (parts[0] === 'api' && parts[1] === 'decks') {
         if (parts.length === 2 && req.method === 'POST') return handleCreate(req, env)

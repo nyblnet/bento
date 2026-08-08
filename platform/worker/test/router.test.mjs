@@ -156,6 +156,16 @@ const exampleDoc = {
 
 let deckId, editToken
 
+await check('GET / serves the compile+create demo page with both steps intact', async () => {
+  const res = await worker.fetch(new Request('https://platform.example/'), env)
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(text.includes('id="outline"'), 'outline textarea missing — template structure likely broken')
+  assert(text.includes('id="doc"'), 'doc textarea missing — template structure likely broken')
+  assert(text.includes("getElementById('compile')"), 'compile button wiring missing')
+  assert(text.includes("getElementById('create')"), 'create button wiring missing')
+})
+
 await check('POST /api/decks creates a deck and strips collab', async () => {
   const res = await worker.fetch(
     new Request('https://platform.example/api/decks', {
@@ -285,6 +295,73 @@ await check('POST /api/decks/:id/assets stores an image and it is fetchable', as
   const assetRes = await worker.fetch(new Request(`https://platform.example${data.path}`), env)
   assert(assetRes.status === 200, `asset fetch expected 200, got ${assetRes.status}`)
   assert(assetRes.headers.get('content-type') === 'image/png', 'wrong content-type on stored asset')
+})
+
+const exampleOutline = {
+  title: 'Compiled deck',
+  theme: { background: '#0D1B2E', color: '#F5F7FA', accent: '#E8442E' },
+  slides: [
+    { layout: 'title', heading: 'From an outline', subheading: 'via POST /api/compile' },
+    { layout: 'stat', value: 42, label: 'The answer' },
+  ],
+}
+
+await check('POST /api/compile turns an outline into a doc, without storing anything', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/compile', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outline: exampleOutline }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(data.doc.format === 'bento/slides', 'compiled doc has the wrong format')
+  assert(data.doc.slides.length === 2, 'compiled doc has the wrong slide count')
+})
+
+await check('POST /api/compile rejects an invalid outline with field errors', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/compile', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outline: { slides: [{ layout: 'title' }] } }), // missing title + heading
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 422, `expected 422, got ${res.status}: ${text}`)
+  assert(Array.isArray(data.errors) && data.errors.length >= 2, 'expected multiple field errors')
+})
+
+await check('a compiled doc round-trips through POST /api/decks and renders in the spliced view', async () => {
+  const compileRes = await worker.fetch(
+    new Request('https://platform.example/api/compile', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outline: exampleOutline }),
+    }),
+    env,
+  )
+  const { data: compiled } = await readBody(compileRes)
+
+  const createRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ doc: compiled.doc }),
+    }),
+    env,
+  )
+  const { data: created, text: createText } = await readBody(createRes)
+  assert(createRes.status === 201, `expected 201, got ${createRes.status}: ${createText}`)
+
+  const viewRes = await worker.fetch(new Request(`https://platform.example/d/${created.id}`), env)
+  const { text: viewText } = await readBody(viewRes)
+  assert(viewRes.status === 200, `expected 200, got ${viewRes.status}`)
+  assert(viewText.includes('From an outline'), 'compiled title text missing from the spliced view')
+  assert(viewText.includes('42'), 'compiled stat value missing from the spliced view')
 })
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed')

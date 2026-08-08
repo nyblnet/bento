@@ -1,11 +1,10 @@
 # Bento platform — hosting Worker (Phase 1)
 
-Turns a `bento/slides` document into a URL: paste JSON in, get back a live,
-editable, presentable page backed by Cloudflare's free tier (Workers + R2 +
-D1). This is the **backend spine** — create → store → view → present →
-download — that the rest of the platform (prompt template page, tolerant
-paste/review flow, placeholder image upload UI) builds on top of. Those
-pieces are follow-up PRs; see "Known gaps" below for exactly what's deferred
+Turns a small structured outline into a URL: compile → store → view →
+present → download, backed by Cloudflare's free tier (Workers + R2 + D1).
+This is the **backend spine** — the prompt-template page and the
+tolerant-paste/review UI a chat AI's output actually lands on are follow-up
+work on Cloudflare Pages; see "Known gaps" below for exactly what's deferred
 and why.
 
 **Zone discipline** (`docs/PARALLEL-WORK.md`): this directory is its own
@@ -37,6 +36,32 @@ platform's own split shape (round-trip losslessness, script-tag balance, and
 a negative control proving the escape is load-bearing — an unescaped hostile
 payload is shown actually breaking out into live markup).
 
+## Compiling an outline
+
+`POST /api/compile` turns a small structured **outline** (`platform/worker/src/compile/schema.ts`)
+into a real `bento/slides` doc — no storage, pure function, meant to sit
+behind a review step before `POST /api/decks` commits anything. This is what
+the eventual prompt-template page will ask a chat AI to fill in; for now the
+demo page's step 1 (`/`) and any direct API caller can already use it. Eight
+layout kinds cover `docs/agents.md`'s content-mapping table (numbers → chart,
+comparisons → table, a headline figure → count-up stat, same-thing-changing
+→ morph): `title`, `section`, `bullets`, `stat`, `chart`, `table`, `quote`,
+`image` (a placeholder box — see "Known gaps"). Consecutive outline slides
+sharing a `morphGroup` string get their heading elements paired via `morphId`
+and the later slide set to `transition:'morph'`, straight out of
+`docs/agents.md`'s own morph recipe.
+
+**The compiler imports `slides/src/model.ts` directly** — real types
+(`BentoDoc`, `Slide`, …) and real constructors (`defaultText`, `defaultChart`,
+`builtinLayouts`, …) rather than a second, drifting copy of them. This is a
+deliberate, one-directional exception to the "platform never touches other
+zones" rule in `docs/PARALLEL-WORK.md` §1: *reading* a stable, zero-import,
+DOM-free module is not the same as *editing* it, and it's the reuse
+`CLAUDE.md` itself calls out as available. It does mean a breaking change to
+`model.ts`'s constructors is a compile error in `platform/worker`, not a
+silent drift — treat that as the point, not friction. See `docs/DECISIONS.md`
+for the full reasoning and what would reopen it.
+
 ## Directory layout
 
 ```
@@ -48,11 +73,14 @@ platform/
     src/
       index.ts            — router (all HTTP routes)
       splice.ts            — HEAD + escape(json) + TAIL
-      validate.ts          — ingest validation (POST/PATCH /api/decks)
+      validate.ts          — ingest validation (POST/PATCH /api/decks, compiled docs too)
       store.ts             — R2 + D1 access
       ids.ts                — random ids/tokens, sha256
-      demo.ts               — paste-and-create page served at `/`
+      demo.ts               — compile→review→create page served at `/`
       env.ts                — Env (binding) interface
+      compile/
+        schema.ts            — the outline schema + parseOutline() validator
+        compile.ts            — outline → BentoDoc, built on slides/src/model.ts
       generated/shell.ts    — GENERATED, gitignored — do not hand-edit
     schema.sql             — D1 table DDL
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
@@ -60,6 +88,8 @@ platform/
     build.mjs              — esbuild bundle → dist/worker.js, for the manual fallback path
     test/
       splice.test.mjs       — splice conformance (no bindings needed)
+      compile.spec.ts        — compiler assertions (TS; bundled+run by compile.test.mjs)
+      compile.test.mjs       — runs compile.spec.ts
       router.test.mjs       — full HTTP flow against dist/worker.js, in-memory R2/D1 mocks
 ```
 
@@ -127,10 +157,11 @@ verbatim (`platform/worker/src/env.ts`); they must match `wrangler.toml`'s
 ### 4. Verify
 
 Visit the Worker's `*.workers.dev` URL. `/healthz` should return
-`{"ok":true,"shellVersion":"..."}`; `/` is the paste-and-create demo page —
-click "Load example", "Create deck", then open the `/d/<id>` link it prints.
-That link is a real, fully editable `.bento.html` page, and `/d/<id>#present`
-starts the show immediately (existing shell behavior, `slides/src/main.ts`).
+`{"ok":true,"shellVersion":"..."}`; `/` is the compile→review→create demo
+page — step 1: "Load example outline", "Compile →" (fills step 2); step 2:
+"Create deck", then open the `/d/<id>` link it prints. That link is a real,
+fully editable `.bento.html` page, and `/d/<id>#present` starts the show
+immediately (existing shell behavior, `slides/src/main.ts`).
 
 ### From here on
 
@@ -148,11 +179,11 @@ cd platform/worker && npm ci
 node ../build/split-shell.mjs        # writes src/generated/shell.ts
 npm run typecheck                     # tsc --noEmit
 npm run build                         # writes dist/worker.js
-npm test                              # splice.test.mjs
-node build.mjs && node test/router.test.mjs   # full HTTP flow, in-memory mocks
+npm test                              # splice.test.mjs + compile.test.mjs
+npm run test:router                   # full HTTP flow, in-memory mocks (needs npm run build first)
 ```
 
-`dist/worker.js` is one self-contained, minified ESM file (~690KB, ~515KB
+`dist/worker.js` is one self-contained, minified ESM file (~710KB, ~520KB
 gzipped). Dashboard → your Worker → **Quick Edit**, delete the default
 script, paste the full contents of `dist/worker.js`, **Save and deploy**.
 Bind R2/D1 exactly as in step 3 above if this Worker hasn't been bound yet.
@@ -167,6 +198,7 @@ only mutation is gated, by the edit token.
 
 | Route | Method | Auth | Purpose |
 |---|---|---|---|
+| `/api/compile` | POST | none | `{outline}` → `{doc}`. Pure — nothing is stored |
 | `/api/decks` | POST | none | `{doc}` → `{id, editToken, url}`. Validates, strips `collab`, mints `docId` |
 | `/api/decks/:id` | GET | `Authorization: Bearer <editToken>` | `{doc}` |
 | `/api/decks/:id` | PATCH | same | `{doc}` → replaces the stored doc |
@@ -180,12 +212,26 @@ write access to that deck — there is no recovery flow in v1 (no accounts).
 
 ## Known gaps (deliberately out of scope for this PR)
 
-- **No outline-schema compiler.** `POST /api/decks` accepts a complete
-  `bento/slides` doc JSON directly — the "paste full Bento JSON, advanced"
-  escape hatch from the platform plan. The small outline schema + compiler
-  that turns a chat AI's structured answer into good Bento (morph pairs,
-  charts, count-ups — see `docs/agents.md`'s content-mapping table) is real,
-  separate work and lands as its own PR.
+- **No prompt-template page and no tolerant outline parser.** `/api/compile`
+  expects the outline JSON to already be well-formed (reasonable — a chat
+  model constrained by an explicit JSON schema in its prompt is not the
+  "markdown fences and trailing prose" case a hand-typed paste would be); the
+  page that shows a user the prompt to copy, and a paste/review UI in front
+  of `/api/compile` (stripping fences, surfacing field errors inline, an
+  iframe-the-real-draft review step), are both Cloudflare Pages work for a
+  follow-up PR. `demo.ts`'s step 1 is a stand-in, not that page.
+- **The outline schema is intentionally narrow.** No custom page size (every
+  compiled deck is the canonical 1280×720), no per-slide background
+  override, no `kicker` on `bullets` slides (no builtin layout has a slot for
+  one). Each is a scope cut, not a limitation of the approach — widening the
+  schema is straightforward when a real use case needs it.
+- **`image` slides are placeholders, not images.** `compileImage` emits a
+  server-generated SVG data URI (safe: `<img src="data:image/svg+xml">`
+  decodes as raster data, embedded script does not execute — see the comment
+  on `placeholderImageSrc`) tagged with a platform-only `phSlot` field. The
+  upload UI that finds these slots and replaces them via
+  `POST /api/decks/:id/assets` is the same follow-up PR as the paste/review
+  page.
 - **`svg` elements are rejected on ingest**, not sanitized. Raw author SVG
   markup has no tag/attribute allowlist anywhere in the renderer (unlike
   text/table `html`, which `slides/src/render.ts`'s `sanitizeHtml` already
