@@ -200,8 +200,8 @@ connected as direct owner — rides the existing socket), and on a dedicated
 `BroadcastSocket` (everything else). The presenter picks which; `sendNav`
 itself is a thin wrapper.
 
-Also expose `broadcastLink(creds)` → `viewerUrl(roomName, tok, relay)` for
-the export + clipboard (see Phase 3).
+Also expose `hostedLink(creds, hostClient)` for minting the hosted viewer
+URL shown in the speaker popup (see Phase 3).
 
 ---
 
