@@ -32,7 +32,7 @@ presenter (user5 replacing user1) can take over without re-exporting files.
    "Hosting URL" field, stored in `doc.meta` (additive format field, same
    mechanism as author/company). Every collaborator's copy of the deck inherits
    it, so user5's deck mints hosted links automatically. The broadcast popup
-   shows a "Hosted link" row with Copy.
+   shows a "Broadcast link" row with the hosted viewer URL and Copy.
 4. **Live doc sync to the hosted client.** The hosted copy joins the deck's
    collab room as a live reader replica, so slide content updates in real time
    as the deck is edited. Re-host once; the copy converges as a fork on first
@@ -65,7 +65,10 @@ current slide re-renders on remote doc changes.
 ### Link minting
 
 - Export: "Save broadcast copy…" → optional "Hosting URL" field → `doc.meta`.
-- Popup: "Hosted link" row = `<hostUrl>?room=<roomName>&tok=<tok>` + Copy.
+- Popup: one "Broadcast link" row showing the hosted viewer URL
+  `<hostClient>?room=<roomName>&tok=<tok>` + Copy. When `doc.meta.hostClient` is
+  missing, a "Set hosting URL" button prompts the presenter and stores it; the
+  deck then mints the viewer link.
 - user5 arms → their deck mints the same shape with their room → client opens
   it → same copy, new driver.
 
@@ -96,7 +99,7 @@ Client only. No relay/worker changes, no format changes beyond `doc.meta`
   copy carries reader creds + sync state.
 - `slides/src/sync/online.ts` — hosted-link minting helper (reuses
   resolveBroadcastCreds + viewerUrl).
-- `slides/src/present.ts` — popup "Hosted link" row.
+- `slides/src/present.ts` — popup broadcast link row + set-host flow.
 - `slides/src/i18n/*.ts` — new strings in all catalogs.
 - `docs/DECISIONS.md` — entry.
 

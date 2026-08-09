@@ -1931,7 +1931,13 @@ export class Editor {
       this.presenting = false
       this.store.goTo(last)
       this.canvas.render()
-    }, { fullscreen })
+    }, {
+      fullscreen,
+      onSetHostClient: (url) => this.store.commit(() => {
+        const m = this.store.doc.meta ??= {}
+        m.hostClient = url
+      }),
+    })
   }
 
   // --- paste: external objects + cross-deck elements/slides ---------------------

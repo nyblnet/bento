@@ -14,7 +14,7 @@ import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
-import { BroadcastSocket, broadcastLink, hostedLink, onlineTransport, resolveBroadcastCreds, type BroadcastCreds } from './sync/online'
+import { BroadcastSocket, hostedLink, onlineTransport, resolveBroadcastCreds, type BroadcastCreds } from './sync/online'
 import { offlineEnabled } from './update'
 
 const MORPH_DURATION = 0.65
@@ -43,6 +43,8 @@ export function startPresentation(
       deck: Reveal.Api
       buildSection: (s: BentoDoc['slides'][number]) => HTMLElement
     }) => void
+    /** presenter set doc.meta.hostClient from the broadcast popup (editor mode) */
+    onSetHostClient?: (url: string) => void
   } = {},
 ): PresentSession {
   const overlay = document.createElement('div')
@@ -650,6 +652,9 @@ export function startPresentation(
   // true when we adopted a speaker window the EDITOR opened — we drive it but
   // must not close it on exit (it lives beyond this present session).
   let speakerAdopted = false
+  // main-window message listener for the broadcast popup's "set host" action;
+  // registered once because openSpeaker can be called multiple times.
+  let bcastMessageListenerAdded = false
   // ——— live slide broadcast ———
   let broadcastOn = false
   let broadcastCreds: BroadcastCreds | null = null
@@ -752,9 +757,9 @@ export function startPresentation(
     toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
   }
 
-  const postBroadcastLink = (link: string | null, hosted?: string | null) => {
+  const postBroadcastLink = (link: string | null, noHost: boolean) => {
     if (!speaker || speaker.closed) return
-    try { speaker.postMessage({ bento: 'broadcast', link, hosted }, '*') } catch { /* gone */ }
+    try { speaker.postMessage({ bento: 'broadcast', link, noHost }, '*') } catch { /* gone */ }
   }
 
   const stopBroadcast = () => {
@@ -772,7 +777,7 @@ export function startPresentation(
     }
     broadcastCreds = null
     broadcastViewers = 0
-    postBroadcastLink(null)
+    postBroadcastLink(null, false)
     updateSpeakerControls()
   }
 
@@ -820,7 +825,7 @@ export function startPresentation(
       }
       broadcastOn = true
       broadcastCreds = creds
-      postBroadcastLink(broadcastLink(creds), doc.meta?.hostClient ? hostedLink(creds, doc.meta.hostClient) : null)
+      postBroadcastLink(doc.meta?.hostClient ? hostedLink(creds, doc.meta.hostClient) : null, !doc.meta?.hostClient)
       updateSpeakerControls()
     } catch (err) {
       console.error('[bento-broadcast] arm failed', err)
@@ -931,12 +936,7 @@ export function startPresentation(
         `<input type="text" class="sv-bcast-input" readonly>` +
         `<button class="sv-bcast-copy">${t('Copy')}</button>` +
         `<span class="sv-bcast-copied" hidden>${t('Copied')}</span>` +
-      `</div>` +
-      `<div class="sv-bcast-link sv-bcast-hosted" hidden>` +
-        `<span class="sv-bcast-label">${t('Hosted link')}</span>` +
-        `<input type="text" class="sv-bcast-input" readonly>` +
-        `<button class="sv-bcast-copy">${t('Copy')}</button>` +
-        `<span class="sv-bcast-copied" hidden>${t('Copied')}</span>` +
+        `<button class="sv-bcast-set" hidden>${t('Set hosting URL')}</button>` +
       `</div>` +
       `<div class="sv-main">` +
         `<div class="sv-current"></div>` +
@@ -956,6 +956,8 @@ export function startPresentation(
       `.sv-bcast-input { flex:1; background:#0d1114; border:1px solid #3a424b; color:#e8eaed; padding:0.3em 0.5em; border-radius:4px; font-size:0.9em; }` +
       `.sv-bcast-copy { background:#3a424b; color:#fff; border:none; border-radius:4px; padding:0.4em 0.8em; cursor:pointer; font-size:0.9em; }` +
       `.sv-bcast-copy:hover { background:#4b5563; }` +
+      `.sv-bcast-set { background:#3a424b; color:#fff; border:none; border-radius:4px; padding:0.4em 0.8em; cursor:pointer; font-size:0.9em; }` +
+      `.sv-bcast-set:hover { background:#4b5563; }` +
       `.sv-bcast-copied { color:#7ee787; font-size:0.9em; }`
     d.head.appendChild(bcastStyle)
 
@@ -963,15 +965,11 @@ export function startPresentation(
     bcastScript.textContent = `
 (function(){
   const linkBox = document.querySelector('.sv-bcast-link')
-  const input = document.querySelector('.sv-bcast-input')
-  const copyBtn = document.querySelector('.sv-bcast-copy')
-  const copied = document.querySelector('.sv-bcast-copied')
-  if (!linkBox || !input || !copyBtn) return
-  const hostedBox = document.querySelector('.sv-bcast-hosted')
-  const hostedInput = hostedBox ? hostedBox.querySelector('.sv-bcast-input') : null
-  const hostedCopy = hostedBox ? hostedBox.querySelector('.sv-bcast-copy') : null
-  const hostedCopied = hostedBox ? hostedBox.querySelector('.sv-bcast-copied') : null
-
+  const input = linkBox ? linkBox.querySelector('.sv-bcast-input') : null
+  const copyBtn = linkBox ? linkBox.querySelector('.sv-bcast-copy') : null
+  const copied = linkBox ? linkBox.querySelector('.sv-bcast-copied') : null
+  const setBtn = linkBox ? linkBox.querySelector('.sv-bcast-set') : null
+  if (!linkBox || !input || !copyBtn || !setBtn) return
   window.addEventListener('message', (ev) => {
     if (ev.source !== window.opener) return
     const data = ev.data
@@ -979,20 +977,18 @@ export function startPresentation(
     if (data.link) {
       linkBox.hidden = false
       input.value = data.link
+      input.placeholder = ''
+      copyBtn.hidden = false
+      setBtn.hidden = true
       if (copied) copied.hidden = true
+    } else if (data.noHost) {
+      linkBox.hidden = false
+      input.value = ''
+      input.placeholder = 'https://example.com/broadcast.bento.html'
+      copyBtn.hidden = true
+      setBtn.hidden = false
     } else {
       linkBox.hidden = true
-      input.value = ''
-    }
-    if (hostedBox && hostedInput) {
-      if (data.hosted) {
-        hostedBox.hidden = false
-        hostedInput.value = data.hosted
-        if (hostedCopied) hostedCopied.hidden = true
-      } else {
-        hostedBox.hidden = true
-        hostedInput.value = ''
-      }
     }
   })
   copyBtn.addEventListener('click', () => {
@@ -1001,18 +997,30 @@ export function startPresentation(
       window.setTimeout(() => { if (copied) copied.hidden = true }, 1200)
     }, () => {})
   })
-  if (hostedCopy) {
-    hostedCopy.addEventListener('click', () => {
-      if (!hostedInput) return
-      navigator.clipboard.writeText(hostedInput.value).then(() => {
-        if (hostedCopied) hostedCopied.hidden = false
-        window.setTimeout(() => { if (hostedCopied) hostedCopied.hidden = true }, 1200)
-      }, () => {})
-    })
-  }
+  setBtn.addEventListener('click', () => {
+    const url = window.prompt(${JSON.stringify(t('Hosting URL'))}, '')
+    if (url === null) return
+    const u = url.trim()
+    if (!u || !/^https?:\/\//i.test(u)) return
+    window.opener.postMessage({ bento: 'broadcast', setHost: u }, '*')
+  })
 })()
 `
     d.body.appendChild(bcastScript)
+
+    if (!bcastMessageListenerAdded) {
+      bcastMessageListenerAdded = true
+      window.addEventListener('message', (ev) => {
+        if (!speaker || ev.source !== speaker) return
+        const data = ev.data
+        if (!data || data.bento !== 'broadcast' || typeof data.setHost !== 'string') return
+        const u = data.setHost.trim()
+        if (!u || !/^https?:\/\//i.test(u)) return
+        opts?.onSetHostClient?.(u)
+        const creds = broadcastCreds
+        postBroadcastLink(creds && doc.meta?.hostClient ? hostedLink(creds, doc.meta.hostClient) : null, !doc.meta?.hostClient)
+      })
+    }
 
     speakerStart = performance.now()
     d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })

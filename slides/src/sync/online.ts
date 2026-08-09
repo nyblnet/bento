@@ -850,16 +850,6 @@ export async function sendBlack(ws: WebSocket | null, signerPriv: string, on: bo
   return true
 }
 
-/** Full URL a broadcast copy connects to. */
-export function viewerUrl(roomName: string, tok: string, relay: string): string {
-  return `${relay}/d/${roomName}?tok=${tok}`
-}
-
-/** Full connection URL for a set of broadcast credentials. */
-export function broadcastLink(creds: BroadcastCreds): string {
-  return viewerUrl(creds.roomName, creds.tok, creds.relay)
-}
-
 /** Full URL of a hosted broadcast client pointed at these credentials. The
  *  hosted copy lives at `hostClient`; the query params select the room. */
 export function hostedLink(creds: BroadcastCreds, hostClient: string): string {
