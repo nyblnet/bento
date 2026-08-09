@@ -14,7 +14,7 @@ import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
-import { BroadcastSocket, broadcastLink, onlineTransport, resolveBroadcastCreds, type BroadcastCreds } from './sync/online'
+import { BroadcastSocket, broadcastLink, hostedLink, onlineTransport, resolveBroadcastCreds, type BroadcastCreds } from './sync/online'
 import { offlineEnabled } from './update'
 
 const MORPH_DURATION = 0.65
@@ -742,9 +742,9 @@ export function startPresentation(
     toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
   }
 
-  const postBroadcastLink = (link: string | null) => {
+  const postBroadcastLink = (link: string | null, hosted?: string | null) => {
     if (!speaker || speaker.closed) return
-    try { speaker.postMessage({ bento: 'broadcast', link }, '*') } catch { /* gone */ }
+    try { speaker.postMessage({ bento: 'broadcast', link, hosted }, '*') } catch { /* gone */ }
   }
 
   const stopBroadcast = () => {
@@ -810,7 +810,7 @@ export function startPresentation(
       }
       broadcastOn = true
       broadcastCreds = creds
-      postBroadcastLink(broadcastLink(creds))
+      postBroadcastLink(broadcastLink(creds), doc.meta?.hostClient ? hostedLink(creds, doc.meta.hostClient) : null)
       updateSpeakerControls()
     } catch (err) {
       console.error('[bento-broadcast] arm failed', err)
@@ -922,6 +922,12 @@ export function startPresentation(
         `<button class="sv-bcast-copy">${t('Copy')}</button>` +
         `<span class="sv-bcast-copied" hidden>${t('Copied')}</span>` +
       `</div>` +
+      `<div class="sv-bcast-link sv-bcast-hosted" hidden>` +
+        `<span class="sv-bcast-label">${t('Hosted link')}</span>` +
+        `<input type="text" class="sv-bcast-input" readonly>` +
+        `<button class="sv-bcast-copy">${t('Copy')}</button>` +
+        `<span class="sv-bcast-copied" hidden>${t('Copied')}</span>` +
+      `</div>` +
       `<div class="sv-main">` +
         `<div class="sv-current"></div>` +
         `<div class="sv-side">` +
@@ -962,6 +968,26 @@ export function startPresentation(
     } else {
       linkBox.hidden = true
       input.value = ''
+    }
+    const hostedBox = document.querySelector('.sv-bcast-hosted')
+    const hostedInput = hostedBox ? hostedBox.querySelector('.sv-bcast-input') : null
+    const hostedCopy = hostedBox ? hostedBox.querySelector('.sv-bcast-copy') : null
+    const hostedCopied = hostedBox ? hostedBox.querySelector('.sv-bcast-copied') : null
+    if (hostedBox && hostedInput && hostedCopy) {
+      if (data.hosted) {
+        hostedBox.hidden = false
+        hostedInput.value = data.hosted
+        if (hostedCopied) hostedCopied.hidden = true
+      } else {
+        hostedBox.hidden = true
+        hostedInput.value = ''
+      }
+      hostedCopy.addEventListener('click', () => {
+        navigator.clipboard.writeText(hostedInput.value).then(() => {
+          if (hostedCopied) hostedCopied.hidden = false
+          setTimeout(() => { if (hostedCopied) hostedCopied.hidden = true }, 1200)
+        })
+      })
     }
   })
   copyBtn.addEventListener('click', () => {
