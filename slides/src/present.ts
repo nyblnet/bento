@@ -991,7 +991,7 @@ export function startPresentation(
         const url = window.prompt(${JSON.stringify(t('Hosting URL'))}, '')
         if (url === null) return
         const u = url.trim()
-        if (!u || !/^https?:\/\//i.test(u)) return
+        if (!u || !/^https?:\\/\\//i.test(u)) return
         window.opener.postMessage({ bento: 'broadcast', setHost: u }, '*')
       })
     }
