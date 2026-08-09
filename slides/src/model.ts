@@ -371,6 +371,9 @@ export interface BentoDoc {
     subject?: string
     event?: string
     keywords?: string
+    /** Hosting URL of this deck's broadcast copy — lets any collaborator mint
+     *  hosted broadcast links (docs/hosted-broadcast-design.md). */
+    hostClient?: string
   }
   /** slide coordinate space, px */
   size: { width: number; height: number }
