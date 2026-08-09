@@ -14,6 +14,43 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-08 — The outline compiler imports `slides/src/model.ts` directly — a deliberate, one-directional zone exception
+
+**Decision.** `platform/worker/src/compile/compile.ts` (the outline → doc
+compiler behind `POST /api/compile`) imports real types and constructors
+from `slides/src/model.ts` — `BentoDoc`, `Slide`, `defaultText`,
+`defaultChart`, `defaultTable`, `defaultImage`, `builtinLayouts`,
+`instantiateLayout`, `readableInk`, `applyChartPalette`, etc. — rather than
+maintaining a second copy of Bento's element/layout defaults inside
+`platform/`.
+
+**Why this doesn't violate `docs/PARALLEL-WORK.md` §1.** The rule against
+cross-app edits is about *write* conflicts between parallel agents — two
+tools touching the same file. `platform/` never edits a line inside
+`slides/`; it only reads a module that is verified zero-import and
+DOM/browser-global-free (checked before wiring this up: `grep -n
+"document\.\|window\.\|localStorage" slides/src/model.ts` matches nothing
+outside a comment). Reading a stable, side-effect-free dependency is
+ordinary code reuse, not a zone collision — and it's exactly the reuse
+`CLAUDE.md`'s own architecture notes flag as available ("model.ts has zero
+imports").
+
+**The cost, accepted on purpose.** This makes `platform/worker`'s build
+depend on `slides/src/model.ts` staying both zero-import and
+API-compatible. A future change to e.g. `defaultChart`'s signature, or a new
+required `ElementBase` field, is a **compile error in `platform/worker`**,
+not a silent divergence — that's the intended trade for not hand-maintaining
+a second "what does a default text element look like" forever. If
+`model.ts` ever needs a DOM global or gains a heavy transitive import, this
+decision is what breaks and needs revisiting (extract the pure parts, or
+accept the drift and fork the definitions).
+
+**What would reopen this.** `model.ts` losing its zero-import property, or
+the compiler needing something `slides/` doesn't export (at which point:
+export it from `model.ts` rather than reaching past it into app-specific
+modules — the boundary is "the pure format/defaults module", not "the whole
+app").
+
 ## 2026-08-08 — `platform/` gets a wrangler.toml after all — for automated deploys, not for creating resources
 
 **Supersedes** the "No wrangler.toml, by explicit choice" paragraph in the
