@@ -811,16 +811,34 @@ export class Editor {
   }
 
   /** A live broadcast hand-out: opens straight into the show and follows the
-   *  presenter's slide changes in real time. Carries only the broadcast room,
-   *  token and relay — no owner key, no symmetric key, no CRDT state. */
+   *  presenter's slide changes in real time. When a hosting URL is set
+   *  (doc.meta.hostClient) the copy ALSO carries the collab read cap — it
+   *  live-syncs slide content from the deck's collab room, so a copy hosted
+   *  once stays current as the deck is edited (docs/hosted-broadcast-design.md). */
   private async saveBroadcastCopy() {
     const creds = await resolveBroadcastCreds(this.store.doc, this.store.doc.docId)
+    const host = window.prompt(t('Hosting URL (optional)'), this.store.doc.meta?.hostClient ?? '')
+    if (host !== null) {
+      const h = host.trim()
+      if (h) this.store.doc.meta = { ...(this.store.doc.meta ?? {}), hostClient: h }
+      else if (this.store.doc.meta) delete this.store.doc.meta.hostClient
+    }
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.docId = newDocId()
     delete clone.readonly
-    clone.collab = { on: false, broadcast: { room: creds.roomName, tok: creds.tok, relay: creds.relay } }
+    const c = this.store.doc.collab
+    clone.collab = {
+      ...(c ?? {}),
+      role: 'reader',
+      on: true,
+      sync: undefined,
+      broadcast: { room: creds.roomName, tok: creds.tok, relay: creds.relay },
+    }
+    delete clone.collab.writerPriv // the muzzle — no write capability travels
+    delete clone.collab.ownerPriv // v2: neither the owner key…
+    delete clone.collab.invite //    …nor any invite (delegation) material
     try {
-      const ok = await writeUpdatedFileAs(serializeFile(clone), clone, { suffix: 'broadcast', keepHandle: false })
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'broadcast', keepHandle: false })
       if (ok) this.toast(t('Broadcast copy saved — viewers open it and their slides follow yours'))
     } catch {
       this.toast(t('Saving failed'))
