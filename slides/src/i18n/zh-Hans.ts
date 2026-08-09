@@ -740,6 +740,8 @@ export const zhHans: Catalog = {
   "Broadcast to audience": "广播给观众",
   "Broadcast": "广播",
   "Broadcast link": "广播链接",
+  "Hosting URL (optional)": "托管 URL（可选）",
+  "Hosted link": "托管链接",
   "Copy": "复制",
   "Copied": "已复制",
   "N viewers": "N 位观众",

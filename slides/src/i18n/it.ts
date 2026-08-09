@@ -740,6 +740,8 @@ export const it: Catalog = {
   "Broadcast to audience": "Trasmetti al pubblico",
   "Broadcast": "Trasmissione",
   "Broadcast link": "Link trasmissione",
+  "Hosting URL (optional)": "URL di hosting (facoltativa)",
+  "Hosted link": "Link ospitato",
   "Copy": "Copia",
   "Copied": "Copiato",
   "N viewers": "N spettatori",

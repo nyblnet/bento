@@ -740,6 +740,8 @@ export const zhHant: Catalog = {
   "Broadcast to audience": "廣播給觀眾",
   "Broadcast": "廣播",
   "Broadcast link": "廣播連結",
+  "Hosting URL (optional)": "託管 URL（可選）",
+  "Hosted link": "託管連結",
   "Copy": "複製",
   "Copied": "已複製",
   "N viewers": "N 位觀眾",

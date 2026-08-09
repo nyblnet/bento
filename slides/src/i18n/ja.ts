@@ -740,6 +740,8 @@ export const ja: Catalog = {
   "Broadcast to audience": "視聴者に配信",
   "Broadcast": "配信",
   "Broadcast link": "配信リンク",
+  "Hosting URL (optional)": "ホスティングURL（任意）",
+  "Hosted link": "ホスト済みリンク",
   "Copy": "コピー",
   "Copied": "コピーしました",
   "N viewers": "N人の視聴者",

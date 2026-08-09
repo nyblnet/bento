@@ -740,6 +740,8 @@ export const de: Catalog = {
   "Broadcast to audience": "Zum Publikum übertragen",
   "Broadcast": "Übertragung",
   "Broadcast link": "Übertragungslink",
+  "Hosting URL (optional)": "Hosting-URL (optional)",
+  "Hosted link": "Gehosteter Link",
   "Copy": "Kopieren",
   "Copied": "Kopiert",
   "N viewers": "N Zuschauer",
