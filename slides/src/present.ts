@@ -957,6 +957,11 @@ export function startPresentation(
   const copyBtn = document.querySelector('.sv-bcast-copy')
   const copied = document.querySelector('.sv-bcast-copied')
   if (!linkBox || !input || !copyBtn) return
+  const hostedBox = document.querySelector('.sv-bcast-hosted')
+  const hostedInput = hostedBox ? hostedBox.querySelector('.sv-bcast-input') : null
+  const hostedCopy = hostedBox ? hostedBox.querySelector('.sv-bcast-copy') : null
+  const hostedCopied = hostedBox ? hostedBox.querySelector('.sv-bcast-copied') : null
+
   window.addEventListener('message', (ev) => {
     if (ev.source !== window.opener) return
     const data = ev.data
@@ -969,11 +974,7 @@ export function startPresentation(
       linkBox.hidden = true
       input.value = ''
     }
-    const hostedBox = document.querySelector('.sv-bcast-hosted')
-    const hostedInput = hostedBox ? hostedBox.querySelector('.sv-bcast-input') : null
-    const hostedCopy = hostedBox ? hostedBox.querySelector('.sv-bcast-copy') : null
-    const hostedCopied = hostedBox ? hostedBox.querySelector('.sv-bcast-copied') : null
-    if (hostedBox && hostedInput && hostedCopy) {
+    if (hostedBox && hostedInput) {
       if (data.hosted) {
         hostedBox.hidden = false
         hostedInput.value = data.hosted
@@ -982,12 +983,6 @@ export function startPresentation(
         hostedBox.hidden = true
         hostedInput.value = ''
       }
-      hostedCopy.addEventListener('click', () => {
-        navigator.clipboard.writeText(hostedInput.value).then(() => {
-          if (hostedCopied) hostedCopied.hidden = false
-          setTimeout(() => { if (hostedCopied) hostedCopied.hidden = true }, 1200)
-        })
-      })
     }
   })
   copyBtn.addEventListener('click', () => {
@@ -996,6 +991,15 @@ export function startPresentation(
       window.setTimeout(() => { if (copied) copied.hidden = true }, 1200)
     }, () => {})
   })
+  if (hostedCopy) {
+    hostedCopy.addEventListener('click', () => {
+      if (!hostedInput) return
+      navigator.clipboard.writeText(hostedInput.value).then(() => {
+        if (hostedCopied) hostedCopied.hidden = false
+        window.setTimeout(() => { if (hostedCopied) hostedCopied.hidden = true }, 1200)
+      }, () => {})
+    })
+  }
 })()
 `
     d.body.appendChild(bcastScript)
