@@ -2171,3 +2171,14 @@ re-pointing grants view access only, exactly the trust of sharing the
 broadcast link itself. Malformed overrides fall back to the embedded room.
 No relay change. The no-code alternative remains: the owner re-exports a
 fresh broadcast copy from their own deck.
+
+## 2026-08-09 — Hosted broadcast client
+
+**Decision.** The broadcast copy can be hosted once and re-pointed at any presenter's room:
+`<hostUrl>?room=<roomName>&tok=<tok>` (minted by the presenter's deck from
+`doc.meta.hostClient`, set at export). The hosted copy also carries the collab
+read cap (`role:'reader'` + key — the v0.9.18 read-only-copy mechanism) so slide
+content live-syncs from the deck's collab room; nav still rides the broadcast
+socket. No relay changes; the URL carries only the nav token (same trust as the
+broadcast link), the file carries the deck key (same trust as the read-only
+copy). Design: docs/hosted-broadcast-design.md.
