@@ -188,7 +188,7 @@ In `toggleBroadcast`, replace line 813:
       `</div>` +
 ```
 
-- [ ] **Step 3: Extend the popup script** (inside the existing `bcastScript` IIFE, after the `linkBox` block)
+- [ ] **Step 3: Extend the popup script** (inside the existing `bcastScript` IIFE — the hosted handling goes INSIDE the `window.addEventListener('message', …)` listener, after the existing `if (data.link) {…} else {…}` block, because `data` is scoped to the listener)
 
 ```ts
   const hostedBox = document.querySelector('.sv-bcast-hosted')
