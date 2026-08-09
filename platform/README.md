@@ -24,7 +24,6 @@ once at build time — no HTML parsing, no per-request template engine.
 slides build  →  split-shell.mjs  →  SHELL_HEAD / SHELL_TAIL (generated/shell.ts)
                                               │
                         wrangler deploy bundles src/index.ts (Workers Builds, automatic)
-                           — or dist/worker.js is bundled+pasted by hand (fallback)
                                               │
                     GET /d/:id  →  SHELL_HEAD + escape(doc from R2) + SHELL_TAIL
 ```
@@ -85,7 +84,7 @@ platform/
     schema.sql             — D1 table DDL
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
     ci-build.mjs           — Workers Builds' "Build command": produces generated/shell.ts
-    build.mjs              — esbuild bundle → dist/worker.js, for the manual fallback path
+    build.mjs              — esbuild bundle → dist/worker.js, used by test:router (below), not by deploy
     test/
       splice.test.mjs       — splice conformance (no bindings needed)
       compile.spec.ts        — compiler assertions (TS; bundled+run by compile.test.mjs)
@@ -96,8 +95,8 @@ platform/
 ## Deploy
 
 Everything below happens **in the Cloudflare dashboard** (dash.cloudflare.com).
-No terminal is required for the recommended path — steps 1–4 are all
-browser clicks, including editing the one config file.
+No terminal, no local clone — steps 1–4 are all browser clicks, including
+editing the one config file.
 
 **Before you start:**
 
@@ -106,8 +105,8 @@ browser clicks, including editing the one config file.
   asks you to "enable R2" the first time you open it, which includes adding a
   card. You will not be charged at this project's scale (10 GB / month
   free), but don't be surprised by the prompt.
-- Nothing else. The fallback path at the bottom needs Node.js + git locally,
-  but the recommended path doesn't.
+- Nothing else — no terminal, no local clone, no Node.js. Every step below
+  happens in the browser.
 
 Cloudflare reorganizes its dashboard's navigation labels periodically —
 every "Dashboard → **X** → **Y**" click-path below is accurate as of this
@@ -198,8 +197,7 @@ to just keep the committed value rather than change two places in sync.
   `platform/worker` (picking up the pinned `wrangler` devDependency), run
   `node ci-build.mjs` (which builds `slides/` fresh from source and runs
   `split-shell.mjs`), then `wrangler deploy` (which bundles `src/index.ts`
-  with its own bundler and applies the R2/D1 bindings from `wrangler.toml` —
-  no `dist/worker.js` involved in this path at all).
+  with its own bundler and applies the R2/D1 bindings from `wrangler.toml`).
 
 You do **not** need to separately visit **Settings → Bindings** and add
 anything — `wrangler.toml`'s `[[r2_buckets]]`/`[[d1_databases]]` blocks are
@@ -231,43 +229,27 @@ Every push to the configured branch rebuilds `slides/` fresh and redeploys —
 decks already stored in R2 are untouched across a shell upgrade; a doc is
 forward-compatible by construction (`docs/PLATFORM.md` §3, formats are
 additive), so old decks keep working under a newer shell without migration.
+This is the only deploy path — there is no manual/local alternative kept
+around, so a broken Workers Builds connection is a dashboard problem to fix,
+not something to route around.
 
-### Fallback: manual paste (no Workers Builds, needs Node.js + git locally)
+## Local development
 
-For when you can't or don't want to connect GitHub to Cloudflare — you still
-need to have done step 1 above (create the bucket + database), but instead
-of steps 2–3 you build locally and paste the result by hand:
+This is for verifying a code change before pushing it — it does not deploy
+anything, and Workers Builds does not use any of it (`ci-build.mjs` is the
+only thing that runs during a real deploy). Requires Node.js (see `.nvmrc`
+for the version) and git locally.
 
 ```bash
-# from the repo root — requires Node.js (see .nvmrc for the version) and git
+# from the repo root
 cd slides && npm ci && npm run build:single && cd ..
 cd platform/worker && npm ci
 node ../build/split-shell.mjs        # writes src/generated/shell.ts
 npm run typecheck                     # tsc --noEmit
-npm run build                         # writes dist/worker.js
 npm test                              # splice.test.mjs + compile.test.mjs
-npm run test:router                   # full HTTP flow, in-memory mocks (needs npm run build first)
+npm run build                         # writes dist/worker.js, needed by the next line
+npm run test:router                   # full HTTP flow against dist/worker.js, in-memory R2/D1 mocks
 ```
-
-`dist/worker.js` is one self-contained, minified ESM file (~710KB, ~520KB
-gzipped). This path never reads `wrangler.toml` at all, so bindings have to
-be added by hand, once:
-
-- Dashboard → **Workers & Pages** → **Create** → **Worker** (any name), then
-  **Quick Edit** → delete the default script → paste the full contents of
-  `dist/worker.js` → **Save and deploy**.
-- Same Worker → **Settings** → **Bindings** → **Add binding**, twice:
-
-  | Type | Binding name | Points at |
-  |---|---|---|
-  | R2 Bucket | `DOCS` | the bucket from step 1 |
-  | D1 Database | `DB` | the database from step 1 |
-
-  Binding names must be exactly `DOCS` and `DB` (case-sensitive) — the code
-  reads `env.DOCS`/`env.DB` verbatim.
-
-After a `slides/` change you want to serve, repeat the local build and
-re-paste — nothing here auto-updates. Verify the same way as step 4 above.
 
 ## API
 
