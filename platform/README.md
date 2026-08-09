@@ -179,25 +179,41 @@ to just keep the committed value rather than change two places in sync.
   in the Create-Worker flow instead — that shortcut works too, as long as the
   resulting Worker still ends up named exactly `bento-platform`.) You'll be
   prompted to install/authorize Cloudflare's GitHub app — grant it access to
-  this repository (or all your repos, your choice). Pick this repo and set:
+  this repository (or all your repos, your choice), then pick this repo.
+  This is a multi-step wizard ("Select a method" → "Select a repository" →
+  "Create and deploy"); the fields below are split across those steps, not
+  all on one screen:
 
-  | Field | Value |
-  |---|---|
-  | Root directory | `platform/worker` |
-  | Build command | `npm install && node ci-build.mjs` |
-  | Deploy command | `npx wrangler deploy` (the default — leave it) |
-  | Branch | `main` (or whichever branch you push releases to) |
+  | Field | Value | Usually shown on |
+  |---|---|---|
+  | Path (may be labeled "Root directory") | `platform/worker` | "Select a repository" |
+  | Build command | `npm install && node ci-build.mjs` | "Select a repository" |
+  | Deploy command | `npx wrangler deploy` (the default — leave it) | "Create and deploy" |
+  | Branch | `main` (or whichever branch you push releases to) | either step |
+
+  The final "Create and deploy" step also shows a **"Builds for
+  non-production branches"** toggle with its own **"Non-production branch
+  deploy command"** (defaults to `npx wrangler versions upload`) — this
+  controls whether pushes to branches *other than* `main` get their own
+  preview deployment. Leave it on its default; it doesn't affect the
+  production Worker either way, and this project doesn't rely on it. You may
+  also see an **API token** field, pre-filled with one Cloudflare already
+  manages for you — leave whatever's already selected; you don't need to
+  create one yourself.
 
   (Field names/layout are from Cloudflare's Workers Builds UI at the time of
-  writing — if your dashboard shows extra fields not listed here, e.g. a
-  preview/non-production branch setting, the defaults are fine; leave them.)
-- Save, then trigger the first build from that same screen (there's usually
-  a "Retry"/"Trigger deploy" button — you don't need to push a commit just
-  to kick off the first one). It will: clone the repo, `npm install` inside
-  `platform/worker` (picking up the pinned `wrangler` devDependency), run
-  `node ci-build.mjs` (which builds `slides/` fresh from source and runs
-  `split-shell.mjs`), then `wrangler deploy` (which bundles `src/index.ts`
-  with its own bundler and applies the R2/D1 bindings from `wrangler.toml`).
+  writing and **will drift** — Cloudflare reorganizes this wizard periodically.
+  If a step looks different, look for these same four concepts — which
+  directory to build from, what command builds it, what command deploys it,
+  which branch triggers it — under whatever labels your dashboard uses.)
+- Save, then trigger the first build (there's usually a "Retry"/"Trigger
+  deploy" button on the Worker's Builds screen — you don't need to push a
+  commit just to kick off the first one). It will: clone the repo, `npm
+  install` inside `platform/worker` (picking up the pinned `wrangler`
+  devDependency), run `node ci-build.mjs` (which builds `slides/` fresh from
+  source and runs `split-shell.mjs`), then `wrangler deploy` (which bundles
+  `src/index.ts` with its own bundler and applies the R2/D1 bindings from
+  `wrangler.toml`).
 
 You do **not** need to separately visit **Settings → Bindings** and add
 anything — `wrangler.toml`'s `[[r2_buckets]]`/`[[d1_databases]]` blocks are
