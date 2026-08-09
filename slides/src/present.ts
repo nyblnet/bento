@@ -653,8 +653,10 @@ export function startPresentation(
   // must not close it on exit (it lives beyond this present session).
   let speakerAdopted = false
   // main-window message listener for the broadcast popup's "set host" action;
-  // registered once because openSpeaker can be called multiple times.
+  // registered once because openSpeaker can be called multiple times. The
+  // reference is kept so it can be removed when the present session ends.
   let bcastMessageListenerAdded = false
+  let bcastMessageListener: ((ev: MessageEvent) => void) | null = null
   // ——— live slide broadcast ———
   let broadcastOn = false
   let broadcastCreds: BroadcastCreds | null = null
@@ -1010,7 +1012,7 @@ export function startPresentation(
 
     if (!bcastMessageListenerAdded) {
       bcastMessageListenerAdded = true
-      window.addEventListener('message', (ev) => {
+      bcastMessageListener = (ev) => {
         if (!speaker || ev.source !== speaker) return
         const data = ev.data
         if (!data || data.bento !== 'broadcast' || typeof data.setHost !== 'string') return
@@ -1019,7 +1021,8 @@ export function startPresentation(
         opts?.onSetHostClient?.(u)
         const creds = broadcastCreds
         postBroadcastLink(creds && doc.meta?.hostClient ? hostedLink(creds, doc.meta.hostClient) : null, !doc.meta?.hostClient)
-      })
+      }
+      window.addEventListener('message', bcastMessageListener)
     }
 
     speakerStart = performance.now()
@@ -1200,6 +1203,11 @@ export function startPresentation(
     }
     setLaserEnabled(false, false)
     window.removeEventListener('blur', onWindowBlur)
+    if (bcastMessageListener) {
+      window.removeEventListener('message', bcastMessageListener)
+      bcastMessageListener = null
+      bcastMessageListenerAdded = false
+    }
     onExit(last)
   }
 

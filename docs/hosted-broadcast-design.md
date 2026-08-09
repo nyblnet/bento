@@ -98,7 +98,7 @@ Client only. No relay/worker changes, no format changes beyond `doc.meta`
 - `slides/src/editor/editor.ts` — export dialog "Hosting URL" field; hosted
   copy carries reader creds + sync state.
 - `slides/src/sync/online.ts` — hosted-link minting helper (reuses
-  resolveBroadcastCreds + viewerUrl).
+  resolveBroadcastCreds + hostedLink).
 - `slides/src/present.ts` — popup broadcast link row + set-host flow.
 - `slides/src/i18n/*.ts` — new strings in all catalogs.
 - `docs/DECISIONS.md` — entry.
