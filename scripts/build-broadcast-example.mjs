@@ -286,6 +286,7 @@ function spliceDoc(shell, doc) {
 const creds = await mintCollab()
 const ownerDocId = uuid()
 const copyDocId = uuid()
+const hostedDocId = uuid()
 
 const ownerCollab = {
   room: creds.room,
@@ -306,19 +307,38 @@ const broadcastCopyCollab = {
   },
 }
 
+const hostedCopyCollab = {
+  ...ownerCollab,
+  role: 'reader',
+  on: true,
+  sync: undefined,
+  broadcast: {
+    room: creds.roomName,
+    tok: creds.tok,
+    relay,
+  },
+}
+delete hostedCopyCollab.writerPriv
+delete hostedCopyCollab.ownerPriv
+delete hostedCopyCollab.invite
+
 const ownerDoc = buildDoc(ownerDocId, ownerCollab)
 const copyDoc = buildDoc(copyDocId, broadcastCopyCollab)
+const hostedDoc = buildDoc(hostedDocId, hostedCopyCollab)
 
 const outDir = join(root, 'working/broadcast-demo')
 mkdirSync(outDir, { recursive: true })
 
 const ownerOut = spliceDoc(shell, ownerDoc)
 const copyOut = spliceDoc(shell, copyDoc)
+const hostedOut = spliceDoc(shell, hostedDoc)
 
-writeFileSync(join(outDir, 'broadcast-demo.bento.html'), ownerOut)
-writeFileSync(join(outDir, 'broadcast-demo-live.bento.html'), copyOut)
+writeFileSync(join(outDir, 'owner.bento.html'), ownerOut)
+writeFileSync(join(outDir, 'copy.bento.html'), copyOut)
+writeFileSync(join(outDir, 'hosted.bento.html'), hostedOut)
 
-console.log(`broadcast-demo.bento.html          — ${Math.round(ownerOut.length / 1024)} KB`)
-console.log(`broadcast-demo-live.bento.html     — ${Math.round(copyOut.length / 1024)} KB`)
+console.log(`owner.bento.html   — ${Math.round(ownerOut.length / 1024)} KB`)
+console.log(`copy.bento.html    — ${Math.round(copyOut.length / 1024)} KB`)
+console.log(`hosted.bento.html  — ${Math.round(hostedOut.length / 1024)} KB`)
 console.log(`relay: ${relay}`)
 console.log(`room:  ${creds.roomName}`)
