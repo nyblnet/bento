@@ -23,7 +23,7 @@ import { Store } from './store'
 import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
-import { onlineTransport, startSharing, stopSharing, BroadcastSocket, syncHost } from './sync/online'
+import { onlineTransport, startSharing, stopSharing, BroadcastSocket, syncHost, joinFromDoc } from './sync/online'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -136,6 +136,16 @@ function broadcastMode(doc: BentoDoc) {
     } catch { /* malformed override → keep the embedded room */ }
   }
   const relay = (creds.relay ?? syncHost()).replace(/\/+$/, '')
+  // ?room=<name>&tok=<tok> re-points this copy at another broadcaster's room on
+  // the SAME relay — the hosted-client flow: any presenter's deck mints this
+  // link (hostedLink), the client opens it, same copy, new driver. ?b= (full
+  // viewer URL, own relay) takes precedence when both are present.
+  if (b < 0) {
+    const q = new URLSearchParams(location.search)
+    const r = q.get('room')
+    const t = q.get('tok')
+    if (r && t) creds = { room: `${relay}/d/${r}`, tok: t, relay }
+  }
   const roomUrl = creds.room.startsWith('wss://') || creds.room.startsWith('ws://')
     ? creds.room
     : `${relay}/d/${creds.room}`
@@ -204,7 +214,39 @@ function broadcastMode(doc: BentoDoc) {
     document.body.appendChild(card)
   }
 
-  const session = startPresentation(doc, 0, exitCard)
+  // Live content (hosted client): the copy carries reader collab creds — join
+  // the deck's collab room as a reader replica so slide content updates in
+  // real time as the deck is edited. Navigation still rides the broadcast
+  // socket above; the session ignores ctl frames (onFrame has no default).
+  const c = doc.collab
+  let liveStore: Store | null = null
+  if (c?.room && c.key && c.on !== false) {
+    liveStore = new Store(doc)
+    const liveSession = new SyncSession(liveStore)
+    joinFromDoc(liveSession, liveStore)
+  }
+  const session = startPresentation(doc, 0, exitCard, {
+    onDocChange: ({ slidesEl, deck, buildSection }) => {
+      const visibleIndexOf = (i: number) => doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
+      liveStore?.on('doc', () => {
+        if (doc.slides.length !== slidesEl.children.length) {
+          // structural change: rebuild the section list and re-settle on the
+          // same visible slide (the presenter's nav is 1-based visible numbers)
+          const cur = deck.getIndices().h
+          slidesEl.replaceChildren(...doc.slides.map(buildSection))
+          deck.sync()
+          session.goTo(slideIndexFromVisible(visibleIndexOf(cur)))
+        } else {
+          // content change: re-render the current slide in place (no fx replay —
+          // the slide is already shown; entrance fx run on slidechange only)
+          const cur = deck.getIndices().h
+          const section = slidesEl.children[cur] as HTMLElement | undefined
+          const slide = doc.slides[cur]
+          if (section && slide) section.replaceChildren(buildSection(slide))
+        }
+      })
+    },
+  })
   updateChip()
 
   const socket = new BroadcastSocket(roomUrl, creds.tok, {

@@ -34,7 +34,16 @@ export function startPresentation(
   doc: BentoDoc,
   startIndex: number,
   onExit: (lastIndex: number) => void,
-  opts: { fullscreen?: boolean } = {},
+  opts: {
+    fullscreen?: boolean
+    /** hosted-client live sync: invoked once at init with the pieces needed to
+     *  re-render the deck on remote doc changes (slidesEl, deck, buildSection) */
+    onDocChange?: (ctx: {
+      slidesEl: HTMLElement
+      deck: Reveal.Api
+      buildSection: (s: BentoDoc['slides'][number]) => HTMLElement
+    }) => void
+  } = {},
 ): PresentSession {
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
@@ -50,7 +59,7 @@ export function startPresentation(
   revealEl.appendChild(slidesEl)
   overlay.appendChild(revealEl)
 
-  doc.slides.forEach((slide) => {
+  const buildSection = (slide: BentoDoc['slides'][number]) => {
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
     section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
@@ -65,8 +74,9 @@ export function startPresentation(
       aside.textContent = slide.notes
       section.appendChild(aside)
     }
-    slidesEl.appendChild(section)
-  })
+    return section
+  }
+  doc.slides.forEach((slide) => slidesEl.appendChild(buildSection(slide)))
 
   document.body.appendChild(overlay)
 
@@ -1367,6 +1377,9 @@ export function startPresentation(
       cacheSlideSymbols(doc, first, startIndex)
       mountLiveCharts(doc.slides[startIndex], first)
       startMediaIn(first)
+    }
+    if (opts?.onDocChange) {
+      opts.onDocChange({ slidesEl, deck, buildSection })
     }
   })
 
