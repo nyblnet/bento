@@ -412,7 +412,7 @@ Run (from REPO ROOT — the script resolves paths relative to the repo root):
 cd /Users/niemes/Code/bento && node scripts/build-broadcast-example.mjs --relay ws://localhost:8787
 ```
 
-Expected: `working/broadcast-demo/` contains owner + copy decks.
+Expected: `working/broadcast-demo/` contains owner + copy + hosted decks.
 
 - [ ] **Step 2: Start the relay**
 

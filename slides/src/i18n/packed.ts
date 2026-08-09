@@ -746,6 +746,8 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Broadcast to audience": ["視聴者に配信","广播给观众","廣播給觀眾","Transmitir a la audiencia","Diffuser vers le public","Zum Publikum übertragen","Trasmetti al pubblico","Transmitir para o público"],
   "Broadcast": ["配信","广播","廣播","Transmitir","Diffusion","Übertragung","Trasmissione","Transmissão"],
   "Broadcast link": ["配信リンク","广播链接","廣播連結","Enlace de transmisión","Lien de diffusion","Übertragungslink","Link trasmissione","Link da transmissão"],
+  "Hosting URL (optional)": ["ホスティングURL（任意）","托管 URL（可选）","託管 URL（可選）","URL de alojamiento (opcional)","URL d'hébergement (facultatif)","Hosting-URL (optional)","URL di hosting (facoltativa)","URL de hospedagem (opcional)"],
+  "Hosted link": ["ホスト済みリンク","托管链接","託管連結","Enlace alojado","Lien hébergé","Gehosteter Link","Link ospitato","Link hospedado"],
   "Copy": ["コピー","复制","複製","Copiar","Copier","Kopieren","Copia","Copiar"],
   "Copied": ["コピーしました","已复制","已複製","Copiado","Copié","Kopiert","Copiato","Copiado"],
   "N viewers": ["N人の視聴者","N 位观众","N 位觀眾","N espectadores","N spectateurs","N Zuschauer","N spettatori","N espectadores"],

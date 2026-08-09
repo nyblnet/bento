@@ -23,7 +23,7 @@ import { Store } from './store'
 import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
-import { onlineTransport, startSharing, stopSharing, BroadcastSocket, syncHost, joinFromDoc } from './sync/online'
+import { onlineTransport, startSharing, stopSharing, disconnectOnline, BroadcastSocket, syncHost, joinFromDoc } from './sync/online'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -152,6 +152,7 @@ function broadcastMode(doc: BentoDoc) {
 
   let viewers = 0
   let firstNav = false
+  let exited = false
   let lastState: import('./sync/online').BroadcastSocketState = 'connecting'
 
   const chip = document.createElement('div')
@@ -206,6 +207,11 @@ function broadcastMode(doc: BentoDoc) {
   const exitCard = (lastIndex: number) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     void lastIndex
+    if (exited) return
+    exited = true
+    socket?.destroy()
+    if (liveSession) disconnectOnline(liveSession)
+    unsubscribeDoc?.()
     const card = document.createElement('div')
     card.className = 'ed-player'
     card.innerHTML =
@@ -220,15 +226,17 @@ function broadcastMode(doc: BentoDoc) {
   // socket above; the session ignores ctl frames (onFrame has no default).
   const c = doc.collab
   let liveStore: Store | null = null
+  let liveSession: SyncSession | null = null
   if (c?.room && c.key && c.on !== false) {
     liveStore = new Store(doc)
-    const liveSession = new SyncSession(liveStore)
+    liveSession = new SyncSession(liveStore)
     joinFromDoc(liveSession, liveStore)
   }
+  let unsubscribeDoc: (() => void) | null = null
   const session = startPresentation(doc, 0, exitCard, {
     onDocChange: ({ slidesEl, deck, buildSection }) => {
       const visibleIndexOf = (i: number) => doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
-      liveStore?.on('doc', () => {
+      const applyDoc = () => {
         if (doc.slides.length !== slidesEl.children.length) {
           // structural change: rebuild the section list and re-settle on the
           // same visible slide (the presenter's nav is 1-based visible numbers)
@@ -244,7 +252,9 @@ function broadcastMode(doc: BentoDoc) {
           const slide = doc.slides[cur]
           if (section && slide) section.replaceChildren(buildSection(slide))
         }
-      })
+      }
+      unsubscribeDoc = liveStore?.on('doc', applyDoc) ?? null
+      applyDoc()
     },
   })
   updateChip()

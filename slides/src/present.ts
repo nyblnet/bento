@@ -657,8 +657,8 @@ export function startPresentation(
   let broadcastTransport: ReturnType<typeof onlineTransport> = null
   let broadcastViewers = 0
 
-  // Broadcast laser/black frames are throttled to ~10 fps to fit the relay's
-  // per-socket rate budget (RATE_BURST 200/10s) alongside nav frames.
+  // Broadcast laser/black frames are throttled to ~30 fps (33 ms) and kept well
+  // under the relay's per-socket burst budget (RATE_BURST 400/10s) alongside nav frames.
   const sendLaserPoint = (p: string | null) => {
     if (!broadcastOn || !broadcastCreds) return
     if (broadcastTransport) {

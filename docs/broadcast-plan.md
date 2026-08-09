@@ -348,7 +348,7 @@ New script `scripts/build-broadcast-example.mjs` (the repo's example-deck
 convention — see `build-example-decks.mjs`), writing to
 `working/broadcast-demo/` (gitignored):
 
-1. **Owner deck** — `broadcast-demo.bento.html`: a simple ~6-slide deck
+1. **Owner deck** — `owner.bento.html`: a simple ~6-slide deck
    (title, bullets, image, morph demo, chart, speaker notes) authored as a
    doc JSON in the script, built on the current shell (dist-single after
    Phase 4). The script mints a **real case-1 collab room** with node crypto
@@ -357,16 +357,18 @@ convention — see `build-example-decks.mjs`), writing to
    (`collab: {room, key, on:true, v:2, owner, ownerPriv, role:'writer'}`) —
    so the demo needs **no localStorage juggling**: the owner deck signs nav
    as the room owner from the file, exactly like a real collab deck.
-2. **Broadcast copy** — `broadcast-demo-live.bento.html`: same shell + doc
-   JSON, `collab = { on: false, broadcast: { room, tok, relay } }`, fresh
-   docId — the exact shape Phase 3's export produces.
-3. `--relay` flag (default `wss://sync.bento.page`); for local testing:
+2. **Broadcast copy** — `copy.bento.html`: same shell + doc JSON,
+   `collab = { on: false, broadcast: { room, tok, relay } }`, fresh docId —
+   the exact shape Phase 3's export produces.
+3. **Hosted copy** — `hosted.bento.html`: same doc JSON with no embedded
+   broadcast creds; driven by `?room=<name>&tok=<tok>` URL parameters.
+4. `--relay` flag (default `wss://sync.bento.page`); for local testing:
    `--relay ws://localhost:8787` and the owner deck's `bento-sync-url`
    localStorage set to match.
 
-Both files are the user's test fixtures: the real export code path in Phase 3
-is verified against the script's output shape (the script IS the export, run
-outside the browser).
+All three files are the user's test fixtures: the real export code path in
+Phase 3 is verified against the script's output shape (the script IS the export,
+run outside the browser).
 
 ---
 
@@ -385,9 +387,9 @@ outside the browser).
 1. `cd server/sync-worker && npx wrangler dev --port 8787` (relay) — or
    `wrangler deploy` for a hosted test;
 2. serve `working/broadcast-demo/` statically (any static server);
-3. tab 1: open `broadcast-demo.bento.html` → Present (fullscreen) → speaker
+3. tab 1: open `owner.bento.html` → Present (fullscreen) → speaker
    view → toggle 📡 Broadcast — badge shows viewer count as copies join;
-4. tab 2: open `broadcast-demo-live.bento.html` → boots straight into
+4. tab 2: open `copy.bento.html` → boots straight into
    present-follow, "Waiting for presenter" → follows slide-for-slide with
    transitions/morphs the moment the presenter moves;
 5. open a second copy **mid-show** → lands on the current slide (replayed
