@@ -95,72 +95,134 @@ platform/
 
 ## Deploy
 
+Everything below happens **in the Cloudflare dashboard** (dash.cloudflare.com).
+No terminal is required for the recommended path — steps 1–4 are all
+browser clicks, including editing the one config file.
+
+**Before you start:**
+
+- A Cloudflare account (the free tier is enough for everything here).
+- **R2 requires a payment method on file** even on the free tier — Cloudflare
+  asks you to "enable R2" the first time you open it, which includes adding a
+  card. You will not be charged at this project's scale (10 GB / month
+  free), but don't be surprised by the prompt.
+- Nothing else. The fallback path at the bottom needs Node.js + git locally,
+  but the recommended path doesn't.
+
+Cloudflare reorganizes its dashboard's navigation labels periodically —
+every "Dashboard → **X** → **Y**" click-path below is accurate as of this
+writing but may have moved; if a label doesn't match what you see, search
+the dashboard for "R2", "D1", or "Workers" and you'll land in the right
+place.
+
 Resource **creation** is always manual, through the dashboard — R2 buckets
 and D1 databases are never created by a CLI or a script here. What's
-automated is the **build and deploy step**: Cloudflare Workers Builds
-watches this repo and runs `wrangler deploy` on every push, so day-to-day you
-never touch the dashboard again after the one-time setup below. A manual
-"paste a bundle into Quick Edit" path still exists as a fallback (e.g. no
-GitHub access from where you're deploying) — see the bottom of this section.
+automated is the **build and deploy step**: once connected, Cloudflare
+Workers Builds runs `wrangler deploy` on every push, so after the one-time
+setup below you never touch the dashboard again to ship a change — push to
+`main` and it redeploys itself.
 
 `wrangler.toml` exists **only** to tell that automated `wrangler deploy`
 which pre-existing R2 bucket / D1 database to attach and where the entry
-point is — it does not create anything. This mirrors the existing convention
-in `server/sync-worker/wrangler.toml` and `server/guestbook-daemon/wrangler.toml`:
-binding names/ids are plain config, not secrets, and are committed; anything
-actually secret (an API token) would be set with `wrangler secret put`, never
-put in this file.
+point is — it does not create anything, and the values inside it are not
+secrets (an API token would be, and would never go in this file — see
+`server/sync-worker/wrangler.toml` for the same convention already in use
+elsewhere in this repo). **If you're setting up your OWN deployment of this
+project, the values currently committed in `platform/worker/wrangler.toml`
+belong to whoever deployed it before you — you're about to overwrite them
+with your own**, not fill in blanks.
 
-### 1. Create the R2 bucket and D1 database (dashboard, one-time)
+### 1. Create the R2 bucket and D1 database
 
-- Dashboard → **R2** → Create bucket. Any name (e.g. `bento-platform-docs`).
-  No public access needed — the Worker reads/writes it via a binding, and
-  asset bytes are served back out through the Worker's own `/a/:id/:key`
-  route.
-- Dashboard → **D1** → Create database. Any name (e.g. `bento-platform`).
-  Open its **Console** tab, paste the contents of
-  `platform/worker/schema.sql`, run it. That's the entire migration step —
-  no CLI needed.
+- Dashboard → **R2 Object Storage** → **Create bucket**. Any name (e.g.
+  `bento-platform-docs`) — write it down. No public access needed; the
+  Worker reads/writes it through a binding, and uploaded assets are served
+  back out through the Worker's own `/a/:id/:key` route, not directly from
+  R2.
+- Dashboard → **D1** → **Create database**. Any name (e.g. `bento-platform`)
+  — write it down. Open the new database's own page: near the top you'll
+  see a **Database ID** (looks like `9408e034-8812-402a-ac21-42bd78f9f24f`)
+  — write that down too, you need both the name and the ID. Then open its
+  **Console** tab, paste the entire contents of `platform/worker/schema.sql`,
+  and run it. That's the whole migration step — no CLI, no separate tool.
 
-### 2. Fill in `platform/worker/wrangler.toml` and commit
+### 2. Edit `platform/worker/wrangler.toml` to point at YOUR resources
 
-Replace the three placeholders with the bucket name, database name, and
-database ID from step 1 (the D1 dashboard page shows the ID). Commit and
-push — these are identifiers, not secrets, safe to commit like the other two
-Workers in this repo already do.
+You can do this entirely on GitHub, no local clone needed: open
+`platform/worker/wrangler.toml` in this repo on GitHub, click the pencil
+("Edit this file") icon, make the three changes below, then commit directly
+to `main` (or open a PR if you prefer review).
 
-### 3. Connect the Worker to this repo (dashboard, one-time)
+Change exactly these three values to what you wrote down in step 1 — leave
+everything else in the file untouched, including `compatibility_date` (it
+doesn't need to be today's date; that field is a deliberate Workers-runtime
+version pin, not a timestamp to keep fresh):
 
-Dashboard → **Workers & Pages** → Create → **Worker** (name it to match
-`wrangler.toml`'s `name`, or attach to an existing Worker of that name) →
-**Settings** → **Builds** → connect to this GitHub repo, then set:
-
-| Field | Value |
+| In the file | Set it to |
 |---|---|
-| Root directory | `platform/worker` |
-| Build command | `node ci-build.mjs` |
-| Deploy command | `npx wrangler deploy` (the default) |
-| Branch | `main` (or whichever you push releases to) |
+| `bucket_name` under `[[r2_buckets]]` | your R2 bucket's name |
+| `database_name` under `[[d1_databases]]` | your D1 database's name |
+| `database_id` under `[[d1_databases]]` | your D1 database's ID |
 
-(Field names are from Cloudflare's Workers Builds UI at the time of writing —
-verify against your dashboard, it may have moved.) Trigger the first build
-manually from that screen. It will: clone the repo, `npm install` in
-`platform/worker` (picking up the pinned `wrangler` devDependency), run
-`ci-build.mjs` (which builds `slides/` fresh and runs `split-shell.mjs`), then
-`wrangler deploy` (which bundles `src/index.ts` with its own bundler — no
-`dist/worker.js` involved in this path at all).
+Leave `name = "bento-platform"` and `main = "src/index.ts"` alone — the
+Worker you create in step 3 needs to match `name` exactly, and it's simplest
+to just keep the committed value rather than change two places in sync.
+
+### 3. Create the Worker and connect it to this repo
+
+- Dashboard → **Workers & Pages** → **Create** → **Worker**. Name it
+  **exactly `bento-platform`** (matching `wrangler.toml`'s `name` — this is
+  what lets `wrangler deploy` find the right Worker later). Any starter
+  template is fine to deploy initially; the first automated build replaces
+  it entirely.
+- Open the new Worker → **Settings** → **Builds** → connect a repository.
+  (Some accounts offer a "Connect to Git"/"Import a repository" option right
+  in the Create-Worker flow instead — that shortcut works too, as long as the
+  resulting Worker still ends up named exactly `bento-platform`.) You'll be
+  prompted to install/authorize Cloudflare's GitHub app — grant it access to
+  this repository (or all your repos, your choice). Pick this repo and set:
+
+  | Field | Value |
+  |---|---|
+  | Root directory | `platform/worker` |
+  | Build command | `npm install && node ci-build.mjs` |
+  | Deploy command | `npx wrangler deploy` (the default — leave it) |
+  | Branch | `main` (or whichever branch you push releases to) |
+
+  (Field names/layout are from Cloudflare's Workers Builds UI at the time of
+  writing — if your dashboard shows extra fields not listed here, e.g. a
+  preview/non-production branch setting, the defaults are fine; leave them.)
+- Save, then trigger the first build from that same screen (there's usually
+  a "Retry"/"Trigger deploy" button — you don't need to push a commit just
+  to kick off the first one). It will: clone the repo, `npm install` inside
+  `platform/worker` (picking up the pinned `wrangler` devDependency), run
+  `node ci-build.mjs` (which builds `slides/` fresh from source and runs
+  `split-shell.mjs`), then `wrangler deploy` (which bundles `src/index.ts`
+  with its own bundler and applies the R2/D1 bindings from `wrangler.toml` —
+  no `dist/worker.js` involved in this path at all).
+
+You do **not** need to separately visit **Settings → Bindings** and add
+anything — `wrangler.toml`'s `[[r2_buckets]]`/`[[d1_databases]]` blocks are
+what create those bindings on deploy. That page will show them once the
+first build succeeds; it's normal for it to look empty before that.
 
 **Binding names are load-bearing** — the code reads `env.DOCS` / `env.DB`
 verbatim (`platform/worker/src/env.ts`); they must match `wrangler.toml`'s
-`binding = "..."` values exactly.
+`binding = "..."` values exactly (they already do, in the committed file —
+just don't rename `DOCS`/`DB` while editing).
 
 ### 4. Verify
 
-Visit the Worker's `*.workers.dev` URL. `/healthz` should return
-`{"ok":true,"shellVersion":"..."}`; `/` is the compile→review→create demo
-page — step 1: "Load example outline", "Compile →" (fills step 2); step 2:
-"Create deck", then open the `/d/<id>` link it prints. That link is a real,
-fully editable `.bento.html` page, and `/d/<id>#present` starts the show
+If the build failed, the Builds screen shows the log — the most likely
+causes are a typo in one of the three values from step 2, or the Worker's
+name not matching `wrangler.toml`'s `name`.
+
+If it succeeded: visit the Worker's `*.workers.dev` URL (shown on its
+overview page). `/healthz` should return `{"ok":true,"shellVersion":"..."}`.
+`/` is the compile→review→create demo page — step 1: click "Load example
+outline", then "Compile →" (fills step 2 in below it); step 2: click "Create
+deck", then open the `/d/<id>` link it prints. That link is a real, fully
+editable `.bento.html` page, and `/d/<id>#present` starts the show
 immediately (existing shell behavior, `slides/src/main.ts`).
 
 ### From here on
@@ -170,10 +232,14 @@ decks already stored in R2 are untouched across a shell upgrade; a doc is
 forward-compatible by construction (`docs/PLATFORM.md` §3, formats are
 additive), so old decks keep working under a newer shell without migration.
 
-### Fallback: manual paste (no Workers Builds, no wrangler.toml read)
+### Fallback: manual paste (no Workers Builds, needs Node.js + git locally)
+
+For when you can't or don't want to connect GitHub to Cloudflare — you still
+need to have done step 1 above (create the bucket + database), but instead
+of steps 2–3 you build locally and paste the result by hand:
 
 ```bash
-# from the repo root
+# from the repo root — requires Node.js (see .nvmrc for the version) and git
 cd slides && npm ci && npm run build:single && cd ..
 cd platform/worker && npm ci
 node ../build/split-shell.mjs        # writes src/generated/shell.ts
@@ -184,11 +250,24 @@ npm run test:router                   # full HTTP flow, in-memory mocks (needs n
 ```
 
 `dist/worker.js` is one self-contained, minified ESM file (~710KB, ~520KB
-gzipped). Dashboard → your Worker → **Quick Edit**, delete the default
-script, paste the full contents of `dist/worker.js`, **Save and deploy**.
-Bind R2/D1 exactly as in step 3 above if this Worker hasn't been bound yet.
-This path never reads `wrangler.toml` and works even if Workers Builds isn't
-set up at all.
+gzipped). This path never reads `wrangler.toml` at all, so bindings have to
+be added by hand, once:
+
+- Dashboard → **Workers & Pages** → **Create** → **Worker** (any name), then
+  **Quick Edit** → delete the default script → paste the full contents of
+  `dist/worker.js` → **Save and deploy**.
+- Same Worker → **Settings** → **Bindings** → **Add binding**, twice:
+
+  | Type | Binding name | Points at |
+  |---|---|---|
+  | R2 Bucket | `DOCS` | the bucket from step 1 |
+  | D1 Database | `DB` | the database from step 1 |
+
+  Binding names must be exactly `DOCS` and `DB` (case-sensitive) — the code
+  reads `env.DOCS`/`env.DB` verbatim.
+
+After a `slides/` change you want to serve, repeat the local build and
+re-paste — nothing here auto-updates. Verify the same way as step 4 above.
 
 ## API
 
