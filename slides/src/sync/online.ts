@@ -860,6 +860,12 @@ export function broadcastLink(creds: BroadcastCreds): string {
   return viewerUrl(creds.roomName, creds.tok, creds.relay)
 }
 
+/** Full URL of a hosted broadcast client pointed at these credentials. The
+ *  hosted copy lives at `hostClient`; the query params select the room. */
+export function hostedLink(creds: BroadcastCreds, hostClient: string): string {
+  return `${hostClient.replace(/\/+$/, '')}?room=${creds.roomName}&tok=${creds.tok}`
+}
+
 /** Extract the room name (e.g. w<commit>) from a full relay WebSocket URL. */
 function roomNameFromUrl(roomUrl: string): string {
   try {
