@@ -815,6 +815,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .bento-present-overlay.laser-over-slide .bento-slide,
 .bento-present-overlay.laser-over-slide .bento-slide * { cursor: none !important; }
+/* While the laser is armed, dragging on the slide must never select text. */
+.bento-present-overlay.laser-enabled .bento-slide,
+.bento-present-overlay.laser-enabled .bento-slide * {
+  user-select: none;
+  -webkit-user-select: none;
+}
 .bento-laser-trail {
   position: absolute;
   inset: 0;
@@ -847,6 +853,17 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   transition: opacity 0.08s linear;
 }
 .bento-laser-dot.visible { opacity: 1; }
+.bento-laser-dot.bento-remote {
+  /* Frames arrive at ~30fps; a short linear tween (longer than one frame
+     interval so it always settles, short enough to add no lag) smooths the
+     last step — Excalidraw steps at 33ms with no tween at all, this is
+     strictly smoother. The LOCAL dot keeps its opacity-only transition: at
+     60fps a position tween would smear it behind the hand. */
+  transition:
+    left 0.045s linear,
+    top 0.045s linear,
+    opacity 0.08s linear;
+}
 .bento-present-overlay.reduce-motion .bento-laser-trail { display: none; }
 .bento-present-overlay.reduce-motion .bento-laser-dot { transition: none; }
 /* Reduced motion (M / speaker toggle / OS prefers-reduced-motion): JS fx are

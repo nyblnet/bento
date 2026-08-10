@@ -387,6 +387,9 @@ export interface BentoDoc {
     subject?: string
     event?: string
     keywords?: string
+    /** Hosting URL of this deck's broadcast copy — lets any collaborator mint
+     *  hosted broadcast links (docs/hosted-broadcast-design.md). */
+    hostClient?: string
   }
   /** slide coordinate space, px */
   size: { width: number; height: number }
@@ -458,10 +461,18 @@ export interface BentoDoc {
    * fork and merge both ways. Never transmitted as sync ops.
    */
   collab?: {
-    room: string
-    key: string
+    room?: string
+    key?: string
     on?: boolean
     sync?: import('./sync/crdt').SyncStateJSON
+    /**
+     * Live slide broadcast credentials: a read-only copy that boots straight
+     * into present-follow mode. Old shells ignore this field. The copy carries
+     * only the room name and relay origin — the connect token is DERIVED from
+     * the room name (broadcastTok), so the file never embeds a secret. No
+     * signing key, no symmetric key, no CRDT state.
+     */
+    broadcast?: { room: string; relay: string }
     /**
      * Signed writes (v0.9.18+): the WRITE capability is an ECDSA P-256 keypair,
      * distinct from the symmetric `key` (the READ capability). `writerPub`

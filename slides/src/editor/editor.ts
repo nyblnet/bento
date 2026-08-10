@@ -21,7 +21,9 @@ import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+// The one exception is saveBroadcastCopy — a broadcast copy is a plaintext
+// share by definition (the design doc says so), so it uses serializeFile.
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
@@ -31,7 +33,7 @@ import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, is
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
-import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, resolveBroadcastCreds, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 const i18nT = t
@@ -874,6 +876,40 @@ export class Editor {
     }
   }
 
+  /** A live broadcast hand-out: opens straight into the show and follows the
+   *  presenter's slide changes in real time. When a hosting URL is set
+   *  (doc.meta.hostClient) the copy ALSO carries the collab read cap — it
+   *  live-syncs slide content from the deck's collab room, so a copy hosted
+   *  once stays current as the deck is edited (docs/hosted-broadcast-design.md). */
+  private async saveBroadcastCopy() {
+    const creds = await resolveBroadcastCreds(this.store.doc, this.store.doc.docId)
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    clone.docId = newDocId()
+    delete clone.readonly
+    const c = this.store.doc.collab
+    // Only a deck with a hosting URL mints a LIVE hosted copy (reader replica
+    // in main.ts broadcastMode). A plain broadcast copy is a pure snapshot:
+    // no room, no keys — on:false explicitly (legacy shells treat absent `on`
+    // as on).
+    const hosted = !!(this.store.doc.meta?.hostClient && c?.room && c.key)
+    clone.collab = hosted
+      ? { room: c.room, key: c.key, role: 'reader', on: true, sync: undefined, broadcast: { room: creds.roomName, relay: creds.relay } }
+      : { on: false, broadcast: { room: creds.roomName, relay: creds.relay } }
+    if (hosted) {
+      delete clone.collab.writerPriv // the muzzle — no write capability travels
+      delete clone.collab.ownerPriv // v2: neither the owner key…
+      delete clone.collab.invite //    …nor any invite (delegation) material
+    }
+    try {
+      // serializeFile, not serializeAuto: the copy is a plaintext share — a
+      // password-gated copy is useless to viewers. The owner's file stays encrypted.
+      const ok = await writeUpdatedFileAs(await serializeFile(clone), clone, { suffix: 'broadcast', keepHandle: false })
+      if (ok) this.toast(t('Broadcast copy saved — viewers open it and their slides follow yours'))
+    } catch {
+      this.toast(t('Saving failed'))
+    }
+  }
+
   /** A live viewer: follows the shared session read-only. Keeps the room + read
    *  key + writer PUBKEY (so the relay knows the room's writer) but drops the
    *  writer PRIVATE key — the relay then rejects any op it tries to send. */
@@ -1260,6 +1296,8 @@ export class Editor {
         t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
       action(ICONS.slideshow, t('Present-only file…'), false, () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
+      action(ICONS.broadcast, t('Broadcast copy…'), false, () => void this.saveBroadcastCopy(),
+        t('A live broadcast hand-out — opens into the show and follows your slides in real time.'))
       action(ICONS.template, t('Template…'), false, () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
     } else {
@@ -3005,6 +3043,32 @@ export class Editor {
     metaField(t('Subject'), () => this.store.doc.meta?.subject ?? '', (v) => { ensureMeta().subject = v })
     metaField(t('Event'), () => this.store.doc.meta?.event ?? '', (v) => { ensureMeta().event = v })
     metaField(t('Keywords'), () => this.store.doc.meta?.keywords ?? '', (v) => { ensureMeta().keywords = v })
+    // Broadcast hosting URL — where the broadcast copy lives. The speaker view
+    // builds the viewer link from it (hostedLink), so a garbage value would
+    // produce a share link nobody can open: validate on change.
+    const hostRow = div('ed-about-meta')
+    const hostLabel = document.createElement('label')
+    hostLabel.textContent = t('Broadcast hosting URL')
+    const hostInp = document.createElement('input')
+    hostInp.type = 'url'
+    hostInp.placeholder = 'https://…'
+    hostInp.value = this.store.doc.meta?.hostClient ?? ''
+    hostInp.addEventListener('change', () => {
+      const v = hostInp.value.trim()
+      // https:// anywhere; http:// only for local dev hosts — a plain-http
+      // hosted client is a mixed-content dead end for viewers on https pages
+      if (v && !/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(v)) {
+        this.toast(t('That doesn’t look like a URL — it should start with https://'))
+        hostInp.value = this.store.doc.meta?.hostClient ?? ''
+        return
+      }
+      this.store.commit(() => {
+        if (v) ensureMeta().hostClient = v
+        else if (this.store.doc.meta) delete this.store.doc.meta.hostClient
+      })
+    })
+    hostRow.append(hostLabel, hostInp)
+    metaWrap.appendChild(hostRow)
     box.appendChild(metaWrap)
 
     const fine = div('ed-about-fine')

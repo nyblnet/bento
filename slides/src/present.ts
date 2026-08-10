@@ -12,21 +12,39 @@ import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from '
 import { morphKey, paginates, inLinearFlow } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
+import { ICONS } from './icons'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
+import { BroadcastSocket, hostedLink, resolveBroadcastCreds, type BroadcastCreds } from './sync/online'
+import { offlineEnabled } from './update'
 
 const MORPH_DURATION = 0.65
 const MORPH_EASE = 'power2.inOut'
 
 export interface PresentSession {
   exit(): void
+  /** Absolute slide navigation: jump the show to a 0-based slide index. */
+  goTo(index: number): void
+  /** Show or hide the audience blackout (broadcast copy side). */
+  setBlack(on: boolean): void
+  /** Position the remote laser dot from a broadcast owner (null = hide). */
+  setRemoteLaser(p: string | null): void
 }
 
 export function startPresentation(
   doc: BentoDoc,
   startIndex: number,
   onExit: (lastIndex: number) => void,
-  opts: { fullscreen?: boolean } = {},
+  opts: {
+    fullscreen?: boolean
+    /** hosted-client live sync: invoked once at init with the pieces needed to
+     *  re-render the deck on remote doc changes (slidesEl, deck, buildSection) */
+    onDocChange?: (ctx: {
+      slidesEl: HTMLElement
+      deck: Reveal.Api
+      buildSection: (s: BentoDoc['slides'][number]) => HTMLElement
+    }) => void
+  } = {},
 ): PresentSession {
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
@@ -42,7 +60,7 @@ export function startPresentation(
   revealEl.appendChild(slidesEl)
   overlay.appendChild(revealEl)
 
-  doc.slides.forEach((slide) => {
+  const buildSection = (slide: BentoDoc['slides'][number]) => {
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
     section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
@@ -57,8 +75,9 @@ export function startPresentation(
       aside.textContent = slide.notes
       section.appendChild(aside)
     }
-    slidesEl.appendChild(section)
-  })
+    return section
+  }
+  doc.slides.forEach((slide) => slidesEl.appendChild(buildSection(slide)))
 
   document.body.appendChild(overlay)
 
@@ -139,9 +158,13 @@ export function startPresentation(
   laserTrail.append(laserTrailHalo, laserTrailCore)
   const laserDot = document.createElement('div')
   laserDot.className = 'bento-laser-dot'
-  laserLayer.append(laserTrail, laserDot)
+  const remoteLaserDot = document.createElement('div')
+  remoteLaserDot.className = 'bento-laser-dot bento-remote'
+  laserLayer.append(laserTrail, laserDot, remoteLaserDot)
 
-  const LASER_TRAIL_LIFETIME = 275
+  // ~0.8s fade, in the direction of Excalidraw's 1s laser decay — short enough
+  // to stay responsive, long enough that the tail reads as a sweep, not a smear.
+  const LASER_TRAIL_LIFETIME = 800
   const LASER_TRAIL_SAMPLE_MS = 5
   const LASER_TRAIL_SEGMENTS = Math.ceil(LASER_TRAIL_LIFETIME / LASER_TRAIL_SAMPLE_MS) + 1
   const laserTrailHaloSegments: SVGPathElement[] = []
@@ -181,12 +204,15 @@ export function startPresentation(
     () => ({ x: 0, y: 0, time: 0 }),
   )
   let laserEnabled = false
+  let laserDrawing = false
   let laserFrame = 0
   let laserTrailFrame = 0
   let laserTrailStart = 0
   let laserTrailLength = 0
   let laserTrailVisibleSegments = 0
   let laserPoint: { x: number; y: number } | null = null
+  let laserSentThisStroke = false
+  let lastLaserSend = 0
 
   const hideLaserDot = () => {
     laserDot.classList.remove('visible')
@@ -327,18 +353,24 @@ export function startPresentation(
   }
 
   const resetLaserPointer = () => {
+    if (laserDrawing && laserSentThisStroke) {
+      laserDrawing = false
+      sendLaserPoint(null)
+    }
+    laserDrawing = false
     hideLaserDot()
     clearLaserTrail()
     if (laserFrame) cancelAnimationFrame(laserFrame)
     laserFrame = 0
     laserPoint = null
     overlay.classList.remove('laser-over-slide')
+    laserSentThisStroke = false
   }
 
   const paintLaser = (now: number) => {
     laserFrame = 0
     const point = laserPoint
-    if (!laserEnabled || blacked || !deckReady || !point) {
+    if (!laserEnabled || blacked || !deckReady || !point || !laserDrawing) {
       resetLaserPointer()
       return
     }
@@ -359,6 +391,17 @@ export function startPresentation(
       overlay.classList.remove('laser-over-slide')
       return
     }
+    const sendAt = performance.now()
+    // ~30fps on the wire — Excalidraw's CURSOR_SYNC_TIMEOUT=33ms. The relay
+    // burst (400/10s) fits a continuous stroke with nav headroom; the copy
+    // still sub-frame-smooths with a short CSS tween.
+    if (sendAt - lastLaserSend >= 33) {
+      const fx = Math.max(0, Math.min(1, (point.x - rect.left) / rect.width))
+      const fy = Math.max(0, Math.min(1, (point.y - rect.top) / rect.height))
+      sendLaserPoint(`${fx.toFixed(4)},${fy.toFixed(4)}`)
+      lastLaserSend = sendAt
+      laserSentThisStroke = true
+    }
     const host = overlay.getBoundingClientRect()
     const x = point.x - host.left
     const y = point.y - host.top
@@ -374,9 +417,83 @@ export function startPresentation(
   }
 
   const scheduleLaser = (ev: PointerEvent) => {
-    if (!laserEnabled || ev.pointerType === 'touch' || !ev.isPrimary) return
+    if (!laserEnabled || !laserDrawing || ev.pointerType === 'touch' || !ev.isPrimary) return
     laserPoint = { x: ev.clientX, y: ev.clientY }
     if (!laserFrame) laserFrame = requestAnimationFrame(paintLaser)
+  }
+
+  // ——— remote (broadcast) laser trail ———
+  // The channel carries dot points at ~30fps (33ms throttle); the LOCAL trail is sampled at
+  // 5ms/1.5px and is never sent. Excalidraw's collab laser is the model here:
+  // the trail head is glued to the pointer's CURRENT position and the whole
+  // stroke redraws every frame — never pre-baked ahead of it. Feeding the
+  // received points subdivided along the tween path injected the ENTIRE
+  // 100ms segment at arrival while the dot still crawled after it, so the
+  // trail visibly ran AHEAD of the pointer. Instead, sample the dot's
+  // RENDERED position every frame (the CSS tween glides it; offsetLeft/Top
+  // are already in trail coordinate space) and feed that — head glued to the
+  // dot at every instant, same fade, same taper, no wire change.
+  let remoteTrailFrame = 0
+  const sampleRemoteTrail = (now: number) => {
+    remoteTrailFrame = 0
+    if (laserDrawing || reduceMotion || blacked || !remoteLaserDot.classList.contains('visible')) return
+    addLaserTrailPoint(remoteLaserDot.offsetLeft, remoteLaserDot.offsetTop, now)
+    if (laserTrailLength > 1) {
+      if (laserTrailFrame) cancelAnimationFrame(laserTrailFrame)
+      renderLaserTrail(now)
+    }
+    remoteTrailFrame = requestAnimationFrame(sampleRemoteTrail)
+  }
+  const clearRemoteLaser = () => {
+    if (remoteTrailFrame) cancelAnimationFrame(remoteTrailFrame)
+    remoteTrailFrame = 0
+    remoteLaserDot.classList.remove('visible')
+    clearLaserTrail()
+  }
+
+  const setRemoteLaser = (p: string | null) => {
+    if (!p || blacked) {
+      clearRemoteLaser()
+      return
+    }
+    // The laser layer only enters the DOM when the laser was armed locally —
+    // on a broadcast copy nobody ever arms it, so mount it on first remote
+    // frame or the dot would be positioned on a detached element.
+    buildLaser()
+    const section = deck.getCurrentSlide() as HTMLElement | null
+    const surface = section?.querySelector<HTMLElement>('.bento-slide')
+    if (!surface) {
+      clearRemoteLaser()
+      return
+    }
+    const rect = surface.getBoundingClientRect()
+    const parts = p.split(',')
+    const fx = parseFloat(parts[0] ?? 'NaN')
+    const fy = parseFloat(parts[1] ?? 'NaN')
+    if (!Number.isFinite(fx) || !Number.isFinite(fy)) {
+      clearRemoteLaser()
+      return
+    }
+    const host = overlay.getBoundingClientRect()
+    const x = rect.left + Math.max(0, Math.min(1, fx)) * rect.width - host.left
+    const y = rect.top + Math.max(0, Math.min(1, fy)) * rect.height - host.top
+    if (remoteLaserDot.classList.contains('visible')) {
+      // Mid-stroke: let the short tween glide the dot to the new frame.
+      remoteLaserDot.style.left = `${x}px`
+      remoteLaserDot.style.top = `${y}px`
+    } else {
+      // A new stroke after a release: the dot is hidden at its OLD spot and the
+      // CSS left/top tween would fly it across the gap — the trail sampler
+      // traces that ghost glide into a line from the last position. Snap it to
+      // the new position first (tween off), then re-enable for the stream.
+      remoteLaserDot.style.transition = 'none'
+      remoteLaserDot.style.left = `${x}px`
+      remoteLaserDot.style.top = `${y}px`
+      void remoteLaserDot.offsetWidth // reflow so the snap lands before re-enabling
+      remoteLaserDot.style.transition = ''
+      remoteLaserDot.classList.add('visible')
+    }
+    if (!remoteTrailFrame) remoteTrailFrame = requestAnimationFrame(sampleRemoteTrail)
   }
 
   const setLaserEnabled = (on: boolean, feedback = true) => {
@@ -391,14 +508,47 @@ export function startPresentation(
   const toggleLaser = () => setLaserEnabled(!laserEnabled)
 
   overlay.addEventListener('pointermove', scheduleLaser, true)
+  overlay.addEventListener('pointerdown', (ev: PointerEvent) => {
+    if (!laserEnabled || ev.pointerType === 'touch' || !ev.isPrimary || !deckReady) return
+    const section = deck.getCurrentSlide() as HTMLElement | null
+    const surface = section?.querySelector<HTMLElement>('.bento-slide')
+    if (!surface) return
+    const rect = surface.getBoundingClientRect()
+    if (
+      ev.clientX < rect.left || ev.clientX > rect.right ||
+      ev.clientY < rect.top || ev.clientY > rect.bottom
+    ) return
+    laserDrawing = true
+    laserSentThisStroke = false
+    laserPoint = { x: ev.clientX, y: ev.clientY }
+    if (!laserFrame) laserFrame = requestAnimationFrame(paintLaser)
+    const fx = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+    const fy = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height))
+    sendLaserPoint(`${fx.toFixed(4)},${fy.toFixed(4)}`)
+    lastLaserSend = performance.now()
+    laserSentThisStroke = true
+  }, true)
+  overlay.addEventListener('pointerup', () => {
+    if (!laserDrawing) return
+    laserDrawing = false
+    // resetLaserPointer's own off-send guard needs laserDrawing still true, so
+    // the off frame fires HERE — before the stroke is cleared.
+    if (laserSentThisStroke) sendLaserPoint(null)
+    resetLaserPointer()
+  })
   overlay.addEventListener('pointerleave', resetLaserPointer)
   const onWindowBlur = () => resetLaserPointer()
   window.addEventListener('blur', onWindowBlur)
 
   const setBlack = (on: boolean) => {
     blacked = on
-    if (on) resetLaserPointer()
+    if (on) {
+      resetLaserPointer()
+      sendLaserPoint(null)
+      setRemoteLaser(null)
+    }
     blackout.hidden = !on
+    sendBlackPoint(on)
     updateSpeakerControls()
   }
   const toggleBlack = () => setBlack(!blacked)
@@ -495,9 +645,29 @@ export function startPresentation(
   // be opened (from the editor) before that, so gate any deck.getIndices() read
   // and re-populate once the deck is ready.
   let deckReady = false
+  // Broadcast follow-mode may receive a nav frame before Reveal finishes init;
+  // park it here and apply as soon as the deck is ready.
+  let pendingIndex: number | null = null
   // true when we adopted a speaker window the EDITOR opened — we drive it but
   // must not close it on exit (it lives beyond this present session).
   let speakerAdopted = false
+  // ——— live slide broadcast ———
+  let broadcastOn = false
+  let broadcastCreds: BroadcastCreds | null = null
+  let broadcastSocket: BroadcastSocket | null = null
+  let broadcastViewers = 0
+
+  // Broadcast laser/black frames are throttled to ~30 fps (33 ms) and kept well
+  // under the relay's per-socket burst budget (RATE_BURST 400/10s) alongside nav frames.
+  const sendLaserPoint = (p: string | null) => {
+    if (!broadcastOn || !broadcastCreds) return
+    void broadcastSocket?.sendLaser(broadcastCreds.signerPriv, p)
+  }
+  const sendBlackPoint = (on: boolean) => {
+    if (!broadcastOn || !broadcastCreds) return
+    void broadcastSocket?.sendBlack(broadcastCreds.signerPriv, on)
+  }
+
   // Second-screen placement is set up in the EDITOR (properties panel) before
   // presenting — that's where the Window Management permission is granted via a
   // dedicated gesture, and the layout is cached in ../screens. Here we just read
@@ -549,6 +719,17 @@ export function startPresentation(
     nav('laser')?.classList.toggle('active', laserEnabled)
     nav('laser')?.setAttribute('aria-pressed', String(laserEnabled))
     nav('reduce')?.classList.toggle('active', reduceMotion)
+    const bcastBtn = nav('broadcast')
+    if (bcastBtn) {
+      bcastBtn.classList.toggle('active', broadcastOn)
+      bcastBtn.setAttribute('aria-pressed', String(broadcastOn))
+    }
+    const bcastBadge = d.querySelector<HTMLElement>('.sv-bcast')
+    if (bcastBadge) {
+      bcastBadge.hidden = !broadcastOn
+      bcastBadge.textContent = broadcastOn ? String(broadcastViewers) : ''
+      bcastBadge.title = t('N viewers').replace('N', String(broadcastViewers))
+    }
   }
 
   // A brief centred pill so a keypress (M) gives visible confirmation — the
@@ -561,6 +742,60 @@ export function startPresentation(
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show') // restart the fade
     clearTimeout(toastTimer)
     toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
+  }
+
+  const postBroadcastLink = (link: string | null) => {
+    if (!speaker || speaker.closed) return
+    try { speaker.postMessage({ bento: 'broadcast', link }, '*') } catch { /* gone */ }
+  }
+
+  const stopBroadcast = () => {
+    if (!broadcastOn) return
+    if (broadcastCreds) {
+      sendLaserPoint(null)
+      sendBlackPoint(false)
+    }
+    broadcastOn = false
+    broadcastSocket?.destroy()
+    broadcastSocket = null
+    broadcastCreds = null
+    broadcastViewers = 0
+    postBroadcastLink(null)
+    updateSpeakerControls()
+  }
+
+  const toggleBroadcast = async () => {
+    if (broadcastOn) {
+      stopBroadcast()
+      flashPresentMsg(t('Broadcast ended'))
+      return
+    }
+    if (offlineEnabled()) {
+      flashPresentMsg(t('Broadcast refused in offline mode'))
+      return
+    }
+    try {
+      const creds = await resolveBroadcastCreds(doc, doc.docId)
+      const socket = new BroadcastSocket(creds.room, creds.tok, {
+        onNav: () => {},
+        onPresence: (count) => { broadcastViewers = count; updateSpeakerControls() },
+        // re-send the CURRENT slide on every open: a mid-show reconnect must
+        // re-sync viewers who joined while the socket was down (the relay only
+        // replays lastNav to the reconnecting socket itself)
+        onState: (s) => {
+          if (s === 'open') void socket.sendNav(creds.signerPriv, visibleIndex(deck.getIndices().h))
+        },
+      }, creds.signerPub)
+      broadcastSocket = socket
+      socket.connect()
+      broadcastOn = true
+      broadcastCreds = creds
+      postBroadcastLink(doc.meta?.hostClient ? hostedLink(doc.meta.hostClient, creds.roomName) : null)
+      updateSpeakerControls()
+    } catch (err) {
+      console.error('[bento-broadcast] arm failed', err)
+      flashPresentMsg(t('Broadcast failed'))
+    }
   }
 
   const setReduceMotion = (on: boolean, persist = true) => {
@@ -654,10 +889,18 @@ export function startPresentation(
           navBtn('next', '›', t('Next')) +
           navBtn('last', '⇥', t('Last slide')) +
           navBtn('black', '■', t('Black screen (B)')) +
-          navBtn('laser', '🟒', t('Laser pointer (L)'), true) +
+          navBtn('laser', ICONS.laser, t('Laser pointer (L)'), true) +
           navBtn('grid', '▦', t('All slides (G)')) +
           navBtn('reduce', '⏸', t('Reduce motion (M)')) +
+          navBtn('broadcast', ICONS.broadcast, t('Broadcast to audience')) +
         `</div>` +
+        `<span class="sv-bcast" hidden title="${t('N viewers')}"></span>` +
+      `</div>` +
+      `<div class="sv-bcast-link" hidden>` +
+        `<span class="sv-bcast-label">${t('Broadcast link')}</span>` +
+        `<input type="text" class="sv-bcast-input" readonly>` +
+        `<button class="sv-bcast-copy">${t('Copy broadcast link')}</button>` +
+        `<span class="sv-bcast-copied" hidden>${t('Broadcast link copied')}</span>` +
       `</div>` +
       `<div class="sv-main">` +
         `<div class="sv-current"></div>` +
@@ -668,6 +911,65 @@ export function startPresentation(
       `</div>` +
       `<div class="sv-rail"></div>` +
       `<div class="sv-grid" hidden><div class="sv-grid-inner"></div></div>`
+
+    const bcastStyle = d.createElement('style')
+    bcastStyle.textContent =
+      // a display property on the rule would override the UA's [hidden]{display:none},
+      // so the [hidden] variants must restate it explicitly
+      `.sv-bcast { display:inline-block; min-width:1.6em; text-align:center; background:rgba(255,255,255,0.15); border-radius:999px; padding:0.15em 0.5em; margin-left:0.5em; font-size:0.85em; line-height:1; }` +
+      `.sv-bcast[hidden] { display:none; }` +
+      `.sv-bcast-link { padding:0.5em 0.85em; background:#1a1f24; border-bottom:1px solid #2a2f35; display:flex; align-items:center; gap:0.6em; }` +
+      `.sv-bcast-link[hidden] { display:none; }` +
+      `.sv-bcast-label { color:#9aa4ad; font-size:0.9em; }` +
+      `.sv-bcast-input { flex:1; background:#0d1114; border:1px solid #3a424b; color:#e8eaed; padding:0.3em 0.5em; border-radius:4px; font-size:0.9em; }` +
+      `.sv-bcast-copy { background:#3a424b; color:#fff; border:none; border-radius:4px; padding:0.4em 0.8em; cursor:pointer; font-size:0.9em; }` +
+      `.sv-bcast-copy:hover { background:#4b5563; }` +
+      `.sv-bcast-copied { color:#7ee787; font-size:0.9em; }`
+    // the popup head persists across openSpeaker calls — never append a second copy
+    if (!d.head.querySelector('style[data-bento-bcast]')) {
+      bcastStyle.dataset.bentoBcast = '1'
+      d.head.appendChild(bcastStyle)
+    }
+
+    const bcastScript = d.createElement('script')
+    bcastScript.textContent = `
+(function(){
+  if (window.__bentoBcastBound) return
+  window.__bentoBcastBound = true
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window.opener) return
+    const data = ev.data
+    if (!data || data.bento !== 'broadcast') return
+    const linkBox = document.querySelector('.sv-bcast-link')
+    const input = linkBox ? linkBox.querySelector('.sv-bcast-input') : null
+    const copyBtn = linkBox ? linkBox.querySelector('.sv-bcast-copy') : null
+    const copied = linkBox ? linkBox.querySelector('.sv-bcast-copied') : null
+    if (!linkBox || !input || !copyBtn) return
+    const bindOnce = () => {
+      if (linkBox.dataset.bound) return
+      linkBox.dataset.bound = '1'
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(input.value).then(() => {
+          if (copied) copied.hidden = false
+          window.setTimeout(() => { if (copied) copied.hidden = true }, 1200)
+        }, () => {})
+      })
+    }
+    if (data.link) {
+      linkBox.hidden = false
+      input.value = data.link
+      input.placeholder = ''
+      copyBtn.hidden = false
+      if (copied) copied.hidden = true
+    } else {
+      linkBox.hidden = true
+      return
+    }
+    bindOnce()
+  })
+})()
+`
+    d.body.appendChild(bcastScript)
 
     speakerStart = performance.now()
     d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
@@ -723,6 +1025,7 @@ export function startPresentation(
       else if (k === 'laser') toggleLaser()
       else if (k === 'grid') toggleGrid()
       else if (k === 'reduce') toggleReduceMotion()
+      else if (k === 'broadcast') toggleBroadcast()
     }
     d.querySelectorAll<HTMLButtonElement>('.sv-btn[data-nav]').forEach((b) => {
       b.addEventListener('click', () => doNav(b.dataset.nav!))
@@ -743,6 +1046,12 @@ export function startPresentation(
     })
 
     updateSpeaker()
+    // Re-post the broadcast link if a show is already armed — the link is
+    // posted on arm/stop only, so a popup reopened mid-broadcast would
+    // otherwise show an empty row.
+    if (broadcastOn && broadcastCreds) {
+      postBroadcastLink(doc.meta?.hostClient ? hostedLink(doc.meta.hostClient, broadcastCreds.roomName) : null)
+    }
     if (!speakerAdopted && wasFullscreen) {
       // A fresh window on THIS display sits behind the fullscreen slides — drop
       // fullscreen so the notes are visible. (Open notes from the Slide panel and
@@ -813,6 +1122,7 @@ export function startPresentation(
   const exit = () => {
     if (exited) return
     exited = true
+    stopBroadcast() // a broadcast never outlives its show
     // measurements are keyed by slide INDEX, so they'd be wrong for the next
     // show if the deck was edited in between — never carry them across
     symCache.clear()
@@ -882,6 +1192,12 @@ export function startPresentation(
       ev.preventDefault()
       ev.stopPropagation()
       if (!ev.repeat) toggleLaser()
+      return
+    }
+    if (ev.key === 'b' || ev.key === 'B') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      toggleBlack()
       return
     }
     const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
@@ -972,6 +1288,10 @@ export function startPresentation(
     // symbol-morph on the way out. symbolOffsets normalises by the element's
     // own box, so measuring mid-morph is safe.
     cacheSlideSymbols(doc, to, toIdx)
+    if (broadcastOn && broadcastCreds) {
+      const n = visibleIndex(toIdx)
+      void broadcastSocket?.sendNav(broadcastCreds.signerPriv, n)
+    }
     updateSpeaker()
   }) as any)
 
@@ -987,9 +1307,18 @@ export function startPresentation(
     }
   })
 
+  const goTo = (index: number) => {
+    if (deckReady) deck.slide(index, 0)
+    else pendingIndex = index
+  }
+
   deck.initialize().then(() => {
     deckReady = true
     if (startIndex > 0) deck.slide(startIndex, 0)
+    if (pendingIndex !== null) {
+      deck.slide(pendingIndex, 0)
+      pendingIndex = null
+    }
     // if the speaker view was opened before init (macOS reorder), fill it now
     updateSpeaker()
     // late layout: fonts/images that finish loading after init can change
@@ -1011,9 +1340,12 @@ export function startPresentation(
       mountLiveCharts(doc.slides[startIndex], first)
       startMediaIn(first)
     }
+    if (opts?.onDocChange) {
+      opts.onDocChange({ slidesEl, deck, buildSection })
+    }
   })
 
-  return { exit }
+  return { exit, goTo, setBlack, setRemoteLaser }
 }
 
 // --- media playback -----------------------------------------------------------
