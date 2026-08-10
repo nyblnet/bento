@@ -12,9 +12,10 @@ import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from '
 import { morphKey } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
+import { ICONS } from './icons'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
-import { BroadcastSocket, hostedLink, onlineTransport, resolveBroadcastCreds, type BroadcastCreds } from './sync/online'
+import { BroadcastSocket, hostedLink, resolveBroadcastCreds, type BroadcastCreds } from './sync/online'
 import { offlineEnabled } from './update'
 
 const MORPH_DURATION = 0.65
@@ -43,8 +44,6 @@ export function startPresentation(
       deck: Reveal.Api
       buildSection: (s: BentoDoc['slides'][number]) => HTMLElement
     }) => void
-    /** presenter set doc.meta.hostClient from the broadcast popup (editor mode) */
-    onSetHostClient?: (url: string) => void
   } = {},
 ): PresentSession {
   const overlay = document.createElement('div')
@@ -655,32 +654,21 @@ export function startPresentation(
   // main-window message listener for the broadcast popup's "set host" action;
   // registered once because openSpeaker can be called multiple times. The
   // reference is kept so it can be removed when the present session ends.
-  let bcastMessageListenerAdded = false
-  let bcastMessageListener: ((ev: MessageEvent) => void) | null = null
   // ——— live slide broadcast ———
   let broadcastOn = false
   let broadcastCreds: BroadcastCreds | null = null
   let broadcastSocket: BroadcastSocket | null = null
-  let broadcastTransport: ReturnType<typeof onlineTransport> = null
   let broadcastViewers = 0
 
   // Broadcast laser/black frames are throttled to ~30 fps (33 ms) and kept well
   // under the relay's per-socket burst budget (RATE_BURST 400/10s) alongside nav frames.
   const sendLaserPoint = (p: string | null) => {
     if (!broadcastOn || !broadcastCreds) return
-    if (broadcastTransport) {
-      void broadcastTransport.sendLaser(broadcastCreds.signerPriv, p)
-    } else {
-      void broadcastSocket?.sendLaser(broadcastCreds.signerPriv, p)
-    }
+    void broadcastSocket?.sendLaser(broadcastCreds.signerPriv, p)
   }
   const sendBlackPoint = (on: boolean) => {
     if (!broadcastOn || !broadcastCreds) return
-    if (broadcastTransport) {
-      void broadcastTransport.sendBlack(broadcastCreds.signerPriv, on)
-    } else {
-      void broadcastSocket?.sendBlack(broadcastCreds.signerPriv, on)
-    }
+    void broadcastSocket?.sendBlack(broadcastCreds.signerPriv, on)
   }
 
   // Second-screen placement is set up in the EDITOR (properties panel) before
@@ -759,9 +747,9 @@ export function startPresentation(
     toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
   }
 
-  const postBroadcastLink = (link: string | null, noHost: boolean) => {
+  const postBroadcastLink = (link: string | null) => {
     if (!speaker || speaker.closed) return
-    try { speaker.postMessage({ bento: 'broadcast', link, noHost }, '*') } catch { /* gone */ }
+    try { speaker.postMessage({ bento: 'broadcast', link }, '*') } catch { /* gone */ }
   }
 
   const stopBroadcast = () => {
@@ -773,13 +761,9 @@ export function startPresentation(
     broadcastOn = false
     broadcastSocket?.destroy()
     broadcastSocket = null
-    if (broadcastTransport) {
-      broadcastTransport.onCtl = null
-      broadcastTransport = null
-    }
     broadcastCreds = null
     broadcastViewers = 0
-    postBroadcastLink(null, false)
+    postBroadcastLink(null)
     updateSpeakerControls()
   }
 
@@ -795,39 +779,23 @@ export function startPresentation(
     }
     try {
       const creds = await resolveBroadcastCreds(doc, doc.docId)
-      const active = onlineTransport()
-      const directOwner = active && active.status === 'open' && (
-        (doc.collab?.v === 2 && doc.collab?.owner && doc.collab?.ownerPriv && active.myPub === doc.collab.owner) ||
-        (doc.collab?.writerPub && doc.collab?.writerPriv && active.myPub === doc.collab.writerPub)
-      )
       const cur = deck.getIndices().h
       const n = visibleIndex(cur)
-      if (directOwner && doc.collab?.on !== false) {
-        broadcastTransport = active
-        broadcastTransport.onCtl = (env) => {
-          if (env.ctl === 'presence' && typeof env.n === 'number') {
-            broadcastViewers = env.n
-            updateSpeakerControls()
-          }
-        }
-        await active?.sendNav(creds.signerPriv, n)
-      } else {
-        const socket = new BroadcastSocket(creds.room, creds.tok, {
-          onNav: () => {},
-          onPresence: (count) => { broadcastViewers = count; updateSpeakerControls() },
-          // re-send the current slide on EVERY open: a mid-show reconnect must
-          // re-sync viewers who joined while the socket was down (the relay
-          // only replays lastNav to the reconnecting socket itself)
-          onState: (s) => {
-            if (s === 'open') void socket.sendNav(creds.signerPriv, n)
-          },
-        }, creds.signerPub)
-        broadcastSocket = socket
-        socket.connect()
-      }
+      const socket = new BroadcastSocket(creds.room, creds.tok, {
+        onNav: () => {},
+        onPresence: (count) => { broadcastViewers = count; updateSpeakerControls() },
+        // re-send the current slide on EVERY open: a mid-show reconnect must
+        // re-sync viewers who joined while the socket was down (the relay
+        // only replays lastNav to the reconnecting socket itself)
+        onState: (s) => {
+          if (s === 'open') void socket.sendNav(creds.signerPriv, n)
+        },
+      }, creds.signerPub)
+      broadcastSocket = socket
+      socket.connect()
       broadcastOn = true
       broadcastCreds = creds
-      postBroadcastLink(doc.meta?.hostClient ? hostedLink(creds, doc.meta.hostClient) : null, !doc.meta?.hostClient)
+      postBroadcastLink(doc.meta?.hostClient ? hostedLink(doc.meta.hostClient, creds.roomName) : null)
       updateSpeakerControls()
     } catch (err) {
       console.error('[bento-broadcast] arm failed', err)
@@ -929,7 +897,7 @@ export function startPresentation(
           navBtn('laser', '🔴', t('Laser pointer (L)'), true) +
           navBtn('grid', '▦', t('All slides (G)')) +
           navBtn('reduce', '⏸', t('Reduce motion (M)')) +
-          navBtn('broadcast', '📡', t('Broadcast to audience')) +
+          navBtn('broadcast', ICONS.broadcast, t('Broadcast to audience')) +
         `</div>` +
         `<span class="sv-bcast" hidden title="${t('N viewers')}"></span>` +
       `</div>` +
@@ -938,7 +906,6 @@ export function startPresentation(
         `<input type="text" class="sv-bcast-input" readonly>` +
         `<button class="sv-bcast-copy">${t('Copy')}</button>` +
         `<span class="sv-bcast-copied" hidden>${t('Copied')}</span>` +
-        `<button class="sv-bcast-set" hidden>${t('Set hosting URL')}</button>` +
       `</div>` +
       `<div class="sv-main">` +
         `<div class="sv-current"></div>` +
@@ -952,14 +919,16 @@ export function startPresentation(
 
     const bcastStyle = d.createElement('style')
     bcastStyle.textContent =
+      // a display property on the rule would override the UA's [hidden]{display:none},
+      // so the [hidden] variants must restate it explicitly
       `.sv-bcast { display:inline-block; min-width:1.6em; text-align:center; background:rgba(255,255,255,0.15); border-radius:999px; padding:0.15em 0.5em; margin-left:0.5em; font-size:0.85em; line-height:1; }` +
+      `.sv-bcast[hidden] { display:none; }` +
       `.sv-bcast-link { padding:0.5em 0.85em; background:#1a1f24; border-bottom:1px solid #2a2f35; display:flex; align-items:center; gap:0.6em; }` +
+      `.sv-bcast-link[hidden] { display:none; }` +
       `.sv-bcast-label { color:#9aa4ad; font-size:0.9em; }` +
       `.sv-bcast-input { flex:1; background:#0d1114; border:1px solid #3a424b; color:#e8eaed; padding:0.3em 0.5em; border-radius:4px; font-size:0.9em; }` +
       `.sv-bcast-copy { background:#3a424b; color:#fff; border:none; border-radius:4px; padding:0.4em 0.8em; cursor:pointer; font-size:0.9em; }` +
       `.sv-bcast-copy:hover { background:#4b5563; }` +
-      `.sv-bcast-set { background:#3a424b; color:#fff; border:none; border-radius:4px; padding:0.4em 0.8em; cursor:pointer; font-size:0.9em; }` +
-      `.sv-bcast-set:hover { background:#4b5563; }` +
       `.sv-bcast-copied { color:#7ee787; font-size:0.9em; }`
     d.head.appendChild(bcastStyle)
 
@@ -976,8 +945,7 @@ export function startPresentation(
     const input = linkBox ? linkBox.querySelector('.sv-bcast-input') : null
     const copyBtn = linkBox ? linkBox.querySelector('.sv-bcast-copy') : null
     const copied = linkBox ? linkBox.querySelector('.sv-bcast-copied') : null
-    const setBtn = linkBox ? linkBox.querySelector('.sv-bcast-set') : null
-    if (!linkBox || !input || !copyBtn || !setBtn) return
+    if (!linkBox || !input || !copyBtn) return
     const bindOnce = () => {
       if (linkBox.dataset.bound) return
       linkBox.dataset.bound = '1'
@@ -987,27 +955,13 @@ export function startPresentation(
           window.setTimeout(() => { if (copied) copied.hidden = true }, 1200)
         }, () => {})
       })
-      setBtn.addEventListener('click', () => {
-        const url = window.prompt(${JSON.stringify(t('Hosting URL'))}, '')
-        if (url === null) return
-        const u = url.trim()
-        if (!u || !/^https?:\\/\\//i.test(u)) return
-        window.opener.postMessage({ bento: 'broadcast', setHost: u }, '*')
-      })
     }
     if (data.link) {
       linkBox.hidden = false
       input.value = data.link
       input.placeholder = ''
       copyBtn.hidden = false
-      setBtn.hidden = true
       if (copied) copied.hidden = true
-    } else if (data.noHost) {
-      linkBox.hidden = false
-      input.value = ''
-      input.placeholder = 'https://example.com/broadcast.bento.html'
-      copyBtn.hidden = true
-      setBtn.hidden = false
     } else {
       linkBox.hidden = true
       return
@@ -1017,21 +971,6 @@ export function startPresentation(
 })()
 `
     d.body.appendChild(bcastScript)
-
-    if (!bcastMessageListenerAdded) {
-      bcastMessageListenerAdded = true
-      bcastMessageListener = (ev) => {
-        if (!speaker || ev.source !== speaker) return
-        const data = ev.data
-        if (!data || data.bento !== 'broadcast' || typeof data.setHost !== 'string') return
-        const u = data.setHost.trim()
-        if (!u || !/^https?:\/\//i.test(u)) return
-        opts?.onSetHostClient?.(u)
-        const creds = broadcastCreds
-        postBroadcastLink(creds && doc.meta?.hostClient ? hostedLink(creds, doc.meta.hostClient) : null, !doc.meta?.hostClient)
-      }
-      window.addEventListener('message', bcastMessageListener)
-    }
 
     speakerStart = performance.now()
     d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
@@ -1108,6 +1047,12 @@ export function startPresentation(
     })
 
     updateSpeaker()
+    // Re-post the broadcast link if a show is already armed — the link is
+    // posted on arm/stop only, so a popup reopened mid-broadcast would
+    // otherwise show an empty row.
+    if (broadcastOn && broadcastCreds) {
+      postBroadcastLink(doc.meta?.hostClient ? hostedLink(doc.meta.hostClient, broadcastCreds.roomName) : null)
+    }
     if (!speakerAdopted && wasFullscreen) {
       // A fresh window on THIS display sits behind the fullscreen slides — drop
       // fullscreen so the notes are visible. (Open notes from the Slide panel and
@@ -1211,11 +1156,6 @@ export function startPresentation(
     }
     setLaserEnabled(false, false)
     window.removeEventListener('blur', onWindowBlur)
-    if (bcastMessageListener) {
-      window.removeEventListener('message', bcastMessageListener)
-      bcastMessageListener = null
-      bcastMessageListenerAdded = false
-    }
     onExit(last)
   }
 
@@ -1351,8 +1291,7 @@ export function startPresentation(
     cacheSlideSymbols(doc, to, toIdx)
     if (broadcastOn && broadcastCreds) {
       const n = visibleIndex(toIdx)
-      if (broadcastSocket) void broadcastSocket.sendNav(broadcastCreds.signerPriv, n)
-      else if (broadcastTransport) void broadcastTransport.sendNav(broadcastCreds.signerPriv, n)
+      void broadcastSocket?.sendNav(broadcastCreds.signerPriv, n)
     }
     updateSpeaker()
   }) as any)
