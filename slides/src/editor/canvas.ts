@@ -1047,7 +1047,15 @@ export class SlideCanvas {
     // even when the text did NOT change, and only a re-render can do that.
     this.editingShowedRaw = false
     if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$/.test(model.html)) {
-      inner.innerHTML = model.html
+      // SANITIZED, even though the point of the swap is to show what the model
+      // holds. This is the only place raw model html reaches the live canvas —
+      // the render path has always cleaned it — so without this, double-
+      // clicking a text box in a deck someone sent you ran its script, and the
+      // `{{`-or-`$` gate is no barrier at all: one literal dollar sign opens it.
+      // Nothing is lost: the sanitizer unwraps tags and strips attributes, so a
+      // {{page:2}} token and `$E=mc^2$` TeX source are plain text to it and
+      // survive verbatim, which is the entire purpose of showing the raw html.
+      inner.innerHTML = sanitizeHtml(model.html)
       this.editingShowedRaw = true
     }
     this.editing = node

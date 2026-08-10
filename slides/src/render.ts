@@ -417,6 +417,7 @@ const ALLOWED_TAGS = new Set(['B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG',
 
 /** Keep pasted/edited rich text down to a safe inline subset. */
 export function sanitizeHtml(html: string): string {
+  if (typeof document === 'undefined') return stripAllTags(html)
   const tpl = document.createElement('template')
   tpl.innerHTML = html
   const walk = (node: Node) => {
@@ -442,22 +443,426 @@ export function sanitizeHtml(html: string): string {
   return out.innerHTML
 }
 
+/** No-DOM fallback (node rigs): drop every tag, keep the words. */
+function stripAllTags(html: string): string {
+  return String(html).replace(/<[^>]*>/g, '')
+}
+
+// --- untrusted svg ----------------------------------------------------------
+//
+// An `svg` element's markup is opaque author content that goes into the page as
+// markup — the one element type whose content is not text we lay out but nodes
+// the browser builds. Every deck is untrusted input: mailed, pasted, or
+// delivered as a collab op. Script running in this page holds `doc.collab.key`,
+// `ownerPriv`/`writerPriv`, the plaintext IndexedDB autosave store and the File
+// System Access handle ⌘S writes through, so "the document can run script" is
+// the document AND the file on disk.
+
+/**
+ * The svg vocabulary an untrusted diagram may use. AN ALLOWLIST, and that is
+ * the whole point of this rewrite.
+ *
+ * The first version of this sanitizer named five tags and three attributes,
+ * and a verifier walked through the gap five ways in Chrome 141 (2026-08-09):
+ * `<form action="javascript:…">` under a full-slide transparent submit button
+ * (ONE click anywhere on the slide), `<button formaction="javascript:…">`,
+ * `<meta http-equiv="refresh">` — which actually navigated the reader's page
+ * off to an attacker host, and which the html parser lets break out of foreign
+ * content so `<svg><rect/><meta …></svg>` reaches the body too — `<base href>`
+ * (a media `src` is documented as possibly relative, so retargeting resolution
+ * is a live fetch), and `<link rel=stylesheet>`. Not one of those is on this
+ * list, so not one of them had to be named, and neither does whatever the next
+ * browser ships.
+ *
+ * Sized against the content that exists: every svg asset in `starterdeck.ts`
+ * (userSpaceOnUse patterns, feTurbulence + feColorMatrix grain, feGaussianBlur
+ * bokeh, radialGradient auroras) draws unchanged through it. NO html tag is on
+ * the list — an svg element's markup is svg, and the html tags that reach it
+ * are exactly the carriers: `foreignObject` children, and the foreign-content
+ * breakout list, which is where `meta` came from. A diagram that wants a name
+ * added here is a one-line change; a diagram that wants `<form>` is not a
+ * diagram. An element not on the list is REMOVED WHOLE rather than unwrapped:
+ * unwrapping would spill a refused element's text onto the slide, and "refuse"
+ * is the rule this list exists to state.
+ *
+ * `template` is on nobody's list twice over — its children live in `.content`,
+ * not `childNodes`, so the walk below would never have seen them while
+ * `importNode(n, true)` copied them wholesale.
+ */
+export const SVG_TAGS = new Set([
+  // structure. `style` stays: it cannot execute, and scopeCss (hard-won detail
+  // #7) is what keeps its rules from leaking into every other svg on the page.
+  'svg', 'g', 'defs', 'symbol', 'use', 'switch', 'desc', 'title', 'metadata', 'style', 'view', 'a',
+  // shapes and text
+  'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
+  'text', 'tspan', 'textpath', 'image',
+  // paint servers, clipping, masking
+  'lineargradient', 'radialgradient', 'stop', 'pattern', 'solidcolor',
+  'clippath', 'mask', 'marker',
+  // filters
+  'filter', 'feblend', 'fecolormatrix', 'fecomponenttransfer', 'fecomposite',
+  'feconvolvematrix', 'fediffuselighting', 'fedisplacementmap', 'fedistantlight',
+  'fedropshadow', 'feflood', 'fefunca', 'fefuncb', 'fefuncg', 'fefuncr',
+  'fegaussianblur', 'feimage', 'femerge', 'femergenode', 'femorphology',
+  'feoffset', 'fepointlight', 'fespecularlighting', 'fespotlight', 'fetile',
+  'feturbulence',
+  // SMIL — judged by what they WRITE, see the attributeName rule below
+  'animate', 'animatemotion', 'animatetransform', 'set', 'mpath',
+])
+
+/** SMIL: these can WRITE an attribute, so they are judged by their target. */
+const SVG_ANIM = new Set(['animate', 'set', 'animatetransform', 'animatemotion'])
+
+/**
+ * Attributes an untrusted svg may keep. Same argument as SVG_TAGS: `action`,
+ * `formaction`, `http-equiv`, `srcdoc` and every `on*` are refused because they
+ * were never permitted, not because a list enumerates them.
+ *
+ * Matched case-INSENSITIVELY, which is what makes the html parser's foreign-
+ * content case fixups (`viewBox`, `attributeName`, `stdDeviation`,
+ * `patternUnits`) line up with the lowercase entries here.
+ */
+const SVG_ATTRS = new Set([
+  // core
+  'id', 'class', 'style', 'lang', 'xml:lang', 'xml:space', 'xmlns', 'xmlns:xlink',
+  'role', 'title', 'version', 'baseprofile', 'tabindex', 'media', 'type', 'target',
+  'href', 'xlink:href',
+  // geometry
+  'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height',
+  'd', 'points', 'pathlength', 'dx', 'dy', 'rotate', 'textlength', 'lengthadjust',
+  'transform', 'transform-origin', 'transform-box', 'viewbox', 'preserveaspectratio', 'zoomandpan',
+  // coordinate systems, paint servers, markers
+  'refx', 'refy', 'markerwidth', 'markerheight', 'markerunits', 'orient',
+  'gradientunits', 'gradienttransform', 'spreadmethod', 'fx', 'fy', 'fr', 'offset',
+  'patternunits', 'patterncontentunits', 'patterntransform', 'clippathunits',
+  'maskunits', 'maskcontentunits', 'primitiveunits', 'filterunits',
+  'startoffset', 'method', 'spacing', 'side',
+  'systemlanguage', 'requiredfeatures', 'requiredextensions',
+  // presentation
+  'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap',
+  'stroke-linejoin', 'stroke-miterlimit', 'stroke-dasharray', 'stroke-dashoffset',
+  'stroke-opacity', 'opacity', 'color', 'color-interpolation', 'color-interpolation-filters',
+  'display', 'visibility', 'overflow', 'cursor', 'pointer-events', 'shape-rendering',
+  'text-rendering', 'image-rendering', 'vector-effect', 'paint-order', 'mix-blend-mode',
+  'isolation', 'font', 'font-family', 'font-size', 'font-size-adjust', 'font-stretch',
+  'font-style', 'font-variant', 'font-weight', 'letter-spacing', 'word-spacing',
+  'text-anchor', 'text-decoration', 'dominant-baseline', 'alignment-baseline',
+  'baseline-shift', 'writing-mode', 'direction', 'unicode-bidi', 'white-space',
+  'clip', 'clip-path', 'clip-rule', 'mask', 'marker', 'marker-start', 'marker-mid',
+  'marker-end', 'filter', 'stop-color', 'stop-opacity', 'flood-color', 'flood-opacity',
+  'lighting-color', 'enable-background',
+  // filter primitives
+  'in', 'in2', 'result', 'mode', 'values', 'tablevalues', 'slope', 'intercept',
+  'amplitude', 'exponent', 'operator', 'k1', 'k2', 'k3', 'k4', 'order', 'kernelmatrix',
+  'divisor', 'bias', 'targetx', 'targety', 'edgemode', 'kernelunitlength', 'preservealpha',
+  'surfacescale', 'diffuseconstant', 'specularconstant', 'specularexponent', 'scale',
+  'xchannelselector', 'ychannelselector', 'stddeviation', 'radius', 'basefrequency',
+  'numoctaves', 'seed', 'stitchtiles', 'azimuth', 'elevation', 'pointsatx', 'pointsaty',
+  'pointsatz', 'limitingconeangle', 'z',
+  // SMIL timing
+  'attributename', 'attributetype', 'from', 'to', 'by', 'dur', 'begin', 'end', 'min',
+  'max', 'restart', 'repeatcount', 'repeatdur', 'calcmode', 'keytimes', 'keysplines',
+  'keypoints', 'path', 'additive', 'accumulate', 'origin',
+])
+
+/**
+ * `data-*` names this renderer, its editor and the kernel read. An author svg
+ * carrying one would answer a `[data-el-id="…"]` lookup that is already
+ * ambiguous between the canvas and the sidebar thumbnails (hard-won detail #3),
+ * so the open `data-*` door below stops short of them.
+ *
+ * `data-bento` is reserved as a PREFIX, not as one name: the shell's own marks
+ * are `data-bento-transient` (kernel `serializeBody` deletes those nodes from
+ * the clone it saves) and `data-bento-preview` (which save.ts removes
+ * unconditionally, replace-never-append). Reserving the exact string only would
+ * have left an author element able to answer either query.
+ */
+const SVG_DATA_RESERVED = /^data-(el-id|flip-id|slide-id|autoplay|r|c)$|^data-bento/
+
+/**
+ * `aria-*` is open-ended by design and inert; `data-*` is how a diagram's own
+ * `<style>` selects its parts. Everything else is the list.
+ *
+ * Exported for `scripts/test-sanitize.ts` — this is a pure decision, so it is
+ * pinned in node while the walk that applies it is measured in a browser.
+ */
+export function svgAttrAllowed(name: string): boolean {
+  const n = name.toLowerCase()
+  if (n.startsWith('aria-')) return true
+  if (n.startsWith('data-')) return !SVG_DATA_RESERVED.test(n)
+  return SVG_ATTRS.has(n)
+}
+
+/**
+ * Tags whose href may leave this document. An `<image>` or `<feImage>` paints
+ * a picture and an `<a>` navigates on a click the reader made; every other
+ * href in svg (`use`, `pattern`, gradient inheritance, `mpath`, `textPath`)
+ * pulls a SUBTREE out of the target document, which is both a fetch and a
+ * trust boundary.
+ */
+const SVG_HREF_REMOTE = new Set(['a', 'image', 'feimage'])
+
+/**
+ * May an untrusted svg keep this href?
+ *
+ * Same-document fragments must survive — gradients, markers and `<use>` all
+ * paint through `url(#…)`, and dropping those refs is what would render a
+ * diagram blank. Beyond that only the tags above, and only http(s) or a
+ * `data:image/` (which the browser loads script-disabled). Everything else
+ * goes: `javascript:` obviously, but the bare relative form too, because
+ * `//host/x` is relative as well and is a network fetch out of a file the
+ * reader believes is self-contained (PLATFORM §1).
+ *
+ * ASCII whitespace and control characters come out before the test, because a
+ * browser ignores them inside a scheme: `java&#9;script:alert(1)` navigates.
+ *
+ * Exported for `scripts/test-sanitize.ts`: the walk below needs a DOM, this
+ * decision does not. `tag` defaults to the permissive case so a caller asking
+ * only "is this url shape allowed anywhere" gets that answer.
+ */
+export function svgHrefAllowed(value: string, tag = 'image'): boolean {
+  const v = value.replace(/[\u0000-\u0020]/g, '').toLowerCase()
+  if (v.startsWith('#')) return true
+  if (!SVG_HREF_REMOTE.has(tag.toLowerCase())) return false
+  return /^https?:/.test(v) || v.startsWith('data:image/')
+}
+
+/** Every `url(…)` target in a CSS-ish string, quotes and padding removed. */
+function urlTargets(value: string): string[] {
+  return Array.from(value.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi))
+    .map((m) => m[2].replace(/[\u0000-\u0020]/g, '').toLowerCase())
+}
+
+/**
+ * `url(#grad)` is the gradient/marker idiom every diagram is built on;
+ * `url(https://…)` in the same attribute is a live fetch out of a self-
+ * contained file, and a read receipt for a mailed deck. So attribute values
+ * are checked for their url targets, not just their scheme — `fill`,
+ * `filter`, `clip-path`, `mask` and `style` all take one.
+ *
+ * Exported for `scripts/test-sanitize.ts`.
+ */
+export function svgUrlRefsAllowed(value: string): boolean {
+  return urlTargets(value).every((t) => t.startsWith('#') || t.startsWith('data:image/'))
+}
+
+/**
+ * At-rules an untrusted sheet may keep — layout, motion and typography, which
+ * is what a diagram's own CSS is for.
+ *
+ * An ALLOWLIST, and the reason is measured. The first pass cut `@import` by
+ * name; Chrome 141 fetched anyway (2026-08-09 — the probe server logged the
+ * request), because a CSS at-keyword is an IDENT and an ident may be written
+ * with escapes: `@\69mport "https://…";` is the same at-rule and matches no
+ * regex spelling `import`. `@im\port` and `@\49MPORT` are two more spellings of
+ * it, and there is no end to that list — so the question asked here is which
+ * at-rules are WANTED.
+ *
+ * It also covers the fetch spelled as a bare string, which the url() rewrite
+ * below cannot see: `@import "https://…"` has no `url(` in it.
+ */
+const CSS_AT_ALLOWED = new Set([
+  'media', 'supports', 'layer', 'container', 'scope', 'page', 'starting-style',
+  'font-face', 'font-feature-values', 'counter-style', 'property',
+  'keyframes', '-webkit-keyframes', '-moz-keyframes',
+])
+
+/**
+ * CSS an untrusted svg may carry, in a `<style>` element or in the model's
+ * `css` field. Neutralised rather than refused: a diagram's rules are how it
+ * draws, so dropping the sheet costs the artwork, while dropping one fetch
+ * costs nothing that was legitimate.
+ *
+ * A refused at-rule is RENAMED to one no browser implements rather than cut
+ * out. CSS error recovery discards an unknown at-rule whole — its prelude, and
+ * its block if it has one — so the payload goes and the rest of the sheet still
+ * parses, and this stays a string rewrite with no brace matching in it. It is
+ * also what makes the missing-semicolon form (`@import "x.css"` with a newline
+ * where the `;` should be) a non-case: the parser, not this regex, decides
+ * where the at-rule ends.
+ *
+ * An external `url()` is the same fetch with different syntax (`@font-face`
+ * src, `background-image`, `fill`) — rewritten to `none`, which is a valid
+ * value everywhere url() is legal, so a sheet stays parseable. Both are the
+ * no-CDN rule (PLATFORM §1) and, for a deck sent by mail, a read receipt with
+ * the reader's IP on it.
+ *
+ * The at-keyword scan requires the `@` to start a token, so an `@` inside a
+ * value (`content:"a@b"`) is left alone.
+ */
+export function sanitizeSvgCss(css: string): string {
+  const atFiltered = css.replace(/(^|[\s{};,)])@([-\w\\]+)/g, (_m, pre: string, kw: string) =>
+    // Written plainly AND wanted. An escape inside the keyword is refused on
+    // sight: nobody spells `@media` as `@\6dedia`, so decoding one would only
+    // be a second chance to disagree with the browser about what the ident says.
+    (/^-?[a-zA-Z][-\w]*$/.test(kw) && CSS_AT_ALLOWED.has(kw.toLowerCase())
+      ? `${pre}@${kw}`
+      : `${pre}@bento-refused `))
+  return atFiltered.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q: string, target: string) => {
+    const v = String(target).replace(/[\u0000-\u0020]/g, '').toLowerCase()
+    return v.startsWith('#') || v.startsWith('data:image/') ? m : 'none'
+  })
+}
+
+/**
+ * Author svg markup → nodes this document can safely hold.
+ *
+ * AT RENDER, EVERY RENDER — not on the load path. An svg element also arrives
+ * from a clipboard paste and from a collab op, and rendering is the one place
+ * all three meet. Sanitizing here also keeps the FORMAT additive: nothing is
+ * stamped on the model, so a file cleaned by this build is byte-identical to
+ * one an older build wrote.
+ *
+ * Parsed INERT. `div.innerHTML = hostile` looks safe because the div is
+ * detached and is not: the elements it creates belong to the live document, so
+ * their resources load and `<img src=x onerror=…>` fires from a div that was
+ * never inserted (measured for spaces, 2026-08-03 — same reason
+ * spaces/src/sanitize.ts parses through DOMParser). `text/html`, not
+ * `image/svg+xml`: the XML parser is FATAL on the first unclosed tag, and
+ * refusing to draw a slightly sloppy diagram is a worse answer than drawing it.
+ * The HTML parser applies the browser's own foreign-content rules, so
+ * `foreignObject`, `clipPath`, `viewBox` and `xlink:href` come back correctly
+ * cased and namespaced.
+ *
+ * `id` is deliberately never stripped: svg gradients and markers resolve
+ * through document-global `url(#…)`, so an id sweep blanks the artwork.
+ */
+export function sanitizeSvg(markup: string): DocumentFragment {
+  const out = document.createDocumentFragment()
+  if (!markup) return out
+  const parsed = new DOMParser().parseFromString(markup, 'text/html')
+
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === Node.TEXT_NODE) continue
+      if (child.nodeType !== Node.ELEMENT_NODE) { child.remove(); continue }
+      const el = child as Element
+      const tag = el.localName.toLowerCase()
+      if (!SVG_TAGS.has(tag)) { el.remove(); continue }
+
+      let gone = false
+      for (const attr of Array.from(el.attributes)) {
+        const name = attr.name.toLowerCase()
+        if (!svgAttrAllowed(name)) { el.removeAttribute(attr.name); continue }
+        if (SVG_ANIM.has(tag) && name === 'attributename') {
+          // An animation WRITES an attribute, and it writes it long after this
+          // walk has finished — so it is judged by its target. Anything off the
+          // allowlist (`onclick`, `formaction`) is refused here even though
+          // Blink declines to apply an on* through SMIL today: the refusal must
+          // not rest on a browser's restraint. `href`/`style` ARE on the
+          // allowlist and still refused, because their values are policed once,
+          // below, and an animation is a second chance to set them.
+          const target = attr.value.trim().toLowerCase()
+          if (!svgAttrAllowed(target) || /(^|:)(href|style)$/.test(target)) { gone = true; break }
+          continue
+        }
+        if (!svgUrlRefsAllowed(attr.value) || (name === 'style' && /@import|expression\s*\(/i.test(attr.value))) {
+          el.removeAttribute(attr.name)
+          continue
+        }
+        if (name !== 'href' && name !== 'xlink:href') continue
+        if (svgHrefAllowed(attr.value, tag)) continue
+        // a <use> IS its href, and one that cannot be resolved in-document
+        // instances a subtree from a document that is not ours to trust; a dead
+        // <a> or <image> is merely inert, so it keeps its place in the layout.
+        if (tag === 'use') { gone = true; break }
+        el.removeAttribute(attr.name)
+      }
+      if (gone) { el.remove(); continue }
+
+      if (tag === 'style') {
+        // Assigning textContent also discards any element children, which the
+        // html parser really does build here: inside foreign content the
+        // tokenizer stays in the data state, so `<svg><style><img src=x
+        // onerror=…></style>` parses that img as an ELEMENT, not as css text.
+        el.textContent = sanitizeSvgCss(el.textContent ?? '')
+        continue
+      }
+      walk(el)
+    }
+  }
+  walk(parsed.body)
+  // importNode, not a bare append: the nodes live in the inert parsed document,
+  // and relying on DOM4's implicit adopt is a trap for the next edit.
+  for (const n of Array.from(parsed.body.childNodes)) out.appendChild(document.importNode(n, true))
+  return out
+}
+
 const VALIGN: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }
+
+/** The three alignments the format defines. Anything else is data, not a value. */
+const ALIGN: Record<string, string> = { left: 'left', center: 'center', right: 'right' }
+
+/**
+ * A colour string safe to paste into a `style` attribute, or the fallback.
+ *
+ * A table's colours are ordinary untrusted input — the rows of a mailed deck, a
+ * paste, a collab op — so the model's `string` says nothing about the value, and
+ * escaping for markup does not cover where it lands. Inside `style="…"` the
+ * dangerous characters are `"` (which ends the attribute and lets the next word
+ * be an event handler) and `;`/`}` (which start a new declaration); `<` means
+ * nothing there. A cell whose `bg` read `x" onmouseover="…` used to mint a real
+ * handler on the canvas, in present, in print AND in every thumbnail.
+ *
+ * So: an allowlist of the characters colour notations actually use, no `url(`,
+ * and a length cap. Anything else falls back rather than being "cleaned" — a
+ * colour we do not recognise is not worth guessing at. Same rule and same
+ * reasons as dash's preview (`dash/src/preview.ts` cssColor); `url` is matched
+ * as `url(` rather than as a word because `burlywood` is a colour.
+ *
+ * Exported for `scripts/test-sanitize.ts`.
+ */
+export function cssColor(v: unknown, fallback: string): string {
+  if (typeof v !== 'string') return fallback
+  const s = v.trim()
+  if (!s || s.length > 48) return fallback
+  if (!/^[#a-zA-Z0-9(),.%\s/-]+$/.test(s)) return fallback
+  if (/url\s*\(|expression|@|\\/i.test(s)) return fallback
+  return s
+}
+
+/** A model number as a CSS length: finite and in range, or the fallback. */
+export function cssNum(v: unknown, fallback: number, max = 4096): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.min(Math.max(n, 0), max) : fallback
+}
+
+/**
+ * An author font stack, reduced to what a stylesheet can hold. Rejected by
+ * CHARACTER rather than by allowlist, unlike cssColor: font names are ordinary
+ * words in any script (`ヒラギノ角ゴ` is a font family), so the test is for the
+ * few characters that end a declaration or start a fetch.
+ */
+function cssFont(v: unknown, fallback: string): string {
+  if (typeof v !== 'string') return fallback
+  const s = v.trim()
+  if (!s || s.length > 160) return fallback
+  return /[;{}<>()\\]/.test(s) ? fallback : s
+}
 
 /**
  * Render a table element as a real HTML <table> string (table-layout: fixed).
  * Column widths are fractional weights normalised to %. Cells carry data-r /
  * data-c so the editor can target them for in-cell editing.
+ *
+ * Every author value is escaped for the attribute AND validated for the CSS it
+ * lands in (cssColor/cssNum/cssFont/ALIGN) — see cssColor for what that stops.
+ * Markup as a string, not DOM built and serialized, is kept deliberately: it is
+ * what makes this whole function testable in node with no DOM at all, which is
+ * what `scripts/test-sanitize.ts` exercises.
  */
 export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
-  const st = el.style
-  const esc = (s: string) => s.replace(/"/g, '&quot;')
-  const totalW = el.columns.reduce((s, c) => s + (c.w || 0), 0) || 1
+  const st = el.style ?? ({} as TableElement['style'])
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+  const totalW = el.columns.reduce((s, c) => s + cssNum(c.w, 0), 0) || 1
   const cols = el.columns
-    .map((c) => `<col style="width:${(((c.w || 0) / totalW) * 100).toFixed(4)}%">`)
+    .map((c) => `<col style="width:${((cssNum(c.w, 0) / totalW) * 100).toFixed(4)}%">`)
     .join('')
-  const font = esc(st.fontFamily || doc.theme.fontFamily)
-  const border = st.borderWidth ? `border:${st.borderWidth}px solid ${st.borderColor};` : ''
+  const font = esc(cssFont(st.fontFamily || doc.theme.fontFamily, 'inherit'))
+  const bw = cssNum(st.borderWidth, 0, 64)
+  const border = bw ? `border:${bw}px solid ${cssColor(st.borderColor, 'transparent')};` : ''
+  const padY = cssNum(st.cellPadY, 0, 512)
+  const padX = cssNum(st.cellPadX, 0, 512)
   const rowsHtml = el.rows
     .map((row, r) => {
       const isHeader = el.header && r === 0
@@ -465,30 +870,31 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
       const stripe = !isHeader && st.zebra && bodyIndex % 2 === 1 ? st.zebra : ''
       const cells = row.cells
         .map((cell, c) => {
-          const align = cell.align || 'left'
-          const bg = cell.bg || (isHeader ? st.headerBg : stripe || 'transparent')
-          const color = cell.color || (isHeader ? st.headerColor : st.color)
+          const align = ALIGN[cell.align as string] ?? 'left'
+          const bg = cssColor(cell.bg || (isHeader ? st.headerBg : stripe || 'transparent'), 'transparent')
+          const color = cssColor(cell.color || (isHeader ? st.headerColor : st.color), 'inherit')
           const weight = cell.bold || isHeader ? 700 : 400
           return (
-            `<td data-r="${r}" data-c="${c}" style="${border}padding:${st.cellPadY}px ${st.cellPadX}px;` +
+            `<td data-r="${r}" data-c="${c}" style="${border}padding:${padY}px ${padX}px;` +
             `text-align:${align};vertical-align:middle;color:${color};background:${bg};` +
             `font-weight:${weight};overflow:hidden;word-break:break-word;">` +
             // dir="auto" per cell for the same reason text elements carry it:
             // a table of Arabic terms is otherwise laid out as if it were
             // English. Per cell, so a bilingual table stays correct in both
             // columns.
-            `<div class="bento-cell-inner" dir="auto">${sanitizeHtml(cell.html || '') || '<br>'}</div></td>`
+            `<div class="bento-cell-inner" dir="auto">${sanitizeHtml(String(cell.html ?? '')) || '<br>'}</div></td>`
           )
         })
         .join('')
       return `<tr data-r="${r}">${cells}</tr>`
     })
     .join('')
-  const radius = st.radius ? `border-radius:${st.radius}px;overflow:hidden;` : ''
+  const rad = cssNum(st.radius, 0, 512)
+  const radius = rad ? `border-radius:${rad}px;overflow:hidden;` : ''
   return (
     `<div class="bento-table-wrap" style="width:100%;height:100%;${radius}">` +
     `<table class="bento-table" style="width:100%;height:100%;border-collapse:collapse;` +
-    `table-layout:fixed;font-family:${font};font-size:${st.fontSize}px;line-height:1.3;">` +
+    `table-layout:fixed;font-family:${font};font-size:${cssNum(st.fontSize, 16, 512)}px;line-height:1.3;">` +
     `<colgroup>${cols}</colgroup>${rowsHtml}</table></div>`
   )
 }
@@ -662,7 +1068,11 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         node.appendChild(img)
         break
       }
-      node.innerHTML = markup
+      // NOT innerHTML: this markup is author content, and assigning it ran
+      // whatever the deck carried in a <script> or an onload — see sanitizeSvg.
+      // The <img> branch above is inert already (an image is script-disabled),
+      // which is why only this path changes.
+      node.appendChild(sanitizeSvg(markup))
       const svg = node.querySelector('svg')
       if (svg) {
         svg.style.width = '100%'
@@ -670,7 +1080,10 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         svg.style.display = 'block'
         if (el.css) {
           const style = document.createElementNS(SVG_NS, 'style')
-          style.textContent = scopeCss(el.css, `[data-el-id="${CSS.escape(el.id)}"]`)
+          // Same sheet, same policy: this lands in the very `<style>` element
+          // sanitizeSvg cleans, so leaving `css` unfiltered would have left an
+          // @import sitting beside the one that was just removed.
+          style.textContent = scopeCss(sanitizeSvgCss(el.css), `[data-el-id="${CSS.escape(el.id)}"]`)
           svg.prepend(style)
         }
       }

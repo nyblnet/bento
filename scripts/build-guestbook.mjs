@@ -39,8 +39,14 @@ const rnd = (n) => { const b = new Uint8Array(n); crypto.getRandomValues(b); ret
 // owner can remove a vandal's device key from the People panel), and the PUBLIC
 // deck carries an owner-signed INVITE so anyone who opens it can write. The
 // owner's private key never enters the public file — it lands in a separate
-// gitignored owner deck next to the admin token. Rolls are MANUAL now
-// (daemon ROLL_HOURS=0): a re-mint would invalidate the held owner file.
+// gitignored owner deck next to the admin token.
+//
+// A roll re-mints the room, which INVALIDATES that held owner file, so this
+// builder's output only stays moderatable while the daemon is not auto-rolling.
+// It is auto-rolling during launch (wrangler.toml ROLL_HOURS="0.5", cron */30):
+// re-seed a freshly built pair once the cadence goes back to manual. The
+// deployed cadence lives in server/guestbook-daemon/wrangler.toml — do not
+// restate it here, that is how this comment went stale.
 const EC = { name: 'ECDSA', namedCurve: 'P-256' }
 const SIG = { name: 'ECDSA', hash: 'SHA-256' }
 const keypair = async () => {

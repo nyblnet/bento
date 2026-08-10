@@ -198,7 +198,14 @@ export default {
           },
         })
       }
-      // KV empty: fall through to the static copy on GitHub Pages
+      // KV empty. This was "fall through to the static copy on GitHub Pages",
+      // and there is no longer a copy to fall through to: the mirror dropped
+      // guestbook.bento.html in v1.0.12 and publish-site.mjs keeps it out, and
+      // the mirror's `CNAME bento.page` makes Pages 301 this URL straight back
+      // to bento.page/guestbook.bento.html — the route we are answering. So an
+      // empty KV is an OUTAGE, not a degraded mode: re-seed (README "Arming /
+      // operating"). Left in place because the daemon is live and this deploy
+      // cannot be tested from a dev machine; see wrangler.toml beside the var.
       return fetch(env.ORIGIN_FALLBACK + '/guestbook.bento.html')
     }
 

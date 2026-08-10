@@ -202,6 +202,49 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Untrusted-markup sanitizer rig
+        # Every deck is untrusted input somebody may open, paste or receive over
+        # collab, and script in that page owns the collab keys, the plaintext
+        # autosave store and the write handle to the file on disk. An audit
+        # measured `<svg onload>`, a rect `onclick`, `<img onerror>` in a
+        # foreignObject and `<form action="javascript:">` all executing.
+        #
+        # The sanitizer is an ALLOWLIST, so what this pins is the DEFAULT: the
+        # first version was a denylist that passed 40 checks with the critical
+        # still open, because the rig tested call sites with source regexes
+        # instead of the policy. These checks drive the real walk, and the
+        # browser half needs Chrome — it self-skips where there is none, so the
+        # node half still gates.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-sanitize.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-sanitize.mjs"
+          node "$RUNNER_TEMP/test-sanitize.mjs"
+
+      - name: Export-secrets rig
+        # "Copy document JSON" shipped the room's owner private key while the
+        # tooltip recommended pasting it into an AI chat, and "Save as
+        # template…" wrote plaintext out of a password-protected deck. Both are
+        # invisible in the product: the file looks right. This scans the source
+        # for the two shapes — an export that forgets to strip collab secrets,
+        # and a user-facing path that reaches serializeFile instead of
+        # serializeAuto — so a NEW export path cannot reintroduce either.
+        run: node scripts/test-export-secrets.ts
+
+      - name: Blob content-address rig
+        # Encrypted assets are fetched by content address from a relay the
+        # threat model treats as untrusted. Nothing verified that what came
+        # back matched what was asked for, and the substitution was cached to
+        # disk, so one poisoned response persisted.
+        run: node scripts/test-blobs.ts
+
+      - name: tray/ios bridge rig
+        # The iOS host opens ANY self-contained HTML document and treats those
+        # documents as mutually untrusted, so a page-supplied filename reaching
+        # appendingPathComponent was an arbitrary write inside the container —
+        # including over another deck the user would later open and trust.
+        # Source-shape checks; the Swift half self-skips without a toolchain.
+        run: node scripts/test-tray-bridge.ts
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected

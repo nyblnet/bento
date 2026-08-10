@@ -8,16 +8,19 @@ import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
-  instantiateLayout, isLightBg, layoutElementIds, newDocId, paginates, inLinearFlow, parseDoc, readableInk, syncLinkedChart, uid,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
-} from '../model'
+  instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
+  paginates, inLinearFlow,
+  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+// serializeFile (plain output) is deliberately NOT imported here: every path
+// in this file writes a real file for a person, so all of them must inherit an
+// active password. serializeAuto is the only encryption-aware serializer.
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
@@ -733,7 +736,7 @@ export class Editor {
         t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
         () => void this.openVersionHistory())
       item(ICONS.code, t('Copy document JSON'),
-        t('Copies this deck as plain JSON — paste it into an AI chat or any tool, then bring the edited JSON back here.'),
+        t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
         () => void this.copyDocJson())
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
@@ -801,7 +804,7 @@ export class Editor {
   private async savePresentationPackage() {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.readonly = true
-    delete clone.collab // a sealed package must not join (or leak) the live room
+    stripCollabSecrets(clone) // a sealed package must not join (or leak) the live room
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'presentonly' })
       if (ok) this.toast(t('Presentation package saved — it opens straight into the show'))
@@ -822,9 +825,7 @@ export class Editor {
     }
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.collab = { ...c, role: 'reader', on: true, sync: undefined }
-    delete clone.collab.writerPriv // the muzzle — no write capability travels
-    delete clone.collab.ownerPriv // v2: neither the owner key…
-    delete clone.collab.invite //    …nor any invite (delegation) material
+    stripCollabSecrets(clone, { keepRoom: true })
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' })
       if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
@@ -848,8 +849,12 @@ export class Editor {
     this.canvas.commitTextEdit()
     this.session?.stampInto(this.store.doc) // copies rejoin as true forks
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    // Strip FIRST, then delegate: the invite is the only private material an
+    // editor copy is allowed to carry. A v2 room is verified through the
+    // owner→invite→member chain, so a stray `writerPriv` (room-wide write key
+    // from a pre-v2 mint) would be a second, UNREVOKABLE way in.
+    stripCollabSecrets(clone, { keepRoom: true })
     clone.collab!.invite = await mintInvite(c.ownerPriv, 'writer')
-    delete clone.collab!.ownerPriv
     clone.collab!.on = true
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' })
@@ -859,9 +864,19 @@ export class Editor {
     }
   }
 
+  /**
+   * The document as loose data (the AI/tooling round-trip). It leaves WITHOUT
+   * the live session: this text is pasted into chats, tickets and scratch
+   * files, and `collab` is a bearer capability — the room key decrypts every
+   * frame and blob the relay holds, and the private halves grant writing and
+   * member revocation on top. Nothing about the round-trip needs a room, and
+   * openReplaceJson keeps THIS document's, so dropping the block costs nothing.
+   */
   private async copyDocJson() {
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    stripCollabSecrets(clone)
     try {
-      await navigator.clipboard.writeText(JSON.stringify(this.store.doc))
+      await navigator.clipboard.writeText(JSON.stringify(clone))
       this.toast(t('Document JSON copied'))
     } catch {
       this.toast(t('Couldn’t access the clipboard'))
@@ -885,8 +900,22 @@ export class Editor {
     applyB.className = 'ed-btn ed-btn-primary'
     applyB.textContent = t('Apply')
     applyB.addEventListener('click', () => {
-      const ok = (window as unknown as { bento?: { loadDoc?: (j: string) => boolean } }).bento?.loadDoc?.(ta.value)
-      if (ok) {
+      // parseDoc + replaceDoc rather than window.bento.loadDoc (which is the
+      // same two calls) because the collab decision has to be made BEFORE the
+      // swap: replaceDoc's events reach the sync session synchronously, and it
+      // re-attaches to whatever `collab` the new document holds.
+      //
+      // The live session belongs to THIS document, not to the pasted text. The
+      // copy side sends no collab at all, so adopting the pasted one would
+      // either wipe the user's room credentials (paste of our own JSON) or
+      // silently move the deck into a room that came from somewhere else.
+      // Content is imported; identity and capability are not.
+      const next = parseDoc(ta.value)
+      if (next) {
+        const keep = this.store.doc.collab
+        if (keep) next.collab = keep
+        else delete next.collab
+        this.store.replaceDoc(next)
         this.toast(t('Document replaced — ⌘Z undoes'))
         overlay.remove()
       } else {
@@ -974,10 +1003,14 @@ export class Editor {
   private async saveAsTemplate() {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.template = true
-    delete clone.collab // instances mint their own credentials
+    stripCollabSecrets(clone) // instances mint their own credentials
     delete (clone as { docId?: string }).docId
     try {
-      const ok = await writeUpdatedFileAs(serializeFile(clone), clone, { suffix: 'template' })
+      // serializeAuto, never serializeFile: a template is the copy people hand
+      // around, and a password-protected deck saved as one wrote its body in
+      // PLAINTEXT while the preview veto still made the file thumbnail as
+      // locked — it looked protected and was readable in any text editor.
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'template' })
       if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
     } catch (err) {
       console.error(err)
@@ -1460,8 +1493,7 @@ export class Editor {
       // numbering a hidden slide has no number at all, so show the marker
       // alone; with office-suite numbering it keeps one, struck through — the
       // same affordance PowerPoint uses. Either way it must be obvious at a
-      // glance, because a slide you forgot you hid is one you rediscover
-      // mid-presentation.
+      // glance, because a slide you forgot you hid is found mid-presentation.
       num.textContent = paginates(slide, this.store.doc) ? String(this.linearNumber(i)) : '—'
       num.title = t('Hidden — skipped while presenting and left out of PDF export')
     } else {
@@ -2986,6 +3018,31 @@ function releaseNotes(notes: string): HTMLElement {
     box.appendChild(item)
   }
   return box
+}
+
+/**
+ * Take the live session out of a copy that is about to leave this machine.
+ * ONE list, in one place: every field under `collab` is a bearer capability,
+ * so a hand-out that forgets one of them grants the recipient write access to
+ * the room, the power to revoke its members, or the ability to decrypt every
+ * frame and blob the relay has ever stored — and the file looks completely
+ * ordinary afterwards. Divergent per-export copies of this list are how one
+ * export path ends up leaking what the other three strip.
+ *
+ * The default is to drop the block outright (sealed packages, templates, the
+ * JSON on the clipboard: none of them may join anything). `keepRoom` is for
+ * the copies that are MEANT to follow the session — they keep the room, the
+ * symmetric read key and the public keys, and lose only the private halves.
+ */
+function stripCollabSecrets(doc: import('../model').BentoDoc, opts: { keepRoom?: boolean } = {}) {
+  if (!doc.collab) return
+  if (!opts.keepRoom) {
+    delete doc.collab
+    return
+  }
+  delete doc.collab.writerPriv // the muzzle — no write capability travels
+  delete doc.collab.ownerPriv // v2: neither the owner key…
+  delete doc.collab.invite //    …nor any invite (delegation) material
 }
 
 /** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */

@@ -279,6 +279,14 @@ function hoistRepeats(root: HTMLElement) {
   const movable = ({ decls }: { decls: string[] }, i: number) => {
     const props = decls.map(propOf)
     const p = props[i]
+    // A `<` in a declaration must stay inline. The stylesheet is raw text, so a
+    // hoisted `</style>` would close it early and the rest would parse as live
+    // markup (kernel previewIsSafe/styleIsInert refuses the whole preview for
+    // exactly that). Inline, the same bytes are attribute text and get escaped.
+    // Not only hardening: imagesToBackgrounds writes background-image:url("<src>"),
+    // and a single-quoted `data:image/svg+xml,<svg xmlns='…'>` image is a legal
+    // src containing `<` — hoisting it cost that deck its thumbnail outright.
+    if (decls[i].includes('<')) return false
     if (props.indexOf(p) !== props.lastIndexOf(p)) return false
     const root_ = p.slice(0, p.indexOf('-') < 0 ? p.length : p.indexOf('-'))
     if (p !== root_ && SHORTHANDS.has(root_) && props.includes(root_)) return false

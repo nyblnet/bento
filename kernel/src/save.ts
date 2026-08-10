@@ -208,6 +208,39 @@ export function previewAllowed(body: string, encrypted = isEncryptionActive()): 
 const SCRIPT_OPEN = '<scr' + 'ipt'
 const SCRIPT_CLOSE_START = '</scr' + 'ipt'
 const NOSCRIPT_CLOSE = '</nosc' + 'ript'
+const STYLE_OPEN = '<sty' + 'le'
+const STYLE_CLOSE_START = '</sty' + 'le'
+
+/**
+ * The preview's one stylesheet, and nothing hiding inside it.
+ *
+ * `<style>` is a RAW TEXT element: its content is not escaped on the way out, so
+ * whatever a provider puts in it is written to the file verbatim. Every app's
+ * preview has one (slides and dash hoist repeated declarations into it, spaces
+ * writes a sheet), and every one of them builds declarations out of AUTHOR
+ * data — colours, fonts, sizes. A single `</style>` in one of those values ends
+ * the element early and everything after it is live markup in the reader's DOM,
+ * outside `#bento-doc`, at parse time, before the remover runs.
+ *
+ * A flat "refuse any `<style`" would be simpler and would refuse EVERY preview,
+ * so the rule is shaped like the tokenizer instead: at most one style element,
+ * no `<` anywhere in its text (the breakout attempt is itself a `<`), and no
+ * second opener or stray closer anywhere around it. That last clause is what
+ * catches the tidy version of the attack, which re-opens a style after the
+ * markup it smuggled in and leaves the tag counts balanced.
+ */
+function styleIsInert(lower: string): boolean {
+  const open = lower.indexOf(STYLE_OPEN)
+  if (open < 0) return !lower.includes(STYLE_CLOSE_START)
+  if (lower.slice(0, open).includes(STYLE_CLOSE_START)) return false
+  const gt = lower.indexOf('>', open)
+  if (gt < 0) return false
+  const end = lower.indexOf(STYLE_CLOSE_START, gt)
+  if (end < 0) return false
+  const rest = lower.slice(end + STYLE_CLOSE_START.length)
+  return !lower.slice(gt + 1, end).includes('<') &&
+    !rest.includes(STYLE_OPEN) && !rest.includes(STYLE_CLOSE_START)
+}
 
 /**
  * Refuse any preview markup that could unbalance the file.
@@ -224,13 +257,15 @@ const NOSCRIPT_CLOSE = '</nosc' + 'ript'
  *
  * The app sanitizes its own output; this is the kernel refusing to take its
  * word for it. Dropping the preview costs a thumbnail. Emitting it anyway could
- * brick the file.
+ * brick the file — or, through the preview's own stylesheet, put live markup in
+ * the reader's DOM; see styleIsInert for the half escaping cannot reach.
  *
  * Exported for `scripts/test-preview.ts`, like previewAllowed.
  */
 export function previewIsSafe(html: string): boolean {
   const lower = html.toLowerCase()
-  return !lower.includes(SCRIPT_OPEN) && !lower.includes(SCRIPT_CLOSE_START) && !lower.includes(NOSCRIPT_CLOSE)
+  if (lower.includes(SCRIPT_OPEN) || lower.includes(SCRIPT_CLOSE_START) || lower.includes(NOSCRIPT_CLOSE)) return false
+  return styleIsInert(lower)
 }
 
 /**
@@ -346,7 +381,23 @@ export interface EncEnvelope {
   data: string
 }
 
-const ENC_ITERATIONS = 300_000
+/**
+ * PBKDF2 rounds for NEW envelopes only.
+ *
+ * A .bento.html is offline at-rest storage: the ciphertext sits in a file that
+ * gets mailed, synced and backed up, so an attacker guesses passwords at their
+ * own pace with no rate limit anywhere. 300k was half of current guidance
+ * (OWASP: 600k for PBKDF2-HMAC-SHA256), and it is the cheapest possible thing
+ * to fix — one number, and the cost lands on a keypress the user already waits
+ * through.
+ *
+ * READING IS UNAFFECTED, deliberately: the count travels in the envelope (`it`)
+ * and `decryptEnvelope` derives with THAT number, never this one. Every deck
+ * encrypted by an older build keeps opening with its own 300k, and re-saving it
+ * re-encrypts at the new count. A file that stops opening would be far worse
+ * than a weak KDF, so `scripts/test-preview.ts` pins a real 300k envelope.
+ */
+const ENC_ITERATIONS = 600_000
 
 const eb64 = {
   enc(bytes: Uint8Array): string {
