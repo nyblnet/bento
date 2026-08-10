@@ -11,6 +11,44 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Security: update this file. A deck could run code hidden in its own
+  content.** Ordinary-looking document content — an image, a shape, an embedded
+  drawing — could carry script that ran when the slide was drawn, or quietly
+  send the reader somewhere else. No unusual file was needed and nothing looked
+  wrong on screen.
+
+  That matters more here than in most applications, because a Bento file is not
+  a passive document: the page holding it also holds the live-session keys, the
+  local autosave copy, and — where the browser allows it — permission to write
+  back to the file on disk. Anything running inside the page inherits all of it.
+
+  Every path that turns author content into a page is now sanitised: the
+  renderer, the still image written for file-manager thumbnails, and the PDF
+  export. The iOS host no longer trusts a filename a document supplies, blob
+  fetches verify what they received, and new password-protected files use a
+  stronger key derivation.
+
+  **Two exports were also leaking.** "Copy document JSON" carried the live
+  room's private keys — while suggesting you paste the result into an AI chat —
+  and "Save as template…" wrote readable content out of a password-protected
+  deck. A third case kept a key in an invite copy that should not have had one.
+  All three now strip, through one list in one place rather than three
+  independent decisions.
+
+  **If you have already shared a live deck** — its JSON, or the file itself, to
+  a chat, a ticket or an agent — updating does not retract that. Use *Share →
+  Rotate keys*, which mints a new room and revokes the old one, then re-share
+  the new copy. If you published a template made from a password-protected
+  deck, treat its contents as disclosed: rotation cannot take back what the
+  template already wrote in the clear.
+
+  Found by auditing this repository rather than by a report, with an
+  independent adversarial review on each round, and every fix was checked to
+  fail against the previous build before being kept. The collaboration relay is
+  deliberately **not** part of this release — a relay deployment cannot be
+  undone by a file update, so it ships separately once its own regression is
+  resolved.
+
 - **A deck that is being shared now says so before an agent reads it.** A file
   with live collaboration switched on carries the keys to its own session —
   that is what makes sharing work without accounts, and it means anything
