@@ -11,6 +11,19 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Live slide broadcast.** *Save broadcast copy…* in the Share menu exports a
+  standalone viewer file of the current deck. Hand that file out and present:
+  every open copy follows your current slide — transitions and morphs included
+  — over the existing relay, with a presenter laser and black-screen controls.
+  The channel carries only a slide number, never content, and the broadcast
+  room is derived from your signing key, so copies carry no credentials and
+  the shareable link has nothing secret in it. A deck with a hosting URL mints
+  a hosted client link instead, so any presenter's room can drive the same
+  hosted copy. The relay must be deployed with the control-frame changes for
+  enforcement.
+
+## [1.0.17] — 2026-08-10
+
 - **Security: update this file. A deck could run code hidden in its own
   content.** Ordinary-looking document content — an image, a shape, an embedded
   drawing — could carry script that ran when the slide was drawn, or quietly
@@ -49,30 +62,18 @@ pre-1.0.
   undone by a file update, so it ships separately once its own regression is
   resolved.
 
-- **Live slide broadcast.** *Save broadcast copy…* in the Share menu exports a
-  standalone viewer file of the current deck. Hand that file out and present:
-  every open copy follows your current slide — transitions and morphs included
-  — over the existing relay, with a presenter laser and black-screen controls.
-  The channel carries only a slide number, never content, and the broadcast
-  room is derived from your signing key, so copies carry no credentials and
-  the shareable link has nothing secret in it. A deck with a hosting URL mints
-  a hosted client link instead, so any presenter's room can drive the same
-  hosted copy. The relay must be deployed with the control-frame changes for
-  enforcement.
+- **A dark interface, if you want one.** *About → Appearance* offers Match my
+  system, Light or Dark. It follows your machine by default and changes as your
+  machine does, so a laptop that dims at sunset takes the editor with it.
 
-- **A deck that is being shared now says so before an agent reads it.** A file
-  with live collaboration switched on carries the keys to its own session —
-  that is what makes sharing work without accounts, and it means anything
-  receiving the file receives the room: a chat, a ticket, an agent harness.
-  Nothing about a document looks like a credential, so this was easy to do by
-  accident.
+  **Your deck does not invert.** Dark dims the chrome around the slide; the
+  slide itself stays exactly as authored, because its background is your data
+  and someone proofing at midnight still needs to see what will be projected.
+  The presenter window stays dark in both themes — you present in a dark room.
 
-  The agent guide and the packaged skill now open by checking for it and
-  saying so, and `window.bento.validate()` reports it as
-  `collab-secrets-present` — only when private key material is actually there,
-  so a read-only copy stays quiet. Removing the keys afterwards does not
-  retract them; if a shared deck has already gone somewhere, *Share → Rotate
-  keys* is the remedy.
+  The theme is a viewer preference, stored on your machine and never written
+  into the file, so it never travels to whoever you send a deck to. Same rule
+  the interface language and reduced motion already follow.
 
 - **Hide a slide from the show.** Toggle *Hide slide* in the Slide panel and it
   stays in the deck, fully editable, but drops out of the walk: arrow keys pass
@@ -91,6 +92,20 @@ pre-1.0.
   struck through, or replaced by a dash when it has none — because a slide you
   have forgotten you hid is a slide you find out about mid-presentation.
 
+- **A deck that is being shared now says so before an agent reads it.** A file
+  with live collaboration switched on carries the keys to its own session —
+  that is what makes sharing work without accounts, and it means anything
+  receiving the file receives the room: a chat, a ticket, an agent harness.
+  Nothing about a document looks like a credential, so this was easy to do by
+  accident.
+
+  The agent guide and the packaged skill now open by checking for it and
+  saying so, and `window.bento.validate()` reports it as
+  `collab-secrets-present` — only when private key material is actually there,
+  so a read-only copy stays quiet. Removing the keys afterwards does not
+  retract them; if a shared deck has already gone somewhere, *Share → Rotate
+  keys* is the remedy.
+
 - **Fix: a live session could crash when two people created the same element at
   the same moment.** Sharing an element id across slides is the morph idiom —
   it is what id continuity is *for* — so two collaborators inserting one
@@ -102,11 +117,34 @@ pre-1.0.
   around a value that can legitimately be absent — and it is now pinned by a
   test with a deterministic trigger rather than left to a random rig's depth.
 
+- **Fix: the end of the toolbar could be cut off the right edge.** Between
+  roughly 1200 and 1250 pixels wide, the buttons on the right ran past the
+  window while their labels were still showing — the bar collapsed to icons at
+  1200px, but it actually needed 1250px to fit. A fixed width was never going
+  to be right, because the same buttons need a different amount of room
+  depending on browser zoom, system text size, the language the interface is
+  in, and whether the update chip is showing. The bar now measures itself and
+  steps down through its tiers until it fits, whatever is in it.
+
+- **Fix: on a narrow window, the ⋯ menu could not be clicked.** With the
+  properties panel open, the menu opened and drew in full, but every click on
+  it landed on the panel behind instead. The toolbar sits in its own painting
+  layer, and that layer was ranked below the panel — so nothing the menu itself
+  could do would bring it forward. The toolbar now sits above the panels, where
+  a menu that escapes it belongs.
+
 - **Fix: choosing a custom slide size now reveals its width and height.** The
   page-size picker rebuilt the properties panel before recording any custom
   state, so a preset-sized deck immediately snapped back to its preset and the
   two inputs never appeared. Custom mode now reveals the existing controls
   without changing the document until a dimension is actually edited.
+
+- **Fix: the toolbar keeps its height as you resize the window.** Narrowing
+  past 760px used to shave 4px off it and then, below 700px, add 14px back for
+  touch-sized buttons — so the bar shrank and then grew while a window was
+  being dragged. It now narrows horizontally only, which is where the room was
+  needed anyway, and has two heights with a reason each: normal, and taller on
+  a phone where every button is a 44px target.
 
 ## [1.0.16] — 2026-08-03
 

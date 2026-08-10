@@ -756,4 +756,7 @@ export const ja: Catalog = {
   "Hide slide": "スライドを非表示",
   "Number hidden slides": "非表示スライドに番号を付ける",
   "Hidden — skipped while presenting and left out of PDF export": "非表示 — 発表中はスキップされ、PDF 書き出しにも含まれません",
+  "Appearance": "外観",
+  "Match my system": "システムに合わせる",
+  "Dark": "ダーク",
 }

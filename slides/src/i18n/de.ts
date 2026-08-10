@@ -756,4 +756,7 @@ export const de: Catalog = {
   "Hide slide": "Folie ausblenden",
   "Number hidden slides": "Ausgeblendete Folien nummerieren",
   "Hidden — skipped while presenting and left out of PDF export": "Ausgeblendet — wird beim Präsentieren übersprungen und nicht als PDF exportiert",
+  "Appearance": "Darstellung",
+  "Match my system": "Systemeinstellung folgen",
+  "Dark": "Dunkel",
 }

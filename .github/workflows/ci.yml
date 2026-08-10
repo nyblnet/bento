@@ -451,6 +451,15 @@ jobs:
         # two it did not catch were found by widening it.
         run: node scripts/test-dash-sync.ts
 
+      - name: Theme token gate
+        # Every failure this catches is INVISIBLE in the light theme, which is
+        # the one the author is looking at. A chrome surface pinned to white
+        # keeps its light background in dark and puts light text on it — the
+        # properties panel measured 1.21:1 against a 4.5 floor before this gate
+        # existed. It also stops a document token being themed (which would
+        # invert the deck) and the light palette forking from spaces and type.
+        run: node scripts/test-slides-theme.mjs
+
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is
         # 1280x720, so they used to hang 200px off the right edge of a default

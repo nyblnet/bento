@@ -754,4 +754,7 @@ export const pt: Catalog = {
   "Hide slide": "Ocultar diapositivo",
   "Number hidden slides": "Numerar diapositivos ocultos",
   "Hidden — skipped while presenting and left out of PDF export": "Oculto — ignorado ao apresentar e excluído da exportação para PDF",
+  "Appearance": "Aspeto",
+  "Match my system": "Acompanhar o sistema",
+  "Dark": "Escuro",
 }

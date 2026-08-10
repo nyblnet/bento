@@ -762,4 +762,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Hide slide": ["スライドを非表示","隐藏幻灯片","隱藏投影片","Ocultar diapositiva","Masquer la diapositive","Folie ausblenden","Nascondi diapositiva","Ocultar diapositivo"],
   "Number hidden slides": ["非表示スライドに番号を付ける","为隐藏幻灯片编号","為隱藏投影片編號","Numerar diapositivas ocultas","Numéroter les diapositives masquées","Ausgeblendete Folien nummerieren","Numera le diapositive nascoste","Numerar diapositivos ocultos"],
   "Hidden — skipped while presenting and left out of PDF export": ["非表示 — 発表中はスキップされ、PDF 書き出しにも含まれません","已隐藏 — 放映时跳过，且不包含在 PDF 导出中","已隱藏 — 放映時略過，且不包含在 PDF 匯出中","Oculta: se omite al presentar y no se incluye en la exportación a PDF","Masquée — ignorée pendant la présentation et absente de l’export PDF","Ausgeblendet — wird beim Präsentieren übersprungen und nicht als PDF exportiert","Nascosta — saltata durante la presentazione ed esclusa dall’esportazione PDF","Oculto — ignorado ao apresentar e excluído da exportação para PDF"],
+  "Appearance": ["外観","外观","外觀","Apariencia","Apparence","Darstellung","Aspetto","Aspeto"],
+  "Match my system": ["システムに合わせる","跟随系统","跟隨系統","Según el sistema","Comme le système","Systemeinstellung folgen","Come il sistema","Acompanhar o sistema"],
+  "Dark": ["ダーク","深色","深色","Oscuro","Sombre","Dunkel","Scuro","Escuro"],
 }

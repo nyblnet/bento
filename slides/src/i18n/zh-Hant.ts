@@ -756,4 +756,7 @@ export const zhHant: Catalog = {
   "Hide slide": "隱藏投影片",
   "Number hidden slides": "為隱藏投影片編號",
   "Hidden — skipped while presenting and left out of PDF export": "已隱藏 — 放映時略過，且不包含在 PDF 匯出中",
+  "Appearance": "外觀",
+  "Match my system": "跟隨系統",
+  "Dark": "深色",
 }

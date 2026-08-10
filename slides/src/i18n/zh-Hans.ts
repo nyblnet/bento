@@ -756,4 +756,7 @@ export const zhHans: Catalog = {
   "Hide slide": "隐藏幻灯片",
   "Number hidden slides": "为隐藏幻灯片编号",
   "Hidden — skipped while presenting and left out of PDF export": "已隐藏 — 放映时跳过，且不包含在 PDF 导出中",
+  "Appearance": "外观",
+  "Match my system": "跟随系统",
+  "Dark": "深色",
 }
