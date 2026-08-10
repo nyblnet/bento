@@ -1970,10 +1970,16 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(8px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
            8px max(8px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
 }
+/* Narrow HORIZONTALLY only: 14 -> 6 reclaims 16px of the width a cramped bar is
+   short of, which is what this tier is for. The vertical padding stays at 8 —
+   shrinking it saved 4px of canvas nobody asked for and made the toolbar
+   visibly change height as a window was dragged. The tighter vertical padding
+   lives in the phone rule below, where 44px touch targets already set the
+   height and small-screen space actually is scarce. */
 .ed-topbar.ed-bar-tight {
   gap: 4px;
-  padding: max(6px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
-           6px max(6px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
+  padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+           8px max(6px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
 }
 .ed-topbar.ed-bar-tight .ed-logo > b { display: none; } /* mark only — the icon is the brand */
 
@@ -2012,6 +2018,16 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* --- phones proper: viewport-scoped chrome that is about TOUCH and small
    screens, not about whether the bar fits, so it stays a media query */
 @media (max-width: 700px) {
+  /* 44px targets already set the bar's height here, so the tighter vertical
+     padding costs nothing visible and buys back 4px where space is scarcest.
+     `.ed-bar-tight` is listed explicitly: a media query adds NO specificity, so
+     a bare `.ed-topbar` here (0,1,0) loses to the tier class (0,2,0) and the
+     phone bar silently keeps the desktop padding. Measured — it did. */
+  .ed-topbar,
+  .ed-topbar.ed-bar-tight {
+    padding: max(6px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+             6px max(6px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
+  }
   /* HIG touch targets — a 36px icon is a mis-tap on glass */
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
