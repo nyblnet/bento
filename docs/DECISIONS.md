@@ -218,6 +218,53 @@ chosen. `STRICT=1` turns every one into an assertion — flip it in CI the day
 the three decisions land, and the rig becomes their enforcement rather than
 their evidence.
 
+## 2026-08-10 — Magic notes: the expression is stored, the answer is derived, and there is no eval
+
+**Decision.** A line whose text ends in `=` gets an answer rendered after it.
+The document stores what was written — `budget * 0.3 =` — and never the number.
+`spaces/src/calc.ts` is the evaluator; `render.ts` derives per page in one
+forward pass.
+
+**Why derived and not stored.** Change `budget = 5000` to 6000 and every line
+below re-answers, because nothing downstream was frozen — measured in the
+browser: 750 → 1,950 and 480 → 720 from one edit, with the file still holding
+only the expressions. It is the rule slides settled for dynamic fields, and it
+also means the file stays plain: search, grep, the Markdown export and a build
+that predates this all see `budget * 0.3 =`, which reads as prose. No new block
+type, no attribute for the sanitizer to strip.
+
+**The trailing `=` is an OPT-IN, and that is the feature.** A notes app where
+every line with numbers became a calculator would be unusable — "we shipped 3
+of 7" is a sentence. The parser must consume the WHOLE line or return nothing;
+a partial parse is a refusal. The rig spends as many assertions on what must
+NOT answer as on what must.
+
+**NO `eval`, NO `new Function`, and it is a security boundary.** Block html
+comes out of a file somebody mailed you, and sanitize.ts exists so nothing in a
+document can execute. Reaching for the JS parser to evaluate `2+2` would hand
+that back. A recursive-descent parser over a fixed grammar can only return a
+number.
+
+**`sum above` means the run of figures DIRECTLY above.** Summing every number
+on the page was the first behaviour and it was confidently wrong: on a page
+with a budget, three expenses and two other answers it reported 78,732 where
+the reader means 515. A heading, a sentence, a definition or another answer
+ends the run — a subtotal is where a group finishes.
+
+**Order matters, and it is fed AFTER each block is drawn.** Feeding before
+meant an answering line cleared the very run its own answer needed, and
+`sum above` read 0. After means a line sees what is above it and nothing of
+itself.
+
+**Precision is a note's, not a physics paper's** — 2 decimals above 100, 4
+above 1, 6 below. `584.088921 mi` is noise around `584.09`.
+
+**Dates and times use the local calendar**, for the reasons journal.ts records:
+UTC makes "today" the wrong day for hours at a time outside Greenwich, and a
+day is not 86,400 seconds on the two DST boundaries. `2026-08-10` is lexed as
+ONE token — as three, it parses as 2026 minus 08 minus 10 and answers 2008,
+which is the worst bug this file could have.
+
 ## 2026-08-03 — Sync parameterization is gated on BYTE equivalence, not convergence
 
 Making `slides/src/sync/` serve spaces (`doc.pages[] → page.blocks[]`) by

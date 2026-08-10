@@ -144,6 +144,18 @@ jobs:
         # reported by the process it hangs.
         run: node scripts/test-spaces-agent.ts
 
+      - name: Magic notes evaluator (several timezones)
+        # Two failure modes, and the second is what would make the feature worse
+        # than not having it: a WRONG answer (silent, confident, in somebody's
+        # notes), and an answer where there should be none — "Meet Ana at 3" is
+        # a sentence. The parser must consume the whole line or return nothing.
+        # Dates run in several timezones for the reasons journal.ts records.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-calc.ts
+          done
+
       - name: Spaces shell size ceiling
         # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
         # the round finished at 108KB, and the same entry claimed the ceiling

@@ -14,7 +14,7 @@ import {
 } from '../../kernel/src/save.ts'
 import { putRecovery, getRecovery, clearRecovery, pruneOld } from '../../kernel/src/autosave.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
-import { t, applyDirection } from './i18n'
+import { t, locale, applyDirection } from './i18n'
 import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult } from './model'
 import {
   validateDoc, outlineDoc, statsDoc,
@@ -25,6 +25,7 @@ import {
 } from './agent'
 import { starterDoc } from './starter'
 import { textOf } from './sanitize'
+import { evaluate, format, pageContext } from './calc'
 import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
@@ -354,6 +355,22 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
      * / menu, no way to type — so an agent creating one would hand a human a
      * page they cannot write in.
      */
+    /**
+     * Work out an expression the way a line ending in `=` would.
+     *
+     * `bento.calc('20% of 340')` → 68. With a page id, the names defined on
+     * that page are in scope, so an agent sees exactly what a reader sees.
+     * Returns null for anything the grammar does not fully understand — the
+     * same refusal the page makes, rather than a guess.
+     */
+    calc: (expr: string, pageId?: string) => {
+      const page = pageId ? store.index.page.get(pageId) : undefined
+      const ctx = page
+        ? pageContext(page.blocks.map((b) => ({ id: b.id, text: textOf(b.html ?? '') })), '')
+        : {}
+      const v = evaluate(String(expr ?? ''), ctx)
+      return v ? { value: v.n, text: format(v, locale()) } : null
+    },
     newPage: (title: string, parent?: string) => {
       if (store.readOnly) return null
       // A TITLE, not something that stringifies into one. This takes a string

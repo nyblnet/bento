@@ -103,6 +103,24 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   now, and it cannot tangle: a block is nested under its parent only when that
   parent is genuinely above it on the page.
 
+- **Lines that work things out.** End a line with `=` and it answers:
+  `budget - flights =`, `20% of 340 =`, `940 km in miles =`, `today + 3 weeks =`,
+  `9:30 + 45 min =`, `sum above =`. Give something a name — `budget = 2400` —
+  and the lines below can use it.
+
+  **The answer is never written into your file.** The line stores what you
+  typed, and the number is worked out each time the page is drawn. Change the
+  budget at the top and every line below follows. Search, export and older
+  versions of the app all see the expression, which reads perfectly well on its
+  own.
+
+  Type a sum *without* the `=` and it shows you the answer first, quietly, with
+  a `Tab` to keep it — so nothing appears in your notes that you did not ask
+  for. A line it cannot fully work out gets nothing at all: "Meet Ana at 3"
+  stays a sentence.
+
+  `bento.calc('20% of 340')` answers the same way for an agent.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

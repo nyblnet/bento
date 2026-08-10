@@ -911,3 +911,42 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   .sp-issue { box-shadow: none; }
   .sp-prop-val { background: none; }
 }
+
+/* Magic notes. The answer is OUTPUT, not text: it sits beside the line in the
+   accent, lighter than the writing, so a page of prose with one sum in it
+   still reads as prose. The ghost preview is the same thing at half strength —
+   it has not been committed to the document yet, and it should not look as
+   though it has. */
+/* `.sp-text` is display:block, so a sibling drops to its own line however it
+   is floated — a float after a full-width block has nothing to sit beside. The
+   host goes INLINE instead, and only on a block that actually has an answer,
+   so nothing else in the editor changes. The answer stays a SIBLING rather
+   than moving inside the host: inside, contentEditable would hand it back on
+   the next keystroke and the derived number would be committed to the file. */
+.sp-b:has(> .sp-ans) > .sp-text { display: inline }
+
+.sp-ans {
+  margin-inline-start: .45em;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  user-select: none;
+}
+.sp-b:has(> .sp-preview) > .sp-text { display: inline }
+
+.sp-preview {
+  margin-inline-start: .45em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  opacity: .8;
+}
+.sp-preview kbd {
+  font: inherit; font-size: .82em; opacity: .8;
+  border: 1px solid currentColor; border-radius: 4px; padding: 0 .3em;
+  margin-inline-start: .4em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sp-preview { animation: sp-ghost-in .12s ease-out }
+  @keyframes sp-ghost-in { from { opacity: 0 } to { opacity: .75 } }
+}
