@@ -183,8 +183,6 @@ export class OnlineTransport implements Transport {
   readonly kind = 'online'
   status: OnlineStatus = 'connecting'
   onStatus: ((s: OnlineStatus) => void) | null = null
-  /** Optional hook for unrecognized control frames (e.g. broadcast presence). */
-  onCtl: ((env: Record<string, unknown>) => void) | null = null
   private ws: WebSocket | null = null
   private key: CryptoKey | null = null
   /** writer signing key — null for readers (they can decrypt but not author). */
@@ -519,12 +517,6 @@ export class OnlineTransport implements Transport {
       }
       return
     }
-    // Pass through control frames the transport doesn't recognise so callers
-    // (e.g. the broadcast presenter) can react to new relay messages without
-    // us having to know them in advance.
-    if (env.ctl && this.onCtl) {
-      this.onCtl(env as Record<string, unknown>)
-    }
     if (!env.i || !env.d || !this.key) return
     let payload: unknown
     try {
@@ -626,31 +618,16 @@ export class OnlineTransport implements Transport {
     return true
   }
 
-  /** Send a signed broadcast nav frame over this open transport. Used when the
-   *  collab socket is reused as the broadcast owner socket. */
-  async sendNav(signerPriv: string, n: number): Promise<boolean> {
-    return sendNav(this.ws, signerPriv, n)
-  }
-
-  /** Send a signed broadcast laser frame over this open transport. */
-  async sendLaser(signerPriv: string, p: string | null): Promise<boolean> {
-    return sendLaser(this.ws, signerPriv, p)
-  }
-
-  /** Send a signed broadcast black-screen frame over this open transport. */
-  async sendBlack(signerPriv: string, on: boolean): Promise<boolean> {
-    return sendBlack(this.ws, signerPriv, on)
-  }
 }
 
 // --- live slide broadcast ---------------------------------------------------
 
 export type BroadcastCreds = {
-  /** Full WebSocket URL the broadcast socket connects to, e.g. wss://host/d/w<commit>. */
+  /** Full WebSocket URL the broadcast socket connects to, e.g. wss://host/d/<name>. */
   room: string
-  /** Room name extracted from the URL, e.g. w<commit>. */
+  /** Room name extracted from the URL (the derived 10-char name). */
   roomName: string
-  /** Possession-proof token derived from the room key. */
+  /** Possession-proof token derived from the room name. */
   tok: string
   /** Relay origin used to build viewer links (respects bento-sync-url override). */
   relay: string
@@ -675,8 +652,8 @@ export type BroadcastSocketState = 'connecting' | 'open' | 'closed'
 /**
  * Lightweight read-only (optionally owner-bound) WebSocket for live slide
  * broadcast. Reuses the same backoff + heartbeat constants as OnlineTransport.
- * Ignores everything except `{ctl:'nav'}` and `{ctl:'presence'}` frames, so it
- * safely replays ciphertext noise from case-1 collab rooms.
+ * Handles nav/presence/laser/black control frames and deliberately ignores
+ * everything else — collab ciphertext, unknown ctl frames.
  */
 export class BroadcastSocket {
   private ws: WebSocket | null = null
@@ -809,8 +786,10 @@ export class BroadcastSocket {
   }
 
   close() {
+    if (this.closed) return
     this.closed = true
     this.stopHeartbeat()
+    this.setState('closed')
     this.ws?.close()
     this.ws = null
   }
@@ -850,8 +829,6 @@ export async function sendBlack(ws: WebSocket | null, signerPriv: string, on: bo
   return true
 }
 
-/** Full URL of a hosted broadcast client pointed at these credentials. The
- *  hosted copy lives at `hostClient`; the query params select the room. */
 /** 10-char broadcast room derived from the presenter's signing key — the
  *  owner key (owner deck), the invite key (a shared editor copy — per-copy
  *  unique), or a device-local broadcast key. Every copy of a deck therefore
@@ -875,6 +852,9 @@ export async function broadcastTok(room: string): Promise<string> {
   return b64u.enc(d).slice(0, 18)
 }
 
+/** Full URL of a hosted broadcast client pointed at these credentials. The
+ *  hosted copy lives at `hostClient`; the query selects the room (no tok —
+ *  viewers derive it from the room name). */
 export function hostedLink(hostClient: string, room: string): string {
   return `${hostClient.replace(/\/+$/, '')}?room=${room}`
 }
