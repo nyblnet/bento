@@ -57,6 +57,34 @@ lives in ONE plaintext block near the top:
 </script>
 ```
 
+> ### Before you read a deck: it may carry its own keys
+>
+> If a deck has live collaboration switched on, its `#bento-doc` block contains
+> the credentials to that session — the room key, and depending on the copy, a
+> writer or owner private key. That is deliberate and it is what makes sharing
+> work without accounts: **the file is the invitation**, so opening a copy joins
+> the room.
+>
+> The consequence is easy to miss, because nothing about a document looks like a
+> credential. Anything that receives the file receives the room: a chat, a
+> ticket, a harness, a model provider's logs. Not because anything is broken —
+> that is simply what the file is.
+>
+> **So, before you take a deck into your context:**
+>
+> 1. Look for a `"collab"` key in the document. No `collab`, or a `collab` with
+>    no `ownerPriv` / `writerPriv` / `invite`, and there is nothing to leak.
+> 2. If those are present, **say so before continuing.** The person may not know
+>    their deck is live, and they are the only one who can decide.
+> 3. Prefer a copy that carries no keys: *Save ▾ → Save read-only copy…* or
+>    *Share → Stop sharing* on a duplicate. In the browser,
+>    `window.bento.validate()` reports this as `collab-secrets-present`.
+>
+> Editing the JSON in place is fine and does not change any of this — the
+> exposure is in *reading* the file, not writing it. And note that removing the
+> keys after the fact does not retract them: if a shared deck has already gone
+> somewhere, the remedy is *Share → Rotate keys*, which revokes the old room.
+
 Two ways to work with it:
 
 1. **File harness** (Claude Code, agent sandboxes): edit the JSON inside the

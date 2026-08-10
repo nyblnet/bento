@@ -11,6 +11,20 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A deck that is being shared now says so before an agent reads it.** A file
+  with live collaboration switched on carries the keys to its own session —
+  that is what makes sharing work without accounts, and it means anything
+  receiving the file receives the room: a chat, a ticket, an agent harness.
+  Nothing about a document looks like a credential, so this was easy to do by
+  accident.
+
+  The agent guide and the packaged skill now open by checking for it and
+  saying so, and `window.bento.validate()` reports it as
+  `collab-secrets-present` — only when private key material is actually there,
+  so a read-only copy stays quiet. Removing the keys afterwards does not
+  retract them; if a shared deck has already gone somewhere, *Share → Rotate
+  keys* is the remedy.
+
 - **Hide a slide from the show.** Toggle *Hide slide* in the Slide panel and it
   stays in the deck, fully editable, but drops out of the walk: arrow keys pass
   over it, PDF export leaves it out, and it is never picked as the file's
