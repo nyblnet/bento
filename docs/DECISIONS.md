@@ -2182,3 +2182,24 @@ content live-syncs from the deck's collab room; nav still rides the broadcast
 socket. No relay changes; the URL carries only the nav token (same trust as the
 broadcast link), the file carries the deck key (same trust as the read-only
 copy). Design: docs/hosted-broadcast-design.md.
+
+## 2026-08-10 — Derived broadcast rooms (no tok in URLs or files)
+
+**Decision.** The broadcast room is derived from the PRESENTER's signing key —
+the key this copy signs control frames with: the owner key (owner deck), the
+per-copy invite key (a shared editor copy — each invitee's room is unique to
+their copy), the shared writer key (legacy), or a device-local broadcast key
+(no-collab decks): `room = b64url(sha256(signerPub))[0:10]`, re-hashed until
+it doesn't start with 'w' (a 'w' name would be mistaken for a signed collab
+room by the relay). The relay connect token is derived from the room name:
+`tok = b64url(sha256(room))[0:18]`. Presenter and viewers compute the same
+values, so the shareable link is `<hostClient>?room=<name>` (no tok) and the
+broadcast copy embeds `broadcast:{room,relay}` (no tok). One room system for
+ALL broadcasts — the collab-socket reuse path is removed, the presenter
+always opens a dedicated BroadcastSocket. The relay TOFUs the presenter's
+`?w=` signer key per non-`w` room (like the tok) and verifies nav/laser/black
+against it; signed rooms keep the owner-key commitment. The old `?room=&tok=`
+and `?b=` URL formats are dropped (no backward compatibility). "Set hosting
+URL" prompt removed — `doc.meta.hostClient` is set in the About dialog's
+Document properties. Key rotation breaks the pinned signer key until the deck
+is duplicated (new docId) — accepted. Design: docs/hosted-broadcast-design.md.
