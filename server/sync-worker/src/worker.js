@@ -461,7 +461,11 @@ export class Room {
     for (const s of this.state.getWebSockets()) {
       if (s === skipWs) continue
       const m = s.deserializeAttachment() || {}
+      // the presenter's own socket never counts: the owner of a signed room
+      // commits to the room name; the presenter of a broadcast room is the
+      // only socket that carries a ?w= signer key at all (viewers have none)
       if (m.signed && m.w && 'w' + (await sha256b64u(b64uDec(m.w))) === name) continue
+      if (!m.signed && m.w) continue
       viewers++
     }
     const note = JSON.stringify({ ctl: 'presence', n: viewers })
@@ -545,9 +549,7 @@ export class Room {
         sigText = 'laser.off'
       } else if (
         typeof f.p === 'string' &&
-        /^[0-9.,]{3,32}$/.test(f.p) &&
-        f.p.indexOf(',') > 0 &&
-        f.p.indexOf(',') === f.p.lastIndexOf(',')
+        /^\d+(?:\.\d+)?,\d+(?:\.\d+)?$/.test(f.p)
       ) {
         sigText = 'laser.' + f.p
       } else {
