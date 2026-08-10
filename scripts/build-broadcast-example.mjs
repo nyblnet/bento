@@ -3,8 +3,8 @@
 // Copyright (c) 2026 The Bento authors
 // Build the live-broadcast example fixtures:
 //   1. Owner deck  (owner.bento.html) — real v2 collab room, owner creds in-file.
-//   2. Broadcast copy (copy.bento.html) — read-only follow mode.
-//   3. Hosted copy  (hosted.bento.html) — same read-only follow mode, no embedded broadcast creds.
+//   2. Broadcast copy (copy.bento.html) — snapshot follow mode (no collab creds).
+//   3. Hosted copy  (hosted.bento.html) — broadcast creds + live reader replica.
 //
 //   node scripts/build-broadcast-example.mjs [--relay wss://host]
 //

@@ -49,6 +49,17 @@ pre-1.0.
   undone by a file update, so it ships separately once its own regression is
   resolved.
 
+- **Live slide broadcast.** *Save broadcast copy…* in the Share menu exports a
+  standalone viewer file of the current deck. Hand that file out and present:
+  every open copy follows your current slide — transitions and morphs included
+  — over the existing relay, with a presenter laser and black-screen controls.
+  The channel carries only a slide number, never content, and the broadcast
+  room is derived from your signing key, so copies carry no credentials and
+  the shareable link has nothing secret in it. A deck with a hosting URL mints
+  a hosted client link instead, so any presenter's room can drive the same
+  hosted copy. The relay must be deployed with the control-frame changes for
+  enforcement.
+
 - **A deck that is being shared now says so before an agent reads it.** A file
   with live collaboration switched on carries the keys to its own session —
   that is what makes sharing work without accounts, and it means anything

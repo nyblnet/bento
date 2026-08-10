@@ -217,10 +217,12 @@ as the deck is edited. Full design: `docs/hosted-broadcast-design.md`.
   `wrangler deploy`d for enforcement — same operational rule as every relay
   change.
 - **Client**: `tsc -b` + `npm run build:single`; manual two-tab session:
-  build a copy → open it (boots into present-follow, "Waiting for presenter")
-  → present + arm → the copy follows slide-for-slide, transitions included →
-  a second copy opened mid-show lands on the current slide → disarm → copies
-  show "Broadcast ended" and reconnect on re-arm → exit ends the broadcast →
-  a stale copy clamps instead of crashing.
+  `scripts/build-broadcast-example.mjs` builds the owner/copy/hosted fixtures
+  into `working/broadcast-demo/` → open the copy (boots into present-follow,
+  "Waiting for presenter") → present + arm → the copy follows slide-for-slide,
+  transitions included → a second copy opened mid-show lands on the current
+  slide → disarm → the count drops and the feed goes quiet (copies stay on
+  the last slide, re-follow on re-arm) → exit ends the broadcast → a stale
+  copy clamps instead of crashing.
 - New UI strings go into **all** i18n catalogs (AGENTS.md hard rule 6).
 - No `crdt.ts` changes → `scripts/test-sync.ts` unaffected.

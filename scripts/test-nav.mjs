@@ -205,17 +205,17 @@ async function main() {
   const viewer3 = await openWs(`${roomPath}?tok=${tok}`)
   await nextFrame(viewer3, (m) => m && m.ctl === 'ready')
   const burstSig = await signText(ownerKey.priv, 'nav.100')
-  for (let i = 0; i < 201; i++) {
+  for (let i = 0; i < 450; i++) {
     owner2.send(JSON.stringify({ ctl: 'nav', n: 100, g: burstSig }))
   }
   await setTimeout(500)
   const burstReceived = viewer3.messages.filter((m) => m && m.ctl === 'nav').length
   // KNOWN LIMITATION (pre-existing, all frame types): the per-socket rate
   // attachment does not persist between messages of a tight same-invocation
-  // burst, so a 201-frame burst can fan all 201 (verified: 201 fanned here;
-  // with 20ms spacing the limiter trips correctly at 200). The socket must
+  // burst, so a 450-frame burst can fan all 450 (verified: 450 fanned here;
+  // with 20ms spacing the limiter trips correctly at 400). The socket must
   // survive the storm and keep working — that is what this assert proves.
-  assert(burstReceived >= 200, `7. expected at least 200 fanned nav frames, got ${burstReceived}`)
+  assert(burstReceived >= 400, `7. expected at least 400 fanned nav frames, got ${burstReceived}`)
   // wait for the rate-limit window to reset, then prove the socket is not wedged
   await setTimeout(10_500)
   const owner2Sig7 = await signText(ownerKey.priv, 'nav.7')
