@@ -20,7 +20,9 @@ import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+// The one exception is saveBroadcastCopy — a broadcast copy is a plaintext
+// share by definition (the design doc says so), so it uses serializeFile.
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
@@ -821,18 +823,23 @@ export class Editor {
     clone.docId = newDocId()
     delete clone.readonly
     const c = this.store.doc.collab
-    clone.collab = {
-      ...(c ?? {}),
-      role: 'reader',
-      on: true,
-      sync: undefined,
-      broadcast: { room: creds.roomName, relay: creds.relay },
+    // Only a deck with a hosting URL mints a LIVE hosted copy (reader replica
+    // in main.ts broadcastMode). A plain broadcast copy is a pure snapshot:
+    // no room, no keys — on:false explicitly (legacy shells treat absent `on`
+    // as on).
+    const hosted = !!(this.store.doc.meta?.hostClient && c?.room && c.key)
+    clone.collab = hosted
+      ? { room: c.room, key: c.key, role: 'reader', on: true, sync: undefined, broadcast: { room: creds.roomName, relay: creds.relay } }
+      : { on: false, broadcast: { room: creds.roomName, relay: creds.relay } }
+    if (hosted) {
+      delete clone.collab.writerPriv // the muzzle — no write capability travels
+      delete clone.collab.ownerPriv // v2: neither the owner key…
+      delete clone.collab.invite //    …nor any invite (delegation) material
     }
-    delete clone.collab.writerPriv // the muzzle — no write capability travels
-    delete clone.collab.ownerPriv // v2: neither the owner key…
-    delete clone.collab.invite //    …nor any invite (delegation) material
     try {
-      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'broadcast', keepHandle: false })
+      // serializeFile, not serializeAuto: the copy is a plaintext share — a
+      // password-gated copy is useless to viewers. The owner's file stays encrypted.
+      const ok = await writeUpdatedFileAs(await serializeFile(clone), clone, { suffix: 'broadcast', keepHandle: false })
       if (ok) this.toast(t('Broadcast copy saved — viewers open it and their slides follow yours'))
     } catch {
       this.toast(t('Saving failed'))
@@ -1969,9 +1976,7 @@ export class Editor {
       this.presenting = false
       this.store.goTo(last)
       this.canvas.render()
-    }, {
-      fullscreen,
-    })
+    }, { fullscreen })
   }
 
   // --- paste: external objects + cross-deck elements/slides ---------------------
@@ -2968,7 +2973,9 @@ export class Editor {
     hostInp.value = this.store.doc.meta?.hostClient ?? ''
     hostInp.addEventListener('change', () => {
       const v = hostInp.value.trim()
-      if (v && !/^https?:\/\//i.test(v)) {
+      // https:// anywhere; http:// only for local dev hosts — a plain-http
+      // hosted client is a mixed-content dead end for viewers on https pages
+      if (v && !/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(v)) {
         this.toast(t('That doesn’t look like a URL — it should start with https://'))
         hostInp.value = this.store.doc.meta?.hostClient ?? ''
         return
