@@ -423,7 +423,7 @@ export function startPresentation(
   }
 
   // ——— remote (broadcast) laser trail ———
-  // The channel carries dot points at ~10fps; the LOCAL trail is sampled at
+  // The channel carries dot points at ~30fps (33ms throttle); the LOCAL trail is sampled at
   // 5ms/1.5px and is never sent. Excalidraw's collab laser is the model here:
   // the trail head is glued to the pointer's CURRENT position and the whole
   // stroke redraws every frame — never pre-baked ahead of it. Feeding the
@@ -651,9 +651,6 @@ export function startPresentation(
   // true when we adopted a speaker window the EDITOR opened — we drive it but
   // must not close it on exit (it lives beyond this present session).
   let speakerAdopted = false
-  // main-window message listener for the broadcast popup's "set host" action;
-  // registered once because openSpeaker can be called multiple times. The
-  // reference is kept so it can be removed when the present session ends.
   // ——— live slide broadcast ———
   let broadcastOn = false
   let broadcastCreds: BroadcastCreds | null = null
@@ -779,16 +776,14 @@ export function startPresentation(
     }
     try {
       const creds = await resolveBroadcastCreds(doc, doc.docId)
-      const cur = deck.getIndices().h
-      const n = visibleIndex(cur)
       const socket = new BroadcastSocket(creds.room, creds.tok, {
         onNav: () => {},
         onPresence: (count) => { broadcastViewers = count; updateSpeakerControls() },
-        // re-send the current slide on EVERY open: a mid-show reconnect must
-        // re-sync viewers who joined while the socket was down (the relay
-        // only replays lastNav to the reconnecting socket itself)
+        // re-send the CURRENT slide on every open: a mid-show reconnect must
+        // re-sync viewers who joined while the socket was down (the relay only
+        // replays lastNav to the reconnecting socket itself)
         onState: (s) => {
-          if (s === 'open') void socket.sendNav(creds.signerPriv, n)
+          if (s === 'open') void socket.sendNav(creds.signerPriv, visibleIndex(deck.getIndices().h))
         },
       }, creds.signerPub)
       broadcastSocket = socket
@@ -799,7 +794,7 @@ export function startPresentation(
       updateSpeakerControls()
     } catch (err) {
       console.error('[bento-broadcast] arm failed', err)
-      flashPresentMsg(t('Broadcast refused in offline mode'))
+      flashPresentMsg(t('Broadcast failed'))
     }
   }
 
@@ -894,7 +889,7 @@ export function startPresentation(
           navBtn('next', '›', t('Next')) +
           navBtn('last', '⇥', t('Last slide')) +
           navBtn('black', '■', t('Black screen (B)')) +
-          navBtn('laser', '🔴', t('Laser pointer (L)'), true) +
+          navBtn('laser', '🟒', t('Laser pointer (L)'), true) +
           navBtn('grid', '▦', t('All slides (G)')) +
           navBtn('reduce', '⏸', t('Reduce motion (M)')) +
           navBtn('broadcast', ICONS.broadcast, t('Broadcast to audience')) +
@@ -904,8 +899,8 @@ export function startPresentation(
       `<div class="sv-bcast-link" hidden>` +
         `<span class="sv-bcast-label">${t('Broadcast link')}</span>` +
         `<input type="text" class="sv-bcast-input" readonly>` +
-        `<button class="sv-bcast-copy">${t('Copy')}</button>` +
-        `<span class="sv-bcast-copied" hidden>${t('Copied')}</span>` +
+        `<button class="sv-bcast-copy">${t('Copy broadcast link')}</button>` +
+        `<span class="sv-bcast-copied" hidden>${t('Broadcast link copied')}</span>` +
       `</div>` +
       `<div class="sv-main">` +
         `<div class="sv-current"></div>` +
@@ -930,7 +925,11 @@ export function startPresentation(
       `.sv-bcast-copy { background:#3a424b; color:#fff; border:none; border-radius:4px; padding:0.4em 0.8em; cursor:pointer; font-size:0.9em; }` +
       `.sv-bcast-copy:hover { background:#4b5563; }` +
       `.sv-bcast-copied { color:#7ee787; font-size:0.9em; }`
-    d.head.appendChild(bcastStyle)
+    // the popup head persists across openSpeaker calls — never append a second copy
+    if (!d.head.querySelector('style[data-bento-bcast]')) {
+      bcastStyle.dataset.bentoBcast = '1'
+      d.head.appendChild(bcastStyle)
+    }
 
     const bcastScript = d.createElement('script')
     bcastScript.textContent = `
