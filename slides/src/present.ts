@@ -889,7 +889,7 @@ export function startPresentation(
           navBtn('next', '›', t('Next')) +
           navBtn('last', '⇥', t('Last slide')) +
           navBtn('black', '■', t('Black screen (B)')) +
-          navBtn('laser', '🟒', t('Laser pointer (L)'), true) +
+          navBtn('laser', ICONS.laser, t('Laser pointer (L)'), true) +
           navBtn('grid', '▦', t('All slides (G)')) +
           navBtn('reduce', '⏸', t('Reduce motion (M)')) +
           navBtn('broadcast', ICONS.broadcast, t('Broadcast to audience')) +
