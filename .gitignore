@@ -24,6 +24,22 @@ site/
 working/
 .dev.vars
 
+# secrets, matched by FILENAME anywhere in the tree. The directory rules above
+# (working/, the daemon's own .dev.vars) only hold while the secret stays put,
+# and this project has twice shipped what a path-scoped rule stopped covering
+# (the built shell under the renamed tray dir, below). Here the escape is a
+# flag, not a rename: `scripts/build-guestbook.mjs --out <anywhere>` writes
+# guestbook-owner-keys.json — the room's owner ECDSA private key — next to
+# --out, so one invocation outside working/ hands a `git add -A` the key.
+guestbook-owner-keys.json
+guestbook-admin-key.txt
+release-key.json
+*.key
+*.pem
+.env
+.env.*
+.dev.vars.*
+
 # make-og.mjs intermediate (the SVG rasterised into site-src/og.png)
 scripts/.cache/
 

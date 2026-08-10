@@ -30,6 +30,7 @@
 
 import { SyncEngine, shape } from '../kernel/src/sync/crdt.ts'
 import { mulberry32, baseDoc, randomMutation, type Doc } from './lib/sync-fixtures-spaces.ts'
+import { effectiveParents, descendantsOf } from '../spaces/src/model.ts'
 
 export const SPACES_SHAPE = shape('pages', 'blocks')
 class SpacesSync extends SyncEngine {
@@ -136,6 +137,8 @@ let diverged = 0
 let opsTotal = 0
 let soloBroken = 0
 let measured = 0
+let ruleBroken = 0
+let ruleChecked = 0
 
 for (let seed = 1; seed <= SEEDS; seed++) {
   const rnd = mulberry32(seed * 7919)
@@ -191,6 +194,29 @@ for (let seed = 1; seed <= SEEDS; seed++) {
   if (total(inspect(solo.doc)) > 0) { soloBroken++; continue }
   measured++
 
+  // THE TREE RULE, on a document the merge actually produced. The violations
+  // below are real and expected; what must never happen is the RULE failing on
+  // one of them — a parent that is not strictly earlier, a walk that cycles, or
+  // a subtree that contains its own root (which is what makes a delete take
+  // blocks nobody selected).
+  for (const page of reps[0].doc.pages) {
+    const at = new Map<string, number>()
+    page.blocks.forEach((b, i) => at.set(b.id, i))
+    const eff = effectiveParents(page as never)
+    for (const b of page.blocks) {
+      const par = eff.get(b.id)
+      if (par !== undefined && (at.get(par) ?? 1e9) >= (at.get(b.id) ?? -1)) ruleBroken++
+      if (par === b.id) ruleBroken++
+      const walked = new Set<string>()
+      for (let up = par; up; up = eff.get(up)) {
+        if (walked.has(up)) { ruleBroken++; break }
+        walked.add(up)
+      }
+      if (descendantsOf(page as never, b.id).has(b.id)) ruleBroken++
+      ruleChecked++
+    }
+  }
+
   const v = inspect(reps[0].doc)
   if (total(v) > 0) {
     seedsWithViolations++
@@ -199,6 +225,10 @@ for (let seed = 1; seed <= SEEDS; seed++) {
 }
 
 ok(diverged === 0, `all replicas converge (${diverged} seed(s) diverged)`)
+ok(ruleBroken === 0,
+  `the effective-parent rule holds on every merged document ` +
+  `(${ruleBroken} failure(s) across ${ruleChecked} blocks) — no cycle, no late parent, ` +
+  'no subtree containing its own root')
 // The control is REPORTED, not asserted: a seed the generator got wrong is
 // excluded from the measurement, so it cannot contaminate the finding. What
 // would invalidate the rig is excluding most of them, so that IS asserted.

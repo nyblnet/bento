@@ -474,8 +474,12 @@ names provisional.
   **Guestbook is a v2 room now**: public deck carries a PUBLIC writer invite
   (anyone writes, individually keyed); the OWNER deck lives in gitignored
   working/guestbook-live/guestbook-owner.bento.html (moderation = open it →
-  People → Remove). Daemon ROLL_HOURS=0 — rolls are manual (re-mint would
-  orphan the held owner file); build-guestbook.mjs emits public + owner decks.
+  People → Remove) — but only while the daemon is NOT auto-rolling, since every
+  roll re-mints the room and orphans that owner file. It IS auto-rolling for
+  launch (wrangler.toml `ROLL_HOURS="0.5"`, cron `*/30`), so moderation is off
+  until the cadence goes manual and a fresh pair is re-seeded. Cadence lives in
+  server/guestbook-daemon/wrangler.toml, explained in that dir's README — never
+  restate the numbers elsewhere; build-guestbook.mjs emits public + owner decks.
   **Share exports** (invite/viewonly/presentonly/template) pass a filename
   suffix and NEVER retain the FSA handle (`writeUpdatedFileAs` opts.keepHandle
   — retaining it made a later ⌘S overwrite the export with the full doc).

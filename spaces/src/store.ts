@@ -97,11 +97,35 @@ export class Store {
   }
 
   /** Pages in sidebar order: a depth-first walk of the page tree. */
-  tree(parent = '', depth = 0): Array<{ page: Page; depth: number }> {
+  /**
+   * The page tree, for the sidebar and the Markdown export.
+   *
+   * `seen` is not defensive tidiness. `buildIndex` bins pages by `parent` with
+   * no position test, and two people concurrently dragging pages onto each
+   * other converge on A.parent=B, B.parent=A — legal for each of them, a cycle
+   * together. Neither page is then reachable from the root, so BOTH VANISH from
+   * the sidebar and from the Markdown export while still sitting in the file,
+   * and nothing says so. Worse, a subtree call from inside the cycle recurses
+   * until the stack gives out.
+   *
+   * A cyclic group is surfaced at the ROOT rather than hidden: pages you can
+   * see and re-home beat pages that quietly stopped existing.
+   */
+  tree(parent = '', depth = 0, seen: Set<string> = new Set()): Array<{ page: Page; depth: number }> {
     const out: Array<{ page: Page; depth: number }> = []
     for (const p of this.index.children.get(parent) ?? []) {
+      if (seen.has(p.id)) continue
+      seen.add(p.id)
       out.push({ page: p, depth })
-      out.push(...this.tree(p.id, depth + 1))
+      out.push(...this.tree(p.id, depth + 1, seen))
+    }
+    // Anything a cycle kept off the root walk, listed rather than lost.
+    if (parent === '' && depth === 0) {
+      for (const p of this.doc.pages) {
+        if (p.archived || seen.has(p.id)) continue
+        seen.add(p.id)
+        out.push({ page: p, depth: 0 })
+      }
     }
     return out
   }

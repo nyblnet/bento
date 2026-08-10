@@ -752,4 +752,7 @@ export const es: Catalog = {
   "A live broadcast hand-out — opens into the show and follows your slides in real time.": "Una copia de transmisión en vivo — abre la presentación y sigue tus diapositivas en tiempo real.",
   "Waiting for presenter": "Esperando al presentador",
   "Live · N viewers": "En directo · N espectadores",
+  "Hide slide": "Ocultar diapositiva",
+  "Number hidden slides": "Numerar diapositivas ocultas",
+  "Hidden — skipped while presenting and left out of PDF export": "Oculta: se omite al presentar y no se incluye en la exportación a PDF",
 }

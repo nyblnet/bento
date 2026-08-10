@@ -752,4 +752,7 @@ export const de: Catalog = {
   "A live broadcast hand-out — opens into the show and follows your slides in real time.": "Eine Live-Übertragungs-Kopie — öffnet direkt die Präsentation und folgt Ihren Folien in Echtzeit.",
   "Waiting for presenter": "Warten auf Referent/in",
   "Live · N viewers": "Live · N Zuschauer",
+  "Hide slide": "Folie ausblenden",
+  "Number hidden slides": "Ausgeblendete Folien nummerieren",
+  "Hidden — skipped while presenting and left out of PDF export": "Ausgeblendet — wird beim Präsentieren übersprungen und nicht als PDF exportiert",
 }

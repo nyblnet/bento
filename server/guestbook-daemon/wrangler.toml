@@ -23,7 +23,22 @@ id = "ac9eeb2800ea4e848ccf303e31d6620f"
 [vars]
 # where a fresh shell is fetched from at roll time (never bundled)
 SHELL_URL = "https://bento.page/releases/slides/Bento_Slides.bento.html"
-# fallback origin if R2 has no current file (GitHub Pages direct)
+# Fallback origin when KV holds no current epoch (GitHub Pages direct).
+#
+# THIS FALLBACK NO LONGER RESOLVES TO A FILE, and the deploy cannot be tested,
+# so it is documented rather than changed. Two things happened to it:
+#   · guestbook.bento.html was DELETED from the public mirror in release
+#     v1.0.12, and publish-site.mjs now deliberately excludes it from the
+#     mirror whenever the build has no local epoch — so it will not come back
+#     on an ordinary publish.
+#   · the mirror repo carries CNAME bento.page, so Pages 301s every
+#     nyblnet.github.io/bento-site/* request to bento.page/* (measured:
+#     .../bento-site/guestbook.bento.html → 301 → bento.page/guestbook.bento.html).
+# That redirect target is THIS worker's own route, so the KV-empty path points
+# back at the request it is meant to rescue. Whatever the platform does with a
+# same-route subrequest, it cannot answer with a guestbook.
+# Operationally: an empty KV is an OUTAGE, not a degraded mode — re-seed
+# (README "Arming / operating"), do not wait for the fallback.
 ORIGIN_FALLBACK = "https://nyblnet.github.io/bento-site"
 # relay host baked into newly minted epochs
 SYNC_HOST = "wss://sync.bento.page"

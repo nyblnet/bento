@@ -17,7 +17,7 @@
 // session's shadow → ops out. Remote ops apply surgically by id and re-emit
 // the same store events the editor already listens to. Zero editor rewrites.
 
-import type { Store } from '../store'
+import type { Store, ViewSnapshot } from '../store'
 import type { BentoDoc, Slide } from '../model'
 import { uid } from '../model'
 import { SyncState, SYNC_V, BLOB_INLINE_MAX, type Op } from './crdt'
@@ -470,10 +470,11 @@ export class SyncSession {
     // remote batch locally; LWW settles the rest)
     this.flush()
     for (const op of ops) if (!this.log.some((o) => o.a === op.a && o.s === op.s)) this.log.push(op)
+    const view = this.store.captureView()
     this.applying = true
     try {
       const res = this.state.apply(this.store.doc, ops)
-      if (res.changed) this.afterRemoteChange(res.structure)
+      if (res.changed) this.afterRemoteChange(res.structure, view)
     } finally {
       this.applying = false
     }
@@ -482,7 +483,7 @@ export class SyncSession {
     }
   }
 
-  private afterRemoteChange(structure: boolean) {
+  private afterRemoteChange(structure: boolean, view: ViewSnapshot) {
     void this.resolveBlobs()
     const store = this.store
     // an all-slides-deleted race leaves an empty deck — heal with a blank
@@ -501,19 +502,16 @@ export class SyncSession {
       this.flush()
       this.applying = true
     }
-    store.currentIndex = Math.min(store.currentIndex, store.doc.slides.length - 1)
-    const sel = store.selection.filter((id) => store.element(id))
-    const selChanged = sel.length !== store.selection.length
-    store.selection = sel
+    const { currentChanged, selectionChanged } = store.reconcileView(view)
     this.shadow = JSON.stringify(store.doc)
     store.doc.modified = new Date().toISOString()
     store.setDirty(true)
     store.emit('doc')
     if (structure) {
       store.emit('slides')
-      store.emit('current')
     }
-    if (selChanged) store.emit('selection')
+    if (currentChanged) store.emit('current')
+    if (selectionChanged) store.emit('selection')
   }
 
   // --- presence -------------------------------------------------------------
@@ -646,10 +644,11 @@ export class SyncSession {
   applySnapshot(rdoc: BentoDoc, rstate: import('./crdt').SyncStateJSON) {
     if (!rstate || rstate.v !== SYNC_V) return // pre-v2 room snapshot — unusable
     this.flush()
+    const view = this.store.captureView()
     this.applying = true
     try {
       const res = this.state.mergeSnapshot(this.store.doc, rdoc, rstate)
-      if (res.changed) this.afterRemoteChange(true)
+      if (res.changed) this.afterRemoteChange(true, view)
     } finally {
       this.applying = false
     }

@@ -752,4 +752,7 @@ export const ja: Catalog = {
   "A live broadcast hand-out — opens into the show and follows your slides in real time.": "ライブ配信用コピー — プレゼンテーションを開き、スライドをリアルタイムで追従します。",
   "Waiting for presenter": "プレゼンターを待っています",
   "Live · N viewers": "ライブ · N人の視聴者",
+  "Hide slide": "スライドを非表示",
+  "Number hidden slides": "非表示スライドに番号を付ける",
+  "Hidden — skipped while presenting and left out of PDF export": "非表示 — 発表中はスキップされ、PDF 書き出しにも含まれません",
 }

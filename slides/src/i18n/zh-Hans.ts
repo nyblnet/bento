@@ -752,4 +752,7 @@ export const zhHans: Catalog = {
   "A live broadcast hand-out — opens into the show and follows your slides in real time.": "实时广播分发副本 — 打开演示并实时跟随幻灯片。",
   "Waiting for presenter": "等待主讲人",
   "Live · N viewers": "直播 · N 位观众",
+  "Hide slide": "隐藏幻灯片",
+  "Number hidden slides": "为隐藏幻灯片编号",
+  "Hidden — skipped while presenting and left out of PDF export": "已隐藏 — 放映时跳过，且不包含在 PDF 导出中",
 }

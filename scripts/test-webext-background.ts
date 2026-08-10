@@ -37,10 +37,16 @@ function ok(cond: boolean, msg: string) {
 // ---- a fake granted folder --------------------------------------------------
 const written = new Map<string, string>()
 
-function fileHandle(name: string) {
+/**
+ * A file in the fake grant. `rel` is its path RELATIVE to the granted folder,
+ * which is what a real `FileSystemDirectoryHandle.resolve()` returns — and the
+ * thing the identity check depends on.
+ */
+function fileHandle(name: string, rel?: string[]) {
   return {
     kind: 'file' as const,
     name,
+    __rel: rel ?? [name],
     async createWritable() {
       let buf = ''
       return {
@@ -51,14 +57,21 @@ function fileHandle(name: string) {
   }
 }
 
-function dirHandle(tree: Record<string, any>, perm = 'granted') {
+function dirHandle(tree: Record<string, any>, perm = 'granted', base: string[] = []) {
   return {
     kind: 'directory' as const,
-    name: 'Decks',
+    name: base.at(-1) ?? 'Decks',
     async queryPermission() { return perm },
+    /** The real API: path segments from THIS directory down to `child`, or null. */
+    async resolve(child: any) {
+      const rel = child?.__rel
+      if (!rel) return null
+      // only children at or below this directory resolve
+      return base.every((seg, i) => rel[i] === seg) ? rel.slice(base.length) : null
+    },
     async *entries() {
       for (const [k, v] of Object.entries(tree)) {
-        yield [k, typeof v === 'object' && !v.kind ? dirHandle(v, perm) : v] as const
+        yield [k, typeof v === 'object' && !v.kind ? dirHandle(v, perm, [...base, k]) : v] as const
       }
     },
   }
@@ -95,8 +108,8 @@ const deps = (tree: Record<string, any>, perm = 'granted') => ({
 {
   // the same name in two subfolders — the case a real Decks folder hits
   const tree = {
-    ClientA: { 'Q3.bento.html': fileHandle('a/Q3.bento.html') },
-    ClientB: { 'Q3.bento.html': fileHandle('b/Q3.bento.html') },
+    ClientA: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['ClientA', 'Q3.bento.html']) },
+    ClientB: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['ClientB', 'Q3.bento.html']) },
   }
   const r = await resolve(senderFor('/Users/x/Decks/ClientA/Q3.bento.html'), deps(tree))
   ok(r.ok === false && /ambiguous/.test(r.reason!),
@@ -113,6 +126,42 @@ const deps = (tree: Record<string, any>, perm = 'granted') => ({
     deps({ 'Q3.bento.html': fileHandle('Q3.bento.html') }))
   ok(r.ok === false && /not a local file/.test(r.reason!),
     'an http page cannot resolve a file in the granted folder')
+}
+
+// ---- 2b. a NAME match is not an IDENTITY match ------------------------------
+// The bug this rig did not previously cover, and it destroyed files with no
+// attacker involved: the grant holds Clients/Q3.bento.html, the user opens a
+// working copy at ~/Desktop/Q3.bento.html, and exactly one hit is found —
+// because the sender's own copy is outside the grant and so is not a second
+// hit. Writing that hit puts the Desktop deck's bytes over the Clients file and
+// never writes the file being edited.
+{
+  const tree = { Clients: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Clients', 'Q3.bento.html']) } }
+  const r = await resolve(senderFor('/Users/x/Desktop/Q3.bento.html'), deps(tree))
+  ok(r.ok === false && /different file/.test(r.reason ?? ''),
+    'a same-named file elsewhere in the grant is NOT treated as the sender\'s file')
+}
+{
+  // and the legitimate nested case still resolves
+  const tree = { Clients: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Clients', 'Q3.bento.html']) } }
+  const r = await resolve(senderFor('/Users/x/Decks/Clients/Q3.bento.html'), deps(tree))
+  ok(r.ok === true, 'the sender\'s own file in a subfolder still resolves')
+}
+{
+  // a candidate the directory refuses to resolve is refused here too
+  const orphan = fileHandle('Q3.bento.html')
+  ;(orphan as any).__rel = null
+  const r = await resolve(senderFor('/Users/x/Decks/Q3.bento.html'), deps({ 'Q3.bento.html': orphan }))
+  ok(r.ok === false && /not inside the granted folder/.test(r.reason ?? ''),
+    'a candidate that does not resolve inside the grant is declined')
+}
+{
+  // a write must be refused for the same reason, not only a claim
+  written.clear()
+  const tree = { Clients: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Clients', 'Q3.bento.html']) } }
+  const r = await write(senderFor('/Users/x/Desktop/Q3.bento.html'), 'attacker bytes', deps(tree))
+  ok(r.ok === false, 'a write to a same-named file elsewhere is refused')
+  ok(written.size === 0, 'and nothing was written')
 }
 
 // ---- 3. a write needs no prior claim (service-worker eviction) --------------
@@ -137,7 +186,7 @@ const deps = (tree: Record<string, any>, perm = 'granted') => ({
 // ---- 5. the depth limit ----------------------------------------------------
 {
   // 6 levels deep — past the limit, so it must NOT be found rather than hang
-  let deep: any = { 'Q3.bento.html': fileHandle('deep/Q3.bento.html') }
+  let deep: any = { 'Q3.bento.html': fileHandle('Q3.bento.html', ['sub','sub','sub','sub','sub','sub','Q3.bento.html']) }
   for (let i = 0; i < 6; i++) deep = { sub: deep }
   const r = await resolve(senderFor('/Users/x/Decks/Q3.bento.html'), deps(deep))
   ok(r.ok === false, 'a file buried past the depth limit is declined, not searched forever')

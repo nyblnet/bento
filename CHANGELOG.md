@@ -11,6 +11,75 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Security: update this file. A deck could run code hidden in its own
+  content.** Ordinary-looking document content — an image, a shape, an embedded
+  drawing — could carry script that ran when the slide was drawn, or quietly
+  send the reader somewhere else. No unusual file was needed and nothing looked
+  wrong on screen.
+
+  That matters more here than in most applications, because a Bento file is not
+  a passive document: the page holding it also holds the live-session keys, the
+  local autosave copy, and — where the browser allows it — permission to write
+  back to the file on disk. Anything running inside the page inherits all of it.
+
+  Every path that turns author content into a page is now sanitised: the
+  renderer, the still image written for file-manager thumbnails, and the PDF
+  export. The iOS host no longer trusts a filename a document supplies, blob
+  fetches verify what they received, and new password-protected files use a
+  stronger key derivation.
+
+  **Two exports were also leaking.** "Copy document JSON" carried the live
+  room's private keys — while suggesting you paste the result into an AI chat —
+  and "Save as template…" wrote readable content out of a password-protected
+  deck. A third case kept a key in an invite copy that should not have had one.
+  All three now strip, through one list in one place rather than three
+  independent decisions.
+
+  **If you have already shared a live deck** — its JSON, or the file itself, to
+  a chat, a ticket or an agent — updating does not retract that. Use *Share →
+  Rotate keys*, which mints a new room and revokes the old one, then re-share
+  the new copy. If you published a template made from a password-protected
+  deck, treat its contents as disclosed: rotation cannot take back what the
+  template already wrote in the clear.
+
+  Found by auditing this repository rather than by a report, with an
+  independent adversarial review on each round, and every fix was checked to
+  fail against the previous build before being kept. The collaboration relay is
+  deliberately **not** part of this release — a relay deployment cannot be
+  undone by a file update, so it ships separately once its own regression is
+  resolved.
+
+- **A deck that is being shared now says so before an agent reads it.** A file
+  with live collaboration switched on carries the keys to its own session —
+  that is what makes sharing work without accounts, and it means anything
+  receiving the file receives the room: a chat, a ticket, an agent harness.
+  Nothing about a document looks like a credential, so this was easy to do by
+  accident.
+
+  The agent guide and the packaged skill now open by checking for it and
+  saying so, and `window.bento.validate()` reports it as
+  `collab-secrets-present` — only when private key material is actually there,
+  so a read-only copy stays quiet. Removing the keys afterwards does not
+  retract them; if a shared deck has already gone somewhere, *Share → Rotate
+  keys* is the remedy.
+
+- **Hide a slide from the show.** Toggle *Hide slide* in the Slide panel and it
+  stays in the deck, fully editable, but drops out of the walk: arrow keys pass
+  over it, PDF export leaves it out, and it is never picked as the file's
+  thumbnail. An element `link` still reaches it, which is the point — backup
+  numbers, an appendix, the detail slide you only open if somebody asks.
+
+  Hidden slides do not take a page number, so `{{page}}`/`{{pages}}` stay
+  contiguous for the audience: the same rule interactive states already follow,
+  rather than a second one to remember. If you prefer the office-suite
+  behaviour, where a hidden slide keeps its number so the visible ones do not
+  renumber while you toggle slides during rehearsal, turn on *Number hidden
+  slides* under Slideshow.
+
+  The sidebar shows what the audience would count — a hidden slide's number is
+  struck through, or replaced by a dash when it has none — because a slide you
+  have forgotten you hid is a slide you find out about mid-presentation.
+
 - **Fix: a live session could crash when two people created the same element at
   the same moment.** Sharing an element id across slides is the morph idiom —
   it is what id continuity is *for* — so two collaborators inserting one
@@ -21,6 +90,12 @@ pre-1.0.
   defect as the two before it in this engine — a debug string built eagerly
   around a value that can legitimately be absent — and it is now pinned by a
   test with a deterministic trigger rather than left to a random rig's depth.
+
+- **Fix: choosing a custom slide size now reveals its width and height.** The
+  page-size picker rebuilt the properties panel before recording any custom
+  state, so a preset-sized deck immediately snapped back to its preset and the
+  two inputs never appeared. Custom mode now reveals the existing controls
+  without changing the document until a dimension is actually edited.
 
 ## [1.0.16] — 2026-08-03
 

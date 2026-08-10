@@ -420,6 +420,15 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   outline: none;
   cursor: default;
 }
+/* A hidden slide is still an ordinary, editable slide — it is just out of the
+   show. Dimmed rather than greyed out, and the number struck through, so the
+   sidebar reads as "this one will be skipped" without looking broken. */
+.ed-thumb-hidden .bento-thumb-surface { opacity: 0.42; }
+.ed-thumb-hidden .ed-thumb-num {
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+
 .ed-stage .bento-el { cursor: grab; }
 .ed-stage .bento-el:active { cursor: grabbing; }
 .ed-stage .bento-editing { cursor: text; }

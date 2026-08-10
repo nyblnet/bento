@@ -300,7 +300,37 @@ export interface SyncStateJSON {
   pos: Record<string, PosEntry>
   births: Record<string, Reg>
   tombs: Record<string, Reg>
-  txt: Record<string, TxtState>
+  /**
+   * Per-character token history for every text node — the structure that lets
+   * two people type into one paragraph without either clobbering the other.
+   *
+   * OPTIONAL, and an app may choose not to stamp it. Measured: identical prose
+   * costs ×0.2 of its own size when it arrives as one write (a paste, an
+   * import, an agent) and ×25.8 when it is TYPED, because a typing run mints a
+   * token per character and a deletion cannot remove one — a tombstone is how
+   * "delete" is expressed to a replica that has not caught up yet, so the
+   * history only ever grows. An emptied paragraph still carries everything ever
+   * typed into it.
+   *
+   * bento/slides stamps it: slide text is titles and bullets. bento/spaces
+   * does NOT — a space is typed prose, which is the whole app, and the state
+   * would outweigh the document many times over inside the plaintext
+   * #bento-doc block, re-serialized on every save and re-parsed on every open.
+   *
+   * ABSENT MEANS BLOCK-LEVEL MERGING, not breakage: `fromJSON` restores a
+   * state with no token history, the differ falls back to a whole-value `set`
+   * for that node's text, and the merge resolves last-writer-wins per block
+   * instead of per character. A LIVE session is unaffected — both replicas hold
+   * the tokens in memory for as long as they are connected; what degrades is
+   * two offline forks reunited later, editing the SAME paragraph.
+   *
+   * Garbage-collecting the tombstones instead (what Yjs does by default) needs
+   * to know every replica has seen the delete. A file that people mail to each
+   * other has no closed set of peers and no moment at which that becomes true —
+   * a copy can come back out of a mailbox a year later — so the causal cutoff
+   * that makes GC safe never arrives here.
+   */
+  txt?: Record<string, TxtState>
   /** values set during a node's dead window — replayed on resurrection.
    * `r` is the register stamp the value belongs to: replay only while it
    * is still the current winner (a newer applied set invalidates it). */
@@ -365,7 +395,20 @@ export class SyncEngine {
     return !b || !regNewer(b, t)
   }
 
-  toJSON(): SyncStateJSON {
+  /**
+   * The state, as it is stamped into a saved file.
+   *
+   * `opts.text: false` OMITS the token history — see the note on
+   * SyncStateJSON.txt. The default is unchanged and always will be: every
+   * bento/slides file in the field was written with `txt` present, and
+   * scripts/test-sync-equiv.ts compares these bytes against the engine as
+   * shipped.
+   *
+   * KEY ORDER IS PART OF THE FORMAT. `txt` is emitted in its original position
+   * rather than appended, so a state WITH text is byte-identical whichever
+   * call site produced it.
+   */
+  toJSON(opts: { text?: boolean } = {}): SyncStateJSON {
     return {
       v: SYNC_V,
       lamport: this.lamport,
@@ -374,7 +417,7 @@ export class SyncEngine {
       pos: this.pos,
       births: this.births,
       tombs: this.tombs,
-      txt: this.txt,
+      ...(opts.text === false ? {} : { txt: this.txt }),
       stash: this.stash,
       limbo: this.limbo,
     }

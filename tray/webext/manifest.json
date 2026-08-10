@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bento Tray",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Save a Bento document back to the file you opened, without a destination prompt.",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -33,5 +33,21 @@
       "world": "ISOLATED",
       "run_at": "document_start"
     }
-  ]
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Bento Tray",
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  }
 }

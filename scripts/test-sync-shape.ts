@@ -120,5 +120,101 @@ const spacesDoc = (blocks: unknown[]) => ({
     'and its skip set is exactly what the shipped engine hardcoded')
 }
 
+// ---- stamping WITHOUT the token history ------------------------------------
+// bento/spaces will not stamp `txt`: a space is typed prose, and the token
+// history costs ×25.8 of the text when it is typed (×0.2 when pasted — the RGA
+// only engages for text somebody typed while a session ran). What must be true
+// for that to be a safe choice, and is asserted here rather than assumed:
+//
+//   1. slides is untouched — the default still emits `txt`, byte for byte;
+//   2. omitting it actually shrinks the stamp, by the order claimed;
+//   3. a state restored WITHOUT it still CONVERGES. Only the granularity
+//      degrades: last-writer-wins per block instead of per character.
+//
+// (3) is the one that would sink the idea, so it is measured, not argued.
+{
+  const doc = spacesDoc([{ id: 'b1', type: 'p', html: '' }]) as never as
+    { pages: { blocks: { html: string }[] }[] }
+  const A = new SpacesSync('alice')
+  A.adopt(doc as never)
+  // TYPE it, in runs, which is what mints tokens
+  const text = 'the quick brown fox jumps over a lazy dog and keeps on going '.repeat(6)
+  for (let c = 0; c < text.length; c += 40) {
+    const before = JSON.parse(JSON.stringify(doc))
+    doc.pages[0].blocks[0].html = text.slice(0, c + 40)
+    A.diff(before, doc as never, { text: true })
+  }
+
+  const withText = JSON.stringify(A.toJSON())
+  const without = JSON.stringify(A.toJSON({ text: false }))
+  ok(withText.includes('"txt"'), 'the default stamp carries the token history')
+  ok(!without.includes('"txt"'), 'and `text: false` leaves it out entirely')
+  ok(without.length * 5 < withText.length,
+    `omitting it is worth having: ${withText.length} B → ${without.length} B ` +
+    `(×${(withText.length / without.length).toFixed(1)} smaller)`)
+
+  // the slides binding must be byte-identical to what it always emitted
+  const sl = new SyncState('a')
+  sl.adopt({ slides: [{ id: 's1', elements: [{ id: 'e1', type: 'text', html: 'x' }] }] } as never)
+  ok(JSON.stringify(sl.toJSON()).includes('"txt":'),
+    'the slides binding still stamps txt by default — every field file was written that way')
+
+  // (3) CONVERGENCE, from a stamp with no token history
+  // DIFFERENT actor ids: two replicas sharing one is not a configuration the
+  // engine supports (it skips its own ops on apply), and a test that gets that
+  // wrong reports a divergence the field would never see.
+  const reopen = (actor: string, stamp: string) => {
+    const d = JSON.parse(JSON.stringify(doc))
+    const st = SpacesSync.fromJSON(actor, JSON.parse(stamp))
+    return { d, st }
+  }
+  const X = reopen('xavier', without)
+  const Y = reopen('yasmin', without)
+  const editX = JSON.parse(JSON.stringify(X.d))
+  X.d.pages[0].blocks[0].html = text + ' — and X adds this'
+  const opsX = X.st.diff(editX, X.d, { text: true })
+  const editY = JSON.parse(JSON.stringify(Y.d))
+  Y.d.pages[0].blocks.push({ id: 'b2', type: 'p', html: 'Y adds a block' })
+  const opsY = Y.st.diff(editY, Y.d, { text: true })
+
+  X.st.apply(X.d, opsY)
+  Y.st.apply(Y.d, opsX)
+  ok(JSON.stringify(X.d) === JSON.stringify(Y.d),
+    'two replicas restored from a txt-less stamp still CONVERGE')
+  ok(X.d.pages[0].blocks.length === 2 && X.d.pages[0].blocks[0].html.endsWith('X adds this'),
+    'and neither edit was lost — different blocks still merge')
+  // NOT a fallback to whole-value sets, as first assumed: the differ RE-SEEDS a
+  // generation from the current content, and two replicas that both re-seed
+  // from the same content derive the same seed — so they still merge per
+  // character. Measured on a shared paragraph: "Friday"→"Monday" from one and
+  // an appended sentence from the other, both kept, byte-identical on both
+  // sides, from a stamp 10.9× smaller.
+  ok(opsX.length === 1 && opsX[0].op === 'txt',
+    `a re-seeded generation still merges per character (op was ${opsX[0]?.op})`)
+
+  // ------------------------------------------------------------------------
+  // AND THE PRECONDITION THAT MAKES IT SAFE, pinned because getting it wrong
+  // is not a degradation — it is a SPLIT BRAIN.
+  //
+  // A replica that re-seeds meets a peer still holding the ORIGINAL generation
+  // (a live session keeps the tokens in memory), the two generations duel as
+  // units, and the loser's edit disappears — measured: the two documents do
+  // NOT converge. So a lean stamp is only safe when EVERY participant is lean.
+  //
+  // The session layer must therefore treat "restored without txt" as
+  // `needs a snapshot`, not as `resume` — rejoin by taking a peer's snapshot
+  // (mergeSnapshot) rather than replaying from where the file left off. That
+  // rule does not exist yet because spaces has no session; this assertion is
+  // here so it cannot be forgotten when it is written.
+  {
+    const full = JSON.parse(JSON.stringify(A.toJSON()))
+    const lean = JSON.parse(JSON.stringify(A.toJSON({ text: false })))
+    ok(!!full.txt && !lean.txt, 'the two stamps differ only in the token history')
+    const keptGeneration = Object.keys(full.txt ?? {}).length
+    ok(keptGeneration > 0,
+      `a typed paragraph has a generation to lose (${keptGeneration} node(s) with token history)`)
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

@@ -28,6 +28,7 @@
 
 import {
   parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
+  effectiveParents, descendantsOf,
   type SpacesDoc,
 } from '../spaces/src/model.ts'
 import { countOutsideTags, replaceOutsideTags } from '../spaces/src/findreplace.ts'
@@ -1334,6 +1335,75 @@ for (const [label, input, err] of [
     'the renderer emits a card status BUTTON only for an editable document')
   ok(/if \(opts\.editable\) \{\s*const on = /.test(ren),
     '…and the view controls likewise, so a reader and a printout get neither')
+}
+
+// ---- ONE answer to "what is this nested under" ------------------------------
+// The rule (DECISIONS 2026-08-03): a block's effective parent is `b.parent` iff
+// that block is in the SAME page and appears STRICTLY EARLIER. It was
+// implemented four times, differently — positional in render.ts, a hop-capped
+// graph walk in blocks.ts, a fixed-point sweep in agent.ts, an id lookup in
+// editor.indent — and they agreed only because the editor keeps the array in
+// pre-order. Collaboration is precisely what breaks that: measured on the merge
+// rig, 52.4% of merged documents violate it.
+{
+  const page = (blocks: unknown[]) => ({ id: 'p1', title: 'P', blocks } as Page)
+
+  // the ordinary case
+  const ok1 = page([{ id: 'a', type: 'p', html: '' }, { id: 'b', type: 'p', html: '', parent: 'a' }])
+  ok(effectiveParents(ok1).get('b') === 'a', 'a child after its parent is nested under it')
+
+  // the shapes a merge produces, and each resolves to the ROOT rather than
+  // to something a renderer cannot draw
+  const later = page([{ id: 'b', type: 'p', html: '', parent: 'a' }, { id: 'a', type: 'p', html: '' }])
+  ok(effectiveParents(later).get('b') === undefined,
+    'a parent that appears LATER is not a parent — this is the merge case')
+  const absent = page([{ id: 'b', type: 'p', html: '', parent: 'gone' }])
+  ok(effectiveParents(absent).get('b') === undefined, 'a parent that is absent is not a parent')
+  const self = page([{ id: 'b', type: 'p', html: '', parent: 'b' }])
+  ok(effectiveParents(self).get('b') === undefined, 'a block is not its own parent')
+
+  // ACYCLIC BY CONSTRUCTION: a parent must be earlier, so no input can loop.
+  // The two-cycle below is what two concurrent indents converge on.
+  const cycle = page([
+    { id: 'x', type: 'p', html: '', parent: 'y' },
+    { id: 'y', type: 'p', html: '', parent: 'x' },
+  ])
+  const eff = effectiveParents(cycle)
+  ok(eff.get('x') === undefined && eff.get('y') === 'x',
+    'a merged cycle resolves to a tree, with no visited set and no hop cap')
+
+  // descendantsOf must never return the node itself, which is what the old
+  // fixed-point sweep did on a cycle — and planRemoveBlocks deletes what it
+  // returns
+  ok(!descendantsOf(cycle, 'x').has('x'), 'a subtree never contains its own root')
+  ok(!descendantsOf(cycle, 'y').has('y'), '…from either end of the cycle')
+
+  const deep = page([
+    { id: 'a', type: 'p', html: '' },
+    { id: 'b', type: 'p', html: '', parent: 'a' },
+    { id: 'c', type: 'p', html: '', parent: 'b' },
+    { id: 'd', type: 'p', html: '' },
+  ])
+  ok([...descendantsOf(deep, 'a')].sort().join(',') === 'b,c', 'a subtree reaches grandchildren')
+  ok(descendantsOf(deep, 'd').size === 0, 'and stops at a leaf')
+
+  // THE CONSUMERS AGREE, checked as source: four implementations was the bug
+  const fs2 = await import('node:fs')
+  const src = (f: string) => fs2.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  ok(/descendantsOf\(page, id\)/.test(src('agent.ts')),
+    'agent.ts delegates rather than sweeping the graph itself')
+  // scoped to the BLOCK sweep: planRemovePage still sweeps the PAGE graph, and
+  // that one is out of this change's scope (it terminates, and cascading a
+  // cyclic pair is what the caller asked for). Named so the next reader knows
+  // the remaining sweep is deliberate rather than missed.
+  ok(!/for \(const b of page\.blocks\)[\s\S]{0,200}grew = true/.test(src('agent.ts')),
+    '…and its block-level fixed-point sweep is gone')
+  ok(/effectiveParents/.test(src('blocks.ts')) && !/chain\.length < 32/.test(src('blocks.ts')),
+    'blocks.ts walks the effective chain, and its hop cap is gone with the cycles')
+  ok(/effectiveParents\(page\)/.test(src('editor.ts')),
+    'editor.indent outdents through the effective parent')
+  ok(/seen: Set<string>/.test(src('store.ts')),
+    'Store.tree carries a visited set')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

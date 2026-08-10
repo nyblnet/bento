@@ -89,6 +89,20 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   `[object Object]` and reported success. It now refuses, as does `newIssue` and
   `updatePage` for the same argument.
 
+- **Fixed: pages could disappear from the sidebar and from the Markdown
+  export.** Two people dragging pages onto each other — or one hand-edited
+  file — could leave a pair each nested inside the other. Neither was reachable
+  from the top, so both dropped out of the sidebar and out of exported
+  Markdown while still sitting in the file, with nothing to say so. They are
+  listed at the top level now.
+
+- **Fixed: deleting a block could take blocks you did not select.** "What is
+  nested under this?" was answered four different ways in four places, and on a
+  document where a block's parent sits *after* it, one of those answers
+  returned the whole tangle — including the block itself. There is one answer
+  now, and it cannot tangle: a block is nested under its parent only when that
+  parent is genuinely above it on the page.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

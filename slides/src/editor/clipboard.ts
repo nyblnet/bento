@@ -8,10 +8,16 @@
 // fonts) travel inside the payload, so pasting into another deck brings the
 // pixels and typefaces along; asset-key collisions with different content are
 // remapped so nothing clobbers the target deck.
+//
+// Reading that channel is the untrusted direction — the clipboard is public,
+// and a payload on it need not have come from a Bento deck. parseClip rebuilds
+// what it finds through untrusted.ts before anything reaches the document, so
+// that a fragment the format cannot express never becomes part of one.
 
 import type { BentoDoc, Slide, SlideElement, TextElement } from '../model'
 import { uid } from '../model'
 import { firstFamily } from '../fonts'
+import { LIMITS, sanitizeAssets, sanitizeElement, sanitizeFonts, sanitizeSlide } from '../untrusted'
 
 export interface ClipPayload {
   __bento: 'clip'
@@ -73,9 +79,54 @@ export function serializeSlides(slides: Slide[], doc: BentoDoc): string {
   return JSON.stringify(payload)
 }
 
+/**
+ * Read a clip payload off the system clipboard — the ONE place foreign
+ * document fragments enter the deck, and so the place they are checked.
+ *
+ * Nothing about clipboard text says a Bento deck wrote it: any page with a
+ * Copy button can leave a `__bento:"clip"` payload there, and this used to
+ * hand whatever it contained to insertElements/insertSlides unread. So the
+ * payload is REBUILT through untrusted.ts — known kind, known element types,
+ * known keys, values of the right shape — and anything that does not conform
+ * is dropped rather than repaired.
+ *
+ * This is the model-shape layer, not the escaping layer: render.ts escapes and
+ * validates what it writes into markup on its own (it has to — a deck opened
+ * from disk never passes through here). What this adds is that the DOCUMENT
+ * never holds the value in the first place, which is the part every future
+ * renderer inherits for free.
+ *
+ * A payload with nothing left after the rebuild returns null, so the paste
+ * handler falls through to its plain-text branch: the JSON lands as a visible
+ * text element instead of silently doing nothing. That fallback is a poor fit
+ * for the SIZE ceiling — an over-budget but perfectly legitimate slide copy
+ * deserves "that paste is too large", not 4000 characters of raw JSON — so the
+ * ceiling is set where real payloads cannot reach it (LIMITS.clipText).
+ */
 export function parseClip(text: string): ClipPayload | null {
-  if (!text || text.length > 40_000_000) return null
-  try { const p = JSON.parse(text); return p && p.__bento === 'clip' ? p as ClipPayload : null } catch { return null }
+  if (!text || text.length > LIMITS.clipText) return null
+  let raw: unknown
+  try { raw = JSON.parse(text) } catch { return null }
+  if (!raw || typeof raw !== 'object') return null
+  const p = raw as Record<string, unknown>
+  if (p.__bento !== 'clip') return null
+  if (p.kind !== 'elements' && p.kind !== 'slides') return null
+
+  const payload: ClipPayload = {
+    __bento: 'clip', kind: p.kind,
+    assets: sanitizeAssets(p.assets),
+    fonts: sanitizeFonts(p.fonts),
+  }
+  if (p.kind === 'elements') {
+    if (!Array.isArray(p.elements) || p.elements.length > LIMITS.elements) return null
+    payload.elements = p.elements.map(sanitizeElement).filter((el): el is SlideElement => el !== null)
+    if (!payload.elements.length) return null
+  } else {
+    if (!Array.isArray(p.slides) || p.slides.length > LIMITS.slides) return null
+    payload.slides = p.slides.map(sanitizeSlide).filter((s): s is Slide => s !== null)
+    if (!payload.slides.length) return null
+  }
+  return payload
 }
 
 /** Merge payload assets into doc; on same-key-different-value, remap to a fresh key. */

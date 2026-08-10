@@ -81,10 +81,12 @@
    */
   /**
    * The release that first sent a distinct picker `id` per purpose (#213).
-   * A deck whose embedded runtime predates it sends `bento-doc` for EVERY save
-   * — including "Save a copy…" — so the id carries no information there and
-   * this bridge must not act on it. If #213 ships under a different number,
-   * this constant is the one thing to change.
+   *
+   * CONFIRMED: `pickerIdFor` is absent from v1.0.14 and present in v1.0.15, so
+   * 1.0.15 is the floor. A deck whose embedded runtime predates it sends
+   * `bento-doc` for EVERY save — including "Save a copy…" — so the id carries
+   * no information there and this bridge must not act on it. Those decks get
+   * the browser's own picker, exactly as they do with no extension installed.
    */
   const ID_SINCE = [1, 0, 15]
 

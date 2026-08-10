@@ -8,7 +8,7 @@
 // and merging blocks can never re-mint an id, and ids are what links,
 // backlinks and (later) collaboration key on.
 
-import { type Block, newBlock, newPage } from './model'
+import { type Block, newBlock, newPage, effectiveParents } from './model'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
@@ -1805,9 +1805,15 @@ export class Editor {
     if (!b) return
     s.commit(() => {
       if (!deeper) {
-        if (!b.parent) return
-        const owner = page.blocks.find((x) => x.id === b.parent)
-        if (owner?.parent) b.parent = owner.parent
+        // by the EFFECTIVE parent (model.ts), not by whatever `parent` names:
+        // on a merged document `parent` can point at a block that is absent or
+        // that sits LATER, and outdenting through it would move this block
+        // under something the renderer never nested it under
+        const eff = effectiveParents(page)
+        const owner = eff.get(b.id)
+        if (!owner) { delete b.parent; return }
+        const grand = eff.get(owner)
+        if (grand) b.parent = grand
         else delete b.parent
         return
       }

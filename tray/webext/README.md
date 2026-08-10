@@ -18,6 +18,24 @@ The last row is the one that matters: the copy and the export went elsewhere
 rather than overwriting the document being edited. An earlier build got that
 wrong and silently destroyed it.
 
+## Packaging
+
+```bash
+node scripts/pack-webext.mjs          # → dist/bento-tray-<version>.zip
+node scripts/pack-webext.mjs --check  # validate only (CI runs this)
+```
+
+It is an allow-list, not a recursive zip: `probe/`, `README.md` and `STORE.md`
+are in this directory and must not reach a listing — the probes especially,
+being four pages that open local files and talk across origins, which is
+harmless to us and alarming to a reviewer. It also checks every file the
+manifest names exists, every icon is the size it claims, and no permission is
+declared but unused. The output is byte-reproducible, so the uploaded package
+can be shown to be the reviewed one.
+
+Listing copy, permission justifications and the data-usage answers live in
+`STORE.md`.
+
 ## Distribution
 
 **The app stores are the main channel** — Chrome Web Store, Edge Add-ons, and
@@ -99,7 +117,12 @@ you choose*, so they fall through to the native picker untouched.
 | `src/page-bridge.js` | MAIN | overrides `showSaveFilePicker`; decides in-place vs native |
 | `src/relay.js` | ISOLATED | pure relay, no logic — the two worlds cannot reach each other |
 | `src/background.js` | service worker | holds the grant; matches the file; writes |
+| `src/status.js` | shared | the two preconditions, read by both surfaces below |
+| `src/popup.html/js` | toolbar | says whether a save will land, before one is attempted |
 | `src/options.html/js` | extension page | where the folder is granted (needs a gesture) |
+
+The popup and the options page read the same `status.js`, so they cannot tell
+the user different stories about whether the next ⌘S will prompt.
 
 Both content-script halves are required: an isolated world can talk to the
 extension but not touch page globals; a MAIN world can define
@@ -130,13 +153,31 @@ declines. Correct, but it means the extension only covers `.bento.html` files.
 ## The matching problem
 
 A page gives us `/Users/…/Decks/Q3.bento.html`. A `FileSystemDirectoryHandle`
-knows its own **name** but not its path, and nothing in the API exposes one — so
-the two cannot be compared directly.
+knows its own **name** but not its path, so the grant and the sender cannot be
+compared directly. Resolution is two steps, and the second is the one that
+matters:
 
-`findByName` searches the granted tree (depth-limited) and requires **exactly one
-match**. Unambiguous in the ordinary case; when it is ambiguous it declines and
-the native picker takes over. Declining costs a prompt, guessing costs somebody's
-file.
+1. find files in the granted tree with the sender's file **name**, and require
+   exactly one — ambiguity is declined, never guessed at;
+2. ask the directory to **`resolve()`** that candidate, which returns its path
+   segments *relative to the grant*, and require the sender's own path to end
+   with them.
+
+**Step 1 alone was wrong, and shipped that way.** A name match is not an
+identity match. With the grant at `~/Documents` holding
+`~/Documents/Clients/Q3.bento.html`, opening a working copy at
+`~/Desktop/Q3.bento.html` produced exactly one hit — the sender's own copy is
+outside the grant, so it is not a second hit and the ambiguity guard cannot
+fire. A save then wrote the Desktop document over the Clients one and never
+wrote the file being edited. No attacker required.
+
+**Residual, stated plainly because the API cannot close it.** Nothing exposes
+the grant's absolute path, so step 2 verifies a relative *suffix*, not a full
+path. A page deliberately placed at `<somewhere-else>/Clients/Q3.bento.html`
+still matches a grant containing `Clients/Q3.bento.html`. That is far narrower
+than a bare filename — it requires reproducing the victim's folder structure —
+but it is not nothing, and it is why the content-script match stays limited
+rather than covering every local HTML file.
 
 ## Trying it
 

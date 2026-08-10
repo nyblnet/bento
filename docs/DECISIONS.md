@@ -14,6 +14,112 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-06 — The tree is DERIVED at read time, in one function, and it cannot cycle
+
+**Decision.** `model.ts effectiveParents(page)` is the only answer to "what is
+this block nested under": `b.parent` iff that block is in the SAME page and
+appears STRICTLY EARLIER. Anything else — absent, itself, later — resolves to
+the root. `descendantsOf(page, id)` is built on it. Every consumer delegates.
+
+This implements the rule settled on 2026-08-03, which until now existed as a
+paragraph and four disagreeing implementations: positional in `render.ts`, a
+hop-capped graph walk in `blocks.ts mdLayout`, a fixed-point sweep in
+`agent.ts descendants` ("rather than trusting the order"), and an id lookup in
+`editor.indent`. They agreed only because the editor keeps the array in
+pre-order — which is exactly the invariant collaboration breaks.
+
+**DERIVE, NEVER REPAIR.** Normalising the array instead would mint `ord` ops and
+two replicas can ping-pong over them forever. A read-time function mutates
+nothing, so two replicas that agree on the array agree on the tree without
+exchanging one extra op.
+
+**Acyclic by construction, which is the point.** A parent must be earlier, so no
+document — authored, hand-edited, imported or merged — can produce a loop. That
+removes a whole class of defence: no visited set, no hop cap of 32, no
+fixed-point sweep. `blocks.ts` capped at 32 because the graph could cycle, and a
+markdown export that silently truncated at depth 32 is a quiet wrong answer
+rather than an error.
+
+**The failure it prevents.** On a merged `parent` cycle the old sweep returned
+the whole connected component INCLUDING the node itself, so `planRemoveBlocks`
+deleted blocks the caller never named.
+
+**Verified against documents the merge actually produced**, not hand-built ones:
+250 merged documents, 1,695 blocks, 24.4% of them violating flat pre-order —
+zero rule failures, no cycles, no self-parents, no subtree containing its own
+root. `scripts/test-sync-spaces.ts` now asserts this on every merged document
+forever, and the negative control (reverting to a raw graph walk) fails 13
+blocks out of 405.
+
+**`Store.tree()` gains a visited set, and surfaces what a cycle orphans.**
+`buildIndex` bins pages by `parent` with no position test, so two concurrent
+sidebar drags converge on A.parent=B, B.parent=A. Neither is reachable from the
+root, so both pages vanished from the sidebar AND from the Markdown export while
+still sitting in the file, with nothing saying so; a subtree call from inside
+the cycle recursed until the stack gave out. Orphaned pages are now listed at
+the root — pages you can see and re-home beat pages that quietly stopped
+existing.
+
+**Still a page-level graph sweep in `planRemovePage`**, deliberately: it
+terminates, and cascading a cyclic pair is what a caller asking for descendants
+gets. Named here so the next reader knows it was considered rather than missed.
+
+## 2026-08-06 — bento/spaces will not stamp the text token history, and that is only safe if everyone is lean
+
+**Decision.** `toJSON({ text: false })` omits `txt` from a stamped state.
+bento/slides keeps stamping it — every file in the field was written that way,
+and the equivalence gate compares those bytes. bento/spaces will not.
+
+**The measurement.** The token history is one entry per character, each ~26
+bytes with an id, and a deletion cannot remove one — a tombstone is how
+"delete" reaches a replica that has not caught up, so the history only grows.
+An emptied paragraph still carries everything ever typed into it (measured:
+"hello" → 159 B; type " world" → 297 B; delete it again → **333 B**; empty the
+paragraph → **363 B**).
+
+**But the cost is EDITING, not text**, which was not obvious and changes where
+it matters. Identical prose, two ways of arriving:
+
+| | stamped state | ratio |
+|---|---|---|
+| pasted / imported / written by an agent | 2,978 B | ×0.2 |
+| typed in ~40-character runs | 479,825 B | ×25.8 |
+
+161× apart for byte-identical content. Text that arrives as one write never
+engages the RGA at all. Slides survives this because slide text is titles and
+bullets; a space IS typed prose, and the state would outweigh the document
+inside the plaintext `#bento-doc` block, re-serialized on every save,
+re-parsed on every open, and written to IndexedDB every 2.5s.
+
+**Why not garbage-collect the tombstones instead** (what Yjs does by default,
+and it is worth being accurate that dropping the history is NOT the industry
+norm — Yjs GCs, Automerge keeps everything and pays for it with a binary
+encoding). GC needs to know every replica has seen the delete. A file people
+mail to each other has no closed set of peers and no moment when that becomes
+true — a copy can come back out of a mailbox a year later. The causal cutoff
+that makes GC safe never arrives here.
+
+**THE PRECONDITION, and it is not a detail.** A restored state with no token
+history does not fall back to whole-value sets, as first assumed: the differ
+RE-SEEDS a generation from the current content, and the seed is derived from
+that content plus the register stamp. Two replicas that both re-seed derive the
+SAME seed and still merge per character — measured on one shared paragraph,
+"Friday"→"Monday" from one side and an appended sentence from the other, both
+kept, byte-identical on both sides, from a stamp 10.9× smaller.
+
+A replica that re-seeds meeting a peer that still holds the ORIGINAL generation
+is a different story. The generations duel as units and the loser's edit
+disappears — measured: **the two documents do not converge.** A live session
+keeps the tokens in memory, so "save, close, reopen, rejoin a room that is still
+live" is exactly that case.
+
+So a lean stamp is safe only when EVERY participant is lean. **The session layer
+must treat "restored without `txt`" as needs-a-snapshot, not as resume** — rejoin
+by taking a peer's snapshot through `mergeSnapshot` rather than replaying from
+where the file left off. That rule does not exist yet because spaces has no
+session; `scripts/test-sync-shape.ts` carries the evidence and the note so it
+cannot be written without it.
+
 ## 2026-08-06 — One CRDT engine, two document shapes, and the shape is never on the wire
 
 **Decision.** `kernel/src/sync/crdt.ts` takes a `DocShape` at construction: two

@@ -342,6 +342,65 @@ const pushInto = <T>(m: Map<string, T[]>, k: string, v: T) => {
   else m.set(k, [v])
 }
 
+/**
+ * THE ONE ANSWER to "what is this block nested under".
+ *
+ * A block's effective parent is `b.parent` iff that block exists in the SAME
+ * page and appears STRICTLY EARLIER in the array. Anything else — a parent that
+ * is absent, that is the block itself, or that sits later — resolves to the
+ * root. Settled in docs/DECISIONS.md (2026-08-03) and implemented here because
+ * it was previously implemented four times, differently:
+ *
+ *   · render.ts walked a stack, which IS this rule (positional);
+ *   · blocks.ts mdLayout followed `parent` as a graph, hop-capped at 32;
+ *   · agent.ts descendants swept the graph to a fixed point, explicitly
+ *     "rather than trusting the order";
+ *   · editor.indent looked its owner up by id, anywhere in the page.
+ *
+ * They agree today only because the editor keeps the array in pre-order. That
+ * is exactly the invariant collaboration breaks: `parent` is a last-writer-wins
+ * register and order is a fractional position key, so two legal concurrent
+ * edits — you indent a block, I move one — converge on an array where a child
+ * precedes its parent. Measured on the merge rig: 52.4% of merged documents.
+ * At that point "the tree" means four different things, and the graph readers
+ * are the dangerous ones: a merged cycle makes `descendants` return the whole
+ * connected component, so deleting one block deletes blocks nobody selected.
+ *
+ * POSITIONAL IS THE RULE BECAUSE IT CANNOT FAIL. A parent must be earlier, so
+ * the result is ACYCLIC BY CONSTRUCTION — no visited set, no hop cap, no
+ * fixed-point sweep, and no document can be authored or merged into a shape
+ * that makes it loop. It is a pure READ-TIME function: it mutates nothing, so
+ * two replicas that agree on the array agree on the tree without exchanging a
+ * single extra op. Repairing the array instead would mint `ord` ops and two
+ * replicas can ping-pong over them forever.
+ */
+export function effectiveParents(page: Page): Map<string, string | undefined> {
+  const out = new Map<string, string | undefined>()
+  const seenAt = new Map<string, number>()
+  page.blocks.forEach((b, i) => {
+    const p = typeof b.parent === 'string' ? b.parent : undefined
+    // strictly earlier: `seenAt` only holds blocks already walked past
+    out.set(b.id, p !== undefined && seenAt.has(p) ? p : undefined)
+    seenAt.set(b.id, i)
+  })
+  return out
+}
+
+/**
+ * Every block nested under `id`, at any depth — by the rule above, so it
+ * terminates on any document and never reaches outside the subtree.
+ */
+export function descendantsOf(page: Page, id: string): Set<string> {
+  const eff = effectiveParents(page)
+  const out = new Set<string>()
+  // one forward pass suffices: a child always follows its effective parent
+  for (const b of page.blocks) {
+    const p = eff.get(b.id)
+    if (p !== undefined && (p === id || out.has(p))) out.add(b.id)
+  }
+  return out
+}
+
 export function buildIndex(doc: SpacesDoc): SpaceIndex {
   const page = new Map<string, Page>()
   const children = new Map<string, Page[]>()

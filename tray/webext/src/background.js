@@ -114,7 +114,30 @@ export async function resolve(sender, deps = {}) {
       reason: hits.length ? `${name} is ambiguous in the granted folder` : 'not in the granted folder',
     }
   }
-  return { ok: true, name, handle: hits[0] }
+
+  // The candidate shares the sender's FILE NAME. That is not the same as being
+  // the sender's file, and treating it as such destroys documents:
+  //
+  //   grant = ~/Documents, which holds ~/Documents/Clients/Q3.bento.html
+  //   the user opens a working copy at ~/Desktop/Q3.bento.html
+  //   -> exactly one hit, so a save wrote the Desktop deck over the Clients one
+  //      and never wrote the file being edited.
+  //
+  // The ambiguity guard above cannot catch that: the sender's own copy is
+  // OUTSIDE the grant, so it is not a second hit. No attacker is required.
+  //
+  // `resolve()` on the directory gives the candidate's path segments relative to
+  // the grant, so the sender's absolute path must end with them. An earlier
+  // comment here claimed the two "cannot be compared directly" — that is true of
+  // the directory handle, which knows no path, but not of a resolved child.
+  const rel = await dir.resolve(hits[0])
+  if (!rel || !rel.length) return { ok: false, reason: 'not inside the granted folder' }
+  const suffix = `/${rel.join('/')}`
+  if (!path.endsWith(suffix)) {
+    return { ok: false, reason: `${name} in the granted folder is a different file` }
+  }
+
+  return { ok: true, name, handle: hits[0], within: suffix }
 }
 
 /** Can this sender's file be written in place? Resolves; writes nothing. */
