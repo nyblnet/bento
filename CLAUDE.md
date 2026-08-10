@@ -479,6 +479,26 @@ names provisional.
   **Share exports** (invite/viewonly/presentonly/template) pass a filename
   suffix and NEVER retain the FSA handle (`writeUpdatedFileAs` opts.keepHandle
   — retaining it made a later ⌘S overwrite the export with the full doc).
+- **Live broadcast (v0.9.19)**: "Save broadcast copy…" (Share menu) embeds
+  `collab.broadcast = {room, relay}` — no tok, no keys, `on:false`, fresh
+  docId, plaintext even for encrypted decks — and the copy boots into a locked
+  present-follow viewer. The room is derived from the PRESENTER's signing key
+  (`broadcastRoom`: b64url(sha256(pub))[0:10], re-hashed until it doesn't
+  start with 'w' — a 'w' name would be mistaken for a signed collab room by
+  the relay); the connect tok is derived from the room name, so URLs carry no
+  tok. Signer resolution: ownerPriv → invite → writerPriv → device-local
+  `bento-broadcast-<docId>` key. The relay TOFUs the presenter's `?w=` per
+  non-`w` room and verifies nav/laser/black frames (`nav.${n}` /
+  `laser.${p}` / `laser.off` / `black.on` / `black.off` signature texts);
+  laser is ~30fps (33ms), RATE_BURST 400/10s. The speaker popup's Broadcast
+  link row + Copy live in an injected IIFE (bcastScript) — GOTCHAS: regexes
+  inside the template literal need DOUBLE-escaped backslashes (`/^https?:\/\//i`
+  → `/^https?:\\/\\//i`), bind click listeners once (`window.__bentoBcastBound`
+  + per-row `dataset.bound`), and restate `[hidden]{display:none}` for any
+  rule that sets `display:flex/inline-block` on the same element (a display
+  property overrides the UA's `[hidden]`). Hosted variant: `doc.meta.hostClient`
+  (About dialog, Document properties) + a live reader replica on the deck's
+  collab room; see docs/broadcast-design.md + docs/hosted-broadcast-design.md.
 - **Canvas slide nav (v1.0.2)**: with NOTHING selected (and not text/cell/path
   editing), arrow keys walk slides and a plain wheel over `.ed-scroll` walks
   slides (threshold 40px + 400ms cooldown so a trackpad swipe = one slide; skips

@@ -2142,64 +2142,50 @@ payload 72KB → 79KB). Most of it is the finding messages, which are the
 product: a code with no explanation is not actionable. Anyone tempted to shrink
 this should shorten prose, not drop checks.
 
-## 2026-08-08 — Broadcast channel grows laser + black-screen control frames
+## 2026-08-08 — Live broadcast control channel
 
-**Decision.** The live-broadcast control channel (previously one frame type:
-owner-signed `{ctl:'nav',n,g}`) now also carries `{ctl:'laser',p,g}` /
-`{ctl:'laser',off:1,g}` (slide-fraction point `p='x,y'` at ≤10fps, sig over
-`laser.${p}` / `laser.off`) and `{ctl:'black',on:1|0,g}` (sig over
-`black.on`/`black.off`, persisted as `lastBlack` and replayed to late joiners,
-unlike laser which is transient by design). The presenter's laser became
-hold-to-draw (L arms, pointer-down draws) so the channel stays event-shaped:
-silence between strokes, ~100 frames per 10s stroke — inside the relay's
-per-socket rate budget (RATE_BURST 200/10s) with nav headroom. The relay
-changes are backward-compatible: old copies ignore unknown ctl frames, and the
-new blocks return before the collab path. Details: docs/broadcast-plan.md,
-server/sync-worker/src/worker.js, slides/src/present.ts.
+**Decision.** The presenter of a deck can broadcast to copies of it over the
+existing relay: a "Save broadcast copy…" Share-menu export embeds
+`collab.broadcast = {room, relay}` and boots the copy into a locked
+present-follow viewer; the presenter's speaker view arms a broadcast per show
+(off by default) and sends signed control frames over a dedicated
+BroadcastSocket. Frame types: `{ctl:'nav',n,g}` (presenter-visible slide
+number, 1-based with interactive states excluded), `{ctl:'laser',p,g}` /
+`{ctl:'laser',off:1,g}` (slide-fraction stroke points, hold-to-draw, ~30fps
+client throttle) and `{ctl:'black',on:1|0,g}` (persisted as `lastBlack` and
+replayed to late joiners, unlike laser which is transient). Signatures over
+literal texts (`nav.${n}`, `laser.${p}`, `laser.off`, `black.on`/`black.off`)
+with the presenter's key; the relay fans a signature-less copy (clients trust
+its verification, like ops) and sends `{ctl:'presence',n}` viewer counts on
+connect/close. The relay keeps the generic per-socket rate limiter (RATE_BURST
+400/10s — enough for a full laser stroke with nav headroom) and the storage is
+two small values (`lastNav`/`lastBlack`) replayed ahead of any live frame, so
+a late joiner always lands on the newest slide. Relay changes are
+backward-compatible: old copies ignore unknown ctl frames. Details:
+docs/broadcast-design.md, server/sync-worker/src/worker.js,
+slides/src/present.ts, slides/src/main.ts.
 
-## 2026-08-09 — Broadcast copies can be re-pointed at another broadcaster (?b=)
+## 2026-08-10 — Broadcast rooms derived from the presenter's signing key; hosted client
 
-**Decision.** A broadcast copy is bound to the exporter's room (its embedded
-`{room,tok,relay}`), and the relay's per-room trust-on-first-use token means
-the room alone is not a capability — the token must come along. When the
-exporter can't present (e.g. a collaborator exported the client copy and the
-owner takes over), the copy now accepts `?b=<viewer url>` on its own URL:
-everything after `?b=` is the owner's broadcast link (relay + room + tok),
-parsed in `broadcastMode` (slides/src/main.ts) and overriding the embedded
-creds. The copy stays a passive viewer — it still carries no signing key, so
-re-pointing grants view access only, exactly the trust of sharing the
-broadcast link itself. Malformed overrides fall back to the embedded room.
-No relay change. The no-code alternative remains: the owner re-exports a
-fresh broadcast copy from their own deck.
-
-## 2026-08-09 — Hosted broadcast client
-
-**Decision.** The broadcast copy can be hosted once and re-pointed at any presenter's room:
-`<hostUrl>?room=<roomName>&tok=<tok>` (minted by the presenter's deck from
-`doc.meta.hostClient`, set at export). The hosted copy also carries the collab
-read cap (`role:'reader'` + key — the v0.9.18 read-only-copy mechanism) so slide
-content live-syncs from the deck's collab room; nav still rides the broadcast
-socket. No relay changes; the URL carries only the nav token (same trust as the
-broadcast link), the file carries the deck key (same trust as the read-only
-copy). Design: docs/hosted-broadcast-design.md.
-
-## 2026-08-10 — Derived broadcast rooms (no tok in URLs or files)
-
-**Decision.** The broadcast room is derived from the PRESENTER's signing key —
-the key this copy signs control frames with: the owner key (owner deck), the
-per-copy invite key (a shared editor copy — each invitee's room is unique to
-their copy), the shared writer key (legacy), or a device-local broadcast key
-(no-collab decks): `room = b64url(sha256(signerPub))[0:10]`, re-hashed until
-it doesn't start with 'w' (a 'w' name would be mistaken for a signed collab
-room by the relay). The relay connect token is derived from the room name:
-`tok = b64url(sha256(room))[0:18]`. Presenter and viewers compute the same
-values, so the shareable link is `<hostClient>?room=<name>` (no tok) and the
-broadcast copy embeds `broadcast:{room,relay}` (no tok). One room system for
-ALL broadcasts — the collab-socket reuse path is removed, the presenter
-always opens a dedicated BroadcastSocket. The relay TOFUs the presenter's
-`?w=` signer key per non-`w` room (like the tok) and verifies nav/laser/black
-against it; signed rooms keep the owner-key commitment. The old `?room=&tok=`
-and `?b=` URL formats are dropped (no backward compatibility). "Set hosting
-URL" prompt removed — `doc.meta.hostClient` is set in the About dialog's
-Document properties. Key rotation breaks the pinned signer key until the deck
-is duplicated (new docId) — accepted. Design: docs/hosted-broadcast-design.md.
+**Decision.** One room system for ALL broadcasts: the room is derived from the
+PRESENTER's signing key — the key this copy signs control frames with: the
+owner key (owner deck), the per-copy invite key (a shared editor copy — each
+invitee's room is unique to their copy), the shared writer key (legacy), or a
+device-local broadcast key (no-collab decks). `room = b64url(sha256(signerPub))
+[0:10]`, re-hashed until it doesn't start with 'w' (a 'w' name would be
+mistaken for a signed collab room by the relay); the relay connect token is
+derived from the room name (`tok = b64url(sha256(room))[0:18]`). Presenter and
+viewers compute the same values, so the shareable link is
+`<hostClient>?room=<name>` (no tok) and the copy embeds `broadcast:{room,relay}`
+(no tok). The relay TOFUs the presenter's `?w=` signer key per non-`w` room
+(like the tok) and verifies nav/laser/black against it; signed rooms keep the
+owner-key commitment. The collab-socket reuse path is removed; earlier
+`?b=` re-pointing and `?room=&tok=` URL formats were dropped during
+development (no backward compatibility). The hosted variant: a broadcast copy
+hosted once on the presenter's server (`doc.meta.hostClient`, set in the
+About dialog's Document properties — no prompt), re-pointed at any presenter
+via `?room=`, and joining the deck's collab room as a live reader replica so
+content updates in real time. The URL carries only the nav capability; the
+file carries the deck key (same trust as the read-only copy). Key rotation
+breaks the pinned signer key until the deck is duplicated (new docId) —
+accepted. Design: docs/broadcast-design.md, docs/hosted-broadcast-design.md.
