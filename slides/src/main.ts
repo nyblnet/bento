@@ -23,7 +23,7 @@ import { Store } from './store'
 import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
-import { onlineTransport, startSharing, stopSharing, disconnectOnline, BroadcastSocket, syncHost, joinFromDoc } from './sync/online'
+import { onlineTransport, startSharing, stopSharing, disconnectOnline, BroadcastSocket, broadcastTok, syncHost, joinFromDoc } from './sync/online'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -101,7 +101,7 @@ async function passwordGate() {
 }
 
 function bootWith(doc: BentoDoc) {
-  if (doc.collab?.broadcast) broadcastMode(doc)
+  if (doc.collab?.broadcast) void broadcastMode(doc)
   else if (doc.readonly) playerMode(doc)
   else editorMode(doc)
 }
@@ -111,41 +111,26 @@ function bootWith(doc: BentoDoc) {
  * document renders through the real present overlay, and a read-only broadcast
  * socket drives navigation from the presenter's speaker view.
  */
-function broadcastMode(doc: BentoDoc) {
+async function broadcastMode(doc: BentoDoc) {
   document.title = `${doc.title} — ${appConfig().appName}`
   if (doc.fonts?.length) injectFonts(doc)
   document.getElementById('bento-splash')?.remove()
 
-  // The broadcast copy carries only the room name, token and relay — build the
-  // same read-only viewer URL the relay design expects.
+  // The broadcast copy carries only the room name and relay — the connect
+  // token is DERIVED from the room name (broadcastTok), so the file never
+  // embeds a secret.
   let creds = doc.collab!.broadcast!
-  // ?b=<viewer url> re-points this copy at ANOTHER broadcaster's room — e.g.
-  // the owner takes over a presentation the exporter can't do. The relay's
-  // auth is a per-room trust-on-first-use token, so the room alone is not
-  // enough: the token (and relay) must come along. The owner's broadcast link
-  // already carries all three; everything after ?b= is that link, raw.
-  const b = location.href.indexOf('?b=')
-  if (b >= 0) {
-    try {
-      const u = new URL(location.href.slice(b + 3))
-      const room = u.pathname.split('/').pop() || ''
-      const tok = u.searchParams.get('tok') || ''
-      if (room && tok) {
-        creds = { room: u.origin + u.pathname, tok, relay: u.origin }
-      }
-    } catch { /* malformed override → keep the embedded room */ }
-  }
   const relay = (creds.relay ?? syncHost()).replace(/\/+$/, '')
-  // ?room=<name>&tok=<tok> re-points this copy at another broadcaster's room on
-  // the SAME relay — the hosted-client flow: any presenter's deck mints this
-  // link (hostedLink), the client opens it, same copy, new driver. ?b= (full
-  // viewer URL, own relay) takes precedence when both are present.
-  if (b < 0) {
-    const q = new URLSearchParams(location.search)
-    const r = q.get('room')
-    const t = q.get('tok')
-    if (r && t) creds = { room: `${relay}/d/${r}`, tok: t, relay }
-  }
+  // ?room=<name> re-points this copy at another broadcaster's room on the
+  // SAME relay — the hosted-client flow: any presenter's deck mints this
+  // link (hostedLink), the client opens it, same copy, new driver.
+  const q = new URLSearchParams(location.search)
+  const r = q.get('room')
+  if (r) creds = { room: `${relay}/d/${r}`, relay }
+  const roomName = creds.room.startsWith('wss://') || creds.room.startsWith('ws://')
+    ? creds.room.split('/').pop() || ''
+    : creds.room
+  const tok = await broadcastTok(roomName)
   const roomUrl = creds.room.startsWith('wss://') || creds.room.startsWith('ws://')
     ? creds.room
     : `${relay}/d/${creds.room}`
@@ -259,7 +244,7 @@ function broadcastMode(doc: BentoDoc) {
   })
   updateChip()
 
-  const socket = new BroadcastSocket(roomUrl, creds.tok, {
+  const socket = new BroadcastSocket(roomUrl, tok, {
     onNav: (n) => {
       firstNav = true
       session.goTo(slideIndexFromVisible(n))

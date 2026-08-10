@@ -817,12 +817,6 @@ export class Editor {
    *  once stays current as the deck is edited (docs/hosted-broadcast-design.md). */
   private async saveBroadcastCopy() {
     const creds = await resolveBroadcastCreds(this.store.doc, this.store.doc.docId)
-    const host = window.prompt(t('Hosting URL (optional)'), this.store.doc.meta?.hostClient ?? '')
-    if (host !== null) {
-      const h = host.trim()
-      if (h) this.store.doc.meta = { ...(this.store.doc.meta ?? {}), hostClient: h }
-      else if (this.store.doc.meta) delete this.store.doc.meta.hostClient
-    }
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.docId = newDocId()
     delete clone.readonly
@@ -832,7 +826,7 @@ export class Editor {
       role: 'reader',
       on: true,
       sync: undefined,
-      broadcast: { room: creds.roomName, tok: creds.tok, relay: creds.relay },
+      broadcast: { room: creds.roomName, relay: creds.relay },
     }
     delete clone.collab.writerPriv // the muzzle — no write capability travels
     delete clone.collab.ownerPriv // v2: neither the owner key…
@@ -1933,10 +1927,6 @@ export class Editor {
       this.canvas.render()
     }, {
       fullscreen,
-      onSetHostClient: (url) => this.store.commit(() => {
-        const m = this.store.doc.meta ??= {}
-        m.hostClient = url
-      }),
     })
   }
 
@@ -2914,6 +2904,30 @@ export class Editor {
     metaField(t('Subject'), () => this.store.doc.meta?.subject ?? '', (v) => { ensureMeta().subject = v })
     metaField(t('Event'), () => this.store.doc.meta?.event ?? '', (v) => { ensureMeta().event = v })
     metaField(t('Keywords'), () => this.store.doc.meta?.keywords ?? '', (v) => { ensureMeta().keywords = v })
+    // Broadcast hosting URL — where the broadcast copy lives. The speaker view
+    // builds the viewer link from it (hostedLink), so a garbage value would
+    // produce a share link nobody can open: validate on change.
+    const hostRow = div('ed-about-meta')
+    const hostLabel = document.createElement('label')
+    hostLabel.textContent = t('Broadcast hosting URL')
+    const hostInp = document.createElement('input')
+    hostInp.type = 'url'
+    hostInp.placeholder = 'https://…'
+    hostInp.value = this.store.doc.meta?.hostClient ?? ''
+    hostInp.addEventListener('change', () => {
+      const v = hostInp.value.trim()
+      if (v && !/^https?:\/\//i.test(v)) {
+        this.toast(t('That doesn’t look like a URL — it should start with https://'))
+        hostInp.value = this.store.doc.meta?.hostClient ?? ''
+        return
+      }
+      this.store.commit(() => {
+        if (v) ensureMeta().hostClient = v
+        else if (this.store.doc.meta) delete this.store.doc.meta.hostClient
+      })
+    })
+    hostRow.append(hostLabel, hostInp)
+    metaWrap.appendChild(hostRow)
     box.appendChild(metaWrap)
 
     const fine = div('ed-about-fine')

@@ -286,6 +286,20 @@ export class Room {
     return this.verifyWith(meta.w, f.g, `${f.i}.${f.d}`)
   }
 
+  /** Control frames (nav/laser/black) must come from the room's presenter.
+   *  Signed rooms pin the committed owner key (name commitment); broadcast
+   *  rooms (non-`w`) pin the TOFU'd signer key. Read-only sockets (no ?w=)
+   *  never pass. */
+  async controlKeyOk(meta) {
+    if (!meta.w) return false
+    if (meta.signed) {
+      const name = (await this.state.storage.get('name')) || ''
+      return 'w' + (await sha256b64u(b64uDec(meta.w))) === name
+    }
+    const signerKey = (await this.state.storage.get('signerKey')) || ''
+    return meta.w === signerKey
+  }
+
   async fetch(req) {
     // Token check for the blob routes — the DO is the only holder of the
     // room's token, so blob auth asks it rather than duplicating the rule.
@@ -363,6 +377,18 @@ export class Room {
             && (await this.verifyWith(ivp, dg, `dlg.${w}`))
         }
         if (!ok || rev.includes(w)) return new Response('forbidden', { status: 403 })
+        sockW = w
+      }
+    } else {
+      // Broadcast rooms (non-`w`): the presenter signs control frames with a
+      // per-deck key presented as ?w=. Trust-on-first-use per room, like the
+      // tok: the first key seen is pinned, later mismatches are refused.
+      const w = url.searchParams.get('w') || ''
+      if (w) {
+        if (!/^[A-Za-z0-9_-]{80,200}$/.test(w)) return new Response('bad writer key', { status: 400 })
+        const signerKey = await this.state.storage.get('signerKey')
+        if (signerKey === undefined) await this.state.storage.put('signerKey', w)
+        else if (signerKey !== w) return new Response('forbidden', { status: 403 })
         sockW = w
       }
     }
@@ -493,11 +519,9 @@ export class Room {
     }
     if (f.ctl === 'nav' && Number.isInteger(f.n) && f.n > 0 && f.n < 1e6 && typeof f.g === 'string') {
       const meta = ws.deserializeAttachment() || {}
-      // owner-bound socket only: the socket's pinned key must BE the room's
-      // committed owner key (a member/chain socket's key never hash-matches).
-      if (!meta.signed || !meta.w) return
-      const name = (await this.state.storage.get('name')) || ''
-      if ('w' + (await sha256b64u(b64uDec(meta.w))) !== name) return
+      // presenter-bound socket only: signed rooms pin the committed owner key,
+      // broadcast rooms pin the TOFU'd signer key.
+      if (!(await this.controlKeyOk(meta))) return
       if (!(await this.verifyWith(meta.w, f.g, `nav.${f.n}`))) return
       await this.state.storage.put('lastNav', f.n)
       const note = JSON.stringify({ ctl: 'nav', n: f.n })
@@ -515,9 +539,7 @@ export class Room {
     }
     if (f.ctl === 'laser' && typeof f.g === 'string') {
       const meta = ws.deserializeAttachment() || {}
-      if (!meta.signed || !meta.w) return
-      const name = (await this.state.storage.get('name')) || ''
-      if ('w' + (await sha256b64u(b64uDec(meta.w))) !== name) return
+      if (!(await this.controlKeyOk(meta))) return
       let sigText
       if (f.off === 1) {
         sigText = 'laser.off'
@@ -544,9 +566,7 @@ export class Room {
     }
     if (f.ctl === 'black' && (f.on === 1 || f.on === 0) && typeof f.g === 'string') {
       const meta = ws.deserializeAttachment() || {}
-      if (!meta.signed || !meta.w) return
-      const name = (await this.state.storage.get('name')) || ''
-      if ('w' + (await sha256b64u(b64uDec(meta.w))) !== name) return
+      if (!(await this.controlKeyOk(meta))) return
       const on = f.on === 1
       const sigText = 'black.' + (on ? 'on' : 'off')
       if (!(await this.verifyWith(meta.w, f.g, sigText))) return

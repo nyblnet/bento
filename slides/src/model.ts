@@ -442,10 +442,11 @@ export interface BentoDoc {
     /**
      * Live slide broadcast credentials: a read-only copy that boots straight
      * into present-follow mode. Old shells ignore this field. The copy carries
-     * only the room name, connect token, and relay origin — no signing key, no
-     * symmetric key, no CRDT state.
+     * only the room name and relay origin — the connect token is DERIVED from
+     * the room name (broadcastTok), so the file never embeds a secret. No
+     * signing key, no symmetric key, no CRDT state.
      */
-    broadcast?: { room: string; tok: string; relay: string }
+    broadcast?: { room: string; relay: string }
     /**
      * Signed writes (v0.9.18+): the WRITE capability is an ECDSA P-256 keypair,
      * distinct from the symmetric `key` (the READ capability). `writerPub`

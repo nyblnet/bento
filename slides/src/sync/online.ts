@@ -852,17 +852,31 @@ export async function sendBlack(ws: WebSocket | null, signerPriv: string, on: bo
 
 /** Full URL of a hosted broadcast client pointed at these credentials. The
  *  hosted copy lives at `hostClient`; the query params select the room. */
-export function hostedLink(creds: BroadcastCreds, hostClient: string): string {
-  return `${hostClient.replace(/\/+$/, '')}?room=${creds.roomName}&tok=${creds.tok}`
+/** 10-char broadcast room derived from the presenter's signing key — the
+ *  owner key (owner deck), the invite key (a shared editor copy — per-copy
+ *  unique), or a device-local broadcast key. Every copy of a deck therefore
+ *  broadcasts into its own room. A name starting with 'w' would be mistaken
+ *  for a signed collab room by the relay (name commitment check), so re-hash
+ *  until it doesn't. */
+export async function broadcastRoom(seed: string): Promise<string> {
+  let name = ''
+  do {
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed)))
+    name = b64u.enc(d).slice(0, 10)
+    seed = name
+  } while (name[0] === 'w')
+  return name
 }
 
-/** Extract the room name (e.g. w<commit>) from a full relay WebSocket URL. */
-function roomNameFromUrl(roomUrl: string): string {
-  try {
-    return new URL(roomUrl.replace(/^ws/, 'http')).pathname.replace(/^\/d\//, '')
-  } catch {
-    return ''
-  }
+/** 18-char relay token derived from the room name — presenter and viewers
+ *  compute the same value, so the shareable URL carries no tok. */
+export async function broadcastTok(room: string): Promise<string> {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(room)))
+  return b64u.enc(d).slice(0, 18)
+}
+
+export function hostedLink(hostClient: string, room: string): string {
+  return `${hostClient.replace(/\/+$/, '')}?room=${room}`
 }
 
 /** Relay origin a room URL lives on (ws://host or wss://host). */
@@ -877,9 +891,14 @@ function relayFromUrl(roomUrl: string): string {
 /**
  * Resolve broadcast credentials for a document.
  *
- * Case 1: the deck already has a signed collab room and this copy holds the
- * owner key (v2 `ownerPriv` or legacy `writerPriv`). Reuses that room and the
- * token derived from `collab.key`.
+ * The room is derived from the presenter's signing key, so every copy of a
+ * deck broadcasts into its own room:
+ *
+ * Case 1: the deck has a signed collab room and this copy holds the owner key
+ * (v2 `ownerPriv` or legacy `writerPriv`) — sign with it.
+ *
+ * Case 1.5: a shared editor copy (v2 `invite`) — sign with the per-copy
+ * invite key, so each invitee's room is unique to their copy.
  *
  * Case 2: everything else. Reads/caches a broadcast-only owner keypair in
  * localStorage under `bento-broadcast-<docId>`. Per-machine by design — the
@@ -887,52 +906,50 @@ function relayFromUrl(roomUrl: string): string {
  */
 export async function resolveBroadcastCreds(doc: BentoDoc, docId: string): Promise<BroadcastCreds> {
   const c = doc.collab
-  // Case 1 reuses an EXISTING room — the copy must point at the relay that
-  // room lives on, not the builder's current syncHost() (they can differ when
-  // a deck's room was minted on a local/override relay). Case 2 mints on
-  // syncHost(), so that stays the fallback.
+  // The broadcast room is derived from the presenter's SIGNING key — the key
+  // this copy signs control frames with. Owner deck → owner key; a shared
+  // editor copy → its per-copy invite key; legacy → the shared writer key;
+  // everything else → a device-local broadcast key. Each copy of a deck
+  // therefore broadcasts into its own room (the relay TOFUs the same key).
+  // The room lives on the same relay as the deck's collab room (they can
+  // differ when a deck's room was minted on a local/override relay).
   const relay = c?.room ? relayFromUrl(c.room) : syncHost()
-  // Case 1: owner-signing copy of a signed room.
+  let signerPub: string
+  let signerPriv: string
   if (c?.room && c.key && ((c.v === 2 && c.ownerPriv) || c.writerPriv)) {
-    const raw = b64u.dec(c.key)
-    const tokDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', raw as BufferSource))
-    const tok = b64u.enc(tokDigest.slice(0, 18))
-    const signerPub = (c.v === 2 && c.owner) ? c.owner : c.writerPub!
-    return {
-      room: c.room,
-      roomName: roomNameFromUrl(c.room),
-      tok,
-      relay,
-      signerPub,
-      signerPriv: (c.v === 2 && c.ownerPriv) ? c.ownerPriv : c.writerPriv!,
-      isOwner: true,
+    // Case 1: owner-signing copy of a signed room — sign with the owner key.
+    signerPub = (c.v === 2 && c.owner) ? c.owner : c.writerPub!
+    signerPriv = (c.v === 2 && c.ownerPriv) ? c.ownerPriv : c.writerPriv!
+  } else if (c?.room && c.key && c.v === 2 && c.invite) {
+    // Case 1.5: a shared editor copy — sign with its per-copy invite key, so
+    // every invitee broadcasts into their own room.
+    signerPub = c.invite.pub
+    signerPriv = c.invite.priv
+  } else {
+    // Case 2: mint/cache a device-local broadcast-only owner keypair.
+    const k = `bento-broadcast-${docId}`
+    let saved: { pub: string; priv: string } | null = null
+    try {
+      const raw = lsGet(k)
+      if (raw) saved = JSON.parse(raw)
+    } catch { /* storage unavailable → mint ephemeral */ }
+    if (!saved) {
+      const id = await mintKeypair()
+      saved = { pub: id.pub, priv: id.priv }
+      try { lsSet(k, JSON.stringify(saved)) } catch { /* storage unavailable */ }
     }
+    signerPub = saved.pub
+    signerPriv = saved.priv
   }
-  // Case 2: mint/cache a device-local broadcast-only owner keypair.
-  const k = `bento-broadcast-${docId}`
-  let saved: { pub: string; priv: string; room: string; tok: string } | null = null
-  try {
-    const raw = lsGet(k)
-    if (raw) saved = JSON.parse(raw)
-  } catch { /* storage unavailable → mint ephemeral */ }
-  if (!saved) {
-    const id = await mintKeypair()
-    const commit = new Uint8Array(await crypto.subtle.digest('SHA-256', b64u.dec(id.pub) as BufferSource))
-    const room = `${syncHost()}/d/w${b64u.enc(commit)}`
-    const key = mintRoomKey()
-    const rawKey = b64u.dec(key)
-    const tokDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', rawKey as BufferSource))
-    const tok = b64u.enc(tokDigest.slice(0, 18))
-    saved = { pub: id.pub, priv: id.priv, room, tok }
-    try { lsSet(k, JSON.stringify(saved)) } catch { /* storage unavailable */ }
-  }
+  const roomName = await broadcastRoom(signerPub)
+  const tok = await broadcastTok(roomName)
   return {
-    room: saved.room,
-    roomName: roomNameFromUrl(saved.room),
-    tok: saved.tok,
+    room: `${relay}/d/${roomName}`,
+    roomName,
+    tok,
     relay,
-    signerPub: saved.pub,
-    signerPriv: saved.priv,
+    signerPub,
+    signerPriv,
     isOwner: true,
   }
 }

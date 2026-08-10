@@ -68,6 +68,20 @@ async function mintCollab() {
   return { room, roomName, key, tok, owner: pub, ownerPriv: priv }
 }
 
+// Broadcast room derived from the presenter's signing key (byte-identical to
+// slides/src/sync/online.ts broadcastRoom): 10-char b64url of sha256(seed),
+// re-hashed until it doesn't start with 'w' (a 'w' name would be mistaken for
+// a signed collab room by the relay).
+async function broadcastRoom(seed) {
+  let name = ''
+  do {
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed)))
+    name = b64u.enc(d).slice(0, 10)
+    seed = name
+  } while (name[0] === 'w')
+  return name
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // tiny SVG asset (geometric bento mark), embedded as a data URI
 // ═══════════════════════════════════════════════════════════════════════
@@ -285,6 +299,7 @@ function spliceDoc(shell, doc) {
 // build + write
 // ═══════════════════════════════════════════════════════════════════════
 const creds = await mintCollab()
+const bcastRoom = await broadcastRoom(creds.owner)
 const ownerDocId = uuid()
 const copyDocId = uuid()
 const hostedDocId = uuid()
@@ -302,8 +317,7 @@ const ownerCollab = {
 const broadcastCopyCollab = {
   on: false,
   broadcast: {
-    room: creds.roomName,
-    tok: creds.tok,
+    room: bcastRoom,
     relay,
   },
 }
@@ -314,8 +328,7 @@ const hostedCopyCollab = {
   on: true,
   sync: undefined,
   broadcast: {
-    room: creds.roomName,
-    tok: creds.tok,
+    room: bcastRoom,
     relay,
   },
 }
@@ -342,4 +355,5 @@ console.log(`owner.bento.html   — ${Math.round(ownerOut.length / 1024)} KB`)
 console.log(`copy.bento.html    — ${Math.round(copyOut.length / 1024)} KB`)
 console.log(`hosted.bento.html  — ${Math.round(hostedOut.length / 1024)} KB`)
 console.log(`relay: ${relay}`)
-console.log(`room:  ${creds.roomName}`)
+console.log(`collab room: ${creds.roomName}`)
+console.log(`broadcast room: ${bcastRoom}`)
