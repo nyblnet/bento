@@ -765,7 +765,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   left: 50%;
   bottom: 26px;
   transform: translate(-50%, 12px);
-  background: var(--ink);
+  background: #1e2a3a;
   color: #fff;
   font-size: 13px;
   padding: 9px 16px;
@@ -776,9 +776,8 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   pointer-events: none;
 }
 :root[data-theme="dark"] .ed-toast {
-  background: var(--chrome-2);
-  color: var(--ink);
-  border: 1px solid var(--line);
+  background: #fff;
+  color: #1e2a3a;
 }
 .ed-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
