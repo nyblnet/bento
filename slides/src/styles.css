@@ -241,7 +241,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .ed-btn-primary {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   padding: 6px 14px;
 }
 .ed-btn-primary:hover { background: var(--ink-2); }
@@ -461,7 +461,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-setchip:hover { background: var(--chrome-2); }
 .ed-setchip.active {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
 }
 
 /* ————— slide surface (shared by canvas, thumbs, present) ————— */
