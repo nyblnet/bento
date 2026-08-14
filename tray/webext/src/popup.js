@@ -211,6 +211,15 @@ $('new').addEventListener('click', async () => {
   }
 })
 
+// The popup stays a launcher — "open the thing I just had". Browsing wants
+// folders, search and a thumbnail big enough to recognise a deck by, none of
+// which fit in 340px that closes when it loses focus. So the page is a page,
+// and this is the door to it rather than a second copy of it.
+$('browse').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('src/home.html') })
+  window.close()
+})
+
 $('open').addEventListener('click', () => {
   chrome.runtime.openOptionsPage()
   window.close()

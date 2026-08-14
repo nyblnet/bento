@@ -21,7 +21,7 @@
 // hand-written fixtures shaped to pass.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { listDocuments, describe, newDocument } from '../tray/webext/src/library.js'
+import { listDocuments, describe, newDocument, duplicate, rename } from '../tray/webext/src/library.js'
 
 let failures = 0
 let checks = 0
@@ -41,6 +41,10 @@ function fileHandle(name: string, text = '', modified = 1_700_000_000_000) {
         size: text.length,
         lastModified: modified,
         async text() { return text },
+        // Copying is done as BYTES, not text — a document is not necessarily
+        // valid UTF-8 all the way through and a round trip through a string
+        // could rewrite it. The mock has to offer the same surface.
+        async arrayBuffer() { return new TextEncoder().encode(text).buffer },
         slice(a: number, b: number) {
           const part = text.slice(a, b)
           return { async text() { return part } }
@@ -48,7 +52,14 @@ function fileHandle(name: string, text = '', modified = 1_700_000_000_000) {
       }
     },
     async createWritable() {
-      return { async write(t: string) { (this as any)._ = t; written.set(name, t) }, async close() {} }
+      return {
+        async write(chunk: any) {
+          written.set(name, typeof chunk === 'string'
+            ? chunk
+            : new TextDecoder().decode(chunk))
+        },
+        async close() {},
+      }
     },
   }
 }
@@ -263,6 +274,94 @@ const fakeNet = (version = '1.0.17', html = '<html>shell</html>') => async (url:
     fetch: async () => ({ ok: true, async json() { return {} } }),
   }).catch((e: any) => { threw = e.message })
   ok(/did not offer a build/.test(threw), 'a manifest with no build is reported rather than written as empty')
+}
+
+// ---- 5. duplicate and rename ------------------------------------------------
+// The only two operations that CHANGE somebody's documents. Deleting is
+// deliberately absent — it needs an undo, a trash and a confirmation people
+// actually read, and Finder has all three — so these two carry the whole risk.
+{
+  written.clear()
+  const original = fileHandle('Q3.bento.html', '<html>original</html>')
+  const tree: Record<string, any> = { 'Q3.bento.html': original }
+  const dir = dirHandle('Decks', tree)
+  const doc = { name: 'Q3.bento.html', base: 'Q3', folder: 'Decks', rel: ['Q3.bento.html'],
+    handle: original, parent: dir }
+  const made = await duplicate(doc as any)
+  ok(made.name === 'Q3 copy.bento.html', `a duplicate is named for the original (${made.name})`)
+  ok(written.get('Q3 copy.bento.html') === '<html>original</html>',
+    'and is byte-for-byte — a Bento document carries its own runtime, keys and identity, '
+    + 'and a file manager has no standing to re-derive any of that')
+  ok(tree['Q3.bento.html'] === original, 'the original is untouched')
+
+  const second = await duplicate(doc as any)
+  ok(second.name === 'Q3 copy 2.bento.html', `duplicating twice counts on the base (${second.name})`)
+}
+{
+  written.clear()
+  const removed: string[] = []
+  const original = fileHandle('Old.bento.html', '<html>content</html>')
+  const tree: Record<string, any> = { 'Old.bento.html': original }
+  const dir: any = dirHandle('Decks', tree)
+  dir.removeEntry = async (n: string) => { removed.push(n); delete tree[n] }
+  const doc = { name: 'Old.bento.html', base: 'Old', folder: 'Decks', rel: ['Old.bento.html'],
+    handle: original, parent: dir }
+
+  const made = await rename(doc as any, 'New Name')
+  ok(made.name === 'New Name.bento.html', `renaming writes the new name (${made.name})`)
+  ok(written.get('New Name.bento.html') === '<html>content</html>', 'with the original content')
+  ok(removed.length === 1 && removed[0] === 'Old.bento.html', 'and removes the old file after')
+}
+{
+  // WRITE THEN REMOVE, never the reverse. If the write fails the original must
+  // survive; removing first would put the only copy of somebody's document in
+  // a variable. Proven by making the write fail and checking nothing was lost.
+  const removed: string[] = []
+  const original = fileHandle('Keep.bento.html', '<html>precious</html>')
+  const tree: Record<string, any> = { 'Keep.bento.html': original }
+  const dir: any = dirHandle('Decks', tree)
+  dir.removeEntry = async (n: string) => { removed.push(n) }
+  const realGet = dir.getFileHandle.bind(dir)
+  dir.getFileHandle = async (n: string, o?: any) => {
+    if (o?.create) throw new Error('disk full')
+    return realGet(n, o)
+  }
+  const doc = { name: 'Keep.bento.html', base: 'Keep', folder: 'Decks', rel: ['Keep.bento.html'],
+    handle: original, parent: dir }
+  let threw = ''
+  await rename(doc as any, 'Whatever').catch((e: any) => { threw = e.message })
+  ok(threw === 'disk full', 'a failed rename reports the failure')
+  ok(removed.length === 0, 'and removes nothing — the original survives a write that did not happen')
+}
+{
+  const dir: any = dirHandle('Decks', {})
+  const doc = { name: 'A.bento.html', base: 'A', folder: 'Decks', rel: ['A.bento.html'],
+    handle: fileHandle('A.bento.html', 'x'), parent: dir }
+  let threw = ''
+  await rename(doc as any, '   ').catch((e: any) => { threw = e.message })
+  ok(/needs a name/.test(threw), 'an empty name is refused rather than creating ".bento.html"')
+
+  dir.removeEntry = async () => {}
+  const same = await rename(doc as any, 'A')
+  ok(same.name === 'A.bento.html', 'renaming to the same name is a no-op, not a duplicate')
+}
+{
+  // A name is about to become a filename, and it comes from a prompt box.
+  const removed: string[] = []
+  const tree: Record<string, any> = { 'A.bento.html': fileHandle('A.bento.html', 'x') }
+  const dir: any = dirHandle('Decks', tree)
+  dir.removeEntry = async (n: string) => { removed.push(n) }
+  const doc = { name: 'A.bento.html', base: 'A', folder: 'Decks', rel: ['A.bento.html'],
+    handle: tree['A.bento.html'], parent: dir }
+  const made = await rename(doc as any, '../../etc/passwd')
+  ok(!made.name.includes('/') && !made.name.includes('..') && !made.name.startsWith('.'),
+    `separators are stripped, so a name cannot escape its folder (${made.name})`)
+  ok(made.name === 'etcpasswd.bento.html',
+    `and what is left is an ordinary visible file name (${made.name})`)
+  const made2 = await rename({ ...doc, base: made.base, name: made.name,
+    handle: tree[made.name] } as any, 'Report.bento.html')
+  ok(made2.name === 'Report.bento.html',
+    `typing the extension does not double it (${made2.name})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

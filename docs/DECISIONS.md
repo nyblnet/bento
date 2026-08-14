@@ -2789,3 +2789,59 @@ Found while writing it: a PRISTINE shell has an EMPTY `#bento-doc` block
 only written on first save. So a newly created document legitimately has no title
 and no preview until it is saved once. The rig asserted a title and failed —
 correctly, at the assertion rather than in the parse.
+
+*2026-08-14, continued: the home page, and the bug that made the tray useless.*
+
+**The tray listed documents and could open none.** A chicken-and-egg: a
+directory handle has no path, so an absolute one is needed to open anything, and
+it was learned only by subtracting during a SAVE. A fresh install had never
+saved, so every row was disabled. Opening a document is the natural moment to
+learn where its folder is, so `relay.js` now announces itself once on load and
+the worker resolves that like a claim — no write, prefix recorded. One document
+opened makes its whole folder openable. The announcement sends an op and
+nothing else; the path still comes from `sender.url`.
+
+**A full page, because a popup cannot browse.** 340px that dies on blur answers
+"open the thing I just had" and nothing else. `src/home.html` adds folders,
+search, sort, and thumbnails big enough to recognise a deck by. The popup stays
+a launcher with a door to it, rather than a second implementation — both read
+`library.js`, so they cannot disagree about what a document is.
+
+**Thumbnails need a real viewport, not a small one.** The preview block sizes
+page one to whatever viewport it lands in. Give the iframe a 56px box and it
+lays the slide out for a phone; give it 1280×720 and scale the whole frame down,
+and it composes exactly as it does on screen. Measured while looking at it: the
+first screenshot showed blank cards because the iframes had not painted yet, not
+because anything was wrong — a reminder that "I looked and it was broken" needs
+a second look before it becomes a finding.
+
+**Rename is write-then-remove, in that order, always.** The File System Access
+API has no rename. If the write fails the original is untouched; if the remove
+fails the worst case is two copies. Removing first would put the only copy of
+somebody's document in a variable, and the rig proves the ordering by failing
+the write and checking nothing was removed.
+
+**The rename box is a filename input, so it is sanitised as one**: separators
+stripped so nothing escapes the folder, the extension stripped so typing it does
+not double it, and leading dots stripped — a document renamed to `.something`
+would vanish from every file manager including this one.
+
+**Duplicate copies bytes, deliberately.** A Bento document carries its own
+runtime, its collaboration keys and its identity. Whether a copy should get a
+fresh `docId` is the DOCUMENT's business — Bento has "Duplicate as new deck" for
+exactly that — and a file manager has no standing to decide it.
+
+**There is no Delete**, and that is a decision rather than an omission.
+Destroying documents needs an undo, a trash, and a confirmation people actually
+read; Finder has all three and is one keystroke away. Duplicate and rename are
+recoverable, delete is not.
+
+**Multi-app support was deferred, deliberately.** Supporting other single-file
+HTML apps means widening the manifest match from `file:///*.bento.html` to all
+local HTML, which injects the bridge into every local page a user opens — a much
+larger thing to justify in a store listing — and replacing the `window.bento`
+version gate with a generic app declaration. That gate is what stops a pre-#213
+document from having its "Save a copy" treated as an overwrite, so it cannot be
+dropped casually. Doing it first would have settled the home page's data model;
+doing it later means the home page will need revisiting. That is the cheaper
+order, because Bento's own shape is known and another app's is not.
