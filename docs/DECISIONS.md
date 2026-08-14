@@ -2437,3 +2437,58 @@ scoped to installed apps; a settings URL; Remove not being a revoke), each
 stated confidently from documentation or memory, each disproved by one
 screenshot. The rule that keeps being relearned: a claim about a browser UI is
 worth nothing until someone has looked at that UI.
+
+---
+
+## 2026-08-14 — "Don't allow" is a one-way door, and the prompt can be embargoed
+
+Reported: after choosing **Don't allow** on the reconnect prompt, the folder
+grant lapsed on every browser restart AND the dialog stopped appearing at all.
+Read out of the Chrome profile (`Profile 1/Preferences`), two independent things
+had happened, neither of them a recorded "block":
+
+**1. The granted folders were DELETED.** `file_system_access_chooser_data` for
+the extension went from two directories with paths to `"chosen-objects": []`.
+The extension's stored handles survive in IndexedDB, but they now refer to a
+grant Chrome no longer has, so there is nothing for `requestPermission` to
+restore.
+
+**2. The restore prompt is EMBARGOED.**
+
+    permission_autoblocking_data → FileSystemAccessRestorePermission
+      { "dismiss_count": 3, "dismissal_embargo_days": … }
+
+Chrome's permission auto-blocker suppresses a prompt after three dismissals.
+`permission_actions_history` is empty and `file_system_write_guard` holds no
+BLOCK — the silence is purely the embargo. `requestPermission` returns without
+showing anything, so the button appears to do nothing, permanently.
+
+**Neither is reachable from Chrome's UI**, for the same reason the persistent
+grant was not: these live in their own stores, not in the content-setting
+exceptions the settings page renders.
+
+### What this changes in the product
+
+**A Renew button is a loaded gun.** Every prompt the user dismisses counts
+toward the embargo, so a UI that encourages clicking it — a notification, say —
+makes the dead end easier to reach. Three impatient dismissals and saving
+silently stops working.
+
+**Re-picking is the escape, and it is a DIFFERENT permission.**
+`showDirectoryPicker` is a user-initiated chooser, not a restore prompt, so it
+still works under embargo and re-creates the chosen-object. So a failed renew is
+not an error to report — it is the signal to ask for the folder again. Both the
+options page and the popup now detect a renew that restored nothing and say so,
+rather than reloading into an unchanged list, which reads as a broken button and
+invites exactly the extra dismissals that cause the embargo.
+
+**This is the strongest argument yet against raising prompts on our own
+initiative.** Nothing may open the restore prompt except an explicit user click,
+and the copy has to be clear enough that the click is deliberate — because the
+cost of a careless dismissal is not a retry, it is the feature.
+
+### Still unknown
+
+Whether the embargo expires on its own (`dismissal_embargo_days` holds what
+looks like a timestamp, not a count of days) and whether re-picking clears it.
+Worth knowing before the store listing claims anything about recovery.

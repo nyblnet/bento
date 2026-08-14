@@ -91,9 +91,46 @@ async function report() {
         const dirs = await getGrants()
         const dir = dirs[i]
         if (!dir) return
-        if (await dir.requestPermission({ mode: 'readwrite' }) === 'granted') await putGrants(dirs)
+        if (await dir.requestPermission({ mode: 'readwrite' }) === 'granted') {
+          await putGrants(dirs)
+          return
+        }
+        // RENEW CAN BECOME PERMANENTLY IMPOSSIBLE, silently. Two ways, both
+        // observed 2026-08-14:
+        //
+        //   · "Don't allow" empties Chrome's `chosen-objects` for this
+        //     extension, so the stored handle refers to a grant that no longer
+        //     exists and there is nothing left to restore.
+        //   · Chrome's permission auto-blocker EMBARGOES the restore prompt
+        //     after three dismissals
+        //     (permission_autoblocking_data.FileSystemAccessRestorePermission),
+        //     after which requestPermission returns without showing anything.
+        //
+        // Either way the button appears to do nothing, for good, and Chrome
+        // offers no UI to undo it. Re-PICKING is a different flow — a
+        // user-initiated chooser rather than a restore prompt — and it still
+        // works under embargo. So a failed renew is not an error, it is a
+        // signal to ask for the folder again.
+        pickInstead.hidden = false
+        el.innerHTML = '<p><b class="bad">Chrome would not restore that folder.</b> ' +
+          'It can stop offering to, and gives no way to turn that back on. ' +
+          'Choosing the folder again works instead — it is a different permission.</p>'
       })
       row.appendChild(renew)
+
+      // Shown only after a renew has actually failed, because until then it is
+      // the more confusing of the two buttons.
+      const pickInstead = document.createElement('button')
+      pickInstead.textContent = 'Choose again…'
+      pickInstead.hidden = true
+      pickInstead.onclick = () => guard(async () => {
+        const picked = await window.showDirectoryPicker({ mode: 'readwrite' })
+        await picked.requestPermission({ mode: 'readwrite' })
+        const dirs = await getGrants()
+        dirs[i] = picked // replace in place: it is the same slot, re-granted
+        await putGrants(dirs)
+      })
+      row.appendChild(pickInstead)
     }
 
     const drop = document.createElement('button')

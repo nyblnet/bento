@@ -73,8 +73,23 @@ lapsed.addEventListener('click', async () => {
   }
   if (ok) await putGrants(dirs)
   await setLapsedBadge()
-  // Reflect the outcome rather than guessing at it: a popup that closes itself
-  // on "Don't allow" tells the user it worked.
+
+  // A renew that restores NOTHING is the state Chrome cannot get you out of:
+  // "Don't allow" empties its record of the granted folders, and three
+  // dismissals embargo the restore prompt so it stops appearing at all. Both
+  // observed 2026-08-14. Re-picking the folder is a different permission and
+  // still works, but it needs the folder chooser, which belongs in Settings.
+  //
+  // Saying so beats reloading into an unchanged list, which reads as "the
+  // button is broken" and invites the extra dismissals that cause the embargo.
+  if (!ok) {
+    document.getElementById('rows').innerHTML = row('bad', 'Chrome would not restore the folder',
+      'It can stop offering to, and gives no way to turn that back on. Choosing the folder '
+      + 'again in Settings works instead — it is a different permission.')
+    lapsed.hidden = true
+    hint.hidden = true
+    return
+  }
   location.reload()
 })
 
