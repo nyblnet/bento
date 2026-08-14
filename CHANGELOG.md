@@ -11,6 +11,18 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Updating a file no longer interrupts you.** With Bento Tray installed and a
+  folder granted, "Update this file" now finishes without a single dialog. The
+  backup it leaves behind is saved **beside your document** instead of being
+  downloaded — so the copy you would roll back to sits next to the thing it
+  backs up, rather than in your downloads folder. Without the extension it is
+  still a download, exactly as before.
+
+  Two things caused the prompt. The backup was handed to the browser's download
+  machinery, which asks where to put things if you have told Chrome to; and an
+  update of a double-clicked file described itself to the extension as an
+  export, so the extension — correctly — refused to write it for you.
+
 ## [1.0.17] — 2026-08-10
 
 - **Security: update this file. A deck could run code hidden in its own

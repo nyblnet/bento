@@ -215,6 +215,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Bu tarayıcı dosyaların üzerine yerinde yazamaz — yeni bir kopya İndirilenler klasörüne kaydedildi",
   "This document": "Bu belge",
   "This file carries its own app — it works offline, forever, as is.": "Bu dosya kendi uygulamasını taşır — çevrimdışı, sonsuza dek, olduğu gibi çalışır.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Bu pencere hâlâ v{v} sürümünü çalıştırıyor — bitirmek için yeniden yükleyin. v{v} yedeği bu dosyanın yanına kaydedildi.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Bu pencere hâlâ v{v} sürümünü çalıştırıyor — bitirmek için yeniden yükleyin. v{v} yedeği indirildi.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Bu pencere hâlâ v{v} sürümünü çalıştırıyor. Burada açık olan dosyanın üzerine yazdıysanız yeniden yükleyin; yazmadıysanız kaydettiğiniz dosyayı açın.",
   "This window keeps running v{v} until you open the downloaded file.": "İndirilen dosyayı açana kadar bu pencere v{v} sürümünü çalıştırmayı sürdürür.",

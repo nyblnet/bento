@@ -44,7 +44,10 @@ function load(opts: { version?: string; pathname?: string } = {}) {
     bento: opts.version ? { updates: { version: opts.version } } : undefined,
   }
   const ctx: any = createContext({
-    window: win, setTimeout, clearTimeout, Date, Math, JSON, Promise, Blob: class {},
+    // A REAL Blob. It was a bare `class {}`, which was enough for the
+    // `instanceof` branch but has no `.text()` — so every close() rejected and
+    // the half of the bridge that actually sends bytes was never exercised.
+    window: win, setTimeout, clearTimeout, Date, Math, JSON, Promise, Blob,
     DOMException: class extends Error { constructor(m: string, n: string) { super(m); this.name = n } },
     FileSystemHandle: class {},
     crypto: { randomUUID: () => 'x' },
@@ -70,6 +73,7 @@ for (const [id, shouldDefer] of [
   ['bento-copy', true],
   ['bento-share', true],
   ['bento-doc', false],
+  ['bento-backup', false],
 ] as const) {
   const { win, nativeCalls, posted } = load({ version: '1.0.15' })
   const p = win.showSaveFilePicker({ id, suggestedName: 'Q3.bento.html' })
@@ -77,8 +81,15 @@ for (const [id, shouldDefer] of [
   const deferred = nativeCalls.length === 1
   ok(deferred === shouldDefer,
     `${id} ${shouldDefer ? 'defers to the native picker' : 'is claimed by the host'}`)
-  if (!shouldDefer) {
+  if (id === 'bento-doc') {
     ok(posted.some((m) => m.op === 'claim'), 'bento-doc asks the extension to claim the file')
+  }
+  if (id === 'bento-backup') {
+    // Nothing to claim: the backup does not exist yet, so resolution happens at
+    // the write. What matters is that it never reaches the native picker —
+    // falling through would prompt for a file the author never asked to save,
+    // which is the interruption this whole path exists to remove.
+    ok(!posted.some((m) => m.op === 'claim'), 'a backup does not claim — there is no file yet to resolve')
   }
   p.catch(() => {})
 }
@@ -118,6 +129,58 @@ for (const [version, trusted] of [
   await win.showSaveFilePicker({ id: 'bento-copy', suggestedName: 'copy.bento.html', startIn: real })
     .catch(() => {})
   ok(nativeCalls.length === 1, 'a copy reaches the native picker')
+}
+
+// ---- the host announces what it can do -------------------------------------
+// `showSaveFilePicker` existing proves nothing — Chrome has it anyway, and a
+// host that declines looks exactly like one that is absent, since both end at
+// the native dialog. So the kernel reads `__bentoHost.ops` before taking a path
+// it can only take with help. Presence alone would be the wrong test: a host
+// that announced itself but did not know `bento-backup` would pass the request
+// through to the native picker and produce the very dialog this removes.
+{
+  const { win } = load({ version: '1.0.15' })
+  const host = (win as any).__bentoHost
+  ok(!!host && Array.isArray(host.ops), 'the host announces itself with a capability list')
+  ok(host.ops.includes('backup'), 'and names the backup op the kernel gates on')
+  ok(host.ops.includes('write'), 'and the write op the update path gates on')
+  // A document is untrusted content sharing this realm; it must not be able to
+  // fake a capability the extension does not have, nor hide one it does.
+  try { (win as any).__bentoHost = { ops: ['everything'] } } catch { /* strict mode */ }
+  ok((win as any).__bentoHost.ops.includes('backup') && !(win as any).__bentoHost.ops.includes('everything'),
+    'and a page cannot overwrite the announcement')
+}
+
+// ---- a backup writes through the host, never the picker --------------------
+{
+  const { win, nativeCalls, posted } = load({ version: '1.0.15' })
+  const h = await win.showSaveFilePicker({ id: 'bento-backup', suggestedName: 'Q3.v1.0.16-backup.bento.html' })
+  ok(nativeCalls.length === 0, 'a backup never reaches the native picker')
+  ok(h?.name === 'Q3.v1.0.16-backup.bento.html', 'and yields a handle named for the backup')
+  const w = await h.createWritable()
+  await w.write('old bytes')
+  // close() serialises the chunks through Blob.text(), which is async — one
+  // tick is not enough, and a rig that checks too early reports the bridge
+  // broken when it is merely mid-flight.
+  const closing = w.close().catch(() => {})
+  await new Promise((r) => setTimeout(r, 20))
+  const req = posted.find((m: any) => m.op === 'backup')
+  ok(!!req, 'closing the writable sends a backup op')
+  ok(req?.payload?.name === 'Q3.v1.0.16-backup.bento.html',
+    'carrying the proposed name, which the extension validates against the sender\'s own file')
+  ok(req?.payload?.text === 'old bytes', 'and the bytes to write')
+  closing.catch(() => {})
+}
+
+// ---- an old runtime never sends bento-backup, so it never sees this path ----
+{
+  const { win, nativeCalls } = load({ version: '1.0.11' })
+  // The id did not exist before the runtime that sends it, so unlike bento-doc
+  // there is no ambiguous legacy meaning to guard against — but a deck that
+  // does not send it must still behave exactly as it does today.
+  win.showSaveFilePicker({ id: 'bento-doc', suggestedName: 'Q3.bento.html' }).catch(() => {})
+  await new Promise((r) => setTimeout(r, 0))
+  ok(nativeCalls.length === 1, 'a pre-1.0.15 deck still gets the browser picker, unchanged')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

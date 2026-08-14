@@ -212,6 +212,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Deze browser kan bestanden niet ter plekke overschrijven — er staat een nieuwe kopie in Downloads",
   "This document": "Dit document",
   "This file carries its own app — it works offline, forever, as is.": "Dit bestand draagt zijn eigen app bij zich — het werkt offline, voor altijd, zoals het is.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Dit venster draait nog v{v} — laad opnieuw om af te ronden. Er is een back-up van v{v} naast dit bestand opgeslagen.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Dit venster draait nog v{v} — laad opnieuw om af te ronden. Er is een back-up van v{v} gedownload.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Dit venster draait nog v{v}. Heb je het bestand overschreven dat hier openstaat, laad dan opnieuw; open anders het bestand dat je hebt opgeslagen.",
   "This window keeps running v{v} until you open the downloaded file.": "Dit venster blijft v{v} draaien totdat je het gedownloade bestand opent.",

@@ -23,7 +23,7 @@ import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
 import {
   serializeDocInto, serializeAuto, suggestedFileName, downloadFile, openedFileName, fileBase,
-  hasFileHandle, writeUpdatedFile, writeUpdatedFileAs,
+  hasFileHandle, writeUpdatedFile, writeUpdatedFileAs, writeBackupBeside, hostCan,
 } from './save.ts'
 import { lsDel, lsGet, lsSet } from './storage.ts'
 
@@ -285,34 +285,73 @@ export async function applyUpdate(release: ReleaseInfo, doc: KernelDoc): Promise
   downloadFile(await buildUpdatedFile(release, doc), openedFileName() ?? suggestedFileName(doc))
 }
 
-/** Can we rewrite the open file directly (a FS Access handle is held)? */
-export const canUpdateInPlace = hasFileHandle
+/**
+ * Can we rewrite the open file directly, with no destination prompt?
+ *
+ * Two ways to be able to. A held FS Access handle is the browser's own, earned
+ * by an earlier save. A HOST needs no handle at all: it resolves the file from
+ * the page's own URL against a folder the author granted once, which is the
+ * whole reason a double-clicked document can be written without a picker.
+ *
+ * This only decides what the button PROMISES ("Update this file" vs "…"), so
+ * being wrong is a mislabelled button rather than a lost file — but it was
+ * wrong in the direction that undersells: with a host installed and no handle
+ * yet, it offered to ask where to save something it could simply write.
+ */
+export const canUpdateInPlace = (): boolean => hasFileHandle() || hostCan('write')
+
+/** What an in-place update actually did with the rollback copy. */
+export type InPlaceOutcome = { backup: 'beside' | 'downloaded' | 'none' }
 
 /**
  * Update the file on disk, then a reload boots the new app with this document.
  *
- * With a held handle: download a backup of the current version first, then
- * overwrite the file in place silently.
+ * A rollback copy of the CURRENT version is written first, whenever the update
+ * itself is going to be silent — see `writeBackupBeside` for where it lands and
+ * why that stopped being a download.
+ *
+ * With a held handle: overwrite the file in place.
  *
  * Without a handle (e.g. the file was double-clicked open — the browser grants
- * no handle on open): use a save picker AND KEEP the resulting handle, so this
- * update and every later one can rewrite the file in place. The picker is
+ * no handle on open): fall to a save picker AND KEEP the resulting handle, so
+ * this update and every later one can rewrite the file in place. The picker is
  * pre-filled with the open file's own NAME (taken from the document URL); its
  * DIRECTORY still cannot be set — the API accepts a handle, never a path — so
  * the caller must still tell the user to overwrite the file they have open.
- * Once they do, it is a one-time grant. Returns false if cancelled.
+ *
+ * That path declares `in-place`, and the distinction is not cosmetic. It is
+ * overwriting the document on screen, which is what `in-place` means, and a
+ * host reads the picker id and nothing else. Sending `share` here — as this did
+ * — told every host "a new file the author will choose", so the one save that
+ * should never need a dialog was the one that always got one.
+ *
+ * Returns null if the picker was cancelled.
  */
-export async function applyUpdateInPlace(release: ReleaseInfo, doc: KernelDoc): Promise<boolean> {
+export async function applyUpdateInPlace(
+  release: ReleaseInfo, doc: KernelDoc,
+): Promise<InPlaceOutcome | null> {
   const html = await buildUpdatedFile(release, doc)
   // Both names below follow the OPEN FILE, not the deck title: the backup sits
   // beside the original, and the picker opens pre-filled with the very file the
   // user is being asked to overwrite.
   const current = openedFileName()
+  const base = fileBase(current ?? suggestedFileName(doc))
+
+  // Only back up when the write that follows is going to happen without asking.
+  // On a plain browser with no handle the author is about to CHOOSE a
+  // destination, and may well choose a new file — the original survives on its
+  // own, and an unasked-for download on top of that is noise.
+  const silent = hasFileHandle() || hostCan('write')
+  const backup = silent
+    ? await writeBackupBeside(await serializeAuto(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
+    : 'none'
+
   if (hasFileHandle()) {
-    const base = fileBase(current ?? suggestedFileName(doc))
-    downloadFile(await serializeAuto(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
     await writeUpdatedFile(html)
-    return true
+    return { backup }
   }
-  return writeUpdatedFileAs(html, doc, { keepHandle: true, suggestedName: current ?? undefined })
+  const written = await writeUpdatedFileAs(html, doc, {
+    keepHandle: true, suggestedName: current ?? undefined, purpose: 'in-place',
+  })
+  return written ? { backup } : null
 }

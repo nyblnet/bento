@@ -24,7 +24,7 @@
 // Both are checked by construction here: a write is issued with no preceding
 // claim at all, which is exactly what a service worker restart looks like.
 
-import { pathFromSender, findByName, claim, write, resolve } from '../tray/webext/src/background.js'
+import { pathFromSender, findByName, claim, write, resolve, backup, backupNameFor } from '../tray/webext/src/background.js'
 
 let failures = 0
 let checks = 0
@@ -68,6 +68,20 @@ function dirHandle(tree: Record<string, any>, perm = 'granted', base: string[] =
       if (!rel) return null
       // only children at or below this directory resolve
       return base.every((seg, i) => rel[i] === seg) ? rel.slice(base.length) : null
+    },
+    /** Real API: throws NotFoundError when absent, which `backup` relies on. */
+    async getDirectoryHandle(name: string) {
+      const v = tree[name]
+      if (!v || v.kind) throw Object.assign(new Error(name), { name: 'NotFoundError' })
+      return dirHandle(v, perm, [...base, name])
+    },
+    async getFileHandle(name: string, opts?: { create?: boolean }) {
+      const v = tree[name]
+      if (v && v.kind === 'file') return v
+      if (!opts?.create) throw Object.assign(new Error(name), { name: 'NotFoundError' })
+      const h = fileHandle(name, [...base, name])
+      tree[name] = h
+      return h
     },
     async *entries() {
       for (const [k, v] of Object.entries(tree)) {
@@ -190,6 +204,86 @@ const deps = (tree: Record<string, any>, perm = 'granted') => ({
   for (let i = 0; i < 6; i++) deep = { sub: deep }
   const r = await resolve(senderFor('/Users/x/Decks/Q3.bento.html'), deps(deep))
   ok(r.ok === false, 'a file buried past the depth limit is declined, not searched forever')
+}
+
+// ---- 6. the backup op ------------------------------------------------------
+// This is the only op that CREATES a file, so it is the only one where the page
+// contributes to a name. Everything below is about keeping that contribution
+// from meaning anything: the name must be visibly derived from the sender's own
+// file, and an existing file is never replaced.
+{
+  const own = 'Q3.bento.html'
+  ok(backupNameFor(own, 'Q3.v1.0.16-backup.bento.html') === 'Q3.v1.0.16-backup.bento.html',
+    'the ordinary backup name is accepted')
+  for (const [bad, why] of [
+    ['../../../etc/passwd', 'a traversal'],
+    ['/etc/Q3.bento.html', 'an absolute path'],
+    ['Q3/x.bento.html', 'a subdirectory'],
+    ['Q3.bento.html', 'the original itself'],
+    ['Other.v1-backup.bento.html', 'a name derived from a DIFFERENT file'],
+    ['Q3.v1-backup.txt', 'a non-document extension'],
+    ['Q3.v1 backup.bento.html', 'a name with a space'],
+    ['Q3. .bento.html', 'an embedded NUL'],
+  ] as const) {
+    ok(backupNameFor(own, bad) === null, `${why} is refused (${JSON.stringify(bad)})`)
+  }
+  ok(backupNameFor(own, `Q3.${'x'.repeat(200)}.bento.html`) === null,
+    'an absurdly long name is refused')
+  ok(backupNameFor(own, undefined as any) === null, 'a missing name is refused')
+}
+{
+  written.clear()
+  const tree: Record<string, any> = { 'Q3.bento.html': fileHandle('Q3.bento.html') }
+  const r = await backup(senderFor('/Users/x/Decks/Q3.bento.html'), 'old bytes',
+    'Q3.v1.0.16-backup.bento.html', deps(tree))
+  ok(r.ok === true, 'a backup beside the sender\'s own file is written')
+  ok(written.get('Q3.v1.0.16-backup.bento.html') === 'old bytes', 'and carries the old version')
+  ok(written.get('Q3.bento.html') === undefined, 'and the original is untouched')
+}
+{
+  // create-only: the second update of the same version must not clobber
+  written.clear()
+  const tree: Record<string, any> = {
+    'Q3.bento.html': fileHandle('Q3.bento.html'),
+    'Q3.v1.0.16-backup.bento.html': fileHandle('Q3.v1.0.16-backup.bento.html'),
+  }
+  const r = await backup(senderFor('/Users/x/Decks/Q3.bento.html'), 'new bytes',
+    'Q3.v1.0.16-backup.bento.html', deps(tree))
+  ok(r.ok === false && /already exists/.test(r.reason!),
+    'an existing file is never overwritten by a backup')
+  ok(written.size === 0, 'and nothing was written')
+}
+{
+  // the backup lands in the sender's OWN subfolder, not the grant root
+  written.clear()
+  const tree: Record<string, any> = {
+    Clients: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Clients', 'Q3.bento.html']) },
+  }
+  const r = await backup(senderFor('/Users/x/Decks/Clients/Q3.bento.html'), 'old bytes',
+    'Q3.v1.0.16-backup.bento.html', deps(tree))
+  ok(r.ok === true, 'a nested document backs up successfully')
+  ok(tree.Clients['Q3.v1.0.16-backup.bento.html'] !== undefined,
+    'and the backup sits beside it, not at the grant root')
+  ok(tree['Q3.v1.0.16-backup.bento.html'] === undefined, 'the grant root is untouched')
+}
+{
+  // every refusal that applies to a write applies here too — this op resolves
+  // through exactly the same gate, and must not have grown a way around it
+  written.clear()
+  const tree: Record<string, any> = {
+    Clients: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Clients', 'Q3.bento.html']) },
+  }
+  const r = await backup(senderFor('/Users/x/Desktop/Q3.bento.html'), 'attacker bytes',
+    'Q3.v1-backup.bento.html', deps(tree))
+  ok(r.ok === false, 'a backup from a same-named file elsewhere is refused')
+  ok(written.size === 0, 'and nothing was written')
+}
+{
+  written.clear()
+  const r = await backup({ url: 'https://evil.example/Q3.bento.html' }, 'x',
+    'Q3.v1-backup.bento.html', deps({ 'Q3.bento.html': fileHandle('Q3.bento.html') }))
+  ok(r.ok === false && /not a local file/.test(r.reason!), 'an http page cannot create a backup')
+  ok(written.size === 0, 'and nothing was written')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

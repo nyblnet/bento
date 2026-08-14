@@ -137,7 +137,79 @@ export async function resolve(sender, deps = {}) {
     return { ok: false, reason: `${name} in the granted folder is a different file` }
   }
 
-  return { ok: true, name, handle: hits[0], within: suffix }
+  return { ok: true, name, handle: hits[0], within: suffix, dir, rel }
+}
+
+/**
+ * The directory a resolved file actually sits in.
+ *
+ * `rel` is the file's path segments relative to the grant root, so its parent is
+ * the grant walked down every segment but the last. Re-walked from the grant
+ * rather than remembered, for the same reason as everything else here: a service
+ * worker can be evicted between two messages.
+ */
+async function parentOf(dir, rel) {
+  let cur = dir
+  for (const seg of rel.slice(0, -1)) cur = await cur.getDirectoryHandle(seg)
+  return cur
+}
+
+/**
+ * Is `proposed` a name this sender is allowed to create beside itself?
+ *
+ * The page supplies it, so it is untrusted, and it is about to become a
+ * filename in somebody's folder. Rather than sanitising toward safety — which
+ * invites arguments about what was missed — this only accepts names that are
+ * transparently derived from the sender's OWN file: same base, our extension,
+ * and nothing in between but the characters a version string is made of.
+ *
+ * A separator therefore cannot survive, so no name can escape the directory,
+ * and the sender can only ever write near itself. `!== own` is the one that
+ * matters most: without it the "backup" is the original.
+ */
+export function backupNameFor(own, proposed) {
+  if (typeof proposed !== 'string' || proposed.length > 128) return null
+  if (!/^[A-Za-z0-9._-]+$/.test(proposed)) return null // no / \ .. NUL, no spaces
+  if (!/\.bento\.html$/i.test(proposed)) return null
+  if (proposed === own) return null
+  const base = own.replace(/\.bento\.html$/i, '')
+  return proposed.startsWith(`${base}.`) ? proposed : null
+}
+
+/**
+ * Write a rollback copy beside the sender's own file.
+ *
+ * NEW AUTHORITY, deliberately narrow. Every other op writes a file that already
+ * exists and that the sender IS; this one creates a file. The blast radius is
+ * held down from both ends: the name must be derived from the sender's own
+ * (`backupNameFor`), and an existing file is never overwritten. So the worst a
+ * hostile document can do is leave one predictably-named copy of ITSELF in a
+ * folder the author granted — which is what the feature does when it works.
+ */
+export async function backup(sender, text, name, deps) {
+  const r = await resolve(sender, deps)
+  if (!r.ok) return { ok: false, reason: r.reason }
+
+  const safe = backupNameFor(r.name, name)
+  if (!safe) return { ok: false, reason: 'not a backup name for this file' }
+
+  try {
+    const parent = await parentOf(r.dir, r.rel)
+    // Create-only. `getFileHandle` without `create` throws NotFoundError when
+    // the name is free — that throw is the success case, and anything else
+    // means something is already there and is not ours to replace.
+    let taken = true
+    try { await parent.getFileHandle(safe) } catch (e) { taken = e?.name !== 'NotFoundError' }
+    if (taken) return { ok: false, reason: `${safe} already exists` }
+
+    const h = await parent.getFileHandle(safe, { create: true })
+    const w = await h.createWritable()
+    await w.write(text)
+    await w.close()
+    return { ok: true, name: safe, bytes: text.length }
+  } catch (e) {
+    return { ok: false, reason: `${e.name}: ${e.message}` }
+  }
 }
 
 /** Can this sender's file be written in place? Resolves; writes nothing. */
@@ -166,6 +238,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const run = msg?.op === 'claim' ? claim(sender)
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
+      : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then(sendResponse, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
     return true // async response

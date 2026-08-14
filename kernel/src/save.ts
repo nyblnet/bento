@@ -528,8 +528,11 @@ export const canWriteInPlace = () => hasFsAccess()
  * · `copy`     — "Save a copy…". A second file, chosen by the author.
  * · `share`    — a suffixed export: view-only, presentation package, invite,
  *                template. Deliberately a new file, and never the ⌘S target.
+ * · `backup`   — the rollback copy a self-update leaves behind. Belongs BESIDE
+ *                the document it backs up, and is the one save the author never
+ *                asked for, so it is also the one that must never interrupt.
  */
-export type SavePurpose = 'in-place' | 'copy' | 'share'
+export type SavePurpose = 'in-place' | 'copy' | 'share' | 'backup'
 
 /**
  * The picker `id` for a purpose — and, incidentally, the only signal a HOST has
@@ -550,7 +553,35 @@ export type SavePurpose = 'in-place' | 'copy' | 'share'
  * recovered from anything else in it.
  */
 export const pickerIdFor = (purpose: SavePurpose): string =>
-  purpose === 'in-place' ? 'bento-doc' : purpose === 'copy' ? 'bento-copy' : 'bento-share'
+  purpose === 'in-place' ? 'bento-doc'
+    : purpose === 'copy' ? 'bento-copy'
+      : purpose === 'backup' ? 'bento-backup'
+        : 'bento-share'
+
+/**
+ * Is a HOST polyfilling the picker — tray/ios, tray/webext — rather than the
+ * browser's own?
+ *
+ * The kernel cannot infer this. `showSaveFilePicker` exists either way, and a
+ * host that declines a request is indistinguishable from one that is not there:
+ * both end in the native dialog. So a host that can do more than the bare
+ * contract announces itself, and this is the only thing the kernel reads.
+ *
+ * It gates exactly one decision — see `writeBackupBeside`. Nothing else may
+ * branch on it: every in-place path must keep working when it is false, because
+ * that is the plain-browser case and it is the majority one.
+ *
+ * PRESENCE IS NOT ENOUGH, so this asks about a named capability. A host that
+ * announced itself but did not recognise `bento-backup` would pass the request
+ * through to the native picker — producing exactly the dialog this exists to
+ * remove, and only for people who installed the host. Decks outlive host
+ * versions in both directions; neither side may assume the other is current.
+ */
+export const hostCan = (op: string): boolean => {
+  const host = (window as any).__bentoHost
+  return !!host && Array.isArray(host.ops) && host.ops.includes(op)
+    && typeof (window as any).showSaveFilePicker === 'function'
+}
 
 async function pickHandle(
   doc: KernelDoc, suffix = '', suggestedName?: string, purpose: SavePurpose = 'in-place',
@@ -683,13 +714,18 @@ export async function writeUpdatedFile(html: string): Promise<void> {
 export async function writeUpdatedFileAs(
   html: string,
   doc: KernelDoc,
-  opts: { suffix?: string; keepHandle?: boolean; suggestedName?: string } = {},
+  opts: { suffix?: string; keepHandle?: boolean; suggestedName?: string; purpose?: SavePurpose } = {},
 ): Promise<boolean> {
   if (!hasFsAccess()) {
     downloadFile(html, opts.suggestedName ?? suggestedFileName(doc, opts.suffix))
     return true
   }
-  const handle = await pickHandle(doc, opts.suffix, opts.suggestedName, 'share')
+  // `share` is the right default — every caller but one is an export. The
+  // exception is the self-update, which is overwriting the open document and
+  // must say so: a host reads only the picker id, and `bento-share` tells it
+  // "a new file the author will choose", so it correctly declines and the
+  // author gets a dialog for the one save that should never need one.
+  const handle = await pickHandle(doc, opts.suffix, opts.suggestedName, opts.purpose ?? 'share')
   if (!handle) return false
   // Share/export artifacts must NOT become the ⌘S target — otherwise the next
   // save would overwrite e.g. a view-only copy with the FULL document (owner
@@ -697,4 +733,48 @@ export async function writeUpdatedFileAs(
   if (opts.keepHandle) fileHandle = handle
   await writeHandle(handle, html)
   return true
+}
+
+/**
+ * Leave the rollback copy an in-place update depends on.
+ *
+ * WHY THIS IS NOT JUST `downloadFile`. It was, and the backup landed in
+ * ~/Downloads: detached from the document it backs up, one per update, and — for
+ * anyone with Chrome's "ask where to save each file" enabled — behind a save
+ * dialog. Reported 2026-08-14 against 1.0.16. That is the wrong outcome twice
+ * over: an update that rewrites the file in place, silently, ended with the one
+ * prompt in the flow being for a file the author never asked for, and the
+ * rollback it produced was somewhere they would have to go hunting for.
+ *
+ * With a host, the backup goes where it belongs — beside the original, inside
+ * the folder already granted. The host derives the directory itself, from the
+ * sender's own resolved path; `name` is only ever validated against that, never
+ * trusted as a path. See tray/webext/src/background.js `backup`.
+ *
+ * Without a host this stays a download, because the alternative is a picker and
+ * a picker is strictly worse than the status quo for the majority case.
+ *
+ * Never throws: a backup that fails must not take the update down with it. The
+ * caller decides what to tell the author, which is why the outcome comes back
+ * as a value.
+ */
+export async function writeBackupBeside(html: string, name: string): Promise<'beside' | 'downloaded'> {
+  if (hostCan('backup')) {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: name,
+        id: pickerIdFor('backup'),
+        types: [{ description: appConfig().appName, accept: { 'text/html': ['.html'] } }],
+      })
+      if (handle) {
+        await writeHandle(handle, html)
+        return 'beside'
+      }
+    } catch {
+      // Declined, cancelled, or the grant lapsed. Fall through — a backup in
+      // Downloads is a worse place, not a lost one.
+    }
+  }
+  downloadFile(html, name)
+  return 'downloaded'
 }

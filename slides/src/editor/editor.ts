@@ -12,6 +12,7 @@ import {
   paginates, inLinearFlow,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
+import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
@@ -2842,7 +2843,7 @@ export class Editor {
         }
         const actions = div('ed-about-actions')
         const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
-        const done = () => {
+        const done = (outcome: InPlaceOutcome) => {
           status.textContent = ''
           const after = div('ed-about-update')
           status.appendChild(after)
@@ -2850,9 +2851,14 @@ export class Editor {
           ok.textContent = t('Updated to v{v} on disk.', { v: release.version })
           after.appendChild(ok)
           const note = div('ed-about-notes')
-          note.textContent = canUpdateInPlace()
-            ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
-            : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
+          // Say where the rollback actually went. It lands beside the document
+          // with a host installed and in the downloads folder without one, and
+          // a backup nobody can find is not much of a backup.
+          note.textContent = outcome.backup === 'beside'
+            ? t('This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.', { v: APP_VERSION })
+            : outcome.backup === 'downloaded'
+              ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
+              : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
           after.appendChild(note)
           const reloadB = document.createElement('button')
           reloadB.className = 'ed-btn ed-btn-primary'
@@ -2896,7 +2902,7 @@ export class Editor {
           try {
             this.session?.stampInto(this.store.doc)
             const written = await applyUpdateInPlace(release, this.store.doc)
-            if (written) done()
+            if (written) done(written)
             else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
           } catch (err: any) { fail(err) }
         })

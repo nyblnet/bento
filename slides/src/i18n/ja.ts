@@ -206,6 +206,7 @@ export const ja: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "このブラウザはファイルの直接書き換えに未対応 — 新しいコピーをダウンロードしました",
   "This document": "このドキュメント",
   "This file carries its own app — it works offline, forever, as is.": "このファイルはアプリを内蔵しています — オフラインでも、ずっと、このまま動きます。",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "このウィンドウはまだ v{v} で動作中 — 再読込で完了します。v{v} のバックアップをこのファイルの隣に保存しました。",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "このウィンドウはまだ v{v} で動作中 — 再読込で完了します。v{v} のバックアップをダウンロード済み。",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "このウィンドウはまだ v{v} で動作中。開いているファイルを上書きした場合は再読込を。別に保存した場合はそのファイルを開いてください。",
   "This window keeps running v{v} until you open the downloaded file.": "ダウンロードしたファイルを開くまで、このウィンドウは v{v} のままです。",

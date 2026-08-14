@@ -206,6 +206,7 @@ export const zhHant: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "此瀏覽器無法就地改寫檔案 — 新副本已存入下載項目",
   "This document": "此文件",
   "This file carries its own app — it works offline, forever, as is.": "此檔案自帶應用程式 — 離線可用，永遠如此。",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "此視窗仍在執行 v{v} — 重新載入以完成。已在此檔案旁儲存 v{v} 備份。",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "此視窗仍在執行 v{v} — 重新載入以完成。已下載 v{v} 備份。",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "此視窗仍在執行 v{v}。若已覆寫目前開啟的檔案請重新載入；否則請開啟您儲存的檔案。",
   "This window keeps running v{v} until you open the downloaded file.": "在開啟下載的檔案之前，此視窗會維持在 v{v}。",

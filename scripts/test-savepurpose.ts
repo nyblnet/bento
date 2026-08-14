@@ -18,6 +18,7 @@
 // value, every host silently loses the ability to tell them apart — and finds
 // out the way we did.
 
+import { readFileSync } from 'node:fs'
 import { pickerIdFor, type SavePurpose } from '../kernel/src/save.ts'
 
 let failures = 0
@@ -28,7 +29,7 @@ function ok(cond: boolean, msg: string) {
   else console.log(`  ok    ${msg}`)
 }
 
-const purposes: SavePurpose[] = ['in-place', 'copy', 'share']
+const purposes: SavePurpose[] = ['in-place', 'copy', 'share', 'backup']
 const ids = purposes.map(pickerIdFor)
 
 ok(new Set(ids).size === purposes.length,
@@ -39,8 +40,26 @@ ok(pickerIdFor('copy') !== pickerIdFor('in-place'),
   'a copy is distinguishable from an in-place save — the case that overwrote a file')
 ok(pickerIdFor('share') !== pickerIdFor('in-place'),
   'a share export is distinguishable from an in-place save')
+ok(pickerIdFor('backup') !== pickerIdFor('in-place'),
+  'a backup is distinguishable from the file it backs up — it is a NEW file beside it')
 ok(ids.every((id) => /^[a-z0-9-]+$/.test(id) && id.length <= 32),
   'ids are plain and short enough for the picker to accept')
+
+// ---------------------------------------------------------- the update path
+// The self-update is the ONE caller of writeUpdatedFileAs that is overwriting
+// the document on screen rather than exporting a new file. It hard-coded
+// `share` for both, so a host was told "the author will choose a destination"
+// about a save that should never have shown a dialog — reported against 1.0.16,
+// with the extension installed and the folder granted.
+//
+// Read as source, because the branch is unreachable without a DOM and a picker.
+// A weak assertion on the right line beats a strong one on a mock of it.
+const updateSrc = readFileSync(new URL('../kernel/src/update.ts', import.meta.url), 'utf8')
+const call = updateSrc.slice(updateSrc.indexOf('writeUpdatedFileAs(html'))
+ok(/purpose:\s*'in-place'/.test(call.slice(0, 300)),
+  'applyUpdateInPlace declares in-place, so a host recognises it and writes without asking')
+ok(!/writeUpdatedFileAs\(html, doc, \{ keepHandle: true, suggestedName: [^}]*\}\)/.test(updateSrc),
+  'the update no longer falls through to the default share purpose')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

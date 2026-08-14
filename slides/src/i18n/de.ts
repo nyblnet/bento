@@ -206,6 +206,7 @@ export const de: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Dieser Browser kann Dateien nicht direkt überschreiben — eine neue Kopie liegt in Downloads",
   "This document": "Dieses Dokument",
   "This file carries its own app — it works offline, forever, as is.": "Diese Datei trägt ihre eigene App — sie funktioniert offline, für immer, so wie sie ist.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Dieses Fenster läuft noch mit v{v} — zum Abschließen neu laden. Ein v{v}-Backup wurde neben dieser Datei gespeichert.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Dieses Fenster läuft noch mit v{v} — zum Abschließen neu laden. Ein v{v}-Backup wurde heruntergeladen.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Dieses Fenster läuft noch mit v{v}. Wenn Sie die geöffnete Datei überschrieben haben, neu laden; andernfalls die gespeicherte Datei öffnen.",
   "This window keeps running v{v} until you open the downloaded file.": "Dieses Fenster bleibt bei v{v}, bis Sie die heruntergeladene Datei öffnen.",

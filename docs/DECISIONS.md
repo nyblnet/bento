@@ -2247,3 +2247,66 @@ too, at the single point where it returns.
 payload 72KB → 79KB). Most of it is the finding messages, which are the
 product: a code with no explanation is not actionable. Anyone tempted to shrink
 this should shorten prose, not drop checks.
+
+---
+
+## 2026-08-14 — a self-update must not be the one save that interrupts
+
+**Reported against 1.0.16**, with tray/webext installed and a folder granted:
+⌘S saved with no dialog, and then "Update this file" put up a macOS save panel
+for `Tray_Test.v1.0.16-backup.bento.html` into ~/Downloads.
+
+The update itself was fine — it had rewritten the file in place, silently,
+through the extension. The dialog was the ROLLBACK COPY, which `applyUpdateInPlace`
+handed to `downloadFile`, and downloads prompt for anyone with Chrome's *"ask
+where to save each file"* enabled. So the flow's only interruption was for a
+file the author never asked for, in the middle of the one operation whose whole
+selling point is that it does not interrupt.
+
+Two things were wrong, and only the first was visible.
+
+**A backup belongs beside what it backs up.** Even silent, ~/Downloads is the
+wrong place: detached from the document, one per update, and a rollback you have
+to go hunting for is a poor rollback. With a host, it now goes in the folder
+already granted, next to the original. Without one it is still a download —
+the alternative there is a picker, which is strictly worse than the status quo
+for the majority case, and the majority case is no extension at all.
+
+**The no-handle path was declaring the wrong intent.** `writeUpdatedFileAs`
+hard-coded `share`, so a document opened by double-clicking — no handle, the
+ordinary case — told every host "a new file the author will choose" about a save
+that is overwriting the document on screen. The host correctly declined and the
+author got a picker. Same class as the 2026-08-02 finding that produced
+`pickerIdFor`: intent has to be explicit in the call, because it cannot be
+recovered from anything else in it. `applyUpdateInPlace` now sends `in-place`,
+and `canUpdateInPlace` stops meaning "we hold a handle" — a host needs none.
+
+**Hosts announce capabilities, not presence** (`window.__bentoHost.ops`,
+`save.ts hostCan`). Presence is not a useful question: `showSaveFilePicker`
+exists in Chrome regardless, and a host that declines looks exactly like one
+that is absent. A host that announced itself but did not know `bento-backup`
+would have passed the request to the native picker — producing the very dialog
+this removes, and only for the people who installed the thing meant to remove
+it. Decks and hosts version independently in both directions.
+
+**The new op is the only one that creates a file**, so it is the only place the
+page contributes to a name. Held down from both ends: the name must be visibly
+derived from the sender's own (`backupNameFor` — no separator survives, and it
+may not equal the original), and an existing file is never overwritten. The
+directory comes from the sender's resolved path, never the payload. Worst case
+for a hostile document is one predictably-named copy of ITSELF inside a granted
+folder.
+
+**Guards.** `scripts/test-savepurpose.ts` pins the update path's purpose (both
+new assertions verified to FAIL against the previous commit — a gate never seen
+failing is not a gate). `scripts/test-webext-background.ts` covers the name
+rules, create-only, the nested-directory case, and that every refusal applying
+to a write applies to a backup. `scripts/test-webext-bridge.ts` covers the
+announcement, that a page cannot forge it, and that a backup never reaches the
+native picker.
+
+*Found while fixing this:* the bridge rig stubbed `Blob` as `class {}`, which
+satisfied the `instanceof` branch but has no `.text()` — so every `close()`
+rejected and the half of the bridge that actually sends bytes had never been
+exercised, across 24 green checks. Mocks shaped to make a test pass test the
+mock.

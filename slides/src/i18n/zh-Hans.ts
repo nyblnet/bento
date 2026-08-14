@@ -206,6 +206,7 @@ export const zhHans: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "此浏览器无法就地改写文件 — 新副本已存入下载",
   "This document": "此文档",
   "This file carries its own app — it works offline, forever, as is.": "此文件自带应用 — 离线可用，永久如此。",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "此窗口仍在运行 v{v} — 重新加载以完成。已在此文件旁保存 v{v} 备份。",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "此窗口仍在运行 v{v} — 重新加载以完成。已下载 v{v} 备份。",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "此窗口仍在运行 v{v}。若覆盖了当前打开的文件请重新加载；否则请打开您保存的文件。",
   "This window keeps running v{v} until you open the downloaded file.": "在打开下载的文件之前，此窗口将继续运行 v{v}。",

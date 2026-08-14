@@ -53,6 +53,7 @@ destroy a file:
 | `bento-doc` | ⌘S — overwrite the document being edited | write in place, silently |
 | `bento-copy` | "Save a copy…" — a second file the author chooses | **must** let the author choose |
 | `bento-share` | a suffixed export: view-only, presentation package, invite, template | **must** let the author choose |
+| `bento-backup` | the rollback copy a self-update leaves behind | write **beside the open document**, silently — see below |
 
 Before this existed, ⌘S and "Save a copy…" reached the picker with
 byte-identical arguments, so a host could not distinguish them. One that guessed
@@ -109,6 +110,49 @@ and in-place update all reuse it. So the rule is deterministic:
 Do **not** infer this by comparing `suggestedName` to the open filename. Bento
 derives that name from the deck TITLE, so it rarely matches — an early version
 of this bridge did exactly that and prompted on every single save.
+
+### Announcing what a host can do
+
+A host that can do more than the bare contract says so on the page:
+
+```js
+window.__bentoHost = { name: 'tray/webext', ops: ['claim', 'write', 'backup'] }
+```
+
+`kernel/src/save.ts hostCan(op)` reads it, and it is the ONLY thing the kernel
+reads about a host. `showSaveFilePicker` existing proves nothing — Chrome has it
+on `file://` anyway — and a host that declines a request is indistinguishable
+from one that is not installed, because both end at the native dialog. So a path
+that is only worth taking with help has to ask first.
+
+Capabilities, not a version number, in both directions: a document can be years
+older or newer than the host it meets. A host that announced only its presence
+and then did not recognise `bento-backup` would pass the request through to the
+native picker and produce a dialog **only** for people who installed the host,
+which is the opposite of the point.
+
+Set it non-writable. The document is untrusted content sharing that realm, and
+it must not be able to claim a capability the host does not have.
+
+### `bento-backup`, the only op that CREATES a file
+
+Every other op writes a file that already exists and that the sender IS. This
+one makes a new one, so the page contributes to a name — and that contribution
+is kept from meaning anything:
+
+- the name must be **visibly derived from the sender's own file**: same base,
+  `.bento.html`, and nothing between but `[A-Za-z0-9._-]`. No separator can
+  survive, so nothing escapes the directory.
+- it may not equal the original. Without that check the "backup" is the file.
+- **create-only**: an existing file is never replaced.
+- the directory is the host's to determine, from the sender's own resolved
+  path — never from the payload.
+
+Worst case for a hostile document: one predictably-named copy of itself in a
+folder the author granted, which is what the feature does when it works.
+
+If a host cannot do this, it must not announce `backup`; the kernel then falls
+back to downloading the rollback copy, which is where it used to go.
 
 ## Two implementation details that carry weight
 
