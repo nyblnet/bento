@@ -11,6 +11,7 @@
 import { getGrant, putGrant, status } from './status.js'
 
 const el = document.getElementById('state')
+const renewB = document.getElementById('renew')
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
 
 async function report() {
@@ -39,9 +40,16 @@ async function report() {
       ? `<b>Folder: ${esc(s.folder)}</b> — ready, but nothing saves in place until file access is on.`
       : `<b class="ok">Folder: ${esc(s.folder)}</b> — decks in here save in place, with no dialog.`)
   } else {
+    // The HANDLE is still here — that is how we know the folder's name. Only
+    // the permission lapsed, and Chrome takes that back with one confirmation
+    // on the handle we already hold. Sending people back through
+    // showDirectoryPicker made them re-find the folder every time, which is a
+    // filesystem browse to answer a yes/no question.
     lines.push(`<b class="bad">Folder: ${esc(s.folder)} — needs renewing.</b> ` +
-      'The grant lapses whenever the extension restarts. Choose it again to restore it.')
+      'Chrome drops the permission when the extension restarts. ' +
+      '<b>Renew</b> restores it in one click — you do not have to find the folder again.')
   }
+  renewB.hidden = !(s.folder && s.permission !== 'granted')
 
   el.innerHTML = lines.map((l) => `<p>${l}</p>`).join('')
 }
@@ -56,6 +64,28 @@ document.getElementById('pick').onclick = async () => {
     el.innerHTML = `<p><b class="bad">${esc(e.name)}</b>: ${esc(e.message)}</p>`
   }
 }
+/**
+ * Take the permission back on the folder we already hold.
+ *
+ * `requestPermission` needs a user gesture, which is why this is a button and
+ * not something `report()` does on load — and why the service worker must never
+ * attempt it (`background.js resolve` queries only). A click here is the
+ * gesture; Chrome shows one Allow/Block confirmation naming the folder.
+ *
+ * The handle is re-put afterwards for the same reason it is stored at all: the
+ * grant that matters is the one the service worker reads, and re-writing it is
+ * cheap insurance against a handle that has been replaced rather than renewed.
+ */
+renewB.onclick = async () => {
+  try {
+    const dir = await getGrant()
+    if (!dir) return report() // nothing to renew — the pick button is the answer
+    const perm = await dir.requestPermission({ mode: 'readwrite' })
+    if (perm === 'granted') await putGrant(dir)
+    await report()
+  } catch (e) {
+    el.innerHTML = `<p><b class="bad">${esc(e.name)}</b>: ${esc(e.message)}</p>`
+  }
+}
 document.getElementById('check').onclick = report
 void report()
-void getGrant // referenced so the import is obviously intentional

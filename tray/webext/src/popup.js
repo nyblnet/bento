@@ -34,7 +34,7 @@ const folder = s.permission === 'granted'
         : 'Decks in here save in place, with no dialog.')
   : s.folder
     ? row('bad', `Folder: ${esc(s.folder)} — needs renewing`,
-        'The grant lapses whenever the extension restarts. One click in Settings restores it.')
+        'Chrome drops the permission when the extension restarts. <b>Renew</b> in Settings restores it in one click — the folder is still remembered.')
     : row('meh', 'No folder yet', 'Choose the folder your decks live in, once.')
 
 document.getElementById('rows').innerHTML = files + folder
