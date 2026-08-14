@@ -2587,3 +2587,41 @@ one of the three dismissals, while re-picking costs nothing and always works. So
 a row whose renew failed hides its Renew button and offers only **Choose
 again…**. The budget is small enough that the UI must not invite people to spend
 it on a repeat.
+
+*Amended 2026-08-14, and this is the one that matters for shipping.* Several
+rounds of renew-and-restart later, with successful grants in between:
+
+    permission_autoblocking_data  [17:35:52]  { "dismiss_count": 1 }
+    file_system_access_chooser_data [17:41:37]  both folders back, writable
+
+**`dismiss_count` did not move.** Six minutes and several successful grants
+after it was set, it is still 1. A grant does not refill the budget.
+
+Confirmed in `permission_decision_auto_blocker.cc`: `RecordDismissAndEmbargo`
+only increments, no path resets counts on a grant, and nothing decays them over
+time. They are cleared only by `RemoveEmbargo` — which no extension can call.
+
+### So the three-strike budget is per-origin and LIFETIME
+
+Not per session, not self-healing. A user who refuses the dialog three times
+across months of ordinary use arrives at the same seven-day embargo as one who
+does it three times in a minute.
+
+And by the shape of the code — inference, not yet watched — once the count
+reaches 3 it stays ≥ 3, and the embargo is re-applied whenever the threshold is
+met. After three lifetime refusals, **every** later refusal would cost another
+week.
+
+That changes how much the mitigations are worth. One prompt per click, no retry
+after a failure, and a warning on the button are not polish; they are the only
+things standing between an ordinary user and a permanent-feeling breakage,
+because the budget never comes back.
+
+### Also observed: allowing does not imply persisting
+
+After all the re-granting, `file_system_access_extended_permission` is still
+empty — access works, but session-scoped, so the restore prompt returns on every
+restart. Persistence comes ONLY from choosing "Allow on every visit" on that
+prompt. A user who keeps choosing "Allow this time" gets a working extension
+that asks forever, and nothing tells them the other button exists. Which is why
+the copy names it in both surfaces.
