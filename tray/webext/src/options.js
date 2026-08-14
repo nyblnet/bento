@@ -60,7 +60,8 @@ async function report() {
     // session; "Don't allow" costs the folder outright.
     lines.push('When Chrome asks, choose <b>Allow on every visit</b> — ' +
       '<b>Allow this time</b> lapses when you quit the browser, and ' +
-      '<b>Don’t allow</b> removes the folder entirely, so you would have to choose it again.')
+      '<b>Don’t allow</b> drops the folder until Chrome offers again, which can take ' +
+      'more than one restart.')
   }
   el.innerHTML = lines.map((l) => `<p>${l}</p>`).join('')
 
@@ -87,7 +88,7 @@ async function report() {
       // dismiss_count 1, no embargo yet, folders already gone. Since the dialog
       // cannot be changed, the warning has to sit on the button that raises it.
       renew.title = 'Chrome will ask to restore this folder. Choosing "Don\'t allow" '
-        + 'removes it — you would have to pick the folder again.'
+        + 'drops it, and Chrome then waits a restart or more before offering again.'
       // The HANDLE is still here — that is how we know the folder's name. Only
       // the permission lapsed, and Chrome takes that back with one confirmation
       // on the handle we already hold. Sending people back through
@@ -122,20 +123,26 @@ async function report() {
         // user-initiated chooser rather than a restore prompt — and it still
         // works under embargo. So a failed renew is not an error, it is a
         // signal to ask for the folder again.
-        // Do not offer Renew again for this folder. It has already failed once,
-        // and each attempt spends one of the three dismissals that trigger a
-        // seven-day embargo — while re-picking costs nothing and always works.
-        // Retrying the losing move is exactly what runs the budget down.
-        renew.hidden = true
+        // A silent failure here is NOT terminal, and saying so was wrong.
+        // MEASURED 2026-08-14: after a "Don't allow", Renew showed nothing at
+        // all for two browser sessions and then, on a later one, produced the
+        // dialog and restored every folder at once. `dismiss_count` stayed at 1
+        // throughout — proof no prompt was displayed, since a refused one
+        // increments it. Chrome brings the offer back on its own schedule.
+        //
+        // So the honest advice is BOTH: try again after a restart, or pick the
+        // folder now if you would rather not wait. Steering only to re-picking
+        // trades a permanent grant for a session-scoped one, since the
+        // "Allow on every visit" option lives solely on the prompt being waited
+        // for.
+        renew.hidden = true // for this visit only; the row is rebuilt on reload
         pickInstead.hidden = false
-        el.innerHTML = '<p><b class="bad">Chrome would not restore that folder.</b> ' +
-          'After three refusals it stops asking for seven days, and there is no setting ' +
-          'anywhere that turns it back on.</p>' +
-          '<p><b>Choose again</b> still works — picking a folder is a different permission — ' +
-          'but it grants access for this session only. The option to make it permanent ' +
-          '(<b>Allow on every visit</b>) appears solely on the prompt that has stopped ' +
-          'appearing, so until it resumes the folder must be chosen again each time Chrome ' +
-          'restarts.</p>'
+        el.innerHTML = '<p><b class="bad">Chrome did not offer to restore that folder.</b> ' +
+          'It usually starts offering again after Chrome is restarted — sometimes not on ' +
+          'the next restart, but a later one.</p>' +
+          '<p>If you would rather not wait, <b>Choose again</b> works now. Note it grants ' +
+          'access for this session only: the option to make it permanent ' +
+          '(<b>Allow on every visit</b>) appears solely on the prompt being waited for.</p>'
       })
       row.appendChild(renew)
 

@@ -2625,3 +2625,45 @@ restart. Persistence comes ONLY from choosing "Allow on every visit" on that
 prompt. A user who keeps choosing "Allow this time" gets a working extension
 that asks forever, and nothing tells them the other button exists. Which is why
 the copy names it in both surfaces.
+
+*Corrected 2026-08-14. The entry above overstated the damage, and it was
+recorded as measured fact — so read this one instead.*
+
+**"Don't allow" does not destroy the grant.** It empties `chosen-objects`
+immediately, which is what the earlier reading saw. But the extension's stored
+handles survive, and the restore prompt eventually returns and re-acquires
+EVERY folder at once through `requestPermission`. No re-picking is required.
+
+Confirmed by the reporter: after refusing, they clicked **Renew** and only
+Renew, across at least three browser sessions, and both folders came back
+together. The evidence in the profile agrees —
+`file_system_last_picked_directory` is absent (picking a folder sets it) while
+`chosen-objects` was rewritten with both entries in one go, which is a restore,
+not two picks.
+
+**The prompt returns on a delay of more than one restart.** Those earlier Renew
+clicks displayed NOTHING — `dismiss_count` stayed at 1 throughout, and a shown
+prompt that is refused increments it. So `requestPermission` was returning
+silently for two or more sessions before Chrome chose to ask again. What governs
+that interval is not known; it is not the embargo, which never engaged.
+
+### What this changes
+
+**A silent Renew is "not yet", not "never".** The UI had been rewritten to treat
+it as terminal and steer to re-picking — which trades a permanent grant for a
+session-scoped one, since **Allow on every visit** appears only on the very
+prompt being waited for. Both surfaces now say the honest thing: it usually comes
+back after a restart, sometimes a later one; re-pick only if you would rather not
+wait, and know what that costs.
+
+**Hiding Renew after a failure stays**, but only for that visit — the row is
+rebuilt on reload, so nothing is permanently withheld.
+
+### On being wrong twice about the same click
+
+The first reading ("Don't allow empties chooser_data") was correct but partial;
+the conclusion drawn from it ("re-picking is the only way back") was invented to
+join it to the embargo finding, and shipped as fact in copy and in this log. The
+reporter's own sequence — Renew, restart, repeat — is what disproved it. A
+measurement explains what it measured, and nothing about what would have happened
+next.

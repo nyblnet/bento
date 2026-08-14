@@ -98,10 +98,10 @@ lapsed.addEventListener('click', async () => {
   // Saying so beats reloading into an unchanged list, which reads as "the
   // button is broken" and invites the extra dismissals that cause the embargo.
   if (!ok) {
-    document.getElementById('rows').innerHTML = row('bad', 'Chrome would not restore the folder',
-      'After three refusals Chrome stops asking for a week, and nothing here can change that. '
-      + 'Choosing the folder again in Settings still works — it is a different permission — '
-      + 'though it grants access for this session rather than permanently.')
+    document.getElementById('rows').innerHTML = row('meh', 'Chrome did not offer to restore it',
+      'It usually starts offering again after a restart — sometimes a later one rather than '
+      + 'the next. To not wait, choose the folder again in Settings, though that grants '
+      + 'access for this session only.')
     lapsed.hidden = true
     hint.hidden = true
     return
