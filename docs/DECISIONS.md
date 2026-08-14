@@ -2323,11 +2323,25 @@ held handle takes it back with one confirmation. That must run on an extension
 PAGE (it needs a user gesture; the worker has none), which is what the
 per-folder **Renew** button is.
 
-**One click per browser session is the ceiling for a pure extension.** Chrome's
-persistent File System Access permissions are scoped to installed web apps, and
-`chrome.downloads` writes only inside the downloads folder. Durable access needs
-a native messaging host — deferred, because it changes distribution from
-"install from the Web Store" to "ship a signed binary per platform".
+**That "one click per browser session is the ceiling" — WRONG, corrected the
+same day.** The claim was that Chrome's persistent File System Access
+permissions are scoped to installed web apps, so a pure extension could never do
+better. Then the reporter screenshotted the actual dialog, on
+`chrome-extension://…/src/options.html`, and it offers three buttons: *Allow
+this time*, **Allow on every visit**, *Don't allow*. Persistent permission IS
+offered to an extension origin.
+
+The lesson is the one this log keeps relearning: I reasoned about a permission
+UI from documentation instead of looking at it, and stated the conclusion firmly
+enough that it nearly settled a distribution decision — native messaging, a
+signed binary per platform — that may not be needed at all.
+
+Whether "every visit" survives a full browser restart for an extension origin is
+STILL NOT MEASURED. So the UI now names the button that ends the chore and
+promises nothing beyond it, and this entry stays open until someone quits Chrome
+and looks. If it holds, the grant is once and for all and native messaging is
+moot. If it does not, the session ceiling stands — `chrome.downloads` writes
+only inside the downloads folder, so nothing else reaches an arbitrary one.
 
 **Resolution no longer searches.** A `FileSystemDirectoryHandle` knows its name
 but not its path, so the host walked the granted tree matching filenames —

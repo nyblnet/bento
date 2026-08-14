@@ -39,7 +39,7 @@ const folders = !s.folders.length
           ? 'Ready, but nothing saves in place until local file access is on.'
           : 'Documents in here save in place, with no dialog.')
     : row('bad', `${esc(f.name)} — needs renewing`,
-        'Chrome drops the permission when the extension restarts. <b>Renew</b> in Settings restores it in one click — the folder is still remembered.')).join('')
+        '<b>Renew</b> in Settings restores it in one click — the folder is still remembered. Choose <b>Allow on every visit</b> and Chrome stops asking.')).join('')
 
 document.getElementById('rows').innerHTML = files + folders
 document.getElementById('open').addEventListener('click', () => {

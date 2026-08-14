@@ -142,11 +142,23 @@ confirmation, no folder to re-find — and it must happen on an **extension page
 because it needs a user gesture and the service worker has none. That is what
 the per-folder **Renew** button is. `background.js` only ever queries.
 
-One click per browser session is the ceiling for a pure extension. Chrome's
-persistent File System Access permissions are scoped to installed web apps, and
-`chrome.downloads` can only write inside the downloads folder — neither reaches
-an arbitrary folder. Durable write access needs a native messaging host, which
-is a separate decision because it changes how the thing is distributed.
+**But Chrome's permission dialog offers "Allow on every visit"**, alongside
+"Allow this time", and it offers it to the EXTENSION origin — observed
+2026-08-14 on `chrome-extension://…/src/options.html`. So persistent File System
+Access permission is available here, and an earlier claim in this file that it
+was scoped to installed web apps was simply wrong.
+
+Whether "every visit" survives a full browser restart for an extension origin is
+NOT yet measured. Until it is, the UI says which button to choose and does not
+promise what follows. If it holds, the grant is once and for all. If it does
+not, the ceiling is one **Renew** click per browser session, since
+`chrome.downloads` can only write inside the downloads folder and durable access
+would then need a native messaging host — a separate decision, because it
+changes how the thing is distributed.
+
+The choice is the browser's to offer and the user's to make; nothing in the
+extension can pick it. All the code can do is point at the one that ends the
+chore.
 
 ### Which file a save targets
 

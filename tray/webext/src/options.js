@@ -41,6 +41,13 @@ async function report() {
   if (!s.folders.length) {
     lines.push('<b>No folders yet.</b> Choose the folder your documents live in. ' +
       'You can add more than one, and a folder covers everything inside it.')
+  } else if (s.folders.some((f) => f.permission !== 'granted')) {
+    // The one instruction worth giving: Chrome asks "Allow this time" or "Allow
+    // on every visit", and only the second survives a restart. Someone clicking
+    // the obvious first button re-grants forever without knowing there was a
+    // choice.
+    lines.push('When Chrome asks, choose <b>Allow on every visit</b> — ' +
+      '<b>Allow this time</b> lapses when you quit the browser.')
   }
   el.innerHTML = lines.map((l) => `<p>${l}</p>`).join('')
 
@@ -56,7 +63,7 @@ async function report() {
       `<b>${esc(f.name)}</b> ` +
       `<span class="note">${granted
         ? (s.files === false ? 'ready — waiting on file access' : 'saves in place, no dialog')
-        : 'needs renewing'}</span>`
+        : 'needs renewing — choose <b>Allow on every visit</b> to stop being asked'}</span>`
 
     if (!granted) {
       const renew = document.createElement('button')
@@ -65,6 +72,12 @@ async function report() {
       // the permission lapsed, and Chrome takes that back with one confirmation
       // on the handle we already hold. Sending people back through
       // showDirectoryPicker made them re-find the folder to answer yes/no.
+      //
+      // Chrome's own dialog offers "Allow on every visit" alongside "Allow this
+      // time", and the copy below points at it: choosing it is the difference
+      // between granting once and granting every session. We cannot pick for
+      // them — the choice is the browser's to offer and the user's to make —
+      // so the only thing we can do is say which one ends the chore.
       renew.onclick = () => guard(async () => {
         const dirs = await getGrants()
         const dir = dirs[i]
