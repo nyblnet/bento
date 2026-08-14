@@ -2336,12 +2336,24 @@ UI from documentation instead of looking at it, and stated the conclusion firmly
 enough that it nearly settled a distribution decision — native messaging, a
 signed binary per platform — that may not be needed at all.
 
-Whether "every visit" survives a full browser restart for an extension origin is
-STILL NOT MEASURED. So the UI now names the button that ends the chore and
-promises nothing beyond it, and this entry stays open until someone quits Chrome
-and looks. If it holds, the grant is once and for all and native messaging is
-moot. If it does not, the session ceiling stands — `chrome.downloads` writes
-only inside the downloads folder, so nothing else reaches an arbitrary one.
+**MEASURED 2026-08-14, and it holds: "Allow on every visit" SURVIVES a full
+browser restart** for an extension origin — quit Chrome, reopen, the folder
+still saves in place with no renewing. So the grant is once and for all, and
+native messaging is moot. The distribution model stands: install from the Web
+Store, grant a folder, done.
+
+What is left is not a permission problem but a DISCOVERY one, and the two failure
+directions are unequal. Choosing "Allow this time" costs a re-grant every
+session and never says so; choosing "Allow on every visit" costs nothing. So the
+extension names the button, and the first grant is the only moment anyone should
+have to think about it.
+
+The dialog can only be raised from an extension PAGE with a user gesture —
+`requestPermission` needs the gesture, and the service worker has none. A deck
+is a `file://` page in another origin that cannot hold the handle at all. So
+"raise it from where the user is" is not available; the best reachable is to put
+the button where the user already is when it matters (the toolbar popup), and to
+make a lapsed grant VISIBLE before a save fails rather than after.
 
 **Resolution no longer searches.** A `FileSystemDirectoryHandle` knows its name
 but not its path, so the host walked the granted tree matching filenames —

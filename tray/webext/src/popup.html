@@ -14,12 +14,19 @@
   .t { flex: 1 }
   .t b { display: block; font-weight: 600 }
   .t span { color: #6b7a8d; font-size: 12.5px }
-  footer { padding: 10px 14px 13px; }
+  footer { padding: 10px 14px 13px; display: grid; gap: 6px; }
   button { font: inherit; width: 100%; padding: 7px 10px; border: 1px solid #c8d0dc; border-radius: 8px; background: #fff; cursor: pointer; }
   button:hover { background: #f5f7fa }
+  button.primary { border-color: #16273e; background: #16273e; color: #fff }
+  button.primary:hover { background: #22364f }
+  .hint { color: #6b7a8d; font-size: 12px; margin: 2px 0 0 }
   code { background: #eef1f5; padding: 1px 4px; border-radius: 4px; font-size: 12px }
 </style>
 <header><img src="../icons/icon-48.png" alt=""><b>Bento Tray</b></header>
 <div class="rows" id="rows"></div>
-<footer><button id="open">Settings…</button></footer>
+<footer>
+  <button id="renew" class="primary" hidden>Reconnect folders</button>
+  <p class="hint" id="hint" hidden>Choose <b>Allow on every visit</b> and Chrome stops asking.</p>
+  <button id="open">Settings…</button>
+</footer>
 <script type="module" src="popup.js"></script>

@@ -80,6 +80,42 @@ export async function fileAccess() {
 }
 
 /**
+ * Mark the toolbar icon when a folder needs reconnecting.
+ *
+ * A lapsed grant used to be invisible until a save fell back to a picker, which
+ * is the worst moment to learn about it: the interruption has already happened,
+ * and nothing on screen connects it to the extension. The badge moves that
+ * discovery BEFORE the save, onto the icon the popup hangs off — the same place
+ * the fix is.
+ *
+ * Best effort. `chrome.action` is absent in the test rig and in any page that
+ * imports this module for its data only, and a badge that cannot be set is not
+ * worth failing a save over.
+ */
+export async function setLapsedBadge() {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.action?.setBadgeText) return
+    const dirs = await getGrants()
+    const perms = await Promise.all(
+      dirs.map((d) => d.queryPermission({ mode: 'readwrite' }).catch(() => 'unreadable')),
+    )
+    // Only when something WAS granted and has lapsed. A user who has never
+    // picked a folder is not behind on anything, and badging them would be
+    // nagging rather than reporting.
+    const stale = dirs.length > 0 && perms.some((p) => p !== 'granted')
+    await chrome.action.setBadgeText({ text: stale ? '!' : '' })
+    if (stale) {
+      await chrome.action.setBadgeBackgroundColor?.({ color: '#C2453B' })
+      await chrome.action.setTitle?.({ title: 'Bento Tray — a folder needs reconnecting' })
+    } else {
+      await chrome.action.setTitle?.({ title: 'Bento Tray' })
+    }
+  } catch {
+    /* never let the badge break a save */
+  }
+}
+
+/**
  * Everything the UI needs: {files, folders, ready}.
  *
  * `folders` is one row per grant — `{name, permission}` — because with more

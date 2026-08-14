@@ -27,6 +27,11 @@
 //    else's deck in the granted folder and overwrite it. The path comes from
 //    the sender, and a payload path is ignored even if present.
 
+// The ONLY import here. status.js owns what the UI is told, and the badge is
+// UI — duplicating the "is anything lapsed?" rule would let the icon and the
+// popup disagree about the same folders.
+import { setLapsedBadge } from './status.js'
+
 const DB = 'bento-tray'
 const STORE = 'grant'
 
@@ -339,7 +344,20 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
-    run.then(sendResponse, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
+    run.then((r) => {
+      sendResponse(r)
+      // A lapsed grant is otherwise invisible until a save has ALREADY fallen
+      // back to a picker. Badging the toolbar icon moves that discovery onto
+      // the thing the fix hangs off, and does it whether the save succeeded or
+      // not — one folder can lapse while another still works.
+      void setLapsedBadge()
+    }, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
     return true // async response
   })
+
+  // The worker restarts constantly; the badge has to survive that, and startup
+  // is also when a browser restart would have dropped a grant.
+  chrome.runtime.onStartup?.addListener(() => void setLapsedBadge())
+  chrome.runtime.onInstalled?.addListener(() => void setLapsedBadge())
+  void setLapsedBadge()
 }

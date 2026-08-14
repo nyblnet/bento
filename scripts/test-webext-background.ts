@@ -435,5 +435,27 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
   }
 }
 
+// ---- 10. the lapsed-grant badge stays wired --------------------------------
+// The badge is the only thing that reports a lapsed grant BEFORE a save falls
+// back to a picker. It is pure wiring — no return value, nothing downstream
+// reads it — so if the call is dropped nothing fails, and the symptom is
+// silence: saves start prompting again with no indication why. Source-level,
+// because chrome.action does not exist here.
+{
+  const read = (f: string) => readFileSync(new URL(`../tray/webext/src/${f}`, import.meta.url), 'utf8')
+  const bg = read('background.js')
+  const st = read('status.js')
+  const pop = read('popup.js')
+
+  ok(/export async function setLapsedBadge/.test(st), 'status.js owns the badge rule')
+  ok(/setBadgeText/.test(st), 'and actually sets a badge')
+  ok(bg.includes('setLapsedBadge'), 'the worker refreshes the badge after handling a message')
+  ok(/onStartup/.test(bg), 'and on browser startup — where a dropped grant would first show')
+  ok(!/setBadgeText/.test(bg) && !/setBadgeText/.test(pop),
+    'only status.js decides what "lapsed" means — the icon and the popup cannot disagree')
+  ok(/requestPermission/.test(pop),
+    'the popup can raise the permission dialog itself, without a trip to the options page')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

@@ -6,7 +6,7 @@
 // and a file-URL permission nothing can request — and a user who cannot see
 // them reads "the extension is broken".
 
-import { status } from './status.js'
+import { getGrants, putGrants, status, setLapsedBadge } from './status.js'
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
 
@@ -42,6 +42,42 @@ const folders = !s.folders.length
         '<b>Renew</b> in Settings restores it in one click — the folder is still remembered. Choose <b>Allow on every visit</b> and Chrome stops asking.')).join('')
 
 document.getElementById('rows').innerHTML = files + folders
+
+/**
+ * Reconnect from HERE, not from the options page.
+ *
+ * `requestPermission` needs a user gesture, and the service worker has none —
+ * so the dialog can only be raised from an extension PAGE. A deck is a `file://`
+ * page in another origin and cannot hold the handle at all, which rules out
+ * asking from where the user actually is.
+ *
+ * The popup is the closest thing to that: it is one click from any tab, it is
+ * where the toolbar badge sends people, and a click in it IS the gesture. Making
+ * this a trip to Settings turned a one-click repair into a navigation, a page,
+ * and a hunt for the right button.
+ */
+const lapsed = document.getElementById('renew')
+const hint = document.getElementById('hint')
+const needsWork = s.folders.some((f) => f.permission !== 'granted')
+lapsed.hidden = !needsWork
+hint.hidden = !needsWork
+lapsed.addEventListener('click', async () => {
+  lapsed.disabled = true
+  const dirs = await getGrants()
+  let ok = 0
+  for (const dir of dirs) {
+    try {
+      if (await dir.queryPermission({ mode: 'readwrite' }) === 'granted') { ok++; continue }
+      if (await dir.requestPermission({ mode: 'readwrite' }) === 'granted') ok++
+    } catch { /* declined, or the handle is gone — the row will say so */ }
+  }
+  if (ok) await putGrants(dirs)
+  await setLapsedBadge()
+  // Reflect the outcome rather than guessing at it: a popup that closes itself
+  // on "Don't allow" tells the user it worked.
+  location.reload()
+})
+
 document.getElementById('open').addEventListener('click', () => {
   chrome.runtime.openOptionsPage()
   window.close()
