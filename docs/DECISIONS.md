@@ -2401,3 +2401,39 @@ prompting, nothing reporting a fault.
 *Found in passing:* the rig carried a LITERAL NUL byte in a test case, which
 made `grep` treat the whole file as binary and hid it from ordinary tooling. It
 is now written as a ` ` escape.
+
+*Amended 2026-08-14, later.* Two corrections to the entry above, both from
+looking rather than reasoning.
+
+**`chrome://settings/content/filesystemwrite` does not exist.** I put it in the
+options page and in STORE.md without visiting it. Chrome's documented ways to
+withdraw File System Access are the address-bar icon's *Remove access* and a
+per-site *File editing* list reached from it — both part of the site-settings
+surface for a website origin. That surface is NOT offered for
+`chrome-extension://` pages: the chip there reports only "You're viewing an
+extension page". Chrome's own write-up demonstrates the feature on vscode.dev
+and does not mention extension origins at all.
+
+So there appears to be **no user-facing control to revoke File System Access
+granted to an extension origin**, and reinstalling does not clear it either —
+an unpacked extension's id comes from its directory path, so re-loading from the
+same path returns to the same origin, still granted. A different path is a
+different id and a clean slate.
+
+**And "Remove only forgets the folder, it does not revoke" was wrong** — the
+pessimistic direction, but wrong. The permission is not the capability; the
+HANDLE is. With no handle stored there is no object to write through, and
+another can only come from the user picking a folder. Deleting it takes the
+access away for real. Chrome's remembered permission means only that re-picking
+that same folder may not ask again.
+
+Which settles where this leaves the product: **the extension's own folder list
+is the only place access can be withdrawn**, so it is not a convenience — it is
+the control, and it says so on the page. A reviewer will ask; STORE.md answers
+it in those terms.
+
+Three wrong claims about browser behaviour in one day (persistent permissions
+scoped to installed apps; a settings URL; Remove not being a revoke), each
+stated confidently from documentation or memory, each disproved by one
+screenshot. The rule that keeps being relearned: a claim about a browser UI is
+worth nothing until someone has looked at that UI.

@@ -147,17 +147,19 @@ A small promo tile (440×280) is optional but improves placement.
 Bento Tray never has standing access to your disk. It can only write inside
 folders you pick, and only to the file a page was actually opened from.
 
-Two separate things are remembered, and it matters that they are separate:
+Two things are remembered, and only one of them is the access:
 
-- **the folders you chose** — stored by the extension. **Remove** forgets one.
-- **Chrome's permission to edit files** — stored by *Chrome*, against this
-  extension's identity. Remove does not touch it, and it survives the extension
-  being uninstalled and installed again.
+- **the folder you chose**, stored by the extension. This is the capability:
+  without it there is no object to write through, and another can only come
+  from you picking a folder again. **Remove**, in the extension's options,
+  deletes it — that is a real withdrawal of access.
+- **Chrome's permission to edit files**, stored by Chrome against this
+  extension. On its own it grants nothing. It means only that if you pick that
+  same folder again, Chrome may not ask a second time.
 
-So re-adding a folder you removed often will not ask you again. To take the
-permission itself back, use `chrome://settings/content/filesystemwrite`. Chrome
-offers no route to it from an extension page: the permission chip in the address
-bar reports only "You're viewing an extension page".
-
-Removing the permission does not, by itself, stop anything — without a stored
-folder there is nothing to write to. Both have to be present for a save to land.
+Chrome's usual controls for this — the address-bar icon's *Remove access*, and
+the per-site *File editing* list — are part of the site-settings surface for a
+website origin, and that surface is not offered for `chrome-extension://` pages;
+the address-bar chip there reports only "You're viewing an extension page".
+Observed 2026-08-14. So the extension's own folder list is the place access is
+withdrawn, and it is written to be exactly that.
