@@ -152,7 +152,26 @@ export async function describe(doc, deps = {}) {
  * Create-only, and the name is derived here rather than taken from anywhere —
  * the same rule as `backup`. Nothing existing is ever replaced.
  */
-const RELEASE_MANIFEST = 'https://bento.page/releases/slides/manifest.json'
+/**
+ * The Bento apps, each with its own signed release channel.
+ *
+ * They all write `.bento.html`, all carry their own runtime, and all save
+ * through the same kernel — so listing, opening, thumbnails and in-place saving
+ * never needed to know which app a document belongs to, and still do not. This
+ * list exists for ONE thing: creating a new document means choosing what it
+ * should be.
+ *
+ * Adding an app here is the whole integration; nothing else in the extension
+ * asks which app it is looking at.
+ */
+export const APPS = [
+  { id: 'slides', name: 'Slides', blurb: 'Presentations',
+    manifest: 'https://bento.page/releases/slides/manifest.json' },
+  { id: 'spaces', name: 'Spaces', blurb: 'Notes and pages',
+    manifest: 'https://bento.page/releases/spaces/manifest.json' },
+  { id: 'dash', name: 'Dash', blurb: 'Data and sheets',
+    manifest: 'https://bento.page/releases/dash/manifest.json' },
+]
 
 /**
  * A free name in `dir`, counting on the BASE.
@@ -228,8 +247,9 @@ export async function rename(doc, wantedBase) {
 
 export async function newDocument(dir, wantedBase = 'Untitled', deps = {}) {
   const net = deps.fetch ?? fetch
-  const res = await net(RELEASE_MANIFEST, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`could not reach the release server (${res.status})`)
+  const app = APPS.find((a) => a.id === deps.app) ?? APPS[0]
+  const res = await net(app.manifest, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`could not reach the ${app.name} release server (${res.status})`)
   const manifest = await res.json()
   const url = manifest?.url
   if (!url) throw new Error('the release server did not offer a build')
@@ -243,5 +263,5 @@ export async function newDocument(dir, wantedBase = 'Untitled', deps = {}) {
   const w = await handle.createWritable()
   await w.write(html)
   await w.close()
-  return { name, base, version: manifest.version }
+  return { name, base, version: manifest.version, app: app.name }
 }

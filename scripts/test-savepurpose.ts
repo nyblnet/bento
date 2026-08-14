@@ -54,6 +54,21 @@ ok(ids.every((id) => /^[a-z0-9-]+$/.test(id) && id.length <= 32),
 //
 // Read as source, because the branch is unreachable without a DOM and a picker.
 // A weak assertion on the right line beats a strong one on a mock of it.
+// ------------------------------------------------- every app announces itself
+// A host must know whether a document predates `pickerIdFor` (#213), because
+// before it every save sent `bento-doc` and acting on that overwrites the open
+// document. The signal used to live in `window.bento.updates.version`, which
+// each app assembles by hand — and bento/dash never included `updates`, so
+// every Cmd-S in Dash fell through to a destination prompt. The fix is that the
+// signal cannot live in a per-app object at all: `configureApp` is the one call
+// every app makes, so it announces the version and the next app inherits it.
+const appSrc = readFileSync(new URL('../kernel/src/app.ts', import.meta.url), 'utf8')
+ok(/__bentoRuntime/.test(appSrc), 'the kernel announces the runtime version to a host')
+ok(appSrc.indexOf('announceRuntime()') < appSrc.indexOf('function announceRuntime'),
+  'and does it from configureApp, which every app calls — not from each app in turn')
+ok(/writable: false/.test(appSrc),
+  'the announcement is not writable: a document shares that realm and must not fake its own version')
+
 const updateSrc = readFileSync(new URL('../kernel/src/update.ts', import.meta.url), 'utf8')
 const call = updateSrc.slice(updateSrc.indexOf('writeUpdatedFileAs(html'))
 ok(/purpose:\s*'in-place'/.test(call.slice(0, 300)),

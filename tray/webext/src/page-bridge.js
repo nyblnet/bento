@@ -90,8 +90,28 @@
    */
   const ID_SINCE = [1, 0, 15]
 
+  /**
+   * Which Bento runtime this document carries.
+   *
+   * TWO SOURCES, and both are needed. `__bentoRuntime` is announced by the
+   * kernel's `configureApp`, so every app has it automatically — that is the
+   * one to prefer. `window.bento.updates.version` is assembled by each app by
+   * hand, and is all that already-shipped documents have.
+   *
+   * The hand-assembled one is exactly why this changed: bento/dash never
+   * included `updates`, so every ⌘S in Dash fell through to a destination
+   * prompt even with a folder granted, and nothing said why. Reading both keeps
+   * every shipped Slides and Spaces document working while Dash — and whatever
+   * comes next — is fixed at the source.
+   */
+  const runtimeVersion = () => {
+    const announced = window.__bentoRuntime
+    if (typeof announced === 'string') return announced
+    return window.bento?.updates?.version
+  }
+
   const runtimeAtLeast = (min) => {
-    const v = window.bento?.updates?.version
+    const v = runtimeVersion()
     if (typeof v !== 'string') return false // no runtime yet, or too old to say
     const parts = v.split('.').map((n) => parseInt(n, 10))
     if (parts.some(Number.isNaN)) return false

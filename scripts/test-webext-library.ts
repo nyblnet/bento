@@ -21,7 +21,7 @@
 // hand-written fixtures shaped to pass.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { listDocuments, describe, newDocument, duplicate, rename } from '../tray/webext/src/library.js'
+import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '../tray/webext/src/library.js'
 
 let failures = 0
 let checks = 0
@@ -362,6 +362,46 @@ const fakeNet = (version = '1.0.17', html = '<html>shell</html>') => async (url:
     handle: tree[made.name] } as any, 'Report.bento.html')
   ok(made2.name === 'Report.bento.html',
     `typing the extension does not double it (${made2.name})`)
+}
+
+// ---- 6. the Bento family ----------------------------------------------------
+// Listing, opening, thumbnails and in-place saving are all app-blind: the whole
+// family writes .bento.html and carries its own runtime. Creating is the one
+// operation that must ask which app, because there is no document yet to ask.
+{
+  ok(APPS.length >= 3 && APPS.every((a) => a.id && a.name && a.manifest),
+    `every app has an id, a name and a release channel (${APPS.map((a) => a.id).join(', ')})`)
+  ok(new Set(APPS.map((a) => a.manifest)).size === APPS.length,
+    'and its own manifest — a shared one would make every new document the same app')
+  ok(APPS.every((a) => a.manifest.startsWith('https://')),
+    'fetched over https: this downloads code that becomes a file on disk')
+}
+{
+  written.clear()
+  const asked: string[] = []
+  const net = async (url: string) => {
+    asked.push(url)
+    return {
+      ok: true,
+      async json() { return { version: '1.0.0', url: 'https://bento.page/x.bento.html' } },
+      async text() { return '<html>spaces</html>' },
+    }
+  }
+  const dir = dirHandle('Decks', {})
+  const made = await newDocument(dir as any, 'Untitled', { fetch: net, app: 'spaces' })
+  ok(asked[0].includes('/spaces/'), `the chosen app's channel is used (${asked[0]})`)
+  ok(made.app === 'Spaces', `and the result says what was made (${made.app})`)
+}
+{
+  // An unknown app must not silently fetch nothing, nor pick at random.
+  const asked: string[] = []
+  const net = async (url: string) => {
+    asked.push(url)
+    return { ok: true, async json() { return { version: '1', url: 'https://x/y' } }, async text() { return 'x' } }
+  }
+  await newDocument(dirHandle('Decks', {}) as any, 'Untitled', { fetch: net, app: 'nonsense' })
+  ok(asked[0] === APPS[0].manifest,
+    'an unknown app falls back to the first, rather than requesting an invented URL')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

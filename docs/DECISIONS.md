@@ -2845,3 +2845,48 @@ document from having its "Save a copy" treated as an overwrite, so it cannot be
 dropped casually. Doing it first would have settled the home page's data model;
 doing it later means the home page will need revisiting. That is the cheaper
 order, because Bento's own shape is known and another app's is not.
+
+*2026-08-14, continued: does the tray handle Spaces and Dash?*
+
+Mostly yes, already — and the exception was a real bug nobody had noticed.
+
+**Listing, opening, thumbnails and in-place saving were never app-specific.**
+The whole family writes `.bento.html`, shares the kernel's `title` field, and
+slides/spaces/dash all register a preview. So the tray shows them all, with
+titles and page-one thumbnails, without knowing which app it is looking at.
+(`type` does not exist on main yet.)
+
+**But bento/dash could not save in place at all.** `page-bridge.js` refuses to
+write unless the runtime is at least 1.0.15, because before `pickerIdFor` (#213)
+every save sent `bento-doc` — including "Save a copy…" — and acting on that id
+overwrites the open document. It read the version from
+`window.bento.updates.version`, which each app assembles BY HAND: slides has it,
+spaces has it, **dash never included `updates`**. So every ⌘S in Dash fell
+through to a destination prompt, with a folder granted and nothing on screen
+saying why. It would have looked like the extension being broken.
+
+The bug is not that Dash forgot. It is that a contract with a host was being
+satisfied by each app remembering to. So the signal moved to where it cannot be
+forgotten: `configureApp` is the one call every app makes, and it now announces
+`window.__bentoRuntime`. The next app inherits the fix without knowing it
+exists.
+
+The bridge reads BOTH — the announcement first, the hand-made object as a
+fallback — because every already-shipped Slides and Spaces document has only the
+latter, and dropping it would break in-place saving for every file already on
+disk. Both are still gated at 1.0.15; an announcement is not a reason to trust a
+runtime that predates the id.
+
+Non-writable, for the same reason `__bentoHost` is: the document shares that
+realm, and a document that could overstate its own version could talk a host
+into overwriting it.
+
+**Creating a document is the one operation that must ask which app**, because
+there is no document yet to say. `library.js APPS` lists the three with their
+own signed release channels, and `+ New document` offers them. Adding an app is
+that one entry; nothing else in the extension asks.
+
+Fetched rather than bundled, for the reason `tray/ios` does not bundle a shell:
+a bundled seed drifts from the real release and drags the extension into a
+review queue on every Bento update. A document created here is the build
+everyone else has that day.

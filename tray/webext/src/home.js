@@ -13,7 +13,7 @@
 // learned, not derived) live there and are explained there.
 
 import { getGrants, putGrants, status } from './status.js'
-import { listDocuments, describe, newDocument, duplicate, rename } from './library.js'
+import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
@@ -295,7 +295,15 @@ $('addFolder').addEventListener('click', async () => {
   }
 })
 
-$('new').addEventListener('click', async () => {
+/**
+ * Which Bento to make.
+ *
+ * Every other operation here is app-blind: `.bento.html` is the whole family,
+ * they share a kernel, and a document says what it is by carrying its own
+ * runtime. Creating one is the single moment that has to ask, because there is
+ * no document yet to ask.
+ */
+$('new').addEventListener('click', async (ev) => {
   const grants = await getGrants()
   if (!grants.length) { $('addFolder').click(); return }
   // Into the folder being looked at, when one is; otherwise the first granted.
@@ -304,19 +312,46 @@ $('new').addEventListener('click', async () => {
   const target = state.folder
     ? grants.find((g) => g.name === state.folder) ?? grants[0]
     : grants[0]
-  const btn = $('new')
-  btn.disabled = true
-  btn.textContent = 'Fetching the latest Bento…'
-  try {
-    const made = await newDocument(target)
-    toast(`Created ${made.base} in ${target.name}`)
-    await load()
-  } catch (e) {
-    toast(e.message)
-  } finally {
-    btn.disabled = false
-    btn.textContent = '+ New document'
+
+  closeMenu()
+  const m = document.createElement('div')
+  m.className = 'menu'
+  const r = ev.target.getBoundingClientRect()
+  m.style.left = `${Math.max(12, r.right - 200)}px`
+  m.style.top = `${r.bottom + 6}px`
+
+  for (const app of APPS) {
+    const b = document.createElement('button')
+    b.innerHTML = `<b>${esc(app.name)}</b> <span style="color:var(--dim)">${esc(app.blurb)}</span>`
+    b.addEventListener('click', async () => {
+      closeMenu()
+      const btn = $('new')
+      btn.disabled = true
+      btn.textContent = `Fetching ${app.name}…`
+      try {
+        // The signed release, fetched now, rather than a copy bundled in the
+        // extension: a document made here is the same build everyone else has
+        // today, and the extension never needs re-reviewing to keep up.
+        const made = await newDocument(target, 'Untitled', { app: app.id })
+        toast(`Created ${made.base} (${made.app} ${made.version}) in ${target.name}`)
+        await load()
+      } catch (e) {
+        toast(e.message)
+      } finally {
+        btn.disabled = false
+        btn.textContent = '+ New document'
+      }
+    })
+    m.appendChild(b)
   }
+  const note = document.createElement('div')
+  note.className = 'note'
+  note.textContent = `into ${target.name}`
+  m.appendChild(Object.assign(document.createElement('div'), { className: 'sep' }))
+  m.appendChild(note)
+
+  document.body.appendChild(m)
+  menuEl = m
 })
 
 $('settings').addEventListener('click', () => chrome.runtime.openOptionsPage())
