@@ -269,6 +269,16 @@ jobs:
         # rather than by reloading an extension and pressing Cmd-S.
         run: node scripts/test-webext-bridge.ts
 
+      - name: WebExtension route rig
+        # Turning an absolute path into "where this granted folder lives", from
+        # paths the extension did not choose — browser history, for files that
+        # may have moved or never been in a grant at all. Getting it wrong does
+        # not produce a broken link; it records a folder at the wrong place and
+        # every document in it silently opens something else. So it must prove,
+        # never guess: the route resolves inside the grant AND dir.resolve()
+        # agrees with the path's own tail.
+        run: node scripts/test-webext-route.ts
+
       - name: WebExtension document-library rig
         # The popup is a document browser, and everything in it is DERIVED from
         # files on disk: the title out of the document block, the thumbnail out

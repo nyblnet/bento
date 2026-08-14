@@ -2890,3 +2890,52 @@ Fetched rather than bundled, for the reason `tray/ios` does not bundle a shell:
 a bundled seed drifts from the real release and drags the extension into a
 review queue on every Bento update. A document created here is the build
 everyone else has that day.
+
+*2026-08-14, and this one was a design failure, not a bug.*
+
+The tray shipped with a first run that read: every document greyed out, and a
+paragraph explaining that you must go to Finder and double-click something
+before the extension works. Reported, correctly, as *"this doesn't make sense
+for normal users"*.
+
+The constraint behind it is real. A `FileSystemDirectoryHandle` never exposes a
+path, so the extension can read and write a folder while having no idea where it
+is — and a tab needs an absolute path to open a document. The only source was a
+document loading out of the folder and its content script reporting
+`sender.url`. Everything followed from treating that as the only source.
+
+**Chrome already knows.** If a document has ever been opened, its `file://` URL
+is in history. One `chrome.history.search({ text: '.bento.html' })` yields the
+absolute path of every Bento document the user has, which places every granted
+folder at once, with no trip to Finder.
+
+**The permission is optional, requested by a button, and handed straight back.**
+"Read your browsing history" is a heavy ask and a fair thing to balk at on a
+store listing, so it is not in `permissions`. It is in `optional_permissions`,
+requested at the moment it is needed with the reason on screen, and
+`permissions.remove`d in a `finally` — held for the length of one query.
+Declining is a legitimate answer and gets the manual route, said plainly,
+without asking again.
+
+**Nothing from history is trusted.** A URL is a hint. `route.js prefixFor`
+accepts a path only when the route resolves inside the grant AND `dir.resolve()`
+on what it lands on agrees with the path's own tail — the same check that stops
+a same-named file elsewhere from being written. The failure mode of getting this
+wrong is not a broken link: it is a folder recorded at the wrong location, with
+every document in it silently opening something else. Its rig is mostly refusals
+for that reason.
+
+`locateIn`/`pathFromSender` moved into `route.js` so the worker and the pages
+can both place a path. Importing `background.js` into a page instead would have
+registered a second `onMessage` listener there.
+
+### What this says about the process
+
+The chicken-and-egg was noticed and "fixed" twice — first by learning on save,
+then by learning on open — and both times the fix was inside the frame that
+opening a document is the only way to learn a path. Neither attempt asked
+whether the frame was true. The user did not report a bug; they reported that
+the result made no sense, which is the question that broke the frame.
+
+The rigs were green throughout. They test what the code does, and the code did
+what it was written to do.

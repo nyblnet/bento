@@ -8,6 +8,9 @@
     "storage",
     "notifications"
   ],
+  "optional_permissions": [
+    "history"
+  ],
   "options_page": "src/options.html",
   "background": {
     "service_worker": "src/background.js",

@@ -114,12 +114,13 @@ async function renderDocs() {
     const note = $('empty')
     note.hidden = false
     const names = [...unplaced]
-    note.innerHTML = 'Open one document in '
-      + `<b>${esc(names.slice(0, 2).join('</b>, <b>'))}</b>`
+    // Point at the one-click fix, not at Finder. The full page can ask Chrome
+    // where these folders are (see home.js locateFolders); 340px is not the
+    // place to explain a permission request, so the popup sends people there.
+    note.innerHTML = `<b>${esc(names.slice(0, 2).join('</b>, <b>'))}</b>`
       + (names.length > 2 ? ` and ${names.length - 2} more` : '')
-      + ' from Finder once — Chrome does not tell an extension where a folder is, '
-      + 'so opening a document is how Bento Tray learns. After that the whole folder '
-      + 'opens from here.'
+      + ' can be read but not opened yet — Chrome does not tell an extension where a folder '
+      + 'is on disk. <b>Browse all</b> can find them in one click.'
   }
 }
 

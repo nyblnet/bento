@@ -32,76 +32,17 @@
 // popup disagree about the same folders.
 import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { learnPrefix } from './db.js'
+import { pathFromSender, locateIn } from './route.js'
+
+// Re-exported: these moved to route.js so the PAGES can place a path too,
+// but they are still part of this module's tested surface.
+export { pathFromSender, locateIn }
 
 /** Refresh the badge, and tell the user once per session if a grant lapsed. */
 const reportLapsed = async () => notifyIfLapsed(await setLapsedBadge())
 
 /** The grants, read through the shared store. */
 const readGrants = getGrants
-
-/**
- * The file this message is about, according to the BROWSER.
- *
- * Not according to the page: a content script's `sender.url` is stamped by
- * Chrome. Only `file:` is accepted — the bridge exists for local documents, and
- * an http page has no business claiming one.
- */
-export function pathFromSender(sender) {
-  try {
-    const u = new URL(sender?.url ?? '')
-    if (u.protocol !== 'file:') return null
-    return decodeURIComponent(u.pathname)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Find the sender's file inside one grant WITHOUT searching for it.
- *
- * THE INSIGHT. A `FileSystemDirectoryHandle` knows its own name but not its
- * path, so a grant and a `sender.url` cannot be compared directly — that is why
- * this used to walk the tree looking for a matching filename. But a directory's
- * NAME must appear in the path of every file inside it. So the name locates the
- * split point in the sender's path, and everything after it is the route: one
- * `getDirectoryHandle` per segment, then `getFileHandle`.
- *
- * O(path depth), with no scanning at all. Three things follow, and they are the
- * whole reason for the change:
- *
- *   · a grant can be ANY size — a home directory costs the same as a decks
- *     folder, because nothing is enumerated
- *   · several grants are cheap to try, since each attempt is a few lookups
- *   · two decks sharing a filename stop being ambiguous. The old walk found
- *     both and declined; the route reaches exactly one, because only one path
- *     leads to it.
- *
- * It is checked, not guessed. A wrong split point fails at the first missing
- * segment, and `resolve()` re-verifies the file it lands on regardless.
- *
- * A folder name can repeat in a path (`/Users/andy/Decks/Decks/Q3.bento.html`),
- * so every split point is tried; the caller decides what more than one hit
- * means.
- */
-export async function locateIn(dir, path) {
-  const name = dir.name
-  const hits = []
-  // Every place this grant's name could sit in the sender's path.
-  for (let i = path.indexOf(`/${name}/`); i !== -1; i = path.indexOf(`/${name}/`, i + 1)) {
-    const rel = path.slice(i + name.length + 2).split('/').filter(Boolean)
-    if (!rel.length) continue
-    try {
-      let cur = dir
-      for (const seg of rel.slice(0, -1)) cur = await cur.getDirectoryHandle(seg)
-      const file = await cur.getFileHandle(rel[rel.length - 1])
-      hits.push({ file, rel })
-    } catch {
-      // Not this split point — a segment that does not exist is an answer, not
-      // an error. Keep trying the others.
-    }
-  }
-  return hits
-}
 
 /** Every file of this name in the granted tree. Depth-limited: a Decks folder
  *  is not a filesystem, and an unbounded walk on a mistakenly-granted home

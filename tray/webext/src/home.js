@@ -14,6 +14,68 @@
 
 import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
+import { prefixFor } from './route.js'
+import { learnPrefix } from './db.js'
+
+/**
+ * Find the granted folders on disk, without sending anyone to Finder.
+ *
+ * THE PROBLEM. A `FileSystemDirectoryHandle` never exposes a path, so the
+ * extension can read and write a folder while having no idea where it is — and
+ * an absolute path is what a tab needs to open a document. Until now the only
+ * source was a document loading out of the folder and its content script
+ * reporting `sender.url`. Which works, and is a terrible first run: install the
+ * thing, open it, and every document is greyed out with instructions to go
+ * double-click something in Finder first.
+ *
+ * THE WAY OUT. Chrome already knows. If a document has ever been opened, its
+ * `file://` URL is in history, and one search yields the absolute path of every
+ * Bento document the user has. That is enough to place every folder at once.
+ *
+ * WHY IT IS OPTIONAL, AND HELD FOR SECONDS. "Read your browsing history" is a
+ * heavy permission and a fair thing to balk at on a store listing, so it is not
+ * requested at install: it is asked for by a button, at the moment it is needed,
+ * with the reason on screen — and handed straight back. The extension holds it
+ * for the length of one query.
+ *
+ * NOTHING IS TRUSTED. A history URL is a hint, not an answer. Every candidate
+ * is verified by `prefixFor`, which walks the route inside the grant and makes
+ * `dir.resolve()` agree with the path's own tail. A path that cannot be proven
+ * to be inside a granted folder teaches nothing.
+ */
+async function locateFolders() {
+  const granted = await chrome.permissions.request({ permissions: ['history'] })
+  if (!granted) return { learned: 0, declined: true }
+
+  let learned = 0
+  try {
+    const items = await chrome.history.search({
+      text: '.bento.html', maxResults: 5000, startTime: 0,
+    })
+    const grants = await getGrants()
+    const need = new Set(grants.map((g) => g.name))
+    for (const it of items) {
+      if (!need.size) break
+      if (!it.url?.startsWith('file://')) continue
+      let path
+      try { path = decodeURIComponent(new URL(it.url).pathname) } catch { continue }
+      for (const dir of grants) {
+        if (!need.has(dir.name)) continue
+        if (await dir.queryPermission({ mode: 'readwrite' }) !== 'granted') continue
+        const prefix = await prefixFor(dir, path)
+        if (!prefix) continue
+        await learnPrefix(dir.name, prefix)
+        need.delete(dir.name)
+        learned++
+      }
+    }
+  } finally {
+    // Straight back. Holding history access after the question has been
+    // answered would be taking more than was asked for.
+    await chrome.permissions.remove({ permissions: ['history'] }).catch(() => {})
+  }
+  return { learned, declined: false }
+}
 
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
@@ -260,9 +322,48 @@ async function renderNotice() {
   // for the reason and the popup does not.
   const unplaced = [...new Set(state.docs.filter((d) => !d.path).map((d) => d.folder))]
   if (unplaced.length) {
-    say('', `<b>${esc(unplaced.join(', '))}</b> can be listed but not opened yet. Chrome never tells `
-      + 'an extension where a folder lives, so Bento Tray learns it the first time a document from '
-      + 'that folder is opened. Open one from Finder and the whole folder opens from here.')
+    const el = document.createElement('div')
+    el.className = 'notice'
+    el.innerHTML = `<b>${esc(unplaced.join(', '))}</b> — Bento Tray can read `
+      + `${unplaced.length === 1 ? 'this folder' : 'these folders'} but does not know where `
+      + `${unplaced.length === 1 ? 'it is' : 'they are'} on disk, so documents cannot be opened `
+      + 'from here yet. Chrome never tells an extension a folder’s path. '
+      + '<span style="opacity:.8">Chrome does know it from documents you have already opened — '
+      + 'one search finds it. Permission is asked for now and given straight back.</span>'
+    const go = document.createElement('button')
+    go.className = 'btn primary'
+    go.style.marginTop = '9px'
+    go.textContent = 'Find my folders'
+    go.addEventListener('click', async () => {
+      go.disabled = true
+      go.textContent = 'Looking…'
+      try {
+        const { learned, declined } = await locateFolders()
+        if (declined) {
+          go.disabled = false
+          go.textContent = 'Find my folders'
+          // Declining is a legitimate answer, not an error. The manual route
+          // still works and costs one trip to Finder, so say so plainly rather
+          // than asking again.
+          el.innerHTML = '<b>No problem.</b> The other way is to open any document in '
+            + `${esc(unplaced.join(' or '))} from Finder once — this page notices and unlocks `
+            + 'the whole folder.'
+          return
+        }
+        await load()
+        await renderNotice()
+        toast(learned
+          ? `Found ${learned} folder${learned === 1 ? '' : 's'}`
+          : 'Nothing in history yet — open one document from Finder')
+      } catch (e) {
+        go.disabled = false
+        go.textContent = 'Find my folders'
+        toast(e.message)
+      }
+    })
+    el.appendChild(document.createElement('br'))
+    el.appendChild(go)
+    host.appendChild(el)
   }
 }
 
@@ -355,6 +456,30 @@ $('new').addEventListener('click', async (ev) => {
 })
 
 $('settings').addEventListener('click', () => chrome.runtime.openOptionsPage())
+
+/**
+ * Notice when the answer arrives.
+ *
+ * The one unlock step happens OUTSIDE this page: a document is opened from
+ * Finder, its content script says hello, and the worker records where that
+ * folder lives. Nothing tells the page. Without this, the user does exactly what
+ * was asked, comes back to a tab still showing greyed-out cards, and reasonably
+ * concludes it did not work.
+ *
+ * Coming back to the tab is the signal — you cannot open a document from Finder
+ * without leaving it. Cheap to act on: the document list is a directory walk and
+ * the expensive part, reading each file, is cached by size and mtime.
+ */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return
+  void (async () => {
+    const before = state.docs.filter((d) => d.path).length
+    await load()
+    await renderNotice()
+    const after = state.docs.filter((d) => d.path).length
+    if (after > before) toast(`${state.folder ?? 'Your documents'} — unlocked`)
+  })()
+})
 
 await load()
 await renderNotice()
