@@ -30,42 +30,14 @@
 // The ONLY import here. status.js owns what the UI is told, and the badge is
 // UI — duplicating the "is anything lapsed?" rule would let the icon and the
 // popup disagree about the same folders.
-import { setLapsedBadge, notifyIfLapsed, openReconnectUi } from './status.js'
+import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
+import { learnPrefix } from './db.js'
 
 /** Refresh the badge, and tell the user once per session if a grant lapsed. */
 const reportLapsed = async () => notifyIfLapsed(await setLapsedBadge())
 
-const DB = 'bento-tray'
-const STORE = 'grant'
-
-const open = () => new Promise((res, rej) => {
-  const r = indexedDB.open(DB, 1)
-  r.onupgradeneeded = () => r.result.createObjectStore(STORE)
-  r.onsuccess = () => res(r.result)
-  r.onerror = () => rej(r.error)
-})
-
-/**
- * Every granted folder, oldest first.
- *
- * Stored under `dirs` as an array. `dir` is the single-grant key this shipped
- * with; it is still read so an existing install does not silently lose the
- * folder it already granted — a lapsed grant looks identical to a lost one from
- * the outside, and someone would have re-picked it without ever knowing why.
- */
-export async function readGrants() {
-  const d = await open()
-  const get = (key) => new Promise((res, rej) => {
-    const t = d.transaction(STORE, 'readonly')
-    const q = t.objectStore(STORE).get(key)
-    q.onsuccess = () => res(q.result ?? null)
-    q.onerror = () => rej(q.error)
-  })
-  const list = await get('dirs')
-  if (Array.isArray(list) && list.length) return list
-  const one = await get('dir')
-  return one ? [one] : []
-}
+/** The grants, read through the shared store. */
+const readGrants = getGrants
 
 /**
  * The file this message is about, according to the BROWSER.
@@ -240,6 +212,20 @@ export async function resolve(sender, deps = {}) {
   const rel = await dir.resolve(hits[0])
   if (!rel || !rel.length) return { ok: false, reason: 'not inside the granted folder' }
   const suffix = `/${rel.join('/')}`
+  // The subtraction that makes a document list clickable. Both halves exist
+  // only here: `path` is absolute and browser-stamped, `suffix` is the same
+  // file's route from the grant root, so what remains is where the granted
+  // folder actually lives. Nothing else in the extension can learn this — a
+  // directory handle has no path — and without it the popup can list documents
+  // but not open them.
+  //
+  // Deliberately AFTER the identity check below is set up but before it
+  // returns: only recorded on the success path, so a mismatched candidate never
+  // teaches us a wrong prefix. Failures are swallowed; a save must not break
+  // because a convenience could not be cached.
+  if (path.endsWith(suffix)) {
+    try { await learnPrefix(dir.name, path.slice(0, -suffix.length)) } catch { /* nice-to-have */ }
+  }
   if (!path.endsWith(suffix)) {
     return { ok: false, reason: `${name} in the granted folder is a different file` }
   }

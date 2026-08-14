@@ -1,104 +1,155 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// The toolbar popup: says whether a save will land in place, BEFORE one is
-// attempted. Both preconditions fail silently otherwise — a lapsed folder grant
-// and a file-URL permission nothing can request — and a user who cannot see
-// them reads "the extension is broken".
+// The tray: your documents first, plumbing at the bottom.
+//
+// This was a permissions panel — "local file access is on, folder: documents" —
+// which is true and useless. tray/ios is a document browser: you see your
+// documents and tap one. Same shape here. Permission state still has to be
+// visible, because both of its failures are silent, but it belongs in a strip
+// that stays quiet while things work.
 
 import { getGrants, putGrants, status, setLapsedBadge } from './status.js'
+import { listDocuments, describe, newDocument } from './library.js'
 
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+const $ = (id) => document.getElementById(id)
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
-const row = (state, title, detail) =>
-  `<div class="row"><div class="dot ${state}"></div><div class="t"><b>${esc(title)}</b><span>${detail}</span></div></div>`
+const ago = (ms) => {
+  const m = Math.round((Date.now() - ms) / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.round(h / 24)
+  return d < 30 ? `${d}d ago` : new Date(ms).toLocaleDateString()
+}
 
-const s = await status()
-
-const files = s.files === true
-  ? row('ok', 'Local files', 'This extension may read pages opened from disk.')
-  : s.files === false
-    ? row('bad', 'Local files — off',
-        'Turn on <b>Allow access to file URLs</b> on this extension’s card in <code>chrome://extensions</code>. Nothing works without it, and no extension can turn it on for you.')
-    : row('meh', 'Local files — unknown',
-        'This browser will not say. If saves still prompt, check <b>Allow access to file URLs</b>.')
-
-// One row per folder. The rows must not promise in-place saving while the OTHER
-// precondition is failing: "saves in place, with no dialog" directly under
-// "nothing works until file access is on" is two green-ish signals
-// contradicting each other, and the reassuring one is the false one.
-//
-// And with several folders, a summary would hide the thing worth knowing —
-// whether saves land depends on WHICH document, so each folder answers for
-// itself rather than being averaged into one verdict.
-const folders = !s.folders.length
-  ? row('meh', 'No folders yet', 'Choose the folder your documents live in. You can add several.')
-  : s.folders.map((f) => f.permission === 'granted'
-    ? row(s.files === false ? 'meh' : 'ok', esc(f.name),
-        s.files === false
-          ? 'Ready, but nothing saves in place until local file access is on.'
-          : 'Documents in here save in place, with no dialog.')
-    : row('bad', `${esc(f.name)} — needs renewing`,
-        '<b>Renew</b> in Settings restores it in one click — the folder is still remembered. Choose <b>Allow on every visit</b> and Chrome stops asking.')).join('')
-
-document.getElementById('rows').innerHTML = files + folders
-
+// ---------------------------------------------------------------- documents
 /**
- * Reconnect from HERE, not from the options page.
+ * Render names FIRST, then fill in titles and thumbnails as they arrive.
  *
- * `requestPermission` needs a user gesture, and the service worker has none —
- * so the dialog can only be raised from an extension PAGE. A deck is a `file://`
- * page in another origin and cannot hold the handle at all, which rules out
- * asking from where the user actually is.
- *
- * The popup is the closest thing to that: it is one click from any tab, it is
- * where the toolbar badge sends people, and a click in it IS the gesture. Making
- * this a trip to Settings turned a one-click repair into a navigation, a page,
- * and a hunt for the right button.
+ * The list has to appear immediately. Reading a document for its title is cheap
+ * (a 300KB head), but its preview sits past the document block — a quarter of
+ * the way into a 900KB file — so a folder of twenty decks is twenty megabytes.
+ * Waiting for all of that before showing anything would make the popup feel
+ * broken every time the cache is cold.
  */
-const lapsed = document.getElementById('renew')
-const hint = document.getElementById('hint')
-const prime = document.getElementById('prime')
-const needsWork = s.folders.some((f) => f.permission !== 'granted')
-lapsed.hidden = !needsWork
-hint.hidden = !needsWork
+async function renderDocs() {
+  const docs = await listDocuments()
+  $('count').textContent = docs.length ? `${docs.length} document${docs.length === 1 ? '' : 's'}` : ''
 
-/**
- * PRIME BEFORE THE PROMPT. This is the whole strategy for getting the grant
- * made permanent, and it rests on two facts:
- *
- *   · "Allow on every visit" is offered ONLY on Chrome's restore prompt.
- *     Picking a folder afresh never offers it. So that dialog is the single
- *     opportunity, and it does not appear on demand.
- *   · Chrome's three options are three near-identical pills, and its wording
- *     ("View and edit files from the last time you visited this site") says
- *     nothing about what the choice costs. "Allow this time" is the obvious,
- *     cautious-looking pick, and it is the one that guarantees being asked
- *     again forever.
- *
- * Prose cannot point at a button. So the popup draws the dialog, marks the
- * middle option, and only then offers to raise it — the standard permission
- * priming pattern, and the only lever an extension actually has here.
- */
-prime.hidden = !needsWork
-lapsed.addEventListener('click', async () => {
-  lapsed.disabled = true
+  if (!docs.length) {
+    $('empty').hidden = false
+    $('empty').textContent = 'No Bento documents in your folders yet.'
+    return
+  }
+
+  // Newest first: the one you want is almost always the one you just had open.
+  const withTimes = await Promise.all(docs.map(async (d) => {
+    try { return { d, modified: (await d.handle.getFile()).lastModified } } catch { return { d, modified: 0 } }
+  }))
+  withTimes.sort((a, b) => b.modified - a.modified)
+
+  const list = $('docs')
+  list.innerHTML = ''
+  for (const { d, modified } of withTimes) {
+    const row = document.createElement('button')
+    row.className = 'doc'
+    // A document whose folder has never taught us its absolute path can be
+    // listed but not opened — a directory handle has no path, and the prefix is
+    // only learned when a document from that folder is saved. Say so on the row
+    // rather than having a click do nothing.
+    if (!d.path) {
+      row.disabled = true
+      row.title = 'Open this document once from Finder and Bento Tray will learn where '
+        + 'this folder lives; after that it can open from here.'
+    }
+    row.innerHTML =
+      `<span class="thumb" data-thumb></span>` +
+      `<span class="meta"><b>${esc(d.base)}</b>` +
+      `<span>${esc(d.folder)} · ${esc(ago(modified))}</span></span>`
+    row.addEventListener('click', () => {
+      if (!d.path) return
+      chrome.tabs.create({ url: `file://${d.path.split('/').map(encodeURIComponent).join('/')}` })
+      window.close()
+    })
+    list.appendChild(row)
+
+    // Lazily, one at a time, so a cold cache does not read every document at
+    // once and stall the popup it is decorating.
+    void (async () => {
+      try {
+        const meta = await describe(d)
+        row.querySelector('b').textContent = meta.title
+        const thumb = row.querySelector('[data-thumb]')
+        if (meta.encrypted) {
+          thumb.innerHTML = '<span class="lock" title="Password-protected">🔒</span>'
+        } else if (meta.preview) {
+          // The preview block scales itself to whatever viewport it lands in —
+          // that is what it was written for — so a fixed-size sandboxed frame
+          // is all it needs. `sandbox` with no allow-scripts: this is somebody
+          // else's document and it renders inert.
+          const f = document.createElement('iframe')
+          f.setAttribute('sandbox', '')
+          f.srcdoc = meta.preview
+          thumb.appendChild(f)
+        } else {
+          // No preview and not encrypted: a document that has never been saved,
+          // which is exactly what "+ New document" just made. A page glyph says
+          // "nothing rendered yet"; blank white says "this is broken".
+          thumb.innerHTML = '<span class="blank" title="Not saved yet">▤</span>'
+        }
+      } catch { /* a row without a picture is still a row */ }
+    })()
+  }
+}
+
+// ------------------------------------------------------------------ plumbing
+async function renderStatus() {
+  const s = await status()
+  const lapsed = s.folders.some((f) => f.permission !== 'granted')
+  const dot = $('dot')
+  const text = $('statusText')
+
+  if (s.files === false) {
+    dot.className = 'dot bad'
+    text.innerHTML = '<span class="warn">Local file access is off</span>'
+  } else if (!s.folders.length) {
+    dot.className = 'dot meh'
+    text.textContent = 'No folders yet'
+  } else if (lapsed) {
+    dot.className = 'dot bad'
+    text.innerHTML = `<span class="warn">${s.folders.filter((f) => f.permission !== 'granted').length} `
+      + 'folder needs reconnecting</span>'
+  } else {
+    dot.className = 'dot ok'
+    const n = s.folders.length
+    text.textContent = `${n} folder${n === 1 ? '' : 's'} · saves in place`
+  }
+
+  $('renew').hidden = !lapsed
+  // Prime BEFORE the prompt, never after. "Allow on every visit" is offered
+  // only on Chrome's restore dialog, that dialog cannot be summoned on demand,
+  // and its three near-identical options say nothing about what they cost. So
+  // the one thing worth doing is making sure the user recognises the middle
+  // button before they see it.
+  $('prime').hidden = !lapsed
+  return s
+}
+
+$('renew').addEventListener('click', async () => {
+  const btn = $('renew')
+  btn.disabled = true
   const dirs = await getGrants()
   let ok = 0
-  // ONE PROMPT PER CLICK, and STOP at the first refusal.
-  //
-  // Chromium embargoes a permission after `kDefaultDismissalsBeforeBlock = 3`
-  // dismissals, for `kDefaultEmbargoDays = 7` days
-  // (components/permissions/permission_decision_auto_blocker.cc), and
-  // FILE_SYSTEM_ACCESS_RESTORE_PERMISSION is on that list. The restore prompt
-  // is ALSO the only one that offers "Allow on every visit", so an embargo does
-  // not merely delay a reconnect — it removes the user's ability to make the
-  // grant persistent for a week, and nothing an extension can call lifts it.
-  //
-  // Three dismissals is a small budget. This loop used to raise a prompt for
-  // every lapsed folder, so a single impatient click on a two-folder setup
-  // spent two of them. Whatever made the user refuse the first prompt applies
-  // to the second, so continuing only buys an embargo.
+  // ONE PROMPT PER CLICK, and stop at the first refusal. Chromium embargoes a
+  // permission after kDefaultDismissalsBeforeBlock = 3 dismissals for
+  // kDefaultEmbargoDays = 7, and FILE_SYSTEM_ACCESS_RESTORE_PERMISSION is on
+  // that list. Those counts never reset — not on a grant, not over time — so
+  // the budget is per-origin and lifetime. This loop used to raise a prompt per
+  // folder, spending two of three on one impatient click.
   for (const dir of dirs) {
     try {
       if (await dir.queryPermission({ mode: 'readwrite' }) === 'granted') { ok++; continue }
@@ -109,28 +160,44 @@ lapsed.addEventListener('click', async () => {
   if (ok) await putGrants(dirs)
   await setLapsedBadge()
 
-  // A renew that restores NOTHING is the state Chrome cannot get you out of:
-  // "Don't allow" empties its record of the granted folders, and three
-  // dismissals embargo the restore prompt so it stops appearing at all. Both
-  // observed 2026-08-14. Re-picking the folder is a different permission and
-  // still works, but it needs the folder chooser, which belongs in Settings.
-  //
-  // Saying so beats reloading into an unchanged list, which reads as "the
-  // button is broken" and invites the extra dismissals that cause the embargo.
   if (!ok) {
-    document.getElementById('rows').innerHTML = row('meh', 'Chrome did not offer to restore it',
-      'It usually starts offering again after a restart — sometimes a later one rather than '
-      + 'the next. To not wait, choose the folder again in Settings, though that grants '
-      + 'access for this session only.')
-    lapsed.hidden = true
-    hint.hidden = true
-    prime.hidden = true // nothing to prime for — Chrome did not ask
+    // A silent refusal is "not yet", not "never": Chrome only offers the
+    // restore prompt while the grant is dormant-and-eligible, so it can be
+    // unavailable for a session or two and then return by itself.
+    $('statusText').innerHTML = '<span class="warn">Chrome did not offer to restore it</span>'
+    $('prime').hidden = true
+    btn.textContent = 'Try again after restarting Chrome'
     return
   }
   location.reload()
 })
 
-document.getElementById('open').addEventListener('click', () => {
+$('new').addEventListener('click', async () => {
+  const btn = $('new')
+  const grants = await getGrants()
+  if (!grants.length) { chrome.runtime.openOptionsPage(); window.close(); return }
+  btn.disabled = true
+  btn.textContent = 'Fetching the latest Bento…'
+  try {
+    // Into the first granted folder. Choosing between folders is a dialog this
+    // popup does not need: the common case is one folder, and a document in the
+    // wrong place is a drag away.
+    const made = await newDocument(grants[0])
+    btn.textContent = `Created ${made.base}`
+    await renderDocs()
+    btn.disabled = false
+    btn.textContent = '+ New document'
+  } catch (e) {
+    btn.disabled = false
+    btn.textContent = '+ New document'
+    $('statusText').innerHTML = `<span class="warn">${esc(e.message)}</span>`
+  }
+})
+
+$('open').addEventListener('click', () => {
   chrome.runtime.openOptionsPage()
   window.close()
 })
+
+await renderStatus()
+await renderDocs()

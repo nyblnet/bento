@@ -3,59 +3,34 @@
 //
 // What the extension can and cannot do right now, in one place.
 //
-// Two things have to be true before a deck saves in place, and BOTH fail
-// silently by nature: a folder grant that lapses whenever the service worker
-// restarts, and a file-URL permission that no manifest can request. Neither is
-// visible until a save is attempted, which is the worst possible moment to
-// discover them — so the popup and the options page read this and say so first.
+// Two things have to be true before a document saves in place, and BOTH fail
+// silently by nature: a folder grant that Chrome drops on a browser restart,
+// and a file-URL permission that no manifest can request. Neither is visible
+// until a save is attempted, which is the worst possible moment to discover
+// them — so every surface reads this and says so first.
 
-const DB = 'bento-tray'
-const STORE = 'grant'
-
-const open = () => new Promise((res, rej) => {
-  const r = indexedDB.open(DB, 1)
-  r.onupgradeneeded = () => r.result.createObjectStore(STORE)
-  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error)
-})
-
-const get = async (key) => {
-  const d = await open()
-  return new Promise((res, rej) => {
-    const t = d.transaction(STORE, 'readonly')
-    const q = t.objectStore(STORE).get(key)
-    q.onsuccess = () => res(q.result ?? null); q.onerror = () => rej(q.error)
-  })
-}
-
-const put = async (key, v) => {
-  const d = await open()
-  return new Promise((res, rej) => {
-    const t = d.transaction(STORE, 'readwrite')
-    t.objectStore(STORE).put(v, key)
-    t.oncomplete = res; t.onerror = () => rej(t.error)
-  })
-}
+import { GRANT, get, put } from './db.js'
 
 /**
  * Every granted folder, oldest first.
  *
  * `dirs` is the list; `dir` is the single-grant key this shipped with, still
  * read so an upgrade does not silently drop the folder someone already granted.
- * Kept byte-identical in shape to background.js `readGrants` — the two read the
- * same store and must not disagree about what is in it.
+ * Both halves of the extension reach the store through db.js, so there is no
+ * longer a second copy of these key names to drift from.
  */
 export const getGrants = async () => {
-  const list = await get('dirs')
+  const list = await get(GRANT, 'dirs')
   if (Array.isArray(list) && list.length) return list
-  const one = await get('dir')
+  const one = await get(GRANT, 'dir')
   return one ? [one] : []
 }
 
 /** Replace the list. `dir` is cleared once a list exists, so the legacy key
  *  cannot resurrect a folder the user has since removed. */
 export const putGrants = async (list) => {
-  await put('dirs', list)
-  await put('dir', null)
+  await put(GRANT, 'dirs', list)
+  await put(GRANT, 'dir', null)
 }
 
 /**

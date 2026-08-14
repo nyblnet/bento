@@ -269,6 +269,21 @@ jobs:
         # rather than by reloading an extension and pressing Cmd-S.
         run: node scripts/test-webext-bridge.ts
 
+      - name: WebExtension document-library rig
+        # The popup is a document browser, and everything in it is DERIVED from
+        # files on disk: the title out of the document block, the thumbnail out
+        # of the preview block, the openable path out of a learned prefix. Each
+        # is a parse against a format that moves, and each fails quietly — a row
+        # showing a filename instead of a title, or a blank square. Nothing
+        # throws, so nothing reports it.
+        #
+        # Runs AFTER the slides build on purpose: it reads the real shell, and
+        # with a document spliced in at the real offset. Hand-written fixtures
+        # would have passed the bug this replaces, where a metadata reader hunted
+        # for the document block's CLOSING tag and so found nothing in any
+        # document carrying an image.
+        run: node scripts/test-webext-library.ts
+
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
         # must tell "overwrite the open document" from "make a second file" from

@@ -425,14 +425,25 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
   const st = read('status.js')
   const constOf = (src: string, name: string) => src.match(new RegExp(`const ${name} = '([^']+)'`))?.[1]
 
-  ok(constOf(bg, 'DB') === constOf(st, 'DB') && !!constOf(bg, 'DB'),
-    `both halves open the same database (${constOf(bg, 'DB')})`)
-  ok(constOf(bg, 'STORE') === constOf(st, 'STORE') && !!constOf(bg, 'STORE'),
-    `and the same object store (${constOf(bg, 'STORE')})`)
-  for (const key of ['dirs', 'dir']) {
-    ok(bg.includes(`'${key}'`) && st.includes(`'${key}'`),
-      `both halves know the '${key}' key — ${key === 'dir' ? 'the legacy single grant is still migrated' : 'the grant list'}`)
-  }
+  // This used to compare duplicated DB/STORE constants between the two files.
+  // They are gone: db.js owns the store and both halves import it. So the gate
+  // becomes the stronger statement — the duplication must not come BACK.
+  // A second `indexedDB.open` is how the split-brain returns, and its symptom
+  // is the options page writing grants the worker never reads: UI green, every
+  // save prompting, nothing reporting a fault.
+  const db = read('db.js')
+  ok(/indexedDB\.open/.test(db), 'db.js opens the database')
+  ok(!/indexedDB\.open/.test(bg) && !/indexedDB\.open/.test(st),
+    'and nothing else does — one module owns the store')
+  ok(/from '\.\/db\.js'/.test(st), 'status.js reads the store through it')
+  ok(constOf(db, 'DB') === 'bento-tray', `the database name is stable (${constOf(db, 'DB')})`)
+  // Each key is named in the module that owns its meaning, not scattered:
+  // the grant list is status.js's business, the path prefixes are db.js's.
+  ok(st.includes("'dirs'") && st.includes("'dir'"),
+    "status.js owns the grant keys, including the legacy 'dir' still migrated")
+  ok(db.includes("'prefixes'"), "db.js owns the learned path prefixes")
+  ok(/VERSION = 2/.test(db) && /objectStoreNames\.contains/.test(db),
+    'the version bump for the cache store is guarded, so a v1 install upgrades rather than throwing')
 }
 
 // ---- 10. the lapsed-grant badge stays wired --------------------------------

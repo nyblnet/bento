@@ -2714,3 +2714,78 @@ button they came for.
 better reason to interrupt than the original one, and it argues for keeping it —
 provided it always lands on the primed popup rather than raising the prompt
 directly.
+
+---
+
+## 2026-08-14 — the extension is a document browser, not a permissions panel
+
+The popup's entire content was plumbing: *local file access is on, folder:
+documents*. True, and nobody wants it. `tray/ios` is a
+`UIDocumentBrowserViewController` — you see your documents and tap one — and
+that is the right shape here too. So the tray now lists documents with real
+titles and page-one thumbnails, and permission state is one line at the bottom
+that stays quiet while things work.
+
+Four pieces, three of which reuse something that already existed.
+
+**Clickable rows come from `locateIn` run backwards.** A directory handle knows
+its name and never its path, so the extension can WRITE a document it cannot
+URL. But `resolve()` holds both halves at one instant: `sender.url` is absolute
+and browser-stamped, and `dir.resolve()` gives the same file's route from the
+grant root. Subtract, and the grant's absolute prefix falls out; store it and
+every document in that folder becomes openable. Bootstrapping costs one document
+opened the ordinary way, which is the premise of the product. A folder that has
+never taught us its prefix still lists — the rows just say they cannot be
+opened, rather than doing nothing when clicked.
+
+**Titles come out of the document block**, which starts ~6KB in, so a fixed
+300KB head reaches it. Matching the field directly matters: an earlier metadata
+reader looked for the block's CLOSING tag and therefore found nothing in any
+document carrying an image, since those blocks run to megabytes. The rig pins
+that case explicitly.
+
+**Thumbnails were already written.** `preview.ts` puts a still render of page one
+into every saved document so file managers can thumbnail it, and this IS a file
+manager. The block is self-contained and scales itself to whatever viewport it
+lands in, so it drops into a 56×32 sandboxed iframe with no work — exactly what
+it was built for. Encrypted documents deliberately carry none, so those show a
+lock, and a document never saved shows a page glyph rather than broken-looking
+white.
+
+**`+ New document` fetches the signed release** rather than bundling a seed.
+Bundling would put a copy of Bento inside the extension, to drift from the real
+release and be re-reviewed on every update — the same trap `tray/ios` avoided by
+letting documents carry their own runtime. De-duplication counts on the BASE
+name (`Untitled 2.bento.html`), because UIKit's own counter produces
+`Untitled.bento 2.html` from a double extension and `tray/ios` had to write its
+own for the same reason.
+
+### Enumeration is allowed here, and that is not a contradiction
+
+`background.js` went to some trouble to STOP enumerating: resolving a save must
+not walk a folder, because the user is mid-⌘S and a granted home directory would
+hang it. Listing is user-initiated, bounded (depth 4, 300 documents) and cached.
+Same folder, different job, different rules — worth stating because the two
+sit next to each other and the next reader will wonder.
+
+### One store, one owner
+
+`background.js` and `status.js` each opened IndexedDB with their own copies of
+the database name, store name and keys, guarded by a rig comparing the two. That
+gate is gone because the duplication is: `db.js` owns the store and both import
+it. The rig now asserts the stronger thing — that nothing else calls
+`indexedDB.open` — since a second opener is how the split-brain returns, and its
+symptom is the options page writing grants the worker never reads.
+
+### Verified by looking
+
+The layout was rendered with a real preview extracted from a real saved deck and
+screenshotted, not asserted. The library rig reads the real built shell, and a
+copy of it with a document spliced in at the real offset — hand-written fixtures
+would have passed the metadata bug that shipped.
+
+Found while writing it: a PRISTINE shell has an EMPTY `#bento-doc` block
+(`id="bento-doc"></script>`) because the starter document is built at runtime and
+only written on first save. So a newly created document legitimately has no title
+and no preview until it is saved once. The rig asserted a title and failed —
+correctly, at the assertion rather than in the parse.

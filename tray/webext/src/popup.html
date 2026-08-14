@@ -2,50 +2,89 @@
 <meta charset="utf-8">
 <title>Bento Tray</title>
 <style>
-  body { font: 13.5px/1.5 -apple-system, system-ui, sans-serif; color: #1e2a3a; margin: 0; width: 290px; }
-  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
+  body { font: 13.5px/1.5 -apple-system, system-ui, sans-serif; color: #1e2a3a; margin: 0; width: 340px; }
+  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; }
   header img { width: 20px; height: 20px; border-radius: 5px; }
-  header b { font-size: 14px; }
-  .rows { padding: 0 14px 4px; }
-  .row { display: flex; gap: 8px; align-items: flex-start; padding: 7px 0; border-top: 1px solid #eceff3; }
-  .row:first-child { border-top: 0; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: none; }
+  header b { font-size: 14px; flex: 1 }
+  header .count { color: #8794a4; font-size: 12px }
+
+  /* --- the documents, which are the point --- */
+  .docs { max-height: 340px; overflow-y: auto; padding: 0 8px }
+  .doc { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
+    padding: 7px 6px; border: 0; background: none; border-radius: 8px; cursor: pointer;
+    font: inherit; color: inherit; }
+  .doc:hover { background: #f2f5f8 }
+  .doc:disabled { cursor: default; opacity: .55 }
+  .thumb { width: 56px; height: 32px; border-radius: 4px; border: 1px solid #e4e8ee;
+    background: #f7f9fb; flex: none; overflow: hidden; position: relative }
+  .thumb iframe { width: 224px; height: 128px; border: 0; transform: scale(.25);
+    transform-origin: 0 0; position: absolute; left: 0; top: 0; pointer-events: none }
+  .thumb .lock { display: grid; place-items: center; height: 100%; font-size: 14px }
+  /* A document with no preview is not an error: a freshly created one has never
+     been saved, so nothing has rendered page one into it yet. Blank white reads
+     as a broken thumbnail, so it gets a quiet page glyph instead. */
+  .thumb .blank { display: grid; place-items: center; height: 100%; color: #c3ccd7;
+    font-size: 15px; line-height: 1 }
+  .meta { flex: 1; min-width: 0 }
+  .meta b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis }
+  .meta span { color: #8794a4; font-size: 12px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; display: block }
+
+  .empty { padding: 6px 14px 12px; color: #6b7a8d; font-size: 12.5px }
+
+  /* --- everything below is plumbing, and looks like it --- */
+  footer { border-top: 1px solid #eceff3; padding: 9px 14px 12px; margin-top: 6px }
+  .status { display: flex; gap: 8px; align-items: center; color: #6b7a8d; font-size: 12px }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none }
   .ok { background: #2e9e5b } .bad { background: #c2453b } .meh { background: #c9a227 }
-  .t { flex: 1 }
-  .t b { display: block; font-weight: 600 }
-  .t span { color: #6b7a8d; font-size: 12.5px }
-  footer { padding: 10px 14px 13px; display: grid; gap: 6px; }
-  button { font: inherit; width: 100%; padding: 7px 10px; border: 1px solid #c8d0dc; border-radius: 8px; background: #fff; cursor: pointer; }
-  button:hover { background: #f5f7fa }
-  button.primary { border-color: #16273e; background: #16273e; color: #fff }
-  button.primary:hover { background: #22364f }
-  .hint { color: #6b7a8d; font-size: 12px; margin: 2px 0 0 }
-  code { background: #eef1f5; padding: 1px 4px; border-radius: 4px; font-size: 12px }
-  /* A small picture of Chrome's own dialog. The three options are
-     indistinguishable in prose — they are three near-identical pills — so the
-     only reliable way to point at the middle one is to draw it. */
-  .prime { padding: 2px 14px 0; }
+  .status .grow { flex: 1 }
+  button.link { border: 0; background: none; color: #40546e; cursor: pointer; font: inherit;
+    font-size: 12px; padding: 0; text-decoration: underline }
+  button.act { font: inherit; width: 100%; padding: 7px 10px; border: 1px solid #c8d0dc;
+    border-radius: 8px; background: #fff; cursor: pointer; margin-top: 8px }
+  button.act:hover { background: #f5f7fa }
+  button.act.primary { border-color: #16273e; background: #16273e; color: #fff }
+  button.act.primary:hover { background: #22364f }
+  .warn { color: #a3322a }
+
+  /* A picture of Chrome's dialog. Its three options are near-identical pills and
+     its wording says nothing about what each costs, so pointing at the middle
+     one in prose does not work — it has to be drawn. */
+  .prime { margin-top: 9px; border: 1px solid #dfe4ea; border-radius: 10px; padding: 9px;
+    background: #fbfcfd }
   .prime p { margin: 0 0 7px; color: #6b7a8d; font-size: 12.5px }
-  .mock { border: 1px solid #dfe4ea; border-radius: 10px; padding: 9px; background: #fbfcfd }
-  .mock .opt { border-radius: 999px; padding: 5px 9px; font-size: 12px; text-align: center;
+  .prime .opt { border-radius: 999px; padding: 5px 9px; font-size: 12px; text-align: center;
     background: #f0f2f5; color: #8794a4; margin-bottom: 5px }
-  .mock .opt.pick { background: #16273e; color: #fff; font-weight: 600 }
-  .mock .opt:last-child { margin-bottom: 0 }
+  .prime .opt.pick { background: #16273e; color: #fff; font-weight: 600 }
+  .prime .opt:last-child { margin-bottom: 0 }
 </style>
-<header><img src="../icons/icon-48.png" alt=""><b>Bento Tray</b></header>
-<div class="rows" id="rows"></div>
-<div class="prime" id="prime" hidden>
-  <p>Chrome will ask next. Pick the middle one:</p>
-  <div class="mock">
+
+<header>
+  <img src="../icons/icon-48.png" alt="">
+  <b>Bento Tray</b>
+  <span class="count" id="count"></span>
+</header>
+
+<div class="docs" id="docs"></div>
+<div class="empty" id="empty" hidden></div>
+
+<footer>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span class="grow" id="statusText"></span>
+    <button class="link" id="open">Settings</button>
+  </div>
+
+  <div class="prime" id="prime" hidden>
+    <p>Chrome will ask next. Pick the middle one:</p>
     <div class="opt">Allow this time</div>
     <div class="opt pick">Allow on every visit</div>
     <div class="opt">Don’t allow</div>
   </div>
-</div>
-<footer>
-  <button id="renew" class="primary" hidden>Reconnect folders</button>
-  <p class="hint" id="hint" hidden><b>Allow this time</b> works, but Chrome asks again every
-    time you restart. <b>Don’t allow</b> drops the folder until Chrome offers again.</p>
-  <button id="open">Settings…</button>
+
+  <button class="act primary" id="renew" hidden>Reconnect folders</button>
+  <button class="act" id="new">+ New document</button>
 </footer>
+
 <script type="module" src="popup.js"></script>
