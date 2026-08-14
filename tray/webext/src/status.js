@@ -94,7 +94,7 @@ export async function fileAccess() {
  */
 export async function setLapsedBadge() {
   try {
-    if (typeof chrome === 'undefined' || !chrome.action?.setBadgeText) return
+    if (typeof chrome === 'undefined' || !chrome.action?.setBadgeText) return false
     const dirs = await getGrants()
     const perms = await Promise.all(
       dirs.map((d) => d.queryPermission({ mode: 'readwrite' }).catch(() => 'unreadable')),
@@ -110,8 +110,85 @@ export async function setLapsedBadge() {
     } else {
       await chrome.action.setTitle?.({ title: 'Bento Tray' })
     }
+    return stale
   } catch {
     /* never let the badge break a save */
+    return false
+  }
+}
+
+const NOTIFIED = 'lapsed-notified'
+
+/**
+ * Tell the user ONCE per browser session that a folder needs reconnecting.
+ *
+ * The badge is passive — it reports to anyone who looks at the toolbar, and
+ * nobody looks at the toolbar. A lapse is otherwise discovered when a save
+ * falls back to a picker, which is both too late and unattributable.
+ *
+ * ONCE, though. The worker re-runs this after every message, and a save is
+ * many messages; a notification per message would be unusable, and one per
+ * save not much better. `chrome.storage.session` is exactly the right
+ * lifetime — it clears when the browser restarts, which is also when a grant
+ * lapses, so the next session gets exactly one fresh telling.
+ *
+ * Cleared as soon as the grant is healthy again, so a lapse later in the same
+ * session is still announced.
+ */
+export async function notifyIfLapsed(stale) {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.notifications?.create) return
+    const session = chrome.storage?.session
+    const seen = session ? (await session.get(NOTIFIED))[NOTIFIED] : false
+
+    if (!stale) {
+      if (seen) await session?.remove(NOTIFIED)
+      return
+    }
+    if (seen) return
+    await session?.set({ [NOTIFIED]: true })
+
+    await chrome.notifications.create('bento-tray-lapsed', {
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+      title: 'Bento Tray needs reconnecting',
+      message: 'Chrome dropped permission for a folder. Until it is restored, saving '
+        + 'a document will ask you where to put it.',
+      buttons: [{ title: 'Reconnect' }],
+      requireInteraction: false,
+    })
+  } catch {
+    /* a notification is never worth failing a save over */
+  }
+}
+
+/**
+ * Put the reconnect button in front of the user.
+ *
+ * `chrome.action.openPopup()` is the one that would make this a single click
+ * from anywhere. UNVERIFIED here: it has moved between "extension-only", "policy
+ * installed only" and generally available across Chrome versions, and this
+ * extension's floor is 116. So it is TRIED, and the options page is the fallback
+ * — which always works and costs a tab.
+ *
+ * Deliberately not called on its own initiative. Opening a popup at a moment the
+ * user did not ask for one is the kind of thing that gets an extension
+ * uninstalled; this runs only from a notification the user clicked.
+ */
+export async function openReconnectUi() {
+  try {
+    if (chrome.action?.openPopup) {
+      await chrome.action.openPopup()
+      return 'popup'
+    }
+  } catch {
+    /* not available in this Chrome, or no focused window — fall through */
+  }
+  try {
+    await chrome.runtime.openOptionsPage()
+    return 'options'
+  } catch {
+    return 'none'
   }
 }
 

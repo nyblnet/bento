@@ -5,7 +5,8 @@
   "description": "Save a Bento document back to the file you opened, without a destination prompt.",
   "minimum_chrome_version": "116",
   "permissions": [
-    "storage"
+    "storage",
+    "notifications"
   ],
   "options_page": "src/options.html",
   "background": {

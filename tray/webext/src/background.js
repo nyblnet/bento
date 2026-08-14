@@ -30,7 +30,10 @@
 // The ONLY import here. status.js owns what the UI is told, and the badge is
 // UI — duplicating the "is anything lapsed?" rule would let the icon and the
 // popup disagree about the same folders.
-import { setLapsedBadge } from './status.js'
+import { setLapsedBadge, notifyIfLapsed, openReconnectUi } from './status.js'
+
+/** Refresh the badge, and tell the user once per session if a grant lapsed. */
+const reportLapsed = async () => notifyIfLapsed(await setLapsedBadge())
 
 const DB = 'bento-tray'
 const STORE = 'grant'
@@ -350,14 +353,25 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       // back to a picker. Badging the toolbar icon moves that discovery onto
       // the thing the fix hangs off, and does it whether the save succeeded or
       // not — one folder can lapse while another still works.
-      void setLapsedBadge()
+      void reportLapsed()
     }, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
     return true // async response
   })
 
   // The worker restarts constantly; the badge has to survive that, and startup
-  // is also when a browser restart would have dropped a grant.
-  chrome.runtime.onStartup?.addListener(() => void setLapsedBadge())
-  chrome.runtime.onInstalled?.addListener(() => void setLapsedBadge())
-  void setLapsedBadge()
+  // is also when a browser restart would have dropped a grant — so it is the
+  // one moment where telling the user is worth an interruption, since it is
+  // before they have tried to save anything.
+  chrome.runtime.onStartup?.addListener(() => void reportLapsed())
+  chrome.runtime.onInstalled?.addListener(() => void reportLapsed())
+  void reportLapsed()
+
+  // The notification's only button, and clicking the notification body itself —
+  // both mean "fix it", so both lead to the same place.
+  chrome.notifications?.onButtonClicked?.addListener((id) => {
+    if (id === 'bento-tray-lapsed') void openReconnectUi()
+  })
+  chrome.notifications?.onClicked?.addListener((id) => {
+    if (id === 'bento-tray-lapsed') void openReconnectUi()
+  })
 }

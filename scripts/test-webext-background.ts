@@ -455,6 +455,25 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
     'only status.js decides what "lapsed" means — the icon and the popup cannot disagree')
   ok(/requestPermission/.test(pop),
     'the popup can raise the permission dialog itself, without a trip to the options page')
+
+  // The notification is the ACTIVE half of reporting a lapse — the badge only
+  // reports to someone already looking at the toolbar. Same wiring risk: no
+  // return value, nothing reads it, so a dropped call is silent.
+  ok(/chrome\.notifications\?\.\.?create|chrome\.notifications\?\.create/.test(st)
+    || /notifications\.create/.test(st), 'status.js can raise a notification')
+  ok(bg.includes('reportLapsed') && /onStartup/.test(bg),
+    'the worker reports a lapse on browser startup — before any save has failed')
+  ok(/storage\?\.session|storage\.session/.test(st),
+    'and only once per browser session, which is the lifetime of a lapse')
+  ok(/onButtonClicked/.test(bg) && /onClicked/.test(bg),
+    'both the notification body and its button lead somewhere')
+  ok(/openPopup/.test(st) && /openOptionsPage/.test(st),
+    'openPopup is TRIED and the options page is the fallback — the first is not available everywhere')
+
+  const manifest = JSON.parse(readFileSync(new URL('../tray/webext/manifest.json', import.meta.url), 'utf8'))
+  ok(manifest.permissions?.includes('notifications'),
+    'the manifest asks for the notifications permission the code depends on')
+  ok(!!manifest.action?.default_popup, 'and declares the popup openPopup would open')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
