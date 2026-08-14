@@ -54,6 +54,10 @@ async function renderDocs() {
 
   const list = $('docs')
   list.innerHTML = ''
+  // Folders we can list but not yet open. A dim row with a tooltip is not an
+  // explanation — nobody hovers a thing that looks broken — so if any exist,
+  // the list says once, in plain words, what unlocks them.
+  const unplaced = new Set()
   for (const { d, modified } of withTimes) {
     const row = document.createElement('button')
     row.className = 'doc'
@@ -63,8 +67,9 @@ async function renderDocs() {
     // rather than having a click do nothing.
     if (!d.path) {
       row.disabled = true
-      row.title = 'Open this document once from Finder and Bento Tray will learn where '
-        + 'this folder lives; after that it can open from here.'
+      row.title = `Open any document in ${d.folder} once from Finder, and everything in `
+        + 'that folder becomes openable from here.'
+      unplaced.add(d.folder)
     }
     row.innerHTML =
       `<span class="thumb" data-thumb></span>` +
@@ -103,6 +108,18 @@ async function renderDocs() {
         }
       } catch { /* a row without a picture is still a row */ }
     })()
+  }
+
+  if (unplaced.size) {
+    const note = $('empty')
+    note.hidden = false
+    const names = [...unplaced]
+    note.innerHTML = 'Open one document in '
+      + `<b>${esc(names.slice(0, 2).join('</b>, <b>'))}</b>`
+      + (names.length > 2 ? ` and ${names.length - 2} more` : '')
+      + ' from Finder once — Chrome does not tell an extension where a folder is, '
+      + 'so opening a document is how Bento Tray learns. After that the whole folder '
+      + 'opens from here.'
   }
 }
 

@@ -467,6 +467,21 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
   ok(/requestPermission/.test(pop),
     'the popup can raise the permission dialog itself, without a trip to the options page')
 
+  // The chicken-and-egg that shipped: the tray lists documents by walking
+  // grants, but needs an absolute path to OPEN one, and that path was learned
+  // only during a save. So a fresh install listed everything and could open
+  // nothing. Opening a document is the natural moment to learn its folder.
+  const relay = read('relay.js')
+  ok(/op: 'hello'/.test(relay), 'the content script announces itself on load')
+  ok(/'hello'/.test(bg) && /learnPrefix/.test(bg),
+    'and the worker resolves it, which is what records where that folder lives')
+  // The call itself, not the comment above it: the announcement must send only
+  // an op. A payload here would be page-controlled data arriving at the code
+  // that decides which file to write, which is the one thing this architecture
+  // refuses — the path comes from sender.url, stamped by the browser.
+  ok(/sendMessage\(\{\s*op:\s*'hello'\s*\}\)/.test(relay),
+    'the announcement sends an op and nothing else — no page-controlled payload reaches the resolver')
+
   // The notification is the ACTIVE half of reporting a lapse — the badge only
   // reports to someone already looking at the toolbar. Same wiring risk: no
   // return value, nothing reads it, so a dropped call is silent.

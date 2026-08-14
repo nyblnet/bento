@@ -329,7 +329,13 @@ export async function write(sender, text, deps) {
 // the logic above and never needs the listener.
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    const run = msg?.op === 'claim' ? claim(sender)
+    // `hello` is a claim by another name: it resolves the sender against the
+    // grants, which is what teaches `db.learnPrefix` where that folder lives,
+    // and writes nothing. Opening a document is the moment to learn its folder
+    // — waiting for a save meant a fresh install listed documents it could not
+    // open.
+    const run = msg?.op === 'hello' ? claim(sender)
+      : msg?.op === 'claim' ? claim(sender)
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
