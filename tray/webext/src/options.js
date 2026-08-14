@@ -55,8 +55,12 @@ async function report() {
     // on every visit", and only the second survives a restart. Someone clicking
     // the obvious first button re-grants forever without knowing there was a
     // choice.
+    // Both branches of the dialog are worth spelling out, because Chrome's own
+    // wording gives no clue about either. "Allow this time" costs a repeat next
+    // session; "Don't allow" costs the folder outright.
     lines.push('When Chrome asks, choose <b>Allow on every visit</b> — ' +
-      '<b>Allow this time</b> lapses when you quit the browser.')
+      '<b>Allow this time</b> lapses when you quit the browser, and ' +
+      '<b>Don’t allow</b> removes the folder entirely, so you would have to choose it again.')
   }
   el.innerHTML = lines.map((l) => `<p>${l}</p>`).join('')
 
@@ -77,6 +81,13 @@ async function report() {
     if (!granted) {
       const renew = document.createElement('button')
       renew.textContent = 'Renew'
+      // Chrome's own dialog gives no hint of what refusing costs, and the cost
+      // is the whole grant: ONE "Don't allow" empties `chosen-objects` and the
+      // folder has to be chosen again. Measured 2026-08-14 — a single refusal,
+      // dismiss_count 1, no embargo yet, folders already gone. Since the dialog
+      // cannot be changed, the warning has to sit on the button that raises it.
+      renew.title = 'Chrome will ask to restore this folder. Choosing "Don\'t allow" '
+        + 'removes it — you would have to pick the folder again.'
       // The HANDLE is still here — that is how we know the folder's name. Only
       // the permission lapsed, and Chrome takes that back with one confirmation
       // on the handle we already hold. Sending people back through
@@ -111,6 +122,11 @@ async function report() {
         // user-initiated chooser rather than a restore prompt — and it still
         // works under embargo. So a failed renew is not an error, it is a
         // signal to ask for the folder again.
+        // Do not offer Renew again for this folder. It has already failed once,
+        // and each attempt spends one of the three dismissals that trigger a
+        // seven-day embargo — while re-picking costs nothing and always works.
+        // Retrying the losing move is exactly what runs the budget down.
+        renew.hidden = true
         pickInstead.hidden = false
         el.innerHTML = '<p><b class="bad">Chrome would not restore that folder.</b> ' +
           'After three refusals it stops asking for seven days, and there is no setting ' +

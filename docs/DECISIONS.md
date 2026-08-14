@@ -2540,3 +2540,50 @@ initiative. A notification that nudges toward the button is a nudge toward the
 dead end, and that trade — a rare lapse made visible, against a permanent
 downgrade made likelier — is not obviously worth taking. Left in for now with
 the loop fixed, but it should be decided deliberately before this ships.
+
+*Amended 2026-08-14, measured cleanly.* The entry above ran two effects
+together. Reset to a clean grant, restarted, pressed **Don't allow** exactly
+once:
+
+    permission_autoblocking_data → FileSystemAccessRestorePermission
+      { "dismiss_count": 1 }          ← no dismissal_embargo_days key
+    file_system_access_chooser_data
+      { "chosen-objects": [] }        ← already empty
+    file_system_last_picked_directory   ← gone entirely
+
+They are separate, and the ORDER matters:
+
+**One "Don't allow" destroys the grant.** Immediately, on the first refusal —
+not after three. `chosen-objects` is emptied and the last-picked directory
+cleared, so every stored handle is orphaned and the folder has to be picked
+again. This is the damage that actually bites people.
+
+**The embargo is secondary.** `dismissal_embargo_days` only appears at
+`dismiss_count = 3`, so three refusals are needed for the seven-day block. An
+explicit "Don't allow" counts toward the DISMISSAL budget, the same as closing
+the bubble with the X.
+
+So the earlier telling — that "Don't allow" left the user embargoed — was two
+findings collapsed into one. The first refusal costs the folders; the third also
+costs persistence for a week.
+
+### The dialog does not say any of this
+
+Chrome asks *"View and edit files from the last time you visited this site"* with
+*Allow this time* / *Allow on every visit* / *Don't allow*. Nothing there
+suggests that refusing DELETES a grant the user already made rather than
+declining for now, and the wording invites a cautious person to refuse. It
+cannot be changed from an extension.
+
+So the warning goes where we do control it — on the button that raises the
+prompt, and in the status line above it. Both branches are spelled out, because
+Chrome's wording gives no clue about either: *Allow this time* costs a repeat
+next session, *Don't allow* costs the folder.
+
+### And a failed renew must not offer Renew again
+
+Retrying is the losing move: it has already failed once, and each attempt spends
+one of the three dismissals, while re-picking costs nothing and always works. So
+a row whose renew failed hides its Renew button and offers only **Choose
+again…**. The budget is small enough that the UI must not invite people to spend
+it on a repeat.
