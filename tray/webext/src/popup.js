@@ -58,9 +58,29 @@ document.getElementById('rows').innerHTML = files + folders
  */
 const lapsed = document.getElementById('renew')
 const hint = document.getElementById('hint')
+const prime = document.getElementById('prime')
 const needsWork = s.folders.some((f) => f.permission !== 'granted')
 lapsed.hidden = !needsWork
 hint.hidden = !needsWork
+
+/**
+ * PRIME BEFORE THE PROMPT. This is the whole strategy for getting the grant
+ * made permanent, and it rests on two facts:
+ *
+ *   · "Allow on every visit" is offered ONLY on Chrome's restore prompt.
+ *     Picking a folder afresh never offers it. So that dialog is the single
+ *     opportunity, and it does not appear on demand.
+ *   · Chrome's three options are three near-identical pills, and its wording
+ *     ("View and edit files from the last time you visited this site") says
+ *     nothing about what the choice costs. "Allow this time" is the obvious,
+ *     cautious-looking pick, and it is the one that guarantees being asked
+ *     again forever.
+ *
+ * Prose cannot point at a button. So the popup draws the dialog, marks the
+ * middle option, and only then offers to raise it — the standard permission
+ * priming pattern, and the only lever an extension actually has here.
+ */
+prime.hidden = !needsWork
 lapsed.addEventListener('click', async () => {
   lapsed.disabled = true
   const dirs = await getGrants()
@@ -104,6 +124,7 @@ lapsed.addEventListener('click', async () => {
       + 'access for this session only.')
     lapsed.hidden = true
     hint.hidden = true
+    prime.hidden = true // nothing to prime for — Chrome did not ask
     return
   }
   location.reload()

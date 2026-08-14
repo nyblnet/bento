@@ -21,13 +21,31 @@
   button.primary:hover { background: #22364f }
   .hint { color: #6b7a8d; font-size: 12px; margin: 2px 0 0 }
   code { background: #eef1f5; padding: 1px 4px; border-radius: 4px; font-size: 12px }
+  /* A small picture of Chrome's own dialog. The three options are
+     indistinguishable in prose — they are three near-identical pills — so the
+     only reliable way to point at the middle one is to draw it. */
+  .prime { padding: 2px 14px 0; }
+  .prime p { margin: 0 0 7px; color: #6b7a8d; font-size: 12.5px }
+  .mock { border: 1px solid #dfe4ea; border-radius: 10px; padding: 9px; background: #fbfcfd }
+  .mock .opt { border-radius: 999px; padding: 5px 9px; font-size: 12px; text-align: center;
+    background: #f0f2f5; color: #8794a4; margin-bottom: 5px }
+  .mock .opt.pick { background: #16273e; color: #fff; font-weight: 600 }
+  .mock .opt:last-child { margin-bottom: 0 }
 </style>
 <header><img src="../icons/icon-48.png" alt=""><b>Bento Tray</b></header>
 <div class="rows" id="rows"></div>
+<div class="prime" id="prime" hidden>
+  <p>Chrome will ask next. Pick the middle one:</p>
+  <div class="mock">
+    <div class="opt">Allow this time</div>
+    <div class="opt pick">Allow on every visit</div>
+    <div class="opt">Don’t allow</div>
+  </div>
+</div>
 <footer>
   <button id="renew" class="primary" hidden>Reconnect folders</button>
-  <p class="hint" id="hint" hidden>Choose <b>Allow on every visit</b> and Chrome stops asking.
-    <b>Don’t allow</b> drops the folder until Chrome offers again.</p>
+  <p class="hint" id="hint" hidden><b>Allow this time</b> works, but Chrome asks again every
+    time you restart. <b>Don’t allow</b> drops the folder until Chrome offers again.</p>
   <button id="open">Settings…</button>
 </footer>
 <script type="module" src="popup.js"></script>

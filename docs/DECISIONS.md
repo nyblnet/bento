@@ -2667,3 +2667,50 @@ join it to the embargo finding, and shipped as fact in copy and in this log. The
 reporter's own sequence — Renew, restart, repeat — is what disproved it. A
 measurement explains what it measured, and nothing about what would have happened
 next.
+
+*2026-08-14, from the source, and the resulting strategy.*
+
+`chrome/browser/file_system_access/chrome_file_system_access_permission_context.cc`
+gates the restore prompt on the grant being DORMANT:
+
+    context_->GetPersistentGrantType(origin_) != PermissionDatabaseType::kDormant
+    context_->IsEligibleToUpgradePermissionRequestToRestorePrompt()
+
+So there is a state machine — no grant / active / dormant — and
+`requestPermission` produces the restore dialog only when there is a dormant
+grant to restore. That, not a cooldown, is why Renew returned silently for two
+sessions after a refusal and then worked: the docs show no backoff or
+rate limit on this prompt. The exact transition rules into dormancy are NOT
+established here; the gate is quoted, the rest is not guessed at.
+
+### The strategy: prime before the prompt
+
+Two facts settle what can be done, and neither depends on the unresolved part:
+
+1. **"Allow on every visit" exists only on the restore prompt.** Picking a
+   folder afresh grants access without offering persistence. So that dialog is
+   the single opportunity, it cannot be summoned on demand, and a wasted one
+   costs at least a restart.
+2. **The state is detectable.** At browser startup, before any user action,
+   `queryPermission` returns `granted` when extended permission is live and
+   `prompt` when the grant is session-scoped. `onStartup` already runs that
+   check, so the extension knows — silently and reliably — that someone is stuck
+   on "Allow this time".
+
+Chrome's dialog is three near-identical pills, and its wording ("View and edit
+files from the last time you visited this site") says nothing about what any of
+them costs. "Allow this time" is the cautious-looking choice and the one that
+guarantees being asked forever. Prose cannot point at a button, so both surfaces
+now DRAW the dialog with the middle option marked, and only then offer to raise
+it.
+
+That is the whole lever. There is no API that grants persistence, no way to
+influence which options Chrome shows, and no way to re-ask sooner. What is left
+is making sure that when the one prompt appears, the user already knows which
+button they came for.
+
+**Corollary for the notification.** Its job changes: not "a folder lapsed" but
+"the one prompt that can fix this permanently is available now". That is a
+better reason to interrupt than the original one, and it argues for keeping it —
+provided it always lands on the primed popup rather than raising the prompt
+directly.

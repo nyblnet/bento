@@ -20,6 +20,7 @@ import { getGrants, putGrants, status } from './status.js'
 
 const el = document.getElementById('state')
 const listEl = document.getElementById('folders')
+const primeEl = document.getElementById('prime')
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
 
 async function report() {
@@ -64,6 +65,13 @@ async function report() {
       'more than one restart.')
   }
   el.innerHTML = lines.map((l) => `<p>${l}</p>`).join('')
+
+  // Show the dialog's shape whenever one is about to be raised — which is any
+  // time a folder is not granted, since both the "Add a folder" flow and Renew
+  // end in Chrome asking. Hidden once everything is granted: at that point the
+  // user has either taken "every visit" or is about to be asked again anyway,
+  // and a permanent instruction panel is just furniture.
+  primeEl.hidden = !s.folders.some((f) => f.permission !== 'granted') && s.folders.length > 0
 
   // One row per folder. The per-folder state is the point: with several grants,
   // a single lapsed one must not read as "the extension is broken".
