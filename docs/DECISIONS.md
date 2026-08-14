@@ -2492,3 +2492,51 @@ cost of a careless dismissal is not a retry, it is the feature.
 Whether the embargo expires on its own (`dismissal_embargo_days` holds what
 looks like a timestamp, not a count of days) and whether re-picking clears it.
 Worth knowing before the store listing claims anything about recovery.
+
+*Amended 2026-08-14, from the Chromium source.* The embargo has numbers, and
+they change how the UI must behave.
+
+`components/permissions/permission_decision_auto_blocker.cc`:
+
+- `kDefaultDismissalsBeforeBlock = 3`
+- `kDefaultEmbargoDays = 7`
+- `FILE_SYSTEM_ACCESS_RESTORE_PERMISSION` is in the auto-blocked content types
+
+`IsUnderEmbargo` is a timestamp comparison —
+`current_time < base::Time::FromInternalValue(*found) + offset` — so the stored
+value is the embargo's START (microseconds since the Windows epoch) and the
+duration is applied at comparison time. **It expires on its own after seven
+days.** The field name `dismissal_embargo_days` describes what the number is
+for, not what it holds; reading it as a duration was wrong.
+
+**Nothing an extension can call lifts it.** `RemoveEmbargoAndResetCounts` is
+C++-internal, reached from browser UI paths, and `chrome.browsingData` has no
+`siteSettings` type at all — its `origins` filter covers cookies, cache and
+storage only. The user-facing escapes are: wait it out, *Clear browsing data →
+Site settings* (profile-wide, so it resets every site's permissions), edit
+Preferences directly, or move to a different extension id.
+
+### The cost is persistence, not delay
+
+The restore prompt is ALSO the only place **Allow on every visit** is offered.
+Picking a folder afresh grants access without offering it. So an embargo does
+not merely postpone a reconnect — for seven days it removes the user's ability
+to make the grant permanent at all, and the extension will lapse on every
+restart with nothing on screen explaining why.
+
+### Which makes three dismissals a budget to spend carefully
+
+The popup's Reconnect looped over every lapsed folder calling
+`requestPermission` on each, so one impatient click on a two-folder setup spent
+two of the three. That is an embargo accelerator, and it is the likely reason
+the reporter reached the limit within minutes of the button existing.
+
+Now: **one prompt per click, stopping at the first refusal.** Whatever made
+someone refuse the first prompt applies to the second, so continuing buys
+nothing but embargo.
+
+The same reasoning condemns anything that raises the prompt on our own
+initiative. A notification that nudges toward the button is a nudge toward the
+dead end, and that trade — a rare lapse made visible, against a permanent
+downgrade made likelier — is not obviously worth taking. Left in for now with
+the loop fixed, but it should be decided deliberately before this ships.

@@ -113,8 +113,13 @@ async function report() {
         // signal to ask for the folder again.
         pickInstead.hidden = false
         el.innerHTML = '<p><b class="bad">Chrome would not restore that folder.</b> ' +
-          'It can stop offering to, and gives no way to turn that back on. ' +
-          'Choosing the folder again works instead — it is a different permission.</p>'
+          'After three refusals it stops asking for seven days, and there is no setting ' +
+          'anywhere that turns it back on.</p>' +
+          '<p><b>Choose again</b> still works — picking a folder is a different permission — ' +
+          'but it grants access for this session only. The option to make it permanent ' +
+          '(<b>Allow on every visit</b>) appears solely on the prompt that has stopped ' +
+          'appearing, so until it resumes the folder must be chosen again each time Chrome ' +
+          'restarts.</p>'
       })
       row.appendChild(renew)
 

@@ -65,11 +65,26 @@ lapsed.addEventListener('click', async () => {
   lapsed.disabled = true
   const dirs = await getGrants()
   let ok = 0
+  // ONE PROMPT PER CLICK, and STOP at the first refusal.
+  //
+  // Chromium embargoes a permission after `kDefaultDismissalsBeforeBlock = 3`
+  // dismissals, for `kDefaultEmbargoDays = 7` days
+  // (components/permissions/permission_decision_auto_blocker.cc), and
+  // FILE_SYSTEM_ACCESS_RESTORE_PERMISSION is on that list. The restore prompt
+  // is ALSO the only one that offers "Allow on every visit", so an embargo does
+  // not merely delay a reconnect — it removes the user's ability to make the
+  // grant persistent for a week, and nothing an extension can call lifts it.
+  //
+  // Three dismissals is a small budget. This loop used to raise a prompt for
+  // every lapsed folder, so a single impatient click on a two-folder setup
+  // spent two of them. Whatever made the user refuse the first prompt applies
+  // to the second, so continuing only buys an embargo.
   for (const dir of dirs) {
     try {
       if (await dir.queryPermission({ mode: 'readwrite' }) === 'granted') { ok++; continue }
-      if (await dir.requestPermission({ mode: 'readwrite' }) === 'granted') ok++
-    } catch { /* declined, or the handle is gone — the row will say so */ }
+      if (await dir.requestPermission({ mode: 'readwrite' }) !== 'granted') break
+      ok++
+    } catch { break }
   }
   if (ok) await putGrants(dirs)
   await setLapsedBadge()
@@ -84,8 +99,9 @@ lapsed.addEventListener('click', async () => {
   // button is broken" and invites the extra dismissals that cause the embargo.
   if (!ok) {
     document.getElementById('rows').innerHTML = row('bad', 'Chrome would not restore the folder',
-      'It can stop offering to, and gives no way to turn that back on. Choosing the folder '
-      + 'again in Settings works instead — it is a different permission.')
+      'After three refusals Chrome stops asking for a week, and nothing here can change that. '
+      + 'Choosing the folder again in Settings still works — it is a different permission — '
+      + 'though it grants access for this session rather than permanently.')
     lapsed.hidden = true
     hint.hidden = true
     return
