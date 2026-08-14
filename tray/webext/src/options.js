@@ -41,6 +41,14 @@ async function report() {
   if (!s.folders.length) {
     lines.push('<b>No folders yet.</b> Choose the folder your documents live in. ' +
       'You can add more than one, and a folder covers everything inside it.')
+  } else if (s.folders.every((f) => f.permission === 'granted')) {
+    // Where the permission actually lives, said once. Chrome offers no way to
+    // reach it from an extension page — the address-bar chip on this page
+    // reports "You're viewing an extension page" and nothing else — so anyone
+    // wanting to take access back has no route to discover on their own.
+    lines.push('<span style="color:#586a80">Removing a folder here forgets it, but Chrome keeps ' +
+      'its own permission for this extension. To take that back, use ' +
+      '<code>chrome://settings/content/filesystemwrite</code>.</span>')
   } else if (s.folders.some((f) => f.permission !== 'granted')) {
     // The one instruction worth giving: Chrome asks "Allow this time" or "Allow
     // on every visit", and only the second survives a restart. Someone clicking
@@ -89,6 +97,15 @@ async function report() {
 
     const drop = document.createElement('button')
     drop.textContent = 'Remove'
+    // Removing FORGETS the folder; it does not revoke anything. Chrome keeps its
+    // own file-editing permission for this extension, keyed to the origin, and
+    // that outlives both this list and the extension itself — observed
+    // 2026-08-14: reinstalling from the same directory (same path, so the same
+    // extension id) came back still granted. So re-adding a removed folder
+    // usually will not ask again. Said out loud below, because a button called
+    // "Remove" reads like a revoke and this one is not.
+    drop.title = 'Forgets this folder. Chrome may still remember the permission, ' +
+      'so adding it back may not ask again — reset it in chrome://settings/content/filesystemwrite'
     drop.onclick = () => guard(async () => {
       const dirs = await getGrants()
       dirs.splice(i, 1)

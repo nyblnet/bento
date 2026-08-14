@@ -141,3 +141,23 @@ A small promo tile (440×280) is optional but improves placement.
       reading is better than a handled unknown)
 - [ ] Screenshots
 - [ ] Developer account (one-off fee)
+
+### Where the folder permission lives, and how to take it back
+
+Bento Tray never has standing access to your disk. It can only write inside
+folders you pick, and only to the file a page was actually opened from.
+
+Two separate things are remembered, and it matters that they are separate:
+
+- **the folders you chose** — stored by the extension. **Remove** forgets one.
+- **Chrome's permission to edit files** — stored by *Chrome*, against this
+  extension's identity. Remove does not touch it, and it survives the extension
+  being uninstalled and installed again.
+
+So re-adding a folder you removed often will not ask you again. To take the
+permission itself back, use `chrome://settings/content/filesystemwrite`. Chrome
+offers no route to it from an extension page: the permission chip in the address
+bar reports only "You're viewing an extension page".
+
+Removing the permission does not, by itself, stop anything — without a stored
+folder there is nothing to write to. Both have to be present for a save to land.
