@@ -1,17 +1,25 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Granting happens here and nowhere else: `showDirectoryPicker` needs a user
-// gesture, and a save is the wrong moment to discover there isn't one. The
-// service worker only ever reads the grant it finds.
+// Granting happens here and nowhere else: `showDirectoryPicker` and
+// `requestPermission` both need a user gesture, and a save is the wrong moment
+// to discover there isn't one. The service worker only ever READS the grants it
+// finds — it never prompts, because it cannot.
 //
 // The popup and this page read the SAME status module, so they cannot tell the
 // user different stories about whether a save will land.
+//
+// WHY A LIST. One folder was never the shape of anyone's work — decks live
+// under clients, under projects, on the Desktop. Since `background.js` resolves
+// by ROUTE rather than by searching, a grant's size and the number of grants
+// both stop mattering, so there is no longer a reason to allow only one. The
+// same change is what makes granting a home directory reasonable: "everywhere"
+// is just a big folder.
 
-import { getGrant, putGrant, status } from './status.js'
+import { getGrants, putGrants, status } from './status.js'
 
 const el = document.getElementById('state')
-const renewB = document.getElementById('renew')
+const listEl = document.getElementById('folders')
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
 
 async function report() {
@@ -30,62 +38,77 @@ async function report() {
     lines.push('<b class="ok">Local file access is on.</b>')
   }
 
-  if (!s.folder) {
-    lines.push('<b>No folder granted yet.</b> Choose the folder your decks live in.')
-  } else if (s.permission === 'granted') {
-    // Do not promise in-place saving while file access is off — that promise is
-    // false, and printing it under "nothing works until it is on" is worse than
-    // saying nothing.
-    lines.push(s.files === false
-      ? `<b>Folder: ${esc(s.folder)}</b> — ready, but nothing saves in place until file access is on.`
-      : `<b class="ok">Folder: ${esc(s.folder)}</b> — decks in here save in place, with no dialog.`)
-  } else {
-    // The HANDLE is still here — that is how we know the folder's name. Only
-    // the permission lapsed, and Chrome takes that back with one confirmation
-    // on the handle we already hold. Sending people back through
-    // showDirectoryPicker made them re-find the folder every time, which is a
-    // filesystem browse to answer a yes/no question.
-    lines.push(`<b class="bad">Folder: ${esc(s.folder)} — needs renewing.</b> ` +
-      'Chrome drops the permission when the extension restarts. ' +
-      '<b>Renew</b> restores it in one click — you do not have to find the folder again.')
+  if (!s.folders.length) {
+    lines.push('<b>No folders yet.</b> Choose the folder your documents live in. ' +
+      'You can add more than one, and a folder covers everything inside it.')
   }
-  renewB.hidden = !(s.folder && s.permission !== 'granted')
-
   el.innerHTML = lines.map((l) => `<p>${l}</p>`).join('')
+
+  // One row per folder. The per-folder state is the point: with several grants,
+  // a single lapsed one must not read as "the extension is broken".
+  listEl.innerHTML = ''
+  s.folders.forEach((f, i) => {
+    const row = document.createElement('div')
+    row.className = 'row'
+    const granted = f.permission === 'granted'
+    row.innerHTML =
+      `<span class="dot ${granted ? 'ok' : 'bad'}"></span>` +
+      `<b>${esc(f.name)}</b> ` +
+      `<span class="note">${granted
+        ? (s.files === false ? 'ready — waiting on file access' : 'saves in place, no dialog')
+        : 'needs renewing'}</span>`
+
+    if (!granted) {
+      const renew = document.createElement('button')
+      renew.textContent = 'Renew'
+      // The HANDLE is still here — that is how we know the folder's name. Only
+      // the permission lapsed, and Chrome takes that back with one confirmation
+      // on the handle we already hold. Sending people back through
+      // showDirectoryPicker made them re-find the folder to answer yes/no.
+      renew.onclick = () => guard(async () => {
+        const dirs = await getGrants()
+        const dir = dirs[i]
+        if (!dir) return
+        if (await dir.requestPermission({ mode: 'readwrite' }) === 'granted') await putGrants(dirs)
+      })
+      row.appendChild(renew)
+    }
+
+    const drop = document.createElement('button')
+    drop.textContent = 'Remove'
+    drop.onclick = () => guard(async () => {
+      const dirs = await getGrants()
+      dirs.splice(i, 1)
+      await putGrants(dirs)
+    })
+    row.appendChild(drop)
+    listEl.appendChild(row)
+  })
 }
 
-document.getElementById('pick').onclick = async () => {
+/** Run an action, then re-report. Errors land in the status block rather than
+ *  the console, because a permission failure here is the user's to act on. */
+async function guard(fn) {
   try {
-    const dir = await window.showDirectoryPicker({ mode: 'readwrite' })
-    await dir.requestPermission({ mode: 'readwrite' })
-    await putGrant(dir)
+    await fn()
     await report()
   } catch (e) {
+    if (e?.name === 'AbortError') return report() // they closed the picker
     el.innerHTML = `<p><b class="bad">${esc(e.name)}</b>: ${esc(e.message)}</p>`
   }
 }
-/**
- * Take the permission back on the folder we already hold.
- *
- * `requestPermission` needs a user gesture, which is why this is a button and
- * not something `report()` does on load — and why the service worker must never
- * attempt it (`background.js resolve` queries only). A click here is the
- * gesture; Chrome shows one Allow/Block confirmation naming the folder.
- *
- * The handle is re-put afterwards for the same reason it is stored at all: the
- * grant that matters is the one the service worker reads, and re-writing it is
- * cheap insurance against a handle that has been replaced rather than renewed.
- */
-renewB.onclick = async () => {
-  try {
-    const dir = await getGrant()
-    if (!dir) return report() // nothing to renew — the pick button is the answer
-    const perm = await dir.requestPermission({ mode: 'readwrite' })
-    if (perm === 'granted') await putGrant(dir)
-    await report()
-  } catch (e) {
-    el.innerHTML = `<p><b class="bad">${esc(e.name)}</b>: ${esc(e.message)}</p>`
+
+document.getElementById('pick').onclick = () => guard(async () => {
+  const dir = await window.showDirectoryPicker({ mode: 'readwrite' })
+  await dir.requestPermission({ mode: 'readwrite' })
+  const dirs = await getGrants()
+  // Adding the same folder twice is a no-op rather than an error — it is an
+  // easy thing to do with several folders, and two entries for one folder would
+  // then need removing twice.
+  for (const existing of dirs) {
+    if (await existing.isSameEntry(dir)) return
   }
-}
+  await putGrants([...dirs, dir])
+})
 document.getElementById('check').onclick = report
 void report()

@@ -11,13 +11,23 @@
   #state p { margin: .7rem 0; }
   .ok { color: #1d6b39 } .bad { color: #a3322a }
   code { background: #e7ebf0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px }
+  #folders { margin-top: 1rem; }
+  #folders .row { display: flex; align-items: center; gap: .5rem; padding: .55rem .8rem;
+    border: 1px solid #e2e7ee; border-radius: 8px; margin-bottom: .45rem; }
+  #folders .row b { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #folders .note { color: #586a80; font-size: 13px; flex: 1 1 auto; }
+  #folders button { padding: .25rem .6rem; font-size: 13px; }
+  .dot { width: .6rem; height: .6rem; border-radius: 50%; flex: none; }
+  .dot.ok { background: #2e9e57 } .dot.bad { background: #c2483d }
 </style>
 <h1><img src="../icons/icon-48.png" alt="" width="22" height="22" style="vertical-align:-4px;border-radius:5px"> Bento Tray</h1>
 <p class="sub">
-  Grant the folder your decks live in, once. After that, ⌘S on a deck you opened
-  by double-clicking writes straight back to the file — no destination prompt.
+  Grant the folders your documents live in. After that, ⌘S on a document you
+  opened by double-clicking writes straight back to the file — no destination
+  prompt. A folder covers everything inside it, so one broad folder is often
+  enough; add as many as you like.
 </p>
-<p><button id="renew" hidden>Renew access to this folder</button>
-   <button id="pick">Choose your decks folder…</button> <button id="check">Check</button></p>
+<p><button id="pick">Add a folder…</button> <button id="check">Check</button></p>
 <div id="state">…</div>
+<div id="folders"></div>
 <script type="module" src="options.js"></script>

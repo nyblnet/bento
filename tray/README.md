@@ -98,6 +98,56 @@ mean more than "any document that saves the way Bento does":
   picker per save would punish an app that saves often, and a download cannot
   overwrite the user's original anyway — that is what the FSA path is for.
 
+### Finding the sender's file: route, don't search
+
+A `FileSystemDirectoryHandle` knows its own **name** but not its path, and no
+API exposes one — so a grant and a `sender.url` cannot be compared directly.
+The webext host used to resolve by walking the granted tree looking for a
+matching filename, depth-capped at 4 and declining whenever two files shared a
+name.
+
+It no longer searches. **A directory's name must appear in the path of every
+file inside it**, so the name locates the split point in the sender's path and
+everything after it is the route: one `getDirectoryHandle` per segment, then
+`getFileHandle`. O(path depth), nothing enumerated. Measured: a file inside a
+500-entry grant resolves with **zero directory scans**.
+
+Three things follow, and they are the reason for it:
+
+- a grant can be **any size**. A home directory costs what a decks folder costs,
+  which is what makes "grant everything" a reasonable thing to offer.
+- **several grants** are cheap — each attempt is a few lookups, so the store
+  holds a list (`dirs`), not one folder.
+- **two documents sharing a filename stop being ambiguous.** The old walk found
+  both and declined; only one route leads to one file. Anyone with per-client
+  folders hit that on every save.
+
+The split point is checked, not guessed: a wrong one fails at the first missing
+segment, and `resolve()` re-verifies the file it lands on against the sender's
+path regardless (the identity check that stopped a same-named file elsewhere
+from being overwritten). A grant covering a whole home directory raises the cost
+of a resolution bug, so that check matters more, not less.
+
+`findByName` survives as a fallback for paths the route cannot place.
+
+### The grant lapses on every browser restart
+
+MEASURED 2026-08-14: a `showDirectoryPicker` grant survives service-worker
+eviction — which is constant, and why nothing is cached between messages — but
+Chrome drops it back to `prompt` when the extension restarts **and when the
+browser restarts**. The HANDLE survives in IndexedDB; only the permission goes.
+
+So the recovery is `requestPermission()` on the handle already held — one
+confirmation, no folder to re-find — and it must happen on an **extension page**,
+because it needs a user gesture and the service worker has none. That is what
+the per-folder **Renew** button is. `background.js` only ever queries.
+
+One click per browser session is the ceiling for a pure extension. Chrome's
+persistent File System Access permissions are scoped to installed web apps, and
+`chrome.downloads` can only write inside the downloads folder — neither reaches
+an arbitrary folder. Durable write access needs a native messaging host, which
+is a separate decision because it changes how the thing is distributed.
+
 ### Which file a save targets
 
 Bento only reaches a picker when it holds **no handle**; afterwards ⌘S, autosave

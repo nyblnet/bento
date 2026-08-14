@@ -2310,3 +2310,68 @@ satisfied the `instanceof` branch but has no `.text()` — so every `close()`
 rejected and the half of the bridge that actually sends bytes had never been
 exercised, across 24 green checks. Mocks shaped to make a test pass test the
 mock.
+
+---
+
+## 2026-08-14 — resolve by route, not by search (and the grant lapses every restart)
+
+**MEASURED, on the reporter's machine:** a `showDirectoryPicker` grant survives
+service-worker eviction, but Chrome drops it to `prompt` when the browser
+restarts. The HANDLE survives in IndexedDB — the options page still knows the
+folder's name — so only the permission is gone, and `requestPermission()` on the
+held handle takes it back with one confirmation. That must run on an extension
+PAGE (it needs a user gesture; the worker has none), which is what the
+per-folder **Renew** button is.
+
+**One click per browser session is the ceiling for a pure extension.** Chrome's
+persistent File System Access permissions are scoped to installed web apps, and
+`chrome.downloads` writes only inside the downloads folder. Durable access needs
+a native messaging host — deferred, because it changes distribution from
+"install from the Web Store" to "ship a signed binary per platform".
+
+**Resolution no longer searches.** A `FileSystemDirectoryHandle` knows its name
+but not its path, so the host walked the granted tree matching filenames —
+depth-capped at 4, declining whenever two files shared a name. But a directory's
+NAME must appear in the path of every file inside it. So the name locates the
+split point in the sender's path and the rest is a route: `getDirectoryHandle`
+per segment, then `getFileHandle`. Measured: a file inside a 500-entry grant
+resolves with ZERO directory scans.
+
+That one change is what makes the rest possible:
+
+- **any grant size.** A home directory costs what a decks folder costs, so
+  "grant everything" stops being a performance question.
+- **several grants**, since each attempt is a few lookups. The store holds a
+  list (`dirs`); the old `dir` key is still read so an upgrade does not silently
+  drop the folder someone already granted.
+- **two documents sharing a filename stop being ambiguous** — a BEHAVIOUR
+  CHANGE, and the old decline was a limitation rather than a safety property.
+  Only one route leads to one file. Anyone with per-client folders hit the old
+  decline on every save.
+
+The route is checked, not guessed: a wrong split point fails at the first
+missing segment, and `resolve()` re-verifies what it landed on against the
+sender's path regardless. A grant covering a home directory raises the cost of a
+resolution bug, so that check matters MORE now, not less.
+
+**A file reachable through two nested grants is one file, not an ambiguity** —
+`isSameEntry` decides, since it is the only thing that can tell "same file, two
+routes" from "two files, same name". Two genuinely different files reachable by
+the same route still decline.
+
+**A lapsed grant is reported distinctly from a missing one**, and only when NO
+grant could serve the file — with several folders, one lapsing must not mask the
+others, and the two need opposite things from the user: one click, or a folder.
+
+**Guards.** `scripts/test-webext-background.ts` (57 checks): per-grant
+resolution, the lapsed-among-healthy case, nested grants, two-different-files,
+and a 500-entry grant asserting `enumerations === 0` — the last is the one that
+would catch a silent return to searching. Plus a source-level gate that
+`background.js` and `status.js` agree on the database, store and keys: they open
+IndexedDB independently and cannot be loaded into one realm, so drift would mean
+the options page writes grants the worker never sees — UI green, every save
+prompting, nothing reporting a fault.
+
+*Found in passing:* the rig carried a LITERAL NUL byte in a test case, which
+made `grep` treat the whole file as binary and hid it from ordinary tooling. It
+is now written as a ` ` escape.

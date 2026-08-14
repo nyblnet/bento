@@ -23,21 +23,25 @@ const files = s.files === true
     : row('meh', 'Local files — unknown',
         'This browser will not say. If saves still prompt, check <b>Allow access to file URLs</b>.')
 
-// The folder row must not promise in-place saving while the OTHER precondition
-// is failing. Seeing "decks in here save in place, with no dialog" directly
-// under "nothing works until file access is on" is two green-ish signals
+// One row per folder. The rows must not promise in-place saving while the OTHER
+// precondition is failing: "saves in place, with no dialog" directly under
+// "nothing works until file access is on" is two green-ish signals
 // contradicting each other, and the reassuring one is the false one.
-const folder = s.permission === 'granted'
-  ? row(s.files === false ? 'meh' : 'ok', `Folder: ${esc(s.folder)}`,
-      s.files === false
-        ? 'Ready, but nothing saves in place until local file access is on.'
-        : 'Decks in here save in place, with no dialog.')
-  : s.folder
-    ? row('bad', `Folder: ${esc(s.folder)} — needs renewing`,
-        'Chrome drops the permission when the extension restarts. <b>Renew</b> in Settings restores it in one click — the folder is still remembered.')
-    : row('meh', 'No folder yet', 'Choose the folder your decks live in, once.')
+//
+// And with several folders, a summary would hide the thing worth knowing —
+// whether saves land depends on WHICH document, so each folder answers for
+// itself rather than being averaged into one verdict.
+const folders = !s.folders.length
+  ? row('meh', 'No folders yet', 'Choose the folder your documents live in. You can add several.')
+  : s.folders.map((f) => f.permission === 'granted'
+    ? row(s.files === false ? 'meh' : 'ok', esc(f.name),
+        s.files === false
+          ? 'Ready, but nothing saves in place until local file access is on.'
+          : 'Documents in here save in place, with no dialog.')
+    : row('bad', `${esc(f.name)} — needs renewing`,
+        'Chrome drops the permission when the extension restarts. <b>Renew</b> in Settings restores it in one click — the folder is still remembered.')).join('')
 
-document.getElementById('rows').innerHTML = files + folder
+document.getElementById('rows').innerHTML = files + folders
 document.getElementById('open').addEventListener('click', () => {
   chrome.runtime.openOptionsPage()
   window.close()

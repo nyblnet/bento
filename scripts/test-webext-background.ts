@@ -24,6 +24,7 @@
 // Both are checked by construction here: a write is issued with no preceding
 // claim at all, which is exactly what a service worker restart looks like.
 
+import { readFileSync } from 'node:fs'
 import { pathFromSender, findByName, claim, write, resolve, backup, backupNameFor } from '../tray/webext/src/background.js'
 
 let failures = 0
@@ -47,6 +48,10 @@ function fileHandle(name: string, rel?: string[]) {
     kind: 'file' as const,
     name,
     __rel: rel ?? [name],
+    /** Identity, not equality: the real API answers "same file on disk?", which
+     *  is how one file reached through two nested grants is told apart from two
+     *  different files that merely share a name. */
+    async isSameEntry(other: any) { return other === this || other?.__id === (this as any).__id },
     async createWritable() {
       let buf = ''
       return {
@@ -57,10 +62,14 @@ function fileHandle(name: string, rel?: string[]) {
   }
 }
 
-function dirHandle(tree: Record<string, any>, perm = 'granted', base: string[] = []) {
+// `base` is where this directory sits BELOW the grant root, which is what
+// resolve() reports. `rootName` is the grant's own folder name — the thing
+// locateIn matches against the sender's path, and the two are independent: a
+// grant named "Documents" has base [] and still has a name.
+function dirHandle(tree: Record<string, any>, perm = 'granted', base: string[] = [], rootName = 'Decks') {
   return {
     kind: 'directory' as const,
-    name: base.at(-1) ?? 'Decks',
+    name: base.at(-1) ?? rootName,
     async queryPermission() { return perm },
     /** The real API: path segments from THIS directory down to `child`, or null. */
     async resolve(child: any) {
@@ -104,7 +113,13 @@ ok(pathFromSender({ url: 'file:///Users/x/My%20Decks/Q3.bento.html' }) === '/Use
 
 // ---- 2. resolution inside the grant ----------------------------------------
 const deps = (tree: Record<string, any>, perm = 'granted') => ({
-  readGrant: async () => dirHandle(tree, perm),
+  readGrants: async () => [dirHandle(tree, perm)],
+  findByName,
+})
+
+/** Several granted folders at once, each with its own permission state. */
+const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; name?: string }>) => ({
+  readGrants: async () => grants.map((g) => dirHandle(g.tree, g.perm ?? 'granted', g.name ? [g.name] : [])),
   findByName,
 })
 
@@ -120,14 +135,23 @@ const deps = (tree: Record<string, any>, perm = 'granted') => ({
     'a file outside the grant is declined, not guessed at')
 }
 {
-  // the same name in two subfolders — the case a real Decks folder hits
+  // the same name in two subfolders — the case a real Decks folder hits.
+  //
+  // THIS USED TO DECLINE, and the decline was a limitation, not a safety
+  // property: the old code searched by filename, found both, and could not tell
+  // which one the sender was. Routing by path reaches exactly one, because only
+  // one route leads to it — and the identity check still verifies what it
+  // landed on. Anyone with client folders hit this on every save.
   const tree = {
     ClientA: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['ClientA', 'Q3.bento.html']) },
     ClientB: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['ClientB', 'Q3.bento.html']) },
   }
-  const r = await resolve(senderFor('/Users/x/Decks/ClientA/Q3.bento.html'), deps(tree))
-  ok(r.ok === false && /ambiguous/.test(r.reason!),
-    'a duplicate file name is declined rather than written to the wrong one')
+  const a = await resolve(senderFor('/Users/x/Decks/ClientA/Q3.bento.html'), deps(tree))
+  ok(a.ok === true && a.within === '/ClientA/Q3.bento.html',
+    'two decks sharing a name both save — each to its own file, not declined')
+  const b = await resolve(senderFor('/Users/x/Decks/ClientB/Q3.bento.html'), deps(tree))
+  ok(b.ok === true && b.within === '/ClientB/Q3.bento.html',
+    'and the other one resolves to the other file')
 }
 {
   const tree = { 'Q3.bento.html': fileHandle('Q3.bento.html') }
@@ -223,7 +247,7 @@ const deps = (tree: Record<string, any>, perm = 'granted') => ({
     ['Other.v1-backup.bento.html', 'a name derived from a DIFFERENT file'],
     ['Q3.v1-backup.txt', 'a non-document extension'],
     ['Q3.v1 backup.bento.html', 'a name with a space'],
-    ['Q3. .bento.html', 'an embedded NUL'],
+    ['Q3.\u0000.bento.html', 'an embedded NUL'],
   ] as const) {
     ok(backupNameFor(own, bad) === null, `${why} is refused (${JSON.stringify(bad)})`)
   }
@@ -284,6 +308,131 @@ const deps = (tree: Record<string, any>, perm = 'granted') => ({
     'Q3.v1-backup.bento.html', deps({ 'Q3.bento.html': fileHandle('Q3.bento.html') }))
   ok(r.ok === false && /not a local file/.test(r.reason!), 'an http page cannot create a backup')
   ok(written.size === 0, 'and nothing was written')
+}
+
+// ---- 7. several granted folders --------------------------------------------
+// One folder was never the shape of anyone's work: decks live under clients,
+// under projects, on the Desktop. What matters is that adding folders does not
+// weaken the identity guarantee — every grant is tried, and the winner is still
+// verified against the sender's own path.
+{
+  const decks = { 'Q3.bento.html': fileHandle('Q3.bento.html') }
+  const work = { 'Plan.bento.html': fileHandle('Plan.bento.html') }
+  const r = await resolve(senderFor('/Users/x/Decks/Q3.bento.html'),
+    multiDeps({ tree: decks }, { tree: work }))
+  ok(r.ok === true && r.name === 'Q3.bento.html', 'a file in the FIRST granted folder resolves')
+}
+{
+  // a second folder with its own name — the ordinary two-folder case
+  const decks = { 'Q3.bento.html': fileHandle('Q3.bento.html') }
+  const work = { 'Plan.bento.html': fileHandle('Plan.bento.html') }
+  const grants = {
+    readGrants: async () => [dirHandle(decks, 'granted', [], 'Decks'), dirHandle(work, 'granted', [], 'Work')],
+    findByName,
+  }
+  const r = await resolve(senderFor('/Users/x/Work/Plan.bento.html'), grants)
+  ok(r.ok === true && r.name === 'Plan.bento.html', 'a file in the SECOND granted folder resolves')
+  const miss = await resolve(senderFor('/Users/x/Elsewhere/Other.bento.html'), grants)
+  ok(miss.ok === false && /not in the granted folder/.test(miss.reason!),
+    'a file in neither folder is still declined')
+}
+{
+  // ONE lapsed grant must not mask the others — the failure that would make
+  // adding a folder look like breaking the extension
+  const decks = { 'Q3.bento.html': fileHandle('Q3.bento.html') }
+  const work = { 'Plan.bento.html': fileHandle('Plan.bento.html') }
+  const grants = {
+    readGrants: async () => [dirHandle(decks, 'prompt', [], 'Decks'), dirHandle(work, 'granted', [], 'Work')],
+    findByName,
+  }
+  const good = await resolve(senderFor('/Users/x/Work/Plan.bento.html'), grants)
+  ok(good.ok === true, 'a healthy grant still serves while another has lapsed')
+  const bad = await resolve(senderFor('/Users/x/Decks/Q3.bento.html'), grants)
+  ok(bad.ok === false && /renewing/.test(bad.reason!),
+    'and a file in the lapsed one reports that it needs renewing, not that it is missing')
+}
+{
+  // nested grants: the same file reached by two routes is ONE file, not an
+  // ambiguity. isSameEntry is the only thing that can tell those apart.
+  // ONE file on disk, seen through two grants — so it presents as two handles
+  // with different relative paths but the same identity, which is exactly what
+  // Chrome does here.
+  const viaOuter = fileHandle('Q3.bento.html', ['Decks', 'Q3.bento.html'])
+  ;(viaOuter as any).__id = 'same-file'
+  const viaInner = fileHandle('Q3.bento.html')
+  ;(viaInner as any).__id = 'same-file'
+  const grants = {
+    readGrants: async () => [
+      dirHandle({ Decks: { 'Q3.bento.html': viaOuter } }, 'granted', [], 'Documents'),
+      dirHandle({ 'Q3.bento.html': viaInner }, 'granted', [], 'Decks'),
+    ],
+    findByName,
+  }
+  const r = await resolve(senderFor('/Users/x/Documents/Decks/Q3.bento.html'), grants)
+  ok(r.ok === true, 'a file inside two nested grants resolves rather than being called ambiguous')
+}
+{
+  // and two genuinely DIFFERENT files reachable at the same path is the case
+  // that must still decline
+  const a = fileHandle('Q3.bento.html'); (a as any).__id = 'A'
+  const b = fileHandle('Q3.bento.html'); (b as any).__id = 'B'
+  const grants = {
+    readGrants: async () => [
+      dirHandle({ 'Q3.bento.html': a }, 'granted', [], 'Decks'),
+      dirHandle({ 'Q3.bento.html': b }, 'granted', [], 'Decks'),
+    ],
+    findByName,
+  }
+  const r = await resolve(senderFor('/Users/x/Decks/Q3.bento.html'), grants)
+  ok(r.ok === false && /ambiguous/.test(r.reason!),
+    'two different files reachable by the same route are declined, not guessed at')
+}
+{
+  // a grant with no folders at all
+  const r = await resolve(senderFor('/Users/x/Decks/Q3.bento.html'), { readGrants: async () => [], findByName })
+  ok(r.ok === false && /no folder granted/.test(r.reason!), 'no grants at all is reported as such')
+}
+
+// ---- 8. a big grant costs nothing to search --------------------------------
+// The point of routing rather than walking: granting a home directory has to be
+// as cheap as granting a decks folder, or "everywhere" is not offerable. This
+// counts DIRECTORY ENUMERATIONS — the thing that made a large grant unusable.
+{
+  let enumerations = 0
+  const wide: Record<string, any> = { Decks: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Decks', 'Q3.bento.html']) } }
+  for (let i = 0; i < 500; i++) wide[`junk${i}`] = { [`f${i}.txt`]: fileHandle(`f${i}.txt`) }
+  const counting = dirHandle(wide, 'granted', [], 'home')
+  const origEntries = counting.entries.bind(counting)
+  ;(counting as any).entries = async function* (...a: any[]) { enumerations++; yield* origEntries(...a) }
+  const r = await resolve(senderFor('/Users/x/home/Decks/Q3.bento.html'),
+    { readGrants: async () => [counting], findByName })
+  ok(r.ok === true, 'a file inside a 500-entry grant resolves')
+  ok(enumerations === 0, `and nothing was enumerated to find it (${enumerations} directory scans)`)
+}
+
+// ---- 9. the worker and the options page read the SAME store ----------------
+// They open IndexedDB independently — the service worker cannot import the
+// options page's module and vice versa — so the store name, the database name
+// and the KEYS are duplicated in two files. If they drift, the options page
+// writes grants the worker never sees: the UI says the folder is granted, every
+// save falls back to a picker, and nothing anywhere reports a problem.
+//
+// Source-level, because the two halves cannot be loaded into one realm to be
+// compared at runtime. A weak check on the real constants beats none.
+{
+  const read = (f: string) => readFileSync(new URL(`../tray/webext/src/${f}`, import.meta.url), 'utf8')
+  const bg = read('background.js')
+  const st = read('status.js')
+  const constOf = (src: string, name: string) => src.match(new RegExp(`const ${name} = '([^']+)'`))?.[1]
+
+  ok(constOf(bg, 'DB') === constOf(st, 'DB') && !!constOf(bg, 'DB'),
+    `both halves open the same database (${constOf(bg, 'DB')})`)
+  ok(constOf(bg, 'STORE') === constOf(st, 'STORE') && !!constOf(bg, 'STORE'),
+    `and the same object store (${constOf(bg, 'STORE')})`)
+  for (const key of ['dirs', 'dir']) {
+    ok(bg.includes(`'${key}'`) && st.includes(`'${key}'`),
+      `both halves know the '${key}' key — ${key === 'dir' ? 'the legacy single grant is still migrated' : 'the grant list'}`)
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

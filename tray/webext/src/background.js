@@ -37,14 +37,26 @@ const open = () => new Promise((res, rej) => {
   r.onerror = () => rej(r.error)
 })
 
-async function readGrant() {
+/**
+ * Every granted folder, oldest first.
+ *
+ * Stored under `dirs` as an array. `dir` is the single-grant key this shipped
+ * with; it is still read so an existing install does not silently lose the
+ * folder it already granted — a lapsed grant looks identical to a lost one from
+ * the outside, and someone would have re-picked it without ever knowing why.
+ */
+export async function readGrants() {
   const d = await open()
-  return new Promise((res, rej) => {
+  const get = (key) => new Promise((res, rej) => {
     const t = d.transaction(STORE, 'readonly')
-    const q = t.objectStore(STORE).get('dir')
+    const q = t.objectStore(STORE).get(key)
     q.onsuccess = () => res(q.result ?? null)
     q.onerror = () => rej(q.error)
   })
+  const list = await get('dirs')
+  if (Array.isArray(list) && list.length) return list
+  const one = await get('dir')
+  return one ? [one] : []
 }
 
 /**
@@ -64,9 +76,61 @@ export function pathFromSender(sender) {
   }
 }
 
+/**
+ * Find the sender's file inside one grant WITHOUT searching for it.
+ *
+ * THE INSIGHT. A `FileSystemDirectoryHandle` knows its own name but not its
+ * path, so a grant and a `sender.url` cannot be compared directly — that is why
+ * this used to walk the tree looking for a matching filename. But a directory's
+ * NAME must appear in the path of every file inside it. So the name locates the
+ * split point in the sender's path, and everything after it is the route: one
+ * `getDirectoryHandle` per segment, then `getFileHandle`.
+ *
+ * O(path depth), with no scanning at all. Three things follow, and they are the
+ * whole reason for the change:
+ *
+ *   · a grant can be ANY size — a home directory costs the same as a decks
+ *     folder, because nothing is enumerated
+ *   · several grants are cheap to try, since each attempt is a few lookups
+ *   · two decks sharing a filename stop being ambiguous. The old walk found
+ *     both and declined; the route reaches exactly one, because only one path
+ *     leads to it.
+ *
+ * It is checked, not guessed. A wrong split point fails at the first missing
+ * segment, and `resolve()` re-verifies the file it lands on regardless.
+ *
+ * A folder name can repeat in a path (`/Users/andy/Decks/Decks/Q3.bento.html`),
+ * so every split point is tried; the caller decides what more than one hit
+ * means.
+ */
+export async function locateIn(dir, path) {
+  const name = dir.name
+  const hits = []
+  // Every place this grant's name could sit in the sender's path.
+  for (let i = path.indexOf(`/${name}/`); i !== -1; i = path.indexOf(`/${name}/`, i + 1)) {
+    const rel = path.slice(i + name.length + 2).split('/').filter(Boolean)
+    if (!rel.length) continue
+    try {
+      let cur = dir
+      for (const seg of rel.slice(0, -1)) cur = await cur.getDirectoryHandle(seg)
+      const file = await cur.getFileHandle(rel[rel.length - 1])
+      hits.push({ file, rel })
+    } catch {
+      // Not this split point — a segment that does not exist is an answer, not
+      // an error. Keep trying the others.
+    }
+  }
+  return hits
+}
+
 /** Every file of this name in the granted tree. Depth-limited: a Decks folder
  *  is not a filesystem, and an unbounded walk on a mistakenly-granted home
- *  directory would hang the save the user is waiting on. */
+ *  directory would hang the save the user is waiting on.
+ *
+ *  KEPT AS A FALLBACK ONLY. `locateIn` handles every path whose grant name
+ *  appears in it, which is all of them in the ordinary case; this covers what
+ *  it cannot place — a symlinked route, say, where the path the browser reports
+ *  does not spell the directory the handle actually points at. */
 export async function findByName(dir, name, depth = 0, found = []) {
   if (depth > 4 || found.length > 1) return found
   for await (const [entryName, handle] of dir.entries()) {
@@ -82,38 +146,73 @@ export async function findByName(dir, name, depth = 0, found = []) {
 /**
  * Resolve the writable handle for a sender's own file, or say why not.
  *
- * THE MATCHING PROBLEM. A page is at `/Users/…/Decks/Q3.bento.html`; a
- * `FileSystemDirectoryHandle` knows its own NAME but not its path, and no API
- * exposes one, so the two cannot be compared directly. This searches the
- * granted tree for that file name and requires EXACTLY ONE match — unambiguous
- * in the ordinary case, and when it is ambiguous the answer is to decline and
- * let the browser's own picker handle it. Declining costs a prompt; guessing
- * costs somebody's file.
+ * ACROSS EVERY GRANT. Each is tried by ROUTE (`locateIn`) rather than by
+ * search, so trying several costs a few lookups each and a grant's size stops
+ * mattering — granting a whole home directory is as cheap as granting one decks
+ * folder, which is what makes "everywhere" a reasonable thing to offer.
+ *
+ * A file reachable through two grants is normal once folders can nest
+ * (~/Documents and ~/Documents/Decks), and it is the SAME file by two routes,
+ * not an ambiguity — `isSameEntry` is the thing that can tell those apart, so
+ * it decides. Two genuinely different files can only happen if the browser
+ * reported a path that leads to both, which it cannot; if it somehow does, that
+ * is the case to decline.
+ *
+ * A LAPSED grant is reported distinctly from an absent one, because they need
+ * opposite things from the user: one click to renew, or a folder to pick. Only
+ * reported when NO grant could serve the file — with several folders, one
+ * lapsing must not mask the others.
  */
 export async function resolve(sender, deps = {}) {
-  const grant = deps.readGrant ?? readGrant
+  const grants = deps.readGrants ?? readGrants
   const search = deps.findByName ?? findByName
+  const locate = deps.locateIn ?? locateIn
 
   const path = pathFromSender(sender)
   if (!path) return { ok: false, reason: 'not a local file' }
 
-  const dir = await grant()
-  if (!dir) return { ok: false, reason: 'no folder granted' }
-  // queryPermission only — never prompt from here. A service worker has no user
-  // gesture, so a request would be refused, and a save is the wrong moment to
-  // discover that. The options page is where granting happens.
-  const perm = await dir.queryPermission({ mode: 'readwrite' })
-  if (perm !== 'granted') return { ok: false, reason: 'folder grant needs renewing' }
+  const all = await grants()
+  if (!all.length) return { ok: false, reason: 'no folder granted' }
 
   const name = path.split('/').pop() || ''
   if (!name) return { ok: false, reason: 'no file name' }
-  const hits = await search(dir, name)
-  if (hits.length !== 1) {
-    return {
-      ok: false,
-      reason: hits.length ? `${name} is ambiguous in the granted folder` : 'not in the granted folder',
+
+  let lapsed = 0
+  const found = []
+  for (const dir of all) {
+    // queryPermission only — never prompt from here. A service worker has no
+    // user gesture, so a request would be refused, and a save is the wrong
+    // moment to discover that. The options page is where granting happens.
+    if (await dir.queryPermission({ mode: 'readwrite' }) !== 'granted') { lapsed++; continue }
+    for (const hit of await locate(dir, path)) found.push({ dir, ...hit })
+    // Only fall back to enumerating when the route found nothing in this grant.
+    if (!found.length) {
+      for (const file of await search(dir, name)) found.push({ dir, file, rel: null })
     }
   }
+
+  if (!found.length) {
+    return {
+      ok: false,
+      reason: lapsed
+        ? 'folder grant needs renewing'
+        : 'not in the granted folder',
+    }
+  }
+  if (found.length > 1) {
+    // The same file reached twice through nested grants is fine; two different
+    // files are not, and only isSameEntry can tell them apart.
+    const [first, ...rest] = found
+    for (const other of rest) {
+      if (!(await first.file.isSameEntry(other.file))) {
+        return { ok: false, reason: `${name} is ambiguous across the granted folders` }
+      }
+    }
+    found.length = 1
+  }
+
+  const { dir, file } = found[0]
+  const hits = [file]
 
   // The candidate shares the sender's FILE NAME. That is not the same as being
   // the sender's file, and treating it as such destroys documents:
