@@ -49,6 +49,25 @@ pre-1.0.
   update of a double-clicked file described itself to the extension as an
   export, so the extension — correctly — refused to write it for you.
 
+- **Fix: Share opened cut in half on a narrow window.** Once the window is
+  narrow enough to fold the toolbar into ⋯, opening **Share** from that menu
+  drew the popover sliced down its left edge, with the properties panel showing
+  through the gap where the rest of it should have been. Share and Language now
+  open as a section of the ⋯ list itself — full width, scrolling with it,
+  nothing hanging over an edge to be cut off.
+
+  The ⋯ menu scrolls when it has more in it than fits on screen, and a box that
+  scrolls in one direction quietly clips the other whether you asked for that or
+  not. Anything floating inside it was always going to be trimmed. Wide windows
+  were never affected: the fold only happens when the toolbar runs out of room.
+
+- **The update card drops its peach stripe.** The "Version X is available" card
+  in About carried a thick accent rule down its leading edge — the only stripe
+  of its kind anywhere in the app, and a hard-coded colour, so it stayed peach
+  while everything around it moved into dark mode. It now has the same quiet
+  1px border as every other surface in the dialog and themes along with them.
+  The accent stays where it earns its place: on the button you press.
+
 ## [1.0.17] — 2026-08-10
 
 - **Security: update this file. A deck could run code hidden in its own
