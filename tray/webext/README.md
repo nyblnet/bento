@@ -36,6 +36,22 @@ can be shown to be the reviewed one.
 Listing copy, permission justifications and the data-usage answers live in
 `STORE.md`.
 
+## Two surfaces
+
+- **Toolbar click → the library** (`src/home.html`): browsing and managing.
+  An existing tab is focused rather than duplicated. This only works because the
+  manifest declares NO `default_popup` — declaring one makes the click open it
+  and `action.onClicked` never fires.
+- **`Alt+B`, or right-click in a document → the panel** (`src/panel.html`):
+  switching documents while working in one. It was a popup; a popup dies when it
+  loses focus, which is exactly when you click into the document you switched
+  to.
+
+`sidePanel.open()` must be called **synchronously** inside the gesture that
+triggered it (Chrome 116+, this extension's floor). An `await` before it loses
+the gesture and Chrome refuses without saying so — which is why the lapsed-grant
+notification opens the library instead: it is handled after an await.
+
 ## Icons
 
 `icons/icon.svg` is the source of everything visual: the favicon for the

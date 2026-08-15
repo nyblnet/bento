@@ -140,28 +140,19 @@ export async function notifyIfLapsed(stale) {
 /**
  * Put the reconnect button in front of the user.
  *
- * `chrome.action.openPopup()` is the one that would make this a single click
- * from anywhere. UNVERIFIED here: it has moved between "extension-only", "policy
- * installed only" and generally available across Chrome versions, and this
- * extension's floor is 116. So it is TRIED, and the options page is the fallback
- * — which always works and costs a tab.
+ * This used to try `chrome.action.openPopup()`. There is no popup any more —
+ * the toolbar icon opens the library, and the tray lives in a side panel — so
+ * the notification leads to the library, which carries the same reconnect
+ * affordance with room to explain it.
  *
- * Deliberately not called on its own initiative. Opening a popup at a moment the
- * user did not ask for one is the kind of thing that gets an extension
- * uninstalled; this runs only from a notification the user clicked.
+ * Deliberately not `sidePanel.open()`: that must be called synchronously inside
+ * a user gesture, and this is reached from a notification click handler after
+ * an await. It would be refused, silently, which is the worst of both.
  */
 export async function openReconnectUi() {
   try {
-    if (chrome.action?.openPopup) {
-      await chrome.action.openPopup()
-      return 'popup'
-    }
-  } catch {
-    /* not available in this Chrome, or no focused window — fall through */
-  }
-  try {
-    await chrome.runtime.openOptionsPage()
-    return 'options'
+    await chrome.tabs.create({ url: chrome.runtime.getURL('src/home.html') })
+    return 'library'
   } catch {
     return 'none'
   }

@@ -421,6 +421,9 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
 // compared at runtime. A weak check on the real constants beats none.
 {
   const read = (f: string) => readFileSync(new URL(`../tray/webext/src/${f}`, import.meta.url), 'utf8')
+  /** Source with comments removed, for gates that must not match documentation
+   *  about the very thing they forbid. */
+  const codeOf = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
   const bg = read('background.js')
   const st = read('status.js')
   const constOf = (src: string, name: string) => src.match(new RegExp(`const ${name} = '([^']+)'`))?.[1]
@@ -454,18 +457,21 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
 // because chrome.action does not exist here.
 {
   const read = (f: string) => readFileSync(new URL(`../tray/webext/src/${f}`, import.meta.url), 'utf8')
+  /** Source with comments stripped, for gates that must not match documentation
+   *  about the very thing they forbid. */
+  const codeOf = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
   const bg = read('background.js')
   const st = read('status.js')
-  const pop = read('popup.js')
+  const pop = read('panel.js')
 
   ok(/export async function setLapsedBadge/.test(st), 'status.js owns the badge rule')
   ok(/setBadgeText/.test(st), 'and actually sets a badge')
   ok(bg.includes('setLapsedBadge'), 'the worker refreshes the badge after handling a message')
   ok(/onStartup/.test(bg), 'and on browser startup — where a dropped grant would first show')
   ok(!/setBadgeText/.test(bg) && !/setBadgeText/.test(pop),
-    'only status.js decides what "lapsed" means — the icon and the popup cannot disagree')
+    'only status.js decides what "lapsed" means — the icon and the panel cannot disagree')
   ok(/requestPermission/.test(pop),
-    'the popup can raise the permission dialog itself, without a trip to the options page')
+    'the panel can raise the permission dialog itself, without a trip to settings')
 
   // The chicken-and-egg that shipped: the tray lists documents by walking
   // grants, but needs an absolute path to OPEN one, and that path was learned
@@ -493,13 +499,38 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
     'and only once per browser session, which is the lifetime of a lapse')
   ok(/onButtonClicked/.test(bg) && /onClicked/.test(bg),
     'both the notification body and its button lead somewhere')
-  ok(/openPopup/.test(st) && /openOptionsPage/.test(st),
-    'openPopup is TRIED and the options page is the fallback — the first is not available everywhere')
+  // There is no popup any more: the toolbar opens the library and the tray is a
+  // side panel. A notification is handled after an await, which loses the user
+  // gesture sidePanel.open() requires, so it leads to the library instead —
+  // silently refused is the worst of both.
+  // Against CODE, not prose. The comment above the function explains why the
+  // call is gone and names it in full, so both "the word" and "call-shaped"
+  // match the documentation — a gate that trips on its own explanation gets
+  // deleted rather than fixed.
+  ok(!/\.openPopup\s*\(/.test(codeOf(st)), 'nothing still calls chrome.action.openPopup')
+  ok(/home\.html/.test(st), 'the notification leads to the library, which carries the same repair')
 
   const manifest = JSON.parse(readFileSync(new URL('../tray/webext/manifest.json', import.meta.url), 'utf8'))
   ok(manifest.permissions?.includes('notifications'),
     'the manifest asks for the notifications permission the code depends on')
-  ok(!!manifest.action?.default_popup, 'and declares the popup openPopup would open')
+  // default_popup and onClicked are mutually exclusive: declaring a popup means
+  // the click opens it and the listener never runs. The click must open the
+  // library, so there must be no popup.
+  ok(!manifest.action?.default_popup,
+    'no default_popup, or chrome.action.onClicked would never fire')
+  ok(manifest.side_panel?.default_path === 'src/panel.html',
+    'the tray is declared as a side panel')
+  ok(!!manifest.commands?.['open-panel']?.suggested_key,
+    'and has a keyboard shortcut, which is the gesture sidePanel.open() needs')
+  for (const perm of ['sidePanel', 'contextMenus']) {
+    ok(manifest.permissions?.includes(perm), `the manifest asks for "${perm}"`)
+  }
+  ok(/onClicked/.test(bg) && /sidePanel\.open/.test(bg),
+    'the worker opens the library on click and the panel on its own gestures')
+  // sidePanel.open() must be called SYNCHRONOUSLY inside the gesture. An await
+  // before it loses the gesture and Chrome refuses, without saying so.
+  const cmd = bg.slice(bg.indexOf("command !== 'open-panel'"), bg.indexOf("command !== 'open-panel'") + 320)
+  ok(!/await/.test(cmd), 'and does it synchronously — an await first loses the user gesture')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

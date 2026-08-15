@@ -78,7 +78,6 @@ async function renderDocs() {
     row.addEventListener('click', () => {
       if (!d.path) return
       chrome.tabs.create({ url: `file://${d.path.split('/').map(encodeURIComponent).join('/')}` })
-      window.close()
     })
     list.appendChild(row)
 
@@ -193,7 +192,7 @@ $('renew').addEventListener('click', async () => {
 $('new').addEventListener('click', async () => {
   const btn = $('new')
   const grants = await getGrants()
-  if (!grants.length) { chrome.runtime.openOptionsPage(); window.close(); return }
+  if (!grants.length) { chrome.runtime.openOptionsPage(); return }
   btn.disabled = true
   btn.textContent = 'Fetching the latest Bento…'
   try {
@@ -218,12 +217,10 @@ $('new').addEventListener('click', async () => {
 // and this is the door to it rather than a second copy of it.
 $('browse').addEventListener('click', () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('src/home.html') })
-  window.close()
 })
 
 $('open').addEventListener('click', () => {
   chrome.runtime.openOptionsPage()
-  window.close()
 })
 
 await renderStatus()

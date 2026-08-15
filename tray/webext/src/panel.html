@@ -4,18 +4,26 @@
 <link rel="icon" href="../icons/icon.svg">
 <link rel="stylesheet" href="ui.css">
 <style>
-  /* Page-specific layout only; the palette and controls come from ui.css. This
-     surface had 21 hardcoded colours and no dark mode — the one people actually
-     open was the one that turned white at midnight. */
+  /* Page-specific layout only; the palette and controls come from ui.css.
+   *
+   * THIS WAS A POPUP, and a popup was the wrong container for it. Its job is
+   * switching documents while you are working IN one — and a popup dies the
+   * moment it loses focus, which is the moment you click into the thing you
+   * were switching to. A side panel stays beside the document. Same markup,
+   * same code; the container is what changed.
+   *
+   * So the width is no longer fixed at 340px: a side panel is resizable, and
+   * the list has to hold at any width the user drags it to. */
 
-  body { width: 340px }
-  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px }
+  body { min-width: 260px; height: 100vh; display: flex; flex-direction: column }
+  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; flex: none }
   header .mark { width: 20px; height: 20px }
   header b { font-size: 14px; flex: 1 }
   header .count { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums }
 
   /* --- the documents, which are the point --- */
-  .docs { max-height: 340px; overflow-y: auto; padding: 0 8px }
+  /* Grows to whatever height the panel has, rather than a popup's fixed cap. */
+  .docs { flex: 1; overflow-y: auto; padding: 0 8px; min-height: 0 }
   .doc { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
     padding: 7px 6px; border: 0; background: none; border-radius: 8px; cursor: pointer;
     font: inherit; color: inherit }
@@ -42,7 +50,8 @@
   .empty { padding: 6px 14px 12px; color: var(--dim); font-size: 12.5px }
 
   /* --- everything below is plumbing, and looks like it --- */
-  footer { border-top: 1px solid var(--line); padding: 9px 14px 12px; margin-top: 6px }
+  footer { border-top: 1px solid var(--line); padding: 9px 14px 12px; margin-top: 6px;
+    flex: none }
   .status { display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: 12px }
   .status .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap }
@@ -78,4 +87,4 @@
   <button class="btn" id="new">+ New document</button>
 </footer>
 
-<script type="module" src="popup.js"></script>
+<script type="module" src="panel.js"></script>

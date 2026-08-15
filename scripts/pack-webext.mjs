@@ -160,6 +160,7 @@ if (manifest) {
   claim(manifest.background?.service_worker)
   claim(manifest.options_page)
   claim(manifest.action?.default_popup)
+  claim(manifest.side_panel?.default_path)
   for (const cs of manifest.content_scripts ?? []) (cs.js ?? []).forEach(claim)
   for (const size of ['16', '32', '48', '128']) {
     const p = manifest.icons?.[size]

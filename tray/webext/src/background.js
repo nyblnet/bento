@@ -299,6 +299,66 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onInstalled?.addListener(() => void reportLapsed())
   void reportLapsed()
 
+  /**
+   * The toolbar icon opens the LIBRARY, not a popup.
+   *
+   * Two surfaces, two jobs. The page is for browsing and managing — folders,
+   * search, rename, settings — and wants room and a tab that stays. The panel
+   * is for switching documents while you are working in one, and wants to sit
+   * beside that document rather than vanish when you click into it.
+   *
+   * `onClicked` only fires when no `default_popup` is declared: setting one
+   * makes the click open the popup and this listener never run. So the manifest
+   * has no popup, and the panel is reached by its own gestures below.
+   *
+   * An existing tab is FOCUSED rather than duplicated. Opening the library four
+   * times should not leave four copies of it.
+   */
+  chrome.action.onClicked.addListener(async () => {
+    const url = chrome.runtime.getURL('src/home.html')
+    const [open] = await chrome.tabs.query({ url })
+    if (open) {
+      await chrome.tabs.update(open.id, { active: true })
+      await chrome.windows.update(open.windowId, { focused: true })
+    } else {
+      await chrome.tabs.create({ url })
+    }
+  })
+
+  /**
+   * The panel, from a keyboard shortcut.
+   *
+   * `sidePanel.open()` must be called SYNCHRONOUSLY inside the gesture that
+   * triggered it — Chrome 116+, which is this extension's floor exactly. An
+   * `await` before it, even a trivial one, loses the gesture and the call is
+   * refused. So nothing is read first; the panel decides what to show once it
+   * is up.
+   */
+  chrome.commands?.onCommand.addListener((command, tab) => {
+    if (command !== 'open-panel') return
+    chrome.sidePanel.open(tab?.windowId != null
+      ? { windowId: tab.windowId }
+      : { windowId: chrome.windows.WINDOW_ID_CURRENT })
+  })
+
+  // And from a right-click inside a document, which is where wanting it
+  // actually happens. Same synchronous rule.
+  chrome.runtime.onInstalled.addListener(() => {
+    chrome.contextMenus?.removeAll(() => {
+      chrome.contextMenus.create({
+        id: 'bento-tray-panel',
+        title: 'Open Bento Tray panel',
+        contexts: ['page'],
+        documentUrlPatterns: ['file:///*'],
+      })
+    })
+  })
+  chrome.contextMenus?.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === 'bento-tray-panel' && tab?.windowId != null) {
+      chrome.sidePanel.open({ windowId: tab.windowId })
+    }
+  })
+
   // The notification's only button, and clicking the notification body itself —
   // both mean "fix it", so both lead to the same place.
   chrome.notifications?.onButtonClicked?.addListener((id) => {

@@ -3028,3 +3028,44 @@ to us and not to someone trying to save a document.
 in the middle of a note became its own line and broke the sentence around it.
 Only visible in a screenshot — no rig would ever have caught it, and I had
 written the markup that triggered it.
+
+*2026-08-15.* Where the popup belongs, once the toolbar icon opens the library.
+
+**`default_popup` and `action.onClicked` are mutually exclusive.** Declaring a
+popup means the click opens it and the listener never fires. So wanting the icon
+to open the full page means having no popup at all — and the question becomes
+what the tray's compact form is FOR.
+
+**Its job was always switching documents while working in one**, and a popup is
+the wrong container for that: it dies the moment it loses focus, which is the
+moment you click into the thing you switched to. A **side panel** does not. Same
+markup, same code, better container — `sidePanel.open()` arrived in Chrome 116,
+which is this extension's floor exactly.
+
+Two surfaces, two jobs, and neither is a lesser copy of the other:
+
+- **toolbar click → the library.** Browsing and managing: folders, search,
+  rename, settings. Wants room and a tab that stays. An existing tab is FOCUSED
+  rather than duplicated.
+- **`Alt+B`, or right-click inside a document → the panel.** Switching while
+  working. Sits beside the document instead of vanishing.
+
+**`sidePanel.open()` must be called SYNCHRONOUSLY inside the gesture.** An
+`await` before it — even a trivial one — loses the gesture and Chrome refuses,
+silently. So the command handler reads nothing first; the panel decides what to
+show once it is up. The rig pins this by slicing the handler and asserting no
+`await` appears in it.
+
+For the same reason the lapsed-grant notification leads to the LIBRARY rather
+than the panel: it is handled after an await, so `sidePanel.open()` there would
+be refused without saying so. It used to try `chrome.action.openPopup()`, which
+no longer exists to try.
+
+`window.close()` is gone from the panel. A popup closing itself after an action
+is correct; a side panel doing it takes away the thing the user just used.
+
+*Two rig lessons, both mine.* The first gate for "nothing calls openPopup"
+matched the comment explaining why the call was removed — a gate that trips on
+its own documentation gets deleted rather than fixed, so it now strips comments
+and reads code. And it was verified by re-adding a real call and watching it
+fail, which is the only way to know a source gate is a gate.
