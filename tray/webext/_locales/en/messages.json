@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Bento Tray",
+    "description": "Product name. Not translated."
+  },
+  "appDesc": {
+    "message": "Save a Bento document back to the file you opened, without a destination prompt.",
+    "description": "Chrome Web Store listing description. 132 characters maximum — the store truncates."
+  }
+}

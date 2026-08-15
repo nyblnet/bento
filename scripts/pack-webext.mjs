@@ -44,7 +44,12 @@ const OUT = join(root, 'dist')
 // chrome at fixed sizes. The SVG is the favicon for the extension's own pages —
 // one vector rather than a family of files, because a tab icon is drawn at 16px
 // and again at whatever the history and bookmarks views feel like.
-const INCLUDE = [/^manifest\.json$/, /^icons\/[^/]+\.(png|svg)$/, /^src\/[^/]+\.(js|html|css)$/]
+const INCLUDE = [
+  /^manifest\.json$/,
+  /^icons\/[^/]+\.(png|svg)$/,
+  /^src\/[^/]+\.(js|html|css)$/,
+  /^_locales\/[a-zA-Z_]+\/messages\.json$/,
+]
 /** Present on purpose, deliberately NOT shipped. */
 const EXCLUDE = [/^probe\//, /^README\.md$/, /^STORE\.md$/]
 
@@ -146,15 +151,72 @@ try {
   fail(`manifest.json does not parse: ${e.message}`)
 }
 
+// ---- localisation ----------------------------------------------------------
+// The store shows `name` and `description` in the shopper's language, so those
+// are `__MSG_*__` placeholders resolved from `_locales`. Which means the checks
+// below MUST resolve them first: a length check against the literal string
+// "__MSG_appDesc__" passes happily while the real German description runs 40
+// characters over and gets truncated in the listing.
+const messagesFor = (loc) => {
+  try {
+    return JSON.parse(readFileSync(join(SRC, `_locales/${loc}/messages.json`), 'utf8'))
+  } catch {
+    return null
+  }
+}
+const localeDirs = [...new Set(all
+  .filter((r) => r.startsWith('_locales/'))
+  .map((r) => r.split('/')[1]))]
+
+let resolve = (v) => v
+if (manifest && localeDirs.length) {
+  const def = manifest.default_locale
+  if (!def) fail('there is a _locales directory, so the manifest must set "default_locale"')
+  const base = def ? messagesFor(def) : null
+  if (def && !base) fail(`default_locale is "${def}" but _locales/${def}/messages.json is missing or invalid`)
+
+  resolve = (v, loc = def) => String(v ?? '').replace(/__MSG_([A-Za-z0-9_]+)__/g, (whole, key) => {
+    const m = messagesFor(loc)?.[key]?.message
+    return m ?? whole
+  })
+
+  for (const loc of localeDirs) {
+    const msgs = messagesFor(loc)
+    if (!msgs) { fail(`_locales/${loc}/messages.json does not parse`); continue }
+    for (const [key, entry] of Object.entries(msgs)) {
+      if (typeof entry?.message !== 'string' || !entry.message) {
+        fail(`_locales/${loc}/messages.json: "${key}" has no message`)
+      }
+    }
+  }
+
+  // Every placeholder the manifest uses must exist in the DEFAULT locale, or
+  // the store sees the raw "__MSG_appName__" as the extension's name.
+  for (const field of ['name', 'description']) {
+    const raw = manifest[field] ?? ''
+    for (const m of String(raw).matchAll(/__MSG_([A-Za-z0-9_]+)__/g)) {
+      if (!base?.[m[1]]) fail(`manifest.${field} uses __MSG_${m[1]}__ but the default locale does not define it`)
+    }
+  }
+
+  // And the LISTING strings are checked in every locale, because a description
+  // is only useful where it is read.
+  for (const loc of localeDirs) {
+    const desc = resolve(manifest.description, loc)
+    if (desc.startsWith('__MSG_')) continue // falls back to default: fine
+    if (desc.length > 132) fail(`${loc} description is ${desc.length} chars; the store truncates at 132`)
+  }
+}
+
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3')
   for (const k of ['name', 'version', 'description']) {
     if (!manifest[k]) fail(`manifest is missing "${k}" — the store requires it`)
   }
   if (manifest.version === '0.0.1') fail('manifest version is still the scaffold placeholder 0.0.1')
-  if ((manifest.description ?? '').length > 132) {
-    fail(`description is ${manifest.description.length} chars; the store truncates at 132`)
-  }
+  const desc = resolve(manifest.description)
+  if (desc.length > 132) fail(`description is ${desc.length} chars; the store truncates at 132`)
+  if (desc.startsWith('__MSG_')) fail('manifest.description does not resolve — check _locales')
 
   const named = new Set()
   const claim = (p) => { if (p) named.add(p.replace(/^\//, '')) }
