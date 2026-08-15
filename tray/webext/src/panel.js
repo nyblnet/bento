@@ -148,10 +148,9 @@ function draw() {
     // Point at the one-click fix, not at Finder. The full page can ask Chrome
     // where these folders are (see home.js locateFolders); 340px is not the
     // place to explain a permission request, so the popup sends people there.
-    note.innerHTML = `<b>${esc(names.slice(0, 2).join('</b>, <b>'))}</b>`
-      + (names.length > 2 ? ` and ${names.length - 2} more` : '')
-      + ' can be read but not opened yet — Chrome does not tell an extension where a folder '
-      + 'is on disk. <b>Browse all</b> can find them in one click.'
+    note.innerHTML = t('panelUnplaced',
+      esc(names.slice(0, 2).join('</b>, <b>')),
+      names.length > 2 ? t('andMore', names.length - 2) : '')
   }
 }
 

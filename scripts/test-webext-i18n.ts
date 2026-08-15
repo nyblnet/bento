@@ -45,8 +45,14 @@ const enKeys = new Set(Object.keys(en))
 // ---- 1. what the code actually asks for -------------------------------------
 const sources = readdirSync(join(SRC, 'src')).filter((f) => /\.(js|html)$/.test(f))
 const used = new Set<string>()
+// i18n.js is skipped rather than comment-stripped. It documents the attributes
+// with EXAMPLE keys (`data-i18n="helpTitle"`) that no page ever renders, and it
+// renders nothing itself — so excluding the file is exact, where stripping
+// comments was not: a `*/` inside a regex or string swallowed real code after
+// it and reported live keys as dead.
 for (const f of sources) {
-  const text = read(`src/${f}`)
+  if (f === 'i18n.js') continue
+  const text = read(`src/${f}`).replace(/<!--[\s\S]*?-->/g, '')
   for (const m of text.matchAll(/\bt\(\s*'([A-Za-z0-9_]+)'/g)) used.add(m[1])
   for (const m of text.matchAll(/data-i18n(?:-html|-placeholder|-title)?="([A-Za-z0-9_]+)"/g)) used.add(m[1])
 }

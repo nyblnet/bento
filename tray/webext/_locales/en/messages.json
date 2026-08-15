@@ -124,7 +124,7 @@
     "message": "Created $1"
   },
   "panelUnplaced": {
-    "message": "Open one document in <b>$1</b>$2 from Finder once — Chrome does not tell an extension where a folder is, so opening a document is how Bento Tray learns. After that the whole folder opens from here.",
+    "message": "<b>$1</b>$2 can be read but not opened yet — Chrome does not tell an extension where a folder is on disk. <b>Browse all</b> can find them in one click.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "andMore": {
