@@ -36,11 +36,13 @@ const ago = (ms) => {
  * Waiting for all of that before showing anything would make the popup feel
  * broken every time the cache is cold.
  */
+let all = []
+
 async function renderDocs() {
   const docs = await listDocuments()
-  $('count').textContent = docs.length ? `${docs.length} document${docs.length === 1 ? '' : 's'}` : ''
 
   if (!docs.length) {
+    $('count').textContent = ''
     $('empty').hidden = false
     $('empty').textContent = 'No Bento documents in your folders yet.'
     return
@@ -51,6 +53,31 @@ async function renderDocs() {
     try { return { d, modified: (await d.handle.getFile()).lastModified } } catch { return { d, modified: 0 } }
   }))
   withTimes.sort((a, b) => b.modified - a.modified)
+  all = withTimes
+  draw()
+}
+
+/**
+ * Draw the list, filtered by whatever is in the search box.
+ *
+ * Search matters more here than in the library: this is the switcher, opened
+ * over the document you are already working in, and the whole interaction is
+ * "the other one, quickly". Matches the TITLE once it is known and the file
+ * name always — a row whose thumbnail has not loaded yet is still findable by
+ * what it is called on disk.
+ */
+function draw() {
+  const q = ($('q').value || '').trim().toLowerCase()
+  const withTimes = q
+    ? all.filter(({ d }) => (d.title ?? d.base).toLowerCase().includes(q)
+        || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q))
+    : all
+
+  $('count').textContent = q
+    ? `${withTimes.length} of ${all.length}`
+    : `${all.length} document${all.length === 1 ? '' : 's'}`
+  $('empty').hidden = withTimes.length > 0
+  if (!withTimes.length) $('empty').textContent = `Nothing matches “${$('q').value.trim()}”`
 
   const list = $('docs')
   list.innerHTML = ''
@@ -85,7 +112,10 @@ async function renderDocs() {
     // once and stall the popup it is decorating.
     void (async () => {
       try {
-        const meta = await describe(d)
+        // Memoised on the descriptor, not just in the IndexedDB cache: typing
+        // in the search box redraws every row, and rebuilding a thumbnail
+        // iframe per keystroke flickers even when the read behind it is free.
+        const meta = d.meta ?? (d.meta = await describe(d))
         row.querySelector('b').textContent = meta.title
         const thumb = row.querySelector('[data-thumb]')
         if (meta.encrypted) {
@@ -155,6 +185,13 @@ async function renderStatus() {
   $('prime').hidden = !lapsed
   return s
 }
+
+$('q').addEventListener('input', draw)
+// Escape clears rather than closing: a side panel that vanished on Escape would
+// take away the thing you opened to use.
+$('q').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('q').value) { e.stopPropagation(); $('q').value = ''; draw() }
+})
 
 $('renew').addEventListener('click', async () => {
   const btn = $('renew')

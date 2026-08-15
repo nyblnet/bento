@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Bento Tray</title>
+<title>bento/tray</title>
 <link rel="icon" href="../icons/icon.svg">
 <link rel="stylesheet" href="ui.css">
 <style>
@@ -16,10 +16,13 @@
    * the list has to hold at any width the user drags it to. */
 
   body { min-width: 260px; height: 100vh; display: flex; flex-direction: column }
-  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; flex: none }
-  header .mark { width: 20px; height: 20px }
-  header b { font-size: 14px; flex: 1 }
-  header .count { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex: none }
+  header .count { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums;
+    flex: none }
+  .search { flex: 1; position: relative; min-width: 0 }
+  .search input { width: 100%; padding: 5px 9px 5px 27px; font-size: 13px }
+  .search .mag { position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+    color: var(--dim); font-size: 12px; pointer-events: none }
 
   /* --- the documents, which are the point --- */
   /* Grows to whatever height the panel has, rather than a popup's fixed cap. */
@@ -59,9 +62,15 @@
   #prime { margin-top: 9px }
 </style>
 
+<!-- No logo and no name here. Chrome draws its OWN side-panel header with the
+     extension's icon and name directly above this document, so a second one is
+     the same words twice — which is exactly how it looked. The space goes to
+     the thing a switcher actually needs. -->
 <header>
-  <img class="mark" src="../icons/icon.svg" alt="">
-  <b>Bento Tray</b>
+  <div class="search">
+    <span class="mag">⌕</span>
+    <input id="q" type="search" placeholder="Search documents" autocomplete="off">
+  </div>
   <span class="count" id="count"></span>
 </header>
 
