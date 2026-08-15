@@ -31,6 +31,25 @@ import { GRANT, get, put } from './db.js'
 const MANIFEST = 'https://bento.page/releases/tray/manifest.json'
 
 /**
+ * Where to ask. A dev override exists for the same reason the app has one
+ * (`localStorage 'bento-update-url'` in kernel/src/update.ts): until the real
+ * manifest is published there is no way to see the notice at all, and a feature
+ * that cannot be exercised before release is a feature nobody has tested.
+ *
+ * From the library page's console:
+ *
+ *   const d = await indexedDB.open('bento-tray', 2)
+ *   // …or simply: import('./db.js').then(m => m.put('grant','updateUrl','http://localhost:5194/tray.json'))
+ *
+ * Never read from a document or a message — only from this extension's own
+ * store, which only its own pages can write.
+ */
+const manifestUrl = async (deps) => {
+  if (deps.url) return deps.url
+  try { return (await get(GRANT, 'updateUrl')) || MANIFEST } catch { return MANIFEST }
+}
+
+/**
  * Whether to check at all. DEFAULT ON, and switchable.
  *
  * On by default because an unpacked install has no other way to learn it is
@@ -115,7 +134,7 @@ export async function checkForUpdate(deps = {}) {
   if (!deps.force && !(await autoCheckEnabled(deps))) return null
 
   try {
-    const res = await net(MANIFEST, { cache: 'no-store' })
+    const res = await net(await manifestUrl(deps), { cache: 'no-store' })
     if (!res.ok) return null
     const m = await res.json()
     if (!m?.version || compareVersions(m.version, current) <= 0) {
