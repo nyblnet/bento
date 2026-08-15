@@ -1,34 +1,15 @@
 <!--
-  bento/tray favicon for the extension's own pages.
+  bento/tray mark for the extension: the same art as tray/assets/tray-icon.svg
+  with a corner radius. That file is deliberately square and full bleed because
+  iOS applies its own squircle mask, and a radius drawn inside one seams along
+  every edge. Chrome applies no mask, so a square reads as a mistake.
 
-  The SAME mark as tray/assets/tray-icon.svg, with one difference: a corner
-  radius. That file is deliberately square and full-bleed because iOS applies
-  its own squircle mask, and a radius drawn inside one shows as a seam along
-  every edge. Chrome applies no mask, so the exported PNGs appear as a hard
-  square in a tab strip full of rounded favicons — which is what it looked like.
-
-  SVG rather than another PNG size: a tab favicon is drawn at 16px and again at
-  whatever the browser feels like (history, bookmarks, the extensions page), and
-  one vector covers all of them without a family of files to keep in step. The
-  radius is 7/32, matching the app mark used elsewhere in the product.
-
-  THIS FILE IS ALSO THE SOURCE OF THE PNGs beside it. The toolbar action icon
-  cannot be an SVG — Chrome's `action.default_icon` takes raster sizes — so the
-  four PNGs are exports of this, and they must be regenerated from here rather
-  than edited:
-
-    for n in 16 32 48 128; do
-      printf '<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}svg{display:block;width:%dpx;height:%dpx}</style>' "$n" "$n" > /tmp/i.html
-      sed -n '/<svg/,$p' icon.svg >> /tmp/i.html
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
-        --disable-gpu --hide-scrollbars --default-background-color=00000000 \
-        --window-size=$n,$n --screenshot=icon-$n.png /tmp/i.html
-    done
-
-  The previous PNGs had NO ALPHA CHANNEL — measured, RGB not RGBA — so they were
-  opaque squares by construction and no amount of CSS could round the toolbar.
-  Any replacement must keep the transparent corners; a re-export that quietly
-  drops the alpha looks identical in a file listing and square in the browser.
+  THIS FILE IS THE SOURCE OF THE PNGs beside it. Chrome takes raster sizes for
+  the toolbar action icon, so those are exports of this and must be regenerated
+  rather than edited. The export command lives in tray/webext/README.md, not
+  here: it is full of command line flags, and an XML comment may not contain a
+  double hyphen. Putting it here made this file malformed, and every place the
+  mark appears rendered as a broken image.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
      role="img" aria-label="Bento Tray">

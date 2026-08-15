@@ -94,6 +94,27 @@ for (const rel of all.filter((r) => /^icons\/.*\.png$/.test(r))) {
   }
 }
 
+// ---- a shipped SVG must actually parse -------------------------------------
+// It did not. `icon.svg` carried its own regeneration command in an XML comment,
+// and every flag in that command starts with a double hyphen — which an XML
+// comment may not contain. The file was malformed, so the mark rendered as a
+// broken image on every surface that used it, while looking perfectly correct
+// in an editor and passing every other check here.
+//
+// No XML parser in node's standard library, so this checks the one rule that
+// was broken plus the shape of the thing: a comment with `--` inside it, and a
+// root element that opens and closes.
+for (const rel of payload.filter((p) => p.endsWith('.svg'))) {
+  const text = readFileSync(join(SRC, rel), 'utf8')
+  for (const m of text.matchAll(/<!--([\s\S]*?)-->/g)) {
+    if (m[1].includes('--')) {
+      fail(`${rel} has a comment containing "--", which is not valid XML — the file will not `
+        + 'parse and the image will not render. Command line flags belong in the README.')
+    }
+  }
+  if (!/<svg[\s>]/.test(text) || !/<\/svg>/.test(text)) fail(`${rel} has no <svg> root element`)
+}
+
 // ---- one design system, not three ------------------------------------------
 // There were three: the home page had tokens and dark mode, the popup had 21
 // hardcoded colours and no dark mode, the options page had 16 and no dark mode —

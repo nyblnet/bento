@@ -36,6 +36,35 @@ can be shown to be the reviewed one.
 Listing copy, permission justifications and the data-usage answers live in
 `STORE.md`.
 
+## Icons
+
+`icons/icon.svg` is the source of everything visual: the favicon for the
+extension's own pages, and the four PNGs Chrome takes for the toolbar action
+icon. It carries a corner radius, unlike `tray/assets/tray-icon.svg`, which is
+square because iOS applies its own squircle mask.
+
+The PNGs are exports of it and must be regenerated rather than edited:
+
+```bash
+cd tray/webext/icons
+for n in 16 32 48 128; do
+  printf '<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}svg{display:block;width:%dpx;height:%dpx}</style>' "$n" "$n" > /tmp/i.html
+  sed -n '/<svg/,$p' icon.svg >> /tmp/i.html
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+    --disable-gpu --hide-scrollbars --default-background-color=00000000 \
+    --window-size=$n,$n --screenshot=icon-$n.png /tmp/i.html
+done
+```
+
+Two things `pack-webext.mjs` refuses, both of which have already happened:
+
+- **A PNG with no alpha channel.** The originals were RGB, so opaque squares by
+  construction, and no radius anywhere could round the toolbar.
+- **An SVG that is not well-formed XML.** This command lives here rather than in
+  a comment inside `icon.svg` because an XML comment may not contain a double
+  hyphen, and every flag above has one. Pasting it in there made the file
+  malformed, and the mark rendered as a broken image on every surface.
+
 ## Distribution
 
 **The app stores are the main channel** — Chrome Web Store, Edge Add-ons, and
