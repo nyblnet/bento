@@ -88,6 +88,17 @@ function dirHandle(name: string, tree: Record<string, any>, perm = 'granted') {
 
 const noCache = { get: async () => null, put: async () => {} }
 
+/** A cache that behaves, so `sniff` actually runs. Without one it throws into a
+ *  `catch { continue }` and the rig quietly proves nothing. */
+const memCache = () => {
+  const m = new Map<string, any>()
+  return {
+    store: m,
+    get: async (k: string) => m.get(k) ?? null,
+    put: async (k: string, v: any) => { m.set(k, v) },
+  }
+}
+
 // ---- 1. what counts as a document ------------------------------------------
 {
   const tree = {
@@ -100,6 +111,7 @@ const noCache = { get: async () => null, put: async () => {} }
   const docs = await listDocuments({
     getGrants: async () => [dirHandle('Decks', tree)],
     prefixes: async () => ({}),
+    ...memCache(),
   })
   const names = docs.map((d: any) => d.name).sort()
   ok(names.length === 2 && names[0] === 'Plan.bento.html' && names[1] === 'Q3.bento.html',
@@ -116,6 +128,7 @@ const noCache = { get: async () => null, put: async () => {} }
   const docs = await listDocuments({
     getGrants: async () => [dirHandle('Decks', tree)],
     prefixes: async () => ({ Decks: '/Users/x/Decks' }),
+    ...memCache(),
   })
   ok(docs[0].path === '/Users/x/Decks/Clients/Plan.bento.html',
     'with a learned prefix the absolute path is reassembled — this is what makes a row clickable')
@@ -124,9 +137,87 @@ const noCache = { get: async () => null, put: async () => {} }
   // A lapsed folder cannot be read; the OTHER folders must still list.
   const good = dirHandle('Good', { 'A.bento.html': fileHandle('A.bento.html') })
   const bad = dirHandle('Bad', { 'B.bento.html': fileHandle('B.bento.html') }, 'prompt')
-  const docs = await listDocuments({ getGrants: async () => [bad, good], prefixes: async () => ({}) })
+  const docs = await listDocuments({ getGrants: async () => [bad, good], prefixes: async () => ({}), ...memCache() })
   ok(docs.length === 1 && docs[0].name === 'A.bento.html',
     'a lapsed folder is skipped rather than throwing, so one bad grant cannot empty the list')
+}
+
+// ---- 1b. a document is one because of what is INSIDE it ---------------------
+// The name is a convention, and people break conventions: renamed to email it,
+// saved with a "(1)", downloaded as .html. Those are still documents this can
+// open, and a regular expression on the name cannot see them.
+const BENTO = '<script id="bento-doc" type="application/json">{"title":"Renamed"}</script>'
+{
+  const cache = memCache()
+  const tree = {
+    'Q3.bento.html': fileHandle('Q3.bento.html', BENTO),
+    'deck.html': fileHandle('deck.html', BENTO),            // ours, renamed
+    'index.html': fileHandle('index.html', '<html>a web page</html>'),
+    'notes.txt': fileHandle('notes.txt', BENTO),            // ours, but not html
+    'huge.html': fileHandle('huge.html', `${'x'.repeat(200_000)}${BENTO}`), // marker past the sniff
+  }
+  const docs = await listDocuments({
+    getGrants: async () => [dirHandle('Decks', tree)], prefixes: async () => ({}), ...cache,
+  })
+  const names = docs.map((d: any) => d.name).sort()
+  ok(names.includes('deck.html'),
+    `a Bento document under another name is found (${names.join(', ')})`)
+  ok(!names.includes('index.html'),
+    'an ordinary web page in the same folder is not — the marker decides, not the extension')
+  ok(!names.includes('notes.txt'),
+    'and a non-html file is never opened at all, whatever is in it')
+  ok(!names.includes('huge.html'),
+    'a marker beyond the sniff window is not found — bounded, and the bound is honest')
+  ok(docs.find((d: any) => d.name === 'deck.html')?.base === 'deck',
+    'a renamed document loses only its extension when named')
+  ok(docs.find((d: any) => d.name === 'Q3.bento.html')?.named === true
+    && docs.find((d: any) => d.name === 'deck.html')?.named === false,
+    'and the two are distinguishable, because only one of them saves in place')
+}
+{
+  // The sniff must be cached, or every popup re-reads every stray .html.
+  const cache = memCache()
+  // Count CONTENT reads, not getFile(). The cache key is built from size and
+  // mtime, so a hit still asks for the File — that is metadata, and cheap. What
+  // must not happen twice is opening the bytes.
+  let bytesRead = 0
+  const counting = fileHandle('deck.html', BENTO)
+  const origGet = counting.getFile.bind(counting)
+  ;(counting as any).getFile = async () => {
+    const f: any = await origGet()
+    const origSlice = f.slice.bind(f)
+    f.slice = (a: number, b: number) => { bytesRead++; return origSlice(a, b) }
+    return f
+  }
+  const tree = { 'deck.html': counting }
+  const args = { getGrants: async () => [dirHandle('Decks', tree)], prefixes: async () => ({}), ...cache }
+  await listDocuments(args)
+  const first = bytesRead
+  await listDocuments(args)
+  ok(first === 1 && bytesRead === 1,
+    `a second listing opens no bytes (${first} then ${bytesRead} content reads)`)
+  ok([...cache.store.keys()].some((k) => k.startsWith('sniff:')),
+    'the verdict is cached under its own key, alongside titles and previews')
+}
+{
+  // A folder of a thousand unrelated pages must not cost a thousand reads
+  // FOREVER. The budget is per listing; named documents never spend from it.
+  const cache = memCache()
+  let reads = 0
+  const tree: Record<string, any> = {}
+  for (let i = 0; i < 500; i++) {
+    const h = fileHandle(`page${i}.html`, '<html>not ours</html>')
+    const orig = h.getFile.bind(h)
+    ;(h as any).getFile = async () => { reads++; return orig() }
+    tree[`page${i}.html`] = h
+  }
+  tree['Real.bento.html'] = fileHandle('Real.bento.html', BENTO)
+  const docs = await listDocuments({
+    getGrants: async () => [dirHandle('Decks', tree)], prefixes: async () => ({}), ...cache,
+  })
+  ok(reads <= 400, `sniffing is capped per listing (${reads} reads for 500 candidates)`)
+  ok(docs.some((d: any) => d.name === 'Real.bento.html'),
+    'and a properly named document is listed regardless — it never spends from the budget')
 }
 
 // ---- 2. title and preview, against a REAL shell -----------------------------

@@ -99,6 +99,13 @@
      from a thumbnail that failed to load. */
   .shot .label { position: absolute; inset: 0; display: grid; place-items: center;
     color: var(--dim); font-size: 12px; letter-spacing: .01em }
+  /* Found by content, not by name — so it opens from here but will still ask
+     where to save. Quiet, but present: half-support that looks like full
+     support is worse than no support. */
+  .card { position: relative }
+  .card .tag { position: absolute; top: 7px; right: 7px; background: var(--panel);
+    border: 1px solid var(--line); color: var(--dim); font-size: 10.5px; line-height: 1;
+    padding: 3px 5px; border-radius: 5px; letter-spacing: .02em }
   .shot { aspect-ratio: 16/9; background: var(--hover); position: relative; overflow: hidden;
     border-bottom: 1px solid var(--line) }
   .shot iframe { width: 1280px; height: 720px; border: 0; transform-origin: 0 0; position: absolute;

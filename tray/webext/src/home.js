@@ -190,8 +190,20 @@ function renderGrid() {
       card.title = `Bento Tray does not know where ${d.folder} is on disk yet. `
         + 'Use "Find my folders", or open any document in it from Finder once.'
     }
+    // Found by its CONTENT rather than its name. It lists and opens like any
+    // other, but the bridge that saves in place is a content script matching
+    // `file:///*.bento.html`, so this one will still ask where to put itself.
+    // Listing it without saying that would be a trap: the tray would look like
+    // it fully supports a document it half supports.
+    if (!d.named) {
+      card.classList.add('renamed')
+      card.title = `${d.name} is a Bento document under another name. It opens from here, `
+        + 'but saving will ask for a destination — in-place saving only recognises '
+        + 'files ending .bento.html.'
+    }
     card.innerHTML =
       `<span class="shot"><span class="glyph">${d.path ? '▤' : '⤺'}</span></span>` +
+      (d.named ? '' : '<span class="tag">.html</span>') +
       `<span class="cardbody"><span class="txt">` +
       `<b>${esc(d.title ?? d.base)}</b>` +
       `<span>${esc(d.folder)} · ${esc(ago(d.modified))}</span>` +
