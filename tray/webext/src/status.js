@@ -10,6 +10,7 @@
 // them — so every surface reads this and says so first.
 
 import { GRANT, get, put } from './db.js'
+import { t } from './i18n.js'
 
 /**
  * Every granted folder, oldest first.
@@ -81,9 +82,9 @@ export async function setLapsedBadge() {
     await chrome.action.setBadgeText({ text: stale ? '!' : '' })
     if (stale) {
       await chrome.action.setBadgeBackgroundColor?.({ color: '#C2453B' })
-      await chrome.action.setTitle?.({ title: 'Bento Tray — a folder needs reconnecting' })
+      await chrome.action.setTitle?.({ title: t('actionTitleLapsed') })
     } else {
-      await chrome.action.setTitle?.({ title: 'Bento Tray' })
+      await chrome.action.setTitle?.({ title: t('actionTitle') })
     }
     return stale
   } catch {
@@ -126,10 +127,9 @@ export async function notifyIfLapsed(stale) {
     await chrome.notifications.create('bento-tray-lapsed', {
       type: 'basic',
       iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
-      title: 'Bento Tray needs reconnecting',
-      message: 'Chrome dropped permission for a folder. Until it is restored, saving '
-        + 'a document will ask you where to put it.',
-      buttons: [{ title: 'Reconnect' }],
+      title: t('notifyLapsedTitle'),
+      message: t('notifyLapsedBody'),
+      buttons: [{ title: t('reconnect') }],
       requireInteraction: false,
     })
   } catch {

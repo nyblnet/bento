@@ -17,6 +17,7 @@ import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '.
 import { prefixFor } from './route.js'
 import { learnPrefix } from './db.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
+import { t, localize } from './i18n.js'
 
 /**
  * Find the granted folders on disk, without sending anyone to Finder.
@@ -84,12 +85,12 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
 
 const ago = (ms) => {
   const m = Math.round((Date.now() - ms) / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m} min ago`
+  if (m < 1) return t('agoJustNow')
+  if (m < 60) return t('agoMinutes', m)
   const h = Math.round(m / 60)
-  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`
+  if (h < 24) return t(h === 1 ? 'agoHour' : 'agoHours', h)
   const d = Math.round(h / 24)
-  if (d < 30) return `${d} day${d === 1 ? '' : 's'} ago`
+  if (d < 30) return t(d === 1 ? 'agoDay' : 'agoDays', d)
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
@@ -201,9 +202,7 @@ function visible() {
 function firstRun() {
   const el = document.createElement('div')
   el.className = 'empty'
-  el.innerHTML = '<h2>Two things and you are set up</h2>'
-    + '<p>After this, ⌘S on a document you opened by double-clicking writes '
-    + 'straight back to the file — no destination prompt, ever.</p>'
+  el.innerHTML = `<h2>${t('setupTitle')}</h2><p>${t('setupLead')}</p>`
 
   const steps = document.createElement('div')
   steps.className = 'steps'
@@ -218,14 +217,11 @@ function firstRun() {
 
   const pick = document.createElement('button')
   pick.className = 'btn primary'
-  pick.textContent = 'Choose a folder…'
+  pick.textContent = t('chooseFolder')
   pick.onclick = () => $('addFolder').click()
-  step(1, !!state.grants, 'Choose the folder your documents live in',
-    'One broad folder is usually enough — it covers everything inside it.', pick)
+  step(1, !!state.grants, t('setupStep1'), t('setupStep1Note'), pick)
 
-  step(2, state.fileAccess === true, 'Turn on local file access',
-    'In <code>chrome://extensions</code> → Bento Tray → <b>Allow access to file URLs</b>. '
-    + 'Chrome does not let an extension turn this on for itself.')
+  step(2, state.fileAccess === true, t('setupStep2'), t('setupStep2Note'))
 
   el.appendChild(steps)
 
@@ -239,11 +235,7 @@ function firstRun() {
     const note = document.createElement('p')
     note.className = 'sub'
     note.style.marginTop = '14px'
-    note.innerHTML = '<b>Upgrading and expected your folders to be here?</b> '
-      + 'An unpacked extension is identified by its folder path, so loading a new copy '
-      + 'from a different folder makes it a different extension. Your folders are still '
-      + 'granted to the old one. Replace the files in the original folder and press '
-      + '<b>Reload</b> in <code>chrome://extensions</code> instead.'
+    note.innerHTML = t('setupUpgradeNote')
     el.appendChild(note)
   }
   return el
@@ -267,20 +259,20 @@ function renderGrid() {
   scroll.innerHTML = '<div class="grid" id="grid"></div>'
   const grid = $('grid')
   const docs = visible()
-  $('heading').textContent = state.folder ?? 'All documents'
+  $('heading').textContent = state.folder ?? t('navAll')
 
   if (!docs.length) {
     // Three different emptinesses, and telling them apart is the whole job of
     // an empty state. Nothing installed yet is a set-up problem; nothing found
     // is a search problem; an empty folder is neither.
     if (state.q) {
-      grid.innerHTML = `<div class="empty"><h2>Nothing matches “${esc(state.q)}”</h2>`
-        + '<p>Search looks at titles, file names and folders.</p></div>'
+      grid.innerHTML = `<div class="empty"><h2>${esc(t('noMatches', state.q))}</h2>`
+        + `<p>${t('searchScope')}</p></div>`
     } else if (!state.grants) {
       grid.appendChild(firstRun())
     } else {
-      grid.innerHTML = '<div class="empty"><h2>Nothing in this folder yet</h2>'
-        + '<p><b>+ New document</b> puts a fresh one here.</p></div>'
+      grid.innerHTML = `<div class="empty"><h2>${t('folderEmpty')}</h2>`
+        + `<p>${t('folderEmptyHint')}</p></div>`
     }
     return
   }
@@ -297,8 +289,7 @@ function renderGrid() {
     if (!d.path) {
       card.disabled = true
       card.classList.add('unplaced')
-      card.title = `Bento Tray does not know where ${d.folder} is on disk yet. `
-        + 'Use "Find my folders", or open any document in it from Finder once.'
+      card.title = t('cardUnplacedTip', d.folder)
     }
     // Found by its CONTENT rather than its name. It lists and opens like any
     // other, but the bridge that saves in place is a content script matching
@@ -307,9 +298,7 @@ function renderGrid() {
     // it fully supports a document it half supports.
     if (!d.named) {
       card.classList.add('renamed')
-      card.title = `${d.name} is a Bento document under another name. It opens from here, `
-        + 'but saving will ask for a destination — in-place saving only recognises '
-        + 'files ending .bento.html.'
+      card.title = t('cardRenamedTip', d.name)
     }
     card.innerHTML =
       `<span class="shot"><span class="glyph">${d.path ? '▤' : '⤺'}</span></span>` +
@@ -318,8 +307,7 @@ function renderGrid() {
       `<b>${esc(d.title ?? d.base)}</b>` +
       `<span>${esc(d.folder)} · ${esc(ago(d.modified))}</span>` +
       `</span><span class="more" title="More">⋯</span></span>`
-    if (!d.named) badge(card, '.html', 'Named .html rather than .bento.html — it opens from '
-      + 'here, but saving will ask for a destination.')
+    if (!d.named) badge(card, '.html', t('badgeRenamed'))
 
     card.addEventListener('click', (ev) => {
       if (ev.target.closest('.more')) { ev.stopPropagation(); openMenu(d, ev); return }
@@ -355,7 +343,7 @@ async function decorate(card, d) {
     }
     const shot = card.querySelector('.shot')
     if (meta.encrypted) {
-      shot.innerHTML = '<span class="glyph" title="Password-protected">🔒</span>'
+      shot.innerHTML = `<span class="glyph" title="${t('encrypted')}">🔒</span>`
       return
     }
     if (!meta.preview) {
@@ -363,7 +351,7 @@ async function decorate(card, d) {
       // page-one render written in on the FIRST SAVE, so a document that has
       // never been saved — including every one `+ New document` creates — has
       // nothing to show yet, and says so instead of sitting there blank.
-      if (d.path) shot.innerHTML = '<span class="label">Not saved yet</span>'
+      if (d.path) shot.innerHTML = `<span class="label">${t('notSavedYet')}</span>`
       return
     }
     shot.innerHTML = ''
@@ -411,23 +399,23 @@ function openMenu(d, ev) {
     m.appendChild(b)
   }
 
-  if (d.path) item('Open', () => openDoc(d))
-  item('Duplicate', async () => {
+  if (d.path) item(t('menuOpen'), () => openDoc(d))
+  item(t('menuDuplicate'), async () => {
     const made = await duplicate(d)
-    toast(`Duplicated as ${made.base}`)
+    toast(t('duplicatedAs', made.base))
     await load()
   })
-  item('Rename…', async () => {
-    const next = prompt('Rename document', d.title ?? d.base)
+  item(t('menuRename'), async () => {
+    const next = prompt(t('renamePrompt'), d.title ?? d.base)
     if (next == null) return
     const made = await rename(d, next)
-    toast(`Renamed to ${made.base}`)
+    toast(t('renamedTo', made.base))
     await load()
   })
   if (d.path) {
-    item('Copy path', async () => {
+    item(t('menuCopyPath'), async () => {
       await navigator.clipboard.writeText(d.path)
-      toast('Path copied')
+      toast(t('pathCopied'))
     })
   }
   // No Delete. A file manager that can destroy documents needs an undo, a trash
@@ -436,7 +424,7 @@ function openMenu(d, ev) {
   m.appendChild(Object.assign(document.createElement('div'), { className: 'sep' }))
   const note = document.createElement('div')
   note.className = 'note'
-  note.textContent = d.path ? `${d.folder}/${d.name}` : `${d.folder} — not opened yet`
+  note.textContent = d.path ? `${d.folder}/${d.name}` : t('folderNotOpenedYet', d.folder)
   m.appendChild(note)
 
   document.body.appendChild(m)
@@ -458,8 +446,7 @@ async function renderNotice() {
   if (s.files === false) {
     // One sentence, then where to go. The reason it cannot be automated is
     // interesting to us and not to someone trying to save a document.
-    say('bad', '<b>Local file access is off</b> — nothing saves in place until it is on. '
-      + 'Turn on <b>Allow access to file URLs</b> in <code>chrome://extensions</code>.')
+    say('bad', t('noticeFileAccessOff'))
   }
   // An update, for installs that will never fetch one themselves. Deliberately
   // NOT on the badge: the badge means "something is broken and saving will
@@ -478,21 +465,17 @@ async function renderNotice() {
     // Replacing the files in the SAME folder keeps the id, so everything
     // survives. That is the whole instruction, and it has to be said or the
     // obvious path is the destructive one.
-    say('', `<b>Bento Tray ${esc(upd.version)} is available.</b> `
-      + 'This copy was loaded unpacked, so Chrome will never update it.'
+    say('', t('updateAvailable', esc(upd.version))
       + '<ol style="margin:8px 0 0;padding-left:18px">'
-      + `<li><a href="${esc(upd.url)}" target="_blank" rel="noopener">Download it from GitHub</a></li>`
-      + '<li>Replace the files <b>in the folder you loaded it from</b> — same folder, '
-      + 'or Chrome treats it as a different extension and your granted folders do not '
-      + 'come with it</li>'
-      + '<li>Open <code>chrome://extensions</code> and press <b>Reload</b> on Bento Tray</li>'
+      + `<li><a href="${esc(upd.url)}" target="_blank" rel="noopener">${t('updateStep1')}</a></li>`
+      + `<li>${t('updateStep2')}</li>`
+      + `<li>${t('updateStep3')}</li>`
       + '</ol>')
   }
 
   const lapsed = s.folders.filter((f) => f.permission !== 'granted')
   if (lapsed.length) {
-    say('bad', `<b>${lapsed.length} folder needs reconnecting.</b> Reconnect it in `
-      + '<b>Settings</b>, and choose <b>Allow on every visit</b> — the only option that lasts.')
+    say('bad', t('noticeLapsed', lapsed.length))
   }
   // The one that unlocks opening. Said here in full, because the page has room
   // for the reason and the popup does not.
@@ -500,35 +483,33 @@ async function renderNotice() {
   if (unplaced.length) {
     const el = document.createElement('div')
     el.className = 'notice'
-    el.innerHTML = `<b>${esc(unplaced.join(', '))}</b> can be listed but not opened yet — `
-      + 'Chrome never tells an extension where a folder is on disk.'
+    el.innerHTML = t('noticeUnplaced', esc(unplaced.join(', ')))
     const go = document.createElement('button')
     go.className = 'btn primary'
     go.style.marginTop = '9px'
-    go.textContent = 'Find my folders'
+    go.textContent = t('findFolders')
     go.addEventListener('click', async () => {
       go.disabled = true
-      go.textContent = 'Looking…'
+      go.textContent = t('looking')
       try {
         const { learned, declined } = await locateFolders()
         if (declined) {
           go.disabled = false
-          go.textContent = 'Find my folders'
+          go.textContent = t('findFolders')
           // Declining is a legitimate answer, not an error. The manual route
           // still works and costs one trip to Finder, so say so plainly rather
           // than asking again.
-          el.innerHTML = '<b>No problem.</b> Open any document in '
-            + `${esc(unplaced.join(' or '))} from Finder once instead — this page notices.`
+          el.innerHTML = t('findDeclined', esc(unplaced.join(' or ')))
           return
         }
         await load()
         await renderNotice()
         toast(learned
-          ? `Found ${learned} folder${learned === 1 ? '' : 's'}`
-          : 'Nothing in history yet — open one document from Finder')
+          ? t(learned === 1 ? 'foundFolder' : 'foundFolders', learned)
+          : t('foundNothing'))
       } catch (e) {
         go.disabled = false
-        go.textContent = 'Find my folders'
+        go.textContent = t('findFolders')
         toast(e.message)
       }
     })
@@ -599,13 +580,13 @@ $('new').addEventListener('click', async (ev) => {
       closeMenu()
       const btn = $('new')
       btn.disabled = true
-      btn.textContent = `Fetching ${app.name}…`
+      btn.textContent = t('fetchingApp', app.name)
       try {
         // The signed release, fetched now, rather than a copy bundled in the
         // extension: a document made here is the same build everyone else has
         // today, and the extension never needs re-reviewing to keep up.
         const made = await newDocument(target, 'Untitled', { app: app.id })
-        toast(`Created ${made.base} (${made.app} ${made.version}) in ${target.name}`)
+        toast(t('createdIn', made.base, `${made.app} ${made.version}`, target.name))
         await load()
       } catch (e) {
         toast(e.message)
@@ -618,7 +599,7 @@ $('new').addEventListener('click', async (ev) => {
   }
   const note = document.createElement('div')
   note.className = 'note'
-  note.textContent = `into ${target.name}`
+  note.textContent = t('intoFolder', target.name)
   m.appendChild(Object.assign(document.createElement('div'), { className: 'sep' }))
   m.appendChild(note)
 
@@ -642,7 +623,7 @@ $('help').addEventListener('click', () => show('help'))
  * which is when people actually look for help.
  */
 async function renderHelp() {
-  $('heading').textContent = 'Help & about'
+  $('heading').textContent = t('navHelp')
   const s = await status()
   const mine = chrome.runtime.getManifest().version
   const wrap = document.createElement('div')
@@ -656,32 +637,24 @@ async function renderHelp() {
   }
 
   // --- what it is for
-  const what = section('What Bento Tray does',
-    'A Bento document is one HTML file that carries its own editor. Opened straight '
-    + 'from disk, a browser will not let it write back to itself — so saving asks you '
-    + 'where to put it, every time. Bento Tray is what removes that question.')
+  const what = section(t('helpWhatTitle'), t('helpWhatSub'))
   const tour = document.createElement('div')
   tour.className = 'tour'
-  for (const [t, p] of [
-    ['Save in place', '⌘S writes straight back to the file you opened, with no dialog. '
-      + 'Autosave and in-place updates go the same way.'],
-    ['Find your documents', 'Every Bento document in your folders, with its real title '
-      + 'and a picture of its first page. Search covers what is written inside them.'],
-    ['Switch while you work', 'Press <kbd>Alt</kbd>+<kbd>B</kbd>, or right-click inside a '
-      + 'document, for a panel beside it.'],
-    ['Make a new one', '<b>+ New document</b> fetches the current release of Slides, '
-      + 'Spaces or Dash and puts a fresh document in your folder.'],
+  for (const [title, body] of [
+    [t('tourSaveTitle'), t('tourSaveBody')],
+    [t('tourFindTitle'), t('tourFindBody')],
+    [t('tourSwitchTitle'), t('tourSwitchBody')],
+    [t('tourNewTitle'), t('tourNewBody')],
   ]) {
     const c = document.createElement('div')
     c.className = 'card'
-    c.innerHTML = `<b>${esc(t)}</b><p>${p}</p>`
+    c.innerHTML = `<b>${esc(title)}</b><p>${body}</p>`
     tour.appendChild(c)
   }
   what.appendChild(tour)
 
   // --- what it needs, live
-  const needs = section('What it needs from you',
-    'Two things, both outside this extension\'s power to arrange.')
+  const needs = section(t('helpNeedsTitle'), t('helpNeedsSub'))
   const step = (done, title, note) => {
     const el = document.createElement('div')
     el.className = `row${done ? '' : ''}`
@@ -690,43 +663,31 @@ async function renderHelp() {
     needs.appendChild(el)
     return el
   }
-  const folderRow = step(s.folders.length > 0, 'A folder',
-    s.folders.length
-      ? `${s.folders.length} granted — documents inside them save in place`
-      : 'Not chosen yet. One broad folder covers everything inside it.')
+  const folderRow = step(s.folders.length > 0, t('helpFolder'),
+    s.folders.length ? t('helpFolderGranted', s.folders.length) : t('helpFolderNone'))
   if (!s.folders.length) {
     const b = document.createElement('button')
     b.className = 'btn'
-    b.textContent = 'Choose a folder…'
+    b.textContent = t('chooseFolder')
     b.onclick = () => $('addFolder').click()
     folderRow.appendChild(b)
   }
-  step(s.files !== false, 'Local file access',
-    s.files === false
-      ? 'Off. Turn on <b>Allow access to file URLs</b> in <code>chrome://extensions</code> — '
-        + 'no extension can turn this on for itself.'
-      : s.files === null
-        ? 'This browser will not report it. If saves still prompt, check it in '
-          + '<code>chrome://extensions</code>.'
-        : 'On — Bento Tray can read pages you opened from disk.')
+  step(s.files !== false, t('setAccessTitle'),
+    s.files === false ? t('helpAccessOff')
+      : s.files === null ? t('helpAccessUnknown') : t('helpAccessOn'))
 
   // --- what it never does
-  section('What it never does',
-    'It reads and writes only inside the folders above, and only the file a page was '
-    + 'actually opened from — the browser tells it which, so a document cannot name '
-    + 'somebody else\'s file. Nothing about your documents is uploaded anywhere, and '
-    + 'the extension has no server to upload them to.')
+  section(t('helpNeverTitle'), t('helpNeverSub'))
 
   // --- where it came from
-  const about = section('About',
-    `Bento Tray ${esc(mine)} · part of the Bento project · MIT licensed`)
+  const about = section(t('helpAboutTitle'), t('helpAboutSub', esc(mine)))
   const links = document.createElement('div')
   links.className = 'links'
   for (const [label, href] of [
     ['bento.page', 'https://bento.page'],
-    ['Source on GitHub', 'https://github.com/nyblnet/bento'],
-    ['Report a problem', 'https://github.com/nyblnet/bento/issues'],
-    ['Releases', 'https://github.com/nyblnet/bento/releases'],
+    [t('linkSource'), 'https://github.com/nyblnet/bento'],
+    [t('linkIssues'), 'https://github.com/nyblnet/bento/issues'],
+    [t('linkReleases'), 'https://github.com/nyblnet/bento/releases'],
   ]) {
     const a = document.createElement('a')
     a.className = 'btn'
@@ -751,7 +712,7 @@ async function renderHelp() {
  * neither.
  */
 async function renderSettings() {
-  $('heading').textContent = 'Settings'
+  $('heading').textContent = t('navSettings')
   const s = await status()
   const dirs = await getGrants()
   const wrap = document.createElement('div')
@@ -765,13 +726,11 @@ async function renderSettings() {
   }
 
   // --- folders
-  const folders = section('Folders',
-    'Documents in these save straight back to the file, with no destination prompt. '
-    + 'A folder covers everything inside it.')
+  const folders = section(t('navFolders'), t('setFoldersSub'))
   if (!dirs.length) {
     const p = document.createElement('p')
     p.className = 'dim'
-    p.textContent = 'None yet.'
+    p.textContent = t('noneYet')
     folders.appendChild(p)
   }
   dirs.forEach((dir, i) => {
@@ -779,13 +738,12 @@ async function renderSettings() {
     const row = document.createElement('div')
     row.className = 'row'
     row.innerHTML = `<span class="dot ${granted ? 'ok' : 'bad'}"></span><b>${esc(dir.name)}</b>`
-      + `<span class="note">${granted ? 'saves in place' : 'needs reconnecting'}</span>`
+      + `<span class="note">${granted ? t('savesInPlace') : t('needsReconnecting')}</span>`
     if (!granted) {
       const renew = document.createElement('button')
       renew.className = 'btn'
-      renew.textContent = 'Reconnect'
-      renew.title = 'Chrome will ask to restore this folder. "Don\'t allow" drops it, and '
-        + 'Chrome then waits a restart or more before offering again.'
+      renew.textContent = t('reconnect')
+      renew.title = t('reconnectTip')
       renew.onclick = () => act(async () => {
         if (await dir.requestPermission({ mode: 'readwrite' }) === 'granted') await putGrants(dirs)
       })
@@ -793,12 +751,11 @@ async function renderSettings() {
     }
     const drop = document.createElement('button')
     drop.className = 'btn'
-    drop.textContent = 'Remove'
+    drop.textContent = t('remove')
     // This list is the only place access can be withdrawn — Chrome offers no
     // control for extension origins — so Remove is a real revoke: with no
     // folder stored there is nothing to write through.
-    drop.title = 'Takes access away. Chrome may still remember the permission, so adding '
-      + 'the folder back may not ask again.'
+    drop.title = t('removeTip')
     drop.onclick = () => act(async () => {
       const next = [...dirs]; next.splice(i, 1); await putGrants(next)
     })
@@ -807,57 +764,75 @@ async function renderSettings() {
   })
   const add = document.createElement('button')
   add.className = 'btn'
-  add.textContent = '+ Add a folder…'
+  add.textContent = t('addFolder')
   add.onclick = () => $('addFolder').click()
   folders.appendChild(add)
 
   // --- the permission nothing can request
-  const access = section('Local file access',
-    'Chrome will not let an extension turn this on for itself, and nothing works without it.')
+  const access = section(t('setAccessTitle'), t('setAccessSub'))
   const row = document.createElement('div')
   row.className = 'row'
   const ok = s.files === true
   row.innerHTML = `<span class="dot ${ok ? 'ok' : s.files === false ? 'bad' : 'meh'}"></span>`
-    + `<b>${ok ? 'On' : s.files === false ? 'Off' : 'Unknown'}</b>`
+    + `<b>${ok ? t('stateOn') : s.files === false ? t('stateOff') : t('stateUnknown')}</b>`
     + `<span class="note">${ok
-      ? 'Bento Tray can read pages you opened from disk.'
-      : s.files === false
-        ? 'Open chrome://extensions, find Bento Tray, turn on "Allow access to file URLs".'
-        : 'This browser will not report it. If saves still prompt, check it in chrome://extensions.'}</span>`
+      ? t('accessOnNote')
+      : s.files === false ? t('accessOffNote') : t('accessUnknownNote')}</span>`
   access.appendChild(row)
 
   // --- version, and whether this copy can update itself
   const mine = chrome.runtime.getManifest().version
   const selfManaged = await isSelfManaged()
   const upd = await pendingUpdate()
-  const ver = section('Version',
-    selfManaged
-      ? 'This copy was loaded unpacked, so Chrome will never update it.'
-      : 'Installed from the store, so it updates itself.')
+  const ver = section(t('setVersionTitle'),
+    selfManaged ? t('setVersionUnpacked') : t('setVersionStore'))
   const vrow = document.createElement('div')
   vrow.className = 'row'
   vrow.innerHTML = `<span class="dot ${upd?.version ? 'meh' : 'ok'}"></span><b>${esc(mine)}</b>`
     + `<span class="note">${upd?.version
-      ? `${esc(upd.version)} is available`
-      : selfManaged ? 'up to date as of the last check' : 'kept current by the browser'}</span>`
+      ? t('versionAvailable', esc(upd.version))
+      : selfManaged ? t('versionUpToDate') : t('versionManaged')}</span>`
   if (upd?.version) {
     const link = document.createElement('a')
     link.className = 'btn'
     link.href = upd.url
     link.target = '_blank'
     link.rel = 'noopener'
-    link.textContent = 'Get it'
+    link.textContent = t('getIt')
     vrow.appendChild(link)
   }
   if (selfManaged) {
     const now = document.createElement('button')
     now.className = 'btn'
-    now.textContent = 'Check now'
+    now.textContent = t('checkNow')
     // `force`: pressing a button IS consent, whatever the preference says.
     now.onclick = () => act(async () => { await checkForUpdate({ force: true }) })
     vrow.appendChild(now)
   }
   ver.appendChild(vrow)
+
+  // The switch for the one outbound request this extension makes.
+  //
+  // THIS WAS CLAIMED AND NOT DELIVERED. The commit that argued for "on by
+  // default, switchable, disclosed" shipped the preference in update.js, the
+  // rig that covers it, and no way for anyone to change it — a script's anchor
+  // text did not match, `String.replace` no-opped, and nothing asserted. The
+  // argument for the default rests entirely on this control existing.
+  if (selfManaged) {
+    const on = await autoCheckEnabled()
+    const pref = document.createElement('label')
+    pref.className = 'row'
+    pref.style.cursor = 'pointer'
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    box.checked = on
+    box.onchange = () => act(async () => { await setAutoCheck(box.checked) })
+    const txt = document.createElement('span')
+    txt.className = 'note'
+    txt.innerHTML = t('autoCheckPref')
+    pref.append(box, txt)
+    ver.appendChild(pref)
+  }
   // The package is byte-reproducible, so a published digest is checkable by the
   // person doing the install — which is the only verification available when
   // the browser is not doing the updating.
@@ -865,14 +840,12 @@ async function renderSettings() {
     const sum = document.createElement('p')
     sum.className = 'sub'
     sum.style.marginTop = '8px'
-    sum.innerHTML = `Expected SHA-256 of the zip: <code>${esc(upd.sha256)}</code>`
+    sum.innerHTML = t('expectedSha', `<code>${esc(upd.sha256)}</code>`)
     ver.appendChild(sum)
   }
 
   // --- what the extension will never do
-  const about = section('What this can reach',
-    'Only the folders above, and only the file a page was actually opened from. '
-    + 'Nothing is uploaded and nothing is read anywhere else.')
+  const about = section(t('setReachTitle'), t('setReachSub'))
   void about
 
   const scroll = document.querySelector('.scroll')
@@ -920,6 +893,7 @@ document.addEventListener('visibilitychange', () => {
 // A fresh install is sent here by the worker (`#welcome`), because the first
 // question is "what did I just install and what does it want" — and a grid of
 // documents it cannot see yet answers none of it.
+localize()
 if (location.hash === '#welcome' || location.hash === '#help') show('help')
 
 await load()

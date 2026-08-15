@@ -33,6 +33,7 @@
 import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { checkForUpdate } from './update.js'
 import { learnPrefix } from './db.js'
+import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
@@ -368,7 +369,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     chrome.contextMenus?.removeAll(() => {
       chrome.contextMenus.create({
         id: 'bento-tray-panel',
-        title: 'Open Bento Tray panel',
+        title: t('ctxOpenPanel'),
         contexts: ['page'],
         documentUrlPatterns: ['file:///*'],
       })

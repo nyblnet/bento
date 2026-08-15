@@ -69,7 +69,7 @@
 <header>
   <div class="search">
     <span class="mag">⌕</span>
-    <input id="q" type="search" placeholder="Search documents" autocomplete="off">
+    <input id="q" type="search" data-i18n-placeholder="searchDocs" autocomplete="off">
   </div>
   <span class="count" id="count"></span>
 </header>
@@ -81,19 +81,19 @@
   <div class="status">
     <span class="dot" id="dot"></span>
     <span class="grow" id="statusText"></span>
-    <button class="btn link" id="browse">Browse all</button>
-    <button class="btn link" id="open">Settings</button>
+    <button class="btn link" id="browse" data-i18n="browseAll"></button>
+    <button class="btn link" id="open" data-i18n="navSettings"></button>
   </div>
 
   <div class="prime" id="prime" hidden>
-    <p>Chrome will ask next. Pick the middle one:</p>
-    <div class="opt">Allow this time</div>
-    <div class="opt pick">Allow on every visit</div>
-    <div class="opt">Don’t allow</div>
+    <p data-i18n="primeIntro"></p>
+    <div class="opt" data-i18n="primeAllowOnce"></div>
+    <div class="opt pick" data-i18n="primeAllowAlways"></div>
+    <div class="opt" data-i18n="primeDeny"></div>
   </div>
 
-  <button class="btn primary" id="renew" hidden>Reconnect folders</button>
-  <button class="btn" id="new">+ New document</button>
+  <button class="btn primary" id="renew" data-i18n="reconnectFolders" hidden></button>
+  <button class="btn" id="new" data-i18n="newDocument"></button>
 </footer>
 
 <script type="module" src="panel.js"></script>

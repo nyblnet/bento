@@ -143,33 +143,33 @@
   </div>
 
   <button class="navitem" id="navAll" aria-current="true">
-    <span class="dot"></span> All documents <span class="n" id="nAll"></span>
+    <span class="dot"></span> <span data-i18n="navAll"></span> <span class="n" id="nAll"></span>
   </button>
 
-  <div class="seclabel">Folders</div>
+  <div class="seclabel" data-i18n="navFolders"></div>
   <div id="folders"></div>
 
-  <button class="btn ghost" id="addFolder">+ Add a folder…</button>
+  <button class="btn ghost" id="addFolder" data-i18n="addFolder"></button>
 
   <div class="spacer"></div>
-  <button class="navitem" id="help"><span class="dot"></span> Help &amp; about</button>
-  <button class="navitem" id="settings"><span class="dot"></span> Settings</button>
+  <button class="navitem" id="help"><span class="dot"></span> <span data-i18n="navHelp"></span></button>
+  <button class="navitem" id="settings"><span class="dot"></span> <span data-i18n="navSettings"></span></button>
 </aside>
 
 <main>
   <div class="bar">
-    <h1 id="heading">All documents</h1>
+    <h1 id="heading" data-i18n="navAll"></h1>
     <div class="search" id="searchWrap">
       <span class="mag">⌕</span>
-      <input id="q" type="search" placeholder="Search documents   /" autocomplete="off">
+      <input id="q" type="search" data-i18n-placeholder="searchDocsSlash" autocomplete="off">
     </div>
-    <select id="sort" title="Sort">
-      <option value="recent">Recently changed</option>
-      <option value="name">Name</option>
-      <option value="folder">Folder</option>
+    <select id="sort" data-i18n-title="sortTitle">
+      <option value="recent" data-i18n="sortRecent"></option>
+      <option value="name" data-i18n="sortName"></option>
+      <option value="folder" data-i18n="sortFolder"></option>
     </select>
     <span class="grow"></span>
-    <button class="btn primary" id="new">+ New document</button>
+    <button class="btn primary" id="new" data-i18n="newDocument"></button>
   </div>
 
   <div id="notice"></div>

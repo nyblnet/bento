@@ -10,6 +10,7 @@
 // that stays quiet while things work.
 
 import { getGrants, putGrants, status, setLapsedBadge } from './status.js'
+import { t, localize } from './i18n.js'
 import { listDocuments, describe, newDocument } from './library.js'
 
 const $ = (id) => document.getElementById(id)
@@ -44,7 +45,7 @@ async function renderDocs() {
   if (!docs.length) {
     $('count').textContent = ''
     $('empty').hidden = false
-    $('empty').textContent = 'No Bento documents in your folders yet.'
+    $('empty').textContent = t('panelEmpty')
     return
   }
 
@@ -78,7 +79,7 @@ function draw() {
     ? `${withTimes.length} of ${all.length}`
     : `${all.length} document${all.length === 1 ? '' : 's'}`
   $('empty').hidden = withTimes.length > 0
-  if (!withTimes.length) $('empty').textContent = `Nothing matches “${$('q').value.trim()}”`
+  if (!withTimes.length) $('empty').textContent = t('noMatches', $('q').value.trim())
 
   const list = $('docs')
   list.innerHTML = ''
@@ -95,8 +96,7 @@ function draw() {
     // rather than having a click do nothing.
     if (!d.path) {
       row.disabled = true
-      row.title = `Open any document in ${d.folder} once from Finder, and everything in `
-        + 'that folder becomes openable from here.'
+      row.title = t('rowUnplacedTip', d.folder)
       unplaced.add(d.folder)
     }
     row.innerHTML =
@@ -121,7 +121,7 @@ function draw() {
         row.querySelector('b').textContent = meta.title
         const thumb = row.querySelector('[data-thumb]')
         if (meta.encrypted) {
-          thumb.innerHTML = '<span class="lock" title="Password-protected">🔒</span>'
+          thumb.innerHTML = `<span class="lock" title="${t('encrypted')}">🔒</span>`
         } else if (meta.preview) {
           // The preview block scales itself to whatever viewport it lands in —
           // that is what it was written for — so a fixed-size sandboxed frame
@@ -135,7 +135,7 @@ function draw() {
           // No preview and not encrypted: a document that has never been saved,
           // which is exactly what "+ New document" just made. A page glyph says
           // "nothing rendered yet"; blank white says "this is broken".
-          thumb.innerHTML = '<span class="blank" title="Not saved yet">▤</span>'
+          thumb.innerHTML = `<span class="blank" title="${t('notSavedYet')}">▤</span>`
         }
       } catch { /* a row without a picture is still a row */ }
     })()
@@ -164,18 +164,18 @@ async function renderStatus() {
 
   if (s.files === false) {
     dot.className = 'dot bad'
-    text.innerHTML = '<span class="warn">Local file access is off</span>'
+    text.innerHTML = `<span class="warn">${t('fileAccessOffShort')}</span>`
   } else if (!s.folders.length) {
     dot.className = 'dot meh'
-    text.textContent = 'No folders yet'
+    text.textContent = t('noFoldersYet')
   } else if (lapsed) {
     dot.className = 'dot bad'
-    text.innerHTML = `<span class="warn">${s.folders.filter((f) => f.permission !== 'granted').length} `
-      + 'folder needs reconnecting</span>'
+    text.innerHTML = `<span class="warn">${
+      t('foldersNeedReconnect', s.folders.filter((f) => f.permission !== 'granted').length)}</span>`
   } else {
     dot.className = 'dot ok'
     const n = s.folders.length
-    text.textContent = `${n} folder${n === 1 ? '' : 's'} · saves in place`
+    text.textContent = t(n === 1 ? 'statusOneFolder' : 'statusFolders', n)
   }
 
   $('renew').hidden = !lapsed
@@ -220,9 +220,9 @@ $('renew').addEventListener('click', async () => {
     // A silent refusal is "not yet", not "never": Chrome only offers the
     // restore prompt while the grant is dormant-and-eligible, so it can be
     // unavailable for a session or two and then return by itself.
-    $('statusText').innerHTML = '<span class="warn">Chrome did not offer to restore it</span>'
+    $('statusText').innerHTML = `<span class="warn">${t('renewNotOffered')}</span>`
     $('prime').hidden = true
-    btn.textContent = 'Try again after restarting Chrome'
+    btn.textContent = t('renewTryAfterRestart')
     return
   }
   location.reload()
@@ -233,19 +233,19 @@ $('new').addEventListener('click', async () => {
   const grants = await getGrants()
   if (!grants.length) { chrome.runtime.openOptionsPage(); return }
   btn.disabled = true
-  btn.textContent = 'Fetching the latest Bento…'
+  btn.textContent = t('fetchingLatest')
   try {
     // Into the first granted folder. Choosing between folders is a dialog this
     // popup does not need: the common case is one folder, and a document in the
     // wrong place is a drag away.
     const made = await newDocument(grants[0])
-    btn.textContent = `Created ${made.base}`
+    btn.textContent = t('created', made.base)
     await renderDocs()
     btn.disabled = false
-    btn.textContent = '+ New document'
+    btn.textContent = t('newDocument')
   } catch (e) {
     btn.disabled = false
-    btn.textContent = '+ New document'
+    btn.textContent = t('newDocument')
     $('statusText').innerHTML = `<span class="warn">${esc(e.message)}</span>`
   }
 })
@@ -262,5 +262,6 @@ $('open').addEventListener('click', () => {
   chrome.runtime.openOptionsPage()
 })
 
+localize()
 await renderStatus()
 await renderDocs()
