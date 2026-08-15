@@ -53,6 +53,15 @@ and only a non-`normal` install ever checks. Store users are never asked and
 never see a notice they cannot act on. The check is a GET for a static JSON file
 with no identifiers and no query string; it can report, link, and nothing else.
 
+**On by default, and switchable.** On, because an unpacked install has no other
+way to learn it is behind, and because the app itself checks at launch by
+default (`kernel/src/update.ts`). Switchable, because this repo has form on the
+other side — the v0.9.1 fix existed so an anonymous visitor never phones home —
+and the audience that installs from GitHub is exactly the one entitled to say
+no. The switch is in Settings, next to what it does, and OFF means no request is
+made at all rather than a result quietly discarded. **Check now** still works
+when it is off: pressing a button is the consent the preference stands in for.
+
 ### To cut a release
 
 ```bash

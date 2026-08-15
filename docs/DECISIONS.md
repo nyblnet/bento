@@ -3111,3 +3111,32 @@ something whose remedy is "download and reload".
 *Rig note:* the comparison is numeric, not textual — `1.0.10` against `1.0.9` is
 the case string comparison gets backwards, and it is pinned. So is the direction
 that matters most: a store install is never told, and never even asks.
+
+*Amended, same day.* Should the check be automatic by default?
+
+Yes, but only with a switch and a disclosure — and the argument runs both ways
+inside this repo, which is why it is worth writing down.
+
+FOR: `kernel/src/update.ts` checks a release manifest at launch by default, with
+an off switch in the About dialog. The extension behaving differently would be
+an inconsistency with no reasoning behind it. And an unpacked install has no
+other way to find out it is behind: the browser will never tell it.
+
+AGAINST: the v0.9.1 fix exists precisely so an anonymous visitor never phones
+home without opting in, and the audience that loads an extension unpacked from
+GitHub is the audience most likely to object to a silent outbound request.
+
+The distinction that settles it: that fix was about connecting to a relay with
+document data. This is a static GET with no identifiers, no query string and no
+version reported upward. Different in kind — but "different in kind" is a
+judgement the user is entitled to make instead of us, so the preference sits in
+Settings next to what it does.
+
+OFF means NO REQUEST, not a request whose result is hidden. The rig pins that
+distinction, because the lazy implementation of a privacy switch is the one that
+keeps the traffic and quietens the UI.
+
+**Check now** works regardless: pressing a button is the consent the preference
+otherwise stands in for. And an unreadable preference is treated as ON, matching
+"absent means on" — a storage hiccup should not silently disable something the
+user never turned off.

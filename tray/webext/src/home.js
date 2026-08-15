@@ -16,7 +16,7 @@ import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
 import { learnPrefix } from './db.js'
-import { checkForUpdate, pendingUpdate, isSelfManaged } from './update.js'
+import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 
 /**
  * Find the granted folders on disk, without sending anyone to Finder.
@@ -672,8 +672,7 @@ async function renderSettings() {
   const upd = await pendingUpdate()
   const ver = section('Version',
     selfManaged
-      ? 'This copy was loaded unpacked, so Chrome will never update it. '
-        + 'Bento Tray checks for a newer release when the browser starts.'
+      ? 'This copy was loaded unpacked, so Chrome will never update it.'
       : 'Installed from the store, so it updates itself.')
   const vrow = document.createElement('div')
   vrow.className = 'row'
@@ -694,7 +693,8 @@ async function renderSettings() {
     const now = document.createElement('button')
     now.className = 'btn'
     now.textContent = 'Check now'
-    now.onclick = () => act(async () => { await checkForUpdate() })
+    // `force`: pressing a button IS consent, whatever the preference says.
+    now.onclick = () => act(async () => { await checkForUpdate({ force: true }) })
     vrow.appendChild(now)
   }
   ver.appendChild(vrow)

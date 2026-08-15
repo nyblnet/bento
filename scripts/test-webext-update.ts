@@ -19,7 +19,7 @@
 // wrong way, a fetch that throws, an install type that cannot be read. None of
 // it breaks anything visible, which is exactly why it needs a rig.
 
-import { compareVersions, isSelfManaged, checkForUpdate } from '../tray/webext/src/update.js'
+import { compareVersions, isSelfManaged, checkForUpdate, autoCheckEnabled } from '../tray/webext/src/update.js'
 
 let failures = 0
 let checks = 0
@@ -144,6 +144,57 @@ const serving = (body: any, okFlag = true) => async () => ({
   ok(!seen.includes('?'), `the request carries no query string (${seen})`)
   ok(!seen.includes('1.0.0'), 'and does not report which version is asking')
   ok(seen.startsWith('https://'), 'over https')
+}
+
+// ---- the preference --------------------------------------------------------
+// Default ON, because an unpacked install has no other way to learn it is
+// behind and the app checks at launch by default too. Switchable, because this
+// repo has form on the other side — the v0.9.1 fix existed so an anonymous
+// visitor never phones home — and the audience that installs from GitHub is
+// exactly the one entitled to say no.
+{
+  ok(await autoCheckEnabled({ get: async () => undefined }),
+    'absent means ON — a fresh install checks, which is the whole point')
+  ok(await autoCheckEnabled({ get: async () => true }), 'true is on')
+  ok(!(await autoCheckEnabled({ get: async () => false })), 'and false is off')
+}
+{
+  // OFF must mean nothing leaves the machine. Not "checks and hides the
+  // result" — that would be the same request with a quieter UI.
+  let fetched = false
+  const found = await checkForUpdate({
+    getSelf: dev, currentVersion: '1.0.0',
+    get: async () => false,
+    fetch: async () => { fetched = true; return serving({ version: '9.9.9' })() },
+    put: async () => {},
+  })
+  ok(found === null, 'with the preference off, nothing is reported')
+  ok(fetched === false, 'and NOTHING is requested — off means no traffic, not a hidden result')
+}
+{
+  // Pressing a button is consent, whatever the preference says. Otherwise the
+  // manual check silently does nothing and looks broken.
+  let fetched = false
+  const found = await checkForUpdate({
+    getSelf: dev, currentVersion: '1.0.0', force: true,
+    get: async () => false,
+    fetch: async () => { fetched = true; return serving({ version: '1.1.0' })() },
+    put: async () => {},
+  })
+  ok(fetched === true && found?.version === '1.1.0',
+    '"Check now" works with the preference off — pressing it IS the consent')
+}
+{
+  // And the preference must never override the install-type rule: a store user
+  // with the preference on still makes no request.
+  let fetched = false
+  await checkForUpdate({
+    getSelf: store, currentVersion: '1.0.0',
+    get: async () => true,
+    fetch: async () => { fetched = true; return serving({ version: '9.9.9' })() },
+    put: async () => {},
+  })
+  ok(fetched === false, 'a store install makes no request even with checking enabled')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

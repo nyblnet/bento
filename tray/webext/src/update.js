@@ -30,6 +30,38 @@ import { GRANT, get, put } from './db.js'
 /** Mirrors the app's release channels: /releases/<app>/manifest.json */
 const MANIFEST = 'https://bento.page/releases/tray/manifest.json'
 
+/**
+ * Whether to check at all. DEFAULT ON, and switchable.
+ *
+ * On by default because an unpacked install has no other way to learn it is
+ * behind — the browser will never tell it — and because the app itself checks
+ * at launch by default (`kernel/src/update.ts`, off switch in the About
+ * dialog). The extension behaving differently would be an inconsistency with
+ * no argument behind it.
+ *
+ * Switchable because this repo has form on the other side: the v0.9.1 fix
+ * existed so the anonymous demo never phones home for someone who did not ask
+ * it to. A version check carries no identifiers and no document data, which is
+ * a different thing from a relay connection — but the audience that loads an
+ * extension unpacked from GitHub is exactly the audience entitled to say no,
+ * and a preference they can see is the difference between a courtesy and a
+ * thing done to them.
+ */
+export const autoCheckEnabled = async (deps = {}) => {
+  const read = deps.get ?? (() => get(GRANT, 'autoCheck'))
+  try {
+    return (await read()) !== false // absent means on
+  } catch {
+    // The store is unreadable — private mode, quota, a migration mid-flight.
+    // Treated as ON, matching "absent means on": a storage hiccup should not
+    // quietly switch off a feature the user never turned off. The only cost of
+    // being wrong here is one request they had asked not to make, once.
+    return true
+  }
+}
+
+export const setAutoCheck = (on) => put(GRANT, 'autoCheck', !!on)
+
 /** Numeric compare, most significant first. Returns >0 when `a` is newer. */
 export function compareVersions(a, b) {
   const pa = String(a).split('.').map(Number)
@@ -76,6 +108,11 @@ export async function checkForUpdate(deps = {}) {
     await save(null) // a store install that was once unpacked must stop nagging
     return null
   }
+
+  // Asked before anything leaves the machine, and before the manual "Check now"
+  // path too — that one passes `force`, because pressing a button IS the
+  // consent the preference otherwise stands in for.
+  if (!deps.force && !(await autoCheckEnabled(deps))) return null
 
   try {
     const res = await net(MANIFEST, { cache: 'no-store' })

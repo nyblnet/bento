@@ -181,3 +181,22 @@ password prevents — so those show a lock instead.
 
 Permission state lives in one line at the bottom and stays quiet while things
 work.
+
+### Does it talk to the network?
+
+Once, and only for copies the browser will never update.
+
+An extension installed from a store updates itself, so it never checks anything
+and never makes a request. A copy loaded unpacked from GitHub cannot update
+itself — Chrome ignores `update_url` for a development install — so it asks
+`bento.page` for a static JSON file when the browser starts, to see whether a
+newer release exists.
+
+That request carries no identifiers, no query string, and not even the version
+asking: the comparison happens on your machine. It can show a notice and link to
+the release. It cannot install anything.
+
+It is on by default for those copies and can be turned off in Settings, where
+turning it off means no request is made at all.
+
+Nothing about your documents ever leaves your machine, under any setting.
