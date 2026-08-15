@@ -110,9 +110,12 @@ function show(view) {
   $('searchWrap').hidden = !docs
   $('sort').hidden = !docs
   $('new').hidden = !docs
-  $('settings').setAttribute('aria-current', String(!docs))
+  $('settings').setAttribute('aria-current', String(view === 'settings'))
+  $('help').setAttribute('aria-current', String(view === 'help'))
   $('navAll').setAttribute('aria-current', String(docs && state.folder === null))
-  if (docs) { renderSidebar(); renderGrid() } else renderSettings()
+  if (docs) { renderSidebar(); renderGrid() }
+  else if (view === 'settings') renderSettings()
+  else renderHelp()
 }
 
 function toast(text) {
@@ -171,8 +174,12 @@ function visible() {
     // Match the TITLE once it is known, and the file name always — a document
     // whose thumbnail has not loaded yet is still findable by what it is called
     // on disk, which is what the user typed if they came from Finder.
+    // Title, file name, folder — and the document's own words once they have
+    // been read. `text` arrives with the thumbnail, so a cold list matches on
+    // names and gets deeper as it decorates, rather than making anyone wait.
     docs = docs.filter((d) => (d.title ?? d.base).toLowerCase().includes(q)
-      || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q))
+      || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q)
+      || (d.text ?? '').toLowerCase().includes(q))
   }
   const by = {
     recent: (a, b) => b.modified - a.modified,
@@ -336,6 +343,7 @@ async function decorate(card, d) {
     const meta = await describe(d)
     d.title = meta.title
     d.app = meta.app
+    d.text = meta.text
     card.querySelector('b').textContent = meta.title
     // Which Bento this is. Three apps write .bento.html now, and without this a
     // folder of decks, notes and sheets is one undifferentiated pile. Absent on
@@ -619,6 +627,121 @@ $('new').addEventListener('click', async (ev) => {
 })
 
 $('settings').addEventListener('click', () => show('settings'))
+$('help').addEventListener('click', () => show('help'))
+
+/**
+ * What this gives you, what it needs, and where it came from — in one place.
+ *
+ * Onboarding, help and about are the same three questions asked at different
+ * moments: "what is this", "how do I use it", "who made it". Three separate
+ * surfaces would repeat each other and drift; one view answers all three, and
+ * a fresh install is simply sent here.
+ *
+ * It shows LIVE state, not a leaflet. The setup steps tick themselves off, so
+ * this is also the page to come back to when something has stopped working —
+ * which is when people actually look for help.
+ */
+async function renderHelp() {
+  $('heading').textContent = 'Help & about'
+  const s = await status()
+  const mine = chrome.runtime.getManifest().version
+  const wrap = document.createElement('div')
+  wrap.className = 'panel'
+
+  const section = (title, sub) => {
+    const el = document.createElement('section')
+    el.innerHTML = `<h2>${esc(title)}</h2>${sub ? `<p class="sub">${sub}</p>` : ''}`
+    wrap.appendChild(el)
+    return el
+  }
+
+  // --- what it is for
+  const what = section('What Bento Tray does',
+    'A Bento document is one HTML file that carries its own editor. Opened straight '
+    + 'from disk, a browser will not let it write back to itself — so saving asks you '
+    + 'where to put it, every time. Bento Tray is what removes that question.')
+  const tour = document.createElement('div')
+  tour.className = 'tour'
+  for (const [t, p] of [
+    ['Save in place', '⌘S writes straight back to the file you opened, with no dialog. '
+      + 'Autosave and in-place updates go the same way.'],
+    ['Find your documents', 'Every Bento document in your folders, with its real title '
+      + 'and a picture of its first page. Search covers what is written inside them.'],
+    ['Switch while you work', 'Press <kbd>Alt</kbd>+<kbd>B</kbd>, or right-click inside a '
+      + 'document, for a panel beside it.'],
+    ['Make a new one', '<b>+ New document</b> fetches the current release of Slides, '
+      + 'Spaces or Dash and puts a fresh document in your folder.'],
+  ]) {
+    const c = document.createElement('div')
+    c.className = 'card'
+    c.innerHTML = `<b>${esc(t)}</b><p>${p}</p>`
+    tour.appendChild(c)
+  }
+  what.appendChild(tour)
+
+  // --- what it needs, live
+  const needs = section('What it needs from you',
+    'Two things, both outside this extension\'s power to arrange.')
+  const step = (done, title, note) => {
+    const el = document.createElement('div')
+    el.className = `row${done ? '' : ''}`
+    el.innerHTML = `<span class="dot ${done ? 'ok' : 'bad'}"></span><b>${esc(title)}</b>`
+      + `<span class="note">${note}</span>`
+    needs.appendChild(el)
+    return el
+  }
+  const folderRow = step(s.folders.length > 0, 'A folder',
+    s.folders.length
+      ? `${s.folders.length} granted — documents inside them save in place`
+      : 'Not chosen yet. One broad folder covers everything inside it.')
+  if (!s.folders.length) {
+    const b = document.createElement('button')
+    b.className = 'btn'
+    b.textContent = 'Choose a folder…'
+    b.onclick = () => $('addFolder').click()
+    folderRow.appendChild(b)
+  }
+  step(s.files !== false, 'Local file access',
+    s.files === false
+      ? 'Off. Turn on <b>Allow access to file URLs</b> in <code>chrome://extensions</code> — '
+        + 'no extension can turn this on for itself.'
+      : s.files === null
+        ? 'This browser will not report it. If saves still prompt, check it in '
+          + '<code>chrome://extensions</code>.'
+        : 'On — Bento Tray can read pages you opened from disk.')
+
+  // --- what it never does
+  section('What it never does',
+    'It reads and writes only inside the folders above, and only the file a page was '
+    + 'actually opened from — the browser tells it which, so a document cannot name '
+    + 'somebody else\'s file. Nothing about your documents is uploaded anywhere, and '
+    + 'the extension has no server to upload them to.')
+
+  // --- where it came from
+  const about = section('About',
+    `Bento Tray ${esc(mine)} · part of the Bento project · MIT licensed`)
+  const links = document.createElement('div')
+  links.className = 'links'
+  for (const [label, href] of [
+    ['bento.page', 'https://bento.page'],
+    ['Source on GitHub', 'https://github.com/nyblnet/bento'],
+    ['Report a problem', 'https://github.com/nyblnet/bento/issues'],
+    ['Releases', 'https://github.com/nyblnet/bento/releases'],
+  ]) {
+    const a = document.createElement('a')
+    a.className = 'btn'
+    a.href = href
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.textContent = label
+    links.appendChild(a)
+  }
+  about.appendChild(links)
+
+  const scroll = document.querySelector('.scroll')
+  scroll.innerHTML = ''
+  scroll.appendChild(wrap)
+}
 
 /**
  * Settings: the folders, and the two permissions that both fail silently.
@@ -794,5 +917,11 @@ document.addEventListener('visibilitychange', () => {
   })()
 })
 
+// A fresh install is sent here by the worker (`#welcome`), because the first
+// question is "what did I just install and what does it want" — and a grid of
+// documents it cannot see yet answers none of it.
+if (location.hash === '#welcome' || location.hash === '#help') show('help')
+
 await load()
 await renderNotice()
+if (location.hash === '#welcome' || location.hash === '#help') show('help')

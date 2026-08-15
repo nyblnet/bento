@@ -351,6 +351,19 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
 
   // And from a right-click inside a document, which is where wanting it
   // actually happens. Same synchronous rule.
+  /**
+   * A fresh install opens the welcome view once.
+   *
+   * `reason === 'install'` only — an UPDATE must not steal a tab, and a browser
+   * that reloads an unpacked extension fires this every time. The first
+   * question after installing is "what did I just install and what does it need
+   * from me", and the toolbar icon answers none of that until someone clicks it.
+   */
+  chrome.runtime.onInstalled.addListener(({ reason }) => {
+    if (reason !== 'install') return
+    void chrome.tabs.create({ url: `${chrome.runtime.getURL('src/home.html')}#welcome` })
+  })
+
   chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus?.removeAll(() => {
       chrome.contextMenus.create({

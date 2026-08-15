@@ -3166,3 +3166,36 @@ Not fixable any other way: handles cannot leave their origin, so there is no
 export/import that would carry grants across ids. The instruction is
 load-bearing, which is why it is in the notice, the first-run screen, the README
 and the store listing rather than in one of them.
+
+*2026-08-15.* Search reached the title, the file name and the folder — which
+finds a document you can already name. What people actually remember is a phrase
+ON a slide, and the bytes to answer that were already being read for the
+thumbnail and thrown away.
+
+`describe` now extracts the text in the same pass. Deliberately NOT a JSON
+parse: the block runs to megabytes with images inline, each app shapes it
+differently (slides put prose in `element.html`, spaces in blocks, dash in
+cells), and a reader that must know the format breaks when the format moves.
+Pulling string VALUES — `:"…"`, never keys — is format-agnostic and degrades to
+"finds less" rather than throwing. Data URIs are dropped first: one embedded
+image outweighs every word in a document. Capped at 40KB, so a folder of large
+documents does not quietly become a search index. Encrypted documents are never
+indexed — a searchable copy of a password-protected file is the leak the
+password prevents.
+
+Measured on a real deck: 36KB of prose out of a 900KB file, finding words from
+slide bodies and speaker notes.
+
+**Onboarding, help and about are one view, not three.** They are the same three
+questions — what is this, how do I use it, who made it — asked at different
+moments, and three surfaces would repeat each other and drift. It shows LIVE
+state rather than a leaflet: the two prerequisites tick themselves off, so the
+page that explains the product is also the page to return to when something
+stopped working, which is when people look for help. A fresh install is sent
+here by `onInstalled` with `reason === "install"` only — an update must not
+steal a tab, and reloading an unpacked extension fires that event every time.
+
+*Found by looking, twice:* `.tour b { display: block }` turned a bolded phrase
+mid-sentence into its own line — the identical mistake `.step b` had made and
+which I had already fixed. An unscoped element selector inside a component is
+the shape of the bug; both are now `> b`.

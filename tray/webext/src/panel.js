@@ -70,7 +70,8 @@ function draw() {
   const q = ($('q').value || '').trim().toLowerCase()
   const withTimes = q
     ? all.filter(({ d }) => (d.title ?? d.base).toLowerCase().includes(q)
-        || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q))
+        || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q)
+        || (d.text ?? '').toLowerCase().includes(q))
     : all
 
   $('count').textContent = q
@@ -116,6 +117,7 @@ function draw() {
         // in the search box redraws every row, and rebuilding a thumbnail
         // iframe per keystroke flickers even when the read behind it is free.
         const meta = d.meta ?? (d.meta = await describe(d))
+        d.text = meta.text
         row.querySelector('b').textContent = meta.title
         const thumb = row.querySelector('[data-thumb]')
         if (meta.encrypted) {

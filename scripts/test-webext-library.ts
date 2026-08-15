@@ -495,5 +495,64 @@ const fakeNet = (version = '1.0.17', html = '<html>shell</html>') => async (url:
     'an unknown app falls back to the first, rather than requesting an invented URL')
 }
 
+// ---- 7. searching what a document SAYS --------------------------------------
+// Search covered the title, the file name and the folder — which finds a
+// document you can already name. What people remember is a phrase on a slide,
+// and the bytes to answer that were already read for the thumbnail.
+{
+  const doc = '<script id="bento-doc" type="application/json">'
+    + '{"format":"bento/slides","title":"Q3","slides":[{"id":"s1",'
+    + '"elements":[{"type":"text","html":"<b>Revenue</b> grew 40% in Iberia"}],'
+    + '"notes":"remember to mention the Lisbon office"}]}</script>'
+  const meta = await describe({ base: 'Q3', folder: 'D', rel: ['Q3.bento.html'],
+    handle: fileHandle('Q3.bento.html', doc) } as any, noCache)
+  const text = (meta.text ?? '').toLowerCase()
+  ok(text.includes('revenue') && text.includes('iberia'),
+    'prose from a slide is searchable')
+  ok(text.includes('lisbon'), 'and so are speaker notes — often the only place a name appears')
+  ok(!text.includes('bento-doc') && !/\bformat\b/.test(text),
+    'JSON keys are not indexed — values only, or every document matches "format"')
+  ok(!text.includes('<b>'), 'markup is stripped, so a search for "b" does not match every bold word')
+}
+{
+  // An embedded image is bigger than every word in the document. If data URIs
+  // are not dropped first they dominate the budget and the work.
+  const big = '<script id="bento-doc">{"src":"data:image/png;base64,'
+    + 'A'.repeat(300_000) + '","html":"findable phrase"}</script>'
+  const meta = await describe({ base: 'Img', folder: 'D', rel: ['Img.bento.html'],
+    handle: fileHandle('Img.bento.html', big) } as any, noCache)
+  ok((meta.text ?? '').includes('findable phrase'),
+    'text after a huge data URI is still found — the URI is dropped, not skipped past')
+  ok((meta.text ?? '').length < 1000, `and the URI itself is not indexed (${meta.text?.length} chars)`)
+}
+{
+  // Capped, or a folder of large documents becomes a search index.
+  const many = '<script id="bento-doc">{'
+    + Array.from({ length: 4000 }, (_, i) => `"k${i}":"word${i} some prose here"`).join(',')
+    + '}</script>'
+  const meta = await describe({ base: 'Big', folder: 'D', rel: ['Big.bento.html'],
+    handle: fileHandle('Big.bento.html', many) } as any, noCache)
+  ok((meta.text ?? '').length <= 40 * 1024,
+    `extraction is capped (${meta.text?.length} chars)`)
+}
+{
+  const enc = '<script id="bento-doc">{"format":"bento/enc","v":1,"ct":"AAAA"}</script>'
+  const meta = await describe({ base: 'Locked', folder: 'D', rel: ['L.bento.html'],
+    handle: fileHandle('L.bento.html', enc) } as any, noCache)
+  ok(meta.text === null,
+    'an encrypted document is not indexed — the ciphertext is not text, and a '
+    + 'search index of a password-protected file is the leak the password prevents')
+}
+if (existsSync(REAL)) {
+  // The real thing: a built shell with a real document spliced in.
+  const html = readFileSync(REAL, 'utf8')
+  const saved = html.replace('id="bento-doc"></script>',
+    'id="bento-doc">{"title":"Deck","slides":[{"notes":"the quarterly figures for Iberia"}]}</script>')
+  const meta = await describe({ base: 'Deck', folder: 'D', rel: ['Deck.bento.html'],
+    handle: fileHandle('Deck.bento.html', saved) } as any, noCache)
+  ok((meta.text ?? '').toLowerCase().includes('iberia'),
+    'and it finds prose inside a real built shell, not only a fixture')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

@@ -185,17 +185,26 @@ export async function describe(doc, deps = {}) {
   // The preview sits AFTER the document block — a quarter of the way into a
   // 900KB file, measured — so unlike the title it cannot be had from the head.
   // This is the expensive read, and the only reason the cache exists.
+  // ONE read, two answers. The preview and the searchable text both come out of
+  // the same bytes, so an encrypted document costs nothing extra and everything
+  // else costs exactly one pass.
   let preview = null
+  let text = null
   if (!encrypted) {
     const whole = await file.text()
     const start = whole.indexOf('<div data-bento-preview')
     const end = start === -1 ? -1 : whole.indexOf('<script data-bento-preview', start)
     if (start !== -1 && end > start) preview = whole.slice(start, end)
+    text = extractText(whole)
   }
 
   const meta = {
     title: title ? title.replace(/\\(.)/g, '$1') : doc.base,
     app,
+    // What the document SAYS, so search can find a deck by a phrase on a slide
+    // rather than only by what somebody happened to call the file. Free in I/O:
+    // the same read that produced the preview.
+    text,
     encrypted,
     preview,
     size: file.size,
@@ -204,6 +213,53 @@ export async function describe(doc, deps = {}) {
   // Best effort: a cache that cannot be written costs a re-read, nothing more.
   try { await cachePut(key, meta) } catch { /* quota, private mode */ }
   return meta
+}
+
+/** How much extracted prose to keep per document. Enough for any phrase
+ *  somebody would search for; far short of storing the document twice. */
+const TEXT_BUDGET = 40 * 1024
+
+/**
+ * The words a document actually contains.
+ *
+ * Search used to cover the title, the file name and the folder — which finds a
+ * deck you can already name. What you usually remember is a phrase ON a slide,
+ * and the bytes to answer that were already read for the thumbnail and then
+ * thrown away.
+ *
+ * Deliberately NOT a JSON parse. The document block runs to megabytes with
+ * images inline, every app shapes it differently (slides put prose in
+ * `element.html`, spaces in blocks, dash in cells), and a parser that has to
+ * know the format is a parser that breaks when the format moves. Pulling string
+ * VALUES out — `:"…"`, never keys — is format-agnostic and degrades to "finds
+ * less" rather than "throws".
+ *
+ * Data URIs go first: one embedded image is bigger than every word in the
+ * document, and they would dominate both the work and the budget.
+ */
+function extractText(html) {
+  const start = html.indexOf(MARKER)
+  if (start === -1) return null
+  const end = html.indexOf('</script>', start)
+  if (end === -1) return null
+
+  let block = html.slice(start, end)
+  block = block.replace(/data:[^"\\]{200,}/g, ' ')      // embedded media
+  const out = []
+  let size = 0
+  for (const m of block.matchAll(/:"((?:[^"\\]|\\.){1,400})"/g)) {
+    const v = m[1]
+    if (!/[A-Za-z]{3,}/.test(v)) continue               // ids, colours, numbers
+    out.push(v)
+    size += v.length
+    if (size > TEXT_BUDGET) break
+  }
+  return out.join(' ')
+    .replace(/<[^>]{1,200}>/g, ' ')                     // element html
+    .replace(/&[a-z]+;|&#\d+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, TEXT_BUDGET) || null
 }
 
 /**
