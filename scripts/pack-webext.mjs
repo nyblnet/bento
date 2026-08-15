@@ -43,7 +43,7 @@ const OUT = join(root, 'dist')
 // chrome at fixed sizes. The SVG is the favicon for the extension's own pages —
 // one vector rather than a family of files, because a tab icon is drawn at 16px
 // and again at whatever the history and bookmarks views feel like.
-const INCLUDE = [/^manifest\.json$/, /^icons\/[^/]+\.(png|svg)$/, /^src\/[^/]+\.(js|html)$/]
+const INCLUDE = [/^manifest\.json$/, /^icons\/[^/]+\.(png|svg)$/, /^src\/[^/]+\.(js|html|css)$/]
 /** Present on purpose, deliberately NOT shipped. */
 const EXCLUDE = [/^probe\//, /^README\.md$/, /^STORE\.md$/]
 
@@ -91,6 +91,28 @@ for (const rel of all.filter((r) => /^icons\/.*\.png$/.test(r))) {
   if (ct !== 6 && ct !== 4) {
     fail(`${rel} has no alpha channel (colour type ${ct}) — its corners are opaque, `
       + 'so the rounded mark will render as a square. Re-export from icons/icon.svg.')
+  }
+}
+
+// ---- one design system, not three ------------------------------------------
+// There were three: the home page had tokens and dark mode, the popup had 21
+// hardcoded colours and no dark mode, the options page had 16 and no dark mode —
+// the same product in three costumes, and the surface people actually open was
+// the one that turned white at midnight.
+//
+// ui.css owns the palette. A literal colour anywhere else is how that comes
+// back, one convenient hex at a time, and the symptom is a page that ignores
+// dark mode rather than anything that looks broken in review.
+//
+// `chrome.action.setBadgeBackgroundColor` is exempt: it is a browser API taking
+// a colour string, not a stylesheet, and CSS variables cannot reach it.
+for (const rel of payload.filter((p) => /\.(html|js)$/.test(p) && p !== 'src/ui.css')) {
+  const text = readFileSync(join(SRC, rel), 'utf8')
+  for (const line of text.split('\n')) {
+    if (!/#[0-9a-fA-F]{3,8}\b/.test(line)) continue
+    if (/setBadgeBackgroundColor/.test(line)) continue
+    if (/^\s*(\*|\/\/|<!--)/.test(line)) continue // prose about colours is fine
+    fail(`${rel} has a literal colour — the palette lives in ui.css: ${line.trim().slice(0, 72)}`)
   }
 }
 

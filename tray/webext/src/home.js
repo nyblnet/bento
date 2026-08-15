@@ -92,7 +92,27 @@ const ago = (ms) => {
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-const state = { docs: [], folder: null, q: '', sort: 'recent' }
+const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs' }
+
+/**
+ * Settings is a VIEW here, not a separate page.
+ *
+ * It used to be `options.html`: its own document, its own stylesheet, 16
+ * hardcoded colours and no dark mode — the same product in a second costume,
+ * reached by leaving the one you were in. Folding it into this shell means one
+ * design system, one back-and-forth-free navigation, and one place that knows
+ * what a folder is.
+ */
+function show(view) {
+  state.view = view
+  const docs = view === 'docs'
+  $('searchWrap').hidden = !docs
+  $('sort').hidden = !docs
+  $('new').hidden = !docs
+  $('settings').setAttribute('aria-current', String(!docs))
+  $('navAll').setAttribute('aria-current', String(docs && state.folder === null))
+  if (docs) { renderSidebar(); renderGrid() } else renderSettings()
+}
 
 function toast(text) {
   const t = document.createElement('div')
@@ -104,6 +124,9 @@ function toast(text) {
 
 // ------------------------------------------------------------------ loading
 async function load() {
+  const s = await status()
+  state.grants = s.folders.length
+  state.fileAccess = s.files
   const docs = await listDocuments()
   // Read mtimes once, here, rather than per render: sorting needs them and the
   // grid is re-rendered on every keystroke of the search box.
@@ -130,13 +153,13 @@ function renderSidebar() {
     const b = document.createElement('button')
     b.className = 'navitem'
     b.setAttribute('aria-current', String(state.folder === folder))
-    b.innerHTML = `<span class="swatch"></span> ${esc(folder)} <span class="n">${n}</span>`
-    b.addEventListener('click', () => { state.folder = folder; renderSidebar(); renderGrid() })
+    b.innerHTML = `<span class="dot"></span> ${esc(folder)} <span class="n">${n}</span>`
+    b.addEventListener('click', () => { state.folder = folder; show('docs') })
     host.appendChild(b)
   }
 }
 
-$('navAll').addEventListener('click', () => { state.folder = null; renderSidebar(); renderGrid() })
+$('navAll').addEventListener('click', () => { state.folder = null; show('docs') })
 
 // --------------------------------------------------------------------- grid
 function visible() {
@@ -157,21 +180,81 @@ function visible() {
   return docs.sort(by)
 }
 
+/**
+ * The first run, as steps rather than an apology.
+ *
+ * Installing used to land you on an empty page with a sentence. Both things
+ * that must happen are outside this extension's power — a folder you choose,
+ * and a Chrome switch no extension may touch — so the honest presentation is a
+ * short list that shows which are done, not a paragraph explaining why nothing
+ * works.
+ */
+function firstRun() {
+  const el = document.createElement('div')
+  el.className = 'empty'
+  el.innerHTML = '<h2>Two things and you are set up</h2>'
+    + '<p>After this, ⌘S on a document you opened by double-clicking writes '
+    + 'straight back to the file — no destination prompt, ever.</p>'
+
+  const steps = document.createElement('div')
+  steps.className = 'steps'
+  const step = (n, done, title, note, btn) => {
+    const s = document.createElement('div')
+    s.className = `step${done ? ' done' : ''}`
+    s.innerHTML = `<span class="num">${done ? '✓' : n}</span>`
+      + `<span class="txt"><b>${esc(title)}</b><small>${note}</small></span>`
+    if (btn && !done) s.querySelector('.txt').appendChild(btn)
+    steps.appendChild(s)
+  }
+
+  const pick = document.createElement('button')
+  pick.className = 'btn primary'
+  pick.textContent = 'Choose a folder…'
+  pick.onclick = () => $('addFolder').click()
+  step(1, !!state.grants, 'Choose the folder your documents live in',
+    'One broad folder is usually enough — it covers everything inside it.', pick)
+
+  step(2, state.fileAccess === true, 'Turn on local file access',
+    'In <code>chrome://extensions</code> → Bento Tray → <b>Allow access to file URLs</b>. '
+    + 'Chrome does not let an extension turn this on for itself.')
+
+  el.appendChild(steps)
+  return el
+}
+
+/** A small mark on a card's picture. Never in the body, where it would push the
+ *  title around and make two cards with the same title look different lengths. */
+function badge(card, text, why) {
+  const host = card.querySelector('[data-badges]')
+  if (!host) return
+  const s = document.createElement('span')
+  s.textContent = text
+  if (why) s.title = why
+  host.appendChild(s)
+}
+
 function renderGrid() {
+  // The settings view replaces the scroller's contents, so the grid is rebuilt
+  // rather than assumed to still be there.
+  const scroll = document.querySelector('.scroll')
+  scroll.innerHTML = '<div class="grid" id="grid"></div>'
   const grid = $('grid')
   const docs = visible()
   $('heading').textContent = state.folder ?? 'All documents'
-  grid.innerHTML = ''
 
   if (!docs.length) {
-    grid.innerHTML = state.q
-      ? `<div class="empty"><h2>Nothing matches “${esc(state.q)}”</h2>
-         <p>Search looks at document titles, file names and folders.</p></div>`
-      : `<div class="empty"><h2>No documents here yet</h2>
-         <p>Bento documents are single HTML files — everything is inside them, so they
-         work offline and travel by AirDrop, email or a USB stick like any other file.</p>
-         <p><b>+ New document</b> fetches the current release and puts a fresh one in
-         your folder.</p></div>`
+    // Three different emptinesses, and telling them apart is the whole job of
+    // an empty state. Nothing installed yet is a set-up problem; nothing found
+    // is a search problem; an empty folder is neither.
+    if (state.q) {
+      grid.innerHTML = `<div class="empty"><h2>Nothing matches “${esc(state.q)}”</h2>`
+        + '<p>Search looks at titles, file names and folders.</p></div>'
+    } else if (!state.grants) {
+      grid.appendChild(firstRun())
+    } else {
+      grid.innerHTML = '<div class="empty"><h2>Nothing in this folder yet</h2>'
+        + '<p><b>+ New document</b> puts a fresh one here.</p></div>'
+    }
     return
   }
 
@@ -203,11 +286,13 @@ function renderGrid() {
     }
     card.innerHTML =
       `<span class="shot"><span class="glyph">${d.path ? '▤' : '⤺'}</span></span>` +
-      (d.named ? '' : '<span class="tag">.html</span>') +
+      '<span class="badges" data-badges></span>' +
       `<span class="cardbody"><span class="txt">` +
       `<b>${esc(d.title ?? d.base)}</b>` +
       `<span>${esc(d.folder)} · ${esc(ago(d.modified))}</span>` +
       `</span><span class="more" title="More">⋯</span></span>`
+    if (!d.named) badge(card, '.html', 'Named .html rather than .bento.html — it opens from '
+      + 'here, but saving will ask for a destination.')
 
     card.addEventListener('click', (ev) => {
       if (ev.target.closest('.more')) { ev.stopPropagation(); openMenu(d, ev); return }
@@ -230,7 +315,16 @@ async function decorate(card, d) {
   try {
     const meta = await describe(d)
     d.title = meta.title
+    d.app = meta.app
     card.querySelector('b').textContent = meta.title
+    // Which Bento this is. Three apps write .bento.html now, and without this a
+    // folder of decks, notes and sheets is one undifferentiated pile. Absent on
+    // a document nobody has saved, which has no format field yet — and that is
+    // already said by "Not saved yet" rather than twice.
+    if (meta.app) {
+      const known = APPS.find((a) => a.id === meta.app)
+      badge(card, known?.name ?? meta.app, known?.blurb)
+    }
     const shot = card.querySelector('.shot')
     if (meta.encrypted) {
       shot.innerHTML = '<span class="glyph" title="Password-protected">🔒</span>'
@@ -334,15 +428,15 @@ async function renderNotice() {
   }
 
   if (s.files === false) {
-    say('bad', '<b>Local file access is off.</b> Open <code>chrome://extensions</code>, find '
-      + 'Bento Tray, and turn on <b>Allow access to file URLs</b>. Nothing works until it is on, '
-      + 'and no extension can turn it on for itself.')
+    // One sentence, then where to go. The reason it cannot be automated is
+    // interesting to us and not to someone trying to save a document.
+    say('bad', '<b>Local file access is off</b> — nothing saves in place until it is on. '
+      + 'Turn on <b>Allow access to file URLs</b> in <code>chrome://extensions</code>.')
   }
   const lapsed = s.folders.filter((f) => f.permission !== 'granted')
   if (lapsed.length) {
-    say('bad', `<b>${lapsed.length} folder needs reconnecting.</b> Chrome drops the permission when `
-      + 'the extension restarts. Open Bento Tray from the toolbar to restore it — and choose '
-      + '<b>Allow on every visit</b>, which is the only option that lasts.')
+    say('bad', `<b>${lapsed.length} folder needs reconnecting.</b> Reconnect it in `
+      + '<b>Settings</b>, and choose <b>Allow on every visit</b> — the only option that lasts.')
   }
   // The one that unlocks opening. Said here in full, because the page has room
   // for the reason and the popup does not.
@@ -350,12 +444,8 @@ async function renderNotice() {
   if (unplaced.length) {
     const el = document.createElement('div')
     el.className = 'notice'
-    el.innerHTML = `<b>${esc(unplaced.join(', '))}</b> — Bento Tray can read `
-      + `${unplaced.length === 1 ? 'this folder' : 'these folders'} but does not know where `
-      + `${unplaced.length === 1 ? 'it is' : 'they are'} on disk, so documents cannot be opened `
-      + 'from here yet. Chrome never tells an extension a folder’s path. '
-      + '<span style="opacity:.8">Chrome does know it from documents you have already opened — '
-      + 'one search finds it. Permission is asked for now and given straight back.</span>'
+    el.innerHTML = `<b>${esc(unplaced.join(', '))}</b> can be listed but not opened yet — `
+      + 'Chrome never tells an extension where a folder is on disk.'
     const go = document.createElement('button')
     go.className = 'btn primary'
     go.style.marginTop = '9px'
@@ -371,9 +461,8 @@ async function renderNotice() {
           // Declining is a legitimate answer, not an error. The manual route
           // still works and costs one trip to Finder, so say so plainly rather
           // than asking again.
-          el.innerHTML = '<b>No problem.</b> The other way is to open any document in '
-            + `${esc(unplaced.join(' or '))} from Finder once — this page notices and unlocks `
-            + 'the whole folder.'
+          el.innerHTML = '<b>No problem.</b> Open any document in '
+            + `${esc(unplaced.join(' or '))} from Finder once instead — this page notices.`
           return
         }
         await load()
@@ -481,7 +570,114 @@ $('new').addEventListener('click', async (ev) => {
   menuEl = m
 })
 
-$('settings').addEventListener('click', () => chrome.runtime.openOptionsPage())
+$('settings').addEventListener('click', () => show('settings'))
+
+/**
+ * Settings: the folders, and the two permissions that both fail silently.
+ *
+ * Everything here was prose in the old options page. It is now rows, because a
+ * folder is a thing with a state and an action, and a paragraph about it is
+ * neither.
+ */
+async function renderSettings() {
+  $('heading').textContent = 'Settings'
+  const s = await status()
+  const dirs = await getGrants()
+  const wrap = document.createElement('div')
+  wrap.className = 'panel'
+
+  const section = (title, sub) => {
+    const el = document.createElement('section')
+    el.innerHTML = `<h2>${esc(title)}</h2><p class="sub">${sub}</p>`
+    wrap.appendChild(el)
+    return el
+  }
+
+  // --- folders
+  const folders = section('Folders',
+    'Documents in these save straight back to the file, with no destination prompt. '
+    + 'A folder covers everything inside it.')
+  if (!dirs.length) {
+    const p = document.createElement('p')
+    p.className = 'dim'
+    p.textContent = 'None yet.'
+    folders.appendChild(p)
+  }
+  dirs.forEach((dir, i) => {
+    const granted = s.folders[i]?.permission === 'granted'
+    const row = document.createElement('div')
+    row.className = 'row'
+    row.innerHTML = `<span class="dot ${granted ? 'ok' : 'bad'}"></span><b>${esc(dir.name)}</b>`
+      + `<span class="note">${granted ? 'saves in place' : 'needs reconnecting'}</span>`
+    if (!granted) {
+      const renew = document.createElement('button')
+      renew.className = 'btn'
+      renew.textContent = 'Reconnect'
+      renew.title = 'Chrome will ask to restore this folder. "Don\'t allow" drops it, and '
+        + 'Chrome then waits a restart or more before offering again.'
+      renew.onclick = () => act(async () => {
+        if (await dir.requestPermission({ mode: 'readwrite' }) === 'granted') await putGrants(dirs)
+      })
+      row.appendChild(renew)
+    }
+    const drop = document.createElement('button')
+    drop.className = 'btn'
+    drop.textContent = 'Remove'
+    // This list is the only place access can be withdrawn — Chrome offers no
+    // control for extension origins — so Remove is a real revoke: with no
+    // folder stored there is nothing to write through.
+    drop.title = 'Takes access away. Chrome may still remember the permission, so adding '
+      + 'the folder back may not ask again.'
+    drop.onclick = () => act(async () => {
+      const next = [...dirs]; next.splice(i, 1); await putGrants(next)
+    })
+    row.appendChild(drop)
+    folders.appendChild(row)
+  })
+  const add = document.createElement('button')
+  add.className = 'btn'
+  add.textContent = '+ Add a folder…'
+  add.onclick = () => $('addFolder').click()
+  folders.appendChild(add)
+
+  // --- the permission nothing can request
+  const access = section('Local file access',
+    'Chrome will not let an extension turn this on for itself, and nothing works without it.')
+  const row = document.createElement('div')
+  row.className = 'row'
+  const ok = s.files === true
+  row.innerHTML = `<span class="dot ${ok ? 'ok' : s.files === false ? 'bad' : 'meh'}"></span>`
+    + `<b>${ok ? 'On' : s.files === false ? 'Off' : 'Unknown'}</b>`
+    + `<span class="note">${ok
+      ? 'Bento Tray can read pages you opened from disk.'
+      : s.files === false
+        ? 'Open chrome://extensions, find Bento Tray, turn on "Allow access to file URLs".'
+        : 'This browser will not report it. If saves still prompt, check it in chrome://extensions.'}</span>`
+  access.appendChild(row)
+
+  // --- what the extension will never do
+  const about = section('What this can reach',
+    'Only the folders above, and only the file a page was actually opened from. '
+    + 'Nothing is uploaded and nothing is read anywhere else.')
+  void about
+
+  const scroll = document.querySelector('.scroll')
+  scroll.innerHTML = ''
+  scroll.appendChild(wrap)
+}
+
+/** Run a settings action, then redraw both the settings view and the library —
+ *  adding or removing a folder changes what documents exist. */
+async function act(fn) {
+  try {
+    await fn()
+    await load()
+    await renderSettings()
+    await renderNotice()
+  } catch (e) {
+    if (e?.name !== 'AbortError') toast(e.message)
+  }
+}
 
 /**
  * Notice when the answer arrives.

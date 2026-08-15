@@ -2988,3 +2988,43 @@ straight into a `catch { continue }` — the check reported green while proving
 nothing. Then the cache assertion counted `getFile()` calls, which a cache hit
 still makes (it needs size and mtime for the key); it now counts content reads.
 Two rounds of a test that passed for reasons unrelated to the thing under test.
+
+*2026-08-15.* A UX and UI pass before merging, and the diagnosis was structural
+rather than cosmetic.
+
+**Three surfaces, three design languages.** The home page had tokens and dark
+mode. The popup had 21 hardcoded colours and no dark mode. The options page had
+16 and no dark mode. So the surface people actually open — the popup — was the
+one that turned white at midnight, and the settings page looked like a different
+product reached by leaving the one you were in.
+
+`ui.css` now owns the palette and the shared primitives; each page keeps only
+its own layout. `pack-webext` fails on a literal colour anywhere but there
+(`setBadgeBackgroundColor` exempt: a browser API taking a string, which CSS
+variables cannot reach). Verified as a real gate by planting one.
+
+**Settings became a VIEW, and options.html is gone.** Same shell, same sidebar,
+same navigation. What was prose is now rows, because a folder is a thing with a
+state and an action and a paragraph about it is neither. `options_page` points
+at `home.html`, so `openOptionsPage()` still works from the popup.
+
+**The first run is steps, not an apology.** Both things that must happen are
+outside the extension's power — a folder you choose, and a Chrome switch no
+extension may touch — so it shows a short list with what is already done ticked,
+rather than an empty page explaining why nothing works.
+
+**Documents say which Bento they are.** Three apps write `.bento.html`, and the
+UI never said which one a document was, so a folder of decks, notes and sheets
+read as one undifferentiated pile. `describe` now reports the format field and
+the card carries a badge — alongside the `.html` badge for a document found by
+content rather than by name. Both sit on the picture, never in the body, so they
+cannot push a title around.
+
+**The notices were essays.** Each is now a sentence and, where there is
+something to do, a button. The reason a thing cannot be automated is interesting
+to us and not to someone trying to save a document.
+
+*Found by looking:* `.step b { display: block }` was unscoped, so a bolded phrase
+in the middle of a note became its own line and broke the sentence around it.
+Only visible in a screenshot — no rig would ever have caught it, and I had
+written the markup that triggered it.

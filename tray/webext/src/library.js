@@ -174,6 +174,12 @@ export async function describe(doc, deps = {}) {
 
   const head = await file.slice(0, HEAD_BYTES).text()
   const title = head.match(/"title"\s*:\s*"((?:[^"\\]|\\.){0,200})"/)?.[1]
+  // Which Bento this is. The format field is the document's own answer — the
+  // extension supports three apps now and the UI never said which one a
+  // document was, so a folder of decks and sheets looked like one undifferentiated
+  // pile. A pristine shell has no document yet, so no format: that is not a
+  // failure, it is a document nobody has saved.
+  const app = head.match(/"format"\s*:\s*"bento\/([a-z]+)"/)?.[1] ?? null
   const encrypted = /"format"\s*:\s*"bento\/enc"/.test(head) || /data-bento-enc/.test(head)
 
   // The preview sits AFTER the document block — a quarter of the way into a
@@ -189,6 +195,7 @@ export async function describe(doc, deps = {}) {
 
   const meta = {
     title: title ? title.replace(/\\(.)/g, '$1') : doc.base,
+    app,
     encrypted,
     preview,
     size: file.size,
