@@ -128,6 +128,7 @@ async function load() {
   const s = await status()
   state.grants = s.folders.length
   state.fileAccess = s.files
+  state.selfManaged = await isSelfManaged()
   const docs = await listDocuments()
   // Read mtimes once, here, rather than per render: sorting needs them and the
   // grid is re-rendered on every keystroke of the search box.
@@ -220,6 +221,24 @@ function firstRun() {
     + 'Chrome does not let an extension turn this on for itself.')
 
   el.appendChild(steps)
+
+  // An unpacked install with no folders is ALSO what a botched upgrade looks
+  // like: extract the new version to a new directory, load unpacked from there,
+  // and Chrome gives it a different id — a different origin with an empty
+  // store. Everything is intact under the old id, which is still installed.
+  // Nothing here can detect that, but this is the exact screen it produces, so
+  // it is the right place to say so.
+  if (state.selfManaged) {
+    const note = document.createElement('p')
+    note.className = 'sub'
+    note.style.marginTop = '14px'
+    note.innerHTML = '<b>Upgrading and expected your folders to be here?</b> '
+      + 'An unpacked extension is identified by its folder path, so loading a new copy '
+      + 'from a different folder makes it a different extension. Your folders are still '
+      + 'granted to the old one. Replace the files in the original folder and press '
+      + '<b>Reload</b> in <code>chrome://extensions</code> instead.'
+    el.appendChild(note)
+  }
   return el
 }
 
@@ -439,9 +458,27 @@ async function renderNotice() {
   // prompt", and being a version behind is neither.
   const upd = await pendingUpdate()
   if (upd?.version) {
-    say('', `<b>Bento Tray ${esc(upd.version)} is available.</b> This copy was loaded unpacked, `
-      + `so it will not update itself. <a href="${esc(upd.url)}" target="_blank" rel="noopener">`
-      + 'Get it on GitHub</a> and reload it in <code>chrome://extensions</code>.')
+    // THE STEPS MATTER, and the wrong ones lose everything.
+    //
+    // An unpacked extension's ID comes from its DIRECTORY PATH. Extract the new
+    // version somewhere else and "Load unpacked" from there, and Chrome treats
+    // it as a different extension: a different origin, an empty IndexedDB, no
+    // granted folders, no learned paths, no preferences — and the old copy
+    // still installed beside it. The user lands on the first-run screen
+    // wondering where their folders went, having done the obvious thing.
+    //
+    // Replacing the files in the SAME folder keeps the id, so everything
+    // survives. That is the whole instruction, and it has to be said or the
+    // obvious path is the destructive one.
+    say('', `<b>Bento Tray ${esc(upd.version)} is available.</b> `
+      + 'This copy was loaded unpacked, so Chrome will never update it.'
+      + '<ol style="margin:8px 0 0;padding-left:18px">'
+      + `<li><a href="${esc(upd.url)}" target="_blank" rel="noopener">Download it from GitHub</a></li>`
+      + '<li>Replace the files <b>in the folder you loaded it from</b> — same folder, '
+      + 'or Chrome treats it as a different extension and your granted folders do not '
+      + 'come with it</li>'
+      + '<li>Open <code>chrome://extensions</code> and press <b>Reload</b> on Bento Tray</li>'
+      + '</ol>')
   }
 
   const lapsed = s.folders.filter((f) => f.permission !== 'granted')

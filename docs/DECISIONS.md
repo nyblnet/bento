@@ -3140,3 +3140,29 @@ keeps the traffic and quietens the UI.
 otherwise stands in for. And an unreadable preference is treated as ON, matching
 "absent means on" — a storage hiccup should not silently disable something the
 user never turned off.
+
+*Amended, same day.* What actually happens when an unpacked user acts on the
+notice — and the footgun the first version of the copy walked them into.
+
+**An unpacked extension is identified by its DIRECTORY PATH.** So the obvious
+upgrade — extract the new zip somewhere convenient, "Load unpacked" from there —
+produces a different extension: different id, different origin, empty
+IndexedDB. No granted folders, no learned prefixes, no preferences, and the old
+copy still installed beside it. The user has done the natural thing and lands on
+the first-run screen wondering where everything went.
+
+The original notice said "get it on GitHub and reload it in chrome://extensions",
+which is close enough to sound complete and does not contain the one word that
+matters: SAME folder. It is now three numbered steps, and step 2 says why.
+
+**The first-run screen also carries the warning**, because "an unpacked install
+with no folders" is precisely what a botched upgrade looks like from inside the
+new copy — and nothing there can detect it. The data is intact under the old id,
+which is still installed; the fix is to replace the files in the original folder
+and reload. Saying so on the screen the mistake produces is the only place it
+can be said.
+
+Not fixable any other way: handles cannot leave their origin, so there is no
+export/import that would carry grants across ids. The instruction is
+load-bearing, which is why it is in the notice, the first-run screen, the README
+and the store listing rather than in one of them.

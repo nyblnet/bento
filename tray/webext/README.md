@@ -62,6 +62,31 @@ no. The switch is in Settings, next to what it does, and OFF means no request is
 made at all rather than a result quietly discarded. **Check now** still works
 when it is off: pressing a button is the consent the preference stands in for.
 
+### What an unpacked user has to do, and the way it goes wrong
+
+An unpacked extension is identified by its **directory path**. So the obvious
+upgrade — extract the new zip somewhere convenient, "Load unpacked" from there —
+produces a DIFFERENT extension: different id, different origin, empty
+IndexedDB. No granted folders, no learned paths, no preferences, and the old
+copy still installed beside it. The user lands on the first-run screen having
+done the natural thing.
+
+The safe procedure, which the notice spells out as numbered steps:
+
+1. Download the zip from the release.
+2. Replace the files **in the folder it was originally loaded from**.
+3. `chrome://extensions` → **Reload** on Bento Tray.
+
+Same path, same id, so the grants and everything else survive. The first-run
+screen also carries a note for anyone who already got it wrong, because "an
+unpacked install with no folders" is exactly what a botched upgrade looks like
+and nothing can detect it from inside the new copy — the data is intact under
+the old id.
+
+Note that extracting over an existing folder leaves files a release has since
+DELETED. Harmless (the manifest does not name them) but untidy; emptying the
+folder first is cleaner, and keeps the path, which is the part that matters.
+
 ### To cut a release
 
 ```bash

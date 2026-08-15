@@ -200,3 +200,10 @@ It is on by default for those copies and can be turned off in Settings, where
 turning it off means no request is made at all.
 
 Nothing about your documents ever leaves your machine, under any setting.
+
+### Updating a copy loaded from GitHub
+
+Replace the files **in the folder you loaded it from**, then press Reload on
+`chrome://extensions`. Same folder matters: Chrome identifies an unpacked
+extension by its path, so loading a new copy from a different folder creates a
+second, separate extension — and your granted folders stay with the first one.
