@@ -51,20 +51,8 @@
     "message": "Reconnect folders"
   },
   "primeIntro": {
-    "message": "Chrome will ask next. Pick the middle one:",
-    "description": "REVIEW: explains a browser permission — a mistranslation here costs the user their setup, not just clarity."
-  },
-  "primeAllowOnce": {
-    "message": "Allow this time",
-    "description": "Must match Chrome’s own button wording in this language. REVIEW: explains a browser permission — a mistranslation here costs the user their setup, not just clarity."
-  },
-  "primeAllowAlways": {
-    "message": "Allow on every visit",
-    "description": "Must match Chrome’s own button wording in this language. This is the option the user is being pointed at. REVIEW: explains a browser permission — a mistranslation here costs the user their setup, not just clarity."
-  },
-  "primeDeny": {
-    "message": "Don’t allow",
-    "description": "Must match Chrome’s own button wording in this language. REVIEW: explains a browser permission — a mistranslation here costs the user their setup, not just clarity."
+    "message": "Chrome will ask next. Pick the middle option:",
+    "description": "Above a drawing of Chrome’s three-option dialog. Deliberately says POSITION, not Chrome’s button names — the order is the same in every language, the wording is not."
   },
   "actionTitle": {
     "message": "Bento Tray",
@@ -456,5 +444,13 @@
   },
   "linkReleases": {
     "message": "Releases"
+  },
+  "primeMiddle": {
+    "message": "the one that lasts",
+    "description": "Label on the highlighted middle pill. Describes what the option DOES; do not substitute Chrome’s own button text, which cannot be verified per language."
+  },
+  "primeNote": {
+    "message": "The other two work too, but Chrome asks again — every restart for the first, and after a wait for the last.",
+    "description": "Explains the two unlabelled pills by consequence rather than by name."
   }
 }

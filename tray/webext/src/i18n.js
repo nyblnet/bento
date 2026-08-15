@@ -57,7 +57,33 @@ export const t = (key, ...subs) => {
  * we wrote — but it is a separate attribute so that using it is a decision
  * rather than the default.
  */
+/**
+ * Right-to-left, when the browser's language is.
+ *
+ * The app already does this deliberately (`slides/src/i18n.ts RTL_LANGS`), and
+ * the extension shipped Arabic, Persian, Hebrew and Urdu catalogues into a
+ * layout that was left-to-right in fourteen places. Setting `dir` is only half
+ * of it — the CSS had to stop naming sides, which is why it uses
+ * `inset-inline-start` and `text-align: start` rather than `left`.
+ *
+ * `chrome.i18n.getUILanguage()` is the browser's language, which is the one
+ * Chrome resolved the catalogue from, so the direction cannot disagree with the
+ * words on screen.
+ */
+const RTL = new Set(['ar', 'fa', 'he', 'iw', 'ur', 'ps', 'sd', 'ug', 'yi'])
+
+export function applyDirection(root = document) {
+  try {
+    const lang = chrome.i18n.getUILanguage()
+    root.documentElement.lang = lang
+    root.documentElement.dir = RTL.has(lang.split('-')[0].toLowerCase()) ? 'rtl' : 'ltr'
+  } catch {
+    /* no chrome.i18n: leave the document as authored */
+  }
+}
+
 export function localize(root = document) {
+  applyDirection(root)
   for (const el of root.querySelectorAll('[data-i18n]')) {
     el.textContent = t(el.dataset.i18n)
   }

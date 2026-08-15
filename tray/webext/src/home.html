@@ -11,19 +11,19 @@
   body { height: 100vh; display: grid; grid-template-columns: 232px 1fr }
 
   /* ---------------------------------------------------------------- sidebar */
-  aside { border-right: 1px solid var(--line); padding: 18px 12px; display: flex;
+  aside { border-inline-end: 1px solid var(--line); padding: 18px 12px; display: flex;
     flex-direction: column; gap: 4px; overflow-y: auto }
   .brand { display: flex; align-items: center; gap: 9px; padding: 0 8px 14px }
   .brand .mark { width: 24px; height: 24px }
   .brand b { font-size: 15px; letter-spacing: -.01em }
   .brand b i { color: var(--peach); font-style: normal }
 
-  .navitem { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  .navitem { display: flex; align-items: center; gap: 9px; width: 100%; text-align: start;
     padding: 7px 9px; border: 0; border-radius: 8px; background: none; color: inherit;
     font: inherit; cursor: pointer }
   .navitem:hover { background: var(--hover) }
   .navitem[aria-current="true"] { background: var(--hover); font-weight: 600 }
-  .navitem .n { margin-left: auto; color: var(--dim); font-size: 12px;
+  .navitem .n { margin-inline-start: auto; color: var(--dim); font-size: 12px;
     font-variant-numeric: tabular-nums }
   .seclabel { color: var(--dim); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
     padding: 14px 9px 5px }
@@ -34,8 +34,8 @@
   .bar { display: flex; align-items: center; gap: 10px; padding: 16px 22px 12px }
   .bar h1 { flex: none }
   .search { flex: 1; max-width: 340px; position: relative }
-  .search input { width: 100%; padding-left: 30px }
-  .search .mag { position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  .search input { width: 100%; padding-inline-start: 30px }
+  .search .mag { position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%);
     color: var(--dim); font-size: 12px; pointer-events: none }
   .grow { flex: 1 }
   #notice { display: grid; gap: 8px; padding: 0 22px 10px }
@@ -48,7 +48,7 @@
     gap: 16px; align-content: start }
   .card { position: relative; border: 1px solid var(--line); border-radius: 12px;
     background: var(--panel); overflow: hidden; box-shadow: var(--shadow); cursor: pointer;
-    text-align: left; padding: 0; color: inherit; font: inherit; display: flex;
+    text-align: start; padding: 0; color: inherit; font: inherit; display: flex;
     flex-direction: column; transition: transform .13s ease, box-shadow .13s ease }
   .card:hover { transform: translateY(-2px); box-shadow: var(--lift) }
   /* An unopenable card must not read as a BROKEN card: the text stays full
@@ -65,7 +65,7 @@
   .shot { aspect-ratio: 16/9; background: var(--hover); position: relative; overflow: hidden;
     border-bottom: 1px solid var(--line) }
   .shot iframe { width: 1280px; height: 720px; border: 0; transform-origin: 0 0;
-    position: absolute; left: 0; top: 0; pointer-events: none }
+    position: absolute; inset-inline-start: 0; top: 0; pointer-events: none }
   .shot .glyph { position: absolute; inset: 0; display: grid; place-items: center;
     color: var(--dim); font-size: 26px }
   .shot .label { position: absolute; inset: 0; display: grid; place-items: center;
@@ -83,7 +83,7 @@
 
   /* Which Bento a document is, and whether it is named like one. Both sit on
      the picture so they never push the title around. */
-  .badges { position: absolute; top: 7px; right: 7px; display: flex; gap: 4px }
+  .badges { position: absolute; top: 7px; inset-inline-end: 7px; display: flex; gap: 4px }
   .badges span { background: var(--panel); border: 1px solid var(--line); color: var(--dim);
     font-size: 10.5px; line-height: 1; padding: 3px 5px; border-radius: 5px;
     letter-spacing: .02em }

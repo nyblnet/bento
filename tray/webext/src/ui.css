@@ -58,7 +58,7 @@ code { background: var(--hover); padding: 1px 5px; border-radius: 4px; font-size
 input:focus { outline: 2px solid var(--peach); outline-offset: -1px; border-color: transparent }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
 .btn.primary:hover { filter: brightness(1.12) }
-.btn.ghost { border-style: dashed; color: var(--dim); background: none; text-align: left }
+.btn.ghost { border-style: dashed; color: var(--dim); background: none; text-align: start }
 .btn.ghost:hover { background: var(--hover); color: var(--ink) }
 .btn.link { border: 0; background: none; color: var(--dim); padding: 0;
   text-decoration: underline; font-size: 12px }
@@ -84,7 +84,7 @@ input:focus { outline: 2px solid var(--peach); outline-offset: -1px; border-colo
   border-radius: 10px; box-shadow: var(--lift); padding: 5px; min-width: 176px;
 }
 .menu button {
-  display: block; width: 100%; text-align: left; border: 0; background: none;
+  display: block; width: 100%; text-align: start; border: 0; background: none;
   color: inherit; font: inherit; padding: 6px 9px; border-radius: 7px; cursor: pointer;
 }
 .menu button:hover { background: var(--hover) }
@@ -111,4 +111,7 @@ input:focus { outline: 2px solid var(--peach); outline-offset: -1px; border-colo
   background: var(--hover); color: var(--dim); margin-bottom: 5px;
 }
 .prime .opt.pick { background: var(--accent); color: var(--on-accent); font-weight: 600 }
-.prime .opt:last-child { margin-bottom: 0 }
+/* The unlabelled pills are shape, not text: they stand for "the one above" and
+   "the one below" without claiming to know what Chrome calls them. */
+.prime .opt:empty { min-height: 1.55em }
+.prime .primeNote { margin: 7px 0 0; color: var(--dim); font-size: 12px }
