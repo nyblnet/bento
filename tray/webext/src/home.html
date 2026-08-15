@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Bento Tray</title>
+<link rel="icon" href="../icons/icon.svg">
 <style>
   /* Light and dark are both first-class: this is a full page someone may leave
      open beside their documents, and a white sheet at night is a reason to
@@ -31,7 +32,9 @@
   aside { border-right: 1px solid var(--line); padding: 18px 12px; display: flex;
     flex-direction: column; gap: 4px; overflow-y: auto; }
   .brand { display: flex; align-items: center; gap: 9px; padding: 0 8px 14px; }
-  .brand img { width: 24px; height: 24px; border-radius: 6px }
+  /* The radius lives in the art (icons/icon.svg), not in a CSS crop —
+     one source of the shape, and it stays crisp at any size. */
+  .brand img { width: 24px; height: 24px }
   .brand b { font-size: 15px; letter-spacing: -.01em }
   .brand b i { color: var(--peach); font-style: normal }
 
@@ -142,7 +145,7 @@
 
 <aside>
   <div class="brand">
-    <img src="../icons/icon-48.png" alt="">
+    <img src="../icons/icon.svg" alt="">
     <b>bento<i>/</i>tray</b>
   </div>
 

@@ -39,7 +39,11 @@ const SRC = join(root, 'tray/webext')
 const OUT = join(root, 'dist')
 
 /** What ships. Anything in the tree and not matched here is an error. */
-const INCLUDE = [/^manifest\.json$/, /^icons\/[^/]+\.png$/, /^src\/[^/]+\.(js|html)$/]
+// The PNGs are the toolbar action icon, which Chrome composites into its own
+// chrome at fixed sizes. The SVG is the favicon for the extension's own pages —
+// one vector rather than a family of files, because a tab icon is drawn at 16px
+// and again at whatever the history and bookmarks views feel like.
+const INCLUDE = [/^manifest\.json$/, /^icons\/[^/]+\.(png|svg)$/, /^src\/[^/]+\.(js|html)$/]
 /** Present on purpose, deliberately NOT shipped. */
 const EXCLUDE = [/^probe\//, /^README\.md$/, /^STORE\.md$/]
 

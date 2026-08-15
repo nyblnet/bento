@@ -1,0 +1,25 @@
+<!--
+  bento/tray favicon for the extension's own pages.
+
+  The SAME mark as tray/assets/tray-icon.svg, with one difference: a corner
+  radius. That file is deliberately square and full-bleed because iOS applies
+  its own squircle mask, and a radius drawn inside one shows as a seam along
+  every edge. Chrome applies no mask, so the exported PNGs appear as a hard
+  square in a tab strip full of rounded favicons — which is what it looked like.
+
+  SVG rather than another PNG size: a tab favicon is drawn at 16px and again at
+  whatever the browser feels like (history, bookmarks, the extensions page), and
+  one vector covers all of them without a family of files to keep in step. The
+  radius is 7/32, matching the app mark used elsewhere in the product.
+
+  The toolbar action icon still uses the PNGs — Chrome composites that into its
+  own chrome and a radius there would fight the browser's spacing, not match it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
+     role="img" aria-label="Bento Tray">
+  <rect width="32" height="32" rx="7" fill="#16273E"/>
+  <rect x="4.2" y="4.2" width="23.6" height="23.6" rx="4.8" fill="#F0EBE0"/>
+  <rect x="6.800" y="6.800" width="5.855" height="18.400" rx="2.091" fill="#5E7699"/>
+  <rect x="14.327" y="6.800" width="10.873" height="8.364" rx="2.091" fill="#FF9E8A"/>
+  <rect x="14.327" y="16.836" width="10.873" height="8.364" rx="2.091" fill="#16273E"/>
+</svg>
