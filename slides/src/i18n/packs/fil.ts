@@ -4,6 +4,12 @@
 // file, so it never enters the module graph. scripts/build-i18n.mjs --packs
 // emits it as downloadable JSON. See docs/i18n-packs.md.
 //
+// CODE: `fil`, not `tl`. The pack's language code is what navigator.language
+// is matched against (kernel resolve()), and every current browser reports
+// Filipino as `fil` / `fil-PH` — filed under `tl` this pack could never be
+// auto-selected by anyone. `tl` is kept as an ALIAS in slides/src/packs.ts so
+// a system that does report `tl-PH` still lands here.
+//
 // REGISTER: natural Taglish, deliberately. English is an official language of
 // the Philippines and everyday Filipino tech speech is heavily code-switched;
 // purist coinages (Komisyon sa Wikang Filipino terminology, "panlaping"
