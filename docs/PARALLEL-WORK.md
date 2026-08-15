@@ -42,6 +42,45 @@ rules exist to keep N parallel workstreams from dissolving into merge hell.
 - Every PR body states: what changed, how it was verified (commands run,
   browser-tested or not), and any platform invariant it touches.
 
+### 2.1 One worktree per session — never share a checkout
+
+Sessions do not share a working tree. `git worktree add .worktrees/<name>
+<branch>`, work there, and leave the main checkout alone.
+
+**Worktrees live in `.worktrees/` inside the repo** (gitignored). Two reasons,
+both learned the expensive way.
+
+*The `gh` account is chosen by directory.* `~/.zshrc` exports the personal
+profile only under the paths in `GH_PERSONAL_DIRS`, which is
+`$HOME/devel/bento` — a worktree anywhere else silently gets the WORK account,
+which cannot see this repo. The failure is badly misleading: `gh` reports
+*"Failed to create release, 'workflow' scope may be required"* and tells you to
+run `gh auth refresh -s workflow`. The token already has that scope. Do not
+refresh it; check where you are. This cost a failed release step on 1.0.17.
+
+*`/tmp` is reaped.* It is not a location for anything you have not pushed. On
+2026-08-15 seven worktrees under `/private/tmp` were reaped in a single day —
+including one holding an open PR's branch and one holding a release build — and
+issue #270's uncommitted relay work appears to have gone the same way. Branches
+that had been pushed survived; nothing else did.
+
+**`git mv` stages.** It is `mv` plus `git add`, so anyone doing a refactor is
+staging by default, and in a shared checkout a plain `git commit` from ANY
+session — no `-a`, no `add -A` — sweeps up their half-finished work. It reports
+clean to a casual reader, because `R  old -> new` looks like working-tree state
+until you notice the `R` is in column ONE. **The check before committing is
+`git diff --cached --stat`, not `git status`.** A session self-reported "nothing
+staged" while sitting on three staged renames of kernel modules.
+
+**A shared checkout goes stale and answers confidently.** The main checkout sat
+two commits behind `origin/main` on a detached HEAD; every tool run in it gave
+pre-fix answers, including `release.mjs --print-notes` printing the wrong
+version's notes. If you must read state from a checkout that is not yours, read
+the ref instead: `git show origin/main:path`.
+
+**Release tooling runs from a worktree pinned to `main`**, never from a shared
+or detached checkout, for exactly that reason.
+
 ## 3. Known conflict magnets (pre-empt them)
 
 - **`CHANGELOG.md`** — every feature branch appends to `[Unreleased]`. Keep

@@ -51,3 +51,8 @@ scripts/.cache/
 # rename must not be able to unignore them again.
 **/*.xcodeproj/
 **/Resources/starter.bento.html
+
+# per-session git worktrees (docs/PARALLEL-WORK.md §2.1). Inside the repo on
+# purpose: ~/.zshrc picks the personal gh account by directory, and /tmp gets
+# reaped — seven worktrees were lost from it in one day.
+.worktrees/
