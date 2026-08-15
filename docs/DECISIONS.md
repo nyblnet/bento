@@ -2939,3 +2939,52 @@ the result made no sense, which is the question that broke the frame.
 
 The rigs were green throughout. They test what the code does, and the code did
 what it was written to do.
+
+*2026-08-15.* "Can't the extension just inspect files to see if they're Bento?"
+Yes — and the better question was "why are there any misnamed ones?"
+
+**The listing now decides by CONTENT.** `id="bento-doc"` is the splice contract
+every Bento app honours (PLATFORM.md §2), frozen because old updaters depend on
+it, and it sits ~6KB into a real shell. So an unrecognised `.html` is settled by
+one 64KB read; a properly named document costs no read at all; the verdict is
+cached by size and mtime, so a second listing opens no bytes; and sniffing is
+capped per listing, because a granted home directory can hold thousands of
+unrelated pages.
+
+Marked in the UI rather than silently half-supported. A found-by-content
+document lists and opens, but the bridge that saves in place is a content script
+matching `file:///*.bento.html`, so it will still ask where to put itself. A
+tray that looked like it fully supported a document it half supports is a trap.
+
+**But the real fix was upstream, and Bento was the culprit.** `suggestedFileName`
+has always produced `.bento.html` — while the PICKER accepted `.html`. So an
+author who edited the name to "Q3" got `Q3.html`, and that document is a
+second-class citizen everywhere the convention is what identifies us: the webext
+bridge matches on the compound extension, and tray/ios matches the same way.
+Bento was manufacturing the exception and then being asked to cope with it.
+
+Both pickers now accept only `.bento.html`, so the browser appends it to a bare
+name. Compound suffixes are explicitly legal (`.tar.gz` is the spec's own
+example) and the limit is 16 characters against this one's 11 — checked in the
+spec rather than assumed, after a day of assuming browser behaviour and being
+wrong.
+
+The cost is that typing `deck.html` yields `deck.html.bento.html`. Accepting
+both extensions would remove that and also remove the whole benefit, since
+`.html` would again be a valid terminal suffix and nothing would be appended.
+The common case — typing a plain name — now produces the right thing, and the
+odd case produces a clumsy name rather than a broken one.
+
+**Widening the content-script match was considered and NOT done.** Making
+renamed documents save in place needs `file:///*.html`, which injects the bridge
+into every local page a user opens — a much heavier ask on a store listing than
+the narrow match, for a case that should now be rare because the source of it is
+fixed. If it is ever wanted, the pattern is the one the history search
+established: an optional permission, requested with the reason on screen,
+registering the broader script only when granted.
+
+*Found while writing the rig:* its `deps` lacked a cache, so `sniff` threw
+straight into a `catch { continue }` — the check reported green while proving
+nothing. Then the cache assertion counted `getFile()` calls, which a cache hit
+still makes (it needs size and mtime for the key); it now counts content reads.
+Two rounds of a test that passed for reasons unrelated to the thing under test.

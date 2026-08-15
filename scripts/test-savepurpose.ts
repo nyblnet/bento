@@ -19,7 +19,7 @@
 // out the way we did.
 
 import { readFileSync } from 'node:fs'
-import { pickerIdFor, type SavePurpose } from '../kernel/src/save.ts'
+import { pickerIdFor, suggestedFileName as suggestedName, type SavePurpose } from '../kernel/src/save.ts'
 
 let failures = 0
 let checks = 0
@@ -54,6 +54,7 @@ ok(ids.every((id) => /^[a-z0-9-]+$/.test(id) && id.length <= 32),
 //
 // Read as source, because the branch is unreachable without a DOM and a picker.
 // A weak assertion on the right line beats a strong one on a mock of it.
+
 // ------------------------------------------------- every app announces itself
 // A host must know whether a document predates `pickerIdFor` (#213), because
 // before it every save sent `bento-doc` and acting on that overwrites the open
@@ -75,6 +76,28 @@ ok(/purpose:\s*'in-place'/.test(call.slice(0, 300)),
   'applyUpdateInPlace declares in-place, so a host recognises it and writes without asking')
 ok(!/writeUpdatedFileAs\(html, doc, \{ keepHandle: true, suggestedName: [^}]*\}\)/.test(updateSrc),
   'the update no longer falls through to the default share purpose')
+
+// ------------------------------------------------- the convention is the id
+// `.bento.html` is not decoration. tray/webext injects its save bridge on
+// `file:///*.bento.html` and tray/ios matches the same way, so a document named
+// `Q3.html` opens fine and then asks where to save — it is a second-class
+// citizen everywhere the name is what identifies us.
+//
+// `suggestedFileName` has always produced the compound extension, but the
+// PICKER accepted `.html`, so an author who typed a bare name got `Q3.html`.
+// Bento was manufacturing the exception and then coping with it. Accepting only
+// `.bento.html` makes the browser append it to a bare name.
+const saveSrc = readFileSync(new URL('../kernel/src/save.ts', import.meta.url), 'utf8')
+ok(/\.bento\.html$/.test(suggestedName({ title: 'Q3 Board Review' } as any)),
+  `suggestedFileName produces the compound extension (${suggestedName({ title: 'Q3 Board Review' } as any)})`)
+ok(!/accept: \{ 'text\/html': \['\.html'\] \}/.test(saveSrc),
+  'and the picker no longer accepts a bare .html, which is how bare names slipped through')
+for (const m of saveSrc.matchAll(/accept: \{ 'text\/html': \[([^\]]*)\] \}/g)) {
+  ok(m[1] === "'.bento.html'", `every picker accepts only .bento.html (found ${m[1]})`)
+}
+ok((saveSrc.match(/accept: \{ 'text\/html'/g) ?? []).length >= 2,
+  'both picker call sites are covered — a copy that drifts is how one of them would regress')
+
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
