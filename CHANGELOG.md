@@ -11,6 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.0.18] — 2026-08-15
+
 - **Security: offline mode did not block everything it promised.** The switch
   says "nothing leaves this computer", and five things still went out with it
   on: a manual *Check for updates* called the release server, *Manage
