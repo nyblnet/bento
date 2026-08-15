@@ -178,13 +178,20 @@ function renderGrid() {
   for (const d of docs) {
     const card = document.createElement('button')
     card.className = 'card'
+    // TWO different absences looked identical, and one of them is not a
+    // problem. A document with no thumbnail has simply never been saved — a
+    // shell only gets its page-one render written into it on the first save —
+    // while a document with no path cannot be opened at all. Both used to be a
+    // pale card with a grey glyph, so five perfectly good documents read as
+    // broken. The states now say which they are, in words.
     if (!d.path) {
       card.disabled = true
-      card.title = `Open any document in ${d.folder} once from Finder, and everything in `
-        + 'that folder opens from here.'
+      card.classList.add('unplaced')
+      card.title = `Bento Tray does not know where ${d.folder} is on disk yet. `
+        + 'Use "Find my folders", or open any document in it from Finder once.'
     }
     card.innerHTML =
-      `<span class="shot"><span class="glyph">▤</span></span>` +
+      `<span class="shot"><span class="glyph">${d.path ? '▤' : '⤺'}</span></span>` +
       `<span class="cardbody"><span class="txt">` +
       `<b>${esc(d.title ?? d.base)}</b>` +
       `<span>${esc(d.folder)} · ${esc(ago(d.modified))}</span>` +
@@ -217,7 +224,14 @@ async function decorate(card, d) {
       shot.innerHTML = '<span class="glyph" title="Password-protected">🔒</span>'
       return
     }
-    if (!meta.preview) return // never saved: the page glyph already says so
+    if (!meta.preview) {
+      // Not a failure, and it should not look like one. A shell has its
+      // page-one render written in on the FIRST SAVE, so a document that has
+      // never been saved — including every one `+ New document` creates — has
+      // nothing to show yet, and says so instead of sitting there blank.
+      if (d.path) shot.innerHTML = '<span class="label">Not saved yet</span>'
+      return
+    }
     shot.innerHTML = ''
     const f = document.createElement('iframe')
     // No scripts. This is somebody else's document and it renders inert; the
