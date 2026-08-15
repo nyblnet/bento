@@ -70,6 +70,30 @@ for (const rel of all) {
   fail(`unexpected file in tray/webext — add it to INCLUDE or EXCLUDE deliberately: ${rel}`)
 }
 
+// ---- the icons must have transparent corners -------------------------------
+// The shipped PNGs had NO ALPHA CHANNEL: RGB, not RGBA, so opaque squares by
+// construction, and the toolbar showed a hard square no CSS could round. They
+// are exports of icons/icon.svg, and an export that quietly drops the alpha
+// looks identical in a file listing and square in the browser — the kind of
+// regression nobody sees until it ships.
+//
+// Colour type lives at byte 25 of a PNG: 8-byte signature, then IHDR's length
+// and type (8 more), then width, height, bit depth, and colour type. 6 is
+// truecolour with alpha, 4 is greyscale with alpha; anything else has none.
+function pngColourType(abs) {
+  const head = readFileSync(abs).subarray(0, 26)
+  if (head.length < 26 || head.readUInt32BE(0) !== 0x89504e47) return null
+  return head[25]
+}
+for (const rel of all.filter((r) => /^icons\/.*\.png$/.test(r))) {
+  const ct = pngColourType(join(SRC, rel))
+  if (ct === null) { fail(`${rel} is not a PNG`); continue }
+  if (ct !== 6 && ct !== 4) {
+    fail(`${rel} has no alpha channel (colour type ${ct}) — its corners are opaque, `
+      + 'so the rounded mark will render as a square. Re-export from icons/icon.svg.')
+  }
+}
+
 // ---- the manifest must match the tree --------------------------------------
 let manifest = null
 try {

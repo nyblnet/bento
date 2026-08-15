@@ -12,8 +12,23 @@
   one vector covers all of them without a family of files to keep in step. The
   radius is 7/32, matching the app mark used elsewhere in the product.
 
-  The toolbar action icon still uses the PNGs — Chrome composites that into its
-  own chrome and a radius there would fight the browser's spacing, not match it.
+  THIS FILE IS ALSO THE SOURCE OF THE PNGs beside it. The toolbar action icon
+  cannot be an SVG — Chrome's `action.default_icon` takes raster sizes — so the
+  four PNGs are exports of this, and they must be regenerated from here rather
+  than edited:
+
+    for n in 16 32 48 128; do
+      printf '<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}svg{display:block;width:%dpx;height:%dpx}</style>' "$n" "$n" > /tmp/i.html
+      sed -n '/<svg/,$p' icon.svg >> /tmp/i.html
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+        --disable-gpu --hide-scrollbars --default-background-color=00000000 \
+        --window-size=$n,$n --screenshot=icon-$n.png /tmp/i.html
+    done
+
+  The previous PNGs had NO ALPHA CHANNEL — measured, RGB not RGBA — so they were
+  opaque squares by construction and no amount of CSS could round the toolbar.
+  Any replacement must keep the transparent corners; a re-export that quietly
+  drops the alpha looks identical in a file listing and square in the browser.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
      role="img" aria-label="Bento Tray">
