@@ -302,6 +302,14 @@ jobs:
         # request. Every failure mode here is silent by nature.
         run: node scripts/test-webext-update.ts
 
+      - name: WebExtension localisation rig
+        # Every failure mode of a message catalogue is silent: a key the code
+        # uses but English lacks renders as the key name, a locale missing a key
+        # falls back so a German page carries English sentences, and a dropped
+        # $1 leaves a hole in a translated sentence. All of them are visible
+        # only to someone who reads that language.
+        run: node scripts/test-webext-i18n.ts
+
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
         # must tell "overwrite the open document" from "make a second file" from

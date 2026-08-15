@@ -91,8 +91,13 @@ input:focus { outline: 2px solid var(--peach); outline-offset: -1px; border-colo
 .menu .sep { height: 1px; background: var(--line); margin: 5px 4px }
 .menu .note { color: var(--dim); font-size: 12px; padding: 4px 9px 6px }
 
+/* Centred without naming a side. `left: 50%` + `translateX(-50%)` also centres,
+   but the translate is PHYSICAL: under RTL it pushes the same direction while
+   the anchor flips, so the toast drifts off centre. Auto margins do not care
+   which way the document runs. */
 .toast {
-  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  position: fixed; inset-inline: 0; bottom: 26px;
+  margin-inline: auto; width: max-content; max-width: calc(100% - 32px);
   background: var(--accent); color: var(--on-accent); padding: 9px 15px;
   border-radius: 999px; box-shadow: var(--lift); font-size: 13px; z-index: 30;
 }
