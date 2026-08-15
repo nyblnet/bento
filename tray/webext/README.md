@@ -36,6 +36,43 @@ can be shown to be the reviewed one.
 Listing copy, permission justifications and the data-usage answers live in
 `STORE.md`.
 
+## Releasing, and keeping unpacked installs current
+
+Two distribution routes, and only one of them updates itself.
+
+**Chrome Web Store and Edge Add-ons** update silently. Nothing to do.
+
+**GitHub, loaded unpacked** never updates. Chrome ignores `update_url` for a
+development install — it is running from a directory on disk, and nothing will
+rewrite that directory. Self-hosting a `.crx` is not a way round it either:
+Chrome refuses off-store installs on Windows and macOS.
+
+So the extension tells those users instead. `src/update.js` asks
+`chrome.management.getSelf()` for `installType` — which needs **no permission** —
+and only a non-`normal` install ever checks. Store users are never asked and
+never see a notice they cannot act on. The check is a GET for a static JSON file
+with no identifiers and no query string; it can report, link, and nothing else.
+
+### To cut a release
+
+```bash
+node scripts/pack-webext.mjs
+```
+
+That writes two things into `dist/`:
+
+- `bento-tray-<version>.zip` — upload to both stores.
+- `tray-release.json` — publish at `https://bento.page/releases/tray/manifest.json`.
+
+The JSON carries the version, the release URL, and the **sha256 of the zip just
+built**. It is emitted rather than hand-written because a copied hash goes stale
+in silence, and it is publishable at all because the package is byte-reproducible
+— anyone can rebuild from source and confirm the zip they downloaded is the one
+that was reviewed.
+
+Bump `manifest.json`'s `version` before packing; the store rejects a re-upload of
+an existing version, and unpacked users compare against exactly that number.
+
 ## Two surfaces
 
 - **Toolbar click → the library** (`src/home.html`): browsing and managing.

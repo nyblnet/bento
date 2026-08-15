@@ -33,6 +33,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'n
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateRawSync, crc32 } from 'node:zlib'
+import { createHash } from 'node:crypto'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = join(root, 'tray/webext')
@@ -261,3 +262,25 @@ const out = join(OUT, `bento-tray-${manifest.version}.zip`)
 writeFileSync(out, bytes)
 console.log(`\nwrote ${relative(root, out)} — ${(bytes.length / 1024).toFixed(1)}KB`)
 console.log('deterministic: the same tree always produces these bytes')
+
+// ---- the release manifest unpacked installs read ---------------------------
+// A store install updates itself. One loaded unpacked never will — Chrome
+// ignores `update_url` for a development install — so the extension asks this
+// file whether it is behind (src/update.js) and says so. Emitted here rather
+// than written by hand because the digest has to match the bytes just built,
+// and a hand-copied hash is a hash that goes stale silently.
+//
+// The digest is publishable BECAUSE the zip is reproducible: anyone can rebuild
+// from source and confirm the package they downloaded is the package that was
+// reviewed. That is the only verification available when the browser is not the
+// one doing the updating.
+const digest = createHash('sha256').update(bytes).digest('hex')
+const release = {
+  version: manifest.version,
+  url: `https://github.com/nyblnet/bento/releases/tag/tray-v${manifest.version}`,
+  sha256: digest,
+}
+const relOut = join(OUT, 'tray-release.json')
+writeFileSync(relOut, `${JSON.stringify(release, null, 2)}\n`)
+console.log(`wrote ${relative(root, relOut)} — publish at /releases/tray/manifest.json`)
+console.log(`sha256 ${digest}`)

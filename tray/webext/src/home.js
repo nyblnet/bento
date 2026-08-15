@@ -16,6 +16,7 @@ import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
 import { learnPrefix } from './db.js'
+import { checkForUpdate, pendingUpdate, isSelfManaged } from './update.js'
 
 /**
  * Find the granted folders on disk, without sending anyone to Finder.
@@ -433,6 +434,16 @@ async function renderNotice() {
     say('bad', '<b>Local file access is off</b> — nothing saves in place until it is on. '
       + 'Turn on <b>Allow access to file URLs</b> in <code>chrome://extensions</code>.')
   }
+  // An update, for installs that will never fetch one themselves. Deliberately
+  // NOT on the badge: the badge means "something is broken and saving will
+  // prompt", and being a version behind is neither.
+  const upd = await pendingUpdate()
+  if (upd?.version) {
+    say('', `<b>Bento Tray ${esc(upd.version)} is available.</b> This copy was loaded unpacked, `
+      + `so it will not update itself. <a href="${esc(upd.url)}" target="_blank" rel="noopener">`
+      + 'Get it on GitHub</a> and reload it in <code>chrome://extensions</code>.')
+  }
+
   const lapsed = s.folders.filter((f) => f.permission !== 'granted')
   if (lapsed.length) {
     say('bad', `<b>${lapsed.length} folder needs reconnecting.</b> Reconnect it in `
@@ -654,6 +665,49 @@ async function renderSettings() {
         ? 'Open chrome://extensions, find Bento Tray, turn on "Allow access to file URLs".'
         : 'This browser will not report it. If saves still prompt, check it in chrome://extensions.'}</span>`
   access.appendChild(row)
+
+  // --- version, and whether this copy can update itself
+  const mine = chrome.runtime.getManifest().version
+  const selfManaged = await isSelfManaged()
+  const upd = await pendingUpdate()
+  const ver = section('Version',
+    selfManaged
+      ? 'This copy was loaded unpacked, so Chrome will never update it. '
+        + 'Bento Tray checks for a newer release when the browser starts.'
+      : 'Installed from the store, so it updates itself.')
+  const vrow = document.createElement('div')
+  vrow.className = 'row'
+  vrow.innerHTML = `<span class="dot ${upd?.version ? 'meh' : 'ok'}"></span><b>${esc(mine)}</b>`
+    + `<span class="note">${upd?.version
+      ? `${esc(upd.version)} is available`
+      : selfManaged ? 'up to date as of the last check' : 'kept current by the browser'}</span>`
+  if (upd?.version) {
+    const link = document.createElement('a')
+    link.className = 'btn'
+    link.href = upd.url
+    link.target = '_blank'
+    link.rel = 'noopener'
+    link.textContent = 'Get it'
+    vrow.appendChild(link)
+  }
+  if (selfManaged) {
+    const now = document.createElement('button')
+    now.className = 'btn'
+    now.textContent = 'Check now'
+    now.onclick = () => act(async () => { await checkForUpdate() })
+    vrow.appendChild(now)
+  }
+  ver.appendChild(vrow)
+  // The package is byte-reproducible, so a published digest is checkable by the
+  // person doing the install — which is the only verification available when
+  // the browser is not doing the updating.
+  if (upd?.sha256) {
+    const sum = document.createElement('p')
+    sum.className = 'sub'
+    sum.style.marginTop = '8px'
+    sum.innerHTML = `Expected SHA-256 of the zip: <code>${esc(upd.sha256)}</code>`
+    ver.appendChild(sum)
+  }
 
   // --- what the extension will never do
   const about = section('What this can reach',

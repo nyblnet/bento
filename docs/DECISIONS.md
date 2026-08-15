@@ -3069,3 +3069,45 @@ matched the comment explaining why the call was removed — a gate that trips on
 its own documentation gets deleted rather than fixed, so it now strips comments
 and reads code. And it was verified by re-adding a real call and watching it
 fail, which is the only way to know a source gate is a gate.
+
+*2026-08-15.* Keeping unpacked installs current, when the browser will not.
+
+**Store installs update themselves; an unpacked one never does.** Chrome ignores
+`update_url` for a development install — it runs from a directory on disk and
+nothing is going to rewrite that directory. Self-hosting a `.crx` is not a way
+round it either: Chrome refuses off-store installs on Windows and macOS. So the
+only move available is to TELL those users.
+
+**Ask only the people it applies to.** `chrome.management.getSelf()` reports
+`installType`, and — checked in the API docs rather than assumed — it needs **no
+permission at all**, so this costs nothing on a listing. Anything but `normal`
+is told: `development` is the GitHub route this exists for, and
+`sideload`/`admin`/`other` also arrive outside the store's update mechanism. A
+store install is never asked and never makes the request; a notice about a
+version the browser has already installed is how an extension gets uninstalled.
+
+**A GET for a static JSON file, and nothing else.** No identifiers, no query
+string, no version reported upward — the comparison happens locally. The app's
+own update check promises "no ids, no telemetry", and the extension must not be
+quietly weaker. It can report and link; there is no mechanism for an unpacked
+extension to update itself, and inventing one would mean downloading code and
+asking for trust, which is precisely what a reviewer would ask about.
+
+**Not on the badge.** The badge means "a folder lapsed, saving will prompt". A
+version behind is neither urgent nor broken, so it is a notice in the library and
+a row in Settings, with a manual "Check now".
+
+**The digest is emitted, not typed.** `pack-webext` now writes
+`dist/tray-release.json` beside the zip, carrying the sha256 of the bytes it just
+built. A hand-copied hash goes stale in silence. Publishing it is worth
+something only because the package is byte-reproducible: anyone can rebuild from
+source and confirm the zip they downloaded is the one that was reviewed — the
+only verification available when the browser is not the thing doing the updating.
+
+**Startup only, plus a manual check.** A daily poll would cost the `alarms`
+permission for a courtesy. A browser session is the natural granularity for
+something whose remedy is "download and reload".
+
+*Rig note:* the comparison is numeric, not textual — `1.0.10` against `1.0.9` is
+the case string comparison gets backwards, and it is pinned. So is the direction
+that matters most: a store install is never told, and never even asks.

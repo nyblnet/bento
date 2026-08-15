@@ -31,6 +31,7 @@
 // UI — duplicating the "is anything lapsed?" rule would let the icon and the
 // popup disagree about the same folders.
 import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
+import { checkForUpdate } from './update.js'
 import { learnPrefix } from './db.js'
 import { pathFromSender, locateIn } from './route.js'
 
@@ -297,6 +298,13 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   // before they have tried to save anything.
   chrome.runtime.onStartup?.addListener(() => void reportLapsed())
   chrome.runtime.onInstalled?.addListener(() => void reportLapsed())
+
+  // Whether an unpacked install is behind. Startup only, plus a manual check in
+  // Settings: a browser session is the natural granularity, and a daily alarm
+  // would cost the `alarms` permission for a courtesy. Store installs are never
+  // asked — `checkForUpdate` returns immediately for them.
+  chrome.runtime.onStartup?.addListener(() => void checkForUpdate())
+  chrome.runtime.onInstalled?.addListener(() => void checkForUpdate())
   void reportLapsed()
 
   /**

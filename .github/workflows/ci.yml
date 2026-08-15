@@ -294,6 +294,14 @@ jobs:
         # document carrying an image.
         run: node scripts/test-webext-library.ts
 
+      - name: WebExtension update-notice rig
+        # Store installs update themselves; one loaded unpacked never will, and
+        # Chrome ignores update_url for a development install. So the GitHub
+        # route has to be told — and told in exactly one direction: a store user
+        # must never see a notice they cannot act on, and must not even cost a
+        # request. Every failure mode here is silent by nature.
+        run: node scripts/test-webext-update.ts
+
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
         # must tell "overwrite the open document" from "make a second file" from
