@@ -116,7 +116,7 @@
     "message": "$1 を作成しました"
   },
   "panelUnplaced": {
-    "message": "<b>$1</b>$2 のドキュメントを Finder から一度開いてください — Chrome は拡張機能にフォルダの場所を教えないため、Bento Tray は開いたときに知ります。その後はフォルダ全体をここから開けます。",
+    "message": "<b>$1</b>$2 は読み取れますが、まだ開けません。Chrome はフォルダーのディスク上の場所を拡張機能に伝えないためです。<b>すべて表示</b> ならワンクリックで見つかります。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "andMore": {

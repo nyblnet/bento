@@ -116,7 +116,7 @@
     "message": "$1 créé"
   },
   "panelUnplaced": {
-    "message": "Ouvrez une fois un document de <b>$1</b>$2 depuis le Finder — Chrome n’indique pas à une extension où est un dossier, c’est donc à l’ouverture que Bento Tray l’apprend. Ensuite, tout le dossier s’ouvre d’ici.",
+    "message": "<b>$1</b>$2 peut être lu, mais pas encore ouvert : Chrome n’indique pas à une extension où se trouve un dossier sur le disque. <b>Tout parcourir</b> les trouve en un clic.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "andMore": {

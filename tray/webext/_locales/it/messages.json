@@ -116,7 +116,7 @@
     "message": "$1 creato"
   },
   "panelUnplaced": {
-    "message": "Apri una volta un documento in <b>$1</b>$2 dal Finder — Chrome non dice a un’estensione dove si trova una cartella, quindi Bento Tray lo impara aprendolo. Dopodiché l’intera cartella si apre da qui.",
+    "message": "<b>$1</b>$2 può essere letto, ma non ancora aperto: Chrome non dice a un’estensione dove si trova una cartella sul disco. <b>Sfoglia tutti</b> li trova con un clic.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "andMore": {

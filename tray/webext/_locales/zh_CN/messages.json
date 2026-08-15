@@ -116,7 +116,7 @@
     "message": "已创建 $1"
   },
   "panelUnplaced": {
-    "message": "请从访达打开一次 <b>$1</b>$2 中的文档 — Chrome 不会告诉扩展程序文件夹在哪里，所以 Bento Tray 是在打开时得知的。之后整个文件夹都能从这里打开。",
+    "message": "<b>$1</b>$2 可以读取，但还无法打开——Chrome 不会告诉扩展程序文件夹在磁盘上的位置。<b>查看全部</b> 可一键找到它们。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "andMore": {

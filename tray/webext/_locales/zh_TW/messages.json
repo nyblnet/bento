@@ -116,7 +116,7 @@
     "message": "已创建 $1"
   },
   "panelUnplaced": {
-    "message": "請從Finder打开一次 <b>$1</b>$2 中的文档 — Chrome 不會告诉擴充功能資料夾在哪里，所以 Bento Tray 是在打开時得知的。之後整個資料夾都能從這里打开。",
+    "message": "<b>$1</b>$2 可以讀取，但還無法開啟——Chrome 不會告訴擴充功能資料夾在磁碟上的位置。<b>查看全部</b> 可一鍵找到它們。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "andMore": {

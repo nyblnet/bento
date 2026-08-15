@@ -116,7 +116,7 @@
     "message": "$1 erstellt"
   },
   "panelUnplaced": {
-    "message": "Öffnen Sie einmal ein Dokument in <b>$1</b>$2 im Finder — Chrome verrät einer Erweiterung nicht, wo ein Ordner liegt, deshalb lernt Bento Tray es beim Öffnen. Danach öffnet sich der ganze Ordner von hier.",
+    "message": "<b>$1</b>$2 kann gelesen, aber noch nicht geöffnet werden — Chrome verrät einer Erweiterung nicht, wo ein Ordner auf der Festplatte liegt. <b>Alle anzeigen</b> findet sie mit einem Klick.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "andMore": {
