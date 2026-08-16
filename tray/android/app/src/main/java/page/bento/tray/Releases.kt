@@ -80,7 +80,15 @@ object Releases {
      * Blocking — call it off the main thread.
      */
     fun seedFor(c: Context, app: App): ByteArray {
-        val envelope = get(app.manifest)
+        // Only slides has a published channel today; spaces and dash 404. Say so
+        // rather than surfacing an HTTP code — the app list is aspirational on
+        // purpose (adding an app here is the whole integration), so an
+        // unreleased one is an expected answer, not a fault.
+        val envelope = try { get(app.manifest) } catch (e: Failed) {
+            if (e.message?.contains("404") == true)
+                throw Failed("${app.label} has not been released yet")
+            throw e
+        }
         val payload = verify(String(envelope, Charsets.UTF_8))
 
         val version = payload.optString("version").ifEmpty {
