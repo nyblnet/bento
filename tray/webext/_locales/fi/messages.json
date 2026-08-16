@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "Kaksi muutakin toimivat, mutta Chrome kysyy uudelleen — ensimmäisessä joka käynnistyksellä ja viimeisessä odotusajan jälkeen."
+  },
+  "viewLayout": {
+    "message": "Miten asiakirjat näytetään"
+  },
+  "viewIcons": {
+    "message": "Kuvakkeet"
+  },
+  "viewList": {
+    "message": "Luettelo"
+  },
+  "close": {
+    "message": "Sulje"
   }
 }

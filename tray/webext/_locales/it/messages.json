@@ -442,5 +442,17 @@
   },
   "primeNote": {
     "message": "Anche le altre due funzionano, ma Chrome chiederà di nuovo — la prima a ogni riavvio, l’ultima dopo un’attesa."
+  },
+  "viewLayout": {
+    "message": "Come vengono mostrati i documenti"
+  },
+  "viewIcons": {
+    "message": "Icone"
+  },
+  "viewList": {
+    "message": "Elenco"
+  },
+  "close": {
+    "message": "Chiudi"
   }
 }

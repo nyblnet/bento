@@ -442,5 +442,17 @@
   },
   "primeNote": {
     "message": "另外两个也能用，但 Chrome 会再次询问 — 第一个每次重启都问，最后一个会等一段时间再问。"
+  },
+  "viewLayout": {
+    "message": "文档的显示方式"
+  },
+  "viewIcons": {
+    "message": "图标"
+  },
+  "viewList": {
+    "message": "列表"
+  },
+  "close": {
+    "message": "关闭"
   }
 }

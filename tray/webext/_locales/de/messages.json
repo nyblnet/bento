@@ -442,5 +442,17 @@
   "accessUnknownNote": {
     "message": "Dieser Browser meldet es nicht. Wird beim Speichern weiterhin gefragt, prüfen Sie es unter chrome://extensions.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "viewLayout": {
+    "message": "Wie Dokumente angezeigt werden"
+  },
+  "viewIcons": {
+    "message": "Symbole"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Schließen"
   }
 }

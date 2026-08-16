@@ -442,5 +442,17 @@
   },
   "primeNote": {
     "message": "As outras duas também funcionam, mas o Chrome pergunta de novo — a primeira a cada reinício, a última depois de uma espera."
+  },
+  "viewLayout": {
+    "message": "Como os documentos são exibidos"
+  },
+  "viewIcons": {
+    "message": "Ícones"
+  },
+  "viewList": {
+    "message": "Lista"
+  },
+  "close": {
+    "message": "Fechar"
   }
 }

@@ -442,5 +442,17 @@
   },
   "primeNote": {
     "message": "Les deux autres fonctionnent aussi, mais Chrome redemandera — à chaque redémarrage pour la première, après une attente pour la dernière."
+  },
+  "viewLayout": {
+    "message": "Affichage des documents"
+  },
+  "viewIcons": {
+    "message": "Icônes"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Fermer"
   }
 }

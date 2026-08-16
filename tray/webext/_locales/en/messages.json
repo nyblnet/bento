@@ -452,5 +452,21 @@
   "primeNote": {
     "message": "The other two work too, but Chrome asks again — every restart for the first, and after a wait for the last.",
     "description": "Explains the two unlabelled pills by consequence rather than by name."
+  },
+  "viewLayout": {
+    "message": "How documents are shown",
+    "description": "Tooltip on the icons/list segmented control as a whole."
+  },
+  "viewIcons": {
+    "message": "Icons",
+    "description": "Tooltip on the icon-grid button. REVIEW: the noun a file browser uses for thumbnail view."
+  },
+  "viewList": {
+    "message": "List",
+    "description": "Tooltip on the list button. REVIEW: the noun a file browser uses for list/detail view."
+  },
+  "close": {
+    "message": "Close",
+    "description": "Tooltip on the About dialog close button."
   }
 }

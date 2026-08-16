@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "De to andre virker også, men Chrome spørger igen — ved hver genstart for den første, og efter en ventetid for den sidste."
+  },
+  "viewLayout": {
+    "message": "Hvordan dokumenter vises"
+  },
+  "viewIcons": {
+    "message": "Ikoner"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Luk"
   }
 }

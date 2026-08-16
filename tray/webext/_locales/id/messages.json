@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "Dua lainnya juga berfungsi, tetapi Chrome akan bertanya lagi — setiap kali mulai ulang untuk yang pertama, dan setelah menunggu untuk yang terakhir."
+  },
+  "viewLayout": {
+    "message": "Cara dokumen ditampilkan"
+  },
+  "viewIcons": {
+    "message": "Ikon"
+  },
+  "viewList": {
+    "message": "Daftar"
+  },
+  "close": {
+    "message": "Tutup"
   }
 }

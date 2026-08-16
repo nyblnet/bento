@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "Pozostałe dwie też działają, ale Chrome zapyta znowu — pierwsza przy każdym uruchomieniu, ostatnia po odczekaniu."
+  },
+  "viewLayout": {
+    "message": "Sposób wyświetlania dokumentów"
+  },
+  "viewIcons": {
+    "message": "Ikony"
+  },
+  "viewList": {
+    "message": "Lista"
+  },
+  "close": {
+    "message": "Zamknij"
   }
 }

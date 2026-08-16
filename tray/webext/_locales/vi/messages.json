@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "Hai lựa chọn kia cũng dùng được, nhưng Chrome sẽ hỏi lại — lựa chọn đầu thì mỗi lần khởi động lại, lựa chọn cuối thì sau một thời gian chờ."
+  },
+  "viewLayout": {
+    "message": "Cách hiển thị tài liệu"
+  },
+  "viewIcons": {
+    "message": "Biểu tượng"
+  },
+  "viewList": {
+    "message": "Danh sách"
+  },
+  "close": {
+    "message": "Đóng"
   }
 }

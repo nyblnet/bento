@@ -15,7 +15,7 @@
 import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
-import { learnPrefix } from './db.js'
+import { learnPrefix, GRANT, get, put } from './db.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import { t, localize } from './i18n.js'
 
@@ -94,7 +94,10 @@ const ago = (ms) => {
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs' }
+// `view` is which SCREEN is showing (docs/settings/help); `layout` is how the
+// documents are drawn within it. Two different words on purpose — they were
+// briefly the same one, and "view" then meant two things one line apart.
+const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs', layout: 'icons' }
 
 /**
  * Settings is a VIEW here, not a separate page.
@@ -258,6 +261,7 @@ function renderGrid() {
   const scroll = document.querySelector('.scroll')
   scroll.innerHTML = '<div class="grid" id="grid"></div>'
   const grid = $('grid')
+  if (state.layout === 'list') grid.classList.add('as-list')
   const docs = visible()
   $('heading').textContent = state.folder ?? t('navAll')
 
@@ -523,6 +527,74 @@ async function renderNotice() {
 $('q').addEventListener('input', (e) => { state.q = e.target.value; renderGrid() })
 $('sort').addEventListener('change', (e) => { state.sort = e.target.value; renderGrid() })
 
+// ------------------------------------------------------------------- about
+//
+// A dialog rather than a view, opened from the wordmark — the idiom bento/slides
+// already uses, so the same question is asked the same way across the suite.
+// <dialog> is used for what it gives free: Esc closes it, focus is trapped and
+// restored, and the backdrop is inert without a click-outside handler of ours.
+function openAbout() {
+  const dlg = $('aboutDlg')
+  const body = $('aboutBody')
+  const mine = chrome.runtime.getManifest().version
+  body.innerHTML = `<p>${t('helpAboutSub', esc(mine))}</p>`
+
+  const links = document.createElement('div')
+  links.className = 'links'
+  for (const [label, href] of [
+    ['bento.page', 'https://bento.page'],
+    [t('linkSource'), 'https://github.com/nyblnet/bento'],
+    [t('linkIssues'), 'https://github.com/nyblnet/bento/issues'],
+    [t('linkReleases'), 'https://github.com/nyblnet/bento/releases'],
+  ]) {
+    const a = document.createElement('a')
+    a.className = 'btn'
+    a.href = href
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.textContent = label
+    links.appendChild(a)
+  }
+  body.appendChild(links)
+  dlg.showModal()
+}
+
+$('brand').addEventListener('click', openAbout)
+$('aboutClose').addEventListener('click', () => $('aboutDlg').close())
+// Clicking the backdrop closes it. The dialog's own box is a child, so a click
+// that lands on the element itself and not on any descendant IS the backdrop.
+$('aboutDlg').addEventListener('click', (e) => { if (e.target === $('aboutDlg')) $('aboutDlg').close() })
+
+// ------------------------------------------------------------- icons / list
+//
+// Stored per DEVICE rather than per folder. Finder remembers per directory,
+// but Finder's folders are a place you furnish; these are a flat list of
+// grants that the user rarely revisits and never arranges, so a per-folder
+// memory would mostly be a setting that appears to forget itself.
+//
+// Kept in the same IndexedDB store as every other preference (update.js does
+// the same with `autoCheck`) so there is one place a preference lives.
+const LAYOUTS = ['icons', 'list']
+
+function paintLayout() {
+  for (const b of $('layout').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.layout === state.layout))
+  }
+}
+
+async function setLayout(next) {
+  if (!LAYOUTS.includes(next) || next === state.layout) return
+  state.layout = next
+  paintLayout()
+  renderGrid()
+  try { await put(GRANT, 'layout', next) } catch { /* the view still changed */ }
+}
+
+$('layout').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-layout]')
+  if (b) void setLayout(b.dataset.layout)
+})
+
 // `/` focuses search, the convention everywhere text is listed. Not while
 // typing in a field, or it eats the character.
 addEventListener('keydown', (e) => {
@@ -625,7 +697,6 @@ $('help').addEventListener('click', () => show('help'))
 async function renderHelp() {
   $('heading').textContent = t('navHelp')
   const s = await status()
-  const mine = chrome.runtime.getManifest().version
   const wrap = document.createElement('div')
   wrap.className = 'panel'
 
@@ -679,25 +750,9 @@ async function renderHelp() {
   // --- what it never does
   section(t('helpNeverTitle'), t('helpNeverSub'))
 
-  // --- where it came from
-  const about = section(t('helpAboutTitle'), t('helpAboutSub', esc(mine)))
-  const links = document.createElement('div')
-  links.className = 'links'
-  for (const [label, href] of [
-    ['bento.page', 'https://bento.page'],
-    [t('linkSource'), 'https://github.com/nyblnet/bento'],
-    [t('linkIssues'), 'https://github.com/nyblnet/bento/issues'],
-    [t('linkReleases'), 'https://github.com/nyblnet/bento/releases'],
-  ]) {
-    const a = document.createElement('a')
-    a.className = 'btn'
-    a.href = href
-    a.target = '_blank'
-    a.rel = 'noopener'
-    a.textContent = label
-    links.appendChild(a)
-  }
-  about.appendChild(links)
+  // Where it came from is NOT repeated here. It lives in the About dialog on
+  // the wordmark (openAbout) — one answer in one place, reachable without
+  // leaving whatever you were doing.
 
   const scroll = document.querySelector('.scroll')
   scroll.innerHTML = ''
@@ -894,6 +949,15 @@ document.addEventListener('visibilitychange', () => {
 // question is "what did I just install and what does it want" — and a grid of
 // documents it cannot see yet answers none of it.
 localize()
+
+// Read BEFORE the first grid render, so someone who chose list mode never
+// watches it boot into icons and reflow a frame later.
+try {
+  const saved = await get(GRANT, 'layout')
+  if (LAYOUTS.includes(saved)) state.layout = saved
+} catch { /* the default is a perfectly good answer */ }
+paintLayout()
+
 if (location.hash === '#welcome' || location.hash === '#help') show('help')
 
 await load()

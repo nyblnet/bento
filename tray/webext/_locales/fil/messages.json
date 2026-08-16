@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "Gumagana rin ang dalawa pa, pero magtatanong muli ang Chrome — sa bawat restart para sa una, at pagkatapos ng paghihintay para sa huli."
+  },
+  "viewLayout": {
+    "message": "Kung paano ipinapakita ang mga dokumento"
+  },
+  "viewIcons": {
+    "message": "Mga icon"
+  },
+  "viewList": {
+    "message": "Listahan"
+  },
+  "close": {
+    "message": "Isara"
   }
 }

@@ -442,5 +442,17 @@
   },
   "primeNote": {
     "message": "他の 2 つでも動きますが、Chrome は再び尋ねます — 1 つ目は再起動のたびに、最後のものはしばらく待ってから。"
+  },
+  "viewLayout": {
+    "message": "ドキュメントの表示方法"
+  },
+  "viewIcons": {
+    "message": "アイコン"
+  },
+  "viewList": {
+    "message": "リスト"
+  },
+  "close": {
+    "message": "閉じる"
   }
 }

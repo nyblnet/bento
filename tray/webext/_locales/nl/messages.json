@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "De andere twee werken ook, maar dan vraagt Chrome het opnieuw — bij de eerste elke herstart, bij de laatste na een wachttijd."
+  },
+  "viewLayout": {
+    "message": "Hoe documenten worden getoond"
+  },
+  "viewIcons": {
+    "message": "Pictogrammen"
+  },
+  "viewList": {
+    "message": "Lijst"
+  },
+  "close": {
+    "message": "Sluiten"
   }
 }

@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "Diğer ikisi de çalışır, ama Chrome yeniden sorar — ilki için her yeniden başlatmada, sonuncusu için bir bekleme sonrasında."
+  },
+  "viewLayout": {
+    "message": "Belgelerin gösterilme biçimi"
+  },
+  "viewIcons": {
+    "message": "Simgeler"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Kapat"
   }
 }

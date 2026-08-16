@@ -409,5 +409,17 @@
   },
   "primeNote": {
     "message": "나머지 둘도 동작하지만 Chrome이 다시 묻습니다 — 첫 번째는 재시작할 때마다, 마지막은 일정 시간이 지난 뒤에."
+  },
+  "viewLayout": {
+    "message": "문서 표시 방식"
+  },
+  "viewIcons": {
+    "message": "아이콘"
+  },
+  "viewList": {
+    "message": "목록"
+  },
+  "close": {
+    "message": "닫기"
   }
 }
