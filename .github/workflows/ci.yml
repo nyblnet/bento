@@ -519,6 +519,23 @@ jobs:
         # two it did not catch were found by widening it.
         run: node scripts/test-dash-sync.ts
 
+      - name: relay protocol — one wire format, two clients
+        # dash's online.ts is a PORT of the transport slides uses (now in
+        # kernel/). The two files are separate text that nobody diffs, and ONE
+        # DEPLOYED WORKER verifies both: it pins the room id to a key and walks
+        # an owner→invite→member signature chain. If one client's idea of
+        # `inv.${pub}.${role}.${exp}` drifts, the symptom is not a red test — it
+        # is one app's users silently unable to join the other's rooms, on a
+        # relay that cannot be rolled back independently of the shells already
+        # in people's files. This diffs only what goes on the wire.
+        #
+        # Written by the bento/dash work; taken here because the kernel lift is
+        # the change it guards, and it should not land after the move it exists
+        # to check. The rig FOLLOWS the twin (kernel first, then slides) and
+        # FAILS if it finds no transport at all, rather than silently comparing
+        # two empty lists — which is how its own first version passed.
+        run: node scripts/test-relay-protocol.ts
+
       - name: Theme token gate
         # Every failure this catches is INVISIBLE in the light theme, which is
         # the one the author is looking at. A chrome surface pinned to white
