@@ -13,6 +13,8 @@
 // meeting a future 'kanban' block keeps it and renders its html fallback.
 // There is no server; a break here is permanent.
 
+import type { CollabCreds } from './sync/crdt.ts'
+
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
 
@@ -141,8 +143,17 @@ export interface SpacesDoc {
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   readonly?: boolean
   template?: boolean
-  /** RESERVED — collaboration credentials, unused until collab ships */
-  collab?: unknown
+  /**
+   * Collaboration credentials (PLATFORM §2).
+   *
+   * Was `unknown` and marked RESERVED "unused until collab ships". It has:
+   * sync/session.ts binds this app to the kernel session. The type is the
+   * KERNEL's so there is one definition of what a room, a key and an invite
+   * chain are — the deployed relay verifies against that shape, and a second
+   * local description of it is how a client and the worker drift apart.
+   * `import type` is erased, so this adds no runtime dependency.
+   */
+  collab?: CollabCreds
   [extra: string]: unknown
 }
 

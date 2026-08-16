@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// The bento/type document model. This JSON is what lives inside the #bento-doc
+// block — the format IS the product (docs/PLATFORM.md §3).
+//
+// The shape of a document here is deliberately narrow: a flat, ordered list of
+// blocks, each holding PLAIN TEXT plus marks over character ranges (see
+// inline.ts for why that spine and not HTML). No nesting, no inline nodes, no
+// tree. A word processor's document is a stream of prose that gets poured into
+// pages; the structure lives in the block kinds and in the pagination, not in
+// the container.
+
+import { normalize, shift as shiftMarks, type Mark } from './inline.ts';
+
+export const FORMAT = 'bento/type';
+export const VERSION = 1;
+
+/** The kinds of block a document is made of. */
+export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote';
+
+/** A footnote reference anchored INTO a block's text, by character offset. */
+export interface NoteRef { id: string; at: number }
+
+export interface Block {
+  /** stable identity: the redline aligns on it, so it must never be re-minted
+   *  for a block the author considers the same paragraph */
+  id: string;
+  kind: BlockKind;
+  /** the block's text, with no markup of any kind in it */
+  text: string;
+  /** formatting over character ranges; absent means none */
+  marks?: Mark[];
+  /** footnote references, by offset into `text` */
+  notes?: NoteRef[];
+  /** authoring role, for restyling and for a table of contents */
+  role?: string;
+}
+
+/** Page geometry, in CSS px at 96dpi. US Letter by default. */
+export interface PageSpec {
+  width: number; height: number;
+  marginX: number; marginTop: number; marginBottom: number;
+}
+export const LETTER: PageSpec = {
+  width: 816, height: 1056, marginX: 104, marginTop: 104, marginBottom: 104,
+};
+
+export interface Signature {
+  alg: 'ES256';
+  /** raw P-256 public key, base64url — the identity. The name is only a claim. */
+  pub: string;
+  /** self-asserted, shown beside the signature and NOT proof of anything */
+  name: string;
+  /** digest of the canonical content at the moment of signing */
+  content: string;
+  /** the signature this one commits to, chaining the order */
+  prev: string;
+  sig: string;
+  /** self-asserted wall clock. Display only — order comes from `prev`. */
+  at?: string;
+}
+
+/** A recorded revision, kept so a redline can be produced with no server. */
+export interface Revision {
+  id: string; at: string; label: string;
+  body: Block[];
+}
+
+export interface TypeDoc {
+  format: typeof FORMAT;
+  version: number;
+  /** minted once at creation, NEVER regenerated (PLATFORM §3) */
+  docId: string;
+  title: string;
+  subtitle?: string;
+  meta?: { author?: string; company?: string; subject?: string; keywords?: string };
+  page: PageSpec;
+  body: Block[];
+  /** note id → note text. Kept out of the blocks so a note can outlive a
+   *  re-flow of the paragraph that references it. */
+  footnotes: Record<string, string>;
+  revisions: Revision[];
+  signatures: Signature[];
+  fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>;
+  assets?: Record<string, string>;
+  readonly?: boolean;
+  template?: boolean;
+  /** volatile, never signed */
+  modified?: string;
+  /** unknown fields are PRESERVED — format additivity (PLATFORM §3) */
+  [extra: string]: unknown;
+}
+
+export const uid = (p = 'b'): string => {
+  const r = globalThis.crypto?.randomUUID?.();
+  return r ? `${p}-${r.slice(0, 8)}` : `${p}-${Math.random().toString(36).slice(2, 10)}`;
+};
+export const newDocId = (): string => globalThis.crypto?.randomUUID?.() ?? uid('doc');
+
+export function emptyDoc(): TypeDoc {
+  return {
+    format: FORMAT, version: VERSION, docId: newDocId(),
+    title: 'Untitled', page: { ...LETTER },
+    body: [{ id: uid(), kind: 'para', text: '' }],
+    footnotes: {}, revisions: [], signatures: [],
+  };
+}
+
+/**
+ * Parse result — TAGGED, never null.
+ *
+ * Following bento/spaces, which learned this the hard way: a `parseDoc` that
+ * returns null lets the caller fall back to the starter document, so opening a
+ * file from another app, or one with a single hand-edited typo, silently
+ * presents an EMPTY document over live data — and the first ⌘S writes it to
+ * disk. The only path to a starter is an absent or empty block.
+ */
+export type ParseResult =
+  | { ok: true; doc: TypeDoc; repaired: string[] }
+  | { ok: false; err: 'empty' }
+  | { ok: false; err: 'json' | 'format' | 'shape'; detail: string; found?: string };
+
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * Read a document, repairing what can be repaired from the BYTES ALONE.
+ *
+ * Repairs are deterministic so that two readers of one file agree on every id —
+ * the redline aligns blocks by id, and two parties whose copies disagree would
+ * see phantom changes.
+ */
+export function parseDoc(raw: string): ParseResult {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: false, err: 'empty' };
+
+  let json: unknown;
+  try { json = JSON.parse(trimmed); }
+  catch (e) { return { ok: false, err: 'json', detail: (e as Error).message }; }
+  if (!isObj(json)) return { ok: false, err: 'shape', detail: 'the document is not an object' };
+
+  const found = typeof json.format === 'string' ? json.format : undefined;
+  if (found !== FORMAT) {
+    return { ok: false, err: 'format',
+             detail: `this file is ${found ? `a ${found} document` : 'not a Bento document'}`, found };
+  }
+  if (!Array.isArray(json.body)) return { ok: false, err: 'shape', detail: 'body is missing' };
+
+  const repaired: string[] = [];
+  const seen = new Set<string>();
+  const body: Block[] = [];
+  (json.body as unknown[]).forEach((b, i) => {
+    if (!isObj(b)) { repaired.push(`dropped a block at ${i} that was not an object`); return; }
+    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote'].includes(b.kind as string)
+      ? b.kind as BlockKind : 'para';
+    if (kind !== b.kind) repaired.push(`block ${i}: unknown kind ${JSON.stringify(b.kind)} read as a paragraph`);
+    const text = typeof b.text === 'string' ? b.text : '';
+    // ids must be unique: the redline aligns on them, so a duplicate makes one
+    // paragraph invisible to review. Derive the replacement from position, so
+    // every reader of these bytes repairs it identically.
+    let id = typeof b.id === 'string' && b.id ? b.id : `b${i}`;
+    if (seen.has(id)) { id = `${id}~${i}`; repaired.push(`block ${i}: duplicate id repaired to ${id}`); }
+    seen.add(id);
+
+    const marks = Array.isArray(b.marks)
+      ? normalize((b.marks as Mark[]).filter(m => isObj(m) && typeof m.from === 'number'
+                                                 && typeof m.to === 'number' && typeof m.t === 'string'), text.length)
+      : undefined;
+    const notes = Array.isArray(b.notes)
+      ? (b.notes as NoteRef[]).filter(n => isObj(n) && typeof n.id === 'string' && typeof n.at === 'number')
+          .map(n => ({ id: n.id, at: Math.max(0, Math.min(n.at, text.length)) }))
+          .sort((x, y) => x.at - y.at)
+      : undefined;
+
+    const out: Block = { id, kind, text };
+    if (marks?.length) out.marks = marks;
+    if (notes?.length) out.notes = notes;
+    if (typeof b.role === 'string') out.role = b.role;
+    body.push(out);
+  });
+  if (!body.length) body.push({ id: uid(), kind: 'para', text: '' });
+
+  const footnotes: Record<string, string> = {};
+  if (isObj(json.footnotes)) {
+    for (const [k, v] of Object.entries(json.footnotes)) if (typeof v === 'string') footnotes[k] = v;
+  }
+  // a reference to a note that is not there would render as a marker with
+  // nothing behind it — drop the reference, keep the text
+  let dangling = 0;
+  for (const b of body) {
+    if (!b.notes) continue;
+    const keep = b.notes.filter(n => footnotes[n.id] !== undefined);
+    if (keep.length !== b.notes.length) dangling += b.notes.length - keep.length;
+    if (keep.length) b.notes = keep; else delete b.notes;
+  }
+  if (dangling) repaired.push(`dropped ${dangling} footnote reference(s) with no note behind them`);
+
+  const doc: TypeDoc = {
+    ...(json as object) as TypeDoc,          // unknown fields ride along
+    format: FORMAT,
+    version: typeof json.version === 'number' ? json.version : VERSION,
+    docId: typeof json.docId === 'string' && json.docId ? json.docId : newDocId(),
+    title: typeof json.title === 'string' ? json.title : 'Untitled',
+    page: isObj(json.page) ? { ...LETTER, ...(json.page as object) } as PageSpec : { ...LETTER },
+    body, footnotes,
+    revisions: Array.isArray(json.revisions) ? json.revisions as Revision[] : [],
+    signatures: Array.isArray(json.signatures) ? json.signatures as Signature[] : [],
+  };
+  if (typeof json.docId !== 'string' || !json.docId) repaired.push('minted a missing docId');
+  return { ok: true, doc, repaired };
+}
+
+/** The document's text, in order — what gets measured, searched and diffed. */
+export const plainText = (doc: TypeDoc): string => doc.body.map(b => b.text).join('\n');
+
+export const wordCount = (doc: TypeDoc): number =>
+  doc.body.reduce((n, b) => n + (b.text.trim() ? b.text.trim().split(/\s+/).length : 0), 0);
+
+/**
+ * Replace [at, at+removed) of a block's text with `added`, keeping marks and
+ * footnote anchors pointing at the same words.
+ *
+ * One function, because these two must move together: they are offsets into the
+ * same string, and a version of this that updated only one of them is exactly
+ * the bug that put a footnote marker in the middle of a word during the spike.
+ */
+export function spliceText(block: Block, at: number, removed: number, added: string): Block {
+  const text = block.text.slice(0, at) + added + block.text.slice(at + removed);
+  const out: Block = { ...block, text };
+  if (block.marks?.length) {
+    const m = shiftMarks(block.marks, at, removed, added.length, text.length);
+    if (m.length) out.marks = m; else delete out.marks;
+  }
+  if (block.notes?.length) {
+    const end = at + removed;
+    const delta = added.length - removed;
+    const n = block.notes
+      .filter(x => !(x.at > at && x.at < end))          // its anchor text is gone
+      .map(x => x.at >= end ? { ...x, at: x.at + delta } : x);
+    if (n.length) out.notes = n; else delete out.notes;
+  }
+  return out;
+}

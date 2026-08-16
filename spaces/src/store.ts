@@ -189,7 +189,17 @@ export class Store {
     if (wasClean) this.emit('doc')
   }
 
-  private reindex(): void {
+  /**
+   * Rebuild the id index, and fall back to the home page if the page being
+   * viewed no longer exists.
+   *
+   * PUBLIC because a remote collaborator's edit lands on `doc` directly —
+   * bypassing commit, deliberately, so it never joins this person's undo
+   * stack — and every `block(id)` / `page` read after that would otherwise
+   * answer from a stale index. sync/session.ts calls it. It was private while
+   * the only writer was the store itself.
+   */
+  reindex(): void {
     this.index = buildIndex(this.doc)
     if (!this.index.page.has(this.pageId)) this.pageId = homePage(this.doc)?.id ?? ''
   }

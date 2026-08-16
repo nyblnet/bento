@@ -14,6 +14,65 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-10 — No dark topbar for now; THEMES are the right shape for it later
+
+**Decision.** Every Bento app keeps the shared light chrome. A dark navy topbar
+was prototyped on the real slides and type builds and is NOT being adopted as a
+one-off. What is wanted instead is a proper light/dark theme layer across all
+apps, of which a "contrasting" navy-topbar theme would be one option.
+
+**Why.** The prototype looked good on light content — and the accent argument is
+real, `#f7a600` is a faint tint on `#f5f7fa` and a clear focal point on
+`#1e2a3a`, which is the brand's own navy+orange. But it fails on its own terms
+in two places: the bar's dropdown MENUS and popovers stay light, so a dark bar
+with light menus hanging off it reads as unfinished; and slides' content
+luminance varies (the starter deck alone runs #0D1B2E / #F2F0EA / #FF9E8A), so
+on a dark deck the bar merges with the slide and destroys the separation a dark
+bar exists to create. Scope was measured, not guessed: the slides topbar alone
+carries 25 distinct `ed-*` control classes, and a ten-line override missed one
+immediately and shipped an invisible Save button into the comparison.
+
+**What this implies now.** App chrome must refer to TOKENS only, never literal
+colours, so a theme layer is a later addition rather than a rewrite.
+`type/src/styles.css` is written that way and should stay that way.
+
+**Pointers.** Tokens are shared verbatim by `slides/src/styles.css`,
+`spaces/src/styles.css` and now `type/src/styles.css`.
+
+---
+
+## 2026-08-10 — bento/type: the app is named, and a block stores TEXT + MARKS, not HTML
+
+**Decision.** The word processor is `bento/type`; `doc.format` is `"bento/type"`
+and, like every format id, cannot be renamed once a file exists. Its block model
+is plain text plus a list of marks over character ranges
+(`{ t:'b', from, to }`), NOT an HTML string and not inline nodes. HTML is what
+`inline.ts toHtml()` renders; it is never what is stored.
+
+**Why.** Four things the app already depends on need a plain-text spine, and all
+four break against HTML: the redline diffs text word-by-word (against HTML a
+formatting change reads as a rewritten sentence); signatures cover a canonical
+form (canonicalizing HTML means ruling on attribute order, tag case, whitespace
+and entity spelling — four ways two honest parties produce different bytes for
+one document); the caret is a model position, forced by measurement, because
+with hyphenation on the renderer inserts characters and any rendered-space
+address drifts; and footnote anchors are already offsets into the same string,
+so marks reuse that rule rather than adding a second concept.
+
+The cost is mark arithmetic, in one file, pinned by `scripts/test-type-inline.ts`
+(38 checks incl. a 2,000-case fuzz) — which caught two bugs no hand-written case
+found: a mark silently truncated when another overlapped it, and same-kind marks
+failing to re-merge after a render split them (423/2,000).
+
+**Pointers.** `type/src/inline.ts` (the argument is in the file header),
+`type/src/model.ts` (tagged `parseDoc`, following the spaces load contract:
+an unreadable file must never become an empty one), `scripts/test-type-model.ts`.
+Design + the measured spike behind it: `working/type-design.md` and
+`working/type-spike/RESULTS.md` (gitignored) — Path A, continuous pagination,
+Knuth–Plass viable live.
+
+---
+
 ## 2026-08-06 — The tree is DERIVED at read time, in one function, and it cannot cycle
 
 **Decision.** `model.ts effectiveParents(page)` is the only answer to "what is
@@ -3246,3 +3305,459 @@ steal a tab, and reloading an unpacked extension fires that event every time.
 mid-sentence into its own line — the identical mistake `.step b` had made and
 which I had already fixed. An unscoped element selector inside a component is
 the shape of the bug; both are now `> b`.
+## 2026-08-15 — The sync engine's shape gains a text property, and children become optional
+
+**Context.** `DocShape` described a document as two levels — `parents` holding
+`children` — and hard-coded `'html'` as the property carrying collaboratively
+edited text. Both shipped apps fit: a slide holds elements, a page holds
+blocks, and in each the text is on the child. bento/type fits neither. Its
+`body` is a flat list of blocks, a block IS the paragraph, so its text sits one
+level up and there is nothing beneath it to point `children` at.
+
+**Decision.** Two additive changes to the shape, both proven byte-identical for
+existing files by `scripts/test-sync-equiv.ts`:
+
+1. `DocShape.text` names the property that gets the token RGA. It defaults to
+   `'html'` in `shape()`, so slides and spaces are untouched.
+2. `DocShape.children` may be `null`, meaning a FLAT document with no element
+   layer. `C()` then reads as a frozen empty array and the differ never mints
+   an element op; `applyEffect` drops an element-scoped op that arrives anyway,
+   because it has nowhere to land.
+
+`shape('body', null, 'text')` is type's binding.
+
+**Why the text property had to be named rather than inferred.** It is the one
+property whose merge behaviour decides whether two people can type in the same
+paragraph at once. Everything else is a last-writer-wins register, which for
+prose means one author's work disappears — and disappears SILENTLY: the
+document stays valid, the replicas converge, and the result simply contains one
+of the two edits. There is no error to notice.
+
+**That failure mode is why two new rigs exist.** The four existing sync rigs
+stayed green through every step of this change, including through a real bug —
+none of them declares text anywhere but on a child, so none of them exercised
+the new path at all. Green there means "nothing broke", never "the new thing
+works".
+
+- `scripts/test-sync-parent-text.ts` isolates ONE variable: text on a parent,
+  children still present. It carries a **negative control** — the same scenario
+  with the RGA off must lose an edit — because a rig that has never been seen
+  failing is not a gate.
+- `scripts/test-sync-flat.ts` binds type's real shape. Besides convergence it
+  asserts the document keeps its SHAPE: an engine that quietly wrote
+  `elements: []` onto every block would converge perfectly and still corrupt
+  the format, so that is checked directly rather than inferred from
+  convergence.
+
+**Two bugs found this way, both invisible to the existing suite.**
+
+- Making `text` configurable, the CONDITIONS were rewired to `S.text` while the
+  OPERANDS stayed hard-coded — `diffText(id, bp.html, ap.html)`, the
+  materialize write-backs, and four register keys built as `` `${el} html` ``.
+  Every one is correct while `S.text === 'html'` and wrong for any other app.
+  Grepping for `.html` does not find the register keys; they are template
+  strings.
+- The flat-shape guard read `op.el` as "this op is element-scoped". On a `txt`
+  op `el` is the NODE key, which for a flat document is the block's own id — so
+  the guard dropped every collaborative keystroke type would ever send, while
+  structure ops kept converging. One author's edits landed and the other's
+  vanished.
+
+**A trap for whoever tests this next.** Two fixtures here read correct
+behaviour as a bug: both minted an op, never delivered it, then delivered a
+later one and found it had no effect. That is the per-actor sequence guarantee
+holding the second op in the gap buffer, exactly as designed. Deliver the whole
+sequence.
+
+**Not done here.** type's session/transport layer is still slides-shaped
+(PLATFORM §9), so this makes type's collaboration possible, not present.
+
+## 2026-08-15 — bento/type's sync binding, and doc-level maps become a shape field
+
+**The binding.** `type/src/sync/crdt.ts`, a facade like the other two apps':
+`shape('body', null, 'text', ['footnotes'])`. It is the first FLAT binding and
+the first whose text is not on a child; both were kernel changes made earlier
+the same day, not things this file works around.
+
+**Doc-level maps are now declared by the shape.** `assets` and `blobs` were
+hard-coded as per-KEY registers, with the right reason attached: two people
+adding different assets concurrently must both keep theirs. Any id-keyed map
+wants that, and an app could not ask for it while the names were baked in.
+`DocShape.maps` now names them; `shape()` unions the caller's list with
+`assets`/`blobs` so an app declaring its own cannot accidentally drop those.
+
+type's `footnotes` (note id → note text) is such a map. As one whole-value
+register, two authors each adding a footnote kept both REFERENCES — those live
+on different blocks and merge independently — while one of the two BODIES was
+overwritten, leaving a marker in the text pointing at nothing.
+
+**Measured, not argued.** Over 120 seeds × 60 steps × 3 actors:
+
+| | before | after |
+|---|---|---|
+| seeds with a dangling note | 34 | 5 |
+| seeds with any format violation | 30.8% | 7.5% |
+
+**What the rig reports rather than asserts.** A block's `text` merges token by
+token through the RGA, while its `marks` and `notes` are CHARACTER OFFSETS into
+that text and merge as ordinary registers. Two independent merge domains
+describing one paragraph — the same shape of problem `parent`-versus-position is
+for bento/spaces, and like that one it is a format-level decision rather than a
+bug to patch inside a rig. At 400 seeds × 80 steps × 4 actors (19,016 ops),
+11.8% of seeds converge on a document with at least one violation.
+
+The rig carries a worked example, because a percentage is not an account of
+what goes wrong. Both authors insert text BEFORE a bold phrase and both shift
+their own marks correctly with the app's `spliceText`:
+
+```
+merged text: "Notwithstanding the above, Under clause 4, Payment is due within 30 days."
+bold covers: "t is du"   (it should cover "30 days")
+```
+
+Neither replica ever held the correct offset — it is shifted by BOTH insertions
+— so no register winner could have been right. `STRICT=1` turns the report into
+a gate the day the decision is taken.
+
+**Two smaller findings, named so they are not rediscovered as bugs.**
+
+- Concurrent deletion can empty `body` entirely (4 of 400 seeds). A document
+  with no blocks is not one the editor should ever present.
+- The residual dangling notes are the same cross-domain split one level up: the
+  REFERENCE is a block property and the BODY is a map entry, so deleting a
+  footnote concurrently with editing its paragraph can keep one and not the
+  other.
+
+**Convergence itself is compared by VALUE, not by `JSON.stringify`.** A property
+deleted and re-added moves to the end of its object, so replicas that applied
+the same removals in a different order hold equal documents with different key
+order — 288 of 400 seeds, every one spurious. Checked rather than assumed
+before relying on it: canon.ts sorts keys (RFC 8785 §3.2.3), so two blocks
+differing only in key order produce the same signing digest, and the redline
+aligns on block id.
+
+**Not done here.** The session and transport layer is still slides-shaped
+(PLATFORM §9). type has a converging engine, not live collaboration.
+
+## 2026-08-15 — The sync session and transport move to the kernel, behind a five-method host
+
+**Context.** `crdt.ts` was kernelized and parameterized by document shape, but
+the layer above it — the session (differ hook, shadow, presence, catch-up, gap
+recovery, blobs, the fork snapshot exchange) and the online relay transport —
+still lived in `slides/` and was slides-shaped. bento/dash had already responded
+by PORTING `online.ts` wholesale (`dash/src/sync/online.ts` still says so in its
+header). A second copy of the transport is a second thing to fix when the relay
+protocol changes, and the relay is the part that must not fork.
+
+**What actually coupled the session to slides.** Of 727 lines, FIVE places knew
+what a slide was: repairing an emptied document, clamping the view, pruning a
+selection, saying where a person is for presence, and recognising embedded media
+in a refused batch. `online.ts` had exactly ONE: the hard no-network switch.
+`blobs.ts` had none and moved untouched.
+
+**Decision.** `kernel/src/sync/{session,online,blobs}.ts`, with apps supplying a
+`SyncHost`: `heal`, `clampView`, `presence`, the store event names, a
+`carriesMedia` probe, and the shape-bound engine class. `slides/src/sync/*.ts`
+are facades, so `new SyncSession(store)` still works everywhere it already did.
+bento/type gets one too, and needed no kernel changes to do it.
+
+**Test first, and this time literally.** The session had NO tests. Moving
+untested code across a seam is how behaviour changes silently, so
+`scripts/test-sync-session.ts` was written against the implementation AS IT
+SHIPPED, run to 13/13, and then run UNCHANGED after the move — same 13/13,
+including the same merged string from a concurrent text edit. It drives the real
+session over the real store through a real BroadcastChannel; two sessions in one
+process are two tabs of one document, which is the transport that ships.
+
+**Running app source in node needed a hook, and that was the right trade.**
+`scripts/lib/ts-resolve-hooks.mjs` resolves Vite-style extensionless imports and
+transpiles with esbuild — Node's built-in TypeScript is strip-only and rejects
+`constructor(private store: Store)`. The alternative was editing session.ts to
+drop the parameter property, which was rejected on principle: a rig that exists
+to prove behaviour is unchanged cannot start by changing its subject.
+
+**Two decisions inside the move worth keeping.**
+
+- The offline switch is INJECTED (`setOfflineCheck`) and the kernel default is
+  OFFLINE. Defaulting the other way means an app that forgot to wire it starts
+  phoning home silently, which is the one failure this project should never
+  ship.
+- `PresenceInfo.slide` keeps its name on the wire. It now means "where this
+  person is" — a block id for type — but deployed clients and the relay read
+  that field, so renaming it would fork presence.
+
+**bento/type now has live collaboration end to end**, proven through the store,
+the differ, the debounce, a real channel and back:
+
+```
+two people typing in one paragraph:
+  "Payment is due within sixty (60) days of invoice."   ← both edits survived
+```
+
+Its host also pins a word-processor-specific rule the kernel could not know: a
+remote edit arrives through `Store.touch`, never `commit`, so it never lands on
+this person's undo stack. ⌘Z means "undo what I did" — a remote paragraph
+arriving as a commit would make it revert a colleague's work and redo would
+bring it back as if it were yours. The rig proves a local edit DOES push a step
+before claiming the remote one does not.
+
+**Not done here, and one correction.** bento/spaces has no session binding yet;
+that one IS small, a host adapter over a store that already has on/emit/commit.
+
+bento/dash is NOT. An earlier draft of this entry said dash needed "just a host
+adapter"; that was wrong, and `dash/src/sync/crdt.ts` is why. Its 2,313 lines are
+not a fork of the kernel engine but a DIFFERENT one, built for spreadsheet scale
+— sparse per-row state so an untouched row costs zero bytes in `collab.sync`,
+run-length order lists, O(inserts) rather than O(rows), sheet-scoped column ids.
+The kernel engine would put O(rows) of state in the file. Merging those is a real
+design question, not a refactor, and nothing here should be read as having
+settled it. `scripts/test-dash-sync.ts` (23,100 checks) exercises dash's engine,
+not the kernel's.
+
+What is plausibly shared is dash's `online.ts`, whose own header calls it "A PORT
+of slides/src/sync/online.ts". That is the RELAY protocol, which is the one part
+that should not fork — the deployed worker verifies signatures and the
+invite/member chain against it. It already imports kernel storage and update.
+Left alone pending the dash session's answer on whether it is deliberately
+diverged.
+
+## 2026-08-15 — `changeEvents`: the kernel session stops assuming one app's event names
+
+**What was wrong.** The kernelized session fired `store.emit('doc')` after every
+remote change. In bento/slides `'doc'` means "something changed, repaint", so
+that read as universal. It is not. In bento/spaces the store emits four events
+and `'doc'` is the DIRTY/STATUS signal — repainting goes through `'tree'` and
+`'page'` — so a remote op would have labelled a colleague's edit "Edited" in this
+user's chrome and moved their dirty flag. The kernel had shipped one app's habit
+as a default, in the very seam built to stop that.
+
+**Decision.** `SyncHost` names both sets:
+
+```ts
+readonly changeEvents: readonly string[]     // after EVERY remote change
+readonly structureEvents: readonly string[]  // extra, on a structural one
+```
+
+slides and type declare `changeEvents: ['doc']`, so neither changed. An app that
+wants no always-on event declares `[]`.
+
+**How it was found, which is the part worth keeping.** Not by a test — by the
+bento/spaces session reviewing the interface before building against it. It also
+caught three things in a spaces adapter this session had drafted: a `heal()` that
+minted the repair page with a random id (two replicas healing concurrently would
+create two pages and the CRDT would faithfully keep both — the fix is to derive
+the id from `docId`), a view clamp that fell back to the home page rather than to
+the deleted page's PARENT, and a `carriesMedia()` that re-decided a question
+already settled by "Large assets travel out-of-band; the relay stays blind"
+(2026-07-25).
+
+The draft was deleted and `spaces/src/sync/session.ts` left to that session,
+which holds context this one did not have — including a user decision taken this
+week and not yet written down: a space does not auto-connect on open. The
+"obvious" call there is auto-connect, and it is the wrong one; it would reproduce
+the v0.9.1 regression where every anonymous visitor to the demo phoned home.
+
+**The general lesson.** A seam is not proven by the app that shaped it. Both
+defects here were invisible from bento/slides and bento/type, because both put
+their text on a child, both call their repaint event `'doc'`, and both were
+written by the same session. The third app is where the assumptions show, and it
+is cheaper to ask its owner than to discover it after the room exists.
+
+**Two changes left in the spaces zone**, both offered for revert: `Store.reindex()`
+is now public (a remote apply writes straight to `doc`, bypassing commit, so
+nothing else rebuilds the derived index), and `SpacesDoc.collab` is typed
+`CollabCreds` instead of `unknown` — it was marked RESERVED "unused until collab
+ships", and it ships. That type moved to `kernel/src/sync/crdt.ts` beside
+`SyncStateJSON`, so a document-format type is not reachable only through the
+session: the deployed relay verifies against that shape, and a second local
+description of it is how a client and the worker drift apart.
+
+## 2026-08-15 — Known gap: the moved sync modules still hold raw network primitives
+
+**Recorded because it is security-relevant and easy to lose.** The session/
+transport lift relocated four raw network calls into `kernel/src/sync/`:
+
+```
+kernel/src/sync/online.ts   new WebSocket(...)      the relay socket
+kernel/src/sync/blobs.ts    fetch() × 3            blob HEAD, upload, download
+```
+
+They are not new — `git show HEAD:slides/src/sync/blobs.ts | diff -
+kernel/src/sync/blobs.ts` is IDENTICAL, and online.ts differs only in imports and
+type names. The lift created none of them. What it did do is move them out from
+under the paths that PR #305 targets — the fix for a privately reported advisory
+(GHSA-5c3x-xqp6-g94r) where offline mode leaked from five places — so they are
+now just as reachable and no longer in the diff that was under review. The bypass
+is unchanged; the move made it easier to miss. That is the reason this entry
+exists rather than a chat message.
+
+**The fix, not applied here because `kernel/src/net.ts` does not exist in this
+tree yet:** once #305 lands, `import { netFetch, netWebSocket } from '../net.ts'`,
+swap the four call sites, and add the retry guard so a refused connection does
+not spin against the switch:
+
+```ts
+} catch { if (!offlineEnabled()) this.retry(); return }
+```
+
+Writing that against an interface not yet present would have been guessing.
+
+**A second call site that is invisible from `slides/`.** `kernel/src/sync/
+online.ts` now imports `offlineEnabled` from `../update.ts` directly. (An
+injection point was built for it and removed once `offlineEnabled` turned out to
+already be in `kernel/src/update.ts`.) If #305's re-export from `update.ts` is
+ever dropped, this breaks as a typecheck failure rather than a silent bypass —
+but `scripts/test-offline.ts` would not catch it either way: that rig enforces
+who may touch the PRIMITIVES, not who reads the SWITCH.
+
+**The four above are NOT the whole defect.** #305 is broader: a single chokepoint
+at `kernel/src/net.ts`, plus `render.ts` remote images (`remoteSrcBlocked`), and
+dash. And the same hole was found independently from the opposite direction while
+auditing the pack channel for an extensions question — `slides/src/packs.ts`
+never consults `offlineEnabled` at all. Verified here rather than taken on
+report: `grep -c offlineEnabled slides/src/packs.ts` → 0, against THREE reachable
+network paths — `fetchPinned` (:133), a bare `fetch` HEAD probe (:141), and the
+listing fetch in `fetchIndex` (:228). Meanwhile `docs/security.md:140` publishes
+the claim that with offline on "you can watch the network tab stay silent". For
+the pack channel that is currently false.
+
+Scoped precisely, because an earlier draft of this entry overstated it as firing
+"from the moment the listing loads": `fetchIndex` has two callers and NEITHER is
+at boot — `availablePacks()` (editor.ts:1342, the Manage languages dialog) and
+`refreshPacksForVersion()` (i18n.ts:76, via registerUpdatePrepare). So opening a
+deck offline does not hit the network from this path. The honest statement is
+"from the moment the pack UI is opened". Whether the second caller is reachable
+in offline mode depends on gating in the update path that nobody has traced, and
+is left as an open question rather than a claim — it is moot if everything routes
+through `net.ts`, which is the argument for the chokepoint.
+
+Two people finding the same hole from unrelated directions is some corroboration
+that the advisory is real and aimed at the right place. It also means the
+DECISIONS entry merged as 5eaccf8 UNDERSTATES it: that entry describes the
+packs.ts symptom, not the missing chokepoint. Cite it with that in mind.
+
+**A separate defect in the switch itself, verified while checking the above.**
+`offlineEnabled()` (kernel/src/update.ts:43) reads `lsGet('bento-offline') ===
+'on'`, and `lsGet` swallows its own failure and returns null. Note where the bug
+actually is: `offlineEnabled` HAS a `try/catch` returning false, and it is DEAD
+CODE — `lsGet` never throws, so the catch never runs and the gate fails through
+`null === 'on'` instead. The defence looks present and is unreachable, which is
+why reading the function alone does not reveal it. So where storage is
+unavailable — Safari private browsing, a blocked file:// context, an opaque
+origin — the gate answers ONLINE. The UI diverges rather than agreeing with it:
+editor.ts:2871 seeds the checkbox from `offlineEnabled()` once, then :2873 calls
+`setOffline(offCb.checked)`, whose write also swallows failure. Tick the box in
+that context and the checkbox stays visibly ticked while the gate keeps answering
+online, until something rebuilds the dialog. A security control that reads ON and
+behaves OFF is worse than one that refuses to turn on. (Found by the bento/dash
+session auditing against #305; confirmed here by reading both call sites.)
+
+**FIXED by #305, merged as 759fb93 — verified rather than assumed after this
+entry claimed otherwise.** The gate is now `sessionOffline ?? lsGet(...)` with the
+in-memory value winning, `setOffline` RETURNS whether the write persisted, and the
+dialog surfaces the failure. It still cannot persist across a reload where storage
+is unavailable — `sessionOffline` is module state — but it no longer claims to,
+which is the right shape for the constraint. `offlineEnabled`/`setOffline` moved
+from `update.ts` into `net.ts`, with `update.ts` re-exporting them, so the
+kernel's sync import keeps working.
+
+**Why that fix is immune rather than lucky**, which is the transferable part: it
+replaced the gate's SOURCE OF TRUTH, not its error handling. Hardening the
+`catch` would have changed nothing, because the catch was never the path taken.
+A defence that sits on the error path cannot protect a function that fails
+without erroring.
+
+This entry originally said the chokepoint would not fix it ("net.ts will
+faithfully consult a gate that is lying"). That was true of the chokepoint IDEA
+and false of the actual diff, which fixes both halves. The observation is still
+the useful one — centralising call sites is not sufficient when the thing they
+consult can lie — but it was already addressed, and recording a fixed defect as
+outstanding is its own kind of error.
+
+**Ordering, as it actually resolved.** #305 landed first (759fb93), which was the
+right sequence: a security fix should not wait on a refactor. The kernel lift
+takes second and applies the four swaps to the moved copies.
+
+That integration is NOT a small apply, contrary to an early estimate from both
+sides. Measured from this tree — and these numbers DRIFT, because origin/main
+moves while the work sits uncommitted: they went from 13 commits and 69 upstream
+files to 14 and 79 during a single conversation. Base 89b4462, 14 commits behind
+origin/main, 28 uncommitted files here against 79 upstream, with six overlapping —
+`.github/workflows/ci.yml` and `docs/DECISIONS.md` (append vs append),
+`kernel/src/theme.ts` (another session's file, now also upstream), and the three
+`slides/src/sync/*` rename-vs-modify pairs.
+
+A shortcut was considered and rejected: writing `git show 759fb93:kernel/src/net.ts`
+into the tree to unblock the swaps would produce a tree that is post-#305 in one
+file and pre-#305 in sixty-eight, where the first failure is unattributable.
+
+**The lift WILL fail CI on contact, by design.** `scripts/test-offline.ts` scans
+`['kernel/src', 'slides/src', 'dash/src', 'spaces/src']`, so the four relocated
+primitives are in scope the moment the integration lands — 3 in
+`kernel/src/sync/blobs.ts`, 1 in `kernel/src/sync/online.ts`. That is the rig
+working: the swaps are not optional cleanup, they are what makes the build green.
+`netWebSocket(url)` returns a genuine `WebSocket` (not a proxy), so `binaryType`,
+the four handlers and `.close(code)` are unchanged; the only behavioural
+difference is that it THROWS `OfflineError` when the switch is on, which is why
+the call site needs `if (!offlineEnabled()) this.retry()`.
+
+**`type/src` was not in that scan list**, so bento/type — a fourth app with a
+model, store, editor, pagination, signing and now a sync binding — was silently
+exempt from the policy. It has no network path today (verified: zero matches for
+all five primitives), which is precisely why it was worth raising while the fix
+could not fail.
+
+The fix taken was better than the one proposed, and the argument for it was in
+the complaint. Adding `'type/src'` to the array fixes type and leaves the NEXT
+app — and the next app is by definition the one nobody is thinking about. So the
+list became DISCOVERY: any top-level directory containing `src/` is in scope, and
+an app joins the policy by existing (slides #307). Discovery has its own failure
+mode, and it is this rig's own lesson one level up — a green run over an empty
+list is indistinguishable from a green run over the whole repo — so it asserts
+that discovery still finds the known apps and does not sweep in non-app
+directories.
+
+The general form is worth keeping: **an exemption list is a latent violation with
+a date on it.** When the answer is "add ourselves to the list", check whether the
+list should exist.
+
+**`kernel/src/theme.ts` is a shadow, not a member of this change set.** It sits
+untracked in the shared checkout and shows up in every overlap measurement, which
+made it look like an orphan needing an owner. It is not: it is byte-identical to
+`origin/main:kernel/src/theme.ts`, shipped in #285, and imported upstream by
+`slides/src/editor/editor.ts` and `slides/src/main.ts`. Nobody needs to adopt it.
+
+It cannot simply be deleted from this tree today, because this tree's base
+(89b4462) PREDATES #285 — so the untracked copy is the only copy here, and
+`type/src/main.ts` imports it. Delete it now and bento/type stops building;
+delete it after the rebase and nothing happens, because the tracked file takes
+over. So: keep it until the rebase, drop it as part of the rebase, and do NOT
+commit it — committing would add a file that already exists upstream and
+manufacture a conflict out of nothing.
+
+The general trap: an untracked file that is byte-identical to a tracked one
+upstream is invisible to every tool you would reach for. It does not appear in
+`git diff`, it survives `git checkout`, and it makes a file look present at a
+commit where it is absent. Two separate sessions reasoned about this one wrongly
+in opposite directions — one concluded it was an unowned orphan safe to remove
+(it is neither), the other that a downstream app depended on it and therefore
+owned it (it depends on it, but does not own it).
+
+The actionable rule, which is narrower than the trap and is what either of us
+needed: **search the REF, not the working tree.** Every observation behind the
+wrong conclusions was TRUE of a checkout based at 89b4462 and FALSE of main — at
+that base slides genuinely does not import the file and the file genuinely is
+untracked, because the base predates #285. `git grep kernel/src/theme origin/main`
+is one command and shows the two slides importers immediately. A working tree
+held at an old base is not a view of the project; it is a view of the past, and
+"I checked" means nothing without saying checked against WHAT.
+
+(A matching blob is also weaker evidence than it looks: it says two commits
+contain the same content, not that one came from the other. The `slides-theme`
+branch shares this file's bytes and never merged; the content reached main by a
+different PR.)
+
+One trap worth recording for anyone verifying this: local `main` was 802804b and
+STALE — #305 is on `origin/main`. Checking against `main` reports `kernel/src/
+net.ts` as absent and the slides sync files as unchanged, i.e. that #305 never
+landed. Compare against `origin/main`.
