@@ -130,4 +130,13 @@ dependencies {
     // Both are WebView-side features rather than app-side ones, so the library
     // is a thin façade over what the installed WebView already implements.
     implementation("androidx.webkit:webkit:1.17.0")
+
+    // Test-only. The indexer is held to the shared corpus in tray/fixtures/ by
+    // a plain JVM test — no emulator, so there is no excuse not to run it.
+    //
+    // Gson rather than org.json: Android's org.json is a STUB in unit tests
+    // whose methods throw, and whether a real one on the test classpath shadows
+    // it is a coin toss. A test that fails for that reason teaches nothing.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.google.code.gson:gson:2.11.0")
 }
