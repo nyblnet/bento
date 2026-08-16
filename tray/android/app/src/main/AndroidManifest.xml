@@ -42,6 +42,7 @@
         <activity
             android:name=".EditorActivity"
             android:exported="true"
+            android:theme="@style/Theme.Tray.Editor"
             android:parentActivityName=".DocumentsActivity"
             android:documentLaunchMode="intoExisting"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode|density|smallestScreenSize|navigation">

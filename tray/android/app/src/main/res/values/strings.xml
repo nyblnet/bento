@@ -42,4 +42,6 @@
     <string name="theme_system">Theme: follow the system</string>
     <string name="theme_light">Theme: light</string>
     <string name="theme_dark">Theme: dark</string>
+    <string name="open_selected">Open</string>
+    <string name="detail_none">Pick a document to see it here.</string>
 </resources>

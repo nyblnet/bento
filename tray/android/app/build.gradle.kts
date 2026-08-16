@@ -116,6 +116,22 @@ dependencies {
     // is a thin façade over what the installed WebView already implements.
     implementation("androidx.webkit:webkit:1.17.0")
 
+    // Material 3, for the documents screen only. Measured cost at the time it
+    // was added: +1.26 MB, taking a 122 KB app past 1.3 MB — dominated by
+    // resources.arsc, because applying an M3 theme references the library's
+    // whole style and attribute graph and resource shrinking cannot prove any
+    // of it unused.
+    //
+    // That ratio was the argument against it while tray was "a thin courier".
+    // It is worth paying for two things a hand-rolled theme cannot do at all:
+    // DYNAMIC COLOUR (the app adopting the user's wallpaper palette, which is
+    // the clearest signal of a modern Android app) and adaptive large-screen
+    // behaviour. Both are what Play's editorial surfaces actually reward.
+    //
+    // EditorActivity deliberately stays off it — a full-screen WebView gains
+    // nothing from Material and would only inherit the inflation requirements.
+    implementation("com.google.android.material:material:1.12.0")
+
     // Test-only. The indexer is held to the shared corpus in tray/fixtures/ by
     // a plain JVM test — no emulator, so there is no excuse not to run it.
     //

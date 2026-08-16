@@ -3,9 +3,14 @@
 
 package page.bento.tray
 
-import android.app.Activity
-import android.app.AlertDialog
 import android.app.UiModeManager
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.color.DynamicColors
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -50,7 +55,7 @@ import android.widget.TextView
  * system font scaling, TalkBack and predictive back things you re-earn rather
  * than get. See `docs/DECISIONS.md`, 2026-08-16.
  */
-class DocumentsActivity : Activity() {
+class DocumentsActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "BentoTray"
@@ -68,6 +73,28 @@ class DocumentsActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("ui", Context.MODE_PRIVATE) }
     private var gridMode = true
     private lateinit var viewToggle: TextView
+
+    /** The detail pane, and what it is showing. Only built on a wide screen —
+     *  on a phone there is nowhere to put it and a tap opens the document. */
+    private var detail: LinearLayout? = null
+    private var selected: Row? = null
+
+    /**
+     * Is this a tablet-class device, rather than a phone that happens to be
+     * sideways?
+     *
+     * `smallestScreenWidthDp`, NOT `screenWidthDp`, and the difference is the
+     * whole point: a Pixel in landscape reports 873dp wide and passes a width
+     * test, but it is only ~390dp TALL, so a two-pane layout left the grid 299px
+     * high — a worse phone layout wearing a tablet's clothes. The smallest
+     * dimension is the one that says "there is room in both directions", which
+     * is why `sw600dp` is the platform's own tablet qualifier.
+     *
+     * A foldable reports the folded width closed and the unfolded width open,
+     * and unfolding recreates the activity, so this lands on the right layout
+     * without a listener.
+     */
+    private val isWide get() = resources.configuration.smallestScreenWidthDp >= 600
     private lateinit var empty: TextView
     private lateinit var search: EditText
     private lateinit var status: TextView
@@ -83,6 +110,10 @@ class DocumentsActivity : Activity() {
     private var rows: List<Row> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before super, and before any view exists: dynamic colour rewrites the
+        // theme's colour roles from the user's wallpaper, so anything already
+        // inflated would keep the fallback palette.
+        DynamicColors.applyToActivityIfAvailable(this)
         super.onCreate(savedInstanceState)
         gridMode = prefs.getString("view", "grid") == "grid"
         applyNightMode(prefs.getString("night", "system")!!)
@@ -316,8 +347,15 @@ class DocumentsActivity : Activity() {
     /** Grid or list. Rebuilds the adapter rather than reusing it: the two modes
      *  produce different view shapes, and GridView recycles by position with no
      *  notion of a view type, so a reused card would be re-fed as a row. */
+    /** How many columns fit. A phone gets 2, a tablet 4 or 5 — a fixed 2 on a
+     *  10" screen wastes most of it, which is the commonest way an Android app
+     *  signals it was only ever designed for a phone. */
+    private fun columns(): Int =
+        if (!gridMode) 1
+        else (resources.configuration.screenWidthDp / (if (isWide) 210 else 180)).coerceIn(2, 6)
+
     private fun applyViewMode() {
-        list.numColumns = if (gridMode) 2 else 1
+        list.numColumns = columns()
         viewToggle.text = if (gridMode) "☰" else "▦"
         viewToggle.contentDescription =
             getString(if (gridMode) R.string.view_as_list else R.string.view_as_grid)
@@ -359,6 +397,23 @@ class DocumentsActivity : Activity() {
         }), Toast.LENGTH_SHORT).show()
         applyNightMode(next)
     }
+
+    /**
+     * A colour from the theme's roles rather than a fixed resource.
+     *
+     * This is what makes dynamic colour actually apply: `@color/ink` is a
+     * constant and would survive DynamicColors untouched, whereas
+     * `colorOnSurface` is rewritten from the wallpaper on Android 12+ and falls
+     * back to the Bento palette below it.
+     */
+    private fun themed(attr: Int): Int {
+        val tv = android.util.TypedValue()
+        theme.resolveAttribute(attr, tv, true)
+        return if (tv.resourceId != 0) getColor(tv.resourceId) else tv.data
+    }
+
+    private val inkColor get() = themed(com.google.android.material.R.attr.colorOnSurface)
+    private val dimColor get() = themed(com.google.android.material.R.attr.colorOnSurfaceVariant)
 
     // ------------------------------------------------- a plain UI, in code
     //
@@ -409,7 +464,7 @@ class DocumentsActivity : Activity() {
             text = getString(R.string.app_name)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 23f)
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(getColor(R.color.ink))
+            setTextColor(inkColor)
             // -.015em on headings, from tray/webext/src/ui.css. Android's
             // letterSpacing is already in ems, so the number transfers directly.
             letterSpacing = -0.015f
@@ -436,26 +491,42 @@ class DocumentsActivity : Activity() {
         }
         root.addView(header)
 
-        search = EditText(this, null, 0, R.style.Field).apply {
+        // Everything below the header belongs to the LIST, so on a wide screen
+        // it sits in the left column and the detail pane gets full height.
+        // Spanning them across both panes left the grid 299px tall in
+        // landscape, which is not a layout so much as a leftover.
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        // TextInputLayout rather than a bare EditText: it carries M3's outlined
+        // box, the focus and error states, and — the reason it matters here —
+        // the colour roles dynamic colour rewrites.
+        val searchBox = TextInputLayout(
+            this, null, com.google.android.material.R.attr.textInputOutlinedStyle
+        ).apply {
             hint = getString(R.string.search_hint)
-            setSingleLine()
+            isHintEnabled = true
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).also { it.topMargin = dp(10) }
+        }
+        search = TextInputEditText(searchBox.context).apply {
+            setSingleLine()
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) = refresh()
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             })
         }
-        root.addView(search)
+        searchBox.addView(search)
+        col.addView(searchBox)
 
         status = TextView(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(getColor(R.color.dim))
+            setTextColor(dimColor)
             setPadding(dp(2), dp(8), dp(2), dp(12))
         }
-        root.addView(status)
+        col.addView(status)
 
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -467,38 +538,47 @@ class DocumentsActivity : Activity() {
         // Styled through R.style.Btn rather than themed, because this screen
         // builds its views in code — the 4-arg View constructor applies a style
         // exactly as an XML layout would, with no library involved.
-        buttons.addView(Button(this, null, 0, R.style.Btn_Primary).apply {
+        // Filled for the primary action, outlined for the rest — M3's own
+        // hierarchy, rather than a hand-rolled one.
+        buttons.addView(MaterialButton(this).apply {
             text = getString(R.string.open_document)
             layoutParams = third().also { it.rightMargin = dp(8) }
             setOnClickListener { openDocument() }
         })
-        buttons.addView(Button(this, null, 0, R.style.Btn).apply {
+        buttons.addView(MaterialButton(this, null,
+            com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = getString(R.string.new_document)
             layoutParams = third().also { it.rightMargin = dp(8) }
             setOnClickListener { newDocument() }
         })
-        buttons.addView(Button(this, null, 0, R.style.Btn).apply {
+        buttons.addView(MaterialButton(this, null,
+            com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = getString(R.string.folders)
             layoutParams = third()
             setOnClickListener { manageFolders() }
         })
-        root.addView(buttons)
+        col.addView(buttons)
 
         empty = TextView(this).apply {
-            setTextColor(getColor(R.color.dim))
+            setTextColor(dimColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(40), dp(8), dp(8))
             visibility = View.GONE
         }
-        root.addView(empty)
+        col.addView(empty)
 
         list = GridView(this).apply {
             adapter = RowAdapter()
             horizontalSpacing = dp(10)
             verticalSpacing = dp(10)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-            setOnItemClickListener { _, _, i, _ -> open(rows[i].uri) }
+            // On a phone a tap opens, because there is nowhere else for it to
+            // go. With a detail pane, a tap selects — and the pane's button
+            // opens — which is what makes the pane worth having.
+            setOnItemClickListener { _, _, i, _ ->
+                if (isWide) showDetail(rows[i]) else open(rows[i].uri)
+            }
             setOnItemLongClickListener { _, _, i, _ ->
                 val r = rows[i]
                 AlertDialog.Builder(this@DocumentsActivity)
@@ -512,9 +592,113 @@ class DocumentsActivity : Activity() {
                 true
             }
         }
-        root.addView(list)
+        // On a wide screen the list shares the window with a detail pane; on a
+        // phone it simply fills it. Same views either way — only the container
+        // differs, so there is no second layout to keep in step.
+        col.addView(list, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        if (!isWide) {
+            root.addView(col, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            applyViewMode()
+            return root
+        }
+
+        val split = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        }
+        split.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.6f))
+        split.addView(buildDetail(), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f
+        ).also { it.leftMargin = dp(16) })
+        root.addView(split)
         applyViewMode()
         return root
+    }
+
+    /**
+     * What a wide screen does with the room a phone does not have: the document
+     * you are pointing at, big enough to recognise, with what is known about it.
+     *
+     * A thumbnail at this size is the whole argument for rendering one — at
+     * 64x36 in a list row it is a hint, at 400px it is the document.
+     */
+    private fun buildDetail(): View {
+        val dp = { v: Int -> (v * resources.displayMetrics.density).toInt() }
+        val pane = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+        pane.addView(ImageView(this).apply {
+            id = 10
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .also { it.bottomMargin = dp(14) }
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        })
+        pane.addView(TextView(this).apply {
+            id = 11
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            setTextColor(inkColor)
+            letterSpacing = -0.015f
+            setPadding(0, 0, 0, dp(6))
+        })
+        pane.addView(TextView(this).apply {
+            id = 12
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(dimColor)
+            setPadding(0, 0, 0, dp(16))
+        })
+        pane.addView(MaterialButton(this).apply {
+            id = 13
+            text = getString(R.string.open_selected)
+            setOnClickListener { selected?.let { open(it.uri) } }
+        })
+        detail = pane
+        showDetail(null)
+        return pane
+    }
+
+    private fun showDetail(r: Row?) {
+        val pane = detail ?: return
+        selected = r
+        val thumb = pane.findViewById<ImageView>(10)
+        val title = pane.findViewById<TextView>(11)
+        val sub = pane.findViewById<TextView>(12)
+        val open = pane.findViewById<MaterialButton>(13)
+
+        if (r == null) {
+            // GONE, not just empty: an ImageView with adjustViewBounds and no
+            // drawable still claims height, which pushed the empty-state line
+            // into the middle of the pane.
+            thumb.visibility = View.GONE
+            thumb.setImageBitmap(null)
+            thumb.background = null
+            title.text = getString(R.string.detail_none)
+            title.setTextColor(dimColor)
+            sub.text = ""
+            open.visibility = View.GONE
+            return
+        }
+        thumb.visibility = View.VISIBLE
+        title.text = if (r.encrypted) "🔒 ${r.label}" else r.label
+        title.setTextColor(inkColor)
+        sub.text = "${r.sub}\n${DateUtils.getRelativeTimeSpanString(
+            r.modified, System.currentTimeMillis(), 0)}"
+        open.visibility = View.VISIBLE
+        thumb.setImageBitmap(null)
+        thumb.background = getDrawable(R.drawable.bg_thumb)
+        if (r.hasPreview) {
+            val key = "${r.uri}|${r.modified}"
+            thumb.tag = key
+            Thumbnails.request(this, r.uri, r.modified) { bmp ->
+                if (bmp != null && thumb.tag == key) thumb.setImageBitmap(bmp)
+            }
+        }
     }
 
     private inner class RowAdapter : BaseAdapter() {
@@ -524,7 +708,7 @@ class DocumentsActivity : Activity() {
 
         override fun getView(i: Int, convert: View?, parent: ViewGroup): View {
             val r = rows[i]
-            val row = (convert as? LinearLayout) ?: if (gridMode) buildCard() else buildRow()
+            val row = (convert as? LinearLayout) ?: if (gridMode) buildCard(parent) else buildRow()
 
             row.findViewById<TextView>(1).text = if (r.encrypted) "🔒 ${r.label}" else r.label
             row.findViewById<TextView>(2).text = r.sub
@@ -549,12 +733,20 @@ class DocumentsActivity : Activity() {
 
         /** A card: the thumbnail carries the row, which is the point of having
          *  rendered one. Matches how tray/webext presents a folder. */
-        private fun buildCard(): LinearLayout {
-            // GridView cells size to content, so the thumbnail's height is
-            // computed from the column width to hold 16:9 rather than guessed.
-            val cols = 2
-            val screen = resources.displayMetrics.widthPixels
-            val cellW = (screen - dp(40) - dp(10) * (cols - 1)) / cols - dp(16)
+        private fun buildCard(parent: ViewGroup): LinearLayout {
+            // GridView cells size to content, so a card's thumbnail needs an
+            // explicit height to hold 16:9.
+            //
+            // Measured from the GRID, not estimated from the screen. The screen
+            // is the wrong number twice over: a hardcoded column count sized
+            // every card for a phone, and once there is a detail pane the grid
+            // is only part of the width anyway. By the time getView runs the
+            // grid has been measured, so ask it — and keep the estimate only for
+            // the first pass, before it has a width to report.
+            val cols = columns()
+            val gridW = if (parent.width > 0) parent.width.toFloat()
+                        else resources.displayMetrics.widthPixels * (if (isWide) 1.6f / 2.6f else 1f)
+            val cellW = (gridW / cols).toInt() - dp(10) - dp(16)
             return LinearLayout(this@DocumentsActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(8), dp(8), dp(8), dp(10))
@@ -569,7 +761,7 @@ class DocumentsActivity : Activity() {
                 addView(TextView(context).apply {
                     id = 1
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                    setTextColor(context.getColor(R.color.ink))
+                    setTextColor(inkColor)
                     typeface = emphasis()
                     maxLines = 2
                     ellipsize = android.text.TextUtils.TruncateAt.END
@@ -578,7 +770,7 @@ class DocumentsActivity : Activity() {
                 addView(TextView(context).apply {
                     id = 2
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                    setTextColor(context.getColor(R.color.dim))
+                    setTextColor(dimColor)
                     maxLines = 1
                     ellipsize = android.text.TextUtils.TruncateAt.END
                     setPadding(dp(2), dp(2), dp(2), 0)
@@ -604,12 +796,12 @@ class DocumentsActivity : Activity() {
                 addView(TextView(context).apply {
                     id = 1
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                    setTextColor(context.getColor(R.color.ink))
+                    setTextColor(inkColor)
                 })
                 addView(TextView(context).apply {
                     id = 2
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                    setTextColor(context.getColor(R.color.dim))
+                    setTextColor(dimColor)
                 })
             })
         }

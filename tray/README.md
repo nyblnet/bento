@@ -756,7 +756,45 @@ What did transfer: the extension's `-.015em` heading tracking (Android's
 in the header is generated from `tray/assets/tray-logo.svg` by the same script
 as the launcher icon, so the two cannot drift.
 
-### The look is themed, with no UI dependency
+### Material 3, dynamic colour, and adaptive layout
+
+The documents screen is Material 3 now, and the reason is specific: **dynamic
+colour** and **adaptive large-screen behaviour** are what Play's editorial
+surfaces reward, and neither can be hand-rolled. Dynamic colour means the app
+adopts the user's wallpaper palette on Android 12+ — so the Bento palette below
+is the FALLBACK for older devices rather than the intent. The brand stays present
+through the mark and the thumbnails, which is the right place for it.
+
+Measured cost, since the earlier decision turned on it: **+1.26 MB**, dominated
+by `resources.arsc` growing 24× — applying an M3 theme references the library's
+whole style and attribute graph and resource shrinking cannot prove any of it
+unused. That ratio was the argument against it while tray was positioned as a
+thin courier; it is worth paying once the goal includes being featured.
+
+`EditorActivity` stays OFF Material on its own plain theme. It hosts one
+full-screen WebView, the document supplies its own chrome, and Material would
+only add inflation requirements.
+
+**Adaptive layout keys off `smallestScreenWidthDp >= 600`, not `screenWidthDp`,**
+and the difference is the whole lesson. A Pixel in landscape reports 873dp wide
+and passes a width test — but it is only ~390dp tall, so a two-pane layout left
+the grid **299px high**: a worse phone layout wearing a tablet's clothes. The
+smallest dimension is the one that means "room in both directions", which is why
+`sw600dp` is the platform's own tablet qualifier. A foldable reports the folded
+width closed and the unfolded width open, and unfolding recreates the activity,
+so it lands on the right layout with no listener.
+
+On a tablet the grid shares the window with a **detail pane**: a large
+first-page render, title, app, folder and date, and Open. That render at 400px is
+the whole argument for having thumbnails at all — at 64×36 in a list row it is a
+hint; at this size it is the document.
+
+Column count comes from the available width, and the card's thumbnail height is
+measured from the GRID rather than the screen — the screen is wrong twice over,
+once because a hardcoded column count sizes every card for a phone, and again
+because with a detail pane the grid is only part of the width.
+
+### What the hand-rolled theme established (superseded by Material, kept for the reasoning)
 
 The documents screen is ours to design — unlike iOS, where the root screen is
 the system document browser — so it carries the same tokens as `tray/webext`
