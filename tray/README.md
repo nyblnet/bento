@@ -483,10 +483,12 @@ here rather than discovered later.
 | write access to an opened document | always | **may be read-only** | platform-forced |
 | status bar while editing | hidden on iPad | always shown | **known gap** |
 | whole-folder grant | folder-mode `UIDocumentPickerViewController` | `ACTION_OPEN_DOCUMENT_TREE` | same capability |
-| text extracted from a document | `BentoIndex.swift` | (in progress) | ported per platform |
-| finding a document by its contents | ✓ search screen + Spotlight | — | **gap on Android**, see below |
+| text extracted from a document | `BentoIndex.swift` | `DocumentIndex.kt` | ported per platform, one corpus |
+| finding a document by its contents | ✓ search screen + Spotlight | ✓ search over a folder index | same |
 
-Two gaps, both named rather than quietly left out.
+One gap left, named rather than quietly left out. (Search was the other, on
+whichever host you read this from — `tray/ios` and `tray/android` landed it a day
+apart, from opposite directions, each believing the other still lacked it.)
 
 **The status bar.** iOS hides it on iPad because nothing else keeps the page off
 the whole screen there; the Android equivalent would be to hide it on tablets
@@ -494,57 +496,44 @@ the whole screen there; the Android equivalent would be to hide it on tablets
 tablet target, and shipping an untested behaviour is worse than naming an
 untested one.
 
-**Search.** `tray/webext` scans every granted folder and searches **the document's
-own prose**, so a deck is findable by a phrase on a slide rather than by what
-somebody named the file. iOS has that now; Android does not yet.
+**Search.** All three hosts have it now. `tray/webext` always did; `tray/ios` and
+`tray/android` landed it a day apart, from opposite directions — which is why the
+parity table above briefly claimed the gap in both directions at once.
 
-On iOS it is three pieces, following `docs/DECISIONS.md` (2026-08-16):
+A deck is findable by **a phrase on one of its slides** rather than only by what
+somebody called the file. Each host does it the same way, and the sameness is
+enforced rather than hoped for:
 
-- a **whole-folder grant** through the folder-mode document picker, persisted as
-  a security-scoped bookmark — the app could previously open one file at a time
-  and could not enumerate anything;
-- **`BentoIndex.swift`**, a port of the extension's `extractText`: up to 40KB of
-  prose per document pulled out of the `#bento-doc` block as string values, data
-  URIs stripped first, encrypted documents never read at all;
-- a **search screen** beside the document browser, and the same prose donated to
-  **CoreSpotlight** so results turn up in system search too.
+- a **whole-folder grant** — folder-mode `UIDocumentPickerViewController` on iOS
+  persisted as a security-scoped bookmark, `ACTION_OPEN_DOCUMENT_TREE` on Android
+  persisted as a URI permission. Both hosts could previously open one file at a
+  time and enumerate nothing.
+- **the extraction, ported per platform** — `BentoIndex.swift` and
+  `DocumentIndex.kt`, both from the reference in `tray/doc-index.mjs`: up to 40KB
+  of prose per document pulled out of the `#bento-doc` block as string values,
+  data URIs stripped first.
+- **one shared corpus** — `tray/fixtures/`, 11 cases, run from each host's own
+  rig (`node scripts/test-doc-index.mjs`, `./gradlew :app:testDebugUnitTest`).
+  The guarantee is deliberately "cannot diverge SILENTLY" rather than "cannot
+  diverge", which is the weaker promise that fits string scanning — unlike
+  `tray/bridge.js`, shared outright because a divergence there wrote documents
+  out as zero bytes.
 
-The browser stays the root. It is not a list but a surface — iCloud Drive, every
-File Provider on the device, drag-and-drop, rename in place, favourites and tags
-— so search is one button away from it rather than in place of it.
-
-The port is held in place by `scripts/test-tray-index.mjs`, which runs two checks
-because they fail for different reasons:
-
-- the **shared corpus** in `tray/fixtures/` — the same cases and answer key every
-  host answers, budgets included. Skipped, not failed, when that directory is
-  absent, since it arrives with the Android work.
-- a diff against the **live `library.js`**, imported and run rather than copied,
-  over generated edge cases and every document in the tree. A frozen answer key
-  pins a port to a snapshot; when the reference moves, static expectations go
-  stale silently and every host stays green while drifting.
-
-That is what makes "each host carries its own copy" safe: a divergence is a
-failing rig rather than a document that is findable on one platform and not
-another. The one deviation currently accepted is written down in
-`BentoIndex.swift` — JavaScript can hold half a surrogate pair at the 40KB cut
-and Swift cannot, so the port drops it.
-
-Indexing prose into CoreSpotlight is a deliberate reach beyond the app, so two
-rules are enforced in code rather than described: an encrypted document yields no
-text and no preview, and revoking a folder deletes everything indexed from it.
-
-**Not built yet, on iOS.** The `data-bento-preview` slice is extracted and stored
-— it is free, the same read produces it — but the results list shows no
-thumbnail, because turning that HTML into an image means snapshotting a WebView
-per row. The document browser already thumbnails these documents; the search
-list does not.
+The shape is settled in `docs/DECISIONS.md` (2026-08-16): **native list UI on
+each host**, not the extension's HTML library screen in a WebView — measured at
+~0.5s of extra cold start, and it would have cost iOS its system document
+browser.
 
 **One thing the extraction inherits from the reference**, visible in snippets: it
 pulls string VALUES, so style values (`sans-serif`, `#EAF4FF`, `rgba(…)`) sit in
 the prose alongside real words. That is what makes it format-agnostic, and it is
 the extension's behaviour too — narrowing it is a change to all three ports and
 belongs in `docs/DECISIONS.md`, not in one host.
+
+Two properties the corpus pinned that reasoning had not: a single JSON string
+value **over 400 characters is not indexed at all** (the value regex is capped
+`{1,400}`), and **JS `\s` is Unicode-aware where Java's is not**. Both are held
+in place so a port cannot quietly "fix" them into divergence.
 
 ### What is genuinely different
 
@@ -639,6 +628,39 @@ At 72 it exactly filled the visible area, so every launcher mask cut its corners
 off and the navy frame that makes the mark read was never drawn at all.
 
 
+### Document search
+
+Grant a folder once and every Bento document inside it is indexed, so a deck is
+findable by **a phrase on one of its slides**. This is what `tray/webext` has
+always had and what neither native host did.
+
+- **The grant** is `ACTION_OPEN_DOCUMENT_TREE` plus a persistable permission —
+  the analogue of the extension's `showDirectoryPicker`. Note that Android
+  refuses to grant some directories outright (the root of shared storage, and
+  `Download` on current versions): the picker says "Can't use this folder" and
+  the user has to pick a subfolder. That is the platform's rule, not ours.
+- **Nothing is copied.** The index holds extracted text and the first-page
+  preview; the documents stay where the user put them.
+- **A rescan is nearly free.** Rows are keyed by size and timestamp, so an
+  unchanged folder costs one directory listing per folder and no reads at all —
+  the expensive step was never the walk, it is pulling 40KB of prose out of a
+  megabyte of document.
+- **The name is not the test.** Any `.html` is opened and the marker inside it
+  decides, so a deck renamed to `deck.html` to email it is still found — and a
+  stray web page that merely contains the word you searched for is not.
+- **SQLite, not a JSON file**, because the prose budget is 40KB *each*: a few
+  hundred documents is megabytes, which is fine on disk and ruinous to parse
+  into memory on every launch.
+- **Encrypted documents are indexed as encrypted and nothing more** — no text,
+  no preview. A privacy rule, not an optimisation.
+- `MAX_FILES` (5000) bounds a scan, and hitting it is **reported**: a library
+  that quietly stops at N is a library that lies about what it holds.
+
+**No thumbnails yet, deliberately.** The preview block is HTML, so showing it in
+a native list means a WebView per row — which is the cost the whole decision
+avoided. It is stored in the index anyway, because it comes out of a read that
+already happened, so thumbnails can be added later without a rescan.
+
 ### State: the document cycle works, on an emulator only
 
 Verified end to end on a Pixel 7 / Android 16 emulator, driven through the real
@@ -654,6 +676,11 @@ UI rather than a harness:
   present, well-formed from `<!DOCTYPE html>` to `</body></html>`, `docId` minted
 - the document reopens from the recents list on its persisted grant
 - the adaptive icon renders correctly under a circular launcher mask
+- **document search works end to end**: a granted folder indexed 2 decks and
+  excluded a decoy `.html` that contains the search word but carries no
+  `#bento-doc` marker; typing `software` — a word in no filename — returns both
+  decks by their own title, `Notes` returns one by file name, and a nonsense
+  query returns none
 
 Not yet verified:
 

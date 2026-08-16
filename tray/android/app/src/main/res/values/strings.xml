@@ -19,4 +19,19 @@
     <string name="err_webview_old">This device’s WebView is too old to save documents. Update Android System WebView from the Play Store.</string>
 
     <string name="notice_read_only">This document was opened read-only, so saves will ask where to put a copy. To edit it in place, open it from Bento Tray’s own “Open…” button instead.</string>
+
+    <string name="search_hint">Search documents and their contents</string>
+    <string name="folders">Folders</string>
+    <string name="add_folder">Add folder…</string>
+    <string name="folders_title">Indexed folders</string>
+    <string name="folder_forget_explain">Stop indexing this folder? The documents are not deleted — this app just gives back its access and forgets what it found.</string>
+    <string name="status_no_folders">Add a folder to search inside your documents, not just their names.</string>
+    <plurals name="status_indexed">
+        <item quantity="one">%1$d document indexed across %2$d folder(s)</item>
+        <item quantity="other">%1$d documents indexed across %2$d folder(s)</item>
+    </plurals>
+    <string name="empty_search">Nothing matches “%1$s”.</string>
+    <string name="empty_library">No Bento documents found in the folders you added.</string>
+    <string name="err_scan">Those folders could not be read.</string>
+    <string name="warn_scan_truncated">Stopped after examining %1$d files. Some documents in these folders are not indexed — try adding a narrower folder.</string>
 </resources>
