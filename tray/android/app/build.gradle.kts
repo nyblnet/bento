@@ -15,24 +15,23 @@ val keystoreProps = Properties().apply {
 }
 
 /**
- * Stages everything the app ships that is generated rather than written.
+ * Stages the one generated thing the app ships: `tray/bridge.js`, the File
+ * System Access polyfill SHARED with tray/ios. One copy of semantics whose
+ * comments record a bug that wrote users' documents out as zero bytes; a second
+ * copy would be a second chance to reintroduce it.
  *
- * Two inputs, for two reasons:
+ * NO STARTER DECK. It used to stage one here, mirroring tray/ios — and that was
+ * wrong. Starter decks change often and there are three Bento apps with more
+ * coming, so bundling means picking one arbitrarily or shipping several copies
+ * of Bento inside the app, each stale from the moment it is built. Measured
+ * before it was removed: the single slides seed was 517,161 bytes, 81% of a
+ * 630,851-byte release APK.
  *
- *  - `tray/bridge.js` is the File System Access polyfill, SHARED with tray/ios.
- *    One copy of semantics whose comments record a bug that wrote users'
- *    documents out as zero bytes; a second copy would be a second chance to
- *    reintroduce it.
- *  - the starter shell is COPIED FROM THE CURRENT BUILD, never committed: a
- *    587KB binary in git would churn on every release. It ages harmlessly — a
- *    new deck self-updates through Bento's normal signed channel the first time
- *    it checks.
- *
- * Mirrors the "Stage starter shell" step in tray/ios/project.yml.
+ * A new document now comes from the signed release channel instead — see
+ * `Releases.kt`.
  */
 abstract class StageTrayAssets : DefaultTask() {
     @get:InputFiles abstract val bridge: ConfigurableFileCollection
-    @get:InputFiles abstract val seed: ConfigurableFileCollection
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
     @TaskAction
@@ -41,25 +40,11 @@ abstract class StageTrayAssets : DefaultTask() {
         out.deleteRecursively()
         out.mkdirs()
         bridge.singleFile.copyTo(out.resolve("bridge.js"), overwrite = true)
-
-        // Resolved at EXECUTION time, not configuration time: the seed is a
-        // build artefact of a different project, so it routinely appears after
-        // this build was last configured.
-        val shell = seed.files.firstOrNull { it.exists() }
-        if (shell != null) {
-            shell.copyTo(out.resolve("starter.bento.html"), overwrite = true)
-        } else {
-            logger.warn(
-                "warning: no starter shell — run 'npm run build:single' in slides/; " +
-                    "New document will be unavailable in this build"
-            )
-        }
     }
 }
 
 val stageAssets = tasks.register<StageTrayAssets>("stageTrayAssets") {
     bridge.from(rootProject.file("../bridge.js"))
-    seed.from(rootProject.file("../../slides/dist-single/Bento_Slides.bento.html"))
     outputDir.set(layout.buildDirectory.dir("staged-assets"))
 }
 

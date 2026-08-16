@@ -11,6 +11,7 @@ import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateUtils
@@ -53,7 +54,6 @@ class DocumentsActivity : Activity() {
         private const val REQ_OPEN = 1
         private const val REQ_NEW = 2
         private const val REQ_FOLDER = 3
-        private const val SEED = "starter.bento.html"
     }
 
     private lateinit var list: ListView
@@ -180,28 +180,36 @@ class DocumentsActivity : Activity() {
 
     private fun addFolder() = startActivityForResult(Library.intentToGrantFolder(), REQ_FOLDER)
 
-    /** A new document is seeded from the bundled starter shell, where the user
-     *  chooses — so it is a real file in their own storage from its first byte,
-     *  with a persistable write grant already attached. */
+    /**
+     * A new document, of whichever Bento the user wants.
+     *
+     * The shell is NOT bundled — it is fetched from the signed release channel
+     * (`Releases`), so a document created here is the version everyone else has
+     * today rather than whatever the app was built against. That also makes
+     * "which app?" a real question worth asking, since there are three of them.
+     */
     private fun newDocument() {
-        if (!hasSeed()) {
-            notify(getString(R.string.err_no_seed)); return
-        }
-        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/html"
-            putExtra(Intent.EXTRA_TITLE, "Untitled.bento.html")
-            addFlags(
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
-            )
-        }, REQ_NEW)
+        val apps = Releases.APPS
+        AlertDialog.Builder(this)
+            .setTitle(R.string.new_document_title)
+            .setItems(apps.map { "${it.label} — ${it.blurb}" }.toTypedArray()) { _, i ->
+                pendingApp = apps[i]
+                startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "text/html"
+                    putExtra(Intent.EXTRA_TITLE, "Untitled.bento.html")
+                    addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                    )
+                }, REQ_NEW)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
-    private fun hasSeed() = try {
-        assets.list("")?.contains(SEED) == true
-    } catch (_: Exception) { false }
+    private var pendingApp: Releases.App? = null
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         val uri = data?.data
@@ -219,18 +227,46 @@ class DocumentsActivity : Activity() {
         }
     }
 
+    /**
+     * Fetch the signed shell, verify it, and write it into the file the user
+     * just named.
+     *
+     * The fetch is the ONLY network request this app makes on its own account.
+     * It is verified twice over — manifest signature, then the shell's pinned
+     * sha256 — because these bytes become an executable document the user will
+     * afterwards trust. A cached shell from a previous "New" is used when the
+     * server cannot be reached, so this keeps working on a plane.
+     */
     private fun seedThenOpen(uri: Uri) {
+        val app = pendingApp ?: Releases.APPS[0]
+        pendingApp = null
         Thread {
-            val ok = try {
-                assets.open(SEED).use { input ->
-                    contentResolver.openOutputStream(uri, "wt")?.use { input.copyTo(it) }
-                        ?: throw IllegalStateException("no output stream")
-                }
-                true
-            } catch (e: Exception) { Log.w(TAG, "seed failed", e); false }
+            var error: String? = null
+            val bytes = try {
+                Releases.seedFor(this, app)
+            } catch (e: Exception) {
+                Log.w(TAG, "could not fetch a seed", e)
+                error = e.message
+                // Offline, or the server is down. A shell cached by an earlier
+                // "New" is still a signed release — it was verified when it was
+                // cached — so it is a sound fallback rather than a guess.
+                Releases.anyCached(this, app)
+            }
+
+            val ok = bytes != null && try {
+                contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } != null
+            } catch (e: Exception) { Log.w(TAG, "could not write the new document", e); false }
+
+            // ACTION_CREATE_DOCUMENT has already made the file by the time we
+            // get here, so a failed fetch leaves an EMPTY document behind — which
+            // then shows up in the folder and indexes as nothing. Take it back.
+            if (!ok) try { DocumentsContract.deleteDocument(contentResolver, uri) }
+                     catch (e: Exception) { Log.w(TAG, "could not remove the empty file", e) }
+
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (ok) open(uri) else notify(getString(R.string.err_create))
+                if (ok) open(uri)
+                else notify(getString(R.string.err_create_fetch, error ?: getString(R.string.err_offline)))
             }
         }.start()
     }

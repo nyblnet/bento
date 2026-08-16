@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- For the DOCUMENT, never for the host. The app itself makes no network
-         request of any kind — no update check, no telemetry, no phoning home.
-         But the document it hosts carries its own runtime, and that runtime
-         syncs with the collab relay and checks Bento's signed update channel,
-         exactly as it would in a browser tab. Withholding this would silently
-         break live collaboration and self-update inside every deck. -->
+    <!-- Almost entirely for the DOCUMENT. The document carries its own runtime,
+         which syncs with the collab relay and checks Bento's signed update
+         channel exactly as it would in a browser tab; withholding this would
+         silently break live collaboration and self-update inside every deck.
+
+         The host itself makes exactly ONE request, and only when you create a
+         new document: it fetches that app's current signed shell rather than
+         bundling a starter deck (see Releases.kt — starter decks change often
+         and there are three Bento apps with more coming). No update check of its
+         own, no telemetry, nothing on launch. docs/PLATFORM.md §1 requires no
+         network to OPEN, EDIT, PRESENT or SAVE, and none of those touch it. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application

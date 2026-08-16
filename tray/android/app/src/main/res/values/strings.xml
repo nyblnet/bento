@@ -15,7 +15,6 @@
     <string name="err_create">The new document could not be written.</string>
     <string name="err_export">That copy could not be saved.</string>
     <string name="err_download">That download could not be saved.</string>
-    <string name="err_no_seed">This build has no starter document. Run “npm run build:single” in slides/ and rebuild the app.</string>
     <string name="err_webview_old">This device’s WebView is too old to save documents. Update Android System WebView from the Play Store.</string>
 
     <string name="notice_read_only">This document was opened read-only, so saves will ask where to put a copy. To edit it in place, open it from Bento Tray’s own “Open…” button instead.</string>
@@ -34,4 +33,7 @@
     <string name="empty_library">No Bento documents found in the folders you added.</string>
     <string name="err_scan">Those folders could not be read.</string>
     <string name="warn_scan_truncated">Stopped after examining %1$d files. Some documents in these folders are not indexed — try adding a narrower folder.</string>
+    <string name="new_document_title">What kind of document?</string>
+    <string name="err_create_fetch">The new document could not be created: %1$s</string>
+    <string name="err_offline">the release server could not be reached, and nothing is cached yet</string>
 </resources>

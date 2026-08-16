@@ -689,6 +689,44 @@ than an error, and all worth knowing before touching `Thumbnails.kt`:
 Because the preview is already stored in the index, adding this needed **no
 rescan** — existing rows thumbnailed on the spot.
 
+### New documents are fetched, never bundled
+
+Starter decks change often, and there are three Bento apps with more coming — so
+bundling one means picking arbitrarily, and bundling all of them means shipping
+several copies of Bento inside the app, each stale from the moment it was built.
+
+Measured on Android before this changed: the single bundled slides seed was
+**517,161 bytes, 81% of a 630,851-byte release APK**. Removing it took the
+release build to **117,940 bytes**, and the only asset left is `bridge.js`.
+
+So "New" asks which app you want and fetches that app's current signed shell
+(`Releases.kt`), the same channel a document uses to update itself — which also
+means a document created here is the version everyone else has, the same day.
+The shell is cached in `filesDir`, so only the first "New" of a given release
+needs a connection. `tray/webext` already worked this way in principle;
+`tray/ios` still bundles and should follow.
+
+This is the **one** request the host makes on its own account — no launch check,
+no telemetry. `docs/PLATFORM.md` §1 requires no network to open, edit, present or
+save; creating from a template is none of those.
+
+**Both halves are verified**, exactly as `kernel/src/update.ts` does it: the
+manifest's ECDSA P-256 signature over the exact payload bytes, then the shell's
+`sha256` as pinned by that signed payload. These bytes become an executable
+document the user afterwards trusts, so an unverified download would let anyone
+in the path choose what they create.
+
+Two traps worth keeping:
+
+- **WebCrypto emits ECDSA signatures as raw `r‖s`; Java expects DER.** The
+  manifest is signed through WebCrypto by `scripts/sign-release.mjs`, so handing
+  its 64 bytes to `SHA256withECDSA` unconverted is simply a bad signature —
+  silent, and indistinguishable from tampering.
+- **Ask for bytes, not a page.** `HttpURLConnection` sends a browser-shaped
+  `Accept` by default, and the release host rewrites responses it believes are
+  pages — see the note below. `Accept: */*` avoids the rewrite; the hash check is
+  what actually makes the bytes trustworthy, and stays regardless.
+
 ### State: the document cycle works, on an emulator only
 
 Verified end to end on a Pixel 7 / Android 16 emulator, driven through the real
@@ -704,6 +742,10 @@ UI rather than a harness:
   present, well-formed from `<!DOCTYPE html>` to `</body></html>`, `docId` minted
 - the document reopens from the recents list on its persisted grant
 - the adaptive icon renders correctly under a circular launcher mask
+- **New document fetches and verifies**: manifest signature checked, shell
+  sha256 checked, cached as `slides-1.0.18.html` at exactly the signed 689,316
+  bytes, written and opened. A failed fetch removes the empty file that
+  `ACTION_CREATE_DOCUMENT` had already created.
 - **document search works end to end**: a granted folder indexed 2 decks and
   excluded a decoy `.html` that contains the search word but carries no
   `#bento-doc` marker; typing `software` — a word in no filename — returns both
