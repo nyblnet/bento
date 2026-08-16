@@ -38,13 +38,16 @@ payload is shown actually breaking out into live markup).
 ## Compiling an outline
 
 `POST /api/compile` turns a small structured **outline** (`platform/worker/src/compile/schema.ts`)
-into a real `bento/slides` doc — no storage, pure function, meant to sit
-behind a review step before `POST /api/decks` commits anything. This is what
-the eventual prompt-template page will ask a chat AI to fill in; for now the
-demo page's step 1 (`/`) and any direct API caller can already use it. Eight
-layout kinds cover `docs/agents.md`'s content-mapping table (numbers → chart,
-comparisons → table, a headline figure → count-up stat, same-thing-changing
-→ morph): `title`, `section`, `bullets`, `stat`, `chart`, `table`, `quote`,
+into a real `bento/slides` doc — no storage, pure function. The demo page
+(`/`) drives it end to end: step 1 is a copy-pasteable prompt asking a chat
+AI (in an existing conversation, so it already has the topic's context) to
+reply with outline JSON matching this schema; step 2 pastes that reply back,
+auto-detects that it's outline shaped (as opposed to an already-compiled
+`bento/slides` doc — the "advanced" path), calls `/api/compile`, then
+`/api/decks`. Any direct API caller can call `/api/compile` the same way.
+Eight layout kinds cover `docs/agents.md`'s content-mapping table (numbers →
+chart, comparisons → table, a headline figure → count-up stat,
+same-thing-changing → morph): `title`, `section`, `bullets`, `stat`, `chart`, `table`, `quote`,
 `image` (a placeholder box — see "Known gaps"). Consecutive outline slides
 sharing a `morphGroup` string get their heading elements paired via `morphId`
 and the later slide set to `transition:'morph'`, straight out of
@@ -75,7 +78,7 @@ platform/
       validate.ts          — ingest validation (POST/PATCH /api/decks, compiled docs too)
       store.ts             — R2 + D1 access
       ids.ts                — random ids/tokens, sha256
-      demo.ts               — compile→review→create page served at `/`
+      demo.ts               — prompt→paste→create page served at `/`
       env.ts                — Env (binding) interface
       compile/
         schema.ts            — the outline schema + parseOutline() validator
@@ -233,10 +236,9 @@ name not matching `wrangler.toml`'s `name`.
 
 If it succeeded: visit the Worker's `*.workers.dev` URL (shown on its
 overview page). `/healthz` should return `{"ok":true,"shellVersion":"..."}`.
-`/` is the compile→review→create demo page — step 1: click "Load example
-outline", then "Compile →" (fills step 2 in below it); step 2: click "Create
-deck", then open the `/d/<id>` link it prints. That link is a real, fully
-editable `.bento.html` page, and `/d/<id>#present` starts the show
+`/` is the prompt→paste→create demo page — in step 2, click "Load example
+outline", then "Create deck →", then open the `/d/<id>` link it prints. That
+link is a real, fully editable `.bento.html` page, and `/d/<id>#present` starts the show
 immediately (existing shell behavior, `slides/src/main.ts`).
 
 ### From here on
@@ -289,14 +291,15 @@ write access to that deck — there is no recovery flow in v1 (no accounts).
 
 ## Known gaps (deliberately out of scope for this PR)
 
-- **No prompt-template page and no tolerant outline parser.** `/api/compile`
-  expects the outline JSON to already be well-formed (reasonable — a chat
-  model constrained by an explicit JSON schema in its prompt is not the
-  "markdown fences and trailing prose" case a hand-typed paste would be); the
-  page that shows a user the prompt to copy, and a paste/review UI in front
-  of `/api/compile` (stripping fences, surfacing field errors inline, an
-  iframe-the-real-draft review step), are both Cloudflare Pages work for a
-  follow-up PR. `demo.ts`'s step 1 is a stand-in, not that page.
+- **No tolerant outline parser.** `demo.ts` now covers the real information
+  architecture — step 1 is a copy-pasteable prompt for an existing AI
+  conversation, step 2 pastes the reply back and auto-detects outline vs.
+  full-doc JSON — but parsing is still a bare `JSON.parse`. If a model
+  ignores the prompt's "no markdown fences" instruction, the user has to
+  strip them by hand; there's no fence-stripping, no inline per-field
+  validation UI (errors are a flat text list), no draft-preview iframe
+  before committing. A dedicated Cloudflare Pages app with that polish is
+  still a follow-up PR — `demo.ts` gets the flow right, not the finish.
 - **The outline schema is intentionally narrow.** No custom page size (every
   compiled deck is the canonical 1280×720), no per-slide background
   override, no `kicker` on `bullets` slides (no builtin layout has a slot for
