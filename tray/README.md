@@ -727,6 +727,34 @@ Two traps worth keeping:
   pages — see the note below. `Accept: */*` avoids the rewrite; the hash check is
   what actually makes the bytes trustworthy, and stays regardless.
 
+### The look is themed, with no UI dependency
+
+The documents screen is ours to design — unlike iOS, where the root screen is
+the system document browser — so it carries the same tokens as `tray/webext`
+rather than framework defaults. Palette, radii and the button variants come
+straight from `tray/webext/src/ui.css`, including its dark set: `values/` and
+`values-night/` define the same colour names twice and the `-night` resource
+qualifier switches them, so **dark mode needs no library and no runtime branch**.
+
+It stays dependency-free, and that is now true rather than an excuse. An earlier
+version of this file justified framework defaults with "every dependency this
+screen does not have is one that cannot drift out of step with the WebView
+work" — an argument about dependency risk in the part of the app where risk
+actually lives, misapplied to the cosmetic part.
+
+Material Components was measured rather than argued about: **+1.26 MB**, taking
+a 616 KB app to 1.83 MB. The largest single line was `resources.arsc` growing
+24× (26 KB → 619 KB), because applying an M3 theme references the library's
+whole style and attribute graph and resource shrinking cannot prove any of it
+unused — styles and attrs resolve by name at runtime. For an app whose logic is
+136 KB of dex that is roughly 7× the app to style one screen. It would be the
+right call for a bigger app, and if tray grows settings or onboarding screens it
+becomes one; today it is not.
+
+What that costs: pressed/focus states, minimum touch targets and the dark
+palette are hand-rolled here rather than inherited. `<ripple>` drawables and an
+explicit `48dp` minimum cover the first two.
+
 ### State: the document cycle works, on an emulator only
 
 Verified end to end on a Pixel 7 / Android 16 emulator, driven through the real

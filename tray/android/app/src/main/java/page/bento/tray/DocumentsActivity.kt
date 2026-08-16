@@ -309,10 +309,10 @@ class DocumentsActivity : Activity() {
 
     private fun buildUi(): View {
         val dp = { v: Int -> (v * resources.displayMetrics.density).toInt() }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#F0EBE0"))
-        }
+        // No setBackgroundColor here: Theme.Tray's windowBackground is the
+        // ground, and it follows the system theme. A view that paints its own
+        // is a view that cannot.
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         // Insets by hand. `fitsSystemWindows = true` REPLACES a view's padding
         // rather than adding to it — the screen lost its side margin that way —
@@ -339,13 +339,12 @@ class DocumentsActivity : Activity() {
             text = getString(R.string.app_name)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#16273E"))
+            setTextColor(getColor(R.color.ink))
         })
 
-        search = EditText(this).apply {
+        search = EditText(this, null, 0, R.style.Field).apply {
             hint = getString(R.string.search_hint)
             setSingleLine()
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).also { it.topMargin = dp(10) }
@@ -359,8 +358,8 @@ class DocumentsActivity : Activity() {
 
         status = TextView(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(Color.parseColor("#5E7699"))
-            setPadding(0, dp(6), 0, dp(10))
+            setTextColor(getColor(R.color.dim))
+            setPadding(dp(2), dp(8), dp(2), dp(12))
         }
         root.addView(status)
 
@@ -371,17 +370,20 @@ class DocumentsActivity : Activity() {
             ).also { it.bottomMargin = dp(10) }
         }
         val third = { LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f) }
-        buttons.addView(Button(this).apply {
+        // Styled through R.style.Btn rather than themed, because this screen
+        // builds its views in code — the 4-arg View constructor applies a style
+        // exactly as an XML layout would, with no library involved.
+        buttons.addView(Button(this, null, 0, R.style.Btn_Primary).apply {
             text = getString(R.string.open_document)
-            layoutParams = third().also { it.rightMargin = dp(6) }
+            layoutParams = third().also { it.rightMargin = dp(8) }
             setOnClickListener { openDocument() }
         })
-        buttons.addView(Button(this).apply {
+        buttons.addView(Button(this, null, 0, R.style.Btn).apply {
             text = getString(R.string.new_document)
-            layoutParams = third().also { it.rightMargin = dp(6) }
+            layoutParams = third().also { it.rightMargin = dp(8) }
             setOnClickListener { newDocument() }
         })
-        buttons.addView(Button(this).apply {
+        buttons.addView(Button(this, null, 0, R.style.Btn).apply {
             text = getString(R.string.folders)
             layoutParams = third()
             setOnClickListener { manageFolders() }
@@ -389,7 +391,7 @@ class DocumentsActivity : Activity() {
         root.addView(buttons)
 
         empty = TextView(this).apply {
-            setTextColor(Color.parseColor("#5E7699"))
+            setTextColor(getColor(R.color.dim))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(40), dp(8), dp(8))
@@ -429,12 +431,15 @@ class DocumentsActivity : Activity() {
             val row = (convert as? LinearLayout) ?: LinearLayout(this@DocumentsActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(10), dp(10), dp(10), dp(10))
+                setPadding(dp(10), dp(12), dp(10), dp(12))
+                background = getDrawable(R.drawable.bg_row)
                 addView(ImageView(context).apply {
                     id = 3
                     layoutParams = LinearLayout.LayoutParams(dp(64), dp(36))
-                        .also { it.rightMargin = dp(12) }
+                        .also { it.rightMargin = dp(14) }
                     scaleType = ImageView.ScaleType.FIT_CENTER
+                    background = context.getDrawable(R.drawable.bg_thumb)
+                    clipToOutline = true
                 })
                 addView(LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
@@ -443,12 +448,12 @@ class DocumentsActivity : Activity() {
                     addView(TextView(context).apply {
                         id = 1
                         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                        setTextColor(Color.parseColor("#16273E"))
+                        setTextColor(context.getColor(R.color.ink))
                     })
                     addView(TextView(context).apply {
                         id = 2
                         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                        setTextColor(Color.parseColor("#5E7699"))
+                        setTextColor(context.getColor(R.color.dim))
                     })
                 })
             }
@@ -465,13 +470,10 @@ class DocumentsActivity : Activity() {
             val key = "${r.uri}|${r.modified}"
             thumb.tag = key
             thumb.setImageBitmap(null)
-            thumb.setBackgroundColor(Color.parseColor("#E4DED1"))
+            thumb.background = getDrawable(R.drawable.bg_thumb)
             if (r.hasPreview) {
                 Thumbnails.request(this@DocumentsActivity, r.uri, r.modified) { bmp ->
-                    if (bmp != null && thumb.tag == key) {
-                        thumb.setBackgroundColor(Color.TRANSPARENT)
-                        thumb.setImageBitmap(bmp)
-                    }
+                    if (bmp != null && thumb.tag == key) thumb.setImageBitmap(bmp)
                 }
             }
             return row

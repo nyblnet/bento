@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Identical to the light theme except for its PARENT and the status-bar
+      flag. Everything else resolves through @color/*, which values-night has
+      already redefined — so the two files stay in step by construction rather
+      than by remembering to edit both.
+    -->
+    <style name="Theme.Tray" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/dim</item>
+        <item name="android:textColorHint">@color/dim</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

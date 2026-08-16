@@ -1,14 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The document owns the screen, so the app's own theme is only ever seen
-         on the documents list. Light, because the editor a deck ships is light
-         and a dark shell around it would flash on every open. -->
+    <!--
+      The LIGHT theme. values-night/themes.xml is the same styles over the dark
+      palette, and the -night resource qualifier is what switches them: no
+      AndroidX, no Material library, no runtime branch.
+
+      Android had no system dark setting before API 29, so on 26-28 this is
+      simply always the light one — which is what those devices had anyway.
+    -->
     <style name="Theme.Tray" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:colorPrimary">@color/tray_navy</item>
-        <item name="android:colorAccent">@color/tray_steel</item>
-        <item name="android:statusBarColor">@color/tray_cream</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/dim</item>
+        <item name="android:textColorHint">@color/dim</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <!-- Deprecated from API 35, where the bars are always transparent and
+             the app draws behind them; harmless there and correct before it. -->
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">@color/tray_cream</item>
-        <item name="android:windowBackground">@color/tray_cream</item>
+    </style>
+
+    <!--
+      Buttons are STYLED, not themed, because this screen builds its views in
+      code — `Button(context, null, 0, R.style.Btn)` applies these the same way
+      an XML layout would.
+
+      textAllCaps is off deliberately: the framework default shouts
+      "OPEN… NEW FOLDERS", which no other Bento surface does.
+    -->
+    <style name="Btn">
+        <item name="android:background">@drawable/bg_button_ghost</item>
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <style name="Btn.Primary">
+        <item name="android:background">@drawable/bg_button_primary</item>
+        <item name="android:textColor">@color/on_accent</item>
+    </style>
+
+    <style name="Field">
+        <item name="android:background">@drawable/bg_field</item>
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:textColorHint">@color/dim</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:inputType">text</item>
+        <item name="android:imeOptions">actionSearch</item>
+        <item name="android:maxLines">1</item>
     </style>
 </resources>
