@@ -1,0 +1,4 @@
+{
+  "payload": "{\"app\":\"bento-slides\",\"version\":\"1.0.11\",\"sha256\":\"743dc96d7ad9a4f922303b828fb507b6a4288f04dac9bb4970513030ed4fa3e2\",\"url\":\"https://bento.page/releases/slides/Bento_Slides.bento.html\",\"notes\":\"• LaTeX maths in any text box, rendered as MathML.\\n• Symbol-level formula morphing.\\n• Twenty-one installable language packs, each hash-signed.\\n• The editor is usable at 402px — the topbar folds instead of overflowing.\\n• Decks carry a page-one preview, so Finder and Files thumbnail them properly.\\n…and 13 more\",\"at\":\"2026-07-27T08:02:28.068Z\"}",
+  "sig": "RGzjLPIMFQN/kvG6n9Xmi8NuKtHL/9ukooCdvmE4ABkC+w/0l+9lf8GOeNWGg6E0IEmsYiq5bdftD7Lwent4SQ=="
+}

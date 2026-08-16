@@ -647,6 +647,16 @@ jobs:
         # invert the deck) and the light palette forking from spaces and type.
         run: node scripts/test-slides-theme.mjs
 
+      - name: Brand palette rig
+        # themeRefs record where a colour came from so a deck can be re-branded.
+        # Three properties must hold or the feature is a liability: the
+        # derivation must be IDEMPOTENT (it runs on the doc event — one that
+        # never settles is a hang, not a wrong colour), stripping the new fields
+        # must leave every rendered value identical (every shipped shell reads
+        # the literals and always will), and an unresolvable reference must
+        # change nothing rather than writing undefined.
+        run: node scripts/test-theme.ts
+
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is
         # 1280x720, so they used to hang 200px off the right edge of a default

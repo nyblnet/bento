@@ -237,5 +237,35 @@ ok(secretsFound(clean).length === 0, 'a deck that was never shared is not report
 ok(validateDoc(withCollab({ room: 'r1', key: 'k', ownerPriv: 'X' }), { measure: false }).ok,
   'carrying your own room keys is never an error — it is how a working file works')
 
+// ------------------------------------------------- brand palette references
+// Both failures are silent: an unresolvable ref simply never updates, and a
+// literal that disagrees with its ref is about to be overwritten by the next
+// palette edit, which reads as the app changing a colour by itself.
+const refDoc = (refs: Record<string, string>, fill = '#F7A600'): BentoDoc => ({
+  ...clean,
+  slides: [{
+    id: 's1', name: 'one', background: '#FFF', transition: 'fade', notes: '', elements: [
+      { id: 'sh', type: 'shape', shape: 'rect', x: 96, y: 96, w: 100, h: 100, rotation: 0,
+        opacity: 1, fill, stroke: 'none', strokeWidth: 0, radius: 0, themeRefs: refs } as any,
+    ],
+  }],
+} as any)
+const refCodes = (d: BentoDoc) => new Set(validateDoc(d, { measure: false }).findings.map((f) => f.code))
+ok(refCodes(refDoc({ fill: 'accent1' })).size === 0,
+  'a correct palette reference is silent')
+ok(refCodes(refDoc({ fill: 'ghost' })).has('theme-ref-malformed'),
+  'a reference naming something that is not a slot is reported as malformed')
+// hlink/folHlink are the only slots that can genuinely be empty — every other
+// one falls back in paletteOf, deliberately, so a reference never dangles just
+// because nobody opened the theme editor.
+ok(refCodes(refDoc({ fill: 'hlink' })).has('theme-ref-unknown-slot'),
+  'a reference to a slot with no value set is reported')
+ok(refCodes(refDoc({ fill: 'accent1 nonsense' })).has('theme-ref-malformed'),
+  'a malformed reference token is reported')
+ok(refCodes(refDoc({ 'shadow.color': 'accent1' })).has('theme-ref-dangling'),
+  'a reference with no colour to control is reported')
+ok(refCodes(refDoc({ fill: 'accent1' }, '#123456')).has('theme-ref-stale'),
+  'a literal that disagrees with its reference is reported before the palette overwrites it')
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

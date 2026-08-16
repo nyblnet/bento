@@ -752,4 +752,7 @@ export const fr: Catalog = {
   "The bento/tray app can keep your files on this device.": "L'application bento/tray peut conserver vos fichiers sur cet appareil.",
   "This browser cannot reopen a file in place — Chrome or Edge can.": "Ce navigateur ne peut pas réécrire un fichier sur place — Chrome ou Edge le peuvent.",
   "Keep the file somewhere you can find it again.": "Conservez le fichier à un endroit où vous le retrouverez.",
+  "Theme": "Thème",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "Couleurs de marque pour tout le diaporama. Tout élément utilisant une couleur du thème suit vos modifications ici.",
+  "Accent {n}": "Accent {n}",
 }

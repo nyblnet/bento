@@ -752,4 +752,7 @@ export const ja: Catalog = {
   "The bento/tray app can keep your files on this device.": "bento/tray アプリはこの端末にファイルを保存できます。",
   "This browser cannot reopen a file in place — Chrome or Edge can.": "このブラウザーはファイルを直接上書きできません — Chrome または Edge なら可能です。",
   "Keep the file somewhere you can find it again.": "ファイルは後で見つけられる場所に保存しておいてください。",
+  "Theme": "テーマ",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "デッキ全体のブランドカラー。テーマカラーを使用している要素は、ここでの変更に追従します。",
+  "Accent {n}": "アクセント {n}",
 }

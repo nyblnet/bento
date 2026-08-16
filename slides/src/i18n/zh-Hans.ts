@@ -752,4 +752,7 @@ export const zhHans: Catalog = {
   "The bento/tray app can keep your files on this device.": "bento/tray 应用可以把文件保存在此设备上。",
   "This browser cannot reopen a file in place — Chrome or Edge can.": "此浏览器无法就地重写文件 — Chrome 或 Edge 可以。",
   "Keep the file somewhere you can find it again.": "把文件保存在你以后能找到的位置。",
+  "Theme": "主题",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "整份文稿的品牌配色。使用主题颜色的元素会随此处的更改而更新。",
+  "Accent {n}": "强调色 {n}",
 }
