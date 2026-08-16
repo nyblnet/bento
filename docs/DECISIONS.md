@@ -998,10 +998,13 @@ Two things the corpus caught that reasoning had not:
   search across one silently fails. The class is written out in full;
   `whitespace.html` catches it, verified by mutation.
 
-Also settled while building it: **no thumbnails in the native list.** The preview
-block is HTML, so rendering it means a WebView per row — the same cost this
-entry rejected. It is stored in the index anyway, since it falls out of a read
-that already happened, so thumbnails can be added later without a rescan.
+**Thumbnails are in, and the reasoning that nearly excluded them was wrong.**
+"the preview is HTML, so a native list needs a WebView per row" conflated two
+different things: a WebView per scrolling row (the design this entry rejects) and
+ONE offscreen WebView at index time producing cached bitmaps (which costs nothing
+at launch and leaves the list plain `ImageView`s). The second is the obvious
+design and it was talked past. Details and the three ways an offscreen render
+silently produces the wrong picture: `tray/README.md` § Document search.
 
 Parity table: `tray/README.md` § Android.
 

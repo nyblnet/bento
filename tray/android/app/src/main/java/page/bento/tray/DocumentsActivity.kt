@@ -23,6 +23,7 @@ import android.view.WindowInsets
 import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
@@ -64,14 +65,24 @@ class DocumentsActivity : Activity() {
      *  any granted folder and would otherwise vanish from a library-only list —
      *  so recents that the library does not already know about are folded in. */
     private class Row(
-        val uri: Uri, val label: String, val sub: String, val encrypted: Boolean, val app: String?,
+        val uri: Uri, val label: String, val sub: String, val encrypted: Boolean,
+        val app: String?, val modified: Long, val hasPreview: Boolean,
     )
 
     private var rows: List<Row> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(buildUi())
+        // The thumbnail renderer needs a real window, so it gets a host added
+        // FIRST — behind the content, which therefore takes every touch.
+        val stack = android.widget.FrameLayout(this)
+        val renderHost = android.widget.FrameLayout(this)
+        stack.addView(renderHost, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        stack.addView(buildUi(), ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        setContentView(stack)
+        Thumbnails.attach(renderHost)
     }
 
     override fun onResume() {
@@ -94,13 +105,16 @@ class DocumentsActivity : Activity() {
         for (d in Library.search(this, q)) {
             known += d.uri.toString()
             val where = if (d.folder.isBlank()) "" else " · ${d.folder}"
-            out += Row(d.uri, d.label, describeApp(d.app) + where, d.encrypted, d.app)
+            out += Row(d.uri, d.label, describeApp(d.app) + where, d.encrypted, d.app,
+                d.modified, d.hasPreview)
         }
         for (e in Recents.prune(this)) {
             if (e.uri.toString() in known) continue
             if (q.isNotEmpty() && !e.name.contains(q, ignoreCase = true)) continue
             val ago = DateUtils.getRelativeTimeSpanString(e.openedAt, System.currentTimeMillis(), 0)
-            out += Row(e.uri, e.name, "opened $ago", false, null)
+            // A recent that the library does not know about has no index row and
+            // therefore no preview — it was opened one-off, not through a folder.
+            out += Row(e.uri, e.name, "opened $ago", false, null, e.openedAt, false)
         }
 
         rows = out
@@ -377,17 +391,29 @@ class DocumentsActivity : Activity() {
         override fun getView(i: Int, convert: View?, parent: ViewGroup): View {
             val dp = { v: Int -> (v * resources.displayMetrics.density).toInt() }
             val row = (convert as? LinearLayout) ?: LinearLayout(this@DocumentsActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(12), dp(12), dp(12))
-                addView(TextView(context).apply {
-                    id = 1
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                    setTextColor(Color.parseColor("#16273E"))
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                addView(ImageView(context).apply {
+                    id = 3
+                    layoutParams = LinearLayout.LayoutParams(dp(64), dp(36))
+                        .also { it.rightMargin = dp(12) }
+                    scaleType = ImageView.ScaleType.FIT_CENTER
                 })
-                addView(TextView(context).apply {
-                    id = 2
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                    setTextColor(Color.parseColor("#5E7699"))
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    addView(TextView(context).apply {
+                        id = 1
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                        setTextColor(Color.parseColor("#16273E"))
+                    })
+                    addView(TextView(context).apply {
+                        id = 2
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                        setTextColor(Color.parseColor("#5E7699"))
+                    })
                 })
             }
             val r = rows[i]
@@ -395,6 +421,23 @@ class DocumentsActivity : Activity() {
             // carries no title page, so a missing one is a signal, not a failure.
             row.findViewById<TextView>(1).text = if (r.encrypted) "🔒 ${r.label}" else r.label
             row.findViewById<TextView>(2).text = r.sub
+
+            val thumb = row.findViewById<ImageView>(3)
+            // The KEY, not the position: ListView recycles views, so a thumbnail
+            // that finishes after its row scrolled away would otherwise be drawn
+            // onto whatever document now occupies that view.
+            val key = "${r.uri}|${r.modified}"
+            thumb.tag = key
+            thumb.setImageBitmap(null)
+            thumb.setBackgroundColor(Color.parseColor("#E4DED1"))
+            if (r.hasPreview) {
+                Thumbnails.request(this@DocumentsActivity, r.uri, r.modified) { bmp ->
+                    if (bmp != null && thumb.tag == key) {
+                        thumb.setBackgroundColor(Color.TRANSPARENT)
+                        thumb.setImageBitmap(bmp)
+                    }
+                }
+            }
             return row
         }
     }

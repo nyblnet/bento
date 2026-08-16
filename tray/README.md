@@ -656,10 +656,38 @@ always had and what neither native host did.
 - `MAX_FILES` (5000) bounds a scan, and hitting it is **reported**: a library
   that quietly stops at N is a library that lies about what it holds.
 
-**No thumbnails yet, deliberately.** The preview block is HTML, so showing it in
-a native list means a WebView per row — which is the cost the whole decision
-avoided. It is stored in the index anyway, because it comes out of a read that
-already happened, so thumbnails can be added later without a rescan.
+**Thumbnails**, rendered once and cached. The other two hosts get these free and
+differently: iOS renders nothing at all — `UIDocumentBrowserViewController` asks
+the SYSTEM to thumbnail the file, and the iOS thumbnailer draws the
+`[data-bento-preview]` block because it runs no JavaScript, which is exactly what
+that block exists for. `tray/webext` sets `iframe.srcdoc`. Android has neither a
+system HTML thumbnailer nor a browser for a list, so it renders the block itself:
+**one offscreen WebView, at index time**, into a bitmap cached in `cacheDir`
+(which Android empties under storage pressure — right for something
+reconstructible). The list stays plain `ImageView`s, so nothing here touches cold
+start or accessibility.
+
+Three traps, all of which produced a *plausible-looking wrong picture* rather
+than an error, and all worth knowing before touching `Thumbnails.kt`:
+
+1. **A detached WebView draws the wrong thing, not nothing.** `measure`/`layout`
+   on a view with no window never reaches the renderer, so the CSS viewport stays
+   at WebView's default. It must be attached.
+2. **The viewport has to be the capture box.** The preview's outer element is
+   `position:fixed; width:100%; height:100%` — it covers the VIEWPORT by design,
+   since a thumbnailer injects it into a real document. `width=device-width`
+   means the SCREEN, not the view, so the block rendered far wider than the box
+   and the capture was a magnified crop of its corner. `width=1280` — the width
+   decks are authored at — plus `loadWithOverviewMode` scales the whole slide to
+   fit, with no density arithmetic.
+3. **WebView lays out in DP; the capture is in PIXELS.** Ignoring that renders
+   everything `density` times too large and captures a crop — on a 2.75× device
+   the slide's title filled the frame with three letters of it. The render box is
+   sized in DP and the bitmap is downscaled after, which also gives crisper text
+   than rendering at final size.
+
+Because the preview is already stored in the index, adding this needed **no
+rescan** — existing rows thumbnailed on the spot.
 
 ### State: the document cycle works, on an emulator only
 

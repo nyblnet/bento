@@ -44,7 +44,7 @@ object Library {
 
     data class Doc(
         val uri: Uri, val name: String, val folder: String, val title: String?,
-        val app: String?, val encrypted: Boolean, val modified: Long, val preview: String?,
+        val app: String?, val encrypted: Boolean, val modified: Long, val hasPreview: Boolean,
     ) {
         /** What to show: the document's own title when it has one. Documents are
          *  called `Q3-board.bento.html`; the document knows it is "Q3 Board
@@ -279,7 +279,8 @@ object Library {
         }
         val out = ArrayList<Doc>()
         db(c).readableDatabase.rawQuery(
-            """SELECT uri, name, folder, title, app, encrypted, modified, preview
+            """SELECT uri, name, folder, title, app, encrypted, modified,
+                        preview IS NOT NULL AND preview != ''
                  FROM docs $where ORDER BY modified DESC LIMIT $limit""", args
         ).use {
             while (it.moveToNext()) {
@@ -287,12 +288,25 @@ object Library {
                     uri = Uri.parse(it.getString(0)), name = it.getString(1),
                     folder = it.getString(2), title = it.getString(3), app = it.getString(4),
                     encrypted = it.getInt(5) == 1, modified = it.getLong(6),
-                    preview = it.getString(7),
+                    hasPreview = it.getInt(7) == 1,
                 )
             }
         }
         return out
     }
+
+    /**
+     * One document's stored preview, fetched only when something is about to
+     * draw it.
+     *
+     * Deliberately NOT part of [search]: a preview block runs to tens of
+     * kilobytes, so selecting it for every row of a 300-document list would pull
+     * megabytes of markup into memory to show a handful of pictures.
+     */
+    fun previewFor(c: Context, uri: Uri): String? =
+        db(c).readableDatabase.rawQuery(
+            "SELECT preview FROM docs WHERE uri = ?", arrayOf(uri.toString())
+        ).use { if (it.moveToFirst()) it.getString(0) else null }
 
     fun count(c: Context): Int =
         db(c).readableDatabase.rawQuery("SELECT COUNT(*) FROM docs", null).use {
