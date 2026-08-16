@@ -5,6 +5,8 @@ package page.bento.tray
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.UiModeManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -26,7 +28,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ListView
+import android.widget.GridView
+import android.widget.Toast
 import android.widget.TextView
 
 /**
@@ -56,7 +59,15 @@ class DocumentsActivity : Activity() {
         private const val REQ_FOLDER = 3
     }
 
-    private lateinit var list: ListView
+    private lateinit var list: GridView
+
+    /** Grid or list, and the theme override — both VIEWER preferences, kept on
+     *  the device and never in a document. Same shape as the runtime's own
+     *  locale and reduce-motion settings, which default to the OS and allow an
+     *  override without the choice ever entering the file. */
+    private val prefs by lazy { getSharedPreferences("ui", Context.MODE_PRIVATE) }
+    private var gridMode = true
+    private lateinit var viewToggle: TextView
     private lateinit var empty: TextView
     private lateinit var search: EditText
     private lateinit var status: TextView
@@ -73,6 +84,8 @@ class DocumentsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        gridMode = prefs.getString("view", "grid") == "grid"
+        applyNightMode(prefs.getString("night", "system")!!)
         // The thumbnail renderer needs a real window, so it gets a host added
         // FIRST — behind the content, which therefore takes every touch.
         val stack = android.widget.FrameLayout(this)
@@ -300,6 +313,53 @@ class DocumentsActivity : Activity() {
     private fun notify(message: String) = AlertDialog.Builder(this)
         .setMessage(message).setPositiveButton(android.R.string.ok, null).show()
 
+    /** Grid or list. Rebuilds the adapter rather than reusing it: the two modes
+     *  produce different view shapes, and GridView recycles by position with no
+     *  notion of a view type, so a reused card would be re-fed as a row. */
+    private fun applyViewMode() {
+        list.numColumns = if (gridMode) 2 else 1
+        viewToggle.text = if (gridMode) "☰" else "▦"
+        viewToggle.contentDescription =
+            getString(if (gridMode) R.string.view_as_list else R.string.view_as_grid)
+        list.adapter = RowAdapter()
+    }
+
+    /**
+     * The theme override, defaulting to the system.
+     *
+     * Deliberately API 31+ only. `setApplicationNightMode` is the sole way to
+     * override the system theme per-app without AndroidX, so below it the app
+     * follows the system and the control is not offered at all — a button that
+     * silently does nothing is worse than no button.
+     */
+    private fun applyNightMode(mode: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        getSystemService(UiModeManager::class.java)?.setApplicationNightMode(
+            when (mode) {
+                "light" -> UiModeManager.MODE_NIGHT_NO
+                "dark" -> UiModeManager.MODE_NIGHT_YES
+                else -> UiModeManager.MODE_NIGHT_AUTO
+            }
+        )
+    }
+
+    private fun cycleNightMode() {
+        val next = when (prefs.getString("night", "system")) {
+            "system" -> "light"
+            "light" -> "dark"
+            else -> "system"
+        }
+        prefs.edit().putString("night", next).apply()
+        // Named, because "system" and "light" look identical on a device that is
+        // already light — the screen alone cannot tell you which you picked.
+        Toast.makeText(this, getString(when (next) {
+            "light" -> R.string.theme_light
+            "dark" -> R.string.theme_dark
+            else -> R.string.theme_system
+        }), Toast.LENGTH_SHORT).show()
+        applyNightMode(next)
+    }
+
     // ------------------------------------------------- a plain UI, in code
     //
     // No layout XML and no AndroidX UI libraries: a title, three buttons, a
@@ -335,12 +395,46 @@ class DocumentsActivity : Activity() {
             insets
         }
 
-        root.addView(TextView(this).apply {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_tray_mark)
+            layoutParams = LinearLayout.LayoutParams(dp(30), dp(30))
+                .also { it.rightMargin = dp(10) }
+            contentDescription = null   // decorative; the title beside it says the name
+        })
+        header.addView(TextView(this).apply {
             text = getString(R.string.app_name)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 23f)
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(getColor(R.color.ink))
+            // -.015em on headings, from tray/webext/src/ui.css. Android's
+            // letterSpacing is already in ems, so the number transfers directly.
+            letterSpacing = -0.015f
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
+        viewToggle = TextView(this, null, 0, R.style.IconBtn).apply {
+            setOnClickListener {
+                gridMode = !gridMode
+                prefs.edit().putString("view", if (gridMode) "grid" else "list").apply()
+                applyViewMode()
+            }
+        }
+        header.addView(viewToggle)
+        // Only offered where it can be honoured: setApplicationNightMode is API
+        // 31+, and without AndroidX there is no way to override the system
+        // theme below it. A control that silently does nothing is worse than no
+        // control, so older devices simply follow the system.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            header.addView(TextView(this, null, 0, R.style.IconBtn).apply {
+                text = "◐"
+                contentDescription = getString(R.string.theme_toggle)
+                setOnClickListener { cycleNightMode() }
+            })
+        }
+        root.addView(header)
 
         search = EditText(this, null, 0, R.style.Field).apply {
             hint = getString(R.string.search_hint)
@@ -399,9 +493,10 @@ class DocumentsActivity : Activity() {
         }
         root.addView(empty)
 
-        list = ListView(this).apply {
-            divider = null
+        list = GridView(this).apply {
             adapter = RowAdapter()
+            horizontalSpacing = dp(10)
+            verticalSpacing = dp(10)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
             setOnItemClickListener { _, _, i, _ -> open(rows[i].uri) }
             setOnItemLongClickListener { _, _, i, _ ->
@@ -418,6 +513,7 @@ class DocumentsActivity : Activity() {
             }
         }
         root.addView(list)
+        applyViewMode()
         return root
     }
 
@@ -427,46 +523,16 @@ class DocumentsActivity : Activity() {
         override fun getItemId(i: Int) = i.toLong()
 
         override fun getView(i: Int, convert: View?, parent: ViewGroup): View {
-            val dp = { v: Int -> (v * resources.displayMetrics.density).toInt() }
-            val row = (convert as? LinearLayout) ?: LinearLayout(this@DocumentsActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(10), dp(12), dp(10), dp(12))
-                background = getDrawable(R.drawable.bg_row)
-                addView(ImageView(context).apply {
-                    id = 3
-                    layoutParams = LinearLayout.LayoutParams(dp(64), dp(36))
-                        .also { it.rightMargin = dp(14) }
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                    background = context.getDrawable(R.drawable.bg_thumb)
-                    clipToOutline = true
-                })
-                addView(LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    layoutParams = LinearLayout.LayoutParams(0,
-                        ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                    addView(TextView(context).apply {
-                        id = 1
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                        setTextColor(context.getColor(R.color.ink))
-                    })
-                    addView(TextView(context).apply {
-                        id = 2
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                        setTextColor(context.getColor(R.color.dim))
-                    })
-                })
-            }
             val r = rows[i]
-            // A lock rather than a blank: an encrypted document deliberately
-            // carries no title page, so a missing one is a signal, not a failure.
+            val row = (convert as? LinearLayout) ?: if (gridMode) buildCard() else buildRow()
+
             row.findViewById<TextView>(1).text = if (r.encrypted) "🔒 ${r.label}" else r.label
             row.findViewById<TextView>(2).text = r.sub
 
             val thumb = row.findViewById<ImageView>(3)
-            // The KEY, not the position: ListView recycles views, so a thumbnail
-            // that finishes after its row scrolled away would otherwise be drawn
-            // onto whatever document now occupies that view.
+            // The KEY, not the position: the collection recycles views, so a
+            // thumbnail that finishes after its cell scrolled away would
+            // otherwise be drawn onto whatever document now occupies it.
             val key = "${r.uri}|${r.modified}"
             thumb.tag = key
             thumb.setImageBitmap(null)
@@ -478,5 +544,81 @@ class DocumentsActivity : Activity() {
             }
             return row
         }
+
+        private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+        /** A card: the thumbnail carries the row, which is the point of having
+         *  rendered one. Matches how tray/webext presents a folder. */
+        private fun buildCard(): LinearLayout {
+            // GridView cells size to content, so the thumbnail's height is
+            // computed from the column width to hold 16:9 rather than guessed.
+            val cols = 2
+            val screen = resources.displayMetrics.widthPixels
+            val cellW = (screen - dp(40) - dp(10) * (cols - 1)) / cols - dp(16)
+            return LinearLayout(this@DocumentsActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(8), dp(8), dp(8), dp(10))
+                background = getDrawable(R.drawable.bg_row)
+                addView(ImageView(context).apply {
+                    id = 3
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, cellW * 9 / 16)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    clipToOutline = true
+                })
+                addView(TextView(context).apply {
+                    id = 1
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setTextColor(context.getColor(R.color.ink))
+                    typeface = emphasis()
+                    maxLines = 2
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(dp(2), dp(8), dp(2), 0)
+                })
+                addView(TextView(context).apply {
+                    id = 2
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(context.getColor(R.color.dim))
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(dp(2), dp(2), dp(2), 0)
+                })
+            }
+        }
+
+        private fun buildRow(): LinearLayout = LinearLayout(this@DocumentsActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(12), dp(10), dp(12))
+            background = getDrawable(R.drawable.bg_row)
+            addView(ImageView(context).apply {
+                id = 3
+                layoutParams = LinearLayout.LayoutParams(dp(64), dp(36))
+                    .also { it.rightMargin = dp(14) }
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                clipToOutline = true
+            })
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                addView(TextView(context).apply {
+                    id = 1
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    setTextColor(context.getColor(R.color.ink))
+                })
+                addView(TextView(context).apply {
+                    id = 2
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextColor(context.getColor(R.color.dim))
+                })
+            })
+        }
+
+        /** `font-weight: 600` in the extension. Real 600 exists from API 28;
+         *  below it the nearest the framework offers is bold. */
+        private fun emphasis(): Typeface =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                Typeface.create(Typeface.DEFAULT, 600, false)
+            else Typeface.DEFAULT_BOLD
     }
 }

@@ -36,4 +36,10 @@
     <string name="new_document_title">What kind of document?</string>
     <string name="err_create_fetch">The new document could not be created: %1$s</string>
     <string name="err_offline">the release server could not be reached, and nothing is cached yet</string>
+    <string name="view_as_grid">Show as grid</string>
+    <string name="view_as_list">Show as list</string>
+    <string name="theme_toggle">Change theme</string>
+    <string name="theme_system">Theme: follow the system</string>
+    <string name="theme_light">Theme: light</string>
+    <string name="theme_dark">Theme: dark</string>
 </resources>

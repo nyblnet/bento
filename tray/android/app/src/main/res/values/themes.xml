@@ -59,4 +59,18 @@
         <item name="android:imeOptions">actionSearch</item>
         <item name="android:maxLines">1</item>
     </style>
+
+    <!-- The two header toggles. Text glyphs rather than icon assets: they are
+         one character each, they inherit the theme's ink colour for free, and
+         they scale with the user's font size, which a drawable would not. -->
+    <style name="IconBtn">
+        <item name="android:background">@drawable/bg_row</item>
+        <item name="android:textColor">@color/dim</item>
+        <item name="android:textSize">19sp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:minWidth">@dimen/touch_min</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
 </resources>

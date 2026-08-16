@@ -48,9 +48,9 @@ const roundRect = (x, y, w, h, r) =>
   `H${f(x + r)} A${f(r)},${f(r)} 0 0 1 ${f(x)},${f(y + h - r)} ` +
   `V${f(y + r)} A${f(r)},${f(r)} 0 0 1 ${f(x + r)},${f(y)} Z`
 
-/** Pull the <rect>s out of the source SVG, in document order. */
-function readMark() {
-  const svg = readFileSync(join(here, 'tray-icon.svg'), 'utf8')
+/** Pull the <rect>s out of a source SVG, in document order. */
+function readMark(file = 'tray-icon.svg') {
+  const svg = readFileSync(join(here, file), 'utf8')
   const rects = [...svg.matchAll(/<rect\b([^>]*)\/>/g)].map((m) => {
     const attr = (name) => {
       const hit = m[1].match(new RegExp(`\\b${name}="([^"]*)"`))
@@ -205,7 +205,41 @@ function ios({ ground, tray, cells }) {
   return out
 }
 
+/**
+ * The mark as an in-app drawable, from tray-logo.svg — the rounded-ground
+ * version, unlike the launcher icon which is full-bleed because iOS and Android
+ * both apply their own mask.
+ *
+ * Drawn on its own 32-unit grid rather than the 108 adaptive canvas: this one is
+ * an image in a header, not an icon under a mask, so it keeps the source's own
+ * proportions and needs none of the safe-zone arithmetic.
+ */
+function buildMark() {
+  const { ground, tray, cells } = readMark('tray-logo.svg')
+  const shapes = [ground, tray, ...cells].map((r) => ({
+    fill: r.fill,
+    d: roundRect(r.x, r.y, r.w, r.h, r.r),
+  }))
+  return `<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GENERATED from tray/assets/tray-logo.svg by tray/assets/make-icons.mjs.
+  Do not edit: run \`node tray/assets/make-icons.mjs\` instead.
+
+  The bento/tray mark, for use inside the app. Same source as the launcher
+  icon, so the two cannot drift apart.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+${shapes.map((s) => `    <path\n        android:fillColor="${s.fill}"\n        android:pathData="${s.d}" />`).join('\n')}
+</vector>
+`
+}
+
 const files = build()
+files[join(ANDROID_RES, 'ic_tray_mark.xml')] = buildMark()
 const check = process.argv.includes('--check')
 let stale = 0
 

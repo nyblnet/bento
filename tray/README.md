@@ -727,6 +727,35 @@ Two traps worth keeping:
   pages — see the note below. `Accept: */*` avoids the rewrite; the hash check is
   what actually makes the bytes trustworthy, and stays regardless.
 
+### Grid or list, and a theme you can override
+
+The documents screen offers both, with the choice remembered. **Grid is the
+default**, matching `tray/webext`, whose home screen has always been a grid of
+thumbnail cards — and it is what makes rendering thumbnails worth the trouble.
+iOS gets the same choice free from the system document browser.
+
+The **theme override** is offered only on API 31+, where
+`UiModeManager.setApplicationNightMode` exists; below it there is no way to
+override the system theme without AndroidX, so the control is not shown at all.
+A button that silently does nothing is worse than no button. Both this and the
+view mode are VIEWER preferences kept on the device — the same shape as the
+runtime's own locale and reduce-motion settings, which default to the OS and
+never enter a document.
+
+### Typography and the mark
+
+The system font, deliberately, because that is what `slides` and `tray/webext`
+both use (`-apple-system, …, Roboto, …`) — on Android the system font IS Roboto,
+so the chrome already matches the apps. The brand faces (`Fraunces`,
+`Instrument Sans`) belong to the marketing site, not to app chrome, and
+bundling them would cost a few hundred KB on a 122 KB app.
+
+What did transfer: the extension's `-.015em` heading tracking (Android's
+`letterSpacing` is already in ems, so the number moves across unchanged) and its
+`font-weight: 600` emphasis — real 600 from API 28, bold below it. The **mark**
+in the header is generated from `tray/assets/tray-logo.svg` by the same script
+as the launcher icon, so the two cannot drift.
+
 ### The look is themed, with no UI dependency
 
 The documents screen is ours to design — unlike iOS, where the root screen is
