@@ -20,6 +20,9 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.text.Editable
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.text.TextWatcher
 import android.text.format.DateUtils
 import android.util.Log
@@ -147,13 +150,13 @@ class DocumentsActivity : AppCompatActivity() {
         val out = ArrayList<Row>()
 
         for (d in Library.search(this, q)) {
-            known += d.uri.toString()
+            known += identity(d.uri)
             val where = if (d.folder.isBlank()) "" else " · ${d.folder}"
             out += Row(d.uri, d.label, describeApp(d.app) + where, d.encrypted, d.app,
                 d.modified, d.hasPreview)
         }
         for (e in Recents.prune(this)) {
-            if (e.uri.toString() in known) continue
+            if (identity(e.uri) in known) continue
             if (q.isNotEmpty() && !e.name.contains(q, ignoreCase = true)) continue
             val ago = DateUtils.getRelativeTimeSpanString(e.openedAt, System.currentTimeMillis(), 0)
             // A recent that the library does not know about has no index row and
@@ -177,6 +180,49 @@ class DocumentsActivity : AppCompatActivity() {
         }
         empty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
         list.visibility = if (rows.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    /**
+     * The wordmark, written the way every other Bento surface writes it.
+     *
+     * `bento` + a PEACH slash + the app: lowercase, one weight, the slash the
+     * only thing carrying colour. `tray/webext` does it as
+     * `<b>bento<i>/</i>tray</b>` and the slides editor as
+     * `bento<span style="color:#FF9E8A">/</span>slides`; this is the same mark
+     * in a SpannableString.
+     *
+     * The peach is LITERAL and stays out of the theme's colour roles on purpose:
+     * dynamic colour rewrites the chrome from the user's wallpaper, and a
+     * wordmark that changes colour with the wallpaper is not a wordmark. It is
+     * the same reasoning that keeps the launcher icon's palette fixed.
+     */
+    private fun wordmark(): CharSequence {
+        val text = "bento/tray"
+        val slash = text.indexOf('/')
+        return SpannableString(text).apply {
+            setSpan(ForegroundColorSpan(getColor(R.color.tray_peach)),
+                slash, slash + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    /**
+     * What makes two URIs the same document.
+     *
+     * NOT the URI string. The same file reached two ways has two different
+     * URIs: a document picked with ACTION_CREATE_DOCUMENT comes back as
+     * `…/document/primary%3ADocuments%2FDecks%2FQ3.bento.html`, while the same
+     * file found by walking a granted tree is `…/tree/<tree>/document/<same id>`.
+     * Comparing the strings therefore never matched, and every document created
+     * or opened inside a granted folder appeared TWICE — once from the library
+     * and once from recents.
+     *
+     * The provider's document id is the same for both, so that is the identity.
+     * Falls back to the URI for anything that is not a document URI at all.
+     */
+    private fun identity(uri: Uri): String = try {
+        DocumentsContract.getDocumentId(uri) ?: uri.toString()
+    } catch (_: Exception) {
+        uri.toString()
     }
 
     private fun describeApp(app: String?) = when (app) {
@@ -350,9 +396,15 @@ class DocumentsActivity : AppCompatActivity() {
     /** How many columns fit. A phone gets 2, a tablet 4 or 5 — a fixed 2 on a
      *  10" screen wastes most of it, which is the commonest way an Android app
      *  signals it was only ever designed for a phone. */
-    private fun columns(): Int =
-        if (!gridMode) 1
-        else (resources.configuration.screenWidthDp / (if (isWide) 210 else 180)).coerceIn(2, 6)
+    private fun columns(): Int {
+        if (!gridMode) return 1
+        // The grid's share of the window, not the window. With a detail pane the
+        // grid is 1.6 of 2.6, so counting against the full width gave six
+        // columns in a space that comfortably holds four — and the cards came
+        // out too narrow to read their own subtitles.
+        val usable = resources.configuration.screenWidthDp * (if (isWide) 1.6f / 2.6f else 1f)
+        return (usable / 190).toInt().coerceIn(2, 6)
+    }
 
     private fun applyViewMode() {
         list.numColumns = columns()
@@ -456,18 +508,19 @@ class DocumentsActivity : AppCompatActivity() {
         }
         header.addView(ImageView(this).apply {
             setImageResource(R.drawable.ic_tray_mark)
-            layoutParams = LinearLayout.LayoutParams(dp(30), dp(30))
-                .also { it.rightMargin = dp(10) }
-            contentDescription = null   // decorative; the title beside it says the name
+            // 24dp with a 9dp gap, matching the extension's `.brand`.
+            layoutParams = LinearLayout.LayoutParams(dp(26), dp(26))
+                .also { it.rightMargin = dp(9) }
+            contentDescription = null   // decorative; the wordmark beside it says the name
         })
         header.addView(TextView(this).apply {
-            text = getString(R.string.app_name)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 23f)
+            text = wordmark()
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(inkColor)
-            // -.015em on headings, from tray/webext/src/ui.css. Android's
-            // letterSpacing is already in ems, so the number transfers directly.
-            letterSpacing = -0.015f
+            // -.01em on the wordmark, from `.brand b`. Android's letterSpacing
+            // is already in ems, so the number transfers unchanged.
+            letterSpacing = -0.01f
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
         viewToggle = TextView(this, null, 0, R.style.IconBtn).apply {
@@ -708,7 +761,7 @@ class DocumentsActivity : AppCompatActivity() {
 
         override fun getView(i: Int, convert: View?, parent: ViewGroup): View {
             val r = rows[i]
-            val row = (convert as? LinearLayout) ?: if (gridMode) buildCard(parent) else buildRow()
+            val row = (convert as? ViewGroup) ?: if (gridMode) buildCard(parent) else buildRow()
 
             row.findViewById<TextView>(1).text = if (r.encrypted) "🔒 ${r.label}" else r.label
             row.findViewById<TextView>(2).text = r.sub
@@ -733,7 +786,7 @@ class DocumentsActivity : AppCompatActivity() {
 
         /** A card: the thumbnail carries the row, which is the point of having
          *  rendered one. Matches how tray/webext presents a folder. */
-        private fun buildCard(parent: ViewGroup): LinearLayout {
+        private fun buildCard(parent: ViewGroup): ViewGroup {
             // GridView cells size to content, so a card's thumbnail needs an
             // explicit height to hold 16:9.
             //
@@ -747,10 +800,20 @@ class DocumentsActivity : AppCompatActivity() {
             val gridW = if (parent.width > 0) parent.width.toFloat()
                         else resources.displayMetrics.widthPixels * (if (isWide) 1.6f / 2.6f else 1f)
             val cellW = (gridW / cols).toInt() - dp(10) - dp(16)
-            return LinearLayout(this@DocumentsActivity).apply {
+            // A MaterialCardView rather than a padded box: it carries M3's
+            // surface role, shape and outline, so it follows dynamic colour and
+            // the dark set without any of them being restated here.
+            return MaterialCardView(this@DocumentsActivity).apply {
+                radius = dp(12).toFloat()
+                cardElevation = 0f
+                strokeWidth = dp(1)
+                strokeColor = themed(com.google.android.material.R.attr.colorOutlineVariant)
+                setCardBackgroundColor(themed(com.google.android.material.R.attr.colorSurfaceContainerLow))
+                isClickable = true
+                isFocusable = true
+                addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(8), dp(8), dp(8), dp(10))
-                background = getDrawable(R.drawable.bg_row)
                 addView(ImageView(context).apply {
                     id = 3
                     layoutParams = LinearLayout.LayoutParams(
@@ -774,6 +837,7 @@ class DocumentsActivity : AppCompatActivity() {
                     maxLines = 1
                     ellipsize = android.text.TextUtils.TruncateAt.END
                     setPadding(dp(2), dp(2), dp(2), 0)
+                })
                 })
             }
         }
