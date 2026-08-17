@@ -10,6 +10,8 @@ import { configureApp } from '../../kernel/src/app.ts';
 import {
   capturePristine, readEmbeddedDoc, saveFile, currentFileName, canWriteInPlace,
 } from '../../kernel/src/save.ts';
+import { ICONS } from './icons.ts';
+import { openAbout } from './about.ts';
 import { startTheme, setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
 import { parseDoc, emptyDoc, uid, wordCount, type TypeDoc } from './model.ts';
 import { Store } from './store.ts';
@@ -92,44 +94,59 @@ if (parsed.ok) {
 
 const app = document.getElementById('app')!;
 app.innerHTML = `
-  <div class="t-bar">
-    <div class="t-brand">bento/<b>type</b></div>
-    <div class="t-sep"></div>
-    <button id="save" class="primary" title="Save (⌘S)">Save</button>
-    <div class="t-sep"></div>
-    <select id="kind" title="Block style">
-      <option value="para">Body</option>
-      <option value="h1">Title</option>
-      <option value="h2">Heading</option>
-      <option value="h3">Subheading</option>
-      <option value="quote">Quote</option>
-    </select>
-    <div class="t-sep"></div>
-    <button id="mb" title="Bold (⌘B)"><b>B</b></button>
-    <button id="mi" title="Italic (⌘I)"><i>I</i></button>
-    <button id="mu" title="Underline (⌘U)"><u>U</u></button>
-    <button id="mc" title="Code">&lt;/&gt;</button>
-    <div class="t-sep"></div>
-    <button id="undo" title="Undo (⌘Z)">↶</button>
-    <button id="redo" title="Redo (⇧⌘Z)">↷</button>
-    <div class="t-sep"></div>
-    <button id="theme" title="Theme: follow the system, light, or dark"></button>
-    <div class="t-sep"></div>
-    <button id="snap" title="Record a revision to compare against later">Snapshot</button>
-    <button id="review" title="Compare with the last snapshot">Review…</button>
-    <div class="t-sep"></div>
-    <button id="sign" title="Sign this revision">Sign</button>
-    <div class="t-sep"></div>
-    <button id="print" title="Print or save as PDF (⌘P)">Print…</button>
-    <div class="t-spacer"></div>
-    <div class="t-stat" id="stat"></div>
-  </div>
+  <header class="t-bar">
+    <button id="mark" class="t-mark" type="button">
+      <svg class="t-mark-svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#16273E"/>
+        <rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>
+        <rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>
+        <rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>
+      </svg><b class="t-mark-word">bento<span>/</span>type</b>
+    </button>
+    <button id="sidebar" class="t-btn" type="button"></button>
+    <input id="doctitle" class="t-doctitle" spellcheck="false">
+    <span class="t-status" id="status"></span>
+
+    <div class="t-right">
+      <select id="kind" class="t-select">
+        <option value="para">Body</option>
+        <option value="h1">Title</option>
+        <option value="h2">Heading</option>
+        <option value="h3">Subheading</option>
+        <option value="quote">Quote</option>
+      </select>
+      <div class="t-group">
+        <button id="mb" class="t-btn" type="button"></button>
+        <button id="mi" class="t-btn" type="button"></button>
+        <button id="mu" class="t-btn" type="button"></button>
+        <button id="ms" class="t-btn" type="button"></button>
+        <button id="mc" class="t-btn" type="button"></button>
+      </div>
+      <div class="t-group">
+        <button id="undo" class="t-btn" type="button"></button>
+        <button id="redo" class="t-btn" type="button"></button>
+      </div>
+      <button id="theme" class="t-btn" type="button"></button>
+      <button id="save" class="t-btn t-primary" type="button"></button>
+      <div class="t-menuwrap">
+        <button id="more" class="t-btn" type="button"></button>
+        <div class="t-menu" id="moreMenu" hidden>
+          <button id="snap" type="button"></button>
+          <button id="review" type="button"></button>
+          <button id="sign" type="button"></button>
+          <div class="t-menu-sep"></div>
+          <button id="print" type="button"></button>
+          <button id="about" type="button"></button>
+        </div>
+      </div>
+    </div>
+  </header>
   <div class="t-main">
     <div class="t-side">
       <div class="t-tabs">
-        <button data-tab="outline" class="on">Outline</button>
-        <button data-tab="review">Review</button>
-        <button data-tab="sigs">Signatures</button>
+        <button data-tab="outline" class="on"></button>
+        <button data-tab="review"></button>
+        <button data-tab="sigs"></button>
       </div>
       <div class="t-panel on" data-panel="outline"><div class="t-outline" id="outline"></div></div>
       <div class="t-panel" data-panel="review"><div id="reviewPanel"></div></div>
@@ -142,10 +159,130 @@ app.innerHTML = `
 
 const paper = document.getElementById('paper')!;
 const deco = document.getElementById('deco')!;
-const statEl = document.getElementById('stat')!;
+const statEl = document.getElementById('status')!;
 
 const store = new Store(doc);
 const editor = new Editor(paper, store);
+
+// ───────────────────────────────────────────────────── chrome: labels & icons
+//
+// Set from script rather than written into the markup so every user-visible
+// string passes through one place — which is what makes the i18n sweep a sweep
+// rather than an archaeology dig through a template literal.
+const byId = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+const label = (id: string, html: string, tip: string, text = '') => {
+  const b = byId(id);
+  b.innerHTML = html + (text ? `<span class="t-lbl">${text}</span>` : '');
+  b.title = tip;
+};
+
+label('sidebar', ICONS.panelLeft, 'Outline — show or hide the document map');
+label('mb', ICONS.bold, 'Bold (⌘B)');
+label('mi', ICONS.italic, 'Italic (⌘I)');
+label('mu', ICONS.underline, 'Underline (⌘U)');
+label('ms', ICONS.strike, 'Strikethrough');
+label('mc', ICONS.code, 'Code');
+label('undo', ICONS.undo, 'Undo (⌘Z)');
+label('redo', ICONS.redo, 'Redo (⇧⌘Z)');
+label('save', ICONS.save, 'Save (⌘S)', 'Save');
+label('more', ICONS.more, 'More — revisions, signing, print');
+label('snap', ICONS.history, '', 'Snapshot');
+label('review', ICONS.review, '', 'Review changes…');
+label('sign', ICONS.sign, '', 'Sign…');
+label('print', ICONS.print, '', 'Print or PDF…');
+label('about', ICONS.sync, '', 'About bento/type');
+byId('mark').title = 'About bento/type — version, updates, language';
+const showAbout = () => openAbout({
+  store,
+  pages: metrics.pages.length,
+  onReplaceDoc: json => {
+    try {
+      const parsed = parseDoc(json);
+      if (!parsed.ok) {
+        // `empty` carries no detail — the tagged union says so, and reading
+        // `.detail` off it would have printed "undefined" to the one person
+        // who most needs to know what went wrong.
+        alert(parsed.err === 'empty'
+          ? 'That JSON was empty.'
+          : `That is not a bento/type document: ${parsed.detail}`);
+        return;
+      }
+      store.replace(parsed.doc);
+      schedule();
+    } catch { alert('That JSON could not be read.'); }
+  },
+});
+byId('mark').addEventListener('click', showAbout);
+byId('about').addEventListener('click', showAbout);
+
+for (const [tab, text] of [['outline', 'Outline'], ['review', 'Review'], ['sigs', 'Signatures']] as const) {
+  const b = document.querySelector<HTMLElement>(`.t-tabs [data-tab="${tab}"]`);
+  if (b) b.textContent = text;
+}
+
+// The DOCUMENT TITLE, in the bar — the one thing every other app in the suite
+// puts there and this one only had buried in the page. It is what the window
+// title, the save-picker filename and `{{title}}` all read.
+const titleInput = byId<HTMLInputElement>('doctitle');
+titleInput.value = store.doc.title;
+titleInput.setAttribute('aria-label', 'Document title');
+titleInput.addEventListener('input', () => {
+  store.commit(d => { d.title = titleInput.value || 'Untitled'; }, { run: '__title' });
+});
+store.on(() => {
+  if (document.activeElement !== titleInput && titleInput.value !== store.doc.title) {
+    titleInput.value = store.doc.title;
+  }
+});
+
+/**
+ * Size the bar by MEASURING it, not by width breakpoints.
+ *
+ * The same reasoning as slides' fitTopbar, and the same tiers: start at the
+ * widest layout and step down while the bar overflows its own box. Breakpoints
+ * were wrong here for the reason they are wrong there — zoom, OS text scaling
+ * and longer translations all change how much room the same buttons need at
+ * one viewport width.
+ *
+ * The title is the only shrinkable item, so flexbox crushes it toward its floor
+ * before anything technically overflows: stepping down only on hard overflow
+ * would leave full labels beside an unusably narrow title. So squeeze counts
+ * as overflow too.
+ */
+const bar = document.querySelector<HTMLElement>('.t-bar')!;
+const TIERS = ['t-bar-compact', 't-bar-tight', 't-bar-fold'];
+function fitBar() {
+  if (!bar.isConnected) return;
+  bar.classList.remove(...TIERS);
+  const title = bar.querySelector<HTMLElement>('.t-doctitle');
+  const tooTight = () =>
+    bar.scrollWidth - bar.clientWidth > 1 || (title ? title.clientWidth < 96 : false);
+  for (const tier of TIERS) {
+    if (!tooTight()) return;
+    bar.classList.add(tier);
+  }
+}
+// BOTH signals, deliberately. ResizeObserver catches content-driven changes
+// (a longer title, a translated label) that no resize event reports; the
+// resize event catches viewport changes when RO callbacks are being throttled,
+// which happens whenever the page is not painting — a background tab, or a
+// hidden preview pane. Measured: with only the observer, the bar stayed
+// untiered and overflowed at 700px because the callback never ran.
+fitBar();
+new ResizeObserver(() => fitBar()).observe(bar);
+new ResizeObserver(() => fitBar()).observe(document.documentElement);
+window.addEventListener('resize', fitBar);
+
+// the ⋯ menu — secondary actions, off the bar but one click away
+const moreMenu = byId('moreMenu');
+byId('more').addEventListener('click', e => {
+  e.stopPropagation();
+  moreMenu.hidden = !moreMenu.hidden;
+});
+document.addEventListener('click', () => { moreMenu.hidden = true; });
+moreMenu.addEventListener('click', () => { moreMenu.hidden = true; });
+
 
 let metrics: Metrics = { pages: [], ms: 0 };
 
@@ -182,7 +319,7 @@ const refresh = () => { markDirty(); paint(); schedule(); };
 editor.onChange = refresh;
 store.on(refresh);
 
-const MARK_BTN: Array<[string, MarkType]> = [['mb', 'b'], ['mi', 'i'], ['mu', 'u'], ['mc', 'code']];
+const MARK_BTN: Array<[string, MarkType]> = [['mb', 'b'], ['mi', 'i'], ['mu', 'u'], ['ms', 's'], ['mc', 'code']];
 for (const [id, t] of MARK_BTN) {
   document.getElementById(id)!.addEventListener('mousedown', (e) => {
     e.preventDefault();                      // keep the selection alive
@@ -192,6 +329,10 @@ for (const [id, t] of MARK_BTN) {
 editor.onSelection = (active) => {
   for (const [id, t] of MARK_BTN) document.getElementById(id)!.classList.toggle('on', active.has(t));
 };
+byId('sidebar').addEventListener('click', () => {
+  document.querySelector('.t-main')!.classList.toggle('t-side-off');
+});
+
 document.getElementById('kind')!.addEventListener('change', (e) => {
   editor.setKind((e.target as HTMLSelectElement).value as never);
 });
@@ -459,8 +600,12 @@ function paintTitle() {
   const t = store.doc.title || 'Untitled';
   document.title = `${dirty ? '• ' : ''}${t} — bento/type`;
   const btn = document.getElementById('save')!;
-  btn.textContent = dirty ? 'Save' : 'Saved';
-  btn.classList.toggle('primary', dirty);
+  // Update the LABEL only. Setting textContent here wiped the icon that
+  // label() had just installed, so the button silently lost its glyph the
+  // first time the dirty flag moved — which is every document, immediately.
+  const lbl = btn.querySelector('.t-lbl');
+  if (lbl) lbl.textContent = dirty ? 'Save' : 'Saved';
+  btn.classList.toggle('t-primary', dirty);
   btn.title = name
     ? `${dirty ? 'Save' : 'Saved to'} ${name}${canWriteInPlace() ? '' : ' (downloads a copy)'}`
     : 'Save (⌘S)';

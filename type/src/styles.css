@@ -119,50 +119,110 @@ html, body {
   word-break: break-all; margin-top: 3px; }
 .t-ok { color: var(--good); } .t-bad { color: var(--bad); } .t-warn { color: var(--warnc); }
 
-/* ————— toolbar ————— */
+/* ————— toolbar —————
+   ONE ROW, and the same furniture every other app in the suite puts there:
+   the mark (which is also the way into About), a panel toggle, the document
+   title, a status line, then the tools. It was two stacked rows of text
+   buttons, which is the single loudest way this app read as a different
+   product. Class names are type's; the STRUCTURE and the metrics are shared
+   with slides/src/styles.css and spaces/src/styles.css deliberately. */
 .t-bar {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  padding: 8px 14px;
-  background: var(--chrome);
-  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  background: var(--chrome); border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+  /* A grid item's automatic minimum size is its MIN-CONTENT width, so without
+     this the bar simply refused to be narrower than its buttons (measured:
+     1135px inside a 1000px window) and #app clipped the overflow. Its own
+     scrollWidth then equalled its clientWidth, so fitBar's overflow test could
+     never fire and the tiers never engaged — the bar looked fine to the code
+     and was cut off on screen. */
+  min-width: 0;
 }
-.t-brand {
-  font-weight: 600; color: var(--ink); margin-inline-end: 6px;
-  letter-spacing: .01em; white-space: nowrap;
-}
-.t-brand small { color: var(--muted); font-weight: 400; margin-inline-start: 4px; }
 
-.t-bar button {
-  display: inline-flex; align-items: center; gap: 6px;
-  font: inherit; font-size: 13px;
-  color: var(--ink-2);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 6px 9px;
-  cursor: pointer;
-  white-space: nowrap;
+/* the suite's mark — identical geometry and colours in all three apps */
+.t-mark {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
+  white-space: nowrap; padding: 4px 7px 4px 4px; user-select: none;
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  color: var(--ink); cursor: pointer;
 }
-.t-bar button:hover { background: var(--chrome-2); }
-.t-bar button:active { background: var(--line); }
-.t-bar button.on {
-  background: var(--accent); border-color: var(--accent);
-  color: var(--accent-ink); font-weight: 600;
+.t-mark:hover { background: var(--chrome-2); }
+.t-mark-svg { display: block; flex: 0 0 auto; }
+.t-mark-word span { color: #FF9E8A; }
+
+.t-doctitle {
+  /* Sized, not greedy — the right group's margin-inline-start:auto is the
+     spacer, so a long title cannot push the tools off the bar. */
+  flex: 0 1 260px; min-width: 0;
+  font: inherit; font-size: 14px; color: var(--ink);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 5px 8px; text-overflow: ellipsis;
 }
-.t-bar button.primary { background: var(--ink); color: var(--chrome); padding: 6px 14px; }
-.t-bar button.primary:hover { background: var(--ink-2); }
-.t-bar select {
+.t-doctitle:hover { background: var(--chrome-2); }
+.t-doctitle:focus { background: var(--field); border-color: var(--blue); outline: none; }
+
+.t-status {
+  font-size: 12px; color: var(--muted); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+
+.t-right { margin-inline-start: auto; display: flex; align-items: center; gap: 4px; }
+.t-group { display: flex; align-items: center; gap: 2px; }
+.t-group + .t-group { margin-inline-start: 6px; padding-inline-start: 6px;
+  border-inline-start: 1px solid var(--line); }
+
+.t-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: inherit; font-size: 13px; color: var(--ink-2);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 6px 9px; min-width: 32px; min-height: 32px;
+  cursor: pointer; white-space: nowrap;
+}
+.t-btn:hover { background: var(--chrome-2); }
+.t-btn:active { background: var(--line); }
+.t-btn.on { background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600; }
+.t-primary { background: var(--ink); color: var(--chrome); padding: 6px 12px; }
+.t-primary:hover { background: var(--ink-2); }
+
+.t-select {
   font: inherit; font-size: 13px; color: var(--ink-2);
   background: var(--field); border: 1px solid var(--line);
   border-radius: 8px; padding: 5px 8px; cursor: pointer;
 }
-.t-sep { width: 1px; height: 20px; background: var(--line); margin: 0 5px; }
-.t-spacer { flex: 1; }
-.t-stat {
-  color: var(--muted);
-  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: nowrap;
+
+/* the ⋯ menu — secondary actions, off the bar but one click away */
+.t-menuwrap { position: relative; }
+.t-menu {
+  position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 60;
+  min-width: 200px; padding: 5px;
+  background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(20 30 45 / .16), 0 2px 6px rgb(20 30 45 / .08);
 }
+.t-menu button {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  font: inherit; font-size: 13px; color: var(--ink-2); text-align: start;
+  background: transparent; border: 0; border-radius: 7px;
+  padding: 7px 9px; cursor: pointer;
+}
+.t-menu button:hover { background: var(--chrome-2); }
+.t-menu-sep { height: 1px; background: var(--line); margin: 5px 4px; }
+
+/* RESPONSIVE, the suite's way: hide TEXT, never scroll the bar — and size it
+   by MEASURING, not by width breakpoints (slides/src/editor/editor.ts
+   fitTopbar explains why at length: browser zoom, OS text scaling and wider
+   translations all change how much room the same buttons need at the same
+   viewport width, and each one clipped the end of the bar).
+   The tiers are applied by fitBar() in main.ts, widest first. */
+.t-bar-compact .t-lbl { display: none; }
+.t-bar-compact .t-primary { padding: 6px 9px; }
+.t-bar-tight .t-mark-word { display: none; }
+.t-bar-tight .t-doctitle { flex-basis: 160px; }
+.t-bar-fold .t-status { display: none; }
+.t-bar-fold .t-doctitle { flex-basis: 110px; }
+.t-bar-fold .t-group + .t-group { margin-inline-start: 2px; padding-inline-start: 2px; }
 
 /* ————— the page ————— */
 .t-scroll {
@@ -233,3 +293,51 @@ html, body {
   font: 600 9px/1 -apple-system, system-ui, sans-serif;
   color: var(--accent-ink); vertical-align: super; margin-inline-end: 4px;
 }
+
+/* ————— dialogs —————
+   NOTE the class names: `.t-card` was already the review card in the sidebar,
+   so the About dialog uses `.t-dlg`. Reusing it inherited the card's padding
+   and 11px buttons and made the dialog look like a comment. */
+.t-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 6vh 16px; overflow: auto;
+  background: rgb(20 30 45 / .38);
+}
+.t-dlg {
+  width: min(560px, 100%);
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 24px 64px rgb(20 30 45 / .28), 0 4px 12px rgb(20 30 45 / .12);
+  padding: 18px 20px 14px;
+}
+.t-dlg-h {
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+  margin: 20px 0 8px; padding-top: 12px; border-top: 1px solid var(--line);
+}
+.t-dlg-h:first-of-type { border-top: 0; padding-top: 0; }
+.t-dlg .t-row {
+  display: flex; align-items: center; gap: 10px; margin: 8px 0;
+}
+.t-dlg .t-row > span:first-child { flex: 0 0 120px; color: var(--muted); font-size: 13px; }
+.t-about-blurb { font-size: 13.5px; line-height: 1.5; color: var(--ink-2); margin: 6px 0; }
+.t-about-val { font-size: 13px; color: var(--ink-2); margin: 4px 0; }
+.t-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.t-note { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 6px 0 0; }
+.t-about-head { margin-bottom: 4px; }
+.t-about-logo {
+  display: inline-flex; align-items: center; gap: 10px;
+  text-decoration: none; color: inherit;
+}
+.t-about-logo b { display: block; font-size: 15px; white-space: nowrap; }
+/* Scoped to the version line. Unscoped, this also caught the brand slash
+   INSIDE the <b> — `bento<span>/</span>type` — turning it into a block and
+   breaking the wordmark across three lines. */
+.t-about-logo > div > span { display: block; font-size: 12px; color: var(--muted); }
+
+/* `hidden` must actually hide. A class that sets `display` beats the hidden
+   attribute's UA rule, so `.t-btn[hidden]` stayed inline-flex and the
+   "Update this file" button was visible before any check had run. */
+.t-btn[hidden], [hidden] { display: none !important; }
+.t-dlg-foot { display: flex; justify-content: flex-end; margin-top: 18px; }
