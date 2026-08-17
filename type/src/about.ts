@@ -21,6 +21,7 @@ import { canWriteInPlace, openedFileName } from '../../kernel/src/save.ts';
 import { setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
 import type { Store } from './store.ts';
 import { wordCount } from './model.ts';
+import { t } from './i18n.ts';
 
 export interface AboutHooks {
   store: Store;
@@ -38,7 +39,7 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
   const card = document.createElement('div');
   card.className = 't-dlg t-about';
   card.setAttribute('role', 'dialog');
-  card.setAttribute('aria-label', 'About this document');
+  card.setAttribute('aria-label', t('About this document'));
   const close = () => back.remove();
 
   const h = (text: string) => {
@@ -74,112 +75,112 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
   head.className = 't-about-head';
   head.innerHTML =
     '<a class="t-about-logo" href="https://bento.page" target="_blank" rel="noopener" ' +
-    'title="Visit bento.page (opens in a new tab)">' +
+    `title="${t('Visit bento.page (opens in a new tab)')}">` +
     '<svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">' +
     '<rect width="32" height="32" rx="7" fill="#16273E"/>' +
     '<rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/>' +
     '<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>' +
     '<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>' +
     '</svg><div><b>bento<span style="color:#FF9E8A">/</span>type</b>' +
-    `<span>v${esc(APP_VERSION)} · format v${esc(String(store.doc.version ?? 1))}</span></div></a>`;
+    `<span>${esc(t('v{app} · format v{fmt}', { app: APP_VERSION, fmt: String(store.doc.version ?? 1) }))}</span></div></a>`;
   card.append(head);
 
-  card.append(h('This file'));
+  card.append(h(t('This file')));
   const notes = Object.keys(store.doc.footnotes ?? {}).length;
-  card.append(p(
-    `${pages || 1} page${pages === 1 ? '' : 's'} · ` +
-    `${wordCount(store.doc).toLocaleString()} words · ` +
-    `${store.doc.body.length} blocks · ${notes} footnote${notes === 1 ? '' : 's'}. ` +
-    'The document, the editor and the typesetter are all in this one file.'));
+  card.append(p(t(
+    '{pages} page(s) · {words} words · {blocks} blocks · {notes} footnote(s). ' +
+    'The document, the editor and the typesetter are all in this one file.',
+    { pages: pages || 1, words: wordCount(store.doc).toLocaleString(),
+      blocks: store.doc.body.length, notes })));
 
   const fileName = openedFileName();
-  if (fileName) card.append(row('File', p(fileName, 't-about-val')));
+  if (fileName) card.append(row(t('File'), p(fileName, 't-about-val')));
   if (!canWriteInPlace()) {
-    card.append(p(
+    card.append(p(t(
       'This browser cannot write back to the file, so every save makes a new copy. ' +
-      'Chrome and Edge on a computer can save in place.', 't-note'));
+      'Chrome and Edge on a computer can save in place.'), 't-note'));
   }
 
   // ---- updates ------------------------------------------------------------
-  card.append(h('Updates'));
+  card.append(h(t('Updates')));
   const upStatus = p('', 't-about-val');
   const upRow = document.createElement('div');
   upRow.className = 't-row';
   let found: ReleaseInfo | null = null;
-  const checkBtn = button('Check for updates', async () => {
-    upStatus.textContent = 'Checking…';
+  const checkBtn = button(t('Check for updates'), async () => {
+    upStatus.textContent = t('Checking…');
     const r = await checkForUpdates();
     if (r.status === 'update') {
       found = r.release;
-      upStatus.textContent = `Version ${r.release.version} is available.`;
+      upStatus.textContent = t('Version {v} is available.', { v: r.release.version });
       applyBtn.hidden = false;
     } else if (r.status === 'current') {
-      upStatus.textContent = `Up to date — v${APP_VERSION}.`;
+      upStatus.textContent = t('Up to date — v{v}.', { v: APP_VERSION });
     } else {
       // A failed check is not an error worth alarming anyone with: the file
       // works offline by design, and that is the common reason it fails.
-      upStatus.textContent = 'Could not check right now.';
+      upStatus.textContent = t('Could not check right now.');
     }
   });
-  const applyBtn = button('Update this file', async () => {
+  const applyBtn = button(t('Update this file'), async () => {
     if (found) await applyUpdate(found, store.doc as never);
   }, true);
   applyBtn.hidden = true;
   upRow.append(checkBtn, applyBtn);
   card.append(upRow, upStatus);
-  card.append(p(
+  card.append(p(t(
     'An update is a NEW file, downloaded beside this one — the original is untouched, ' +
     'so a bad update is undone by deleting it. Every release is signature-checked ' +
-    'before it is applied.', 't-note'));
+    'before it is applied.'), 't-note'));
 
   // ---- appearance ---------------------------------------------------------
-  card.append(h('Appearance'));
+  card.append(h(t('Appearance')));
   const themeSel = document.createElement('select');
   themeSel.className = 't-select';
-  for (const [val, label] of [['auto', 'Follow the system'], ['light', 'Light'], ['dark', 'Dark']] as const) {
+  for (const [val, label] of [['auto', t('Follow the system')], ['light', t('Light')], ['dark', t('Dark')]] as const) {
     const o = document.createElement('option');
     o.value = val; o.textContent = label;
     o.selected = themeChoice() === val;
     themeSel.append(o);
   }
   themeSel.addEventListener('change', () => setTheme(themeSel.value as ThemeChoice));
-  card.append(row('Theme', themeSel));
-  card.append(p(
+  card.append(row(t('Theme'), themeSel));
+  card.append(p(t(
     'The theme is yours, not the document’s — it is remembered in this browser and ' +
     'never saved into the file. The PAGE stays white in both, because paper is white ' +
-    'and somebody proofing a contract at midnight still has to see what will print.',
+    'and somebody proofing a contract at midnight still has to see what will print.'),
     't-note'));
 
   // ---- the document, for tools --------------------------------------------
-  card.append(h('Document'));
-  card.append(row('Document id', p(String(store.doc.docId ?? ''), 't-about-val t-mono')));
+  card.append(h(t('Document')));
+  card.append(row(t('Document id'), p(String(store.doc.docId ?? ''), 't-about-val t-mono')));
   const jsonRow = document.createElement('div');
   jsonRow.className = 't-row';
   jsonRow.append(
-    button('Copy document JSON', async () => {
+    button(t('Copy document JSON'), async () => {
       try { await navigator.clipboard.writeText(JSON.stringify(store.doc, null, 2)); }
       catch { /* clipboard blocked — the agent surface below still works */ }
     }),
-    button('Replace from JSON…', () => {
-      const json = prompt('Paste a bento/type document JSON. This replaces the document and can be undone with ⌘Z.');
+    button(t('Replace from JSON…'), () => {
+      const json = prompt(t('Paste a bento/type document JSON. This replaces the document and can be undone with ⌘Z.'));
       if (json) onReplaceDoc(json);
     }),
   );
   card.append(jsonRow);
-  card.append(p(
+  card.append(p(t(
     'The document is the interchange unit: hand this JSON to an AI, get one back, ' +
-    'and paste it in. `window.bento` exposes the same thing to scripts.', 't-note'));
+    'and paste it in. `window.bento` exposes the same thing to scripts.'), 't-note'));
 
   // ---- credits ------------------------------------------------------------
-  card.append(h('Credits'));
-  card.append(p(
+  card.append(h(t('Credits')));
+  card.append(p(t(
     'bento/type is MIT-licensed. Line breaking uses the Knuth–Plass algorithm ' +
     'via tex-linebreak; hyphenation patterns are Liang’s. Everything runs in ' +
-    'this file — nothing is fetched, and nothing is sent anywhere.', 't-note'));
+    'this file — nothing is fetched, and nothing is sent anywhere.'), 't-note'));
 
   const foot = document.createElement('div');
   foot.className = 't-dlg-foot';
-  foot.append(button('Close', close, true));
+  foot.append(button(t('Close'), close, true));
   card.append(foot);
 
   back.append(card);

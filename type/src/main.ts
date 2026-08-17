@@ -11,6 +11,8 @@ import {
   capturePristine, readEmbeddedDoc, saveFile, currentFileName, canWriteInPlace,
 } from '../../kernel/src/save.ts';
 import { ICONS } from './icons.ts';
+import { t } from './i18n.ts';
+import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
 import { startTheme, setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
 import { parseDoc, emptyDoc, uid, wordCount, type TypeDoc } from './model.ts';
@@ -108,13 +110,7 @@ app.innerHTML = `
     <span class="t-status" id="status"></span>
 
     <div class="t-right">
-      <select id="kind" class="t-select">
-        <option value="para">Body</option>
-        <option value="h1">Title</option>
-        <option value="h2">Heading</option>
-        <option value="h3">Subheading</option>
-        <option value="quote">Quote</option>
-      </select>
+      <select id="kind" class="t-select"></select>
       <div class="t-group">
         <button id="mb" class="t-btn" type="button"></button>
         <button id="mi" class="t-btn" type="button"></button>
@@ -177,22 +173,22 @@ const label = (id: string, html: string, tip: string, text = '') => {
   b.title = tip;
 };
 
-label('sidebar', ICONS.panelLeft, 'Outline — show or hide the document map');
-label('mb', ICONS.bold, 'Bold (⌘B)');
-label('mi', ICONS.italic, 'Italic (⌘I)');
-label('mu', ICONS.underline, 'Underline (⌘U)');
-label('ms', ICONS.strike, 'Strikethrough');
-label('mc', ICONS.code, 'Code');
-label('undo', ICONS.undo, 'Undo (⌘Z)');
-label('redo', ICONS.redo, 'Redo (⇧⌘Z)');
-label('save', ICONS.save, 'Save (⌘S)', 'Save');
-label('more', ICONS.more, 'More — revisions, signing, print');
-label('snap', ICONS.history, '', 'Snapshot');
-label('review', ICONS.review, '', 'Review changes…');
-label('sign', ICONS.sign, '', 'Sign…');
-label('print', ICONS.print, '', 'Print or PDF…');
-label('about', ICONS.sync, '', 'About bento/type');
-byId('mark').title = 'About bento/type — version, updates, language';
+label('sidebar', ICONS.panelLeft, t('Outline — show or hide the document map'));
+label('mb', ICONS.bold, t('Bold (⌘B)'));
+label('mi', ICONS.italic, t('Italic (⌘I)'));
+label('mu', ICONS.underline, t('Underline (⌘U)'));
+label('ms', ICONS.strike, t('Strikethrough'));
+label('mc', ICONS.code, t('Code'));
+label('undo', ICONS.undo, t('Undo (⌘Z)'));
+label('redo', ICONS.redo, t('Redo (⇧⌘Z)'));
+label('save', ICONS.save, t('Save (⌘S)'), t('Save'));
+label('more', ICONS.more, t('More — revisions, signing, print'));
+label('snap', ICONS.history, '', t('Snapshot'));
+label('review', ICONS.review, '', t('Review changes…'));
+label('sign', ICONS.sign, '', t('Sign…'));
+label('print', ICONS.print, '', t('Print or PDF…'));
+label('about', ICONS.sync, '', t('About bento/type'));
+byId('mark').title = t('About bento/type — version, updates, language');
 const showAbout = () => openAbout({
   store,
   pages: metrics.pages.length,
@@ -204,19 +200,28 @@ const showAbout = () => openAbout({
         // `.detail` off it would have printed "undefined" to the one person
         // who most needs to know what went wrong.
         alert(parsed.err === 'empty'
-          ? 'That JSON was empty.'
-          : `That is not a bento/type document: ${parsed.detail}`);
+          ? t('That JSON was empty.')
+          : t('That is not a bento/type document: {detail}', { detail: parsed.detail }));
         return;
       }
       store.replace(parsed.doc);
       schedule();
-    } catch { alert('That JSON could not be read.'); }
+    } catch { alert(t('That JSON could not be read.')); }
   },
 });
 byId('mark').addEventListener('click', showAbout);
 byId('about').addEventListener('click', showAbout);
 
-for (const [tab, text] of [['outline', 'Outline'], ['review', 'Review'], ['sigs', 'Signatures']] as const) {
+for (const [val, text] of [
+  ['para', t('Body')], ['h1', t('Title')], ['h2', t('Heading')],
+  ['h3', t('Subheading')], ['quote', t('Quote')],
+] as const) {
+  const o = document.createElement('option');
+  o.value = val; o.textContent = text;
+  byId<HTMLSelectElement>('kind').append(o);
+}
+
+for (const [tab, text] of [['outline', t('Outline')], ['review', t('Review')], ['sigs', t('Signatures')]] as const) {
   const b = document.querySelector<HTMLElement>(`.t-tabs [data-tab="${tab}"]`);
   if (b) b.textContent = text;
 }
@@ -226,7 +231,7 @@ for (const [tab, text] of [['outline', 'Outline'], ['review', 'Review'], ['sigs'
 // title, the save-picker filename and `{{title}}` all read.
 const titleInput = byId<HTMLInputElement>('doctitle');
 titleInput.value = store.doc.title;
-titleInput.setAttribute('aria-label', 'Document title');
+titleInput.setAttribute('aria-label', t('Document title'));
 titleInput.addEventListener('input', () => {
   store.commit(d => { d.title = titleInput.value || 'Untitled'; }, { run: '__title' });
 });
@@ -364,7 +369,7 @@ function buildOutline() {
   const heads = store.doc.body.filter(b => b.kind === 'h2' || b.kind === 'h3');
   box.replaceChildren();
   if (!heads.length) {
-    const h = el('div', 't-hint'); h.textContent = 'Headings appear here.';
+    const h = el('div', 't-hint'); h.textContent = t('Headings appear here.');
     box.appendChild(h); return;
   }
   const paperTop = paper.getBoundingClientRect().top + store.doc.page.marginTop;
@@ -597,18 +602,25 @@ const markDirty = () => { dirty = true; paintTitle(); };
 
 function paintTitle() {
   const name = currentFileName();
-  const t = store.doc.title || 'Untitled';
-  document.title = `${dirty ? '• ' : ''}${t} — bento/type`;
+  const docTitle = store.doc.title || t('Untitled');
+  document.title = `${dirty ? '• ' : ''}${docTitle} — bento/type`;
   const btn = document.getElementById('save')!;
   // Update the LABEL only. Setting textContent here wiped the icon that
   // label() had just installed, so the button silently lost its glyph the
   // first time the dirty flag moved — which is every document, immediately.
   const lbl = btn.querySelector('.t-lbl');
-  if (lbl) lbl.textContent = dirty ? 'Save' : 'Saved';
+  if (lbl) lbl.textContent = dirty ? t('Save') : t('Saved');
   btn.classList.toggle('t-primary', dirty);
+  // These two were the ONLY strings the pseudo-locale audit caught, and the
+  // reason is worth keeping: this function had a local `const t` holding the
+  // document title, which shadowed the imported t(). The sweep could not have
+  // wrapped them without renaming it first.
   btn.title = name
-    ? `${dirty ? 'Save' : 'Saved to'} ${name}${canWriteInPlace() ? '' : ' (downloads a copy)'}`
-    : 'Save (⌘S)';
+    ? (dirty
+        ? t('Save to {file}', { file: name })
+        : t('Saved to {file}', { file: name })) +
+      (canWriteInPlace() ? '' : t(' (downloads a copy)'))
+    : t('Save (⌘S)');
 }
 
 async function save(forcePicker = false) {
@@ -672,4 +684,18 @@ dirty = false; paintTitle();
   printHtml: () => { repaginate(); return buildPrintDocument(store.doc, metrics, { pageNumbers: true }); },
   paginate: () => { repaginate(); return metrics; },
   get pages() { return metrics.pages; },
+  // PLATFORM §7: the AI round-trip surface. `loadDoc` is the scripted twin of
+  // About's "Replace from JSON…", and `serialize` is what a tool reads back.
+  serialize: () => JSON.stringify(store.doc),
+  loadDoc: (json: string) => {
+    const parsed = parseDoc(json);
+    if (!parsed.ok) throw new Error(`bento/type: ${parsed.err === 'empty' ? 'empty document' : parsed.detail}`);
+    store.replace(parsed.doc);
+    schedule();
+    return true;
+  },
+  // The language engine, so `bento.i18n.setLocale('x-pseudo')` can audit for
+  // unswept strings — which is the only way to find one that is cheap enough
+  // to actually do.
+  i18n: i18nApi,
 };
