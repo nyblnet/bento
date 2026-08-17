@@ -256,6 +256,69 @@ export class Editor {
   }
 
   /** Change a block's kind — paragraph, heading, quote. */
+  /**
+   * Insert a table at the caret: `rows` x `cols` empty cells, header row first.
+   *
+   * Every cell is a block, so this is an ordinary splice into `body` — nothing
+   * about the caret, the redline or pagination has to learn what a table is.
+   */
+  insertTable(rows = 3, cols = 3): void {
+    const c = this.caret();
+    if (!c) return;
+    const i = this.store.doc.body.findIndex(b => b.id === c.id);
+    if (i < 0) return;
+    const table = uid();
+    const cells: Block[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let k = 0; k < cols; k++) {
+        cells.push({ id: uid(), kind: 'cell', text: '',
+                     cell: { table, cols, ...(r === 0 ? { head: true } : {}) } });
+      }
+    }
+    this.store.breakRun();
+    this.#runId = null;
+    // An empty paragraph at the caret is consumed; anything with text keeps its
+    // place and the table lands after it.
+    const here = this.store.doc.body[i];
+    const at = here.text === '' && here.kind === 'para' ? i : i + 1;
+    const drop = here.text === '' && here.kind === 'para' ? 1 : 0;
+    this.store.commit(d => { d.body.splice(at, drop, ...cells); });
+    this.render();
+    this.setCaret({ id: cells[0].id, at: 0 });
+    this.onChange?.();
+  }
+
+  /**
+   * Tab inside a table moves to the next cell, and off the last cell adds a
+   * row — the behaviour every table editor has, and the one that makes a table
+   * fillable without reaching for the mouse.
+   */
+  #nextCell(back: boolean): boolean {
+    const c = this.caret();
+    if (!c) return false;
+    const body = this.store.doc.body;
+    const i = body.findIndex(b => b.id === c.id);
+    const here = body[i];
+    if (i < 0 || here?.kind !== 'cell' || !here.cell) return false;
+    const step = back ? -1 : 1;
+    const next = body[i + step];
+    if (next?.kind === 'cell' && next.cell?.table === here.cell.table) {
+      this.setCaret({ id: next.id, at: 0 });
+      return true;
+    }
+    if (back) return true;                       // at the first cell: stay put
+    // off the end: append one row
+    const { table, cols } = here.cell;
+    const fresh: Block[] = Array.from({ length: cols }, () =>
+      ({ id: uid(), kind: 'cell' as const, text: '', cell: { table, cols } }));
+    this.store.breakRun();
+    this.store.commit(d => { d.body.splice(i + 1, 0, ...fresh); });
+    this.render();
+    this.setCaret({ id: fresh[0].id, at: 0 });
+    this.onChange?.();
+    return true;
+  }
+
   /** Empty list item + Enter: outdent one level, or leave the list entirely. */
   #exitList(c: Caret): void {
     this.store.breakRun();
@@ -327,7 +390,9 @@ export class Editor {
     // that is not a list, Tab must still move focus out of the editor, which is
     // the only way a keyboard user leaves it.
     if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-      if (this.indent(e.shiftKey ? -1 : 1)) e.preventDefault();
+      // A table cell claims Tab first: inside a grid it means "next cell", and
+      // indenting a cell would mean nothing.
+      if (this.#nextCell(e.shiftKey) || this.indent(e.shiftKey ? -1 : 1)) e.preventDefault();
       return;
     }
     const mod = e.metaKey || e.ctrlKey;

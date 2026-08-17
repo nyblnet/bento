@@ -123,6 +123,7 @@ app.innerHTML = `
         <button id="lol" class="t-btn" type="button"></button>
         <button id="lin" class="t-btn" type="button"></button>
         <button id="lout" class="t-btn" type="button"></button>
+        <button id="tbl" class="t-btn" type="button"></button>
       </div>
       <div class="t-group">
         <button id="undo" class="t-btn" type="button"></button>
@@ -189,6 +190,7 @@ label('lul', ICONS.bullets, t('Bulleted list'));
 label('lol', ICONS.numbers, t('Numbered list'));
 label('lin', ICONS.indent, t('Indent (Tab)'));
 label('lout', ICONS.outdent, t('Outdent (⇧Tab)'));
+label('tbl', ICONS.table, t('Insert a table'));
 label('undo', ICONS.undo, t('Undo (⌘Z)'));
 label('redo', ICONS.redo, t('Redo (⇧⌘Z)'));
 label('save', ICONS.save, t('Save (⌘S)'), t('Save'));
@@ -360,6 +362,7 @@ for (const [id, kind] of [['lul', 'ul'], ['lol', 'ol']] as const) {
     editor.setKind(cur === kind ? 'para' : kind);
   });
 }
+byId('tbl').addEventListener('mousedown', e => { e.preventDefault(); editor.insertTable(); });
 byId('lin').addEventListener('mousedown', e => { e.preventDefault(); editor.indent(1); });
 byId('lout').addEventListener('mousedown', e => { e.preventDefault(); editor.indent(-1); });
 

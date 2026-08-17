@@ -13,9 +13,10 @@ import { isList, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 
 export const TAG: Record<Block['kind'], string> = {
   para: 'p', h1: 'h1', h2: 'h2', h3: 'h3', quote: 'blockquote',
-  // A list ITEM is the block. The <ul>/<ol> around it is not in the model —
-  // see groupBlocks, and Block.level for why the document stays flat.
-  ul: 'li', ol: 'li',
+  // A list ITEM is the block, and so is a table CELL. The <ul>/<ol> and the
+  // <table> around them are not in the model — see groupBlocks, and Block.level
+  // / Block.cell for why the document stays flat.
+  ul: 'li', ol: 'li', cell: 'td',
 };
 
 /**
@@ -33,6 +34,7 @@ export const TAG: Record<Block['kind'], string> = {
 export type GroupToken =
   | { t: 'open'; kind: 'ul' | 'ol' }
   | { t: 'close'; kind: 'ul' | 'ol' }
+  | { t: 'table'; rows: Block[][]; head: boolean }
   | { t: 'block'; block: Block };
 
 export function groupBlocks(body: readonly Block[]): GroupToken[] {
@@ -46,7 +48,28 @@ export function groupBlocks(body: readonly Block[]): GroupToken[] {
   const closeTo = (depth: number) => {
     while (stack.length > depth) out.push({ t: 'close', kind: stack.pop()! });
   };
-  for (const b of body) {
+  for (let i = 0; i < body.length; i++) {
+    const b = body[i];
+    // ---- tables: a run of cells sharing one table id, chunked into rows
+    if (b.kind === 'cell' && b.cell) {
+      closeTo(0);
+      const id = b.cell.table;
+      const cells: Block[] = [];
+      while (i < body.length && body[i].kind === 'cell' && body[i].cell?.table === id) {
+        cells.push(body[i]); i++;
+      }
+      i--;                                    // the for-loop will step past the run
+      // `cols` is repeated on every cell, so a disagreement is resolved by
+      // MAJORITY rather than by trusting whichever cell happened to be first —
+      // one edited cell should not reshape the whole table.
+      const tally = new Map<number, number>();
+      for (const c of cells) tally.set(c.cell!.cols, (tally.get(c.cell!.cols) ?? 0) + 1);
+      const cols = Math.max(1, [...tally.entries()].sort((x, y) => y[1] - x[1] || x[0] - y[0])[0][0]);
+      const rows: Block[][] = [];
+      for (let k = 0; k < cells.length; k += cols) rows.push(cells.slice(k, k + cols));
+      out.push({ t: 'table', rows, head: !!cells[0]?.cell?.head });
+      continue;
+    }
     if (!isList(b.kind)) { closeTo(0); out.push({ t: 'block', block: b }); continue; }
     const kind = b.kind as 'ul' | 'ol';
     // CLAMPED HERE TOO, not only in the parser. parseDoc clamps what arrives
@@ -93,6 +116,43 @@ export function renderBlock(b: Block): HTMLElement {
 }
 
 /** The whole body. Callers own the host; this replaces its contents. */
+/**
+ * A table, from its rows of cell blocks.
+ *
+ * Each <td> keeps its block's `data-id`, so everything that addresses a block —
+ * the caret, the redline, a comment — reaches a cell without knowing tables
+ * exist. A short last row is PADDED with empty cells rather than left ragged:
+ * the model may disagree with itself, but the rendered grid never should.
+ */
+export function renderTable(rows: Block[][], head: boolean): HTMLElement {
+  const table = document.createElement('table');
+  table.className = 't-table';
+  const cols = rows[0]?.length ?? 1;
+  const thead = head ? document.createElement('thead') : null;
+  const tbody = document.createElement('tbody');
+  rows.forEach((row, r) => {
+    const isHead = head && r === 0;
+    const tr = document.createElement('tr');
+    for (let c = 0; c < cols; c++) {
+      const b = row[c];
+      const cell = document.createElement(isHead ? 'th' : 'td');
+      if (b) {
+        cell.dataset.id = b.id;
+        cell.dataset.kind = b.kind;
+        cell.innerHTML = blockHtml(b);
+      } else {
+        cell.innerHTML = '<br>';               // padding for a short final row
+        cell.dataset.pad = '1';
+      }
+      tr.appendChild(cell);
+    }
+    (isHead ? thead! : tbody).appendChild(tr);
+  });
+  if (thead) table.appendChild(thead);
+  table.appendChild(tbody);
+  return table;
+}
+
 export function renderBody(doc: TypeDoc, host: HTMLElement): void {
   const frag = document.createDocumentFragment();
   let cursor: Node = frag;
@@ -103,6 +163,8 @@ export function renderBody(doc: TypeDoc, host: HTMLElement): void {
       cursor = list;
     } else if (tok.t === 'close') {
       cursor = cursor.parentNode ?? frag;
+    } else if (tok.t === 'table') {
+      cursor.appendChild(renderTable(tok.rows, tok.head));
     } else {
       cursor.appendChild(renderBlock(tok.block));
     }

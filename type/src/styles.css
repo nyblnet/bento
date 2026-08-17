@@ -251,6 +251,27 @@ html, body {
 .t-paper h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--paper-ink-2); hyphens: none; }
 .t-paper p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 .t-paper p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+/* ————— tables —————
+   Ruled, not boxed: a contract table wants horizontal rules and air, not a grid
+   of borders. `table-layout: fixed` so a long cell widens nothing — the measure
+   is the page's, and a table that changes it makes the page look broken. */
+.t-paper .t-table {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+  margin: 0 0 12px; font-size: .95em;
+}
+.t-paper .t-table th, .t-paper .t-table td {
+  border-bottom: 1px solid var(--paper-rule);
+  padding: 6px 10px 6px 0; vertical-align: top;
+  text-align: start; text-indent: 0; hyphens: none;
+}
+.t-paper .t-table th {
+  font-weight: 600; border-bottom-width: 1.5px;
+  color: var(--paper-ink);
+}
+.t-paper .t-table tr:last-child td { border-bottom: 0; }
+/* a padded cell in a short final row is structure, not content */
+.t-paper .t-table td[data-pad] { opacity: .35; }
+
 /* ————— lists —————
    Justified like body text, because a list in a contract is prose that happens
    to be enumerated. `text-indent` is reset: `p + p` gives paragraphs a first-line

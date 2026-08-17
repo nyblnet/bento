@@ -17,7 +17,33 @@ export const FORMAT = 'bento/type';
 export const VERSION = 1;
 
 /** The kinds of block a document is made of. */
-export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol';
+export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'cell';
+
+/**
+ * Where a table cell sits. Carried on EVERY cell of the table, not on a table
+ * block — because there is no table block.
+ *
+ * A CELL IS A BLOCK, for the same reason a list item is one, and here the
+ * reason is sharper: the redline aligns on block ids, so per-cell blocks give
+ * per-cell review. A table as a single block would report "the payment table
+ * changed" when one figure moved — which is precisely the failure that makes
+ * line diffs useless on prose, and the limitation bento/slides documents for
+ * its own tables. For an app whose differentiator is redlining contracts, that
+ * is the wrong trade.
+ *
+ * `cols` is repeated on every cell rather than stored once. It is redundant and
+ * that is the point: there is no header block to lose, so a grid can always be
+ * rebuilt from any run of cells, and a file that disagrees with itself is
+ * repaired to the majority rather than being unreadable.
+ */
+export interface CellRef {
+  /** which table this cell belongs to — consecutive cells sharing it group */
+  table: string;
+  /** the table's column count */
+  cols: number;
+  /** cells of the first row, rendered as <th> */
+  head?: boolean;
+}
 
 /** The list kinds, which are the ones that carry `level` and group when rendered. */
 export const LIST_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>(['ul', 'ol']);
@@ -26,6 +52,9 @@ export const isList = (k: BlockKind): boolean => LIST_KINDS.has(k);
 /** How deep a list item may be nested. Beyond this the indents stop reading as
  *  structure and start reading as a mistake. */
 export const MAX_LIST_LEVEL = 5;
+
+/** Columns beyond this stop being a table and start being a spreadsheet. */
+export const MAX_TABLE_COLS = 20;
 
 /** A footnote reference anchored INTO a block's text, by character offset. */
 export interface NoteRef { id: string; at: number }
@@ -56,6 +85,8 @@ export interface Block {
    * is correct today because there is no tree.
    */
   level?: number;
+  /** table placement; only meaningful on a `cell` block */
+  cell?: CellRef;
 }
 
 /** Page geometry, in CSS px at 96dpi. US Letter by default. */
@@ -173,7 +204,7 @@ export function parseDoc(raw: string): ParseResult {
   const body: Block[] = [];
   (json.body as unknown[]).forEach((b, i) => {
     if (!isObj(b)) { repaired.push(`dropped a block at ${i} that was not an object`); return; }
-    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol'].includes(b.kind as string)
+    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell'].includes(b.kind as string)
       ? b.kind as BlockKind : 'para';
     if (kind !== b.kind) repaired.push(`block ${i}: unknown kind ${JSON.stringify(b.kind)} read as a paragraph`);
     const text = typeof b.text === 'string' ? b.text : '';
@@ -205,6 +236,21 @@ export function parseDoc(raw: string): ParseResult {
       const lv = Math.max(0, Math.min(MAX_LIST_LEVEL, Math.floor(b.level)));
       if (lv !== b.level) repaired.push(`block ${i}: list level ${b.level} clamped to ${lv}`);
       if (lv > 0) out.level = lv;
+    }
+    // A cell without a usable `cell` ref is not a cell — it becomes a paragraph
+    // rather than a block the renderer has to guess about. Repaired loudly:
+    // silently dropping a table is worse than saying the table was lost.
+    if (kind === 'cell') {
+      const c = isObj(b.cell) ? b.cell as Partial<CellRef> : undefined;
+      const cols = typeof c?.cols === 'number' && c.cols >= 1 ? Math.min(Math.floor(c.cols), MAX_TABLE_COLS) : 0;
+      if (c && typeof c.table === 'string' && c.table && cols) {
+        out.cell = { table: c.table, cols };
+        if (c.head === true) out.cell.head = true;
+        if (cols !== c.cols) repaired.push(`block ${i}: table columns ${c.cols} clamped to ${cols}`);
+      } else {
+        out.kind = 'para';
+        repaired.push(`block ${i}: table cell with no usable placement read as a paragraph`);
+      }
     }
     body.push(out);
   });

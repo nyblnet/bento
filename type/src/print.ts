@@ -79,6 +79,11 @@ h2 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; hyphens: none; }
 h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: #3a3d44; hyphens: none; }
 p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+.t-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0 0 12px; font-size: .95em; }
+.t-table th, .t-table td { border-bottom: 1px solid #c3cad4; padding: 6px 10px 6px 0;
+                           vertical-align: top; text-align: start; text-indent: 0; hyphens: none; }
+.t-table th { font-weight: 600; border-bottom-width: 1.5px; }
+.t-table tr:last-child td { border-bottom: 0; }
 ul, ol { margin: 0 0 10px; padding-inline-start: 1.6em; }
 li { margin: 0 0 3px; text-align: justify; text-indent: 0; orphans: 2; widows: 2; }
 li > ul, li > ol { margin: 3px 0 0; }
@@ -108,6 +113,27 @@ sup.t-note { font: 600 9px/1 -apple-system, system-ui, sans-serif; color: #7a520
 }
 
 /**
+ * A table, as HTML — the string twin of render.ts renderTable, and it must stay
+ * one: a table that gains a header row on screen and loses it on paper is the
+ * drift this module exists to prevent. Both are driven by the same token from
+ * the same grouping function, so only the emission differs.
+ */
+function tableHtml(rows: Block[][], head: boolean): string {
+  const cols = rows[0]?.length ?? 1;
+  const cell = (b: Block | undefined, tag: 'th' | 'td') =>
+    b ? `<${tag} data-id="${esc(b.id)}">${blockHtml(b)}</${tag}>`
+      : `<${tag}></${tag}>`;
+  const row = (r: Block[], tag: 'th' | 'td') =>
+    `<tr>${Array.from({ length: cols }, (_, c) => cell(r[c], tag)).join('')}</tr>`;
+  const parts: string[] = ['<table class="t-table">'];
+  if (head && rows.length) parts.push(`<thead>${row(rows[0], 'th')}</thead>`);
+  parts.push('<tbody>');
+  for (const r of rows.slice(head ? 1 : 0)) parts.push(row(r, 'td'));
+  parts.push('</tbody></table>');
+  return parts.join('');
+}
+
+/**
  * The body, rendered once — every page shows a window onto this same flow.
  *
  * Uses the SAME grouping as the editor (render.ts groupBlocks), so a list that
@@ -120,6 +146,7 @@ function bodyHtml(body: Block[]): string {
   for (const tok of groupBlocks(body)) {
     if (tok.t === 'open') out.push(`<${tok.kind}>`);
     else if (tok.t === 'close') out.push(`</${tok.kind}>`);
+    else if (tok.t === 'table') out.push(tableHtml(tok.rows, tok.head));
     else {
       const b = tok.block;
       out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}">${blockHtml(b)}</${TAG[b.kind]}>`);
