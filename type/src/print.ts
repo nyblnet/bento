@@ -23,7 +23,7 @@
 // pagination is the same computation the editor already ran.
 
 import type { Block, TypeDoc } from './model.ts';
-import { blockHtml, TAG } from './render.ts';
+import { blockHtml, groupBlocks, TAG } from './render.ts';
 import type { Metrics } from './paginate.ts';
 
 export interface PrintOptions {
@@ -79,6 +79,11 @@ h2 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; hyphens: none; }
 h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: #3a3d44; hyphens: none; }
 p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+ul, ol { margin: 0 0 10px; padding-inline-start: 1.6em; }
+li { margin: 0 0 3px; text-align: justify; text-indent: 0; orphans: 2; widows: 2; }
+li > ul, li > ol { margin: 3px 0 0; }
+ul { list-style: disc; } ul ul { list-style: circle; } ul ul ul { list-style: square; }
+ol { list-style: decimal; } ol ol { list-style: lower-alpha; } ol ol ol { list-style: lower-roman; }
 blockquote { margin: 12px 0 12px 24px; padding-left: 14px; border-left: 2px solid #d8dce2;
              color: #3a3d44; font-style: italic; }
 strong { font-weight: 600; }
@@ -102,9 +107,25 @@ sup.t-note { font: 600 9px/1 -apple-system, system-ui, sans-serif; color: #7a520
 `;
 }
 
-/** The body, rendered once — every page shows a window onto this same flow. */
+/**
+ * The body, rendered once — every page shows a window onto this same flow.
+ *
+ * Uses the SAME grouping as the editor (render.ts groupBlocks), so a list that
+ * nests on screen nests identically on paper. Rebuilding the list structure
+ * here with a second implementation is exactly how print drifts from the
+ * editor, which is the failure this whole module exists to avoid.
+ */
 function bodyHtml(body: Block[]): string {
-  return body.map(b => `<${TAG[b.kind]} data-id="${esc(b.id)}">${blockHtml(b)}</${TAG[b.kind]}>`).join('\n');
+  const out: string[] = [];
+  for (const tok of groupBlocks(body)) {
+    if (tok.t === 'open') out.push(`<${tok.kind}>`);
+    else if (tok.t === 'close') out.push(`</${tok.kind}>`);
+    else {
+      const b = tok.block;
+      out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}">${blockHtml(b)}</${TAG[b.kind]}>`);
+    }
+  }
+  return out.join('\n');
 }
 
 /**

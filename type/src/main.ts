@@ -119,6 +119,12 @@ app.innerHTML = `
         <button id="mc" class="t-btn" type="button"></button>
       </div>
       <div class="t-group">
+        <button id="lul" class="t-btn" type="button"></button>
+        <button id="lol" class="t-btn" type="button"></button>
+        <button id="lin" class="t-btn" type="button"></button>
+        <button id="lout" class="t-btn" type="button"></button>
+      </div>
+      <div class="t-group">
         <button id="undo" class="t-btn" type="button"></button>
         <button id="redo" class="t-btn" type="button"></button>
       </div>
@@ -179,6 +185,10 @@ label('mi', ICONS.italic, t('Italic (⌘I)'));
 label('mu', ICONS.underline, t('Underline (⌘U)'));
 label('ms', ICONS.strike, t('Strikethrough'));
 label('mc', ICONS.code, t('Code'));
+label('lul', ICONS.bullets, t('Bulleted list'));
+label('lol', ICONS.numbers, t('Numbered list'));
+label('lin', ICONS.indent, t('Indent (Tab)'));
+label('lout', ICONS.outdent, t('Outdent (⇧Tab)'));
 label('undo', ICONS.undo, t('Undo (⌘Z)'));
 label('redo', ICONS.redo, t('Redo (⇧⌘Z)'));
 label('save', ICONS.save, t('Save (⌘S)'), t('Save'));
@@ -205,6 +215,10 @@ const showAbout = () => openAbout({
         return;
       }
       store.replace(parsed.doc);
+      // store.replace swaps the model; only this rebuilds the paper from it.
+      // Without it the document changed and the screen did not — which is what
+      // "Replace from JSON…" did on the day it was added.
+      editor.render();
       schedule();
     } catch { alert(t('That JSON could not be read.')); }
   },
@@ -215,6 +229,7 @@ byId('about').addEventListener('click', showAbout);
 for (const [val, text] of [
   ['para', t('Body')], ['h1', t('Title')], ['h2', t('Heading')],
   ['h3', t('Subheading')], ['quote', t('Quote')],
+  ['ul', t('Bulleted list')], ['ol', t('Numbered list')],
 ] as const) {
   const o = document.createElement('option');
   o.value = val; o.textContent = text;
@@ -334,6 +349,20 @@ for (const [id, t] of MARK_BTN) {
 editor.onSelection = (active) => {
   for (const [id, t] of MARK_BTN) document.getElementById(id)!.classList.toggle('on', active.has(t));
 };
+// A list button TOGGLES: pressing Bulleted list on an item that is already
+// bulleted returns it to a paragraph. Without that the button is a one-way door
+// and the only way back is the style menu, which is not where anyone looks.
+for (const [id, kind] of [['lul', 'ul'], ['lol', 'ol']] as const) {
+  byId(id).addEventListener('mousedown', e => {
+    e.preventDefault();                        // keep the caret
+    const c = editor.caret();
+    const cur = c && store.block(c.id)?.kind;
+    editor.setKind(cur === kind ? 'para' : kind);
+  });
+}
+byId('lin').addEventListener('mousedown', e => { e.preventDefault(); editor.indent(1); });
+byId('lout').addEventListener('mousedown', e => { e.preventDefault(); editor.indent(-1); });
+
 byId('sidebar').addEventListener('click', () => {
   document.querySelector('.t-main')!.classList.toggle('t-side-off');
 });
@@ -691,6 +720,7 @@ dirty = false; paintTitle();
     const parsed = parseDoc(json);
     if (!parsed.ok) throw new Error(`bento/type: ${parsed.err === 'empty' ? 'empty document' : parsed.detail}`);
     store.replace(parsed.doc);
+    editor.render();
     schedule();
     return true;
   },

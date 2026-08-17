@@ -17,7 +17,15 @@ export const FORMAT = 'bento/type';
 export const VERSION = 1;
 
 /** The kinds of block a document is made of. */
-export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote';
+export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol';
+
+/** The list kinds, which are the ones that carry `level` and group when rendered. */
+export const LIST_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>(['ul', 'ol']);
+export const isList = (k: BlockKind): boolean => LIST_KINDS.has(k);
+
+/** How deep a list item may be nested. Beyond this the indents stop reading as
+ *  structure and start reading as a mistake. */
+export const MAX_LIST_LEVEL = 5;
 
 /** A footnote reference anchored INTO a block's text, by character offset. */
 export interface NoteRef { id: string; at: number }
@@ -35,6 +43,19 @@ export interface Block {
   notes?: NoteRef[];
   /** authoring role, for restyling and for a table of contents */
   role?: string;
+  /**
+   * Nesting depth for a list item, 0-based. Absent means 0, and it means
+   * nothing on a block that is not a list.
+   *
+   * A LIST ITEM IS A BLOCK, and the list itself is not in the model at all —
+   * runs of adjacent `ul`/`ol` blocks are grouped into real <ul>/<ol> elements
+   * at RENDER time. That keeps the document flat, which is not a stylistic
+   * preference: the redline aligns on block ids, the caret is (blockId,
+   * offset), and pagination measures line boxes through a tree walker. A
+   * nested list model would have put a tree under all three, and each of them
+   * is correct today because there is no tree.
+   */
+  level?: number;
 }
 
 /** Page geometry, in CSS px at 96dpi. US Letter by default. */
@@ -152,7 +173,7 @@ export function parseDoc(raw: string): ParseResult {
   const body: Block[] = [];
   (json.body as unknown[]).forEach((b, i) => {
     if (!isObj(b)) { repaired.push(`dropped a block at ${i} that was not an object`); return; }
-    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote'].includes(b.kind as string)
+    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol'].includes(b.kind as string)
       ? b.kind as BlockKind : 'para';
     if (kind !== b.kind) repaired.push(`block ${i}: unknown kind ${JSON.stringify(b.kind)} read as a paragraph`);
     const text = typeof b.text === 'string' ? b.text : '';
@@ -177,6 +198,14 @@ export function parseDoc(raw: string): ParseResult {
     if (marks?.length) out.marks = marks;
     if (notes?.length) out.notes = notes;
     if (typeof b.role === 'string') out.role = b.role;
+    // `level` is clamped and only kept on list kinds. A level on a paragraph
+    // would be silently meaningless, and a level of 40 would render as a list
+    // indented off the page — both are files a generator can produce.
+    if (isList(kind) && typeof b.level === 'number' && Number.isFinite(b.level)) {
+      const lv = Math.max(0, Math.min(MAX_LIST_LEVEL, Math.floor(b.level)));
+      if (lv !== b.level) repaired.push(`block ${i}: list level ${b.level} clamped to ${lv}`);
+      if (lv > 0) out.level = lv;
+    }
     body.push(out);
   });
   if (!body.length) body.push({ id: uid(), kind: 'para', text: '' });

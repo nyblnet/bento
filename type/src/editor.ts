@@ -20,7 +20,7 @@
 
 import { renderBody, renderBlock, readBlock, isNoteAtom, TAG } from './render.ts';
 import { toggleMark, activeAt, type MarkType } from './inline.ts';
-import { uid, type Block, type TypeDoc } from './model.ts';
+import { isList, uid, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import type { Store } from './store.ts';
 
 export interface Caret { id: string; at: number; to?: number }
@@ -169,6 +169,16 @@ export class Editor {
     if (!c) return;
     if (e.inputType === 'insertParagraph') {
       e.preventDefault();
+      // Enter on an EMPTY list item ends the list instead of adding another
+      // empty one — outdenting a level at a time, then becoming a paragraph.
+      // Every word processor does this and its absence is felt immediately:
+      // without it there is no way out of a list except changing the kind by
+      // hand.
+      const blk = this.store.block(c.id);
+      if (blk && isList(blk.kind) && blk.text === '') {
+        this.#exitList(c);
+        return;
+      }
       this.#splitBlock(c);
       return;
     }
@@ -187,10 +197,13 @@ export class Editor {
     const tailText = src.text.slice(c.at);
     const tail: Block = {
       id: uid(),
-      // a heading's continuation is a paragraph — nobody wants two headings
-      kind: src.kind === 'para' || src.kind === 'quote' ? src.kind : 'para',
+      // a heading's continuation is a paragraph — nobody wants two headings;
+      // a list item's continuation is another item at the same level, which is
+      // what makes a list feel like a list rather than a kind you re-pick
+      kind: src.kind === 'para' || src.kind === 'quote' || isList(src.kind) ? src.kind : 'para',
       text: tailText,
     };
+    if (isList(src.kind) && src.level) tail.level = src.level;
     const shifted = shiftPast(src, c.at);
     if (shifted.marks?.length) tail.marks = shifted.marks;
     if (shifted.notes?.length) tail.notes = shifted.notes;
@@ -243,13 +256,64 @@ export class Editor {
   }
 
   /** Change a block's kind — paragraph, heading, quote. */
+  /** Empty list item + Enter: outdent one level, or leave the list entirely. */
+  #exitList(c: Caret): void {
+    this.store.breakRun();
+    this.#runId = null;
+    this.store.commit(d => {
+      const b = d.body.find(x => x.id === c.id);
+      if (!b) return;
+      const lv = b.level ?? 0;
+      if (lv > 0) b.level = lv - 1 || undefined;
+      else { b.kind = 'para'; delete b.level; }
+    }, { scope: { block: c.id } });
+    this.render();
+    this.setCaret(c);
+    this.onChange?.();
+  }
+
+  /**
+   * Indent or outdent a list item.
+   *
+   * An item may only ever be one level deeper than the item above it. Allowing
+   * a jump would produce a list whose first child is nested two deep, which the
+   * renderer has to express as two <ul>s with nothing between them — legal HTML
+   * that reads as a bug.
+   */
+  indent(by: 1 | -1): boolean {
+    const c = this.caret();
+    if (!c) return false;
+    const i = this.store.doc.body.findIndex(b => b.id === c.id);
+    if (i < 0) return false;
+    const b = this.store.doc.body[i];
+    if (!isList(b.kind)) return false;
+    const cur = b.level ?? 0;
+    const prev = i > 0 ? this.store.doc.body[i - 1] : undefined;
+    const ceiling = prev && isList(prev.kind) ? (prev.level ?? 0) + 1 : 0;
+    const next = Math.max(0, Math.min(by > 0 ? ceiling : cur - 1, MAX_LIST_LEVEL));
+    if (next === cur) return false;
+    this.store.breakRun();
+    this.store.commit(d => {
+      const t = d.body.find(x => x.id === c.id);
+      if (t) { if (next) t.level = next; else delete t.level; }
+    }, { scope: { block: c.id } });
+    this.render();
+    this.setCaret(c);
+    this.onChange?.();
+    return true;
+  }
+
   setKind(kind: Block['kind']): void {
     const c = this.caret();
     if (!c) return;
     this.store.breakRun();
     this.store.commit(d => {
       const b = d.body.find(x => x.id === c.id);
-      if (b) b.kind = kind;
+      if (!b) return;
+      b.kind = kind;
+      // a level left behind on a paragraph is dead data that reappears the
+      // moment somebody makes it a list again, at a depth they did not choose
+      if (!isList(kind)) delete b.level;
     }, { scope: { block: c.id } });
     this.render();
     this.setCaret(c);
@@ -259,6 +323,13 @@ export class Editor {
   // ───────────────────────────────────────────────────────────── keys
 
   #keydown = (e: KeyboardEvent): void => {
+    // Tab indents a list item. It is NOT swallowed elsewhere: in a document
+    // that is not a list, Tab must still move focus out of the editor, which is
+    // the only way a keyboard user leaves it.
+    if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (this.indent(e.shiftKey ? -1 : 1)) e.preventDefault();
+      return;
+    }
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
     const k = e.key.toLowerCase();

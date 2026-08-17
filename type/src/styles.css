@@ -251,6 +251,31 @@ html, body {
 .t-paper h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--paper-ink-2); hyphens: none; }
 .t-paper p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 .t-paper p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+/* ————— lists —————
+   Justified like body text, because a list in a contract is prose that happens
+   to be enumerated. `text-indent` is reset: `p + p` gives paragraphs a first-line
+   indent and a list item is not a continued paragraph.
+
+   The markers are OUTSIDE the text column so the text edge stays flush with the
+   paragraphs above and below — a list that shifts the measure makes the page
+   look broken even though nothing is wrong. */
+.t-paper ul, .t-paper ol {
+  margin: 0 0 10px; padding-inline-start: 1.6em;
+}
+.t-paper li {
+  margin: 0 0 3px; text-align: justify; text-indent: 0;
+  orphans: 2; widows: 2;
+}
+/* a nested list tucks under its parent item and loses the outer gap */
+.t-paper li > ul, .t-paper li > ol { margin: 3px 0 0; }
+.t-paper ul { list-style: disc; }
+.t-paper ul ul { list-style: circle; }
+.t-paper ul ul ul { list-style: square; }
+.t-paper ol { list-style: decimal; }
+.t-paper ol ol { list-style: lower-alpha; }
+.t-paper ol ol ol { list-style: lower-roman; }
+.t-paper li::marker { color: var(--paper-ink-2); }
+
 .t-paper blockquote {
   margin: 12px 0 12px 24px; padding-inline-start: 14px;
   border-inline-start: 2px solid var(--line);

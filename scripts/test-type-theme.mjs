@@ -80,10 +80,23 @@ H('chrome never borrows a document token');
 
 H('no literal colours outside the token blocks');
 {
+  // EXEMPT, with the reason written down — the house pattern from
+  // scripts/test-slides-theme.mjs, which keeps a list like this rather than
+  // letting the gate erode:
+  //
+  //   .t-mark-word span   the slash in `bento/type` is the BRAND accent, and
+  //                       brand does not follow the reader's theme — the same
+  //                       literal appears in slides and spaces, beside the
+  //                       mark's SVG fills which are literal for the same
+  //                       reason. Tokenising it would let a future theme
+  //                       recolour the wordmark, which is the one thing in the
+  //                       chrome that must look identical in all three apps.
+  const EXEMPT = /\.t-mark-word\s+span/;
   const lines = css.split('\n');
   const strays = [];
   lines.forEach((line, i) => {
     if (/^\s*--/.test(line)) return;                     // a token definition
+    if (EXEMPT.test(line)) return;
     if (/#[0-9a-fA-F]{3,8}\b/.test(line)) strays.push(`${i + 1}: ${line.trim().slice(0, 56)}`);
   });
   ok(strays.length === 0,
