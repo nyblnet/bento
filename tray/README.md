@@ -716,6 +716,38 @@ manifest's ECDSA P-256 signature over the exact payload bytes, then the shell's
 document the user afterwards trusts, so an unverified download would let anyone
 in the path choose what they create.
 
+**Two more checks, and neither is optional** — both catch an attacker who can
+re-serve but cannot forge, which is what an origin or CDN compromise looks like:
+
+- **App identity.** A genuinely signed `bento-slides` manifest served on the
+  dash channel passes the signature AND the digest: every byte authentic, just
+  not what was asked for. Checked against the app the CALLER requested, never
+  against what the payload says about itself — and an ABSENT field must not read
+  as a match, which is the hole `tray/webext` had before PR #318.
+- **A rollback floor**, a per-app high-water mark. A stale but genuine manifest
+  passes everything, because every byte of it really was signed and really does
+  match; it just hands over an older release. `kernel/src/update.ts` refuses to
+  go backwards using its own build version, but a host that CREATES documents
+  has nothing to compare against except what it has seen.
+
+  Two details that are easy to get backwards, and both turn a failed attack into
+  a permanent one if you do. The floor is raised **only after the downloaded
+  bytes pass their digest** — raising it on a merely-verified manifest would let
+  one forged-but-unfetchable release naming 9.9.9 lock the device out of every
+  real release below it. And an **equal version is accepted**: re-fetching the
+  version already seen is the normal case, so treating equal as a downgrade
+  breaks the + button on its second use, not at some edge.
+
+  Accepted cost, taken deliberately: a maintainer's own rollback is refused too,
+  so pulling a bad release needs a version bump rather than a re-point.
+
+  An unreadable store reads as NO floor rather than a refusal — being unable to
+  remember must not mean being unable to create a document — and an unparsable
+  version component sorts as 0, so a strange version can fail to raise the floor
+  but never blocks a release. That last one matches the kernel exactly, including
+  the detail that `Number('1a')` is NaN and NaN is falsy, so `(pa[i] || 0)`
+  coerces it to 0 rather than propagating.
+
 Two traps worth keeping:
 
 - **WebCrypto emits ECDSA signatures as raw `r‖s`; Java expects DER.** The

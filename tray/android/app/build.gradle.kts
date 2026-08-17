@@ -92,6 +92,11 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
+
+    // Android's own classes are stubs on the JVM rig and throw by default.
+    // Returning defaults instead lets Releases' verification sequence — the part
+    // most worth testing — run without a device.
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
 
 androidComponents {
