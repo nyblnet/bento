@@ -29,8 +29,12 @@
 // means rewriting the store.
 
 import { applySheetProps } from './rowcol.ts'
+// The one definition of "what counts as a number" — import's. A second
+// implementation here is how a value converts on import and refuses on a
+// type change, or the other way round.
+import { coerce, encodeColumn, inferColumn } from './import.ts'
 import { PROVENANCE_OPS } from './steps.ts'
-import type { CellOverride, Comment, View, Column, ColumnData, DashDoc, Measure, Sheet, Step, TableSheet, CanvasCell, CanvasSheet } from './model.ts'
+import type { CellOverride, Comment, View, Column, ColumnData, ColumnType, DashDoc, Measure, Sheet, Step, TableSheet, CanvasCell, CanvasSheet } from './model.ts'
 
 type Listener = () => void
 export type StoreEvent = 'doc' | 'view' | 'selection'
@@ -93,7 +97,9 @@ export type Patch =
       dropEmptyCells?: boolean
     }
   | { op: 'deleteRows'; sheet: string; rids: number[] }
-  | { op: 'setColumn'; sheet: string; col: string; patch: Record<string, unknown> }
+  | { op: 'setColumn'; sheet: string; col: string; patch: Record<string, unknown>;
+      /** the pre-conversion bytes, set only on the INVERSE of a type change */
+      data?: ColumnData }
   /** `at` is the position; omitted appends. `data` is omitted for a FORMULA
    *  column, which has no stored values — its numbers are derived from its
    *  expression, so storing them would let a file carry a number that
@@ -659,10 +665,85 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
       if (!col) throw new Error(`no column ${p.col}`)
       const was: Record<string, unknown> = {}
       for (const k of Object.keys(p.patch)) was[k] = (col as Record<string, unknown>)[k]
+
+      // A TYPE CHANGE MUST CONVERT THE STORAGE, or the column's declared type
+      // and its bytes disagree and every reader downstream believes the
+      // declaration.
+      //
+      // This shipped, and it produced a WRONG NUMBER at the end of a path dash
+      // itself recommends. Import lands a mixed column as `text` and advises
+      // "set the column type once you have decided what it is". Doing that used
+      // to rewrite only `col.type`: the grid began right-aligning and
+      // number-formatting the values, and `aggregate` (grid.ts) — which skips
+      // anything not already `typeof v === 'number'` — totalled them as
+      // **zero**. Measured on a real import: footer `SUM 0` against a true
+      // total of 10,308.85, which dash returns correctly from `=SUM(D2:D10)`
+      // on a spreadsheet copy of the same rows. A confident wrong total is
+      // worse than a refusal and much worse than an error.
+      //
+      // The conversion reuses IMPORT's own coercion (`inferColumn`/`coerce`/
+      // `encodeColumn`) rather than a second implementation, so "what counts as
+      // a number" has one answer here, on import, and on paste.
+      //
+      // WHAT WILL NOT CONVERT IS REFUSED, NOT ZEROED. `coerce` answers null for
+      // a value it cannot read, and writing those nulls would silently delete
+      // data on a dropdown change. So the patch throws with a count and an
+      // example, the commit is abandoned, and the column keeps both its old
+      // type and its old bytes. That matches the house rule import already
+      // follows: refuse where you cannot decide.
+      let dataWas: ColumnData | undefined
+
+      // AN INVERSE CARRYING BYTES RESTORES THEM. Undo of a type change has to
+      // put back the storage as well as the declaration; restoring only the
+      // declaration leaves exactly the disagreement this case exists to
+      // prevent, pointing the other way.
+      if (p.data !== undefined) {
+        dataWas = sheet.data[p.col]
+        sheet.data[p.col] = p.data
+        Object.assign(col, p.patch)
+        return {
+          inverse: { op: 'setColumn', sheet: p.sheet, col: p.col, patch: was, data: dataWas },
+          touched: { sheet: p.sheet, cols: [p.col], structural: true },
+        }
+      }
+
+      const nextType = p.patch.type as ColumnType | undefined
+      if (nextType !== undefined && nextType !== col.type) {
+        const n = totalRows(sheet)
+        const src = sheet.data[p.col]
+        const rawText: string[] = []
+        for (let i = 0; i < n; i++) {
+          const v = readCell(src, i)
+          rawText.push(v == null ? '' : String(v))
+        }
+        const inf = { ...inferColumn(rawText), type: nextType }
+        const out: unknown[] = []
+        let lost = 0
+        let firstLost = ''
+        for (let i = 0; i < n; i++) {
+          const t = rawText[i]
+          if (t.trim() === '') { out.push(null); continue }
+          const c = coerce(t, inf)
+          if (c === null) { lost++; if (!firstLost) firstLost = t }
+          out.push(c)
+        }
+        if (lost) {
+          throw new Error(
+            `${lost} value${lost === 1 ? '' : 's'} in “${col.name}” cannot be read as ${nextType}` +
+            `${firstLost ? ` (for example “${firstLost}”)` : ''}. The column was left as it was.`,
+          )
+        }
+        dataWas = src
+        sheet.data[p.col] = encodeColumn(out, nextType)
+      }
+
       Object.assign(col, p.patch)
       return {
-        inverse: { op: 'setColumn', sheet: p.sheet, col: p.col, patch: was },
-        touched: { sheet: p.sheet, cols: [p.col] },
+        inverse: {
+          op: 'setColumn', sheet: p.sheet, col: p.col, patch: was,
+          ...(dataWas !== undefined ? { data: dataWas } : {}),
+        },
+        touched: { sheet: p.sheet, cols: [p.col], ...(dataWas !== undefined ? { structural: true } : {}) },
       }
     }
 

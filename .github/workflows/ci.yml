@@ -728,6 +728,24 @@ jobs:
         # presentation so bolding a cell beside a concurrent retype keeps both.
         run: node scripts/test-dash-cellfmt.ts
 
+      - name: dash column type vs storage
+        # Guards a shipped bug that produced a WRONG NUMBER at the end of a path
+        # dash itself recommends — the worst shape a defect can take: not a
+        # crash, not an error cell, a confident total that is wrong. Import
+        # lands a mixed column as text and advises setting the type; doing that
+        # used to move only `col.type`, so the grid right-aligned and
+        # number-formatted the values while `aggregate` skipped every one of
+        # them. Measured on a real .xlsx: footer SUM 0 against a true total of
+        # 10,308.85, a number dash returns correctly from =SUM() on a
+        # spreadsheet copy of the same rows. Three properties: converting works;
+        # undo restores the BYTES and not just the declaration (text→number→text
+        # is lossy, "1200.50" returns as "1200.5", which a typeof check cannot
+        # see); and what will not convert is refused rather than zeroed. The
+        # validator half is checked too, because store.ts can only stop this
+        # state being created — it still arrives from files saved by the buggy
+        # build and from hand-edited JSON, which PLATFORM §7 makes a way in.
+        run: node scripts/test-dash-coltype.ts
+
       - name: Data validation rig
         # In-cell dropdowns and typed entry rules — Excel's Data Validation,
         # which is NOT dash's validate.ts (that one asks whether a workbook

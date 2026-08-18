@@ -559,6 +559,43 @@ function checkFormulas(
     }
   }
 
+  // A COLUMN WHOSE BYTES DISAGREE WITH ITS DECLARED TYPE.
+  //
+  // This file's header says the columnar failure is the one that matters
+  // because it has no symptom. Here is one that had a symptom and it was a
+  // wrong number: a column declared `number` whose stored values are strings
+  // reads as a number column everywhere — right-aligned, number-formatted — and
+  // totals as ZERO, because `aggregate` (grid.ts) skips anything that is not
+  // already `typeof v === 'number'`. Measured before the fix: footer `SUM 0`
+  // against a true total of 10,308.85.
+  //
+  // `store.ts` now converts the storage on a type change and refuses what will
+  // not convert, so this state can no longer be CREATED by the app. It is still
+  // checked here for the two ways it arrives anyway: a file SAVED by a build
+  // that had the bug, and hand-edited or model-generated JSON, which PLATFORM §7
+  // makes a first-class way in. Both look completely normal on screen.
+  //
+  // Only `raw` encodings are walked. A `dict` column is strings by construction
+  // and a `pack` is opaque until inflated, so neither can answer this question.
+  for (const c of columns) {
+    const id = typeof c.id === 'string' ? c.id : ''
+    const want = c.type
+    if (want !== 'number' && want !== 'money' && want !== 'percent') continue
+    if (typeof c.formula === 'string' && c.formula.trim()) continue // computed, not stored
+    const data = (sheet.data as Record<string, ColumnData | undefined>)?.[id]
+    if (!data || data.enc !== 'raw') continue
+    let wrong = 0
+    let sample = ''
+    for (const v of data.v) {
+      if (v == null || typeof v === 'number') continue
+      wrong++
+      if (!sample) sample = String(v)
+    }
+    if (!wrong) continue
+    add({ code: 'type-storage-mismatch', severity: 'suspicious', sheet: sid, column: id,
+      message: `Sheet ${q(sid)}: column ${q(id)} is declared ${q(String(want))} but ${wrong} of its stored values ${wrong === 1 ? 'is' : 'are'} not a number${sample ? ` (for example ${q(sample)})` : ''}. The grid will right-align and format them as numbers, and every total over the column will silently skip them — a column like this reads as SUM 0. Set the type again to convert the storage, or set it back to text.` })
+  }
+
   // Cycles. `recalc` reports these as #CYCLE! per cell rather than a plausible
   // number, so nothing is corrupted — but a column of #CYCLE! in a saved file is
   // a model somebody meant to work, and the graph is cheap to walk without
