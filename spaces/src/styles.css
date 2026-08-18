@@ -660,15 +660,50 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    the page list is already an overlay rather than a column, which is exactly the
    band where the bar is competing with the document for width. One breakpoint,
    one meaning. */
-@media (max-width: 820px) {
-  .sp-sec { display: none; }
-  .sp-more { display: inline-flex; }
-  /* Save keeps its icon; the word costs 44px and says nothing the icon doesn't */
-  .sp-bar .sp-primary span.sp-savelabel { display: none; }
-  /* …and so does Insert's: measured 76.6px labelled against 40px as an icon. */
-  .sp-bar .sp-btnlabel { display: none; }
-  .sp-bar { gap: 2px; }
-  .sp-doctitle { font-size: 13px; }
+/* ————— the topbar fits itself by MEASURING —————
+   These three tiers are applied by editor.ts fitTopbar(), which steps down
+   while the bar still overflows its own box. They were px media queries (820
+   and 600) until it became clear a px guess cannot answer the question being
+   asked: the same buttons need different room at the same viewport width
+   depending on browser zoom, OS text scaling, how long the labels are in the
+   reader's language — eight catalogs ship in every file — and live content
+   like the people count appearing when somebody joins. Slides settled this
+   first (#239); this is its pattern, with this app's controls. */
+
+/* compact: the words beside the icons go. Measured: Insert 76.6px labelled
+   against 40px as an icon; Save's word costs 44px and says nothing the icon
+   does not. */
+.sp-bar-compact .sp-primary span.sp-savelabel { display: none; }
+.sp-bar-compact .sp-btnlabel { display: none; }
+.sp-bar-compact { gap: 2px; }
+.sp-bar-compact .sp-doctitle { font-size: 13px; }
+
+/* tight: the wordmark loses its word, keeping the mark — which is the route
+   to About, and the corner every app in the suite puts it in. */
+.sp-bar-tight .sp-mark-word { display: none; }
+
+/* fold: whole controls move into ⋯. Nothing is lost, everything is one tap
+   away, and the editor asks the DOM which tier is live rather than re-deriving
+   it from a width — see fitTopbar. */
+.sp-bar-fold .sp-sec { display: none; }
+.sp-bar-fold .sp-more { display: inline-flex; }
+.sp-bar-fold .sp-mark { display: none; }
+.sp-bar-fold .sp-group-history { display: none; }
+.sp-bar-fold .sp-split .sp-caret { display: none; }
+/* with the caret gone Save is one button again, not the left half of two */
+.sp-bar-fold .sp-split > .sp-btn:first-child {
+  border-start-end-radius: 8px; border-end-end-radius: 8px;
+  padding-inline-end: 14px;
+}
+/* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
+   ("Reading view — press Esc or the eye to edit" is ~250px) would shove the
+   bar into overflow for the 1.8s it is up and put Save off-screen again.
+   Overlaid on the title strip it says its piece and costs no width. */
+.sp-bar-fold { position: relative; }
+.sp-bar-fold .sp-status {
+  position: absolute; z-index: 2; pointer-events: none;
+  inset-inline: 46px 96px; bottom: 2px; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; background: var(--bg);
 }
 
 /* Belt and braces at every width: a status message can shrink and clip, but it
@@ -755,34 +790,6 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    Save itself never moves. Measured after, coarse pointer, scrollWidth ==
    clientWidth at every one: 320 (Save's right edge 308), 375 (363), 390 (378),
    768 (725, and the rightmost control at 756). */
-@media (max-width: 600px) {
-  .sp-mark { display: none; }
-  .sp-group-history { display: none; }
-  .sp-split .sp-caret { display: none; }
-  /* with the caret gone Save is one button again, not the left half of two */
-  .sp-split > .sp-btn:first-child {
-    border-start-end-radius: 8px; border-end-end-radius: 8px;
-    padding-inline-end: 14px;
-  }
-  /* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
-     ("Reading view — press Esc or the eye to edit" is ~250px) would shove the
-     bar into overflow for the 1.8s it is up and put Save off-screen again.
-     Overlaid on the title strip it says its piece and costs no width. */
-  .sp-bar { position: relative; }
-  .sp-status {
-    position: absolute; z-index: 2; pointer-events: none;
-    inset-inline: 46px 96px; bottom: 2px; text-align: center;
-    overflow: hidden; text-overflow: ellipsis; background: #fff;
-  }
-}
-
-@media (max-width: 820px) {
-  /* on a tablet the mark stays — it is the route to About — but loses its
-     word. On a PHONE it goes too; see the phone-topbar block above, which must
-     therefore not be out-specified from here. */
-  .sp-mark-word { display: none; }
-}
-
 /* About opens with the suite's mark, as slides does — a dialog that starts on a
    section heading does not say what you are looking at. */
 .sp-about-head { margin-bottom: 4px; }

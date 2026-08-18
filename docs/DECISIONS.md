@@ -14,6 +14,44 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-18 — The spaces topbar fits itself by measuring, not by px breakpoints
+
+The bar folded at 820px and again at 600px. Those numbers moved once already
+(720 → 820, because at 768 the save caret still ended 27px off the screen) and
+they would have moved again, because a px guess cannot answer the question
+being asked. The same buttons need different room at the same viewport width
+depending on browser zoom, OS text scaling, live content, and — this is the one
+that matters here — the reader's language.
+
+MEASURED on the shipped shell at a 1600px viewport: the control group is 568px
+in English and 618px in German. Fifty pixels the 820 threshold was never
+calibrated for, in a file that ships eight catalogs so that any reader can open
+it in their own language. The English-calibrated breakpoint was the only
+calibration there was.
+
+Three tiers now, applied by `fitTopbar()` stepping down while the bar still
+overflows its own box: `sp-bar-compact` drops the button words, `sp-bar-tight`
+drops the wordmark, `sp-bar-fold` moves whole controls into ⋯. A ResizeObserver
+is the primary signal; a MutationObserver catches the content that changes
+width at a fixed viewport (the people count arriving when somebody joins a
+session). The observer must NOT watch `class` — fitTopbar's own tier flips are
+class changes on that element.
+
+THE SECOND COPY OF THE NUMBER IS GONE, which is the real win. `isPhone()` was
+`matchMedia('(max-width: 600px)')` with a comment saying the number was
+duplicated from the stylesheet on purpose; it decided what the ⋯ menu carried,
+and when it disagreed with the CSS the symptom was a menu offering Undo while
+Undo sat in the bar two centimetres away. It is `isFolded()` now and it reads
+the tier off the bar — there is nothing left to disagree with.
+
+The drawer breakpoint STAYS a media query (820px). Whether the page list is a
+column or an overlay is a layout mode, not a question about whether things fit,
+and slides keeps its own for the same reason.
+
+Follows bento/slides #239, which settled this first.
+
+---
+
 ## 2026-08-18 — Presence in a space is a page, shown in the tree
 
 bento/slides paints collaborator cursors on its canvas, because a deck IS a

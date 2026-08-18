@@ -14,6 +14,11 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **The toolbar fits itself.** It used to fold at two fixed widths that were
+  measured in English; German needs 50px more for the same buttons, and eight
+  languages ship in every file. It now measures itself and steps down when it
+  actually runs out of room — at any zoom level, text size or language.
+
 - **You can see who else is here.** A coloured initial sits on the page each
   person is reading, so a shared space shows at a glance where everyone is
   working. Click somebody in the people panel to go to them.

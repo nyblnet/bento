@@ -216,7 +216,7 @@ export class Editor {
       // (35px) and the save caret (48px) are what a phone gives up so that the
       // document title beside them is still wide enough to read. Nothing is
       // lost: they are all one tap away, here.
-      if (this.isPhone()) {
+      if (this.isFolded()) {
         menu.append(this.menuItem('undo', t('Undo (⌘Z)'), '', () => {
           close(); this.store.undo(); this.repaint()
         }, { off: !this.store.canUndo }))
@@ -227,7 +227,7 @@ export class Editor {
       for (const a of secondary) {
         menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
       }
-      if (this.isPhone()) {
+      if (this.isFolded()) {
         menu.append(this.menuItem('copy', t('Save a copy…'), t('A second file — the original is left alone'), () => {
           close(); void this.saveAs('copy')
         }))
@@ -285,6 +285,30 @@ export class Editor {
     right.append(insert, search, ...inlineSecondary, this.liveSlot, more, saveGroup)
 
     bar.append(pagesB, mark, title, this.statusEl, history, right)
+
+    // Drive the fit now, and again whenever the bar's size or its CONTENT
+    // changes. The ResizeObserver is the primary width signal — it fires for
+    // every viewport change, including a phone rotating, where matchMedia
+    // change events are unreliable under a driven viewport. The MutationObserver
+    // catches the constant-width case: the people count appearing when someone
+    // joins, the "Saved" tag flashing, the update chip arriving. Each of those
+    // clipped the end of the bar under the old breakpoints.
+    this.topbar = bar
+    this.barRO?.disconnect()
+    this.barRO = new ResizeObserver(() => this.fitTopbar())
+    this.barRO.observe(bar)
+    this.barMO?.disconnect()
+    this.barMO = new MutationObserver(() => this.fitTopbar())
+    this.barMO.observe(bar, {
+      childList: true, subtree: true, characterData: true,
+      // NOT 'class': fitTopbar's own tier flips are class changes on this very
+      // element, and observing them makes the fix for the loop (takeRecords)
+      // the only thing standing between here and a spin. Slides omits it for
+      // the same reason.
+      attributes: true, attributeFilter: ['style', 'hidden'],
+    })
+    // …and once the bar is actually in the document and has a width to measure
+    queueMicrotask(() => this.fitTopbar())
 
     this.sidebar = el('nav', 'sp-side')
     this.sidebar.setAttribute('aria-label', t('Pages'))
@@ -499,14 +523,59 @@ export class Editor {
   }
 
   /**
-   * A PHONE, not merely a narrow window: the width below which the topbar has
-   * dropped the wordmark, the history pair and the save caret (styles.css, the
-   * "phone topbar" block). The number is duplicated between here and the
-   * stylesheet on purpose — the alternative is a menu that offers Undo while
-   * Undo is also sitting in the bar two centimetres away.
+   * Has the bar FOLDED — are undo/redo and the save caret currently inside ⋯
+   * rather than in the bar?
+   *
+   * This used to be `matchMedia('(max-width: 600px)')`, with a comment saying
+   * the number was duplicated from the stylesheet on purpose. It is not needed
+   * at all now: fitTopbar puts the tier on the bar as a class, so the menu can
+   * ASK what is on screen instead of re-deriving it from a width and hoping
+   * the two agree. When they disagreed the symptom was a menu offering Undo
+   * while Undo sat in the bar two centimetres away.
    */
-  private isPhone(): boolean {
-    return window.matchMedia('(max-width: 600px)').matches
+  private isFolded(): boolean {
+    return !!this.topbar?.classList.contains('sp-bar-fold')
+  }
+
+  /**
+   * Size the topbar by MEASURING it, not by width breakpoints.
+   *
+   * A px guess cannot answer the question being asked. The same buttons need
+   * different room at the same viewport width depending on browser zoom, OS
+   * text scaling, and how long the labels are in the reader's language — eight
+   * catalogs ship inside every file, and "Insert" is 76px in English and
+   * nothing like that in German. The bar's own CONTENT changes width too, at a
+   * fixed viewport: the people count appears when somebody joins a session.
+   * Each of those cases clipped the end of the bar under the old 820/600
+   * breakpoints. Slides settled this first (#239); this is its pattern.
+   *
+   * Start from the widest layout, step down a tier while the bar still
+   * overflows its own box.
+   */
+  private fitTopbar(): void {
+    const bar = this.topbar
+    if (!bar || !bar.isConnected) return
+    const tiers = ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold']
+    // Re-fitting starts by UNFOLDING, which would slam shut a menu somebody is
+    // reading — and the ⋯ menu's contents depend on the tier, so rebuilding it
+    // mid-read would change it under them. The next resize runs this again.
+    if (this.overlay) return
+    // scrollWidth counts content sticking out of the padding box even with
+    // overflow visible, so this IS the clipped-controls condition. 1px of
+    // slack absorbs subpixel rounding at fractional zoom.
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // The title is the only shrinkable thing in the bar, so flexbox crushes it
+    // toward its floor before anything overflows. Waiting for hard overflow
+    // would mean full labels beside an unreadable document title.
+    const title = bar.querySelector<HTMLElement>('.sp-doctitle')
+    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 110)
+    bar.classList.remove(...tiers)
+    if (cramped()) bar.classList.add('sp-bar-compact')
+    if (cramped()) bar.classList.add('sp-bar-tight')
+    if (cramped()) bar.classList.add('sp-bar-fold')
+    // the class flips above queued mutation records of their own; drop them,
+    // or the observer re-runs this forever
+    this.barMO?.takeRecords()
   }
 
   /**
@@ -1970,6 +2039,9 @@ export class Editor {
 
   private collab: import('./collabui.ts').CollabUi | null = null
   private liveSlot!: HTMLElement
+  private topbar: HTMLElement | null = null
+  private barRO: ResizeObserver | null = null
+  private barMO: MutationObserver | null = null
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private paintTreeSoon(): void {
     clearTimeout(this.treeTimer)

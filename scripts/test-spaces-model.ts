@@ -387,36 +387,71 @@ for (const [label, input, err] of [
   ok(/secondary\.map\(/.test(ed), '…the inline row is built from that list')
   ok(/for \(const a of secondary\)/.test(ed), '…and the ⋯ menu is built from the SAME list')
 
-  // Which TIER a rule lives in is the thing worth pinning: the numbers moved
-  // once already (720 → 820) because at 768 the save caret still ended 27px off
-  // the screen, and they will move again.
-  const tierOf = (sel: RegExp): number => {
-    const i = css.search(sel)
-    if (i < 0) return -1
-    const opener = [...css.slice(0, i).matchAll(/@media \(max-width: (\d+)px\)/g)].pop()
-    return opener ? Number(opener[1]) : 0
+  // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
+  // no longer px media queries. They were (820 and 600), and the numbers moved
+  // once already (720 -> 820, because at 768 the save caret still ended 27px
+  // off the screen). They moved because a px guess cannot answer the question:
+  // the same buttons need different room at the same viewport width depending
+  // on browser zoom, OS text scaling, and the reader's language. Measured on
+  // the shipped shell: the control group is 568px in English and 618px in
+  // German — 50px the old threshold was never calibrated for, and eight
+  // catalogs ship inside every file.
+  //
+  // So the tiers are CLASSES now, applied by measuring, and what is worth
+  // pinning is that each control is dropped by the right tier.
+  const inTier = (tier: string, sel: RegExp): boolean => {
+    const re = new RegExp('\\.sp-bar-' + tier + '\\s+' + sel.source)
+    return re.test(css)
   }
-  ok(tierOf(/\.sp-sec \{ display: none/) === 820, 'the inline secondary row folds at the drawer breakpoint')
-  ok(tierOf(/\.sp-more \{ display: inline-flex/) === 820, '…which is where the ⋯ menu appears')
+  ok(inTier('compact', /\.sp-btnlabel \{ display: none/), 'compact drops the button words')
+  ok(inTier('compact', /\.sp-primary span\.sp-savelabel \{ display: none/), "…including Save's")
+  ok(inTier('tight', /\.sp-mark-word \{ display: none/), 'tight drops the wordmark, keeping the mark')
+  ok(inTier('fold', /\.sp-sec \{ display: none/), 'fold moves the secondary row into ⋯')
+  ok(inTier('fold', /\.sp-more \{ display: inline-flex/), '…which is where ⋯ appears')
+  ok(inTier('fold', /\.sp-mark \{ display: none/), '…and the mark goes (About is in ⋯)')
+  ok(inTier('fold', /\.sp-group-history \{ display: none/), '…and the history pair')
+  ok(inTier('fold', /\.sp-split \.sp-caret \{ display: none/), '…and the save caret')
+  ok(/\.sp-bar-fold \.sp-status \{\n\s*position: absolute/.test(css),
+    'the status message leaves the flow when folded, so it cannot move Save')
 
-  // THE PHONE TIER. Folding the six secondary actions was not enough: measured
-  // on a 390×844 viewport with a coarse pointer, the bar still laid out 467px
-  // wide and Save's right edge landed at x = 426 — 36px off the screen. So a
-  // phone also gives up the wordmark, the history pair and the save caret, and
-  // the ⋯ menu picks them up.
-  ok(tierOf(/\.sp-mark \{ display: none/) === 600, 'a phone drops the wordmark (About is in ⋯)')
-  ok(tierOf(/\.sp-group-history \{ display: none/) === 600, '…and the history pair')
-  ok(tierOf(/\.sp-split \.sp-caret \{ display: none/) === 600, '…and the save caret')
-  // The status line is a nowrap span: left in the flow, one long message pushes
-  // Save back off the screen for as long as it is up.
-  ok(tierOf(/\.sp-status \{\n\s*position: absolute/) === 600,
-    'the status message is out of the flow on a phone, so it cannot move Save')
-  // The JS gate that decides what the ⋯ menu carries MUST agree with the CSS
-  // tier, or the menu offers Undo while Undo is also sitting in the bar.
-  const isPhone = ed.match(/isPhone\(\): boolean \{[\s\S]{0,120}?matchMedia\('\(max-width: (\d+)px\)'\)/)
-  ok(!!isPhone && Number(isPhone![1]) === 600, 'isPhone() uses the same breakpoint as the phone tier')
-  ok(/if \(this\.isPhone\(\)\)/.test(ed) && /t\('Undo \(⌘Z\)'\)/.test(ed) && /t\('Redo \(⇧⌘Z\)'\)/.test(ed),
-    '…and the ⋯ menu picks up undo/redo there')
+  // NO px query may govern the fold any more. A stray one would re-introduce
+  // exactly the disagreement this replaced: CSS folding at one width while the
+  // menu decides its contents at another.
+  const foldSelectors = [/\.sp-sec \{ display: none/, /\.sp-mark \{ display: none/,
+    /\.sp-group-history \{ display: none/, /\.sp-split \.sp-caret \{ display: none/]
+  for (const sel of foldSelectors) {
+    const i = css.search(sel)
+    const opener = i < 0 ? null : [...css.slice(0, i).matchAll(/@media \(max-width: (\d+)px\)/g)].pop()
+    const closer = i < 0 ? -1 : css.lastIndexOf('\n}', i)
+    const inQuery = !!opener && closer < (opener.index ?? 0)
+    ok(!inQuery, `${sel.source.slice(0, 28)} is not inside a width query`)
+  }
+
+  // The bar is sized by MEASUREMENT, and the measurement is the overflow of
+  // the bar's own box — not a number written down twice.
+  ok(/private fitTopbar\(\): void \{/.test(ed), 'fitTopbar exists')
+  ok(/bar\.scrollWidth - bar\.clientWidth/.test(ed), '…and it measures overflow rather than matching a width')
+  ok(/new ResizeObserver\(\(\) => this\.fitTopbar\(\)\)/.test(ed), 'a ResizeObserver drives it on viewport change')
+  ok(/new MutationObserver\(\(\) => this\.fitTopbar\(\)\)/.test(ed),
+    '…and a MutationObserver for content that changes width at a fixed viewport')
+  ok(/attributeFilter: \['style', 'hidden'\]/.test(ed),
+    "…which does NOT watch 'class', or its own tier flips would feed it")
+  ok(/this\.barMO\?\.takeRecords\(\)/.test(ed), '…and it drops the records its own mutations queue')
+
+  // THE JS GATE ASKS THE DOM. It used to be matchMedia with the phone number
+  // written down a second time, and the comment beside it admitted as much;
+  // when the two disagreed the symptom was a menu offering Undo while Undo sat
+  // in the bar two centimetres away.
+  ok(/isFolded\(\): boolean \{[\s\S]{0,160}?classList\.contains\('sp-bar-fold'\)/.test(ed),
+    'isFolded() reads the tier off the bar instead of re-deriving it from a width')
+  // Comments STRIPPED before this one: the doc comment above isFolded quotes
+  // the expression it replaced, and an assertion that reads prose is an
+  // assertion that fails when somebody explains themselves.
+  const edCode = ed.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  ok(!/matchMedia\('\(max-width: 600px\)'\)/.test(edCode),
+    'no phone breakpoint is duplicated in the editor CODE')
+  ok(/if \(this\.isFolded\(\)\)/.test(ed) && /t\('Undo \(⌘Z\)'\)/.test(ed) && /t\('Redo \(⇧⌘Z\)'\)/.test(ed),
+    '…and the ⋯ menu picks up undo/redo exactly when the bar has folded them away')
 
   // the bar must never become a scroller — that hides the same controls, just
   // less honestly, and it is the fix everyone reaches for first
