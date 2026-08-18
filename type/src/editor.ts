@@ -445,13 +445,27 @@ export class Editor {
     }
   };
 
+  /**
+   * The marks in force at the caret.
+   *
+   * The same answer `onSelection` pushes, available to ASK for. A panel that
+   * rebuilds itself needs the state at the moment it rebuilds, and a single
+   * push callback can only have one subscriber — so a second consumer either
+   * hijacks it or mirrors it into a variable that is stale by definition.
+   */
+  activeMarks(): Set<MarkType> {
+    const c = this.caret();
+    if (!c) return new Set();
+    const blk = this.store.block(c.id);
+    if (!blk) return new Set();
+    return activeAt(blk.marks ?? [], c.to !== undefined ? Math.min(c.at, c.to) + 1 : c.at);
+  }
+
   #selectionChange = (): void => {
     if (!this.onSelection) return;
-    const c = this.caret();
-    if (!c) return;
-    const blk = this.store.block(c.id);
-    if (!blk) return;
-    this.onSelection(activeAt(blk.marks ?? [], c.to !== undefined ? Math.min(c.at, c.to) + 1 : c.at));
+    const marks = this.activeMarks();
+    if (!this.caret()) return;
+    this.onSelection(marks);
   };
 
   destroy(): void {

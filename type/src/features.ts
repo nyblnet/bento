@@ -133,6 +133,18 @@ export type PaginatedFn = (ctx: FeatureContext, metrics: unknown, host: HTMLElem
 const READY: ReadyFn[] = [];
 const PAGINATED: PaginatedFn[] = [];
 export const registerReady = (f: ReadyFn): void => { READY.push(f); };
+
+/**
+ * The caret moved, or the selection changed.
+ *
+ * A CONTEXTUAL panel needs this and the document signal is not enough: moving
+ * the caret from a paragraph into a table cell changes what the properties
+ * panel should show without changing a byte of the document.
+ */
+export type SelectionFn = (ctx: FeatureContext) => void;
+const SELECTION: SelectionFn[] = [];
+export const registerSelection = (f: SelectionFn): void => { SELECTION.push(f); };
+export const selectionFns = (): SelectionFn[] => SELECTION;
 export const registerPaginated = (f: PaginatedFn): void => { PAGINATED.push(f); };
 export const readyFns = (): ReadyFn[] => READY;
 export const paginatedFns = (): PaginatedFn[] => PAGINATED;

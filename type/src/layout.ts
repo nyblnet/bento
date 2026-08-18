@@ -914,6 +914,11 @@ export function openPageSetup(ctx: FeatureContext): void {
 // the author is judging the change by.
 
 function mountPanel(host: HTMLElement, ctx: FeatureContext): void {
+  // its own title, now that the mount loop no longer adds one
+  const title = document.createElement('div');
+  title.className = 't-section';
+  title.textContent = t('Paragraph');
+  host.appendChild(title);
   watch(ctx);
   const unit = readerUnit();
   const wrap = el('div', 't-lay');

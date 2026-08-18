@@ -12,7 +12,7 @@ import {
 } from '../../kernel/src/save.ts';
 import { ICONS } from './icons.ts';
 import { t } from './i18n.ts';
-import { tools, menuItems, panels, matchKey, readyFns, paginatedFns, text as labelText, type FeatureContext } from './features.ts';
+import { tools, menuItems, panels, matchKey, readyFns, paginatedFns, selectionFns, text as labelText, type FeatureContext } from './features.ts';
 import './registry.ts';   // side-effect: every feature module registers itself
 import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
@@ -112,17 +112,7 @@ app.innerHTML = `
     <span class="t-status" id="status"></span>
 
     <div class="t-right">
-      <select id="kind" class="t-select"></select>
       <div class="t-group" id="gFormat"></div>
-      <div class="t-group">
-        <button id="mb" class="t-btn" type="button"></button>
-        <button id="mi" class="t-btn" type="button"></button>
-        <button id="mu" class="t-btn" type="button"></button>
-      </div>
-      <div class="t-group">
-        <button id="lul" class="t-btn" type="button"></button>
-        <button id="lol" class="t-btn" type="button"></button>
-      </div>
       <div class="t-group" id="gInsert"></div>
       <div class="t-group" id="gReview"></div>
       <div class="t-group">
@@ -187,16 +177,11 @@ const label = (id: string, html: string, tip: string, text = '') => {
 
 label('sidebar', ICONS.panelLeft, t('Outline — show or hide the document map'));
 label('props', ICONS.panelRight, t('Format — show or hide the properties panel'));
-label('mb', ICONS.bold, t('Bold (⌘B)'));
-label('mi', ICONS.italic, t('Italic (⌘I)'));
-label('mu', ICONS.underline, t('Underline (⌘U)'));
 // Strikethrough and code leave the BAR for the ⋯ menu: of the five character
 // formats they are the two nobody reaches for mid-sentence in the prose this
 // app is for, and bar width is the scarcest thing in the app.
 label('ms', ICONS.strike, t('Strikethrough'), t('Strikethrough'));
 label('mc', ICONS.code, t('Code'), t('Code'));
-label('lul', ICONS.bullets, t('Bulleted list'));
-label('lol', ICONS.numbers, t('Numbered list'));
 label('undo', ICONS.undo, t('Undo (⌘Z)'));
 label('redo', ICONS.redo, t('Redo (⇧⌘Z)'));
 label('save', ICONS.save, t('Save (⌘S)'), t('Save'));
@@ -233,16 +218,6 @@ const showAbout = () => openAbout({
 });
 byId('mark').addEventListener('click', showAbout);
 byId('about').addEventListener('click', showAbout);
-
-for (const [val, text] of [
-  ['para', t('Body')], ['h1', t('Title')], ['h2', t('Heading')],
-  ['h3', t('Subheading')], ['quote', t('Quote')],
-  ['ul', t('Bulleted list')], ['ol', t('Numbered list')],
-] as const) {
-  const o = document.createElement('option');
-  o.value = val; o.textContent = text;
-  byId<HTMLSelectElement>('kind').append(o);
-}
 
 for (const [tab, text] of [['outline', t('Outline')], ['review', t('Review')], ['sigs', t('Signatures')]] as const) {
   const b = document.querySelector<HTMLElement>(`.t-tabs [data-tab="${tab}"]`);
@@ -414,11 +389,12 @@ for (const spec of panels('right')) {
   panel.dataset.panel = spec.id;
   // a DIV, not an <h3>: these are chrome, and a real heading here joins the
   // document's own headings for anything that collects them
-  const head = document.createElement('div');
-  head.className = 't-section';
-  head.textContent = labelText(spec.label);
-  panel.appendChild(head);
   byId('propsPanel').appendChild(panel);
+  // NO header added here. A contextual panel owns its whole body and rebuilds
+  // it with replaceChildren, which wiped a header the loop had just added — so
+  // the label vanished the first time the panel refreshed. A panel that wants a
+  // title writes its own section, which is also what lets ONE panel show
+  // several (Text, Picture, Table) as the selection changes.
   spec.mount(panel, featureCtx);
   if (spec.update) store.on(() => spec.update!(panel, featureCtx));
 }
@@ -497,28 +473,27 @@ const refresh = () => { markDirty(); paint(); schedule(); };
 editor.onChange = refresh;
 store.on(refresh);
 
-const MARK_BTN: Array<[string, MarkType]> = [['mb', 'b'], ['mi', 'i'], ['mu', 'u'], ['ms', 's'], ['mc', 'code']];
+// Bold, italic and underline moved to the properties panel with the rest of the
+// character formatting; strikethrough and code live in the ⋯ menu. Only the
+// ones still in the chrome are wired here, and the lookup is GUARDED rather
+// than asserted: `getElementById(id)!` on a button that had moved was a
+// TypeError at boot that tsc could not see — the app rendered its paper and
+// then stopped before it published `window.bento`, so it looked like it worked.
+const MARK_BTN: Array<[string, MarkType]> = [['ms', 's'], ['mc', 'code']];
 for (const [id, t] of MARK_BTN) {
-  document.getElementById(id)!.addEventListener('mousedown', (e) => {
+  document.getElementById(id)?.addEventListener('mousedown', (e) => {
     e.preventDefault();                      // keep the selection alive
     editor.toggle(t);
   });
 }
 editor.onSelection = (active) => {
   paintToolStates();
-  for (const [id, t] of MARK_BTN) document.getElementById(id)!.classList.toggle('on', active.has(t));
+  for (const f of selectionFns()) f(featureCtx);
+  for (const [id, t] of MARK_BTN) document.getElementById(id)?.classList.toggle('on', active.has(t));
 };
 // A list button TOGGLES: pressing Bulleted list on an item that is already
 // bulleted returns it to a paragraph. Without that the button is a one-way door
 // and the only way back is the style menu, which is not where anyone looks.
-for (const [id, kind] of [['lul', 'ul'], ['lol', 'ol']] as const) {
-  byId(id).addEventListener('mousedown', e => {
-    e.preventDefault();                        // keep the caret
-    const c = editor.caret();
-    const cur = c && store.block(c.id)?.kind;
-    editor.setKind(cur === kind ? 'para' : kind);
-  });
-}
 
 byId('sidebar').addEventListener('click', () => {
   document.querySelector('.t-main')!.classList.toggle('t-side-off');
@@ -533,10 +508,6 @@ window.addEventListener('keydown', e => {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
   if (e.key === '[') document.querySelector('.t-main')!.classList.toggle('t-side-off');
   if (e.key === ']') document.querySelector('.t-main')!.classList.toggle('t-props-off');
-});
-
-document.getElementById('kind')!.addEventListener('change', (e) => {
-  editor.setKind((e.target as HTMLSelectElement).value as never);
 });
 document.getElementById('undo')!.addEventListener('mousedown', (e) => {
   e.preventDefault(); store.undo(); editor.render(); refresh();

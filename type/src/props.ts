@@ -1,0 +1,308 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// The properties panel — what the thing under the caret IS, and how to change it.
+//
+// THE SUITE'S DIVISION, and it is not a matter of taste: the top bar holds
+// ACTIONS, the right panel holds PROPERTIES. slides does exactly this — its bar
+// inserts and its panel describes, with Typography, Fill & stroke and Position
+// & size all panel sections that change with the selection
+// (slides/src/editor/panels.ts). type had drifted into putting properties in
+// the bar, one control at a time, until the bar was permanently folded.
+//
+// CONTEXTUAL means the panel answers a question about the current block. Put the
+// caret in a paragraph and it offers the paragraph's style and its character
+// formatting; put it in a table cell and a Table section appears; select a
+// picture and its width, alignment and alt text appear. Nothing is shown for a
+// thing that is not there — a panel of permanently disabled controls teaches
+// people to stop reading it.
+//
+// It rebuilds on the SELECTION signal as well as the document one, because
+// moving the caret from a paragraph into a cell changes what should be shown
+// without changing a byte of the document.
+
+import { registerPanel, registerSelection, type FeatureContext } from './features.ts';
+import { ICONS } from './icons.ts';
+import { t } from './i18n.ts';
+import { MAX_TABLE_COLS, type Block, type BlockKind } from './model.ts';
+
+// ─────────────────────────────────────────────────────────────── small parts
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string): HTMLElementTagNameMap[K] => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  return n;
+};
+
+/** A titled group. Sections are the panel's grammar — one per kind of thing. */
+function section(host: HTMLElement, title: string): HTMLElement {
+  const h = el('div', 't-section');
+  h.textContent = title;
+  const body = el('div', 't-sec-body');
+  host.append(h, body);
+  return body;
+}
+
+/** A labelled row: the name on the left, the control right-aligned. */
+function row(host: HTMLElement, label: string, control: HTMLElement): HTMLElement {
+  const r = el('div', 't-row');
+  const s = el('span');
+  s.textContent = label;
+  r.append(s, control);
+  host.appendChild(r);
+  return r;
+}
+
+/** A cluster of toggle buttons, e.g. bold / italic / underline. */
+function toggles(
+  host: HTMLElement,
+  items: Array<{ icon: string; title: string; on: boolean; run: () => void }>,
+): void {
+  const g = el('div', 't-toggles');
+  for (const it of items) {
+    const b = el('button', 't-btn' + (it.on ? ' on' : ''));
+    b.type = 'button';
+    b.innerHTML = it.icon;
+    b.title = it.title;
+    // mousedown, not click: the caret must survive pressing a formatting button
+    b.addEventListener('mousedown', e => { e.preventDefault(); it.run(); });
+    g.appendChild(b);
+  }
+  host.appendChild(g);
+}
+
+function select(
+  options: Array<[string, string]>, value: string, onChange: (v: string) => void,
+): HTMLSelectElement {
+  const s = el('select', 't-select');
+  for (const [v, label] of options) {
+    const o = el('option');
+    o.value = v; o.textContent = label; o.selected = v === value;
+    s.appendChild(o);
+  }
+  s.addEventListener('change', () => onChange(s.value));
+  return s;
+}
+
+function numberField(value: number | undefined, placeholder: string,
+                     onCommit: (v: number | undefined) => void): HTMLInputElement {
+  const i = el('input', 't-field');
+  i.type = 'number';
+  i.value = value === undefined ? '' : String(value);
+  i.placeholder = placeholder;
+  i.addEventListener('change', () => {
+    const raw = i.value.trim();
+    onCommit(raw === '' ? undefined : Number(raw));
+  });
+  return i;
+}
+
+// ────────────────────────────────────────────────────────────────── sections
+
+/** The block under the caret, or undefined. */
+function current(ctx: FeatureContext): Block | undefined {
+  const c = ctx.editor.caret();
+  return c ? ctx.store.block(c.id) : undefined;
+}
+
+const STYLE_OPTIONS: Array<[BlockKind, string]> = [
+  ['para', 'Body'], ['h1', 'Title'], ['h2', 'Heading'], ['h3', 'Subheading'],
+  ['quote', 'Quote'], ['ul', 'Bulleted list'], ['ol', 'Numbered list'],
+];
+
+function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
+  const body = section(host, t('Text'));
+  row(body, t('Style'), select(
+    STYLE_OPTIONS.map(([v, l]) => [v, t(l)] as [string, string]),
+    b.kind,
+    v => { ctx.editor.setKind(v as BlockKind); ctx.refresh(); },
+  ));
+
+  const active = ctx.editor.activeMarks() as Set<string>;
+  toggles(body, [
+    { icon: ICONS.bold, title: t('Bold (⌘B)'), on: active.has('b'), run: () => ctx.editor.toggle('b') },
+    { icon: ICONS.italic, title: t('Italic (⌘I)'), on: active.has('i'), run: () => ctx.editor.toggle('i') },
+    { icon: ICONS.underline, title: t('Underline (⌘U)'), on: active.has('u'), run: () => ctx.editor.toggle('u') },
+    { icon: ICONS.strike, title: t('Strikethrough'), on: active.has('s'), run: () => ctx.editor.toggle('s') },
+    { icon: ICONS.code, title: t('Code'), on: active.has('code'), run: () => ctx.editor.toggle('code') },
+  ]);
+}
+
+function imageSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
+  const body = section(host, t('Picture'));
+  const im = b.image;
+  if (!im) return;
+
+  // WIDTH IS A PERCENTAGE of the text measure, because that is what the model
+  // stores — a fraction, not pixels, so the picture still fits when the page
+  // size changes. Showing pixels here would invite a value that stops being
+  // right the moment somebody switches to A4.
+  const w = numberField(im.w === undefined ? undefined : Math.round(im.w * 100), '100', v => {
+    ctx.store.commit(d => {
+      const t2 = d.body.find(x => x.id === b.id);
+      if (!t2?.image) return;
+      if (v === undefined || !(v > 0) || v > 100) delete t2.image.w;
+      else t2.image.w = v / 100;
+    }, { scope: { block: b.id } });
+    ctx.refresh();
+  });
+  row(body, t('Width (%)'), w);
+
+  row(body, t('Align'), select(
+    [['left', t('Left')], ['center', t('Centre')], ['right', t('Right')]],
+    im.align ?? 'center',
+    v => {
+      ctx.store.commit(d => {
+        const t2 = d.body.find(x => x.id === b.id);
+        if (t2?.image) t2.image.align = v as 'left' | 'center' | 'right';
+      }, { scope: { block: b.id } });
+      ctx.refresh();
+    },
+  ));
+
+  const alt = el('input', 't-field t-field-wide');
+  alt.value = im.alt ?? '';
+  alt.placeholder = t('What the picture shows');
+  alt.addEventListener('change', () => {
+    ctx.store.commit(d => {
+      const t2 = d.body.find(x => x.id === b.id);
+      if (t2?.image) t2.image.alt = alt.value;
+    }, { scope: { block: b.id } });
+  });
+  row(body, t('Alt text'), alt);
+  const note = el('p', 't-note');
+  // Alt text is not decoration: it is what a screen reader says, what search
+  // finds, and what survives when the picture does not (parseDoc keeps it as
+  // the paragraph text when a source is unusable).
+  note.textContent = t('Read aloud by screen readers, and kept as the text if the picture is ever lost.');
+  body.appendChild(note);
+}
+
+/** Every cell of the table the caret is in, in document order. */
+function tableCells(ctx: FeatureContext, b: Block): Block[] {
+  const id = b.cell?.table;
+  if (!id) return [];
+  return ctx.store.doc.body.filter(x => x.kind === 'cell' && x.cell?.table === id);
+}
+
+function tableSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
+  const body = section(host, t('Table'));
+  const cells = tableCells(ctx, b);
+  const cols = b.cell?.cols ?? 1;
+  const rows = Math.ceil(cells.length / cols);
+
+  const info = el('p', 't-note');
+  info.textContent = t('{rows} rows × {cols} columns', { rows, cols });
+  body.appendChild(info);
+
+  const headOn = !!cells[0]?.cell?.head;
+  const head = el('input');
+  head.type = 'checkbox';
+  head.checked = headOn;
+  head.addEventListener('change', () => {
+    ctx.store.commit(d => {
+      const all = d.body.filter(x => x.kind === 'cell' && x.cell?.table === b.cell!.table);
+      all.slice(0, cols).forEach(c => {
+        if (!c.cell) return;
+        if (head.checked) c.cell.head = true; else delete c.cell.head;
+      });
+    });
+    ctx.refresh();
+  });
+  row(body, t('Header row'), head);
+
+  const addRow = el('button', 't-btn');
+  addRow.type = 'button';
+  addRow.textContent = t('Add row');
+  addRow.addEventListener('click', () => {
+    ctx.store.commit(d => {
+      const all = d.body.filter(x => x.kind === 'cell' && x.cell?.table === b.cell!.table);
+      const last = d.body.indexOf(all[all.length - 1]);
+      const fresh: Block[] = Array.from({ length: cols }, (_, i) => ({
+        id: `${b.cell!.table}-r${Date.now().toString(36)}-${i}`,
+        kind: 'cell' as const, text: '', cell: { table: b.cell!.table, cols },
+      }));
+      d.body.splice(last + 1, 0, ...fresh);
+    });
+    ctx.refresh();
+  });
+
+  const addCol = el('button', 't-btn');
+  addCol.type = 'button';
+  addCol.textContent = t('Add column');
+  addCol.disabled = cols >= MAX_TABLE_COLS;
+  addCol.addEventListener('click', () => {
+    // Adding a column means inserting one cell per ROW and re-stamping `cols`
+    // on every cell — the count is repeated on each one deliberately, so a run
+    // of cells can always rebuild its own grid.
+    ctx.store.commit(d => {
+      const all = d.body.filter(x => x.kind === 'cell' && x.cell?.table === b.cell!.table);
+      const next = cols + 1;
+      for (let r = rows - 1; r >= 0; r--) {
+        const lastOfRow = all[r * cols + cols - 1];
+        const at = d.body.indexOf(lastOfRow);
+        d.body.splice(at + 1, 0, {
+          id: `${b.cell!.table}-c${Date.now().toString(36)}-${r}`,
+          kind: 'cell', text: '',
+          cell: { table: b.cell!.table, cols: next, ...(r === 0 && all[0]?.cell?.head ? { head: true } : {}) },
+        });
+      }
+      for (const c of d.body) if (c.kind === 'cell' && c.cell?.table === b.cell!.table) c.cell.cols = next;
+    });
+    ctx.refresh();
+  });
+
+  const btns = el('div', 't-toggles');
+  btns.append(addRow, addCol);
+  body.appendChild(btns);
+}
+
+function captionSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
+  const body = section(host, t('Caption'));
+  row(body, t('Numbered as'), select(
+    [['table', t('Table')], ['figure', t('Figure')]],
+    b.caption?.kind ?? 'table',
+    v => {
+      ctx.store.commit(d => {
+        const t2 = d.body.find(x => x.id === b.id);
+        if (t2?.caption) t2.caption.kind = v as 'table' | 'figure';
+      }, { scope: { block: b.id } });
+      ctx.refresh();
+    },
+  ));
+  const note = el('p', 't-note');
+  note.textContent = t('Tables and figures are numbered separately, in document order.');
+  body.appendChild(note);
+}
+
+// ──────────────────────────────────────────────────────────────── the panel
+
+function build(host: HTMLElement, ctx: FeatureContext): void {
+  host.replaceChildren();
+  const b = current(ctx);
+  if (!b) {
+    const p = el('p', 't-props-empty');
+    p.textContent = t('Put the caret in the document to see its properties.');
+    host.appendChild(p);
+    return;
+  }
+  // Order is stability, not importance: Text is always there, so it is always
+  // first, and the contextual sections appear beneath it rather than pushing it
+  // around as the caret moves.
+  textSection(host, ctx, b);
+  if (b.kind === 'image') imageSection(host, ctx, b);
+  if (b.kind === 'cell') tableSection(host, ctx, b);
+  if (b.kind === 'caption') captionSection(host, ctx, b);
+}
+
+registerPanel({
+  id: 'props',
+  label: () => t('Properties'),
+  side: 'right',
+  order: 10,
+  mount(host, ctx) {
+    build(host, ctx);
+    registerSelection(() => build(host, ctx));
+  },
+  update(host, ctx) { build(host, ctx); },
+});
