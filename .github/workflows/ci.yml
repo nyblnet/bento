@@ -466,6 +466,17 @@ jobs:
       - name: bento/dash filter and sort
         run: node scripts/test-dash-filter.ts
 
+      - name: bento/dash filtering is REACHABLE
+        # The engine rig above proves sixteen predicates over an order vector;
+        # the app used to offer ONE of them per column — a free-text "Contains"
+        # box you had to already know the answer to spell into. This one drives
+        # the column menu over a real DOM: it opens the value checklist on a
+        # mounted grid, CLICKS a checkbox, and asserts the row indices
+        # `store.order` ends up holding — plus that a truncated list never
+        # pre-ticks itself, that a column's list honours the other columns'
+        # filters and not its own, and that none of it dirties the document.
+        run: node scripts/test-dash-filterui.ts
+
       - name: bento/dash rows and columns
         # Structure, and the rid watermark — a rid must never be minted twice,
         # which is collaboration's correctness precondition.
