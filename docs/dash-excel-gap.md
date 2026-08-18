@@ -219,7 +219,7 @@ already worked out the correct mapping — `totalsRowFunction="sum"` ⇄
 
 ## FRICTION
 
-### 8. Right-click on a row number or a column letter does nothing
+### 8. ~~Right-click on a row number or a column letter does nothing~~ — FIXED (`86fa750`)
 
 The cell context menu is good: insert row above/below, delete row, insert and
 delete column, fill down, clear contents, the two conditional formats, remove
@@ -234,7 +234,7 @@ gutters, twice.
 The menu is also missing Copy, Cut and Paste, which is the other reason people
 right-click a cell.
 
-### 9. ⌘Z after a sort undoes the wrong thing
+### 9. ~~⌘Z after a sort undoes the wrong thing~~ — FIXED (`dash-honesty`)
 
 Sorting is view state and is deliberately not a document edit — `store.ts`
 (around line 950) says so and flags the mismatch as an open question. Measured:
@@ -246,7 +246,7 @@ either way.
 "Sort is not undoable" would be defensible. Silently undoing something else is
 not.
 
-### 10. The filter has no list of values, and one operator per column
+### 10. ~~The filter has no list of values, and one operator per column~~ — FIXED (`084da64`, `d3bf3ba`)
 
 Excel's autofilter is a checklist of every distinct value. dash's text filter is
 a single free-text **Contains** box: to filter Stage to "Open" you must already
@@ -259,7 +259,7 @@ contains Open + Value greater than 50000 gave "4 of 11 rows", correct), and the
 status line naming the view is better than Excel's. It is the reach that is
 narrow.
 
-### 11. An imported per-cell formula does not extend to a new row
+### 11. ~~An imported per-cell formula does not extend to a new row~~ — FIXED (`86fa750`)
 
 `timesheet.xlsx` has `=SUM(B2:F2)` down a Total column. Add a person: the Total
 cell for the new row is **empty**. Excel's table would have filled it.
@@ -274,7 +274,7 @@ Adding the row also placed it *below* the imported "Day total" row, which is
 finding 7 again: dash cannot know that row is a total, because the import did
 not tell it.
 
-### 12. Fifteen findings arrive as one unbroken paragraph — but only through the drop door
+### 12. ~~Fifteen findings arrive as one unbroken paragraph~~ — FIXED (`e10f762`)
 
 `budget.xlsx` produced a wall of amber text 224px tall — 31% of a 720px window —
 with no bullets, no grouping by sheet, no link to the column concerned, and no
@@ -293,7 +293,7 @@ other side: promoting to a spreadsheet renders its three findings as three
 readable lines. The drop path is the odd one out, and the fix is to pass the
 array.
 
-### 13. Smaller things, measured
+### 13. Smaller things, measured — MOSTLY FIXED (see the note at the end of this section)
 
 - A number **pattern** typed against a `text` column is accepted, displayed as
   set, and does nothing. The panel's own line — *"The column decides what these
@@ -326,6 +326,27 @@ array.
   `SUMPRODUCT`, `LARGE`/`SMALL`, `ROW`/`COLUMN`, `CHOOSE`, `HLOOKUP`,
   `TRANSPOSE`, `REPLACE`. `VLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`, `SUMIFS`,
   `COUNTIFS`, `MAXIFS` and `AVERAGEIFS` are all present.
+
+
+**Finding 13 outcomes.** Fixed: the Date-on-messy-text silent no-op (`setColumnType`
+refuses and names the value); pattern-on-a-text-column (a persistent panel note,
+not a toast — a display pattern destroys nothing, so a refusal would be the wrong
+shape); Escape closing the cell menu; the invisible column appender; and 12 of the
+14 missing functions, `SUBTOTAL` among them, which is what made every imported
+Excel table arrive with a dead total.
+
+NOT done, deliberately: `ROW`/`COLUMN`, because registering a function is what
+admits it through the xlsx liveness gate (`FN_SET` is built from `FUNCTIONS`), so
+a `ROW()` that cannot answer without an anchor would import LIVE and paint
+`#VALUE!` over the number Excel had cached. And ⌘H, which is still open.
+
+Two of the three print complaints were STALE when written: `thead {
+display: table-header-group }` already repeated column names and `@page{margin:12mm}`
+already existed. What was real was the sheet caption printing on page one only —
+now the first row of that `thead`, carrying the date — plus margin choices. Page
+numbers stay out, and the reasoning was re-argued rather than overridden: margin
+boxes are unimplemented in every browser and a second set disagreeing with the
+system dialog's is worse than none. The dialog now says where they come from.
 
 ---
 
