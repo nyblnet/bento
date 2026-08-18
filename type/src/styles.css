@@ -387,3 +387,18 @@ html, body {
    "Update this file" button was visible before any check had run. */
 .t-btn[hidden], [hidden] { display: none !important; }
 .t-dlg-foot { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+/* ————— section numbers and the table of contents —————
+   LAYOUT (the columns, the indent, the fixed page column) is emitted inline by
+   toc.ts, because print.ts carries its own stylesheet and a TOC that got its
+   columns from here would print as a run-on paragraph. What lives here is
+   COLOUR and affordance — the parts that follow the theme and that only the
+   editor has. Both are derived content: `[data-derived]` is the core's atom
+   marker, so nothing selected here can ever be typed into the document. */
+.t-paper .t-secnum { color: var(--paper-ink-2); }
+.t-paper .t-toc-e { color: var(--paper-ink); border-bottom: 0; cursor: pointer;
+                    border-radius: 3px; padding: 1px 3px; margin-inline-end: -3px; }
+.t-paper .t-toc-e:hover { background: var(--chrome-2); }
+.t-paper .t-toc-n, .t-paper .t-toc-p { color: var(--paper-ink-2); }
+/* the entries are not prose: no justification, no first-line indent */
+.t-paper .t-toc { text-align: start; }
