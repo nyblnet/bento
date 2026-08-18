@@ -503,6 +503,15 @@ jobs:
         # shifts every date by four years, silently.
         run: node scripts/test-dash-xlsx.ts
 
+      - name: bento/dash xlsx — what an import carries and what it says it dropped
+        # The gate that lost a number: `=SUM(RentCells)/B5` has no `!`, no `[`
+        # and no unknown function, so a bare defined name sailed through and
+        # the cell painted #NAME? over the 0.61 Excel had computed. Also pins
+        # the header-under-a-merged-title repair, and the freeze, per-cell
+        # format and Excel-table totals row that used to be dropped in silence.
+        # Builds real .xlsx bytes — the gate only ever sees real formula text.
+        run: node scripts/test-dash-xlsx-carry.ts
+
       - name: bento/dash WebGL
         run: node scripts/test-dash-gl.ts
 

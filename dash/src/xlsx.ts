@@ -56,13 +56,16 @@ import {
   readZip, writeZip, ZipError, type ZipEntry,
 } from './zip.ts'
 import {
-  colToLetters, lettersToCol, parseRef, shiftRefsForInsert,
+  colToLetters, lettersToCol, mapNames, parseRef, shiftRefsForInsert,
 } from './a1.ts'
-import { translateCellFormula } from './cellformula.ts'
+import {
+  nameText, translateCellFormula, validateDefinedName, type NameProblem,
+} from './cellformula.ts'
 import { FUNCTIONS } from './formula.ts'
 import { readCell } from './store.ts'
 import type {
-  CellOverride, Column, ColumnData, ColumnType, DashDoc, DataRule, TableSheet,
+  CellOverride, Column, ColumnData, ColumnType, DashDoc, DataRule, DefinedName,
+  TableSheet,
 } from './model.ts'
 import { columnRule, describeRule, refBox } from './datavalid.ts'
 
@@ -80,7 +83,8 @@ export interface XlsxFinding {
     | 'coerce-failed' | 'no-header' | 'duplicate-header' | 'empty-header'
     | 'formula-not-live' | 'hidden-sheet' | 'sheet-skipped' | 'time-of-day'
     | 'leading-blanks' | 'formula-column' | 'chart-dropped' | 'renamed-sheet'
-    | 'data-validation'
+    | 'data-validation' | 'defined-name' | 'header-row' | 'totals-row'
+    | 'cell-format'
   sheet?: string
   column?: string
   message: string
@@ -91,6 +95,13 @@ export interface XlsxImportResult {
   findings: XlsxFinding[]
   /** The workbook's own title, if `docProps/core.xml` carried one. */
   title?: string
+  /**
+   * The workbook's `<definedNames>`, as `doc.names`. Present only when the
+   * caller asked for them (`XlsxImportOpts.names`) — see the DEFINED NAMES
+   * section below for why the default is to leave them out rather than to
+   * return a table nobody installs.
+   */
+  names?: Record<string, DefinedName>
 }
 
 // --- a very small XML reader --------------------------------------------------
@@ -869,16 +880,142 @@ function coerceCell(
   }
 }
 
+// --- defined names --------------------------------------------------------
+//
+// `=SUM(RentCells)/B5`, where `RentCells` is a `<definedName>` in workbook.xml.
+//
+// WHY THIS SECTION EXISTS, AND IT IS NOT "names are nice to have". Before it,
+// a bare identifier was the ONE class of formula the liveness gate let through
+// by accident, and it is the class that loses data: dash imported
+// `SUM(RentCells)/B5` LIVE, the grid painted `#NAME?` in red, and the 0.61
+// Excel had computed — the number the cell was FOR — was gone. The gate
+// screened for a `!`, a `[` and unknown function names; a bare word is none of
+// the three. See `liveFormula` for the check that closes it.
+//
+// SO WHAT IS A NAME WORTH KEEPING. dash has `doc.names` now, so the answer is
+// no longer "nothing". A definition is imported when it is one of the three
+// things dash can hold:
+//
+//   a NUMBER      `0.2`             → `{ v: 0.2 }`
+//   a TEXT        `"North"`         → `{ v: 'North' }`
+//   a RANGE       `Summary!$B$2:$B$4` → `{ ref: … }`, row-shifted below
+//
+// and it is DROPPED, with a finding, when it is anything else: a formula
+// (`OFFSET(…)`), a multi-area reference, or a spelling dash cannot reach
+// (`TAX1` is a cell address, so a name spelled that way would sit in the file
+// and never once be consulted — `validateDefinedName` is the refusal).
+//
+// AN UNQUALIFIED REF IS DROPPED, which looks harsh and is not. dash's names
+// are workbook-scoped (model.ts), so `$B$2:$B$4` with no sheet on it means a
+// different range on every tab, and there is no sheet to row-shift it against
+// either. Excel does not write one; a hand-made file that does gets told.
+//
+// `_xlnm.*` (Print_Area, Print_Titles, _FilterDatabase) are VIEW state, not
+// names anybody writes in a formula, and are skipped in silence.
+
+/** What the import decided about the workbook's names. */
+interface NameImport {
+  names: Record<string, DefinedName>
+  /**
+   * The spellings, lower-cased, that a live formula may mention: those whose
+   * SUBSTITUTION would itself survive the gate. `TaxRate` = 0.2 substitutes to
+   * `(0.2)` and dash evaluates it; `RentCells` substitutes to
+   * `Summary!$B$2:$B$4`, which is a cross-sheet reference dash's dataset kind
+   * cannot resolve — so a formula using it keeps its cached value, exactly as
+   * one calling `SUBTOTAL` does.
+   */
+  live: Set<string>
+}
+
+const NAME_REFUSED: Record<NameProblem, string> = {
+  empty: 'it has no name',
+  shape: 'its spelling is not one a formula can mention (letters, digits, "_" and "." only, starting with a letter)',
+  cellshaped: 'it is spelled like a cell address, so a formula would read the cell and never the name',
+  taken: 'another name is already spelled that way',
+}
+
+/** A single cell or range, sheet-qualified. Deliberately not multi-area:
+ *  `Sheet1!$A$1,Sheet1!$C$1` is two ranges and dash's `ref` is one. */
+const QUALIFIED_REF =
+  /^(?:'(?:[^']|'')+'|[A-Za-z_\\][A-Za-z0-9_.\\ ]*)!\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/
+const BARE_REF = /^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/
+const NUM_LITERAL = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/
+const STR_LITERAL = /^"(?:[^"]|"")*"$/
+
+/** The workbook's `<definedNames>`, as far as dash can carry them. */
+function readDefinedNames(wbXml: string, findings: XlsxFinding[]): NameImport {
+  const names: Record<string, DefinedName> = {}
+  const live = new Set<string>()
+  const block = element(wbXml, 'definedNames')
+  if (!block) return { names, live }
+
+  for (const d of elements(block.body, 'definedName')) {
+    const raw = (attr(d.a, 'name') ?? '').trim()
+    if (!raw || raw.toLowerCase().startsWith('_xlnm')) continue
+    const body = unescapeXml(d.body).trim().replace(/^=/, '').trim()
+    const drop = (why: string): void => {
+      findings.push({
+        code: 'defined-name',
+        message: `The name "${raw}" was not imported: ${why}. Any formula that used it keeps the value Excel last calculated, with the formula text beside it.`,
+      })
+    }
+    const problem = validateDefinedName(raw, names)
+    if (problem) { drop(NAME_REFUSED[problem]); continue }
+    if (!body) { drop('it defines nothing'); continue }
+
+    let def: DefinedName | undefined
+    if (NUM_LITERAL.test(body)) def = { v: Number(body) }
+    else if (STR_LITERAL.test(body)) def = { v: body.slice(1, -1).replace(/""/g, '"') }
+    else if (QUALIFIED_REF.test(body)) def = { ref: body }
+    else if (BARE_REF.test(body)) {
+      drop(`it points at ${body} without saying which sheet, and a dash name means one thing across the whole workbook`)
+      continue
+    } else {
+      drop(`it is defined as "${body}", which is not a number, a piece of text, or a single range`)
+      continue
+    }
+    names[raw] = def
+    const text = nameText(def)
+    if (text !== undefined && liveFormula(text).ok) live.add(raw.toLowerCase())
+  }
+  return { names, live }
+}
+
+/**
+ * Move every name's `ref` by the rows its sheet lost on the way in.
+ *
+ * A dataset's row 1 is the first DATA row: the header, and any blank
+ * letterhead rows above it, are not rows dash has. So `Summary!$B$2:$B$4`
+ * written against Excel's numbering points one row too low here, and pointing
+ * a name at the wrong rows is the same silent wrong number the formula shift
+ * exists to prevent — this is that shift, for the other kind of reference.
+ */
+function shiftNamesForImport(
+  names: Record<string, DefinedName>, drops: Map<string, number>,
+): void {
+  for (const [sheet, drop] of drops) {
+    if (drop <= 0) continue
+    for (const def of Object.values(names)) {
+      if (typeof def.ref !== 'string') continue
+      def.ref = shiftRefsForInsert(def.ref, 'row', 0, -drop, { on: sheet })
+    }
+  }
+}
+
 // --- formulas ------------------------------------------------------------------
 
 const FN_SET = new Set(FUNCTIONS.map((f) => f.toUpperCase()))
 const CALL_RE = /([A-Za-z][A-Za-z0-9_.]*)\s*\(/g
 
+/** Words that are values in a formula, not names: nothing defines them and
+ *  nothing needs to. */
+const LITERAL_WORDS = new Set(['TRUE', 'FALSE'])
+
 /**
  * Can dash make this formula LIVE, or must it stay a number with the source
  * recorded beside it?
  *
- * Three ways it cannot, and the first is the dangerous one:
+ * Four ways it cannot, and the first is the dangerous one:
  *
  *   1. A SHEET QUALIFIER (`Sheet2!A1`, `'Q1 data'!B7`). a1.ts deliberately
  *      leaves the name before `!` alone — but the `A1` AFTER it is then read as
@@ -891,14 +1028,35 @@ const CALL_RE = /([A-Za-z][A-Za-z0-9_.]*)\s*\(/g
  *      the rest would evaluate to `#NAME?` — visible, not silent, but a grid
  *      full of `#NAME?` where numbers used to be is not an import, it is a
  *      demolition.
+ *   4. A BARE IDENTIFIER THAT RESOLVES TO NOTHING. `=SUM(RentCells)/B5` has no
+ *      `!`, no `[` and no unknown function in it, so for a long time it sailed
+ *      through all three checks above and landed LIVE — and `RentCells` is a
+ *      `<definedName>`, which dash did not import, so the cell that had held
+ *      Excel's 0.61 painted `#NAME?` in red. The message this module prints
+ *      elsewhere on the same screen promises the opposite in as many words:
+ *      *a live formula dash cannot evaluate would replace real numbers with
+ *      #NAME?*. That was the hole, and it was the only one that DESTROYED a
+ *      value rather than merely declining to compute one.
  *
- * In all three cases the cached VALUE is kept (so the sheet still reads
+ *      `known` closes it without the blunt answer of refusing every word.
+ *      Names now exist in dash (`doc.names`), so a word the workbook defines
+ *      AND the import carried — and whose substitution would itself pass this
+ *      gate — is allowed through; every other word fails, keeps the cached
+ *      value and takes a `formula-not-live` finding, exactly as `SUBTOTAL`
+ *      does. `mapNames` is the lexer rather than a regex of our own because it
+ *      already knows the four places a word is not a name: inside a string, in
+ *      front of a `(`, after a `!`, and where the word is really a cell
+ *      address (`B5`, `TAX1`).
+ *
+ * In all four cases the cached VALUE is kept (so the sheet still reads
  * correctly) and the formula text is preserved on the override under `xlsxF`,
  * which is an additive field: nothing in dash reads it yet, the format promises
  * it survives (PLATFORM §3), and the export half below writes it back out. That
  * is what makes xlsx → dash → xlsx not lose someone's model.
  */
-export function liveFormula(src: string): { ok: true } | { ok: false; why: string; fn?: string } {
+export function liveFormula(
+  src: string, known: ReadonlySet<string> = new Set(),
+): { ok: true } | { ok: false; why: string; fn?: string; name?: string } {
   // A quoted literal can contain anything; strip it before looking for `!`.
   const bare = src.replace(/"[^"]*"/g, '""')
   if (/'[^']*'\s*!/.test(bare) || /[A-Za-z0-9_.$]\s*!/.test(bare.replace(/#REF!/g, ''))) {
@@ -910,6 +1068,23 @@ export function liveFormula(src: string): { ok: true } | { ok: false; why: strin
   while ((m = CALL_RE.exec(bare))) {
     const fn = m[1].toUpperCase()
     if (!FN_SET.has(fn)) return { ok: false, why: `dash has no ${fn}() yet`, fn }
+  }
+  // The fourth check. `mapNames` offers exactly the words that are neither a
+  // reference, a call, nor part of somebody else's syntax; the walk is only
+  // reading, so every word goes back unchanged.
+  let unknown: string | undefined
+  mapNames(src, (w) => {
+    if (unknown === undefined && !LITERAL_WORDS.has(w.toUpperCase()) && !known.has(w.toLowerCase())) {
+      unknown = w
+    }
+    return w
+  })
+  if (unknown !== undefined) {
+    return {
+      ok: false,
+      why: `it uses the name ${unknown}, which this workbook defines somewhere dash could not follow`,
+      name: unknown,
+    }
   }
   return { ok: true }
 }
@@ -924,6 +1099,17 @@ export interface XlsxImportOpts {
   idPrefix?: string
   /** Override the header-row decision instead of letting it be inferred. */
   header?: boolean
+  /**
+   * THE CALLER PROMISES TO INSTALL `result.names` INTO `doc.names`.
+   *
+   * Names are opt-in rather than always-on because the liveness gate trusts
+   * them: with this set, `=B4*TaxRate` is imported LIVE, and if the name table
+   * never reaches the document that live formula paints `#NAME?` over the
+   * number Excel computed — the precise damage the gate exists to prevent. So
+   * the default is off and safe (every name-using formula keeps its cached
+   * value and says so), and a caller that wires the table up says so here.
+   */
+  names?: boolean
 }
 
 const blank = (s: string): boolean => s.trim() === ''
@@ -983,6 +1169,29 @@ export async function importXlsx(
   const epoch1904 = d1904 === '1' || d1904.toLowerCase() === 'true'
 
   const findings: XlsxFinding[] = []
+
+  // Names are read BEFORE the sheets, because the liveness gate needs to know
+  // which words a formula may mention; their refs are row-shifted AFTER, once
+  // every sheet has said how many rows it dropped on the way in.
+  const nameFindings: XlsxFinding[] = []
+  const nameImport = readDefinedNames(wbXml, nameFindings)
+  const carryNames = opts.names === true
+  if (carryNames) {
+    findings.push(...nameFindings)
+  } else {
+    const listed = Object.keys(nameImport.names)
+    const total = listed.length + nameFindings.length
+    if (total) {
+      findings.push({
+        code: 'defined-name',
+        message: `This workbook defines ${total} name${total === 1 ? '' : 's'}${listed.length ? ` (${listed.slice(0, 4).join(', ')}${listed.length > 4 ? ', …' : ''})` : ''}, which this import does not carry. A formula that used one shows the value Excel last calculated, with the formula text kept beside it.`,
+      })
+    }
+  }
+  const liveNames: ReadonlySet<string> = carryNames ? nameImport.live : new Set<string>()
+  /** sheet name → rows that exist in Excel and do not exist in dash. */
+  const drops = new Map<string, number>()
+
   if (epoch1904) {
     findings.push({
       code: 'date-system',
@@ -1024,8 +1233,10 @@ export async function importXlsx(
     n++
     const id = `${prefix}-${n}`
     usedIds.add(id)
-    sheets.push(readOneSheet(xml, name, id, shared, styles, epoch1904, findings, opts))
+    sheets.push(readOneSheet(xml, name, id, shared, styles, epoch1904, findings, opts,
+      { liveNames, drops }))
   }
+  if (carryNames) shiftNamesForImport(nameImport.names, drops)
 
   if (!sheets.length && !findings.some((f) => f.code === 'sheet-skipped')) {
     throw new ZipError('this workbook contains no worksheets')
@@ -1033,7 +1244,12 @@ export async function importXlsx(
 
   const core = text('docProps/core.xml')
   const title = core ? element(core, 'title')?.body : undefined
-  return { sheets, findings: condense(findings), title: title ? unescapeXml(title) : undefined }
+  return {
+    sheets,
+    findings: condense(findings),
+    title: title ? unescapeXml(title) : undefined,
+    ...(carryNames && Object.keys(nameImport.names).length ? { names: nameImport.names } : {}),
+  }
 }
 
 /** How many of one KIND of finding, on one sheet, are worth listing before the
@@ -1073,9 +1289,19 @@ function condense(findings: XlsxFinding[]): XlsxFinding[] {
   return out
 }
 
+/** What one sheet needs from the workbook around it, and what it reports back
+ *  to it. Bundled rather than added to an already long parameter list. */
+interface SheetCtx {
+  /** names a formula on this sheet may mention and still go live */
+  liveNames: ReadonlySet<string>
+  /** filled in: sheet name → rows Excel had that dash does not */
+  drops: Map<string, number>
+}
+
 function readOneSheet(
   xml: string, name: string, id: string, shared: string[], styles: Styles,
   epoch1904: boolean, findings: XlsxFinding[], opts: XlsxImportOpts,
+  ctx: SheetCtx,
 ): TableSheet {
   const { cells, merges, maxCol, widths, validations } = readSheetCells(xml, shared)
 
@@ -1136,6 +1362,12 @@ function readOneSheet(
   const dataRows = grid.slice(bodyStart)
   const rowCount = Math.max(0, lastRow - firstRow + 1 - bodyStart)
 
+  // What Excel's row numbering has and dash's does not: the blank letterhead
+  // above the table, plus the header. Every reference written against this
+  // sheet — in a formula (below) or in a defined name (importXlsx) — moves by
+  // exactly this much.
+  ctx.drops.set(name, firstRow + bodyStart)
+
   // Data validation, mapped to COLUMNS before the loop that builds them —
   // `lastRow - firstRow` is the body's extent, which is what decides whether a
   // rule covered the whole column or a slice of it.
@@ -1150,6 +1382,7 @@ function readOneSheet(
   let notLive = 0
   let liveCount = 0
   const missingFns = new Set<string>()
+  const missingNames = new Set<string>()
 
   for (let ci = 0; ci < width; ci++) {
     const rawName = bodyStart > 0 ? cellText(headerRow[ci], shared, styles, epoch1904) : ''
@@ -1201,7 +1434,7 @@ function readOneSheet(
         // the field that exists to preserve it verbatim.
         const rid = r + 1
         const key = `${colId}:${rid}`
-        const live = liveFormula(cell.f)
+        const live = liveFormula(cell.f, ctx.liveNames)
         if (live.ok) {
           // Row references shift by exactly the rows we did not import: the
           // blank rows above the table plus the header.
@@ -1219,6 +1452,7 @@ function readOneSheet(
           overrides[key] = { ...(overrides[key] ?? {}), xlsxF: `=${cell.f}` }
           notLive++
           if ('fn' in live && live.fn) missingFns.add(live.fn)
+          if ('name' in live && live.name) missingNames.add(live.name)
         }
       }
     }
@@ -1256,9 +1490,13 @@ function readOneSheet(
   }
   if (notLive) {
     const fns = [...missingFns].slice(0, 4).join(', ')
+    const nms = [...missingNames].slice(0, 4).join(', ')
+    const why = fns ? `dash has no ${fns} yet`
+      : nms ? `they use the name${missingNames.size === 1 ? '' : 's'} ${nms}, which dash could not follow`
+        : 'they point at other sheets or external data'
     findings.push({
       code: 'formula-not-live', sheet: name,
-      message: `${notLive} formula${notLive === 1 ? '' : 's'} in "${name}" could not be made live${fns ? ` (dash has no ${fns} yet)` : ' (they point at other sheets or external data)'}. The values Excel last calculated are shown, and the formula text is kept with each cell so nothing is lost — a live formula dash cannot evaluate would replace real numbers with #NAME?.`,
+      message: `${notLive} formula${notLive === 1 ? '' : 's'} in "${name}" could not be made live (${why}). The values Excel last calculated are shown, and the formula text is kept with each cell so nothing is lost — a live formula dash cannot evaluate would replace real numbers with #NAME?.`,
     })
   }
 
