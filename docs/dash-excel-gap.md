@@ -45,7 +45,7 @@ once, in any of the four jobs.** That is worth saying before the list.
 
 ## BROKEN
 
-### 1. A dataset column of imported numbers totals to zero, and says so in the footer
+### 1. ~~A dataset column of imported numbers totals to zero~~ — FIXED (`7772e81`, `f62080b`)
 
 This is the heaviest thing here, and it is a wrong number rather than a missing
 feature.
@@ -87,7 +87,7 @@ disagreement is printed as a number.
 Note how this compounds: the import finding is what sends the person to the
 type switcher in the first place. dash gives good advice and then punishes it.
 
-### 2. A formula column that returns text is typed Number
+### 2. ~~A formula column that returns text is typed Number~~ — FIXED (`dash-uireach`)
 
 Splitting `"Lastname, Firstname"` with a formula column —
 `TRIM(LEFT(Name, FIND(",", Name) - 1))` — works, and handles the blank rows
@@ -103,7 +103,7 @@ The type is never inferred from what the expression returns or from the values
 it produced. Downstream this picks the wrong filter operators, the wrong sort,
 and the wrong export type for every text-valued computed column.
 
-### 3. A merged title makes the whole sheet text, and the two findings that say so never meet
+### 3. ~~A merged title makes the whole sheet text~~ — FIXED (`70bfa35`)
 
 `budget.xlsx` has an ordinary spanning title in `A1:C1` and its real header in
 row 2. dash takes row 1 as the header. Column A becomes "Jan 2026 budget";
@@ -122,7 +122,7 @@ anyway. There is no "use this row as the header" in the cell menu.
 This is a repair, not a feature: dash already knows there is a merge in row 1
 and already knows row 2 is the only row where every column is text.
 
-### 4. A defined name passes the live-formula gate and destroys the value Excel computed
+### 4. ~~A defined name passes the live-formula gate~~ — FIXED (`01ffff1`, `43398cf`)
 
 `budget.xlsx`'s Summary sheet has `=SUM(RentCells)/B5`, where `RentCells` is a
 `definedName`. dash imports it **live** and the cell renders **`#NAME?`** in
@@ -141,7 +141,7 @@ by accident is the one that loses data. A bare identifier that is not a known
 function should fail the gate and take a `formula-not-live` finding, exactly
 like `SUBTOTAL` does.
 
-### 5. Four of six conditional-format rules are unreachable
+### 5. ~~Four of six conditional-format rules are unreachable~~ — FIXED (`dash-uireach`)
 
 Job 3 asks to flag anyone over 40 hours. Right-click a cell and conditional
 formatting offers **Colour scale** and **Data bars**. That is all there is.
@@ -165,7 +165,7 @@ This is a dialog over a finished engine, not a feature.
 
 ## BLOCK
 
-### 6. Cross-sheet references work in one sheet kind and return `#REF!` in the other
+### 6. ~~Cross-sheet references work in one sheet kind~~ — FIXED (`dash-xsheet`, `00b59dd`)
 
 Job 1 asks for a formula on one sheet totalling another. In a **dataset**
 sheet, typing `=SUM(Jan!B1:B6)` gives **`#REF!`**. The job cannot be done.
@@ -186,7 +186,7 @@ two kinds. `Contacts!D2` returned the dataset's second **data** row, while D2 in
 the spreadsheet copy of that dataset is the second row *including the header*.
 Both are internally consistent; side by side on one screen they are not.
 
-### 7. Frozen panes, per-cell formatting, data validation, and the totals row are dropped in silence
+### 7. ~~Frozen panes, per-cell formatting, validation and the totals row dropped in silence~~ — FIXED (`b155131`, `cfa0fcb`)
 
 Measured on the imported documents. Every fixture froze its header
 (`<pane ySplit="1" state="frozen"/>`); every imported sheet reports
@@ -429,3 +429,21 @@ property of a table, and dash keeps it as one" is a *better* position than
 Excel's, already written down in `docs/dash-sheet-kinds.md` — but until it is
 implemented and stated, what the person sees is their Total row sorting itself
 into the middle of their deals.
+
+---
+
+## Status, 2026-08-18
+
+All seven BROKEN and BLOCK findings are fixed and each is pinned by a rig.
+**Findings 8–13 (FRICTION) and 14–16 (DELIBERATE DIFFERENCE) are open**, and
+the friction tier is where the next pass should start — #12 especially, because
+it is a defect in a door rather than in a feature: fifteen import findings
+render as bullets through the menu and as one unbroken paragraph through the
+drop door, and the drop door is the one people use.
+
+Three of the seven needed a CALLER change in a file the agent fixing them did
+not own — per-cell appearance, array spill, and the cross-sheet recalc. In every
+case the rig was green while the feature was invisible on screen. That is the
+characteristic failure of splitting work by file ownership, and it is now caught
+by an explicit check on the call site each time rather than by whoever
+remembered to look.
