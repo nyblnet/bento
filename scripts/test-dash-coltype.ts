@@ -36,6 +36,7 @@
 // first-class way in. Both look completely normal on screen.
 
 import { registerHooks } from 'node:module'
+import { readFileSync } from 'node:fs'
 registerHooks({
   load(url, context, next) {
     if (url.endsWith('.css')) return { format: 'module', source: 'export {}', shortCircuit: true }
@@ -132,6 +133,44 @@ console.log('\n4 · the validator catches a document that already arrived broken
   ok(f(mk([1, null, 3], 'number')).length === 0, 'and a blank is not a violation — null is a legitimate empty cell')
   ok(f(mk(['a', 'b'], 'text')).length === 0, 'a text column holding text is silent')
   ok(f(mk(['1', '2'], 'money')).length === 1, 'money is checked too — it is a number with a format')
+}
+
+console.log('\n5 · a refusal is REPORTED, and both call sites report it')
+{
+  // Measured on screen before this existed: the reader picked "Money", the
+  // commit threw into the CONSOLE, and the dropdown went on displaying `money`
+  // while the header chip beside it displayed `Text`. Two controls disagreeing,
+  // no message, nothing to act on — the same shape as the bug this whole file
+  // guards, and the second time this codebase has had it (the Offline switch
+  // stayed ticked over a preference that had not persisted).
+  const { setColumnType } = await import('../dash/src/store.ts')
+
+  const good = new Store(mk(['1', '2']))
+  const said: string[] = []
+  ok(setColumnType(good, 's1', 'amt', 'number', (m: string) => said.push(m)) === true,
+    'a conversion that works returns true')
+  ok(said.length === 0, 'and says nothing, because there is nothing to say')
+
+  const bad = new Store(mk(['1', 'n/a']))
+  const heard: string[] = []
+  ok(setColumnType(bad, 's1', 'amt', 'number', (m: string) => heard.push(m)) === false,
+    'a refusal returns false, so the caller can put its control back')
+  ok(heard.length === 1 && /cannot be read as number/.test(heard[0]),
+    'and REPORTS the reason rather than throwing past the UI into the console')
+  ok((bad.doc.sheets[0] as any).columns[0].type === 'text', 'with the column still untouched')
+
+  // Both call sites must route through it. A third that forgets is the failure
+  // this helper exists to remove, so the check is on the source.
+  const src = (f: string) => readFileSync(new URL(`../dash/src/${f}`, import.meta.url), 'utf8')
+  for (const f of ['panels.ts', 'main.ts']) {
+    const code = src(f)
+    ok(code.includes('setColumnType('),
+      `${f} changes a column type through setColumnType, so its refusal is reported`)
+    ok(!/commit\(\{ op: 'setColumn'[^}]*patch: \{ type:/.test(code),
+      `and ${f} has no bare setColumn type commit left to swallow one`)
+  }
+  ok(src('panels.ts').includes('render(true)'),
+    'and the panel rebuilds on refusal, so the dropdown cannot keep showing a type the column does not have')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

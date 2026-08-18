@@ -336,6 +336,41 @@ const ridIndex = (sheet: TableSheet, rid: number): number => {
   return -1
 }
 
+/**
+ * Change a column's type, and SAY SO when it will not go.
+ *
+ * The `setColumn` case throws when a value cannot be read as the new type,
+ * which is the right thing — refusing beats zeroing. But a throw is only half
+ * an answer, and the missing half was measured on screen: the reader picked
+ * "Money", the commit threw into the console, and the dropdown went on
+ * displaying **money** while the column header chip beside it displayed
+ * **Text**. Two controls disagreeing, no message, nothing to act on.
+ *
+ * That is the same shape as the bug this whole change exists to fix — the app
+ * knowing something and not saying it — and it is the second time this exact
+ * pattern has appeared in this codebase, after the Offline switch that stayed
+ * ticked over a preference that had not persisted.
+ *
+ * So both call sites go through here: it commits, and on refusal it reports the
+ * reason and returns false so the caller can put its control back. A third call
+ * site that forgets is the failure mode this function exists to remove.
+ */
+export function setColumnType(
+  store: Store,
+  sheetId: string,
+  colId: string,
+  next: ColumnType,
+  report: (message: string) => void,
+): boolean {
+  try {
+    store.commit({ op: 'setColumn', sheet: sheetId, col: colId, patch: { type: next } })
+    return true
+  } catch (e) {
+    report(e instanceof Error ? e.message : String(e))
+    return false
+  }
+}
+
 export function readCell(data: ColumnData | undefined, row: number): unknown {
   if (!data || row < 0) return null
   if (data.enc === 'raw') return data.v[row] ?? null

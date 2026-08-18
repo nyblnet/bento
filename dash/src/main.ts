@@ -69,7 +69,7 @@ import {
   type CellBox, type CanvasView, type PromoteFinding,
 } from './promote.ts'
 import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformula.ts'
-import { Store, type Patch } from './store.ts'
+import { Store, type Patch, setColumnType } from './store.ts'
 import { starterDoc } from './starter.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
@@ -1937,7 +1937,11 @@ function retype(store: Store, col: Column, x: number, y: number): void {
       const next = b.dataset.t as ColumnType
       el.remove()
       if (!sheet || next === col.type) return
-      store.commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { type: next } })
+      // Through the shared helper, like the panel's dropdown: a type change can
+      // be refused, and this menu closes itself before the commit — so without
+      // a report the reader picks a type, the menu vanishes, and nothing at all
+      // happens or explains why.
+      setColumnType(store, sheet.id, col.id, next, toast)
     }
   })
 }

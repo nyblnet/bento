@@ -45,8 +45,9 @@ import {
   countViolations, columnRulePatch, boxRef, type DataRule,
 } from './datavalid.ts'
 import { mountTabs, renameSheetPatch } from './tabs.ts'
+import { toast } from './saveui.ts'
 import type { CanvasSheet, Column, ColumnType, TableSheet } from './model.ts'
-import { readCell, type Patch, type Store } from './store.ts'
+import { readCell, setColumnType, type Patch, type Store } from './store.ts'
 import type { Grid } from './grid.ts'
 import {
   freezeAt, hiddenSet, readFrozen, resizeColumn, setHidden,
@@ -469,7 +470,13 @@ export function mountPanels(host: PanelsHost): Panels {
     row(right, t('Type'), select(
       TYPES.map((tp) => [tp, t(TYPE_LABEL[tp])] as const),
       col.type,
-      (v) => commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { type: v as ColumnType } }),
+      // Not a bare commit: a type change can be REFUSED (a value that cannot be
+      // read as the new type), and a silent refusal leaves this dropdown showing
+      // the type the reader picked while the header chip shows the one the
+      // column still has. Report, then rebuild so the control tells the truth.
+      (v) => {
+        if (!setColumnType(store, sheet.id, col.id, v as ColumnType, toast)) render(true)
+      },
     ))
 
     // The Excel-style pattern (format.ts readPattern): a currency prefix,
