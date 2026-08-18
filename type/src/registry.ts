@@ -18,6 +18,7 @@ import './find.ts';    // find and replace — panel, ⌘F, replace all
 // captions, automatic figure/table numbering and cross-references
 import './xref.ts';
 import './layout.ts';   // paragraph properties, page setup, page breaks
+import './cite.ts';       // citations, the bibliography and the BibTeX import
 
 export {};
 import './link.ts';

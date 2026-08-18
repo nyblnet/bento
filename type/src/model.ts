@@ -79,6 +79,14 @@ export interface ImageRef {
  */
 export interface CaptionRef { kind: 'table' | 'figure'; of?: string }
 
+/**
+ * A citation: an atom at an offset, like a footnote anchor.
+ *
+ * `keys` is a LIST because "(Knuth 1984; Lamport 1994)" is one citation at one
+ * position, not two adjacent ones.
+ */
+export interface CiteRef { at: number; keys: string[]; locator?: string; suppressAuthor?: boolean }
+
 /** A cross-reference: an atom at an offset, exactly like a footnote anchor. */
 export interface XrefRef { to: string; at: number; style?: 'label' | 'page' | 'both' }
 
@@ -157,6 +165,8 @@ export interface Block {
   caption?: CaptionRef;
   /** cross-references, by offset into `text` — atoms, like `notes` */
   refs?: XrefRef[];
+  /** citations, by offset into `text` — atoms, like `notes` */
+  cites?: CiteRef[];
 
   // ---- paragraph layout. ABSENT MEANS "the document's default", never a
   // value: a paragraph with no `align` is justified because the DOCUMENT says
@@ -346,7 +356,7 @@ export function parseDoc(raw: string): ParseResult {
     for (const k of ['keepNext', 'keepTogether', 'breakBefore'] as const) {
       if (out[k] !== true) delete out[k];
     }
-    delete out.level; delete out.cell; delete out.image; delete out.caption; delete out.refs;
+    delete out.level; delete out.cell; delete out.image; delete out.caption; delete out.refs; delete out.cites;
     if (typeof b.role === 'string') out.role = b.role;
     // `level` is clamped and only kept on list kinds. A level on a paragraph
     // would be silently meaningless, and a level of 40 would render as a list
@@ -414,6 +424,23 @@ export function parseDoc(raw: string): ParseResult {
           .sort((x, y) => x.at - y.at)
       : undefined;
     if (refs?.length) out.refs = refs;
+    // No dangling-key sweep, deliberately, and for the same reason a dangling
+    // cross-reference is kept: a citation whose entry is missing must render
+    // visibly as [?key] so somebody fixes the bibliography. Dropping it deletes
+    // the author's claim to a source.
+    const cites = Array.isArray(b.cites)
+      ? (b.cites as CiteRef[])
+          .filter(c => isObj(c) && typeof c.at === 'number' && Array.isArray(c.keys))
+          .map(c => ({
+            at: Math.max(0, Math.min(c.at, text.length)),
+            keys: c.keys.filter((k): k is string => typeof k === 'string' && !!k),
+            ...(typeof c.locator === 'string' && c.locator ? { locator: c.locator } : {}),
+            ...(c.suppressAuthor === true ? { suppressAuthor: true } : {}),
+          }))
+          .filter(c => c.keys.length)
+          .sort((x, y) => x.at - y.at)
+      : undefined;
+    if (cites?.length) out.cites = cites;
     body.push(out);
   });
   if (!body.length) body.push({ id: uid(), kind: 'para', text: '' });
@@ -475,6 +502,13 @@ export function spliceText(block: Block, at: number, removed: number, added: str
   if (block.marks?.length) {
     const m = shiftMarks(block.marks, at, removed, added.length, text.length);
     if (m.length) out.marks = m; else delete out.marks;
+  }
+  if (block.cites?.length) {
+    const end = at + removed, delta = added.length - removed;
+    const c = block.cites
+      .filter(x => !(x.at > at && x.at < end))
+      .map(x => (x.at >= end ? { ...x, at: x.at + delta } : x));
+    if (c.length) out.cites = c; else delete out.cites;
   }
   if (block.refs?.length) {
     const r = shiftRefs(block.refs, at, removed, added.length);

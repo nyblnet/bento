@@ -12,6 +12,7 @@ import { toHtml, fromDom, type Mark } from './inline.ts';
 import { isList, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import { captionPrefixHtml, isXrefAtom, refAtoms, readXrefs, numberXrefs } from './xref.ts';
 import { blockStyle } from './layout.ts';
+import { citeInject, isCiteAtom, mergeInject, paintCitations, readCiteAtoms } from './cite.ts';
 
 export const TAG: Record<Block['kind'], string> = {
   para: 'p', h1: 'h1', h2: 'h2', h3: 'h3', quote: 'blockquote',
@@ -130,9 +131,14 @@ export function blockHtml(b: Block): string {
   // Notes and cross-references are both ATOMS at offsets into the same text, so
   // they share one inject map — a reference is the footnote marker's idea
   // applied to a different target.
-  const atoms = new Map<number, string>();
-  for (const n of b.notes ?? []) atoms.set(n.at, noteMarker(n.id));
-  for (const [at, html] of refAtoms(b)) atoms.set(at, (atoms.get(at) ?? '') + html);
+  // A note, a cross-reference and a citation can all sit at the SAME offset, so
+  // these are merged rather than assigned — a plain map write silently drops
+  // one, and the one it drops depends on iteration order.
+  const atoms = mergeInject(
+    new Map((b.notes ?? []).map(n => [n.at, noteMarker(n.id)])),
+    refAtoms(b),
+    citeInject(b),
+  );
   const html = toHtml(b.text, b.marks ?? [], atoms.size ? atoms : undefined);
   // an empty block still needs a line box, or it collapses and cannot be clicked
   return captionPrefixHtml(b) + decorate(b, html || '<br>');
@@ -252,6 +258,7 @@ export function renderBody(doc: TypeDoc, host: HTMLElement): void {
   host.replaceChildren(frag);
   numberNotes(host, doc);
   numberXrefs(host, doc);
+  paintCitations(host, doc);
 }
 
 /**
@@ -278,7 +285,7 @@ export function numberNotes(host: HTMLElement, _doc: TypeDoc): string[] {
  * nothing that has no place to go.
  */
 export function readBlock(el: HTMLElement, prev: Block): Block {
-  const { text, marks, atoms } = fromDom(el, el2 => isNoteAtom(el2) || isXrefAtom(el2));
+  const { text, marks, atoms } = fromDom(el, el2 => isNoteAtom(el2) || isXrefAtom(el2) || isCiteAtom(el2));
   const out: Block = { ...prev, id: el.dataset.id || prev.id, text };
   const kind = el.dataset.kind as Block['kind'] | undefined;
   if (kind && kind in TAG) out.kind = kind;
@@ -289,5 +296,7 @@ export function readBlock(el: HTMLElement, prev: Block): Block {
   if (notes.length) out.notes = notes; else delete out.notes;
   const refs = readXrefs(atoms);
   if (refs.length) out.refs = refs; else delete out.refs;
+  const cites = readCiteAtoms(atoms);
+  if (cites.length) out.cites = cites; else delete out.cites;
   return out;
 }

@@ -654,3 +654,71 @@ html, body {
   margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line);
   padding-inline-start: 8px;
 }
+/* ————— citations & the bibliography (cite.ts) —————
+
+   The in-document citation is an ATOM: it occupies a position and no
+   characters, so it is styled as one indivisible thing the caret steps over,
+   exactly as `sup.t-note` is. It takes the PAPER ink, not the chrome ink,
+   because it is part of the printed sentence — a citation that dimmed with
+   the app's dark theme would print differently from how it reads.
+
+   A citation whose entry is missing is tinted with --bad and keeps its text
+   ("[?knuth1984]"), because the failure has to survive being printed. */
+.t-paper .t-cite {
+  color: var(--paper-ink);
+  white-space: nowrap;
+  cursor: default;
+  border-radius: 2px;
+}
+.t-paper .t-cite:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.t-paper .t-cite.miss {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+/* ————— the Sources panel ————— */
+.t-cite-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+.t-cite-style {
+  flex: 1 1 100%; font: inherit; font-size: 12px; padding: 4px 6px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.t-cite-btn, .t-cite-mini {
+  font: inherit; font-size: 11.5px; padding: 4px 8px; cursor: pointer;
+  color: var(--ink-2); background: var(--chrome);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.t-cite-btn:hover, .t-cite-mini:hover { background: var(--chrome-2); }
+.t-cite-go { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.t-cite-h {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin: 14px 0 6px;
+}
+.t-cite-miss {
+  border: 1px solid var(--bad); border-radius: 8px; padding: 7px 9px; margin-bottom: 8px;
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+.t-cite-miss-h { font-size: 11.5px; font-weight: 600; color: var(--bad); margin-bottom: 4px; }
+.t-cite-miss code { display: inline-block; margin: 0 5px 3px 0; }
+.t-cite-list { display: flex; flex-direction: column; gap: 7px; }
+.t-cite-ref { display: flex; gap: 7px; font-size: 11.5px; line-height: 1.45; color: var(--ink-2); }
+.t-cite-ref .n { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.t-cite-ref .r { word-break: break-word; }
+
+/* ————— the import and picker dialogs ————— */
+.t-cite-paste, .t-cite-search {
+  width: 100%; font: inherit; font-size: 12.5px; padding: 6px 8px; margin-top: 8px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.t-cite-paste { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.t-cite-pick { max-height: 46vh; overflow: auto; margin-top: 8px; }
+.t-cite-row {
+  display: flex; gap: 8px; align-items: flex-start; padding: 6px 7px;
+  border-radius: 7px; cursor: pointer;
+}
+.t-cite-row:hover { background: var(--chrome-2); }
+.t-cite-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.t-cite-row b { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.t-cite-row i { display: block; font-size: 12px; font-style: normal; color: var(--ink-2); }
+.t-cite-row code { font-size: 11px; color: var(--muted); }
