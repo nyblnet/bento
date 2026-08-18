@@ -433,6 +433,21 @@ jobs:
         # spill; a column formula is the columnar answer to the same need.
         run: node scripts/test-dash-spill.ts
 
+      - name: bento/dash cross-sheet references and what row 1 means
+        # Both halves of one boundary. A per-CELL formula reaches another sheet
+        # from EITHER kind of sheet — it used to work on a spreadsheet and
+        # answer #REF! on a dataset in the same workbook, which was two call
+        # sites rather than a decision. A COLUMN formula still may not, and now
+        # names the boundary instead of calling a sheet in the tab strip an
+        # unknown name: reaching across is either a position that moves or a
+        # join with no key, and dash has `join`. Then the trap underneath: an A1
+        # row is the row the addressed sheet paints in its own gutter, so a
+        # dataset's row 1 is its first DATA row and a spreadsheet copy of it is
+        # one lower — safe only because the conversion shifts LOCAL references
+        # and leaves QUALIFIED ones alone. That last one is measured against
+        # both sheets, because it is the part that would rot in silence.
+        run: node scripts/test-dash-xsheet.ts
+
       - name: bento/dash pivot
         # Subtotals are COMPUTED, not summed: an average of averages is a
         # different number, and a distinct count does not add up.

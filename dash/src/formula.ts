@@ -24,6 +24,7 @@
 
 import type { TableSheet } from './model.ts'
 import { readCell } from './store.ts'
+import { sheetQualifiers } from './a1.ts'
 
 export type Cell = number | string | boolean | null | FormulaError
 export type Vec = Cell[]
@@ -890,8 +891,53 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
   return carryShape(Array.from({ length: width }, (_, i) => fn(args.map((a) => at(a, i)))), ...args)
 }
 
+/**
+ * THE EDGE OF THE COLUMN LANGUAGE, and the one sentence it is allowed to say
+ * about the other side of it.
+ *
+ * `Jan!A1` in a column expression used to come back `#NAME? unknown name "Jan"`,
+ * which is false in both halves: `Jan` is not unknown, it is a sheet sitting in
+ * the tab strip, and the reason it cannot be used is a BOUNDARY rather than a
+ * typo. An error that misdescribes itself sends the reader to fix the spelling
+ * of a word that was spelled correctly.
+ *
+ * WHY THE BOUNDARY IS REAL and not an unimplemented feature. Everything that
+ * runs through `evaluate` — a column formula, a derive step, a conditional
+ * format rule — is defined over the COLUMNS OF ONE SHEET, by identity. That is
+ * the whole structural claim this file's header makes: no positions, so no
+ * `#REF!` class, and inserting a row changes nothing. Reaching another sheet
+ * gives that back in the worst possible way:
+ *
+ *   · another sheet's CELL by position (`Rates!B2`) reintroduces exactly the
+ *     address that moves when somebody inserts a row on a sheet the author is
+ *     not looking at — into the one expression that has n rows depending on it;
+ *   · another sheet's COLUMN is a JOIN, and pairing row i with row i is a join
+ *     with no key, no cardinality answer and no opinion about two sheets of
+ *     different lengths. dash has `join` in its step vocabulary for this, and
+ *     it asks all three questions. A second, worse join hidden inside an
+ *     arithmetic expression is not a feature, it is the bug report a year from
+ *     now that says the numbers changed when someone sorted a different tab.
+ *
+ * So the answer names the boundary and both ways across it. A CELL formula on
+ * this same dataset may reference another sheet — that path is positional
+ * already and is bound by cellformula.ts, which resolves the workbook.
+ */
+const crossSheetRefusal = (src: string): FormulaError | null => {
+  const named = sheetQualifiers(src)
+  if (!named.length) return null
+  return new FormulaError('#NAME?',
+    `"${named[0].sheet}" is another sheet. This expression is computed over the ` +
+    'columns of its own sheet only — a formula in a single CELL can reference ' +
+    'another sheet, and a join step brings another sheet\'s rows across.')
+}
+
 /** Evaluate one column expression over `n` rows. Never throws. */
 export function evaluate(src: string, ctx: EvalCtx): Vec {
+  // Before parsing, because the parser has no concept of a sheet and would
+  // report the qualifier as a stray word. `sheetQualifiers` is free on a source
+  // with no `!` in it, which is virtually all of them.
+  const crossed = crossSheetRefusal(src)
+  if (crossed) return Array.from({ length: ctx.n }, () => crossed)
   let node: Node
   try { node = parse(src) } catch { return Array.from({ length: ctx.n }, () => ERR.value('could not parse')) }
   let out: Cell | Vec

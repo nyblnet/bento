@@ -306,6 +306,50 @@ export function mapNames(src: string, map: MapName): string {
   return rewrite(src, null, map)
 }
 
+/** A sheet a source named, and the text that followed the `!`. */
+export interface SheetQualifier {
+  sheet: string
+  /** `A1` for `Jan!A1`, `Amount` for `Jan!Amount` — an address, or not one. */
+  after: string
+}
+
+/**
+ * Every sheet a source QUALIFIES, in the order it names them, without
+ * duplicates.
+ *
+ * The point is to be able to answer "this expression reaches another sheet"
+ * WITHOUT being the thing that resolves it. formula.ts's column language is
+ * defined over the columns of one sheet and has no concept of a workbook, so
+ * `Jan!A1` reaches its lexer as the bare word `Jan` and comes back
+ * `#NAME? unknown name "Jan"` — which is false twice over: the name is not
+ * unknown, it is a sheet, and the reason it cannot be used is a boundary rather
+ * than a typo. This is how the column path learns enough to say so.
+ *
+ * IT IS THE SAME SCANNER, deliberately. A second pass over the source looking
+ * for `!` would be a second definition of what a qualifier is, and the two
+ * would disagree the first time somebody wrote `="not a sheet!" & A1` — where
+ * the `!` is inside a string literal this walk already skips.
+ *
+ * Both qualifier shapes are reported: `Jan!A1`, where a reference follows, and
+ * `Jan!Amount`, where a COLUMN NAME follows. The second is the spelling a
+ * dataset author reaches for and the one a naive `!`-hunt would find while a
+ * reference-only walk would miss.
+ */
+export function sheetQualifiers(src: string): SheetQualifier[] {
+  // Free when there is no `!` at all, which is almost every expression ever
+  // evaluated — this runs in the recalculation hot path.
+  if (src.indexOf('!') < 0) return []
+  const seen = new Set<string>()
+  const out: SheetQualifier[] = []
+  rewrite(src, null, undefined, (sheet, after) => {
+    const k = sheet.toLowerCase()
+    if (seen.has(k)) return
+    seen.add(k)
+    out.push({ sheet, after })
+  })
+  return out
+}
+
 /**
  * Is this a spelling a defined name may have?
  *
@@ -327,7 +371,12 @@ export const isNameLike = (s: string): boolean =>
  * canonicalise `a1 : b2` into `A1:B2` — correct, unasked for, and a diff in
  * every formula a name touches.
  */
-function rewrite(src: string, map: MapUnit | null, mapName?: MapName): string {
+function rewrite(
+  src: string,
+  map: MapUnit | null,
+  mapName?: MapName,
+  onQualifier?: (sheet: string, after: string) => void,
+): string {
   const n = src.length
   const skipSpace = (j: number): number => {
     while (j < n && (src[j] === ' ' || src[j] === '\t' || src[j] === '\n' || src[j] === '\r')) j++
@@ -412,7 +461,11 @@ function rewrite(src: string, map: MapUnit | null, mapName?: MapName): string {
     // qualify a reference is copied like any other character.
     if (c === "'") {
       const q = quoted(i)
-      const hit = q > 0 ? qualified(unquoteSheet(src.slice(i, q)), i, q) : null
+      const name = q > 0 ? unquoteSheet(src.slice(i, q)) : ''
+      if (q > 0 && src[skipSpace(q)] === '!') {
+        onQualifier?.(name, src.slice(skipSpace(skipSpace(q) + 1), word(skipSpace(skipSpace(q) + 1))))
+      }
+      const hit = q > 0 ? qualified(name, i, q) : null
       if (hit) { out += hit.text; i = hit.end; continue }
       out += c
       i++
@@ -455,14 +508,28 @@ function rewrite(src: string, map: MapUnit | null, mapName?: MapName): string {
       // unit — dropping the name here is what made `Sheet1!A1` read the local
       // A1. When what follows is not a reference, the name is left alone.
       if (src[k] === '!') {
+        // WHOEVER IS WATCHING hears about the qualifier here, in BOTH of the
+        // branches below, because both are a formula naming another sheet:
+        // `Jan!A1` is one dash cannot mistake, and `Jan!Amount` — a sheet and a
+        // COLUMN, which is what a dataset author reaches for — is one it would
+        // otherwise pass on to formula.ts as the bare word `Jan`. See
+        // `sheetQualifiers`.
         const hit = qualified(text, i, j)
-        if (hit) { out += hit.text; i = hit.end; continue }
+        if (hit) {
+          onQualifier?.(text, src.slice(skipSpace(k + 1), hit.end))
+          out += hit.text; i = hit.end; continue
+        }
         // Not a reference after the `!`, so the whole thing is somebody else's
         // syntax. The WORD AFTER IT is consumed here too, verbatim: leaving it
         // to the loop would offer `Sheet1!Total` up as the defined name
         // `Total`, and substituting a range into it would fabricate
         // `Sheet1!A1:A5` — a reference to a sheet the author never named.
-        const w = word(skipSpace(k + 1))
+        const after = skipSpace(k + 1)
+        const w = word(after)
+        // A word DID follow, so this is `Jan!Amount` — a sheet and a column
+        // name — and not `a ! b`, which is not this language's syntax at all
+        // and must not be reported as somebody reaching for another sheet.
+        if (w > after) onQualifier?.(text, src.slice(after, w))
         out += src.slice(i, w)
         i = w
         continue

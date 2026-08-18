@@ -204,6 +204,102 @@ Note a defect to fix alongside: `exportCsv` currently exports
 `sheets.find(kind === 'table')` — the FIRST table sheet in the workbook, not the
 one on screen. With one sheet that looked correct; with tabs it is simply wrong.
 
+## Settled while building: which kind may reach another sheet, and what row 1 means
+
+2026-08-18, after a bounce test. Two questions the section above left open, and
+the second one had no answer written down anywhere.
+
+### A dataset resolves cross-sheet references in a CELL formula
+
+`=SUM(Jan!B1:B6)` returned `#REF!` on a dataset sheet and the right number on a
+spreadsheet sheet **in the same workbook**. That reads as an unimplemented
+feature and was not one: `recalcWorkbook` had crossed sheets since the workbook
+graph landed, the spreadsheet's grid called it, and the dataset's grid called
+the one-sheet entry point beside it. A kind is not a place to keep an accident.
+
+So: **yes, from a per-cell formula.** A `CellOverride.f` is the CELLULAR escape
+hatch inside the columnar kind — addressed by position, bound by `cellformula.ts`,
+which is already workbook-wide. The boundary that actually separates the kinds is
+where the TYPE lives, and a cell override sits on the cellular side of it either
+way. A spreadsheet has been able to read `Pipeline!A1` all along, so refusing
+only the outbound direction made the dataset the lesser kind, which the top of
+this document says in as many words it is not.
+
+### A COLUMN formula still may not, and now says so
+
+Rejected, and not on cost — the refusal is the feature. A column expression is
+defined over the columns of ONE sheet by identity, which is the whole structural
+claim `formula.ts` makes: no positions, so no `#REF!` class, and inserting a row
+changes nothing. Reaching another sheet hands that back in the two worst ways:
+
+- **another sheet's CELL** (`Rates!B2`) puts back exactly the address that moves
+  when somebody inserts a row on a tab the author is not looking at — inside the
+  one expression that has *n* rows depending on it;
+- **another sheet's COLUMN** is a **join**, and pairing row *i* with row *i* is a
+  join with no key, no cardinality answer and no opinion about two sheets of
+  different lengths. `join` is already in the step vocabulary and asks all three
+  questions. A second, worse join hidden inside an arithmetic expression is not
+  a feature; it is next year's bug report saying the numbers changed when
+  somebody sorted a different tab.
+
+Note this keeps ONE rule rather than inventing a second: defined names do not
+reach a column formula either (`recalc` takes a sheet, not a document). The
+column language is closed over its own sheet, and that is now true without
+exception.
+
+### What the reader sees instead of `#REF!`
+
+`#REF!` means *the thing this pointed at was deleted* — the reader's file, the
+reader's mistake. It was being spent on two things that are not that:
+
+| typed | said | says now |
+|---|---|---|
+| `Jan!A1` in a column formula | `#NAME?` *unknown name "Jan"* | `#NAME?` *"Jan" is another sheet. This expression is computed over the columns of its own sheet only — a formula in a single CELL can reference another sheet, and a join step brings another sheet's rows across.* |
+| `Jan!A1` evaluated outside a workbook | `#REF!` *there is no sheet called "Jan" in this workbook* | `#REF!` *"Jan" is another sheet, and this formula is being computed on its own — outside the workbook that would resolve it* |
+| `Feb!A1` where Feb really is gone | `#REF!` *there is no sheet called "Feb" in this workbook* | unchanged — this one was always true |
+
+The first was false twice over: the name is not unknown, it is a sheet in the
+tab strip, and the reason it cannot be used is a boundary rather than a typo, so
+the old wording sent the reader to fix a spelling that was already right. The
+codes stay Excel's, because the grid has one cell of space to say it in; the
+whole difference is in `FormulaError.why`, which is what the panel shows.
+
+### The trap underneath: what an A1 row number counts
+
+`Contacts!D2` is the dataset's second **data** row. `D2` in the spreadsheet
+**copy** of that same dataset is the second row *including the header* — the
+first data row. Both are internally consistent; side by side they are off by one.
+
+THE RULE, and it is one rule rather than two:
+
+> **An A1 row number is the row number the addressed sheet paints in its own
+> gutter.**
+
+Both kinds already satisfy it, and it is the only rule a reader can *check* —
+look at the sheet, read the number beside the row. A dataset's gutter counts
+data rows because a dataset has exactly the rows it has and its header is chrome
+(`docs/dash-excel-gap.md` files that under DELIBERATE DIFFERENCE). A
+spreadsheet's counts every row because a spreadsheet has no headers, only cells,
+one of which happens to hold a word.
+
+**The Excel-shaped alternative was rejected.** Making a dataset's A1 count the
+header would make the two kinds agree with each other and with Excel — and would
+put a formula's row numbers out of step with the row numbers printed down the
+side of the very same sheet. That is the worse mismatch: the cross-kind one
+needs two sheets in front of you to notice, this one needs none. It would also
+silently change what every `Pipeline!A2` in every saved file already means.
+
+**So the offset is not removed, it is owned.** What makes the two bases safe to
+coexist is already true and was only unwritten: `flattenToSpreadsheet` shifts a
+copy's LOCAL references by the header row (the cells moved) and leaves QUALIFIED
+references exactly as written (that sheet did not move), so no reference is
+re-pointed at a different row by the conversion. `cellformula.rowMeaning(sheet)`
+is the sentence for the other half — the reader with both sheets on screen, about
+to type an address at one of them. Both halves are pinned by
+`scripts/test-dash-xsheet.ts`, which measures the one-row offset against both
+sheets rather than asserting it, because that is the part that would rot in
+silence.
+
 ## Not in scope for the first cut
 
 Merged cells, per-cell borders and fills (dash has no manual cell formatting at

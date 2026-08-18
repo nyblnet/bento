@@ -57,12 +57,12 @@
 // rows together, and that is a wrong number that looks like a right one.
 
 import {
-  evaluate, isErr, spillError, vecShape, FormulaError,
+  evaluate, isErr, recalc, spillError, vecShape, FormulaError,
   type Cell, type Shaped, type Vec,
 } from './formula.ts'
 import {
   expandRange, formatRef, isNameLike, mapNames, mapRefs, rewriteFormulaRefs,
-  shiftRefsForInsert, parseRef, RANGE_CELL_MAX, REF_ERR,
+  shiftRefsForInsert, parseRef, sheetQualifiers, RANGE_CELL_MAX, REF_ERR,
   type CellRef, type RangeRef, type ShiftScope,
 } from './a1.ts'
 import { readCell } from './store.ts'
@@ -145,6 +145,83 @@ export interface SheetSource {
   vectors?(): Map<string, Vec>
   /** The document's defined names as this sheet sees them (columns shadow). */
   names?: NameScope
+  /**
+   * OPTIONAL. Which KIND of sheet this is, and therefore what the `1` of `A1`
+   * counts on it. See the ROW BASE block below — a reference that crosses from
+   * one kind to the other is the one place the two answers meet.
+   */
+  kind?: RowBase
+  /**
+   * OPTIONAL. This sheet is being computed ON ITS OWN, not as part of a
+   * document — `recalcCells`, and a promotion previewing a detached range.
+   *
+   * A one-sheet list is indistinguishable from a one-sheet workbook, so without
+   * this the failed qualifier says "there is no sheet called Jan in this
+   * workbook" about a sheet that is sitting in the tab strip of the workbook
+   * the caller declined to pass. See `ERR_SHEET`.
+   */
+  detached?: boolean
+}
+
+// --- what the `1` of `A1` counts --------------------------------------------
+//
+// THE TRAP. `Contacts!D2` on a DATASET is the second row of the DATA. `D2` in
+// the spreadsheet COPY of that same dataset is the second row INCLUDING the
+// header, which is the first row of the data. Both are internally consistent,
+// and side by side on one screen they are off by one — a wrong number with no
+// symptom, which is the failure this codebase names everywhere else.
+//
+// WHAT IS TRUE, and it is one rule rather than two:
+//
+//   AN A1 ROW NUMBER IS THE ROW NUMBER THE ADDRESSED SHEET PAINTS IN ITS OWN
+//   GUTTER.
+//
+// That rule is already satisfied by both kinds and is the only one a reader can
+// CHECK — look at the sheet, read the number beside the row. On a dataset the
+// gutter counts data rows, because a dataset has exactly the rows it has and
+// its header is chrome rather than a row (docs/dash-excel-gap.md finding 14
+// files that under DELIBERATE DIFFERENCE). On a spreadsheet the gutter counts
+// every row, because a spreadsheet has no headers — only cells, one of which
+// happens to hold a word.
+//
+// THE ALTERNATIVE WAS REJECTED. Making a dataset's A1 count the header — which
+// is what Excel does, and would make the two kinds agree — puts the formula's
+// row numbers out of step with the row numbers printed down the side of the
+// very same sheet. That is a worse mismatch: the cross-kind one needs two
+// sheets to be seen, this one needs none. It would also silently change what
+// every `Pipeline!A2` in every saved file already means.
+//
+// SO THE OFFSET IS NOT REMOVED, IT IS OWNED. `promote.flattenToSpreadsheet`
+// already does the only thing that makes the two bases safe to coexist: it
+// shifts a copied sheet's LOCAL formulas by the header row and leaves QUALIFIED
+// references exactly as written, so nothing is re-pointed at a different row by
+// the conversion. `rowMeaning` is the sentence for the other half — the reader
+// who has both sheets on screen and is about to type an address at one of them.
+
+/** Which of the two answers a sheet gives to "what does row 1 mean". */
+export type RowBase = 'dataset' | 'spreadsheet'
+
+export const rowBaseOf = (sheet: Sheet): RowBase | undefined =>
+  sheet.kind === 'table' ? 'dataset' : sheet.kind === 'canvas' ? 'spreadsheet' : undefined
+
+/**
+ * What an address AT this sheet counts, in one sentence, for a reader who has
+ * two kinds of sheet in front of them.
+ *
+ * Plain English and no i18n, the convention this file, a1.ts and formula.ts all
+ * keep: the panel that shows it owns the translation, the engine owns the fact.
+ */
+export function rowMeaning(sheet: Sheet): string | undefined {
+  const base = rowBaseOf(sheet)
+  if (base === 'dataset') {
+    return `"${sheet.name}" is a dataset, so ${sheet.name}!A1 is its first DATA row. ` +
+      'The header is not a row — the address matches the row number beside it.'
+  }
+  if (base === 'spreadsheet') {
+    return `"${sheet.name}" is a spreadsheet, so ${sheet.name}!A1 is the top row of the grid. ` +
+      'A header there is an ordinary cell that happens to hold a word, and it is row 1.'
+  }
+  return undefined
 }
 
 /**
@@ -165,9 +242,21 @@ export interface RefScope {
   /** OPTIONAL. The document's defined names, minus anything this sheet's own
    *  columns claim. Absent = no names, and every word is a column or `#NAME?`. */
   names?: NameScope
+  /**
+   * OPTIONAL. Was this scope assembled from a WHOLE workbook?
+   *
+   * It decides which of two different sentences a failed qualifier gets, and
+   * the difference matters to the person reading it. With a workbook, `has()`
+   * returning false is a FACT: there is no sheet by that name, go and check the
+   * spelling on the tab. Without one, `has()` returns false for every name
+   * including the ones sitting in the tab strip, and telling the reader their
+   * sheet does not exist is a lie that sends them looking for a deleted sheet
+   * that was never deleted.
+   */
+  workbook?: boolean
 }
 
-const NO_SHEETS: RefScope = { has: () => false, clip: (r) => r }
+const NO_SHEETS: RefScope = { has: () => false, clip: (r) => r, workbook: false }
 
 /**
  * The separator between a sheet key and a cell key in a workbook graph node.
@@ -521,8 +610,39 @@ export const cellDeps = (src: string, scope?: RefScope): ScopedRef[] =>
 
 const ERR_REF = (why = 'the referenced cell was deleted'): FormulaError =>
   new FormulaError(REF_ERR, why)
-const ERR_SHEET = (name: string): FormulaError =>
-  new FormulaError(REF_ERR, `there is no sheet called "${name}" in this workbook`)
+/**
+ * A qualified reference that did not land, and the two reasons it can fail.
+ *
+ * `#REF!` is the right code for the FIRST one only. To a spreadsheet reader
+ * `#REF!` means "the thing this pointed at was deleted" — their file, their
+ * mistake — so spending it on "this evaluation was not given the workbook"
+ * blames the reader for the caller's limit. The code has to stay `#REF!` in
+ * both (it is what Excel gives for a deleted sheet, and the grid has one column
+ * of space to say it in), so the whole difference lives in `why`, which is what
+ * the panel actually shows.
+ */
+const ERR_SHEET = (name: string, workbook = true): FormulaError =>
+  new FormulaError(REF_ERR, workbook
+    ? `there is no sheet called "${name}" in this workbook`
+    : `"${name}" is another sheet, and this formula is being computed on its ` +
+      'own — outside the workbook that would resolve it')
+/**
+ * `Jan!Amount` — a sheet, and then something that is not an address on it.
+ *
+ * The spelling a DATASET author reaches for, because on their own sheet a
+ * column name is exactly how you say which column. It bound as nothing, so
+ * formula.ts used to report the bare word `Jan` as an unknown name — and once
+ * the column language learned to name the cross-sheet boundary, a CELL formula
+ * would have inherited that sentence and been told to put it in a cell, which
+ * is where it already was. A cell formula CAN reach another sheet; what it
+ * cannot do is address a column there, because a column name is not a position
+ * and the other sheet is reached by position.
+ */
+const ERR_NOT_ADDRESS = (sheet: string, after: string): FormulaError =>
+  new FormulaError('#NAME?',
+    `"${sheet}" is a sheet, but "${after}" is not a cell address on it. ` +
+    `A formula reaches another sheet by position — ${sheet}!B2, or ${sheet}!B1:B6 — ` +
+    'and a column name only names a column on its own sheet.')
 const ERR_BIG = (): FormulaError =>
   new FormulaError('#VALUE!', 'the range covers too many cells to evaluate')
 const ERR_CYCLE = (): FormulaError => new FormulaError('#CYCLE!')
@@ -590,7 +710,12 @@ export function evalCellArray(
   if (circular) return one(ERR_NAME_CYCLE(circular.nameCycle!))
   if (deps.some((d) => d.dead)) return one(ERR_REF())
   const gone = deps.find((d) => d.missing)
-  if (gone) return one(ERR_SHEET(gone.sheet ?? ''))
+  if (gone) return one(ERR_SHEET(gone.sheet ?? '', opts.scope?.workbook !== false))
+  // A qualifier still in the REWRITTEN expression is one that bound to no
+  // reference — every real one has become a generated name by now, and a
+  // missing sheet was caught on the line above.
+  const stray = expr.indexOf('!') < 0 ? undefined : sheetQualifiers(expr)[0]
+  if (stray) return one(ERR_NOT_ADDRESS(stray.sheet, stray.after))
   if (deps.some((d) => d.tooBig)) return one(ERR_BIG())
 
   // Column names stay visible, so a cell formula can also say `SUM(amount)`.
@@ -835,6 +960,7 @@ export function recalcWorkbook(sheets: SheetSource[], now?: string): Map<string,
     }
 
     const scopeFor = (self: number): RefScope => ({
+      workbook: !sheets[self]?.detached,
       has: (name) => byName.has(sheetKey(name)),
       clip: (r, name) => {
         const at = name === undefined ? self : byName.get(sheetKey(name)) ?? -1
@@ -905,7 +1031,7 @@ export function recalcWorkbook(sheets: SheetSource[], now?: string): Map<string,
       return (r: ScopedRef): Cell => {
         const at = r.sheet === undefined ? self : byName.get(sheetKey(r.sheet)) ?? -1
         const s = r.sheet === undefined ? own : sheets[at]
-        if (!s) return ERR_SHEET(r.sheet ?? '')
+        if (!s) return ERR_SHEET(r.sheet ?? '', !own?.detached)
         if (s.source.unavailable) return new FormulaError('#N/A', s.source.unavailable)
         if (r.row < 0 || r.col < 0) return null
         if (spillsKnown) {
@@ -1160,8 +1286,49 @@ export function recalcCells(
   cols?: Map<string, Vec>,
   names?: NameScope,
 ): CellRecalc {
-  const one: SheetSource = { name: '', source: src, vectors: cols && (() => cols), names }
+  const one: SheetSource = {
+    name: '', source: src, vectors: cols && (() => cols), names, detached: true,
+  }
   return recalcWorkbook([one], now).get('')!
+}
+
+/**
+ * One sheet's cell formulas, computed THROUGH ITS WORKBOOK — the call a grid
+ * painting a sheet should make, of EITHER kind.
+ *
+ * THIS EXISTS BECAUSE THE TWO KINDS HAD TWO DIFFERENT ANSWERS TO ONE QUESTION.
+ * A spreadsheet sheet went through `recalcWorkbook`, so `=Contacts!D2` resolved.
+ * A dataset sheet went through `recalcCells`, which is one sheet and no
+ * workbook, so the identical formula in the identical workbook came back
+ * `#REF!` — and, worse, `#REF! there is no sheet called "Contacts" in this
+ * workbook` about a sheet sitting in the tab strip. That was never a decision
+ * about the kinds; it was two call sites, and a kind is not a place to keep an
+ * accident.
+ *
+ * A DATASET RESOLVES CROSS-SHEET REFERENCES IN A CELL FORMULA. It already
+ * resolves them in the other direction (a spreadsheet has read `Pipeline!A1`
+ * since the workbook graph landed), a per-cell override is already the CELLULAR
+ * escape hatch inside the columnar kind, and it is already bound by this module,
+ * which is already workbook-wide. The boundary that actually exists between the
+ * kinds is where the TYPE lives, and a cell override is on the cellular side of
+ * it either way. Refusing only the outbound direction made the dataset the
+ * lesser kind, which docs/dash-sheet-kinds.md says in as many words it is not.
+ *
+ * A COLUMN FORMULA STILL DOES NOT, and that refusal is `formula.ts`'s —
+ * see `crossSheetRefusal` there for why a column expression reaching another
+ * sheet is either a position that will move or a join with no key.
+ *
+ * `own` supplies the caller's already-computed column formulas for a sheet it
+ * has painted, so they are not evaluated twice; every other sheet resolves
+ * lazily and only if something reads it.
+ */
+export function recalcSheetCells(
+  doc: { sheets?: Sheet[]; names?: Record<string, DefinedName>; modified?: string },
+  sheetId: string,
+  own?: (sheet: TableSheet) => Map<string, Vec> | undefined,
+): CellRecalc {
+  return recalcWorkbook(workbookSources(doc, own), doc.modified).get(sheetId)
+    ?? { values: new Map(), cycles: [], order: [], spills: new Map() }
 }
 
 // --- the sheets themselves ---------------------------------------------------
@@ -1300,9 +1467,24 @@ const rowOfRid = (sheet: TableSheet, rid: number): number => {
  * `recalc`). Without it a computed column reads as its stored value, which is
  * usually nothing at all.
  */
-export function tableCellSource(sheet: TableSheet, computed?: Map<string, Vec>): CellSource {
+export function tableCellSource(
+  sheet: TableSheet,
+  computed?: Map<string, Vec> | (() => Map<string, Vec> | undefined),
+): CellSource {
   const rows = sheet.rids.reduce((n, [, count]) => n + count, 0)
   const columns = sheet.columns
+  // A FUNCTION is how a workbook says "only if somebody reads this sheet". A
+  // workbook recalculates on every keystroke and most of its sheets are not
+  // referenced by anything, so evaluating a 100k-row dataset's column formulas
+  // to build a source nobody reads is the whole cost of making the graph
+  // workbook-wide. Resolved at most once, here.
+  let memo: Map<string, Vec> | undefined
+  let asked = false
+  const comp = (): Map<string, Vec> | undefined => {
+    if (typeof computed !== 'function') return computed
+    if (!asked) { asked = true; memo = computed() }
+    return memo
+  }
   return {
     rows,
     cols: columns.length,
@@ -1317,8 +1499,11 @@ export function tableCellSource(sheet: TableSheet, computed?: Map<string, Vec>):
       if (!col) return null
       const over = sheet.cells?.[`${col.id}:${ridAtRow(sheet, r)}`]
       if (over && 'v' in over) return over.v as Cell
-      const comp = computed?.get(col.id)
-      return (comp ? comp[r] ?? null : readCell(sheet.data[col.id], r) as Cell)
+      // Only a COMPUTED column pays for the resolution. A plain stored column
+      // is read straight out of the dictionary, which is what keeps a reference
+      // into an ordinary dataset free.
+      const vec = col.formula ? comp()?.get(col.id) : undefined
+      return (vec ? vec[r] ?? null : readCell(sheet.data[col.id], r) as Cell)
     },
     formulaCells: () => {
       const out: Array<{ row: number; col: number; src: string }> = []
@@ -1342,12 +1527,16 @@ export function tableCellSource(sheet: TableSheet, computed?: Map<string, Vec>):
 }
 
 /** The column names a formula on a dataset sheet may use, id and name alike. */
-export function columnVectors(sheet: TableSheet, computed?: Map<string, Vec>): Map<string, Vec> {
+export function columnVectors(
+  sheet: TableSheet,
+  computed?: Map<string, Vec> | (() => Map<string, Vec> | undefined),
+): Map<string, Vec> {
   const n = sheet.rids.reduce((a, [, c]) => a + c, 0)
+  const resolved = typeof computed === 'function' ? computed() : computed
   const out = new Map<string, Vec>()
   const put = (k: string, v: Vec) => { out.set(k, v); out.set(k.toLowerCase(), v) }
   for (const c of sheet.columns) {
-    const v = computed?.get(c.id)
+    const v = resolved?.get(c.id)
       ?? Array.from({ length: n }, (_, i) => readCell(sheet.data[c.id], i) as Cell)
     put(c.id, v)
     put(c.name, v)
@@ -1387,7 +1576,7 @@ export const unaddressableSource = (why: string): CellSource => ({
  * than by the name a reference uses to reach it, which it does not.
  */
 export function workbookSources(
-  doc: { sheets?: Sheet[]; names?: Record<string, DefinedName> },
+  doc: { sheets?: Sheet[]; names?: Record<string, DefinedName>; modified?: string },
   computed?: (sheet: TableSheet) => Map<string, Vec> | undefined,
 ): SheetSource[] {
   // The document's defined names, per sheet, with that sheet's own column
@@ -1399,7 +1588,24 @@ export function workbookSources(
   return (doc.sheets ?? []).map((s): SheetSource => {
     if (s.kind === 'table') {
       const t = s as TableSheet
-      const comp = computed?.(t)
+      // THE CALLER'S CACHE FIRST, THEN OUR OWN, AND ONLY IF ASKED.
+      //
+      // `computed` exists because the sheet on screen has already been
+      // recalculated by whoever is painting it, and running formula.ts's
+      // `recalc` over it a second time would be a second answer to one
+      // question. But every OTHER dataset in the workbook used to get
+      // `undefined`, which meant a calculated column read as its STORED value —
+      // usually nothing at all. So `=Sales!C2` into a calculated column
+      // answered blank, and `=Sales!C2*1.2` answered a confident 0: the exact
+      // error-becomes-a-zero failure this codebase refuses everywhere else.
+      //
+      // Falling back to a real recalculation closes that, and it is affordable
+      // only because `tableCellSource` resolves this LAZILY — a workbook of
+      // 100k-row datasets pays nothing for the ones no formula reaches, which
+      // is nearly all of them, and pays once for the ones it does.
+      const comp = () => computed?.(t) ?? (t.columns.some((c) => c.formula)
+        ? recalc(t, doc.modified).values
+        : undefined)
       const shadow = new Set<string>()
       for (const c of t.columns) {
         shadow.add(c.id.toLowerCase())
@@ -1410,6 +1616,7 @@ export function workbookSources(
         name: t.name,
         source: tableCellSource(t, comp),
         vectors: () => columnVectors(t, comp),
+        kind: 'dataset',
         names: namesFor(shadow),
       }
     }
@@ -1421,6 +1628,7 @@ export function workbookSources(
         name: s.name,
         source: canvasCellSource(s as CanvasSheet),
         names: namesFor(),
+        kind: 'spreadsheet',
       }
     }
     return {
