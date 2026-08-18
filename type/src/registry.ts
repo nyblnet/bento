@@ -13,4 +13,7 @@
 // Anything order-sensitive should say so with an explicit `order` instead of
 // relying on this list.
 
+// captions, automatic figure/table numbering and cross-references
+import './xref.ts';
+
 export {};
