@@ -156,14 +156,15 @@ const exampleDoc = {
 
 let deckId, editToken
 
-await check('GET / serves the compile+create demo page with both steps intact', async () => {
+await check('GET / serves the prompt+paste demo page with both steps intact', async () => {
   const res = await worker.fetch(new Request('https://platform.example/'), env)
   const { text } = await readBody(res)
   assert(res.status === 200, `expected 200, got ${res.status}`)
-  assert(text.includes('id="outline"'), 'outline textarea missing — template structure likely broken')
-  assert(text.includes('id="doc"'), 'doc textarea missing — template structure likely broken')
-  assert(text.includes("getElementById('compile')"), 'compile button wiring missing')
+  assert(text.includes('id="promptText"'), 'step 1 prompt block missing — template structure likely broken')
+  assert(text.includes("getElementById('copyPrompt')"), 'copy-prompt button wiring missing')
+  assert(text.includes('id="input"'), 'step 2 paste textarea missing — template structure likely broken')
   assert(text.includes("getElementById('create')"), 'create button wiring missing')
+  assert(text.includes('/api/compile'), 'auto-detect compile path missing from step 2 wiring')
 })
 
 await check('POST /api/decks creates a deck and strips collab', async () => {
