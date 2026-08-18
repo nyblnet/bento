@@ -41,14 +41,28 @@ export interface FeatureContext {
   toast(msg: string): void;
 }
 
+/**
+ * A label that may be resolved LATE.
+ *
+ * registerTool/registerPanel run at module scope, so a plain `t('Find')` in a
+ * spec is evaluated at import time — frozen before the viewer's locale
+ * resolves, which is the one i18n rule this codebase repeats everywhere. The
+ * API was quietly forcing every feature to break it: one agent worked around it
+ * with a getter, another noticed and said so. A thunk makes the correct thing
+ * the easy thing, and a plain string still works for anything genuinely
+ * constant.
+ */
+export type Label = string | (() => string);
+export const text = (l: Label): string => (typeof l === 'function' ? l() : l);
+
 export interface ToolSpec {
   id: string;
   /** inline SVG, from icons.ts — the house recipe, 24px box at 16px */
   icon: string;
-  /** tooltip; already translated by the caller */
-  title: string;
+  /** tooltip — pass `() => t('…')` so it resolves at render, not at import */
+  title: Label;
   /** optional visible label beside the icon */
-  label?: string;
+  label?: Label;
   /** which cluster of the bar it joins */
   group: 'format' | 'insert' | 'review' | 'right';
   order?: number;
@@ -59,7 +73,7 @@ export interface ToolSpec {
 
 export interface MenuSpec {
   id: string;
-  label: string;
+  label: Label;
   icon?: string;
   order?: number;
   run(ctx: FeatureContext): void;
@@ -68,7 +82,7 @@ export interface MenuSpec {
 export interface PanelSpec {
   id: string;
   /** tab label beside Outline / Review / Signatures */
-  label: string;
+  label: Label;
   order?: number;
   /** called once with the panel's host element */
   mount(host: HTMLElement, ctx: FeatureContext): void;

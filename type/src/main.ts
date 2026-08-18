@@ -12,7 +12,7 @@ import {
 } from '../../kernel/src/save.ts';
 import { ICONS } from './icons.ts';
 import { t } from './i18n.ts';
-import { tools, menuItems, panels, matchKey, type FeatureContext } from './features.ts';
+import { tools, menuItems, panels, matchKey, text as labelText, type FeatureContext } from './features.ts';
 import './registry.ts';   // side-effect: every feature module registers itself
 import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
@@ -323,8 +323,8 @@ const mountTools = (hostId: string, group: 'format' | 'insert' | 'review' | 'rig
     b.className = 't-btn';
     b.type = 'button';
     b.id = `tool-${spec.id}`;
-    b.innerHTML = spec.icon + (spec.label ? `<span class="t-lbl">${spec.label}</span>` : '');
-    b.title = spec.title;
+    b.innerHTML = spec.icon + (spec.label ? `<span class="t-lbl">${labelText(spec.label)}</span>` : '');
+    b.title = labelText(spec.title);
     // mousedown, not click: the caret must survive pressing a toolbar button
     b.addEventListener('mousedown', e => { e.preventDefault(); spec.run(featureCtx); });
     host.appendChild(b);
@@ -338,7 +338,7 @@ mountTools('gReview', 'review');
 for (const spec of menuItems()) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.innerHTML = (spec.icon ?? '') + `<span>${spec.label}</span>`;
+  b.innerHTML = (spec.icon ?? '') + `<span>${labelText(spec.label)}</span>`;
   b.addEventListener('click', () => spec.run(featureCtx));
   byId('moreMenu').insertBefore(b, byId('about'));
 }
@@ -346,7 +346,7 @@ for (const spec of menuItems()) {
 for (const spec of panels()) {
   const tab = document.createElement('button');
   tab.dataset.tab = spec.id;
-  tab.textContent = spec.label;
+  tab.textContent = labelText(spec.label);
   document.querySelector('.t-tabs')!.appendChild(tab);
   const panel = document.createElement('div');
   panel.className = 't-panel';
