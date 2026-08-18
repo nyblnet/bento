@@ -28,6 +28,7 @@
 // agent API. That is why this lands at commit one: retrofitting op-minting
 // means rewriting the store.
 
+import { t } from './i18n.ts'
 import { applySheetProps } from './rowcol.ts'
 // The one definition of "what counts as a number" — import's. A second
 // implementation here is how a value converts on import and refuses on a
@@ -958,6 +959,31 @@ export class Store {
   private runCell: string | null = null
   private runTimer: ReturnType<typeof setTimeout> | undefined
   private pending: { inverse: Patch[]; touched: Touched; bytes: number } | null = null
+  /**
+   * Set while a document change is being applied and broadcast.
+   *
+   * The grid re-derives its order vector from inside the `doc` listener
+   * (grid.ts: a structural edit renumbers the rows the vector holds), so a
+   * `view()` call arriving here is DERIVED — the consequence of an edit, not
+   * something the reader did. `viewBarrier` exists to tell those two apart and
+   * this counter is the only honest way to do it.
+   */
+  private inDocChange = 0
+  /**
+   * THE READER'S LAST ACTION WAS A VIEW ACTION — see `view()` and `undo()`.
+   *
+   * Null means the last thing they did was a document edit (or nothing).
+   */
+  private viewBarrier = false
+  /**
+   * How the store speaks to the reader, when refusing.
+   *
+   * A FIELD RATHER THAN AN IMPORT, and the same shape `setColumnType` takes its
+   * `report` in: this module runs in the node rigs and must not reach the DOM.
+   * Default swallows, so a build that never lends it a voice is quieter than it
+   * should be but never wrong. panels.ts lends it `toast` today.
+   */
+  say: (message: string) => void = () => {}
 
   constructor(doc: DashDoc) {
     this.doc = doc
@@ -991,8 +1017,13 @@ export class Store {
   changedRemotely(touched: Touched = { all: true }): void {
     this.doc.modified = new Date().toISOString()
     this.lastTouched = touched
-    this.emit('doc')
-    this.emit('view')
+    // NOT a barrier reset: somebody else's edit is not the reader's last
+    // action, exactly as it is not an entry in their undo history.
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.emit('view')
+    } finally { this.inDocChange-- }
   }
 
   /** The last invalidation, for a listener that wants to repaint precisely. */
@@ -1067,8 +1098,14 @@ export class Store {
     this.push({ inverse, touched, bytes })
     this.touch()
     this.lastTouched = touched
-    this.emit('doc')
-    this.runAfter()
+    // The reader's last action is a document edit again, so undo has something
+    // of theirs to reverse and no reason to hesitate.
+    this.viewBarrier = false
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.runAfter()
+    } finally { this.inDocChange-- }
   }
 
   /**
@@ -1107,8 +1144,12 @@ export class Store {
     }
     merge(this.pending!.touched, r.touched)
     this.touch()
-    this.emit('doc')
-    this.runAfter()
+    this.viewBarrier = false
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.runAfter()
+    } finally { this.inDocChange-- }
     clearTimeout(this.runTimer)
     this.runTimer = setTimeout(() => this.endRun(), RUN_IDLE_MS)
   }
@@ -1131,12 +1172,43 @@ export class Store {
    * `commit` is the easy mistake, and nobody notices until a file saves itself
    * every time someone clicks a column header.
    *
-   * OPEN QUESTION: Excel users press ⌘Z after a sort and expect it undone. That
-   * needs a separate view-history, not the document's undo stack — deliberately
-   * not built here, because guessing it wrong is worse than leaving it.
+   * A SORT IS STILL NOT UNDOABLE, AND UNDO NO LONGER PRETENDS OTHERWISE.
+   *
+   * The open question this comment used to hold was whether ⌘Z should reverse a
+   * sort. Measured while it was open: sort a column, press ⌘Z, and the sort
+   * stayed while the NUMBER FORMAT set two actions earlier came off. The reader
+   * keeps the thing they asked to reverse and loses a thing they were not
+   * thinking about, with nothing said either way. "Sort is not undoable" is
+   * defensible; silently undoing something else is not.
+   *
+   * A real view history still belongs to the grid, not here — `docs/DECISIONS.md`
+   * ("one view vector") puts the filters and sorts in grid.ts and the store owns
+   * only the vector they produce, so a stack kept here would restore the row
+   * order while the header arrow, the status line and the filter menu went on
+   * describing the sort that had just been undone, and the next `applyView()`
+   * would put it back. Half an undo that lies is worse than none.
+   *
+   * So the store does the one thing it CAN see and CAN promise: it notices that
+   * the reader's last action changed the rows on screen without changing the
+   * document, and makes the next undo REFUSE and say so, instead of reaching
+   * past the sort for an edit nobody asked about. One press to be told; a
+   * second press to undo the edit anyway.
+   *
+   * THE TEST FOR "THE READER DID THIS" is that the order map changed and no
+   * document change was in flight. That is deliberately about the VECTOR rather
+   * than about sorts and filters by name: the store cannot see grid.ts's
+   * `filters`/`sorts` (nor should it), and filter.ts is free to widen what a
+   * filter is without this having to hear about it. It errs towards arming —
+   * switching to a sheet that still holds a stale vector clears it here, and
+   * that arms the barrier too. Costing one keypress after a tab switch is the
+   * right side to be wrong on, and undoing an edit on the sheet you just left
+   * is the same surprise anyway.
    */
   view(mutate: () => void): void {
+    if (this.inDocChange) { mutate(); this.emit('view'); return }
+    const before = { ...this.order }
     mutate()
+    if (orderChanged(before, this.order)) this.viewBarrier = true
     this.emit('view')
   }
 
@@ -1174,14 +1246,39 @@ export class Store {
     }
     this.touch()
     this.lastTouched = touched
-    this.emit('doc')
-    this.runAfter()
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.runAfter()
+    } finally { this.inDocChange-- }
     return { inverse, touched, bytes }
+  }
+
+  /**
+   * The refusal, once. Returns true when this press was spent saying no.
+   *
+   * ONLY WHEN THERE IS SOMETHING TO REVERSE: with an empty stack the next press
+   * would do nothing either, so "press it again" would be a lie and the barrier
+   * is simply dropped. Redo is guarded on the same footing — after a sort,
+   * ⇧⌘Z reaching past it for a document edit is the same surprise pointing the
+   * other way.
+   */
+  private blocked(has: boolean): boolean {
+    if (!this.viewBarrier) return false
+    this.viewBarrier = false
+    if (!has) return false
+    // ONE LITERAL, not a concatenation: the i18n rig sweeps t() calls out of the
+    // source and cannot see through a `+`, and an unswept string is one that
+    // silently never gets translated.
+    this.say(t('Sorting and filtering are not changes to the data, so undo cannot take them back — clear them from the column’s ▾ menu. Nothing was undone; press undo again to undo the last change to the data.'))
+    this.emit('view')
+    return true
   }
 
   undo(): boolean {
     if (this.readOnly) return false
     this.endRun()
+    if (this.blocked(this.undoStack.length > 0)) return false
     const e = this.undoStack.pop()
     if (!e) return false
     this.redoStack.push(this.invert(e))
@@ -1191,6 +1288,7 @@ export class Store {
   redo(): boolean {
     if (this.readOnly) return false
     this.endRun()
+    if (this.blocked(this.redoStack.length > 0)) return false
     const e = this.redoStack.pop()
     if (!e) return false
     this.undoStack.push(this.invert(e))
@@ -1209,10 +1307,34 @@ export class Store {
     this.undoStack.length = 0
     this.redoStack.length = 0
     this.order = {}
+    this.viewBarrier = false
     this.lastTouched = { all: true }
     this.emit('doc')
     this.emit('view')
   }
+}
+
+/**
+ * Did the rows on screen change?
+ *
+ * BY CONTENT, not by reference: `applyView` builds a fresh array every time it
+ * runs, so reference equality would call re-applying an identical filter a
+ * change. The walk costs a pass over a vector that was just built by a pass
+ * over the same rows, and it only runs on a view change the reader made.
+ */
+function orderChanged(
+  a: Record<string, number[] | undefined>, b: Record<string, number[] | undefined>,
+): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const k of keys) {
+    const x = a[k]
+    const y = b[k]
+    if (x === y) continue
+    if (!x || !y) return true          // one of them says "no filter, no sort"
+    if (x.length !== y.length) return true
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true
+  }
+  return false
 }
 
 function merge(into: Touched, from: Touched): void {
