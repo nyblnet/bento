@@ -36,6 +36,7 @@
 // in a gate that only ever sees real formula text, and a check that a helper
 // returns the right answer proves nothing about whether the importer calls it.
 
+import { readFileSync } from 'node:fs'
 import { writeZip } from '../dash/src/zip.ts'
 import { importXlsx, exportXlsx, installNames, liveFormula } from '../dash/src/xlsx.ts'
 import { readCell } from '../dash/src/store.ts'
@@ -552,6 +553,35 @@ const over = (s: TableSheet, key: string): Record<string, unknown> =>
   ok(skipped.join() === 'TaxRate', 'the collision comes back so the caller can say so')
   ok(installNames(doc, undefined).length === 0 && doc.names?.Fresh?.v === 0.5,
     'and installing nothing changes nothing')
+}
+
+console.log('\nBOTH import doors ask for names, and BOTH install them')
+{
+  // THE CALLER CHECK, and here it guards a contract rather than a feature.
+  // `names: true` is opt-in because the gate TRUSTS the table: `liveFormula`
+  // lets a formula go live when every bare word it mentions is a name the
+  // import carried. A caller that asks for names and does not install them
+  // therefore re-creates finding 4 exactly — `=B4*TaxRate` painting #NAME? over
+  // a real number — while looking more capable, not less.
+  //
+  // Both doors are checked because dash has TWO import paths and the bounce
+  // test already found them out of step once: fifteen findings render as
+  // bullets through the menu and as one unbroken paragraph through the drop
+  // door. Same feature, two doors, and the door people use was the broken one.
+  // COMMENTS STRIPPED, and that is not fussiness. The first version of this
+  // check tested the raw source, and a negative control walked straight through
+  // it: dropopen.ts carries a comment EXPLAINING the `names: true` contract, so
+  // deleting the actual option left the string sitting in the prose above it
+  // and the check stayed green. A guard a comment can satisfy is a guard that
+  // certifies documentation.
+  const src = (f: string) => readFileSync(new URL(`../dash/src/${f}`, import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+  for (const f of ['main.ts', 'dropopen.ts']) {
+    const code = src(f)
+    ok(/names:\s*true/.test(code), `${f} asks importXlsx to carry defined names`)
+    ok(code.includes('installNames('),
+      `and ${f} INSTALLS them — asking without installing is finding 4 with extra steps`)
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

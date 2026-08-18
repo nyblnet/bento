@@ -40,7 +40,7 @@ import { SyncSession } from './sync/session.ts'
 import { mountPeople } from './sync/people.ts'
 import { ridBase, ridBlockFor } from './model.ts'
 import { setRidBlock } from './rowcol.ts'
-import { importXlsx, exportXlsx, xlsxFileName } from './xlsx.ts'
+import { importXlsx, installNames, exportXlsx, xlsxFileName } from './xlsx.ts'
 import { runPivot, mountPivot, defaultPivot, newPivotSheet, type PivotSpec } from './pivot.ts'
 import { buildSheetPreview } from './preview.ts'
 import { installPrint, openPrintDialog } from './print.ts'
@@ -2345,11 +2345,15 @@ async function pickXlsx(store: Store, host: HTMLElement, grid: Grid): Promise<vo
     if (refuseWrite(host, store)) return
     void f.arrayBuffer().then(async (buf) => {
       try {
+        // See dropopen.ts for why `names` and `installNames` are one change:
+        // the live-formula gate trusts that a name it was told about exists.
         const r = await importXlsx(new Uint8Array(buf), {
           source: f.name, at: new Date().toISOString(),
           idPrefix: `xl-${Math.floor(Date.now() % 1e8).toString(36)}`,
+          names: true,
         })
         store.doc.sheets.push(...r.sheets)
+        installNames(store.doc, r.names)
         store.replaceDoc(store.doc)
         if (r.sheets.length) grid.setSheet(r.sheets[0].id)
         showFindings(host, r.findings as never)

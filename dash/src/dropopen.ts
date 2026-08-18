@@ -49,7 +49,7 @@
 // same findings and the same single undo checkpoint. The xlsx path has no such
 // shared function to borrow (main.ts's lives inside its file picker), so it is
 // spelled out below.
-import { importXlsx } from './xlsx.ts'
+import { importXlsx, installNames } from './xlsx.ts'
 import { parseDoc } from './model.ts'
 import { swapWorkbook, type WorkbookHost } from './recovery.ts'
 import { adoptFileHandle, hasFileHandle, isEncryptionActive } from '../../kernel/src/save.ts'
@@ -233,16 +233,24 @@ async function handleDrop(host: DropHost, ev: DragEvent): Promise<void> {
  *  Import Excel button does. */
 async function openXlsx(host: DropHost, file: File): Promise<void> {
   const buf = await file.arrayBuffer()
+  // `names: true` is the caller's half of a two-part contract, and the gate
+  // TRUSTS it: `liveFormula` lets a formula go live when every bare word it
+  // mentions is a name the import carried. Ask for the names and then fail to
+  // install them, and `=B4*TaxRate` paints #NAME? over a real number — which is
+  // the exact bug this opt-in exists to prevent. So the two lines belong
+  // together, and both import doors get them in the same commit.
   const r = await importXlsx(new Uint8Array(buf), {
     source: file.name,
     at: new Date().toISOString(),
     idPrefix: `xl-${Math.floor(Date.now() % 1e8).toString(36)}`,
+    names: true,
   })
   if (!r.sheets.length) {
     host.notice(t('“{name}” has no worksheet dash could read.', { name: file.name }))
     return
   }
   host.store.doc.sheets.push(...r.sheets)
+  installNames(host.store.doc, r.names)
   host.store.replaceDoc(host.store.doc)
   host.showSheet(r.sheets[0].id)
   const findings = (r.findings as Array<{ message: string }>).map((f) => f.message)
