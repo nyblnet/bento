@@ -186,6 +186,15 @@ export interface Panels {
 export function mountPanels(host: PanelsHost): Panels {
   const { store, grid, body } = host
 
+  // THE STORE'S VOICE. `store.ts` runs in the node rigs and must not reach the
+  // DOM, so it refuses through an injected reporter rather than an import —
+  // exactly the shape `setColumnType` already takes its `report` in, and this
+  // file already hands that one `toast` (see the Type row below). The undo
+  // barrier needs the same channel and gets it here rather than growing a
+  // second mechanism. Left unlent it swallows: an undo that refuses silently is
+  // still honest, but it is only half the sentence.
+  store.say = toast
+
   // DECLARED FIRST, and it has to be: `resizer()` writes into this while
   // building the strips below, and the strips are built before any of the
   // sections that follow. A `const` further down the closure is in its temporal

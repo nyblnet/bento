@@ -464,6 +464,7 @@ export const es: Catalog = {
   "Sort Z → A": "Ordenar Z → A",
   "Sort and filter…": "Ordenar y filtrar…",
   "Sorted by {cols}": "Ordenado por {cols}",
+  "Sorting and filtering are not changes to the data, so undo cannot take them back — clear them from the column’s ▾ menu. Nothing was undone; press undo again to undo the last change to the data.": "Ordenar y filtrar no son cambios en los datos, así que deshacer no puede revertirlos: quítalos desde el menú ▾ de la columna. No se ha deshecho nada; pulsa deshacer otra vez para deshacer el último cambio en los datos.",
   "Split": "Dividir",
   "Split into columns": "Dividir en columnas",
   "Split into columns…": "Dividir en columnas…",

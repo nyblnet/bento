@@ -464,6 +464,7 @@ export const ja: Catalog = {
   "Sort Z → A": "Z → A で並べ替え",
   "Sort and filter…": "並べ替えとフィルター…",
   "Sorted by {cols}": "{cols} で並べ替え",
+  "Sorting and filtering are not changes to the data, so undo cannot take them back — clear them from the column’s ▾ menu. Nothing was undone; press undo again to undo the last change to the data.": "並べ替えと絞り込みはデータへの変更ではないため、元に戻すでは取り消せません — 列の ▾ メニューから解除してください。何も元に戻していません。データへの最後の変更を元に戻すには、もう一度押してください。",
   "Split": "分割",
   "Split into columns": "列に分割",
   "Split into columns…": "列に分割…",

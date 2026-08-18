@@ -464,6 +464,7 @@ export const zhHans: Catalog = {
   "Sort Z → A": "排序 Z → A",
   "Sort and filter…": "排序和筛选…",
   "Sorted by {cols}": "按 {cols} 排序",
+  "Sorting and filtering are not changes to the data, so undo cannot take them back — clear them from the column’s ▾ menu. Nothing was undone; press undo again to undo the last change to the data.": "排序和筛选不是对数据的更改，因此撤销无法取消它们 — 请从列的 ▾ 菜单中清除。这次没有撤销任何内容；再按一次撤销，可撤销对数据的最后一次更改。",
   "Split": "拆分",
   "Split into columns": "拆分为多列",
   "Split into columns…": "拆分为多列…",

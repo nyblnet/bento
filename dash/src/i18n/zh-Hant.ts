@@ -464,6 +464,7 @@ export const zhHant: Catalog = {
   "Sort Z → A": "排序 Z → A",
   "Sort and filter…": "排序與篩選…",
   "Sorted by {cols}": "依 {cols} 排序",
+  "Sorting and filtering are not changes to the data, so undo cannot take them back — clear them from the column’s ▾ menu. Nothing was undone; press undo again to undo the last change to the data.": "排序和篩選不是對資料的變更，因此還原無法取消它們 — 請從欄的 ▾ 選單中清除。這次沒有還原任何內容；再按一次還原，可還原對資料的最後一次變更。",
   "Split": "拆分",
   "Split into columns": "拆分為多欄",
   "Split into columns…": "拆分為多欄…",
