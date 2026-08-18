@@ -13,6 +13,7 @@ import { isList, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import { captionPrefixHtml, isXrefAtom, refAtoms, readXrefs, numberXrefs } from './xref.ts';
 import { blockStyle } from './layout.ts';
 import { citeInject, isCiteAtom, mergeInject, paintCitations, readCiteAtoms } from './cite.ts';
+import { displayMathHtml, inlineMathHtml, isMathMark } from './math.ts';
 
 export const TAG: Record<Block['kind'], string> = {
   para: 'p', h1: 'h1', h2: 'h2', h3: 'h3', quote: 'blockquote',
@@ -21,7 +22,7 @@ export const TAG: Record<Block['kind'], string> = {
   // / Block.cell for why the document stays flat.
   ul: 'li', ol: 'li', cell: 'td',
   // atomic: rendered by renderImage, never by the generic path
-  image: 'figure', caption: 'figcaption', toc: 'nav',
+  image: 'figure', caption: 'figcaption', toc: 'nav', math: 'div',
 };
 
 /**
@@ -134,12 +135,20 @@ export function blockHtml(b: Block): string {
   // A note, a cross-reference and a citation can all sit at the SAME offset, so
   // these are merged rather than assigned — a plain map write silently drops
   // one, and the one it drops depends on iteration order.
+  // INLINE MATH is a mark whose source characters are replaced wholesale by the
+  // typeset result. It is a mark and not an atom deliberately: the source lives
+  // in the text, so `x^2` → `x^3` reports to the redline as a one-word change
+  // to that formula. As an atom the diff would see no change at all, which for
+  // a redlining app is disqualifying.
+  const mathRanges = (b.marks ?? []).filter(isMathMark)
+    .map(m => ({ from: m.from, to: m.to, html: inlineMathHtml(b.text.slice(m.from, m.to)) }));
   const atoms = mergeInject(
     new Map((b.notes ?? []).map(n => [n.at, noteMarker(n.id)])),
     refAtoms(b),
     citeInject(b),
   );
-  const html = toHtml(b.text, b.marks ?? [], atoms.size ? atoms : undefined);
+  const html = toHtml(b.text, b.marks ?? [], atoms.size ? atoms : undefined,
+                      mathRanges.length ? mathRanges : undefined);
   // an empty block still needs a line box, or it collapses and cannot be clicked
   return captionPrefixHtml(b) + decorate(b, html || '<br>');
 }
@@ -190,6 +199,19 @@ export function renderImage(b: Block): HTMLElement {
 
 export function renderBlock(b: Block): HTMLElement {
   if (b.kind === 'image') return renderImage(b);
+  if (b.kind === 'math') {
+    // A display formula is atomic: it has height and, once typeset, may hold no
+    // text node pagination can measure — so it carries data-atomic like a
+    // picture, and gets the same one-box treatment.
+    const el = document.createElement('div');
+    el.className = 't-mathblock';
+    el.dataset.id = b.id;
+    el.dataset.kind = b.kind;
+    el.dataset.atomic = '1';
+    el.dataset.tex = b.text;
+    el.innerHTML = displayMathHtml(b.text);
+    return el;
+  }
   const el = document.createElement(TAG[b.kind]);
   el.dataset.id = b.id;
   el.dataset.kind = b.kind;

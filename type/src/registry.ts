@@ -19,6 +19,7 @@ import './find.ts';    // find and replace — panel, ⌘F, replace all
 import './xref.ts';
 import './layout.ts';   // paragraph properties, page setup, page breaks
 import './cite.ts';       // citations, the bibliography and the BibTeX import
+import './math.ts';      // mathematics: inline formulas and display equations
 
 export {};
 import './link.ts';

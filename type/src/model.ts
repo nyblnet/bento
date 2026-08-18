@@ -21,7 +21,7 @@ export const FORMAT = 'bento/type';
 export const VERSION = 1;
 
 /** The kinds of block a document is made of. */
-export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'cell' | 'image' | 'caption' | 'toc';
+export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'cell' | 'image' | 'caption' | 'toc' | 'math';
 
 /**
  * Where a table cell sits. Carried on EVERY cell of the table, not on a table
@@ -305,7 +305,7 @@ export function parseDoc(raw: string): ParseResult {
   const body: Block[] = [];
   (json.body as unknown[]).forEach((b, i) => {
     if (!isObj(b)) { repaired.push(`dropped a block at ${i} that was not an object`); return; }
-    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'image', 'caption', 'toc'].includes(b.kind as string)
+    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'image', 'caption', 'toc', 'math'].includes(b.kind as string)
       ? b.kind as BlockKind : 'para';
     if (kind !== b.kind) repaired.push(`block ${i}: unknown kind ${JSON.stringify(b.kind)} read as a paragraph`);
     const text = typeof b.text === 'string' ? b.text : '';

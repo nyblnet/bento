@@ -36,7 +36,7 @@
 // place instead of leaking into four.
 
 /** The formatting a run of text can carry. Deliberately small. */
-export type MarkType = 'b' | 'i' | 'u' | 's' | 'code' | 'link';
+export type MarkType = 'b' | 'i' | 'u' | 's' | 'code' | 'link' | 'math';
 
 export interface Mark {
   t: MarkType;
@@ -51,6 +51,11 @@ export interface Mark {
 /** The tag each mark renders as. `link` is special-cased (it carries an href). */
 const TAG: Record<Exclude<MarkType, 'link'>, string> = {
   b: 'strong', i: 'em', u: 'u', s: 's', code: 'code',
+  // `math` never reaches here: a math range is replaced wholesale by `ranges`
+  // below, so its source characters are never emitted as text inside a tag.
+  // The entry exists because the type demands one, and a wrong tag would be a
+  // silent fallback rather than an error.
+  math: 'span',
 };
 const BY_TAG: Record<string, MarkType> = {
   strong: 'b', b: 'b', em: 'i', i: 'i', u: 'u', s: 's', strike: 's', del: 's',
@@ -221,11 +226,25 @@ const closeTag = (m: Mark) => m.t === 'link' ? '</a>' : `</${TAG[m.t]}>`;
  * `inject` lets the caller drop non-text atoms (footnote markers) at exact
  * offsets without them entering the text or the mark arithmetic.
  */
-export function toHtml(text: string, marks: Mark[] = [], inject?: Map<number, string>): string {
+/** A span of the text replaced WHOLESALE by ready-made HTML. */
+export interface HtmlRange { from: number; to: number; html: string }
+
+export function toHtml(
+  text: string,
+  marks: Mark[] = [],
+  inject?: Map<number, string>,
+  ranges?: HtmlRange[],
+): string {
   const ms = normalize(marks, text.length);
   const cuts = new Set<number>([0, text.length]);
   for (const m of ms) { cuts.add(m.from); cuts.add(m.to); }
   if (inject) for (const k of inject.keys()) cuts.add(Math.max(0, Math.min(k, text.length)));
+  // A replaced range must start and end on a cut, or its boundary would fall
+  // inside a segment and the replacement would land mid-tag.
+  const reps = (ranges ?? [])
+    .filter(r => r.from >= 0 && r.to <= text.length && r.to > r.from)
+    .sort((a, b) => a.from - b.from);
+  for (const r of reps) { cuts.add(r.from); cuts.add(r.to); }
   const points = [...cuts].sort((a, b) => a - b);
 
   // The nesting order a segment WANTS: outermost is the mark that began
@@ -254,7 +273,11 @@ export function toHtml(text: string, marks: Mark[] = [], inject?: Map<number, st
     for (; k < want.length; k++) { out += openTag(want[k]); open.push(want[k]); }
     if (inject?.has(at)) out += inject.get(at)!;
     if (i === points.length - 1) break;
-    out += esc(text.slice(at, points[i + 1]));
+    // A REPLACED range emits its ready-made HTML instead of its characters.
+    // Its marks are still open around it, so `\frac12` inside a bold run is
+    // typeset and bold — the source is never shown and never escaped as text.
+    const rep = reps.find(r => r.from === at);
+    out += rep ? rep.html : esc(text.slice(at, points[i + 1]));
   }
   while (open.length) out += closeTag(open.pop()!);
   return out;
