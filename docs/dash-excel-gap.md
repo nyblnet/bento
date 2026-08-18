@@ -430,6 +430,26 @@ Excel's, already written down in `docs/dash-sheet-kinds.md` — but until it is
 implemented and stated, what the person sees is their Total row sorting itself
 into the middle of their deals.
 
+
+### 17. `AVG` over an empty view reports 0, and there is no average of nothing
+
+Found while adding `SUBTOTAL`, by comparing it against the footer rather than
+against a hand-worked number — the two disagreed and the formula was right.
+
+`grid.ts aggregate()` ends `spec === 'avg' ? (seen ? acc / seen : 0) : …`, so a
+view whose filter has hidden every row shows **AVG 0**. `SUBTOTAL(101, …)` over
+the same rows answers `#DIV/0!`, which is the true answer: an average of nothing
+is not zero.
+
+Same class as finding 1 — a confident number where there is none — and much
+smaller, because the view is visibly empty above it. `sum` of nothing IS legitimately
+0; `avg`, `min` and `max` of nothing are not, and `min`/`max` should be checked
+at the same time.
+
+Left open deliberately: `grid.ts` was owned by another agent when this was
+found, and `SUBTOTAL`'s rig asserts the divergence as a DIFFERENCE rather than
+quietly matching the formula to the grid — matching would have buried it.
+
 ---
 
 ## Status, 2026-08-18
