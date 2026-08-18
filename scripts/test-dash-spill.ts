@@ -126,23 +126,28 @@ const GRID_HOOK: Array<[string, string]> = [
   ],
 ]
 
-/** grid.ts with the hook, as an importable module. A no-op once it is applied. */
+/**
+ * grid.ts, which must CARRY the hook. It now does.
+ *
+ * While `grid.ts` belonged to another agent this patched a COPY and asserted on
+ * the markup that copy emitted — the right call then, and it proved the anchors
+ * still existed. But it is exactly the shape that has bitten this repo twice:
+ * a rig green over a feature that is invisible on screen, because what it
+ * exercised was not what ships. Once the hook is applied, the patching arm
+ * stops being a convenience and becomes a way for its removal to go unnoticed.
+ *
+ * So absence is now a FAILURE, not a fallback. If someone rewrites the paint
+ * loop and drops the call, the 57 checks below do not quietly re-patch their
+ * way back to green — they go red and say which line went missing.
+ */
 function hookedGrid(): string {
-  let src = readFileSync(`${SRC}/grid.ts`, 'utf8')
-  const applied = src.includes('spillExtent(rc)')
-  if (!applied) {
-    for (const [from, to] of GRID_HOOK) {
-      ok(src.includes(from), `grid.ts still holds the anchor this hook replaces: ${from.trim().slice(0, 48)}…`)
-      src = src.replace(from, to)
-    }
-    src = src.replace(
-      'cellKey, isFormula, recalcCells, recalcWorkbook, translateCellFormula,',
-      'cellKey, isFormula, recalcCells, recalcWorkbook, spillExtent, translateCellFormula,',
-    )
-    ok(src.includes('spillExtent, translateCellFormula'), 'and the import anchor')
-  } else {
-    ok(true, 'grid.ts already carries the spill paint hook')
-  }
+  const src = readFileSync(`${SRC}/grid.ts`, 'utf8')
+  ok(src.includes('spillExtent(rc)'),
+    'grid.ts CALLS spillExtent — without it a 100-row spill paints ~40 rows and stops, ' +
+    'with nothing on screen saying the rest of the answer exists')
+  ok(src.includes("this.cvComputed(row, col) ??"),
+    'and cvValueAt consults the computed map, or every spilled cell reads as empty')
+  ok(src.includes('spillExtent, translateCellFormula'), 'and the import is there')
   // Relative imports have to keep resolving from outside the source directory.
   const out = src.replace(/from '\.\/([^']+)'/g, (_m, f) => `from '${SRC}/${f}'`)
   mkdirSync('/tmp/dash-spill-probe', { recursive: true })

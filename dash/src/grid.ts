@@ -34,7 +34,7 @@ import { colToLetters, formatRef, parseRef } from './a1.ts'
 import { t } from './i18n.ts'
 import { resizeColumn, autoFitWidth, hiddenSet, readFrozen, insertRowsAt } from './rowcol.ts'
 import {
-  cellKey, isFormula, recalcCells, recalcWorkbook, translateCellFormula,
+  cellKey, isFormula, recalcCells, recalcWorkbook, spillExtent, translateCellFormula,
   shiftSheetFormulas, workbookSources, type CellSource,
 } from './cellformula.ts'
 import { mountFind, type FindUI, type Hit } from './find.ts'
@@ -2124,11 +2124,18 @@ export class Grid {
   private cvRefresh(s: CanvasSheet): void {
     if (!this.cvDirty) return
     this.cvDirty = false
-    this.cvUsed = canvasUsed(s)
-    this.cellValues = canvasHasFormulas(s)
-      ? recalcWorkbook(workbookSources(this.store.doc), this.store.doc.modified)
-        .get(s.id)?.values ?? EMPTY_CELLS
-      : EMPTY_CELLS
+    // A SPILLED CELL HOLDS NOTHING IN THE DOCUMENT — only the anchor carries
+    // the formula — so the used range has to be ruled past the last STORED
+    // cell as well. The frontier is only +20 rows past the used range, so a
+    // 100-row spill would otherwise paint 40 rows and stop, with no sign
+    // that the rest of the answer exists.
+    const rc = canvasHasFormulas(s)
+      ? recalcWorkbook(workbookSources(this.store.doc), this.store.doc.modified).get(s.id)
+      : undefined
+    this.cellValues = rc?.values ?? EMPTY_CELLS
+    const used = canvasUsed(s)
+    const sp = rc ? spillExtent(rc) : { rows: 0, cols: 0 }
+    this.cvUsed = { rows: Math.max(used.rows, sp.rows), cols: Math.max(used.cols, sp.cols) }
   }
 
   /**
@@ -2249,7 +2256,7 @@ export class Grid {
       const v = this.cvComputed(row, col)
       return v === undefined ? null : v
     }
-    return cell && 'v' in cell ? cell.v : null
+    return this.cvComputed(row, col) ?? (cell && 'v' in cell ? cell.v : null)
   }
 
   /** What a canvas cell IS — the formula source when it has one. The formula bar. */
