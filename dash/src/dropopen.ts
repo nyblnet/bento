@@ -108,8 +108,20 @@ export interface DropHost extends WorkbookHost {
    * answer to "what does importing do".
    */
   importText: (text: string, source: string) => void
-  /** One line in the findings strip: what opening this file decided. */
-  notice: (message: string) => void
+  /**
+   * What opening this file decided, for the findings strip.
+   *
+   * Takes an ARRAY as well as a string, and that is the whole of finding 12.
+   * `showFindings` renders one bullet per entry and the MENU import path passes
+   * it the array, so it does. This path could only hand over one string, so it
+   * had to `.join(' ')` first — and `budget.xlsx` arrived as a wall of amber
+   * text 224px tall, 31% of a 720px window, with no bullets, no grouping and no
+   * link to the column concerned.
+   *
+   * Two doors into one feature, and the door people actually use — dragging the
+   * file onto the window — was the one that destroyed the structure.
+   */
+  notice: (message: string | ReadonlyArray<{ message: string }>) => void
   /** Unsaved edits in the OPEN workbook — main.ts owns the flag. */
   dirty?: () => boolean
 }
@@ -253,9 +265,11 @@ async function openXlsx(host: DropHost, file: File): Promise<void> {
   installNames(host.store.doc, r.names)
   host.store.replaceDoc(host.store.doc)
   host.showSheet(r.sheets[0].id)
-  const findings = (r.findings as Array<{ message: string }>).map((f) => f.message)
-  host.notice([t('Imported {n} sheet(s) from “{name}”.', { n: r.sheets.length, name: file.name }),
-    ...findings].join(' '))
+  // The array, unflattened. One bullet per finding, the same as the menu path.
+  host.notice([
+    { message: t('Imported {n} sheet(s) from “{name}”.', { n: r.sheets.length, name: file.name }) },
+    ...(r.findings as Array<{ message: string }>),
+  ])
 }
 
 /**

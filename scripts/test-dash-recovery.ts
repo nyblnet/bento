@@ -426,5 +426,29 @@ console.log('\nrestoring a whole workbook is reversible, from both surfaces')
     'and locks AFTER it, because swapWorkbook refuses to load into an already-locked workbook')
 }
 
+// --- both import doors report findings the same way -------------------------
+//
+// Finding 12 of the bounce test, and it is a defect in a DOOR rather than in a
+// feature. `showFindings` renders one bullet per finding, and the MENU import
+// path passes it the array — so it does. The DROP path could only hand its host
+// a single string, so it `.join(' ')`d fifteen findings first, and budget.xlsx
+// arrived as a wall of amber text 224px tall — 31% of a 720px window — with no
+// bullets, no grouping by sheet and no link to the column concerned.
+//
+// Two doors into one feature, and the one people actually use is the one that
+// destroyed the structure. Checked on the source because the rendering itself
+// belongs to main.ts, and what went wrong was upstream of it: the shape of the
+// value handed over.
+{
+  const drop = readFileSync(new URL('../dash/src/dropopen.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+  ok(!/\.join\(' '\)/.test(drop),
+    'the drop path no longer flattens its findings into one paragraph')
+  ok(/notice\(\[/.test(drop),
+    'and hands over the ARRAY, so showFindings can put one bullet per finding')
+  ok(/ReadonlyArray<\{ message: string \}>/.test(drop),
+    'the host contract admits an array at all — the string-only signature was what forced the join')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

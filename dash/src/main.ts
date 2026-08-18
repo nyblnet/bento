@@ -1226,7 +1226,8 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   mountDropOpen({
     ...openHost,
     importText: (text: string, source: string) => applyImport(store, findingsEl, grid, text, source),
-    notice: (message: string) => showFindings(findingsEl, [{ message }] as never),
+    notice: (message: string | ReadonlyArray<{ message: string }>) =>
+      showFindings(findingsEl, (typeof message === 'string' ? [{ message }] : message) as never),
     dirty: () => dirty,
   })
 
