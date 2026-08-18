@@ -280,9 +280,23 @@ export function parseDoc(raw: string): ParseResult {
           .sort((x, y) => x.at - y.at)
       : undefined;
 
-    const out: Block = { id, kind, text };
-    if (marks?.length) out.marks = marks;
-    if (notes?.length) out.notes = notes;
+    // START FROM THE INCOMING BLOCK, then overwrite what we validate.
+    //
+    // This used to be `{ id, kind, text }`, which silently DROPPED every
+    // block-level field this build does not know about — while doc-level
+    // unknowns survived on the object spread above. That breaks format
+    // additivity (PLATFORM §3) exactly where a word processor's additive
+    // fields land: a document written by a newer build, opened and saved by an
+    // older one, came back with its paragraph alignment, its page-break hints
+    // and anything else newer quietly deleted. Nothing announced it.
+    //
+    // Known fields are still validated and repaired below; unknown ones ride
+    // through untouched, which is the whole promise.
+    const out: Block = { ...(b as Partial<Block>), id, kind, text } as Block;
+    if (marks?.length) out.marks = marks; else delete out.marks;
+    if (notes?.length) out.notes = notes; else delete out.notes;
+    if (typeof b.role !== 'string') delete out.role;
+    delete out.level; delete out.cell; delete out.image; delete out.caption; delete out.refs;
     if (typeof b.role === 'string') out.role = b.role;
     // `level` is clamped and only kept on list kinds. A level on a paragraph
     // would be silently meaningless, and a level of 40 would render as a list

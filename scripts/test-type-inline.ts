@@ -22,6 +22,7 @@
 // because the round trip has to be checkable in CI, and a property only
 // checked in a browser is a property nobody checks.
 
+import { readFileSync } from 'node:fs';
 import {
   normalize, coversAll, activeAt, addMark, removeMark, toggleMark, shift,
   toHtml, fromDom, type Mark,
@@ -217,6 +218,52 @@ H('fuzz: 2,000 random mark sets round-trip exactly');
   }
   ok(bad === 0, `2,000 random mark sets survive the round trip (${bad} failed)`);
   if (bad) console.log(`        ${worst}`);
+}
+
+H('an href cannot escape its attribute, and cannot carry a scheme');
+{
+  // Both of these were live. A document is untrusted input, so neither needed a
+  // user of the link feature: a hand-written #bento-doc block, a pasted <a>
+  // (fromDom copies the attribute verbatim) or a sync op would do, and
+  // render.ts puts the result through innerHTML.
+  const inject = toHtml('click me', [{ t: 'link', from: 0, to: 8,
+    href: 'https://x" onmouseover="alert(1)' }] as never);
+  ok(/^<a href="[^"]*">click me<\/a>$/.test(inject),
+     `the attribute stays one attribute: ${inject}`);
+  // NO SUBSTRING SEARCH. `onmouseover=` survives inside the escaped attribute
+  // VALUE, where it is inert, so grepping for it fails on correct output — and
+  // a cleverer regex over the same string fails the same way, because a regex
+  // cannot tell an attribute from text that looks like one. The assertion
+  // above IS the integrity check: `[^"]*` cannot contain a quote, so if the
+  // whole tag matches `<a href="...">` then the value never closed early and
+  // no second attribute exists. Two agents wrote the substring version first,
+  // which is why this note is here rather than a third one.
+
+  for (const bad of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,<script>',
+                     'vbscript:msgbox', 'file:///etc/passwd']) {
+    const out = toHtml('x', [{ t: 'link', from: 0, to: 1, href: bad }] as never);
+    ok(out === '<a>x</a>', `${bad.slice(0, 24)} renders with no href, keeping the words: ${out}`);
+  }
+  for (const good of ['https://example.com/a?b=1&c=2', 'mailto:a@b.co', '#anchor', '/rel', './rel']) {
+    const out = toHtml('x', [{ t: 'link', from: 0, to: 1, href: good }] as never);
+    ok(/^<a href="/.test(out), `${good} survives: ${out}`);
+  }
+  // & inside a real href must be escaped, not dropped
+  const amp = toHtml('x', [{ t: 'link', from: 0, to: 1, href: 'https://e.com/?a=1&b=2' }] as never);
+  ok(amp.includes('&amp;b=2'), `an ampersand in a query is escaped: ${amp}`);
+}
+
+H('the source carries no literal control characters');
+{
+  // A literal NUL in the merge key made git and grep treat this whole file as
+  // binary, which hid it from ordinary tooling and cost a debugging cycle. The
+  // separator is still a NUL at runtime; it is written as an escape.
+  const src = readFileSync(new URL('../type/src/inline.ts', import.meta.url), 'utf8');
+  const ctrl = [...src].filter(c => c.charCodeAt(0) < 9 || (c.charCodeAt(0) > 13 && c.charCodeAt(0) < 32));
+  ok(ctrl.length === 0, `no literal control characters in the source (${ctrl.length})`);
+  ok(normalize([{ t: 'link', from: 0, to: 2, href: 'a' },
+                { t: 'link', from: 2, to: 4, href: 'b' }] as never, 4).length === 2,
+     'and two different links still do not merge, so the separator still works');
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
