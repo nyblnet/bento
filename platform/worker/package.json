@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "build": "node build.mjs",
     "ci:build": "node ci-build.mjs",
-    "test": "node test/splice.test.mjs && node test/compile.test.mjs",
+    "test": "node test/splice.test.mjs && node test/compile.test.mjs && node test/auth.test.mjs",
     "test:router": "node test/router.test.mjs"
   },
   "devDependencies": {

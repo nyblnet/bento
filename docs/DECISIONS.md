@@ -14,6 +14,62 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-18 — Single-owner auth: stateful D1 sessions, not signed cookies; edit tokens retired
+
+**Decision.** `platform/worker/src/auth.ts` (migration `0002_auth.sql`) adds
+single-owner authentication: one `config` row (username + PBKDF2-SHA-256
+password hash, 300k iterations — matching `kernel/src/save.ts`'s existing
+`bento/enc` construction rather than inventing a second one), created once
+via `POST /api/setup` and refusing to run again. Login creates a `sessions`
+row and sets its id as an `HttpOnly`/`Secure`/`SameSite=Lax` cookie;
+validating a request is a D1 lookup by that id, not a signature check.
+Logout is `DELETE FROM sessions WHERE id = ?`.
+
+**Stateful over signed, deliberately.** A signed/JWT-style cookie needs a
+signing secret managed somewhere, encodes expiry client-side (harder to
+force-revoke one session without a key rotation that invalidates all of
+them), and buys performance that doesn't matter at this project's declared
+scale ("assume low usage" has been the standing brief throughout). A D1 row
+per session costs one lookup per request and makes logout trivially correct
+(delete the row) with nothing to get subtly wrong about.
+
+**The salt is always server-generated.** `createConfig` calls
+`crypto.getRandomValues()` itself; there is no parameter, code path, or API
+shape that accepts a caller-supplied salt. This was an explicit constraint
+in the request that produced this feature — worth stating as a decision
+because a future "let the setup form pick its own salt for reproducibility"
+change would quietly reopen a real footgun.
+
+**The old per-deck capability token (`editToken`, `Authorization: Bearer`)
+is removed, not kept alongside.** It existed only because there was no real
+auth yet; now that there's a single owner, every mutating route (`POST
+/api/decks`, `PATCH /api/decks/:id`, `POST /api/decks/:id/assets`, `POST
+/api/compile`) checks the owner's session instead. `store.ts`'s
+`edit_token_hash` D1 column stays (existing rows have a NOT NULL value there
+that isn't worth a destructive migration to remove) but is never read again.
+
+**What deliberately did NOT land in this change**, each its own follow-up
+because each is a separable decision:
+- Per-deck public/private visibility — `/d/:id` etc. stay unauthenticated
+  for every deck, exactly as before. Needs its own `decks` column and its
+  own review of the owner-always-gets-edit-mode / anonymous-gets-read-only
+  matrix.
+- A deck history/dashboard list (`GET /api/decks`) — natural next step once
+  visibility exists, since a list entry needs to show public/private state.
+- Saving live in-browser edits back to R2/D1. Investigated before deciding
+  to defer it: `window.bento` in editor mode exposes no way for an
+  externally-injected script to know a doc mutation happened — `Store`
+  (`slides/src/store.ts`) only emits to code with direct closure access
+  (the app bundle itself), confirmed by reading `store.ts`, `editor.ts`'s
+  `wireAutosave()`, and grepping for any existing remote-POST-on-change
+  precedent (there is none — the only remote-sync path in the codebase is
+  the WebSocket CRDT relay in `slides/src/sync/`, deliberately not what's
+  wanted here). The fix is a small, precise addition to `slides/src/main.ts`
+  (dispatch a real `document.dispatchEvent` on every `store.touch()`) — the
+  one piece of this whole feature area that reaches outside `platform/`'s
+  zone (`docs/PARALLEL-WORK.md` §1), so it gets its own PR and review rather
+  than riding in with everything else.
+
 ## 2026-08-08 — The outline compiler imports `slides/src/model.ts` directly — a deliberate, one-directional zone exception
 
 **Decision.** `platform/worker/src/compile/compile.ts` (the outline → doc

@@ -11,9 +11,15 @@
 //   assets/<deckId>/<sha256>.<ext>  uploaded images, content-addressed
 //                                    within the deck's own namespace
 //
-// D1 table `decks` — see platform/worker/schema.sql for DDL comments.
+// D1 table `decks` — see platform/worker/migrations/0001_init.sql for DDL
+// comments. Mutation used to be gated by a per-deck capability token
+// (edit_token_hash); that's superseded by the single-owner session auth in
+// auth.ts (migrations/0002_auth.sql) — every mutating route now checks the
+// caller's session instead, so nothing here mints or checks a token anymore.
+// The column stays in the table (existing rows still have a NOT NULL value
+// to satisfy), just unused.
 import type { Env } from './env.ts'
-import { randomId, randomToken, sha256Hex } from './ids.ts'
+import { randomId, sha256Hex } from './ids.ts'
 import { SHELL_VERSION } from './splice.ts'
 
 export interface DeckMeta {
@@ -27,7 +33,6 @@ export interface DeckMeta {
 
 export interface CreateResult {
   id: string
-  editToken: string
 }
 
 function deckDocKey(id: string): string {
@@ -38,12 +43,10 @@ function titleOf(doc: Record<string, unknown>): string {
   return typeof doc.title === 'string' && doc.title.trim() ? doc.title.trim().slice(0, 200) : 'Untitled deck'
 }
 
-/** Create a new deck: mints docId + edit token, writes R2 + D1. `doc` must
- *  already be validated (validate.ts) — this function trusts its shape. */
+/** Create a new deck, writes R2 + D1. `doc` must already be validated
+ *  (validate.ts) — this function trusts its shape. */
 export async function createDeck(env: Env, doc: Record<string, unknown>): Promise<CreateResult> {
   const id = randomId()
-  const editToken = randomToken()
-  const editTokenHash = await sha256Hex(editToken)
   const now = Date.now()
 
   // docId is minted once and never regenerated (docs/PLATFORM.md §3) — the
@@ -57,10 +60,10 @@ export async function createDeck(env: Env, doc: Record<string, unknown>): Promis
     `INSERT INTO decks (id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, titleOf(stored), now, now, editTokenHash, SHELL_VERSION, json.length)
+    .bind(id, titleOf(stored), now, now, '', SHELL_VERSION, json.length)
     .run()
 
-  return { id, editToken }
+  return { id }
 }
 
 export async function getDeckDoc(env: Env, id: string): Promise<unknown | null> {
@@ -78,18 +81,8 @@ export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null
   return row ?? null
 }
 
-export async function checkEditToken(env: Env, id: string, token: string): Promise<boolean> {
-  if (!token) return false
-  const row = await env.DB.prepare(`SELECT edit_token_hash FROM decks WHERE id = ?`).bind(id).first<{
-    edit_token_hash: string
-  }>()
-  if (!row) return false
-  const hash = await sha256Hex(token)
-  return hash === row.edit_token_hash
-}
-
 /** Overwrite a deck's doc in place. Caller must have already verified the
- *  edit token and that `doc` passed validate.ts. */
+ *  owner session and that `doc` passed validate.ts. */
 export async function replaceDeckDoc(env: Env, id: string, doc: Record<string, unknown>): Promise<void> {
   const stored = { ...doc, docId: id }
   const json = JSON.stringify(stored)
