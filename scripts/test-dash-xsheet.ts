@@ -45,6 +45,7 @@ import {
   cellKey, columnVectors, recalcCells, recalcSheetCells, recalcWorkbook,
   rowMeaning, tableCellSource, workbookSources,
 } from '../dash/src/cellformula.ts'
+import { readFileSync } from 'node:fs'
 import { recalc, isErr, type Cell } from '../dash/src/formula.ts'
 import { sheetQualifiers, parseRef } from '../dash/src/a1.ts'
 import { flattenToSpreadsheet } from '../dash/src/promote.ts'
@@ -317,6 +318,24 @@ console.log('\n--- the cost of asking the whole workbook -----------------------
     'and the moment something references it, its calculated column is there')
   ok(asked2 === 1,
     'asked exactly once, however many cells of it a formula reads — the resolution is memoised')
+}
+
+console.log('\nthe dataset grid actually recalculates through the workbook')
+{
+  // THE CALLER CHECK. Everything above proves the engine crosses sheets. None
+  // of it proves the DATASET GRID asks it to — and that was the entire defect:
+  // `recalcWorkbook` had crossed sheets since the workbook graph landed, and
+  // `cvRefresh` already called it for the canvas kind. The dataset path called
+  // the one-sheet `recalcCells`. Two call sites, never two kinds.
+  //
+  // So without this, all 31 checks above pass over a feature that is still
+  // #REF! on screen. That failure has happened three times in this codebase in
+  // one week, which is why it gets its own check rather than a comment.
+  const grid = readFileSync(new URL('../dash/src/grid.ts', import.meta.url), 'utf8')
+  ok(grid.includes('recalcSheetCells('),
+    'grid.ts recalculates the dataset kind through the workbook, so a cross-sheet reference resolves on screen')
+  ok(!/\brecalcCells\(/.test(grid),
+    'and the one-sheet recalc is gone from it entirely — leaving it is how the two kinds drift apart again')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

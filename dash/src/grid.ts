@@ -34,8 +34,8 @@ import { colToLetters, formatRef, parseRef } from './a1.ts'
 import { t } from './i18n.ts'
 import { resizeColumn, autoFitWidth, hiddenSet, readFrozen, insertRowsAt } from './rowcol.ts'
 import {
-  cellKey, isFormula, recalcCells, recalcWorkbook, spillExtent, translateCellFormula,
-  shiftSheetFormulas, workbookSources, type CellSource,
+  cellKey, isFormula, recalcSheetCells, recalcWorkbook, spillExtent, translateCellFormula,
+  shiftSheetFormulas, workbookSources,
 } from './cellformula.ts'
 import { mountFind, type FindUI, type Hit } from './find.ts'
 // The data-validation stylesheet is imported HERE rather than in datavalid.ts,
@@ -1104,8 +1104,16 @@ export class Grid {
     // looking at the same file through different sorts have to see the same
     // number. Hiding a column is document state but still editorial, and
     // renumbering every reference behind it would be a silent rewrite.
+    // THROUGH THE WORKBOOK, not this sheet alone. This line was the whole of
+    // the cross-sheet defect: `recalcWorkbook` has crossed sheets since the
+    // workbook graph landed, and `cvRefresh` calls it for the canvas kind —
+    // this call site handed the dataset kind the one-sheet `recalcCells`, so
+    // `=SUM(Jan!B1:B6)` answered #REF! on a dataset and resolved on a
+    // spreadsheet in the same workbook. Two call sites, never two kinds.
+    // `own` hands back this sheet's already-computed columns so a calculated
+    // column is not evaluated twice.
     this.cellValues = this.hasCellFormulas()
-      ? recalcCells(this.cellSource(), this.store.doc.modified, this.columnVectors()).values
+      ? recalcSheetCells(this.store.doc, s.id, (tb) => (tb.id === s.id ? this.computed : undefined)).values
       : EMPTY_CELLS
 
     // Conditional formats are evaluated over the WHOLE column, not the painted
@@ -1242,31 +1250,7 @@ export class Grid {
     this.onPaint?.()
   }
 
-  /**
-   * Every column as a vector, under BOTH its id and its name.
-   *
-   * A cell formula has to be able to say `SUMIFS(value, region, "North")` —
-   * naming columns is half of what makes one worth writing. Only the COMPUTED
-   * columns were being passed, so every reference to an ordinary column was an
-   * unknown name: `SUMIFS` then matched nothing and returned 0, `XLOOKUP` gave
-   * #N/A, and a formula that mentioned no column at all (a PMT, say) worked
-   * perfectly — which is exactly the pattern that makes this look like four
-   * unrelated bugs instead of one.
-   */
-  private columnVectors(): Map<string, Vec> {
-    const s = this.sheet
-    const n = rowCount(s)
-    const out = new Map<string, Vec>()
-    const put = (k: string, v: Vec) => { out.set(k, v); out.set(k.toLowerCase(), v) }
-    for (const c of s.columns) {
-      const comp = this.computed.get(c.id)
-      const v = comp ?? Array.from({ length: n }, (_, i) => readCell(s.data[c.id], i) as never)
-      put(c.id, v)
-      put(c.name, v)
-    }
-    return out
-  }
-
+  
   /** The formula stored at a canonical position, if any. */
   private formulaAtPos(row: number, col: number): string | undefined {
     const s = this.sheet
@@ -1284,25 +1268,7 @@ export class Grid {
     return false
   }
 
-  /** The sheet as a plain grid of positions, which is all cellformula.ts wants. */
-  private cellSource(): CellSource {
-    const s = this.sheet
-    return {
-      rows: rowCount(s),
-      cols: s.columns.length,
-      formulaAt: (r, c) => this.formulaAtPos(r, c),
-      valueAt: (r, c) => {
-        const col = s.columns[c]
-        if (!col) return null
-        const rid = ridForDataRow(s, r)
-        const over = s.cells?.[`${col.id}:${rid}`]
-        if (over && 'v' in over) return over.v as never
-        const comp = this.computed.get(col.id)
-        return (comp ? comp[r] : readCell(s.data[col.id], r)) as never
-      },
-    }
-  }
-
+  
   /** The computed value of a cell formula at a canonical position, if it has one. */
   private cellFormulaValue(row: number, colId: string): unknown {
     if (this.cellValues === EMPTY_CELLS) return undefined
