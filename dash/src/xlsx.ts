@@ -1100,6 +1100,13 @@ export interface XlsxImportOpts {
   /** Override the header-row decision instead of letting it be inferred. */
   header?: boolean
   /**
+   * WHICH row is the header, 0-based within the sheet's used range — the
+   * answer `header` cannot give, because "has one or hasn't" is not the
+   * question a report with a spanning title over its header row asks. Beats
+   * both `header` and the inference below. Data starts on the row after it.
+   */
+  headerRow?: number
+  /**
    * THE CALLER PROMISES TO INSTALL `result.names` INTO `doc.names`.
    *
    * Names are opt-in rather than always-on because the liveness gate trusts
@@ -1331,15 +1338,31 @@ function readOneSheet(
     ;(grid[r] ??= [])[c.col] = c
   }
 
-  const headerRow = grid[0] ?? []
-  const head = decideHeader(headerRow, grid, styles, opts.header)
+  // THE HEADER IS NOT ALWAYS ROW 1 — see `titleRowAbove`. An explicit
+  // instruction always wins; otherwise a spanning title over a full header row
+  // moves the header down one, and says so.
+  const told = opts.header !== undefined || opts.headerRow !== undefined
+  const title = told ? null : titleRowAbove(grid, merges, firstRow, styles)
+  const head = opts.headerRow !== undefined
+    ? { start: Math.max(0, Math.floor(opts.headerRow)) + 1, sure: true }
+    : title
+      ? { start: 2, sure: true }
+      : decideHeader(grid[0] ?? [], grid, styles, opts.header)
   const bodyStart = head.start
+  const headerRow = bodyStart > 0 ? (grid[bodyStart - 1] ?? []) : []
+  if (title) {
+    const at = firstRow + 2
+    findings.push({
+      code: 'header-row', sheet: name,
+      message: `Row ${firstRow + 1} of "${name}" is a title spanning ${title.merge} — one value across several columns, which is not a header. Its header is row ${at}, and that is the row the columns were named from; the title ("${title.text}") is not one of them and is not in the data either. If that is wrong, re-import saying the header is row ${firstRow + 1}.`,
+    })
+  }
   if (bodyStart === 0 && opts.header === undefined) {
     findings.push({
       code: 'no-header', sheet: name,
       message: `"${name}" does not appear to start with a header row (its first row holds values, not labels), so the columns are named by position. Rename them, or re-import telling dash there is a header.`,
     })
-  } else if (!head.sure && opts.header === undefined) {
+  } else if (!head.sure && !told) {
     // The undecidable case, and it costs a ROW OF DATA if we are wrong. Every
     // column of an all-text sheet looks exactly like its own heading, so there
     // is no evidence in the file and the honest thing is to say which way it
@@ -1525,6 +1548,71 @@ function cellText(
   const k = kindOf(c, styles)
   if (k === 'date') return serialToIso(Number(c.v), epoch1904) ?? c.v
   return c.v
+}
+
+/**
+ * A spanning TITLE above the real header — and the repair for the worst import
+ * outcome in the 2026-08-18 bounce test.
+ *
+ * WHAT HAPPENED. `budget.xlsx` had "Jan 2026 budget" merged across A1:C1 and
+ * its real header ("Category / Budget / Actual") in row 2. Row 1 was taken as
+ * the header, so column A was called "Jan 2026 budget", B and C became
+ * "Column 2" and "Column 3", the real header became data row 1 — and because
+ * every numeric column now held one text value, EVERY COLUMN TYPED AS TEXT. A
+ * three-column budget arrived with no numbers in it, and dash said so three
+ * times (`merged-cells`, `empty-header`, `mixed-types`) without ever joining
+ * the three into the one sentence that would have helped.
+ *
+ * WHY THIS DETECTS AND ACTS RATHER THAN OFFERING. The evidence below is not a
+ * heuristic about what a header usually looks like; it is a PROOF that row 1
+ * is not one. A row holding a single value merged across the columns cannot be
+ * the header of those columns — there is one label for three of them — and the
+ * row under it names every column that has data. Nothing is discarded either
+ * way: taking row 1 costs a row of real data (the header becomes a row) and
+ * costs every numeric column its type, while taking row 2 costs the title,
+ * which is a caption and is named in the finding. So the honest thing is to do
+ * it and say it, loudly, with the row number to re-import against. Doing it
+ * SILENTLY is the one answer that is wrong — that is how the finding started.
+ *
+ * THE EVIDENCE, all four required:
+ *   1. a merged range on the first used row, spanning at least two columns;
+ *   2. that row holds exactly ONE value, and it is text (a title, not data);
+ *   3. the row below it has a text value in every column that has data;
+ *   4. there is more than one column, and there is a row below the header.
+ *
+ * (2) is what keeps this from stealing a header: the two-tier `Region | Q1 Q2`
+ * idiom merges B1:C1 over a row that is ALSO the header, and that row has
+ * three values, not one.
+ */
+function titleRowAbove(
+  grid: Array<Array<RawCell | undefined>>, merges: readonly string[],
+  firstRow: number, styles: Styles,
+): { merge: string; text: string } | null {
+  if (grid.length < 3) return null
+  const spanning = merges.find((m) => {
+    const box = refBox(m.replace(/\$/g, ''))
+    return !!box && box.top === firstRow && box.right > box.left
+  })
+  if (!spanning) return null
+
+  const top = grid[0] ?? []
+  const filled = [...top.entries()].filter(([, c]) => !!c) as Array<[number, RawCell]>
+  if (filled.length !== 1) return null
+  if (familyOf(kindOf(filled[0][1], styles)) !== 'text') return null
+
+  // Every column with data under the title has to be named by the row below
+  // it, or that row is not a header either and nothing here is safe.
+  const used = new Set<number>()
+  for (let r = 1; r < grid.length; r++) {
+    for (const [ci, c] of (grid[r] ?? []).entries()) if (c) used.add(ci)
+  }
+  if (used.size < 2) return null
+  const second = grid[1] ?? []
+  for (const ci of used) {
+    const c = second[ci]
+    if (!c || familyOf(kindOf(c, styles)) !== 'text') return null
+  }
+  return { merge: spanning, text: cellText(filled[0][1], [], styles, false) }
 }
 
 /**

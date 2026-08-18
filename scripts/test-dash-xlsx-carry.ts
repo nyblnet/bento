@@ -19,6 +19,13 @@
 //     it DOES (a name dash imported, whose substitution dash can evaluate)
 //     still goes live, because "reject every word" would be a different bug.
 //
+//   FINDING 3 — A MERGED TITLE MADE THE WHOLE SHEET TEXT. A spanning title in
+//     A1:C1 with the real header in row 2: row 1 became the header, the header
+//     became data row 1, every numeric column held one text value, and all
+//     three columns typed as TEXT. A three-column budget with no numbers in
+//     it. The facts were all emitted (merged-cells, empty-header, mixed-types)
+//     and never joined.
+//
 // THE RIG BUILDS REAL .xlsx BYTES — a ZIP of OOXML — and asserts on the
 // DOCUMENT that comes out of `importXlsx`. Both halves matter: finding 4 lives
 // in a gate that only ever sees real formula text, and a check that a helper
@@ -257,6 +264,87 @@ const over = (s: TableSheet, key: string): Record<string, unknown> =>
     '…and nothing goes live on the strength of a table the document will not have')
   ok(r.findings.some((f) => f.code === 'defined-name' && f.message.includes('TaxRate')),
     'and the names are REPORTED as not carried — finding 7 counted this as a silent drop')
+}
+
+// ═══════════════════════════════════════ THE HEADER IN ROW 2 (finding 3)
+{
+  // budget.xlsx, as the bounce test had it: a spanning title in A1:C1, the
+  // real header in row 2, numbers below.
+  const bytes = await build({
+    shared: ['Jan 2026 budget', 'Category', 'Budget', 'Actual', 'Rent', 'Food'],
+    sheets: [{
+      name: 'Budget',
+      rows: row(1, sc('A1', 0)) +
+        row(2, sc('A2', 1) + sc('B2', 2) + sc('C2', 3)) +
+        row(3, sc('A3', 4) + nc('B3', 1200) + nc('C3', 1180)) +
+        row(4, sc('A4', 5) + nc('B4', 400) + nc('C4', 455)),
+      after: '<mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>',
+    }],
+  })
+  const r = await importXlsx(bytes, { idPrefix: 'h' })
+  const s = r.sheets[0]
+
+  // THE MEASUREMENT, and every line of it was wrong before: the columns were
+  // "Jan 2026 budget"/"Column 2"/"Column 3", all three typed TEXT, and the
+  // real header sat in data row 1.
+  ok(s.columns.map((c) => c.name).join() === 'Category,Budget,Actual',
+    'the header is taken from ROW 2, under the spanning title')
+  ok(s.columns.map((c) => c.type).join() === 'text,number,number',
+    'so the numeric columns are NUMBERS — a three-column budget arrived with no numbers in it')
+  ok(readCell(s.data[s.columns[1].id], 0) === 1200 && s.rids[0][1] === 2,
+    'and the two data rows are the two data rows, with the header no longer among them')
+  const hr = r.findings.find((f) => f.code === 'header-row')
+  ok(!!hr, 'it is SAID — a header moved without a word is how the whole finding started')
+  ok(!!hr && hr.message.includes('A1:C1'),
+    'and it names the merge that caused it, joining two facts that used to read as unrelated complaints')
+  ok(!r.findings.some((f) => f.code === 'empty-header'),
+    'the empty-header complaint about "Column 2"/"Column 3" is gone, because it was a consequence')
+  ok(!r.findings.some((f) => f.code === 'mixed-types'),
+    'and so is mixed-types: one text value in a numeric column was the header all along')
+}
+
+// The evidence has to be REQUIRED, or this becomes a header thief. A merge in
+// row 1 that spans a real header — the "Q1 | Q2" two-tier idiom — must not
+// move anything.
+{
+  const bytes = await build({
+    shared: ['Region', 'Q1', 'Q2', 'North'],
+    sheets: [{
+      name: 'Tiered',
+      rows: row(1, sc('A1', 0) + sc('B1', 1) + sc('C1', 2)) +
+        row(2, sc('A2', 3) + nc('B2', 10) + nc('C2', 20)),
+      after: '<mergeCells count="1"><mergeCell ref="B1:C1"/></mergeCells>',
+    }],
+  })
+  const r = await importXlsx(bytes, { idPrefix: 'q' })
+  ok(r.sheets[0].columns.map((c) => c.name).join() === 'Region,Q1,Q2',
+    'a merge in a row that IS the header changes nothing — row 2 has to look like a header for row 1 to lose the job')
+  ok(!r.findings.some((f) => f.code === 'header-row'), 'and nothing is claimed about it')
+}
+
+// An explicit instruction always beats the inference.
+{
+  const bytes = await build({
+    shared: ['Jan 2026 budget', 'Category', 'Budget'],
+    sheets: [{
+      name: 'Budget',
+      rows: row(1, sc('A1', 0)) + row(2, sc('A2', 1) + sc('B2', 2)) + row(3, sc('A3', 1) + nc('B3', 5)),
+      after: '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
+    }],
+  })
+  const r = await importXlsx(bytes, { idPrefix: 'f', header: false })
+  ok(r.sheets[0].columns[0].name === 'Column 1' && r.sheets[0].rids[0][1] === 3,
+    'header:false still means no header at all, and no row is taken from anybody')
+  ok(!r.findings.some((f) => f.code === 'header-row'), 'and the inference does not argue with the instruction')
+
+  // `headerRow` is the answer a boolean cannot give, and the hook a "use this
+  // row as the header" command would call.
+  const r2 = await importXlsx(bytes, { idPrefix: 'x', headerRow: 1 })
+  ok(r2.sheets[0].columns.map((c) => c.name).join() === 'Category,Budget' && r2.sheets[0].rids[0][1] === 1,
+    'headerRow:1 names the second row of the used range as the header, and the data starts under it')
+  const r3 = await importXlsx(bytes, { idPrefix: 'y', headerRow: 0 })
+  ok(r3.sheets[0].columns[0].name === 'Jan 2026 budget',
+    'and headerRow:0 puts it back on the title, because an instruction is an instruction')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
