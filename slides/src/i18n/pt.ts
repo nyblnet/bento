@@ -742,4 +742,7 @@ export const pt: Catalog = {
   "Appearance": "Aspeto",
   "Match my system": "Acompanhar o sistema",
   "Dark": "Escuro",
+  "Theme": "Tema",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "Cores da marca para toda a apresentação. Tudo o que usa uma cor do tema acompanha as alterações feitas aqui.",
+  "Accent {n}": "Destaque {n}",
 }

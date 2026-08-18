@@ -18,6 +18,7 @@ import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './u
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
 import { validateDoc, type ValidateOpts } from './validate'
+import { resolveThemeRefs } from './palette'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
@@ -120,6 +121,13 @@ async function passwordGate() {
 }
 
 function bootWith(doc: BentoDoc) {
+  // Derive palette-referenced colours once before anything renders. A file
+  // saved by this app already carries correct literals, so this is normally a
+  // no-op — it matters for a document whose JSON was written by hand or by an
+  // agent, where the refs may be right and the literals stale. Editing later
+  // re-derives through the editor's `doc` hook; nothing else would visit a
+  // player file at all.
+  resolveThemeRefs(doc)
   if (doc.readonly) playerMode(doc)
   else editorMode(doc)
 }

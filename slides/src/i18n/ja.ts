@@ -744,4 +744,7 @@ export const ja: Catalog = {
   "Appearance": "外観",
   "Match my system": "システムに合わせる",
   "Dark": "ダーク",
+  "Theme": "テーマ",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "デッキ全体のブランドカラー。テーマカラーを使用している要素は、ここでの変更に追従します。",
+  "Accent {n}": "アクセント {n}",
 }

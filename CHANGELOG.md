@@ -11,6 +11,19 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Deck-wide brand colours.** The Slide panel gains a **Theme** section — a
+  background, a text colour and six accents — and every colour control now
+  offers those swatches above its picker. Pick one and the deck *remembers where
+  the colour came from*, so changing the theme later updates every element using
+  it, across every slide. Pick a custom colour instead and it stays exactly as
+  you set it: choosing by hand clears the link, because a colour you chose
+  deliberately should never be overwritten by a later theme edit.
+
+  The document keeps ordinary colour values throughout, exactly as before — the
+  reference sits alongside them rather than replacing them. So a deck saved with
+  a theme still opens correctly in any earlier copy of Bento, which simply sees
+  a normal deck of normal colours.
+
 ## [1.0.18] — 2026-08-15
 
 - **Security: offline mode did not block everything it promised.** The switch

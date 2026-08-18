@@ -744,4 +744,7 @@ export const de: Catalog = {
   "Appearance": "Darstellung",
   "Match my system": "Systemeinstellung folgen",
   "Dark": "Dunkel",
+  "Theme": "Design",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "Markenfarben für das gesamte Deck. Alles, was eine Designfarbe verwendet, folgt Ihren Änderungen hier.",
+  "Accent {n}": "Akzent {n}",
 }

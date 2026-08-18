@@ -744,4 +744,7 @@ export const zhHant: Catalog = {
   "Appearance": "外觀",
   "Match my system": "跟隨系統",
   "Dark": "深色",
+  "Theme": "主題",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "整份簡報的品牌配色。使用主題顏色的元素會隨此處的變更而更新。",
+  "Accent {n}": "強調色 {n}",
 }

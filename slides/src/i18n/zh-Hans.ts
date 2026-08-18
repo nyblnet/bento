@@ -744,4 +744,7 @@ export const zhHans: Catalog = {
   "Appearance": "外观",
   "Match my system": "跟随系统",
   "Dark": "深色",
+  "Theme": "主题",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "整份文稿的品牌配色。使用主题颜色的元素会随此处的更改而更新。",
+  "Accent {n}": "强调色 {n}",
 }

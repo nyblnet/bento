@@ -750,4 +750,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Appearance": ["外観","外观","外觀","Apariencia","Apparence","Darstellung","Aspetto","Aspeto"],
   "Match my system": ["システムに合わせる","跟随系统","跟隨系統","Según el sistema","Comme le système","Systemeinstellung folgen","Come il sistema","Acompanhar o sistema"],
   "Dark": ["ダーク","深色","深色","Oscuro","Sombre","Dunkel","Scuro","Escuro"],
+  "Theme": ["テーマ","主题","主題","Tema","Thème","Design","Tema","Tema"],
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": ["デッキ全体のブランドカラー。テーマカラーを使用している要素は、ここでの変更に追従します。","整份文稿的品牌配色。使用主题颜色的元素会随此处的更改而更新。","整份簡報的品牌配色。使用主題顏色的元素會隨此處的變更而更新。","Colores de marca de toda la presentación. Todo lo que use un color del tema se actualiza al cambiarlo aquí.","Couleurs de marque pour tout le diaporama. Tout élément utilisant une couleur du thème suit vos modifications ici.","Markenfarben für das gesamte Deck. Alles, was eine Designfarbe verwendet, folgt Ihren Änderungen hier.","Colori del brand per tutta la presentazione. Tutto ciò che usa un colore del tema segue le modifiche fatte qui.","Cores da marca para toda a apresentação. Tudo o que usa uma cor do tema acompanha as alterações feitas aqui."],
+  "Accent {n}": ["アクセント {n}","强调色 {n}","強調色 {n}","Acento {n}","Accent {n}","Akzent {n}","Accento {n}","Destaque {n}"],
 }
