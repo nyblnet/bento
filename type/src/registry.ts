@@ -20,3 +20,5 @@ import './xref.ts';
 
 export {};
 import './link.ts';
+import './toc.ts';        // section numbering + table of contents
+

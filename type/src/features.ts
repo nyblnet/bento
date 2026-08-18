@@ -107,6 +107,23 @@ export interface KeySpec {
   run(ctx: FeatureContext): void;
 }
 
+/**
+ * Lifecycle hooks.
+ *
+ * `ready` fires once the app is built and a FeatureContext exists; `paginated`
+ * fires after every pagination pass, which is the only moment a feature can
+ * know a page number. Both exist because a feature that needs either had to
+ * reach into main.ts for it otherwise.
+ */
+export type ReadyFn = (ctx: FeatureContext) => void;
+export type PaginatedFn = (ctx: FeatureContext, metrics: unknown, host: HTMLElement) => void;
+const READY: ReadyFn[] = [];
+const PAGINATED: PaginatedFn[] = [];
+export const registerReady = (f: ReadyFn): void => { READY.push(f); };
+export const registerPaginated = (f: PaginatedFn): void => { PAGINATED.push(f); };
+export const readyFns = (): ReadyFn[] => READY;
+export const paginatedFns = (): PaginatedFn[] => PAGINATED;
+
 const TOOLS: ToolSpec[] = [];
 const MENU: MenuSpec[] = [];
 const PANELS: PanelSpec[] = [];

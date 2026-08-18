@@ -12,7 +12,7 @@ import {
 } from '../../kernel/src/save.ts';
 import { ICONS } from './icons.ts';
 import { t } from './i18n.ts';
-import { tools, menuItems, panels, matchKey, text as labelText, type FeatureContext } from './features.ts';
+import { tools, menuItems, panels, matchKey, readyFns, paginatedFns, text as labelText, type FeatureContext } from './features.ts';
 import './registry.ts';   // side-effect: every feature module registers itself
 import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
@@ -396,6 +396,8 @@ let idle: number | undefined;
 const repaginate = () => {
   metrics = paginate(store.doc, paper);
   drawPages(store.doc, paper, deco, metrics);
+  // page numbers are knowable only here, so anything that shows one is told now
+  for (const f of paginatedFns()) f(featureCtx, metrics, paper);
   buildOutline();
   paint();
   void paintSigs();
@@ -817,3 +819,13 @@ dirty = false; paintTitle();
   // to actually do.
   i18n: i18nApi,
 };
+
+// ─────────────────────────────────────────────────────────────────── ready
+//
+// LAST LINE ON PURPOSE. Called from beside the panels() loop, where it visually
+// belongs, featureCtx.refresh() reaches `schedule` inside its temporal dead
+// zone — "Cannot access 'schedule' before initialization" — and the editor
+// boots blank. The agent that needed this hook found that by applying the patch
+// and loading the app, not by reading, and said so in its note; this comment is
+// here so the next person does not move it back.
+for (const f of readyFns()) f(featureCtx);

@@ -19,7 +19,7 @@ export const TAG: Record<Block['kind'], string> = {
   // / Block.cell for why the document stays flat.
   ul: 'li', ol: 'li', cell: 'td',
   // atomic: rendered by renderImage, never by the generic path
-  image: 'figure', caption: 'figcaption',
+  image: 'figure', caption: 'figcaption', toc: 'nav',
 };
 
 /**
@@ -95,7 +95,31 @@ export function groupBlocks(body: readonly Block[]): GroupToken[] {
 
 /** Footnote markers are ATOMS: they occupy a position but no characters. */
 export const isNoteAtom = (el: Element) =>
-  el.tagName === 'SUP' && el.classList.contains('t-note');
+  (el.tagName === 'SUP' && el.classList.contains('t-note')) ||
+  // DERIVED content — a section number, a contents list — is an atom for the
+  // same reason a footnote marker is: it occupies a position, owns no
+  // characters, and readBlock must never absorb it into the text. Broadened
+  // here rather than at every call site so nothing downstream has to learn a
+  // second predicate.
+  el.hasAttribute('data-derived');
+
+/**
+ * Decorators — a feature's chance to add derived content to a block.
+ *
+ * ONE hook, consulted by blockHtml, so the editor and print cannot drift: both
+ * build their HTML through this function. A decorator returns a prefix, a
+ * suffix, or atoms; it must never change the block's text, which is what keeps
+ * the redline quiet and the signature stable.
+ */
+export type BlockDecorator = (b: Block, base: string) => string | null;
+const DECORATORS: BlockDecorator[] = [];
+export const registerBlockDecorator = (d: BlockDecorator): void => { DECORATORS.push(d); };
+/** Each decorator sees the previous one's output, so several can compose. */
+const decorate = (b: Block, base: string): string => {
+  let out = base;
+  for (const d of DECORATORS) out = d(b, out) ?? out;
+  return out;
+};
 
 const noteMarker = (id: string) =>
   `<sup class="t-note" data-note="${id}" contenteditable="false">•</sup>`;
@@ -110,7 +134,7 @@ export function blockHtml(b: Block): string {
   for (const [at, html] of refAtoms(b)) atoms.set(at, (atoms.get(at) ?? '') + html);
   const html = toHtml(b.text, b.marks ?? [], atoms.size ? atoms : undefined);
   // an empty block still needs a line box, or it collapses and cannot be clicked
-  return captionPrefixHtml(b) + (html || '<br>');
+  return captionPrefixHtml(b) + decorate(b, html || '<br>');
 }
 
 /**
