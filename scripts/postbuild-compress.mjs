@@ -53,10 +53,18 @@ const modRe = /<script type="module"[^>]*>([\s\S]*?)<\/script>/
 const mod = html.match(modRe)
 if (!mod) throw new Error('module script not found')
 
-// the FIRST big <style> is the app css; the splash <style> lives in body
-const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/
+// The app css. Vite emits it as `<style rel="stylesheet" crossorigin>`, and we
+// match THAT rather than "the first <style> in head" — the module script is
+// inlined into the head too, so any app whose source builds a `<style>` string
+// (dash's thumbnail preview does) had its own string matched first. The whole
+// runtime stylesheet was then left uncompressed and unregistered, and the app
+// booted with no CSS at all. esbuild constant-folds `\`<${'style'}>\`` straight
+// back to a literal, so this cannot be worked around in the app source.
 const headPart = html.slice(0, html.indexOf('</head>'))
-const styleM = headPart.match(styleRe)
+const linkedRe = /<style[^>]*\brel="stylesheet"[^>]*>([\s\S]*?)<\/style>/
+const styleM = headPart.match(linkedRe)
+  // Fallback for a build that does not carry the attribute; unchanged behaviour.
+  ?? headPart.match(/<style[^>]*>([\s\S]*?)<\/style>/)
 if (!styleM) throw new Error('app stylesheet not found in head')
 
 const js = mod[1]

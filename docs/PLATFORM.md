@@ -197,9 +197,17 @@ encryption), `autosave.ts`, `update.ts`, `anim.ts`, `charts.ts`, the `i18n.ts`
 engine, `app.ts` (per-app identity via `configureApp`), `doc.ts` (the
 `KernelDoc` envelope). Apps import these through facades at their own paths.
 
-Also shared but NOT yet in `kernel/`: the collab engine (`slides/src/sync/`)
-and the relay (`server/`). Both are slides-shaped today and genericizing the
-CRDT is its own project — treat them as kernel-zone for serialization.
+The CRDT engine is `kernel/src/sync/crdt.ts` now. It takes its document shape
+as a `DocShape` at construction (two property names: the doc key holding the
+parent array, the parent key holding the child array), so one algebra serves
+bento/slides and bento/spaces with neither app's vocabulary in the kernel. An
+app imports its own binding — `slides/src/sync/crdt.ts` → `SLIDES_SHAPE` —
+never the engine directly.
+
+Also shared but NOT yet in `kernel/`: the session/transport layer
+(`slides/src/sync/session.ts`, `online.ts`, `blobs.ts`) and the relay
+(`server/`). Those are still slides-shaped — treat them as kernel-zone for
+serialization.
 
 Shared build tooling: `scripts/postbuild-compress.mjs` (parameterised per app
 via `--generator` / `--title`) and `scripts/shell-gate.mjs`.

@@ -22,17 +22,34 @@
       <div class="dash-splash-mark">bento<span>/</span>dash</div>
     </div>
     <style>
+      /* The splash paints before any script runs — before the app stylesheet
+         is even inflated — so it carries its own two colours rather than the
+         tokens, and it declares `color-scheme` itself so that `light-dark()`
+         has something to resolve against this early. (That declaration also
+         overrides the <meta> above, which is what stops the browser painting
+         a white canvas behind a dark splash for one frame.)
+
+         It follows the OS on its own, and follows an EXPLICIT light/dark
+         choice as soon as about.ts injects its `color-scheme` rule — which
+         happens at module load, while the splash is still covering the
+         screen. That preference lives in localStorage and only script can
+         read it, so a reader whose choice differs from their OS sees the OS
+         colour for that fraction of a second. The alternative is a white flash
+         on a dark desktop, which is worse and lasts exactly as long. */
+      :root {
+        color-scheme: light dark;
+      }
       #bento-splash {
         position: fixed;
         inset: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #fff;
+        background: light-dark(#fff, #0e1319);
         z-index: 9999;
         transition: opacity 0.45s ease;
         font: 600 20px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
-        color: #1e2a3a;
+        color: light-dark(#1e2a3a, #d6dee9);
       }
       #bento-splash.done { opacity: 0; pointer-events: none; }
       .dash-splash-mark span { color: #ff9e8a; }

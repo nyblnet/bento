@@ -28,7 +28,8 @@
 // agent API. That is why this lands at commit one: retrofitting op-minting
 // means rewriting the store.
 
-import type { CellOverride, Column, ColumnData, DashDoc, Measure, Sheet, Step, TableSheet } from './model.ts'
+import { applySheetProps } from './rowcol.ts'
+import type { CellOverride, View, Column, ColumnData, DashDoc, Measure, Sheet, Step, TableSheet } from './model.ts'
 
 type Listener = () => void
 export type StoreEvent = 'doc' | 'view' | 'selection'
@@ -61,11 +62,16 @@ export type Patch =
    *  apply-then-undo that leaves `"cells": {}` behind is not a round trip. */
   | {
       op: 'setOverrides'; sheet: string; keys: string[]
-      v: Array<CellOverride | undefined>; dropEmpty?: boolean
+      /** `null` and `undefined` both DELETE; null is the one that survives JSON. */
+      v: Array<CellOverride | null | undefined>; dropEmpty?: boolean
     }
   /**
    * `at[i]` is the row POSITION rids[i] takes; omitted means append.
    * `values` is colId → one value per rid.
+   *
+   * `overrides` puts a deleted row's `cells` entries back with it. Without it
+   * the inverse of a delete restored the row's VALUES and dropped every hand
+   * correction, note and per-cell formula attached to it.
    *
    * Both exist because this is the inverse of a delete, and a delete has to be
    * undoable exactly. Without `values` the rows come back EMPTY; without `at`
@@ -76,6 +82,14 @@ export type Patch =
   | {
       op: 'insertRows'; sheet: string; rids: number[]
       at?: number[]; values?: Record<string, unknown[]>
+      /**
+       * A deleted row's `cells` entries, put back with it. Without this the
+       * inverse of a delete restored the row's VALUES and silently dropped
+       * every hand correction, note and per-cell formula attached to it.
+       */
+      overrides?: Record<string, CellOverride>
+      /** the sheet had no `cells` container before; do not leave one behind */
+      dropEmptyCells?: boolean
     }
   | { op: 'deleteRows'; sheet: string; rids: number[] }
   | { op: 'setColumn'; sheet: string; col: string; patch: Record<string, unknown> }
@@ -89,6 +103,61 @@ export type Patch =
   | { op: 'setMeasure'; name: string; measure?: Measure; dropEmpty?: boolean }
   | { op: 'setTitle'; title: string }
   /**
+   * Sheet-level properties — conditional formats, frozen panes, the sheet name.
+   *
+   * Needed because nothing else in this union can write above the column: the
+   * row/column helpers had to declare their own patch type for want of one.
+   * Keyed like `setColumn` so the inverse is the displaced values, and a key
+   * whose new value is `undefined` is REMOVED rather than set — the un-hide
+   * hazard, met once already in rowcol.ts.
+   */
+  /**
+   * Sheet-level fields (frozen panes, conditional formats, filters) — the only
+   * op that writes ABOVE the column level.
+   *
+   * Deletes are a LISTED `drop`, never `props: {k: undefined}`, because these
+   * objects are also the collab wire format and `JSON.stringify` drops an
+   * undefined value entirely: the delete would arrive at every other replica as
+   * a no-op, and one editor would be looking at frozen panes nobody else has.
+   * The same trap sits on the INVERSE — undoing a newly-added key has to say
+   * "remove it", which is a `drop`, not a `props` entry that vanishes in
+   * transit. `props: {k: undefined}` is REFUSED rather than treated as a
+   * second spelling of delete.
+   */
+  | { op: 'setSheetProps'; sheet: string; props: Record<string, unknown>; drop?: string[] }
+  /**
+   * Top-level document fields — the story, a dashboard layout, anything
+   * additive that belongs to the WORKBOOK rather than to a sheet.
+   *
+   * Same discipline as `setSheetProps`, for the same reason: deletes are a
+   * listed `drop`, and `props: {k: undefined}` is refused rather than accepted
+   * as a second spelling, because `JSON.stringify` erases it and the delete
+   * would reach no other replica.
+   */
+  | { op: 'setDocProps'; props: Record<string, unknown>; drop?: string[] }
+  /**
+   * One dashboard view, by id. `view: undefined` removes it.
+   *
+   * Per-view rather than a whole-`views` write, so editing one tile carries an
+   * inverse the size of one view instead of every dashboard in the workbook —
+   * the same argument the byte-capped history makes everywhere else. `views` is
+   * an ARRAY (order is the tab order and readers must agree on it), so a
+   * replacement keeps its position and only a genuinely new id appends.
+   */
+  | { op: 'setView'; id: string; view?: View; at?: number; dropEmpty?: boolean }
+  /**
+   * Add or remove a whole sheet. `sheet: undefined` removes the one named.
+   *
+   * Adding and deleting a sheet used to go through `replaceDoc`, because
+   * nothing in this union reached the sheet LIST — and `replaceDoc` CLEARS THE
+   * UNDO STACK. So creating a pivot, or importing a CSV, silently threw away
+   * every edit you could previously take back, and deleting a sheet could not
+   * be undone at all. It is a whole-sheet assignment either way, so the inverse
+   * carries the sheet and its POSITION: sheet order is the tab order, and
+   * readers must agree on it.
+   */
+  | { op: 'setSheet'; id: string; sheet?: Sheet; at?: number }
+  /**
    * RESERVED. Both need the transform engine, which does not exist yet. They
    * are in the union now because the discriminant cannot be retrofitted once
    * patches are also CRDT ops. `applyPatch` refuses them loudly rather than
@@ -96,6 +165,30 @@ export type Patch =
    */
   | { op: 'applySteps'; sheet: string; steps: Step[] }
   | { op: 'refreshBinding'; sheet: string; cols: Record<string, ColumnData> }
+
+/**
+ * Document keys `setDocProps` refuses. `sheets` and `measures` have typed
+ * patches that know how to invert them; `docId` is identity and must never be
+ * rewritten by a props op (PLATFORM: it is the merge key).
+ */
+const STRUCTURAL_DOC_KEYS = new Set([
+  'sheets', 'measures', 'docId', 'format', 'version', 'policy',
+])
+
+/**
+ * Raise a sheet's rid watermark past every rid in `rids`.
+ *
+ * MONOTONIC, and never lowered — not by undo either. A rid that has existed
+ * must never be minted again, because everything that attaches to one
+ * (overrides, comments, a peer's CRDT node) assumes it names one row forever.
+ * This is why insert and delete are the ops whose apply→undo is not
+ * byte-identical: the watermark is precisely the part that must survive.
+ */
+function raiseWatermark(sheet: TableSheet, rids: number[]): void {
+  const hi = rids.reduce((m, r) => Math.max(m, r), 0) + 1
+  const cur = (sheet as { nextRid?: number }).nextRid
+  if (typeof cur !== 'number' || !Number.isFinite(cur) || cur < hi) sheet.nextRid = hi
+}
 
 /**
  * What a patch touched, so undo can invalidate precisely.
@@ -235,14 +328,26 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
       p.keys.forEach((k, i) => {
         was.push(sheet.cells![k])
         const v = p.v[i]
-        if (v === undefined) delete sheet.cells![k]
+        // `null` deletes as well as `undefined`, and it is the spelling that
+        // SURVIVES: this is an array, and `JSON.stringify([undefined])` is
+        // `[null]`, so a delete sent over collab arrives as a null. Checking
+        // only for undefined would write that null in as an override — junk in
+        // the file, `dropEmpty` never firing, and the two replicas disagreeing
+        // about whether the cell has one.
+        if (v === undefined || v === null) delete sheet.cells![k]
         else sheet.cells![k] = v
       })
       if (p.dropEmpty && Object.keys(sheet.cells).length === 0) delete sheet.cells
       return {
         inverse: {
           op: 'setOverrides', sheet: p.sheet, keys: p.keys, v: was,
-          dropEmpty: !existed,
+          // `dropEmpty` BOTH WAYS. Undoing the removal of the last override used
+          // to leave `cells: {}` behind on the undoing replica, while every peer
+          // received the change through a path that drops the container. Twelve
+          // bytes in the file, and a document that no longer matches its own
+          // collaborators — the engine normalised it afterwards, but the store
+          // should not create the divergence in the first place.
+          dropEmpty: !existed || p.dropEmpty === true,
         },
         touched: {
           sheet: p.sheet,
@@ -255,8 +360,19 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
     case 'insertRows': {
       const sheet = table(doc, p.sheet)
       const flat = expandRids(sheet)
-      // ascending, so each splice index stays valid as earlier ones land
-      const order = p.rids.map((rid, i) => ({ rid, at: p.at?.[i] ?? flat.length + i, i }))
+      // ascending, so each splice index stays valid as earlier ones land.
+      //
+      // CLAMPED, and it has to be. `splice` past the end APPENDS, but the
+      // `writeCell` below writes at the literal index — so an `at` beyond the
+      // sheet put the row at position 3 and its value at position 10, leaving
+      // the column longer than the sheet has rows with a hole of nulls
+      // between. Measured on a 3-row sheet: rids said 4 rows, the column held
+      // 11 entries. rowcol.ts clamps before it builds the patch, so the UI
+      // never produced this — but `window.bento.commit` is a public API and a
+      // remote op is another producer, and applyPatch is where the invariant
+      // has to hold.
+      const order = p.rids
+        .map((rid, i) => ({ rid, at: Math.max(0, Math.min(p.at?.[i] ?? flat.length + i, flat.length + i)), i }))
         .sort((a, b) => a.at - b.at)
       for (const { rid, at, i } of order) {
         flat.splice(at, 0, rid)
@@ -270,6 +386,12 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
         }
       }
       sheet.rids = compressRids(flat)
+      raiseWatermark(sheet, p.rids)
+      // put back whatever the delete took with it
+      if (p.overrides) {
+        sheet.cells ??= {}
+        for (const [k, v] of Object.entries(p.overrides)) sheet.cells[k] = v
+      }
       return {
         inverse: { op: 'deleteRows', sheet: p.sheet, rids: p.rids },
         touched: { sheet: p.sheet, rids: p.rids, structural: true },
@@ -278,6 +400,12 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
 
     case 'deleteRows': {
       const sheet = table(doc, p.sheet)
+      // ON DELETE TOO — this is the half that matters. Raising the mark only on
+      // insert leaves nothing remembering that a DELETED rid ever existed, so
+      // the floor (derived from the current maximum) drops back and the next
+      // insert mints it again. Measured before this line: rid 3 deleted, then
+      // minted for a different row.
+      raiseWatermark(sheet, p.rids)
       // capture position AND value before anything moves — the inverse has to
       // put each row back exactly where it was, because order is data
       const taken = p.rids
@@ -298,10 +426,36 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
         }
       }
       sheet.rids = compressRids(flat)
+
+      // TAKE THE ROW'S OVERRIDES WITH IT, and hand them to the inverse.
+      //
+      // A deleted row's `cells` entries used to be left behind — orphaned, keyed
+      // to a rid that no longer names anything, and resurrected on top of
+      // whatever came back. rowcol.deleteRowsAt clears them, so the UI path was
+      // safe; but `insertRows`' own inverse is a BARE deleteRows, so undoing an
+      // insert went through here and stranded any override added to that row in
+      // the meantime — on the undoing replica only, since the sync engine strips
+      // them everywhere else. That is a divergence, and it is invisible.
+      const doomed = new Set(taken.map((r) => r.rid))
+      const overKeys: string[] = []
+      const overWas: Array<CellOverride | null> = []
+      for (const k of Object.keys(sheet.cells ?? {})) {
+        const i = k.indexOf(':')
+        if (i < 0 || !doomed.has(Number(k.slice(i + 1)))) continue
+        overKeys.push(k)
+        overWas.push(sheet.cells![k])
+        delete sheet.cells![k]
+      }
+      const hadCells = sheet.cells !== undefined
+      if (sheet.cells && !Object.keys(sheet.cells).length) delete sheet.cells
+
+      const overrides: Record<string, CellOverride> = {}
+      overKeys.forEach((k, i) => { const v = overWas[i]; if (v) overrides[k] = v })
       return {
         inverse: {
           op: 'insertRows', sheet: p.sheet,
           rids: taken.map((r) => r.rid), at: taken.map((r) => r.at), values: restore,
+          ...(overKeys.length ? { overrides, dropEmptyCells: !hadCells } : {}),
         },
         touched: { sheet: p.sheet, rids: p.rids, structural: true },
       }
@@ -370,6 +524,74 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
       }
     }
 
+    case 'setSheet': {
+      const at = doc.sheets.findIndex((sh) => sh.id === p.id)
+      const was = at < 0 ? undefined : doc.sheets[at]
+      if (p.sheet === undefined) { if (at >= 0) doc.sheets.splice(at, 1) }
+      else if (at >= 0) doc.sheets[at] = p.sheet
+      else if (typeof p.at === 'number' && p.at >= 0 && p.at <= doc.sheets.length) {
+        doc.sheets.splice(p.at, 0, p.sheet)
+      } else doc.sheets.push(p.sheet)
+      return {
+        inverse: { op: 'setSheet', id: p.id, sheet: was, at: at < 0 ? undefined : at },
+        touched: { all: true },
+      }
+    }
+
+    case 'setView': {
+      const existed = doc.views !== undefined
+      doc.views ??= []
+      const at = doc.views.findIndex((v) => v.id === p.id)
+      const was = at < 0 ? undefined : doc.views[at]
+      if (p.view === undefined) { if (at >= 0) doc.views.splice(at, 1) }
+      else if (at >= 0) doc.views[at] = p.view
+      // `at` on the way IN is how the inverse of a removal restores POSITION.
+      // Without it undo appended the view to the end, so undoing the deletion
+      // of the first dashboard silently reordered the tabs — a change nobody
+      // asked for, arriving inside the operation meant to undo one.
+      else if (typeof p.at === 'number' && p.at >= 0 && p.at <= doc.views.length) {
+        doc.views.splice(p.at, 0, p.view)
+      } else doc.views.push(p.view)
+      if (p.dropEmpty && doc.views.length === 0) delete doc.views
+      return {
+        inverse: { op: 'setView', id: p.id, view: was, at: at < 0 ? undefined : at, dropEmpty: !existed },
+        touched: { all: true },
+      }
+    }
+
+    case 'setDocProps': {
+      const bag = doc as unknown as Record<string, unknown>
+      const props: Record<string, unknown> = {}
+      const drop: string[] = []
+      const dropping = new Set(p.drop ?? [])
+      const displace = (k: string): void => {
+        if (STRUCTURAL_DOC_KEYS.has(k)) {
+          throw new Error(`setDocProps may not write "${k}" — structure moves through typed patches`)
+        }
+        if (k in bag) props[k] = bag[k]
+        else drop.push(k)
+      }
+      for (const k of Object.keys(p.props)) {
+        if (dropping.has(k)) throw new Error(`setDocProps sets and drops "${k}" in one patch`)
+        if (p.props[k] === undefined) {
+          throw new Error(`setDocProps: to remove "${k}" list it in \`drop\`, not props`)
+        }
+        displace(k)
+        bag[k] = p.props[k]
+      }
+      for (const k of dropping) { displace(k); delete bag[k] }
+      return {
+        inverse: { op: 'setDocProps', props, ...(drop.length ? { drop } : {}) },
+        touched: { all: true },
+      }
+    }
+
+    case 'setSheetProps':
+      // The writer lives in rowcol.ts beside `freezeAt`, which is what emits
+      // these, and is covered there. Two copies of one op is how the inverse
+      // and the forward drift apart.
+      return applySheetProps(table(doc, p.sheet), p)
+
     case 'setTitle': {
       const was = doc.title
       doc.title = p.title
@@ -415,6 +637,27 @@ export class Store {
     for (const fn of this.listeners.get(ev) ?? []) fn()
   }
 
+  /**
+   * The document changed UNDERNEATH this store — a collaborator's edit applied
+   * surgically, not an edit made here.
+   *
+   * It is deliberately not `commit`: somebody else's change is not an entry in
+   * your undo history, and routing it through the undo stack would let you
+   * "undo" a keystroke you never made. But every listener still has to repaint,
+   * so this stamps `modified`, invalidates everything and emits the same events
+   * an edit does.
+   *
+   * The alternative, which is what the sync session did before this existed,
+   * was to reach through `unknown` and call the PRIVATE `emit`. That works
+   * until the day the event names change, and nothing tells you.
+   */
+  changedRemotely(touched: Touched = { all: true }): void {
+    this.doc.modified = new Date().toISOString()
+    this.lastTouched = touched
+    this.emit('doc')
+    this.emit('view')
+  }
+
   /** The last invalidation, for a listener that wants to repaint precisely. */
   lastTouched: Touched = {}
 
@@ -423,10 +666,58 @@ export class Store {
    * Closes any open typing run first, so a run's text and a structural edit
    * never merge into one entry.
    */
+  /**
+   * Listeners that see every patch BEFORE it is applied, and may replace the
+   * list — collaboration's entry point.
+   *
+   * WHY A HOOK RATHER THAN WRAPPING THE VERBS. The sync session used to
+   * decorate `commit` and `runEdit` on the instance, which covers every edit
+   * the UI makes and cannot see UNDO and REDO — those apply their inverses
+   * through a private path. Undo therefore fell back to broadcasting a whole
+   * state snapshot: correct, and enormously heavier than the two ops it
+   * stands in for. `invert` calls this too, so an undo now ships as ops.
+   *
+   * The listener runs BEFORE the document changes because the CRDT reads what
+   * a delete is about to displace; `afterPatch` is the other half.
+   */
+  beforePatch(fn: (patches: Patch[]) => Patch[] | void): () => void {
+    this.patchHooks.push(fn)
+    return () => { this.patchHooks = this.patchHooks.filter((f) => f !== fn) }
+  }
+
+  /** Listeners that run once the document HAS changed. */
+  afterPatch(fn: () => void): () => void {
+    this.appliedHooks.push(fn)
+    return () => { this.appliedHooks = this.appliedHooks.filter((f) => f !== fn) }
+  }
+
+  private patchHooks: Array<(p: Patch[]) => Patch[] | void> = []
+  private appliedHooks: Array<() => void> = []
+
+  /**
+   * Run the before-hooks. `substitute` is false for undo/redo: a hook may
+   * REFUSE a patch it cannot express, and dropping one there would apply half
+   * an inverse and leave the undo stack describing a document that no longer
+   * exists. An undo must land whole or not at all.
+   */
+  private runBefore(list: Patch[], substitute = true): Patch[] {
+    let out = list
+    for (const fn of this.patchHooks) {
+      const next = fn(out)
+      if (substitute && Array.isArray(next)) out = next
+    }
+    return out
+  }
+
+  private runAfter(): void {
+    for (const fn of this.appliedHooks) fn()
+  }
+
   commit(patches: Patch | Patch[]): void {
     if (this.readOnly) return
     this.endRun()
-    const list = Array.isArray(patches) ? patches : [patches]
+    const list = this.runBefore(Array.isArray(patches) ? patches : [patches])
+    if (!list.length) return
     const inverse: Patch[] = []
     const touched: Touched = {}
     let bytes = 0
@@ -440,6 +731,7 @@ export class Store {
     this.touch()
     this.lastTouched = touched
     this.emit('doc')
+    this.runAfter()
   }
 
   /**
@@ -447,24 +739,39 @@ export class Store {
    * every later one extends it in place, so a cell typed into forty times is
    * one undo step carrying one inverse — not forty.
    */
-  runEdit(cellKey: string, patch: Patch): void {
+  runEdit(cellKey: string, patch: Patch | Patch[]): void {
     if (this.readOnly) return
     if (this.runCell !== cellKey) {
       this.endRun()
       this.runCell = cellKey
       this.pending = { inverse: [], touched: {}, bytes: 0 }
     }
-    const r = applyPatch(this.doc, patch)
-    // keep only the FIRST inverse for this cell: it holds the value the run
-    // started from, which is what undo must restore
-    if (this.pending!.inverse.length === 0) {
-      this.pending!.inverse.push(r.inverse)
-      this.pending!.bytes = patchBytes(r.inverse)
+    // Keep only the FIRST edit's inverse for this cell: it holds the value the
+    // run started from, which is what undo must restore. Forty keystrokes are
+    // one step back to where the typing began.
+    const first = this.pending!.inverse.length === 0
+    // One EDIT may be several patches — writing a value and clearing the
+    // formula it replaced is two, and they have to undo as ONE step. Their
+    // inverses go on REVERSED, because `invert` replays the list forward.
+    const list = this.runBefore(Array.isArray(patch) ? patch : [patch])
+    if (!list.length) return
+    const inverses: Patch[] = []
+    const r = { touched: {} as Touched }
+    for (const p of list) {
+      const one = applyPatch(this.doc, p)
+      if (first) inverses.push(one.inverse)
+      merge(r.touched, one.touched)
+      this.lastTouched = one.touched
+    }
+    if (first) {
+      inverses.reverse()
+      this.pending!.inverse.push(...inverses)
+      this.pending!.bytes = inverses.reduce((n, p) => n + patchBytes(p), 0)
     }
     merge(this.pending!.touched, r.touched)
     this.touch()
-    this.lastTouched = r.touched
     this.emit('doc')
+    this.runAfter()
     clearTimeout(this.runTimer)
     this.runTimer = setTimeout(() => this.endRun(), RUN_IDLE_MS)
   }
@@ -517,6 +824,11 @@ export class Store {
     const inverse: Patch[] = []
     const touched: Touched = {}
     let bytes = 0
+    // THE POINT OF THE HOOK. Undo and redo change the document exactly as an
+    // edit does, and a collaborator has to hear about it. Without this the
+    // session could not see them at all and fell back to broadcasting a whole
+    // state snapshot. `substitute: false` — see runBefore.
+    this.runBefore(e.inverse, false)
     for (const p of e.inverse) {
       const r = applyPatch(this.doc, p)
       inverse.unshift(r.inverse)
@@ -526,6 +838,7 @@ export class Store {
     this.touch()
     this.lastTouched = touched
     this.emit('doc')
+    this.runAfter()
     return { inverse, touched, bytes }
   }
 

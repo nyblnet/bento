@@ -11,22 +11,39 @@
 //    MUTANT=pos-spread node scripts/test-sync-equiv.ts   (see it fail)
 //
 //  ┌───────────────────────────────────────────────────────────────────────┐
-//  │  LOUD WARNING — AS OF THIS COMMIT THIS RIG PASSES TRIVIALLY.          │
+//  │  THE BASELINE IS A FROZEN COPY (scripts/lib/sync-baseline-frozen.ts). │
 //  │                                                                       │
-//  │  There is only ONE engine in the tree today, so the "candidate"       │
-//  │  import below resolves to the SAME MODULE as the baseline. Node       │
-//  │  dedupes it: baseline === candidate, literally the same object. A     │
-//  │  green run here currently proves NOTHING about parameterization —     │
-//  │  it proves the comparator runs. The rig announces this at startup     │
-//  │  (`NO-OP RUN`) and will announce `LIVE RUN` the moment the candidate  │
-//  │  import points somewhere else. Do not read a NO-OP green as safety.   │
+//  │  It used to import the live engine, which made this rig compare that  │
+//  │  engine with itself and pass trivially — and, worse, it decided       │
+//  │  whether a run was meaningful by comparing MODULE identity. Measured: │
+//  │  a candidate containing nothing but `export * from '…/crdt.ts'`       │
+//  │  announced "LIVE RUN" and "PASS" while proving nothing, and that is   │
+//  │  precisely the file that step two of the parameterization creates.    │
+//  │  The baseline is now a copy that stops tracking the engine the        │
+//  │  instant the engine moves, its sha256 is asserted, and vacuity is     │
+//  │  decided by comparing the ENGINE CLASS rather than the module.        │
+//  │                                                                       │
+//  │  IF THIS RIG GOES RED, DO NOT EDIT THE BASELINE. Red means the        │
+//  │  candidate mints different bytes than the code that wrote every       │
+//  │  bento/slides file already on someone's disk.                         │
 //  │                                                                       │
 //  │  Because a never-failed comparator is worth nothing, the rig ends     │
 //  │  with a SELF-TEST: it builds four deliberately perturbed engines      │
 //  │  that are still perfectly CONVERGENT (scripts/test-sync.ts passes     │
-//  │  every one of them) and asserts that this rig catches all four. That  │
-//  │  is the part of a NO-OP run that does carry signal.                   │
+//  │  every one of them) and asserts that this rig catches all four.       │
 //  └───────────────────────────────────────────────────────────────────────┘
+//
+//  FOUR THINGS THIS RIG ONCE WAVED THROUGH, each measured against a real
+//  broken engine and each now covered by a scripted scenario:
+//    · adopt() AFTER fromJSON — the path every saved shared file takes on
+//      every open, and the one the rig never walked. An engine that re-keys
+//      on adopt passed 200 seeds × 60 steps × 4 actors byte-identically.
+//    · the ApplyResult of apply() — never compared; it gates rematerialize()
+//      and the editor's rebuild.
+//    · SKIP_DOC — invisible, because no fixture carried the keys it skips.
+//      A candidate that stopped skipping `collab` would broadcast private
+//      keys to the room.
+//    · the blob boundary and asset removal — no fixture went near either.
 //
 //  WHY THIS EXISTS. spaces is getting live collaboration by PARAMETERIZING
 //  this engine over a document-shape descriptor (slides→elements becomes
@@ -71,14 +88,18 @@ import {
   type Doc,
 } from './lib/sync-fixtures.ts'
 
-import * as BASELINE_MODULE from '../slides/src/sync/crdt.ts'
+// THE BASELINE IS FROZEN, and that is the whole design. It used to import the
+// live engine, so the rig compared that engine with itself; the parameterized
+// engine would have been compared against a tree it had already changed.
+// scripts/lib/sync-baseline-frozen.ts is a verbatim copy that stops tracking
+// the engine the instant the engine moves. Never repoint this at a live file.
+import * as BASELINE_MODULE from './lib/sync-baseline-frozen.ts'
 // ───────────────────────────────────────────────────────────────────────────
 // THE ONE LINE. When the parameterized engine lands, repoint THIS import (and
 // nothing else in this file) at it — e.g.
 //     import * as CANDIDATE_MODULE from '../kernel/src/sync/crdt.ts'
-// and the rig turns from a NO-OP into the gate that protects every shipped
-// bento/slides file. If the candidate's entry point needs a shape descriptor,
-// bind it in `CANDIDATE` below (the Engine adapter is the seam).
+// If the candidate's entry point needs a shape descriptor, bind it in
+// `CANDIDATE` below (the Engine adapter is the seam).
 import * as CANDIDATE_MODULE from '../slides/src/sync/crdt.ts'
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -121,7 +142,51 @@ function engineOf(label: string, M: CrdtModule): Engine {
 
 const BASELINE = engineOf('baseline', BASELINE_MODULE)
 const CANDIDATE = engineOf('candidate', CANDIDATE_MODULE)
-const IS_NOOP = (BASELINE_MODULE as unknown) === (CANDIDATE_MODULE as unknown)
+/**
+ * Is the comparison vacuous?
+ *
+ * THIS USED TO COMPARE MODULE IDENTITY, and that was the rig's worst bug:
+ * a candidate consisting of nothing but `export * from '…/crdt.ts'` is a
+ * DIFFERENT module object wrapping the SAME class, so the rig announced
+ * "LIVE RUN" and "PASS" while comparing one engine with itself. Measured —
+ * and it is not a hypothetical, because turning slides/src/sync/crdt.ts into
+ * a re-export facade is exactly step two of the parameterization.
+ *
+ * The engine is the CLASS, so that is what gets compared.
+ */
+const IS_NOOP = (BASELINE.SyncState as unknown) === (CANDIDATE.SyncState as unknown)
+
+/**
+ * The baseline must be the FROZEN copy, not something that resolves back to
+ * the live tree. Checked by content, because the realistic failure is not a
+ * bad import — it is someone making a red run green by editing the baseline,
+ * which deletes the only evidence that the candidate mints different bytes
+ * than the code every shipped file was written by.
+ *
+ * Update this constant ONLY when deliberately re-freezing against a new
+ * shipped engine, in a commit that says so.
+ */
+const BASELINE_SHA = '476c018fe63f83ae4f66837688ea0701f5bdec31f7a9a16447245248173d81ad'
+{
+  const { createHash } = await import('node:crypto')
+  const { readFileSync } = await import('node:fs')
+  const path = new URL('./lib/sync-baseline-frozen.ts', import.meta.url)
+  const sha = createHash('sha256').update(readFileSync(path)).digest('hex')
+  if (sha !== BASELINE_SHA) {
+    console.error('')
+    console.error('  FROZEN BASELINE HAS CHANGED.')
+    console.error(`    expected sha256 ${BASELINE_SHA}`)
+    console.error(`    found            ${sha}`)
+    console.error('')
+    console.error('  scripts/lib/sync-baseline-frozen.ts is the engine as shipped, and the')
+    console.error('  only thing this rig compares against. If you edited it to make a red')
+    console.error('  run green, undo that: a red run means the candidate would fork every')
+    console.error('  bento/slides file already on someone’s disk. If you are deliberately')
+    console.error('  re-freezing against a newly shipped engine, update BASELINE_SHA in')
+    console.error('  this file, in the same commit, and say why.')
+    process.exit(1)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // replicas and worlds (engine-parameterized twins of test-sync.ts's Replica)
@@ -159,8 +224,19 @@ class Replica {
     this.log.push(...ops)
     return ops
   }
+  /**
+   * The ApplyResult of the last apply(), kept because it is OBSERVABLE
+   * BEHAVIOUR and was not being compared.
+   *
+   * `structure` gates rematerialize() in the engine and the canvas/sidebar
+   * rebuild in session.ts, so a candidate that returned it more (or less)
+   * eagerly would reorder documents and repaint differently while every byte
+   * this rig looked at stayed identical. Measured: a candidate hardcoding
+   * `structure: true` passed the whole gate.
+   */
+  lastApply = ''
   receive(ops: Op[]) {
-    this.state.apply(this.doc, ops)
+    this.lastApply = JSON.stringify(this.state.apply(this.doc, ops))
     this.log.push(...ops)
     this.shadow = JSON.stringify(this.doc)
   }
@@ -433,6 +509,12 @@ function checkActor(seed: number, step: number | string, wa: World, wb: World, i
     cmp('materialized document', seed, step, a.actor, da, db, [a.docCanon(), b.docCanon()])
     return true
   }
+  // not a byte on the wire, but it decides whether the engine rematerializes
+  // and whether the editor rebuilds — see Replica.lastApply
+  if (a.lastApply !== b.lastApply) {
+    cmp('ApplyResult', seed, step, a.actor, a.lastApply, b.lastApply)
+    return true
+  }
   return false
 }
 
@@ -453,6 +535,151 @@ const snap = (t: Transcript, label: string, r: Replica) => {
 }
 
 const SCENARIOS: Scenario[] = [
+  {
+    /**
+     * THE PRODUCTION BOOT PATH, and until this scenario existed the rig had
+     * never once walked it.
+     *
+     * session.ts opens a saved, previously-shared file by calling
+     * `SyncState.fromJSON(saved)` and THEN `state.adopt(doc)` — restore first,
+     * adopt second, every open, every shared file. The rig's Replica always
+     * constructed fresh and adopted, and the one fromJSON scenario adopts and
+     * then throws the adopted state away. So the interaction between a
+     * RESTORED state and adopt() was untested.
+     *
+     * That is not a theoretical gap. Measured: an engine whose adopt() drops
+     * its two first-write guards — re-keying nodes it has already seen —
+     * passed this entire rig byte-identically at 200 seeds × 60 steps × 4
+     * actors. In the field it re-spreads every position key with the losing
+     * null register [0,''] on every open, and rematerialize() sorts on that
+     * key alone, so document order silently resets for everyone.
+     *
+     * What makes it bite is `pos` entries that were EARNED — moved by a real
+     * ord op, so they hold a real register — plus nodes the restored state has
+     * never seen, which adopt() legitimately fills in. A correct adopt() must
+     * leave the first alone and add the second.
+     */
+    name: 'adopt AFTER fromJSON — the path every saved shared file takes',
+    run: (E) => {
+      const t: Transcript = []
+      const A = new Replica(E, 'A')
+      // earn a real register on a node: move the last slide to the front
+      A.mutate((d) => d.slides.unshift(d.slides.pop()!))
+      A.mutate((d) => d.slides[0].elements.push({ id: 'earned', type: 'shape', shape: 'rect', x: 1, y: 2, w: 3, h: 4, rotation: 0, opacity: 1, fill: '#123', stroke: 'none', strokeWidth: 0, radius: 0 }))
+      const saved = A.stateBytes()
+      const savedDoc = JSON.parse(A.docBytes()) as Doc
+      t.push(['saved/state', saved])
+
+      // reopen: restore, then adopt the doc that came out of the same file
+      const reopened = E.fromJSON('A', JSON.parse(saved))
+      t.push(['reopened/before-adopt', J(reopened.toJSON())])
+      reopened.adopt(savedDoc)
+      t.push(['reopened/after-adopt', J(reopened.toJSON())])
+      // the registers that were earned must still be there, and the null
+      // register must not have come back — recorded explicitly so a divergence
+      // report names the property rather than a 60KB blob
+      t.push(['reopened/null-registers', J(Object.values(reopened.pos).filter((p) => p.r[0] === 0).length)])
+      t.push(['reopened/pos-count', J(Object.keys(reopened.pos).length)])
+
+      // and the case adopt() legitimately exists for: the file gained content
+      // while this state was away (an older build edited it, an agent wrote
+      // the JSON, a version was restored)
+      const grown = JSON.parse(J(savedDoc)) as Doc
+      grown.slides.push({ id: 'offline-slide', background: '#fff', transition: 'none', notes: '', elements: [{ id: 'offline-el', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, rotation: 0, opacity: 1, fill: '#abc', stroke: 'none', strokeWidth: 0, radius: 0 }] })
+      const reopened2 = E.fromJSON('A', JSON.parse(saved))
+      reopened2.adopt(grown)
+      t.push(['grown/after-adopt', J(reopened2.toJSON())])
+
+      // adopt() twice in a row must be a no-op the second time
+      const twice = E.fromJSON('A', JSON.parse(saved))
+      twice.adopt(savedDoc)
+      const once = J(twice.toJSON())
+      twice.adopt(savedDoc)
+      t.push(['adopt-is-idempotent', J(once === J(twice.toJSON()))])
+      return t
+    },
+  },
+  {
+    /**
+     * SKIP_DOC is invisible to every other check in this rig, because no
+     * fixture carries the keys it skips.
+     *
+     * The engine refuses to sync `slides` (the container — syncing it as one
+     * value would make the whole deck a single last-writer-wins register),
+     * `modified`, `collab`, `format` and `version`. Measured: a candidate with
+     * that set cut down to just the container name passed everything. A
+     * candidate that stopped skipping `collab` would broadcast `writerPriv`
+     * and `ownerPriv` to every peer in the room and clobber the per-copy
+     * credentials that the whole access model rests on — a security
+     * regression this gate would have waved straight through.
+     *
+     * Parameterizing the set is unavoidable (the container name is exactly
+     * what the descriptor changes), which is why it needs to be observable.
+     */
+    name: 'SKIP_DOC — the doc-level keys that must never sync',
+    run: (E) => {
+      const t: Transcript = []
+      const r = new Replica(E, 'A')
+      const touch = (label: string, fn: (d: Doc) => void) => {
+        t.push([`${label}/ops`, J(r.mutate(fn))])
+      }
+      // each of these must emit NOTHING
+      touch('modified', (d) => { (d as Record<string, unknown>).modified = '2026-01-01T00:00:00.000Z' })
+      touch('collab', (d) => {
+        (d as Record<string, unknown>).collab = {
+          room: 'w-abc', key: 'SECRET-ROOM-KEY', on: true, v: 2,
+          owner: 'pub', ownerPriv: 'PRIVATE-KEY-MUST-NOT-SYNC',
+        }
+      })
+      touch('collab-again', (d) => {
+        ((d as Record<string, unknown>).collab as Record<string, unknown>).sync = { v: 2, lamport: 99 }
+      })
+      touch('format', (d) => { (d as Record<string, unknown>).format = 'bento/other' })
+      touch('version', (d) => { (d as Record<string, unknown>).version = 99 })
+      // …while an ordinary doc property beside them still syncs
+      touch('title-still-syncs', (d) => { d.title = 'and this one does' })
+      snap(t, 'skipdoc', r)
+      return t
+    },
+  },
+  {
+    /**
+     * Assets are a PER-KEY register map, not one whole-value register, and
+     * the boundary at which one is offloaded to a blob is a constant in the
+     * engine. Neither was observable: no fixture ever created an asset near
+     * the inline threshold, and no fixture ever deleted one.
+     *
+     * Getting per-key wrong is not subtle in the field — one person adding an
+     * image would delete everyone else's — and it is a special case in exactly
+     * the code the descriptor touches. Measured: a candidate with the inline
+     * threshold moved from 64KB to 8KB passed the whole gate.
+     */
+    name: 'assets — per-key registers, the blob boundary, and removal',
+    run: (E) => {
+      const t: Transcript = []
+      const A = new Replica(E, 'A')
+      const B = new Replica(E, 'B')
+      const small = 'data:image/gif;base64,' + 'A'.repeat(64)
+      const big = 'data:image/png;base64,' + 'B'.repeat(80 * 1024)   // over the inline max
+      const edge = 'data:image/png;base64,' + 'C'.repeat(60 * 1024)  // under it
+
+      // two actors add DIFFERENT assets concurrently: both must survive
+      const opsA = A.mutate((d) => { (d.assets as Record<string, string>).k1 = small })
+      const opsB = B.mutate((d) => { (d.assets as Record<string, string>).k2 = edge })
+      t.push(['A/add', J(opsA)])
+      t.push(['B/add', J(opsB)])
+      A.receive(opsB); B.receive(opsA)
+      t.push(['A/apply-result', A.lastApply])
+      snap(t, 'both-assets', A)
+
+      // one over the blob boundary
+      t.push(['over-boundary', J(A.mutate((d) => { (d.assets as Record<string, string>).k3 = big }))])
+      // and a removal — the `v === undefined` path, which no fixture reached
+      t.push(['removal', J(A.mutate((d) => { delete (d.assets as Record<string, string>).k1 }))])
+      snap(t, 'after-removal', A)
+      return t
+    },
+  },
   {
     // The single highest-risk parameterization site: adopt() derives every
     // fractional position key for a file that has never synced. Change it and
@@ -822,16 +1049,21 @@ function mutantEngine(M: CrdtModule, name: MutantName): Engine {
   return {
     label: `mutant:${name}`,
     SyncState: Cls,
-    // crdt.ts's `static fromJSON` constructs `new SyncState(actor)` literally —
-    // not `new this(actor)` — so a subclass cannot be produced through it, and
-    // this returned an UNMUTATED engine. Every scenario that round-trips state
-    // therefore tested the baseline against itself while reporting mutant
-    // coverage, which is the one lie a self-test must not tell.
+    // `static fromJSON` used to construct `new SyncState(actor)` literally, so
+    // a subclass could not be produced through it and this returned an
+    // UNMUTATED engine — every scenario that round-trips state tested the
+    // baseline against itself while reporting mutant coverage, which is the
+    // one lie a self-test must not tell. The workaround was to re-point the
+    // prototype, a harness liberty taken only because that step's acceptance
+    // criterion was an empty product diff.
     //
-    // Re-pointing the prototype is a test-harness liberty, taken here rather
-    // than changing one word in the shipped engine: this step's whole
-    // acceptance criterion is that `git diff slides/ kernel/ server/` is empty.
+    // The engine now says `new this(actor)`, so a mutant restores as itself
+    // and the liberty is gone. The FROZEN BASELINE still has the old literal
+    // construction, which is exactly why this falls back rather than assuming:
+    // a mutant built on the baseline still needs the prototype repointed.
     fromJSON: (a, j) => {
+      const made = (Cls as { fromJSON?: (a: string, j: StateJSON) => unknown }).fromJSON?.(a, j)
+      if (made && Object.getPrototypeOf(made) === Cls.prototype) return made as EngineState
       const base = M.SyncState.fromJSON(a, j)
       Object.setPrototypeOf(base, Cls.prototype)
       return base as unknown as EngineState
@@ -904,19 +1136,35 @@ console.log('bento-sync equivalence rig — baseline vs candidate, byte for byte
 if (IS_NOOP) {
   console.log('')
   console.log('  ############################################################')
-  console.log('  #  NO-OP RUN. The candidate import resolves to the SAME    #')
-  console.log('  #  module as the baseline (they are === at runtime), so    #')
-  console.log('  #  the comparison below is vacuous BY CONSTRUCTION. Green  #')
-  console.log('  #  here says nothing about any parameterized engine — it   #')
-  console.log('  #  only says the comparator runs. The SELF-TEST at the end #')
-  console.log('  #  is the part with signal. Repoint the CANDIDATE_MODULE   #')
-  console.log('  #  import (one line, marked in the header) to go LIVE.     #')
+  console.log('  #  NO-OP RUN. The candidate resolves to the SAME ENGINE    #')
+  console.log('  #  CLASS as the frozen baseline, so the comparison below   #')
+  console.log('  #  is vacuous BY CONSTRUCTION — green here says only that  #')
+  console.log('  #  the comparator runs. Note this now catches a candidate  #')
+  console.log('  #  that merely RE-EXPORTS the baseline, which the old      #')
+  console.log('  #  module-identity check reported as a live PASS.          #')
   console.log('  ############################################################')
   console.log('')
 } else {
   console.log('')
-  console.log(`  LIVE RUN — candidate is a distinct module (${CANDIDATE.label}).`)
+  console.log(`  LIVE RUN — candidate is a distinct engine (${CANDIDATE.label}), compared`)
+  console.log('             against the frozen baseline as shipped.')
   console.log('')
+}
+
+/**
+ * REQUIRE_LIVE=1 makes a vacuous run a FAILURE rather than a note.
+ *
+ * CI sets it. The failure mode it exists for is quiet: someone repoints the
+ * candidate back at the baseline (or at something that re-exports it) to get
+ * past a red run, and CI keeps printing PASS forever while the gate protects
+ * nothing at all.
+ */
+if (process.env.REQUIRE_LIVE === '1' && IS_NOOP) {
+  console.error('')
+  console.error('  REQUIRE_LIVE=1 but this is a NO-OP run: the candidate is the same engine')
+  console.error('  class as the frozen baseline, so nothing was actually compared. Repoint')
+  console.error('  CANDIDATE_MODULE at the engine you mean to gate.')
+  process.exit(1)
 }
 
 const MUTANT = process.env.MUTANT as MutantName | undefined
@@ -960,8 +1208,16 @@ if (process.env.SELFTEST !== '0' && !MUTANT) {
   console.log('self-test — engines that CONVERGE but do not MATCH:')
   const suppress = console.error
   const names: MutantName[] = ['pos-spread', 'lamport-skew', 'op-field-order', 'state-key-order']
+  // PERTURB THE ENGINE UNDER TEST, not the frozen baseline. Mutating the
+  // baseline only ever asked "is the comparator sensitive?" — a question about
+  // the rig. Mutating the CANDIDATE asks whether the comparator is sensitive
+  // to THIS engine, which is the question that matters once the candidate is a
+  // parameterized engine reached through a factory or a facade: if it cannot
+  // even be subclassed, the self-test says so here instead of the rig quietly
+  // testing something else.
+  const MUT_MODULE = IS_NOOP ? BASELINE_MODULE : CANDIDATE_MODULE
   for (const name of names) {
-    const mut = mutantEngine(BASELINE_MODULE, name)
+    const mut = mutantEngine(MUT_MODULE, name)
     const converges = convergesWithItself(mut, 4, 60, 3)
     console.error = () => {} // the mutants' diffs are expected noise
     const caught = whatCatches(BASELINE, mut, 4, 60, 3)
@@ -981,8 +1237,8 @@ console.log('')
 if (failed) {
   console.log(`FAILED — ${divCount} divergence(s); the first is printed above.`)
 } else if (IS_NOOP) {
-  console.log(`PASS (trivially — candidate === baseline). total ${ms(t0).toFixed(0)}ms`)
+  console.log(`PASS (trivially — candidate is the same engine class as the baseline). total ${ms(t0).toFixed(0)}ms`)
 } else {
-  console.log(`PASS — candidate is byte-identical to baseline. total ${ms(t0).toFixed(0)}ms`)
+  console.log(`PASS — candidate is byte-identical to the engine as shipped. total ${ms(t0).toFixed(0)}ms`)
 }
 process.exit(failed ? 1 : 0)

@@ -2,7 +2,8 @@
 
 The app-agnostic machinery every Bento app shares: document lifecycle
 (save/splice, `bento/enc` encryption, autosave/version history), signed
-self-update, the i18n engine, the animation engine, and charts-lite. The
+self-update, the i18n engine, the animation engine, charts-lite, and the
+bento-sync CRDT engine (`src/sync/crdt.ts`). The
 kernel/app boundary is defined in `docs/PLATFORM.md` §9 — the kernel never
 sees an app's content shape (slides, blocks, cells); it reads only the
 `KernelDoc` envelope (`src/doc.ts`).
@@ -36,7 +37,16 @@ shared dependency ever appears, convert then, in one mechanical sweep.
   conveniences.
 - Frozen contracts that live here: the `#bento-doc` splice (save.ts), the
   `bento/enc` envelope (save.ts), the update-manifest verification
-  (update.ts). Treat every byte as shipped-file compatibility surface.
+  (update.ts), and **every byte the sync engine mints** (sync/crdt.ts) — ops,
+  `SyncStateJSON`, fractional position keys, lamport ordering. Treat every byte
+  as shipped-file compatibility surface.
+- `sync/crdt.ts` takes its document shape as a `DocShape` at construction and
+  knows nothing else about an app's content. The app binds it
+  (`slides/src/sync/crdt.ts` → `SLIDES_SHAPE`), and the binding is what an app
+  imports. Changing the engine is gated by `scripts/test-sync-equiv.ts`, which
+  compares it byte-for-byte against a frozen copy of the engine as shipped: a
+  change that alters a minted byte forks every file in the field from its own
+  copies, with no way to push a fix.
 
 ## Typecheck
 

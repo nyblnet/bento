@@ -9,15 +9,20 @@ import {
   MEDIA_EMBED_BUDGET,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
-} from '../model'
+  paginates, inLinearFlow,
+  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
+import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
+import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+// serializeFile (plain output) is deliberately NOT imported here: every path
+// in this file writes a real file for a person, so all of them must inherit an
+// active password. serializeAuto is the only encryption-aware serializer.
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
@@ -421,25 +426,34 @@ export class Editor {
       for (const k of kids) this.phoneChrome.homeOf.set(k, g)
     }
 
-    // drive it now and whenever the query flips
-    // Held on `this` deliberately: a MediaQueryList that nothing references can
-    // be collected along with its listener, and the bar then never unfolds when
-    // the window grows — the CSS flips but the JS half silently stops.
-    this.phoneQuery = window.matchMedia('(max-width: 700px)')
+    // drive it now and whenever the bar's size or content changes.
     // build() has just re-authored the bar, so whatever folding state a PREVIOUS
     // bar was in no longer describes this DOM. Without this reset a rebuild on a
     // phone (switching language, say) would early-return on `true === true` and
     // leave the freshly authored DESKTOP bar in place — overflowing, with Save
     // off-screen again.
     this.phoneChromeOn = null
-    this.applyPhoneChrome(this.phoneQuery.matches)
-    this.phoneQuery.addEventListener('change', (e) => this.applyPhoneChrome(e.matches))
-    // ...and on plain resize as well. matchMedia's change event is the correct
-    // signal but not a universally reliable one — it does not fire at all under
-    // CDP-driven viewport changes, and a phone ROTATING is exactly this path.
-    // applyPhoneChrome early-returns when the state is unchanged, so calling it
-    // on every resize costs a comparison.
-    window.addEventListener('resize', () => this.applyPhoneChrome(window.innerWidth <= 700))
+    this.topbar = bar
+    this.fitTopbar()
+    // A ResizeObserver on the bar itself is the primary width signal. It fires
+    // for every viewport change (matchMedia change events do not fire at all
+    // under CDP-driven viewport changes, and a phone ROTATING is exactly this
+    // path); the plain resize listener is belt and braces on top. fitTopbar
+    // is idempotent, so the overlap costs a few reads.
+    this.barRO?.disconnect()
+    this.barRO = new ResizeObserver(() => this.fitTopbar())
+    this.barRO.observe(bar)
+    window.addEventListener('resize', () => this.fitTopbar())
+    // The bar's CONTENT changes width too, at a constant viewport (avatars
+    // join, the update chip appears, the file chip fills in, the "Saved" tag
+    // flashes), and each of these used to clip the end of the bar. fitTopbar
+    // drops the records its own mutations queue, so this cannot loop.
+    this.barMO?.disconnect()
+    this.barMO = new MutationObserver(() => this.fitTopbar())
+    this.barMO.observe(bar, {
+      childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['style', 'hidden'],
+    })
 
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
@@ -571,11 +585,13 @@ export class Editor {
   } | null = null
 
   /**
-   * Fold the topbar into menus on a phone, and unfold it again on a wide
-   * window. REPARENTS the existing buttons rather than building phone copies:
-   * a duplicate would need its own listeners and would desync from live state
-   * (the dirty dot lives ON the save button; the comment button carries an
-   * armed class). Moving a node keeps all of that by construction.
+   * Fold the topbar into menus, and unfold it again when there is room.
+   * Driven by fitTopbar (every phone, plus any window where even the icon
+   * tier overflows). REPARENTS the existing buttons rather than building
+   * phone copies: a duplicate would need its own listeners and would desync
+   * from live state (the dirty dot lives ON the save button; the comment
+   * button carries an armed class). Moving a node keeps all of that by
+   * construction.
    */
   private applyPhoneChrome(on: boolean) {
     const p = this.phoneChrome
@@ -642,7 +658,59 @@ export class Editor {
   }
 
   private phoneChromeOn: boolean | null = null
-  private phoneQuery: MediaQueryList | null = null
+  private topbar: HTMLElement | null = null
+  private barRO: ResizeObserver | null = null
+  private barMO: MutationObserver | null = null
+
+  /**
+   * Size the topbar by MEASURING it, not by width breakpoints. Breakpoints
+   * in px were wrong here: browser zoom, OS text scaling, wider translations
+   * and live content (avatars, the update chip) all change how much room the
+   * same buttons need at the same viewport width, and each of those cases
+   * used to clip the end of the bar. Instead, start from the widest layout
+   * and step down a tier while the bar still overflows its own box. First
+   * ed-bar-compact hides the button labels, then ed-bar-tight drops the
+   * wordmark, then ed-bar-fold moves buttons into menus (applyPhoneChrome).
+   */
+  private fitTopbar() {
+    const bar = this.topbar
+    if (!bar || !bar.isConnected) return
+    const tiers = ['ed-bar-compact', 'ed-bar-tight', 'ed-bar-fold']
+    // Phones fold unconditionally. The 700px media query is also what turns
+    // the panels into overlay drawers, and the folded bar belongs with it.
+    if (window.innerWidth <= 700) {
+      bar.classList.add(...tiers)
+      this.applyPhoneChrome(true)
+      this.barMO?.takeRecords()
+      return
+    }
+    // Re-fitting starts by unfolding, which reparents buttons and would slam
+    // shut a dropdown the user is reading. Skip while one is open; the next
+    // resize or content change runs this again.
+    if (bar.querySelector('.ed-dropdown.open')) return
+    // scrollWidth counts content that sticks out of the padding box even with
+    // overflow visible, so "scrollWidth > clientWidth" IS the clipped-buttons
+    // condition (ed-root clips whatever leaks). The 1px slack absorbs
+    // subpixel rounding at fractional zoom levels.
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // The title input is the bar's only shrinkable item, so flexbox crushes
+    // it toward its 48px floor before anything overflows. Waiting for hard
+    // overflow would mean full button labels beside an unusable title, so
+    // step down while the title is squeezed badly, not only on true overflow.
+    const title = bar.querySelector<HTMLElement>('.ed-title')
+    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 120)
+    bar.classList.remove(...tiers)
+    this.applyPhoneChrome(false)
+    if (cramped()) bar.classList.add('ed-bar-compact')
+    if (cramped()) bar.classList.add('ed-bar-tight')
+    if (overflow()) {
+      bar.classList.add('ed-bar-fold')
+      this.applyPhoneChrome(true)
+    }
+    // the class flips and reparenting above queued mutation records of their
+    // own; drop them, or the observer re-runs this forever
+    this.barMO?.takeRecords()
+  }
 
   togglePanel(side: 'left' | 'right') {
     const el = side === 'left' ? this.sidebar : this.props
@@ -733,7 +801,7 @@ export class Editor {
         t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
         () => void this.openVersionHistory())
       item(ICONS.code, t('Copy document JSON'),
-        t('Copies this deck as plain JSON — paste it into an AI chat or any tool, then bring the edited JSON back here.'),
+        t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
         () => void this.copyDocJson())
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
@@ -789,19 +857,16 @@ export class Editor {
     const blank = builtinLayouts().find((l) => l.id === 'layout-blank')
     if (!blank) return
     this.canvas.commitTextEdit() // a live text edit would commit ONTO the new slide
-    this.store.select([])
     this.store.commit(() => {
       this.store.doc.slides = [instantiateLayout(blank)]
     }, 'slides')
-    this.store.goTo(0)
-    this.store.emit('current')
   }
 
   /** A sealed hand-out: present-only player file, no editor, no live session. */
   private async savePresentationPackage() {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.readonly = true
-    delete clone.collab // a sealed package must not join (or leak) the live room
+    stripCollabSecrets(clone) // a sealed package must not join (or leak) the live room
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'presentonly' })
       if (ok) this.toast(t('Presentation package saved — it opens straight into the show'))
@@ -822,9 +887,7 @@ export class Editor {
     }
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.collab = { ...c, role: 'reader', on: true, sync: undefined }
-    delete clone.collab.writerPriv // the muzzle — no write capability travels
-    delete clone.collab.ownerPriv // v2: neither the owner key…
-    delete clone.collab.invite //    …nor any invite (delegation) material
+    stripCollabSecrets(clone, { keepRoom: true })
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' })
       if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
@@ -848,8 +911,12 @@ export class Editor {
     this.canvas.commitTextEdit()
     this.session?.stampInto(this.store.doc) // copies rejoin as true forks
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    // Strip FIRST, then delegate: the invite is the only private material an
+    // editor copy is allowed to carry. A v2 room is verified through the
+    // owner→invite→member chain, so a stray `writerPriv` (room-wide write key
+    // from a pre-v2 mint) would be a second, UNREVOKABLE way in.
+    stripCollabSecrets(clone, { keepRoom: true })
     clone.collab!.invite = await mintInvite(c.ownerPriv, 'writer')
-    delete clone.collab!.ownerPriv
     clone.collab!.on = true
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' })
@@ -859,9 +926,19 @@ export class Editor {
     }
   }
 
+  /**
+   * The document as loose data (the AI/tooling round-trip). It leaves WITHOUT
+   * the live session: this text is pasted into chats, tickets and scratch
+   * files, and `collab` is a bearer capability — the room key decrypts every
+   * frame and blob the relay holds, and the private halves grant writing and
+   * member revocation on top. Nothing about the round-trip needs a room, and
+   * openReplaceJson keeps THIS document's, so dropping the block costs nothing.
+   */
   private async copyDocJson() {
+    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
+    stripCollabSecrets(clone)
     try {
-      await navigator.clipboard.writeText(JSON.stringify(this.store.doc))
+      await navigator.clipboard.writeText(JSON.stringify(clone))
       this.toast(t('Document JSON copied'))
     } catch {
       this.toast(t('Couldn’t access the clipboard'))
@@ -885,8 +962,22 @@ export class Editor {
     applyB.className = 'ed-btn ed-btn-primary'
     applyB.textContent = t('Apply')
     applyB.addEventListener('click', () => {
-      const ok = (window as unknown as { bento?: { loadDoc?: (j: string) => boolean } }).bento?.loadDoc?.(ta.value)
-      if (ok) {
+      // parseDoc + replaceDoc rather than window.bento.loadDoc (which is the
+      // same two calls) because the collab decision has to be made BEFORE the
+      // swap: replaceDoc's events reach the sync session synchronously, and it
+      // re-attaches to whatever `collab` the new document holds.
+      //
+      // The live session belongs to THIS document, not to the pasted text. The
+      // copy side sends no collab at all, so adopting the pasted one would
+      // either wipe the user's room credentials (paste of our own JSON) or
+      // silently move the deck into a room that came from somewhere else.
+      // Content is imported; identity and capability are not.
+      const next = parseDoc(ta.value)
+      if (next) {
+        const keep = this.store.doc.collab
+        if (keep) next.collab = keep
+        else delete next.collab
+        this.store.replaceDoc(next)
         this.toast(t('Document replaced — ⌘Z undoes'))
         overlay.remove()
       } else {
@@ -974,10 +1065,14 @@ export class Editor {
   private async saveAsTemplate() {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     clone.template = true
-    delete clone.collab // instances mint their own credentials
+    stripCollabSecrets(clone) // instances mint their own credentials
     delete (clone as { docId?: string }).docId
     try {
-      const ok = await writeUpdatedFileAs(serializeFile(clone), clone, { suffix: 'template' })
+      // serializeAuto, never serializeFile: a template is the copy people hand
+      // around, and a password-protected deck saved as one wrote its body in
+      // PLAINTEXT while the preview veto still made the file thumbnail as
+      // locked — it looked protected and was readable in any text editor.
+      const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'template' })
       if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
     } catch (err) {
       console.error(err)
@@ -1455,6 +1550,14 @@ export class Editor {
       const parentIdx = this.store.doc.slides.findIndex((s) => s.id === slide.stateOf)
       num.textContent = slide.name ?? `⤷ ${parentIdx + 1}`
       num.title = `Interactive state of slide ${parentIdx + 1} — reached via links while presenting`
+    } else if (slide.hidden) {
+      // The sidebar shows what the AUDIENCE would count. With the default
+      // numbering a hidden slide has no number at all, so show the marker
+      // alone; with office-suite numbering it keeps one, struck through — the
+      // same affordance PowerPoint uses. Either way it must be obvious at a
+      // glance, because a slide you forgot you hid is found mid-presentation.
+      num.textContent = paginates(slide, this.store.doc) ? String(this.linearNumber(i)) : '—'
+      num.title = t('Hidden — skipped while presenting and left out of PDF export')
     } else {
       num.textContent = String(this.linearNumber(i))
     }
@@ -1479,7 +1582,7 @@ export class Editor {
 
   /** 1-based position among non-state slides (what the audience counts). */
   private linearNumber(i: number): number {
-    return this.store.doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
+    return this.store.doc.slides.slice(0, i + 1).filter((s) => paginates(s, this.store.doc)).length
   }
 
   private rebuildSidebar() {
@@ -1493,6 +1596,7 @@ export class Editor {
       if (!slide.stateOf) this.sidebar.appendChild(this.insertGap(i))
       const item = this.makeThumb(slide, i, !!slide.stateOf)
       if (slide.stateOf) item.classList.add('ed-thumb-state')
+      if (slide.hidden) item.classList.add('ed-thumb-hidden')
       this.sidebar.appendChild(item)
     })
     this.sidebar.appendChild(this.insertGap(slides.length))
@@ -1611,6 +1715,14 @@ export class Editor {
   }
 
   private wireThumbDrag(item: HTMLElement, index: number) {
+    // Select on press, before the browser starts native dragging. Waiting for
+    // click/dragstart leaves Moveable's previous canvas target live while the
+    // pointer crosses the workspace.
+    item.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0 || (ev.target instanceof Element && ev.target.closest('.ed-thumb-tools'))) return
+      ev.stopPropagation() // keep the canvas Moveable gesture controller out
+      this.store.goTo(index)
+    })
     item.addEventListener('dragstart', (ev) => {
       ev.dataTransfer!.setData('text/bento-slide', String(index))
       ev.dataTransfer!.effectAllowed = 'move'
@@ -1629,8 +1741,6 @@ export class Editor {
         const [moved] = this.store.doc.slides.splice(from, 1)
         this.store.doc.slides.splice(index, 0, moved)
       }, 'slides')
-      this.store.currentIndex = index
-      this.store.emit('current')
     })
   }
 
@@ -1716,14 +1826,13 @@ export class Editor {
         }
       }
     }, 'slides')
-    this.store.goTo(Math.min(i, this.store.doc.slides.length - 1))
-    this.store.emit('current')
   }
 
   /**
    * Export the deck to PDF via the browser's print pipeline: every linear
-   * slide becomes one exact 1600×900 page (states are reachable only through
-   * interaction, so they stay out of the paper trail).
+   * slide becomes one exact 1600×900 page. Anything outside the linear flow
+   * stays off the paper: a state is reachable only through interaction, and a
+   * hidden slide is material the audience was not meant to be handed.
    */
   exportPdf() {
     this.canvas.commitTextEdit()
@@ -1736,7 +1845,7 @@ export class Editor {
     pageCss.textContent = `@page { size: 1600px ${pageH}px; margin: 0; } #bento-print .bp-page { height: ${pageH}px; }`
     box.appendChild(pageCss)
     for (const slide of this.store.doc.slides) {
-      if (slide.stateOf) continue
+      if (!inLinearFlow(slide)) continue
       const page = div('bp-page')
       const surface = renderSlide(slide, this.store.doc, { svgAsImage: true, hidePlaceholders: true })
       // normalise to the print page size regardless of doc size
@@ -2452,13 +2561,21 @@ export class Editor {
   }
 
   private savedTimer = 0
+  private savedHideTimer = 0
   private flashSaved(message = t('Saved')) {
     let tag = document.querySelector<HTMLElement>('.ed-autosaved')
     if (!tag) { tag = div('ed-autosaved'); document.querySelector('.ed-topbar .ed-title')?.after(tag) }
     tag.textContent = message
+    // hidden while idle: at opacity 0 the tag still held its width, so after
+    // the first backup the title permanently lost the space this text needs
+    tag.hidden = false
+    void tag.offsetWidth // paint a frame at opacity 0 so the fade-in runs
     tag.classList.add('show')
     clearTimeout(this.savedTimer)
+    clearTimeout(this.savedHideTimer)
     this.savedTimer = window.setTimeout(() => tag!.classList.remove('show'), 1400)
+    // leave layout only after the 0.25s fade-out has finished
+    this.savedHideTimer = window.setTimeout(() => { tag!.hidden = true }, 1700)
   }
 
   async save(forcePicker: boolean) {
@@ -2726,7 +2843,7 @@ export class Editor {
         }
         const actions = div('ed-about-actions')
         const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
-        const done = () => {
+        const done = (outcome: InPlaceOutcome) => {
           status.textContent = ''
           const after = div('ed-about-update')
           status.appendChild(after)
@@ -2734,9 +2851,14 @@ export class Editor {
           ok.textContent = t('Updated to v{v} on disk.', { v: release.version })
           after.appendChild(ok)
           const note = div('ed-about-notes')
-          note.textContent = canUpdateInPlace()
-            ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
-            : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
+          // Say where the rollback actually went. It lands beside the document
+          // with a host installed and in the downloads folder without one, and
+          // a backup nobody can find is not much of a backup.
+          note.textContent = outcome.backup === 'beside'
+            ? t('This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.', { v: APP_VERSION })
+            : outcome.backup === 'downloaded'
+              ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
+              : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
           after.appendChild(note)
           const reloadB = document.createElement('button')
           reloadB.className = 'ed-btn ed-btn-primary'
@@ -2780,7 +2902,7 @@ export class Editor {
           try {
             this.session?.stampInto(this.store.doc)
             const written = await applyUpdateInPlace(release, this.store.doc)
-            if (written) done()
+            if (written) done(written)
             else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
           } catch (err: any) { fail(err) }
         })
@@ -2809,6 +2931,24 @@ export class Editor {
     row.appendChild(checkB)
     box.append(row, status)
 
+    // Appearance — a VIEWER preference, so it sits with the others (language,
+    // auto-update) rather than anywhere near the document's own settings.
+    // "Auto" is first and is the default: most people want their machine's
+    // choice, and the explicit options exist for the ones who do not.
+    const themeRow = document.createElement('label')
+    themeRow.className = 'ed-about-auto'
+    const themeSel = document.createElement('select')
+    for (const c of THEME_CHOICES) {
+      const o = document.createElement('option')
+      o.value = c
+      o.textContent = c === 'auto' ? t('Match my system') : c === 'light' ? t('Light') : t('Dark')
+      if (c === themeChoice()) o.selected = true
+      themeSel.appendChild(o)
+    }
+    themeSel.addEventListener('change', () => setTheme(themeSel.value as never))
+    themeRow.append(document.createTextNode(t('Appearance') + ' '), themeSel)
+    box.appendChild(themeRow)
+
     const autoRow = document.createElement('label')
     autoRow.className = 'ed-about-auto'
     const autoCb = document.createElement('input')
@@ -2827,7 +2967,11 @@ export class Editor {
     offCb.type = 'checkbox'
     offCb.checked = offlineEnabled()
     offCb.addEventListener('change', () => {
-      setOffline(offCb.checked)
+      // setOffline reports whether the preference PERSISTED. It holds for this
+      // session either way (net.ts keeps it in memory), but a switch that
+      // silently forgets itself on reload has to say so — it used to show
+      // "on" over a setting that had never been stored.
+      const stuck = setOffline(offCb.checked)
       if (offCb.checked) {
         if (this.session) disconnectOnline(this.session)
       } else {
@@ -2835,9 +2979,11 @@ export class Editor {
       }
       this.wireOnlineStatus()
       this.toast(
-        offCb.checked
-          ? t('Offline mode on — nothing leaves this computer')
-          : t('Offline mode off — online features re-enabled'),
+        !stuck
+          ? t('Offline mode is on for this tab, but could not be saved — this browser is blocking site data, so it will not survive a reload')
+          : offCb.checked
+            ? t('Offline mode on — nothing leaves this computer')
+            : t('Offline mode off — online features re-enabled'),
       )
     })
     offRow.append(offCb, document.createTextNode(' ' + t('Offline mode — block all network features (updates, online collaboration)')))
@@ -2975,6 +3121,31 @@ function releaseNotes(notes: string): HTMLElement {
     box.appendChild(item)
   }
   return box
+}
+
+/**
+ * Take the live session out of a copy that is about to leave this machine.
+ * ONE list, in one place: every field under `collab` is a bearer capability,
+ * so a hand-out that forgets one of them grants the recipient write access to
+ * the room, the power to revoke its members, or the ability to decrypt every
+ * frame and blob the relay has ever stored — and the file looks completely
+ * ordinary afterwards. Divergent per-export copies of this list are how one
+ * export path ends up leaking what the other three strip.
+ *
+ * The default is to drop the block outright (sealed packages, templates, the
+ * JSON on the clipboard: none of them may join anything). `keepRoom` is for
+ * the copies that are MEANT to follow the session — they keep the room, the
+ * symmetric read key and the public keys, and lose only the private halves.
+ */
+function stripCollabSecrets(doc: import('../model').BentoDoc, opts: { keepRoom?: boolean } = {}) {
+  if (!doc.collab) return
+  if (!opts.keepRoom) {
+    delete doc.collab
+    return
+  }
+  delete doc.collab.writerPriv // the muzzle — no write capability travels
+  delete doc.collab.ownerPriv // v2: neither the owner key…
+  delete doc.collab.invite //    …nor any invite (delegation) material
 }
 
 /** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */

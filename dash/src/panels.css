@@ -1,0 +1,339 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Side panels — dash's half of the suite's shared chrome.
+
+   The geometry is slides' (slides/src/styles.css `.ed-sidebar` / `.ed-props` /
+   `.ed-section` / `.ed-row` / `.ed-resizer`), copied to the pixel: 11px
+   uppercase section headers at 0.07em, 12.5px rows with a 110px control, 8px
+   gaps, 6px control radii, a 5px resizer strip and a 16×44 chevron docked to
+   the screen edge when its panel is shut. The COLOURS come from dash's own
+   :root, so the panels sit against dash's grid rather than importing slides'
+   palette wholesale. Two apps that agree on spacing and differ on hue read as
+   one product; the reverse does not. */
+
+/* ————— layout ————— */
+
+/* Everything that was already in .dx-body — the grid and the chart — moves in
+   here at mount, so the panels bracket BOTH rather than just the grid. */
+.dp-centre {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+/* styles.css stacks .dx-body on a narrow window so the chart sits UNDER the
+   grid. The panels are the columns now, so that flip moves down one level.
+   `#app` gives these the specificity to win regardless of stylesheet order —
+   which import order decides, and import order is not something a rule this
+   load-bearing should depend on. */
+@media (max-width: 760px) {
+  #app .dx-body { flex-direction: row; }
+  #app .dp-centre { flex-direction: column; }
+}
+
+/* ————— phones: the panels become DRAWERS —————
+   As flex siblings, two 220px panels plus their resizers claim 450px of a
+   390px screen: MEASURED, document.body.scrollWidth was 460 against a
+   clientWidth of 390, so the whole app grew a horizontal scrollbar and the
+   grid — the thing you came for — was the smallest region on screen.
+   panels.ts already shuts both panels at BOOT on a narrow window, which is why
+   this never showed up on a real phone; it shows up the moment a desktop window
+   is narrowed or a tablet is rotated, because that path runs once and never
+   again. Overlaying costs no layout width at all, so the grid keeps the full
+   screen whether a drawer is open or shut. slides made the same move at the
+   same breakpoint, and for the same reason.
+
+   699 and not 700, because panels.ts tests `vw < PHONE_W` with PHONE_W = 700 —
+   so 700 is a DESKTOP there. At `max-width: 700px` the two definitions
+   disagreed on exactly one pixel, and on that pixel a fresh load left both
+   panels open AND floating: two overlay drawers covering a 700px window, with
+   the grid a sliver between them. Breakpoints that mean the same thing have to
+   BE the same number. */
+@media (max-width: 699px) {
+  #app .dx-body { position: relative; }
+  #app .dp-panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 40;
+    box-shadow: var(--shadow-pop);
+  }
+  #app .dp-left { left: 0; }
+  #app .dp-right { right: 0; }
+  /* a shut drawer casts no shadow, or the closed edge draws a grey smear */
+  #app .dp-panel.dp-shut { box-shadow: none; }
+
+  /* Both chevrons DOCK now, open or shut. With the panels floating, the two
+     resizer strips are the only things left in flow, so they sit hard against
+     the screen edges — and a 16px chevron centred on a 5px rail then hung 5.5px
+     past the viewport. Measured: body.scrollWidth 396 against clientWidth 390,
+     a horizontal scrollbar for six pixels of decoration. These are the same
+     rules the shut state already used; the phone just always wants them. */
+  #app .dp-panel + .dp-resizer .dp-toggle {
+    left: 0;
+    transform: translateY(-50%);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+  #app .dp-resizer:has(+ .dp-panel) .dp-toggle {
+    left: auto;
+    right: 0;
+    transform: translateY(-50%);
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
+
+.dp-panel {
+  width: var(--dp-w, 220px);
+  flex: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  background: var(--surface);
+  padding: 12px;
+  transition: width 0.18s ease, padding 0.18s ease;
+}
+.dp-left { border-right: 1px solid var(--line); }
+.dp-right { border-left: 1px solid var(--line); padding: 14px; }
+
+.dp-panel.dp-shut {
+  width: 0;
+  min-width: 0;             /* flex items floor at min-content without this */
+  padding-left: 0;
+  padding-right: 0;
+  border-width: 0;
+  overflow: hidden;
+}
+.dp-noanim { transition: none !important; }
+
+/* ————— resizer strips ————— */
+
+.dp-resizer {
+  position: relative;
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s ease 0.08s;
+}
+.dp-resizer:hover,
+body.dp-resizing .dp-resizer { background: rgb(247 166 0 / 0.45); }
+body.dp-resizing { cursor: col-resize; user-select: none; }
+/* against a shut panel the strip carries nothing but the reopen chevron */
+.dp-panel.dp-shut + .dp-resizer,
+.dp-resizer:has(+ .dp-panel.dp-shut) { cursor: default; }
+.dp-panel.dp-shut + .dp-resizer:hover,
+.dp-resizer:has(+ .dp-panel.dp-shut):hover { background: transparent; }
+
+.dp-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font: 11px/1 inherit;
+  padding: 0;
+  cursor: pointer;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px light-dark(rgb(20 30 45 / 0.12), rgb(0 0 0 / 0.45));
+}
+.dp-toggle:hover { color: var(--ink); border-color: var(--line-strong); }
+/* shut: the chevron pins fully on-screen, docked to the edge like a drawer pull */
+.dp-panel.dp-shut + .dp-resizer .dp-toggle {
+  left: 0;
+  transform: translateY(-50%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.dp-resizer:has(+ .dp-panel.dp-shut) .dp-toggle {
+  left: auto;
+  right: 0;
+  transform: translateY(-50%);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* ————— sections ————— */
+
+.dp-section {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 18px 0 8px;
+}
+.dp-section:first-child { margin-top: 2px; }
+
+.dp-sec-toggle {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-left: 14px;
+}
+.dp-sec-toggle::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transform: translateY(-50%) rotate(90deg);
+  transition: transform 0.12s ease;
+  opacity: 0.55;
+}
+.dp-sec-toggle.closed::before { transform: translateY(-50%); }
+.dp-sec-toggle:hover { color: var(--ink); }
+.dp-section-body { display: flex; flex-direction: column; }
+
+/* ————— rows ————— */
+
+.dp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.dp-row > span:first-child { flex: none; color: var(--muted); }
+.dp-row input[type='text'],
+.dp-row input[type='number'],
+.dp-row select {
+  width: 110px;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.dp-row input:focus,
+.dp-row select:focus { outline: none; border-color: var(--accent); }
+.dp-row .dp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.dp-row input[type='checkbox'] { width: auto; accent-color: var(--accent); margin: 0; }
+.dp-row-ro { cursor: default; }
+.dp-value { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.dp-note {
+  margin: -2px 0 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.dp-empty { font-size: 12.5px; color: var(--muted); }
+
+/* ————— buttons ————— */
+
+.dp-btn {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dp-btn:hover { background: var(--hover); border-color: var(--muted); }
+.dp-btn[disabled] { opacity: 0.45; cursor: default; }
+.dp-block { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+.dp-add {
+  width: 100%;
+  margin-top: 8px;
+  border: 1.5px dashed var(--line-strong);
+  color: var(--muted);
+  text-align: center;
+}
+.dp-add:hover { color: var(--ink); }
+
+/* ————— the sheet list ————— */
+
+.dp-sheet {
+  position: relative;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: var(--surface);
+  user-select: none;
+}
+.dp-sheet:hover { border-color: var(--line-strong); }
+.dp-sheet.active { border-color: var(--accent); background: var(--accent-wash); }
+.dp-sheet-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* leave room for the hover tools, or a long name slides under the ✕ */
+  padding-right: 18px;
+}
+.dp-sheet-meta {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* MEASURED at 4.2:1 and fixed: --muted is sized for a white card, and on the
+   active card's warm wash it dropped under AA. The row count is the one thing
+   on that card a reader checks against the grid, so it takes full ink there —
+   the size difference still says it is a caption. */
+.dp-sheet.active .dp-sheet-meta { color: var(--ink); }
+
+/* a canvas sheet is really there and this build cannot open it — greyed, not
+   hidden, because a sheet that looks deleted is worse than one that looks inert */
+.dp-sheet-off { cursor: default; opacity: 0.55; }
+.dp-sheet-off:hover { border-color: var(--line); }
+
+.dp-sheet-tools {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: none;
+}
+.dp-sheet:hover .dp-sheet-tools { display: block; }
+.dp-icon {
+  padding: 0 5px;
+  line-height: 18px;
+  font-size: 11px;
+  color: var(--muted);
+  border-color: transparent;
+  /* the tools float OVER a sheet card, so the wash has to be the card's own
+     surface rather than a hard white that would punch a hole in a dark one */
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+.dp-icon:hover { color: var(--err-ink); border-color: var(--line-strong); background: var(--surface); }
+
+.dp-sheet-rename {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.dp-sheet-rename:focus { outline: none; }

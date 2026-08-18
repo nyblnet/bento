@@ -1,0 +1,153 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The About dialog. Separate from styles.css because it is a whole surface
+   nothing else shares — but the same tokens, so it inherits a theme change.
+
+   Vite concatenates every imported stylesheet into ONE <style> in head, which
+   is what postbuild-compress deflates (it takes the first <style> in head and
+   would leave a second one as plaintext). So this file must be IMPORTED, never
+   linked, and nothing here may depend on landing after styles.css in the
+   cascade — order follows the module graph, not intent.
+
+   Which is exactly why the shared radii/shadows/type sizes are CUSTOM
+   PROPERTIES and not a base rule some file overrides: a var() resolves where
+   it is used, so --radius-xl means the same thing here whether this file lands
+   before or after the one that declares it. */
+
+.dx-about-back {
+  position: fixed;
+  inset: 0;
+  z-index: 10000; /* above .dx-pop (9999): a popover left open must not sit on top */
+  background: var(--scrim);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.dx-about {
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-dialog);
+  padding: 20px 22px 18px;
+  width: min(560px, 100%);
+  /* the notch, same rule as the top bar: the app pads its own chrome */
+  margin-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.dx-about h2 {
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 20px 0 8px;
+}
+.dx-about h2:first-child { margin-top: 0; }
+
+.dx-about-lede { margin: 0 0 10px; }
+.dx-about-lede b { font-weight: 650; }
+
+.dx-about-note {
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+
+.dx-about-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: var(--fs-ui);
+}
+.dx-about-row > span:first-child {
+  flex: 0 0 8.5rem;
+  color: var(--muted);
+}
+.dx-about-row > :last-child { flex: 1 1 auto; min-width: 0; }
+
+.dx-about-val {
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.dx-about-in,
+.dx-about select {
+  font: inherit;
+  font-size: var(--fs-ui);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 4px 7px;
+  background: var(--surface);
+  color: inherit;
+  width: 100%;
+}
+.dx-about-in:focus,
+.dx-about select:focus { outline: none; border-color: var(--accent); }
+.dx-about-in[disabled] { background: var(--panel); color: var(--muted); }
+
+.dx-about-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dx-about-paste {
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  width: 100%;
+  min-height: 9rem;
+  margin-top: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 8px;
+  resize: vertical;
+  background: var(--surface);
+  color: inherit;
+}
+.dx-about-paste:focus { outline: none; border-color: var(--accent); }
+
+.dx-about-vers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 30vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+.dx-about-ver {
+  font: inherit;
+  font-size: var(--fs-ui);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.dx-about-ver:hover { background: var(--hover); }
+.dx-about-ver span:first-child { flex: 1 1 auto; font-variant-numeric: tabular-nums; }
+.dx-about-ver span:last-child { color: var(--accent); }
+
+.dx-about-close { margin-top: 18px; }
+
+/* The wordmark and the version chip are the way in — say so on hover, since
+   neither looks like a control. */
+.dx-mark[data-about], .dx-ver[data-about] { cursor: pointer; }
+.dx-mark[data-about]:hover, .dx-ver[data-about]:hover { color: var(--accent); }
+.dx-mark[data-about]:focus-visible, .dx-ver[data-about]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

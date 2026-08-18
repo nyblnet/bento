@@ -1,0 +1,234 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Pivot table chrome. Co-located with pivot.ts, which imports it — the pattern
+   panels.ts already sets, so a rig stubs `.css` rather than the module moving
+   its import out (scripts/test-dash-panels.ts:42).
+
+   Variables come from styles.css and are never redefined here: a pivot that
+   carried its own palette would drift from the grid beside it on the first
+   theme change. In particular the rules use --grid-line and the header band
+   uses --grid-head, NOT the chrome greys: a pivot is a grid, it sits a few
+   hundred pixels from the real one, and the two have to be the same object at
+   a glance. It used --line and --panel, and read a shade lighter than the
+   sheet it summarised. */
+
+.dxp {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font: 13px/1.4 var(--ui, system-ui, sans-serif);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.dxp-scroll {
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.dxp-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  /* not `width: 100%`: a pivot is as wide as it is, and stretching it spreads
+     four columns across a monitor so that reading a row means a head turn */
+  width: max-content;
+  min-width: 100%;
+}
+
+.dxp-table th,
+.dxp-table td {
+  border-right: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+  padding: 0 10px;
+  height: var(--row-h);
+  white-space: nowrap;
+}
+
+.dxp-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--grid-head);
+  font-weight: 600;
+  text-align: left;
+  /* the sticky header loses its own border on scroll in every engine — the
+     shadow is what keeps the seam visible. 2px, matching .dg-head-row: this is
+     the same seam, and it has to be the same weight. */
+  box-shadow: inset 0 -2px 0 var(--line-strong);
+}
+
+.dxp-corner {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--grid-head);
+  color: var(--muted);
+  font-weight: 600;
+  vertical-align: bottom;
+}
+
+.dxp-rh {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg);
+  text-align: left;
+  font-weight: 400;
+}
+
+/* Numbers are right-aligned and TABULAR. Proportional digits make a column of
+   figures ragged, and a ragged column cannot be scanned for an order of
+   magnitude — which is the one thing a reader does with a pivot at a glance. */
+.dxp-c {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A GAP IS NOT A ZERO, and it must not read as one on screen either. An empty
+   cell tinted a shade off the background says "there is nothing here" where a
+   dash or a 0 would say something about the world. */
+.dxp-gap {
+  background: repeating-linear-gradient(
+    135deg, transparent, transparent 5px,
+    color-mix(in srgb, var(--line) 60%, transparent) 5px,
+    color-mix(in srgb, var(--line) 60%, transparent) 6px);
+}
+
+/* Values that could not be read as numbers were counted and not summed; the
+   corner mark is the only thing on screen that says the number is short. */
+.dxp-skipped {
+  background-image: linear-gradient(
+    225deg, color-mix(in srgb, var(--accent) 55%, transparent) 6px, transparent 6px);
+}
+
+.dxp-total,
+.dxp-subtotal,
+.dxp-grand {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--panel) 70%, var(--bg));
+}
+
+.dxp-r.dxp-grand td,
+.dxp-r.dxp-grand th {
+  border-top: 2px solid var(--line-strong);
+}
+
+.dxp-c[tabindex] {
+  cursor: pointer;
+}
+
+.dxp-c[tabindex]:hover,
+.dxp-c[tabindex]:focus-visible {
+  background: var(--sel);
+  outline: 1px solid var(--sel-ring);
+  outline-offset: -1px;
+}
+
+/* --- findings + notes ---------------------------------------------------- */
+
+/* the same shape as the top-level findings banner (.dx-findings): amber on a
+   warm tint, because they answer the same question — what did this decide for
+   me? Two different treatments for one idea is how a suite stops reading as one. */
+.dxp-findings {
+  border-left: 3px solid var(--accent);
+  background: var(--warn-bg);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 6px 10px;
+  margin: 0 0 6px;
+  font-size: var(--fs-ui);
+}
+
+.dxp-finding + .dxp-finding {
+  margin-top: 3px;
+}
+
+.dxp-note,
+.dxp-empty {
+  color: var(--muted);
+  margin: 6px 2px 0;
+  font-size: var(--fs-small);
+}
+
+/* --- drill-down ---------------------------------------------------------- */
+
+.dxp-drawer {
+  border-top: 2px solid var(--line-strong);
+  margin-top: 8px;
+  padding-top: 6px;
+  /* capped rather than free: the drawer explains the table above it, so it must
+     never push that table off screen */
+  max-height: 45vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dxp-drawer[hidden] {
+  display: none;
+}
+
+.dxp-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px 6px;
+}
+
+.dxp-drawer-title {
+  font-weight: 600;
+}
+
+.dxp-drawer-count {
+  color: var(--muted);
+  margin-inline-start: auto;
+}
+
+/* the same button as everywhere else in dash, at the same radius — this one
+   had grown its own 4px corners and a lighter border */
+.dxp-drawer-close {
+  font: inherit;
+  font-size: var(--fs-ui);
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.dxp-drawer-close:hover { background: var(--panel); color: var(--ink); }
+
+.dxp-drill-scroll {
+  overflow: auto;
+  min-height: 0;
+}
+
+.dxp-drill {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+}
+
+.dxp-drill th,
+.dxp-drill td {
+  border-right: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+  padding: 3px 8px;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.dxp-drill thead th {
+  position: sticky;
+  top: 0;
+  background: var(--grid-head);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--line-strong);
+}
+
+.dxp-drill-n {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

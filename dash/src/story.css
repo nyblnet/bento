@@ -1,0 +1,226 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Data story mode — the present overlay and the little authoring panel.
+
+   The overlay is DARK on BOTH themes, deliberately: the moment the room dims, a
+   white 1400px rectangle is the brightest object in it. slides' present overlay
+   makes the same call, and the two surfaces share this palette so a deck and a
+   workbook presented back to back do not flash at the audience. So the values
+   below are literal rather than tokens — this surface does not follow the
+   viewer's theme, it follows the room, and a `light-dark()` here would make a
+   presenter's light-theme preference reach the audience's screen.
+
+   The AUTHORING panel at the bottom of the file is the opposite: it belongs to
+   the editor, never to the show, so it is tokens throughout and it does follow
+   the theme.
+
+   Everything here is `position: fixed` and mounted on <body>, so it is immune
+   to the app's flex layout — and it carries `direction: ltr` because it renders
+   DOCUMENT content: PLATFORM §8's invariant is that a document never mirrors,
+   and every new document-rendering surface has to pin it for itself. */
+
+.ds-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  direction: ltr;
+  display: flex;
+  flex-direction: column;
+  background: #0e1420;
+  color: #e8edf5;
+  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  outline: none;
+}
+
+.ds-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  padding: 24px 32px 8px;
+  /* the chart is measured from this box, so it must not be a scroller —
+     a scrollbar appearing mid-morph would resize every remaining frame */
+  overflow: hidden;
+}
+.ds-stage > svg { width: 100%; height: 100%; display: block; }
+/* The stage is dark in every theme, and charts-lite defaults its label colour
+   to a mid grey sized for white paper — 3.3:1 against #0e1420. `fill` is a
+   presentation attribute, so this rule wins; the marks keep the document's own
+   palette. Literal, like everything else on this surface. */
+/* Same rule as the chart panel's, and for the same reason: override the
+   kernel's DEFAULT text colour, never a colour somebody chose. The presenter
+   stage is deliberately dark in both themes, so this value is literal. */
+.ds-stage svg text[fill="#6B7280"] { fill: #b9c4d3; }
+
+.ds-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: #7c8899;
+}
+
+/* ————— caption ————— */
+
+.ds-caption {
+  flex: 0 0 auto;
+  padding: 4px 40px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+}
+.ds-cap-text {
+  font-size: clamp(15px, 2.2vw, 26px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  max-width: 60ch;
+  /* Reserve the line even when empty, so stepping onto an uncaptioned step
+     does not jolt the chart upward by a line height. */
+  min-height: 1.4em;
+}
+.ds-cap-text.empty { opacity: 0; }
+
+.ds-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.ds-chip {
+  font-size: var(--fs-small);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(247, 166, 0, 0.16);
+  border: 1px solid rgba(247, 166, 0, 0.5);
+  color: #ffcf72;
+}
+
+/* ————— the bar ————— */
+
+.ds-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px max(8px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ds-bar .ds-dots { flex: 1 1 auto; display: flex; gap: 6px; align-items: center; }
+.ds-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s;
+}
+.ds-dot:hover { background: rgba(255, 255, 255, 0.45); }
+.ds-dot.on { background: var(--accent); transform: scale(1.35); }
+.ds-count { font-variant-numeric: tabular-nums; color: #8c99ad; font-size: var(--fs-small); }
+
+/* Same metrics as .dx-btn in styles.css — padding, radius, type size — and a
+   dark skin instead of a light one. The presenter overlay is the one surface in
+   dash that inverts, and inverting is ALL it should do: a button that also
+   changed shape and size would read as a different kind of control. */
+.ds-btn {
+  font: inherit;
+  font-size: var(--fs-ui);
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  cursor: pointer;
+}
+.ds-btn:hover { background: rgba(255, 255, 255, 0.14); }
+.ds-btn[disabled] { opacity: 0.4; cursor: default; }
+
+/* Reduced motion is a VIEWER preference (see story.ts). The class kills CSS
+   motion as well as the tweens — a dot that still springs is motion the reader
+   asked not to have. */
+.ds-overlay.reduce-motion .ds-dot { transition: none; }
+.ds-overlay.reduce-motion .ds-dot.on { transform: none; }
+.ds-overlay.reduce-motion [data-nav='motion'] {
+  background: rgba(247, 166, 0, 0.22);
+  border-color: rgba(247, 166, 0, 0.55);
+}
+
+/* ————— the authoring panel ————— */
+
+/* The AUTHORING panel is light — it belongs to the editor, not to the show —
+   so it is styled as a floating surface exactly like the save menu and the
+   right-click popovers: same radius, same shadow, same 13px rows. */
+.ds-editor {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 8500;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(60vh, 560px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-ui);
+}
+.ds-ed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ds-ed-head .ds-btn,
+.ds-ed-foot .ds-btn,
+.ds-step .ds-btn {
+  background: var(--surface);
+  color: inherit;
+  border-color: var(--line-strong);
+}
+.ds-ed-head .ds-btn:hover,
+.ds-ed-foot .ds-btn:hover,
+.ds-step .ds-btn:hover { background: var(--hover); }
+.ds-primary { border-color: var(--accent) !important; }
+
+.ds-steps {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+.ds-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--radius);
+}
+.ds-step:hover { background: var(--hover); }
+.ds-n {
+  flex: 0 0 auto;
+  width: 20px;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ds-fields { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ds-cap-in {
+  font: inherit;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+}
+.ds-cap-in:hover { border-color: var(--line-strong); }
+.ds-cap-in:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.ds-meta { font-size: var(--fs-micro); color: var(--muted); padding-left: 6px; }
+.ds-warn { color: var(--err-ink); font-weight: 600; }
+.ds-hint { margin: 0; padding: 14px 14px 6px; color: var(--muted); }
+.ds-ed-foot {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}

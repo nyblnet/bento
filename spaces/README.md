@@ -71,6 +71,7 @@ load contract and format additivity.
 | `src/model.ts` | the format, `buildIndex()` (tree, backlinks), id repair |
 | `src/sanitize.ts` | the inline allowlist — the only thing between a file someone mailed you and script execution |
 | `src/store.ts` | undo, and the **typing run** |
+| `src/calc.ts` | magic notes — the evaluator behind a line ending in `=`. No eval, ever |
 | `src/render.ts` | model → DOM, shared by the editor, reading view and print |
 | `src/highlight.ts` | the code lexer — text → `{kind, a, b}` ranges, no DOM, no strings |
 | `src/markdown.ts` | markdown → blocks, the folder tree → the page tree, `[[wikilinks]]` → `#p/` links. Pure and DOM-free, so the import is tested in node |

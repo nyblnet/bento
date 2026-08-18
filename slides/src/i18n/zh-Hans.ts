@@ -206,6 +206,7 @@ export const zhHans: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "此浏览器无法就地改写文件 — 新副本已存入下载",
   "This document": "此文档",
   "This file carries its own app — it works offline, forever, as is.": "此文件自带应用 — 离线可用，永久如此。",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "此窗口仍在运行 v{v} — 重新加载以完成。已在此文件旁保存 v{v} 备份。",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "此窗口仍在运行 v{v} — 重新加载以完成。已下载 v{v} 备份。",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "此窗口仍在运行 v{v}。若覆盖了当前打开的文件请重新加载；否则请打开您保存的文件。",
   "This window keeps running v{v} until you open the downloaded file.": "在打开下载的文件之前，此窗口将继续运行 v{v}。",
@@ -737,4 +738,10 @@ export const zhHans: Catalog = {
   "Zoom in and out": "放大与缩小",
   "Space-drag": "空格键+拖动",
   "Pan as well, if your mouse has a middle button": "如果鼠标有中键，也可以平移",
+  "Hide slide": "隐藏幻灯片",
+  "Number hidden slides": "为隐藏幻灯片编号",
+  "Hidden — skipped while presenting and left out of PDF export": "已隐藏 — 放映时跳过，且不包含在 PDF 导出中",
+  "Appearance": "外观",
+  "Match my system": "跟随系统",
+  "Dark": "深色",
 }

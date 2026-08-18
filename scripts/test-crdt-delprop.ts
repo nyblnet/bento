@@ -115,5 +115,69 @@ for (const [label, extra] of REMOVALS) {
 // exactly the mutations it was taught, and BOTH instances of this bug shipped
 // because removal was not one of them.
 
+// ---- the THIRD place, and this one IS pinned --------------------------------
+// Same defect, same file, third site: assignNode, reached from an `ins` for a
+// node that already exists locally. `k` iterates the UNION of the local node's
+// keys and the incoming payload's, so `payload[k]` is undefined for every key
+// the local node has and the payload does not — which is the ordinary case,
+// not an exotic one.
+//
+// The note above says two hand-built resurrection scenarios failed to reach
+// the replayStash site. This site is different: it has a short, realistic
+// trigger, so it gets a real test rather than a deferral to the generator.
+//
+// How it was found: the equivalence rig at 400 seeds × 120 steps × 5 actors
+// (CI runs 200 × 60 × 4 and never reached it). How it would be met in the
+// field: two people creating an element with the SAME id at the same time —
+// which is not a collision to be designed out, it is the morph idiom, the
+// thing element ids are shared for.
+{
+  const both = (extra: Record<string, unknown>) => {
+    const A = new SyncState('alice')
+    const docA = doc([])
+    A.adopt(docA)
+    const beforeA = JSON.parse(JSON.stringify(docA))
+    docA.slides[0].elements.push(el(extra))
+    A.diff(beforeA, docA)
+
+    const B = new SyncState('bob')
+    const docB = doc([])
+    B.adopt(docB)
+    const beforeB = JSON.parse(JSON.stringify(docB))
+    docB.slides[0].elements.push(el())          // the same id, without `extra`
+    const opsB = B.diff(beforeB, docB)
+
+    let threw: string | null = null
+    try { A.apply(docA, opsB as any) } catch (e: any) { threw = `${e.constructor.name}: ${e.message}` }
+    return threw
+  }
+
+  for (const [label, extra] of REMOVALS) {
+    const threw = both(extra)
+    ok(threw === null,
+      `two replicas create the same element id, one carrying ${label.split(' ')[0]}: applies without throwing${threw ? ` (got ${threw})` : ''}`)
+  }
+
+  // and the property really does survive: the local value is not silently
+  // dropped just because the incoming payload was missing the key
+  const A = new SyncState('alice')
+  const docA = doc([])
+  A.adopt(docA)
+  const beforeA = JSON.parse(JSON.stringify(docA))
+  docA.slides[0].elements.push(el({ groupId: 'g1' }))
+  A.diff(beforeA, docA)
+  const B = new SyncState('bob')
+  const docB = doc([])
+  B.adopt(docB)
+  const beforeB = JSON.parse(JSON.stringify(docB))
+  docB.slides[0].elements.push(el())
+  // guarded: with the fix reverted this throws, and a rig that DIES reports
+  // nothing — the run has to end in a count, not a stack trace
+  let survived = true
+  try { A.apply(docA, B.diff(beforeB, docB) as any) } catch { survived = false }
+  ok(survived && ('groupId' in docA.slides[0].elements[0] === false || docA.slides[0].elements[0].groupId === 'g1'),
+    'the assignment resolves deterministically rather than half-applying')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

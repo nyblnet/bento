@@ -9,7 +9,7 @@ import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
-import { morphKey } from './model'
+import { morphKey, paginates, inLinearFlow } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
@@ -46,7 +46,7 @@ export function startPresentation(
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
     section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
-    if (slide.stateOf) section.dataset.bentoState = '1' // dimmed in overview
+    if (!inLinearFlow(slide)) section.dataset.bentoState = '1' // dimmed in overview
     const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
     // reveal slides start with only the default hover set visible
     if (slide.hover?.type === 'reveal') applyRevealSet(surface, slide.hover.default ?? null, slide.hover.default)
@@ -64,7 +64,7 @@ export function startPresentation(
 
   // ——— state-aware linear navigation ———
   // Slides with stateOf are interactive states: linked-to, never walked-to.
-  const isState = (i: number) => !!doc.slides[i]?.stateOf
+  const isState = (i: number) => { const sl = doc.slides[i]; return !!sl && !inLinearFlow(sl) }
   const anchorOf = (i: number) => {
     const pid = doc.slides[i]?.stateOf
     const p = doc.slides.findIndex((s) => s.id === pid)
@@ -98,8 +98,8 @@ export function startPresentation(
     }
     return false
   }
-  const visibleIndex = (i: number) => doc.slides.slice(0, i + 1).filter((s) => !s.stateOf).length
-  const visibleTotal = doc.slides.filter((s) => !s.stateOf).length
+  const visibleIndex = (i: number) => doc.slides.slice(0, i + 1).filter((s) => paginates(s, doc)).length
+  const visibleTotal = doc.slides.filter((s) => paginates(s, doc)).length
   // real slide indices that appear in linear navigation (states are excluded) —
   // the presenter-view thumbnail rail and grid iterate this.
   const railIndices = doc.slides.map((_, i) => i).filter((i) => !isState(i))
