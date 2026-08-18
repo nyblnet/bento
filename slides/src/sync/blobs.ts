@@ -26,6 +26,10 @@
 const CHUNK = 4 * 1024 * 1024
 /** Must match the relay's MAX_BLOB. NOTE this bounds the ENCODED blob, not the
  *  plaintext — the relay measures what it receives. */
+// Every request in the app goes through the one chokepoint (kernel/src/net.ts)
+// so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
+import { netFetch } from '../../../kernel/src/net.ts'
+
 export const MAX_BLOB = 8 * 1024 * 1024
 const MAGIC = 0x4242 // 'BB'
 const HEADER = 16
@@ -238,7 +242,7 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
   if (encodedSize(bytes.length) > MAX_BLOB) return { ok: false, reason: 'too-large' }
   const key = await blobKey(rawRoomKey, bytes)
   try {
-    const head = await fetch(url(e, key), { method: 'HEAD' })
+    const head = await netFetch(url(e, key), { method: 'HEAD' })
     if (head.status === 200) {
       void cachePut(key, bytes)
       return { ok: true, key, deduped: true }
@@ -246,7 +250,7 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
     if (head.status === 501) return { ok: false, reason: 'unsupported' }
     if (head.status === 403) return { ok: false, reason: 'forbidden' }
     const body = await encodeBlob(rawRoomKey, bytes)
-    const res = await fetch(url(e, key), {
+    const res = await netFetch(url(e, key), {
       method: 'PUT', body: body as BodyInit,
       headers: { 'content-type': 'application/octet-stream' },
     })
@@ -264,17 +268,43 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
   }
 }
 
+/** Does `plain` actually hash to the address we asked for? One SHA-256 plus
+ *  one HMAC over bytes we have just decrypted anyway — negligible beside the
+ *  AES-GCM pass that produced them, and it runs once per fetch, not per use
+ *  (the cache is keyed by the same address). */
+async function addressMatches(rawRoomKey: Uint8Array, key: string, plain: Uint8Array): Promise<boolean> {
+  return (await blobKey(rawRoomKey, plain)) === key
+}
+
 /** Fetch and decrypt, cache-first. Null means "not available right now" —
- *  callers render a placeholder rather than a broken image, and may retry. */
+ *  callers render a placeholder rather than a broken image, and may retry.
+ *  A blob that fails its content-address check reads as unavailable too: a
+ *  placeholder is recoverable, the wrong picture is not. */
 export async function getBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, key: string): Promise<Uint8Array | null> {
   const hit = await cacheGet(key)
-  if (hit) return hit
   try {
-    const res = await fetch(url(e, key))
+    // The hit is checked as well, so a cache written before this verification
+    // existed (or edited under us in IndexedDB) heals: falling through re-fetches
+    // and cachePut, keyed by the address, overwrites the bad entry.
+    // INSIDE the try like the post-fetch check below: addressMatches can throw
+    // (measured — crypto.subtle.importKey('raw', new Uint8Array(0), HMAC) rejects
+    // with DataError on an empty room key), and the contract above promises null,
+    // not a rejection. session.resolveBlobs has try/finally and no catch, so a
+    // throw here escapes as an unhandled rejection.
+    if (hit && await addressMatches(rawRoomKey, key, hit)) return hit
+    const res = await netFetch(url(e, key))
     if (!res.ok) return null
     const enc = new Uint8Array(await res.arrayBuffer())
     const plain = await decodeBlob(rawRoomKey, enc)
-    if (plain) void cachePut(key, plain)
+    if (!plain) return null
+    // GCM proves someone holding the room key sealed these bytes. It does NOT
+    // prove they are the bytes this address names, and nothing else here did:
+    // the relay is free to answer address A with the room's blob B, and every
+    // check above passes. The picture silently becomes a different picture and
+    // cachePut writes the swap to disk permanently. The address is the only
+    // binding between reference and content, so verify it before both.
+    if (!await addressMatches(rawRoomKey, key, plain)) return null
+    void cachePut(key, plain)
     return plain
   } catch {
     return null

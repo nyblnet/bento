@@ -1,0 +1,230 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Dashboards. Colours come from dash's own :root (styles.css), so a tile sits
+   against the grid rather than importing a second palette — two surfaces that
+   agree on hue and spacing read as one product.
+
+   THE LAYOUT IS GRID UNITS, NOT PIXELS. `View.w` is a column count and a tile
+   carries x/y/w/h in those units, so the same document lays out on a laptop
+   and on a phone. The pixel height of a row is chrome and lives here; putting
+   it in the document would freeze one author's viewport into everyone else's
+   file. */
+
+.dbx {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  background: var(--panel);
+  /* the document never mirrors — PLATFORM §8: tiles carry x/y coordinates, so
+     a dashboard must lay out identically for an RTL reader */
+  direction: ltr;
+}
+
+.dbx-grid-wrap {
+  display: grid;
+  grid-template-columns: repeat(var(--dbx-cols, 12), minmax(0, 1fr));
+  grid-auto-rows: 92px;
+  gap: 10px;
+}
+
+/* A phone cannot honour a twelve-column arrangement, and squeezing it produces
+   tiles too small to read OR to press. Every tile spans the width and keeps
+   its row span, which preserves the author's ORDER — the part of the layout
+   that still means something at this size. */
+@media (max-width: 700px) {
+  .dbx-grid-wrap { grid-template-columns: 1fr; }
+  .dbx-tile { grid-column: 1 / -1 !important; }
+}
+
+.dbx-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.dbx-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 4px;
+  flex: 0 0 auto;
+}
+/* the same label as a panel section header and a chart-panel title: 11px,
+   uppercase, wide-tracked, muted. Three surfaces had three different answers. */
+.dbx-title {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A tile filtered by a click somewhere else has to SAY so. A number that
+   quietly answers a narrower question than the reader thinks is the whole
+   failure mode of cross-filtering. */
+.dbx-filtered { font-size: 9px; color: var(--accent); }
+
+.dbx-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 10px 8px;
+}
+
+.dbx-note {
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  padding-top: 4px;
+  flex: 0 0 auto;
+}
+
+/* ————— empty states —————
+   An empty tile says why it is empty. The alternative — an axis with no bars —
+   reads as zero, and zero is a number, and that number is wrong. */
+.dbx-empty,
+.dbx-blank {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: var(--fs-small);
+  color: var(--muted);
+  padding: 8px;
+}
+.dbx-blank { height: 100%; }
+
+.dbx-text { font-size: var(--fs-ui); padding: 4px 0; }
+
+/* ————— the selection bar ————— */
+.dbx-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px 10px;
+  font-size: var(--fs-small);
+}
+.dbx-chips-idle { color: var(--muted); }
+.dbx-chips-label { color: var(--muted); }
+.dbx-chip {
+  font: inherit;
+  font-size: var(--fs-small);
+  padding: 3px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--ink);
+  cursor: pointer;
+}
+.dbx-chip:hover { border-color: var(--ink); }
+.dbx-chip-clear { border-color: var(--line-strong); background: var(--bg); color: var(--muted); }
+
+/* ————— KPI ————— */
+.dbx-kpi .dbx-body { justify-content: center; }
+.dbx-value {
+  /* Sized to the BOX, not to taste. The tile is a fixed-height grid cell with
+     `overflow: hidden`, so a figure that wants more than its share is simply
+     cut — measured at 30px/33px: the value needed 34px of height in a 20px box
+     and 166px of width in 125px, and "£97,050.00" rendered as "£97,05" with
+     the descenders sliced off. A KPI tile that truncates its own number is
+     worse than one with smaller type, because the reader cannot tell it
+     happened.
+     `flex: 0 0 auto` stops the column squashing the line box below its own
+     line-height; `min-width: 0` is what lets the ellipsis actually engage
+     inside a flex child. */
+  flex: 0 0 auto;
+  min-width: 0;
+  font-size: clamp(18px, 2.2vw, 26px);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dbx-sub { font-size: var(--fs-small); color: var(--muted); padding-top: 2px; }
+/* Direction is a hue AND a sign in the text, never hue alone — a colour-blind
+   reader gets the same answer. */
+.dbx-up { color: var(--up-ink); }
+.dbx-down { color: var(--down-ink); }
+
+/* ————— charts ————— */
+.dbx-svg { flex: 1 1 auto; min-height: 0; width: 100%; overflow: visible; }
+.dbx-grid { stroke: var(--grid-line); stroke-width: 1; }
+.dbx-axis { stroke: var(--line-strong); stroke-width: 1; }
+.dbx-ytick { font-size: 9px; fill: var(--muted); text-anchor: end; }
+.dbx-xtick { font-size: 9px; fill: var(--muted); text-anchor: middle; }
+.dbx-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+
+/* The pick target is the whole band, so a category with no bar — a null, which
+   is a gap and not a zero — can still be clicked. Invisible, never absent. */
+.dbx-hit { fill: transparent; cursor: pointer; }
+.dbx-hit:hover { fill: var(--wash); }
+.dbx-band-on { fill: var(--sel); }
+.dbx-bar, .dbx-slice, .dbx-dot, .dbx-key { cursor: pointer; }
+/* Cross-highlight: what is NOT selected fades, rather than vanishing. A tile
+   that dropped its other categories would be a tile you cannot click your way
+   out of. */
+.dbx-dim { opacity: 0.28; }
+.dbx-slice-on { stroke: var(--ink); stroke-width: 1.5; }
+.dbx-swatch { rx: 2; }
+.dbx-keytext { font-size: 10px; fill: var(--ink); }
+
+.dbx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  padding-bottom: 2px;
+  flex: 0 0 auto;
+}
+.dbx-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; }
+
+/* ————— table tile ————— */
+.dbx-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dbx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+.dbx-table th {
+  position: sticky;
+  top: 0;
+  background: var(--grid-head);
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-strong);
+  padding: 3px 6px;
+  white-space: nowrap;
+}
+.dbx-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--grid-line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.dbx-table tr[data-tile] { cursor: pointer; }
+.dbx-table tr[data-tile]:hover td { background: var(--wash); }
+.dbx-row-on td { background: var(--sel); }
+
+/* Toggled from the topbar. `.dbx` sets no `display`, so the UA default for
+   [hidden] applies — but state it, because a later `display: flex` here would
+   silently un-hide the whole surface. */
+.dbx[hidden] { display: none; }

@@ -211,5 +211,31 @@ ok(DOC_BUDGET_DOWNLOAD < DOC_BUDGET_FSA,
 ok(!Object.keys({ FORMAT, FORMAT_VERSION }).includes('ROW_MAX'),
   'there is no row cap: rows are the wrong unit (1M x 12 is 65 MB; 1M x 2 is ~10 MB)')
 
+// ADDITIVITY OF THE SHEET KIND (PLATFORM §3). A build that has never heard of a
+// sheet kind must keep the file intact. This branch used to fall through, so
+// every non-canvas sheet came back as `kind: 'table'` with empty
+// rids/columns/data/steps bolted on — the sheet was rewritten into a different
+// thing and what made it one was dropped. Old builds are frozen code, so a file
+// from a newer dash has to survive a round trip through them untouched.
+{
+  const r = parseDoc(JSON.stringify({
+    format: 'bento/dash', version: 1, policy: 'bento-dash-1', docId: 'd', title: 't',
+    sheets: [
+      { id: 'p1', name: 'P', kind: 'pivot', pivot: { from: 's1', rows: ['region'] } },
+      { id: 'f1', name: 'F', kind: 'from-the-future', mystery: { a: 1 } },
+    ],
+  }))
+  ok(r.ok, 'a workbook of unknown sheet kinds still parses')
+  if (r.ok) {
+    const [p, f] = r.doc.sheets as unknown as Array<Record<string, unknown>>
+    ok(p.kind === 'pivot', 'an unrecognised kind is PRESERVED, not coerced to table')
+    ok(!!p.pivot, 'and the field that makes it that kind survives')
+    ok(!('rids' in p) && !('columns' in p) && !('data' in p),
+      'with no table scaffolding bolted on to a sheet that is not a table')
+    ok(f.kind === 'from-the-future' && JSON.stringify(f.mystery) === '{"a":1}',
+      'a kind this build has never heard of round-trips whole')
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

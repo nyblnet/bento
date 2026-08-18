@@ -30,7 +30,7 @@
 // an undo entry that undoes nothing. Planning first also makes the whole write
 // path testable in node, where there is no store and no DOM.
 
-import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid } from './model.ts'
+import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
@@ -64,22 +64,17 @@ export function findBlock(doc: SpacesDoc, id: string): BlockAt | null {
   return null
 }
 
-/** Every block nested under `id` on its page, at any depth. */
+/**
+ * Every block nested under `id`.
+ *
+ * Delegates to model.ts's ONE rule. It used to sweep the `parent` graph to a
+ * fixed point "rather than trusting the order", which is the right instinct and
+ * the wrong rule: on a merged document a `parent` cycle makes that sweep return
+ * the whole connected component INCLUDING `id` itself, so planRemoveBlocks
+ * would delete blocks the caller never named. The positional rule cannot cycle.
+ */
 function descendants(page: Page, id: string): Set<string> {
-  const out = new Set<string>()
-  let grew = true
-  // the array is pre-order, but a hand-written document need not be, so this
-  // sweeps to a fixed point rather than trusting the order
-  while (grew) {
-    grew = false
-    for (const b of page.blocks) {
-      if (b.parent && (b.parent === id || out.has(b.parent)) && !out.has(b.id)) {
-        out.add(b.id)
-        grew = true
-      }
-    }
-  }
-  return out
+  return descendantsOf(page, id)
 }
 
 /**

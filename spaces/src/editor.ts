@@ -8,7 +8,7 @@
 // and merging blocks can never re-mint an id, and ids are what links,
 // backlinks and (later) collaboration key on.
 
-import { type Block, newBlock, newPage } from './model'
+import { type Block, newBlock, newPage, effectiveParents } from './model'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
@@ -20,6 +20,7 @@ import {
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
+import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
 import { openAbout } from './about'
 import {
@@ -1370,6 +1371,91 @@ export class Editor {
     this.paintPage()
   }
 
+  /** the block whose ghost answer is currently showing, if any */
+  private ghostFor: string | null = null
+
+  private clearGhost(): void {
+    this.main.querySelectorAll('.sp-preview').forEach((n) => n.remove())
+    this.ghostFor = null
+  }
+
+  /**
+   * While you type, show what the answer WOULD be.
+   *
+   * The answer is not in the document yet and must not look as though it is:
+   * it renders muted, beside the line, and says how to keep it. Pressing Tab
+   * appends the `=` — so committing is one keystroke, and ignoring it is none,
+   * which is the right balance for something that appears while you are
+   * writing prose.
+   *
+   * Nothing is shown for a line that already asks (the real answer is there),
+   * for a line that does not fully parse, or for a bare number — `42` on its
+   * own is not a calculation anybody needs confirming.
+   */
+  private ghost(id: string, host: HTMLElement): void {
+    const s = this.store
+    if (this.ghostFor && this.ghostFor !== id) this.clearGhost()
+    const block = s.block(id)
+    const page = s.page
+    if (!block || !page) return
+    const line = textOf(host.innerHTML)
+    const holder = host.parentElement
+    if (!holder) return
+    holder.querySelectorAll('.sp-preview').forEach((n) => n.remove())
+    this.ghostFor = null
+    if (asksForAnswer(line) || !/[-+*/^%=]|\bin\b|\bof\b/.test(line)) return
+
+    const ctx = pageContext(page.blocks.map((x) => ({ id: x.id, text: textOf(x.html ?? '') })), id)
+    const v = evaluate(line, ctx)
+    // a bare number is not a calculation; neither is a line that only names a
+    // value already defined
+    if (!v || /^\s*[\d.,_]+\s*$/.test(line)) return
+
+    const g = document.createElement('span')
+    g.className = 'sp-preview'
+    g.contentEditable = 'false'
+    g.setAttribute('aria-hidden', 'true')
+    g.textContent = `= ${format(v, locale())}`
+    const kbd = document.createElement('kbd')
+    kbd.textContent = 'Tab'
+    g.appendChild(kbd)
+    holder.appendChild(g)
+    this.ghostFor = id
+  }
+
+  /**
+   * Keep the ghost answer: append the `=` that asks for it.
+   *
+   * The ANSWER is not written — only the question. That is the whole design:
+   * the document holds `budget * 0.3 =` and the number is derived every time
+   * the page is drawn, so changing `budget` above updates this line too.
+   * Writing the number here would freeze it, and a frozen number that no
+   * longer matches its own expression is worse than no number at all.
+   */
+  private commitAnswer(id: string): boolean {
+    const s = this.store
+    const b = s.block(id)
+    if (!b || s.readOnly) return false
+    const html = `${(b.html ?? '').replace(/\s+$/, '')} =`
+    s.commit(() => { b.html = html })
+    this.clearGhost()
+    this.paintPage()
+    afterPaint(() => {
+      const h = this.main.querySelector<HTMLElement>(`[data-edit="${CSS.escape(id)}"]`)
+      // caret at the END, not selecting the line: you asked for the answer,
+      // you did not ask to replace what you wrote
+      if (!h) return
+      h.focus()
+      const r = document.createRange()
+      r.selectNodeContents(h)
+      r.collapse(false)
+      const sel = getSelection()
+      sel?.removeAllRanges()
+      sel?.addRange(r)
+    })
+    return true
+  }
+
   /** Attach behaviour to a freshly painted page. */
   private wire(view: HTMLElement): void {
     const s = this.store
@@ -1408,9 +1494,11 @@ export class Editor {
           if (b) b.html = host.innerHTML
         })
         this.autoformat(id, host)
+        this.ghost(id, host)
       })
       host.addEventListener('blur', () => {
         if (this.painting) return
+        this.clearGhost()
         s.endRun()
         const b = s.block(id)
         if (b && b.html !== undefined) {
@@ -1821,6 +1909,11 @@ export class Editor {
     }
     if (e.key === 'Tab') {
       e.preventDefault()
+      // A GHOST ANSWER CLAIMS TAB, and only while it is showing. Committing is
+      // then the keystroke your hand is already on, and ignoring it costs
+      // nothing — you carry on typing and it goes away. Shift+Tab still
+      // outdents, so the one gesture people use constantly is never stolen.
+      if (!e.shiftKey && this.ghostFor === cur.id && this.commitAnswer(cur.id)) return
       this.indent(cur.id, !e.shiftKey)
       return
     }
@@ -1901,9 +1994,15 @@ export class Editor {
     if (!b) return
     s.commit(() => {
       if (!deeper) {
-        if (!b.parent) return
-        const owner = page.blocks.find((x) => x.id === b.parent)
-        if (owner?.parent) b.parent = owner.parent
+        // by the EFFECTIVE parent (model.ts), not by whatever `parent` names:
+        // on a merged document `parent` can point at a block that is absent or
+        // that sits LATER, and outdenting through it would move this block
+        // under something the renderer never nested it under
+        const eff = effectiveParents(page)
+        const owner = eff.get(b.id)
+        if (!owner) { delete b.parent; return }
+        const grand = eff.get(owner)
+        if (grand) b.parent = grand
         else delete b.parent
         return
       }

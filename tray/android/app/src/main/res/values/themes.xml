@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The document owns the screen, so the app's own theme is only ever seen
+         on the documents list. Light, because the editor a deck ships is light
+         and a dark shell around it would flash on every open. -->
+    <style name="Theme.Tray" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/tray_navy</item>
+        <item name="android:colorAccent">@color/tray_steel</item>
+        <item name="android:statusBarColor">@color/tray_cream</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/tray_cream</item>
+        <item name="android:windowBackground">@color/tray_cream</item>
+    </style>
+</resources>

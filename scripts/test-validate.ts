@@ -193,5 +193,49 @@ const chartFindings = validateDoc(chartDoc, { measure: false }).findings
 ok(chartFindings.length === 0,
   `a realistic dual-axis chart produces no findings (got ${chartFindings.map((f) => f.path).join(', ') || 'none'})`)
 
+// ------------------------------------------------- hidden slides
+// Hidden is the one state a slide can be in where nothing on screen reveals a
+// mistake: it is skipped silently, exactly as intended, whether or not anyone
+// can still get to it.
+const hiddenDoc = (link?: string): BentoDoc => ({
+  ...clean,
+  slides: [
+    { id: 's1', name: 'one', background: '#FFF', transition: 'fade', notes: '', elements:
+      link ? [{ id: 'go', type: 'shape', shape: 'rect', x: 10, y: 10, w: 50, h: 50, rotation: 0,
+                opacity: 1, fill: '#000', stroke: 'none', strokeWidth: 0, radius: 0, link }] : [] },
+    { id: 's2', name: 'appendix', background: '#FFF', transition: 'fade', notes: '', hidden: true, elements: [] },
+  ],
+} as any)
+const unreachable = (d: BentoDoc) => validateDoc(d, { measure: false })
+  .findings.filter((f) => f.code === 'unreachable-hidden-slide')
+
+ok(unreachable(hiddenDoc()).length === 1,
+  'a hidden slide nothing links to is reported as unreachable')
+ok(unreachable(hiddenDoc('s2')).length === 0,
+  'a hidden slide with an inbound link is not reported — that is the point of hiding it')
+ok(unreachable(clean).length === 0, 'an ordinary deck reports nothing')
+ok(validateDoc(hiddenDoc('s2'), { measure: false }).ok,
+  'hiding a slide is never an error')
+
+// ------------------------------------------------- live-session keys in a file
+// The capability nobody can see. A shared deck's file grants write access to
+// whoever holds it, which is the design — but it is invisible in the JSON's
+// shape, so the one place it can be surfaced is a check an agent runs.
+const withCollab = (collab: unknown): BentoDoc => ({ ...clean, collab } as any)
+const secretsFound = (d: BentoDoc) => validateDoc(d, { measure: false })
+  .findings.filter((f) => f.code === 'collab-secrets-present')
+
+ok(secretsFound(withCollab({ room: 'r1', key: 'k', ownerPriv: 'X' })).length === 1,
+  'an owner private key in the document is reported')
+ok(secretsFound(withCollab({ room: 'r1', key: 'k', writerPriv: 'X' })).length === 1,
+  'a writer private key is reported')
+ok(secretsFound(withCollab({ room: 'r1', key: 'k', invite: { pub: 'a', priv: 'b' } })).length === 1,
+  'invite delegation material is reported')
+ok(secretsFound(withCollab({ room: 'r1', key: 'k', role: 'reader' })).length === 0,
+  'a reader copy — room and read key, no private material — is NOT reported')
+ok(secretsFound(clean).length === 0, 'a deck that was never shared is not reported')
+ok(validateDoc(withCollab({ room: 'r1', key: 'k', ownerPriv: 'X' }), { measure: false }).ok,
+  'carrying your own room keys is never an error — it is how a working file works')
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

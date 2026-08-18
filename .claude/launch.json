@@ -2,26 +2,60 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "serve-dash-wt",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5188",
+        "--directory",
+        "/Users/andy/devel/bento/.claude/worktrees/bento-dash/dash/dist-single"
+      ],
+      "port": 5188
+    },
+    {
       "name": "spaces-dev",
+      "comment": "LOOPBACK ONLY. Vite already defaults to loopback, but the flag is written out so every entry in this file states its interface \u2014 the one entry that stayed silent is the one that kept binding the wildcard.",
       "cwd": "spaces",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5196", "--strictPort"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "5196",
+        "--strictPort"
+      ],
       "port": 5196
     },
     {
       "name": "serve-spaces-built",
+      "comment": "LOOPBACK ONLY. http.server defaults to 0.0.0.0 (measured: TCP *:<port> LISTEN, reachable from the LAN), so every entry here pins the interface \u2014 a preview server has no reason to be a LAN service, whatever it happens to be serving today.",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "5195", "--directory", "spaces/dist-single"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5195",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "spaces/dist-single"
+      ],
       "port": 5195
     },
     {
       "name": "slides-dev",
+      "comment": "LOOPBACK ONLY, see spaces-dev.",
       "cwd": "slides",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
         "dev",
         "--",
+        "--host",
+        "127.0.0.1",
         "--port",
         "5199",
         "--strictPort"
@@ -30,12 +64,15 @@
     },
     {
       "name": "serve-built",
+      "comment": "LOOPBACK ONLY, see serve-spaces-built.",
       "cwd": "slides",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
         "-m",
         "http.server",
         "5198",
+        "--bind",
+        "127.0.0.1",
         "--directory",
         "dist-single"
       ],
@@ -43,11 +80,14 @@
     },
     {
       "name": "serve-testing",
+      "comment": "LOOPBACK ONLY, and the highest-value of the http.server entries after working/: .gitignore describes testing/ as 'local test decks \u2014 never committed (may contain confidential content)'. It bound the wildcard until now (measured: TCP *:5197 LISTEN, LAN curl 200).",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
         "-m",
         "http.server",
         "5197",
+        "--bind",
+        "127.0.0.1",
         "--directory",
         "testing"
       ],
@@ -55,11 +95,14 @@
     },
     {
       "name": "serve-site-src",
+      "comment": "LOOPBACK ONLY, see serve-spaces-built.",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
         "-m",
         "http.server",
         "5192",
+        "--bind",
+        "127.0.0.1",
         "--directory",
         "site-src"
       ],
@@ -67,11 +110,14 @@
     },
     {
       "name": "serve-site",
+      "comment": "LOOPBACK ONLY, see serve-spaces-built.",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
         "-m",
         "http.server",
         "5195",
+        "--bind",
+        "127.0.0.1",
         "--directory",
         "site"
       ],
@@ -79,11 +125,14 @@
     },
     {
       "name": "serve-working",
+      "comment": "LOOPBACK ONLY. working/ is the gitignored secrets drawer \u2014 the live guestbook ADMIN_KEY bearer token and the room's owner ECDSA private key sit in it, and http.server serves a directory listing. http.server defaults to 0.0.0.0, so without --bind anyone on the same cafe/office LAN could walk the listing and take both while this entry runs.",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
         "-m",
         "http.server",
         "5194",
+        "--bind",
+        "127.0.0.1",
         "--directory",
         "working"
       ],
@@ -91,12 +140,13 @@
     },
     {
       "name": "serve-working2",
+      "comment": "LOOPBACK ONLY, same secrets as serve-working. `serve -l 5193` listens on the WILDCARD (measured: `*:5193`) while logging 'Accepting connections at http://localhost:5193' \u2014 the line reads as loopback and is not, so the misconfiguration is invisible. The tcp://host:port form is the only way to pin the interface.",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
         "--yes",
         "serve",
         "-l",
-        "5193",
+        "tcp://127.0.0.1:5193",
         "working"
       ],
       "port": 5193

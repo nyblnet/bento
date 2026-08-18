@@ -339,6 +339,22 @@ export interface Slide {
    */
   stateOf?: string
   /**
+   * Hidden from the show: skipped by linear navigation, left out of PDF
+   * export, and never chosen as the file's thumbnail — but still an ordinary
+   * slide you can edit, and still reachable by an element `link`, which is
+   * what makes it useful for backup and appendix material you jump to only
+   * if asked.
+   *
+   * Distinct from `stateOf`: a state is a VARIANT OF another slide (← returns
+   * to its parent, and it morphs with it). Hidden carries no such
+   * relationship — it is simply out of the linear flow.
+   *
+   * By default a hidden slide does not consume a page number either, so the
+   * audience sees 1..N with no gaps; `doc.present.numberHidden` restores the
+   * office-suite behaviour of counting it.
+   */
+  hidden?: boolean
+  /**
    * present-mode hover behaviour:
    * - focus-group: dim every element outside the hovered element's group
    * - reveal: show the showOnHover set matching the hovered group
@@ -386,6 +402,16 @@ export interface BentoDoc {
   }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {
+    /**
+     * Count hidden slides in {{page}}/{{pages}} and the presenter's counter.
+     *
+     * Default (absent/false): they are skipped, matching interactive states —
+     * one rule, "skipped means uncounted", and contiguous numbering falls out
+     * of it. True restores what PowerPoint and Keynote do, where a hidden
+     * slide keeps its number so the visible ones do not renumber as you toggle
+     * slides in and out during rehearsal.
+     */
+    numberHidden?: boolean
     slideNumber?: boolean
     controls?: boolean
     progress?: boolean
@@ -995,6 +1021,27 @@ export function layoutElementIds(doc: BentoDoc): Set<string> {
   }
   return ids
 }
+
+/**
+ * Does this slide consume a page number?
+ *
+ * The single answer to that question — page fields, the presenter's counter,
+ * the sidebar — so they cannot disagree about which slide is "4". Interactive
+ * states never count; hidden slides count only when the deck opts into
+ * office-suite numbering.
+ */
+export const paginates = (s: Slide, doc: BentoDoc): boolean =>
+  !s.stateOf && (!s.hidden || !!doc.present?.numberHidden)
+
+/**
+ * Is this slide part of the linear walk?
+ *
+ * Deliberately NOT the same question as `paginates`. Navigation, PDF export and
+ * the file thumbnail all skip states and hidden slides unconditionally; only
+ * NUMBERING is configurable. Collapsing the two would make `numberHidden` walk
+ * the audience into a slide that was hidden on purpose.
+ */
+export const inLinearFlow = (s: Slide): boolean => !s.stateOf && !s.hidden
 
 export const newDocId = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid('doc')

@@ -206,7 +206,26 @@ const bool = (v: Cell): boolean => {
 const numbersIn = (v: Vec): number[] =>
   v.map(num).filter((x): x is number => typeof x === 'number')
 
+const REF = '#REF!'
+
 const AGG: Record<string, (v: Vec) => Cell> = {
+  VAR: (v) => variance(numbersIn(v), true),
+  VARP: (v) => variance(numbersIn(v), false),
+  STDEVP: (v) => { const r = variance(numbersIn(v), false); return isErr(r) ? r : Math.sqrt(r as number) },
+  COUNTUNIQUE: (v) => new Set(v.filter((x) => x != null && x !== '').map((x) => String(x))).size,
+  MODE: (v) => {
+    const n = numbersIn(v)
+    if (!n.length) return ERR.na()
+    const seen = new Map<number, number>()
+    let best = n[0]
+    let bestC = 0
+    for (const x of n) {
+      const c = (seen.get(x) ?? 0) + 1
+      seen.set(x, c)
+      if (c > bestC) { bestC = c; best = x }
+    }
+    return bestC > 1 ? best : ERR.na()
+  },
   SUM: (v) => numbersIn(v).reduce((a, b) => a + b, 0),
   AVERAGE: (v) => { const n = numbersIn(v); return n.length ? n.reduce((a, b) => a + b, 0) / n.length : ERR.div0() },
   MIN: (v) => { const n = numbersIn(v); return n.length ? Math.min(...n) : 0 },
@@ -233,12 +252,119 @@ AGG.AVG = AGG.AVERAGE
 /** SUMIF/COUNTIF/AVERAGEIF — high-frequency, so worth having in v1. */
 const CONDITIONAL = new Set(['SUMIF', 'COUNTIF', 'AVERAGEIF'])
 
+/**
+ * The multi-criteria family: `SUMIFS(sum, r1, c1, r2, c2, …)`.
+ *
+ * Note the argument order is NOT SUMIF's. Excel put the sum range LAST in
+ * SUMIF and FIRST in SUMIFS, and every spreadsheet in the world now depends on
+ * both. Matching Excel here is not politeness — a formula pasted from a
+ * colleague's workbook has to mean the same thing or the number is wrong and
+ * looks fine.
+ */
+const MULTI = new Set(['SUMIFS', 'COUNTIFS', 'AVERAGEIFS', 'MINIFS', 'MAXIFS'])
+
+/** Lookups. Vector-shaped, because dash is column-shaped — see LOOKUP_NOTE. */
+const LOOKUPS = new Set(['XLOOKUP', 'VLOOKUP', 'INDEX', 'MATCH', 'LOOKUP'])
+
 const round = (x: number, dp: number) => {
   const f = 10 ** dp
   return Math.round((x + Number.EPSILON * Math.sign(x)) * f) / f
 }
 
+const nums = (a: Array<Cell | Vec>): number[] =>
+  a.flatMap((x) => (Array.isArray(x) ? x : [x]))
+    .map((x) => num(x as Cell)).filter((x): x is number => typeof x === 'number')
+
+/**
+ * Functions that consume a WHOLE COLUMN, dispatched before SCALAR.
+ *
+ * SCALAR broadcasts: it finds the widest vector argument and calls the function
+ * once per row, which is exactly right for `ROUND(value, 2)` and exactly wrong
+ * for `CORREL(a, b)` — that ran per row and correlated two single numbers,
+ * which is 0/0. Same for IRR over a column of cash flows, PERCENTILE over a
+ * column, and TEXTJOIN of one. They take the arguments UNBROADCAST.
+ */
+const RAW: Record<string, (a: Array<Cell | Vec>) => Cell> = {
+  NPV: (a) => { const r = num(a[0] as Cell); return isErr(r) ? r : npv(r, nums(a.slice(1))) },
+  IRR: (a) => irr(nums(a)),
+  PERCENTILE: (a) => { const k = num(a[1] as Cell); return isErr(k) ? k : percentile(nums([a[0]]), k) },
+  QUARTILE: (a) => { const q = num(a[1] as Cell); return isErr(q) ? q : percentile(nums([a[0]]), (q as number) / 4) },
+  CORREL: (a) => correl(nums([a[0]]), nums([a[1]])),
+  RANK: (a) => {
+    const v = num(a[0] as Cell)
+    if (isErr(v)) return v
+    const list = nums([a[1]])
+    const desc = a[2] === undefined || num(a[2] as Cell) === 0
+    const sorted = [...list].sort((x, y) => (desc ? y - x : x - y))
+    const i = sorted.findIndex((x) => x === v)
+    return i < 0 ? ERR.na() : i + 1
+  },
+  TEXTJOIN: (a) => {
+    const sep = str(a[0] as Cell)
+    const skip = bool(a[1] as Cell)
+    const parts = a.slice(2).flatMap((x) => (Array.isArray(x) ? x : [x])).map((x) => str(x as Cell))
+    return (skip ? parts.filter((p) => p !== '') : parts).join(sep)
+  },
+}
+
 const SCALAR: Record<string, (a: Cell[]) => Cell> = {
+  // --- logic
+  // TRUE()/FALSE() are functions in Excel, and people type them. Their absence
+  // was not an error either: `TRUE()` parsed as an unknown NAME, so `IF(TRUE(),
+  // …)` quietly took the false branch.
+  TRUE: () => true,
+  FALSE: () => false,
+  IFS: (a) => {
+    for (let i = 0; i + 1 < a.length; i += 2) if (bool(a[i])) return a[i + 1]
+    return ERR.na()
+  },
+  SWITCH: (a) => {
+    for (let i = 1; i + 1 < a.length; i += 2) if (looseEq(a[0], a[i])) return a[i + 1]
+    // an odd trailing argument is the default, as Excel has it
+    return a.length % 2 === 0 ? a[a.length - 1] : ERR.na()
+  },
+  XOR: (a) => a.filter(bool).length % 2 === 1,
+  IFNA: (a) => (isErr(a[0]) && String(a[0]) === '#N/A' ? a[1] ?? '' : a[0]),
+  // --- text
+  PROPER: (a) => str(a[0]).replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()),
+  REPT: (a) => { const n = num(a[1]); return isErr(n) ? n : n < 0 ? ERR.value('negative count') : str(a[0]).repeat(Math.floor(n)) },
+  DATE: (a) => {
+    const y = num(a[0]); const m = num(a[1]); const d = num(a[2])
+    if (isErr(y)) return y; if (isErr(m)) return m; if (isErr(d)) return d
+    return isoOf(new Date(Date.UTC(y, m - 1, d)))
+  },
+  EOMONTH: (a) => {
+    const d = asDate(a[0]); const k = num(a[1] ?? 0)
+    if (!d) return ERR.value('not a date'); if (isErr(k)) return k
+    return isoOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + k + 1, 0)))
+  },
+  EDATE: (a) => {
+    const d = asDate(a[0]); const k = num(a[1] ?? 0)
+    if (!d) return ERR.value('not a date'); if (isErr(k)) return k
+    return isoOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + k, d.getUTCDate())))
+  },
+  DAYS: (a) => {
+    const b = asDate(a[0]); const c = asDate(a[1])
+    return b && c ? Math.round((b.getTime() - c.getTime()) / DAY_MS) : ERR.value('not a date')
+  },
+  WEEKDAY: (a) => { const d = asDate(a[0]); return d ? d.getUTCDay() + 1 : ERR.value('not a date') },
+  // --- finance. Every rate is PER PERIOD; nothing here divides by twelve for you.
+  PMT: (a) => {
+    const r = num(a[0]); const n = num(a[1]); const p = num(a[2])
+    if (isErr(r)) return r; if (isErr(n)) return n; if (isErr(p)) return p
+    return pmt(r, n, p, a[3] === undefined ? 0 : (num(a[3]) as number), a[4] === undefined ? 0 : (num(a[4]) as number))
+  },
+  FV: (a) => {
+    const r = num(a[0]); const n = num(a[1]); const p = num(a[2])
+    if (isErr(r)) return r; if (isErr(n)) return n; if (isErr(p)) return p
+    return fvOf(r, n, p, a[3] === undefined ? 0 : (num(a[3]) as number), a[4] === undefined ? 0 : (num(a[4]) as number))
+  },
+  PV: (a) => {
+    const r = num(a[0]); const n = num(a[1]); const p = num(a[2])
+    if (isErr(r)) return r; if (isErr(n)) return n; if (isErr(p)) return p
+    return pvOf(r, n, p, a[3] === undefined ? 0 : (num(a[3]) as number), a[4] === undefined ? 0 : (num(a[4]) as number))
+  },
+  // --- statistics over explicit arguments
   IF: (a) => (bool(a[0]) ? a[1] ?? true : a[2] ?? false),
   AND: (a) => a.every(bool),
   OR: (a) => a.some(bool),
@@ -368,6 +494,179 @@ function matches(v: Cell, crit: Cell): boolean {
   return bool(r as Cell)
 }
 
+// --- lookups ----------------------------------------------------------------
+//
+// LOOKUP_NOTE. dash is COLUMN-shaped: a reference resolves to a vector, and a
+// range binds to one flat vector of the cells it covers. Excel's VLOOKUP takes
+// a 2-D table and a column NUMBER, which only means something if the shape is
+// known — so a range carries its width, and VLOOKUP reads it. Where the shape
+// is unknown (a bare column), a `col` of 1 is the column itself and anything
+// higher is #REF!, which is what Excel says when you index past the table.
+//
+// XLOOKUP is the one to reach for and the one that fits dash without
+// contortion: two vectors, no index arithmetic, and no silent breakage when a
+// column is inserted in the middle of the table — the failure VLOOKUP is
+// famous for. VLOOKUP exists because people's existing formulas use it.
+
+/** A range's shape, when the binding knew it. See cellformula.ts's bindRefs. */
+export interface Shaped { __rows?: number; __cols?: number }
+const shapeOf = (v: Vec): { rows: number; cols: number } => {
+  const s = v as Vec & Shaped
+  const cols = typeof s.__cols === 'number' && s.__cols > 0 ? s.__cols : 1
+  return { rows: Math.ceil(v.length / cols), cols }
+}
+
+/** Row-major cell at (r, c) of a shaped range. */
+const cellAt = (v: Vec, r: number, c: number): Cell => {
+  const { cols } = shapeOf(v)
+  return v[r * cols + c] ?? null
+}
+
+/**
+ * First index in `hay` matching `needle`.
+ *
+ * EXACT by default, and that is a deliberate departure from VLOOKUP's legacy
+ * 4th argument defaulting to TRUE (approximate). An approximate match on
+ * UNSORTED data returns a confidently wrong row, and that default has produced
+ * more quiet spreadsheet errors than any other single thing in Excel. Ours
+ * defaults to exact; approximate is available by asking for it.
+ */
+function findIndex(hay: Vec, needle: Cell, approx = false): number {
+  if (!approx) {
+    for (let i = 0; i < hay.length; i++) if (looseEq(hay[i], needle)) return i
+    return -1
+  }
+  // approximate: the LAST value <= needle, which assumes ascending order —
+  // Excel's rule, and its documented requirement
+  let best = -1
+  for (let i = 0; i < hay.length; i++) {
+    const c = binop('<=', hay[i], needle)
+    if (c === true) best = i
+  }
+  return best
+}
+
+const asVec = (v: Cell | Vec): Vec => (Array.isArray(v) ? v : [v])
+
+// --- finance ----------------------------------------------------------------
+//
+// The reason a finance team opens Excel rather than anything else. All of these
+// take a RATE PER PERIOD, not an annual rate — the single most common way these
+// get used wrongly, so the argument is named `rate` everywhere and never
+// silently divided by twelve.
+
+/** Net present value of `flows`, discounted one period each, first flow at t=1. */
+const npv = (rate: number, flows: number[]): number =>
+  flows.reduce((acc, f, i) => acc + f / (1 + rate) ** (i + 1), 0)
+
+/**
+ * Internal rate of return: the rate at which NPV is zero.
+ *
+ * Bisection, not Newton-Raphson. Newton is faster and diverges on exactly the
+ * cash-flow shapes people have (a sign change late in the series), returning a
+ * number rather than failing. Bisection over a bracketed range either converges
+ * or reports #NUM!, and a refusal is worth more than a plausible rate.
+ */
+function irr(flows: number[], guess = 0.1): Cell {
+  const f = (r: number) => flows.reduce((a, c, i) => a + c / (1 + r) ** i, 0)
+  let lo = -0.9999
+  let hi = 10
+  let flo = f(lo)
+  let fhi = f(hi)
+  if (!Number.isFinite(flo) || !Number.isFinite(fhi) || flo * fhi > 0) {
+    void guess
+    return new FormulaError('#NUM!', 'no rate brackets a sign change in these cash flows')
+  }
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2
+    const fm = f(mid)
+    if (Math.abs(fm) < 1e-10) return mid
+    if (flo * fm < 0) { hi = mid; fhi = fm } else { lo = mid; flo = fm }
+  }
+  void fhi
+  return (lo + hi) / 2
+}
+
+/** Payment per period for a loan. Excel's sign convention: a payment is negative. */
+const pmt = (rate: number, nper: number, pv: number, fv = 0, type = 0): number => {
+  if (rate === 0) return -(pv + fv) / nper
+  const p = (1 + rate) ** nper
+  return -(pv * p + fv) * rate / ((p - 1) * (1 + rate * (type ? 1 : 0)))
+}
+
+const fvOf = (rate: number, nper: number, pmtv: number, pv = 0, type = 0): number => {
+  if (rate === 0) return -(pv + pmtv * nper)
+  const p = (1 + rate) ** nper
+  return -(pv * p + pmtv * (1 + rate * (type ? 1 : 0)) * (p - 1) / rate)
+}
+
+const pvOf = (rate: number, nper: number, pmtv: number, fv = 0, type = 0): number => {
+  if (rate === 0) return -(fv + pmtv * nper)
+  const p = (1 + rate) ** nper
+  return -(fv + pmtv * (1 + rate * (type ? 1 : 0)) * (p - 1) / rate) / p
+}
+
+// --- statistics -------------------------------------------------------------
+
+/**
+ * Linear-interpolated percentile, Excel's PERCENTILE.INC.
+ *
+ * `k` is a FRACTION (0.9), not a percentage (90) — passing 90 gets #NUM! rather
+ * than being clamped to the maximum, because clamping would silently answer a
+ * question nobody asked.
+ */
+function percentile(nums: number[], k: number): Cell {
+  if (!nums.length) return ERR.div0()
+  if (!(k >= 0 && k <= 1)) return new FormulaError('#NUM!', 'percentile takes a fraction between 0 and 1')
+  const s = [...nums].sort((a, b) => a - b)
+  const pos = k * (s.length - 1)
+  const lo = Math.floor(pos)
+  const hi = Math.ceil(pos)
+  return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (pos - lo)
+}
+
+/** Sample variance (n−1). VARP/STDEVP use the population divisor. */
+const variance = (nums: number[], sample: boolean): Cell => {
+  const n = nums.length
+  if (n < (sample ? 2 : 1)) return ERR.div0()
+  const mean = nums.reduce((a, b) => a + b, 0) / n
+  const ss = nums.reduce((a, b) => a + (b - mean) ** 2, 0)
+  return ss / (sample ? n - 1 : n)
+}
+
+function correl(xs: number[], ys: number[]): Cell {
+  const n = Math.min(xs.length, ys.length)
+  if (n < 2) return ERR.div0()
+  const mx = xs.slice(0, n).reduce((a, b) => a + b, 0) / n
+  const my = ys.slice(0, n).reduce((a, b) => a + b, 0) / n
+  let sxy = 0
+  let sxx = 0
+  let syy = 0
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - mx
+    const dy = ys[i] - my
+    sxy += dx * dy; sxx += dx * dx; syy += dy * dy
+  }
+  const d = Math.sqrt(sxx * syy)
+  return d === 0 ? ERR.div0() : sxy / d
+}
+
+// --- dates ------------------------------------------------------------------
+//
+// Dates are ISO STRINGS in dash, not serial numbers (model.ts). So date maths
+// parses, computes in UTC and formats back — never through the local timezone,
+// which would move a date across midnight for half the world's readers.
+
+const asDate = (v: Cell): Date | null => {
+  if (typeof v !== 'string') return null
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!m) return null
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+  return Number.isNaN(d.getTime()) ? null : d
+}
+const isoOf = (d: Date): string => d.toISOString().slice(0, 10)
+const DAY_MS = 86_400_000
+
 function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
   const name = node.name
 
@@ -392,6 +691,77 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
     if (name === 'SUMIF') return vals.reduce((a, b) => a + b, 0)
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : ERR.div0()
   }
+  if (MULTI.has(name)) {
+    // SUMIFS(sum, r1, c1, …) / COUNTIFS(r1, c1, …) — count has no sum range.
+    const counting = name === 'COUNTIFS'
+    const target = counting ? null : asVec(evalNode(node.args[0], ctx))
+    const pairsFrom = counting ? 0 : 1
+    const pairs: Array<{ range: Vec; crit: Cell | Vec }> = []
+    for (let i = pairsFrom; i + 1 < node.args.length; i += 2) {
+      pairs.push({
+        range: asVec(evalNode(node.args[i], ctx)),
+        crit: evalNode(node.args[i + 1], ctx),
+      })
+    }
+    if (!pairs.length) return ERR.value(`${name} needs at least one range and criterion`)
+    const rows = Math.max(...pairs.map((p) => p.range.length), target?.length ?? 0)
+    const keep: number[] = []
+    for (let i = 0; i < rows; i++) {
+      // EVERY criterion must hold. `some` here instead of `every` is the bug
+      // that turns a two-condition report into a one-condition one, and the
+      // total still looks like a total.
+      if (pairs.every((p) => matches(p.range[i] ?? null, at(p.crit, i)))) keep.push(i)
+    }
+    if (counting) return keep.length
+    const vals = keep.map((i) => num(target![i] ?? null)).filter((x): x is number => typeof x === 'number')
+    if (name === 'SUMIFS') return vals.reduce((a, b) => a + b, 0)
+    if (!vals.length) return name === 'AVERAGEIFS' ? ERR.div0() : 0
+    if (name === 'AVERAGEIFS') return vals.reduce((a, b) => a + b, 0) / vals.length
+    return name === 'MINIFS' ? Math.min(...vals) : Math.max(...vals)
+  }
+
+  if (LOOKUPS.has(name)) {
+    const a = node.args.map((x) => evalNode(x, ctx))
+    if (name === 'MATCH') {
+      const i = findIndex(asVec(a[1]), a[0] as Cell, num((a[2] ?? 0) as Cell) !== 0)
+      return i < 0 ? ERR.na() : i + 1        // 1-based, as Excel reports it
+    }
+    if (name === 'INDEX') {
+      const v = asVec(a[0])
+      const n = num(a[1] as Cell)
+      if (isErr(n)) return n
+      // INDEX(range, row, col) on a shaped range; INDEX(vector, n) otherwise
+      if (node.args.length > 2) {
+        const c = num(a[2] as Cell)
+        if (isErr(c)) return c
+        return cellAt(v, n - 1, c - 1)
+      }
+      return n >= 1 && n <= v.length ? v[n - 1] : new FormulaError(REF, 'index is outside the range')
+    }
+    if (name === 'XLOOKUP') {
+      const i = findIndex(asVec(a[1]), a[0] as Cell)
+      if (i < 0) return a[3] !== undefined ? (a[3] as Cell) : ERR.na()
+      return asVec(a[2])[i] ?? null
+    }
+    if (name === 'LOOKUP') {
+      const i = findIndex(asVec(a[1]), a[0] as Cell, true)
+      return i < 0 ? ERR.na() : asVec(a[2] ?? a[1])[i] ?? null
+    }
+    // VLOOKUP(value, table, col, [approx])
+    const table = asVec(a[1])
+    const { cols } = shapeOf(table)
+    const colN = num(a[2] as Cell)
+    if (isErr(colN)) return colN
+    if (colN < 1 || colN > cols) return new FormulaError(REF, `column ${colN} is outside a ${cols}-column range`)
+    const firstCol: Vec = []
+    for (let r = 0; r * cols < table.length; r++) firstCol.push(cellAt(table, r, 0))
+    const i = findIndex(firstCol, a[0] as Cell, a[3] !== undefined && bool(a[3] as Cell))
+    return i < 0 ? ERR.na() : cellAt(table, i, colN - 1)
+  }
+
+  const raw = RAW[name]
+  if (raw) return raw(node.args.map((x) => evalNode(x, ctx)))
+
   const fn = SCALAR[name]
   if (!fn) return ERR.name(name)
 
@@ -495,5 +865,6 @@ export function recalc(sheet: TableSheet, now?: string): RecalcResult {
 
 /** Every function name this build knows — the agent surface needs to say. */
 export const FUNCTIONS: string[] = [
-  ...Object.keys(AGG), ...CONDITIONAL, ...Object.keys(SCALAR), ...VOLATILE,
+  ...Object.keys(AGG), ...CONDITIONAL, ...MULTI, ...LOOKUPS,
+  ...Object.keys(RAW), ...Object.keys(SCALAR), ...VOLATILE,
 ].sort()

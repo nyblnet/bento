@@ -233,8 +233,14 @@ export function openAbout({ store, onRepaint, onSaveCopy, onImport }: AboutHooks
  */
 export function toMarkdown(store: Store): string {
   const out: string[] = []
-  const walk = (parent: string, depth: number) => {
-    for (const page of store.index.children.get(parent) ?? []) {
+  // ONE traversal, store.tree() — not a second walk over index.children.
+  // That second walk is how a page-tree CYCLE dropped pages out of the export
+  // while they sat in the file: neither page is reachable from the root, so
+  // neither was ever visited. Store.tree() carries the visited set and surfaces
+  // what a cycle orphans, and this now inherits both. Measured before the fix:
+  // 13 pages in the file, 11 in the export.
+  const walk = () => {
+    for (const { page, depth } of store.tree()) {
       out.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${page.title}`, '')
       // Indent, blockquote markers and what separates one block from the next
       // are properties of the TREE, not of a block, so they come from the
@@ -263,10 +269,9 @@ export function toMarkdown(store: Store): string {
         out.push(...lines.flatMap((l) => l.split('\n')).map((l) => (l ? quote + l : quote.trimEnd())))
         out.push(sep)
       })
-      walk(page.id, depth + 1)
     }
   }
-  walk('', 0)
+  walk()
   return out.join('\n').replace(/\n{3,}/g, '\n\n')
 }
 

@@ -1,0 +1,91 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The Save split button and its menu. Prefixed `dxs-` so it can be dropped in
+   beside styles.css without either file having to know about the other.
+
+   It knows about styles.css's TOKENS, though, and that is the point: this menu,
+   the top bar's own dropdowns, the right-click popovers and the pivot were each
+   written separately and each chose its own radius and shadow. They are one
+   floating-surface style now, spelled --radius-lg / --shadow-pop, and nothing
+   here restates a number that lives there. */
+
+.dxs-wrap { position: relative; display: inline-flex; align-items: stretch; }
+
+/* The caret sits FLUSH against the Save button so the pair reads as one
+   control. It is its own button rather than a click zone inside Save, because a
+   miss on a split control that saves is a save to the wrong file. */
+.dxs-caret {
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: -1px;
+}
+/* …and Save loses its right corners to meet it. Without this the pair read as
+   two buttons that happened to touch. */
+.dxs-wrap > .dx-btn:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.dxs-wrap .dxs-caret { align-self: stretch; }
+
+.dxs-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 260px;
+  /* capped at the viewport: this menu hangs off a button in the right half of
+     the bar, and on a phone a 260px start-anchored panel walks off the screen */
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  display: none;
+}
+.dxs-wrap.dxs-open .dxs-menu { display: block; }
+
+.dxs-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.dxs-item:hover:not(:disabled) { background: var(--hover); }
+.dxs-item:disabled { opacity: 0.45; cursor: default; }
+.dxs-item small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.35;
+  margin-top: 1px;
+}
+.dxs-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+
+/* Toast: the only feedback these actions have. A share export leaves the open
+   file untouched, so without a line of text nothing visibly happened at all. */
+.dxs-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: min(92vw, 460px);
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
+  font-size: var(--fs-ui);
+  box-shadow: var(--shadow-pop);
+}

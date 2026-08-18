@@ -216,6 +216,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Этот браузер не может перезаписывать файлы на месте — новая копия отправлена в папку «Загрузки»",
   "This document": "Этот документ",
   "This file carries its own app — it works offline, forever, as is.": "Этот файл несёт в себе собственное приложение — он работает без сети, всегда, как есть.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "В этом окне по-прежнему работает v{v} — перезагрузите, чтобы завершить. Резервная копия v{v} сохранена рядом с этим файлом.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "В этом окне по-прежнему работает v{v} — перезагрузите, чтобы завершить. Резервная копия v{v} скачана.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "В этом окне по-прежнему работает v{v}. Если вы перезаписали открытый здесь файл, перезагрузите страницу; иначе откройте сохранённый файл.",
   "This window keeps running v{v} until you open the downloaded file.": "В этом окне продолжит работать v{v}, пока вы не откроете скачанный файл.",

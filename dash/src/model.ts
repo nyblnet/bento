@@ -113,6 +113,15 @@ export interface CellOverride {
   was?: unknown
   /** A per-cell formula, for the cases a column expression cannot express. */
   f?: string
+  /**
+   * The formula an imported .xlsx held, kept VERBATIM even when dash will not
+   * evaluate it — a cross-sheet reference, an external workbook, a function we
+   * lack. `f` is what dash computes; this is what the file said. Keeping both
+   * is what stops an xlsx → dash → xlsx round trip from quietly deleting
+   * somebody's model, and it is why an import that cannot run a formula still
+   * shows the cached VALUE rather than a blank or a zero.
+   */
+  xlsxF?: string
   /** Volatiles (`TODAY()`): the moment this value was committed. */
   froze?: string
   /**
@@ -189,6 +198,22 @@ export interface TableSheet {
    * attach to.
    */
   rids: Array<[number, number]>
+  /**
+   * The rid watermark: the next rid this sheet may mint.
+   *
+   * MONOTONIC, and deliberately not restored by undo. Without it the floor is
+   * derived from the current maximum, so deleting the last row lowers it and
+   * the next insert REUSES that rid — measured: rid 3 deleted, then minted
+   * again for a different row. The header above says rids are never reused,
+   * and everything that attaches to one (overrides, comments, CRDT nodes)
+   * assumes it. Under collaboration it stops being untidy and becomes a
+   * correctness precondition: two replicas would mint the same rid for two
+   * different rows and merge them into one.
+   *
+   * Optional because files written before it exists have none; `nextRidFloor`
+   * falls back to deriving it, which is the old behaviour.
+   */
+  nextRid?: number
   columns: Column[]
   /** colId → encoded column. */
   data: Record<string, ColumnData>
@@ -230,7 +255,77 @@ export interface CanvasCell {
   [extra: string]: unknown
 }
 
-export type Sheet = TableSheet | CanvasSheet
+/**
+ * A pivot sheet holds a SPEC and never the numbers it produces — the same rule
+ * a chart tile follows, so a pivot cannot disagree with its data, go stale, or
+ * double the file.
+ */
+export interface PivotSheet {
+  id: string
+  name: string
+  kind: 'pivot'
+  pivot: Record<string, unknown>
+  [extra: string]: unknown
+}
+
+// --- rid partitioning -------------------------------------------------------
+//
+// TWO REPLICAS MUST NEVER MINT THE SAME RID FOR DIFFERENT ROWS. The watermark
+// (`TableSheet.nextRid`) makes minting monotonic, which fixes reuse after a
+// delete — but it cannot help the CONCURRENT case, where two people insert at
+// the same moment, both compute "one past the highest I know about", and both
+// get the same number. rid is identity: the CRDT keys a row node on it, and
+// overrides and comments attach to it. Two different rows sharing one would
+// merge into a single row and silently lose one of them.
+//
+// So under collaboration each replica mints from its OWN BLOCK of the rid
+// space. `rid = base + counter`, and no two replicas share a base.
+//
+// THE SPLIT. JavaScript integers are exact to 2^53. That budget is divided
+// 30 bits of block by 23 bits of counter: 1.07e9 blocks, and 8.4M rows per
+// replica per workbook — comfortably past `docBudget`, which stops a document
+// long before then. The alternative split (more rows, fewer blocks) buys
+// capacity nobody reaches at the cost of the only thing that matters here.
+//
+// BLOCK 0 IS RESERVED and is what a solo document uses, so an unshared
+// workbook still numbers its rows 1, 2, 3 and run-length encodes to
+// `[[1, 4200]]`. Nothing about the common case changes; the cost is paid only
+// once a second person is actually editing.
+//
+// THE RESIDUAL RISK, stated plainly: a block is derived from the actor id, so
+// two replicas collide only if their derived blocks collide. That is the same
+// assumption the engine already rests on everywhere else — actor ids are
+// random per session and every register comparison assumes they differ. With
+// 1.07e9 blocks the chance for ten concurrent editors is about 5e-8, and for a
+// hundred about 5e-6. It is not zero, and pretending otherwise would be worse
+// than saying so.
+
+/** Rows one replica may mint in one workbook: 2^23. */
+export const RID_BLOCK = 8_388_608
+/** Blocks available: 2^30. Block 0 is the solo/pre-collab range. */
+export const RID_BLOCKS = 1_073_741_824
+
+/**
+ * The rid block for an actor id — deterministic, and never 0.
+ *
+ * FNV-1a over the id. It only has to spread evenly; it is not a security
+ * property, and the uniqueness it inherits is the actor id's.
+ */
+export function ridBlockFor(actor: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < actor.length; i++) {
+    h ^= actor.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  // 1..RID_BLOCKS-1 — never block 0, which belongs to solo documents
+  return (h % (RID_BLOCKS - 1)) + 1
+}
+
+/** First rid in a block. Block 0 starts at 1, so a solo file numbers from 1. */
+export const ridBase = (block: number): number =>
+  block <= 0 ? 1 : block * RID_BLOCK
+
+export type Sheet = TableSheet | CanvasSheet | PivotSheet
 
 /**
  * A named measure. Measured at 7,289 bytes for a real six-entity model — 0.13%
@@ -254,7 +349,11 @@ export interface Measure {
 }
 
 export interface Tile {
-  kind: 'chart' | 'kpi' | 'slice' | 'text' | 'gl'
+  /** Stable per-tile identity — a cross-filter click is attributed to its tile
+   *  so a tile never filters ITSELF into a single bar. */
+  id?: string
+  title?: string
+  kind: 'chart' | 'kpi' | 'slice' | 'text' | 'gl' | 'table'
   x: number
   y: number
   w: number
@@ -265,8 +364,16 @@ export interface Tile {
    *  does not double the file. */
   bind?: {
     sheet: string; x?: string; by?: string; series?: string[]
+    /** a single column, for a KPI or a one-column table */
+    col?: string
+    /** several, for a table tile */
+    cols?: string[]
     measure?: string; agg?: string
   }
+  /** chart kind for a chart tile — bar/line/pie, as chart.ts spells them */
+  chart?: string
+  /** what a KPI compares against: the whole sheet, its own column, or nothing */
+  compare?: 'all' | 'column' | null
   option?: Record<string, unknown>
   /** REQUIRED on `kind:'gl'`: what to draw where WebGL is unavailable. */
   fallback?: 'heatmap' | 'scatter2d' | 'table'
@@ -276,6 +383,9 @@ export interface Tile {
 export interface View {
   id: string
   name: string
+  /** GRID UNITS — columns and rows of the tile grid, never pixels. A pixel
+   *  layout would lay out differently on every reader's screen, which is the
+   *  one thing a shared document must not do. */
   w: number
   h: number
   tiles: Tile[]
@@ -312,6 +422,8 @@ export interface DashDoc {
   meta?: DocMeta
   sheets: Sheet[]
   measures?: Record<string, Measure>
+  /** the data story — see the Story block at the foot of this file */
+  story?: Story
   names?: Record<string, { v: number | string; note?: string }>
   views?: View[]
   theme?: Theme
@@ -358,7 +470,7 @@ export const docBudget = (canWriteInPlace: boolean): number =>
 // --- Parsing -------------------------------------------------------------
 
 export interface Repair {
-  what: 'sheet-id' | 'column-id' | 'duplicate-id' | 'missing-id'
+  what: 'sheet-id' | 'column-id' | 'duplicate-id' | 'missing-id' | 'doc-id'
   id: string
   became: string
 }
@@ -385,6 +497,15 @@ export interface Repair {
  * loss this type exists to prevent. The boot site decides it, because only the
  * boot site can still see the DOM.
  */
+/**
+ * A fresh document identity. Never derived from anything in the document —
+ * two workbooks made from the same template must not collide.
+ */
+export const newDocId = (): string =>
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `d-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+
 export type ParseResult =
   | { ok: true; doc: DashDoc; repairs: Repair[]; frozen?: 'policy' | 'version' }
   | { ok: false; err: 'empty' }
@@ -496,6 +617,20 @@ export function parseDoc(json: string): ParseResult {
       return { ...s, id, kind: 'canvas', cells: isObj(s.cells) ? s.cells : {} } as unknown as CanvasSheet
     }
 
+    // AN UNRECOGNISED KIND IS PRESERVED VERBATIM, not coerced to a table.
+    //
+    // This branch used to fall through, so every sheet that was not 'canvas'
+    // came back as `kind: 'table'` with empty rids/columns/data/steps bolted
+    // on. That is not a pivot-shaped problem, it is the additivity invariant
+    // (PLATFORM §3) failing for EVERY future sheet kind: a build that has never
+    // heard of one is required to keep the file intact, and instead it quietly
+    // rewrote the sheet into a different thing and dropped what made it one.
+    // Old builds are frozen code, so a file written by a newer dash has to
+    // survive a round trip through them untouched.
+    if (typeof s.kind === 'string' && s.kind !== 'table') {
+      return { ...s, id } as unknown as Sheet
+    }
+
     const colIds = new Set<string>()
     const renamed = new Map<string, string>()
     const columns = Array.isArray(s.columns)
@@ -540,7 +675,16 @@ export function parseDoc(json: string): ParseResult {
     } as unknown as TableSheet
   })
 
-  const doc = { ...raw, format: FORMAT, version, sheets } as unknown as DashDoc
+  // MINT A docId IF THE FILE HAS NONE. The field is declared required and was
+  // not enforced, so a document block without one parsed happily and booted
+  // with `docId: undefined` — and everything that keys off it (autosave
+  // recovery, the version timeline, every future merge) then shares ONE slot
+  // named "undefined" across every such workbook. Slides mints it here for the
+  // same reason. It persists from the next save on, so a file gains an
+  // identity once and keeps it.
+  const docId = typeof raw.docId === 'string' && raw.docId ? raw.docId : newDocId()
+  if (docId !== raw.docId) repairs.push({ what: 'doc-id', id: '', became: docId })
+  const doc = { ...raw, format: FORMAT, version, docId, sheets } as unknown as DashDoc
   return frozen ? { ok: true, doc, repairs, frozen } : { ok: true, doc, repairs }
 }
 
@@ -557,3 +701,112 @@ export const rowCount = (doc: DashDoc): number =>
     (n, s) => n + (s.kind === 'table' ? s.rids.reduce((m, [, c]) => m + c, 0) : 0),
     0,
   )
+
+// The story references the chart and 3D binding shapes. Both imports are
+// TYPE-ONLY and therefore erased, so this does not create a runtime cycle with
+// chart.ts/viz3d.ts, which import model.ts back.
+import type { ChartBinding } from './chart.ts'
+import type { Viz3dBinding } from './viz3d.ts'
+
+// --- data story --------------------------------------------------------------
+//
+// An ADDITIVE top-level field (`DashDoc.story`). A build that has never heard of
+// stories keeps it on a round trip and simply does not present it — the format
+// rule PLATFORM §3 states, and the reason the field can ship before the
+// presenter is finished.
+
+/**
+ * A filter, in the form that survives JSON.
+ *
+ * filter.ts's `Predicate` carries a `Set` for the checkbox list, and a Set
+ * serializes as `{}` — the filter would come back from the file matching
+ * NOTHING, which reads as "this step's data vanished" rather than as a broken
+ * round trip. So the stored spelling is an array and `toPredicate` /
+ * `fromPredicate` are the only bridge. Everything else is passed through
+ * verbatim, including a predicate op this build does not know: it is dropped at
+ * USE time (`toFilters`) and kept in the document, which is the additive
+ * behaviour and not the same as deleting it.
+ */
+export type StoredPredicate =
+  | { op: 'equals' | 'notEquals' | 'greater' | 'less' | 'greaterOrEqual' | 'lessOrEqual'; v: unknown }
+  | { op: 'contains' | 'notContains' | 'startsWith' | 'endsWith'; v: string }
+  | { op: 'between'; lo: unknown; hi: unknown }
+  | { op: 'isBlank' | 'notBlank' }
+  /** the Excel checkbox list; `null` in the list is the "(Blanks)" box */
+  | { op: 'isOneOf'; values: unknown[] }
+  | { op: 'topN' | 'bottomN'; n: number }
+  /** a predicate a future build understands. Kept, not applied. */
+  | { op: string; [k: string]: unknown }
+
+export interface StoredFilter {
+  col: string
+  pred: StoredPredicate
+  [extra: string]: unknown
+}
+
+export interface SortKey {
+  col: string
+  dir: 'asc' | 'desc'
+}
+
+/**
+ * Where the 3D camera stands. Angles in radians, matching gl.ts's `Orbit`, so
+ * capture and restore are a field copy rather than a conversion nobody can
+ * check. `distance` is optional because `frameCamera` derives a sensible one
+ * from the scene radius, and a stored distance from a differently-sized slice
+ * of the data would frame the next step wrong.
+ */
+export interface StoryCamera {
+  azimuth: number
+  elevation: number
+  distance?: number
+  [extra: string]: unknown
+}
+
+/**
+ * The subset the step is ABOUT — category values on the chart's x axis.
+ *
+ * Carried in the format from commit one even though the renderer cannot paint
+ * it yet (see KNOWN GAPS): a field added later is permanently second-class,
+ * which is the same argument model.ts makes for `CanvasSheet` and for the
+ * reserved `bind` op.
+ */
+export interface StoryHighlight {
+  values: unknown[]
+  label?: string
+  [extra: string]: unknown
+}
+
+/**
+ * How to get here from the step before.
+ *
+ * An OPEN union, like model.ts's `Policy`. A value this build does not know
+ * must PARSE and must degrade to a cut — a story from a newer build has to
+ * play, less prettily, rather than throw in front of an audience.
+ */
+export type StoryTransition = 'morph' | 'cut' | (string & {})
+
+/** One saved view of the data. */
+export interface StoryStep {
+  id: string
+  /** sheet id. A step whose sheet was deleted is SKIPPED, never guessed at. */
+  sheet: string
+  caption?: string
+  filters?: StoredFilter[]
+  sorts?: SortKey[]
+  /** the same binding shape chart.ts uses — columns, not numbers */
+  chart?: ChartBinding
+  /** a 3D step. `chart` and `viz` are alternatives; `viz` wins if both are set. */
+  viz?: Viz3dBinding
+  camera?: StoryCamera
+  highlight?: StoryHighlight
+  transition?: StoryTransition
+  /** seconds. Clamped at use; a story that hangs for a minute is not a story. */
+  duration?: number
+  [extra: string]: unknown
+}
+
+export interface Story {
+  steps: StoryStep[]
+  [extra: string]: unknown
+}

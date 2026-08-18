@@ -15,6 +15,30 @@
 
 const CH = '__bento_tray__'
 
+/**
+ * Say hello, once, on load.
+ *
+ * This is the ONLY thing here that the page did not ask for, and it exists to
+ * fix a chicken-and-egg. The tray lists documents by walking granted folders,
+ * but a `FileSystemDirectoryHandle` has no path, so it cannot turn one into a
+ * URL to open. The path is learned by subtracting a file's route-from-the-grant
+ * from its absolute `sender.url` — and that only happened during a SAVE. So on
+ * a fresh install every row was listed and none could be opened, which is
+ * exactly as useful as no list at all.
+ *
+ * Opening a document is the natural moment to learn where its folder is. One
+ * document opened teaches the prefix for its whole folder, and every other
+ * document in there becomes openable from the tray.
+ *
+ * It sends no payload — the extension reads `sender.url`, which the browser
+ * stamps and this page cannot forge — and ignores the answer. A page that
+ * cannot be placed inside a grant simply is not one, and nothing is written
+ * either way.
+ */
+chrome.runtime.sendMessage({ op: 'hello' }).catch(() => {
+  /* worker asleep, extension reloading, page outside every grant — all fine */
+})
+
 window.addEventListener('message', async (ev) => {
   const d = ev.data
   // Same-window only: `ev.source !== window` rejects anything posted in from a

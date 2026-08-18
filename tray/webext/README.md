@@ -18,6 +18,140 @@ The last row is the one that matters: the copy and the export went elsewhere
 rather than overwriting the document being edited. An earlier build got that
 wrong and silently destroyed it.
 
+## Packaging
+
+```bash
+node scripts/pack-webext.mjs          # → dist/bento-tray-<version>.zip
+node scripts/pack-webext.mjs --check  # validate only (CI runs this)
+```
+
+It is an allow-list, not a recursive zip: `probe/`, `README.md` and `STORE.md`
+are in this directory and must not reach a listing — the probes especially,
+being four pages that open local files and talk across origins, which is
+harmless to us and alarming to a reviewer. It also checks every file the
+manifest names exists, every icon is the size it claims, and no permission is
+declared but unused. The output is byte-reproducible, so the uploaded package
+can be shown to be the reviewed one.
+
+Listing copy, permission justifications and the data-usage answers live in
+`STORE.md`.
+
+## Releasing, and keeping unpacked installs current
+
+Two distribution routes, and only one of them updates itself.
+
+**Chrome Web Store and Edge Add-ons** update silently. Nothing to do.
+
+**GitHub, loaded unpacked** never updates. Chrome ignores `update_url` for a
+development install — it is running from a directory on disk, and nothing will
+rewrite that directory. Self-hosting a `.crx` is not a way round it either:
+Chrome refuses off-store installs on Windows and macOS.
+
+So the extension tells those users instead. `src/update.js` asks
+`chrome.management.getSelf()` for `installType` — which needs **no permission** —
+and only a non-`normal` install ever checks. Store users are never asked and
+never see a notice they cannot act on. The check is a GET for a static JSON file
+with no identifiers and no query string; it can report, link, and nothing else.
+
+**On by default, and switchable.** On, because an unpacked install has no other
+way to learn it is behind, and because the app itself checks at launch by
+default (`kernel/src/update.ts`). Switchable, because this repo has form on the
+other side — the v0.9.1 fix existed so an anonymous visitor never phones home —
+and the audience that installs from GitHub is exactly the one entitled to say
+no. The switch is in Settings, next to what it does, and OFF means no request is
+made at all rather than a result quietly discarded. **Check now** still works
+when it is off: pressing a button is the consent the preference stands in for.
+
+### What an unpacked user has to do, and the way it goes wrong
+
+An unpacked extension is identified by its **directory path**. So the obvious
+upgrade — extract the new zip somewhere convenient, "Load unpacked" from there —
+produces a DIFFERENT extension: different id, different origin, empty
+IndexedDB. No granted folders, no learned paths, no preferences, and the old
+copy still installed beside it. The user lands on the first-run screen having
+done the natural thing.
+
+The safe procedure, which the notice spells out as numbered steps:
+
+1. Download the zip from the release.
+2. Replace the files **in the folder it was originally loaded from**.
+3. `chrome://extensions` → **Reload** on Bento Tray.
+
+Same path, same id, so the grants and everything else survive. The first-run
+screen also carries a note for anyone who already got it wrong, because "an
+unpacked install with no folders" is exactly what a botched upgrade looks like
+and nothing can detect it from inside the new copy — the data is intact under
+the old id.
+
+Note that extracting over an existing folder leaves files a release has since
+DELETED. Harmless (the manifest does not name them) but untidy; emptying the
+folder first is cleaner, and keeps the path, which is the part that matters.
+
+### To cut a release
+
+```bash
+node scripts/pack-webext.mjs
+```
+
+That writes two things into `dist/`:
+
+- `bento-tray-<version>.zip` — upload to both stores.
+- `tray-release.json` — publish at `https://bento.page/releases/tray/manifest.json`.
+
+The JSON carries the version, the release URL, and the **sha256 of the zip just
+built**. It is emitted rather than hand-written because a copied hash goes stale
+in silence, and it is publishable at all because the package is byte-reproducible
+— anyone can rebuild from source and confirm the zip they downloaded is the one
+that was reviewed.
+
+Bump `manifest.json`'s `version` before packing; the store rejects a re-upload of
+an existing version, and unpacked users compare against exactly that number.
+
+## Two surfaces
+
+- **Toolbar click → the library** (`src/home.html`): browsing and managing.
+  An existing tab is focused rather than duplicated. This only works because the
+  manifest declares NO `default_popup` — declaring one makes the click open it
+  and `action.onClicked` never fires.
+- **`Alt+B`, or right-click in a document → the panel** (`src/panel.html`):
+  switching documents while working in one. It was a popup; a popup dies when it
+  loses focus, which is exactly when you click into the document you switched
+  to.
+
+`sidePanel.open()` must be called **synchronously** inside the gesture that
+triggered it (Chrome 116+, this extension's floor). An `await` before it loses
+the gesture and Chrome refuses without saying so — which is why the lapsed-grant
+notification opens the library instead: it is handled after an await.
+
+## Icons
+
+`icons/icon.svg` is the source of everything visual: the favicon for the
+extension's own pages, and the four PNGs Chrome takes for the toolbar action
+icon. It carries a corner radius, unlike `tray/assets/tray-icon.svg`, which is
+square because iOS applies its own squircle mask.
+
+The PNGs are exports of it and must be regenerated rather than edited:
+
+```bash
+cd tray/webext/icons
+for n in 16 32 48 128; do
+  printf '<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}svg{display:block;width:%dpx;height:%dpx}</style>' "$n" "$n" > /tmp/i.html
+  sed -n '/<svg/,$p' icon.svg >> /tmp/i.html
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+    --disable-gpu --hide-scrollbars --default-background-color=00000000 \
+    --window-size=$n,$n --screenshot=icon-$n.png /tmp/i.html
+done
+```
+
+Two things `pack-webext.mjs` refuses, both of which have already happened:
+
+- **A PNG with no alpha channel.** The originals were RGB, so opaque squares by
+  construction, and no radius anywhere could round the toolbar.
+- **An SVG that is not well-formed XML.** This command lives here rather than in
+  a comment inside `icon.svg` because an XML comment may not contain a double
+  hyphen, and every flag above has one. Pasting it in there made the file
+  malformed, and the mark rendered as a broken image on every surface.
+
 ## Distribution
 
 **The app stores are the main channel** — Chrome Web Store, Edge Add-ons, and
@@ -99,7 +233,12 @@ you choose*, so they fall through to the native picker untouched.
 | `src/page-bridge.js` | MAIN | overrides `showSaveFilePicker`; decides in-place vs native |
 | `src/relay.js` | ISOLATED | pure relay, no logic — the two worlds cannot reach each other |
 | `src/background.js` | service worker | holds the grant; matches the file; writes |
+| `src/status.js` | shared | the two preconditions, read by both surfaces below |
+| `src/popup.html/js` | toolbar | says whether a save will land, before one is attempted |
 | `src/options.html/js` | extension page | where the folder is granted (needs a gesture) |
+
+The popup and the options page read the same `status.js`, so they cannot tell
+the user different stories about whether the next ⌘S will prompt.
 
 Both content-script halves are required: an isolated world can talk to the
 extension but not touch page globals; a MAIN world can define
@@ -130,13 +269,31 @@ declines. Correct, but it means the extension only covers `.bento.html` files.
 ## The matching problem
 
 A page gives us `/Users/…/Decks/Q3.bento.html`. A `FileSystemDirectoryHandle`
-knows its own **name** but not its path, and nothing in the API exposes one — so
-the two cannot be compared directly.
+knows its own **name** but not its path, so the grant and the sender cannot be
+compared directly. Resolution is two steps, and the second is the one that
+matters:
 
-`findByName` searches the granted tree (depth-limited) and requires **exactly one
-match**. Unambiguous in the ordinary case; when it is ambiguous it declines and
-the native picker takes over. Declining costs a prompt, guessing costs somebody's
-file.
+1. find files in the granted tree with the sender's file **name**, and require
+   exactly one — ambiguity is declined, never guessed at;
+2. ask the directory to **`resolve()`** that candidate, which returns its path
+   segments *relative to the grant*, and require the sender's own path to end
+   with them.
+
+**Step 1 alone was wrong, and shipped that way.** A name match is not an
+identity match. With the grant at `~/Documents` holding
+`~/Documents/Clients/Q3.bento.html`, opening a working copy at
+`~/Desktop/Q3.bento.html` produced exactly one hit — the sender's own copy is
+outside the grant, so it is not a second hit and the ambiguity guard cannot
+fire. A save then wrote the Desktop document over the Clients one and never
+wrote the file being edited. No attacker required.
+
+**Residual, stated plainly because the API cannot close it.** Nothing exposes
+the grant's absolute path, so step 2 verifies a relative *suffix*, not a full
+path. A page deliberately placed at `<somewhere-else>/Clients/Q3.bento.html`
+still matches a grant containing `Clients/Q3.bento.html`. That is far narrower
+than a bare filename — it requires reproducing the victim's folder structure —
+but it is not nothing, and it is why the content-script match stays limited
+rather than covering every local HTML file.
 
 ## Trying it
 

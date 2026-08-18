@@ -217,6 +217,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "הדפדפן הזה אינו יכול לשכתב קבצים במקומם — עותק חדש נשמר בתיקיית ההורדות",
   "This document": "המסמך הזה",
   "This file carries its own app — it works offline, forever, as is.": "הקובץ הזה נושא בתוכו את היישום שלו — הוא עובד גם ללא חיבור, לתמיד, כמו שהוא.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "החלון הזה עדיין מריץ את גרסה {v} — טענו מחדש כדי לסיים. גיבוי של גרסה {v} נשמר לצד הקובץ הזה.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "החלון הזה עדיין מריץ את גרסה {v} — טענו מחדש כדי לסיים. גיבוי של גרסה {v} הורד.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "החלון הזה עדיין מריץ את גרסה {v}. אם שכתבתם את הקובץ הפתוח כאן, טענו מחדש; אחרת פתחו את הקובץ ששמרתם.",
   "This window keeps running v{v} until you open the downloaded file.": "החלון הזה ימשיך להריץ את גרסה {v} עד שתפתחו את הקובץ שהורד.",

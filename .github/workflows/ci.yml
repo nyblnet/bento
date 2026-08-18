@@ -155,6 +155,16 @@ jobs:
           for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
             echo "--- $tz"
             TZ=$tz node scripts/test-spaces-journal.ts
+      - name: Magic notes evaluator (several timezones)
+        # Two failure modes, and the second is what would make the feature worse
+        # than not having it: a WRONG answer (silent, confident, in somebody's
+        # notes), and an answer where there should be none — "Meet Ana at 3" is
+        # a sentence. The parser must consume the whole line or return nothing.
+        # Dates run in several timezones for the reasons journal.ts records.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-calc.ts
           done
 
       - name: Spaces shell size ceiling
@@ -215,6 +225,71 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Offline-mode rig
+        # Offline mode promises "nothing leaves this computer" and was broken
+        # five ways at once (GHSA-5c3x-xqp6-g94r): a manual update check, a
+        # language-pack download, a deck's remote <video>, in-flight requests
+        # that kept running, and a second tab's socket that kept syncing.
+        #
+        # It stayed hidden because it reads as correct: an agent asked to audit
+        # it said "secure" from the docs AND from the code. So the rig does not
+        # check the call sites — it enforces the POLICY that no file outside
+        # kernel/src/net.ts may touch a network primitive at all, which is what
+        # stops the NEXT call site being wrong, plus the chokepoint's own
+        # behaviour (refusal, aborting what is already in flight, cross-tab).
+        run: node scripts/test-offline.ts
+
+      - name: Untrusted-markup sanitizer rig
+        # Every deck is untrusted input somebody may open, paste or receive over
+        # collab, and script in that page owns the collab keys, the plaintext
+        # autosave store and the write handle to the file on disk. An audit
+        # measured `<svg onload>`, a rect `onclick`, `<img onerror>` in a
+        # foreignObject and `<form action="javascript:">` all executing.
+        #
+        # The sanitizer is an ALLOWLIST, so what this pins is the DEFAULT: the
+        # first version was a denylist that passed 40 checks with the critical
+        # still open, because the rig tested call sites with source regexes
+        # instead of the policy. These checks drive the real walk, and the
+        # browser half needs Chrome — it self-skips where there is none, so the
+        # node half still gates.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-sanitize.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-sanitize.mjs"
+          node "$RUNNER_TEMP/test-sanitize.mjs"
+
+      - name: Export-secrets rig
+        # "Copy document JSON" shipped the room's owner private key while the
+        # tooltip recommended pasting it into an AI chat, and "Save as
+        # template…" wrote plaintext out of a password-protected deck. Both are
+        # invisible in the product: the file looks right. This scans the source
+        # for the two shapes — an export that forgets to strip collab secrets,
+        # and a user-facing path that reaches serializeFile instead of
+        # serializeAuto — so a NEW export path cannot reintroduce either.
+        run: node scripts/test-export-secrets.ts
+
+      - name: Blob content-address rig
+        # Encrypted assets are fetched by content address from a relay the
+        # threat model treats as untrusted. Nothing verified that what came
+        # back matched what was asked for, and the substitution was cached to
+        # disk, so one poisoned response persisted.
+        run: node scripts/test-blobs.ts
+
+      - name: tray/ios bridge rig
+        # The iOS host opens ANY self-contained HTML document and treats those
+        # documents as mutually untrusted, so a page-supplied filename reaching
+        # appendingPathComponent was an arbitrary write inside the container —
+        # including over another deck the user would later open and trust.
+        # Source-shape checks; the Swift half self-skips without a toolchain.
+        run: node scripts/test-tray-bridge.ts
+
+      - name: WebExtension package rig
+        # Validates the store package without writing it: every file the
+        # manifest names exists, every icon is the size it claims, no unexpected
+        # file is about to ship (probe/ is four capability probes — harmless to
+        # us, alarming to a reviewer), and no permission is declared but unused.
+        # A listing rejected for a missing 128px icon costs days of review.
+        run: node scripts/pack-webext.mjs --check
+
       - name: WebExtension background rig
         # The half that WRITES, and previously the untested half. Two properties
         # it must hold: the target file comes from sender.url (browser-stamped)
@@ -230,6 +305,47 @@ jobs:
         # decision is pure logic over an options bag, so it is checkable here
         # rather than by reloading an extension and pressing Cmd-S.
         run: node scripts/test-webext-bridge.ts
+
+      - name: WebExtension route rig
+        # Turning an absolute path into "where this granted folder lives", from
+        # paths the extension did not choose — browser history, for files that
+        # may have moved or never been in a grant at all. Getting it wrong does
+        # not produce a broken link; it records a folder at the wrong place and
+        # every document in it silently opens something else. So it must prove,
+        # never guess: the route resolves inside the grant AND dir.resolve()
+        # agrees with the path's own tail.
+        run: node scripts/test-webext-route.ts
+
+      - name: WebExtension document-library rig
+        # The popup is a document browser, and everything in it is DERIVED from
+        # files on disk: the title out of the document block, the thumbnail out
+        # of the preview block, the openable path out of a learned prefix. Each
+        # is a parse against a format that moves, and each fails quietly — a row
+        # showing a filename instead of a title, or a blank square. Nothing
+        # throws, so nothing reports it.
+        #
+        # Runs AFTER the slides build on purpose: it reads the real shell, and
+        # with a document spliced in at the real offset. Hand-written fixtures
+        # would have passed the bug this replaces, where a metadata reader hunted
+        # for the document block's CLOSING tag and so found nothing in any
+        # document carrying an image.
+        run: node scripts/test-webext-library.ts
+
+      - name: WebExtension update-notice rig
+        # Store installs update themselves; one loaded unpacked never will, and
+        # Chrome ignores update_url for a development install. So the GitHub
+        # route has to be told — and told in exactly one direction: a store user
+        # must never see a notice they cannot act on, and must not even cost a
+        # request. Every failure mode here is silent by nature.
+        run: node scripts/test-webext-update.ts
+
+      - name: WebExtension localisation rig
+        # Every failure mode of a message catalogue is silent: a key the code
+        # uses but English lacks renders as the key name, a locale missing a key
+        # falls back so a German page carries English sentences, and a dropped
+        # $1 leaves a hole in a translated sentence. All of them are visible
+        # only to someone who reads that language.
+        run: node scripts/test-webext-i18n.ts
 
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
@@ -328,6 +444,99 @@ jobs:
         # is a missing value drawn as a zero — "we sold nothing" instead of "we
         # do not know".
         run: node scripts/test-dash-chart.ts
+
+      # ── the rest of bento/dash. Each of these asserts a way a spreadsheet can
+      # be CONFIDENTLY WRONG, which is the failure that matters here: nobody
+      # re-derives a number by hand, so a wrong one is not caught by the person
+      # relying on it. Each rig argues its own case in its header; the lines
+      # below say why it gates a merge.
+      - name: bento/dash function pack
+        # Lookups, multi-criteria, finance, statistics — including the three
+        # places we deliberately depart from Excel because Excel's default is a
+        # trap: an approximate VLOOKUP on unsorted data, an IRR that converges
+        # on nothing, a PERCENTILE that clamps instead of refusing.
+        run: node scripts/test-dash-functions.ts
+
+      - name: bento/dash cell formulas
+        # Evaluation ORDER. A cell computed before the cell it reads writes a
+        # stale number into the document, looking authoritative.
+        run: node scripts/test-dash-cellformula.ts
+
+      - name: bento/dash A1 references
+        # `$` pins against a COPY and not against structure, and a reference
+        # into a deleted row is #REF! rather than whatever slid up into it.
+        run: node scripts/test-dash-a1.ts
+
+      - name: bento/dash pivot
+        # Subtotals are COMPUTED, not summed: an average of averages is a
+        # different number, and a distinct count does not add up.
+        run: node scripts/test-dash-pivot.ts
+
+      - name: bento/dash dashboard
+        # Cross-filter selections compose, and the categories of a column
+        # PARTITION the sheet — no row dropped, none counted twice.
+        run: node scripts/test-dash-dashboard.ts
+
+      - name: bento/dash data story
+        # A gap tweens as a gap. Interpolating an absent quarter through zero is
+        # the animation telling a lie about the data.
+        run: node scripts/test-dash-story.ts
+
+      - name: bento/dash filter and sort
+        run: node scripts/test-dash-filter.ts
+
+      - name: bento/dash rows and columns
+        # Structure, and the rid watermark — a rid must never be minted twice,
+        # which is collaboration's correctness precondition.
+        run: node scripts/test-dash-rowcol.ts
+
+      - name: bento/dash selection and clipboard
+        run: node scripts/test-dash-select.ts
+
+      - name: bento/dash conditional formatting
+        run: node scripts/test-dash-condfmt.ts
+
+      - name: bento/dash side panels
+        run: node scripts/test-dash-panels.ts
+
+      - name: bento/dash About dialog
+        run: node scripts/test-dash-about.ts
+
+      - name: bento/dash thumbnail preview
+        # An encrypted workbook NEVER gets a preview — a plaintext title beside
+        # the ciphertext is the leak the password exists to prevent.
+        run: node scripts/test-dash-preview.ts
+
+      - name: bento/dash zip
+        # Verified against real unzip implementations, not only our own reader:
+        # a reader and a writer that share a bug agree with each other perfectly.
+        run: node scripts/test-dash-zip.ts
+
+      - name: bento/dash xlsx
+        # Both 1900 date epochs, including the leap-year bug — getting it wrong
+        # shifts every date by four years, silently.
+        run: node scripts/test-dash-xlsx.ts
+
+      - name: bento/dash WebGL
+        run: node scripts/test-dash-gl.ts
+
+      - name: bento/dash 3D scenes
+        run: node scripts/test-dash-viz3d.ts
+
+      - name: bento/dash CRDT convergence
+        # The big one: randomised concurrent edits across N replicas, asserted
+        # to converge. It has caught every ordering bug in the engine, and the
+        # two it did not catch were found by widening it.
+        run: node scripts/test-dash-sync.ts
+
+      - name: Theme token gate
+        # Every failure this catches is INVISIBLE in the light theme, which is
+        # the one the author is looking at. A chrome surface pinned to white
+        # keeps its light background in dark and puts light text on it — the
+        # properties panel measured 1.21:1 against a 4.5 floor before this gate
+        # existed. It also stops a document token being themed (which would
+        # invert the deck) and the light palette forking from spaces and type.
+        run: node scripts/test-slides-theme.mjs
 
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is

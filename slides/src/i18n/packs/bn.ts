@@ -227,6 +227,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "এই ব্রাউজার ফাইলকে তার নিজের জায়গায় নতুন করে লিখতে পারে না — একটি নতুন কপি Downloads-এ গেছে",
   "This document": "এই ডকুমেন্ট",
   "This file carries its own app — it works offline, forever, as is.": "এই ফাইল নিজের অ্যাপ নিজেই বয়ে নিয়ে চলে — যেমন আছে তেমনই, অফলাইনে, চিরকাল কাজ করে।",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "এই উইন্ডোতে এখনো v{v} চলছে — শেষ করতে রিলোড করুন। v{v}-এর একটি ব্যাকআপ এই ফাইলের পাশে সংরক্ষিত হয়েছে।",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "এই উইন্ডোতে এখনো v{v} চলছে — শেষ করতে রিলোড করুন। v{v}-এর একটি ব্যাকআপ ডাউনলোড হয়েছে।",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "এই উইন্ডোতে এখনো v{v} চলছে। এখানে খোলা ফাইলটির উপরেই যদি লিখে থাকেন, তবে রিলোড করুন; নাহলে যে ফাইলটি সেভ করেছেন সেটি খুলুন।",
   "This window keeps running v{v} until you open the downloaded file.": "ডাউনলোড করা ফাইলটি না খোলা পর্যন্ত এই উইন্ডোতে v{v} চলতেই থাকবে।",

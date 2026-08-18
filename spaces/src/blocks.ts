@@ -21,6 +21,7 @@
 // `custom: true`; everything the registry can express lives here.
 
 import type { Block } from './model'
+import { effectiveParents } from './model.ts'
 import type { IconName } from './icons'
 
 export interface BlockSpec {
@@ -313,9 +314,20 @@ export function mdLayout(blocks: Block[]): Array<{ quote: string; indent: string
   // blocks can name each other. The renderer is a pre-order pass and cannot
   // loop; an ancestor walk can, and would hang an export of a document that
   // displays perfectly well.
+  // The ancestor chain, by model.ts's ONE rule — `parent` must exist in this
+  // page AND appear strictly earlier. This followed the raw `parent` graph with
+  // a hop cap of 32, which is a cap because the graph can cycle; under the
+  // positional rule it cannot, so the walk terminates by construction and the
+  // cap is gone. (Held: an EXPORT that silently truncated at depth 32 would
+  // have been a quiet wrong answer, not an error.)
+  const eff = effectiveParents({ blocks } as never)
   const owners = (b: Block): Block[] => {
     const chain: Block[] = []
-    for (let o = b.parent ? byId.get(b.parent) : undefined; o && chain.length < 32; o = o.parent ? byId.get(o.parent) : undefined) chain.push(o)
+    for (let id = eff.get(b.id); id; id = eff.get(id)) {
+      const o = byId.get(id)
+      if (!o) break
+      chain.push(o)
+    }
     return chain
   }
   const wraps = (b: Block | undefined): boolean => !!b && SPEC.get(b.type)?.mdQuoteChildren === true

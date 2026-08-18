@@ -221,6 +221,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Tämä selain ei voi korvata tiedostoja suoraan — uusi kopio ladattiin Lataukset-kansioon",
   "This document": "Tämä asiakirja",
   "This file carries its own app — it works offline, forever, as is.": "Tämä tiedosto kantaa oman sovelluksensa — se toimii offline-tilassa, ikuisesti, sellaisenaan.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Tässä ikkunassa on yhä käytössä versio v{v} — viimeistele lataamalla uudelleen. Versiosta v{v} tallennettiin varmuuskopio tämän tiedoston viereen.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Tässä ikkunassa on yhä käytössä versio v{v} — viimeistele lataamalla uudelleen. Versiosta v{v} ladattiin varmuuskopio.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Tässä ikkunassa on yhä käytössä versio v{v}. Jos korvasit tässä avoinna olevan tiedoston, lataa uudelleen; muussa tapauksessa avaa tallentamasi tiedosto.",
   "This window keeps running v{v} until you open the downloaded file.": "Tässä ikkunassa on käytössä versio v{v}, kunnes avaat ladatun tiedoston.",

@@ -218,6 +218,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Denne nettleseren kan ikke skrive over filer direkte — en ny kopi er lagt i Nedlastinger",
   "This document": "Dette dokumentet",
   "This file carries its own app — it works offline, forever, as is.": "Denne filen har med seg sin egen app — den virker offline, for alltid, som den er.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Dette vinduet kjører fortsatt v{v} — last inn på nytt for å fullføre. En sikkerhetskopi av v{v} ble lagret ved siden av denne filen.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Dette vinduet kjører fortsatt v{v} — last inn på nytt for å fullføre. En sikkerhetskopi av v{v} ble lastet ned.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Dette vinduet kjører fortsatt v{v}. Hvis du skrev over filen som er åpen her, laster du inn på nytt; ellers åpner du filen du lagret.",
   "This window keeps running v{v} until you open the downloaded file.": "Dette vinduet fortsetter å kjøre v{v} til du åpner den nedlastede filen.",

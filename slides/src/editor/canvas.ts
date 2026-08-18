@@ -34,6 +34,11 @@ export class SlideCanvas {
   private zoom = 1
   private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
+  /** Slide identity captured when an inline edit begins. Element ids may be
+   *  shared across duplicated slides, so resolving through store.slide at
+   *  commit time can write into the wrong slide after navigation or a remote
+   *  deletion. */
+  private editingSlideId: string | null = null
   /** startTextEdit swapped the rendered form for raw source (a field or a
    *  formula), so commit must re-render even if the text is unchanged. */
   private editingShowedRaw = false
@@ -575,6 +580,10 @@ export class SlideCanvas {
   }
 
   render() {
+    // A slide switch is a hard boundary for an inline edit. Commit against
+    // the slide where editing began (or discard if that slide was remotely
+    // deleted) before replacing the canvas DOM.
+    if (this.editing && this.editingSlideId !== this.store.slide?.id) this.commitTextEdit()
     // Don't repaint out from under an in-progress inline edit. A remote collab
     // op landing must NOT tear down the text/cell node you're typing in — that
     // steals focus and resets the caret (the #1 rough edge reported at launch).
@@ -1047,10 +1056,19 @@ export class SlideCanvas {
     // even when the text did NOT change, and only a re-render can do that.
     this.editingShowedRaw = false
     if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$/.test(model.html)) {
-      inner.innerHTML = model.html
+      // SANITIZED, even though the point of the swap is to show what the model
+      // holds. This is the only place raw model html reaches the live canvas —
+      // the render path has always cleaned it — so without this, double-
+      // clicking a text box in a deck someone sent you ran its script, and the
+      // `{{`-or-`$` gate is no barrier at all: one literal dollar sign opens it.
+      // Nothing is lost: the sanitizer unwraps tags and strips attributes, so a
+      // {{page:2}} token and `$E=mc^2$` TeX source are plain text to it and
+      // survive verbatim, which is the entire purpose of showing the raw html.
+      inner.innerHTML = sanitizeHtml(model.html)
       this.editingShowedRaw = true
     }
     this.editing = node
+    this.editingSlideId = this.store.slide.id
     node.classList.add('bento-editing')
     inner.contentEditable = 'true'
     inner.focus()
@@ -1103,7 +1121,9 @@ export class SlideCanvas {
     const node = this.editing
     if (!node) return
     if (this.editingCell) { this.commitCellEdit(node); return }
+    const slideId = this.editingSlideId
     this.editing = null
+    this.editingSlideId = null
     this.onTextEditChange?.(undefined)
     const inner = node.querySelector<HTMLElement>('.bento-text-inner')
     const id = node.dataset.elId
@@ -1113,7 +1133,9 @@ export class SlideCanvas {
     // drop the zero-width caret spacers autoformat leaves behind
     const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
-    const el = this.store.element(id)
+    const el = this.store.doc.slides
+      .find((slide) => slide.id === slideId)
+      ?.elements.find((element) => element.id === id)
     if (el && el.type === 'text' && (el.html !== html || grownH > el.h)) {
       this.store.commit(() => {
         el.html = html
@@ -1162,6 +1184,7 @@ export class SlideCanvas {
     const inner = td.querySelector<HTMLElement>('.bento-cell-inner')
     if (!node || !inner) return
     this.editing = node
+    this.editingSlideId = this.store.slide.id
     this.editingCell = { r, c }
     node.classList.add('bento-editing')
     inner.contentEditable = 'true'
@@ -1194,7 +1217,9 @@ export class SlideCanvas {
   private commitCellEdit(node: HTMLElement) {
     const cell = this.editingCell!
     const id = node.dataset.elId
+    const slideId = this.editingSlideId
     this.editing = null
+    this.editingSlideId = null
     this.editingCell = null
     this.onTextEditChange?.(undefined)
     node.classList.remove('bento-editing')
@@ -1203,10 +1228,12 @@ export class SlideCanvas {
     if (!inner || !id) return
     inner.contentEditable = 'false'
     const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
-    const el = this.store.element(id)
+    const el = this.store.doc.slides
+      .find((slide) => slide.id === slideId)
+      ?.elements.find((element) => element.id === id)
     if (el && el.type === 'table' && el.rows[cell.r]?.cells[cell.c] && el.rows[cell.r].cells[cell.c].html !== html) {
       this.store.commit(() => {
-        const tb = this.store.element(id) as TableElement
+        const tb = el as TableElement
         if (tb.rows[cell.r]?.cells[cell.c]) tb.rows[cell.r].cells[cell.c].html = html
       })
     } else {
