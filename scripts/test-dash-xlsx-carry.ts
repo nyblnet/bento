@@ -26,6 +26,11 @@
 //     it. The facts were all emitted (merged-cells, empty-header, mixed-types)
 //     and never joined.
 //
+//   FINDING 7 — THINGS DROPPED IN SILENCE. Frozen panes, per-cell bold and
+//     colour, and an Excel table's TOTALS ROW — which is the consequential
+//     one, because it imports as an ordinary data row and then sorts to the
+//     top of the deals, is caught by filters, and is counted by aggregates.
+//
 // THE RIG BUILDS REAL .xlsx BYTES — a ZIP of OOXML — and asserts on the
 // DOCUMENT that comes out of `importXlsx`. Both halves matter: finding 4 lives
 // in a gate that only ever sees real formula text, and a check that a helper
@@ -345,6 +350,187 @@ const over = (s: TableSheet, key: string): Record<string, unknown> =>
   const r3 = await importXlsx(bytes, { idPrefix: 'y', headerRow: 0 })
   ok(r3.sheets[0].columns[0].name === 'Jan 2026 budget',
     'and headerRow:0 puts it back on the title, because an instruction is an instruction')
+}
+
+// ═════════════════════════════════ FROZEN PANES, FORMAT, TOTALS (finding 7)
+{
+  // Every fixture in the bounce test froze its header and bolded it; not one
+  // imported sheet reported a freeze and not one cell override carried bold.
+  const bytes = await build({
+    shared: ['Deal', 'Stage', 'Value', 'Acme', 'Open', 'Beta', 'Won'],
+    fonts: [
+      '<sz val="11"/><name val="Calibri"/>',
+      '<b/><sz val="11"/><name val="Calibri"/>',
+      '<i/><u/><color rgb="FFCC0000"/><sz val="11"/><name val="Calibri"/>',
+    ],
+    fills: [
+      '<patternFill patternType="none"/>', '<patternFill patternType="gray125"/>',
+      '<patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill>',
+    ],
+    borders: ['<left/><right/><top/><bottom/><diagonal/>',
+      '<left/><right/><top/><bottom style="thin"><color rgb="FF333333"/></bottom><diagonal/>'],
+    //  1 = bold   2 = italic+underline+red on a yellow fill   3 = bottom rule
+    xfs: [{}, { font: 1 }, { font: 2, fill: 2 }, { border: 1 }],
+    sheets: [{
+      name: 'Pipeline',
+      before: '<sheetViews><sheetView workbookViewId="0"><pane xSplit="1" ySplit="2" topLeftCell="B3" state="frozen"/></sheetView></sheetViews>',
+      rows: row(1, sc('A1', 0, 1) + sc('B1', 1, 1) + sc('C1', 2, 1)) +
+        row(2, sc('A2', 3) + sc('B2', 4) + nc('C2', 120000, 2)) +
+        row(3, sc('A3', 5) + sc('B3', 6) + nc('C3', 749050, 3)),
+    }],
+  })
+  const r = await importXlsx(bytes, { idPrefix: 'z' })
+  const s = r.sheets[0]
+
+  // FREEZE. Excel's ySplit counts SHEET rows and its first one is the header,
+  // which a dataset pins on its own; dash's frozen.rows counts DATA rows. So
+  // ySplit=2 over a 1-row header is one frozen data row, and ySplit=1 (which
+  // every fixture had) is correctly zero — a distinction the finding could not
+  // make from the outside and this rig has to.
+  const fz = readFrozen(s)
+  ok(fz.rows === 1 && fz.cols === 1,
+    'a frozen pane arrives: ySplit=2 over a one-row header is ONE frozen data row, xSplit=1 is one column')
+  ok(readFrozen({ ...s, frozen: undefined } as TableSheet).rows === 0, 'and readFrozen is what reads it')
+
+  // FORMAT. Header bold is not carried and must not be: a dataset draws its
+  // own header, so there is nowhere to put it and nothing is lost.
+  const vId = s.columns[2].id
+  ok(over(s, `${vId}:1`).bold === undefined, 'the header row is the grid\'s own furniture, so its bold is not a cell override')
+  ok(over(s, `${vId}:1`).italic === true && over(s, `${vId}:1`).underline === true,
+    'a data cell keeps italic and underline')
+  ok(over(s, `${vId}:1`).color === '#cc0000', 'and its font colour, as #rrggbb')
+  ok(over(s, `${vId}:1`).bg === '#fff2cc', 'and its solid fill becomes the background')
+  ok(over(s, `${vId}:2`).border === 'b' && over(s, `${vId}:2`).borderColor === '#333333',
+    'a bottom rule becomes the "b" edge with its colour')
+  ok(!('v' in over(s, `${vId}:1`)),
+    'an appearance override carries NO value — cellfmt.ts\'s one line: appearance is not a back door to a type')
+  ok(readCell(s.data[vId], 0) === 120000, 'so the number is still the column\'s, and no total can move')
+}
+
+// THE TOTALS ROW — the consequential one. Excel's totals row imports as an
+// ordinary data row, so sorting pipeline.xlsx by Value descending puts the row
+// labelled "Total", holding 869,050, at the top of the deals.
+{
+  const table = '<table xmlns="' + M + '" id="1" name="Deals" displayName="Deals" ref="A1:C4" ' +
+    'headerRowCount="1" totalsRowCount="1"><autoFilter ref="A1:C3"/><tableColumns count="3">' +
+    '<tableColumn id="1" name="Deal" totalsRowLabel="Total"/>' +
+    '<tableColumn id="2" name="Stage"/>' +
+    '<tableColumn id="3" name="Value" totalsRowFunction="sum"/>' +
+    '</tableColumns></table>'
+  const bytes = await build({
+    shared: ['Deal', 'Stage', 'Value', 'Acme', 'Open', 'Beta', 'Won', 'Total'],
+    sheets: [{
+      name: 'Pipeline',
+      table,
+      rows: row(1, sc('A1', 0) + sc('B1', 1) + sc('C1', 2)) +
+        row(2, sc('A2', 3) + sc('B2', 4) + nc('C2', 120000)) +
+        row(3, sc('A3', 5) + sc('B3', 6) + nc('C3', 749050)) +
+        row(4, sc('A4', 7) + fc('C4', 'SUBTOTAL(109,C2:C3)', 869050)),
+    }],
+  })
+  const r = await importXlsx(bytes, { idPrefix: 't' })
+  const s = r.sheets[0]
+  const vId = s.columns[2].id
+
+  ok(s.rids.reduce((n, [, c]) => n + c, 0) === 2,
+    'the table has TWO rows, not three: the totals row is not a deal')
+  const values = Array.from({ length: 3 }, (_, i) => readCell(s.data[vId], i))
+  ok(values[0] === 120000 && values[1] === 749050 && !values.includes(869050),
+    'and 869,050 is NOWHERE in the column, waiting to sort to the top of the deals')
+  ok(s.totals?.[vId] === 'sum',
+    'it became the column PROPERTY docs/dash-sheet-kinds.md worked out: totalsRowFunction="sum" ⇄ totals:{value:"sum"}')
+  ok(s.columns[0].name === 'Deal' && s.columns.length === 3, 'the table names the columns')
+  const tf = r.findings.find((f) => f.code === 'totals-row')
+  ok(!!tf, 'and it is said, because a row that leaves the data is a row somebody will look for')
+
+  // The property must survive the format, or it is a runtime trick.
+  const doc = parseDoc(JSON.stringify({
+    format: 'bento/dash', version: 1, docId: 'x', title: 'T', sheets: [s],
+  }))
+  ok(doc.ok && (doc.doc.sheets[0] as TableSheet).totals?.[vId] === 'sum',
+    'and it round-trips through parseDoc, so it is document data and not a guess made at paint time')
+}
+
+// A totals function dash has no home for is DROPPED and named, never guessed.
+{
+  const table = '<table xmlns="' + M + '" id="1" name="D" displayName="D" ref="A1:B3" ' +
+    'headerRowCount="1" totalsRowCount="1"><tableColumns count="2">' +
+    '<tableColumn id="1" name="Deal" totalsRowLabel="Total"/>' +
+    '<tableColumn id="2" name="Value" totalsRowFunction="stdDev"/></tableColumns></table>'
+  const bytes = await build({
+    shared: ['Deal', 'Value', 'Acme', 'Total'],
+    sheets: [{
+      name: 'Odd',
+      table,
+      rows: row(1, sc('A1', 0) + sc('B1', 1)) + row(2, sc('A2', 2) + nc('B2', 10)) +
+        row(3, sc('A3', 3) + nc('B3', 10)),
+    }],
+  })
+  const r = await importXlsx(bytes, { idPrefix: 'o' })
+  const s = r.sheets[0]
+  ok(s.rids.reduce((n, [, c]) => n + c, 0) === 1, 'the totals row still leaves the data')
+  ok(s.totals === undefined || Object.keys(s.totals).length === 0, 'but no total is invented for stdDev')
+  ok(r.findings.some((f) => f.code === 'totals-row' && f.message.includes('stdDev')),
+    'and the one dash cannot express is named')
+}
+
+// ROUND TRIP: what comes in has to go back out, or the importer has made a new
+// silent loss on the export side.
+{
+  const bytes = await build({
+    shared: ['Deal', 'Value', 'Acme', 'Beta'],
+    fonts: ['<sz val="11"/><name val="Calibri"/>', '<b/><color rgb="FF0044AA"/><sz val="11"/>'],
+    fills: ['<patternFill patternType="none"/>', '<patternFill patternType="gray125"/>',
+      '<patternFill patternType="solid"><fgColor rgb="FFEEEEEE"/></patternFill>'],
+    xfs: [{}, { font: 1, fill: 2 }],
+    sheets: [{
+      name: 'Deals',
+      before: '<sheetViews><sheetView workbookViewId="0"><pane ySplit="2" state="frozen"/></sheetView></sheetViews>',
+      rows: row(1, sc('A1', 0) + sc('B1', 1)) + row(2, sc('A2', 2) + nc('B2', 10, 1)) +
+        row(3, sc('A3', 3) + nc('B3', 20)),
+    }],
+  })
+  const first = await importXlsx(bytes, { idPrefix: 'rt' })
+  const doc = {
+    format: 'bento/dash', version: 1, docId: 'x', title: 'T', sheets: first.sheets,
+  } as unknown as DashDoc
+  const out = await exportXlsx(doc, { store: true })
+  const back = await importXlsx(out.bytes, { idPrefix: 'rt2' })
+  const a = first.sheets[0]
+  const b = back.sheets[0]
+  ok(over(b, `${b.columns[1].id}:1`).bold === true, 'bold survives dash → xlsx → dash')
+  ok(over(b, `${b.columns[1].id}:1`).color === '#0044aa', 'so does the font colour')
+  ok(over(b, `${b.columns[1].id}:1`).bg === '#eeeeee', 'and the fill')
+  ok(readFrozen(b).rows === readFrozen(a).rows && readFrozen(b).rows === 1,
+    'and the frozen pane comes home as the same one row')
+  ok(readCell(b.data[b.columns[1].id], 0) === 10 && readCell(b.data[b.columns[1].id], 1) === 20,
+    'with the numbers unchanged, which is the only part of this that a person would notice going wrong')
+}
+
+// A dash totals row has to survive dash → xlsx → dash, or the property this
+// import now understands is one the export flattens back into a data row —
+// the same finding, one door along.
+{
+  const bytes = await build({
+    shared: ['Deal', 'Value', 'Acme', 'Beta'],
+    sheets: [{
+      name: 'Deals',
+      rows: row(1, sc('A1', 0) + sc('B1', 1)) + row(2, sc('A2', 2) + nc('B2', 120000)) +
+        row(3, sc('A3', 3) + nc('B3', 749050)),
+    }],
+  })
+  const first = await importXlsx(bytes, { idPrefix: 'tt' })
+  const sheet = { ...first.sheets[0], totals: { [first.sheets[0].columns[1].id]: 'sum' as const } }
+  const out = await exportXlsx({
+    format: 'bento/dash', version: 1, docId: 'x', title: 'T', sheets: [sheet],
+  } as unknown as DashDoc, { store: true })
+  const back = await importXlsx(out.bytes, { idPrefix: 'tt2' })
+  const b = back.sheets[0]
+  ok(b.rids.reduce((n, [, c]) => n + c, 0) === 2,
+    'the exported totals row does not come home as a third deal')
+  ok(b.totals?.[b.columns[1].id] === 'sum',
+    'it comes home as the property it left as — the export writes a real ListObject, not only a row of SUM()s')
+  ok(readCell(b.data[b.columns[1].id], 0) === 120000, 'and the deals are untouched')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
