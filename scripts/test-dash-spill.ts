@@ -67,7 +67,7 @@ function ok(cond: boolean, msg: string) {
 }
 
 
-const { readFileSync, writeFileSync, mkdirSync } = await import('node:fs')
+const { readFileSync } = await import('node:fs')
 const { dirname, resolve } = await import('node:path')
 const { fileURLToPath } = await import('node:url')
 
@@ -102,45 +102,7 @@ const { Store } = await import('../dash/src/store.ts')
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../dash/src')
 
-/** The two edits `grid.ts` needs. Reported verbatim; applied here to a copy. */
-const GRID_HOOK: Array<[string, string]> = [
-  // 1. a spilled cell holds nothing in the document, so consult the computed map
-  [
-    "    return cell && 'v' in cell ? cell.v : null\n",
-    "    return this.cvComputed(row, col) ?? (cell && 'v' in cell ? cell.v : null)\n",
-  ],
-  // 2. a spill's output is used range that is in no cell map — rule that far
-  [
-    '    this.cvUsed = canvasUsed(s)\n' +
-    '    this.cellValues = canvasHasFormulas(s)\n' +
-    '      ? recalcWorkbook(workbookSources(this.store.doc), this.store.doc.modified)\n' +
-    '        .get(s.id)?.values ?? EMPTY_CELLS\n' +
-    '      : EMPTY_CELLS\n',
-    '    const rc = canvasHasFormulas(s)\n' +
-    '      ? recalcWorkbook(workbookSources(this.store.doc), this.store.doc.modified).get(s.id)\n' +
-    '      : undefined\n' +
-    '    this.cellValues = rc?.values ?? EMPTY_CELLS\n' +
-    '    const used = canvasUsed(s)\n' +
-    '    const sp = rc ? spillExtent(rc) : { rows: 0, cols: 0 }\n' +
-    '    this.cvUsed = { rows: Math.max(used.rows, sp.rows), cols: Math.max(used.cols, sp.cols) }\n',
-  ],
-]
-
-/**
- * grid.ts, which must CARRY the hook. It now does.
- *
- * While `grid.ts` belonged to another agent this patched a COPY and asserted on
- * the markup that copy emitted — the right call then, and it proved the anchors
- * still existed. But it is exactly the shape that has bitten this repo twice:
- * a rig green over a feature that is invisible on screen, because what it
- * exercised was not what ships. Once the hook is applied, the patching arm
- * stops being a convenience and becomes a way for its removal to go unnoticed.
- *
- * So absence is now a FAILURE, not a fallback. If someone rewrites the paint
- * loop and drops the call, the 57 checks below do not quietly re-patch their
- * way back to green — they go red and say which line went missing.
- */
-function hookedGrid(): string {
+function requireGridHook(): void {
   const src = readFileSync(`${SRC}/grid.ts`, 'utf8')
   ok(src.includes('spillExtent(rc)'),
     'grid.ts CALLS spillExtent — without it a 100-row spill paints ~40 rows and stops, ' +
@@ -148,15 +110,10 @@ function hookedGrid(): string {
   ok(src.includes("this.cvComputed(row, col) ??"),
     'and cvValueAt consults the computed map, or every spilled cell reads as empty')
   ok(src.includes('spillExtent, translateCellFormula'), 'and the import is there')
-  // Relative imports have to keep resolving from outside the source directory.
-  const out = src.replace(/from '\.\/([^']+)'/g, (_m, f) => `from '${SRC}/${f}'`)
-  mkdirSync('/tmp/dash-spill-probe', { recursive: true })
-  writeFileSync('/tmp/dash-spill-probe/grid.ts', out)
-  return '/tmp/dash-spill-probe/grid.ts'
 }
+requireGridHook()
 
-console.log('\nthe grid paint hook')
-const { Grid } = await import(hookedGrid())
+const { Grid } = await import('../dash/src/grid.ts')
 type Cell = import('../dash/src/formula.ts').Cell
 type CellSource = import('../dash/src/cellformula.ts').CellSource
 type CellRecalc = import('../dash/src/cellformula.ts').CellRecalc
