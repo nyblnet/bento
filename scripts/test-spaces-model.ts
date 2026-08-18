@@ -387,10 +387,36 @@ for (const [label, input, err] of [
   ok(/secondary\.map\(/.test(ed), '…the inline row is built from that list')
   ok(/for \(const a of secondary\)/.test(ed), '…and the ⋯ menu is built from the SAME list')
 
-  ok(/@media \(max-width: 720px\)/.test(css), 'there is a narrow-width breakpoint')
-  const narrow = css.slice(css.indexOf('@media (max-width: 720px)'))
-  ok(/\.sp-sec \{ display: none/.test(narrow), 'narrow hides the inline secondary row')
-  ok(/\.sp-more \{ display: inline-flex/.test(narrow), 'narrow reveals the ⋯ menu')
+  // Which TIER a rule lives in is the thing worth pinning: the numbers moved
+  // once already (720 → 820) because at 768 the save caret still ended 27px off
+  // the screen, and they will move again.
+  const tierOf = (sel: RegExp): number => {
+    const i = css.search(sel)
+    if (i < 0) return -1
+    const opener = [...css.slice(0, i).matchAll(/@media \(max-width: (\d+)px\)/g)].pop()
+    return opener ? Number(opener[1]) : 0
+  }
+  ok(tierOf(/\.sp-sec \{ display: none/) === 820, 'the inline secondary row folds at the drawer breakpoint')
+  ok(tierOf(/\.sp-more \{ display: inline-flex/) === 820, '…which is where the ⋯ menu appears')
+
+  // THE PHONE TIER. Folding the six secondary actions was not enough: measured
+  // on a 390×844 viewport with a coarse pointer, the bar still laid out 467px
+  // wide and Save's right edge landed at x = 426 — 36px off the screen. So a
+  // phone also gives up the wordmark, the history pair and the save caret, and
+  // the ⋯ menu picks them up.
+  ok(tierOf(/\.sp-mark \{ display: none/) === 600, 'a phone drops the wordmark (About is in ⋯)')
+  ok(tierOf(/\.sp-group-history \{ display: none/) === 600, '…and the history pair')
+  ok(tierOf(/\.sp-split \.sp-caret \{ display: none/) === 600, '…and the save caret')
+  // The status line is a nowrap span: left in the flow, one long message pushes
+  // Save back off the screen for as long as it is up.
+  ok(tierOf(/\.sp-status \{\n\s*position: absolute/) === 600,
+    'the status message is out of the flow on a phone, so it cannot move Save')
+  // The JS gate that decides what the ⋯ menu carries MUST agree with the CSS
+  // tier, or the menu offers Undo while Undo is also sitting in the bar.
+  const isPhone = ed.match(/isPhone\(\): boolean \{[\s\S]{0,120}?matchMedia\('\(max-width: (\d+)px\)'\)/)
+  ok(!!isPhone && Number(isPhone![1]) === 600, 'isPhone() uses the same breakpoint as the phone tier')
+  ok(/if \(this\.isPhone\(\)\)/.test(ed) && /t\('Undo \(⌘Z\)'\)/.test(ed) && /t\('Redo \(⇧⌘Z\)'\)/.test(ed),
+    '…and the ⋯ menu picks up undo/redo there')
 
   // the bar must never become a scroller — that hides the same controls, just
   // less honestly, and it is the fix everyone reaches for first
@@ -1109,6 +1135,19 @@ for (const [label, input, err] of [
   const narrow = css.slice(css.indexOf('@media (max-width: 820px)'))
   ok(!/\.sp-gutter \{ display: none/.test(narrow), 'the gutter is not hidden on touch')
   ok(/\.sp-gutter \{ opacity: 1/.test(narrow), '…it is shown rather than hovered')
+  // …AND IT DOES NOT TAKE A ROW. The first fix for "no hover on touch" put the
+  // gutter in the flow (position: static), which cost 36px of height on EVERY
+  // block: measured at 390px, a one-line paragraph was 68.4px tall and half of
+  // that was the two affordances. It belongs in the start margin, out of flow.
+  ok(!/\.sp-gutter \{[^}]*position: static/.test(narrow),
+    '…and it is out of the flow, so a block does not pay a row for it')
+  // …reserved on the PAGE, not on the scroller: `.sp-main` follows the
+  // interface direction and a block follows the document's (theme.dir), so an
+  // rtl document put the padding on one side and the gutter on the other.
+  ok(/\.sp-page-inner \{ padding-inline-start: 26px/.test(narrow),
+    'the page reserves the margin the gutter sits in, on the side the blocks start')
+  ok(!/\.sp-main \{[^}]*padding-inline-start/.test(narrow),
+    '…and the scroller does not, so the two cannot disagree under rtl')
   ok(/sp-sheet/.test(css) && /isDrawer\(\)/.test(ed),
     'and the menu becomes a bottom sheet where a 5px anchor would be unusable')
 

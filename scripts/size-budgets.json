@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 143360,
-      "//": "140 KiB. Raised from 132: magic notes cost ~4.6 KB compressed — a recursive-descent evaluator (no eval, ever: block html comes from a file somebody mailed you), a small unit table, date and clock arithmetic, the derived answer in the renderer and the typing preview. Headroom is deliberate: the shell is mostly a zlib block and zlib differs across node versions — one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 147456,
+      "//": "144 KiB. Raised from 140: the view controls (layout, group-by, sort) and the board's Markdown export cost ~3.4 KB compressed — the sort engine, three popovers and 17 strings × 8 locales, which is most of it. Measured with magic notes, daily notes and the mobile fold already in: 142,674 B, which is 99.5% of the old ceiling and 686 B of headroom. That is not enough: the shell is mostly a zlib block and zlib differs across node versions — one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so this would have failed CI while passing here. CI is the number that counts."
     }
   }
 }

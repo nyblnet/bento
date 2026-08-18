@@ -24,6 +24,7 @@ import {
   type Plan, type PlanError, type IssueQuery,
 } from './agent'
 import { starterDoc } from './starter'
+import { todayISO, isISO, journalFor } from './journal'
 import { textOf } from './sanitize'
 import { evaluate, format, pageContext } from './calc'
 import { buildSpacePreview } from './preview'
@@ -355,6 +356,23 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
      * / menu, no way to type — so an agent creating one would hand a human a
      * page they cannot write in.
      */
+    /**
+     * Today's entry, or any day's — created if it does not exist yet.
+     *
+     * The same path the button and ⌘⇧J take, so an agent writing a daily note
+     * lands in the same page a person would, and calling it twice in a day
+     * returns the same page rather than making a second one.
+     *
+     * `date` is an ISO `YYYY-MM-DD`. Anything else is refused rather than
+     * guessed at: "06/08/2026" is two different days depending on who wrote it.
+     */
+    journal: (date?: string) => {
+      if (store.readOnly) return null
+      const iso = date === undefined ? todayISO() : String(date)
+      if (!isISO(iso)) return null
+      editor.openJournal(iso)
+      return journalFor(store.doc, iso)?.id ?? null
+    },
     /**
      * Work out an expression the way a line ending in `=` would.
      *

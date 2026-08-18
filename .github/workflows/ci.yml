@@ -144,6 +144,19 @@ jobs:
         # reported by the process it hangs.
         run: node scripts/test-spaces-agent.ts
 
+      - name: Spaces journal rig (several timezones)
+        # Every part of a daily note that can be wrong is wrong QUIETLY and on
+        # someone else's machine: "today" in UTC is the wrong day for hours at
+        # a time outside Greenwich, adding 86,400,000 ms is not adding a day on
+        # the two DST boundaries, and `new Date('2026-08-06')` is UTC midnight
+        # by spec. A date test that only ever runs in one timezone has not been
+        # run — so this runs in five, including a half-hour DST offset.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-journal.ts
+          done
+
       - name: Magic notes evaluator (several timezones)
         # Two failure modes, and the second is what would make the feature worse
         # than not having it: a WRONG answer (silent, confident, in somebody's

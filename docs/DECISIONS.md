@@ -273,6 +273,46 @@ where the file left off. That rule does not exist yet because spaces has no
 session; `scripts/test-sync-shape.ts` carries the evidence and the note so it
 cannot be written without it.
 
+---
+
+## 2026-08-06 — A journal entry is a page with a DATE on it, and the date is never the title
+
+**Decision.** `page.journal` holds an ISO `YYYY-MM-DD`. That field, not the
+page title, is what makes a page a daily entry. The title starts as the same
+ISO string and the author may rename it freely.
+
+**Why not Logseq's model.** Logseq derives a journal from its page title,
+formatted by `:journal/page-title-format`. Their own tracker carries the
+consequence — "Changing journal filename format causes blank journals and data
+loss" (logseq/logseq#4019) — because the moment the format changes, yesterday's
+journals stop being journals. A title is display; a date is data. Three things
+follow from separating them, and none are available to a title-derived design:
+the FILE is locale-neutral (a space written in Tokyo shows a Lisbon reader their
+own format, because the label is rendered through `Intl` at display time and
+never stored, per PLATFORM §8); search, grep and the Markdown export all see
+`2026-08-06`, which sorts and is unambiguous in every locale; and a build that
+predates journals renders an ordinary page and round-trips the field untouched.
+
+**Created on demand, never one page per day.** Logseq makes a journal page every
+day you open the app — on a filesystem that is a cheap empty file. A space is
+ONE file people mail to each other, so a page per unopened day is permanent
+weight for nothing.
+
+**Entries sort by DATE in `doc.pages`, not by creation.** Inserting each new
+entry after the Journal page gives reverse-creation order, which looks sorted
+until someone backfills yesterday. Found by looking at the sidebar in a browser
+after the node rig was already green.
+
+**The date arithmetic is the whole risk, and it fails on other people's
+machines.** `toISOString().slice(0,10)` is UTC, so "today" is the wrong day for
+hours at a time outside Greenwich; `+ 86_400_000` is not a day on the two DST
+boundaries each year; `new Date('2026-08-06')` is UTC midnight by spec. A
+digit-shaped non-date like `2026-13-99` must be REJECTED rather than formatted,
+because every Date-based formatter silently rolls it into some other real day.
+`scripts/test-spaces-journal.ts` runs in five timezones in CI, including
+Australia/Lord_Howe's half-hour DST offset — a date test that runs in one
+timezone has not been run.
+
 ## 2026-08-06 — One CRDT engine, two document shapes, and the shape is never on the wire
 
 **Decision.** `kernel/src/sync/crdt.ts` takes a `DocShape` at construction: two
@@ -3456,3 +3496,64 @@ steal a tab, and reloading an unpacked extension fires that event every time.
 mid-sentence into its own line — the identical mistake `.step b` had made and
 which I had already fixed. An unscoped element selector inside a component is
 the shape of the bug; both are now `> b`.
+
+---
+
+## 2026-08-10 — The spaces topbar has TWO fold tiers, and the touch gutter lives in a margin
+
+Two mobile defects, both measured on the shipped shell at a 390×844 viewport
+with a coarse pointer, neither of them a regression — they had been there since
+the surfaces shipped.
+
+**The bar folds twice, and it starts at the drawer breakpoint.** `.sp-bar` laid
+out 467px wide inside 390 and Save's right edge landed at x = 426: the primary
+action, 36px off the screen. The existing fold (six secondary actions → the ⋯
+menu) was not enough, because what survives it is still eleven controls' worth
+of 40px touch targets. So there are two tiers now:
+
+- **≤820px** — the DRAWER breakpoint, not 720. The secondary row folds into ⋯
+  and labelled controls drop their words. It was 720, and at 768 (an iPad in
+  portrait) the save caret still ended 27px off the screen; 721–820 is exactly
+  the band where the page list is already an overlay competing for width, so
+  one number now means one thing.
+- **≤600px** — a phone. It also gives up the wordmark (About is the first item
+  in ⋯), the undo/redo pair (added to ⋯ with their shortcuts and their disabled
+  state) and the save caret (each of its four items is in ⋯ or in About). Save
+  itself never moves, at any width.
+
+The status span leaves the flow on a phone. It is `white-space: nowrap`, so a
+long message ("Reading view — press Esc or the eye to edit" measures ~250px)
+would have pushed Save back off the screen for as long as it was up — and
+`status()` never cleared its text, only faded it, so the width it claimed was
+permanent for the session. It is cleared after the fade now, and overlaid on the
+title strip below 600px.
+
+`isPhone()` in editor.ts duplicates the 600px number, because the ⋯ menu must
+not offer Undo while Undo is also sitting in the bar. The model rig pins both
+numbers and the agreement between them.
+
+**The touch gutter is absolute, in a reserved margin — never in the flow.** The
+earlier fix for "there is no hover on touch" made `.sp-gutter` `position:
+static`, which bought reachability with 36px of height on EVERY block: a
+one-line paragraph measured 68.4px, half of it affordances. It is absolutely
+positioned again, the way it is on a desktop, inside a start margin reserved
+for it (26px on `.sp-page-inner`, 44px from the edge of the screen once
+`.sp-main`'s own 18px is counted), visible at rest, and carrying ONE control —
+the grip, whose sheet
+already offers "Add below", so the ＋ was a second button for something a thumb
+could already reach. Measured after: one-line paragraph 68.4 → 32.4px; the
+reading column pays 26px of width for it (354 → 328 at 390px). Both directions
+of that trade are deliberate: a phone has ~800px of height and 390 of width, and
+the chrome was eating the scarce one.
+
+**Cost.** +312 bytes on the shipped shell (132,102 → 132,414 B), inside the
+existing 135,168 B ceiling; no budget change.
+
+*Amended, same day.* The margin was reserved on `.sp-main` first, which is
+wrong for a reason worth writing down: `.sp-main` is chrome and follows the
+INTERFACE direction, while the gutter is anchored to a block and blocks follow
+the DOCUMENT's (`renderPage` puts `theme.dir` on `.sp-page-inner`). On a
+document carrying `theme.dir: 'rtl'` the padding therefore went left while the
+gutter went right — measured at 390px, the gutter landed at x = 378…412 and the
+column scrolled to 412. It is reserved on `.sp-page-inner` now, so the two flip
+together; the ltr metrics are byte-identical.

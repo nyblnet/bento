@@ -24,6 +24,9 @@ import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
 import { openAbout } from './about'
+import {
+  todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
+} from './journal'
 import { canWriteInPlace } from '../../kernel/src/save.ts'
 import { ICONS, type IconName } from './icons'
 import { internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, blobToDataUri } from './assets'
@@ -181,6 +184,7 @@ export class Editor {
       keep?: (b: HTMLButtonElement) => void
     }> = [
       { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
+      { icon: 'book', label: t("Today's journal"), hint: '⌘⇧J', run: () => this.openJournal() },
       { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
       { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
         run: () => this.makeIssue() },
@@ -200,8 +204,31 @@ export class Editor {
     })
 
     const more = this.dropdown('more', '', t('More'), (menu, close) => {
+      // On a PHONE the ⋯ menu also carries the history pair and the other ways
+      // to save. Measured at 390px with a coarse pointer: eleven bar controls
+      // wanted 467px of a 390px viewport, and Save — the one action that must
+      // never be off-screen — ended at x = 426. Undo/redo (84px), the wordmark
+      // (35px) and the save caret (48px) are what a phone gives up so that the
+      // document title beside them is still wide enough to read. Nothing is
+      // lost: they are all one tap away, here.
+      if (this.isPhone()) {
+        menu.append(this.menuItem('undo', t('Undo (⌘Z)'), '', () => {
+          close(); this.store.undo(); this.repaint()
+        }, { off: !this.store.canUndo }))
+        menu.append(this.menuItem('redo', t('Redo (⇧⌘Z)'), '', () => {
+          close(); this.store.redo(); this.repaint()
+        }, { off: !this.store.canRedo }))
+      }
       for (const a of secondary) {
         menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+      }
+      if (this.isPhone()) {
+        menu.append(this.menuItem('copy', t('Save a copy…'), t('A second file — the original is left alone'), () => {
+          close(); void this.saveAs('copy')
+        }))
+        menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
+          close(); this.exportMarkdown()
+        }))
       }
     })
     more.classList.add('sp-more', 'sp-dd-end')
@@ -322,7 +349,10 @@ export class Editor {
     b.className = 'sp-btn'
     b.type = 'button'
     b.innerHTML = ICONS[icon]
-    if (label) b.append(document.createTextNode(label))
+    // The word is a SPAN, not a bare text node, so a narrow bar can drop it and
+    // keep the icon — slides' rule, and the only way to collapse a labelled
+    // control without also losing it.
+    if (label) b.append(el('span', 'sp-btnlabel', label))
     b.title = tip
     b.setAttribute('aria-label', tip)
     b.setAttribute('aria-haspopup', 'menu')
@@ -343,11 +373,29 @@ export class Editor {
     return wrap
   }
 
-  private menuItem(icon: IconName, label: string, hint: string, onClick: () => void, selected = false): HTMLElement {
+  /**
+   * One row in a dropdown menu.
+   *
+   * `state` carries BOTH meanings the menus need, because they arrived from
+   * two directions and mean different things: `off` is a command that exists
+   * but cannot run right now (folded undo/redo on a phone — disabled, not
+   * hidden, so the menu does not change shape as you edit), and `selected` is
+   * the choice a view is currently on (layout, group-by, sort). A row can be
+   * neither; nothing yet is both. They were separate 5th parameters on two
+   * branches, which is exactly the collision an options object avoids.
+   */
+  private menuItem(
+    icon: IconName,
+    label: string,
+    hint: string,
+    onClick: () => void,
+    state: { off?: boolean; selected?: boolean } = {},
+  ): HTMLElement {
     const b = document.createElement('button')
-    b.className = 'sp-dditem' + (selected ? ' sp-sel' : '')
+    b.className = 'sp-dditem' + (state.off ? ' sp-off' : '') + (state.selected ? ' sp-sel' : '')
     b.type = 'button'
-    if (selected) b.setAttribute('aria-current', 'true')
+    if (state.off) b.setAttribute('aria-disabled', 'true')
+    if (state.selected) b.setAttribute('aria-current', 'true')
     b.setAttribute('role', 'menuitem')
     b.innerHTML = `<span class="sp-result-ico">${ICONS[icon]}</span>` +
       `<span class="sp-result-txt"><strong>${escapeHtml(label)}</strong>` +
@@ -441,6 +489,17 @@ export class Editor {
   }
 
   /**
+   * A PHONE, not merely a narrow window: the width below which the topbar has
+   * dropped the wordmark, the history pair and the save caret (styles.css, the
+   * "phone topbar" block). The number is duplicated between here and the
+   * stylesheet on purpose — the alternative is a menu that offers Undo while
+   * Undo is also sitting in the bar two centimetres away.
+   */
+  private isPhone(): boolean {
+    return window.matchMedia('(max-width: 600px)').matches
+  }
+
+  /**
    * Dismiss the PHONE DRAWER after navigating. On anything wider this does
    * nothing, deliberately.
    *
@@ -476,7 +535,16 @@ export class Editor {
     this.statusEl.textContent = msg
     this.statusEl.classList.add('sp-on')
     clearTimeout((this.statusEl as any)._t)
-    ;(this.statusEl as any)._t = setTimeout(() => this.statusEl.classList.remove('sp-on'), 1800)
+    ;(this.statusEl as any)._t = setTimeout(() => {
+      this.statusEl.classList.remove('sp-on')
+      // The word must LEAVE the bar, not just fade out of it. This span is
+      // nowrap, so once "Edited" had been written once it held ~40px of the
+      // topbar for the rest of the session — and on a phone that width came
+      // out of the controls beside it. Cleared after the fade, never during.
+      setTimeout(() => {
+        if (!this.statusEl.classList.contains('sp-on')) this.statusEl.textContent = ''
+      }, 260)
+    }, 1800)
   }
 
   // ---- the page tree ------------------------------------------------------
@@ -503,7 +571,7 @@ export class Editor {
       const ico = el('span', 'sp-tree-ico')
       ico.innerHTML = pageIcon(page.icon)
       const label = document.createElement('span')
-      label.textContent = page.title || t('Untitled')
+      label.textContent = this.pageLabel(page)
       a.append(ico, label)
       a.draggable = true
       a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
@@ -554,7 +622,7 @@ export class Editor {
         const ico = el('span', 'sp-tree-ico')
         ico.innerHTML = pageIcon(page.icon)
         const label = document.createElement('span')
-        label.textContent = page.title || t('Untitled')
+        label.textContent = this.pageLabel(page)
         a.append(ico, label)
         a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
         const un = document.createElement('button')
@@ -597,6 +665,53 @@ export class Editor {
       if (parent) page.parent = parent
       else delete page.parent
     })
+  }
+
+  /**
+   * The reader's own name for a page.
+   *
+   * An entry stores its title as the ISO date — locale-neutral in the file, the
+   * same for every reader, and what search and the Markdown export see. The
+   * SIDEBAR shows it in the reader's own format, because "2026-08-06" is a key
+   * and "Thu 6 Aug" is a date. An entry the author has RENAMED keeps its name:
+   * the rename was the point.
+   */
+  pageLabel(page: { title: string; journal?: unknown }): string {
+    if (isJournal(page as never) && page.title === page.journal) {
+      return journalShort(String(page.journal), locale())
+    }
+    return page.title || t('Untitled')
+  }
+
+  /**
+   * Open a day's entry, creating it if this is the first note of the day.
+   *
+   * ONE COMMIT for the whole plan (the Journal page and the entry, when both
+   * are new), so ⌘Z takes back "I opened today's journal" in a single step
+   * rather than leaving a stray empty parent behind.
+   */
+  openJournal(iso = todayISO()): void {
+    const s = this.store
+    if (s.readOnly) return
+    const plan = planJournal(s.doc, iso)
+    if (plan.add.length) {
+      s.commit(() => {
+        for (const { page, after } of plan.add) {
+          const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
+          if (at >= 0) s.doc.pages.splice(at + 1, 0, page)
+          else s.doc.pages.push(page)
+        }
+      })
+    }
+    s.goToPage(plan.page.id)
+    this.status(journalLabel(iso, locale()))
+  }
+
+  /** The day before or after the entry in view. */
+  stepJournal(n: number): void {
+    const cur = this.store.page
+    if (!cur || !isJournal(cur)) return
+    this.openJournal(stepDay(String(cur.journal), n))
   }
 
   newPage(parent?: string): void {
@@ -644,6 +759,50 @@ export class Editor {
       inner.prepend(pick)
     }
 
+    // A DAY HAS A DAY EITHER SIDE OF IT. Without this, reaching yesterday means
+    // finding it in the sidebar, which is the one navigation a journal should
+    // never need. The strip carries the reader's own long-form date because the
+    // title above it is the ISO key, and a date nobody can read at a glance is
+    // not much of a journal.
+    if (inner && isJournal(page)) {
+      const iso = String(page.journal)
+      const nav = el('div', 'sp-jnav')
+      const step = (n: number, glyph: string, title: string) => {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.className = 'sp-jstep'
+        b.textContent = glyph
+        b.title = title
+        b.setAttribute('aria-label', title)
+        b.addEventListener('click', () => this.stepJournal(n))
+        return b
+      }
+      nav.append(step(-1, '‹', t('The day before')), step(1, '›', t('The day after')))
+      if (iso !== todayISO()) {
+        const today = document.createElement('button')
+        today.type = 'button'
+        today.className = 'sp-jstep sp-jtoday'
+        today.textContent = t('Today')
+        today.addEventListener('click', () => this.openJournal())
+        nav.append(today)
+      }
+      inner.prepend(nav)
+
+      // THE HEADING READS AS A DATE, not as a key. The title is stored as the
+      // ISO string so the file is locale-neutral and sorts — but "2026-08-01"
+      // as a page's own H1 is a filename, not a day.
+      //
+      // Slides solves the same shape for dynamic fields by swapping the RAW
+      // token back while editing, and that is deliberately NOT copied here: a
+      // `{{page}}` token is something the author means to keep, whereas an ISO
+      // date is a key nobody wants to type. Someone renaming an entry starts
+      // from the date they can read and appends to it — which is the rename
+      // they were going to make anyway. The date itself lives in `journal` and
+      // is untouched by any of it, so a renamed entry is still that day's.
+      const h = inner.querySelector<HTMLElement>('[data-page-title]')
+      if (h && page.title === iso) h.textContent = journalLabel(iso, locale())
+    }
+
     if (trail.length) {
       const crumb = el('nav', 'sp-crumb')
       crumb.setAttribute('aria-label', t('Breadcrumb'))
@@ -674,7 +833,9 @@ export class Editor {
   private addGutter(node: HTMLElement, blockId: string): void {
     const g = el('div', 'sp-gutter')
     const add = document.createElement('button')
-    add.className = 'sp-ghost'
+    // Named, because a phone drops it: there is only room for ONE control in a
+    // 44px margin, and "Add below" is the second item of the grip's own menu.
+    add.className = 'sp-ghost sp-ghost-add'
     add.type = 'button'
     add.innerHTML = ICONS.plus
     add.title = t('Add a block below')
@@ -1110,7 +1271,7 @@ export class Editor {
           // `status` is the default the renderer assumes, so choosing it clears
           // the key instead of writing what absence already means
           this.editView(blockId, 'groupBy', f.key === 'status' ? undefined : f.key)
-        }, f.key === now))
+        }, { selected: f.key === now }))
       }
       if (!groupable.length) pop.append(el('div', 'sp-fgroup', t('No field here has options to group by')))
     })
@@ -1134,7 +1295,7 @@ export class Editor {
       pop.append(this.menuItem('grip', t('Manual order'), '', () => {
         this.closeOverlay()
         this.editView(blockId, 'sort', undefined)
-      }, !cur))
+      }, { selected: !cur }))
       pop.append(el('div', 'sp-fgroup', t('Sort')))
       for (const f of fieldsOf(s.doc)) {
         const mine = cur?.key === f.key
@@ -1147,7 +1308,7 @@ export class Editor {
         pop.append(this.menuItem('arrowDown', f.label, hint, () => {
           this.closeOverlay()
           this.editView(blockId, 'sort', [dir === 'asc' ? { key: f.key } : { key: f.key, dir }])
-        }, mine))
+        }, { selected: mine }))
       }
     })
   }
@@ -1869,6 +2030,7 @@ export class Editor {
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
     // `[` collapses the page list, as in slides. Bare, not modified: it only
     // reaches here when nothing is being edited (the text path returns above,
     // where `[` is the page-link trigger).

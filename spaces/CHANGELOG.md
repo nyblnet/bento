@@ -14,6 +14,25 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **Fixed: Save was partly off the screen on a phone.** Measured on a 390×844
+  viewport, the topbar laid out 467px wide inside 390 and the Save button's
+  right edge landed at x = 426 — 36px past the edge, on the one control that
+  must never be unreachable. A phone now also folds the wordmark, undo/redo and
+  the other-ways-to-save caret into the ⋯ menu, which already held the six
+  secondary actions, and the ＋ Insert button keeps its icon without its word.
+  Nothing is removed — undo and redo are in ⋯ carrying their shortcuts and their
+  disabled state, and Save a copy / Export as Markdown join them there. The same
+  fold now starts at the drawer breakpoint (820px) rather than 720, because at
+  768 — an iPad in portrait — the save caret still ended 27px off the screen.
+  The bar fits exactly at 320, 375, 390 and 768px, and is unchanged at 1280.
+
+- **Fixed: every block cost a whole row of chrome on a phone.** The ＋/grip
+  gutter is shown rather than hovered on touch (there is no hover), but it was
+  laid out IN the flow: a one-line paragraph measured 68.4px tall, 36px of it
+  affordances. The gutter moves into a reserved 44px start margin, out of the
+  flow, keeping the grip — whose menu already offers "Add below". A one-line
+  paragraph is 32.4px now; the reading column gives up 26px of width for it.
+
 - **Callouts.** A boxed note, tip, important, warning or caution — `/callout`,
   the Insert menu, or type `[!warning] ` on an empty line. Press ⏎ inside one
   and the next line goes in with it; an empty line and ⌫ takes you back out.
@@ -146,6 +165,24 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   stays a sentence.
 
   `bento.calc('20% of 340')` answers the same way for an agent.
+
+- **Daily notes.** `⌘⇧J` opens today's journal — a page per day, made the first
+  time you write in it rather than one for every day you happen to open the
+  file. Arrows either side of the date walk to yesterday and tomorrow, and the
+  entries nest under a **Journal** page, newest first, however out of order you
+  wrote them.
+
+  An entry is an ordinary page, so it searches, links, back-links, prints and
+  exports like everything else — and you can rename one to "Monday — sprint
+  kickoff" without it ceasing to be that day's. The date, not the title, is
+  what makes it a journal. Logseq derives the same thing from a formatted page
+  title, and their tracker carries the data loss that follows when the format
+  changes.
+
+  The date is stored as `2026-08-06` and SHOWN in your own language and format —
+  Japanese readers see 2026年8月6日木曜日, German readers Donnerstag, 6. August
+  2026, from the same file. `bento.journal()` opens today's for an agent, and
+  `bento.journal('2026-08-06')` any day's.
 
 ## [0.1.0] — 2026-08-03
 
