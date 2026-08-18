@@ -28,6 +28,15 @@ export interface FeatureContext {
   editor: Editor;
   /** re-paginate and repaint; call after changing the document */
   refresh(): void;
+  /**
+   * Bring a registered panel to the front, opening the sidebar if it is shut.
+   *
+   * Without this a feature could register a panel and then have no way to show
+   * it — the find feature reached through the DOM for the tab button and
+   * cleared the sidebar's collapsed class by hand, which is a feature knowing
+   * the chrome's markup.
+   */
+  showPanel(id: string): void;
   /** transient message to the reader */
   toast(msg: string): void;
 }
@@ -63,7 +72,15 @@ export interface PanelSpec {
   order?: number;
   /** called once with the panel's host element */
   mount(host: HTMLElement, ctx: FeatureContext): void;
-  /** called whenever the document changes */
+  /**
+   * Called whenever the document changes.
+   *
+   * This was declared and never called — a panel implementing it was silently
+   * dead, and the only reason nothing broke is that the first feature to want
+   * it subscribed to the store itself instead. An interface that lies is worse
+   * than one that is missing: the second is a compile error, the first is a
+   * feature that quietly does nothing.
+   */
   update?(host: HTMLElement, ctx: FeatureContext): void;
 }
 

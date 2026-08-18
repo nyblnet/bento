@@ -13,6 +13,7 @@
 // Anything order-sensitive should say so with an explicit `order` instead of
 // relying on this list.
 
-import './image.ts';
+import './image.ts';   // pictures — insert, embed, atomic pagination
+import './find.ts';    // find and replace — panel, ⌘F, replace all
 
 export {};

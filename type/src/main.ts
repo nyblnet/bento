@@ -310,6 +310,10 @@ const featureCtx: FeatureContext = {
   store, editor,
   refresh: () => { editor.render(); schedule(); },
   toast: (m: string) => toast(m),
+  showPanel: (id: string) => {
+    document.querySelector('.t-main')!.classList.remove('t-side-off');
+    showTab(id);
+  },
 };
 
 const mountTools = (hostId: string, group: 'format' | 'insert' | 'review' | 'right') => {
@@ -349,6 +353,10 @@ for (const spec of panels()) {
   panel.dataset.panel = spec.id;
   document.querySelector('.t-side')!.appendChild(panel);
   spec.mount(panel, featureCtx);
+  // `update` was declared on PanelSpec and never called, so a panel that
+  // implemented it was silently dead. Wired to the same signal everything else
+  // repaints on.
+  if (spec.update) store.on(() => spec.update!(panel, featureCtx));
 }
 
 // feature shortcuts, ahead of the editor's own so a feature can claim one
