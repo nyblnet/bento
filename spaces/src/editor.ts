@@ -104,6 +104,9 @@ export class Editor {
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
     this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty() })
+    // A REMOTE change moves the unsaved dot without claiming you made it —
+    // 'doc' paints "Edited", 'dirty' paints only the dot. See store.setDirty.
+    this.store.on('dirty', () => this.syncDirty())
     window.addEventListener('popstate', () => this.fromHash())
     this.fromHash()
   }

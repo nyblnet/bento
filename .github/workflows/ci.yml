@@ -701,3 +701,14 @@ jobs:
         # flat document, text on the parent, a store with one listener and no
         # dirty flag — so a surviving slides assumption shows up there.
         run: node --no-warnings scripts/test-sync-session.ts
+
+      - name: the spaces binding of the sync session
+        # Only what bento/spaces answers DIFFERENTLY, because three of the five
+        # host answers are not slides' answers and each one is invisible until
+        # two people are live: a repair id that must be DERIVED (a spare blank
+        # slide is one click to delete; a spare page is a phantom), a view that
+        # clamps by page identity to the nearest surviving ANCESTOR rather than
+        # to home, and a remote op that must not raise this app's 'doc' event —
+        # which paints "Edited" and would credit a colleague's typing to you.
+        # The last section is two real sessions over a real BroadcastChannel.
+        run: node --no-warnings scripts/test-sync-spaces-session.ts

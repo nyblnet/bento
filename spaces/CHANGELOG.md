@@ -14,6 +14,20 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **Live collaboration.** Two tabs of the same space, or two people with the
+  same file, now edit it together: changes merge per character, and the file
+  you save carries the state so a copy edited on a plane rejoins as a fork
+  rather than overwriting anyone.
+
+  A space goes live only when it arrived carrying a session — a file that was
+  saved or shared — or when you start one. A fresh space and a template stay
+  offline, as they always have.
+
+  When somebody else deletes the page you are reading, you surface at the page
+  above it rather than being thrown back to the start. And their typing never
+  says "Edited" in your window; only the unsaved dot moves, because the file on
+  disk is out of date either way.
+
 - **Fixed: Save was partly off the screen on a phone.** Measured on a 390×844
   viewport, the topbar laid out 467px wide inside 390 and the Save button's
   right edge landed at x = 426 — 36px past the edge, on the one control that

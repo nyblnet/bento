@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 147456,
-      "//": "144 KiB. Raised from 140: the view controls (layout, group-by, sort) and the board's Markdown export cost ~3.4 KB compressed — the sort engine, three popovers and 17 strings × 8 locales, which is most of it. Measured with magic notes, daily notes and the mobile fold already in: 142,674 B, which is 99.5% of the old ceiling and 686 B of headroom. That is not enough: the shell is mostly a zlib block and zlib differs across node versions — one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so this would have failed CI while passing here. CI is the number that counts."
+      "max": 163840,
+      "//": "160 KiB. Raised from 144: live collaboration costs 16,772 B compressed — the CRDT engine, the session, the E2EE relay transport and the blob offload, measured at 142,674 B before and 159,446 B after. That is well inside the ~30 KB the feature was budgeted at, and it is the largest single item this shell will take: every saved space carries it whether or not anyone shares that space. Headroom is deliberate — the shell is mostly a zlib block and zlib differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }

@@ -14,6 +14,118 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-18 — A shared space connects on open; a fresh one still does not
+
+bento/spaces follows the rule bento/slides already ships: `shareEligible()` —
+auto-connect on open ONLY if the document arrived carrying collab credentials
+(it was saved, or somebody shared it), or if the user opted in during this
+session. A never-saved starter space and a template someone is kicking the
+tyres on stay dormant.
+
+The alternative was to connect whenever credentials exist. That is the obvious
+call and it is wrong here for a reason this repo has already paid for: v0.9.0
+of slides connected every visitor to the anonymous demo and v0.9.1 had to undo
+it. The rule is also already written down for this app — "A space does not
+phone home when it is opened" (2026-08-03) — and nothing about collaboration
+changes what that promise means.
+
+Worth being honest about the wrinkle, because it is the reason to revisit
+rather than close this. A space is a whole wiki, so "open the file somebody
+mailed me" is a far more ordinary act than opening a deck, and that file
+carries credentials by construction: the capability IS the file. Receiving a
+space therefore joins its room, which is what the sender intended and may not
+be what the reader expected.
+
+TO BE REVISITED WITH bento/vault, which is where per-recipient access stops
+being a property of the file and starts being something a broker can answer.
+Until then the file is the capability and this rule is the whole of the
+protection. Decided by the user, 2026-08-18.
+
+---
+
+## 2026-08-18 — The healed page's id comes from the ROOM, not from docId
+
+The kernel's `heal()` contract is explicit that a repair does not converge by
+itself: it is minted as an ordinary local op, and two replicas that heal at the
+same moment mint two nodes which the CRDT faithfully keeps. It tells an
+implementer to derive the id from stable document data, and it suggests
+`docId`.
+
+**bento/spaces must not use `docId`**, and the reason was already written down
+next to `repairId` in model.ts before collab existed: `template: true` re-mints
+`docId` on every open, so a docId-derived id gives two readers of ONE file
+different ids — precisely the failure derivation exists to prevent.
+
+`doc.collab.room` is the right seed. Every replica that can race to heal is by
+definition in the same room; the value is identical for all of them by
+construction; and it does not move when a template is opened. The fallback to
+`docId` is safe exactly where it is reached — a document with no room has no
+second replica to disagree with.
+
+Pinned by scripts/test-sync-spaces-session.ts: two replicas with the same room
+and DIFFERENT docIds still heal to one page.
+
+Also settled while binding: "empty" for a space is ZERO PAGES, not an empty
+page — and a dangling `doc.home` is NOT a repair case, because `homePage()`
+already falls back to `pages[0]` on its own. Minting a page for it would
+manufacture a phantom to fix something that was never broken.
+
+---
+
+## 2026-08-18 — 'doc' is this app's dirty signal, so a remote op must not raise it
+
+The kernel session used to emit `'doc'` after every remote change, because that
+is what bento/slides calls "something changed, repaint". In bento/spaces the
+same name means something else: editor.ts binds it to `status('Edited')`, the
+unsaved dot and the undo buttons. Emitting it for a colleague's keystroke would
+put "Edited" in this user's chrome for someone else's work.
+
+The kernel now takes `changeEvents` and `structureEvents` from the app. Spaces
+declares `changeEvents: ['page']` and `structureEvents: ['tree']`: 'page' is
+bound to paintPage + paintTree and carries no status text, so it repaints
+without claiming authorship, and 'tree' covers a structural change to a page
+other than the one on screen.
+
+The first version declared `changeEvents: []`, reasoning that repaints could
+ride on the structural events alone. That is wrong and the rig did not catch
+it — two browser tabs did. A remote TEXT edit is not structural, so nothing
+fired: `block.html` held the new sentence while the DOM still showed the old
+one. Every remote change must repaint; only the authorship claim was ever the
+thing to withhold.
+
+The dot still has to move: the file on disk IS out of date, however the change
+arrived. The kernel calls `store.setDirty(true)` independently of the events,
+and store.ts routes that to its own `'dirty'` event, which the editor binds to
+the dot alone. Two facts, two signals, instead of one signal asked to carry
+both.
+
+A REMOTE APPLY ALSO BYPASSES `commit()` — deliberately, so it never joins this
+person's undo stack — which leaves `store.index` describing the document as it
+was. `clampView()` therefore calls `reindex()` before anything reads the index.
+This was not theoretical: measured, a block that had already arrived in
+`doc.pages[0].blocks` was invisible to `store.block(id)`, and the first version
+of the rig hid it by reindexing by hand.
+
+---
+
+## 2026-08-18 — Where a reader lands when somebody deletes what they are reading
+
+A deck clamps an INDEX. A space navigates by page identity (`#p/<id>`), so the
+only question is whether the page you are reading still exists — and when it
+does not, `reindex()`'s own fallback sends you to the home page, out of the
+part of the space you were working in.
+
+`clampView()` surfaces at the nearest surviving ANCESTOR instead, falling back
+to home only when the whole chain is gone. It needs `captureView()` for that:
+after the apply the page is simply gone and there is nothing left to be near.
+
+Presence reports the PAGE and never the block. A block-level cursor would
+republish presence at typing speed — the typing run in store.ts exists because
+a notes app may never blur — while a page changes only when somebody
+navigates, which is the rate presence is worth.
+
+---
+
 ## 2026-08-16 — Document search: the list stays native, the indexer is shared by FIXTURE
 
 **Decision.** When the native hosts grow a document library, each keeps its own

@@ -77,6 +77,7 @@ load contract and format additivity.
 | `src/highlight.ts` | the code lexer — text → `{kind, a, b}` ranges, no DOM, no strings |
 | `src/markdown.ts` | markdown → blocks, the folder tree → the page tree, `[[wikilinks]]` → `#p/` links. Pure and DOM-free, so the import is tested in node |
 | `src/editor.ts` | topbar, sidebar, block menu, `[[` picker, ⌘K, ⌘F, archive |
+| `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |
 | `src/agent.ts` | the agent surface — `validate()`, `outline()`, `stats()`, and the patch verbs behind `window.bento` |
 | `src/assets.ts` | content-addressed images and the downscale |
 | `src/about.ts` | updates, language, password, exports |
@@ -136,11 +137,10 @@ pages are one document rather than one file each.
 
 ## Not built yet
 
-- **Collaboration.** No CRDT wiring. The sync engine is slides-shaped
-  (composite `slideId ␟ elementId` node keys); spaces needs `pageId ␟ blockId`
-  and a token RGA over `html`, which is the same shape — but genericizing it is
-  its own project, and PLATFORM §10 permits shipping without collab rather than
-  with a half-secure version.
+- **A collaboration UI.** The engine is wired — `src/sync/session.ts` binds
+  this app to the kernel session, and two tabs of one file merge — but there is
+  no People panel, no invite flow and no presence cursors yet. Sharing is
+  whatever the file already carries.
 - **Tables and embeds.** Deliberate: the format is permanent, so a block type
   ships when its model is right, not when its UI is ready. (Databases DID ship —
   as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a

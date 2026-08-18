@@ -16,7 +16,7 @@ type Scope = 'doc' | 'page'
 import { type SpacesDoc, type Page, type Block, buildIndex, type SpaceIndex, homePage } from './model'
 
 type Listener = () => void
-type Event = 'doc' | 'page' | 'tree' | 'selection'
+type Event = 'doc' | 'page' | 'tree' | 'selection' | 'dirty'
 
 /** Idle that closes a run. Autosave debounces longer, so no snapshot lands mid-run. */
 const RUN_IDLE_MS = 600
@@ -187,6 +187,24 @@ export class Store {
     this.doc.modified = new Date().toISOString()
     this.reindex()
     if (wasClean) this.emit('doc')
+  }
+
+  /**
+   * Set the unsaved flag from outside a commit.
+   *
+   * The kernel session calls this after applying a REMOTE change: the document
+   * on screen now differs from the file on disk, which is true however the
+   * change arrived. It is deliberately separate from the `doc` event — this
+   * app reads `doc` as "you edited something" and paints "Edited" from it, so
+   * a colleague's keystroke must move the dot without claiming to be yours.
+   */
+  setDirty(v: boolean): void {
+    if (this.dirty === v) return
+    this.dirty = v
+    // NOT 'doc'. The editor reads 'doc' as "you edited something" and paints
+    // "Edited" from it; a colleague's keystroke must move the unsaved dot
+    // without claiming to be yours. 'dirty' carries the dot and nothing else.
+    this.emit('dirty')
   }
 
   /**

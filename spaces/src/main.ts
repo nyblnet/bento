@@ -30,6 +30,7 @@ import { evaluate, format, pageContext } from './calc'
 import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
+import { SyncSession } from './sync/session.ts'
 import { downloadMarkdown } from './about'
 
 configureApp({
@@ -191,6 +192,16 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // understand the file and must not rewrite it.
   if (frozen || doc.readonly) store.readOnly = true
   const editor = new Editor(document.getElementById('app')!, store)
+
+  // Live collaboration. Constructing the session is enough to make same-machine
+  // tabs of one file sync (BroadcastChannel, keyed on docId); the RELAY is not
+  // dialled here — the kernel's shareEligible() gate decides that, and it says
+  // connect only when the document ARRIVED carrying collab credentials (it was
+  // saved or shared) or the user opted in this session. A fresh starter space
+  // and a template tire-kicker stay dormant, which is the rule this app already
+  // wrote down: "A space does not phone home when it is opened".
+  const session = new SyncSession(store)
+  void session
 
   if (!frozen && doc.readonly) {
     banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))
