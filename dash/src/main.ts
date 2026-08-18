@@ -68,21 +68,29 @@ import {
   promoteRange, flattenToSpreadsheet, describeBox, detectHeader, trimBox, currentRegion,
   type CellBox, type CanvasView, type PromoteFinding,
 } from './promote.ts'
-import { isFormula, recalcWorkbook, workbookSources } from './cellformula.ts'
-import { Store } from './store.ts'
+import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformula.ts'
+import { Store, type Patch } from './store.ts'
 import { starterDoc } from './starter.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
 import { keyToAction, normalize } from './select.ts'
 import {
-  appearancePatch, overrideKeys, toggleTarget,
+  appearancePatch, overrideKeys, ridAt, toggleTarget,
   type AppearanceField, type CellRange,
 } from './cellfmt.ts'
 import { rangeKeys, stylePatch } from './cellprops.ts'
 import { mountComments, flatComments } from './comments.ts'
 import { mountRecovery } from './recovery.ts'
 import { mountDropOpen } from './dropopen.ts'
-import { Grid } from './grid.ts'
+import { Grid, canvasKey, CANVAS_MAX_ROWS, CANVAS_MAX_COLS } from './grid.ts'
+// Paste Special and Text to Columns. Both are DOM-free decisions with their
+// own rigs (scripts/test-dash-pastespecial.ts, scripts/test-dash-tocolumns.ts);
+// what lives in this file is only the gesture that calls them.
+import {
+  planPasteSpecial, pasteSpecialItems, pickLook, canvasPastePatches, tablePastePatches,
+  type Clip, type ClipCell, type PasteRefusal, type PasteSpecialItem, type PasteWhat,
+} from './pastespecial.ts'
+import { planTableSplit, planCanvasSplit, type SplitSpec } from './tocolumns.ts'
 import { importDelimited } from './import.ts'
 import { TYPE_LABEL } from './format.ts'
 import { defaultBinding, renderChart, chartHeading, type ChartBinding } from './chart.ts'
@@ -648,7 +656,10 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // observed sitting under a different sheet entirely.
   grid.onViewChange = (text) => { viewEl.textContent = text }
   grid.onFilterMenu = (colId, x, y) => openFilterMenu(store, grid, colId, x, y, viewEl)
-  grid.onContextMenu = (row, ci, x, y) => openCellMenu(store, grid, row, ci, x, y)
+  grid.onContextMenu = (row, ci, x, y) => openCellMenu(store, grid, row, ci, x, y, {
+    pasteSpecial: (px, py) => openPasteSpecial(px, py),
+    split: () => { void textToColumns() },
+  })
 
   // keyboard: the grid owns the key set when nothing else has focus
   document.addEventListener('keydown', (e) => {
@@ -662,6 +673,13 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // that `!keyToAction(e)` it typed a space into the cell instead.
     if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && !keyToAction(e)) {
       if (grid.typeInto(e.key)) { e.preventDefault(); return }
+    }
+    // BEFORE `handleKey`, and that ordering is the whole of it: ⌘X clears the
+    // selection, so a snapshot taken after the grid has run is a rectangle of
+    // blanks. `rememberClip` only reads.
+    const clipAct = keyToAction(e)
+    if (clipAct && (clipAct.kind === 'copy' || clipAct.kind === 'cut')) {
+      rememberClip(clipAct.kind === 'cut')
     }
     if (grid.handleKey(e)) e.preventDefault()
   })
@@ -1313,6 +1331,11 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // ⌘D / ⌘Enter fill down. THE MAP decides which keys mean fill; a fill
     // WRITES CELLS, which the selection model cannot do, so the verb lands here.
     else if (keyToAction(e)?.kind === 'fill') { e.preventDefault(); grid.fillDownSelection() }
+    // ⌘⇧V / ⌘⌃V and ⌘⇧D. Beside `fill` for the reason `fill` is here: the
+    // browser hands this file no `paste` event for a chord that is not its own,
+    // and both of these WRITE CELLS.
+    else if (keyToAction(e)?.kind === 'pasteSpecial') { e.preventDefault(); openPasteSpecial() }
+    else if (keyToAction(e)?.kind === 'textToColumns') { e.preventDefault(); void textToColumns() }
     else {
       // ⌘B / ⌘I / ⌘U. Beside `fill` and for the same reason: `Grid.handleKey`
       // routes motion and clipboard, and a style write is neither — it is a
@@ -1366,6 +1389,324 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     })
     if (p) store.commit(p)
   }
+
+  // --- Paste Special, and Text to Columns -----------------------------------
+  //
+  // Both live here, beside `fill` and `styleSelection`, for exactly the reason
+  // those two do: they WRITE CELLS, which the selection model cannot do, and
+  // `Grid.handleKey` routes motion and the clipboard and neither of these is
+  // motion. Every DECISION either command makes is in pastespecial.ts and
+  // tocolumns.ts, with no DOM and a rig each; what is left here is the gesture
+  // — read the selection, ask the question, commit the patches, say what
+  // happened.
+  //
+  // WHY THIS FILE REMEMBERS THE CLIP AND THE GRID'S OWN COPY IS NOT REUSED.
+  // The grid keeps a private clip for ⌘V, and it holds values and formulas but
+  // not appearance, which "formats only" is entirely about. More to the point
+  // the browser delivers a `paste` EVENT only for its own paste chord: ⌘⇧V
+  // never produces one, so a second chord has to read a clip this app kept.
+  // So the snapshot is taken here, on the same keystroke, BEFORE the grid sees
+  // it — ⌘X clears the selection, and a snapshot taken afterwards would be a
+  // rectangle of blanks.
+
+  /** Canonical row index of a rid — grid.ts's private `dataRow`, DOM-free. */
+  const rowOfRid = (s: TableSheet, rid: number): number => {
+    let i = 0
+    for (const [start, count] of s.rids) {
+      if (rid >= start && rid < start + count) return i + (rid - start)
+      i += count
+    }
+    return -1
+  }
+
+  const shownCols = (s: TableSheet): Column[] => {
+    const hidden = hiddenSet(s)
+    return s.columns.filter((c) => !hidden.has(c.id))
+  }
+
+  /** What ⌘C / ⌘X last took: value, formula and appearance, per cell. */
+  let clip: Clip | null = null
+
+  /**
+   * Snapshot the selection.
+   *
+   * `v` IS THE COMPUTED VALUE, deliberately, and that is the opposite of what
+   * `fillCells` reads. A fill copies a formula DOWN, so seeding it from the
+   * result destroys the formula (scripts/test-dash-fill.ts); "paste values
+   * only" asks for the result on purpose. Both are held here at once: `f` is
+   * the source and `v` is what it printed, so no mode has to reconstruct
+   * either. What neither may do is store an ERROR, and `refusesValue` is the
+   * gate the plan runs every value through.
+   */
+  function rememberClip(cut: boolean): void {
+    const b = grid.sel.bounds()
+    const cv = grid.canvas
+    if (cv) {
+      const view = canvasView(cv)
+      const rows: ClipCell[][] = []
+      for (let r = b.top; r <= b.bottom; r++) {
+        const line: ClipCell[] = []
+        for (let c = b.left; c <= b.right; c++) {
+          const key = canvasKey(r, c)
+          const cell = cv.cells[key]
+          const fv = view.computed?.get(cellKey(r, c))
+          const look = pickLook(cell as Record<string, unknown> | undefined)
+          line.push({
+            r, c,
+            v: fv !== undefined ? fv : cell && 'v' in cell ? cell.v : null,
+            ...(isFormula(cell?.f) ? { f: cell!.f } : {}),
+            ...(look ? { look } : {}),
+          })
+        }
+        rows.push(line)
+      }
+      clip = { kind: 'canvas', rows, ...(cut ? { cut: true } : {}) }
+      return
+    }
+    let s: TableSheet
+    try { s = grid.sheet } catch { return }
+    const vis = shownCols(s)
+    const order = store.order[s.id]
+    // GUARDED ON THE SHEET HAVING A CELL FORMULA AT ALL, the same guard
+    // `canvasView` makes and for the same reason: `workbookSources` walks a
+    // dataset rows × columns, and a 100k-row sheet must not pay that to copy
+    // four cells.
+    const live = !!s.cells && Object.keys(s.cells).some((k) => isFormula(s.cells![k]?.f))
+    const results = live
+      ? recalcWorkbook(
+        workbookSources(store.doc, (tb) => (tb.id === grid.showingId() ? grid.computed : undefined)),
+        store.doc.modified,
+      ).get(s.id)?.values ?? new Map<string, unknown>()
+      : new Map<string, unknown>()
+    const rows: ClipCell[][] = []
+    for (let r = b.top; r <= b.bottom; r++) {
+      const line: ClipCell[] = []
+      const rid = ridAt(s, order, r)
+      const dr = rid < 0 ? -1 : rowOfRid(s, rid)
+      for (let c = b.left; c <= b.right; c++) {
+        const col = vis[c]
+        if (!col || dr < 0) { line.push({ r: dr, c, v: null }); continue }
+        const ci = s.columns.findIndex((x) => x.id === col.id)
+        const over = s.cells?.[`${col.id}:${rid}`]
+        const f = typeof over?.f === 'string' && over.f !== '' ? over.f : undefined
+        const fv = f === undefined ? undefined : results.get(cellKey(dr, ci))
+        const comp = grid.computed.get(col.id)
+        const v = fv !== undefined ? fv
+          : over && 'v' in over ? over.v
+            : comp ? comp[dr] : readCell(s.data[col.id], dr)
+        const look = pickLook(over as Record<string, unknown> | undefined)
+        line.push({ r: dr, c: ci, v, ...(f !== undefined ? { f } : {}), ...(look ? { look } : {}) })
+      }
+      rows.push(line)
+    }
+    clip = { kind: 'table', rows, ...(cut ? { cut: true } : {}) }
+  }
+
+  /**
+   * The menu's English, as LITERALS inside t().
+   *
+   * pastespecial.ts returns ids and refusal CODES and no prose, because the
+   * i18n sweep reads t()'s argument out of the source: a sentence reached
+   * through a variable is invisible to it and ships untranslated in all seven
+   * locales. So the words live at the call site, where the extractor can see
+   * them, and the pure module keeps the decision.
+   */
+  const pasteLabel = (i: PasteSpecialItem): string =>
+    i.id === 'values' ? t('Values only')
+      : i.id === 'formulas' ? t('Formulas')
+        : i.id === 'formats' ? t('Formats only')
+          : i.id === 'transpose' ? t('Transpose')
+            : t('Values only, transposed')
+
+  const refusalText = (why: PasteRefusal | undefined): string =>
+    why === 'transpose-typed-columns'
+      ? t('A dataset’s columns each have one type, so a transposed row of mixed types could only land as text. Transpose works on a spreadsheet sheet; on a dataset, use Pivot or Unpivot.')
+      : ''
+
+  /** The menu. What is available on this kind of sheet is pastespecial.ts's answer. */
+  function openPasteSpecial(x?: number, y?: number): void {
+    if (store.readOnly) return
+    if (!clip) {
+      showFindings(findingsEl, [{
+        message: t('Copy something first — paste special pastes what dash last copied.'),
+      }])
+      return
+    }
+    const items = pasteSpecialItems(grid.isCanvas ? 'canvas' : 'table')
+    const cur = grid.sel.cursor
+    const anchor = document.querySelector<HTMLElement>(
+      `.dg-row[data-row="${cur.row}"] .dg-cell[data-ci="${cur.col}"]`)
+    const box = anchor?.getBoundingClientRect()
+    const el = popover(x ?? box?.right ?? 120, y ?? box?.bottom ?? 120, items.map((i) =>
+      `<button data-a="${i.id}"${i.enabled ? '' : ` disabled title="${esc(refusalText(i.why))}"`}>` +
+      `${esc(pasteLabel(i))}</button>`).join(''))
+    el.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+      b.onclick = () => {
+        const item = items.find((i) => i.id === b.dataset.a)
+        el.remove()
+        if (!item) return
+        // A DISABLED ITEM STILL EXPLAINS ITSELF. Removing the row would leave
+        // the reader hunting for a command that is simply not possible here;
+        // greying it and saying why is the same choice tabs.ts makes for the
+        // toolbar (`actionReason`).
+        if (!item.enabled) {
+          showFindings(findingsEl, [{ message: refusalText(item.why) }])
+          return
+        }
+        runPasteSpecial(item.what, item.transpose)
+      }
+    })
+  }
+
+  function runPasteSpecial(what: PasteWhat, transpose: boolean): void {
+    if (!clip || store.readOnly) return
+    const plan = planPasteSpecial(clip, { what, transpose })
+    if (plan.refusal) {
+      showFindings(findingsEl, [{ message: refusalText(plan.refusal) }])
+      return
+    }
+    const cur = grid.sel.cursor
+    const cv = grid.canvas
+    const notes: Notice[] = []
+    let patches: Patch[]
+    if (cv) {
+      patches = canvasPastePatches({
+        sheetId: cv.id,
+        cellAt: (r, c) => cv.cells[canvasKey(r, c)],
+        maxRows: CANVAS_MAX_ROWS,
+        maxCols: CANVAS_MAX_COLS,
+      }, cur.row, cur.col, plan)
+    } else {
+      let s: TableSheet
+      try { s = grid.sheet } catch { return }
+      const vis = shownCols(s)
+      const order = store.order[s.id]
+      const w = tablePastePatches({
+        sheetId: s.id,
+        colAt: (dc) => {
+          const c = vis[cur.col + dc]
+          return c
+            ? {
+              id: c.id, type: c.type, formula: c.formula, parsed: c.parsed,
+              index: s.columns.findIndex((x) => x.id === c.id),
+            }
+            : null
+        },
+        ridAt: (dr) => ridAt(s, order, cur.row + dr),
+        rowOf: (rid) => rowOfRid(s, rid),
+        overrideAt: (k) => s.cells?.[k],
+      }, plan)
+      patches = w.patches
+      if (w.skipped) {
+        notes.push({
+          message: t('{n} cell(s) had nowhere to land and were not pasted.')
+            .replace('{n}', String(w.skipped)),
+        })
+      }
+    }
+    if (!patches.length) {
+      showFindings(findingsEl, notes.length ? notes : [{ message: t('Nothing was pasted.') }])
+      return
+    }
+    // ONE commit, so one ⌘Z puts the whole paste back.
+    store.commit(patches)
+    if (plan.dropped) {
+      notes.unshift({
+        message: t('{n} cell(s) held an error, not a value, and pasted blank.')
+          .replace('{n}', String(plan.dropped)),
+      })
+    }
+    if (notes.length) showFindings(findingsEl, notes)
+  }
+
+  /**
+   * Text to Columns.
+   *
+   * ONE COLUMN AT A TIME, which is Excel's rule and is not arbitrary: the
+   * output width is read from the data, so two source columns would spill into
+   * each other by a distance neither of them chose.
+   *
+   * On a DATASET the whole column is split, not the selected rows — a column is
+   * a column, and half a split column would be a column with two meanings in
+   * it. On a SPREADSHEET the selection IS the extent, because there is no
+   * column to mean anything.
+   */
+  async function textToColumns(): Promise<void> {
+    if (store.readOnly) return
+    const b = grid.sel.bounds()
+    if (b.left !== b.right) {
+      showFindings(findingsEl, [{
+        message: t('Text to Columns splits one column. Select cells in a single column.'),
+      }])
+      return
+    }
+    const cv = grid.canvas
+    let sheet: TableSheet | null = null
+    let col: Column | undefined
+    if (!cv) {
+      try { sheet = grid.sheet } catch { return }
+      col = shownCols(sheet)[b.left]
+      if (!col) return
+      if (col.formula) {
+        showFindings(findingsEl, [{
+          message: t('A computed column is defined by its formula; there is nothing stored in it to split.'),
+        }])
+        return
+      }
+    }
+    const got = await askForm({
+      title: t('Split into columns'),
+      fields: [
+        { key: 'by', label: t('Split on'), value: ',', mono: true, placeholder: t('e.g. , or ; or a space') },
+        { key: 'widths', label: t('…or cut at character positions'), value: '', mono: true, placeholder: t('e.g. 3, 8, 12') },
+      ],
+      hint: cv
+        ? t('Quoted fields stay whole. The first field replaces the cell you split; the rest spill to the right.')
+        : t('Quoted fields stay whole. The whole column is split, and the column you split is kept.'),
+      submit: t('Split'),
+      check: (v) => (v.by === '' && v.widths.trim() === ''
+        ? t('Give a delimiter, or the character positions to cut at.')
+        : null),
+    })
+    if (!got) return
+    const widths = got.widths.split(/[,\s]+/).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+    const spec: SplitSpec = widths.length ? { widths } : { by: got.by }
+
+    if (cv) {
+      const out = planCanvasSplit(cv, { top: b.top, bottom: b.bottom, col: b.left }, spec, canvasKey)
+      if (out.refusal || !out.patches.length) {
+        showFindings(findingsEl, [{ message: t('Nothing was split.') }])
+        return
+      }
+      // EXCEL WARNS, AND SO DOES THIS. A split's width comes out of the data,
+      // so the author cannot see how far right it will reach before it goes.
+      if (out.overwrites && !window.confirm(
+        t('This split writes over {n} cell(s) that already hold something. Replace them?')
+          .replace('{n}', String(out.overwrites)))) return
+      store.commit(out.patches)
+      if (out.findings.length) showFindings(findingsEl, out.findings.map((f) => ({ message: f.message })))
+      return
+    }
+    if (!sheet || !col) return
+    const out = planTableSplit(sheet, col.id, spec)
+    if (out.refusal || !out.patches.length) {
+      showFindings(findingsEl, [{ message: t('Nothing was split.') }])
+      return
+    }
+    if (out.collisions.length && !window.confirm(
+      t('This split writes over the existing columns {cols}. Replace them?')
+        .replace('{cols}', out.collisions.join(', ')))) return
+    store.commit(out.patches)
+    showFindings(findingsEl, [
+      {
+        message: t('“{col}” split into {n} new column(s).')
+          .replace('{col}', col.name)
+          .replace('{n}', String(out.into.length)),
+      },
+      ...out.findings.map((f) => ({ message: f.message })),
+    ])
+  }
+
   document.addEventListener('paste', (e) => {
     if ((e.target as HTMLElement)?.isContentEditable) return
     const target = e.target as HTMLElement | null
@@ -2030,7 +2371,13 @@ const readCellOf = (sheet: TableSheet, colId: string, row: number): unknown =>
   readCell(sheet.data[colId], row)
 
 /** Right-click on the grid: the structural operations. */
-function openCellMenu(store: Store, grid: Grid, row: number, ci: number, x: number, y: number): void {
+function openCellMenu(
+  store: Store, grid: Grid, row: number, ci: number, x: number, y: number,
+  // The two data-shaping commands. Passed in rather than imported because they
+  // are closures over the live grid and the findings strip, and this menu is a
+  // module-level function; the alternative was a second copy of the wiring.
+  hooks: { pasteSpecial: (x: number, y: number) => void; split: () => void },
+): void {
   const sheet = grid.sheet
   const col = sheet.columns[ci]
   const el = popover(x, y,
@@ -2043,6 +2390,9 @@ function openCellMenu(store: Store, grid: Grid, row: number, ci: number, x: numb
     `<div class="dx-pop-sep"></div>` +
     `<button data-a="fill">${t('Fill down')}</button>` +
     `<button data-a="clear">${t('Clear contents')}</button>` +
+    `<div class="dx-pop-sep"></div>` +
+    `<button data-a="paste-special">${t('Paste special…')}</button>` +
+    `<button data-a="split">${t('Split into columns…')}</button>` +
     `<div class="dx-pop-sep"></div>` +
     `<button data-a="cf-scale">${t('Colour scale')}</button>` +
     `<button data-a="cf-bar">${t('Data bars')}</button>` +
@@ -2081,6 +2431,8 @@ function openCellMenu(store: Store, grid: Grid, row: number, ci: number, x: numb
       }
       else if (a === 'fill') grid.fillDownSelection()
       else if (a === 'clear') grid.clearSelection()
+      else if (a === 'paste-special') hooks.pasteSpecial(x, y)
+      else if (a === 'split') hooks.split()
       else if (col && (a === 'cf-scale' || a === 'cf-bar' || a === 'cf-off')) {
         // Conditional formats are DOCUMENT data — they travel with the file —
         // and live in an additive field, so an older build keeps them.

@@ -64,6 +64,7 @@ import type {
 } from './model.ts'
 import { readCell } from './store.ts'
 import { compare, isBlank } from './filter.ts'
+import { planSplit, type SplitSpec } from './tocolumns.ts'
 import { dependencies, evaluate, isErr, recalc, type Cell, type EvalCtx, type Vec } from './formula.ts'
 
 // --- what a step run reports --------------------------------------------------
@@ -603,6 +604,73 @@ function stepDerive(
       { at, op: 'derive', column: id, rows: errors }))
   }
   return { frame: next, issues }
+}
+
+/**
+ * `split` — one text column into several. Text to Columns, as a declaration.
+ *
+ * Three things make it an op rather than N `derive`s, and they are argued in
+ * full in tocolumns.ts's header: there is no SPLIT in the expression language,
+ * the delimiter must live in ONE place rather than N that can disagree, and the
+ * output types have to come from import.ts's whole-column inference — which
+ * REFUSES on an ambiguous date column — rather than from `derive`'s per-value
+ * guess.
+ *
+ * THE SOURCE COLUMN SURVIVES. Excel replaces it with field one; that makes the
+ * step non-idempotent, and a step that has eaten its own input cannot be
+ * re-run, which is the entire point of putting it in the pipeline. Running this
+ * pipeline twice produces the same frame.
+ */
+function stepSplit(
+  frame: Frame,
+  step: { col?: unknown; by?: unknown; widths?: unknown; into?: unknown; quoted?: unknown; trim?: unknown },
+  at: number,
+): StepOut {
+  const ref = typeof step.col === 'string' ? step.col : ''
+  const into = Array.isArray(step.into)
+    ? (step.into as unknown[]).filter((t): t is { id: string; name: string } =>
+      !!t && typeof (t as { id?: unknown }).id === 'string' && (t as { id: string }).id !== '')
+      .map((t) => ({ id: t.id, name: typeof t.name === 'string' && t.name ? t.name : t.id }))
+    : []
+  const widths = Array.isArray(step.widths)
+    ? (step.widths as unknown[]).filter((n): n is number => typeof n === 'number') : []
+  const spec: SplitSpec = {
+    ...(widths.length ? { widths } : { by: typeof step.by === 'string' ? step.by : '' }),
+    ...(step.quoted === false ? { quoted: false } : {}),
+    ...(step.trim === false ? { trim: false } : {}),
+  }
+  if (!ref || !into.length || (!widths.length && !spec.by)) {
+    return {
+      issues: [issue('split-incomplete', 'fatal',
+        `Step ${at + 1} is a split without ${!ref ? 'a column' : !into.length ? 'any output columns' : 'a delimiter or widths'}, so there is nothing to cut.`,
+        { at, op: 'split' })],
+    }
+  }
+  const col = columnOf(frame, ref)
+  const src = values(frame, ref)
+  if (!col || !src) {
+    return {
+      issues: [issue('split-no-column', 'fatal',
+        `Step ${at + 1} splits ${JSON.stringify(ref)}, and this sheet has no such column.`,
+        { at, op: 'split', column: ref })],
+    }
+  }
+  // ONE plan for the app and the pipeline. The grid's Text to Columns command
+  // calls `planSplit` directly to write the columns into a base sheet's bytes;
+  // if this re-derived them a second way the two would drift, and the drift
+  // would show up as a re-run changing a column nobody edited.
+  const plan = planSplit(src.slice(0, frame.n), spec, into)
+  const derived = new Map(frame.derived)
+  plan.columns.forEach((c, i) => {
+    derived.set(c.id, plan.values[i] as Vec)
+    stats.retainedCells += frame.n
+  })
+  const made = new Set(plan.columns.map((c) => c.id))
+  const columns = frame.columns.filter((c) => !made.has(c.id)).concat(plan.columns)
+  stats.frames++
+  const issues = plan.findings.map((f) => issue(f.code, 'suspicious',
+    `Step ${at + 1}: ${f.message}`, { at, op: 'split', column: f.column }))
+  return { frame: { src: frame.src, rows: frame.rows, n: frame.n, columns, derived }, issues }
 }
 
 function inferType(vals: Vec): ColumnType {
@@ -1243,6 +1311,7 @@ export function runSteps(
       switch (op) {
         case 'filter': out = stepFilter(frame, step as never, at, opts.now); break
         case 'derive': out = stepDerive(frame, step as never, at, opts.now); break
+        case 'split': out = stepSplit(frame, step as never, at); break
         case 'sort': out = stepSort(frame, step as never, at); break
         case 'limit': out = stepLimit(frame, step as never, at); break
         case 'group': out = stepGroup(frame, step as never, at); break

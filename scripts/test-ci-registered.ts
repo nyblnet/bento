@@ -75,15 +75,21 @@ ok(rigs.length > 20, 'the rig glob still finds rigs (this check is what stops a 
  * Adding to it should feel worse than fixing the rig.
  */
 const NOT_RUN: Record<string, string> = {
-  // Found by this guard on its first run, and it is worse than unregistered:
-  // the rig CANNOT EXECUTE. `slides/src/store.ts` imports `'./model'` with no
-  // extension — Vite resolves that, Node's ESM resolver refuses it — so
-  // `node scripts/test-slide-store.ts` dies in module resolution before a
-  // single check runs, and has since the day it was added (#262, 2026-08-10).
-  // Registering it would redden CI for a reason unrelated to whatever push
-  // triggered it. slides/ is another session's zone, so this is REPORTED
-  // rather than fixed here. Remove this entry when the imports carry `.ts`.
-  'test-slide-store.ts': 'cannot run: extensionless imports in slides/src/store.ts (see #262)',
+  // Found by this guard on its first run. CORRECTED after checking how its
+  // siblings run: the first version of this note said the rig "cannot execute"
+  // because `slides/src/store.ts` imports `'./model'` with no extension, which
+  // Node's ESM resolver refuses. True of `node scripts/test-slide-store.ts`,
+  // and misleading — because test-autosave, test-clipboard, test-sanitize,
+  // test-validate and test-spaces-undo have exactly the same imports and DO
+  // run in CI, bundled through esbuild first, which resolves them.
+  //
+  // So this is not a broken rig. It is an unwired one, and the fix is not a
+  // slides-zone change at all: it is an esbuild step in ci.yml copied from any
+  // of those five. It sits here rather than being done in this branch only
+  // because the rig covers slides' store and should go red in front of someone
+  // who owns that code — a dash branch is the wrong place to first turn it on.
+  // Remove this entry and add the step.
+  'test-slide-store.ts': 'not wired up — needs an esbuild step in ci.yml like test-clipboard (#262)',
 }
 
 console.log('\nevery rig is registered')

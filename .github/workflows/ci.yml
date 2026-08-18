@@ -462,6 +462,26 @@ jobs:
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
+      - name: bento/dash paste special
+        # Values only must land the COMPUTED value and NEVER an error object —
+        # the same class of damage scripts/test-dash-fill.ts records, reached
+        # from the other side. Also: formats-only cannot move a number (the
+        # column is summed before and after), a copied formula's relative refs
+        # translate while $A$1 does not and a CUT one does not translate at
+        # all, and transpose is REFUSED on a dataset because its columns are
+        # typed. Last section reads main.ts: the chord must reach the command,
+        # and the clip must be snapshotted BEFORE ⌘X clears the selection.
+        run: node scripts/test-dash-pastespecial.ts
+
+      - name: bento/dash text to columns
+        # The split reuses import.ts's delimiter parser and its type inference,
+        # so "Smith, John" quoted stays one field and an undecidable date
+        # column lands as TEXT rather than eleven months out. The overwrite is
+        # named before it happens. And the outcome is checked in the DOCUMENT:
+        # patches are committed to a real Store, the source column survives,
+        # and re-running the recorded step reproduces the same bytes.
+        run: node scripts/test-dash-tocolumns.ts
+
       - name: bento/dash side panels
         run: node scripts/test-dash-panels.ts
 

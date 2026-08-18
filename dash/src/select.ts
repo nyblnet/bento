@@ -121,6 +121,37 @@ export type Action =
   /** Push the top row of the selection down through the rest of it (⌘D, ⌘↵). */
   | { kind: 'fill' }
   /**
+   * PASTE SPECIAL — open the menu of what to paste (values, formulas,
+   * formats, transposed).
+   *
+   * NOT handled by `Grid.handleKey`, and not by the document `paste` listener
+   * either: the browser only delivers a `paste` EVENT for the browser's own
+   * paste chord, so a second chord has to read the clip this app remembered
+   * when the copy happened. main.ts owns both, beside `fill` and `style`, for
+   * the reason those two are there — this WRITES CELLS, which the selection
+   * model cannot do.
+   *
+   * ⌘⇧V is the chord because Excel's own ⌘⌃V cannot be described by this map
+   * (it probes ⌘ and ctrl separately, never together) and because ⇧ is what
+   * Sheets uses for the same family. keyToAction ALSO answers pasteSpecial for
+   * ⌘⌃V — it costs one condition and it is the key half the world's fingers
+   * already know.
+   */
+  | { kind: 'pasteSpecial' }
+  /**
+   * TEXT TO COLUMNS — split the selected column on a delimiter or at fixed
+   * widths.
+   *
+   * Excel has no shortcut for this (it is a ribbon button), and the reason to
+   * claim one here is the SPREADSHEET kind: a dataset reaches the command from
+   * its cell menu and its column-header menu, and `kind:'canvas'` has neither
+   * — grid.ts declines to open the dataset cell menu over a spreadsheet, and
+   * it is right to. Without a key, half the app cannot reach the feature at
+   * all. ⌘⇧D sits beside ⌘D, which is already this map's answer to "the
+   * browser wanted that key for a bookmark".
+   */
+  | { kind: 'textToColumns' }
+  /**
    * OPEN THE FIND BAR — and this map entry is why ⌘F is safe to claim at all.
    *
    * The grid is windowed: about 55 of a 5,000-row sheet's rows exist in the
@@ -259,13 +290,18 @@ export function keyToAction(e: KeyLike): Action | null {
     case 'a': return { kind: 'selectAll' }
     case 'c': return { kind: 'copy' }
     case 'x': return { kind: 'cut' }
-    case 'v': return { kind: 'paste' }
+    // ⇧ is the paste-special menu, and so is holding ⌘ AND ctrl together —
+    // Excel's own ⌘⌃V. The map folds ⌘ and ctrl into one `cmd` everywhere
+    // else because no binding has ever needed them apart; this one does, so it
+    // asks for both explicitly rather than changing the fold for everybody.
+    case 'v': return shift || (e.metaKey === true && e.ctrlKey === true)
+      ? { kind: 'pasteSpecial' } : { kind: 'paste' }
     case 'z': return shift ? { kind: 'redo' } : { kind: 'undo' }
     case 'y': return { kind: 'redo' }
     // ⌘D is the fill people actually press — ⌘↵ is Excel's, ⌘D is Sheets' and
     // Excel's both. Unclaimed it is the browser's bookmark dialog, which is
     // what a spreadsheet user gets today for reaching for fill-down.
-    case 'd': return { kind: 'fill' }
+    case 'd': return shift ? { kind: 'textToColumns' } : { kind: 'fill' }
     // ⌘F and ⌘G are the two keys every application on the platform already
     // means by "find" and "find again", and both are the browser's by default
     // — which is precisely the problem, because the browser can only see the
