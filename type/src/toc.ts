@@ -531,6 +531,7 @@ features.registerTool({
   icon: TOC_ICON,
   get title() { return t('Insert a table of contents'); },
   group: 'insert',
+  label: () => t('Contents'),
   order: 60,
   run: insertToc,
 });

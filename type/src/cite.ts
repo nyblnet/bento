@@ -603,6 +603,7 @@ registerTool({
   icon: ICON,
   title: t('Insert citation'),
   group: 'insert',
+  label: () => t('Citation'),
   order: 40,
   run: openPicker,
 });

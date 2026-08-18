@@ -710,13 +710,13 @@ function paintPanel(host: HTMLElement, ctx: FeatureContext): void {
 // ─────────────────────────────────────────────────────────────── registration
 
 registerTool({
-  id: 'caption', icon: ICON_CAPTION, group: 'insert', order: 30,
+  id: 'caption', icon: ICON_CAPTION, group: 'insert', order: 30, label: () => t('Caption'),
   get title() { return t('Caption this table or figure'); },
   run: addCaption,
 });
 
 registerTool({
-  id: 'xref', icon: ICON_XREF, group: 'insert', order: 31,
+  id: 'xref', icon: ICON_XREF, group: 'insert', order: 31, label: () => t('Cross-reference'),
   get title() { return t('Insert a cross-reference to a caption'); },
   run: openPicker,
 });

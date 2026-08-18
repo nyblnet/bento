@@ -118,15 +118,10 @@ app.innerHTML = `
         <button id="mb" class="t-btn" type="button"></button>
         <button id="mi" class="t-btn" type="button"></button>
         <button id="mu" class="t-btn" type="button"></button>
-        <button id="ms" class="t-btn" type="button"></button>
-        <button id="mc" class="t-btn" type="button"></button>
       </div>
       <div class="t-group">
         <button id="lul" class="t-btn" type="button"></button>
         <button id="lol" class="t-btn" type="button"></button>
-        <button id="lin" class="t-btn" type="button"></button>
-        <button id="lout" class="t-btn" type="button"></button>
-        <button id="tbl" class="t-btn" type="button"></button>
       </div>
       <div class="t-group" id="gInsert"></div>
       <div class="t-group" id="gReview"></div>
@@ -140,6 +135,9 @@ app.innerHTML = `
       <div class="t-menuwrap">
         <button id="more" class="t-btn" type="button"></button>
         <div class="t-menu" id="moreMenu" hidden>
+          <button id="ms" type="button"></button>
+          <button id="mc" type="button"></button>
+          <div class="t-menu-sep"></div>
           <button id="snap" type="button"></button>
           <button id="review" type="button"></button>
           <button id="sign" type="button"></button>
@@ -192,13 +190,13 @@ label('props', ICONS.panelRight, t('Format — show or hide the properties panel
 label('mb', ICONS.bold, t('Bold (⌘B)'));
 label('mi', ICONS.italic, t('Italic (⌘I)'));
 label('mu', ICONS.underline, t('Underline (⌘U)'));
-label('ms', ICONS.strike, t('Strikethrough'));
-label('mc', ICONS.code, t('Code'));
+// Strikethrough and code leave the BAR for the ⋯ menu: of the five character
+// formats they are the two nobody reaches for mid-sentence in the prose this
+// app is for, and bar width is the scarcest thing in the app.
+label('ms', ICONS.strike, t('Strikethrough'), t('Strikethrough'));
+label('mc', ICONS.code, t('Code'), t('Code'));
 label('lul', ICONS.bullets, t('Bulleted list'));
 label('lol', ICONS.numbers, t('Numbered list'));
-label('lin', ICONS.indent, t('Indent (Tab)'));
-label('lout', ICONS.outdent, t('Outdent (⇧Tab)'));
-label('tbl', ICONS.table, t('Insert a table'));
 label('undo', ICONS.undo, t('Undo (⌘Z)'));
 label('redo', ICONS.redo, t('Redo (⇧⌘Z)'));
 label('save', ICONS.save, t('Save (⌘S)'), t('Save'));
@@ -319,23 +317,67 @@ const featureCtx: FeatureContext = {
   },
 };
 
+const toolButton = (spec: ReturnType<typeof tools>[number]) => {
+  const b = document.createElement('button');
+  b.className = 't-btn';
+  b.type = 'button';
+  b.id = `tool-${spec.id}`;
+  b.innerHTML = spec.icon + (spec.label ? `<span class="t-lbl">${labelText(spec.label)}</span>` : '');
+  b.title = labelText(spec.title);
+  // mousedown, not click: the caret must survive pressing a toolbar button
+  b.addEventListener('mousedown', e => { e.preventDefault(); spec.run(featureCtx); });
+  return b;
+};
+
 const mountTools = (hostId: string, group: 'format' | 'insert' | 'review' | 'right') => {
   const host = byId(hostId);
-  for (const spec of tools(group)) {
-    const b = document.createElement('button');
-    b.className = 't-btn';
-    b.type = 'button';
-    b.id = `tool-${spec.id}`;
-    b.innerHTML = spec.icon + (spec.label ? `<span class="t-lbl">${labelText(spec.label)}</span>` : '');
-    b.title = labelText(spec.title);
-    // mousedown, not click: the caret must survive pressing a toolbar button
-    b.addEventListener('mousedown', e => { e.preventDefault(); spec.run(featureCtx); });
-    host.appendChild(b);
-  }
+  for (const spec of tools(group)) host.appendChild(toolButton(spec));
   if (!host.children.length) host.remove();
 };
+
+/**
+ * INSERT IS ONE BUTTON, not eight.
+ *
+ * Every feature that can put something in the document registered its own icon,
+ * and the bar reached thirty-nine buttons needing 1253px inside a 1120px
+ * window — accumulated a feature at a time, never designed. slides solved the
+ * same problem the same way (shapeDropdown, mediaDropdown): related inserts
+ * live behind one control, so adding the ninth thing costs no width at all.
+ *
+ * They are also the RARE actions. A picture or a citation is chosen
+ * deliberately, once; bold is pressed mid-sentence without looking. Frequency
+ * is what earns a place in the bar.
+ */
+const mountInsertMenu = () => {
+  const host = byId('gInsert');
+  const specs = tools('insert');
+  if (!specs.length) { host.remove(); return; }
+  const wrap = document.createElement('div');
+  wrap.className = 't-menuwrap';
+  const btn = document.createElement('button');
+  btn.className = 't-btn';
+  btn.type = 'button';
+  btn.id = 'insertMenuBtn';
+  btn.innerHTML = ICONS.plus + `<span class="t-lbl">${t('Insert')}</span>`;
+  btn.title = t('Insert a picture, table, formula, citation…');
+  const menu = document.createElement('div');
+  menu.className = 't-menu';
+  menu.hidden = true;
+  for (const spec of specs) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.innerHTML = spec.icon + `<span>${labelText(spec.label ?? spec.title)}</span>`;
+    item.addEventListener('mousedown', e => { e.preventDefault(); menu.hidden = true; spec.run(featureCtx); });
+    menu.appendChild(item);
+  }
+  btn.addEventListener('click', e => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener('click', () => { menu.hidden = true; });
+  wrap.append(btn, menu);
+  host.appendChild(wrap);
+};
+
 mountTools('gFormat', 'format');
-mountTools('gInsert', 'insert');
+mountInsertMenu();
 mountTools('gReview', 'review');
 
 for (const spec of menuItems()) {
@@ -477,9 +519,6 @@ for (const [id, kind] of [['lul', 'ul'], ['lol', 'ol']] as const) {
     editor.setKind(cur === kind ? 'para' : kind);
   });
 }
-byId('tbl').addEventListener('mousedown', e => { e.preventDefault(); editor.insertTable(); });
-byId('lin').addEventListener('mousedown', e => { e.preventDefault(); editor.indent(1); });
-byId('lout').addEventListener('mousedown', e => { e.preventDefault(); editor.indent(-1); });
 
 byId('sidebar').addEventListener('click', () => {
   document.querySelector('.t-main')!.classList.toggle('t-side-off');

@@ -375,6 +375,7 @@ registerTool({
   icon: RADICAL_ICON,
   get title() { return t('Formula (⌘M)'); },
   group: 'insert',
+  label: () => t('Formula'),
   order: 40,
   run: ctx => insertInlineMath(ctx),
 });

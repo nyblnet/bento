@@ -42,7 +42,8 @@ export const humanSize = (bytes: number): string =>
 registerTool({
   id: 'image',
   icon: ICONS.image,
-  title: t('Insert a picture'),
+  title: () => t('Insert a picture'),
+  label: () => t('Picture'),
   group: 'insert',
   order: 20,
   run(ctx) {
@@ -71,4 +72,17 @@ registerTool({
     }, { once: true });
     input.click();
   },
+});
+
+// The table lives in the Insert menu beside the picture, rather than as its own
+// button in the bar: both are things you place deliberately and rarely, and the
+// menu is what stops the ninth insertable thing costing another 32px.
+registerTool({
+  id: 'table',
+  icon: ICONS.table,
+  title: () => t('Insert a table'),
+  label: () => t('Table'),
+  group: 'insert',
+  order: 10,
+  run(ctx) { ctx.editor.insertTable(); ctx.refresh(); },
 });
