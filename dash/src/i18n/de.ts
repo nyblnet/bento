@@ -524,6 +524,7 @@ export const de: Catalog = {
   "This chart is about {sheet}. You are looking at {other}.": "Dieses Diagramm bezieht sich auf {sheet}. Sie sehen gerade {other}.",
   "This chart was drawn from {cols}, and {sheet} does not have {n} of them any more.": "Dieses Diagramm entstand aus {cols}, und {sheet} hat {n} davon nicht mehr.",
   "This choice could not be saved — site data is blocked or full — so it holds for this tab and will be forgotten when you reload.": "Diese Auswahl konnte nicht gespeichert werden – Websitedaten sind blockiert oder voll –, sie gilt daher nur für diesen Tab und geht beim Neuladen verloren.",
+  "This column is {type}, so its values print exactly as they are stored and this pattern changes nothing. Set the type to Number, Money or Percent for it to apply.": "Diese Spalte ist {type}, ihre Werte werden also genau so ausgegeben, wie sie gespeichert sind, und dieses Muster ändert nichts. Setzen Sie den Typ auf Zahl, Währung oder Prozent, damit es greift.",
   "This file": "Diese Datei",
   "This file could not be opened as a bento/dash workbook.": "Diese Datei konnte nicht als bento/dash-Arbeitsmappe geöffnet werden.",
   "This file is encrypted.": "Diese Datei ist verschlüsselt.",

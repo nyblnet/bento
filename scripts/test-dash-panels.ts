@@ -54,6 +54,7 @@ registerHooks({
 
 const {
   totalsPatch, totalsChoice, freezeThroughPatch, renameSheetPatch, mintSheetId, mintSheetName, blankSheet,
+  patternIsInert,
 } = await import('../dash/src/panels.ts')
 
 const { parseDoc } = await import('../dash/src/model.ts')
@@ -284,6 +285,41 @@ console.log('\nthe factories are factories')
   mintSheetName(d, 'Sheet')
   ok(content(d) === before,
     'minting six patches from one document mutates nothing — the same rule rowcol.ts holds itself to, and the reason a patch has an inverse at all')
+}
+
+// --- THE PATTERN THAT DOES NOTHING -------------------------------------------
+//
+// WHY THIS EXISTS. Measured: `#,##0.00` typed into the Format field of a TEXT
+// column is accepted, shown back as set, saved into the file — and changes
+// nothing, on screen or on paper, because `formatValue` answers `String(v)` for
+// text and never reads the pattern at all. The panel's own sentence next door
+// is exactly right ("The column decides what these cells ARE. A pattern here
+// only changes how they print"), and this is the case where "how they print" is
+// nothing at all. The note is the report; `patternIsInert` is the decision, and
+// a decision shown in the wrong case is as wrong as one never shown.
+//
+// It is deliberately NOT a refusal — `setColumnType` refuses because converting
+// would DESTROY values it cannot read, and a display pattern destroys nothing.
+{
+  ok(patternIsInert('text', '#,##0.00'),
+    'a number pattern on a Text column is inert, and the panel says so')
+  ok(patternIsInert('text', '£#,##0'),
+    '…currency included: the £ is a prefix around digits that never print')
+  ok(patternIsInert('text', '0%') && patternIsInert('enum', '#,##0')
+     && patternIsInert('date', '#,##0') && patternIsInert('bool', '0'),
+    '…and on every type `formatValue` prints as-stored: Text, Category, Date, Yes/No')
+
+  // THE CONTROLS, which are what make the four above mean anything. A note that
+  // fired on every pattern would pass all of them and be noise on the columns
+  // where the pattern is the whole point.
+  ok(!patternIsInert('number', '#,##0.00') && !patternIsInert('money', '£#,##0')
+     && !patternIsInert('percent', '0.0%'),
+    'and it is silent on the types that DO print through the number formatter')
+  ok(!patternIsInert('text', ''),
+    'silent when no pattern is set — an empty field is not a mistake')
+  ok(!patternIsInert('date', 'yyyy-mm-dd'),
+    'silent on a date pattern: it does nothing either, but it is not the number '
+    + 'mistake this sentence names, and the wrong explanation is worse than none')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

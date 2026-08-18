@@ -524,6 +524,7 @@ export const zhHans: Catalog = {
   "This chart is about {sheet}. You are looking at {other}.": "此图表针对 {sheet}。你正在查看 {other}。",
   "This chart was drawn from {cols}, and {sheet} does not have {n} of them any more.": "此图表由 {cols} 绘制，而 {sheet} 中已缺少其中 {n} 个。",
   "This choice could not be saved — site data is blocked or full — so it holds for this tab and will be forgotten when you reload.": "此选择无法保存——站点数据被阻止或已满——因此它仅在此标签页中有效，重新加载后将会丢失。",
+  "This column is {type}, so its values print exactly as they are stored and this pattern changes nothing. Set the type to Number, Money or Percent for it to apply.": "此列是{type}，因此其值按存储的原样显示，这个格式不起任何作用。要让它生效，请将类型设为数字、货币或百分比。",
   "This file": "此文件",
   "This file could not be opened as a bento/dash workbook.": "此文件无法作为 bento/dash 工作簿打开。",
   "This file is encrypted.": "此文件已加密。",

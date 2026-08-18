@@ -524,6 +524,7 @@ export const ja: Catalog = {
   "This chart is about {sheet}. You are looking at {other}.": "このグラフは {sheet} のものです。今表示しているのは {other} です。",
   "This chart was drawn from {cols}, and {sheet} does not have {n} of them any more.": "このグラフは {cols} から作成されましたが、{sheet} にはそのうち {n} 個がありません。",
   "This choice could not be saved — site data is blocked or full — so it holds for this tab and will be forgotten when you reload.": "この選択は保存できませんでした（サイトデータがブロックされているか、容量がいっぱいです）。このタブでは有効ですが、再読み込みすると失われます。",
+  "This column is {type}, so its values print exactly as they are stored and this pattern changes nothing. Set the type to Number, Money or Percent for it to apply.": "この列は {type} なので、値は保存されているとおりに表示され、この書式は何も変えません。適用するには型を数値・通貨・パーセントのいずれかにしてください。",
   "This file": "このファイル",
   "This file could not be opened as a bento/dash workbook.": "このファイルを bento/dash のブックとして開けませんでした。",
   "This file is encrypted.": "このファイルは暗号化されています。",

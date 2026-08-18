@@ -464,6 +464,11 @@ export function mountPanels(host: PanelsHost): Panels {
     pat.disabled = ro()
     row(right, t('Pattern'), pat)
     note(right, t('The column decides what these cells ARE. A pattern here only changes how they print.'))
+    // …and on a column that prints its values as they are, "how they print" is
+    // nothing at all. Read from the CELL's own pattern, not the effective one:
+    // the placeholder above shows the column's, and warning about a pattern the
+    // reader did not type here would send them to the wrong field.
+    patternInertNote(right, col.type, own)
 
     buildAppearanceSection({
       host: right,
@@ -515,6 +520,7 @@ export function mountPanels(host: PanelsHost): Panels {
     })
     fmt.placeholder = '£#,##0.00'
     row(right, t('Format'), fmt)
+    patternInertNote(right, col.type, typeof col.format === 'string' ? col.format : '')
 
     // One expression for the WHOLE column. Editing it here beats the prompt()
     // the grid falls back to, because you can see the column while you type.
@@ -986,11 +992,60 @@ function readonlyRow(hostEl: HTMLElement, label: string, value: string): void {
   hostEl.appendChild(r)
 }
 
-function note(hostEl: HTMLElement, message: string): void {
+function note(hostEl: HTMLElement, message: string, cls = ''): void {
   const p = document.createElement('p')
-  p.className = 'dp-note'
+  p.className = cls ? `dp-note ${cls}` : 'dp-note'
   p.textContent = message
   hostEl.appendChild(p)
+}
+
+/**
+ * Types whose display NEVER goes through the number formatter.
+ *
+ * `formatValue` (format.ts) answers `String(v)` for these and never reads the
+ * pattern at all — so a pattern typed against one of them is accepted, shown
+ * back as set, saved into the file, and does nothing. Stated here rather than
+ * imported because format.ts exports the formatter and not its shape, and a
+ * second implementation of "what counts as a number" is the thing store.ts
+ * refuses to have. This is the narrower question — "does this type print
+ * through the number path" — and its answer is one `if` in that file.
+ */
+const PRINTS_AS_TYPED: ReadonlySet<ColumnType> = new Set<ColumnType>(['text', 'enum', 'date', 'bool'])
+
+/**
+ * A pattern that only a number can honour: an Excel digit placeholder (`#`/`0`)
+ * or a percent sign, which is everything `readPattern` looks for.
+ */
+const isNumericPattern = (fmt: string): boolean => /[#0%]/.test(fmt)
+
+/**
+ * IS THIS PATTERN DOING NOTHING? The decision, separated from the paragraph
+ * that reports it, so a rig can assert it — a note nobody can check is how a
+ * sentence ends up shown in the wrong case, which is the same defect as not
+ * showing it at all pointing the other way.
+ */
+export const patternIsInert = (type: ColumnType, fmt: string): boolean =>
+  !!fmt && PRINTS_AS_TYPED.has(type) && isNumericPattern(fmt)
+
+/**
+ * THE PATTERN THAT DOES NOTHING, said where it is typed.
+ *
+ * Measured: `#,##0.00` typed against a Text column is accepted, redisplayed as
+ * set, and changes nothing on screen or on paper. The cell section already
+ * carries the sentence that explains why — "The column decides what these cells
+ * ARE. A pattern here only changes how they print." — and this is its sibling,
+ * shown only in the case where the pattern has nothing to change.
+ *
+ * DELIBERATELY NOT A REFUSAL. `setColumnType` refuses and says so because
+ * converting a column would DESTROY values it cannot read; a display pattern
+ * destroys nothing, and a Text column on its way to being a Number column is a
+ * reasonable place to be standing with a pattern already typed. So the pattern
+ * is kept, and the panel stops pretending it is doing something.
+ */
+function patternInertNote(hostEl: HTMLElement, type: ColumnType, fmt: string): void {
+  if (!patternIsInert(type, fmt)) return
+  note(hostEl, t('This column is {type}, so its values print exactly as they are stored and this pattern changes nothing. Set the type to Number, Money or Percent for it to apply.',
+    { type: t(TYPE_LABEL[type]) }), 'dp-note-warn')
 }
 
 /** Commits on `change` — blur or Enter — never per keystroke. */

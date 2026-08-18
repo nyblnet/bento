@@ -73,6 +73,10 @@ const INDIRECT: Array<{ arg: string; file: string; name: string; pick: 'values' 
   // cell's appearance — the type boundary made visible, so it has to be
   // localized like every other reading of this table.
   { arg: 'TYPE_LABEL[col.type]', file: 'format.ts', name: 'TYPE_LABEL', pick: 'values' },
+  // …and the "this pattern does nothing" note names the type it is refusing to
+  // format, so it reads the same table again — a fourth spelling of the same
+  // indirection rather than a fourth table.
+  { arg: 'TYPE_LABEL[type]', file: 'format.ts', name: 'TYPE_LABEL', pick: 'values' },
   { arg: 'role', file: 'sync/people.ts', name: 'ROLE_LABEL', pick: 'values' },
 ]
 

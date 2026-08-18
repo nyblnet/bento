@@ -554,3 +554,13 @@ body.dp-resizing { cursor: col-resize; user-select: none; }
   color: var(--ink);
 }
 .dp-sheet-rename:focus { outline: none; }
+
+/* A note that reports something the reader has already done and that is not
+   taking effect (a number pattern on a Text column). Louder than `.dp-note`'s
+   muted grey, which reads as chrome and is skipped, and quieter than an error,
+   which this is not: nothing was refused and nothing was lost. */
+.dp-note-warn {
+  color: var(--ink);
+  border-left: 2px solid var(--warn-ink);
+  padding-left: 7px;
+}
