@@ -213,10 +213,59 @@ ok((filtered.html.match(/dxpr-tot/g) ?? []).length === 1,
 
 ok((whole.html.match(/<thead>/g) ?? []).length === 1,
   'one <thead> per table — the group the renderer repeats on every page')
-ok(/<thead><tr[^>]*><th class="dxpr-g"><\/th><th>/.test(whole.html),
+ok(/<tr[^>]*><th class="dxpr-g"><\/th><th>/.test(whole.html),
   'the header carries the columns, so page 40 still says what it is a column of')
 ok(whole.html.includes('Region') && whole.html.includes('Value'),
   '…by name')
+
+// --- 3b. THE PAGE HEADER REPEATS, which is what puts a date on page 27 --------
+//
+// A caption in a <div> above the table prints on page one and is never seen
+// again; the same caption as the FIRST ROW of the thead prints on every page
+// the table reaches, because `table-header-group` is what repeats a thead. That
+// one structural fact is the whole of "repeat rows at top", so it is asserted
+// structurally rather than by eye in a print preview.
+
+const stamped = buildPrintable(wb([small]), [view(small)], opts(),
+  new Date('2026-03-09T14:05:00Z'))
+ok(stamped.html.includes('dxpr-caprow'),
+  'the sheet caption is a row of the <thead>, so it repeats on every page')
+ok(stamped.html.indexOf('dxpr-caprow') < stamped.html.indexOf('dxpr-g'),
+  '…and it is the FIRST row, above the column names rather than below them')
+ok(/<thead><tr class="dxpr-caprow"><th colspan="3">/.test(stamped.html),
+  '…spanning the gutter and both columns, so a long title is not hyphenated into the gutter')
+ok(/2026/.test(stamped.html) && /dxpr-when/.test(stamped.html),
+  'the page header carries the date the printout was made — the thing a printed budget had no way to say')
+ok(stamped.html.includes('dxpr-name">Pipeline'),
+  '…beside the sheet name it has always carried')
+
+// NEGATIVE CONTROL for the date: the SAME build with the header off must lose
+// it. Without this the check above passes on any markup containing "2026",
+// including a cell value that happens to be a year.
+const bare = buildPrintable(wb([small]), [view(small)], opts({ header: false }),
+  new Date('2026-03-09T14:05:00Z'))
+ok(!bare.html.includes('dxpr-caprow') && !bare.html.includes('dxpr-when'),
+  'Page header: None removes the header row and the date with it')
+ok(bare.html.includes('Region'),
+  '…and takes nothing else with it — the column names stay')
+ok(buildPrintable(wb([small]), [view(small)], opts(), new Date('2026-03-09T14:05:00Z')).html
+  === buildPrintable(wb([small]), [view(small)], opts(), new Date('2026-03-09T14:05:00Z')).html,
+  'the builder is PURE: the date is an argument, so the same inputs give the same bytes')
+ok(buildPrintable(wb([small]), [view(small)], opts(), new Date('2020-01-01T00:00:00Z')).html
+  !== stamped.html,
+  '…and a different date really does reach the markup (the control for the line above)')
+
+// --- 3c. MARGINS are a choice, and one that does real work -------------------
+
+const narrow = buildPrintable(wb([small]), [view(small)], opts({ margin: 'narrow' }))
+const widem = buildPrintable(wb([small]), [view(small)], opts({ margin: 'wide' }))
+ok(narrow.pageCss.includes('margin:10mm') && widem.pageCss.includes('margin:20mm'),
+  'the margin choice reaches the @page rule, which is the only thing the renderer reads')
+ok(pageBox(opts({ margin: 'narrow' })).w > pageBox(opts({ margin: 'wide' })).w,
+  '…and the printable box follows it, so a narrow margin really does fit more column')
+ok(Math.round(pageBox(opts({ margin: 'narrow' })).w - pageBox(opts({ margin: 'normal' })).w)
+   === Math.round(2 * 2 * 96 / 25.4),
+  '…by exactly twice the difference — a margin is on both edges')
 
 // --- 4. no column may run off the right edge ----------------------------------
 

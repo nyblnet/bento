@@ -70,10 +70,22 @@
 //
 // ═══ WHAT IS NOT HERE ════════════════════════════════════════════════════════
 //
-// No page numbers. `@page { @bottom-right { content: counter(page) } }` is CSS
-// Paged Media and no browser implements the margin boxes; the system print
-// dialog's own headers and footers are where page numbers come from, and
-// inventing a second set that disagrees with them is worse than none.
+// No page numbers, and that decision is UNCHANGED after being re-argued.
+// `@page { @bottom-right { content: counter(page) } }` is CSS Paged Media and
+// no browser implements the margin boxes; the system print dialog's own
+// headers and footers are where page numbers come from, and inventing a second
+// set that disagrees with them is worse than none. What was wrong was not the
+// decision but the SILENCE around it — a reader who wants "Page 3 of 40" was
+// left to conclude the feature is missing rather than that it lives one dialog
+// along, so the Print dialog now says where to find it.
+//
+// WHAT THE PAGE HEADER DOES CARRY, on every page rather than once per sheet:
+// the sheet name, the workbook title, the view sentence and the DATE. It is
+// the first row of the `<thead>`, which is to say it repeats by the same
+// `table-header-group` mechanism that repeats the column names — Excel's "rows
+// to repeat at top", built out of the one thing that works across engines.
+// A caption in a `<div>` above the table, which is what this used to be,
+// appears on page one and is never seen again.
 //
 // Table-sheet per-cell colours (`CellOverride.color/bg/bold`) are NOT painted,
 // because the grid does not paint them either (grid.ts's table path applies
@@ -120,8 +132,22 @@ export const PAPERS: readonly Paper[] = [
   { id: 'a3', label: 'A3', w: 297, h: 420 },
 ] as const
 
-/** Millimetres of margin on every edge. Under 10mm and consumer printers clip. */
-export const MARGIN_MM = 12
+/**
+ * Millimetres of margin on every edge, by choice. 10mm is the floor: under it
+ * consumer printers clip, and a margin that loses the last column is the same
+ * defect as a column planner that drops one.
+ *
+ * The choice is real work rather than decoration — `pageBox` shrinks with it,
+ * so a narrow margin puts more columns in a block, changes the shrink factor
+ * and moves the page estimate. It is the one knob a reader has when a sheet is
+ * one column wider than the paper.
+ */
+export const MARGINS: Readonly<Record<string, number>> = {
+  narrow: 10, normal: 12, wide: 20,
+}
+
+/** The default, and the number the `@page` rule used to be fixed at. */
+export const MARGIN_MM = MARGINS.normal
 
 /** CSS px per millimetre: 96 dpi over 25.4mm to the inch, which is the pixel
  *  the `@page` box is measured in whatever the printer's real dots are. */
@@ -131,17 +157,27 @@ export type Orientation = 'portrait' | 'landscape'
 /** How a sheet wider than the paper is dealt with — see the header. */
 export type WideMode = 'auto' | 'fit' | 'split'
 export type Scope = 'sheet' | 'workbook'
+export type MarginChoice = 'narrow' | 'normal' | 'wide'
 
 export interface PrintOptions {
   paper: string
   orientation: Orientation
   wide: WideMode
   scope: Scope
+  margin: MarginChoice
+  /** the repeating page header — see `captionRow` */
+  header: boolean
 }
 
 export const DEFAULT_OPTIONS: PrintOptions = {
   paper: 'a4', orientation: 'landscape', wide: 'auto', scope: 'sheet',
+  // The header defaults ON because the caption it replaces was unconditional:
+  // a printout that lost its sheet name in an upgrade is a regression, not a
+  // new default.
+  margin: 'normal', header: true,
 }
+
+const marginOf = (o: PrintOptions): number => MARGINS[o.margin] ?? MARGIN_MM
 
 const paperOf = (id: string): Paper => PAPERS.find((p) => p.id === id) ?? PAPERS[0]
 
@@ -150,9 +186,10 @@ export function pageBox(opts: PrintOptions): { w: number; h: number } {
   const p = paperOf(opts.paper)
   const w = opts.orientation === 'landscape' ? p.h : p.w
   const h = opts.orientation === 'landscape' ? p.w : p.h
+  const m = marginOf(opts)
   return {
-    w: (w - MARGIN_MM * 2) * PX_PER_MM,
-    h: (h - MARGIN_MM * 2) * PX_PER_MM,
+    w: (w - m * 2) * PX_PER_MM,
+    h: (h - m * 2) * PX_PER_MM,
   }
 }
 
@@ -448,14 +485,48 @@ const metricsFor = (scale: number): Metrics => ({
 
 /** The caption over one table: sheet name, what the view is, which columns. */
 function caption(
-  doc: DashDoc, name: string, status: string, block: string,
+  doc: DashDoc, name: string, status: string, block: string, when?: string,
 ): string {
   const bits = [status, block].filter(Boolean).join('  ·  ')
   return `<div class="dxpr-cap">` +
     `<span class="dxpr-name">${esc(name || t('(untitled sheet)'))}</span>` +
     `<span class="dxpr-title">${esc(doc.title || '')}</span>` +
     (bits ? `<span class="dxpr-view">${esc(bits)}</span>` : '') +
+    (when ? `<span class="dxpr-when">${esc(when)}</span>` : '') +
     `</div>`
+}
+
+/**
+ * The date on the printout, in the VIEWER's locale.
+ *
+ * Taken from an argument rather than from `new Date()` inside the builder, so
+ * `buildPrintable` stays a pure function of its inputs: a rig that could not
+ * pin the date could not assert on the markup at all, and a printout is not the
+ * place to discover the one impure line.
+ */
+const stamp = (when: Date): string => {
+  try {
+    return when.toLocaleString(undefined,
+      { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch { return when.toISOString().slice(0, 16).replace('T', ' ') }
+}
+
+/**
+ * THE PAGE HEADER: the caption, as the first row of the `<thead>`.
+ *
+ * That one move is the whole of "repeat rows at top". A `<div>` above the table
+ * prints once, on the page the table starts on; a `<thead>` row prints on every
+ * page the table reaches, by the same `table-header-group` rule that repeats
+ * the column names, which is the only mechanism that behaves across engines
+ * (see the file header). So page 27 of a budget now names the sheet, the
+ * workbook, the view it is a view OF, and the day it was printed.
+ *
+ * It is a `th` spanning the whole table because a header row that did not span
+ * would be laid out against the column widths and hyphenate the workbook title
+ * into the row-number gutter.
+ */
+function captionRow(cols: number, inner: string): string {
+  return `<tr class="dxpr-caprow"><th colspan="${cols + 1}">${inner}</th></tr>`
 }
 
 /** "Columns 9–14 of 22", or '' when the sheet fitted in one block. */
@@ -468,9 +539,9 @@ const blockLabel = (from: number, to: number, total: number, split: boolean): st
  * THE ROW LOOP IS THE POINT. It runs the whole view vector, once per block,
  * with no window anywhere in it.
  */
-function tableMarkup(doc: DashDoc, view: SheetView, opts: PrintOptions, box: { w: number }): {
-  html: string; rows: number; blocks: number
-} {
+function tableMarkup(
+  doc: DashDoc, view: SheetView, opts: PrintOptions, box: { w: number }, when: string,
+): { html: string; rows: number; blocks: number } {
   const sheet = view.sheet as TableSheet
   const hidden = hiddenSet(sheet)
   const vis = sheet.columns.filter((c) => !hidden.has(c.id))
@@ -480,7 +551,7 @@ function tableMarkup(doc: DashDoc, view: SheetView, opts: PrintOptions, box: { w
 
   if (!vis.length || !n) {
     return {
-      html: `<section class="dxpr-sheet">${caption(doc, sheet.name, view.status ?? '', '')}` +
+      html: `<section class="dxpr-sheet">${opts.header ? caption(doc, sheet.name, view.status ?? '', '', when) : ''}` +
         `<p class="dxpr-empty">${esc(t('Nothing to print — this sheet is empty.'))}</p></section>`,
       rows: 0, blocks: 1,
     }
@@ -539,14 +610,17 @@ function tableMarkup(doc: DashDoc, view: SheetView, opts: PrintOptions, box: { w
 
     const parts: string[] = []
     parts.push(`<section class="dxpr-sheet">`)
-    parts.push(caption(doc, sheet.name, view.status ?? '',
-      blockLabel(block[0], block[block.length - 1], vis.length, multi)))
     parts.push(`<table class="dxpr-t" style="width:${width}px;font-size:${m.font}px">`)
     parts.push(`<colgroup><col style="width:${m.gutter}px">` +
       columns.map((c) => `<col style="width:${Math.round(colW(c) * m.scale)}px">`).join('') +
       `</colgroup>`)
 
-    parts.push(`<thead><tr style="height:${m.head}px"><th class="dxpr-g"></th>` +
+    parts.push('<thead>')
+    if (opts.header) {
+      parts.push(captionRow(columns.length, caption(doc, sheet.name, view.status ?? '',
+        blockLabel(block[0], block[block.length - 1], vis.length, multi), when)))
+    }
+    parts.push(`<tr style="height:${m.head}px"><th class="dxpr-g"></th>` +
       columns.map((c) =>
         `<th><span class="dxpr-h">${esc(c.name || c.id)}</span>` +
         // The same argument expression grid.ts's header uses, deliberately: the
@@ -609,14 +683,14 @@ function tableMarkup(doc: DashDoc, view: SheetView, opts: PrintOptions, box: { w
  * empty ruled rows. A cell's own colour, weight and alignment DO print here,
  * because here the grid paints them.
  */
-function canvasMarkup(doc: DashDoc, view: SheetView, opts: PrintOptions, box: { w: number }): {
-  html: string; rows: number; blocks: number
-} {
+function canvasMarkup(
+  doc: DashDoc, view: SheetView, opts: PrintOptions, box: { w: number }, when: string,
+): { html: string; rows: number; blocks: number } {
   const sheet = view.sheet as CanvasSheet
   const used = canvasUsed(sheet)
   if (!used.rows || !used.cols) {
     return {
-      html: `<section class="dxpr-sheet">${caption(doc, sheet.name, '', '')}` +
+      html: `<section class="dxpr-sheet">${opts.header ? caption(doc, sheet.name, '', '', when) : ''}` +
         `<p class="dxpr-empty">${esc(t('Nothing to print — this sheet is empty.'))}</p></section>`,
       rows: 0, blocks: 1,
     }
@@ -638,13 +712,16 @@ function canvasMarkup(doc: DashDoc, view: SheetView, opts: PrintOptions, box: { 
     const width = m.gutter + block.reduce((w, c) => w + Math.round(widths[c] * m.scale), 0)
     const parts: string[] = []
     parts.push(`<section class="dxpr-sheet">`)
-    parts.push(caption(doc, sheet.name, '',
-      blockLabel(block[0], block[block.length - 1], used.cols, multi)))
     parts.push(`<table class="dxpr-t dxpr-cv" style="width:${width}px;font-size:${m.font}px">`)
     parts.push(`<colgroup><col style="width:${m.gutter}px">` +
       block.map((c) => `<col style="width:${Math.round(widths[c] * m.scale)}px">`).join('') +
       `</colgroup>`)
-    parts.push(`<thead><tr style="height:${m.head}px"><th class="dxpr-g"></th>` +
+    parts.push('<thead>')
+    if (opts.header) {
+      parts.push(captionRow(block.length, caption(doc, sheet.name, '',
+        blockLabel(block[0], block[block.length - 1], used.cols, multi), when)))
+    }
+    parts.push(`<tr style="height:${m.head}px"><th class="dxpr-g"></th>` +
       block.map((c) => `<th class="dxpr-g">${esc(colToLetters(c))}</th>`).join('') +
       `</tr></thead><tbody>`)
 
@@ -694,8 +771,11 @@ export interface Printable {
  */
 export function buildPrintable(
   doc: DashDoc, views: SheetView[], opts: PrintOptions = DEFAULT_OPTIONS,
+  /** the moment on the page header. An ARGUMENT so this stays pure — see `stamp`. */
+  now: Date = new Date(),
 ): Printable {
   const box = pageBox(opts)
+  const when = opts.header ? stamp(now) : ''
   const parts: string[] = []
   let rows = 0
   let blocks = 0
@@ -703,14 +783,18 @@ export function buildPrintable(
 
   for (const view of views) {
     const built = view.sheet.kind === 'canvas'
-      ? canvasMarkup(doc, view, opts, box)
-      : tableMarkup(doc, view, opts, box)
+      ? canvasMarkup(doc, view, opts, box, when)
+      : tableMarkup(doc, view, opts, box, when)
     parts.push(built.html)
     rows += built.rows
     blocks += built.blocks
     // Rows that fit under the caption and the repeated header. A floor of one:
     // a page that holds no rows would divide by zero and report Infinity pages.
-    const perPage = Math.max(1, Math.floor((box.h - CAPTION_H - HEAD_H) / ROW_H))
+    // The caption is subtracted per PAGE because it now prints per page — it
+    // rides the thead. With the header off it costs nothing and the estimate
+    // says so, which is the difference between an estimate and a constant.
+    const perPage = Math.max(1,
+      Math.floor((box.h - (opts.header ? CAPTION_H : 0) - HEAD_H) / ROW_H))
     pages += built.blocks * Math.max(1, Math.ceil(built.rows / perPage))
   }
 
@@ -718,7 +802,7 @@ export function buildPrintable(
   const size = opts.orientation === 'landscape' ? `${p.h}mm ${p.w}mm` : `${p.w}mm ${p.h}mm`
   return {
     html: parts.join(''),
-    pageCss: `@page{size:${size};margin:${MARGIN_MM}mm}`,
+    pageCss: `@page{size:${size};margin:${marginOf(opts)}mm}`,
     rows,
     blocks,
     sheets: views.length,
@@ -760,6 +844,11 @@ export function loadOptions(): PrintOptions {
       orientation: got.orientation === 'portrait' ? 'portrait' : 'landscape',
       wide: got.wide === 'fit' || got.wide === 'split' ? got.wide : 'auto',
       scope: got.scope === 'workbook' ? 'workbook' : 'sheet',
+      margin: got.margin === 'narrow' || got.margin === 'wide' ? got.margin : 'normal',
+      // Only an explicit false turns it off: a preference file written by the
+      // build before this option existed carries no key, and that reader's
+      // printouts must not silently lose the sheet name they have always had.
+      header: got.header !== false,
     }
   } catch { return { ...DEFAULT_OPTIONS } }
 }
@@ -904,7 +993,30 @@ export function openPrintDialog(host: PrintHost): void {
     ['split', t('Full size — continue the columns on later pages')],
   ], opts.wide, (v) => { opts.wide = v as WideMode; refresh() })
 
+  // The margin is not decoration: it changes the printable width, so it feeds
+  // the column planner and moves the page estimate under the reader's hand.
+  select(t('Margins'), [
+    ['normal', t('Normal — 12mm')],
+    ['narrow', t('Narrow — 10mm, for one more column')],
+    ['wide', t('Wide — 20mm, room to bind or annotate')],
+  ], opts.margin, (v) => { opts.margin = v as MarginChoice; refresh() })
+
+  select(t('Page header'), [
+    ['on', t('Sheet name, workbook and date on every page')],
+    ['off', t('No page header')],
+  ], opts.header ? 'on' : 'off', (v) => { opts.header = v === 'on'; refresh() })
+
   card.append(note, warn)
+
+  // WHERE PAGE NUMBERS COME FROM, said out loud. dash cannot print them: the
+  // CSS that would (`@page { @bottom-right { content: counter(page) } }`) is
+  // unimplemented in every browser, and a second set of numbers disagreeing
+  // with the ones the system dialog can already print is worse than none. What
+  // was wrong was leaving a reader to guess that from an absence.
+  const pageNums = document.createElement('p')
+  pageNums.className = 'dx-ask-hint'
+  pageNums.textContent = t('Page numbers come from your browser’s own print dialog — turn on its headers and footers there.')
+  card.append(pageNums)
 
   const foot = document.createElement('div')
   foot.className = 'dx-ask-foot'

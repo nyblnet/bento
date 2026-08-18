@@ -51,9 +51,29 @@
     break-after: avoid;
     page-break-after: avoid;
   }
+  /* THE PAGE HEADER, and it is a `thead` row so that it repeats. The `th` it
+     rides in must not look like a column heading: no grey fill, no cell
+     border, no padding of its own — the `.dxpr-cap` rule above owns the rule
+     line under it, exactly as it did when this was a `<div>`. */
+  .dxpr-caprow th {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-weight: 400;
+    text-align: left;
+  }
+  .dxpr-caprow .dxpr-cap { padding-top: 4px; }
+
   .dxpr-name { font-weight: 700; font-size: 13px; }
-  .dxpr-title { font-size: 11px; color: #444; }
-  .dxpr-view { margin-left: auto; font-size: 10px; color: #444; }
+  /* THE GAP IS CLAIMED HERE, by the last thing on the left, rather than by the
+     first thing on the right. Two right-hand items each claiming
+     `margin-left:auto` would SPLIT the space between them, and a caption with
+     no view sentence (a spreadsheet sheet has none) would leave the date
+     stranded in the middle. One `margin-right:auto` holds for every
+     combination of the four. */
+  .dxpr-title { font-size: 11px; color: #444; margin-right: auto; }
+  .dxpr-view { font-size: 10px; color: #444; }
+  .dxpr-when { font-size: 10px; color: #444; white-space: nowrap; }
 
   .dxpr-t {
     border-collapse: collapse;
