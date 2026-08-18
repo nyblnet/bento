@@ -19,3 +19,4 @@ import './find.ts';    // find and replace — panel, ⌘F, replace all
 import './xref.ts';
 
 export {};
+import './link.ts';
