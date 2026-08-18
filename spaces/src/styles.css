@@ -1036,3 +1036,62 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   .sp-preview { animation: sp-ghost-in .12s ease-out }
   @keyframes sp-ghost-in { from { opacity: 0 } to { opacity: .75 } }
 }
+
+/* ---- who else is here ---------------------------------------------------
+   Presence has to be legible without being loud: a shared space is still a
+   document, and a colleague reading a page two levels down the tree is not an
+   event. Dots, not banners. */
+
+.sp-live {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  border-radius: 8px; padding: 5px 8px; cursor: pointer; font: inherit; line-height: 1;
+}
+.sp-live:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-live .sp-ico { display: inline-flex; }
+.sp-live .sp-ico svg { width: 17px; height: 17px; }
+.sp-live-n:empty { display: none; }
+.sp-live-n { font-size: 12px; font-variant-numeric: tabular-nums; }
+/* LIVE is a state worth seeing at a glance, and OFF must not look broken —
+   the overwhelmingly common case is a document nobody is sharing, and a red
+   or struck-through control would make normal use look like a fault. */
+.sp-live-on { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 45%, var(--line)); }
+.sp-live-off { opacity: .75; }
+
+.sp-presence { display: inline-flex; gap: 2px; margin-inline-start: auto; padding-inline-start: 6px; }
+.sp-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  font-size: 9px; font-weight: 700; color: #fff;
+  text-transform: uppercase; letter-spacing: 0;
+}
+.sp-dot-more { background: var(--chrome-2); color: var(--muted); }
+
+.sp-people { min-width: 260px; padding: 10px; }
+.sp-pop-title { font-weight: 650; margin: 0 0 8px; }
+.sp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.sp-field-lbl { font-size: 12px; color: var(--muted); }
+.sp-input {
+  font: inherit; padding: 6px 8px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%;
+}
+.sp-plist { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.sp-pitem {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 0; background: none; font: inherit; color: inherit;
+  padding: 5px 6px; border-radius: 7px; cursor: pointer; text-align: start;
+}
+.sp-pitem:hover { background: var(--chrome-2); }
+.sp-pname { font-weight: 550; }
+/* where they are, quietly — the page title is context, not the subject */
+.sp-ppage { color: var(--muted); font-size: 12px; margin-inline-start: auto;
+  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-pempty, .sp-pnote { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.sp-pacts { display: flex; flex-direction: column; gap: 4px; }
+.sp-paction {
+  display: flex; flex-direction: column; gap: 1px; text-align: start;
+  border: 0; background: none; font: inherit; color: inherit;
+  padding: 7px 8px; border-radius: 7px; cursor: pointer;
+}
+.sp-paction:hover { background: var(--chrome-2); }
+.sp-paction span { color: var(--muted); font-size: 12px; }

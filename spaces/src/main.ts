@@ -201,7 +201,7 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // and a template tire-kicker stay dormant, which is the rule this app already
   // wrote down: "A space does not phone home when it is opened".
   const session = new SyncSession(store)
-  void session
+  editor.connectSync(session)
 
   if (!frozen && doc.readonly) {
     banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))

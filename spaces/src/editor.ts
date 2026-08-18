@@ -9,6 +9,8 @@
 // backlinks and (later) collaboration key on.
 
 import { type Block, newBlock, newPage, effectiveParents } from './model'
+import * as collabUi from './collabui.ts'
+import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
@@ -236,6 +238,11 @@ export class Editor {
     })
     more.classList.add('sp-more', 'sp-dd-end')
 
+    // The live control sits BEFORE ⋯ and is replaced in place once the session
+    // exists (connectSync). A placeholder rather than a conditional build, so
+    // the bar's widths do not shift when a document turns out to be shared.
+    this.liveSlot = el('span', 'sp-live-slot')
+
     // save is a split control, as in slides: the common action, and the
     // less-common ways of writing this document somewhere else
     const saveB = iconBtn('save', t('Save (⌘S)'), () => this.onSave?.())
@@ -275,7 +282,7 @@ export class Editor {
     const saveGroup = el('div', 'sp-split')
     saveGroup.append(saveB, saveMore)
     const right = el('div', 'sp-group sp-group-right')
-    right.append(insert, search, ...inlineSecondary, more, saveGroup)
+    right.append(insert, search, ...inlineSecondary, this.liveSlot, more, saveGroup)
 
     bar.append(pagesB, mark, title, this.statusEl, history, right)
 
@@ -534,6 +541,36 @@ export class Editor {
     }
   }
 
+  /**
+   * Bind the live session to the UI.
+   *
+   * Called once from main.ts with the session that already exists — the
+   * session is constructed whether or not anyone shares, because two tabs of
+   * one file sync locally regardless; what this adds is the ability to SEE it.
+   */
+  connectSync(session: import('./sync/session.ts').SyncSession): void {
+    const { CollabUi } = collabUi
+    this.collab = new CollabUi({
+      store: this.store,
+      session,
+      status: (m) => this.status(m),
+      paintTree: () => this.paintTree(),
+      popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
+      goToPage: (id) => { this.store.goToPage(id); this.closeDrawer() },
+      invite: () => { void this.saveAs('copy') },
+    })
+    session.onPeers(() => this.collab?.onPeersChanged())
+    // The relay refuses things the user can act on — too large, room full. For
+    // the permanent codes their change stays in this copy and reaches nobody,
+    // which they must be told rather than left to discover.
+    session.onNotice((n) => this.status(syncNoticeText(n)))
+    this.collab.tryJoin()
+    // a document REPLACED under us (Replace-from-JSON, a restored version) may
+    // be a different document with different credentials
+    this.store.on('doc', () => this.collab?.tryJoin())
+    if (this.liveSlot) this.liveSlot.replaceWith(this.collab.button())
+  }
+
   status(msg: string): void {
     this.statusEl.textContent = msg
     this.statusEl.classList.add('sp-on')
@@ -576,6 +613,11 @@ export class Editor {
       const label = document.createElement('span')
       label.textContent = this.pageLabel(page)
       a.append(ico, label)
+      // who else is reading this page. A space is a TREE, so "where is
+      // everyone" is a question about pages, not about carets — this is the
+      // spaces answer to the cursors slides paints on its canvas.
+      const dots = this.collab?.dotsFor(page.id)
+      if (dots) a.append(dots)
       a.draggable = true
       a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
       a.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text/bento-page', page.id))
@@ -1926,6 +1968,8 @@ export class Editor {
     }, 0)
   }
 
+  private collab: import('./collabui.ts').CollabUi | null = null
+  private liveSlot!: HTMLElement
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private paintTreeSoon(): void {
     clearTimeout(this.treeTimer)

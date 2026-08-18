@@ -291,5 +291,27 @@ H('end to end: two tabs of one space converge')
   sa.close?.(); sb.close?.()
 }
 
+// ---------------------------------------------------------------------------
+H('the people UI: who is on which page')
+{
+  // Only the pure part. The panel, the dots and the three button states were
+  // verified in two real browser windows — a DOM shim deep enough to assert on
+  // them would be testing the shim.
+  const { peersOnPage, initial } = await import('../spaces/src/collabui.ts')
+  const peers = [
+    { actor: 'a1', name: 'Ada', color: '#f0a', slide: 'home' },
+    { actor: 'a2', name: 'Grace', color: '#0af', slide: 'writing' },
+    { actor: 'a3', name: 'Alan', color: '#0fa', slide: 'writing' },
+  ]
+  ok(peersOnPage(peers, 'writing').length === 2, 'two people on one page')
+  ok(peersOnPage(peers, 'home').length === 1, 'one on another')
+  ok(peersOnPage(peers, 'nobody-here').length === 0, 'none on a page nobody is reading')
+  ok(initial('Ada') === 'A', 'the dot takes the first letter')
+  ok(initial('') === '?', 'and says so when there is no name')
+  // a name whose first character is not one code unit must not be cut in half
+  ok(initial('😀 Zoë') === '😀', 'a multi-byte first character survives')
+  ok(initial('Ünal') === 'Ü', '…and so does an accented one')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

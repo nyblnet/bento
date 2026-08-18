@@ -14,6 +14,14 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **You can see who else is here.** A coloured initial sits on the page each
+  person is reading, so a shared space shows at a glance where everyone is
+  working. Click somebody in the people panel to go to them.
+
+  The button beside ⋯ tells you the truth about three different situations:
+  live with others, open in another window on this computer, or not shared at
+  all. Nothing leaves the file until you start a session.
+
 - **Live collaboration.** Two tabs of the same space, or two people with the
   same file, now edit it together: changes merge per character, and the file
   you save carries the state so a copy edited on a plane rejoins as a fork

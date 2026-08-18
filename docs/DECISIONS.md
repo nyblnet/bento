@@ -14,6 +14,43 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-18 — Presence in a space is a page, shown in the tree
+
+bento/slides paints collaborator cursors on its canvas, because a deck IS a
+canvas and "where is that person" means a position on it. A space is a TREE,
+and the useful question is which PAGE somebody is on — a caret position two
+levels down a wiki tells a reader nothing they can act on.
+
+So presence lives in the sidebar: a coloured initial on the page each person is
+reading, three of them and then a count. It costs one span per person, it is
+visible without opening anything, and it is what makes a shared space feel
+inhabited rather than merely synced. `SyncHost.presence()` already reported the
+page rather than the block for the same reason (a block-level cursor would
+republish at typing speed).
+
+THE BUTTON REPORTS THREE STATES, NOT TWO, and this was got wrong twice before
+it was got right. Same-machine tabs sync over BroadcastChannel with no relay at
+all, so "has peers" and "is online" are different facts:
+
+  · online, with people  — Live, and how many
+  · peers but no relay   — another window on this computer; NOT shared online
+  · neither              — not sharing yet
+
+The first version showed a peer count of 1 under the words "Not sharing yet",
+which is a control contradicting itself in a single glance. The second fixed
+the button and left the same conflation in the panel, which listed nobody while
+that person's dot was visible in the tree two inches away. The panel's LIST now
+follows who is here; only its ACTIONS follow the relay.
+
+TWELVE OF THE TWENTY-FOUR NEW STRINGS WERE LIFTED WORD-FOR-WORD from the
+bento/slides catalogs rather than reworded — the refusal messages, join/leave,
+"Your name", "Start live session". They were already written, reviewed and
+translated into eight languages; rewording them would have cost eight fresh
+translations to say the same thing and let the two apps drift on the one
+message a user only sees when something has gone wrong.
+
+---
+
 ## 2026-08-18 — A shared space connects on open; a fresh one still does not
 
 bento/spaces follows the rule bento/slides already ships: `shareEligible()` —
