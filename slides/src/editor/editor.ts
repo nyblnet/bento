@@ -10,7 +10,7 @@ import {
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
+  type BentoDoc, type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
@@ -25,6 +25,8 @@ import { startPresentation } from '../present'
 import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
+import { SlideImageExportError, downloadExportArtifact, exportSlideImages } from '../image-export'
+import { promptSlideImageExport } from './image-export-dialog'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
 import { borderPoint, boxCenter, lineEndpoints, setLineEndpoints, sideMidpoint } from './lineedit'
 import { ICONS } from '../icons'
@@ -731,7 +733,8 @@ export class Editor {
     trigger.classList.add('ed-split-caret')
     const rebuild = () => {
       menu.textContent = ''
-      this.buildSaveAsItems(menu, () => wrap.classList.remove('open'))
+      // The caret is the visible control here, so it is where focus returns.
+      this.buildSaveAsItems(menu, () => wrap.classList.remove('open'), false, () => trigger)
     }
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
@@ -752,7 +755,21 @@ export class Editor {
    * creates so the phone copy can be torn down again without disturbing the
    * real toolbar buttons parked in that same menu.
    */
-  private buildSaveAsItems(into: HTMLElement, close: () => void, mark = false) {
+  private buildSaveAsItems(
+    into: HTMLElement,
+    close: () => void,
+    mark = false,
+    /**
+     * The control a dialog opened from this list should return focus to.
+     *
+     * A FUNCTION, resolved at click time rather than at build time, and it
+     * names the VISIBLE trigger — the desktop split-button caret, or the phone
+     * ⋯ button — not the menu item itself. The item is inside a menu that
+     * `close()` has already hidden by the time any handler runs, so focusing it
+     * would drop a keyboard user on an invisible element.
+     */
+    trigger?: () => HTMLElement | null,
+  ) {
     const tag = <T extends HTMLElement>(el: T): T => {
       if (mark) el.dataset.phoneSaveas = '1'
       return el
@@ -794,6 +811,13 @@ export class Editor {
           t('Protect this file with a password: the document (collaboration keys included) is encrypted at rest with AES-256. The password cannot be recovered.'),
           () => void this.setFilePassword())
       }
+      // ONE item, built here, so the desktop Save dropdown and the phone ⋯
+      // list both get it: this builder feeds both, and a second phone-only
+      // action would be a second thing to keep in step.
+      item(ICONS.download, t('Export slides as images…'),
+        t('Download PNG or JPEG copies — the editable deck and future saves are unchanged.'),
+        () => this.exportImages(trigger?.() ?? null))
+
       // the document AS DATA — history and the AI/JSON round-trip live with
       // the other file operations now (they were buried in the About dialog)
       into.appendChild(tag(div('ed-menu-sep')))
@@ -837,7 +861,10 @@ export class Editor {
     const sep = div('ed-menu-sep')
     sep.dataset.phoneSaveas = '1'
     menu.appendChild(sep)
-    this.buildSaveAsItems(menu, () => wrap.classList.remove('open'), true)
+    // On a phone the ⋯ button is the visible control — the split caret beside
+    // Save is hidden at this width, so returning focus there would be silent.
+    this.buildSaveAsItems(menu, () => wrap.classList.remove('open'), true,
+      () => wrap.querySelector('button'))
   }
 
   /**
@@ -1826,6 +1853,99 @@ export class Editor {
         }
       }
     }, 'slides')
+  }
+
+  /**
+   * Export slides as PNG/JPEG pictures.
+   *
+   * The ORDER here is the whole point, and it is not the order exportPdf uses.
+   *
+   * `commitTextEdit` is a real document mutation: it commits the user's pending
+   * edit, marks the deck dirty and emits a collab op. So it runs only AFTER the
+   * user has confirmed — someone who opens this dialog, reads it and presses
+   * Escape has changed nothing, which is what Cancel has to mean. exportPdf can
+   * commit up front because it has no dialog to cancel.
+   *
+   * After that commit the snapshot is taken, and everything past it is a READ:
+   * the exporter never touches the store, the save handle, or the file.
+   */
+  private exportImages(returnFocusTo: HTMLElement | null) {
+    promptSlideImageExport(
+      {
+        mainSlideCount: this.store.doc.slides.filter(inLinearFlow).length,
+        encrypted: isEncryptionActive(),
+        // The VISIBLE trigger, handed down from whichever menu built this item.
+        // Reading document.activeElement here would capture the menu item that
+        // was just clicked — which close() has already hidden.
+        returnFocusTo,
+      },
+      async (options, controller, signal) => {
+        try {
+          // the user's pending edit, finalized — the one mutation this flow makes
+          this.canvas.commitTextEdit()
+          const currentSlideId = this.store.slide.id
+          const snapshot = JSON.parse(JSON.stringify(this.store.doc)) as BentoDoc
+          const artifact = await exportSlideImages(snapshot, currentSlideId, options, {
+            signal,
+            onProgress: (progress) => controller.setProgress(progress),
+          })
+          downloadExportArtifact(artifact)
+          controller.close()
+        } catch (err) {
+          if (err instanceof SlideImageExportError) {
+            if (err.code === 'cancelled') { controller.close(); return }
+            controller.showError(this.imageExportMessage(err))
+            return
+          }
+          // Unexpected: the user gets one sentence, the console keeps the
+          // detail. Swallowing it entirely is how a bug becomes unreportable.
+          console.error('slide image export failed', err)
+          controller.showError(t('Couldn’t export the slide images. Try again.'))
+        }
+      },
+    )
+  }
+
+  /**
+   * One localized sentence per failure CODE.
+   *
+   * The error's own `message` is developer prose in English, assembled by the
+   * export module — putting it on screen would show an untranslated, internally
+   * worded string in the UI of a Japanese deck. The CODE is the stable thing,
+   * and these are the strings the catalogs will carry.
+   *
+   * The slide number is applied by ONE wrapper rather than baked into each
+   * sentence: a translator needs to move "Slide 3:" to wherever their language
+   * puts it, and nine sentences with the number sewn in take that choice away.
+   */
+  private imageExportMessage(err: SlideImageExportError): string {
+    const body = ((): string => {
+      switch (err.code) {
+        case 'no-slides':
+          return t('This deck has no main slides to export.')
+        case 'missing-current':
+          return t('The current slide is no longer in this deck.')
+        case 'size':
+          return t('This export is too large. Reduce the image size, embedded media, or number of slides and try again.')
+        case 'resource':
+          return t('This slide uses a linked or unsupported image, poster, font, or SVG resource. Embed a supported static resource and try again.')
+        case 'decode':
+          return t('An embedded image or font on this slide could not be decoded.')
+        case 'canvas':
+          return t('This browser could not draw this slide as an image.')
+        case 'encode':
+          return t('This browser could not encode this slide as an image.')
+        case 'archive':
+          return t('The image archive could not be created. Try 1×, JPEG, or fewer slides.')
+        case 'cancelled':
+          return t('Export cancelled.')
+        default:
+          return t('Couldn’t export the slide images. Try again.')
+      }
+    })()
+    return err.slideNumber === undefined
+      ? body
+      : t('Slide {n}: {message}', { n: String(err.slideNumber), message: body })
   }
 
   /**

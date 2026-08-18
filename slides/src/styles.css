@@ -2290,6 +2290,66 @@ dialog.ed-pwdialog input {
   font-size: 14px;
 }
 dialog.ed-pwdialog .ed-pwerr { color: #C33; }
+
+/* ————— export slides as images ————— */
+/* Feature-scoped only. It reuses .ed-dialog, .ed-dialog-actions, .ed-primary
+   and the shared tokens; what is here is the three-group layout and the
+   wrapping that keeps a German or Japanese label from pushing the dialog wider
+   than a 320px phone. */
+dialog.ed-image-export {
+  width: min(360px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+}
+dialog.ed-image-export::backdrop { background: rgb(15 23 36 / 0.38); }
+dialog.ed-image-export h2 { font-size: 15px; margin-bottom: 10px; }
+/* Long words are the whole hazard here: a compound German label has no space
+   to break at, so it has to be allowed to break anywhere rather than force the
+   dialog to grow. */
+dialog.ed-image-export h2,
+dialog.ed-image-export label,
+dialog.ed-image-export legend,
+dialog.ed-image-export p,
+dialog.ed-image-export button { overflow-wrap: anywhere; min-width: 0; }
+.ed-image-export-options { display: flex; flex-direction: column; gap: 10px; }
+.ed-image-export-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.ed-image-export-group legend {
+  padding: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ed-image-export-group label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+}
+.ed-image-export-group input:disabled + span { opacity: 0.5; }
+.ed-image-export-note {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ed-image-export-status {
+  margin-top: 10px;
+  min-height: 1.2em;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ed-image-export-status.is-error { color: var(--ink); font-weight: 600; }
+
 .ed-dialog-actions {
   display: flex;
   justify-content: flex-end;

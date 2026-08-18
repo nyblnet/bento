@@ -67,6 +67,21 @@ names provisional.
   (64KB, model.ts) tiers the output: full → images dropped for tinted boxes →
   title card. Guards: `scripts/test-preview.ts` + shell-gate's
   preview-carrying-shell invariant. Full rationale in docs/DECISIONS.md.
+- `src/image-export.ts` + `src/image-export-zip.ts` + `src/image-export-errors.ts`
+  + `src/editor/image-export-dialog.ts` — **export slides as PNG/JPEG, or all
+  main slides as one STORE ZIP**. It renders the model through the shared
+  renderer into a `data:` SVG and one reused canvas; a `blob:` SVG taints
+  `file://`. Resource preflight and the detached-DOM audit must stay fail-closed
+  and fetch nothing: inspect both `href` and `xlink:href`, tokenize CSS escapes
+  and `image-set()`, and accept only inventoried embedded payloads. Re-collect a
+  slide immediately before rendering to close the edit/preflight race. Limits
+  are product policy measured only in Chrome. The dialog owns DOM/a11y only.
+  Run
+  `slides/node_modules/.bin/esbuild scripts/test-slide-image-export.ts --bundle
+  --platform=node --format=esm --outfile=$TMPDIR/t.mjs && node $TMPDIR/t.mjs`
+  plus the browser rig after touching it; after `build:single`, run the shipped
+  acceptance rig. `--characterize` is manual-only. These do not exercise native
+  OS save-panel UX or tray/WebExtension writeback.
 - `src/autosave.ts` (v0.9.8) — auto-save + local version history, IndexedDB
   (`bento-autosave`, two stores: `recovery` single-latest-per-docId, `versions`
   capped timeline). Editor debounces (2.5s) on `doc` events: writes a recovery

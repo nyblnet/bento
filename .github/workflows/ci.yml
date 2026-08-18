@@ -95,6 +95,13 @@ jobs:
       - name: Splice conformance gate
         run: node scripts/shell-gate.mjs slides/dist-single/Bento_Slides.bento.html
 
+      - name: Shipped-file acceptance (image export)
+        # Drives the built file's desktop and 320px menus through file://.
+        # CI=1 makes a missing Chrome a failure rather than a skip.
+        env:
+          CI: '1'
+        run: node scripts/test-slide-image-export-acceptance.ts
+
       # spaces: a second app proving the kernel seam — same pipeline, same gate.
       - name: Install (spaces)
         working-directory: spaces
@@ -259,6 +266,19 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-sanitize.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-sanitize.mjs"
           node "$RUNNER_TEMP/test-sanitize.mjs"
+
+      - name: Slide image export contracts
+        # Selection, names, allocation limits and STORE ZIP bytes. Independent
+        # readers verify the archive rather than our writer verifying itself.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slide-image-export.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-slide-image-export.mjs"
+          node "$RUNNER_TEMP/test-slide-image-export.mjs"
+
+      - name: Slide image export in browser
+        # Proves file:// rasterization and zero export fetches with pixels plus
+        # a CDP request log. --characterize is manual-only and never runs here.
+        run: node scripts/test-slide-image-export-browser.ts
 
       - name: Export-secrets rig
         # "Copy document JSON" shipped the room's owner private key while the
