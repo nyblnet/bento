@@ -14,6 +14,196 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-16 — Starter decks are FETCHED and verified, never bundled
+
+**Decision.** No `bento/tray` host ships a starter deck inside the app. A new
+document is fetched from the signed release channel
+(`https://bento.page/releases/<app>/manifest.json`) and cached. Andy's call;
+`tray/android` did it first (`Releases.kt`), `tray/ios` mirrors it
+(`Releases.swift`).
+
+**Why.** Starter decks change often and there are three apps with more coming, so
+bundling means either picking one arbitrarily or shipping several copies of Bento
+inside the app, each stale from the moment it was built. Measured: the single
+bundled slides seed was 517,161 bytes, **81% of a 630,851-byte Android release
+APK**. A document created this way is also the version everyone else has, the
+same day.
+
+**What it costs, stated plainly.** The host now makes ONE network request, only
+when creating a new document, only to the signed release channel. It makes no
+other — no update check of its own, no telemetry. `docs/PLATFORM.md` §1 requires
+no network to OPEN, EDIT, PRESENT or SAVE; creating from a template is none of
+those, and `tray/webext` already drew the line in the same place. The result is
+cached in durable storage (NOT a caches directory, which the OS may evict), so
+only the first "New" of a given release needs a connection, and a previously
+cached shell is the offline fallback — sound rather than a guess, because it was
+verified when it was cached.
+
+**VERIFICATION IS NOT OPTIONAL, and it is the reason the fetch is acceptable.**
+The bytes become an executable HTML document on the reader's own disk that they
+will afterwards trust. Both halves are checked, as `kernel/src/update.ts` does:
+the manifest's ECDSA P-256 signature over the EXACT payload string (no
+canonicalisation, no re-serialisation), then the downloaded shell's sha256
+against the hash pinned inside that signed payload. **Do NOT copy
+`tray/webext`'s `newDocument()`** — it does neither, and it is also broken
+against the live server (it reads a top-level `url` from what is actually a
+`{payload, sig}` envelope, so it always throws). Raised separately.
+
+**Three things a third port should not have to rediscover.**
+
+1. **The signature is raw `r || s`, not DER.** WebCrypto signs that way. Swift's
+   `P256.Signing.ECDSASignature(rawRepresentation:)` takes it directly; Java's
+   `SHA256withECDSA` wants DER and silently reports a bad signature otherwise —
+   indistinguishable from tampering. Check which your platform expects before
+   concluding the manifest is wrong.
+2. **Ask for bytes, not a page** (`Accept: */*`). This header is LOAD-BEARING,
+   and an earlier version of this entry got it wrong by repeating a second-hand
+   "fixed at the origin". Measured against the live server 2026-08-17:
+
+   | request | bytes | matches the signed pin |
+   |---|---|---|
+   | `Accept: */*` | 689,316 | yes |
+   | `Accept: text/html,…,*/*;q=0.8` | 689,675 | **no** |
+
+   Same URL, same `.bento.html` path, 359 bytes apart. bento.page's CDN injects a
+   Cloudflare analytics beacon before `</body>` when it believes the response is
+   a page being browsed. **The trigger is the Accept header, not the extension**
+   — which is the part worth knowing, because if it were the path then no header
+   would fix it for any host. The injected file still carries an intact
+   `id="bento-doc"`, so it looks like a perfectly good document and only the hash
+   tells them apart. The hash check remains the defence; the header avoids a
+   known rewrite.
+3. **Prove the verifier REFUSES.** `scripts/test-tray-releases.mjs` runs the
+   Swift verifier against a captured real manifest plus ten bad ones (payload
+   edited, signature bent, a valid signature over different bytes, no signature,
+   captive-portal HTML, and the cross-app case below). Watching it accept the
+   live manifest proves nothing — `return true` passes that test.
+4. **Check the payload names the app you ASKED for.** This is NOT redundant with
+   the signature, and both native hosts shipped without it until `tray/webext`'s
+   own verification (PR #318) turned out to test for it. A `bento-slides`
+   manifest and a `bento-dash` manifest are both genuinely signed by the same
+   key, so serving one on the other's channel passes the signature AND the hash
+   — every byte authentic, just not what was requested. Only identity catches a
+   swap between two real releases. Fixed in `Releases.swift`
+   (`release(from:for:)`); **`tray/android`'s `Releases.kt` still needs it.**
+   An ABSENT `app` field must not read as a match either — `undefined !== x`
+   passes by construction, and a plausible tidy-up to `info.app && info.app !== x`
+   silently turns a missing field into a pass.
+5. **Refuse an unsigned manifest as a CATEGORY**, not as a parse error. A flat
+   `{url: …}` is exactly the shape the old broken reader was reaching for, so
+   "malformed" invites someone later to add a lenient fallback for it as a
+   compatibility gap. It is not a gap.
+6. **A valid signature under the WRONG key is a different test from a bent one.**
+   Bending bytes proves only that a non-validating signature is rejected — almost
+   any bug-free crypto call passes that. A signature that validates *perfectly*
+   under an untrusted key is what catches a verifier that imported the wrong key,
+   or that would trust a key travelling inside the manifest. No test seam is
+   needed: sign with a throwaway key and hand it to the shipped verifier. The
+   load-bearing case remains a manifest captured verbatim from bento.page and
+   checked against the SHIPPED key with nothing injected — the only check a
+   self-consistent fixture cannot fake.
+7. **Rollback replay: refuse a genuine release older than one already accepted.**
+   A stale but real manifest passes signature, app identity AND digest, because
+   every byte of it is authentic — it just hands over an older shell, which is
+   how someone who can re-serve but not forge pins new documents to a version
+   with a known hole. `kernel/src/update.ts` already refuses to go backwards; a
+   host that CREATES documents had no floor, having no version of its own to
+   compare against — so each keeps a per-app high-water mark instead.
+
+   **Andy's decision, and taken as a policy call rather than an implementation
+   detail**, because it is not a straight win: refusing a rollback also refuses a
+   DELIBERATE one, so **pulling a bad release requires a version bump rather than
+   a re-point**. That is the accepted cost, and the same trade `update.ts` makes.
+
+   The route there is worth recording, because it is the argument for deciding
+   this once for every host rather than per PR: built in `tray/ios`, removed again
+   when it looked like one host diverging, then restored when the decision covered
+   all of them. A release-channel rule only some hosts enforce is worse than one
+   nobody does.
+
+   Two details are easy to get backwards, and rigs on both hosts pin them:
+   - **Raise the floor only AFTER the downloaded bytes pass their digest.**
+     Raising it on a merely-verified manifest lets a forged one lock the device
+     out of every real release below it — a failed attack becomes a permanent
+     denial of service.
+   - **An EQUAL version must be accepted.** Re-fetching the version already seen
+     is the normal case — the second document somebody creates — so getting it
+     wrong breaks the `+` button on its second use rather than at some exotic edge.
+
+   Two further choices, matched deliberately: an **unreadable store reads as NO
+   floor** rather than as a refusal (private mode, quota, a migration mid-flight —
+   availability over protection in a case that is not an attack), and an
+   **unparsable version component sorts as 0**, so a strange version can fail to
+   raise the floor but never block a release. That last matches the kernel: both
+   `kernel/src/update.ts` and `tray/webext/src/update.js` do
+   `(pa[i] || 0) - (pb[i] || 0)`, and `Number('1a')` is NaN which is falsy, so it
+   coerces to 0 rather than leaving the comparison inconclusive — verified by
+   running it, after being asserted both ways from reading.
+
+   Implementations: `tray/ios` `Releases.release(from:for:notBefore:)` with
+   `floor(for:)`/`raiseFloor`; `tray/webext` `library.js` `readFloor`/`raiseFloor`
+   keyed `release-floor:<app.id>` (PR #318). **`tray/android` still needs it** —
+   its `Releases.kt` exists only on the unmerged `tray-android-search` branch, so
+   there is nothing on `main` to add it to yet.
+
+## 2026-08-16 — iOS document search: CoreSpotlight is the surface, and the port is pinned to the LIVE reference
+
+**Decision.** `tray/ios` implements the search settled below. Three things that
+the Android port and any future host should follow or knowingly diverge from:
+
+**1. On iOS the "native list" is a screen BESIDE the document browser, and the
+system index is a first-class output.** `UIDocumentBrowserViewController` stays
+the root; search is one toolbar button away from it. The extracted prose is also
+donated to **CoreSpotlight**, which is what the original gap statement ("the app
+contributes nothing to search — no CoreSpotlight, no `NSUserActivity`") actually
+asked for, and Spotlight results are resolved back through the index rather than
+by re-deriving a path. Android has no equivalent obligation; its recents list IS
+its root, so it has one surface where iOS has two.
+
+**2. TWO checks, because they catch different things.**
+`scripts/test-tray-index.mjs` runs both:
+
+- **against the shared corpus** (`tray/fixtures/`, with `tray/doc-index.mjs` as
+  the reference and `expected.json` as the answer key). This proves all three
+  hosts give the same frozen answers — including Kotlin, which nothing on a Mac
+  running the Swift rig can execute. Budgets are checked too: a port that agreed
+  on every case while carrying a different `TEXT_BUDGET` agrees by luck.
+- **against the RUNNING `library.js`**, imported live — `describe()` is exported
+  and takes injectable deps, so a fake file handle runs the real code path.
+
+The second is not redundant. A frozen answer key pins each port to a SNAPSHOT:
+when `library.js` moves, static expectations go stale silently and every host
+stays green while drifting from the thing they are copies of. Importing the
+reference means it cannot move without a rig failing. Verified 2026-08-16: the
+Swift port agrees with both, on all 11 corpus cases and on 59 documents against
+the live reference.
+
+**The corpus contract is the one to conform to where they differ.** It folds
+`isDocument` into the same call and returns nulls throughout for a file that is
+not ours; `library.js`'s `describe()` always returns a title, falling back to the
+file name, because its caller sniffs first and it never faces a non-document.
+`BentoIndex.describe` follows the corpus and the LISTING supplies the file-name
+fallback — which is the better seam anyway: inventing a title during extraction
+reports one for a file that is not a Bento document at all.
+
+**3. Ports must count UTF-16 code units.** The reference is JavaScript, where
+every index, length and budget is UTF-16; the natural Swift/Kotlin spelling uses
+graphemes or code points and disagrees on any document containing an emoji or a
+CJK character — that is real documents, not pathological ones. One deviation is
+allowed and is written down in `BentoIndex.swift`: the final `slice(0, 40KB)` can
+land inside a surrogate pair, and where JavaScript keeps the lone half a Swift
+`String` cannot hold one, so it is dropped. The rig accepts exactly that shape
+and nothing looser.
+
+**Also:** enumeration needs a folder grant the app did not previously take
+(folder-mode `UIDocumentPickerViewController`, persisted as a security-scoped
+bookmark). Each indexed document gets its OWN bookmark, minted inside the
+folder's open scope, because a file in a granted folder is readable only while
+the FOLDER is scoped and an editing session outlives the walk. Encrypted
+documents are never read for text or preview, and revoking a folder deletes its
+documents from CoreSpotlight — both enforced in `LibraryIndex`, not just
+described. Parity table: `tray/README.md`.
+
 ## 2026-08-16 — Document search: the list stays native, the indexer is shared by FIXTURE
 
 **Decision.** When the native hosts grow a document library, each keeps its own
@@ -1209,6 +1399,18 @@ Naming notes, so this is not relitigated:
   it, so confirm there before submitting.
 - The App Store name carries no slash. Per the 2026-07-24 naming entry, `/` is
   a mark, never a stored name.
+- **But the ON-DEVICE name does carry it: `CFBundleDisplayName` is `bento/tray`**
+  (2026-08-18). These are different fields and only one of them is a stored name.
+  The App Store listing name lives in App Store Connect and stays "Bento Tray";
+  the bundle display name is a LABEL — it drives the home-screen caption, the
+  document browser's title ("bento/tray Recents") and the app's folder in Browse,
+  and iOS never turns it into a path, because the container on disk is addressed
+  by uuid. Verified on iOS 26: all three render it verbatim, nothing escaped or
+  substituted. The 2026-07-24 rule scopes the ban to "filenames, URLs, package
+  names and social handles… anywhere a name must be stored or typed", and a
+  display label is none of those — it is exactly where the mark belongs. Recorded
+  because "the App Store name carries no slash" reads at a glance as "the app is
+  never called bento/tray", and someone will otherwise "fix" the plist.
 
 **One app, not two.** A separate "generic HTML runner" listing would risk
 guideline 4.3 (duplicate apps from one developer) and doubles the listing

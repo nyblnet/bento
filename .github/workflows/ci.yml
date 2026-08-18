@@ -271,6 +271,40 @@ jobs:
         # Source-shape checks; the Swift half self-skips without a toolchain.
         run: node scripts/test-tray-bridge.ts
 
+      - name: tray mark is one source
+        # tray-icon.svg is the only drawing of the mark. Everything else is
+        # generated from it: the Android launcher vectors (which have no <rect>,
+        # so each rounded corner becomes opaque path data nobody would diff), and
+        # the iOS asset catalog — the mark plus the four brand colours the app's
+        # chrome reads by name. A hex value retyped into Swift is a value that can
+        # disagree with the logo while looking almost right, which is the kind of
+        # wrong nothing notices. This fails if any of it drifts.
+        run: node tray/assets/make-icons.mjs --check
+
+      - name: tray/ios index rig
+        # The iOS text extractor is a PORT of tray/webext's, and the two are held
+        # together by nothing but agreement — so this diffs them, driving the
+        # real library.js against the compiled Swift over generated edge cases
+        # and every document in the tree. A divergence means a deck is findable
+        # by a phrase on one host and not the other, which nothing else notices.
+        # This one really runs HERE: BentoIndex.swift is Foundation-only, and the
+        # runner has Swift, so the diff happens on every push rather than only on
+        # a Mac. That is the payoff for keeping UIKit out of that file.
+        run: node scripts/test-tray-index.mjs
+
+      - name: tray/ios release verifier rig
+        # Starter decks are not bundled; a new document is FETCHED from the
+        # signed release channel and written to disk as an executable page. The
+        # signature and hash checks are what make that acceptable, so this proves
+        # the verifier REFUSES — tampered payload, tampered signature, a real
+        # signature over different bytes, no signature at all. Watching it accept
+        # the live manifest proves nothing: `return true` passes that test.
+        # Unlike the index rig above this CANNOT run here — CryptoKit is
+        # Apple-only — so it probes for that module (not for swiftc, which the
+        # runner has) and skips loudly. A Mac must run it before Releases.swift
+        # changes.
+        run: node scripts/test-tray-releases.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected

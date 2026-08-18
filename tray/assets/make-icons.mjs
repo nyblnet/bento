@@ -3,15 +3,22 @@
 // Copyright (c) 2026 The Bento authors
 //
 // One mark, two platforms. `tray-icon.svg` is the SOURCE; this generates the
-// Android launcher vectors from it so the geometry cannot drift.
+// Android launcher vectors and the iOS asset catalog from it so the geometry and
+// the palette cannot drift.
 //
-//   node tray/assets/make-icons.mjs          # write the Android drawables
+//   node tray/assets/make-icons.mjs          # write the generated assets
 //   node tray/assets/make-icons.mjs --check  # fail if they are out of date (CI)
 //
-// iOS consumes the same SVG directly, as a 1024x1024 PNG export — see the
-// comment at the top of tray-icon.svg for the export command. It is not
-// generated here because it needs a browser to rasterise, and this script has no
-// dependencies on purpose.
+// The iOS APP ICON is still a hand-exported 1024x1024 PNG — see the comment at
+// the top of tray-icon.svg for the command — because rasterising needs a browser
+// and this script has no dependencies on purpose. Everything else iOS needs is
+// vector or colour, so it is generated: the mark used by the launch screen and
+// the in-app chrome, and the four brand colours as named colour sets.
+//
+// The colours are read OUT OF THE MARK rather than typed in again. Four hex
+// values restated in a Swift file are four values that can disagree with the
+// logo, and nothing would notice — the app would simply be slightly the wrong
+// navy forever.
 //
 // WHY GENERATE AT ALL: Android vector drawables have no <rect>, so every rounded
 // rectangle in the mark has to be re-expressed as path data. Written by hand
@@ -24,6 +31,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ANDROID_RES = join(here, '../android/app/src/main/res/drawable')
+const IOS_ASSETS = join(here, '../ios/Assets.xcassets')
 
 // The adaptive-icon canvas is 108 units with a 72-unit safe zone. The cream tray
 // is drawn at 56, NOT 72: at 72 it exactly filled the visible area, so every
@@ -121,7 +129,80 @@ ${extra}-->
   return {
     [join(ANDROID_RES, 'ic_launcher_foreground.xml')]: foreground,
     [join(ANDROID_RES, 'ic_launcher_monochrome.xml')]: monochrome,
+    ...ios({ ground, tray, cells }),
   }
+}
+
+/**
+ * The iOS asset catalog: the mark as a vector image set, and the brand palette
+ * as named colour sets.
+ *
+ * The mark keeps its navy GROUND, deliberately, so one asset serves both places
+ * it is used. On the navy launch screen the frame melts into the background and
+ * the cream tray reads as floating; on the search screen's system background it
+ * reads as the app icon. A frameless variant would vanish on white and need a
+ * second asset to maintain.
+ *
+ * Named colour sets rather than UIColor literals in Swift: the launch screen is
+ * configured from Info.plist and can only name a colour from the catalog, so the
+ * catalog has to hold them anyway. Having code read the same names means the
+ * launch screen and the chrome cannot end up different shades of navy.
+ */
+function ios({ ground, tray, cells }) {
+  const asset = (obj) => JSON.stringify(obj, null, 2) + '\n'
+  const info = { author: 'xcode', version: 1 }
+
+  const note = 'GENERATED from tray/assets/tray-icon.svg by tray/assets/make-icons.mjs.'
+  const mark =
+    `<!-- ${note} Do not edit. -->\n` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${ground.w * 4}" height="${ground.h * 4}"\n` +
+    `     viewBox="0 0 ${ground.w} ${ground.h}" role="img" aria-label="Bento Tray">\n` +
+    [ground, tray, ...cells].map((r) =>
+      `  <rect${r.x ? ` x="${f(r.x)}"` : ''}${r.y ? ` y="${f(r.y)}"` : ''}` +
+      ` width="${f(r.w)}" height="${f(r.h)}"${r.r ? ` rx="${f(r.r)}"` : ''} fill="${r.fill}"/>`
+    ).join('\n') +
+    '\n</svg>\n'
+
+  // Ground is the navy, tray the cream, and the three compartments give steel,
+  // peach and (again) navy. Named for what they are in the mark, so a reader can
+  // point at the shape a colour came from.
+  const palette = {
+    BentoNavy: ground.fill,
+    BentoCream: tray.fill,
+    BentoSteel: cells[0].fill,
+    BentoPeach: cells[1].fill,
+  }
+
+  const colorset = (hex) => asset({
+    colors: [{
+      color: {
+        'color-space': 'srgb',
+        components: {
+          alpha: '1.000',
+          red: `0x${hex.slice(1, 3).toUpperCase()}`,
+          green: `0x${hex.slice(3, 5).toUpperCase()}`,
+          blue: `0x${hex.slice(5, 7).toUpperCase()}`,
+        },
+      },
+      idiom: 'universal',
+    }],
+    info,
+  })
+
+  const out = {
+    [join(IOS_ASSETS, 'BentoMark.imageset', 'bento-mark.svg')]: mark,
+    [join(IOS_ASSETS, 'BentoMark.imageset', 'Contents.json')]: asset({
+      images: [{ filename: 'bento-mark.svg', idiom: 'universal' }],
+      info,
+      // Vector preserved so the launch screen and any chrome can scale it without
+      // shipping a rasterised ladder of @1x/@2x/@3x.
+      properties: { 'preserves-vector-representation': true },
+    }),
+  }
+  for (const [name, hex] of Object.entries(palette)) {
+    out[join(IOS_ASSETS, `${name}.colorset`, 'Contents.json')] = colorset(hex)
+  }
+  return out
 }
 
 const files = build()
@@ -141,8 +222,9 @@ for (const [path, content] of Object.entries(files)) {
 }
 
 if (check && stale) {
-  console.error('\nAndroid launcher drawables are out of date with tray-icon.svg.')
+  console.error(`\n${stale} generated file(s) are out of date with tray-icon.svg —`)
+  console.error('the Android launcher vectors and/or the iOS asset catalog.')
   console.error('Run: node tray/assets/make-icons.mjs')
   process.exit(1)
 }
-if (!stale) console.log('icons up to date')
+if (!stale) console.log('mark, launcher vectors and iOS assets all match tray-icon.svg')

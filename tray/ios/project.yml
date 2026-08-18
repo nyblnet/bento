@@ -19,20 +19,13 @@ targets:
       # withExtension: "js")` finds it exactly as it did under Resources/.
       - path: ../bridge.js
         buildPhase: resources
-    preBuildScripts:
-      # The seed shell for "new document". Copied from the current build rather
-      # than committed: a 587KB binary in git would churn on every release, and
-      # the seed ages harmlessly anyway — a new deck self-updates through the
-      # normal signed channel the first time it checks.
-      - name: Stage starter shell
-        script: |
-          SRC="$SRCROOT/../../slides/dist-single/Bento_Slides.bento.html"
-          DST="$SRCROOT/Resources/starter.bento.html"
-          if [ -f "$SRC" ]; then
-            mkdir -p "$(dirname "$DST")" && cp "$SRC" "$DST"
-          elif [ ! -f "$DST" ]; then
-            echo "warning: no starter shell — run 'npm run build:single' in slides/; new-document creation will fail"
-          fi
+    # NO starter shell is staged into the bundle. It used to be, and it was the
+    # single largest thing in the app — the same seed measured 81% of the Android
+    # release APK. New documents come from the signed release channel instead
+    # (tray/ios/Releases.swift), which also means one created here is the version
+    # everyone else has rather than whatever was current on build day. There are
+    # three apps now and more coming; bundling meant picking one or shipping
+    # several copies of Bento inside the app.
     settings:
       base:
         INFOPLIST_FILE: Info.plist
