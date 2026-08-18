@@ -214,6 +214,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Browser ini tidak dapat menulis ulang file di tempatnya — salinan baru dikirim ke folder Unduhan",
   "This document": "Dokumen ini",
   "This file carries its own app — it works offline, forever, as is.": "File ini membawa aplikasinya sendiri — berfungsi offline, selamanya, apa adanya.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Jendela ini masih menjalankan v{v} — muat ulang untuk menyelesaikannya. Cadangan v{v} disimpan di samping berkas ini.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Jendela ini masih menjalankan v{v} — muat ulang untuk menyelesaikannya. Cadangan v{v} telah diunduh.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Jendela ini masih menjalankan v{v}. Jika Anda menimpa file yang terbuka di sini, muat ulang; jika tidak, buka file yang Anda simpan.",
   "This window keeps running v{v} until you open the downloaded file.": "Jendela ini tetap menjalankan v{v} sampai Anda membuka file yang diunduh.",

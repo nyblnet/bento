@@ -144,6 +144,18 @@ jobs:
         # reported by the process it hangs.
         run: node scripts/test-spaces-agent.ts
 
+      - name: Magic notes evaluator (several timezones)
+        # Two failure modes, and the second is what would make the feature worse
+        # than not having it: a WRONG answer (silent, confident, in somebody's
+        # notes), and an answer where there should be none — "Meet Ana at 3" is
+        # a sentence. The parser must consume the whole line or return nothing.
+        # Dates run in several timezones for the reasons journal.ts records.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-calc.ts
+          done
+
       - name: Spaces shell size ceiling
         # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
         # the round finished at 108KB, and the same entry claimed the ceiling
@@ -201,6 +213,20 @@ jobs:
         # deck must never carry one, and author content must never reach the
         # file carrying a script tag.
         run: node scripts/test-preview.ts
+
+      - name: Offline-mode rig
+        # Offline mode promises "nothing leaves this computer" and was broken
+        # five ways at once (GHSA-5c3x-xqp6-g94r): a manual update check, a
+        # language-pack download, a deck's remote <video>, in-flight requests
+        # that kept running, and a second tab's socket that kept syncing.
+        #
+        # It stayed hidden because it reads as correct: an agent asked to audit
+        # it said "secure" from the docs AND from the code. So the rig does not
+        # check the call sites — it enforces the POLICY that no file outside
+        # kernel/src/net.ts may touch a network primitive at all, which is what
+        # stops the NEXT call site being wrong, plus the chokepoint's own
+        # behaviour (refusal, aborting what is already in flight, cross-tab).
+        run: node scripts/test-offline.ts
 
       - name: Untrusted-markup sanitizer rig
         # Every deck is untrusted input somebody may open, paste or receive over
@@ -268,6 +294,47 @@ jobs:
         # decision is pure logic over an options bag, so it is checkable here
         # rather than by reloading an extension and pressing Cmd-S.
         run: node scripts/test-webext-bridge.ts
+
+      - name: WebExtension route rig
+        # Turning an absolute path into "where this granted folder lives", from
+        # paths the extension did not choose — browser history, for files that
+        # may have moved or never been in a grant at all. Getting it wrong does
+        # not produce a broken link; it records a folder at the wrong place and
+        # every document in it silently opens something else. So it must prove,
+        # never guess: the route resolves inside the grant AND dir.resolve()
+        # agrees with the path's own tail.
+        run: node scripts/test-webext-route.ts
+
+      - name: WebExtension document-library rig
+        # The popup is a document browser, and everything in it is DERIVED from
+        # files on disk: the title out of the document block, the thumbnail out
+        # of the preview block, the openable path out of a learned prefix. Each
+        # is a parse against a format that moves, and each fails quietly — a row
+        # showing a filename instead of a title, or a blank square. Nothing
+        # throws, so nothing reports it.
+        #
+        # Runs AFTER the slides build on purpose: it reads the real shell, and
+        # with a document spliced in at the real offset. Hand-written fixtures
+        # would have passed the bug this replaces, where a metadata reader hunted
+        # for the document block's CLOSING tag and so found nothing in any
+        # document carrying an image.
+        run: node scripts/test-webext-library.ts
+
+      - name: WebExtension update-notice rig
+        # Store installs update themselves; one loaded unpacked never will, and
+        # Chrome ignores update_url for a development install. So the GitHub
+        # route has to be told — and told in exactly one direction: a store user
+        # must never see a notice they cannot act on, and must not even cost a
+        # request. Every failure mode here is silent by nature.
+        run: node scripts/test-webext-update.ts
+
+      - name: WebExtension localisation rig
+        # Every failure mode of a message catalogue is silent: a key the code
+        # uses but English lacks renders as the key name, a locale missing a key
+        # falls back so a German page carries English sentences, and a dropped
+        # $1 leaves a hole in a translated sentence. All of them are visible
+        # only to someone who reads that language.
+        run: node scripts/test-webext-i18n.ts
 
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
@@ -450,6 +517,15 @@ jobs:
         # to converge. It has caught every ordering bug in the engine, and the
         # two it did not catch were found by widening it.
         run: node scripts/test-dash-sync.ts
+
+      - name: Theme token gate
+        # Every failure this catches is INVISIBLE in the light theme, which is
+        # the one the author is looking at. A chrome surface pinned to white
+        # keeps its light background in dark and puts light text on it — the
+        # properties panel measured 1.21:1 against a 4.5 floor before this gate
+        # existed. It also stops a document token being themed (which would
+        # invert the deck) and the light palette forking from spaces and type.
+        run: node scripts/test-slides-theme.mjs
 
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is

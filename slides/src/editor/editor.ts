@@ -11,6 +11,8 @@ import {
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
+import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
+import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
@@ -424,25 +426,34 @@ export class Editor {
       for (const k of kids) this.phoneChrome.homeOf.set(k, g)
     }
 
-    // drive it now and whenever the query flips
-    // Held on `this` deliberately: a MediaQueryList that nothing references can
-    // be collected along with its listener, and the bar then never unfolds when
-    // the window grows — the CSS flips but the JS half silently stops.
-    this.phoneQuery = window.matchMedia('(max-width: 700px)')
+    // drive it now and whenever the bar's size or content changes.
     // build() has just re-authored the bar, so whatever folding state a PREVIOUS
     // bar was in no longer describes this DOM. Without this reset a rebuild on a
     // phone (switching language, say) would early-return on `true === true` and
     // leave the freshly authored DESKTOP bar in place — overflowing, with Save
     // off-screen again.
     this.phoneChromeOn = null
-    this.applyPhoneChrome(this.phoneQuery.matches)
-    this.phoneQuery.addEventListener('change', (e) => this.applyPhoneChrome(e.matches))
-    // ...and on plain resize as well. matchMedia's change event is the correct
-    // signal but not a universally reliable one — it does not fire at all under
-    // CDP-driven viewport changes, and a phone ROTATING is exactly this path.
-    // applyPhoneChrome early-returns when the state is unchanged, so calling it
-    // on every resize costs a comparison.
-    window.addEventListener('resize', () => this.applyPhoneChrome(window.innerWidth <= 700))
+    this.topbar = bar
+    this.fitTopbar()
+    // A ResizeObserver on the bar itself is the primary width signal. It fires
+    // for every viewport change (matchMedia change events do not fire at all
+    // under CDP-driven viewport changes, and a phone ROTATING is exactly this
+    // path); the plain resize listener is belt and braces on top. fitTopbar
+    // is idempotent, so the overlap costs a few reads.
+    this.barRO?.disconnect()
+    this.barRO = new ResizeObserver(() => this.fitTopbar())
+    this.barRO.observe(bar)
+    window.addEventListener('resize', () => this.fitTopbar())
+    // The bar's CONTENT changes width too, at a constant viewport (avatars
+    // join, the update chip appears, the file chip fills in, the "Saved" tag
+    // flashes), and each of these used to clip the end of the bar. fitTopbar
+    // drops the records its own mutations queue, so this cannot loop.
+    this.barMO?.disconnect()
+    this.barMO = new MutationObserver(() => this.fitTopbar())
+    this.barMO.observe(bar, {
+      childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['style', 'hidden'],
+    })
 
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
@@ -574,11 +585,13 @@ export class Editor {
   } | null = null
 
   /**
-   * Fold the topbar into menus on a phone, and unfold it again on a wide
-   * window. REPARENTS the existing buttons rather than building phone copies:
-   * a duplicate would need its own listeners and would desync from live state
-   * (the dirty dot lives ON the save button; the comment button carries an
-   * armed class). Moving a node keeps all of that by construction.
+   * Fold the topbar into menus, and unfold it again when there is room.
+   * Driven by fitTopbar (every phone, plus any window where even the icon
+   * tier overflows). REPARENTS the existing buttons rather than building
+   * phone copies: a duplicate would need its own listeners and would desync
+   * from live state (the dirty dot lives ON the save button; the comment
+   * button carries an armed class). Moving a node keeps all of that by
+   * construction.
    */
   private applyPhoneChrome(on: boolean) {
     const p = this.phoneChrome
@@ -645,7 +658,59 @@ export class Editor {
   }
 
   private phoneChromeOn: boolean | null = null
-  private phoneQuery: MediaQueryList | null = null
+  private topbar: HTMLElement | null = null
+  private barRO: ResizeObserver | null = null
+  private barMO: MutationObserver | null = null
+
+  /**
+   * Size the topbar by MEASURING it, not by width breakpoints. Breakpoints
+   * in px were wrong here: browser zoom, OS text scaling, wider translations
+   * and live content (avatars, the update chip) all change how much room the
+   * same buttons need at the same viewport width, and each of those cases
+   * used to clip the end of the bar. Instead, start from the widest layout
+   * and step down a tier while the bar still overflows its own box. First
+   * ed-bar-compact hides the button labels, then ed-bar-tight drops the
+   * wordmark, then ed-bar-fold moves buttons into menus (applyPhoneChrome).
+   */
+  private fitTopbar() {
+    const bar = this.topbar
+    if (!bar || !bar.isConnected) return
+    const tiers = ['ed-bar-compact', 'ed-bar-tight', 'ed-bar-fold']
+    // Phones fold unconditionally. The 700px media query is also what turns
+    // the panels into overlay drawers, and the folded bar belongs with it.
+    if (window.innerWidth <= 700) {
+      bar.classList.add(...tiers)
+      this.applyPhoneChrome(true)
+      this.barMO?.takeRecords()
+      return
+    }
+    // Re-fitting starts by unfolding, which reparents buttons and would slam
+    // shut a dropdown the user is reading. Skip while one is open; the next
+    // resize or content change runs this again.
+    if (bar.querySelector('.ed-dropdown.open')) return
+    // scrollWidth counts content that sticks out of the padding box even with
+    // overflow visible, so "scrollWidth > clientWidth" IS the clipped-buttons
+    // condition (ed-root clips whatever leaks). The 1px slack absorbs
+    // subpixel rounding at fractional zoom levels.
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // The title input is the bar's only shrinkable item, so flexbox crushes
+    // it toward its 48px floor before anything overflows. Waiting for hard
+    // overflow would mean full button labels beside an unusable title, so
+    // step down while the title is squeezed badly, not only on true overflow.
+    const title = bar.querySelector<HTMLElement>('.ed-title')
+    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 120)
+    bar.classList.remove(...tiers)
+    this.applyPhoneChrome(false)
+    if (cramped()) bar.classList.add('ed-bar-compact')
+    if (cramped()) bar.classList.add('ed-bar-tight')
+    if (overflow()) {
+      bar.classList.add('ed-bar-fold')
+      this.applyPhoneChrome(true)
+    }
+    // the class flips and reparenting above queued mutation records of their
+    // own; drop them, or the observer re-runs this forever
+    this.barMO?.takeRecords()
+  }
 
   togglePanel(side: 'left' | 'right') {
     const el = side === 'left' ? this.sidebar : this.props
@@ -2778,7 +2843,7 @@ export class Editor {
         }
         const actions = div('ed-about-actions')
         const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
-        const done = () => {
+        const done = (outcome: InPlaceOutcome) => {
           status.textContent = ''
           const after = div('ed-about-update')
           status.appendChild(after)
@@ -2786,9 +2851,14 @@ export class Editor {
           ok.textContent = t('Updated to v{v} on disk.', { v: release.version })
           after.appendChild(ok)
           const note = div('ed-about-notes')
-          note.textContent = canUpdateInPlace()
-            ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
-            : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
+          // Say where the rollback actually went. It lands beside the document
+          // with a host installed and in the downloads folder without one, and
+          // a backup nobody can find is not much of a backup.
+          note.textContent = outcome.backup === 'beside'
+            ? t('This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.', { v: APP_VERSION })
+            : outcome.backup === 'downloaded'
+              ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
+              : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
           after.appendChild(note)
           const reloadB = document.createElement('button')
           reloadB.className = 'ed-btn ed-btn-primary'
@@ -2832,7 +2902,7 @@ export class Editor {
           try {
             this.session?.stampInto(this.store.doc)
             const written = await applyUpdateInPlace(release, this.store.doc)
-            if (written) done()
+            if (written) done(written)
             else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
           } catch (err: any) { fail(err) }
         })
@@ -2861,6 +2931,24 @@ export class Editor {
     row.appendChild(checkB)
     box.append(row, status)
 
+    // Appearance — a VIEWER preference, so it sits with the others (language,
+    // auto-update) rather than anywhere near the document's own settings.
+    // "Auto" is first and is the default: most people want their machine's
+    // choice, and the explicit options exist for the ones who do not.
+    const themeRow = document.createElement('label')
+    themeRow.className = 'ed-about-auto'
+    const themeSel = document.createElement('select')
+    for (const c of THEME_CHOICES) {
+      const o = document.createElement('option')
+      o.value = c
+      o.textContent = c === 'auto' ? t('Match my system') : c === 'light' ? t('Light') : t('Dark')
+      if (c === themeChoice()) o.selected = true
+      themeSel.appendChild(o)
+    }
+    themeSel.addEventListener('change', () => setTheme(themeSel.value as never))
+    themeRow.append(document.createTextNode(t('Appearance') + ' '), themeSel)
+    box.appendChild(themeRow)
+
     const autoRow = document.createElement('label')
     autoRow.className = 'ed-about-auto'
     const autoCb = document.createElement('input')
@@ -2879,7 +2967,11 @@ export class Editor {
     offCb.type = 'checkbox'
     offCb.checked = offlineEnabled()
     offCb.addEventListener('change', () => {
-      setOffline(offCb.checked)
+      // setOffline reports whether the preference PERSISTED. It holds for this
+      // session either way (net.ts keeps it in memory), but a switch that
+      // silently forgets itself on reload has to say so — it used to show
+      // "on" over a setting that had never been stored.
+      const stuck = setOffline(offCb.checked)
       if (offCb.checked) {
         if (this.session) disconnectOnline(this.session)
       } else {
@@ -2887,9 +2979,11 @@ export class Editor {
       }
       this.wireOnlineStatus()
       this.toast(
-        offCb.checked
-          ? t('Offline mode on — nothing leaves this computer')
-          : t('Offline mode off — online features re-enabled'),
+        !stuck
+          ? t('Offline mode is on for this tab, but could not be saved — this browser is blocking site data, so it will not survive a reload')
+          : offCb.checked
+            ? t('Offline mode on — nothing leaves this computer')
+            : t('Offline mode off — online features re-enabled'),
       )
     })
     offRow.append(offCb, document.createTextNode(' ' + t('Offline mode — block all network features (updates, online collaboration)')))

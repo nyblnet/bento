@@ -3,6 +3,7 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
+import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates } from './model'
 import { chartSnapshotSvg } from './charts'
@@ -77,6 +78,58 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
 /** Resolve "asset:<key>" references against the document's asset table. */
 export function resolveAsset(doc: BentoDoc, ref: string): string {
   return ref.startsWith('asset:') ? (doc.assets?.[ref.slice(6)] ?? '') : ref
+}
+
+/**
+ * The src to actually put on an element, or '' when offline mode must not let
+ * it out. Media and images are loaded by the BROWSER from a src attribute,
+ * not by us from a fetch — so no wrapper around fetch() can see them, and a
+ * deck's remote <video> sailed straight through the offline switch
+ * (GHSA-5c3x-xqp6-g94r: measured, 4 requests). A remote src in a document is
+ * also a tracking beacon, and offline mode is exactly what a careful reader
+ * turns on before opening a deck they do not trust.
+ *
+ * Callers must OMIT the attribute rather than set it to '', because
+ * `video.src = ''` resolves against the page and makes browsers request the
+ * document's own URL — a blank src is a request, not the absence of one.
+ */
+export function assetSrc(doc: BentoDoc, ref: string): string {
+  const url = resolveAsset(doc, ref)
+  return remoteSrcBlocked(url) ? '' : url
+}
+
+/** Attributes a browser will go to the network for, all element types. */
+const URL_ATTRS = ['src', 'href', 'xlink:href', 'poster', 'srcset', 'data'] as const
+
+/**
+ * Last line of defence for offline mode: strip every remote reference from a
+ * rendered subtree.
+ *
+ * assetSrc covers the srcs the RENDERER emits, but author content is markup —
+ * an svg's `<image href="https://…">` (which the sanitizer allows on purpose,
+ * because it is a legitimate picture), an `<img>` inside a text box or a table
+ * cell — and that markup is injected as HTML without passing through any of
+ * our src helpers. A browser fetches those the moment they are in the
+ * document. No wrapper around fetch() can see it and no allowlist can, since
+ * the markup is perfectly legitimate; the only question offline mode asks is
+ * where it POINTS.
+ *
+ * A remote reference in a document you were sent is also the cheapest tracking
+ * beacon there is, and offline mode is precisely what a careful reader turns
+ * on before opening one.
+ */
+export function stripRemoteRefs(node: HTMLElement): void {
+  if (!offlineEnabled()) return
+  const all = [node, ...node.querySelectorAll<HTMLElement>('*')]
+  for (const e of all) {
+    for (const a of URL_ATTRS) {
+      const v = e.getAttribute?.(a)
+      if (v && isRemoteUrl(v)) {
+        e.removeAttribute(a)
+        e.dataset.bentoOffline = '1'
+      }
+    }
+  }
 }
 
 function svgMarkup(el: SvgElement, doc: BentoDoc): string {
@@ -975,7 +1028,9 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       break
     case 'image': {
       const img = document.createElement('img')
-      img.src = resolveAsset(doc, el.src)
+      const imgSrc = assetSrc(doc, el.src)
+      if (imgSrc) img.src = imgSrc
+      else img.dataset.bentoOffline = '1'
       img.draggable = false
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
@@ -990,7 +1045,8 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         still.style.cssText = `width:100%;height:100%;border-radius:${radius}px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:${el.kind === 'video' ? '#0b0f14' : '#e7edf4'}`
         if (el.kind === 'video' && el.poster) {
           const img = document.createElement('img')
-          img.src = resolveAsset(doc, el.poster)
+          const posterSrc = assetSrc(doc, el.poster)
+          if (posterSrc) img.src = posterSrc
           img.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};display:block`
           still.appendChild(img)
         } else {
@@ -1009,7 +1065,8 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         // and looked odd) — only centre it in the element box. Size the box to
         // the control's ~54px intrinsic height (defaultMedia audio uses 56).
         const audio = document.createElement('audio')
-        if (el.src) audio.src = resolveAsset(doc, el.src)
+        const audioSrc = assetSrc(doc, el.src)
+        if (audioSrc) audio.src = audioSrc
         audio.controls = el.controls !== false
         audio.loop = !!el.loop
         audio.preload = 'metadata'
@@ -1025,8 +1082,11 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         break
       }
       const video = document.createElement('video')
-      if (el.src) video.src = resolveAsset(doc, el.src)
-      if (el.poster) video.poster = resolveAsset(doc, el.poster)
+      const videoSrc = assetSrc(doc, el.src)
+      if (videoSrc) video.src = videoSrc
+      else if (el.src) video.dataset.bentoOffline = '1'
+      const posterUrl = assetSrc(doc, el.poster ?? '')
+      if (posterUrl) video.poster = posterUrl
       video.controls = el.controls !== false
       video.loop = !!el.loop
       video.muted = el.muted !== false
@@ -1090,6 +1150,9 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       break
     }
   }
+  // Every element type funnels through here, so this is the one place that
+  // sees author markup after it has been built into DOM.
+  stripRemoteRefs(node)
   return node
 }
 

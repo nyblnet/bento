@@ -26,6 +26,10 @@
 const CHUNK = 4 * 1024 * 1024
 /** Must match the relay's MAX_BLOB. NOTE this bounds the ENCODED blob, not the
  *  plaintext — the relay measures what it receives. */
+// Every request in the app goes through the one chokepoint (kernel/src/net.ts)
+// so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
+import { netFetch } from '../../../kernel/src/net.ts'
+
 export const MAX_BLOB = 8 * 1024 * 1024
 const MAGIC = 0x4242 // 'BB'
 const HEADER = 16
@@ -238,7 +242,7 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
   if (encodedSize(bytes.length) > MAX_BLOB) return { ok: false, reason: 'too-large' }
   const key = await blobKey(rawRoomKey, bytes)
   try {
-    const head = await fetch(url(e, key), { method: 'HEAD' })
+    const head = await netFetch(url(e, key), { method: 'HEAD' })
     if (head.status === 200) {
       void cachePut(key, bytes)
       return { ok: true, key, deduped: true }
@@ -246,7 +250,7 @@ export async function putBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, bytes: Ui
     if (head.status === 501) return { ok: false, reason: 'unsupported' }
     if (head.status === 403) return { ok: false, reason: 'forbidden' }
     const body = await encodeBlob(rawRoomKey, bytes)
-    const res = await fetch(url(e, key), {
+    const res = await netFetch(url(e, key), {
       method: 'PUT', body: body as BodyInit,
       headers: { 'content-type': 'application/octet-stream' },
     })
@@ -288,7 +292,7 @@ export async function getBlob(e: BlobEndpoint, rawRoomKey: Uint8Array, key: stri
     // not a rejection. session.resolveBlobs has try/finally and no catch, so a
     // throw here escapes as an unhandled rejection.
     if (hit && await addressMatches(rawRoomKey, key, hit)) return hit
-    const res = await fetch(url(e, key))
+    const res = await netFetch(url(e, key))
     if (!res.ok) return null
     const enc = new Uint8Array(await res.arrayBuffer())
     const plain = await decodeBlob(rawRoomKey, enc)

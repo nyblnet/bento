@@ -214,6 +214,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Trình duyệt này không ghi đè trực tiếp được tệp — một bản sao mới đã được lưu vào thư mục Tải xuống",
   "This document": "Tài liệu này",
   "This file carries its own app — it works offline, forever, as is.": "Tệp này mang theo ứng dụng của chính nó — nó hoạt động ngoại tuyến, mãi mãi, nguyên trạng.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Cửa sổ này vẫn đang chạy phiên bản v{v} — hãy tải lại để hoàn tất. Một bản sao lưu v{v} đã được lưu bên cạnh tệp này.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Cửa sổ này vẫn đang chạy phiên bản v{v} — hãy tải lại để hoàn tất. Một bản sao lưu v{v} đã được tải xuống.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Cửa sổ này vẫn đang chạy phiên bản v{v}. Nếu bạn đã ghi đè lên tệp đang mở ở đây, hãy tải lại; nếu không, hãy mở tệp bạn vừa lưu.",
   "This window keeps running v{v} until you open the downloaded file.": "Cửa sổ này vẫn chạy phiên bản v{v} cho đến khi bạn mở tệp vừa tải xuống.",

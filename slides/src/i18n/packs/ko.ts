@@ -200,6 +200,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "이 브라우저는 파일을 제자리에 다시 쓸 수 없습니다 — 새 사본이 다운로드 폴더에 저장되었습니다",
   "This document": "이 문서",
   "This file carries its own app — it works offline, forever, as is.": "이 파일은 자체 앱을 담고 있습니다 — 지금 이 상태 그대로 오프라인에서 영원히 동작합니다.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "이 창은 아직 v{v}를 실행 중입니다 — 다시 불러와 마무리하세요. v{v} 백업이 이 파일 옆에 저장되었습니다.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "이 창은 아직 v{v}를 실행 중입니다 — 다시 불러와 마무리하세요. v{v} 백업이 다운로드되었습니다.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "이 창은 아직 v{v}를 실행 중입니다. 여기 열린 파일을 덮어썼다면 다시 불러오고, 그렇지 않으면 저장한 파일을 여세요.",
   "This window keeps running v{v} until you open the downloaded file.": "다운로드한 파일을 열기 전까지 이 창은 계속 v{v}를 실행합니다.",

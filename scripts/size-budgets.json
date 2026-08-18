@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 135168,
-      "//": "132 KiB. The tracker took spaces from 73 KB. Headroom is deliberate: the shell is mostly a zlib block and zlib differs across node versions \u2014 the same commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 143360,
+      "//": "140 KiB. Raised from 132: magic notes cost ~4.6 KB compressed — a recursive-descent evaluator (no eval, ever: block html comes from a file somebody mailed you), a small unit table, date and clock arithmetic, the derived answer in the renderer and the typing preview. Headroom is deliberate: the shell is mostly a zlib block and zlib differs across node versions — one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }

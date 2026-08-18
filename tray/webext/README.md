@@ -36,6 +36,122 @@ can be shown to be the reviewed one.
 Listing copy, permission justifications and the data-usage answers live in
 `STORE.md`.
 
+## Releasing, and keeping unpacked installs current
+
+Two distribution routes, and only one of them updates itself.
+
+**Chrome Web Store and Edge Add-ons** update silently. Nothing to do.
+
+**GitHub, loaded unpacked** never updates. Chrome ignores `update_url` for a
+development install — it is running from a directory on disk, and nothing will
+rewrite that directory. Self-hosting a `.crx` is not a way round it either:
+Chrome refuses off-store installs on Windows and macOS.
+
+So the extension tells those users instead. `src/update.js` asks
+`chrome.management.getSelf()` for `installType` — which needs **no permission** —
+and only a non-`normal` install ever checks. Store users are never asked and
+never see a notice they cannot act on. The check is a GET for a static JSON file
+with no identifiers and no query string; it can report, link, and nothing else.
+
+**On by default, and switchable.** On, because an unpacked install has no other
+way to learn it is behind, and because the app itself checks at launch by
+default (`kernel/src/update.ts`). Switchable, because this repo has form on the
+other side — the v0.9.1 fix existed so an anonymous visitor never phones home —
+and the audience that installs from GitHub is exactly the one entitled to say
+no. The switch is in Settings, next to what it does, and OFF means no request is
+made at all rather than a result quietly discarded. **Check now** still works
+when it is off: pressing a button is the consent the preference stands in for.
+
+### What an unpacked user has to do, and the way it goes wrong
+
+An unpacked extension is identified by its **directory path**. So the obvious
+upgrade — extract the new zip somewhere convenient, "Load unpacked" from there —
+produces a DIFFERENT extension: different id, different origin, empty
+IndexedDB. No granted folders, no learned paths, no preferences, and the old
+copy still installed beside it. The user lands on the first-run screen having
+done the natural thing.
+
+The safe procedure, which the notice spells out as numbered steps:
+
+1. Download the zip from the release.
+2. Replace the files **in the folder it was originally loaded from**.
+3. `chrome://extensions` → **Reload** on Bento Tray.
+
+Same path, same id, so the grants and everything else survive. The first-run
+screen also carries a note for anyone who already got it wrong, because "an
+unpacked install with no folders" is exactly what a botched upgrade looks like
+and nothing can detect it from inside the new copy — the data is intact under
+the old id.
+
+Note that extracting over an existing folder leaves files a release has since
+DELETED. Harmless (the manifest does not name them) but untidy; emptying the
+folder first is cleaner, and keeps the path, which is the part that matters.
+
+### To cut a release
+
+```bash
+node scripts/pack-webext.mjs
+```
+
+That writes two things into `dist/`:
+
+- `bento-tray-<version>.zip` — upload to both stores.
+- `tray-release.json` — publish at `https://bento.page/releases/tray/manifest.json`.
+
+The JSON carries the version, the release URL, and the **sha256 of the zip just
+built**. It is emitted rather than hand-written because a copied hash goes stale
+in silence, and it is publishable at all because the package is byte-reproducible
+— anyone can rebuild from source and confirm the zip they downloaded is the one
+that was reviewed.
+
+Bump `manifest.json`'s `version` before packing; the store rejects a re-upload of
+an existing version, and unpacked users compare against exactly that number.
+
+## Two surfaces
+
+- **Toolbar click → the library** (`src/home.html`): browsing and managing.
+  An existing tab is focused rather than duplicated. This only works because the
+  manifest declares NO `default_popup` — declaring one makes the click open it
+  and `action.onClicked` never fires.
+- **`Alt+B`, or right-click in a document → the panel** (`src/panel.html`):
+  switching documents while working in one. It was a popup; a popup dies when it
+  loses focus, which is exactly when you click into the document you switched
+  to.
+
+`sidePanel.open()` must be called **synchronously** inside the gesture that
+triggered it (Chrome 116+, this extension's floor). An `await` before it loses
+the gesture and Chrome refuses without saying so — which is why the lapsed-grant
+notification opens the library instead: it is handled after an await.
+
+## Icons
+
+`icons/icon.svg` is the source of everything visual: the favicon for the
+extension's own pages, and the four PNGs Chrome takes for the toolbar action
+icon. It carries a corner radius, unlike `tray/assets/tray-icon.svg`, which is
+square because iOS applies its own squircle mask.
+
+The PNGs are exports of it and must be regenerated rather than edited:
+
+```bash
+cd tray/webext/icons
+for n in 16 32 48 128; do
+  printf '<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}svg{display:block;width:%dpx;height:%dpx}</style>' "$n" "$n" > /tmp/i.html
+  sed -n '/<svg/,$p' icon.svg >> /tmp/i.html
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+    --disable-gpu --hide-scrollbars --default-background-color=00000000 \
+    --window-size=$n,$n --screenshot=icon-$n.png /tmp/i.html
+done
+```
+
+Two things `pack-webext.mjs` refuses, both of which have already happened:
+
+- **A PNG with no alpha channel.** The originals were RGB, so opaque squares by
+  construction, and no radius anywhere could round the toolbar.
+- **An SVG that is not well-formed XML.** This command lives here rather than in
+  a comment inside `icon.svg` because an XML comment may not contain a double
+  hyphen, and every flag above has one. Pasting it in there made the file
+  malformed, and the mark rendered as a broken image on every surface.
+
 ## Distribution
 
 **The app stores are the main channel** — Chrome Web Store, Edge Add-ons, and

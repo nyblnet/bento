@@ -14,6 +14,159 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-16 — Document search: the list stays native, the indexer is shared by FIXTURE
+
+**Decision.** When the native hosts grow a document library, each keeps its own
+**native list UI** and ports the text extraction itself; the three
+implementations are held together by **one shared fixture corpus**, not by a
+shared runtime. Specifically NOT by moving `tray/webext`'s `home.html` /
+`library.js` into a WebView on the native hosts.
+
+**The gap this is about.** The three surfaces are at three different levels, and
+only one of them can search:
+
+| | what "search" means there |
+|---|---|
+| `tray/webext` | scans every granted folder; matches title, file name, folder, **and the document's own prose** (`library.js extractText`) |
+| `tray/ios` | the system document browser's search field — **the app contributes nothing to it** (no CoreSpotlight, no `NSUserActivity`) |
+| `tray/android` | **none**; a recents list sorted by last-opened |
+
+`extractText` is the valuable part: up to 40KB of prose per document, pulled out
+of the `#bento-doc` block as string VALUES (`:"…"`, never keys), data URIs
+stripped first. Deliberately not a JSON parse, so it is format-agnostic across
+slides/spaces/dash and degrades to "finds less" rather than throwing. It is free
+in I/O because the same read already produced the thumbnail. That is what lets
+someone find a deck by a phrase on a slide rather than by what they named the
+file.
+
+Both platforms CAN support this — it is a "not built" gap, not a "can't" one.
+Android has `ACTION_OPEN_DOCUMENT_TREE` (a persistable whole-directory grant,
+near-exactly `showDirectoryPicker`); iOS has the document picker in folder mode
+(a security-scoped directory URL).
+
+**Why the shared-WebView-library option was rejected.** Three costs, in
+descending order of severity:
+
+1. **iOS would throw away `UIDocumentBrowserViewController`,** which is not a
+   list but a surface: Browse into iCloud Drive, Dropbox and every File Provider
+   on the device, drag-and-drop, in-place rename, favourites and tags, the
+   system's own sort and view controls. An HTML grid replaces all of that with
+   less, and contradicts the property `tray/README.md` claims — *on iOS the app
+   is a lens onto the filesystem; on Android it is a keyring*. **Android has
+   nothing to lose here**, which is the asymmetry that makes a single shared
+   answer wrong.
+2. **Cold start costs ~0.5s,** on the first screen of every launch. MEASURED
+   2026-08-16, Pixel 7 / Android 16 emulator, both cold: native list root
+   **1171ms** (1241ms on a repeat) against WebView root **1728ms**. That is an
+   emulator on Apple silicon, so treat it as a FLOOR — WebView provider load is
+   I/O and CPU bound and a mid-range phone widens the gap. iOS was not measured.
+3. **Accessibility stops being free.** Native lists get VoiceOver/TalkBack,
+   Dynamic Type and system font scaling correctly with no effort; in a WebView
+   Android's font-size setting does nothing unless `WebSettings.textZoom` is
+   wired, and Dynamic Type does not reach web content without explicit work.
+   Predictive back and interactive dismiss are native on a native screen and
+   reimplemented in a WebView. `home.html` is also a desktop-first grid with a
+   sidebar and would need a real mobile design pass, not a media query.
+
+**The reasoning that settles it: the UX cost sits entirely in the part that does
+not need sharing.** What is worth sharing is the INDEXER — pure data work, no UI.
+The chrome is what costs cold start, accessibility and the iOS browser, and the
+chrome is exactly what should stay native.
+
+**Why this differs from `tray/bridge.js`, which IS shared.** That file is shared
+because its semantics are subtle and a divergence is catastrophic and silent —
+its comments record a bug that wrote users' documents out as zero bytes. Text
+extraction is string scanning with a documented budget: a divergence makes search
+find less, which is visible and recoverable. So the right guarantee is weaker and
+cheaper. Trading "cannot diverge" for "cannot diverge SILENTLY" is the correct
+trade at this level of consequence, and it is already this repo's idiom for
+exactly this problem — the splice contract has a conformance gate in
+`release.mjs`, the save-purpose ids have `scripts/test-savepurpose.ts`.
+
+**Status: not built.** Nothing here has been implemented. The cheap intermediate
+step, if it is wanted before the full library, is a name filter over the existing
+Android recents list — that brings Android level with iOS and touches no
+extraction. Parity table and the standing gap: `tray/README.md` § Android.
+
+## 2026-08-16 — bento/tray gets an Android host (PR #87, rearchitected)
+
+**Decision.** `tray/android/` is a document host, written against the same two
+decisions as `tray/ios`: the document is served through an origin we control,
+and the app ships **file access only** — no bundled runtime, no OTA channel of
+its own.
+
+It lands as **PR #87** (savrum, opened 2026-07-26), which asked the right
+question first: Android needs a native host for the same reason iOS does. The
+branch keeps that original commit and builds on it. Its `native/ios` half is
+superseded by `tray/ios`, which arrived in the meantime; its Gradle and keystore
+scaffolding is the shape used here; and the `isElementFullscreenEnabled` flag
+`tray/ios` briefly used was found there.
+
+What did NOT survive is the **architecture**, which is the one tray deliberately
+rejected:
+
+- it BUNDLES a deck and OTA-fetches a newer one from the GitHub releases API on
+  every launch. tray's whole thesis is the opposite (`tray/README.md`, "What it
+  is, and what it deliberately is not"), and an unsigned OTA — which the PR's own
+  README flags — contradicts `docs/PLATFORM.md` §1 as well as the signed-update
+  invariant.
+- every save calls `ACTION_CREATE_DOCUMENT`, so Bento's 2.5s autosave write-back
+  would open a file picker on a loop. It has no in-place path at all.
+- the page is loaded from `file://` (opaque origin: unreliable `localStorage`
+  and IndexedDB) and the shim is injected from `onPageStarted`, which races the
+  boot-time capability check.
+
+**Three Android-specific findings worth not rediscovering.**
+
+1. **Write access is not implied by receiving a document.** `ACTION_VIEW` from a
+   file manager grants READ ONLY; only the app's own `ACTION_OPEN_DOCUMENT`
+   yields a persistable read+write grant. Checked per document
+   (`canWriteInPlace`), and when false every save becomes a Save-As — the
+   "when in doubt, prompt" rule the whole project already follows.
+2. **`androidx.webkit` is a required dependency, not a convenience.**
+   `addDocumentStartJavaScript` is the only true `.atDocumentStart` equivalent,
+   and `addWebMessageListener` is **origin-scoped** where `addJavascriptInterface`
+   is injected into every frame — a remote iframe in an untrusted document would
+   otherwise be handed a channel that writes the user's file.
+3. **`fitsSystemWindows = true` REPLACES a view's padding, it does not add to
+   it** — and from targetSdk 35 edge-to-edge is mandatory, so insets must be
+   applied by hand. Same for `enableOnBackInvokedCallback`: it stops
+   `onBackPressed` being called at all on API 33+, so an override alone compiles,
+   runs, and silently does nothing.
+
+**A host must implement the page-dialog delegate, and BOTH lacked it.** Building
+the Android host surfaced a bug that had been shipping in `tray/ios` too. Neither
+`WKWebView` nor Android's `WebView` shows `alert`/`confirm`/`prompt` on its own,
+and without the delegate they do not merely skip them — they answer wrongly and
+say nothing: `alert()` is a no-op and **`confirm()` returns `false`**. Every one
+of the runtime's seven uses is shaped `if (!confirm(…)) return`, so delete a
+slide, remove a collaborator, reset access, replace all slides and embed an
+oversized file all silently did nothing when tapped. Fixed on both
+(`WKUIDelegate`, `TrayChromeClient`) and verified on both: iOS through
+"Start from scratch…", Android over CDP (`true` on OK, `false` on Cancel).
+Android additionally needs `onShowFileChooser` or `<input type="file">` cannot
+open at all, which is how images, media and fonts get into a deck — restored
+from #87's `native/android`, which had it.
+
+**Parity is written down, not assumed.** `tray/README.md` § Android carries a
+row-per-behaviour table of iOS against Android, marking each as the same, a
+platform-forced difference, or a gap. The one gap is the status bar (iOS hides it
+on iPad; Android does not on tablets), left undone because it cannot be tested
+without a tablet target.
+
+**The launcher icon is GENERATED from the shared mark**
+(`tray/assets/make-icons.mjs`, with `--check` for CI). Android vector drawables
+have no `<rect>`, so every rounded rectangle has to be re-expressed as path data
+— four opaque `M…A…V…Z` strings nobody would ever diff against the SVG, so a
+change to the mark would land on iOS and silently miss Android.
+
+**`tray/bridge.js` is now SHARED** by both native hosts (was
+`tray/ios/Resources/bridge.js`). The transport is ~15 lines at the top; the rest
+is `FileSystemWritableFileStream` semantics whose comments record the bug that
+wrote documents out as zero bytes. Forking that file forks that bug.
+
+Details and verification state: `tray/README.md` § Android.
+
 ## 2026-08-06 — The tree is DERIVED at read time, in one function, and it cannot cycle
 
 **Decision.** `model.ts effectiveParents(page)` is the only answer to "what is
@@ -217,6 +370,53 @@ format violations: failing the build on them would assert an answer nobody has
 chosen. `STRICT=1` turns every one into an assertion — flip it in CI the day
 the three decisions land, and the rig becomes their enforcement rather than
 their evidence.
+
+## 2026-08-10 — Magic notes: the expression is stored, the answer is derived, and there is no eval
+
+**Decision.** A line whose text ends in `=` gets an answer rendered after it.
+The document stores what was written — `budget * 0.3 =` — and never the number.
+`spaces/src/calc.ts` is the evaluator; `render.ts` derives per page in one
+forward pass.
+
+**Why derived and not stored.** Change `budget = 5000` to 6000 and every line
+below re-answers, because nothing downstream was frozen — measured in the
+browser: 750 → 1,950 and 480 → 720 from one edit, with the file still holding
+only the expressions. It is the rule slides settled for dynamic fields, and it
+also means the file stays plain: search, grep, the Markdown export and a build
+that predates this all see `budget * 0.3 =`, which reads as prose. No new block
+type, no attribute for the sanitizer to strip.
+
+**The trailing `=` is an OPT-IN, and that is the feature.** A notes app where
+every line with numbers became a calculator would be unusable — "we shipped 3
+of 7" is a sentence. The parser must consume the WHOLE line or return nothing;
+a partial parse is a refusal. The rig spends as many assertions on what must
+NOT answer as on what must.
+
+**NO `eval`, NO `new Function`, and it is a security boundary.** Block html
+comes out of a file somebody mailed you, and sanitize.ts exists so nothing in a
+document can execute. Reaching for the JS parser to evaluate `2+2` would hand
+that back. A recursive-descent parser over a fixed grammar can only return a
+number.
+
+**`sum above` means the run of figures DIRECTLY above.** Summing every number
+on the page was the first behaviour and it was confidently wrong: on a page
+with a budget, three expenses and two other answers it reported 78,732 where
+the reader means 515. A heading, a sentence, a definition or another answer
+ends the run — a subtotal is where a group finishes.
+
+**Order matters, and it is fed AFTER each block is drawn.** Feeding before
+meant an answering line cleared the very run its own answer needed, and
+`sum above` read 0. After means a line sees what is above it and nothing of
+itself.
+
+**Precision is a note's, not a physics paper's** — 2 decimals above 100, 4
+above 1, 6 below. `584.088921 mi` is noise around `584.09`.
+
+**Dates and times use the local calendar**, for the reasons journal.ts records:
+UTC makes "today" the wrong day for hours at a time outside Greenwich, and a
+day is not 86,400 seconds on the two DST boundaries. `2026-08-10` is lexed as
+ONE token — as three, it parses as 2026 minus 08 minus 10 and answers 2008,
+which is the worst bug this file could have.
 
 ## 2026-08-03 — Sync parameterization is gated on BYTE equivalence, not convergence
 
@@ -2247,6 +2447,969 @@ too, at the single point where it returns.
 payload 72KB → 79KB). Most of it is the finding messages, which are the
 product: a code with no explanation is not actionable. Anyone tempted to shrink
 this should shorten prose, not drop checks.
+
+---
+
+## 2026-08-14 — a self-update must not be the one save that interrupts
+
+**Reported against 1.0.16**, with tray/webext installed and a folder granted:
+⌘S saved with no dialog, and then "Update this file" put up a macOS save panel
+for `Tray_Test.v1.0.16-backup.bento.html` into ~/Downloads.
+
+The update itself was fine — it had rewritten the file in place, silently,
+through the extension. The dialog was the ROLLBACK COPY, which `applyUpdateInPlace`
+handed to `downloadFile`, and downloads prompt for anyone with Chrome's *"ask
+where to save each file"* enabled. So the flow's only interruption was for a
+file the author never asked for, in the middle of the one operation whose whole
+selling point is that it does not interrupt.
+
+Two things were wrong, and only the first was visible.
+
+**A backup belongs beside what it backs up.** Even silent, ~/Downloads is the
+wrong place: detached from the document, one per update, and a rollback you have
+to go hunting for is a poor rollback. With a host, it now goes in the folder
+already granted, next to the original. Without one it is still a download —
+the alternative there is a picker, which is strictly worse than the status quo
+for the majority case, and the majority case is no extension at all.
+
+**The no-handle path was declaring the wrong intent.** `writeUpdatedFileAs`
+hard-coded `share`, so a document opened by double-clicking — no handle, the
+ordinary case — told every host "a new file the author will choose" about a save
+that is overwriting the document on screen. The host correctly declined and the
+author got a picker. Same class as the 2026-08-02 finding that produced
+`pickerIdFor`: intent has to be explicit in the call, because it cannot be
+recovered from anything else in it. `applyUpdateInPlace` now sends `in-place`,
+and `canUpdateInPlace` stops meaning "we hold a handle" — a host needs none.
+
+**Hosts announce capabilities, not presence** (`window.__bentoHost.ops`,
+`save.ts hostCan`). Presence is not a useful question: `showSaveFilePicker`
+exists in Chrome regardless, and a host that declines looks exactly like one
+that is absent. A host that announced itself but did not know `bento-backup`
+would have passed the request to the native picker — producing the very dialog
+this removes, and only for the people who installed the thing meant to remove
+it. Decks and hosts version independently in both directions.
+
+**The new op is the only one that creates a file**, so it is the only place the
+page contributes to a name. Held down from both ends: the name must be visibly
+derived from the sender's own (`backupNameFor` — no separator survives, and it
+may not equal the original), and an existing file is never overwritten. The
+directory comes from the sender's resolved path, never the payload. Worst case
+for a hostile document is one predictably-named copy of ITSELF inside a granted
+folder.
+
+**Guards.** `scripts/test-savepurpose.ts` pins the update path's purpose (both
+new assertions verified to FAIL against the previous commit — a gate never seen
+failing is not a gate). `scripts/test-webext-background.ts` covers the name
+rules, create-only, the nested-directory case, and that every refusal applying
+to a write applies to a backup. `scripts/test-webext-bridge.ts` covers the
+announcement, that a page cannot forge it, and that a backup never reaches the
+native picker.
+
+*Found while fixing this:* the bridge rig stubbed `Blob` as `class {}`, which
+satisfied the `instanceof` branch but has no `.text()` — so every `close()`
+rejected and the half of the bridge that actually sends bytes had never been
+exercised, across 24 green checks. Mocks shaped to make a test pass test the
+mock.
+
+---
+
+## 2026-08-14 — resolve by route, not by search (and the grant lapses every restart)
+
+**MEASURED, on the reporter's machine:** a `showDirectoryPicker` grant survives
+service-worker eviction, but Chrome drops it to `prompt` when the browser
+restarts. The HANDLE survives in IndexedDB — the options page still knows the
+folder's name — so only the permission is gone, and `requestPermission()` on the
+held handle takes it back with one confirmation. That must run on an extension
+PAGE (it needs a user gesture; the worker has none), which is what the
+per-folder **Renew** button is.
+
+**That "one click per browser session is the ceiling" — WRONG, corrected the
+same day.** The claim was that Chrome's persistent File System Access
+permissions are scoped to installed web apps, so a pure extension could never do
+better. Then the reporter screenshotted the actual dialog, on
+`chrome-extension://…/src/options.html`, and it offers three buttons: *Allow
+this time*, **Allow on every visit**, *Don't allow*. Persistent permission IS
+offered to an extension origin.
+
+The lesson is the one this log keeps relearning: I reasoned about a permission
+UI from documentation instead of looking at it, and stated the conclusion firmly
+enough that it nearly settled a distribution decision — native messaging, a
+signed binary per platform — that may not be needed at all.
+
+**MEASURED 2026-08-14, and it holds: "Allow on every visit" SURVIVES a full
+browser restart** for an extension origin — quit Chrome, reopen, the folder
+still saves in place with no renewing. So the grant is once and for all, and
+native messaging is moot. The distribution model stands: install from the Web
+Store, grant a folder, done.
+
+What is left is not a permission problem but a DISCOVERY one, and the two failure
+directions are unequal. Choosing "Allow this time" costs a re-grant every
+session and never says so; choosing "Allow on every visit" costs nothing. So the
+extension names the button, and the first grant is the only moment anyone should
+have to think about it.
+
+The dialog can only be raised from an extension PAGE with a user gesture —
+`requestPermission` needs the gesture, and the service worker has none. A deck
+is a `file://` page in another origin that cannot hold the handle at all. So
+"raise it from where the user is" is not available; the best reachable is to put
+the button where the user already is when it matters (the toolbar popup), and to
+make a lapsed grant VISIBLE before a save fails rather than after.
+
+**Resolution no longer searches.** A `FileSystemDirectoryHandle` knows its name
+but not its path, so the host walked the granted tree matching filenames —
+depth-capped at 4, declining whenever two files shared a name. But a directory's
+NAME must appear in the path of every file inside it. So the name locates the
+split point in the sender's path and the rest is a route: `getDirectoryHandle`
+per segment, then `getFileHandle`. Measured: a file inside a 500-entry grant
+resolves with ZERO directory scans.
+
+That one change is what makes the rest possible:
+
+- **any grant size.** A home directory costs what a decks folder costs, so
+  "grant everything" stops being a performance question.
+- **several grants**, since each attempt is a few lookups. The store holds a
+  list (`dirs`); the old `dir` key is still read so an upgrade does not silently
+  drop the folder someone already granted.
+- **two documents sharing a filename stop being ambiguous** — a BEHAVIOUR
+  CHANGE, and the old decline was a limitation rather than a safety property.
+  Only one route leads to one file. Anyone with per-client folders hit the old
+  decline on every save.
+
+The route is checked, not guessed: a wrong split point fails at the first
+missing segment, and `resolve()` re-verifies what it landed on against the
+sender's path regardless. A grant covering a home directory raises the cost of a
+resolution bug, so that check matters MORE now, not less.
+
+**A file reachable through two nested grants is one file, not an ambiguity** —
+`isSameEntry` decides, since it is the only thing that can tell "same file, two
+routes" from "two files, same name". Two genuinely different files reachable by
+the same route still decline.
+
+**A lapsed grant is reported distinctly from a missing one**, and only when NO
+grant could serve the file — with several folders, one lapsing must not mask the
+others, and the two need opposite things from the user: one click, or a folder.
+
+**Guards.** `scripts/test-webext-background.ts` (57 checks): per-grant
+resolution, the lapsed-among-healthy case, nested grants, two-different-files,
+and a 500-entry grant asserting `enumerations === 0` — the last is the one that
+would catch a silent return to searching. Plus a source-level gate that
+`background.js` and `status.js` agree on the database, store and keys: they open
+IndexedDB independently and cannot be loaded into one realm, so drift would mean
+the options page writes grants the worker never sees — UI green, every save
+prompting, nothing reporting a fault.
+
+*Found in passing:* the rig carried a LITERAL NUL byte in a test case, which
+made `grep` treat the whole file as binary and hid it from ordinary tooling. It
+is now written as a `\x00` escape.
+
+*Amended 2026-08-16:* and then **this file caught it** — the sentence above
+shipped with a literal NUL where it says `` `\x00` ``, so `grep` treated
+DECISIONS.md as binary and returned nothing, silently, for every query. That is
+the worst possible file to lose to this: `CLAUDE.md` tells every agent to read it
+before non-trivial work, so a silent no-match reads as "no prior decision" and
+invites the contradiction the log exists to prevent. Found by a `grep` for a
+heading that was demonstrably present. If you are describing a control character,
+escape it.
+
+*Amended 2026-08-14, later.* Two corrections to the entry above, both from
+looking rather than reasoning.
+
+**`chrome://settings/content/filesystemwrite` does not exist.** I put it in the
+options page and in STORE.md without visiting it. Chrome's documented ways to
+withdraw File System Access are the address-bar icon's *Remove access* and a
+per-site *File editing* list reached from it — both part of the site-settings
+surface for a website origin. That surface is NOT offered for
+`chrome-extension://` pages: the chip there reports only "You're viewing an
+extension page". Chrome's own write-up demonstrates the feature on vscode.dev
+and does not mention extension origins at all.
+
+So there appears to be **no user-facing control to revoke File System Access
+granted to an extension origin**, and reinstalling does not clear it either —
+an unpacked extension's id comes from its directory path, so re-loading from the
+same path returns to the same origin, still granted. A different path is a
+different id and a clean slate.
+
+**And "Remove only forgets the folder, it does not revoke" was wrong** — the
+pessimistic direction, but wrong. The permission is not the capability; the
+HANDLE is. With no handle stored there is no object to write through, and
+another can only come from the user picking a folder. Deleting it takes the
+access away for real. Chrome's remembered permission means only that re-picking
+that same folder may not ask again.
+
+Which settles where this leaves the product: **the extension's own folder list
+is the only place access can be withdrawn**, so it is not a convenience — it is
+the control, and it says so on the page. A reviewer will ask; STORE.md answers
+it in those terms.
+
+Three wrong claims about browser behaviour in one day (persistent permissions
+scoped to installed apps; a settings URL; Remove not being a revoke), each
+stated confidently from documentation or memory, each disproved by one
+screenshot. The rule that keeps being relearned: a claim about a browser UI is
+worth nothing until someone has looked at that UI.
+
+---
+
+## 2026-08-14 — "Don't allow" is a one-way door, and the prompt can be embargoed
+
+Reported: after choosing **Don't allow** on the reconnect prompt, the folder
+grant lapsed on every browser restart AND the dialog stopped appearing at all.
+Read out of the Chrome profile (`Profile 1/Preferences`), two independent things
+had happened, neither of them a recorded "block":
+
+**1. The granted folders were DELETED.** `file_system_access_chooser_data` for
+the extension went from two directories with paths to `"chosen-objects": []`.
+The extension's stored handles survive in IndexedDB, but they now refer to a
+grant Chrome no longer has, so there is nothing for `requestPermission` to
+restore.
+
+**2. The restore prompt is EMBARGOED.**
+
+    permission_autoblocking_data → FileSystemAccessRestorePermission
+      { "dismiss_count": 3, "dismissal_embargo_days": … }
+
+Chrome's permission auto-blocker suppresses a prompt after three dismissals.
+`permission_actions_history` is empty and `file_system_write_guard` holds no
+BLOCK — the silence is purely the embargo. `requestPermission` returns without
+showing anything, so the button appears to do nothing, permanently.
+
+**Neither is reachable from Chrome's UI**, for the same reason the persistent
+grant was not: these live in their own stores, not in the content-setting
+exceptions the settings page renders.
+
+### What this changes in the product
+
+**A Renew button is a loaded gun.** Every prompt the user dismisses counts
+toward the embargo, so a UI that encourages clicking it — a notification, say —
+makes the dead end easier to reach. Three impatient dismissals and saving
+silently stops working.
+
+**Re-picking is the escape, and it is a DIFFERENT permission.**
+`showDirectoryPicker` is a user-initiated chooser, not a restore prompt, so it
+still works under embargo and re-creates the chosen-object. So a failed renew is
+not an error to report — it is the signal to ask for the folder again. Both the
+options page and the popup now detect a renew that restored nothing and say so,
+rather than reloading into an unchanged list, which reads as a broken button and
+invites exactly the extra dismissals that cause the embargo.
+
+**This is the strongest argument yet against raising prompts on our own
+initiative.** Nothing may open the restore prompt except an explicit user click,
+and the copy has to be clear enough that the click is deliberate — because the
+cost of a careless dismissal is not a retry, it is the feature.
+
+### Still unknown
+
+Whether the embargo expires on its own (`dismissal_embargo_days` holds what
+looks like a timestamp, not a count of days) and whether re-picking clears it.
+Worth knowing before the store listing claims anything about recovery.
+
+*Amended 2026-08-14, from the Chromium source.* The embargo has numbers, and
+they change how the UI must behave.
+
+`components/permissions/permission_decision_auto_blocker.cc`:
+
+- `kDefaultDismissalsBeforeBlock = 3`
+- `kDefaultEmbargoDays = 7`
+- `FILE_SYSTEM_ACCESS_RESTORE_PERMISSION` is in the auto-blocked content types
+
+`IsUnderEmbargo` is a timestamp comparison —
+`current_time < base::Time::FromInternalValue(*found) + offset` — so the stored
+value is the embargo's START (microseconds since the Windows epoch) and the
+duration is applied at comparison time. **It expires on its own after seven
+days.** The field name `dismissal_embargo_days` describes what the number is
+for, not what it holds; reading it as a duration was wrong.
+
+**Nothing an extension can call lifts it.** `RemoveEmbargoAndResetCounts` is
+C++-internal, reached from browser UI paths, and `chrome.browsingData` has no
+`siteSettings` type at all — its `origins` filter covers cookies, cache and
+storage only. The user-facing escapes are: wait it out, *Clear browsing data →
+Site settings* (profile-wide, so it resets every site's permissions), edit
+Preferences directly, or move to a different extension id.
+
+### The cost is persistence, not delay
+
+The restore prompt is ALSO the only place **Allow on every visit** is offered.
+Picking a folder afresh grants access without offering it. So an embargo does
+not merely postpone a reconnect — for seven days it removes the user's ability
+to make the grant permanent at all, and the extension will lapse on every
+restart with nothing on screen explaining why.
+
+### Which makes three dismissals a budget to spend carefully
+
+The popup's Reconnect looped over every lapsed folder calling
+`requestPermission` on each, so one impatient click on a two-folder setup spent
+two of the three. That is an embargo accelerator, and it is the likely reason
+the reporter reached the limit within minutes of the button existing.
+
+Now: **one prompt per click, stopping at the first refusal.** Whatever made
+someone refuse the first prompt applies to the second, so continuing buys
+nothing but embargo.
+
+The same reasoning condemns anything that raises the prompt on our own
+initiative. A notification that nudges toward the button is a nudge toward the
+dead end, and that trade — a rare lapse made visible, against a permanent
+downgrade made likelier — is not obviously worth taking. Left in for now with
+the loop fixed, but it should be decided deliberately before this ships.
+
+*Amended 2026-08-14, measured cleanly.* The entry above ran two effects
+together. Reset to a clean grant, restarted, pressed **Don't allow** exactly
+once:
+
+    permission_autoblocking_data → FileSystemAccessRestorePermission
+      { "dismiss_count": 1 }          ← no dismissal_embargo_days key
+    file_system_access_chooser_data
+      { "chosen-objects": [] }        ← already empty
+    file_system_last_picked_directory   ← gone entirely
+
+They are separate, and the ORDER matters:
+
+**One "Don't allow" destroys the grant.** Immediately, on the first refusal —
+not after three. `chosen-objects` is emptied and the last-picked directory
+cleared, so every stored handle is orphaned and the folder has to be picked
+again. This is the damage that actually bites people.
+
+**The embargo is secondary.** `dismissal_embargo_days` only appears at
+`dismiss_count = 3`, so three refusals are needed for the seven-day block. An
+explicit "Don't allow" counts toward the DISMISSAL budget, the same as closing
+the bubble with the X.
+
+So the earlier telling — that "Don't allow" left the user embargoed — was two
+findings collapsed into one. The first refusal costs the folders; the third also
+costs persistence for a week.
+
+### The dialog does not say any of this
+
+Chrome asks *"View and edit files from the last time you visited this site"* with
+*Allow this time* / *Allow on every visit* / *Don't allow*. Nothing there
+suggests that refusing DELETES a grant the user already made rather than
+declining for now, and the wording invites a cautious person to refuse. It
+cannot be changed from an extension.
+
+So the warning goes where we do control it — on the button that raises the
+prompt, and in the status line above it. Both branches are spelled out, because
+Chrome's wording gives no clue about either: *Allow this time* costs a repeat
+next session, *Don't allow* costs the folder.
+
+### And a failed renew must not offer Renew again
+
+Retrying is the losing move: it has already failed once, and each attempt spends
+one of the three dismissals, while re-picking costs nothing and always works. So
+a row whose renew failed hides its Renew button and offers only **Choose
+again…**. The budget is small enough that the UI must not invite people to spend
+it on a repeat.
+
+*Amended 2026-08-14, and this is the one that matters for shipping.* Several
+rounds of renew-and-restart later, with successful grants in between:
+
+    permission_autoblocking_data  [17:35:52]  { "dismiss_count": 1 }
+    file_system_access_chooser_data [17:41:37]  both folders back, writable
+
+**`dismiss_count` did not move.** Six minutes and several successful grants
+after it was set, it is still 1. A grant does not refill the budget.
+
+Confirmed in `permission_decision_auto_blocker.cc`: `RecordDismissAndEmbargo`
+only increments, no path resets counts on a grant, and nothing decays them over
+time. They are cleared only by `RemoveEmbargo` — which no extension can call.
+
+### So the three-strike budget is per-origin and LIFETIME
+
+Not per session, not self-healing. A user who refuses the dialog three times
+across months of ordinary use arrives at the same seven-day embargo as one who
+does it three times in a minute.
+
+And by the shape of the code — inference, not yet watched — once the count
+reaches 3 it stays ≥ 3, and the embargo is re-applied whenever the threshold is
+met. After three lifetime refusals, **every** later refusal would cost another
+week.
+
+That changes how much the mitigations are worth. One prompt per click, no retry
+after a failure, and a warning on the button are not polish; they are the only
+things standing between an ordinary user and a permanent-feeling breakage,
+because the budget never comes back.
+
+### Also observed: allowing does not imply persisting
+
+After all the re-granting, `file_system_access_extended_permission` is still
+empty — access works, but session-scoped, so the restore prompt returns on every
+restart. Persistence comes ONLY from choosing "Allow on every visit" on that
+prompt. A user who keeps choosing "Allow this time" gets a working extension
+that asks forever, and nothing tells them the other button exists. Which is why
+the copy names it in both surfaces.
+
+*Corrected 2026-08-14. The entry above overstated the damage, and it was
+recorded as measured fact — so read this one instead.*
+
+**"Don't allow" does not destroy the grant.** It empties `chosen-objects`
+immediately, which is what the earlier reading saw. But the extension's stored
+handles survive, and the restore prompt eventually returns and re-acquires
+EVERY folder at once through `requestPermission`. No re-picking is required.
+
+Confirmed by the reporter: after refusing, they clicked **Renew** and only
+Renew, across at least three browser sessions, and both folders came back
+together. The evidence in the profile agrees —
+`file_system_last_picked_directory` is absent (picking a folder sets it) while
+`chosen-objects` was rewritten with both entries in one go, which is a restore,
+not two picks.
+
+**The prompt returns on a delay of more than one restart.** Those earlier Renew
+clicks displayed NOTHING — `dismiss_count` stayed at 1 throughout, and a shown
+prompt that is refused increments it. So `requestPermission` was returning
+silently for two or more sessions before Chrome chose to ask again. What governs
+that interval is not known; it is not the embargo, which never engaged.
+
+### What this changes
+
+**A silent Renew is "not yet", not "never".** The UI had been rewritten to treat
+it as terminal and steer to re-picking — which trades a permanent grant for a
+session-scoped one, since **Allow on every visit** appears only on the very
+prompt being waited for. Both surfaces now say the honest thing: it usually comes
+back after a restart, sometimes a later one; re-pick only if you would rather not
+wait, and know what that costs.
+
+**Hiding Renew after a failure stays**, but only for that visit — the row is
+rebuilt on reload, so nothing is permanently withheld.
+
+### On being wrong twice about the same click
+
+The first reading ("Don't allow empties chooser_data") was correct but partial;
+the conclusion drawn from it ("re-picking is the only way back") was invented to
+join it to the embargo finding, and shipped as fact in copy and in this log. The
+reporter's own sequence — Renew, restart, repeat — is what disproved it. A
+measurement explains what it measured, and nothing about what would have happened
+next.
+
+*2026-08-14, from the source, and the resulting strategy.*
+
+`chrome/browser/file_system_access/chrome_file_system_access_permission_context.cc`
+gates the restore prompt on the grant being DORMANT:
+
+    context_->GetPersistentGrantType(origin_) != PermissionDatabaseType::kDormant
+    context_->IsEligibleToUpgradePermissionRequestToRestorePrompt()
+
+So there is a state machine — no grant / active / dormant — and
+`requestPermission` produces the restore dialog only when there is a dormant
+grant to restore. That, not a cooldown, is why Renew returned silently for two
+sessions after a refusal and then worked: the docs show no backoff or
+rate limit on this prompt. The exact transition rules into dormancy are NOT
+established here; the gate is quoted, the rest is not guessed at.
+
+### The strategy: prime before the prompt
+
+Two facts settle what can be done, and neither depends on the unresolved part:
+
+1. **"Allow on every visit" exists only on the restore prompt.** Picking a
+   folder afresh grants access without offering persistence. So that dialog is
+   the single opportunity, it cannot be summoned on demand, and a wasted one
+   costs at least a restart.
+2. **The state is detectable.** At browser startup, before any user action,
+   `queryPermission` returns `granted` when extended permission is live and
+   `prompt` when the grant is session-scoped. `onStartup` already runs that
+   check, so the extension knows — silently and reliably — that someone is stuck
+   on "Allow this time".
+
+Chrome's dialog is three near-identical pills, and its wording ("View and edit
+files from the last time you visited this site") says nothing about what any of
+them costs. "Allow this time" is the cautious-looking choice and the one that
+guarantees being asked forever. Prose cannot point at a button, so both surfaces
+now DRAW the dialog with the middle option marked, and only then offer to raise
+it.
+
+That is the whole lever. There is no API that grants persistence, no way to
+influence which options Chrome shows, and no way to re-ask sooner. What is left
+is making sure that when the one prompt appears, the user already knows which
+button they came for.
+
+**Corollary for the notification.** Its job changes: not "a folder lapsed" but
+"the one prompt that can fix this permanently is available now". That is a
+better reason to interrupt than the original one, and it argues for keeping it —
+provided it always lands on the primed popup rather than raising the prompt
+directly.
+
+---
+
+## 2026-08-14 — the extension is a document browser, not a permissions panel
+
+The popup's entire content was plumbing: *local file access is on, folder:
+documents*. True, and nobody wants it. `tray/ios` is a
+`UIDocumentBrowserViewController` — you see your documents and tap one — and
+that is the right shape here too. So the tray now lists documents with real
+titles and page-one thumbnails, and permission state is one line at the bottom
+that stays quiet while things work.
+
+Four pieces, three of which reuse something that already existed.
+
+**Clickable rows come from `locateIn` run backwards.** A directory handle knows
+its name and never its path, so the extension can WRITE a document it cannot
+URL. But `resolve()` holds both halves at one instant: `sender.url` is absolute
+and browser-stamped, and `dir.resolve()` gives the same file's route from the
+grant root. Subtract, and the grant's absolute prefix falls out; store it and
+every document in that folder becomes openable. Bootstrapping costs one document
+opened the ordinary way, which is the premise of the product. A folder that has
+never taught us its prefix still lists — the rows just say they cannot be
+opened, rather than doing nothing when clicked.
+
+**Titles come out of the document block**, which starts ~6KB in, so a fixed
+300KB head reaches it. Matching the field directly matters: an earlier metadata
+reader looked for the block's CLOSING tag and therefore found nothing in any
+document carrying an image, since those blocks run to megabytes. The rig pins
+that case explicitly.
+
+**Thumbnails were already written.** `preview.ts` puts a still render of page one
+into every saved document so file managers can thumbnail it, and this IS a file
+manager. The block is self-contained and scales itself to whatever viewport it
+lands in, so it drops into a 56×32 sandboxed iframe with no work — exactly what
+it was built for. Encrypted documents deliberately carry none, so those show a
+lock, and a document never saved shows a page glyph rather than broken-looking
+white.
+
+**`+ New document` fetches the signed release** rather than bundling a seed.
+Bundling would put a copy of Bento inside the extension, to drift from the real
+release and be re-reviewed on every update — the same trap `tray/ios` avoided by
+letting documents carry their own runtime. De-duplication counts on the BASE
+name (`Untitled 2.bento.html`), because UIKit's own counter produces
+`Untitled.bento 2.html` from a double extension and `tray/ios` had to write its
+own for the same reason.
+
+### Enumeration is allowed here, and that is not a contradiction
+
+`background.js` went to some trouble to STOP enumerating: resolving a save must
+not walk a folder, because the user is mid-⌘S and a granted home directory would
+hang it. Listing is user-initiated, bounded (depth 4, 300 documents) and cached.
+Same folder, different job, different rules — worth stating because the two
+sit next to each other and the next reader will wonder.
+
+### One store, one owner
+
+`background.js` and `status.js` each opened IndexedDB with their own copies of
+the database name, store name and keys, guarded by a rig comparing the two. That
+gate is gone because the duplication is: `db.js` owns the store and both import
+it. The rig now asserts the stronger thing — that nothing else calls
+`indexedDB.open` — since a second opener is how the split-brain returns, and its
+symptom is the options page writing grants the worker never reads.
+
+### Verified by looking
+
+The layout was rendered with a real preview extracted from a real saved deck and
+screenshotted, not asserted. The library rig reads the real built shell, and a
+copy of it with a document spliced in at the real offset — hand-written fixtures
+would have passed the metadata bug that shipped.
+
+Found while writing it: a PRISTINE shell has an EMPTY `#bento-doc` block
+(`id="bento-doc"></script>`) because the starter document is built at runtime and
+only written on first save. So a newly created document legitimately has no title
+and no preview until it is saved once. The rig asserted a title and failed —
+correctly, at the assertion rather than in the parse.
+
+*2026-08-14, continued: the home page, and the bug that made the tray useless.*
+
+**The tray listed documents and could open none.** A chicken-and-egg: a
+directory handle has no path, so an absolute one is needed to open anything, and
+it was learned only by subtracting during a SAVE. A fresh install had never
+saved, so every row was disabled. Opening a document is the natural moment to
+learn where its folder is, so `relay.js` now announces itself once on load and
+the worker resolves that like a claim — no write, prefix recorded. One document
+opened makes its whole folder openable. The announcement sends an op and
+nothing else; the path still comes from `sender.url`.
+
+**A full page, because a popup cannot browse.** 340px that dies on blur answers
+"open the thing I just had" and nothing else. `src/home.html` adds folders,
+search, sort, and thumbnails big enough to recognise a deck by. The popup stays
+a launcher with a door to it, rather than a second implementation — both read
+`library.js`, so they cannot disagree about what a document is.
+
+**Thumbnails need a real viewport, not a small one.** The preview block sizes
+page one to whatever viewport it lands in. Give the iframe a 56px box and it
+lays the slide out for a phone; give it 1280×720 and scale the whole frame down,
+and it composes exactly as it does on screen. Measured while looking at it: the
+first screenshot showed blank cards because the iframes had not painted yet, not
+because anything was wrong — a reminder that "I looked and it was broken" needs
+a second look before it becomes a finding.
+
+**Rename is write-then-remove, in that order, always.** The File System Access
+API has no rename. If the write fails the original is untouched; if the remove
+fails the worst case is two copies. Removing first would put the only copy of
+somebody's document in a variable, and the rig proves the ordering by failing
+the write and checking nothing was removed.
+
+**The rename box is a filename input, so it is sanitised as one**: separators
+stripped so nothing escapes the folder, the extension stripped so typing it does
+not double it, and leading dots stripped — a document renamed to `.something`
+would vanish from every file manager including this one.
+
+**Duplicate copies bytes, deliberately.** A Bento document carries its own
+runtime, its collaboration keys and its identity. Whether a copy should get a
+fresh `docId` is the DOCUMENT's business — Bento has "Duplicate as new deck" for
+exactly that — and a file manager has no standing to decide it.
+
+**There is no Delete**, and that is a decision rather than an omission.
+Destroying documents needs an undo, a trash, and a confirmation people actually
+read; Finder has all three and is one keystroke away. Duplicate and rename are
+recoverable, delete is not.
+
+**Multi-app support was deferred, deliberately.** Supporting other single-file
+HTML apps means widening the manifest match from `file:///*.bento.html` to all
+local HTML, which injects the bridge into every local page a user opens — a much
+larger thing to justify in a store listing — and replacing the `window.bento`
+version gate with a generic app declaration. That gate is what stops a pre-#213
+document from having its "Save a copy" treated as an overwrite, so it cannot be
+dropped casually. Doing it first would have settled the home page's data model;
+doing it later means the home page will need revisiting. That is the cheaper
+order, because Bento's own shape is known and another app's is not.
+
+*2026-08-14, continued: does the tray handle Spaces and Dash?*
+
+Mostly yes, already — and the exception was a real bug nobody had noticed.
+
+**Listing, opening, thumbnails and in-place saving were never app-specific.**
+The whole family writes `.bento.html`, shares the kernel's `title` field, and
+slides/spaces/dash all register a preview. So the tray shows them all, with
+titles and page-one thumbnails, without knowing which app it is looking at.
+(`type` does not exist on main yet.)
+
+**But bento/dash could not save in place at all.** `page-bridge.js` refuses to
+write unless the runtime is at least 1.0.15, because before `pickerIdFor` (#213)
+every save sent `bento-doc` — including "Save a copy…" — and acting on that id
+overwrites the open document. It read the version from
+`window.bento.updates.version`, which each app assembles BY HAND: slides has it,
+spaces has it, **dash never included `updates`**. So every ⌘S in Dash fell
+through to a destination prompt, with a folder granted and nothing on screen
+saying why. It would have looked like the extension being broken.
+
+The bug is not that Dash forgot. It is that a contract with a host was being
+satisfied by each app remembering to. So the signal moved to where it cannot be
+forgotten: `configureApp` is the one call every app makes, and it now announces
+`window.__bentoRuntime`. The next app inherits the fix without knowing it
+exists.
+
+The bridge reads BOTH — the announcement first, the hand-made object as a
+fallback — because every already-shipped Slides and Spaces document has only the
+latter, and dropping it would break in-place saving for every file already on
+disk. Both are still gated at 1.0.15; an announcement is not a reason to trust a
+runtime that predates the id.
+
+Non-writable, for the same reason `__bentoHost` is: the document shares that
+realm, and a document that could overstate its own version could talk a host
+into overwriting it.
+
+**Creating a document is the one operation that must ask which app**, because
+there is no document yet to say. `library.js APPS` lists the three with their
+own signed release channels, and `+ New document` offers them. Adding an app is
+that one entry; nothing else in the extension asks.
+
+Fetched rather than bundled, for the reason `tray/ios` does not bundle a shell:
+a bundled seed drifts from the real release and drags the extension into a
+review queue on every Bento update. A document created here is the build
+everyone else has that day.
+
+*2026-08-14, and this one was a design failure, not a bug.*
+
+The tray shipped with a first run that read: every document greyed out, and a
+paragraph explaining that you must go to Finder and double-click something
+before the extension works. Reported, correctly, as *"this doesn't make sense
+for normal users"*.
+
+The constraint behind it is real. A `FileSystemDirectoryHandle` never exposes a
+path, so the extension can read and write a folder while having no idea where it
+is — and a tab needs an absolute path to open a document. The only source was a
+document loading out of the folder and its content script reporting
+`sender.url`. Everything followed from treating that as the only source.
+
+**Chrome already knows.** If a document has ever been opened, its `file://` URL
+is in history. One `chrome.history.search({ text: '.bento.html' })` yields the
+absolute path of every Bento document the user has, which places every granted
+folder at once, with no trip to Finder.
+
+**The permission is optional, requested by a button, and handed straight back.**
+"Read your browsing history" is a heavy ask and a fair thing to balk at on a
+store listing, so it is not in `permissions`. It is in `optional_permissions`,
+requested at the moment it is needed with the reason on screen, and
+`permissions.remove`d in a `finally` — held for the length of one query.
+Declining is a legitimate answer and gets the manual route, said plainly,
+without asking again.
+
+**Nothing from history is trusted.** A URL is a hint. `route.js prefixFor`
+accepts a path only when the route resolves inside the grant AND `dir.resolve()`
+on what it lands on agrees with the path's own tail — the same check that stops
+a same-named file elsewhere from being written. The failure mode of getting this
+wrong is not a broken link: it is a folder recorded at the wrong location, with
+every document in it silently opening something else. Its rig is mostly refusals
+for that reason.
+
+`locateIn`/`pathFromSender` moved into `route.js` so the worker and the pages
+can both place a path. Importing `background.js` into a page instead would have
+registered a second `onMessage` listener there.
+
+### What this says about the process
+
+The chicken-and-egg was noticed and "fixed" twice — first by learning on save,
+then by learning on open — and both times the fix was inside the frame that
+opening a document is the only way to learn a path. Neither attempt asked
+whether the frame was true. The user did not report a bug; they reported that
+the result made no sense, which is the question that broke the frame.
+
+The rigs were green throughout. They test what the code does, and the code did
+what it was written to do.
+
+*2026-08-15.* "Can't the extension just inspect files to see if they're Bento?"
+Yes — and the better question was "why are there any misnamed ones?"
+
+**The listing now decides by CONTENT.** `id="bento-doc"` is the splice contract
+every Bento app honours (PLATFORM.md §2), frozen because old updaters depend on
+it, and it sits ~6KB into a real shell. So an unrecognised `.html` is settled by
+one 64KB read; a properly named document costs no read at all; the verdict is
+cached by size and mtime, so a second listing opens no bytes; and sniffing is
+capped per listing, because a granted home directory can hold thousands of
+unrelated pages.
+
+Marked in the UI rather than silently half-supported. A found-by-content
+document lists and opens, but the bridge that saves in place is a content script
+matching `file:///*.bento.html`, so it will still ask where to put itself. A
+tray that looked like it fully supported a document it half supports is a trap.
+
+**But the real fix was upstream, and Bento was the culprit.** `suggestedFileName`
+has always produced `.bento.html` — while the PICKER accepted `.html`. So an
+author who edited the name to "Q3" got `Q3.html`, and that document is a
+second-class citizen everywhere the convention is what identifies us: the webext
+bridge matches on the compound extension, and tray/ios matches the same way.
+Bento was manufacturing the exception and then being asked to cope with it.
+
+Both pickers now accept only `.bento.html`, so the browser appends it to a bare
+name. Compound suffixes are explicitly legal (`.tar.gz` is the spec's own
+example) and the limit is 16 characters against this one's 11 — checked in the
+spec rather than assumed, after a day of assuming browser behaviour and being
+wrong.
+
+The cost is that typing `deck.html` yields `deck.html.bento.html`. Accepting
+both extensions would remove that and also remove the whole benefit, since
+`.html` would again be a valid terminal suffix and nothing would be appended.
+The common case — typing a plain name — now produces the right thing, and the
+odd case produces a clumsy name rather than a broken one.
+
+**Widening the content-script match was considered and NOT done.** Making
+renamed documents save in place needs `file:///*.html`, which injects the bridge
+into every local page a user opens — a much heavier ask on a store listing than
+the narrow match, for a case that should now be rare because the source of it is
+fixed. If it is ever wanted, the pattern is the one the history search
+established: an optional permission, requested with the reason on screen,
+registering the broader script only when granted.
+
+*Found while writing the rig:* its `deps` lacked a cache, so `sniff` threw
+straight into a `catch { continue }` — the check reported green while proving
+nothing. Then the cache assertion counted `getFile()` calls, which a cache hit
+still makes (it needs size and mtime for the key); it now counts content reads.
+Two rounds of a test that passed for reasons unrelated to the thing under test.
+
+*2026-08-15.* A UX and UI pass before merging, and the diagnosis was structural
+rather than cosmetic.
+
+**Three surfaces, three design languages.** The home page had tokens and dark
+mode. The popup had 21 hardcoded colours and no dark mode. The options page had
+16 and no dark mode. So the surface people actually open — the popup — was the
+one that turned white at midnight, and the settings page looked like a different
+product reached by leaving the one you were in.
+
+`ui.css` now owns the palette and the shared primitives; each page keeps only
+its own layout. `pack-webext` fails on a literal colour anywhere but there
+(`setBadgeBackgroundColor` exempt: a browser API taking a string, which CSS
+variables cannot reach). Verified as a real gate by planting one.
+
+**Settings became a VIEW, and options.html is gone.** Same shell, same sidebar,
+same navigation. What was prose is now rows, because a folder is a thing with a
+state and an action and a paragraph about it is neither. `options_page` points
+at `home.html`, so `openOptionsPage()` still works from the popup.
+
+**The first run is steps, not an apology.** Both things that must happen are
+outside the extension's power — a folder you choose, and a Chrome switch no
+extension may touch — so it shows a short list with what is already done ticked,
+rather than an empty page explaining why nothing works.
+
+**Documents say which Bento they are.** Three apps write `.bento.html`, and the
+UI never said which one a document was, so a folder of decks, notes and sheets
+read as one undifferentiated pile. `describe` now reports the format field and
+the card carries a badge — alongside the `.html` badge for a document found by
+content rather than by name. Both sit on the picture, never in the body, so they
+cannot push a title around.
+
+**The notices were essays.** Each is now a sentence and, where there is
+something to do, a button. The reason a thing cannot be automated is interesting
+to us and not to someone trying to save a document.
+
+*Found by looking:* `.step b { display: block }` was unscoped, so a bolded phrase
+in the middle of a note became its own line and broke the sentence around it.
+Only visible in a screenshot — no rig would ever have caught it, and I had
+written the markup that triggered it.
+
+*2026-08-15.* Where the popup belongs, once the toolbar icon opens the library.
+
+**`default_popup` and `action.onClicked` are mutually exclusive.** Declaring a
+popup means the click opens it and the listener never fires. So wanting the icon
+to open the full page means having no popup at all — and the question becomes
+what the tray's compact form is FOR.
+
+**Its job was always switching documents while working in one**, and a popup is
+the wrong container for that: it dies the moment it loses focus, which is the
+moment you click into the thing you switched to. A **side panel** does not. Same
+markup, same code, better container — `sidePanel.open()` arrived in Chrome 116,
+which is this extension's floor exactly.
+
+Two surfaces, two jobs, and neither is a lesser copy of the other:
+
+- **toolbar click → the library.** Browsing and managing: folders, search,
+  rename, settings. Wants room and a tab that stays. An existing tab is FOCUSED
+  rather than duplicated.
+- **`Alt+B`, or right-click inside a document → the panel.** Switching while
+  working. Sits beside the document instead of vanishing.
+
+**`sidePanel.open()` must be called SYNCHRONOUSLY inside the gesture.** An
+`await` before it — even a trivial one — loses the gesture and Chrome refuses,
+silently. So the command handler reads nothing first; the panel decides what to
+show once it is up. The rig pins this by slicing the handler and asserting no
+`await` appears in it.
+
+For the same reason the lapsed-grant notification leads to the LIBRARY rather
+than the panel: it is handled after an await, so `sidePanel.open()` there would
+be refused without saying so. It used to try `chrome.action.openPopup()`, which
+no longer exists to try.
+
+`window.close()` is gone from the panel. A popup closing itself after an action
+is correct; a side panel doing it takes away the thing the user just used.
+
+*Two rig lessons, both mine.* The first gate for "nothing calls openPopup"
+matched the comment explaining why the call was removed — a gate that trips on
+its own documentation gets deleted rather than fixed, so it now strips comments
+and reads code. And it was verified by re-adding a real call and watching it
+fail, which is the only way to know a source gate is a gate.
+
+*2026-08-15.* Keeping unpacked installs current, when the browser will not.
+
+**Store installs update themselves; an unpacked one never does.** Chrome ignores
+`update_url` for a development install — it runs from a directory on disk and
+nothing is going to rewrite that directory. Self-hosting a `.crx` is not a way
+round it either: Chrome refuses off-store installs on Windows and macOS. So the
+only move available is to TELL those users.
+
+**Ask only the people it applies to.** `chrome.management.getSelf()` reports
+`installType`, and — checked in the API docs rather than assumed — it needs **no
+permission at all**, so this costs nothing on a listing. Anything but `normal`
+is told: `development` is the GitHub route this exists for, and
+`sideload`/`admin`/`other` also arrive outside the store's update mechanism. A
+store install is never asked and never makes the request; a notice about a
+version the browser has already installed is how an extension gets uninstalled.
+
+**A GET for a static JSON file, and nothing else.** No identifiers, no query
+string, no version reported upward — the comparison happens locally. The app's
+own update check promises "no ids, no telemetry", and the extension must not be
+quietly weaker. It can report and link; there is no mechanism for an unpacked
+extension to update itself, and inventing one would mean downloading code and
+asking for trust, which is precisely what a reviewer would ask about.
+
+**Not on the badge.** The badge means "a folder lapsed, saving will prompt". A
+version behind is neither urgent nor broken, so it is a notice in the library and
+a row in Settings, with a manual "Check now".
+
+**The digest is emitted, not typed.** `pack-webext` now writes
+`dist/tray-release.json` beside the zip, carrying the sha256 of the bytes it just
+built. A hand-copied hash goes stale in silence. Publishing it is worth
+something only because the package is byte-reproducible: anyone can rebuild from
+source and confirm the zip they downloaded is the one that was reviewed — the
+only verification available when the browser is not the thing doing the updating.
+
+**Startup only, plus a manual check.** A daily poll would cost the `alarms`
+permission for a courtesy. A browser session is the natural granularity for
+something whose remedy is "download and reload".
+
+*Rig note:* the comparison is numeric, not textual — `1.0.10` against `1.0.9` is
+the case string comparison gets backwards, and it is pinned. So is the direction
+that matters most: a store install is never told, and never even asks.
+
+*Amended, same day.* Should the check be automatic by default?
+
+Yes, but only with a switch and a disclosure — and the argument runs both ways
+inside this repo, which is why it is worth writing down.
+
+FOR: `kernel/src/update.ts` checks a release manifest at launch by default, with
+an off switch in the About dialog. The extension behaving differently would be
+an inconsistency with no reasoning behind it. And an unpacked install has no
+other way to find out it is behind: the browser will never tell it.
+
+AGAINST: the v0.9.1 fix exists precisely so an anonymous visitor never phones
+home without opting in, and the audience that loads an extension unpacked from
+GitHub is the audience most likely to object to a silent outbound request.
+
+The distinction that settles it: that fix was about connecting to a relay with
+document data. This is a static GET with no identifiers, no query string and no
+version reported upward. Different in kind — but "different in kind" is a
+judgement the user is entitled to make instead of us, so the preference sits in
+Settings next to what it does.
+
+OFF means NO REQUEST, not a request whose result is hidden. The rig pins that
+distinction, because the lazy implementation of a privacy switch is the one that
+keeps the traffic and quietens the UI.
+
+**Check now** works regardless: pressing a button is the consent the preference
+otherwise stands in for. And an unreadable preference is treated as ON, matching
+"absent means on" — a storage hiccup should not silently disable something the
+user never turned off.
+
+*Amended, same day.* What actually happens when an unpacked user acts on the
+notice — and the footgun the first version of the copy walked them into.
+
+**An unpacked extension is identified by its DIRECTORY PATH.** So the obvious
+upgrade — extract the new zip somewhere convenient, "Load unpacked" from there —
+produces a different extension: different id, different origin, empty
+IndexedDB. No granted folders, no learned prefixes, no preferences, and the old
+copy still installed beside it. The user has done the natural thing and lands on
+the first-run screen wondering where everything went.
+
+The original notice said "get it on GitHub and reload it in chrome://extensions",
+which is close enough to sound complete and does not contain the one word that
+matters: SAME folder. It is now three numbered steps, and step 2 says why.
+
+**The first-run screen also carries the warning**, because "an unpacked install
+with no folders" is precisely what a botched upgrade looks like from inside the
+new copy — and nothing there can detect it. The data is intact under the old id,
+which is still installed; the fix is to replace the files in the original folder
+and reload. Saying so on the screen the mistake produces is the only place it
+can be said.
+
+Not fixable any other way: handles cannot leave their origin, so there is no
+export/import that would carry grants across ids. The instruction is
+load-bearing, which is why it is in the notice, the first-run screen, the README
+and the store listing rather than in one of them.
+
+*2026-08-15.* Search reached the title, the file name and the folder — which
+finds a document you can already name. What people actually remember is a phrase
+ON a slide, and the bytes to answer that were already being read for the
+thumbnail and thrown away.
+
+`describe` now extracts the text in the same pass. Deliberately NOT a JSON
+parse: the block runs to megabytes with images inline, each app shapes it
+differently (slides put prose in `element.html`, spaces in blocks, dash in
+cells), and a reader that must know the format breaks when the format moves.
+Pulling string VALUES — `:"…"`, never keys — is format-agnostic and degrades to
+"finds less" rather than throwing. Data URIs are dropped first: one embedded
+image outweighs every word in a document. Capped at 40KB, so a folder of large
+documents does not quietly become a search index. Encrypted documents are never
+indexed — a searchable copy of a password-protected file is the leak the
+password prevents.
+
+Measured on a real deck: 36KB of prose out of a 900KB file, finding words from
+slide bodies and speaker notes.
+
+**Onboarding, help and about are one view, not three.** They are the same three
+questions — what is this, how do I use it, who made it — asked at different
+moments, and three surfaces would repeat each other and drift. It shows LIVE
+state rather than a leaflet: the two prerequisites tick themselves off, so the
+page that explains the product is also the page to return to when something
+stopped working, which is when people look for help. A fresh install is sent
+here by `onInstalled` with `reason === "install"` only — an update must not
+steal a tab, and reloading an unpacked extension fires that event every time.
+
+*Found by looking, twice:* `.tour b { display: block }` turned a bolded phrase
+mid-sentence into its own line — the identical mistake `.step b` had made and
+which I had already fixed. An unscoped element selector inside a component is
+the shape of the bug; both are now `> b`.
+
+---
 
 ## 2026-08-10 — The spaces topbar has TWO fold tiers, and the touch gutter lives in a margin
 

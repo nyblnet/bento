@@ -206,6 +206,7 @@ export const fr: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Ce navigateur ne peut pas réécrire les fichiers sur place — une copie est allée dans Téléchargements",
   "This document": "Ce document",
   "This file carries its own app — it works offline, forever, as is.": "Ce fichier embarque sa propre application — il fonctionne hors ligne, pour toujours, tel quel.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Cette fenêtre tourne encore en v{v} — rechargez pour terminer. Une sauvegarde v{v} a été enregistrée à côté de ce fichier.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Cette fenêtre tourne encore en v{v} — rechargez pour terminer. Une sauvegarde v{v} a été téléchargée.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Cette fenêtre tourne encore en v{v}. Si vous avez écrasé le fichier ouvert ici, rechargez ; sinon ouvrez le fichier enregistré.",
   "This window keeps running v{v} until you open the downloaded file.": "Cette fenêtre reste en v{v} jusqu'à l'ouverture du fichier téléchargé.",
@@ -740,4 +741,7 @@ export const fr: Catalog = {
   "Hide slide": "Masquer la diapositive",
   "Number hidden slides": "Numéroter les diapositives masquées",
   "Hidden — skipped while presenting and left out of PDF export": "Masquée — ignorée pendant la présentation et absente de l’export PDF",
+  "Appearance": "Apparence",
+  "Match my system": "Comme le système",
+  "Dark": "Sombre",
 }

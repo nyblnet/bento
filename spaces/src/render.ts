@@ -12,12 +12,13 @@
 import { type SpacesDoc, type Page, type Block, isRemote } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
-import { t } from './i18n'
+import { t, locale } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE } from './blocks'
 import {
   fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, type FieldSpec,
 } from './fields'
+import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 
 export interface RenderOpts {
@@ -54,6 +55,10 @@ export interface RenderOpts {
  */
 export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): DocumentFragment {
   const frag = document.createDocumentFragment()
+  // MAGIC NOTES' CONTEXT, accumulated as the pass goes. A name is defined by a
+  // line and usable by the lines BELOW it — the same direction a person reads
+  // in, and the reason this needs no second pass and cannot cycle.
+  const calc: CalcCtx = freshContext()
   // stack of open containers, innermost last: [blockId, element]
   const stack: Array<[string, HTMLElement]> = []
   let list: { el: HTMLElement; kind: 'ul' | 'ol'; under: string } | null = null
@@ -80,8 +85,16 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   }
 
   page.blocks.forEach((b, i) => {
+    // MAGIC NOTES' CONTEXT IS FED AFTER THE BLOCK IS DRAWN, not before, and the
+    // order is the whole difference between `sum above` working and reading 0:
+    // an answering line ENDS the run of figures it summarises, so feeding it
+    // first cleared the very run its own answer needed. After means a line sees
+    // exactly what is above it and nothing of itself — which is also what makes
+    // a name usable by the lines below and by none above.
+    const takeIn = () => feed(calc, textFromHtml(b.html))
     if (strip && i < head) {
-      strip.appendChild(renderBlock(b, doc, opts))
+      strip.appendChild(renderBlock(b, doc, opts, calc))
+      takeIn()
       return
     }
     const host = hostFor(b.parent)
@@ -99,7 +112,8 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       list = null
     }
 
-    const node = renderBlock(b, doc, opts)
+    const node = renderBlock(b, doc, opts, calc)
+    takeIn()
     ;(kind && list ? list.el : host).appendChild(node)
 
     // A CONTAINER owns the blocks whose parent is its id. Which types those are
@@ -133,7 +147,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   return frag
 }
 
-export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HTMLElement {
+export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, calc: CalcCtx = {}): HTMLElement {
   const type = b.type
   const el = document.createElement(TAG_OF[type] ?? 'div')
   el.dataset.blockId = b.id
@@ -225,7 +239,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       // the checkbox is a control, not text: it must not be inside the
       // editable host or typing would land in it
       el.appendChild(box)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       if (b.done) el.classList.add('sp-done')
       return el
     }
@@ -301,7 +315,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       label.textContent = toneLabel(raw)
       chip.append(mark, label)
       el.appendChild(chip)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
     }
 
@@ -313,12 +327,12 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       twist.setAttribute('aria-label', 'Toggle section')
       twist.textContent = '▸'
       el.appendChild(twist)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
     }
 
     default:
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
   }
 }
@@ -369,6 +383,28 @@ function calloutMark(host: HTMLElement, b: Block, known: string): void {
     return
   }
   host.innerHTML = ICONS[(TONE.get(known) ?? TONE.get('note')!).icon]
+}
+
+/**
+ * The editable host, plus the ANSWER when the line asks for one.
+ *
+ * The answer is a SIBLING of the editable span, never inside it. Inside, it
+ * would be part of what contentEditable hands back on the next keystroke, and
+ * the derived answer would be committed into `html` — which is exactly the
+ * frozen-result design this feature exists to avoid. It is also
+ * contenteditable=false and aria-hidden: it is output, not text, and a screen
+ * reader should hear the line once.
+ */
+function hostAndAnswer(el: HTMLElement, b: Block, opts: RenderOpts, ctx: CalcCtx): void {
+  el.appendChild(inlineHost(b, opts))
+  const ans = answer(textFromHtml(b.html), ctx, locale())
+  if (ans === null) return
+  const out = document.createElement('span')
+  out.className = 'sp-ans'
+  out.contentEditable = 'false'
+  out.setAttribute('aria-hidden', 'true')
+  out.textContent = ans
+  el.appendChild(out)
 }
 
 /** The editable text host. Per-block, never one big editable container — that

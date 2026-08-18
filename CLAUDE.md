@@ -523,8 +523,12 @@ names provisional.
   all (verified against pre-change code too) — resize behavior needs a
   real mouse. Present: real fullscreen via overlay.requestFullscreen at start +
   F toggle (denied requests degrade to tab-fill — that IS the testing/
-  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling: labels
-  collapse to icons <1200px, the wordmark collapses to the mark <760px.
+  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling — and by
+  MEASURING, not width breakpoints (zoom/OS text scale/locale width made px
+  queries clip the bar): editor.ts fitTopbar() steps down tier classes while
+  the bar overflows (ed-bar-compact hides labels, ed-bar-tight the wordmark,
+  ed-bar-fold folds into menus via applyPhoneChrome), driven by a Resize- +
+  MutationObserver on the bar.
   Panel show/hide lives ON the resizer strips as chevron tabs (docked
   flush to the screen edge when collapsed); phones (<700px) boot with
   both panels collapsed (canvas-first; chevrons/[/] bring them back).
@@ -590,6 +594,28 @@ names provisional.
    svg on the page (CSS animations with fill modes even beat later static rules).
 8. Tiny text labels make unusable click targets when scaled down — interactive
    controls get padded transparent `link` overlay rects, not links on the text itself.
+9. **`.ed-topbar`'s z-index is a CEILING, not just an order.** The bar is a flex
+   item of `.ed-root`, and a flex item honours z-index even at
+   `position: static` — so the value opens a stacking context that caps every
+   descendant. At 20 the ⋯ menu's own `z-index: 50` was clamped to 20 and the
+   phone-mode panel drawers (z 40) painted straight over it: the menu rendered
+   in full, and every click landed on the panel behind it. Raising the MENU can
+   never fix this; only the ceiling moves. Same trap for any future chrome that
+   must escape the bar. Diagnose with `document.elementsFromPoint()` — the menu
+   sat fourth in the stack under its own coordinates.
+10. **`overflow-y: auto` also clips HORIZONTALLY.** There is no such thing as
+   scrolling one axis while the other still overflows visibly: set either axis
+   to a non-`visible` value and the browser computes the other to `auto`. So
+   the moment `.ed-topbar.ed-bar-fold .ed-menu` gained `max-height` +
+   `overflow-y: auto` (so a long ⋯ menu could scroll), that menu became a
+   CLIPPING BOX for everything positioned inside it. Phone chrome demotes whole
+   dropdown widgets (Share, Language) into ⋯, and `.ed-share-pop` is a 250px
+   popover anchored to its parent's end — inside the 200px menu it hung 55px
+   off the left and 69px below, both silently cut, and the properties panel
+   underneath showed through the gap so the popover looked interleaved with it.
+   A floating child can never escape a scroll container: inside ⋯ these render
+   `position: static`, as a section of the list. Anything else demoted into a
+   menu must do the same.
 
 - **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script

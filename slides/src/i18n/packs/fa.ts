@@ -220,6 +220,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "این مرورگر نمی‌تواند فایل‌ها را در جای خود بازنویسی کند — یک نسخهٔ تازه در پوشهٔ دانلودها ذخیره شد",
   "This document": "همین سند",
   "This file carries its own app — it works offline, forever, as is.": "این فایل برنامهٔ خودش را همراه دارد — بدون اینترنت، برای همیشه، همین‌طور که هست کار می‌کند.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "این پنجره هنوز نسخهٔ {v} را اجرا می‌کند — برای پایان کار دوباره بارگذاری کنید. یک پشتیبان از نسخهٔ {v} کنار این پرونده ذخیره شد.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "این پنجره هنوز نسخهٔ {v} را اجرا می‌کند — برای پایان کار دوباره بارگذاری کنید. یک پشتیبان از نسخهٔ {v} دانلود شد.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "این پنجره هنوز نسخهٔ {v} را اجرا می‌کند. اگر فایلِ باز در اینجا را بازنویسی کرده‌اید، دوباره بارگذاری کنید؛ در غیر این صورت فایلی را که ذخیره کردید باز کنید.",
   "This window keeps running v{v} until you open the downloaded file.": "این پنجره تا وقتی فایل دانلودشده را باز نکنید، همچنان نسخهٔ {v} را اجرا می‌کند.",
