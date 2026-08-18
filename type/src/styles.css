@@ -387,3 +387,130 @@ html, body {
    "Update this file" button was visible before any check had run. */
 .t-btn[hidden], [hidden] { display: none !important; }
 .t-dlg-foot { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+/* ————— mathematics —————
+   The metrics are computed in math/layout.ts and arrive as inline styles; this
+   block only supplies what is CONSTANT — display roles, the rule colours, and
+   the fonts. Nothing here may carry a number that the layout engine also knows,
+   or the two would drift and every formula would be subtly wrong.
+
+   COLOUR IS `currentColor`, everywhere. A formula is text: it must be the same
+   ink as the sentence it sits in, on the always-white page and equally in the
+   Math panel's live preview, which sits on CHROME and therefore inverts with
+   the theme. One token would have been wrong in one of those two places.
+
+   `line-height: 1` is load-bearing. The layout engine models a line box as
+   rising 0.75em and falling 0.22em from its baseline, which is only true when
+   nothing adds leading — with the paper's 1.62 line-height every stacked box
+   would be spaced by an amount the engine never accounted for. */
+.t-math {
+  display: inline-block;
+  line-height: 1;
+  white-space: nowrap;
+  hyphens: none; -webkit-hyphens: none;
+  text-indent: 0;
+  font-family: "STIX Two Math", "Cambria Math", "Latin Modern Math",
+               "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-style: normal; font-weight: normal;
+}
+/* A formula never justifies, never hyphenates and never breaks: the spacing
+   inside it is typeset, not text. */
+.t-paper .t-math { text-align: start; }
+
+/* the variants — the only place a letter's shape is decided */
+.t-math .t-mi { font-style: italic; }
+.t-math .t-mb { font-weight: 700; }
+.t-math .t-mbi { font-weight: 700; font-style: italic; }
+.t-math .t-msf { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.t-math .t-mtt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.t-math .t-mop { font-style: normal; }
+.t-math .t-mbig { display: inline-block; }
+/* prose inside a formula wears the PAGE's face, not the maths face */
+.t-math .t-mtext {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  white-space: pre-wrap;
+}
+.t-math .t-msp { display: inline-block; }
+
+/* fractions: the bar is the numerator's bottom border, so it is exactly as
+   wide as the wider of the two rows and needs no width of its own */
+.t-math .t-mfrac { display: inline-block; text-align: center; }
+.t-math .t-mnum, .t-math .t-mden { display: block; }
+.t-math .t-mnum { border-bottom: 0 solid currentColor; }
+
+/* scripts */
+.t-math .t-mss { display: inline-block; text-align: start; }
+.t-math .t-mss > .t-msup, .t-math .t-mss > .t-msub { display: block; }
+.t-math .t-mside { display: inline-block; }
+
+/* limits above and below a big operator */
+.t-math .t-mlim { display: inline-block; text-align: center; }
+.t-math .t-mlim > span { display: block; }
+
+/* radicals. `non-scaling-stroke` (set in the markup) keeps the surd's stroke
+   even however far it is stretched; the width here is what stops a tall
+   radical from also becoming a wide one. */
+.t-math .t-msurd {
+  display: inline-block; width: .58em; overflow: visible;
+  fill: none; stroke: currentColor; stroke-width: .055em;
+  stroke-linecap: round; stroke-linejoin: miter;
+}
+.t-math .t-mrad { display: inline-block; border-top: 0 solid currentColor; }
+.t-math .t-mroot { display: inline-block; margin-inline-end: -.32em; }
+
+/* over- and underlines */
+.t-math .t-mbar { display: inline-block; }
+.t-math .t-mbar.t-over { border-top: 0 solid currentColor; }
+.t-math .t-mbar.t-under { border-bottom: 0 solid currentColor; }
+
+/* accents are ABSOLUTE: they add no width, so `\hat{x}` is exactly as wide as
+   `x` and a hatted symbol in a fraction still centres correctly */
+.t-math .t-macc { position: relative; display: inline-block; }
+.t-math .t-maccm {
+  position: absolute; inset-inline: 0; text-align: center;
+  line-height: 1; pointer-events: none;
+}
+
+/* matrices, cases and aligned — one inline-table, centred on the math axis */
+.t-math .t-mmatrix { display: inline-table; border-collapse: collapse; }
+.t-math .t-mrow2 { display: table-row; }
+.t-math .t-mcell {
+  display: table-cell; padding: var(--t-mpad, .16em) .3em; text-align: center;
+}
+.t-math .t-mmatrix.t-mleft .t-mcell { text-align: start; padding-inline-end: .7em; }
+.t-math .t-mmatrix.t-mleft .t-mcell:last-child { padding-inline-end: .3em; }
+
+/* delimiters stretch about the axis, which is 0.5em below the top of a
+   line-height:1 box — the one place a metric is duplicated between the engine
+   and the stylesheet, because a transform-origin cannot be computed per box
+   without a second inline style on every fence */
+.t-math .t-mdelim { display: inline-block; transform-origin: 50% .5em; }
+
+/* a display equation is its own paragraph-level object */
+.t-math.t-math-display { display: block; text-align: center; }
+.t-paper [data-kind="math"] {
+  margin: 16px 0; text-align: center; text-indent: 0;
+  hyphens: none; -webkit-hyphens: none; font-size: 1.06em;
+}
+
+/* what a formula does when it is wrong: says so, in place, and keeps setting */
+.t-math .t-merr {
+  color: var(--bad); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .86em; font-style: normal;
+}
+.t-math-bad { text-decoration: underline dotted var(--bad); text-underline-offset: 4px; }
+
+/* ————— the Math panel ————— */
+.t-mathsrc {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px;
+}
+.t-mathsrc:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.t-mathprev {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 52px; margin: 8px 0; padding: 10px 8px; overflow-x: auto;
+  font-size: 17px; color: var(--ink);
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px;
+}

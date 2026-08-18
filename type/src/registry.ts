@@ -13,4 +13,6 @@
 // Anything order-sensitive should say so with an explicit `order` instead of
 // relying on this list.
 
+import './math.ts';      // mathematics: inline formulas and display equations
+
 export {};
