@@ -13,4 +13,4 @@
 // Anything order-sensitive should say so with an explicit `order` instead of
 // relying on this list.
 
-export {};
+import './link.ts';

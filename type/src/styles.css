@@ -387,3 +387,35 @@ html, body {
    "Update this file" button was visible before any check had run. */
 .t-btn[hidden], [hidden] { display: none !important; }
 .t-dlg-foot { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+/* ─────────────────────────────────────────────────────── the link popover
+   CHROME, not document: it floats over the page and must follow the reader's
+   theme, so no --paper token appears here (scripts/test-type-theme.mjs would
+   fail the build if one did, and it would be a white box in dark mode). */
+.t-link-pop {
+  position: fixed; z-index: 60;
+  display: flex; align-items: center; gap: 4px;
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 6px; max-width: min(440px, calc(100vw - 16px));
+  box-shadow: 0 12px 32px rgb(20 30 45 / .22), 0 2px 8px rgb(20 30 45 / .12);
+}
+.t-link-url {
+  font: inherit; font-size: 13px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 8px; width: 240px; min-width: 0;
+}
+.t-link-url:focus { border-color: var(--blue); outline: none; }
+.t-link-pop .t-btn { padding: 6px 8px; }
+.t-link-ok { color: var(--ink); font-weight: 600; }
+.t-link-rm { color: var(--bad); }
+
+/* Which link you are standing on, while the popover is open. Scoped to the
+   page, so this rule may use a document token — and must, or the marker would
+   invert with the chrome while the paper stays white. */
+.t-paper a.t-link-on {
+  background: rgb(91 141 239 / .16);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px rgb(91 141 239 / .35);
+}
