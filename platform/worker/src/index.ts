@@ -3,25 +3,50 @@
 //
 // The platform Worker. Routes:
 //
-//   GET  /                    paste-and-create demo page (demo.ts)
-//   POST /api/compile         outline JSON -> compiled bento/slides doc JSON (no storage)
-//   POST /api/decks           create a deck: { doc } -> { id, editToken }
-//   GET  /api/decks/:id       fetch a deck's doc JSON (Authorization: Bearer <editToken>)
-//   PATCH /api/decks/:id      replace a deck's doc JSON (same auth)
-//   POST /api/decks/:id/assets  upload an image blob (same auth) -> { path }
+//   GET  /setup                one-time owner setup form (redirects to /login once config exists)
+//   POST /api/setup             create the (only) owner account — 409 if one already exists
+//   GET  /login                 owner login form
+//   POST /api/login              verify credentials, start a session
+//   POST /api/logout             end the current session
+//   GET  /                     compile+create wizard (demo.ts) — OWNER ONLY
+//   POST /api/compile           outline JSON -> compiled bento/slides doc JSON (no storage) — OWNER ONLY
+//   POST /api/decks             create a deck: { doc } -> { id } — OWNER ONLY
+//   GET  /api/decks/:id         fetch a deck's doc JSON — OWNER ONLY
+//   PATCH /api/decks/:id        replace a deck's doc JSON — OWNER ONLY
+//   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
 //   GET  /d/:id                the deck spliced into the shell (a real .bento.html page)
-//   GET  /d/:id/download       same, as a downloadable attachment
-//   GET  /a/:id/:key           an uploaded asset's bytes
+//   GET  /d/:id/download        same, as a downloadable attachment
+//   GET  /a/:id/:key            an uploaded asset's bytes
+//
+// "OWNER ONLY" = gated by a session cookie (auth.ts) — single account,
+// created once via /setup, no signup. Viewing a deck (/d/:id, /a/:id/:key)
+// is NOT yet gated here — every deck is reachable by anyone who has its
+// unguessable id, same as before auth existed. Per-deck public/private
+// access control is deliberately a separate PR (it needs its own `decks`
+// column and its own review), not folded into this one — see
+// docs/DECISIONS.md.
 //
 // No wrangler.toml — bindings (env.DOCS, env.DB) are added by hand in the CF
 // dashboard after pasting dist/worker.js via Quick Edit. See platform/README.md.
 import type { Env } from './env.ts'
 import { spliceDoc, SHELL_VERSION } from './splice.ts'
 import { validateIncomingDoc } from './validate.ts'
-import { createDeck, getDeckDoc, checkEditToken, replaceDeckDoc, putAsset, getAsset } from './store.ts'
+import { createDeck, getDeckDoc, replaceDeckDoc, putAsset, getAsset } from './store.ts'
 import { renderDemoPage } from './demo.ts'
+import { renderSetupPage, renderLoginPage } from './authPages.ts'
 import { parseOutline } from './compile/schema.ts'
 import { compileOutline } from './compile/compile.ts'
+import {
+  getConfig,
+  createConfig,
+  verifyPassword,
+  createSession,
+  deleteSession,
+  readSessionCookie,
+  setSessionCookieHeader,
+  clearSessionCookieHeader,
+  isAuthenticated,
+} from './auth.ts'
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -40,20 +65,98 @@ function html(body: string, init: ResponseInit = {}): Response {
   return new Response(body, { ...init, headers: { 'content-type': 'text/html; charset=utf-8', ...init.headers } })
 }
 
-function bearerToken(req: Request): string {
-  const auth = req.headers.get('authorization') ?? ''
-  return auth.startsWith('Bearer ') ? auth.slice(7) : ''
-}
-
-async function requireEditAccess(req: Request, env: Env, id: string): Promise<Response | null> {
-  const ok = await checkEditToken(env, id, bearerToken(req))
-  if (!ok) return json({ error: 'invalid or missing edit token' }, { status: 401 })
-  return null
+function redirect(location: string): Response {
+  return new Response(null, { status: 302, headers: { location } })
 }
 
 function notFound(): Response {
   return html('<!DOCTYPE html><title>Not found</title><p>No deck at this address.</p>', { status: 404 })
 }
+
+/** Where the caller stands relative to the single-owner account. */
+type Gate = 'ok' | 'needs-setup' | 'needs-login'
+
+async function ownerGate(req: Request, env: Env): Promise<Gate> {
+  if (!(await getConfig(env))) return 'needs-setup'
+  return (await isAuthenticated(req, env)) ? 'ok' : 'needs-login'
+}
+
+/** For HTML page routes: redirects instead of continuing. Returns null when
+ *  the caller may proceed. */
+async function requireOwnerPage(req: Request, env: Env): Promise<Response | null> {
+  const gate = await ownerGate(req, env)
+  if (gate === 'needs-setup') return redirect('/setup')
+  if (gate === 'needs-login') return redirect('/login')
+  return null
+}
+
+/** For JSON API routes: a 401 body instead of a redirect. Returns null when
+ *  the caller may proceed. */
+async function requireOwnerApi(req: Request, env: Env): Promise<Response | null> {
+  const gate = await ownerGate(req, env)
+  if (gate === 'ok') return null
+  return json({ error: gate === 'needs-setup' ? 'not set up yet' : 'not authenticated' }, { status: 401 })
+}
+
+// --- auth routes -------------------------------------------------------
+
+async function handleSetupPage(env: Env): Promise<Response> {
+  if (await getConfig(env)) return redirect('/login')
+  return html(renderSetupPage())
+}
+
+async function handleSetupSubmit(req: Request, env: Env): Promise<Response> {
+  if (await getConfig(env)) return json({ error: 'already set up' }, { status: 409 })
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const { username, password } = (body ?? {}) as { username?: unknown; password?: unknown }
+  if (typeof username !== 'string' || !username.trim()) {
+    return json({ error: 'username is required' }, { status: 422 })
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return json({ error: 'password must be at least 8 characters' }, { status: 422 })
+  }
+  await createConfig(env, username.trim(), password)
+  const sessionId = await createSession(env)
+  return json({ ok: true }, { headers: { 'set-cookie': setSessionCookieHeader(sessionId) } })
+}
+
+async function handleLoginPage(req: Request, env: Env): Promise<Response> {
+  const gate = await ownerGate(req, env)
+  if (gate === 'needs-setup') return redirect('/setup')
+  if (gate === 'ok') return redirect('/')
+  return html(renderLoginPage())
+}
+
+async function handleLoginSubmit(req: Request, env: Env): Promise<Response> {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const { username, password } = (body ?? {}) as { username?: unknown; password?: unknown }
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return json({ error: 'username and password are required' }, { status: 400 })
+  }
+  if (!(await verifyPassword(env, username, password))) {
+    return json({ error: 'invalid username or password' }, { status: 401 })
+  }
+  const sessionId = await createSession(env)
+  return json({ ok: true }, { headers: { 'set-cookie': setSessionCookieHeader(sessionId) } })
+}
+
+async function handleLogout(req: Request, env: Env): Promise<Response> {
+  const sessionId = readSessionCookie(req)
+  if (sessionId) await deleteSession(env, sessionId)
+  return json({ ok: true }, { headers: { 'set-cookie': clearSessionCookieHeader() } })
+}
+
+// --- deck routes ---------------------------------------------------------
 
 async function handleCreate(req: Request, env: Env): Promise<Response> {
   let body: unknown
@@ -65,8 +168,8 @@ async function handleCreate(req: Request, env: Env): Promise<Response> {
   const doc = (body as { doc?: unknown })?.doc
   const result = validateIncomingDoc(doc)
   if (!result.ok) return json({ errors: result.errors }, { status: 422 })
-  const { id, editToken } = await createDeck(env, result.doc!)
-  return json({ id, editToken, url: `/d/${id}` }, { status: 201 })
+  const { id } = await createDeck(env, result.doc!)
+  return json({ id, url: `/d/${id}` }, { status: 201 })
 }
 
 async function handleCompile(req: Request): Promise<Response> {
@@ -92,17 +195,13 @@ async function handleCompile(req: Request): Promise<Response> {
   return json({ doc: result.doc })
 }
 
-async function handleGetDoc(req: Request, env: Env, id: string): Promise<Response> {
-  const denied = await requireEditAccess(req, env, id)
-  if (denied) return denied
+async function handleGetDoc(env: Env, id: string): Promise<Response> {
   const doc = await getDeckDoc(env, id)
   if (!doc) return notFound()
   return json({ doc })
 }
 
 async function handleReplace(req: Request, env: Env, id: string): Promise<Response> {
-  const denied = await requireEditAccess(req, env, id)
-  if (denied) return denied
   let body: unknown
   try {
     body = await req.json()
@@ -117,8 +216,6 @@ async function handleReplace(req: Request, env: Env, id: string): Promise<Respon
 }
 
 async function handleUploadAsset(req: Request, env: Env, id: string): Promise<Response> {
-  const denied = await requireEditAccess(req, env, id)
-  if (denied) return denied
   const contentType = req.headers.get('content-type') ?? ''
   if (!contentType.startsWith('image/')) {
     return json({ error: 'content-type must be image/*' }, { status: 400 })
@@ -164,17 +261,53 @@ export default {
     const parts = url.pathname.split('/').filter(Boolean)
 
     try {
-      if (parts.length === 0 && req.method === 'GET') return html(renderDemoPage())
+      if (parts[0] === 'setup' && parts.length === 1) {
+        if (req.method === 'GET') return handleSetupPage(env)
+      }
+      if (parts[0] === 'login' && parts.length === 1) {
+        if (req.method === 'GET') return handleLoginPage(req, env)
+      }
+      if (parts[0] === 'api' && parts[1] === 'setup' && parts.length === 2 && req.method === 'POST') {
+        return handleSetupSubmit(req, env)
+      }
+      if (parts[0] === 'api' && parts[1] === 'login' && parts.length === 2 && req.method === 'POST') {
+        return handleLoginSubmit(req, env)
+      }
+      if (parts[0] === 'api' && parts[1] === 'logout' && parts.length === 2 && req.method === 'POST') {
+        return handleLogout(req, env)
+      }
+
+      if (parts.length === 0 && req.method === 'GET') {
+        const denied = await requireOwnerPage(req, env)
+        if (denied) return denied
+        return html(renderDemoPage())
+      }
 
       if (parts[0] === 'api' && parts[1] === 'compile' && parts.length === 2 && req.method === 'POST') {
+        const denied = await requireOwnerApi(req, env)
+        if (denied) return denied
         return handleCompile(req)
       }
 
       if (parts[0] === 'api' && parts[1] === 'decks') {
-        if (parts.length === 2 && req.method === 'POST') return handleCreate(req, env)
-        if (parts.length === 3 && req.method === 'GET') return handleGetDoc(req, env, parts[2]!)
-        if (parts.length === 3 && req.method === 'PATCH') return handleReplace(req, env, parts[2]!)
+        if (parts.length === 2 && req.method === 'POST') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return handleCreate(req, env)
+        }
+        if (parts.length === 3 && req.method === 'GET') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return handleGetDoc(env, parts[2]!)
+        }
+        if (parts.length === 3 && req.method === 'PATCH') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return handleReplace(req, env, parts[2]!)
+        }
         if (parts.length === 4 && parts[3] === 'assets' && req.method === 'POST') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
           return handleUploadAsset(req, env, parts[2]!)
         }
       }

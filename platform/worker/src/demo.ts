@@ -26,6 +26,9 @@
 // deploy. Deliberately dark-only (not adaptive to light mode) — matches the
 // navy/accent palette already used below, and this is a small enough
 // surface that committing to one look beats maintaining two palettes.
+// The base stylesheet itself lives in pageStyles.ts, shared with the
+// setup/login pages — this file only adds its own `pre.prompt` rules.
+import { PAGE_STYLES } from './pageStyles.ts'
 
 const EXAMPLE_DOC = {
   format: 'bento/slides',
@@ -158,79 +161,32 @@ export function renderDemoPage(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bento platform — compile &amp; create a deck</title>
 <style>
-  :root {
-    --bg: #0D1B2E;
-    --bg-elev: #0A1524;
-    --card: #142338;
-    --border: rgba(245,247,250,0.12);
-    --border-strong: rgba(245,247,250,0.22);
-    --text: #F5F7FA;
-    --text-dim: #93A2BA;
-    --accent: #E8442E;
-    --accent-hover: #FF5B3F;
-    --ok-bg: rgba(45,164,78,0.16);
-    --ok-fg: #5BD584;
-    --err-bg: rgba(232,68,46,0.14);
-    --err-fg: #FF8A76;
-    color-scheme: dark;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 56px 24px 80px; }
-  header.hero { margin-bottom: 36px; }
-  h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 8px; }
-  h1 span { color: var(--accent); }
-  .subtitle { color: var(--text-dim); font-size: 15px; margin: 0; max-width: 60ch; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin-bottom: 24px; }
-  .step-label {
-    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
-  }
-  h2 { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
-  .card > p { color: var(--text-dim); margin: 0 0 16px; font-size: 14px; }
-  .card > p strong { color: var(--text); }
-  textarea, pre.prompt {
+${PAGE_STYLES}
+  pre.prompt {
     display: block; width: 100%; background: var(--bg-elev); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
     font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0;
   }
-  textarea { min-height: 260px; resize: vertical; }
-  textarea:focus { outline: none; border-color: var(--accent); }
-  pre.prompt { max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
-  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-  button {
-    font: inherit; font-weight: 600; font-size: 14px; padding: 10px 18px; border-radius: 8px;
-    border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease;
+  .hero-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .logout-link {
+    flex-shrink: 0; font-size: 13px; color: var(--text-dim); background: none; border: none;
+    cursor: pointer; text-decoration: underline; padding: 4px 0;
   }
-  button:hover { background: rgba(245,247,250,0.07); }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-  .status { margin-top: 16px; padding: 12px 14px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; display: none; }
-  .status.err { display: block; background: var(--err-bg); color: var(--err-fg); }
-  .status.ok { display: block; background: var(--ok-bg); color: var(--ok-fg); }
-  code { background: rgba(245,247,250,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  .logout-link:hover { color: var(--text); }
   @media (max-width: 600px) {
-    .wrap { padding: 32px 16px 60px; }
-    h1 { font-size: 23px; }
-    .card { padding: 18px; border-radius: 10px; margin-bottom: 18px; }
-    textarea { min-height: 200px; font-size: 12px; }
     pre.prompt { max-height: 220px; font-size: 12px; }
-    .actions { flex-direction: column; }
-    .actions button { width: 100%; }
   }
 </style>
 </head>
 <body>
 <div class="wrap">
-<header class="hero">
-  <h1>Bento platform <span>·</span> compile &amp; create</h1>
-  <p class="subtitle">Two steps: get an outline from an AI you're already talking to, paste it back here, get a deck.</p>
+<header class="hero hero-row">
+  <div>
+    <h1>Bento platform <span>·</span> compile &amp; create</h1>
+    <p class="subtitle">Two steps: get an outline from an AI you're already talking to, paste it back here, get a deck.</p>
+  </div>
+  <button id="logout" class="logout-link" type="button">Log out</button>
 </header>
 
 <section class="card">
@@ -263,6 +219,10 @@ export function renderDemoPage(): string {
 </section>
 </div>
 <script>
+document.getElementById('logout').onclick = async () => {
+  await fetch('/api/logout', { method: 'POST' })
+  location.href = '/login'
+}
 document.getElementById('copyPrompt').onclick = async () => {
   const btn = document.getElementById('copyPrompt')
   try {
@@ -337,8 +297,7 @@ document.getElementById('create').onclick = async () => {
       'Created ' + body.id + '\\n' +
       'Open it:  ' + location.origin + '/d/' + body.id + '\\n' +
       'Present:  ' + location.origin + '/d/' + body.id + '#present\\n' +
-      'Download: ' + location.origin + '/d/' + body.id + '/download\\n' +
-      'Edit token (save this — shown once): ' + body.editToken
+      'Download: ' + location.origin + '/d/' + body.id + '/download'
   } catch (e) {
     status.className = 'status err'
     status.textContent = 'Request failed: ' + e.message

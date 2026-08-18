@@ -76,15 +76,20 @@ platform/
       index.ts            — router (all HTTP routes)
       splice.ts            — HEAD + escape(json) + TAIL
       validate.ts          — ingest validation (POST/PATCH /api/decks, compiled docs too)
-      store.ts             — R2 + D1 access
+      store.ts             — R2 + D1 access for decks/assets
+      auth.ts               — single-owner auth: password hashing, sessions, cookies
+      authPages.ts           — /setup and /login page markup
+      pageStyles.ts           — shared CSS (demo.ts + the auth pages)
       ids.ts                — random ids/tokens, sha256
-      demo.ts               — prompt→paste→create page served at `/`
+      demo.ts               — prompt→paste→create wizard served at `/` (owner-only)
       env.ts                — Env (binding) interface
       compile/
         schema.ts            — the outline schema + parseOutline() validator
         compile.ts            — outline → BentoDoc, built on slides/src/model.ts
       generated/shell.ts    — GENERATED, gitignored — do not hand-edit
-    schema.sql             — D1 table DDL
+    migrations/            — numbered, additive D1 schema files (see "Deploy" step 1)
+      0001_init.sql          — decks table
+      0002_auth.sql           — config (single-owner account) + sessions tables
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
     ci-build.mjs           — Workers Builds' "Build command": produces generated/shell.ts
     build.mjs              — esbuild bundle → dist/worker.js, used by test:router (below), not by deploy
@@ -92,8 +97,35 @@ platform/
       splice.test.mjs       — splice conformance (no bindings needed)
       compile.spec.ts        — compiler assertions (TS; bundled+run by compile.test.mjs)
       compile.test.mjs       — runs compile.spec.ts
+      auth.spec.ts            — auth.ts unit assertions (TS; bundled+run by auth.test.mjs)
+      auth.test.mjs           — runs auth.spec.ts
       router.test.mjs       — full HTTP flow against dist/worker.js, in-memory R2/D1 mocks
 ```
+
+## Authentication
+
+Single owner, no signup, no other accounts — ever. The first time the Worker
+runs with no account configured, every owner-only page redirects to `/setup`;
+after that one-time form, `/setup` itself redirects to `/login` and refuses
+to run again (`POST /api/setup` returns 409 if a config row already exists).
+Login issues a **session** — an opaque random token stored as a row in the
+`sessions` table and set as an `HttpOnly`, `Secure`, `SameSite=Lax` cookie;
+validating a request is a lookup by that token, not signature verification,
+so logout is just deleting the row (`auth.ts`). This is a deliberate choice
+for a single-owner, low-traffic project — no signing-key management, no JWT
+library, one small D1 row per active session.
+
+Passwords are hashed with PBKDF2-SHA-256 at 300,000 iterations — the same
+construction `kernel/src/save.ts` already uses for `bento/enc` password-
+protected decks, reused rather than reinvented. **The salt is always
+generated server-side** (`crypto.getRandomValues`); there is no code path
+that accepts or stores a caller-supplied salt.
+
+`GET /d/:id`, `GET /d/:id/download`, and `GET /a/:id/:key` are **not** gated
+by this — every deck is still reachable by anyone holding its unguessable id,
+same as before auth existed. Per-deck public/private visibility (so viewing
+could actually require login for decks you mark private) is deliberately a
+separate, later PR — see "Known gaps".
 
 ## Deploy
 
@@ -145,8 +177,12 @@ with your own**, not fill in blanks.
   — write it down. Open the new database's own page: near the top you'll
   see a **Database ID** (looks like `9408e034-8812-402a-ac21-42bd78f9f24f`)
   — write that down too, you need both the name and the ID. Then open its
-  **Console** tab, paste the entire contents of `platform/worker/schema.sql`,
-  and run it. That's the whole migration step — no CLI, no separate tool.
+  **Console** tab and run each file in `platform/worker/migrations/` **in
+  numeric order** — paste `0001_init.sql`, run it, then paste `0002_auth.sql`,
+  run it. That's the whole migration step — no CLI, no separate tool. (If
+  you already ran `0001` from an earlier version of this project under its
+  old name, `schema.sql` — same file, just moved and renumbered — you only
+  need to run `0002` now.)
 
 ### 2. Edit `platform/worker/wrangler.toml` to point at YOUR resources
 
@@ -236,9 +272,12 @@ name not matching `wrangler.toml`'s `name`.
 
 If it succeeded: visit the Worker's `*.workers.dev` URL (shown on its
 overview page). `/healthz` should return `{"ok":true,"shellVersion":"..."}`.
-`/` is the prompt→paste→create demo page — in step 2, click "Load example
-outline", then "Create deck →", then open the `/d/<id>` link it prints. That
-link is a real, fully editable `.bento.html` page, and `/d/<id>#present` starts the show
+Visiting `/` with no account configured yet redirects to `/setup` — pick a
+username and password there (this only works once; see "Authentication"
+above) and you land back on `/`, now logged in. `/` is the prompt→paste→
+create wizard — in step 2, click "Load example outline", then "Create deck
+→", then open the `/d/<id>` link it prints. That link is a real, fully
+editable `.bento.html` page, and `/d/<id>#present` starts the show
 immediately (existing shell behavior, `slides/src/main.ts`).
 
 ### From here on
@@ -272,25 +311,58 @@ npm run test:router                   # full HTTP flow against dist/worker.js, i
 ## API
 
 All `/api/*` routes are CORS-open (`*`) so a future separately-hosted paste/
-review UI can call them; decks aren't secret (the URL is the share link) —
-only mutation is gated, by the edit token.
+review UI can call them, though a cross-origin caller won't be able to ride
+the owner's session cookie (browsers require `Access-Control-Allow-Origin`
+to be a specific origin, not `*`, for credentialed requests) — that's a
+problem for whenever that app exists, not solved here.
 
 | Route | Method | Auth | Purpose |
 |---|---|---|---|
-| `/api/compile` | POST | none | `{outline}` → `{doc}`. Pure — nothing is stored |
-| `/api/decks` | POST | none | `{doc}` → `{id, editToken, url}`. Validates, strips `collab`, mints `docId` |
-| `/api/decks/:id` | GET | `Authorization: Bearer <editToken>` | `{doc}` |
-| `/api/decks/:id` | PATCH | same | `{doc}` → replaces the stored doc |
-| `/api/decks/:id/assets` | POST | same | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
+| `/setup` | GET | none | setup form; redirects to `/login` once an account exists |
+| `/api/setup` | POST | none | `{username, password}` → creates the (only) account, starts a session. 409 if one already exists |
+| `/login` | GET | none | login form |
+| `/api/login` | POST | none | `{username, password}` → starts a session on success |
+| `/api/logout` | POST | none | ends the current session |
+| `/api/compile` | POST | owner session | `{outline}` → `{doc}`. Pure — nothing is stored |
+| `/api/decks` | POST | owner session | `{doc}` → `{id, url}`. Validates, strips `collab`, mints `docId` |
+| `/api/decks/:id` | GET | owner session | `{doc}` |
+| `/api/decks/:id` | PATCH | owner session | `{doc}` → replaces the stored doc |
+| `/api/decks/:id/assets` | POST | owner session | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
 | `/d/:id` | GET | none | the deck spliced into the shell — a real, editable page |
 | `/d/:id/download` | GET | none | same, with `Content-Disposition: attachment` |
 | `/a/:id/:key` | GET | none | an uploaded asset's bytes |
 
-The edit token is returned **once**, at creation. Losing it means losing
-write access to that deck — there is no recovery flow in v1 (no accounts).
+"Owner session" = the `bento_session` cookie set by `/api/login` (or
+`/api/setup`, which logs you in immediately) — see "Authentication" above.
+The previous per-deck capability-token model (`editToken`, `Authorization:
+Bearer`) is gone; every mutation now checks the single owner's session
+instead. Viewing (`/d/:id`, `/d/:id/download`, `/a/:id/:key`) is unauthenticated
+for every deck regardless of session — see "Known gaps".
 
 ## Known gaps (deliberately out of scope for this PR)
 
+- **Viewing a deck isn't gated yet.** Auth in this PR covers the *create/
+  edit* surface only — `/d/:id`, `/d/:id/download`, and `/a/:id/:key` stay
+  reachable by anyone with the deck's id, exactly as before auth existed.
+  The planned follow-up: a per-deck `is_public` flag, defaulting private,
+  that lets the owner explicitly share a deck anonymously (read-only present
+  mode for a non-owner visitor; the owner always gets the full editor on
+  their own decks, public or not).
+- **No deck history/dashboard.** `/` is still a one-shot wizard; there's no
+  list of decks you've already created to browse back into. Planned as its
+  own follow-up once visibility exists (a deck's list entry needs to show
+  its public/private state).
+- **Edits made in the live-served editor aren't saved back.** Opening `/d/:id`
+  while logged in serves the full, editable Bento app, but the in-browser
+  editor still only holds its state in the browser (same as opening any
+  `.bento.html` locally) — nothing currently pushes those edits to R2/D1.
+  That needs a small, precise event hook added to `slides/src/main.ts`
+  (`window.bento` today exposes no way for an externally-injected script to
+  know a doc mutation happened — verified before writing this, see
+  `docs/DECISIONS.md`) plus a debounced save-back listener here. Deliberately
+  its own follow-up: it's the one piece of this feature set that reaches
+  into a different ownership zone (`docs/PARALLEL-WORK.md` §1) and deserves
+  its own focused review.
 - **No tolerant outline parser.** `demo.ts` now covers the real information
   architecture — step 1 is a copy-pasteable prompt for an existing AI
   conversation, step 2 pastes the reply back and auto-detects outline vs.
