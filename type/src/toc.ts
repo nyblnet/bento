@@ -192,7 +192,13 @@ export interface SectionSettings { numbered: boolean }
 export function sectionSettings(doc: TypeDoc): SectionSettings {
   const raw = (doc as { sections?: unknown }).sections;
   const obj = raw && typeof raw === 'object' ? raw as Record<string, unknown> : undefined;
-  return { numbered: obj?.numbered !== false };
+  // ABSENT MEANS OFF. Automatic numbering is opt-in, because the documents this
+  // app opens mostly already carry their numbers in the heading text — every
+  // contract reads "1. Scope of Work" — and numbering those again renders
+  // "1.1 1. Scope of Work". The risk is asymmetric: on-by-default visibly
+  // corrupts an existing document, off-by-default is a feature somebody has to
+  // find. Verified on the starter contract, which is exactly this case.
+  return { numbered: obj?.numbered === true };
 }
 
 /** Mutate the switch. The only thing in this file that writes to the model. */

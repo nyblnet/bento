@@ -28,7 +28,13 @@ const H = (s: string) => console.log(`\n=== ${s} ===`);
 const b = (kind: string, text: string, extra: Partial<Block> = {}): Block =>
   ({ id: `${kind}-${text.toLowerCase().replace(/\W+/g, '-')}`, kind: kind as BlockKind, text, ...extra });
 
-const docOf = (body: Block[]): TypeDoc => ({ ...emptyDoc(), body });
+// Numbering is OPT-IN — absent means off, because the documents this app opens
+// mostly carry their numbers in the heading text already ("1. Scope of Work"),
+// and numbering those again renders "1.1 1. Scope of Work". These fixtures
+// exercise the numbering machinery, so they turn it on; the default itself is
+// asserted separately below.
+const docOf = (body: Block[]): TypeDoc =>
+  ({ ...emptyDoc(), body, sections: { numbered: true } } as TypeDoc);
 
 /** '1.1 Scope' for every heading, so an expectation reads like the page. */
 const numbering = (doc: TypeDoc) =>
@@ -204,6 +210,19 @@ H('the decorator, which is what the renderer calls');
 
   setNumbered(doc, false);
   ok(decorate(doc, doc.body[0], 'A') === null, 'with numbering off a heading is not touched at all');
+}
+
+H('automatic numbering is OFF until asked for');
+{
+  // The risk is asymmetric. On by default visibly corrupts an existing
+  // document — the starter contract renders "1.1 1. Scope of Work" — while off
+  // by default is a feature somebody has to find. Verified on that document,
+  // which is exactly the common case: headings that already carry numbers.
+  const plain = { ...emptyDoc(), body: [b('h1', '1. Scope of Work'), b('h2', '1.1 Fees')] } as TypeDoc;
+  ok(headings(plain).every(h => h.number === undefined),
+     'a document that says nothing about numbering gets no numbers');
+  const on = { ...plain, sections: { numbered: true } } as TypeDoc;
+  ok(headings(on).some(h => h.number !== undefined), 'and asking for them turns them on');
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

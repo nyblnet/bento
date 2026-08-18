@@ -134,6 +134,7 @@ app.innerHTML = `
         <button id="undo" class="t-btn" type="button"></button>
         <button id="redo" class="t-btn" type="button"></button>
       </div>
+      <button id="props" class="t-btn" type="button"></button>
       <button id="theme" class="t-btn" type="button"></button>
       <button id="save" class="t-btn t-primary" type="button"></button>
       <div class="t-menuwrap">
@@ -163,6 +164,7 @@ app.innerHTML = `
     <div class="t-scroll"><div class="t-wrap">
       <div class="t-paper" id="paper"></div><div class="t-deco" id="deco"></div>
     </div></div>
+    <aside class="t-props" id="propsPanel"></aside>
   </div>`;
 
 const paper = document.getElementById('paper')!;
@@ -186,6 +188,7 @@ const label = (id: string, html: string, tip: string, text = '') => {
 };
 
 label('sidebar', ICONS.panelLeft, t('Outline — show or hide the document map'));
+label('props', ICONS.panelRight, t('Format — show or hide the properties panel'));
 label('mb', ICONS.bold, t('Bold (⌘B)'));
 label('mi', ICONS.italic, t('Italic (⌘I)'));
 label('mu', ICONS.underline, t('Underline (⌘U)'));
@@ -343,7 +346,8 @@ for (const spec of menuItems()) {
   byId('moreMenu').insertBefore(b, byId('about'));
 }
 
-for (const spec of panels()) {
+// LEFT — navigation: what is in this document.
+for (const spec of panels('left')) {
   const tab = document.createElement('button');
   tab.dataset.tab = spec.id;
   tab.textContent = labelText(spec.label);
@@ -357,6 +361,30 @@ for (const spec of panels()) {
   // implemented it was silently dead. Wired to the same signal everything else
   // repaints on.
   if (spec.update) store.on(() => spec.update!(panel, featureCtx));
+}
+
+// RIGHT — the properties of whatever is selected. Stacked rather than tabbed:
+// a property panel answers "what is this thing", and hiding half the answer
+// behind a tab is how a formatting panel becomes a place people stop looking.
+for (const spec of panels('right')) {
+  const panel = document.createElement('div');
+  panel.className = 't-panel';
+  panel.dataset.panel = spec.id;
+  // a DIV, not an <h3>: these are chrome, and a real heading here joins the
+  // document's own headings for anything that collects them
+  const head = document.createElement('div');
+  head.className = 't-section';
+  head.textContent = labelText(spec.label);
+  panel.appendChild(head);
+  byId('propsPanel').appendChild(panel);
+  spec.mount(panel, featureCtx);
+  if (spec.update) store.on(() => spec.update!(panel, featureCtx));
+}
+if (!byId('propsPanel').children.length) {
+  const empty = document.createElement('p');
+  empty.className = 't-props-empty';
+  empty.textContent = t('Select something to see its properties.');
+  byId('propsPanel').appendChild(empty);
 }
 
 // feature shortcuts, ahead of the editor's own so a feature can claim one
@@ -455,6 +483,17 @@ byId('lout').addEventListener('mousedown', e => { e.preventDefault(); editor.ind
 
 byId('sidebar').addEventListener('click', () => {
   document.querySelector('.t-main')!.classList.toggle('t-side-off');
+});
+byId('props').addEventListener('click', () => {
+  document.querySelector('.t-main')!.classList.toggle('t-props-off');
+});
+// `[` and `]` collapse the panels, as they do in slides and dash
+window.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target as HTMLElement)?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
+  if (e.key === '[') document.querySelector('.t-main')!.classList.toggle('t-side-off');
+  if (e.key === ']') document.querySelector('.t-main')!.classList.toggle('t-props-off');
 });
 
 document.getElementById('kind')!.addEventListener('change', (e) => {
@@ -828,4 +867,11 @@ dirty = false; paintTitle();
 // boots blank. The agent that needed this hook found that by applying the patch
 // and loading the app, not by reading, and said so in its note; this comment is
 // here so the next person does not move it back.
+// The properties panel starts CLOSED, and this is arithmetic rather than taste:
+// the page is 816px plus a 250px note gutter, so with both panels open the
+// document needs 1566px before it stops being scrolled sideways. A laptop does
+// not have that. It opens on ] or the toolbar button, and slides makes the same
+// trade on a phone by booting with both panels collapsed.
+if (window.innerWidth < 1566) document.querySelector('.t-main')!.classList.add('t-props-off');
+
 for (const f of readyFns()) f(featureCtx);

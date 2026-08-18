@@ -81,8 +81,21 @@ export interface MenuSpec {
 
 export interface PanelSpec {
   id: string;
-  /** tab label beside Outline / Review / Signatures */
+  /** tab label */
   label: Label;
+  /**
+   * Which side it lives on, and this is not decoration.
+   *
+   * The suite's rule, written down in dash/src/panels.ts and copied from
+   * slides: LEFT is navigation — the list of things in the document — and
+   * RIGHT is the properties of whatever is selected. Two Bento apps that lay
+   * themselves out differently read as two products.
+   *
+   * Getting it wrong is not merely untidy: paragraph layout first landed on
+   * the left, beside Outline and Review, which put "properties of this
+   * paragraph" in the column that answers "what is in this document".
+   */
+  side?: 'left' | 'right';
   order?: number;
   /** called once with the panel's host element */
   mount(host: HTMLElement, ctx: FeatureContext): void;
@@ -140,7 +153,8 @@ const byOrder = <T extends { order?: number }>(a: T[]): T[] =>
 export const tools = (group: ToolSpec['group']): ToolSpec[] =>
   byOrder(TOOLS.filter(t => t.group === group));
 export const menuItems = (): MenuSpec[] => byOrder(MENU);
-export const panels = (): PanelSpec[] => byOrder(PANELS);
+export const panels = (side: 'left' | 'right' = 'left'): PanelSpec[] =>
+  byOrder(PANELS.filter(p => (p.side ?? 'left') === side));
 export const keys = (): KeySpec[] => KEYS;
 
 /** Does this event match a registered shortcut? Returns the first match. */

@@ -1058,6 +1058,9 @@ const trim = (v: number): string => String(Math.round(v * 10) / 10);
 
 registerPanel({
   id: 'layout',
+  // RIGHT: these are the properties of the selected paragraph, not a list of
+  // what is in the document. The suite's rule, from dash/src/panels.ts.
+  side: 'right',
   label: t('Layout'),
   order: 40,
   mount: mountPanel,
