@@ -108,7 +108,7 @@ mean more than "any document that saves the way Bento does":
   "export this page" tools. WKWebView DROPS these silently without a download
   delegate, so the button appears to do nothing, which is the worst possible
   failure for a save. Downloads land in the app's Documents folder (visible in
-  Files under Bento Tray) with a collision-safe name and a confirmation. A
+  Files under bento/tray) with a collision-safe name and a confirmation. A
   picker per save would punish an app that saves often, and a download cannot
   overwrite the user's original anyway — that is what the FSA path is for.
 
@@ -276,7 +276,7 @@ back to downloading the rollback copy, which is where it used to go.
 
 Four routes, all landing on the same in-place editing:
 
-1. **Files** — the app's folder appears under *On My iPhone → Bento Tray*, and
+1. **Files** — the app's folder appears under *On My iPhone → bento/tray*, and
    the Browse tab navigates the whole Files hierarchy: iCloud Drive, Dropbox,
    Google Drive, anything with a File Provider. Tap a document to open it where
    it lives; edits go back to that file.

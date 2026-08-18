@@ -1399,6 +1399,18 @@ Naming notes, so this is not relitigated:
   it, so confirm there before submitting.
 - The App Store name carries no slash. Per the 2026-07-24 naming entry, `/` is
   a mark, never a stored name.
+- **But the ON-DEVICE name does carry it: `CFBundleDisplayName` is `bento/tray`**
+  (2026-08-18). These are different fields and only one of them is a stored name.
+  The App Store listing name lives in App Store Connect and stays "Bento Tray";
+  the bundle display name is a LABEL — it drives the home-screen caption, the
+  document browser's title ("bento/tray Recents") and the app's folder in Browse,
+  and iOS never turns it into a path, because the container on disk is addressed
+  by uuid. Verified on iOS 26: all three render it verbatim, nothing escaped or
+  substituted. The 2026-07-24 rule scopes the ban to "filenames, URLs, package
+  names and social handles… anywhere a name must be stored or typed", and a
+  display label is none of those — it is exactly where the mark belongs. Recorded
+  because "the App Store name carries no slash" reads at a glance as "the app is
+  never called bento/tray", and someone will otherwise "fix" the plist.
 
 **One app, not two.** A separate "generic HTML runner" listing would risk
 guideline 4.3 (duplicate apps from one developer) and doubles the listing
