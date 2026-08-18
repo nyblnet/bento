@@ -450,6 +450,38 @@ Left open deliberately: `grid.ts` was owned by another agent when this was
 found, and `SUBTOTAL`'s rig asserts the divergence as a DIFFERENCE rather than
 quietly matching the formula to the grid — matching would have buried it.
 
+
+### 18. OPEN DECISION — should `SUBTOTAL` in a cell formula see the viewer's filter?
+
+Not a defect. A decision that fell out of adding `SUBTOTAL`, and it is recorded
+rather than taken because it crosses a boundary the formula engine has kept.
+
+`SUBTOTAL(109, …)`'s whole meaning is *ignore rows a filter has hidden* — a
+`SUBTOTAL` that ignores the filter is just `SUM`, which makes the function
+pointless in the use it exists for. So it wants the view.
+
+But in dash the filter is **view state**: `store.ts:952` — *"never in the
+document, never synced, never undoable by default"*. `cellformula.ts` takes a
+DOCUMENT. Wiring the reported hook (`CellSource.hiddenRow`, filled from
+`store.order`) makes the formula engine view-aware, and then two collaborators
+with different filters compute different numbers for the same cell.
+
+Two things make that less alarming than it sounds, both checked rather than
+assumed: a computed value is **never persisted** (`CellOverride.v` is a hand
+correction, `f` is what is stored, and the CRDT syncs `f`), so nothing diverges
+in the FILE; and Excel behaves the same way — the difference is only that
+Excel's filters are shared document state and dash's are not.
+
+**The case that already works needs none of this.** Every imported Excel table
+arrived with a dead total because `SUBTOTAL` was not implemented at all; it is
+implemented now and goes live through the import gate. An unmarked range means
+nothing is hidden, which is correct on an unfiltered sheet and correct for a
+freshly imported one. What is open is only `SUBTOTAL` inside a cell formula on a
+sheet the reader has filtered.
+
+Left unwired deliberately. The engine half is done and exported (`markHidden`,
+`Shaped.__hidden`); what is missing is the decision, not the code.
+
 ---
 
 ## Status, 2026-08-18
