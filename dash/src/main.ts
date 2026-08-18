@@ -33,7 +33,7 @@ import { FileWriteBack } from './writeback.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
 import { mountAbout, openAbout, rememberVersion, checkAtLaunch } from './about.ts'
 import { runSql, sqlRows } from './sql.ts'
-import { mountPanels } from './panels.ts'
+import { mountPanels, type Panels } from './panels.ts'
 import { installStory } from './story.ts'
 import { Dashboard } from './dashboard.ts'
 import { SyncSession } from './sync/session.ts'
@@ -72,6 +72,9 @@ import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformu
 import { Store, type Patch, setColumnType } from './store.ts'
 import { starterDoc } from './starter.ts'
 import { inferComputedType } from './computedtype.ts'
+import {
+  blankCondFmtRule, condFmtPatch, describeCondFmtRule, readCondFmt, readOperand,
+} from './condfmtui.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
 import { keyToAction, normalize } from './select.ts'
@@ -657,9 +660,16 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // observed sitting under a different sheet entirely.
   grid.onViewChange = (text) => { viewEl.textContent = text }
   grid.onFilterMenu = (colId, x, y) => openFilterMenu(store, grid, colId, x, y, viewEl)
+  // ASSIGNED AT mountPanels, below. The context menu is wired before the panels
+  // exist and its "More conditional formatting…" item has to reach them, so the
+  // reference is late-bound rather than the wiring re-ordered — moving
+  // mountPanels above this would break the chaining of grid.onSelectionChange
+  // that the comment at its call site is about.
+  let panels: Panels | null = null
   grid.onContextMenu = (row, ci, x, y) => openCellMenu(store, grid, row, ci, x, y, {
     pasteSpecial: (px, py) => openPasteSpecial(px, py),
     split: () => { void textToColumns() },
+    condFmt: () => panels?.reveal(t('Conditional formatting')),
   })
 
   // keyboard: the grid owns the key set when nothing else has focus
@@ -860,7 +870,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // Sheets on the left, properties on the right — the suite's shared chrome.
   // AFTER grid.onSelectionChange is set: mountPanels CHAINS that callback
   // rather than replacing it, so the formula bar and status bar keep working.
-  mountPanels({ store, grid, body: app.querySelector<HTMLElement>('.dx-body')! })
+  panels = mountPanels({ store, grid, body: app.querySelector<HTMLElement>('.dx-body')! })
 
 
   // Comments. AFTER mountPanels, which chains grid.onSheetChange.
@@ -2403,7 +2413,12 @@ function openCellMenu(
   // The two data-shaping commands. Passed in rather than imported because they
   // are closures over the live grid and the findings strip, and this menu is a
   // module-level function; the alternative was a second copy of the wiring.
-  hooks: { pasteSpecial: (x: number, y: number) => void; split: () => void },
+  hooks: {
+    pasteSpecial: (x: number, y: number) => void
+    split: () => void
+    /** open the panel's full rule editor — every kind the engine implements */
+    condFmt: () => void
+  },
 ): void {
   const sheet = grid.sheet
   const col = sheet.columns[ci]
@@ -2421,8 +2436,11 @@ function openCellMenu(
     `<button data-a="paste-special">${t('Paste special…')}</button>` +
     `<button data-a="split">${t('Split into columns…')}</button>` +
     `<div class="dx-pop-sep"></div>` +
+    `<button data-a="cf-gt">${t('Highlight cells greater than…')}</button>` +
+    `<button data-a="cf-dup">${t('Highlight duplicate values')}</button>` +
     `<button data-a="cf-scale">${t('Colour scale')}</button>` +
     `<button data-a="cf-bar">${t('Data bars')}</button>` +
+    `<button data-a="cf-more">${t('More conditional formatting…')}</button>` +
     `<button data-a="cf-off">${t('Remove formatting')}</button>`)
   el.querySelectorAll<HTMLElement>('button').forEach((b) => {
     b.onclick = () => {
@@ -2460,14 +2478,40 @@ function openCellMenu(
       else if (a === 'clear') grid.clearSelection()
       else if (a === 'paste-special') hooks.pasteSpecial(x, y)
       else if (a === 'split') hooks.split()
-      else if (col && (a === 'cf-scale' || a === 'cf-bar' || a === 'cf-off')) {
+      else if (a === 'cf-more') hooks.condFmt()
+      else if (col && a === 'cf-gt') {
+        // THE ONE EVERYBODY REACHES FOR, one click from where they right-clicked.
+        // "Flag anyone over 40 hours" was the task that found this feature
+        // unreachable, and routing it through the panel would answer it in three
+        // moves. The panel is still there for the other five kinds and for the
+        // colours; this is the shortcut, and it writes the same rule object.
+        void askForm({
+          title: t('Highlight cells greater than…'),
+          fields: [{ key: 'n', label: t('Value'), value: '0' }],
+          submit: t('Highlight'),
+          check: (v) => (v.n.trim() === '' ? t('A value to compare against.') : null),
+        }).then((got) => {
+          if (!got) return
+          const rule = blankCondFmtRule('cellValue')
+          if (rule.kind === 'cellValue') rule.value = readOperand('>', got.n)
+          const next = [...readCondFmt(sheet, col.id), rule]
+          store.commit(condFmtPatch(sheet, col.id, next) as Patch)
+          toast(describeCondFmtRule(rule))
+        })
+      } else if (col && a === 'cf-dup') {
+        // Job 4's other half, and the same story: implemented, persisted,
+        // painted, and unreachable.
+        const rule = blankCondFmtRule('duplicates')
+        store.commit(condFmtPatch(sheet, col.id, [...readCondFmt(sheet, col.id), rule]) as Patch)
+        toast(describeCondFmtRule(rule))
+      } else if (col && (a === 'cf-scale' || a === 'cf-bar' || a === 'cf-off')) {
         // Conditional formats are DOCUMENT data — they travel with the file —
-        // and live in an additive field, so an older build keeps them.
-        const cf = { ...((sheet as unknown as { condfmt?: Record<string, unknown> }).condfmt ?? {}) }
-        if (a === 'cf-off') delete cf[col.id]
-        else if (a === 'cf-scale') cf[col.id] = [{ kind: 'colorScale', colors: ['#fee2e2', '#fef9c3', '#dcfce7'] }]
-        else cf[col.id] = [{ kind: 'dataBar', color: '#F7A600', negativeColor: '#E1616C' }]
-        store.commit({ op: 'setSheetProps', sheet: sheet.id, props: { condfmt: cf } } as never)
+        // and live in an additive field, so an older build keeps them. The two
+        // presets REPLACE the column's rules rather than appending, which is
+        // what they have always done: a colour scale is a whole-column
+        // treatment and stacking two of them is never what the click meant.
+        const rules = a === 'cf-off' ? [] : [blankCondFmtRule(a === 'cf-scale' ? 'colorScale' : 'dataBar')]
+        store.commit(condFmtPatch(sheet, col.id, rules) as Patch)
       }
       el.remove()
     }
