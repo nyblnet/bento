@@ -32,6 +32,13 @@
   --page-w: 816px; --page-h: 1056px;
   --mar-x: 104px; --mar-t: 104px; --mar-b: 104px;
   --gutter: 250px;
+
+  /* find highlights — they sit ON the page, so like --paper they do NOT theme:
+     a match must look the same to the person proofing at midnight as it will
+     when the page is printed. */
+  --find-hit: #ffe9a8;
+  --find-cur: #f7a600;
+  --find-ink: #1a1a1a;
 }
 
 /* LIGHT — the suite's shared palette, character for character with
@@ -387,3 +394,33 @@ html, body {
    "Update this file" button was visible before any check had run. */
 .t-btn[hidden], [hidden] { display: none !important; }
 .t-dlg-foot { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+/* ————— find and replace —————
+   The matches are painted with the CSS Custom Highlight API, so nothing is
+   inserted into the page: no wrapper element inside contentEditable to move
+   the caret, and nothing that `readBlock` could read back into the model.
+   The current match is the ACCENT; the others are a pale wash of it, which is
+   the distinction a person scanning the page needs at a glance. */
+::highlight(t-find) { background-color: var(--find-hit); color: var(--find-ink); }
+::highlight(t-find-cur) { background-color: var(--find-cur); color: var(--find-ink); }
+
+.t-find { display: grid; gap: 7px; }
+.t-find input[type="text"] {
+  width: 100%; font: inherit; font-size: 12px; padding: 5px 7px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--field); color: var(--ink);
+}
+.t-find input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.t-find-opts { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); }
+.t-find-opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.t-find-bar { display: flex; align-items: center; gap: 5px; }
+.t-find-count { flex: 1; font-size: 11.5px; color: var(--muted); }
+.t-find-actions { display: flex; gap: 5px; }
+.t-find-actions button { flex: 1; }
+.t-find button {
+  font: inherit; font-size: 11.5px; padding: 3px 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--chrome); color: var(--ink-2);
+}
+.t-find button:hover:not(:disabled) { background: var(--chrome-2); }
+.t-find button:disabled { opacity: .45; cursor: default; }
