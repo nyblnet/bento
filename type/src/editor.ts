@@ -319,6 +319,26 @@ export class Editor {
     return true;
   }
 
+  /** Insert a picture at the caret as its own block. */
+  insertImage(image: { src: string; alt?: string }): void {
+    const c = this.caret();
+    if (!c) return;
+    const i = this.store.doc.body.findIndex(b => b.id === c.id);
+    if (i < 0) return;
+    const here = this.store.doc.body[i];
+    const block: Block = { id: uid(), kind: 'image', text: '', image: { ...image } };
+    // a following paragraph, so there is somewhere to type after the picture —
+    // an image as the last block leaves the caret nowhere to go
+    const after: Block = { id: uid(), kind: 'para', text: '' };
+    const empty = here.kind === 'para' && here.text === '';
+    this.store.breakRun();
+    this.#runId = null;
+    this.store.commit(d => { d.body.splice(empty ? i : i + 1, empty ? 1 : 0, block, after); });
+    this.render();
+    this.setCaret({ id: after.id, at: 0 });
+    this.onChange?.();
+  }
+
   /** Empty list item + Enter: outdent one level, or leave the list entirely. */
   #exitList(c: Caret): void {
     this.store.breakRun();

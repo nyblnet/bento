@@ -13,4 +13,6 @@
 // Anything order-sensitive should say so with an explicit `order` instead of
 // relying on this list.
 
+import './image.ts';
+
 export {};

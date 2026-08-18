@@ -77,6 +77,20 @@ function lineBoxes(host: HTMLElement, page: PageSpec): LineBox[] {
       if (rect.height) out.push({ top: rect.top - top0, bottom: rect.bottom - top0 });
     }
   }
+  // ATOMIC BLOCKS — an image, and later a display formula — contain no text
+  // nodes, so the walker above never sees them. Left out, they contributed
+  // height to the flow that pagination did not know about, and every page after
+  // the first image overflowed by exactly the image's height.
+  //
+  // One box for the whole element is not an approximation, it is the truth: an
+  // image cannot be broken across a page, so "does it fit in what is left" is
+  // the only question, and a box that does not fit pushes the break to its top
+  // — which moves the whole image to the next page. That falls out of the
+  // existing algorithm with no special case.
+  for (const el of Array.from(host.querySelectorAll<HTMLElement>('[data-atomic]'))) {
+    const rect = el.getBoundingClientRect();
+    if (rect.height) out.push({ top: rect.top - top0, bottom: rect.bottom - top0 });
+  }
   return out.sort((a, b) => a.top - b.top);
 }
 
@@ -172,6 +186,18 @@ export function paginate(doc: TypeDoc, host: HTMLElement): Metrics {
       }
       seen.add(key);
       reserved = need; end = e; notes = ids;
+    }
+
+    // NO PROGRESS. One box is taller than the page can ever be — an image
+    // larger than the paper, which a file can perfectly well contain. The break
+    // would be placed at the box's own top, the next page would start where
+    // this one did, and the loop would spin until the guard, producing hundreds
+    // of empty pages. Give the oversized box its own page and move past it: it
+    // will overflow the margin, which is visible and fixable, rather than
+    // hanging the document, which is neither.
+    if (isFinite(end) && end <= start + 0.5) {
+      const next = boxes.find(b => b.top > start + 0.5);
+      end = next ? next.top : Infinity;
     }
 
     pages.push({ n: pages.length + 1, start, end, notes, reserved });

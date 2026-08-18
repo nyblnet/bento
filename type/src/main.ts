@@ -397,6 +397,11 @@ const schedule = () => {
   idle = setTimeout(repaginate, 180) as unknown as number;
 };
 
+// A picture that finishes decoding changes the flow's height, so the pages have
+// to be recomputed — see renderImage. Listening on the paper rather than per
+// image keeps this to one handler however many pictures a document has.
+paper.addEventListener('t-relayout', () => schedule());
+
 const paint = () => {
   const d = store.doc;
   const notes = Object.keys(d.footnotes).length;

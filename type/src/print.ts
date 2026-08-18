@@ -79,6 +79,10 @@ h2 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; hyphens: none; }
 h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: #3a3d44; hyphens: none; }
 p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+.t-figure { margin: 12px 0; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+.t-figure img { max-width: 100%; height: auto; }
+.t-figure[data-align="left"] { text-align: left; }
+.t-figure[data-align="right"] { text-align: right; }
 .t-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0 0 12px; font-size: .95em; }
 .t-table th, .t-table td { border-bottom: 1px solid #c3cad4; padding: 6px 10px 6px 0;
                            vertical-align: top; text-align: start; text-indent: 0; hyphens: none; }
@@ -147,6 +151,14 @@ function bodyHtml(body: Block[]): string {
     if (tok.t === 'open') out.push(`<${tok.kind}>`);
     else if (tok.t === 'close') out.push(`</${tok.kind}>`);
     else if (tok.t === 'table') out.push(tableHtml(tok.rows, tok.head));
+    else if (tok.block.kind === 'image') {
+      const b = tok.block, im = b.image;
+      const w = im?.w ? ` style="width:${Math.round(im.w * 100)}%"` : '';
+      const al = im?.align ? ` data-align="${esc(im.align)}"` : '';
+      out.push(`<figure class="t-figure" data-id="${esc(b.id)}"${al}>` +
+               (im ? `<img src="${esc(im.src)}" alt="${esc(im.alt ?? '')}"${w}>` : '') +
+               `</figure>`);
+    }
     else {
       const b = tok.block;
       out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}">${blockHtml(b)}</${TAG[b.kind]}>`);

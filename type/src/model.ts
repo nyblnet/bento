@@ -17,7 +17,7 @@ export const FORMAT = 'bento/type';
 export const VERSION = 1;
 
 /** The kinds of block a document is made of. */
-export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'cell';
+export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'cell' | 'image';
 
 /**
  * Where a table cell sits. Carried on EVERY cell of the table, not on a table
@@ -44,6 +44,39 @@ export interface CellRef {
   /** cells of the first row, rendered as <th> */
   head?: boolean;
 }
+
+/**
+ * A picture in the document.
+ *
+ * `src` is a data: URI (embedded, so the file stays self-contained) or an
+ * external URL (referenced, so the file stays small). Embedding is the default
+ * because the whole promise is that one file IS the document — a reference that
+ * breaks when the document is emailed is a worse failure than a large file.
+ *
+ * `w` is a fraction of the text measure (0–1), not pixels: the page size is a
+ * document property that can change, and an image sized in pixels would stop
+ * fitting the moment somebody switched to A4.
+ */
+export interface ImageRef {
+  src: string;
+  alt?: string;
+  /** width as a fraction of the text column, default 1 */
+  w?: number;
+  align?: 'left' | 'center' | 'right';
+}
+
+/** Above this an embedded image is refused, and a URL offered instead. */
+export const IMAGE_EMBED_BUDGET = 4 * 1024 * 1024;
+
+/**
+ * Sources an image may have.
+ *
+ * A document is UNTRUSTED INPUT (docs/DECISIONS.md), and `src` goes straight
+ * into an <img>. `javascript:` is the obvious attack and is not the only one —
+ * anything that is not plainly an image reference is refused rather than
+ * guessed at.
+ */
+export const SAFE_IMG = /^(data:image\/(png|jpe?g|gif|webp|avif|svg\+xml)[;,]|https?:\/\/|\.{0,2}\/)/i;
 
 /** The list kinds, which are the ones that carry `level` and group when rendered. */
 export const LIST_KINDS: ReadonlySet<BlockKind> = new Set<BlockKind>(['ul', 'ol']);
@@ -87,6 +120,8 @@ export interface Block {
   level?: number;
   /** table placement; only meaningful on a `cell` block */
   cell?: CellRef;
+  /** the picture; only meaningful on an `image` block */
+  image?: ImageRef;
 }
 
 /** Page geometry, in CSS px at 96dpi. US Letter by default. */
@@ -204,7 +239,7 @@ export function parseDoc(raw: string): ParseResult {
   const body: Block[] = [];
   (json.body as unknown[]).forEach((b, i) => {
     if (!isObj(b)) { repaired.push(`dropped a block at ${i} that was not an object`); return; }
-    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell'].includes(b.kind as string)
+    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'image'].includes(b.kind as string)
       ? b.kind as BlockKind : 'para';
     if (kind !== b.kind) repaired.push(`block ${i}: unknown kind ${JSON.stringify(b.kind)} read as a paragraph`);
     const text = typeof b.text === 'string' ? b.text : '';
@@ -250,6 +285,30 @@ export function parseDoc(raw: string): ParseResult {
       } else {
         out.kind = 'para';
         repaired.push(`block ${i}: table cell with no usable placement read as a paragraph`);
+      }
+    }
+    // An image with no usable src is not an image. Repaired to a paragraph
+    // carrying its alt text, so the words survive even when the picture does
+    // not — a silently vanished figure is the worse outcome.
+    if (kind === 'image') {
+      const im = isObj(b.image) ? b.image as Partial<ImageRef> : undefined;
+      if (im && typeof im.src === 'string' && im.src && SAFE_IMG.test(im.src)) {
+        out.image = { src: im.src };
+        if (typeof im.alt === 'string') out.image.alt = im.alt;
+        if (typeof im.w === 'number' && im.w > 0 && im.w <= 1) out.image.w = im.w;
+        else if (im.w !== undefined) {
+          // Dropped rather than clamped: `w` is a FRACTION of the measure, so a
+          // value outside 0–1 is not a big number, it is a different unit —
+          // most likely pixels — and guessing which would be worse than
+          // falling back to full width. Reported, because a silent repair is
+          // one the author cannot learn from.
+          repaired.push(`block ${i}: image width ${JSON.stringify(im.w)} is not a fraction of the measure — using full width`);
+        }
+        if (im.align === 'left' || im.align === 'center' || im.align === 'right') out.image.align = im.align;
+      } else {
+        out.kind = 'para';
+        if (!out.text && typeof im?.alt === 'string') out.text = im.alt;
+        repaired.push(`block ${i}: image with no usable source read as a paragraph`);
       }
     }
     body.push(out);

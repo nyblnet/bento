@@ -251,6 +251,20 @@ html, body {
 .t-paper h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--paper-ink-2); hyphens: none; }
 .t-paper p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 .t-paper p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+/* ————— figures ————— */
+.t-paper .t-figure {
+  margin: 14px 0; text-align: center;
+  /* an image is atomic: it must not be split across a page, and pagination is
+     told the same thing by data-atomic */
+  break-inside: avoid; page-break-inside: avoid;
+}
+.t-paper .t-figure img { max-width: 100%; height: auto; vertical-align: top; }
+.t-paper .t-figure[data-align="left"] { text-align: left; }
+.t-paper .t-figure[data-align="right"] { text-align: right; }
+/* a source that will not load leaves a visible frame rather than a silent gap
+   that pagination has already reserved height for */
+.t-paper .t-figure[data-broken] img { min-height: 80px; outline: 1px dashed var(--paper-rule); }
+
 /* ————— tables —————
    Ruled, not boxed: a contract table wants horizontal rules and air, not a grid
    of borders. `table-layout: fixed` so a long cell widens nothing — the measure

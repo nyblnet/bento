@@ -17,6 +17,8 @@ export const TAG: Record<Block['kind'], string> = {
   // <table> around them are not in the model — see groupBlocks, and Block.level
   // / Block.cell for why the document stays flat.
   ul: 'li', ol: 'li', cell: 'td',
+  // atomic: rendered by renderImage, never by the generic path
+  image: 'figure',
 };
 
 /**
@@ -107,7 +109,52 @@ export function blockHtml(b: Block): string {
   return html || '<br>';
 }
 
+/**
+ * A picture.
+ *
+ * `data-atomic` is what tells pagination this block has a height but no text
+ * nodes — without it the TreeWalker in paginate.ts never sees the image and
+ * every page after it overflows by exactly its height. Any future block that
+ * renders as a box rather than as text (a display formula, a chart) must carry
+ * the same attribute.
+ *
+ * The alt text is also the caption fallback and the redline's handle on the
+ * block, which is why it lives in the model rather than only in the markup.
+ */
+export function renderImage(b: Block): HTMLElement {
+  const fig = document.createElement('figure');
+  fig.className = 't-figure';
+  fig.dataset.id = b.id;
+  fig.dataset.kind = b.kind;
+  fig.dataset.atomic = '1';
+  const im = b.image;
+  if (!im) return fig;
+  if (im.align) fig.dataset.align = im.align;
+  const img = document.createElement('img');
+  img.src = im.src;
+  img.alt = im.alt ?? '';
+  if (im.w) img.style.width = `${Math.round(im.w * 100)}%`;
+  // PAGINATION MUST RE-RUN WHEN THE PICTURE ARRIVES. An image decodes
+  // asynchronously, so the pass that runs immediately after render measures it
+  // as one line of alt text. Measured: a 500px picture paginated as 2 pages
+  // before it decoded and 3 after, with the first break moving 836 → 560. And
+  // because print reproduces the editor's pagination exactly, that is a
+  // document that prints with the wrong breaks — silently, and only when it
+  // contains a picture.
+  //
+  // The renderer stays pure with respect to the document: it announces that the
+  // layout changed and does not know who is listening.
+  const relayout = () => fig.dispatchEvent(new CustomEvent('t-relayout', { bubbles: true }));
+  img.addEventListener('load', relayout, { once: true });
+  // An image that fails to load must not leave an invisible gap that
+  // pagination has already reserved space for.
+  img.addEventListener('error', () => { fig.dataset.broken = '1'; relayout(); }, { once: true });
+  fig.appendChild(img);
+  return fig;
+}
+
 export function renderBlock(b: Block): HTMLElement {
+  if (b.kind === 'image') return renderImage(b);
   const el = document.createElement(TAG[b.kind]);
   el.dataset.id = b.id;
   el.dataset.kind = b.kind;
