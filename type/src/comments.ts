@@ -133,7 +133,7 @@
 import { shift, type Mark } from './inline.ts';
 import { isNoteAtom } from './render.ts';
 import { uid, type Block, type TypeDoc } from './model.ts';
-import { registerTool, registerPanel, registerKey, type FeatureContext } from './features.ts';
+import { registerTool, registerPanel, registerKey, registerMenuItem, registerReady, type FeatureContext } from './features.ts';
 import { t } from './i18n.ts';
 
 // ───────────────────────────────────────────────────────────────── the shape
@@ -902,3 +902,45 @@ registerPanel({
   },
   update(_host, ctx) { refreshPanel?.(); paintLayer(ctx); },
 });
+
+// ─────────────────────────────────────────────────────── showing and hiding
+//
+// A VIEWER preference, kept beside the theme rather than in the document: it is
+// about reading this file today, not about the file. Two people opening the
+// same document disagree about whether they want the margin full of review,
+// and neither answer belongs in bytes they both sign.
+//
+// It hides the APPARATUS — highlights and cards — and never the text, and it
+// changes nothing in `doc.comments`, so a hidden thread is still saved, still
+// exported, and still there when it is turned back on.
+
+const HIDE_KEY = 'bento-type-hide-comments';
+
+export const commentsHidden = (): boolean => {
+  try { return localStorage.getItem(HIDE_KEY) === '1'; } catch { return false; }
+};
+
+export function setCommentsHidden(on: boolean): void {
+  try { on ? localStorage.setItem(HIDE_KEY, '1') : localStorage.removeItem(HIDE_KEY); }
+  catch { /* storage blocked — the class below still applies for this session */ }
+  document.documentElement.classList.toggle('t-hide-comments', on);
+}
+
+/** Apply the remembered choice at boot. */
+export const applyCommentVisibility = (): void => {
+  document.documentElement.classList.toggle('t-hide-comments', commentsHidden());
+};
+
+registerMenuItem({
+  id: 'comments-visibility',
+  get label() { return commentsHidden() ? t('Show comments') : t('Hide comments'); },
+  order: 15,
+  run(ctx) {
+    setCommentsHidden(!commentsHidden());
+    ctx.refresh();
+    ctx.toast(commentsHidden() ? t('Comments hidden') : t('Comments shown'));
+  },
+});
+
+// the remembered choice, applied once the app exists
+registerReady(() => applyCommentVisibility());

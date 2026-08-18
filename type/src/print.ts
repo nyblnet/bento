@@ -52,13 +52,18 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c =>
  * unreachable from content.
  */
 function printCss(doc: TypeDoc): string {
-  const p = doc.page;
+  // the document's typeface, so paper matches screen — same fallback as
+  // styles.css, so a file that says nothing prints exactly as it always did
+  const p = { ...doc.page,
+    __fontSize: `${doc.type?.size ?? 17}px`,
+    __fontFamily: doc.type?.family ?? '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif',
+  };
   return `
 @page { size: ${p.width}px ${p.height}px; margin: 0; }
 * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 html, body { margin: 0; padding: 0; background: #fff; }
 body {
-  font: 17px/1.62 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font: ${p.__fontSize}/1.62 ${p.__fontFamily};
   color: #1a1a1a; hyphens: auto; -webkit-hyphens: auto;
 }
 .t-page {

@@ -536,12 +536,7 @@ features.registerTool({
   run: insertToc,
 });
 
-features.registerMenuItem({
-  id: 'toc-numbering',
-  get label() { return t('Number sections'); },
-  order: 40,
-  run: toggleNumbering,
-});
+// 'Number sections' is a document PROPERTY and lives in the properties panel.
 
 features.registerMenuItem({
   id: 'toc-exclude',

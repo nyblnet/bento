@@ -233,6 +233,20 @@ export interface TypeDoc {
   comments?: Record<string, CommentThread>;
   /** document-wide paragraph defaults; absent means the built-in ones */
   layout?: { align?: Block['align']; sb?: number; sa?: number; lh?: number; ind?: number };
+  /**
+   * The document's typeface and base size.
+   *
+   * A DOCUMENT property, not a viewer preference: a contract is typeset, and
+   * the person who wrote it chose how it reads on paper. The theme follows the
+   * reader; the typeface does not.
+   *
+   * `family` is a CSS font stack, not a single name, and the choices are stacks
+   * that resolve on every platform without shipping a font file — a
+   * self-contained document cannot rely on a download, and an embedded face is
+   * the separate `fonts` field. `size` is px, the unit the page geometry is
+   * already in.
+   */
+  type?: { family?: string; size?: number };
   revisions: Revision[];
   signatures: Signature[];
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>;

@@ -355,13 +355,25 @@ mountTools('gFormat', 'format');
 mountInsertMenu();
 mountTools('gReview', 'review');
 
+// Menu rows keep a reference to their spec so their labels can be RE-READ when
+// the menu opens. A toggle's label is a function of state — "Hide comments"
+// becomes "Show comments" — and rendering it once at mount left it permanently
+// wrong after the first use, describing the action you had already taken.
+const menuRows: Array<[HTMLElement, ReturnType<typeof menuItems>[number]]> = [];
 for (const spec of menuItems()) {
   const b = document.createElement('button');
   b.type = 'button';
   b.innerHTML = (spec.icon ?? '') + `<span>${labelText(spec.label)}</span>`;
   b.addEventListener('click', () => spec.run(featureCtx));
   byId('moreMenu').insertBefore(b, byId('about'));
+  menuRows.push([b, spec]);
 }
+const refreshMenuLabels = () => {
+  for (const [b, spec] of menuRows) {
+    const span = b.querySelector('span');
+    if (span) span.textContent = labelText(spec.label);
+  }
+};
 
 // LEFT — navigation: what is in this document.
 for (const spec of panels('left')) {
@@ -425,6 +437,7 @@ const paintToolStates = () => {
 const moreMenu = byId('moreMenu');
 byId('more').addEventListener('click', e => {
   e.stopPropagation();
+  if (moreMenu.hidden) refreshMenuLabels();
   moreMenu.hidden = !moreMenu.hidden;
 });
 document.addEventListener('click', () => { moreMenu.hidden = true; });
@@ -439,7 +452,17 @@ let metrics: Metrics = { pages: [], ms: 0 };
  * one. It runs on an idle beat instead, which is what makes typing feel free.
  */
 let idle: number | undefined;
+// The document's typeface, onto the paper. Set before pagination measures
+// anything: a different face changes every line box, so measuring first would
+// paginate the old type.
+const applyDocType = () => {
+  const ty = store.doc.type;
+  paper.style.setProperty('--doc-family', ty?.family ?? '');
+  paper.style.setProperty('--doc-size', ty?.size ? `${ty.size}px` : '');
+};
+
 const repaginate = () => {
+  applyDocType();
   metrics = paginate(store.doc, paper);
   drawPages(store.doc, paper, deco, metrics);
   // page numbers are knowable only here, so anything that shows one is told now

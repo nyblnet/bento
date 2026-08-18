@@ -25,6 +25,8 @@ import { registerPanel, registerSelection, type FeatureContext } from './feature
 import { ICONS } from './icons.ts';
 import { t } from './i18n.ts';
 import { MAX_TABLE_COLS, type Block, type BlockKind } from './model.ts';
+import { PAPER, openPageSetup, withSize, withOrientation, type SizeId } from './layout.ts';
+import { sectionSettings, setNumbered } from './toc.ts';
 
 // ─────────────────────────────────────────────────────────────── small parts
 
@@ -275,15 +277,99 @@ function captionSection(host: HTMLElement, ctx: FeatureContext, b: Block): void 
   body.appendChild(note);
 }
 
+/**
+ * Faces that resolve everywhere without shipping a font file.
+ *
+ * A self-contained document cannot fetch a webfont — the whole promise is that
+ * the file works from a memory stick in 2036 — so these are STACKS chosen so
+ * that every platform lands on something close. Embedding a real face is the
+ * separate `doc.fonts` field, which is how a house typeface would travel.
+ */
+const FACES: Array<[string, string]> = [
+  ['"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif', 'Palatino (serif)'],
+  ['Georgia, "Times New Roman", Times, serif', 'Georgia (serif)'],
+  ['"Times New Roman", Times, serif', 'Times New Roman'],
+  ['Charter, "Bitstream Charter", Cambria, Georgia, serif', 'Charter (serif)'],
+  ['-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'System (sans)'],
+  ['Helvetica, Arial, sans-serif', 'Helvetica'],
+  ['Verdana, Geneva, sans-serif', 'Verdana'],
+  ['ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', 'Monospace'],
+];
+
+function documentSection(host: HTMLElement, ctx: FeatureContext): void {
+  const body = section(host, t('Document'));
+  const doc = ctx.store.doc;
+
+  // ---- typeface. A DOCUMENT property: a contract is typeset, and the person
+  // who wrote it chose how it reads. The theme follows the reader; type does not.
+  row(body, t('Typeface'), select(
+    FACES.map(([v, l]) => [v, l] as [string, string]),
+    doc.type?.family ?? FACES[0][0],
+    v => {
+      ctx.store.commit(d => { d.type = { ...d.type, family: v }; });
+      ctx.refresh();
+    },
+  ));
+  row(body, t('Size (px)'), numberField(doc.type?.size ?? 17, '17', v => {
+    ctx.store.commit(d => {
+      if (v === undefined || !(v >= 6 && v <= 96)) delete d.type?.size;
+      else d.type = { ...d.type, size: v };
+    });
+    ctx.refresh();
+  }));
+
+  // ---- page
+  const sizeId = (Object.keys(PAPER) as SizeId[])
+    .find(id => PAPER[id].width === doc.page.width && PAPER[id].height === doc.page.height)
+    ?? (Object.keys(PAPER) as SizeId[])
+      .find(id => PAPER[id].height === doc.page.width && PAPER[id].width === doc.page.height);
+  row(body, t('Page size'), select(
+    (Object.keys(PAPER) as SizeId[]).map(id => [id, id] as [string, string]),
+    sizeId ?? '',
+    v => { ctx.store.commit(d => { d.page = withSize(d.page, v as SizeId); }); ctx.refresh(); },
+  ));
+  row(body, t('Orientation'), select(
+    [['portrait', t('Portrait')], ['landscape', t('Landscape')]],
+    doc.page.width > doc.page.height ? 'landscape' : 'portrait',
+    v => {
+      ctx.store.commit(d => { d.page = withOrientation(d.page, v as 'portrait' | 'landscape'); });
+      ctx.refresh();
+    },
+  ));
+
+  // Margins stay behind the dialog: four numbers with live validation is more
+  // than a panel row, and it is the one thing here nobody sets twice.
+  const more = el('button', 't-btn');
+  more.type = 'button';
+  more.textContent = t('Margins…');
+  more.addEventListener('click', () => openPageSetup(ctx));
+  const wrap = el('div', 't-toggles');
+  wrap.appendChild(more);
+  body.appendChild(wrap);
+
+  // ---- numbering
+  const num = el('input');
+  num.type = 'checkbox';
+  num.checked = sectionSettings(doc).numbered;
+  num.addEventListener('change', () => {
+    ctx.store.commit(d => setNumbered(d, num.checked));
+    ctx.refresh();
+  });
+  row(body, t('Number sections'), num);
+  const note = el('p', 't-note');
+  note.textContent = t('Off by default: most documents already carry their numbers in the heading text.');
+  body.appendChild(note);
+}
+
 // ──────────────────────────────────────────────────────────────── the panel
 
 function build(host: HTMLElement, ctx: FeatureContext): void {
   host.replaceChildren();
   const b = current(ctx);
   if (!b) {
-    const p = el('p', 't-props-empty');
-    p.textContent = t('Put the caret in the document to see its properties.');
-    host.appendChild(p);
+    // No caret: the document's own properties are still worth showing, and are
+    // the ones you reach for before you start typing.
+    documentSection(host, ctx);
     return;
   }
   // Order is stability, not importance: Text is always there, so it is always
@@ -293,6 +379,9 @@ function build(host: HTMLElement, ctx: FeatureContext): void {
   if (b.kind === 'image') imageSection(host, ctx, b);
   if (b.kind === 'cell') tableSection(host, ctx, b);
   if (b.kind === 'caption') captionSection(host, ctx, b);
+  // The document's own properties last: they are the ones you set once, so
+  // they should not push what you are working on down the panel.
+  documentSection(host, ctx);
 }
 
 registerPanel({

@@ -284,7 +284,9 @@ html, body {
   border-radius: 2px;
   position: relative; z-index: 1;
   color: var(--paper-ink);
-  font: 17px/1.62 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  /* The document's own typeface. The fallback is the historical default, so a
+     file that says nothing about type is byte-for-byte unchanged. */
+  font: var(--doc-size, 17px)/1.62 var(--doc-family, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif);
   hyphens: auto; -webkit-hyphens: auto;
 }
 .t-paper:focus { outline: none; }
@@ -635,6 +637,11 @@ html, body {
    Colours are token-derived throughout; the translucent highlight is a
    color-mix of the accent rather than a literal, so a theme change carries it. */
 .t-cmt-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+/* HIDING COMMENTS is a VIEWER preference, like the theme — it is about reading
+   this document today, not about the document, so it never enters the file and
+   the threads are untouched. One class on the root turns off the marginal
+   apparatus and leaves the words exactly where they were. */
+.t-hide-comments .t-cmt-layer, .t-hide-comments .t-cmt-card { display: none; }
 .t-cmt-hl {
   position: absolute; border-radius: 2px;
   background: color-mix(in srgb, var(--accent) 24%, transparent);

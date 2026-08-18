@@ -1071,13 +1071,8 @@ registerPanel({
   mount: mountPanel,
 });
 
-registerMenuItem({
-  id: 'page-setup',
-  label: t('Page setup…'),
-  icon: ICON_PAGE,
-  order: 30,
-  run: openPageSetup,
-});
+// Page setup is reached from the Document section of the properties panel;
+// it is a property, not an action, and the ⋯ menu is for actions.
 
 registerMenuItem({
   id: 'page-break',
