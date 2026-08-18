@@ -37,7 +37,7 @@
 // returns the right answer proves nothing about whether the importer calls it.
 
 import { writeZip } from '../dash/src/zip.ts'
-import { importXlsx, exportXlsx, liveFormula } from '../dash/src/xlsx.ts'
+import { importXlsx, exportXlsx, installNames, liveFormula } from '../dash/src/xlsx.ts'
 import { readCell } from '../dash/src/store.ts'
 import { parseDoc, type DashDoc, type TableSheet } from '../dash/src/model.ts'
 import { readFrozen } from '../dash/src/rowcol.ts'
@@ -531,6 +531,27 @@ const over = (s: TableSheet, key: string): Record<string, unknown> =>
   ok(b.totals?.[b.columns[1].id] === 'sum',
     'it comes home as the property it left as — the export writes a real ListObject, not only a row of SUM()s')
   ok(readCell(b.data[b.columns[1].id], 0) === 120000, 'and the deals are untouched')
+}
+
+// The caller's half of the names contract, in one line — and its one rule.
+{
+  const bytes = await build({
+    shared: ['Net'],
+    sheets: [{ name: 'Bill', rows: row(1, sc('A1', 0)) + row(2, nc('A2', 100)) }],
+    definedNames: [{ name: 'TaxRate', body: '0.2' }, { name: 'Fresh', body: '0.5' }],
+  })
+  const r = await importXlsx(bytes, { idPrefix: 'i', names: true })
+  const doc = {
+    format: 'bento/dash', version: 1, docId: 'x', title: 'T', sheets: r.sheets,
+    names: { TaxRate: { v: 0.4 } },
+  } as unknown as DashDoc
+  const skipped = installNames(doc, r.names)
+  ok(doc.names?.Fresh?.v === 0.5, 'a name the document does not have is installed')
+  ok(doc.names?.TaxRate?.v === 0.4,
+    "and one it DOES keeps its own meaning — importing a second workbook must not repoint every formula that used it")
+  ok(skipped.join() === 'TaxRate', 'the collision comes back so the caller can say so')
+  ok(installNames(doc, undefined).length === 0 && doc.names?.Fresh?.v === 0.5,
+    'and installing nothing changes nothing')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

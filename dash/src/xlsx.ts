@@ -1234,6 +1234,36 @@ function shiftNamesForImport(
   }
 }
 
+/**
+ * Put an import's names into a document — the caller's half of
+ * `XlsxImportOpts.names`, in one line, so no caller has to work out the
+ * collision rule for itself.
+ *
+ * A NAME ALREADY IN THE DOCUMENT WINS. Importing a second workbook must not
+ * silently repoint `TaxRate` at the new file's rate: every formula in the
+ * document that used it would change its answer, all at once, with nothing on
+ * screen having been edited. The skipped spellings come back so the caller can
+ * say so.
+ *
+ * Returns the names that were NOT installed because the document already had
+ * them; an empty array is the ordinary case.
+ */
+export function installNames(
+  doc: DashDoc, names: Record<string, DefinedName> | undefined,
+): string[] {
+  if (!names || !Object.keys(names).length) return []
+  const have = doc.names ?? {}
+  const taken = new Set(Object.keys(have).map((k) => k.toLowerCase()))
+  const skipped: string[] = []
+  const next: Record<string, DefinedName> = { ...have }
+  for (const [k, d] of Object.entries(names)) {
+    if (taken.has(k.toLowerCase())) { skipped.push(k); continue }
+    next[k] = d
+  }
+  doc.names = next
+  return skipped
+}
+
 // --- formulas ------------------------------------------------------------------
 
 const FN_SET = new Set(FUNCTIONS.map((f) => f.toUpperCase()))
