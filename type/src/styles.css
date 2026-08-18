@@ -438,3 +438,50 @@ html, body {
 }
 .t-find button:hover:not(:disabled) { background: var(--chrome-2); }
 .t-find button:disabled { opacity: .45; cursor: default; }
+/* ── captions, numbering and cross-references (xref.ts) ───────────────────
+   The caption LABEL and every reference are derived text written into empty
+   atoms after render, so nothing here may reserve space by content: a rule
+   that generated the words in CSS would put them out of reach of print,
+   selection and copy, and would have to know the document's language. */
+.t-paper figcaption {
+  margin: -4px 0 14px; font-size: 14.5px; line-height: 1.5;
+  color: var(--paper-ink-2); text-align: start; hyphens: none;
+  break-before: avoid;                 /* a caption never starts a page alone */
+}
+.t-paper .t-cap-num { font-weight: 600; color: var(--paper-ink); margin-inline-end: .35em; }
+.t-paper .t-xref { color: var(--blue); white-space: nowrap; }
+/* A broken reference must be impossible to read past — it is prose that has
+   lost its meaning, not a styling detail. */
+.t-paper .t-xref-broken,
+.t-xref-broken { color: var(--bad); font-weight: 600; }
+.t-paper .t-xref-broken { background: color-mix(in srgb, var(--bad) 12%, transparent); border-radius: 2px; }
+
+/* The picker reuses the house dialog chrome (.t-overlay + .t-dlg) — a second
+   scrim and card would drift from About's the first time either is touched. */
+.t-xref-pick { width: min(440px, 100%); }
+.t-xref-pick h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+.t-xref-style { margin-bottom: 10px; }
+.t-xref-style select {
+  width: 100%; font: inherit; font-size: 12.5px; padding: 5px 6px;
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.t-xref-list { display: flex; flex-direction: column; gap: 3px; }
+.t-xref-list button {
+  display: flex; gap: 8px; align-items: baseline; text-align: start;
+  font: inherit; font-size: 12.5px; padding: 6px 8px; cursor: pointer;
+  background: transparent; color: var(--ink);
+  border: 1px solid transparent; border-radius: 6px;
+}
+.t-xref-list button:hover, .t-xref-list button:focus-visible {
+  background: var(--chrome-2); border-color: var(--line); outline: none;
+}
+.t-xref-list button span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-xref-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+.t-xref-item {
+  display: block; color: var(--ink-2); text-decoration: none;
+  padding: 3px 6px; border-radius: 5px; font-size: 12px; line-height: 1.45;
+}
+.t-xref-item:hover { background: var(--chrome-2); }
+.t-xref-broken-head { margin: 12px 0 4px; font-size: 11px; color: var(--bad); font-weight: 600; }

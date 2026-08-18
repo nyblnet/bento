@@ -12,12 +12,15 @@
 // the container.
 
 import { normalize, shift as shiftMarks, type Mark } from './inline.ts';
+// value import is safe: xref.ts imports only TYPES from this module, precisely
+// so the core can call into it without a cycle
+import { shiftRefs } from './xref.ts';
 
 export const FORMAT = 'bento/type';
 export const VERSION = 1;
 
 /** The kinds of block a document is made of. */
-export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'cell' | 'image';
+export type BlockKind = 'para' | 'h1' | 'h2' | 'h3' | 'quote' | 'ul' | 'ol' | 'cell' | 'image' | 'caption';
 
 /**
  * Where a table cell sits. Carried on EVERY cell of the table, not on a table
@@ -64,6 +67,19 @@ export interface ImageRef {
   w?: number;
   align?: 'left' | 'center' | 'right';
 }
+
+/**
+ * A caption, and what it captions.
+ *
+ * A BLOCK, not a field on the table — because there IS no table block to hang
+ * one on (a table is a run of `cell` blocks sharing an id), and a caption needs
+ * its own stable id anyway: that id is what a reference points at, and what the
+ * redline aligns on so an edited caption reports as an edited caption.
+ */
+export interface CaptionRef { kind: 'table' | 'figure'; of?: string }
+
+/** A cross-reference: an atom at an offset, exactly like a footnote anchor. */
+export interface XrefRef { to: string; at: number; style?: 'label' | 'page' | 'both' }
 
 /** Above this an embedded image is refused, and a URL offered instead. */
 export const IMAGE_EMBED_BUDGET = 4 * 1024 * 1024;
@@ -122,6 +138,10 @@ export interface Block {
   cell?: CellRef;
   /** the picture; only meaningful on an `image` block */
   image?: ImageRef;
+  /** caption placement; only meaningful on a `caption` block */
+  caption?: CaptionRef;
+  /** cross-references, by offset into `text` — atoms, like `notes` */
+  refs?: XrefRef[];
 }
 
 /** Page geometry, in CSS px at 96dpi. US Letter by default. */
@@ -239,7 +259,7 @@ export function parseDoc(raw: string): ParseResult {
   const body: Block[] = [];
   (json.body as unknown[]).forEach((b, i) => {
     if (!isObj(b)) { repaired.push(`dropped a block at ${i} that was not an object`); return; }
-    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'image'].includes(b.kind as string)
+    const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'image', 'caption'].includes(b.kind as string)
       ? b.kind as BlockKind : 'para';
     if (kind !== b.kind) repaired.push(`block ${i}: unknown kind ${JSON.stringify(b.kind)} read as a paragraph`);
     const text = typeof b.text === 'string' ? b.text : '';
@@ -311,6 +331,25 @@ export function parseDoc(raw: string): ParseResult {
         repaired.push(`block ${i}: image with no usable source read as a paragraph`);
       }
     }
+    if (kind === 'caption') {
+      const c = isObj(b.caption) ? b.caption as Partial<CaptionRef> : undefined;
+      out.caption = { kind: c?.kind === 'figure' ? 'figure' : 'table',
+                      ...(typeof c?.of === 'string' && c.of ? { of: c.of } : {}) };
+    }
+    // A dangling REFERENCE is kept, deliberately unlike a dangling note. A
+    // marker with no note behind it renders as a number pointing at nothing, so
+    // notes are dropped. A reference is the opposite case: the author wrote
+    // "see <that table>" and the table was deleted. Dropping it silently
+    // deletes the sentence's meaning and leaves prose reading "see ." Keeping
+    // it renders a visible ?? that says something must be fixed — the LaTeX
+    // behaviour, and the only safe one.
+    const refs = Array.isArray(b.refs)
+      ? (b.refs as XrefRef[]).filter(r => isObj(r) && typeof r.to === 'string' && typeof r.at === 'number')
+          .map(r => ({ to: r.to, at: Math.max(0, Math.min(r.at, text.length)),
+                       ...(r.style === 'page' || r.style === 'both' ? { style: r.style } : {}) }))
+          .sort((x, y) => x.at - y.at)
+      : undefined;
+    if (refs?.length) out.refs = refs;
     body.push(out);
   });
   if (!body.length) body.push({ id: uid(), kind: 'para', text: '' });
@@ -365,6 +404,10 @@ export function spliceText(block: Block, at: number, removed: number, added: str
   if (block.marks?.length) {
     const m = shiftMarks(block.marks, at, removed, added.length, text.length);
     if (m.length) out.marks = m; else delete out.marks;
+  }
+  if (block.refs?.length) {
+    const r = shiftRefs(block.refs, at, removed, added.length);
+    if (r.length) out.refs = r; else delete out.refs;
   }
   if (block.notes?.length) {
     const end = at + removed;

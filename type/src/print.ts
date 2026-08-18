@@ -25,6 +25,7 @@
 import type { Block, TypeDoc } from './model.ts';
 import { blockHtml, groupBlocks, TAG } from './render.ts';
 import type { Metrics } from './paginate.ts';
+import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
 
 export interface PrintOptions {
   /** running head text; omitted = the document title */
@@ -145,7 +146,7 @@ function tableHtml(rows: Block[][], head: boolean): string {
  * here with a second implementation is exactly how print drifts from the
  * editor, which is the failure this whole module exists to avoid.
  */
-function bodyHtml(body: Block[]): string {
+function bodyHtml(body: Block[], lang: string): string {
   const out: string[] = [];
   for (const tok of groupBlocks(body)) {
     if (tok.t === 'open') out.push(`<${tok.kind}>`);
@@ -164,7 +165,10 @@ function bodyHtml(body: Block[]): string {
       out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}">${blockHtml(b)}</${TAG[b.kind]}>`);
     }
   }
-  return out.join('\n');
+  // The DOM pass (numberXrefs) and this string pass fill the SAME atoms from
+  // the SAME index, which is what stops the printed numbering drifting from the
+  // screen's — the drift this module exists to prevent.
+  return fillXrefsHtml(out.join('\n'), captionIndex(body, lang));
 }
 
 /**
@@ -180,7 +184,9 @@ function bodyHtml(body: Block[]): string {
 export function buildPrintDocument(doc: TypeDoc, metrics: Metrics, opts: PrintOptions = {}): string {
   const p = doc.page;
   const head = opts.header ?? doc.title;
-  const flow = bodyHtml(doc.body);
+  // the DOCUMENT's language, not the reader's: a caption label is printed and
+  // signed with the author's sentences, so it must not change per reader
+  const flow = bodyHtml(doc.body, docLang(doc));
   const contentH = p.height - p.marginTop - p.marginBottom;
 
   // footnote numbering is derived, in document order, exactly as on screen
