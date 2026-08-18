@@ -90,6 +90,8 @@ const LABELS: Record<string, [Section, string]> = {
   'copy': ['clip', 'Copy the selection'],
   'cut': ['clip', 'Cut the selection'],
   'paste': ['clip', 'Paste into the selection'],
+  'pasteSpecial': ['clip', 'Paste special — values only, formulas, formats only, transposed'],
+  'textToColumns': ['clip', 'Split the selected column into several, on a delimiter or at fixed widths'],
 
   'find': ['file', 'Find in the sheet — the grid is windowed, so the browser’s own ⌘F cannot see it all'],
   'findNext': ['file', 'Go to the next match'],

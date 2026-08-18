@@ -206,6 +206,44 @@ export type Step =
    *  row position, so a re-import cannot re-apply one to the wrong row. A patch
    *  whose key vanished is a `stale-patch` finding, not a disappearance. */
   | { op: 'patch'; key: string[]; edits: PatchEdit[] }
+  // ── added for Text to Columns (one contiguous block) ──────────────────────
+  /**
+   * Split one text column into several — Excel's Text to Columns, as a
+   * DECLARATION rather than a one-off mutation, so the lineage survives.
+   *
+   * WHY THIS IS NOT A `derive`. `derive` is one expression producing one
+   * column, and it was the first thing tried. Fixed width it expresses
+   * perfectly (`MID(col, start, len)`), and that arm really is emitted as
+   * derives. A DELIMITER it cannot express: formula.ts has no SPLIT, and the
+   * Excel workaround — `TRIM(MID(SUBSTITUTE(c, ",", REPT(" ", 100)), …))` —
+   * collapses every run of spaces inside a field and silently truncates a
+   * field longer than the pad. Beyond the expression, three things belong to
+   * the split as a WHOLE and cannot live in N independent steps: the delimiter
+   * (edited in one place, not N places that can disagree), the quoting rule,
+   * and the TYPE INFERENCE, which must be import.ts's column-wide refusal
+   * (`inferColumn`) and not `derive`'s per-value guess.
+   *
+   * The SOURCE COLUMN IS ALWAYS KEPT. Excel overwrites it with field one; that
+   * makes the operation destructive and, worse here, non-idempotent — a step
+   * that consumed its own input cannot be re-run. Keeping it means running the
+   * pipeline twice produces the same sheet, which is what a re-runnable step
+   * has to promise.
+   */
+  | {
+      op: 'split'; col: string
+      /** delimiter mode: the separator, verbatim (never a regexp) */
+      by?: string
+      /** fixed-width mode: cut points, in characters from the start */
+      widths?: number[]
+      /** the columns to produce, in order. Ids are the caller's, so a re-run
+       *  lands on the same columns rather than minting new ones each time. */
+      into: Array<{ id: string; name: string }>
+      /** honour RFC-4180 quoting when splitting on a delimiter (default true) */
+      quoted?: boolean
+      /** trim each field's outer whitespace (default true) */
+      trim?: boolean
+    }
+  // ── end of the Text to Columns block ──────────────────────────────────────
   /** Unknown ops survive parse → serialize and mark their descendants
    *  `unresolved`. Views then show last known values with a badge, NEVER zero —
    *  an empty bar chart reads as ZERO, which is a number, which is a lie. */
