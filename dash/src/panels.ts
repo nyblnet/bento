@@ -40,9 +40,13 @@ import {
   appearancePatch, buildAppearanceSection, describeOverrideSelection, effectiveFormat,
   overrideFormatPatch, overrideKeys, type Appearance, type AppearanceEdit,
 } from './cellfmt.ts'
+import {
+  buildValidationSection, canvasEntryAt, canvasRulePatch, canvasRules, columnRule,
+  countViolations, columnRulePatch, boxRef, type DataRule,
+} from './datavalid.ts'
 import { mountTabs, renameSheetPatch } from './tabs.ts'
-import type { Column, ColumnType, TableSheet } from './model.ts'
-import type { Patch, Store } from './store.ts'
+import type { CanvasSheet, Column, ColumnType, TableSheet } from './model.ts'
+import { readCell, type Patch, type Store } from './store.ts'
 import type { Grid } from './grid.ts'
 import {
   freezeAt, hiddenSet, readFrozen, resizeColumn, setHidden,
@@ -363,6 +367,7 @@ export function mountPanels(host: PanelsHost): Panels {
             render(true)
           },
         })
+        buildCanvasValidationSection(canvas)
         buildWorkbookSection()
         applyAccordion(right)
         return
@@ -375,6 +380,7 @@ export function mountPanels(host: PanelsHost): Panels {
     }
     buildDatasetCellSection(sheet)
     buildColumnSection(sheet)
+    buildDatasetValidationSection(sheet)
     buildSheetSection(sheet)
     buildWorkbookSection()
     applyAccordion(right)
@@ -522,6 +528,68 @@ export function mountPanels(host: PanelsHost): Panels {
     if (typeof col.failed === 'number' && col.failed > 0) {
       note(right, t('{n} value(s) could not be read as this type.').replace('{n}', String(col.failed)))
     }
+  }
+
+  /**
+   * Validation on a DATASET — attached to the COLUMN, because on this kind the
+   * column is what owns the type and a rule is a NARROWING of it. A per-cell
+   * rule here would be a per-cell type through the back door, which is the
+   * appearance-leakage argument (cellfmt.ts) run in reverse.
+   *
+   * The offender count is what makes "existing data is marked, never changed"
+   * a promise a reader can see rather than one the code merely keeps: adding a
+   * rule to a column of real data says immediately how much of it disagrees.
+   * Capped, because it runs on every document event.
+   */
+  function buildDatasetValidationSection(sheet: TableSheet): void {
+    const col = currentColumn(sheet)
+    if (!col) return
+    const rule = columnRule(col)
+    buildValidationSection({
+      host: right,
+      kit: KIT,
+      scope: col.name,
+      rule,
+      readOnly: ro(),
+      offenders: rule ? countViolations(rule, columnValues(sheet, col)) : undefined,
+      write: (next: DataRule | null) => commit(columnRulePatch(sheet, col.id, next)),
+    })
+  }
+
+  /** Every stored value of one column, lazily — `countViolations` stops early
+   *  at its own cap and a materialised array would defeat that. */
+  function* columnValues(sheet: TableSheet, col: Column): Generator<unknown> {
+    const n = rowsOf(sheet)
+    const data = sheet.data[col.id]
+    for (let i = 0; i < n; i++) yield readCell(data, i)
+  }
+
+  /**
+   * Validation on a SPREADSHEET — attached to a RANGE, as Excel's `sqref` is,
+   * because there is no column here to own it.
+   *
+   * Editing an EXISTING rule writes back to its own range, not to whatever
+   * happens to be selected: the cursor is inside the rule, and re-keying it to
+   * the selection would silently shrink a rule over B2:B100 to the one cell
+   * somebody clicked while changing its message. A NEW rule takes the
+   * selection, which is the range the author has in their hand.
+   */
+  function buildCanvasValidationSection(sheet: CanvasSheet): void {
+    const cur = grid.sel.cursor
+    const entry = canvasEntryAt(canvasRules(sheet), cur.row, cur.col)
+    const b = grid.sel.bounds()
+    const ref = entry?.ref ?? boxRef({ top: b.top, left: b.left, bottom: b.bottom, right: b.right })
+    buildValidationSection({
+      host: right,
+      kit: KIT,
+      scope: ref,
+      rule: entry?.rule ?? null,
+      readOnly: ro(),
+      write: (next: DataRule | null) => {
+        const p = canvasRulePatch(sheet, ref, next)
+        if (p) commit(p as Patch)
+      },
+    })
   }
 
   function buildSheetSection(sheet: TableSheet): void {

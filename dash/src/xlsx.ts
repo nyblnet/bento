@@ -62,8 +62,9 @@ import { translateCellFormula } from './cellformula.ts'
 import { FUNCTIONS } from './formula.ts'
 import { readCell } from './store.ts'
 import type {
-  CellOverride, Column, ColumnData, ColumnType, DashDoc, TableSheet,
+  CellOverride, Column, ColumnData, ColumnType, DashDoc, DataRule, TableSheet,
 } from './model.ts'
+import { columnRule, describeRule, refBox } from './datavalid.ts'
 
 // --- findings ---------------------------------------------------------------
 
@@ -79,6 +80,7 @@ export interface XlsxFinding {
     | 'coerce-failed' | 'no-header' | 'duplicate-header' | 'empty-header'
     | 'formula-not-live' | 'hidden-sheet' | 'sheet-skipped' | 'time-of-day'
     | 'leading-blanks' | 'formula-column' | 'chart-dropped' | 'renamed-sheet'
+    | 'data-validation'
   sheet?: string
   column?: string
   message: string
@@ -463,9 +465,11 @@ interface RawCell {
  */
 function readSheetCells(xml: string, shared: string[]): {
   cells: RawCell[]; merges: string[]; maxCol: number; widths: Map<number, number>
+  validations: RawValidation[]
 } {
   const cells: RawCell[] = []
   const merges: string[] = []
+  const validations: RawValidation[] = []
   const widths = new Map<number, number>()
   let maxCol = -1
 
@@ -545,7 +549,183 @@ function readSheetCells(xml: string, shared: string[]): {
     const px = Math.round(w * 7 + 5)
     for (let i = min; i <= (Number.isFinite(max) ? max : min); i++) widths.set(i - 1, px)
   }
-  return { cells, merges, maxCol, widths }
+  for (const dv of elements(xml, 'dataValidation')) {
+    const sqref = attr(dv.a, 'sqref')
+    if (!sqref) continue
+    const f = (n: 'formula1' | 'formula2'): string | undefined => {
+      const el = element(dv.body, n)
+      return el ? unescapeXml(el.body) : undefined
+    }
+    validations.push({
+      sqref,
+      type: attr(dv.a, 'type') ?? 'none',
+      operator: attr(dv.a, 'operator') ?? 'between',
+      allowBlank: attr(dv.a, 'allowBlank') === '1',
+      // NOTE THE INVERSION, which is the single most-misread attribute in the
+      // whole schema: `showDropDown="1"` HIDES the in-cell dropdown. Excel's
+      // own UI checkbox is "In-cell dropdown" and the file stores its
+      // NEGATION, so a reader that takes the name at face value ships every
+      // list rule with its arrow switched the wrong way round.
+      hideDropdown: attr(dv.a, 'showDropDown') === '1',
+      errorStyle: attr(dv.a, 'errorStyle') ?? 'stop',
+      error: attr(dv.a, 'error'),
+      f1: f('formula1'),
+      f2: f('formula2'),
+    })
+  }
+  return { cells, merges, maxCol, widths, validations }
+}
+
+// --- data validation ----------------------------------------------------------
+//
+// Excel's `<dataValidation>` is dash's `DataRule` (model.ts, datavalid.ts) with
+// three differences that have to be handled rather than assumed away, because
+// each one is a silent wrong answer if it is not:
+//
+//   1. `showDropDown` is INVERTED (see above).
+//   2. `errorStyle` defaults to `stop`. dash's `on` defaults to `warn`, and
+//      that is not a translation bug — dash's reject is a keyboard-only
+//      refusal (datavalid.ts's header explains why a reject that runs on apply
+//      is a divergence under collaboration), so `stop` maps to `reject` and
+//      means slightly less than it did. It is still the closer of the two.
+//   3. A validation covers a RANGE. On a dataset that range has to become a
+//      COLUMN, because a dataset's rule lives on its column — so a rule over
+//      part of a column is WIDENED to the whole one, and that is reported.
+//      Widening is the safe direction here: it marks more cells than Excel
+//      circled, and marking never changes a value.
+//
+// An operator dash cannot express (`notBetween`, `equal`, `notEqual`) is
+// DROPPED with a finding rather than approximated. `greaterThan` and
+// `lessThan` are kept as inclusive bounds and reported, because off by one at
+// the boundary is a small, stated loss and losing the rule entirely is a
+// larger one.
+
+interface RawValidation {
+  sqref: string
+  type: string
+  operator: string
+  allowBlank: boolean
+  hideDropdown: boolean
+  errorStyle: string
+  error?: string
+  f1?: string
+  f2?: string
+}
+
+/** The inline list Excel writes: `"Open,Won,Lost"` — quoted, comma separated.
+ *  A RANGE reference (`$H$1:$H$5`) is a different feature dash has no answer
+ *  for; the caller reports it rather than importing an empty list. */
+function inlineList(f1: string | undefined): string[] | null {
+  if (!f1) return null
+  const s = f1.trim()
+  if (!(s.startsWith('"') && s.endsWith('"') && s.length >= 2)) return null
+  return s.slice(1, -1).split(',').map((x) => x.trim()).filter(Boolean)
+}
+
+/** A bound, as dash stores one. Dates arrive as serials and go in as ISO, so
+ *  the panel shows `2026-03-01` rather than `46082`. */
+function dvBound(raw: string | undefined, isDate: boolean, epoch1904: boolean): number | string | undefined {
+  if (raw === undefined) return undefined
+  const s = raw.trim().replace(/^=/, '')
+  if (s === '') return undefined
+  const n = Number(s)
+  if (!Number.isFinite(n)) return s          // DATE(2026,1,1) and friends: verbatim
+  if (!isDate) return n
+  return serialToIso(n, epoch1904) ?? n
+}
+
+/**
+ * One `<dataValidation>` as a dash rule, plus what could not be carried.
+ * `null` means nothing worth storing came out of it.
+ */
+function toDataRule(
+  v: RawValidation, epoch1904: boolean,
+): { rule: DataRule | null; lost?: string } {
+  const on = v.errorStyle === 'stop' ? 'reject' : 'warn'
+  const base = {
+    ...(v.allowBlank ? {} : { blank: false as const }),
+    on: on as 'reject' | 'warn',
+    ...(v.error ? { message: v.error } : {}),
+  }
+  if (v.type === 'list') {
+    const list = inlineList(v.f1)
+    if (!list?.length) {
+      return { rule: null, lost: `its list of values is a reference (${v.f1 ?? '—'}) rather than a written-out list, and dash stores the values themselves` }
+    }
+    return { rule: { kind: 'list', list, ...(v.hideDropdown ? { noDropdown: true } : {}), ...base } }
+  }
+  if (v.type === 'custom') {
+    return v.f1
+      ? { rule: { kind: 'formula', formula: v.f1, ...base } }
+      : { rule: null }
+  }
+  const kind = v.type === 'whole' || v.type === 'decimal' ? 'number'
+    : v.type === 'date' ? 'date'
+      : v.type === 'textLength' ? 'textLength' : null
+  if (!kind) return { rule: null }
+  const isDate = kind === 'date'
+  const a = dvBound(v.f1, isDate, epoch1904)
+  const b = dvBound(v.f2, isDate, epoch1904)
+  switch (v.operator) {
+    case 'between':
+      return { rule: { kind, ...(a !== undefined ? { min: a } : {}), ...(b !== undefined ? { max: b } : {}), ...base } }
+    case 'greaterThanOrEqual':
+      return { rule: { kind, ...(a !== undefined ? { min: a } : {}), ...base } }
+    case 'lessThanOrEqual':
+      return { rule: { kind, ...(a !== undefined ? { max: a } : {}), ...base } }
+    case 'greaterThan':
+      return {
+        rule: { kind, ...(a !== undefined ? { min: a } : {}), ...base },
+        lost: `its "greater than ${v.f1}" test became "${v.f1} or more" — dash's bounds are inclusive, so the boundary value itself is now allowed`,
+      }
+    case 'lessThan':
+      return {
+        rule: { kind, ...(a !== undefined ? { max: a } : {}), ...base },
+        lost: `its "less than ${v.f1}" test became "${v.f1} or less" — dash's bounds are inclusive, so the boundary value itself is now allowed`,
+      }
+    default:
+      return { rule: null, lost: `dash has no "${v.operator}" test` }
+  }
+}
+
+/** Column index → rule, from every `<dataValidation>` on the sheet. */
+function validationsByColumn(
+  raws: readonly RawValidation[], epoch1904: boolean, sheetName: string,
+  lastRow: number, findings: XlsxFinding[],
+): Map<number, DataRule> {
+  const out = new Map<number, DataRule>()
+  for (const v of raws) {
+    if (v.type === 'none' || v.type === '') continue
+    const { rule, lost } = toDataRule(v, epoch1904)
+    // `sqref` is SPACE SEPARATED and may name several ranges.
+    const refs = v.sqref.trim().split(/\s+/).filter(Boolean)
+    const boxes = refs.map((r) => refBox(r.replace(/\$/g, ''))).filter((b): b is NonNullable<typeof b> => !!b)
+    if (!boxes.length) continue
+    if (!rule) {
+      findings.push({
+        code: 'data-validation', sheet: sheetName,
+        message: `A data validation rule on ${v.sqref} of "${sheetName}" was not imported: ${lost ?? `dash has no equivalent of its "${v.type}" test`}. The cells keep their values; nothing on them is checked.`,
+      })
+      continue
+    }
+    let widened = false
+    for (const b of boxes) {
+      // Rows 2..lastRow is the whole data body. Anything narrower has to widen
+      // to the column, because a dataset's rule belongs to the column.
+      if (b.top > 1 || (lastRow > 1 && b.bottom < lastRow - 1)) widened = true
+      for (let ci = b.left; ci <= b.right; ci++) out.set(ci, rule)
+    }
+    if (widened || lost) {
+      const parts: string[] = []
+      if (widened) parts.push(`it covered ${v.sqref} and now applies to the whole column, because a dash dataset keeps its rules on the column that owns the type`)
+      if (lost) parts.push(lost)
+      findings.push({
+        code: 'data-validation', sheet: sheetName,
+        message: `A data validation rule on "${sheetName}" was imported with a change: ${parts.join('; ')}.`,
+      })
+    }
+  }
+  return out
 }
 
 // --- typing a column ---------------------------------------------------------
@@ -897,7 +1077,7 @@ function readOneSheet(
   xml: string, name: string, id: string, shared: string[], styles: Styles,
   epoch1904: boolean, findings: XlsxFinding[], opts: XlsxImportOpts,
 ): TableSheet {
-  const { cells, merges, maxCol, widths } = readSheetCells(xml, shared)
+  const { cells, merges, maxCol, widths, validations } = readSheetCells(xml, shared)
 
   if (merges.length) {
     findings.push({
@@ -955,6 +1135,11 @@ function readOneSheet(
 
   const dataRows = grid.slice(bodyStart)
   const rowCount = Math.max(0, lastRow - firstRow + 1 - bodyStart)
+
+  // Data validation, mapped to COLUMNS before the loop that builds them —
+  // `lastRow - firstRow` is the body's extent, which is what decides whether a
+  // rule covered the whole column or a slice of it.
+  const dvByCol = validationsByColumn(validations, epoch1904, name, lastRow - firstRow + 1, findings)
 
   const columns: Column[] = []
   const data: Record<string, ColumnData> = {}
@@ -1052,6 +1237,7 @@ function readOneSheet(
       ...(plan.format ? { format: plan.format } : {}),
       ...(plan.failed || lostHere ? { failed: lostHere } : {}),
       ...(widths.has(ci) ? { w: widths.get(ci) } : {}),
+      ...(dvByCol.has(ci) ? { validate: dvByCol.get(ci) } : {}),
     })
     data[colId] = { enc: 'raw', v: values as Array<number | string | boolean | null> }
   }
@@ -1514,13 +1700,106 @@ function writeSheet(
     ? `<col min="${i + 1}" max="${i + 1}" width="${Math.max(2, (c.w - 5) / 7).toFixed(2)}" customWidth="1"/>`
     : '').join('')
 
+  // DATA VALIDATION, out as well as in — which is the whole of what makes a
+  // round trip survive. `<dataValidations>` sits AFTER `<sheetData>` in the
+  // CT_Worksheet sequence; Excel refuses to open a file that puts it before,
+  // with the same "unreadable content" dialog it gives a truncated zip, so the
+  // ordering here is a hard requirement rather than tidiness.
+  const dv = writeValidations(cols, rows, sheet.name, findings)
+
   const lastRow = rows + (totalsXml ? 2 : 1)
   return `${DECL}<worksheet xmlns="${MAIN_NS}">` +
     `<dimension ref="A1:${colToLetters(Math.max(0, cols.length - 1))}${Math.max(1, lastRow)}"/>` +
     '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="15"/>' +
     (widths ? `<cols>${widths}</cols>` : '') +
-    `<sheetData>${out.join('')}${totalsXml}</sheetData></worksheet>`
+    `<sheetData>${out.join('')}${totalsXml}</sheetData>${dv}</worksheet>`
+}
+
+/**
+ * `<dataValidations>` for every column carrying a rule.
+ *
+ * The sqref is the column's DATA range — row 2 to row n+1, because dash's row
+ * 0 is Excel's row 2 — never the header and never the totals row. Putting the
+ * header inside the range is what makes Excel circle a heading as invalid data
+ * the first time somebody runs the command.
+ *
+ * `kind:'formula'` goes out as `type="custom"` with the expression this build
+ * never evaluated, verbatim: the `xlsxF` bargain, one level up. Whatever Excel
+ * meant by it, Excel gets back.
+ *
+ * The one rule that CANNOT go out is a list too long for Excel's 255-character
+ * `formula1`. Truncating it would export a rule that permits a subset of what
+ * the author allowed — a stricter rule than anyone wrote, which would start
+ * refusing real values on the other side. So it is dropped and named.
+ */
+function writeValidations(
+  cols: readonly Column[], rows: number, sheetName: string, findings: XlsxFinding[],
+): string {
+  if (!rows) return ''
+  const out: string[] = []
+  cols.forEach((col, i) => {
+    const rule = columnRule(col)
+    if (!rule) return
+    const sqref = `${colToLetters(i)}2:${colToLetters(i)}${rows + 1}`
+    const common = ` allowBlank="${rule.blank === false ? 0 : 1}"` +
+      ` errorStyle="${rule.on === 'reject' ? 'stop' : 'warning'}"` +
+      ` error="${escapeXml(rule.message ?? describeRule(rule))}"` +
+      ` errorTitle="${escapeXml(sheetName)}"`
+    if (rule.kind === 'list') {
+      const body = (rule.list ?? []).join(',')
+      // Excel's own limit, and it counts the quotes.
+      if (body.length + 2 > 255) {
+        findings.push({
+          code: 'data-validation', sheet: sheetName, column: col.name,
+          message: `"${col.name}" has a list rule with ${(rule.list ?? []).length} values, which is longer than the 255 characters Excel allows in a written-out list. It was not exported: a truncated list would have refused values the rule allows.`,
+        })
+        return
+      }
+      // `showDropDown` is the INVERSION noted on the import side: 1 HIDES it.
+      out.push(`<dataValidation type="list" sqref="${sqref}"${rule.noDropdown ? ' showDropDown="1"' : ''}${common}>` +
+        `<formula1>"${escapeXml(body)}"</formula1></dataValidation>`)
+      return
+    }
+    if (rule.kind === 'formula') {
+      if (!rule.formula) return
+      out.push(`<dataValidation type="custom" sqref="${sqref}"${common}>` +
+        `<formula1>${escapeXml(rule.formula.replace(/^=/, ''))}</formula1></dataValidation>`)
+      return
+    }
+    const type = rule.kind === 'number' ? 'decimal'
+      : rule.kind === 'date' ? 'date'
+        : rule.kind === 'textLength' ? 'textLength' : null
+    if (!type) return
+    const bound = (b: number | string | undefined): string | null => {
+      if (b === undefined) return null
+      if (rule.kind === 'date') {
+        const serial = typeof b === 'number' ? b : isoToSerial(String(b))
+        return serial === null ? null : String(serial)
+      }
+      const n = Number(b)
+      return Number.isFinite(n) ? String(n) : null
+    }
+    const lo = bound(rule.min)
+    const hi = bound(rule.max)
+    // An UNBOUNDED rule ("must be a number", no min or max) has no Excel
+    // spelling at all — every `decimal` validation carries an operator and at
+    // least one formula. It is dropped rather than invented, because inventing
+    // a bound is inventing a refusal.
+    if (lo === null && hi === null) {
+      findings.push({
+        code: 'data-validation', sheet: sheetName, column: col.name,
+        message: `"${col.name}" must be a ${rule.kind === 'date' ? 'date' : rule.kind === 'number' ? 'number' : 'text length'} with no upper or lower limit. Excel's data validation always compares against a value, so this rule has no equivalent there and was not exported.`,
+      })
+      return
+    }
+    const op = lo !== null && hi !== null ? 'between'
+      : lo !== null ? 'greaterThanOrEqual' : 'lessThanOrEqual'
+    const f1 = lo !== null ? lo : hi!
+    out.push(`<dataValidation type="${type}" operator="${op}" sqref="${sqref}"${common}>` +
+      `<formula1>${f1}</formula1>${op === 'between' ? `<formula2>${hi}</formula2>` : ''}</dataValidation>`)
+  })
+  return out.length ? `<dataValidations count="${out.length}">${out.join('')}</dataValidations>` : ''
 }
 
 /**

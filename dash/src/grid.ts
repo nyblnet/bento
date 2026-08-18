@@ -38,6 +38,15 @@ import {
   shiftSheetFormulas, workbookSources, type CellSource,
 } from './cellformula.ts'
 import { mountFind, type FindUI, type Hit } from './find.ts'
+// The data-validation stylesheet is imported HERE rather than in datavalid.ts,
+// because this is the file that emits the markup it styles and because
+// datavalid.ts is also read by xlsx.ts, whose rig runs in node with no css
+// loader at all.
+import './datavalid.css'
+import {
+  DROPDOWN_HTML, INVALID_CLASS, canvasRuleAt, canvasRules, closeListMenu, columnRule,
+  hasDropdown, listOptions, openListMenu, violationOf, type DataRule,
+} from './datavalid.ts'
 
 /**
  * Row height, in px — SPREADSHEET density, not web-table density.
@@ -1062,6 +1071,9 @@ export class Grid {
   }
 
   paint(): void {
+    // A repaint detaches the arrow the menu was dropped from, and the menu is
+    // mounted on the body — so it would hang there over a grid that has moved.
+    closeListMenu()
     // Captured BEFORE any innerHTML is replaced: afterwards the previously
     // focused node is detached and `contains` answers false for it, so this is
     // the only moment the question "did the grid have focus?" can be asked.
@@ -1126,6 +1138,18 @@ export class Grid {
     const visible = Math.ceil(this.scroller.clientHeight / ROW_H) + OVERSCAN * 2
     const end = Math.min(gridN, top + visible)
 
+    // Data validation rules, read ONCE per paint rather than per cell: a rule
+    // is a column property and re-reading it forty times a row would be forty
+    // untrusted-input guards run over the same object. `violationOf` below is
+    // called for the PAINTED WINDOW only — the mark is derived, never stored,
+    // because a stored flag is stale the instant the value or the rule moves
+    // (datavalid.ts's header argues this at length).
+    const dvRules = new Map<string, DataRule>()
+    for (const c of cols(s)) {
+      const rule = columnRule(c)
+      if (rule) dvRules.set(c.id, rule)
+    }
+
     const body: string[] = []
     for (let i = top; i < end; i++) {
       if (i === front) { body.push(this.frontierRowHtml(i)); continue }
@@ -1170,14 +1194,23 @@ export class Grid {
           const hit = this.findHits.has(fk)
             ? (this.findCur === fk ? ' dg-find dg-find-cur' : ' dg-find')
             : ''
-          return `<div class="dg-cell${note}${bad}${inSel ? ' dg-sel' : ''}${isCursor ? ' dg-cursor' : ''}${hit}${fz.cls}" ` +
+          // Data validation. A value that breaks its column's rule is MARKED
+          // (never changed, never dropped — the rule arrived after the data and
+          // the data is what somebody actually has), and a `list` rule puts a
+          // real dropdown arrow in the cell.
+          const rule = dvRules.get(c.id)
+          const why = rule ? violationOf(rule, v) : null
+          const dvCls = (why !== null ? ` ${INVALID_CLASS}` : '') + (rule && hasDropdown(rule) ? ' dv-list' : '')
+          const dvArrow = rule && hasDropdown(rule) ? DROPDOWN_HTML : ''
+          const dvTitle = why !== null ? ` title="${esc(why)}"` : ''
+          return `<div class="dg-cell${note}${bad}${inSel ? ' dg-sel' : ''}${isCursor ? ' dg-cursor' : ''}${hit}${fz.cls}${dvCls}"${dvTitle} ` +
             `role="gridcell" aria-colindex="${ariaColIndex(ci)}" aria-selected="${inSel}" ` +
             // THE ROVING TABINDEX. Exactly one cell in the grid is in the tab
             // order and it is the cursor — 300 focusable cells would mean 300
             // Tab presses to get past the grid, and Tab already means "next
             // cell" inside it (select.ts owns that key).
             `tabindex="${isCursor ? 0 : -1}" ` +
-            `data-col="${c.id}" data-ci="${ci}" style="${fz.st}${st}">${bar}<span class="dg-v">${esc(shown)}</span></div>`
+            `data-col="${c.id}" data-ci="${ci}" style="${fz.st}${st}">${bar}<span class="dg-v">${esc(shown)}</span>${dvArrow}</div>`
         }).join('') + '</div>')
     }
     this.paintEmptyGrid(gridN * ROW_H)
@@ -2300,6 +2333,12 @@ export class Grid {
     const padLeft = lefts[c0] - GUTTER_W
     const pad = padLeft > 0 ? `<div class="dg-cell dg-pad" style="width:${padLeft}px"></div>` : ''
 
+    // Data validation, read once per paint. On THIS kind there is no column to
+    // hang a rule on, so a rule covers an A1 RANGE and the sheet carries the
+    // list — Excel's `sqref`, and model.ts's DATA VALIDATION block says why it
+    // is not a field on the cell.
+    const dvRules = canvasRules(s)
+
     const box = this.sel.bounds()
     const body: string[] = []
     for (let i = r0; i < r1; i++) {
@@ -2325,13 +2364,18 @@ export class Grid {
         // loop above calls the same function. Two paint sites with two ideas
         // of what "bold" means is how they drifted the first time.
         st += appearanceCss(cell)
+        const rule = dvRules.length ? canvasRuleAt(dvRules, i, c) : null
+        const why = rule ? violationOf(rule, v) : null
+        const dvCls = (why !== null ? ` ${INVALID_CLASS}` : '') + (rule && hasDropdown(rule) ? ' dv-list' : '')
+        const dvArrow = rule && hasDropdown(rule) ? DROPDOWN_HTML : ''
+        const dvTitle = why !== null ? ` title="${esc(why)}"` : ''
         cells.push(
           `<div class="dg-cell${cell?.note ? ' dg-noted' : ''}${isErr(v) ? ' dg-err' : ''}` +
-          `${inSel ? ' dg-sel' : ''}${isCursor ? ' dg-cursor' : ''}${hit}" ` +
+          `${inSel ? ' dg-sel' : ''}${isCursor ? ' dg-cursor' : ''}${hit}${dvCls}"${dvTitle} ` +
           `role="gridcell" aria-colindex="${ariaColIndex(c)}" aria-selected="${inSel}" ` +
           `tabindex="${isCursor ? 0 : -1}" ` +
           `data-ci="${c}" data-key="${key}" style="${st}">` +
-          `<span class="dg-v">${esc(canvasShown(cell, v))}</span></div>`)
+          `<span class="dg-v">${esc(canvasShown(cell, v))}</span>${dvArrow}</div>`)
       }
       body.push(
         `<div class="dg-row" role="row" aria-rowindex="${ariaRowIndex(i)}" data-row="${i}" style="top:${rs.top(i)}px${hst}">` +
@@ -2401,6 +2445,7 @@ export class Grid {
   }
 
   private wireCanvas(s: CanvasSheet, rs: { height: (i: number) => number }): void {
+    this.wireDropdowns()
     const handle = this.table.querySelector<HTMLElement>('.dg-handle')
     if (handle) {
       handle.onmousedown = (e) => {
@@ -2584,9 +2629,19 @@ export class Grid {
     let done = false
     const finish = (write: boolean, move?: 'down' | 'up' | 'right' | 'left') => {
       if (done || !this.cvEditing) return
+      const typed = cell.textContent ?? ''
+      // The refusal, on this kind. Same shape as the dataset path's, and
+      // deliberately so — the two editors differ only in what a cell IS.
+      if (write && !isFormula(typed)) {
+        const rule = canvasRuleAt(canvasRules(this.canvas ?? s), row, col)
+        const why = this.refusal(rule, canvasValue(typed))
+        if (why !== null) { this.refuse(cell, why); return }
+      }
+      cell.classList.remove('dv-refused')
+      cell.removeAttribute('title')
       done = true
       this.cvEditing = null
-      const text = cell.textContent ?? ''
+      const text = typed
       cell.contentEditable = 'false'
       cell.classList.remove('dg-editing')
       cell.onblur = null
@@ -2659,7 +2714,92 @@ export class Grid {
     this.writeCanvas(cells)
   }
 
+  /**
+   * The in-cell dropdown arrows, on BOTH kinds — one wiring, called from each
+   * paint's own wire step.
+   *
+   * `onmousedown` with `stopPropagation`, not `onclick`: the grid starts a
+   * SELECTION on mousedown over a cell, so a click handler alone would move
+   * the cursor, repaint, destroy the node under the pointer and never see the
+   * click. The same reason the fill handle and the column grips do it.
+   */
+  private wireDropdowns(): void {
+    this.table.querySelectorAll<HTMLElement>('.dv-arrow').forEach((arrow) => {
+      arrow.onmousedown = (e) => {
+        e.preventDefault(); e.stopPropagation()
+        const cell = arrow.closest<HTMLElement>('.dg-cell')
+        if (!cell || this.store.readOnly) return
+        const cv = this.canvas
+        if (cv) {
+          const key = cell.dataset.key
+          const pos = key ? canvasPos(key) : null
+          if (!pos) return
+          const rule = canvasRuleAt(canvasRules(cv), pos.row, pos.col)
+          if (!rule) return
+          openListMenu({
+            anchor: cell,
+            options: listOptions(rule),
+            current: this.cvValueAt(pos.row, pos.col),
+            onPick: (v) => {
+              const had = this.canvas?.cells[key!]
+              const next = canvasCellEdit(had, v)
+              if (next !== null || had !== undefined) this.writeCanvas({ [key!]: next })
+              this.paint(); this.announce()
+            },
+          })
+          return
+        }
+        const s = this.sheet
+        const colId = cell.dataset.col
+        const rid = Number(cell.parentElement?.dataset.rid)
+        const col = s.columns.find((c) => c.id === colId)
+        if (!col || !Number.isFinite(rid) || rid < 0) return
+        const rule = columnRule(col)
+        if (!rule) return
+        openListMenu({
+          anchor: cell,
+          options: listOptions(rule),
+          current: readCell(s.data[col.id], dataRow(s, rid)),
+          onPick: (v) => {
+            // Through `coerceForColumn`, exactly as a typed entry is: a list on
+            // a number column stores numbers, or the dropdown would be the one
+            // door into the sheet that writes the wrong type.
+            this.store.commit({
+              op: 'setCells', sheet: s.id, col: col.id, rids: [rid],
+              v: [coerceForColumn(v, col.type)],
+            })
+            this.paint(); this.announce()
+          },
+        })
+      }
+    })
+  }
+
+  /**
+   * Does a rule REFUSE this entry, here, now?
+   *
+   * `reject` is scoped to the keyboard — see datavalid.ts's header. This is
+   * called from the two cell editors and from nowhere else on purpose: a
+   * paste, a fill, an import, an undo and a remote collaborator's op all land
+   * and are MARKED. A refusal on a remote op would either diverge the replicas
+   * or discard somebody else's committed work.
+   */
+  private refusal(rule: DataRule | null, v: unknown): string | null {
+    if (!rule || rule.on !== 'reject') return null
+    return violationOf(rule, v)
+  }
+
+  /** Paint a refusal into the open editor and keep it open. Nothing is
+   *  committed, so nothing the author typed is lost; Escape abandons it. */
+  private refuse(cell: HTMLElement, why: string): void {
+    cell.classList.add('dv-refused')
+    cell.title = why
+    if (this.descEl) this.descEl.textContent = why
+    cell.focus()
+  }
+
   private wire(): void {
+    this.wireDropdowns()
     // the fill handle: drag down to extend the selection and fill it
     const handle = this.table.querySelector<HTMLElement>('.dg-handle')
     if (handle) {
@@ -2902,9 +3042,19 @@ export class Grid {
     let done = false
     const finish = (write: boolean, move?: 'down' | 'up' | 'right' | 'left') => {
       if (done || !this.editing) return
+      const typed = cell.textContent ?? ''
+      // THE REFUSAL, and the only place in the app that has one. Checked
+      // BEFORE anything is torn down, so a refused entry leaves the editor
+      // exactly as it was with the author's own text still in it.
+      if (write && !isFormula(typed)) {
+        const why = this.refusal(columnRule(col), coerceForColumn(typed, col.type))
+        if (why !== null) { this.refuse(cell, why); return }
+      }
+      cell.classList.remove('dv-refused')
+      cell.removeAttribute('title')
       done = true
       this.editing = null
-      const text = cell.textContent ?? ''
+      const text = typed
       cell.contentEditable = 'false'
       cell.classList.remove('dg-editing')
       cell.onblur = null
