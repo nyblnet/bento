@@ -71,6 +71,7 @@ import {
 import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformula.ts'
 import { Store, type Patch, setColumnType } from './store.ts'
 import { starterDoc } from './starter.ts'
+import { inferComputedType } from './computedtype.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
 import { keyToAction, normalize } from './select.ts'
@@ -2042,9 +2043,18 @@ async function addFormula(store: Store, sheet: TableSheet): Promise<void> {
   })
   if (!got) return
   const id = `f-${Math.floor(Date.now() % 1e8).toString(36)}`
+  // THE TYPE COMES FROM WHAT THE EXPRESSION RETURNS, not from a constant. This
+  // line used to read `type: 'number'` — so a column of surnames arrived
+  // badged NUMBER, right-aligned, filtered with numeric operators and totalling
+  // to nothing. computedtype.ts runs the expression against this sheet and
+  // judges the values; when they cannot be judged it says text, which is the
+  // type that makes no claim.
   store.commit({
     op: 'addColumn', sheet: sheet.id,
-    column: { id, name: got.name.trim() || t('Computed'), type: 'number', formula: got.expr },
+    column: {
+      id, name: got.name.trim() || t('Computed'),
+      type: inferComputedType(sheet, got.expr).type, formula: got.expr,
+    },
   })
 }
 
@@ -2058,9 +2068,22 @@ async function editFormula(store: Store, sheet: TableSheet, col: Column): Promis
     check: (v) => formulaProblem(sheet, v.expr),
   })
   if (!got) return
+  if (!got.expr.trim()) {
+    store.commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { formula: undefined } })
+    return
+  }
+  // RE-INFER, BUT NEVER OVERRULE A PERSON. Changing `Value * Rate` to a text
+  // split should re-type the column, or the badge goes on lying — but a type
+  // somebody chose by hand in the panel is a decision, and silently undoing it
+  // on the next formula edit is the worse of the two failures. So the type
+  // moves only while it still matches what the OLD expression produced, which
+  // is exactly the case "nobody has touched this".
+  const before = inferComputedType(sheet, col.formula ?? '', col.id)
+  const after = inferComputedType(sheet, got.expr, col.id)
+  const retype = col.type === before.type && after.type !== col.type
   store.commit({
     op: 'setColumn', sheet: sheet.id, col: col.id,
-    patch: got.expr.trim() ? { formula: got.expr } : { formula: undefined },
+    patch: retype ? { formula: got.expr, type: after.type } : { formula: got.expr },
   })
 }
 

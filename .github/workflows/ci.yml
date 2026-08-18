@@ -462,6 +462,15 @@ jobs:
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
+      - name: bento/dash a formula column is typed by what it returns
+        # It used to be born `number`, hardcoded: a formula splitting surnames
+        # out of "Lastname, Firstname" produced a NUMBER column of text that
+        # filtered, sorted, exported and totalled wrongly. Inference is by the
+        # JS type of the computed values, never their appearance — a numeric
+        # STRING typed number is the SUM 0 bug (test-dash-coltype.ts) arriving
+        # by a new door, and that is asserted by name.
+        run: node scripts/test-dash-computedtype.ts
+
       - name: bento/dash paste special
         # Values only must land the COMPUTED value and NEVER an error object —
         # the same class of damage scripts/test-dash-fill.ts records, reached

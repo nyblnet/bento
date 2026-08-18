@@ -45,6 +45,7 @@ import {
   countViolations, columnRulePatch, boxRef, type DataRule,
 } from './datavalid.ts'
 import { mountTabs, renameSheetPatch } from './tabs.ts'
+import { inferComputedType } from './computedtype.ts'
 import { toast } from './saveui.ts'
 import type { CanvasSheet, Column, ColumnType, TableSheet } from './model.ts'
 import { readCell, setColumnType, type Patch, type Store } from './store.ts'
@@ -499,7 +500,22 @@ export function mountPanels(host: PanelsHost): Panels {
     const formula = text(typeof col.formula === 'string' ? col.formula : '', (v) => {
       const next = v.trim()
       if (next === (col.formula ?? '')) return
-      commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { formula: next || undefined } })
+      if (!next) {
+        commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { formula: undefined } })
+        return
+      }
+      // The same rule main.ts's formula dialog follows, for the same reason: a
+      // column whose expression now returns text must stop claiming NUMBER, and
+      // a type chosen by hand in the dropdown two rows up must not be undone by
+      // an unrelated edit here. See computedtype.ts.
+      const before = inferComputedType(sheet, col.formula ?? '', col.id)
+      const after = inferComputedType(sheet, next, col.id)
+      commit({
+        op: 'setColumn', sheet: sheet.id, col: col.id,
+        patch: col.type === before.type && after.type !== col.type
+          ? { formula: next, type: after.type }
+          : { formula: next },
+      })
     })
     formula.placeholder = t('Value * Probability')
     formula.classList.add('dp-mono')
