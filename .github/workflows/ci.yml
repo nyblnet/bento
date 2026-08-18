@@ -155,6 +155,8 @@ jobs:
           for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
             echo "--- $tz"
             TZ=$tz node scripts/test-spaces-journal.ts
+          done
+
       - name: Magic notes evaluator (several timezones)
         # Two failure modes, and the second is what would make the feature worse
         # than not having it: a WRONG answer (silent, confident, in somebody's
