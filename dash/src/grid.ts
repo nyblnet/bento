@@ -524,6 +524,32 @@ export class Grid {
   onContextMenu?: (row: number, col: number, x: number, y: number) => void
   onFilterMenu?: (colId: string, x: number, y: number) => void
   /**
+   * THE TWO GUTTERS, right-clicked. Separate hooks from `onContextMenu`, and
+   * deliberately so: the cell menu is a menu about a CELL and these are menus
+   * about a whole row and a whole column, which is the distinction Excel makes
+   * and the reason a hand goes to the gutter in the first place. One shared
+   * hook would have meant one menu, and a menu offering "Fill down" for a row
+   * or "Insert row above" for a column is the same silence in a longer form.
+   *
+   * The column hook carries the column ID, not the visible index: `ci` counts
+   * SHOWN columns and every structural op counts all of them, so a sheet with
+   * one hidden column would insert against the wrong one.
+   */
+  onRowMenu?: (row: number, x: number, y: number) => void
+  onColMenu?: (colId: string, x: number, y: number) => void
+  /**
+   * The `+` at the right end of the header strip — the column counterpart of
+   * the appender row. Routed out rather than handled here because a new column
+   * needs a NAME, and asking for one is the app's dialog, not the grid's.
+   */
+  onAddColumn?: () => void
+  /**
+   * Something the grid did that the reader has to be told about, in the words
+   * the grid chose. Appending a row is the whole of it today: what happened to
+   * the formulas in that row is a fact only `appendRows` knows.
+   */
+  onNotice?: (messages: string[]) => void
+  /**
    * A footer cell was clicked — the totals row is the CONTROL now.
    *
    * The rect, not a point: this menu opens from the bottom of the window, so
@@ -694,6 +720,16 @@ export class Grid {
   /** Is this grid showing a spreadsheet? The branch every shared verb takes. */
   get isCanvas(): boolean { return this.canvas !== null }
 
+  /**
+   * The columns a reader can SEE, in the order the header draws them.
+   *
+   * Every `ci` in this file counts these and not `sheet.columns`, and the two
+   * differ the moment a column is hidden. Exported as a method so the menus
+   * (gridmenu.ts) index the same list the header does rather than keeping a
+   * second copy of the hidden-column rule.
+   */
+  visibleColumns(): Column[] { return cols(this.sheet) }
+
   /** A selection sized to whichever kind is on screen. */
   private freshSelection(): Selection {
     const cv = this.canvas
@@ -858,7 +894,41 @@ export class Grid {
         `</span>` +
         `<span class="dg-grip" data-grip="${c.id}" title="${esc(t('Drag to resize, double-click to fit the widest value'))}"></span>` +
         `</div>`
-    }).join('')}`
+    }).join('')}${this.headerAppender()}`
+  }
+
+  /**
+   * THE COLUMN APPENDER — the `+` at the right end of the header strip.
+   *
+   * The row appender (`frontierRowHtml`) is the argument for this one: the
+   * dataset's frontier was invisible in both directions, one half of it was
+   * fixed, and a reader who has learned that the `+` under the last row adds a
+   * row has every reason to look for the same mark past the last column. There
+   * was nothing there, and Insert column lived only in a right-click nobody had
+   * a reason to try. Half a convention is worse than none — it teaches the rule
+   * and then breaks it.
+   *
+   * WHERE IT DIFFERS FROM THE ROW, and it has to. A row is brought into being
+   * by TYPING in it, which is why clicking the row appender costs nothing:
+   * a row's content is what a row is. A column is not — it needs a NAME and a
+   * type before it holds anything, and there is nowhere on the header strip to
+   * type one. So the click opens the same New-column dialog the menu opens, and
+   * the file still only grows when that dialog is submitted. The invariant the
+   * frontier rig states — SELECTION IS FREE, ONLY WRITING COSTS — is kept; it
+   * is the gesture in between that differs, because the two things being
+   * appended differ.
+   *
+   * Absent in a read-only workbook, where an invitation is a lie, and on the
+   * spreadsheet kind, which has an unbounded grid and needs no invitation.
+   */
+  private headerAppender(): string {
+    if (this.canvas || this.store.readOnly) return ''
+    // NOT `.dg-h`, and not `role="columnheader"`. It heads no column: giving it
+    // either would put a cell in the header row that `aria-colcount` does not
+    // count and that a screen reader would announce as a column the sheet does
+    // not have. A button is what it is.
+    return `<div class="dg-cell dg-add-col" role="button" tabindex="-1" ` +
+      `title="${esc(t('Add a column'))}" aria-label="${esc(t('Add a column'))}">+</div>`
   }
 
   /**
@@ -1047,13 +1117,22 @@ export class Grid {
    * goes last, and under a sort `buildOrder` sinks blanks to the end in both
    * directions — so the cursor is already on it and does not have to be moved.
    */
-  private appendRows(count = 1): number {
+  private appendRows(count = 1, carry = false): number {
     const at = this.frontier()
     if (at < 0) return -1
     const s = this.sheet
     const patches = insertRowsAt(s, rowCount(s), count)
     if (!patches.length) return -1
-    this.store.commit(patches)
+    // ONLY WHEN A PERSON IS ADDING ONE ROW. A paste that appends rows is about
+    // to write every one of those cells itself, and a formula carried in
+    // underneath it would be a second author of the same cell — the value
+    // lands, the formula wins the paint, and the paste looks like it failed.
+    const rid = (patches[0] as { rids?: number[] }).rids?.[0]
+    const carried = carry && count === 1 && rid !== undefined
+      ? this.carryFormulas(rid, rowCount(s) - 1)
+      : { patches: [] as Patch[], messages: [] as string[] }
+    this.store.commit([...patches, ...carried.patches])
+    if (carried.messages.length) this.onNotice?.(carried.messages)
     // The `doc` listener repaints, but only if the store emits synchronously;
     // painting again is cheap and makes the new row's cell findable by the
     // caller that is about to open an editor on it.
@@ -1062,12 +1141,95 @@ export class Grid {
   }
 
   /**
+   * WHAT HAPPENS TO A PER-CELL FORMULA WHEN A ROW IS APPENDED, and — either
+   * way — what the reader is told about it.
+   *
+   * THE FINDING. `timesheet.xlsx` carries `=SUM(B2:F2)` down a Total column.
+   * Add a person and the Total cell for the new row is empty; Excel's table
+   * would have filled it. dash's own answer to this is a COLUMN formula, which
+   * propagates and is better, but an IMPORTED sheet's per-cell formulas stay
+   * per-cell forever and nothing said so at the moment the hole appeared. The
+   * silence was the defect, not the emptiness.
+   *
+   * THE RULE, and why it is not "copy the last row's formula". A dataset does
+   * not know which of its rows are data: an imported sheet's last row is very
+   * often a TOTALS row (finding 7 — the import cannot know, because the file
+   * does not say), and `=SUM(B2:B8)` translated down a row is a wrong number
+   * that looks exactly like a right one. So a formula is carried only when the
+   * column PROVES it repeats: the last two rows must hold the same formula one
+   * row apart — `translate(f[n-2], +1) === f[n-1]`. A run of one is not a
+   * pattern, and a day-total sitting under a run of row-totals fails the test
+   * on the spot.
+   *
+   * The translation is a1.ts's, through `translateCellFormula` — the same call
+   * a fill makes, so relative and absolute references move by the rules
+   * `scripts/test-dash-fill.ts` guards, and a fill never seeds from a computed
+   * value (that was the shipped data-loss bug; nothing here reads a value at
+   * all — only the stored `f`).
+   *
+   * AND WHEN IT REFUSES IT SAYS SO. A column that has per-cell formulas but no
+   * proven pattern produces a sentence naming the column and pointing at the
+   * column formula, which is the thing that would have filled every future row.
+   * Silence is the one outcome this function does not have.
+   *
+   * `rid` is the new row's rid and `below` is the DATA position of the row it
+   * follows — `rowCount - 1` for an append, `at - 1` for an insert in the
+   * middle, so both doors to a new row get the same answer. Public for that
+   * second door, which is gridmenu.ts's.
+   */
+  carryFormulas(rid: number, below: number): { patches: Patch[]; messages: string[] } {
+    const s = this.sheet
+    if (!s.cells || below < 0) return { patches: [], messages: [] }
+    const keys: string[] = []
+    const overs: Array<Record<string, unknown>> = []
+    const carried: string[] = []
+    const stranded: string[] = []
+    for (const col of cols(s)) {
+      // A COMPUTED COLUMN already fills every row from its expression — there
+      // is nothing per-cell to carry and nothing to warn about.
+      if (col.formula) continue
+      const at = (r: number): string | undefined => {
+        if (r < 0) return undefined
+        const f = s.cells?.[`${col.id}:${ridForDataRow(s, r)}`]?.f
+        return typeof f === 'string' && f !== '' ? f : undefined
+      }
+      const last = at(below)
+      if (last === undefined) continue
+      const prev = at(below - 1)
+      if (prev === undefined || translateCellFormula(prev, 1, 0) !== last) {
+        stranded.push(col.name)
+        continue
+      }
+      keys.push(`${col.id}:${rid}`)
+      overs.push({ f: translateCellFormula(last, 1, 0) })
+      carried.push(col.name)
+    }
+    const messages: string[] = []
+    if (carried.length) {
+      messages.push(t('The formula in {cols} was carried down to the new row. A column formula would fill every new row, without being asked.')
+        .replace('{cols}', carried.join(', ')))
+    }
+    if (stranded.length) {
+      messages.push(t('{cols} holds formulas on single cells that do not repeat down the column, so the new row is empty there. An imported formula stays on the cell it arrived on; give the column a formula and every new row fills itself.')
+        .replace('{cols}', stranded.join(', ')))
+    }
+    return {
+      patches: keys.length
+        ? [{ op: 'setOverrides', sheet: s.id, keys, v: overs as never, dropEmpty: true } as Patch]
+        : [],
+      messages,
+    }
+  }
+
+  /**
    * The cursor is on the appender and something is about to write there — turn
    * it into a real row first. False means the write must not happen.
    */
   private materialiseCursorRow(): boolean {
     if (!this.isFrontier(this.sel.cursor.row)) return true
-    return this.appendRows() >= 0
+    // `carry: true` — this is the "add a person" gesture, and finding 11 is
+    // about the row it makes. See `carryFormulas`.
+    return this.appendRows(1, true) >= 0
   }
 
   paint(): void {
@@ -1528,6 +1690,18 @@ export class Grid {
     cut?: boolean
   } | null = null
 
+  /**
+   * ⌘C and ⌘X, as one method — because the gutter menus' Copy and Cut are the
+   * SAME gesture reached with a mouse, and two implementations of a cut is how
+   * one of them forgets to set `clip.cut` and pastes a copy instead.
+   */
+  copyToClipboard(cut: boolean): void {
+    void navigator.clipboard?.writeText(this.copyTsv())
+    if (!cut) return
+    if (this.clip) this.clip.cut = true
+    this.clearSelection()
+  }
+
   copyTsv(): string {
     const b = this.sel.bounds()
     const tsv = tsvFromRange((r, c) => this.valueAt(r, c),
@@ -1926,8 +2100,7 @@ export class Grid {
     if (a.kind === 'edit') return this.editActive()
     if (a.kind === 'clear') { this.clearSelection(); return true }
     if (a.kind === 'copy' || a.kind === 'cut') {
-      void navigator.clipboard?.writeText(this.copyTsv())
-      if (a.kind === 'cut') { if (this.clip) this.clip.cut = true; this.clearSelection() }
+      this.copyToClipboard(a.kind === 'cut')
       return true
     }
     if (a.kind === 'paste') return false          // the document paste listener has the data
@@ -2810,6 +2983,31 @@ export class Grid {
         this.paint(); this.announce()
       }
     })
+    // THE COLUMN GUTTER, right-clicked. On the WHOLE header cell and not just
+    // the letter strip: the reader aiming at "this column" aims at the name,
+    // the type badge or the letter without distinguishing between them, and a
+    // menu that appears over one third of the target is a menu that does
+    // nothing twice out of three.
+    this.head.querySelectorAll<HTMLElement>('.dg-h[data-col]').forEach((el) => {
+      el.oncontextmenu = (e) => {
+        e.preventDefault()
+        const ci = Number(el.dataset.ci)
+        // SELECT FIRST, unless this column is already inside the selection —
+        // the same rule the cell menu follows, and the reason right-clicking
+        // one of three selected columns still means all three.
+        const box = this.sel.bounds()
+        if (!(ci >= box.left && ci <= box.right)) {
+          this.sel.selectCol(ci)
+          this.paint(); this.announce()
+        }
+        this.onColMenu?.(el.dataset.col!, e.clientX, e.clientY)
+      }
+    })
+    // THE COLUMN APPENDER. A click, not a right-click: it is an invitation, and
+    // the file only grows when the dialog it opens is submitted (see
+    // `headerAppender` for why a column cannot be typed into being).
+    const addCol = this.head.querySelector<HTMLElement>('.dg-add-col')
+    if (addCol) addCol.onclick = () => this.onAddColumn?.()
     const corner = this.head.querySelector<HTMLElement>('.dg-corner')
     if (corner) corner.onclick = () => { this.sel.selectAll(); this.paint(); this.announce() }
     // filter caret
@@ -2872,9 +3070,29 @@ export class Grid {
     })
     // row header selects the row
     this.table.querySelectorAll<HTMLElement>('[data-rowhead]').forEach((el) => {
-      el.onmousedown = () => {
-        this.sel.selectRow(Number(el.dataset.rowhead))
+      const row = Number(el.dataset.rowhead)
+      el.onmousedown = (e) => {
+        // A RIGHT BUTTON MUST NOT COLLAPSE THE SELECTION. mousedown fires
+        // before contextmenu, so without this guard right-clicking inside a
+        // three-row selection re-selected one row and the menu that opened a
+        // moment later described a selection the reader never made.
+        if ((e as MouseEvent).button !== 0) return
+        this.sel.selectRow(row)
         this.paint(); this.announce(); this.focusGrid()
+      }
+      el.oncontextmenu = (e) => {
+        e.preventDefault()
+        // THE APPENDER HAS NO MENU. Its gutter is a `+`, not a row number,
+        // because the row is not there yet — and "Delete row" over a row that
+        // does not exist is exactly the kind of item that teaches a reader to
+        // stop trusting the menu. Typing is still how it becomes a row.
+        if (this.isFrontier(row)) return
+        const box = this.sel.bounds()
+        if (!(row >= box.top && row <= box.bottom)) {
+          this.sel.selectRow(row)
+          this.paint(); this.announce()
+        }
+        this.onRowMenu?.(row, e.clientX, e.clientY)
       }
     })
     this.head.querySelectorAll<HTMLElement>('[data-retype]').forEach((el) => {

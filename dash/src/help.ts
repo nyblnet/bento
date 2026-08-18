@@ -112,8 +112,9 @@ const TIPS = [
   'A cell that starts with “?” has to be typed that way: press F2 first, because a bare “?” opens this card.',
   'Drag the small square at the corner of the selection to fill — dash continues 1, 2, 3 and Jan, Feb, Mar, and repeats anything it cannot read as a series.',
   'Paste from Excel or Sheets lands in the cells at the cursor. Use Data ▸ Import to bring a file in as a new sheet.',
-  'Right-click a cell for rows, columns, fill and conditional formatting.',
+  'Right-click a cell for the clipboard, rows, columns, fill and conditional formatting. Right-click a row number or a column header for the whole row or column — insert, delete and clear, counted from the selection.',
   'Click a column letter to select it, the corner box to select the sheet, and a column header’s caret to sort or filter.',
+  'The row of + cells under the last row adds a row: click it and type. The + past the last column header adds a column — a column needs a name first, so it asks for one.',
 ]
 
 // --- drawing a chord ---------------------------------------------------------
