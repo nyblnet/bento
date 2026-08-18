@@ -602,7 +602,6 @@ const ALIGN_ICON: Record<Align, string> = {
   right: svg('<line x1="3" y1="5" x2="21" y2="5"/><line x1="9" y1="9.5" x2="21" y2="9.5"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="9" y1="18.5" x2="21" y2="18.5"/>'),
   justify: svg('<line x1="3" y1="5" x2="21" y2="5"/><line x1="3" y1="9.5" x2="21" y2="9.5"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="18.5" x2="21" y2="18.5"/>'),
 };
-const ICON_PAGE = svg('<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="17" x2="13" y2="17"/>');
 const ICON_BREAK = svg('<line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="3 3"/><path d="M8 7V3h8v4"/><path d="M8 17v4h8v-4"/>');
 
 /**
@@ -914,11 +913,8 @@ export function openPageSetup(ctx: FeatureContext): void {
 // the author is judging the change by.
 
 function mountPanel(host: HTMLElement, ctx: FeatureContext): void {
-  // its own title, now that the mount loop no longer adds one
-  const title = document.createElement('div');
-  title.className = 't-section';
-  title.textContent = t('Paragraph');
-  host.appendChild(title);
+  // NO title of its own: the first group below is already "Paragraph", and
+  // adding a section header above it printed the word twice in a row.
   watch(ctx);
   const unit = readerUnit();
   const wrap = el('div', 't-lay');
@@ -1012,17 +1008,15 @@ function mountPanel(host: HTMLElement, ctx: FeatureContext): void {
     applyPara(ctx, { align: undefined, sb: undefined, sa: undefined, lh: undefined, ind: undefined });
   });
 
-  const setup = el('button', 't-btn') as HTMLButtonElement;
-  setup.type = 'button';
-  setup.innerHTML = ICON_PAGE + `<span>${t('Page setup…')}</span>`;
-  setup.addEventListener('click', () => openPageSetup(ctx));
-
+  // The page-size summary, and ONLY the summary. The "Page setup…" button that
+  // used to sit beside it, under a second "Document" heading, is gone: page
+  // size and orientation are rows in the props panel's Document section now,
+  // and repeating the entry point here printed "Document" twice in one panel.
   const summary = el('p', 't-hint');
 
   wrap.append(
     group(t('Paragraph'), alignRow, lineRow, before.row, after.row, indent.row),
-    group(t('Page breaking'), keepNext.label, keepTogether.label, breakBefore.label),
-    group(t('Document'), setup, summary),
+    group(t('Page breaking'), keepNext.label, keepTogether.label, breakBefore.label, summary),
   );
   const resetRow = el('div', 't-lay-row');
   resetRow.append(reset);
