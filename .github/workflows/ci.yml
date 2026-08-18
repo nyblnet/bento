@@ -415,6 +415,24 @@ jobs:
         # into a deleted row is #REF! rather than whatever slid up into it.
         run: node scripts/test-dash-a1.ts
 
+      - name: bento/dash defined names
+        # A name is a redirection, and every way it can go wrong reports a
+        # NUMBER: substituted inside quoted text or after a sheet's `!`,
+        # outranking a column of the same name, spelled like a cell address and
+        # therefore never consulted, or DROPPED when its rows are deleted
+        # instead of becoming #REF!. Ends by mounting the real grid, because an
+        # engine the app never passes the name table to is invisible.
+        run: node scripts/test-dash-names.ts
+
+      - name: bento/dash array formulas and spill
+        # A spilled cell is COMPUTED, not stored: it must never reach the file,
+        # a collision must BLOCK with #SPILL! rather than overwrite, two spills
+        # wanting one cell must pick the same winner on every machine, and the
+        # shape must survive the operators (2×3, not 6×1 — the wrong answer is
+        # right in the only cell anybody checks). Datasets deliberately do not
+        # spill; a column formula is the columnar answer to the same need.
+        run: node scripts/test-dash-spill.ts
+
       - name: bento/dash pivot
         # Subtotals are COMPUTED, not summed: an average of averages is a
         # different number, and a distinct count does not add up.

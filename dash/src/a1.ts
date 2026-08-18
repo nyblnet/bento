@@ -54,6 +54,15 @@
 // whole and carries its sheet on the `Unit`. `'Q3 pipeline'!A1` is the quoted
 // form, for names that are not bare words; `''` inside the quotes is one quote.
 //
+// A DEFINED NAME IS THE THIRD KIND OF NAME, and the scanner now offers it up
+// rather than skipping it. `Sheet1!A1` is a sheet qualifier, `Table1[Col]` is a
+// structured reference, and a bare word that is neither — not cell-shaped, not
+// a call, not a qualifier — is what `TaxRate` looks like. `mapNames` walks with
+// the SAME rules the reference rewrites use, because a second walk would be a
+// second definition of what a word is, and the two would disagree about a
+// quoted string on some Tuesday. This file does not know what a name MEANS;
+// cellformula.ts owns the table and the substitution.
+//
 // AN ERROR LITERAL IS COPIED VERBATIM. `#REF!`, `#DIV/0!`, `#N/A` — the `REF`
 // in `#REF!` is a word followed by `!` and would otherwise read as a sheet
 // qualifier now that qualifiers are scanned.
@@ -260,6 +269,8 @@ interface Unit {
   sheet?: string
 }
 type MapUnit = (u: Unit) => string
+/** A bare word that is not a reference, not a call and not a qualifier. */
+type MapName = (name: string) => string
 
 const isAlpha = (c: string): boolean => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
 const isDigit = (c: string): boolean => c >= '0' && c <= '9'
@@ -277,7 +288,46 @@ const isWord = (c: string): boolean => isAlpha(c) || isDigit(c) || c === '_' || 
 export function mapRefs(src: string, map: MapUnit): string { return rewrite(src, map) }
 export type { Unit as RefUnit }
 
-function rewrite(src: string, map: MapUnit): string {
+/**
+ * Walk `src` and hand every DEFINED-NAME candidate to `map`, splicing its
+ * return in place. References, calls, sheet qualifiers, quoted text, bracketed
+ * names and error literals are all left exactly as written.
+ *
+ * A word is offered only when nothing else claims it: `SUM` is followed by `(`,
+ * `Sheet1` by `!`, `Table1` by `[`, `B4` is cell-shaped, and the word AFTER a
+ * `!` belongs to the qualifier that could not be resolved — none of those are
+ * a defined name, and substituting into one corrupts the formula.
+ *
+ * `map` returning the word unchanged is how "there is no name by that spelling"
+ * is said; formula.ts then reports `#NAME?`, which is the honest answer and the
+ * one it already gives.
+ */
+export function mapNames(src: string, map: MapName): string {
+  return rewrite(src, null, map)
+}
+
+/**
+ * Is this a spelling a defined name may have?
+ *
+ * The fence is the same one the header draws around `REVENUE2024`: a name that
+ * is CELL-SHAPED is refused, because the scanner resolves `TAX1` as a cell
+ * before it ever reaches the name table, so a name spelled that way would be
+ * silently unreachable — a definition that exists and never applies is worse
+ * than a refusal. The body is formula.ts's identifier, so a name that parses
+ * here also lexes there.
+ */
+export const NAME_RE = /^[A-Za-z_][A-Za-z0-9_.]*$/
+export const isNameLike = (s: string): boolean =>
+  NAME_RE.test(s) && parseRef(s) === null
+
+/**
+ * `map` may be `null`: a walk that is only substituting NAMES must return every
+ * reference as the author wrote it, spacing and lower case included. Running
+ * them through a mapper that formats a parsed `CellRef` would silently
+ * canonicalise `a1 : b2` into `A1:B2` — correct, unasked for, and a diff in
+ * every formula a name touches.
+ */
+function rewrite(src: string, map: MapUnit | null, mapName?: MapName): string {
   const n = src.length
   const skipSpace = (j: number): number => {
     while (j < n && (src[j] === ' ' || src[j] === '\t' || src[j] === '\n' || src[j] === '\r')) j++
@@ -328,11 +378,12 @@ function rewrite(src: string, map: MapUnit): string {
   }
 
   /** `<name>!<ref>` starting at the qualifier's end `q`, or null. */
-  const qualified = (name: string, q: number): { text: string; end: number } | null => {
+  const qualified = (name: string, at: number, q: number): { text: string; end: number } | null => {
     const k = skipSpace(q)
     if (src[k] !== '!') return null
     const r = refAt(skipSpace(k + 1))
-    return r ? { text: map({ ...r.unit, sheet: name }), end: r.end } : null
+    if (!r) return null
+    return { text: map ? map({ ...r.unit, sheet: name }) : src.slice(at, r.end), end: r.end }
   }
 
   let out = ''
@@ -361,7 +412,7 @@ function rewrite(src: string, map: MapUnit): string {
     // qualify a reference is copied like any other character.
     if (c === "'") {
       const q = quoted(i)
-      const hit = q > 0 ? qualified(unquoteSheet(src.slice(i, q)), q) : null
+      const hit = q > 0 ? qualified(unquoteSheet(src.slice(i, q)), i, q) : null
       if (hit) { out += hit.text; i = hit.end; continue }
       out += c
       i++
@@ -404,10 +455,16 @@ function rewrite(src: string, map: MapUnit): string {
       // unit — dropping the name here is what made `Sheet1!A1` read the local
       // A1. When what follows is not a reference, the name is left alone.
       if (src[k] === '!') {
-        const hit = qualified(text, j)
+        const hit = qualified(text, i, j)
         if (hit) { out += hit.text; i = hit.end; continue }
-        out += text
-        i = j
+        // Not a reference after the `!`, so the whole thing is somebody else's
+        // syntax. The WORD AFTER IT is consumed here too, verbatim: leaving it
+        // to the loop would offer `Sheet1!Total` up as the defined name
+        // `Total`, and substituting a range into it would fabricate
+        // `Sheet1!A1:A5` — a reference to a sheet the author never named.
+        const w = word(skipSpace(k + 1))
+        out += src.slice(i, w)
+        i = w
         continue
       }
       // `(` = a call, `[` = a structured reference. Both are followed by a
@@ -419,8 +476,8 @@ function rewrite(src: string, map: MapUnit): string {
         continue
       }
       const r = refAt(i)
-      if (!r) { out += text; i = j; continue }
-      out += map(r.unit)
+      if (!r) { out += mapName ? mapName(text) : text; i = j; continue }
+      out += map ? map(r.unit) : src.slice(i, r.end)
       i = r.end
       continue
     }

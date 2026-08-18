@@ -47,7 +47,11 @@ const ERR = {
   name: (n: string) => new FormulaError('#NAME?', `unknown name "${n}"`),
   cycle: () => new FormulaError('#CYCLE!'),
   na: () => new FormulaError('#N/A'),
+  /** An array result had nowhere to land. See SPILL in cellformula.ts. */
+  spill: (why?: string) => new FormulaError('#SPILL!', why),
 }
+/** Mint `#SPILL!` from outside this module — cellformula.ts owns the geometry. */
+export const spillError = (why?: string): FormulaError => ERR.spill(why)
 export const isErr = (v: unknown): v is FormulaError => v instanceof FormulaError
 
 // --- lexer ------------------------------------------------------------------
@@ -505,9 +509,41 @@ function evalNode(node: Node, ctx: EvalCtx): Cell | Vec {
 const isVec = (v: Cell | Vec): v is Vec => Array.isArray(v)
 const at = (v: Cell | Vec, i: number): Cell => (isVec(v) ? v[i] ?? null : v)
 
+/**
+ * Give a result the SHAPE of the range that produced it.
+ *
+ * A bound range carries its width (`Shaped.__cols`, set by cellformula.ts's
+ * `bindRefs`) because VLOOKUP and INDEX have to tell a 2-column table from a
+ * 20-row one. Every operator here then threw that width away: `A1:C3 * 2` came
+ * out as a flat nine-element array with no idea it was three wide.
+ *
+ * That was survivable while the only consumer was a lookup reading a range
+ * DIRECTLY, and is not now that a result can SPILL — the shape is the footprint
+ * it spills into, and losing it turns a 3×3 block into a 9×1 column down the
+ * sheet, which is a wrong answer that looks like a right one in the first cell.
+ *
+ * Only carried when the operand SURVIVED the operation at full length. A
+ * broadcast that changed the length changed the shape, and guessing the new one
+ * from the old width is exactly the kind of nearly-right that this file's
+ * header refuses.
+ */
+function carryShape(out: Vec, ...from: Array<Cell | Vec>): Vec {
+  let cols = 0
+  let widest = -1
+  for (const a of from) {
+    if (!isVec(a) || a.length !== out.length) continue
+    const c = (a as Vec & Shaped).__cols
+    if (typeof c === 'number' && c > 1 && a.length > widest) { widest = a.length; cols = c }
+  }
+  // 1 is the default a reader infers from the length alone; storing it would
+  // make "no shape" and "one column" two states that mean the same thing.
+  if (cols > 1) (out as Vec & Shaped).__cols = cols
+  return out
+}
+
 function map1(a: Cell | Vec, f: (x: Cell) => Cell): Cell | Vec {
   if (!isVec(a)) return f(a)
-  return a.map(f)
+  return carryShape(a.map(f), a)
 }
 
 function binop(op: string, l: Cell | Vec, r: Cell | Vec): Cell | Vec {
@@ -537,7 +573,7 @@ function binop(op: string, l: Cell | Vec, r: Cell | Vec): Cell | Vec {
     }
   }
   if (n < 0) return one(l as Cell, r as Cell)
-  return Array.from({ length: n }, (_, i) => one(at(l, i), at(r, i)))
+  return carryShape(Array.from({ length: n }, (_, i) => one(at(l, i), at(r, i))), l, r)
 }
 
 const looseEq = (x: Cell, y: Cell): boolean => {
@@ -580,6 +616,14 @@ const shapeOf = (v: Vec): { rows: number; cols: number } => {
   const cols = typeof s.__cols === 'number' && s.__cols > 0 ? s.__cols : 1
   return { rows: Math.ceil(v.length / cols), cols }
 }
+
+/**
+ * The shape of a result, for whoever has to place it on a grid.
+ *
+ * The same reading `cellAt` uses, exported so that spill geometry and lookup
+ * geometry cannot drift into two answers to one question.
+ */
+export const vecShape = (v: Vec): { rows: number; cols: number } => shapeOf(v)
 
 /** Row-major cell at (r, c) of a shaped range. */
 const cellAt = (v: Vec, r: number, c: number): Cell => {
@@ -843,7 +887,7 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
   let width = -1
   for (const a of args) if (isVec(a)) width = Math.max(width, a.length)
   if (width < 0) return fn(args as Cell[])
-  return Array.from({ length: width }, (_, i) => fn(args.map((a) => at(a, i))))
+  return carryShape(Array.from({ length: width }, (_, i) => fn(args.map((a) => at(a, i)))), ...args)
 }
 
 /** Evaluate one column expression over `n` rows. Never throws. */

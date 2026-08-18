@@ -524,6 +524,42 @@ export interface DocMeta {
   [extra: string]: unknown
 }
 
+// --- DEFINED NAMES ----------------------------------------------------------
+//
+// `TaxRate`, `Q3Sales` — a word a formula can use in place of a number or a
+// range. The field predates the implementation; what it gained is `ref`.
+//
+// WORKBOOK-SCOPED, ONE NAMESPACE. Excel has both workbook and sheet scope, and
+// the collision rules between them are the fiddly part: a sheet-local name
+// shadows the workbook one, `Sheet1!TaxRate` reaches past the shadow, and the
+// same word can mean two things two tabs apart. dash's whole claim is that a
+// number can be traced to where it came from, and a name whose meaning depends
+// on which tab you are reading is the opposite of that. So there is one table,
+// at the document, and `TaxRate` means one thing everywhere.
+//
+// A COLUMN NAME WINS. A dataset sheet's `SUM(amount)` already binds `amount` on
+// that sheet, and documents exist that do it. A document-level name must not be
+// able to silently re-point a working column formula at something else, so a
+// defined name only fills in where no column of that sheet claimed the word.
+// That is the local-beats-global instinct Excel's sheet scope encodes, kept
+// without a second namespace to spell it.
+//
+// A DELETED TARGET IS `#REF!`, NEVER A DROPPED NAME. When rows under `Q3Sales`
+// are deleted the entry STAYS and its `ref` becomes `#REF!`, so every formula
+// using it says so and the definition is still there to be repointed. Deleting
+// the entry would turn the same event into `#NAME?` at every use — "you never
+// defined that", which is a lie about what happened.
+
+export interface DefinedName {
+  /** A literal — `TaxRate` = 0.2. Mutually exclusive with `ref`; `ref` wins. */
+  v?: number | string
+  /** An A1 reference or range, sheet-qualified where it needs to be. */
+  ref?: string
+  /** The sentence that makes the number arguable rather than merely present. */
+  note?: string
+  [extra: string]: unknown
+}
+
 export interface DashDoc {
   format: typeof FORMAT
   version: number
@@ -537,7 +573,8 @@ export interface DashDoc {
   measures?: Record<string, Measure>
   /** the data story — see the Story block at the foot of this file */
   story?: Story
-  names?: Record<string, { v: number | string; note?: string }>
+  /** Defined names — see the DEFINED NAMES block just above `DashDoc`. */
+  names?: Record<string, DefinedName>
   views?: View[]
   theme?: Theme
   /**
