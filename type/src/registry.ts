@@ -22,4 +22,7 @@ import './layout.ts';   // paragraph properties, page setup, page breaks
 export {};
 import './link.ts';
 import './toc.ts';        // section numbering + table of contents
-
+// comments — margin notes on a range of text, with replies and resolution.
+// Anchors ride inline.ts `shift`, so they move exactly as marks and footnote
+// anchors do; nothing here can reach print (see the header of comments.ts).
+import './comments.ts';

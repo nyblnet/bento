@@ -15,6 +15,7 @@ import { normalize, shift as shiftMarks, type Mark } from './inline.ts';
 // value import is safe: xref.ts imports only TYPES from this module, precisely
 // so the core can call into it without a cycle
 import { shiftRefs } from './xref.ts';
+import { readThreadsRaw, reconcileThreads } from './comments.ts';
 
 export const FORMAT = 'bento/type';
 export const VERSION = 1;
@@ -107,6 +108,20 @@ export const MAX_TABLE_COLS = 20;
 
 /** A footnote reference anchored INTO a block's text, by character offset. */
 export interface NoteRef { id: string; at: number }
+
+/**
+ * A review comment: a thread anchored to a RANGE of a block's text.
+ *
+ * Doc-level and keyed by id, like `footnotes`, because a thread must be able to
+ * outlive the block it points at — the conversation about a deleted clause is
+ * exactly the conversation you still need.
+ */
+export interface CommentMsg { id: string; author: string; at: string; text: string }
+export interface CommentThread {
+  id: string; block: string; from: number; to: number;
+  quote: string; messages: CommentMsg[];
+  resolved?: boolean; orphan?: boolean;
+}
 
 export interface Block {
   /** stable identity: the redline aligns on it, so it must never be re-minted
@@ -204,6 +219,8 @@ export interface TypeDoc {
   /** note id → note text. Kept out of the blocks so a note can outlive a
    *  re-flow of the paragraph that references it. */
   footnotes: Record<string, string>;
+  /** review threads, by id — see CommentThread */
+  comments?: Record<string, CommentThread>;
   /** document-wide paragraph defaults; absent means the built-in ones */
   layout?: { align?: Block['align']; sb?: number; sa?: number; lh?: number; ind?: number };
   revisions: Revision[];
@@ -428,6 +445,13 @@ export function parseDoc(raw: string): ParseResult {
     signatures: Array.isArray(json.signatures) ? json.signatures as Signature[] : [],
   };
   if (typeof json.docId !== 'string' || !json.docId) repaired.push('minted a missing docId');
+  // Comment threads: parse totally, THEN repair. The order matters and the
+  // feature's note says why — repairing before an anchor moves would clamp it
+  // against a body that has already changed.
+  const threads = reconcileThreads(readThreadsRaw(doc), body);
+  if (threads.length) doc.comments = Object.fromEntries(threads.map(t => [t.id, t]));
+  else delete doc.comments;
+
   return { ok: true, doc, repaired };
 }
 

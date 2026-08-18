@@ -589,3 +589,68 @@ html, body {
 }
 .t-input:focus { border-color: var(--blue); outline: none; }
 .t-dlg .t-input { width: 90px; }
+/* ————— comments —————
+   The layer is a SIBLING of .t-deco, not a child: drawPages() calls
+   deco.replaceChildren() on every repagination and would wipe anything a
+   feature put there. Highlights are absolutely positioned boxes computed from
+   Range.getClientRects(), so nothing is drawn inside the editable — which is
+   also why a comment can never reach print (print.ts renders blocks from the
+   model and this module never touches a block).
+
+   Colours are token-derived throughout; the translucent highlight is a
+   color-mix of the accent rather than a literal, so a theme change carries it. */
+.t-cmt-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.t-cmt-hl {
+  position: absolute; border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.t-cmt-hl.on { background: color-mix(in srgb, var(--accent) 42%, transparent); }
+.t-cmt-hl.done { background: color-mix(in srgb, var(--muted) 16%, transparent); box-shadow: none; }
+
+/* the margin, the same gutter the footnote sidenotes use */
+.t-cmt-card {
+  position: absolute; left: var(--page-w);
+  width: calc(var(--gutter) - 26px); margin-inline-start: 22px;
+  pointer-events: auto; cursor: pointer;
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-inline-start: 2px solid var(--accent);
+  border-radius: 7px; padding: 6px 8px;
+  font: 11.5px/1.45 -apple-system, system-ui, sans-serif;
+}
+.t-cmt-card.on { border-color: var(--accent); box-shadow: 0 2px 10px rgb(20 30 45 / .14); }
+.t-cmt-card.done { opacity: .5; border-inline-start-color: var(--muted); }
+.t-cmt-card .who { color: var(--muted); font-size: 10.5px; }
+.t-cmt-card .what { color: var(--ink); word-break: break-word; }
+.t-cmt-card .msg + .msg { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); }
+
+/* the reply box, shared by the margin card and the panel item */
+.acts { margin-top: 6px; }
+.acts textarea {
+  width: 100%; resize: vertical; font: inherit; font-size: 11.5px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
+}
+.acts .btns { display: flex; gap: 5px; margin-top: 5px; }
+.acts .btns button {
+  flex: 1; font: inherit; font-size: 11px; padding: 3px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--chrome); color: var(--ink-2);
+}
+.acts .btns button:hover { background: var(--chrome-2); }
+
+/* the panel list */
+.t-cmt-item { cursor: pointer; }
+.t-cmt-item.on { border-color: var(--accent); }
+.t-cmt-item .quote {
+  font-size: 11px; color: var(--muted); margin: 3px 0 4px;
+  padding-inline-start: 6px; border-inline-start: 2px solid var(--accent);
+  word-break: break-word;
+}
+/* a detached thread: its words are gone, so the quote is struck through and the
+   accent rail drops to muted — it is history, not a place you can click to */
+.t-cmt-item .quote.gone { text-decoration: line-through; border-inline-start-color: var(--muted); }
+.t-cmt-item .reply {
+  margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line);
+  padding-inline-start: 8px;
+}

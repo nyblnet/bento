@@ -22,6 +22,7 @@ import { renderBody, renderBlock, readBlock, isNoteAtom, TAG } from './render.ts
 import { toggleMark, activeAt, type MarkType } from './inline.ts';
 import { isList, uid, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import type { Store } from './store.ts';
+import { commentsOnEdit, commentsOnSplit, commentsOnMerge } from './comments.ts';
 
 export interface Caret { id: string; at: number; to?: number }
 
@@ -152,6 +153,11 @@ export class Editor {
     this.store.commit(d => {
       const i = d.body.findIndex(b => b.id === c.id);
       if (i >= 0) d.body[i] = next;
+      // INSIDE the commit deliberately: an anchor that moved outside it would
+      // survive a ⌘Z that put the words back, leaving the comment pointing at
+      // text nobody wrote. Returns false when the block carries no comment, so
+      // an ordinary paragraph never widens anybody's undo scope.
+      commentsOnEdit(d, c.id, prev.text, next.text);
     }, { scope: { block: c.id }, run: this.#runId });
     this.onChange?.();
   };
@@ -209,7 +215,10 @@ export class Editor {
     if (shifted.notes?.length) tail.notes = shifted.notes;
     this.store.breakRun();
     this.#runId = null;
-    this.store.commit(d => { d.body.splice(i, 1, head, tail); });
+    this.store.commit(d => {
+      d.body.splice(i, 1, head, tail);
+      commentsOnSplit(d, src.id, c.at, src.text.length, tail.id);
+    });
     this.render();
     this.setCaret({ id: tail.id, at: 0 });
     this.onChange?.();
@@ -226,7 +235,10 @@ export class Editor {
     if (notes.length) merged.notes = notes; else delete merged.notes;
     this.store.breakRun();
     this.#runId = null;
-    this.store.commit(d => { d.body.splice(i - 1, 2, merged); });
+    this.store.commit(d => {
+      d.body.splice(i - 1, 2, merged);
+      commentsOnMerge(d, prev.id, cur.id, at);
+    });
     this.render();
     this.setCaret({ id: merged.id, at });
     this.onChange?.();
