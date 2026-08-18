@@ -40,6 +40,7 @@
 //      stripped the sign and kept the digits, so every comparison in a percent
 //      column was wrong by a factor of a hundred and looked reasonable.
 
+import { readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 
 // The menu co-locates its stylesheet (filterui.ts → filter.css) and reaches
@@ -579,6 +580,25 @@ console.log('\nrank, over what is left')
   [{ col: 'value', pred: { op: 'topN', n: 2 } }], [])) === '[4,5]',
   'and the whole-column top 2 really is a different pair, so the check above ' +
   'discriminates rather than agreeing with itself')
+}
+
+console.log('\nboth doors into the column menu reach THIS menu')
+{
+  // The caret in the column header and the column context menu's "Sort and
+  // filter…" are two ways to one thing. This codebase has been bitten three
+  // times by giving one door a capability the other lacks — import findings
+  // rendered as bullets through one door and a paragraph through the other,
+  // defined names carried by one importer and not the other, and the column
+  // menu itself, which only ever existed on the caret.
+  //
+  // Comments are stripped before matching: a check a comment can satisfy is a
+  // check that certifies documentation, and one of mine already was.
+  const main = readFileSync(new URL('../dash/src/main.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+  const doors = [...main.matchAll(/openColumnMenu\(/g)].length
+  ok(doors >= 2, `both doors call openColumnMenu (found ${doors})`)
+  ok(!/openFilterMenu/.test(main),
+    'and the old one-box menu is gone entirely — leaving it is how one door keeps the old behaviour')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

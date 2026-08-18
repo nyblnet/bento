@@ -45,6 +45,7 @@ import { runPivot, mountPivot, defaultPivot, newPivotSheet, type PivotSpec } fro
 import { buildSheetPreview } from './preview.ts'
 import { installPrint, openPrintDialog } from './print.ts'
 import './ask.css'
+import { openColumnMenu } from './filterui.ts'
 import { installSaveMenu, adoptOpenedDoc, toast } from './saveui.ts'
 import { dismissSplash, dismissSplashNow } from './splash.ts'
 import { t, i18nApi } from './i18n.ts'
@@ -101,9 +102,7 @@ import { importDelimited } from './import.ts'
 import { TYPE_LABEL } from './format.ts'
 import { defaultBinding, renderChart, chartHeading, type ChartBinding } from './chart.ts'
 import { readCell } from './store.ts'
-import {
-  resizeColumn,
-  autoFitWidth, setHidden, freezeAt, readFrozen, hiddenSet } from './rowcol.ts'
+import { hiddenSet } from './rowcol.ts'
 import { FUNCTIONS, dependencies, recalc } from './formula.ts'
 import { buildScene, defaultViz3d, mountViz3d, type Viz3dBinding, type Viz3dKind } from './viz3d.ts'
 
@@ -661,7 +660,11 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // stale the moment the view changed by any other route: "4 of 8 rows" was
   // observed sitting under a different sheet entirely.
   grid.onViewChange = (text) => { viewEl.textContent = text }
-  grid.onFilterMenu = (colId, x, y) => openFilterMenu(store, grid, colId, x, y, viewEl)
+  // BOTH DOORS, and deliberately in one change: the caret in the header and
+  // the column menu's "Sort and filter…" are two ways to the same thing, and
+  // this codebase has now been bitten three times by giving one door a feature
+  // the other lacks (import findings, defined names, and this menu itself).
+  grid.onFilterMenu = (colId, x, y) => openColumnMenu({ store, grid, colId, x, y })
   // ASSIGNED AT mountPanels, below. The context menu is wired before the panels
   // exist and its "More conditional formatting…" item has to reach them, so the
   // reference is late-bound rather than the wiring re-ordered — moving
@@ -682,7 +685,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     pasteSpecial: (px, py) => openPasteSpecial(px, py),
     split: () => { void textToColumns() },
     condFmt: () => panels?.reveal(t('Conditional formatting')),
-    filterMenu: (colId, px, py) => openFilterMenu(store, grid, colId, px, py, viewEl),
+    filterMenu: (colId, px, py) => openColumnMenu({ store, grid, colId, x: px, y: py }),
   }
   installGridMenus(store, grid, menuHooks)
   // What appending a row did to the formulas in it — finding 11. The grid says
@@ -2306,83 +2309,6 @@ function askForm(opts: {
   })
 }
 
-/** Sort and filter for one column — the caret in its header. */
-function openFilterMenu(
-  store: Store, grid: Grid, colId: string, x: number, y: number, viewEl: HTMLElement,
-): void {
-  // CAPTURED ONCE, at the moment the caret was clicked. The menu is about THIS
-  // sheet's column, and every handler below used to re-read `grid.sheet` when
-  // the item was picked — a window the keyboard can walk straight through,
-  // since ctrl+PgDn switches sheets without dismissing an open popover. On a
-  // spreadsheet that re-read is a throw; on another dataset it is the wrong
-  // sheet's column, hidden or frozen, silently.
-  const sheet = grid.sheet
-  const col = sheet.columns.find((c) => c.id === colId)
-  if (!col) return
-  const numeric = col.type === 'number' || col.type === 'money' || col.type === 'percent'
-  const el = popover(x, y,
-    `<button data-a="asc">${t('Sort A → Z')}</button>` +
-    `<button data-a="desc">${t('Sort Z → A')}</button>` +
-    `<div class="dx-pop-sep"></div>` +
-    `<label class="dx-pop-row"><span>${numeric ? t('Greater than') : t('Contains')}</span>` +
-    `<input class="dx-pop-in" spellcheck="false"></label>` +
-    `<button data-a="apply">${t('Apply filter')}</button>` +
-    `<button data-a="clear">${t('Clear filters and sorts')}</button>` +
-    `<div class="dx-pop-sep"></div>` +
-    `<button data-a="hide">${t('Hide this column')}</button>` +
-    `<button data-a="fit">${t('Fit width to content')}</button>` +
-    `<div class="dx-pop-sep"></div>` +
-    `<button data-a="freeze">${frozenTo(sheet, colId) ? t('Unfreeze columns') : t('Freeze up to this column')}</button>`)
-  const input = el.querySelector<HTMLInputElement>('.dx-pop-in')!
-  // DELEGATED, not a second copy. The menu used to compute this line itself,
-  // which meant two renderings of the same fact — and the menu's ran last, so
-  // it overwrote the grid's more accurate one (it knew nothing about sorts).
-  const showView = () => { viewEl.textContent = grid.viewStatus() }
-  el.querySelectorAll<HTMLElement>('button').forEach((b) => {
-    b.onclick = () => {
-      const a = b.dataset.a
-      if (a === 'asc' || a === 'desc') grid.addSort(colId, a)
-      else if (a === 'apply') {
-        const v = input.value.trim()
-        // `v`, not `value` — and NO `as never`. The cast is what let this
-        // compile: filter.ts spells the payload `v`, so `{op:'greater',
-        // value:…}` reached the predicate with an undefined bound. Measured
-        // before the fix: "greater than 10000" left 0 of 8 rows, and `contains`
-        // matched everything, so the feature looked inert rather than wrong.
-        grid.setFilter(colId, v === '' ? null : {
-          col: colId,
-          pred: numeric
-            ? { op: 'greater', v: Number(v.replace(/[,\s£$€¥%]/g, '')) }
-            : { op: 'contains', v },
-        })
-      } else if (a === 'clear') grid.clearView()
-      else if (a === 'hide') store.commit(setHidden(sheet, colId, true))
-      else if (a === 'freeze') {
-        // "up to this column" counts VISIBLE position, which is what the reader
-        // pointed at; a hidden column between them would otherwise freeze one
-        // more column than the menu item named.
-        const at = sheet.columns.filter((c) => !c.hidden).findIndex((c) => c.id === colId)
-        store.commit(freezeAt(sheet, 0, frozenTo(sheet, colId) ? 0 : at + 1))
-      }
-      else if (a === 'fit') {
-        const sh = sheet
-        const comp = grid.computed.get(colId)
-        store.commit(resizeColumn(sh, colId,
-          autoFitWidth((row) => comp ? comp[row] : readCellOf(sh, colId, row), col,
-            sh.rids.reduce((n, [, c]) => n + c, 0))))
-      }
-      showView()
-      el.remove()
-    }
-  })
-  input.focus()
-}
-
-/** Is the freeze already exactly at this column? Then the item offers to undo it. */
-const frozenTo = (sheet: TableSheet, colId: string): boolean => {
-  const at = sheet.columns.filter((c) => !c.hidden).findIndex((c) => c.id === colId)
-  return readFrozen(sheet).cols === at + 1
-}
 
 /** Open a .xlsx. Every worksheet arrives as its own dash sheet. */
 async function pickXlsx(store: Store, host: HTMLElement, grid: Grid): Promise<void> {
@@ -2458,5 +2384,3 @@ async function saveXlsx(
   ])
 }
 
-const readCellOf = (sheet: TableSheet, colId: string, row: number): unknown =>
-  readCell(sheet.data[colId], row)
