@@ -45,6 +45,8 @@ import {
   countViolations, columnRulePatch, boxRef, type DataRule,
 } from './datavalid.ts'
 import { mountTabs, renameSheetPatch } from './tabs.ts'
+import { inferComputedType } from './computedtype.ts'
+import { buildCondFmtSection, condFmtPatch, readCondFmt } from './condfmtui.ts'
 import { toast } from './saveui.ts'
 import type { CanvasSheet, Column, ColumnType, TableSheet } from './model.ts'
 import { readCell, setColumnType, type Patch, type Store } from './store.ts'
@@ -169,6 +171,16 @@ export interface Panels {
   toggle(side: Side): void
   /** Rebuild both panels now. */
   refresh(): void
+  /**
+   * Open the panel, open the named accordion section and scroll to it.
+   *
+   * The cell menu's "More conditional formatting…" is the only caller today,
+   * and it is why this exists: the full rule editor lives in the panel, the
+   * panel can be collapsed and the section can be shut, so a menu item that
+   * merely hoped both were open would do nothing at all on the phone layout —
+   * which boots with the panel shut, by design.
+   */
+  reveal(title: string): void
 }
 
 export function mountPanels(host: PanelsHost): Panels {
@@ -382,6 +394,7 @@ export function mountPanels(host: PanelsHost): Panels {
     buildDatasetCellSection(sheet)
     buildColumnSection(sheet)
     buildDatasetValidationSection(sheet)
+    buildCondFmtColumnSection(sheet)
     buildSheetSection(sheet)
     buildWorkbookSection()
     applyAccordion(right)
@@ -499,7 +512,22 @@ export function mountPanels(host: PanelsHost): Panels {
     const formula = text(typeof col.formula === 'string' ? col.formula : '', (v) => {
       const next = v.trim()
       if (next === (col.formula ?? '')) return
-      commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { formula: next || undefined } })
+      if (!next) {
+        commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { formula: undefined } })
+        return
+      }
+      // The same rule main.ts's formula dialog follows, for the same reason: a
+      // column whose expression now returns text must stop claiming NUMBER, and
+      // a type chosen by hand in the dropdown two rows up must not be undone by
+      // an unrelated edit here. See computedtype.ts.
+      const before = inferComputedType(sheet, col.formula ?? '', col.id)
+      const after = inferComputedType(sheet, next, col.id)
+      commit({
+        op: 'setColumn', sheet: sheet.id, col: col.id,
+        patch: col.type === before.type && after.type !== col.type
+          ? { formula: next, type: after.type }
+          : { formula: next },
+      })
     })
     formula.placeholder = t('Value * Probability')
     formula.classList.add('dp-mono')
@@ -535,6 +563,34 @@ export function mountPanels(host: PanelsHost): Panels {
     if (typeof col.failed === 'number' && col.failed > 0) {
       note(right, t('{n} value(s) could not be read as this type.').replace('{n}', String(col.failed)))
     }
+  }
+
+  /**
+   * Conditional formatting on a DATASET — attached to the COLUMN, for the same
+   * reason validation is: on this kind the column is the thing that owns how
+   * every value in it is read, and a per-cell rule here would be a per-cell
+   * type through the back door.
+   *
+   * The engine (condfmt.ts) has implemented six rule kinds since it landed and
+   * the app reached two of them. Everything the section needs is passed in, so
+   * condfmtui.ts never reads the store: this is where the write is, so this is
+   * where the patch is built.
+   */
+  function buildCondFmtColumnSection(sheet: TableSheet): void {
+    const col = currentColumn(sheet)
+    if (!col) return
+    buildCondFmtSection({
+      host: right,
+      kit: KIT,
+      sheetId: sheet.id,
+      colId: col.id,
+      scope: col.name,
+      columns: sheet.columns.map((c) => c.name),
+      rules: readCondFmt(sheet, col.id),
+      readOnly: ro(),
+      write: (rules) => commit(condFmtPatch(sheet, col.id, rules) as Patch),
+      rerender: () => render(true),
+    })
   }
 
   /**
@@ -830,7 +886,18 @@ export function mountPanels(host: PanelsHost): Panels {
   // the status bar and this panel are all listening.
   grid.announce()
 
-  return { toggle, refresh: () => render(true) }
+  function reveal(title: string): void {
+    const open = lsJson<Record<string, boolean>>(LS_SECTIONS, {})
+    open[title] = true
+    lsSet(LS_SECTIONS, JSON.stringify(open))
+    if (right.classList.contains('dp-shut')) toggle('right')
+    render(true)
+    for (const h of right.querySelectorAll<HTMLElement>('.dp-section')) {
+      if (h.textContent === title) { h.scrollIntoView({ block: 'nearest' }); return }
+    }
+  }
+
+  return { toggle, refresh: () => render(true), reveal }
 }
 
 // --- a popover, placed against a rect ---------------------------------------
@@ -982,6 +1049,6 @@ function toggle_(value: boolean, onChange: (v: boolean) => void): HTMLInputEleme
  * same functions the Column section uses, so there is one spelling of a row and
  * a change to it moves every section at once.
  */
-const KIT: PanelKit = {
+export const KIT: PanelKit = {
   section, row, readonlyRow, note, text, number, select, check: toggle_,
 }

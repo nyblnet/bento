@@ -99,6 +99,27 @@ export class El {
 
   appendChild(c: El): El { c.parentElement = this; this.children.push(c); return c }
 
+  /**
+   * `append(a, b, …)`, which the panel builders use where the grid uses
+   * `appendChild`. Strings become text, as the DOM's does — panels.ts never
+   * passes one, but a shim that silently dropped it would be worse than one
+   * that throws.
+   */
+  append(...nodes: Array<El | string>): void {
+    for (const n of nodes) {
+      if (typeof n === 'string') addText(this, n)
+      else this.appendChild(n)
+    }
+  }
+
+  /** Detach from the parent. `.dx-pop` and `.dx-ask-back` both remove themselves. */
+  remove(): void {
+    const p = this.parentElement
+    if (!p) return
+    p.children = p.children.filter((c) => c !== this)
+    this.parentElement = null
+  }
+
   get innerHTML(): string { return this.children.map(serialize).join('') + this.text }
 
   set innerHTML(html: string) {
