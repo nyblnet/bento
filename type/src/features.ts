@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// The feature registry — how a module adds itself to the chrome without
+// editing the chrome.
+//
+// WHY. Every feature wants the same four things: a button in the bar, an item
+// in the ⋯ menu, a panel beside the outline, and a keyboard shortcut. Wiring
+// each one directly into main.ts made that file the place where all features
+// meet, which is fine for two and miserable for ten — and impossible for
+// several people working at once, because every feature's diff touches the same
+// hundred lines.
+//
+// So a feature module registers what it wants and main.ts renders the registry.
+// A feature is then ONE file plus one import line, which is also what makes it
+// reviewable: everything belonging to find-and-replace is in find.ts.
+//
+// Registration happens at import time and the chrome is built after, so order
+// is module evaluation order — deterministic, and the `order` field breaks ties
+// where a group's arrangement matters.
+
+import type { Editor } from './editor.ts';
+import type { Store } from './store.ts';
+
+/** What a feature is handed when it runs. Kept small on purpose. */
+export interface FeatureContext {
+  store: Store;
+  editor: Editor;
+  /** re-paginate and repaint; call after changing the document */
+  refresh(): void;
+  /** transient message to the reader */
+  toast(msg: string): void;
+}
+
+export interface ToolSpec {
+  id: string;
+  /** inline SVG, from icons.ts — the house recipe, 24px box at 16px */
+  icon: string;
+  /** tooltip; already translated by the caller */
+  title: string;
+  /** optional visible label beside the icon */
+  label?: string;
+  /** which cluster of the bar it joins */
+  group: 'format' | 'insert' | 'review' | 'right';
+  order?: number;
+  run(ctx: FeatureContext): void;
+  /** highlight the button when this returns true (called on selection change) */
+  active?(ctx: FeatureContext): boolean;
+}
+
+export interface MenuSpec {
+  id: string;
+  label: string;
+  icon?: string;
+  order?: number;
+  run(ctx: FeatureContext): void;
+}
+
+export interface PanelSpec {
+  id: string;
+  /** tab label beside Outline / Review / Signatures */
+  label: string;
+  order?: number;
+  /** called once with the panel's host element */
+  mount(host: HTMLElement, ctx: FeatureContext): void;
+  /** called whenever the document changes */
+  update?(host: HTMLElement, ctx: FeatureContext): void;
+}
+
+export interface KeySpec {
+  /** lowercase key name, as KeyboardEvent.key reports it */
+  key: string;
+  mod?: boolean;      // ⌘ / Ctrl
+  shift?: boolean;
+  alt?: boolean;
+  run(ctx: FeatureContext): void;
+}
+
+const TOOLS: ToolSpec[] = [];
+const MENU: MenuSpec[] = [];
+const PANELS: PanelSpec[] = [];
+const KEYS: KeySpec[] = [];
+
+export const registerTool = (t: ToolSpec): void => { TOOLS.push(t); };
+export const registerMenuItem = (m: MenuSpec): void => { MENU.push(m); };
+export const registerPanel = (p: PanelSpec): void => { PANELS.push(p); };
+export const registerKey = (k: KeySpec): void => { KEYS.push(k); };
+
+const byOrder = <T extends { order?: number }>(a: T[]): T[] =>
+  [...a].sort((x, y) => (x.order ?? 100) - (y.order ?? 100));
+
+export const tools = (group: ToolSpec['group']): ToolSpec[] =>
+  byOrder(TOOLS.filter(t => t.group === group));
+export const menuItems = (): MenuSpec[] => byOrder(MENU);
+export const panels = (): PanelSpec[] => byOrder(PANELS);
+export const keys = (): KeySpec[] => KEYS;
+
+/** Does this event match a registered shortcut? Returns the first match. */
+export function matchKey(e: KeyboardEvent): KeySpec | undefined {
+  const mod = e.metaKey || e.ctrlKey;
+  return KEYS.find(k =>
+    k.key === e.key.toLowerCase() &&
+    !!k.mod === mod && !!k.shift === e.shiftKey && !!k.alt === e.altKey);
+}

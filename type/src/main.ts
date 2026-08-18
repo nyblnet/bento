@@ -12,6 +12,8 @@ import {
 } from '../../kernel/src/save.ts';
 import { ICONS } from './icons.ts';
 import { t } from './i18n.ts';
+import { tools, menuItems, panels, matchKey, type FeatureContext } from './features.ts';
+import './registry.ts';   // side-effect: every feature module registers itself
 import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
 import { startTheme, setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
@@ -111,6 +113,7 @@ app.innerHTML = `
 
     <div class="t-right">
       <select id="kind" class="t-select"></select>
+      <div class="t-group" id="gFormat"></div>
       <div class="t-group">
         <button id="mb" class="t-btn" type="button"></button>
         <button id="mi" class="t-btn" type="button"></button>
@@ -125,6 +128,8 @@ app.innerHTML = `
         <button id="lout" class="t-btn" type="button"></button>
         <button id="tbl" class="t-btn" type="button"></button>
       </div>
+      <div class="t-group" id="gInsert"></div>
+      <div class="t-group" id="gReview"></div>
       <div class="t-group">
         <button id="undo" class="t-btn" type="button"></button>
         <button id="redo" class="t-btn" type="button"></button>
@@ -296,6 +301,72 @@ new ResizeObserver(() => fitBar()).observe(bar);
 new ResizeObserver(() => fitBar()).observe(document.documentElement);
 window.addEventListener('resize', fitBar);
 
+// ─────────────────────────────────────────────── the feature registry, rendered
+//
+// Everything a feature module registered at import time becomes chrome here.
+// A feature is one file plus one line in registry.ts; nothing below knows what
+// any particular feature is.
+const featureCtx: FeatureContext = {
+  store, editor,
+  refresh: () => { editor.render(); schedule(); },
+  toast: (m: string) => toast(m),
+};
+
+const mountTools = (hostId: string, group: 'format' | 'insert' | 'review' | 'right') => {
+  const host = byId(hostId);
+  for (const spec of tools(group)) {
+    const b = document.createElement('button');
+    b.className = 't-btn';
+    b.type = 'button';
+    b.id = `tool-${spec.id}`;
+    b.innerHTML = spec.icon + (spec.label ? `<span class="t-lbl">${spec.label}</span>` : '');
+    b.title = spec.title;
+    // mousedown, not click: the caret must survive pressing a toolbar button
+    b.addEventListener('mousedown', e => { e.preventDefault(); spec.run(featureCtx); });
+    host.appendChild(b);
+  }
+  if (!host.children.length) host.remove();
+};
+mountTools('gFormat', 'format');
+mountTools('gInsert', 'insert');
+mountTools('gReview', 'review');
+
+for (const spec of menuItems()) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.innerHTML = (spec.icon ?? '') + `<span>${spec.label}</span>`;
+  b.addEventListener('click', () => spec.run(featureCtx));
+  byId('moreMenu').insertBefore(b, byId('about'));
+}
+
+for (const spec of panels()) {
+  const tab = document.createElement('button');
+  tab.dataset.tab = spec.id;
+  tab.textContent = spec.label;
+  document.querySelector('.t-tabs')!.appendChild(tab);
+  const panel = document.createElement('div');
+  panel.className = 't-panel';
+  panel.dataset.panel = spec.id;
+  document.querySelector('.t-side')!.appendChild(panel);
+  spec.mount(panel, featureCtx);
+}
+
+// feature shortcuts, ahead of the editor's own so a feature can claim one
+window.addEventListener('keydown', e => {
+  const hit = matchKey(e);
+  if (hit) { e.preventDefault(); hit.run(featureCtx); }
+}, true);
+
+// active-state highlighting, on the same signal the mark buttons use
+const paintToolStates = () => {
+  for (const group of ['format', 'insert', 'review'] as const) {
+    for (const spec of tools(group)) {
+      if (!spec.active) continue;
+      document.getElementById(`tool-${spec.id}`)?.classList.toggle('on', spec.active(featureCtx));
+    }
+  }
+};
+
 // the ⋯ menu — secondary actions, off the bar but one click away
 const moreMenu = byId('moreMenu');
 byId('more').addEventListener('click', e => {
@@ -349,6 +420,7 @@ for (const [id, t] of MARK_BTN) {
   });
 }
 editor.onSelection = (active) => {
+  paintToolStates();
   for (const [id, t] of MARK_BTN) document.getElementById(id)!.classList.toggle('on', active.has(t));
 };
 // A list button TOGGLES: pressing Bulleted list on an item that is already
