@@ -690,6 +690,30 @@ jobs:
         # presentation so bolding a cell beside a concurrent retype keeps both.
         run: node scripts/test-dash-cellfmt.ts
 
+      - name: Data validation rig
+        # In-cell dropdowns and typed entry rules — Excel's Data Validation,
+        # which is NOT dash's validate.ts (that one asks whether a workbook
+        # agrees with itself). Two features, one English word, and a rig that
+        # confuses them tests neither.
+        #
+        # The checks that matter are the three a green suite would otherwise
+        # hide. (1) The dropdown and the invalid mark are asserted on the
+        # MARKUP A REAL GRID EMITS, through BOTH paint loops — the pure
+        # functions were all green with the feature invisible on screen, which
+        # is precisely the failure this repo shipped once already. (2) `reject`
+        # refuses AT THE KEYBOARD and nowhere else: a paste, an import, an undo
+        # and a remote CRDT op all LAND and are marked, because refusing an op
+        # that has already been committed elsewhere either diverges the
+        # replicas or silently discards a collaborator's work. Both arms are
+        # pinned, and a sabotage that leaks the refusal into the paste path
+        # turns the second one red. (3) A rule never changes existing data —
+        # what breaks it is marked, never deleted — and the mark is derived at
+        # paint rather than stored, so it cannot go stale. Also pins the .xlsx
+        # round trip in both directions, including Excel's INVERTED
+        # `showDropDown` attribute (1 hides it), which reads correctly in code
+        # that has it exactly backwards.
+        run: node scripts/test-dash-datavalid.ts
+
       - name: every rig is actually run
         # A rig nobody runs is worse than no rig, and it fails flatteringly: the
         # file is there, the checks in it are good, git log shows it being

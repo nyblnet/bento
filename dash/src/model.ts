@@ -988,3 +988,92 @@ export interface Comment {
   was?: { col?: string; row?: number; value?: string }
   [extra: string]: unknown
 }
+
+// --- DATA VALIDATION, and why it lives in two different places --------------
+//
+// Excel's Data Validation: a rule saying what may be ENTERED — a list (which
+// draws an in-cell dropdown), a number range, a date range, a text length, or
+// a formula. Nothing here is `validate.ts`, which is DOCUMENT validation
+// ("does this workbook agree with itself"), and nothing here is `isOneOf`,
+// which is a FILTER predicate. Three different questions that English spells
+// the same way; the code must not.
+//
+// THE RULE HAS TWO HOMES BECAUSE THE TWO SHEET KINDS ARE NOT SYMMETRIC
+// (docs/dash-sheet-kinds.md — the difference between them IS where the type
+// lives), and picking one home for both is exactly the leakage the appearance
+// round was careful about, run in reverse:
+//
+//   * On a DATASET (`kind:'table'`) the COLUMN declares the type, and a
+//     validation rule is a NARROWING of that type. So it rides on the column
+//     (`Column.validate`), written with the existing `setColumn` patch — which
+//     is already one LWW register per column per key. A per-CELL rule on this
+//     kind would be a per-cell type through the back door: the thing that
+//     earns a dataset its column formulas, its import refusal and its chart
+//     binding is that the column, and only the column, says what a value is.
+//     A `list` rule here is very nearly an `enum` type, and is deliberately
+//     not spelled as one: `type` is what the values ARE (and coercion follows
+//     it), `validate` is what a person may TYPE (and only entry consults it),
+//     so an imported column of free text can be constrained tomorrow without
+//     re-reading a million cells today.
+//
+//   * On a SPREADSHEET (`kind:'canvas'`) there is no column to hang it on, so
+//     it attaches to a RANGE, exactly as Excel's `<dataValidation sqref>`
+//     does, and the list of ranges is a SHEET field (`CanvasSheet.validations`)
+//     written with the existing `setSheetProps`. NOT a field on `CanvasCell`:
+//     a rule over B2:B5000 would be five thousand keys in a map whose whole
+//     promise is that a cell nobody touched costs zero bytes, and under
+//     collaboration (docs/dash-collab.md §6.9) a spreadsheet cell is keyed by
+//     its ADDRESS, so a rule stored per address inherits every problem a
+//     row-insert already has and multiplies it by the rule.
+//
+// Neither field needs a new patch op, and that is a property of the design
+// rather than luck: a rule belongs to a thing the format already has an op for.
+//
+// The cost of the sheet-level list is stated rather than hidden: `validations`
+// is ONE register, so two people adding a rule to the same spreadsheet in the
+// same moment keep one of the two. That is `condfmt`'s bargain already, it is
+// the right one for a list edited rarely and deliberately, and it is not the
+// bargain for cell CONTENT, which is why content is not stored this way.
+
+/** What a rule tests. Open union: an unknown kind must PARSE and round-trip. */
+export type DataRuleKind =
+  | 'list' | 'number' | 'date' | 'textLength' | 'formula' | (string & {})
+
+/**
+ * What happens when an entry fails.
+ *
+ * `warn` is the DEFAULT and `reject` is deliberately the narrower promise —
+ * see datavalid.ts's header for the collaboration argument, which is the whole
+ * reason this field is not simply Excel's `errorStyle`.
+ */
+export type DataRuleOn = 'warn' | 'reject' | (string & {})
+
+export interface DataRule {
+  kind: DataRuleKind
+  /** `kind:'list'` — the permitted values, in the order the dropdown shows. */
+  list?: string[]
+  /** `kind:'list'` — suppress the in-cell arrow. ABSENT means show it. */
+  noDropdown?: boolean
+  /** `number`/`textLength`: a number. `date`: an ISO `YYYY-MM-DD`. Either bound
+   *  may be absent, which is how "at least 0" is spelled. */
+  min?: number | string
+  max?: number | string
+  /** `kind:'formula'` — carried verbatim, checked only when this build can. */
+  formula?: string
+  /** ABSENT means an empty cell is allowed (Excel's `ignoreBlank`, defaulted
+   *  the same way). `false` makes blank a violation. */
+  blank?: boolean
+  /** Default `warn`. */
+  on?: DataRuleOn
+  /** What to say when it fails. Absent = a sentence generated from the rule. */
+  message?: string
+  [extra: string]: unknown
+}
+
+/** One rule over one A1 range on a SPREADSHEET sheet. */
+export interface RangeValidation {
+  /** `B2:B100`. A single cell is `B2:B2` or `B2`. */
+  ref: string
+  rule: DataRule
+  [extra: string]: unknown
+}
