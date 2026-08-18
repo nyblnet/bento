@@ -178,8 +178,15 @@ const over = (s: TableSheet, key: string): Record<string, unknown> =>
   ok(!liveFormula('#REF!+1').ok === false,
     'an error literal left by a previous edit is not read as the name REF')
   ok(liveFormula('LOG10(A1)').ok, 'a function dash has is still a call, not a bare word')
-  ok(!liveFormula('SUBTOTAL(109,A1:A9)').ok,
-    'and the SUBTOTAL case that was always right is still right')
+  // SUBTOTAL used to stand here as the example of a function dash lacked, and
+  // it is the one Excel writes into EVERY table's totals row — so while it was
+  // missing, every imported table arrived with a dead total. dash has it now
+  // (formula.ts), which is why the gate lets it through; the gate itself is
+  // unchanged and is asserted against a function dash still does not have.
+  ok(liveFormula('SUBTOTAL(109,A1:A9)').ok,
+    'a table totals row goes LIVE now — dash has SUBTOTAL, and a dead total was the whole complaint')
+  ok(!liveFormula('OFFSET(A1,1,1)').ok,
+    'and the case that was always right is still right: a function dash lacks keeps its cached value')
 }
 
 // The importer half: real bytes, and the OUTCOME in the document.

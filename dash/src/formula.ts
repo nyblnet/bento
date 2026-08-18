@@ -25,6 +25,12 @@
 import type { TableSheet } from './model.ts'
 import { readCell } from './store.ts'
 import { sheetQualifiers } from './a1.ts'
+// TEXT() is the column panel's own format engine, and VALUE()/DATEVALUE() are
+// import's own reading of a string. Both are IMPORTS rather than second
+// implementations, deliberately: two answers to "what does #,##0.00 mean", or
+// to "what day is 03/04/2026", is one wrong number waiting for a date change.
+import { formatNumber, readPattern } from './format.ts'
+import { coerce, inferColumn } from './import.ts'
 
 export type Cell = number | string | boolean | null | FormulaError
 export type Vec = Cell[]
@@ -334,11 +340,39 @@ const CONDITIONAL = new Set(['SUMIF', 'COUNTIF', 'AVERAGEIF'])
 const MULTI = new Set(['SUMIFS', 'COUNTIFS', 'AVERAGEIFS', 'MINIFS', 'MAXIFS'])
 
 /** Lookups. Vector-shaped, because dash is column-shaped — see LOOKUP_NOTE. */
-const LOOKUPS = new Set(['XLOOKUP', 'VLOOKUP', 'INDEX', 'MATCH', 'LOOKUP'])
+const LOOKUPS = new Set(['XLOOKUP', 'VLOOKUP', 'HLOOKUP', 'INDEX', 'MATCH', 'LOOKUP'])
 
 const round = (x: number, dp: number) => {
   const f = 10 ** dp
   return Math.round((x + Number.EPSILON * Math.sign(x)) * f) / f
+}
+
+/** "1st", "2nd", "3rd" — for a message that names which argument was wrong. */
+const ordinalSuffix = (n: number): string => {
+  const t = n % 100
+  if (t >= 11 && t <= 13) return 'th'
+  return ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
+}
+
+/**
+ * The kth value of a sorted list — LARGE and SMALL.
+ *
+ * A `k` past the end is `#NUM!` and NOT the last value. Clamping is the
+ * tempting answer and it is the dangerous one: `LARGE(range, 5)` on a range
+ * that turned out to hold four numbers would return the smallest of them,
+ * labelled as the fifth largest, and nothing on screen would say the list ran
+ * out. Excel refuses here too, for the same reason.
+ */
+const nth = (list: number[], kArg: Cell, big: boolean): Cell => {
+  const k = num(kArg)
+  if (isErr(k)) return k
+  const i = Math.trunc(k)
+  if (i < 1 || i > list.length) {
+    return new FormulaError('#NUM!', list.length
+      ? `there is no ${i}${ordinalSuffix(i)} value in a list of ${list.length}`
+      : 'there are no numbers in that range to rank')
+  }
+  return [...list].sort((x, y) => (big ? y - x : x - y))[i - 1]
 }
 
 const nums = (a: Array<Cell | Vec>): number[] =>
@@ -369,12 +403,78 @@ const RAW: Record<string, (a: Array<Cell | Vec>) => Cell> = {
     const i = sorted.findIndex((x) => x === v)
     return i < 0 ? ERR.na() : i + 1
   },
+  /**
+   * `SUMPRODUCT(a, b, …)` — sum of the element-wise products.
+   *
+   * RANGES OF DIFFERENT LENGTHS ARE REFUSED. Excel's `#VALUE!` for this is one
+   * of its few unambiguously right refusals: pairing a 10-row range with a
+   * 9-row one is a question with no answer, and padding the short one with
+   * zeros would return a total that is wrong by however many rows were missed.
+   *
+   * Two house rules, both deliberate and both dash-wide rather than invented
+   * here. TEXT counts as ZERO (Excel's own rule for this function — the whole
+   * term goes to zero, which is what makes `SUMPRODUCT((a="x")*b)` work).
+   * BOOLEANS count as 1 and 0, which is `num()`'s reading everywhere else in
+   * this file — Excel would give 0 for a bare `SUMPRODUCT(a="x")`, a famous
+   * gotcha, and agreeing with `SUM` of the same column matters more than
+   * reproducing it. An ERROR still propagates, as it does in every other total.
+   */
+  SUMPRODUCT: (a) => {
+    if (!a.length) return ERR.value('SUMPRODUCT needs at least one range')
+    const arrays = a.map(asVec)
+    const n = arrays[0].length
+    const odd = arrays.findIndex((x) => x.length !== n)
+    if (odd > 0) {
+      return ERR.value(`SUMPRODUCT pairs its ranges row by row, so they must be the ` +
+        `same size — the first covers ${n} cells and the ${odd + 1}${ordinalSuffix(odd + 1)} covers ${arrays[odd].length}`)
+    }
+    let total = 0
+    for (let i = 0; i < n; i++) {
+      let term = 1
+      for (const arr of arrays) {
+        const x = arr[i] ?? null
+        if (isErr(x)) return x
+        const v = num(x)
+        // A non-number is zero, so the whole term is zero — Excel's rule.
+        term *= isErr(v) ? 0 : v
+      }
+      total += term
+    }
+    return total
+  },
+  /** The kth largest / smallest. `k` past the end is #NUM!, never the end. */
+  LARGE: (a) => nth(nums([a[0]]), a[1] as Cell, true),
+  SMALL: (a) => nth(nums([a[0]]), a[1] as Cell, false),
   TEXTJOIN: (a) => {
     const sep = str(a[0] as Cell)
     const skip = bool(a[1] as Cell)
     const parts = a.slice(2).flatMap((x) => (Array.isArray(x) ? x : [x])).map((x) => str(x as Cell))
     return (skip ? parts.filter((p) => p !== '') : parts).join(sep)
   },
+}
+
+/**
+ * Excel's text wildcards, as a regular expression: `?` is one character, `*` is
+ * any run of them, and `~` before any of the three means the character itself.
+ *
+ * Every other character is ESCAPED. Without that, `SEARCH("(a)", …)` would be
+ * read as a regular expression by accident — a group rather than two brackets —
+ * and would match text that does not contain what was asked for, which is the
+ * one outcome worse than not matching.
+ */
+function wildcardRe(pattern: string): RegExp {
+  let out = ''
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i]
+    if (c === '~' && i + 1 < pattern.length && '~?*'.includes(pattern[i + 1])) {
+      out += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      continue
+    }
+    if (c === '?') { out += '[^]'; continue }
+    if (c === '*') { out += '[^]*'; continue }
+    out += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+  return new RegExp(out, 'i')
 }
 
 const SCALAR: Record<string, (a: Cell[]) => Cell> = {
@@ -395,7 +495,134 @@ const SCALAR: Record<string, (a: Cell[]) => Cell> = {
   },
   XOR: (a) => a.filter(bool).length % 2 === 1,
   IFNA: (a) => (isErr(a[0]) && String(a[0]) === '#N/A' ? a[1] ?? '' : a[0]),
+  CHOOSE: (a) => {
+    const i = num(a[0])
+    if (isErr(i)) return i
+    const k = Math.trunc(i)
+    if (k < 1 || k >= a.length) {
+      const have = a.length - 1
+      return ERR.value(`CHOOSE was given ${have} choice${have === 1 ? '' : 's'} and asked for number ${k}`)
+    }
+    return a[k]
+  },
   // --- text
+  /**
+   * `TEXT(value, "#,##0.00")` — a number, printed the way a column would print
+   * it. THE SAME ENGINE, imported from format.ts rather than written again.
+   *
+   * IT REFUSES A DATE PATTERN instead of quietly handing the value back.
+   * `TEXT(A1, "dd/mm/yyyy")` is the second most common use of this function in
+   * Excel and dash's patterns describe NUMBERS only (`readPattern` — a prefix,
+   * grouping, decimals, a percent), so the honest answer is to say so. Printing
+   * the ISO date unchanged would look like it had worked and would be wrong on
+   * every screen where the format was the point.
+   */
+  TEXT: (a) => {
+    if (isErr(a[0])) return a[0]
+    const fmt = str(a[1])
+    if (!fmt) return ERR.value('TEXT needs a format to print with, like "#,##0.00"')
+    if (!readPattern(fmt).digits) {
+      return ERR.value(`"${fmt}" is not a number format — it has no 0 or # in it. ` +
+        'dash formats NUMBERS this way (a prefix, grouping, decimals, %); a date ' +
+        'is already the date it is, and DAY/MONTH/YEAR take it apart.')
+    }
+    const n = num(a[0])
+    if (isErr(n)) return n
+    return formatNumber(n, fmt)
+  },
+  /**
+   * `VALUE("1,234.50")` — the standard Excel repair for numbers stored as text,
+   * reading the string exactly as IMPORT would read it (`inferColumn` +
+   * `coerce`). Currency signs, grouping, accounting parentheses and a trailing
+   * `%` all come out as the number they denote; the decimal convention is the
+   * one import picks, so a formula and a re-import can never disagree about
+   * what `1.234` was.
+   *
+   * A DATE IS REFUSED rather than turned into a serial number. dash stores a
+   * date as a date (model.ts), so `VALUE("2026-03-04")` has nothing to return —
+   * Excel's answer, 46085, is a number about a calendar dash does not keep.
+   */
+  VALUE: (a) => {
+    const v = a[0]
+    if (isErr(v)) return v
+    if (typeof v === 'number') return v
+    const s = String(v ?? '').trim()
+    if (s === '') return ERR.value('VALUE was given nothing to read')
+    const inf = inferColumn([s])
+    if (inf.type === 'number' || inf.type === 'money' || inf.type === 'percent') {
+      const n = coerce(s, inf)
+      if (typeof n === 'number') return n
+    }
+    if (inf.type === 'date' || inf.ambiguous) {
+      return ERR.value(`"${s}" reads as a date, not a number. dash keeps a date as a ` +
+        'date rather than as a serial number, so there is no number here to return — ' +
+        'DATEVALUE reads a date, and DAYS() subtracts two of them.')
+    }
+    return ERR.value(`"${s}" is not a number. VALUE reads the digits a number was ` +
+      'typed with — grouping, a currency sign, a trailing %, accounting brackets — ' +
+      'and refuses anything else rather than returning part of it.')
+  },
+  /**
+   * `DATEVALUE("15/04/2026")` — and the refusal is the feature.
+   *
+   * The reading is IMPORT'S, deliberately (`inferColumn`): `03/04/2026` is 3
+   * April and 4 March and the string does not say which, so import refuses it
+   * and so does this. A looser rule here would mean the same six characters
+   * meant one day in a column and another in a formula, in one file, with
+   * nothing on screen to show which had happened.
+   *
+   * Returns an ISO date STRING, because that is what a date is in dash — not a
+   * serial number, so it is comparable, sortable and printable as it stands.
+   */
+  DATEVALUE: (a) => {
+    const v = a[0]
+    if (isErr(v)) return v
+    const s = String(v ?? '').trim()
+    if (s === '') return ERR.value('DATEVALUE was given nothing to read')
+    const inf = inferColumn([s])
+    if (inf.type === 'date') {
+      const d = coerce(s, inf)
+      if (typeof d === 'string') return d
+    }
+    if (inf.ambiguous) {
+      return ERR.value(`"${s}" is ambiguous: ${inf.ambiguous.detail}. ` +
+        'Write it as 2026-03-04, or say which you mean with DATE(2026, 3, 4).')
+    }
+    return ERR.value(`"${s}" is not a date dash can read without guessing. It reads ` +
+      '2026-03-04, and a slash date only when the day is unmistakable (15/04/2026). ' +
+      'DATE(y, m, d) says it outright.')
+  },
+  /**
+   * `SEARCH` is `FIND` with the case ignored and wildcards allowed — `?` for one
+   * character, `*` for any run, `~` to mean the character itself.
+   *
+   * A MISS IS `#N/A`, matching dash's own FIND rather than Excel's `#VALUE!`.
+   * Two functions in one product that report the same nothing two different
+   * ways is worse than either choice, and #N/A is the more accurate of the two:
+   * the text is not there, which is an absence, not a bad argument.
+   */
+  SEARCH: (a) => {
+    const needle = str(a[0])
+    const hay = str(a[1])
+    const from = a[2] === undefined ? 1 : num(a[2])
+    if (isErr(from)) return from
+    if (from < 1 || from > hay.length + 1) {
+      return ERR.value(`SEARCH starts at character 1, and "${hay}" has ${hay.length}`)
+    }
+    const i = hay.slice(from - 1).search(wildcardRe(needle))
+    return i < 0 ? ERR.na() : from + i
+  },
+  /** `REPLACE(text, start, howMany, with)` — by POSITION. SUBSTITUTE is by text. */
+  REPLACE: (a) => {
+    const s = str(a[0])
+    const start = num(a[1])
+    const n = num(a[2])
+    if (isErr(start)) return start
+    if (isErr(n)) return n
+    if (start < 1) return ERR.value('REPLACE counts characters from 1')
+    if (n < 0) return ERR.value('a negative number of characters is not a length')
+    return s.slice(0, start - 1) + str(a[3]) + s.slice(start - 1 + n)
+  },
   PROPER: (a) => str(a[0]).replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()),
   REPT: (a) => { const n = num(a[1]); return isErr(n) ? n : n < 0 ? ERR.value('negative count') : str(a[0]).repeat(Math.floor(n)) },
   DATE: (a) => {
@@ -610,8 +837,55 @@ function matches(v: Cell, crit: Cell): boolean {
 // column is inserted in the middle of the table — the failure VLOOKUP is
 // famous for. VLOOKUP exists because people's existing formulas use it.
 
-/** A range's shape, when the binding knew it. See cellformula.ts's bindRefs. */
-export interface Shaped { __rows?: number; __cols?: number }
+/**
+ * What a bound range knows about ITSELF, beyond its values.
+ *
+ * `__cols` is the shape VLOOKUP and INDEX read. The other two are the two
+ * things a COLUMN expression structurally does not have and a CELL formula
+ * does, and they are carried on the vector rather than in `EvalCtx` for one
+ * reason: they are facts about ONE argument. `SUBTOTAL(109, A1:A9)` asks which
+ * rows of THAT range the view is hiding, and a context-level answer would have
+ * to be re-derived per argument anyway.
+ *
+ * Both are set by whoever binds the range — see `markHidden` / `markOrigin` and
+ * the note above them. Absent means "not known", and every function that reads
+ * them says what it does with that, in the open, rather than guessing.
+ */
+export interface Shaped {
+  __rows?: number
+  __cols?: number
+  /**
+   * Which of these values the VIEW is hiding, one flag per element, row-major.
+   *
+   * A filter is view state (grid.ts), never document state, so this is the
+   * only way the view can reach an expression at all. Absent = nothing is
+   * hidden, which is the truth on an unfiltered sheet and the whole of what a
+   * column expression can ever say.
+   */
+  __hidden?: boolean[]
+}
+
+/**
+ * Mark which elements the current view hides. `mask` is 1:1 with `v`.
+ *
+ * EXPORTED RATHER THAN ASSIGNED IN PLACE. `cellformula.ts` binds every
+ * reference and is the only module that can know which rows the view is
+ * hiding — and it is not this file, so the shape of what it stamps has to be
+ * stated somewhere both agree on. `(vec as Vec & Shaped).__hidden = …` written
+ * in another module is a private field assigned from outside, which survives
+ * exactly until one of the two is renamed. This is the contract.
+ */
+export const markHidden = (v: Vec, mask: boolean[]): Vec => {
+  ;(v as Vec & Shaped).__hidden = mask
+  return v
+}
+
+/** The elements a view is showing. Unmarked = all of them. */
+const visibleIn = (v: Cell | Vec): Vec => {
+  if (!isVec(v)) return [v]
+  const mask = (v as Vec & Shaped).__hidden
+  return mask ? v.filter((_, i) => !mask[i]) : v
+}
 const shapeOf = (v: Vec): { rows: number; cols: number } => {
   const s = v as Vec & Shaped
   const cols = typeof s.__cols === 'number' && s.__cols > 0 ? s.__cols : 1
@@ -657,6 +931,95 @@ function findIndex(hay: Vec, needle: Cell, approx = false): number {
 }
 
 const asVec = (v: Cell | Vec): Vec => (Array.isArray(v) ? v : [v])
+
+// --- SUBTOTAL, and the totals row Excel writes ------------------------------
+//
+// EVERY EXCEL TABLE ARRIVES CARRYING ONE. A ListObject's totals row is written
+// as `SUBTOTAL(109, …)`, so before this existed every imported table landed
+// with a dead total: `#NAME?` where a number had been, or — worse — the cached
+// number frozen beside a formula nothing would ever recompute. Measured on
+// `pipeline.xlsx`.
+//
+// ITS DEFINING BEHAVIOUR IS THAT IT IGNORES ROWS A FILTER HAS HIDDEN, which is
+// exactly what dash's own footer already does (`grid.ts aggregate` over
+// `store.order`). That agreement is not a coincidence and is not dash deviating
+// from Excel: docs/dash-sheet-kinds.md works out that dash's dataset IS an
+// Excel Table, and a Table's totals row is filter-aware in Excel too. So
+// `SUBTOTAL(109, Value)` and the footer's `sum` must be the SAME NUMBER over
+// the same rows, and `scripts/test-dash-functions.ts` asserts that against
+// `aggregate` itself rather than against a total worked out by hand.
+//
+// THE 1xx AND THE 1-11 FORMS ARE THE SAME FUNCTION HERE, and that is a fact
+// about dash rather than a shortcut. In Excel both families skip filtered-out
+// rows and only the 1xx family also skips rows hidden BY HAND; dash has no
+// hand-hidden rows at all (`rowcol.ts hiddenSet` hides COLUMNS, and the view
+// vector is built by the filter), so there is no case that could tell them
+// apart. If manual row hiding is ever built, this is the line that has to grow
+// a second mask — not a second function.
+//
+// NESTED SUBTOTALS ARE NOT EXCLUDED. Excel ignores other SUBTOTAL results
+// inside the range so that a stack of group totals does not double-count.
+// Doing that needs to know which CELLS in the range are themselves SUBTOTALs,
+// which the bound vector does not carry — and dash's own totals row is a column
+// property that sits outside the data range, so the shape that makes Excel need
+// the rule does not arise from anything dash generates. Written down rather
+// than silently absent.
+const SUBTOTAL_FNS: Record<number, string> = {
+  1: 'AVERAGE', 2: 'COUNT', 3: 'COUNTA', 4: 'MAX', 5: 'MIN', 6: 'PRODUCT',
+  7: 'STDEV', 8: 'STDEVP', 9: 'SUM', 10: 'VAR', 11: 'VARP',
+}
+
+/**
+ * Functions that take their arguments UNBROADCAST and may hand back an ARRAY.
+ *
+ * `RAW` was nearly this and cannot be: its signature returns a `Cell`, so a
+ * function whose whole point is a rectangle (TRANSPOSE) would have had to
+ * return its first value, which is the failure mode a spilling engine exists to
+ * end. These see the vectors as they were bound — shape, view mask and all.
+ */
+const SHAPED: Record<string, (a: Array<Cell | Vec>) => Cell | Vec> = {
+  SUBTOTAL: (a) => {
+    const k = num(a[0] as Cell)
+    if (isErr(k)) return k
+    const legal = Number.isInteger(k) && ((k >= 1 && k <= 11) || (k >= 101 && k <= 111))
+    if (!legal) {
+      return ERR.value(`SUBTOTAL's first argument says WHICH total: 1-11, or 101-111 ` +
+        `to say the same thing about a filtered view. ${k} is neither ` +
+        '(109 is SUM, which is what Excel writes into a table\'s totals row).')
+    }
+    if (a.length < 2) return ERR.value('SUBTOTAL needs something to total')
+    const fn = SUBTOTAL_FNS[k > 100 ? k - 100 : k]
+    const vec = a.slice(1).flatMap(visibleIn)
+    // The same rule the aggregates keep: a COUNT may look at an error without
+    // being poisoned, and everything else propagates the first one it meets
+    // rather than totalling the cells that happened to work.
+    if (!COUNTING.has(fn)) {
+      const bad = vec.find(isErr)
+      if (bad) return bad
+    }
+    return AGG[fn](vec)
+  },
+  /**
+   * Rows become columns. On the SPREADSHEET kind this SPILLS — the shape it
+   * returns is the footprint cellformula.ts places (see its SPILL block) — and
+   * on a dataset a cell formula keeps returning its first value, which is that
+   * module's existing rule for every array result and not one invented here.
+   */
+  TRANSPOSE: (a) => {
+    const v = a[0]
+    if (isErr(v)) return v
+    if (!isVec(v)) return v ?? null
+    if (!v.length) return ERR.value('TRANSPOSE was given nothing to transpose')
+    const { rows, cols } = shapeOf(v)
+    const out: Vec = new Array(rows * cols).fill(null)
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) out[c * rows + r] = v[r * cols + c] ?? null
+    }
+    // The transpose of an r×c block is c×r, so the new width is the old height.
+    if (rows > 1) (out as Vec & Shaped).__cols = rows
+    return out
+  },
+}
 
 // --- finance ----------------------------------------------------------------
 //
@@ -784,6 +1147,11 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
     const iso = ctx.now ?? new Date().toISOString()
     return name === 'TODAY' ? iso.slice(0, 10) : iso
   }
+  // BEFORE the aggregates, and before broadcasting: these read the vectors as
+  // they were BOUND — shape, view mask and all — and may hand back a rectangle.
+  const shaped = SHAPED[name]
+  if (shaped) return shaped(node.args.map((x) => evalNode(x, ctx)))
+
   if (AGG[name]) {
     const v = evalNode(node.args[0], ctx)
     const vec = isVec(v) ? v : [v]
@@ -864,6 +1232,22 @@ function callFn(node: Node & { k: 'call' }, ctx: EvalCtx): Cell | Vec {
     if (name === 'LOOKUP') {
       const i = findIndex(asVec(a[1]), a[0] as Cell, true)
       return i < 0 ? ERR.na() : asVec(a[2] ?? a[1])[i] ?? null
+    }
+    if (name === 'HLOOKUP') {
+      // The same function turned ninety degrees: search the first ROW, return
+      // from the nth. Rarer than VLOOKUP and it exists for the same reason —
+      // somebody's workbook already says it.
+      const grid = asVec(a[1])
+      const { rows, cols } = shapeOf(grid)
+      const rowN = num(a[2] as Cell)
+      if (isErr(rowN)) return rowN
+      if (rowN < 1 || rowN > rows) {
+        return new FormulaError(REF, `row ${rowN} is outside a ${rows}-row range`)
+      }
+      const firstRow: Vec = []
+      for (let c = 0; c < cols; c++) firstRow.push(cellAt(grid, 0, c))
+      const i = findIndex(firstRow, a[0] as Cell, a[3] !== undefined && bool(a[3] as Cell))
+      return i < 0 ? ERR.na() : cellAt(grid, rowN - 1, i)
     }
     // VLOOKUP(value, table, col, [approx])
     const table = asVec(a[1])
@@ -1029,5 +1413,5 @@ export function recalc(sheet: TableSheet, now?: string): RecalcResult {
 /** Every function name this build knows — the agent surface needs to say. */
 export const FUNCTIONS: string[] = [
   ...Object.keys(AGG), ...CONDITIONAL, ...MULTI, ...LOOKUPS,
-  ...Object.keys(RAW), ...Object.keys(SCALAR), ...VOLATILE,
+  ...Object.keys(RAW), ...Object.keys(SCALAR), ...Object.keys(SHAPED), ...VOLATILE,
 ].sort()
