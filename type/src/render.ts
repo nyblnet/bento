@@ -11,6 +11,7 @@
 import { toHtml, fromDom, type Mark } from './inline.ts';
 import { isList, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import { captionPrefixHtml, isXrefAtom, refAtoms, readXrefs, numberXrefs } from './xref.ts';
+import { blockStyle } from './layout.ts';
 
 export const TAG: Record<Block['kind'], string> = {
   para: 'p', h1: 'h1', h2: 'h2', h3: 'h3', quote: 'blockquote',
@@ -186,6 +187,10 @@ export function renderBlock(b: Block): HTMLElement {
   const el = document.createElement(TAG[b.kind]);
   el.dataset.id = b.id;
   el.dataset.kind = b.kind;
+  // The paragraph's OWN properties only — the document's defaults live on the
+  // paper, not on ten thousand copies of themselves.
+  const st = blockStyle(b);
+  if (st) el.setAttribute('style', st);
   el.innerHTML = blockHtml(b);
   return el;
 }

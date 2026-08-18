@@ -142,12 +142,29 @@ export interface Block {
   caption?: CaptionRef;
   /** cross-references, by offset into `text` — atoms, like `notes` */
   refs?: XrefRef[];
+
+  // ---- paragraph layout. ABSENT MEANS "the document's default", never a
+  // value: a paragraph with no `align` is justified because the DOCUMENT says
+  // so, and setting the current default deletes the field rather than writing
+  // it. That is what keeps a restyled document from carrying ten thousand
+  // copies of its own defaults.
+  align?: 'left' | 'center' | 'right' | 'justify';
+  /** space before, px */   sb?: number;
+  /** space after, px */    sa?: number;
+  /** line spacing, a multiple of the font size */ lh?: number;
+  /** first-line indent, px */ ind?: number;
+  keepNext?: true; keepTogether?: true; breakBefore?: true;
+
+  /** Unknown fields ride through untouched — format additivity, PLATFORM §3. */
+  [extra: string]: unknown;
 }
 
 /** Page geometry, in CSS px at 96dpi. US Letter by default. */
 export interface PageSpec {
   width: number; height: number;
   marginX: number; marginTop: number; marginBottom: number;
+  /** absent means `marginX`, so a symmetric page keeps writing one field */
+  marginLeft?: number; marginRight?: number;
 }
 export const LETTER: PageSpec = {
   width: 816, height: 1056, marginX: 104, marginTop: 104, marginBottom: 104,
@@ -187,6 +204,8 @@ export interface TypeDoc {
   /** note id → note text. Kept out of the blocks so a note can outlive a
    *  re-flow of the paragraph that references it. */
   footnotes: Record<string, string>;
+  /** document-wide paragraph defaults; absent means the built-in ones */
+  layout?: { align?: Block['align']; sb?: number; sa?: number; lh?: number; ind?: number };
   revisions: Revision[];
   signatures: Signature[];
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>;
@@ -296,6 +315,20 @@ export function parseDoc(raw: string): ParseResult {
     if (marks?.length) out.marks = marks; else delete out.marks;
     if (notes?.length) out.notes = notes; else delete out.notes;
     if (typeof b.role !== 'string') delete out.role;
+    // Now that these are KNOWN fields they are clamped like `level`, rather
+    // than riding through as unknowns. A generator can emit any of them.
+    const num = (v: unknown, lo: number, hi: number) =>
+      typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : undefined;
+    if (!['left', 'center', 'right', 'justify'].includes(out.align as string)) delete out.align;
+    for (const k of ['sb', 'sa', 'ind'] as const) {
+      const v = num(out[k], 0, 2000);
+      if (v === undefined) delete out[k]; else out[k] = v;
+    }
+    const lh = num(out.lh, 0.5, 4);
+    if (lh === undefined) delete out.lh; else out.lh = lh;
+    for (const k of ['keepNext', 'keepTogether', 'breakBefore'] as const) {
+      if (out[k] !== true) delete out[k];
+    }
     delete out.level; delete out.cell; delete out.image; delete out.caption; delete out.refs;
     if (typeof b.role === 'string') out.role = b.role;
     // `level` is clamped and only kept on list kinds. A level on a paragraph

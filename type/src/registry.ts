@@ -17,6 +17,7 @@ import './image.ts';   // pictures — insert, embed, atomic pagination
 import './find.ts';    // find and replace — panel, ⌘F, replace all
 // captions, automatic figure/table numbering and cross-references
 import './xref.ts';
+import './layout.ts';   // paragraph properties, page setup, page breaks
 
 export {};
 import './link.ts';

@@ -26,6 +26,7 @@ import type { Block, TypeDoc } from './model.ts';
 import { blockHtml, groupBlocks, TAG } from './render.ts';
 import type { Metrics } from './paginate.ts';
 import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
+import { blockStyle } from './layout.ts';
 
 export interface PrintOptions {
   /** running head text; omitted = the document title */
@@ -162,7 +163,9 @@ function bodyHtml(body: Block[], lang: string): string {
     }
     else {
       const b = tok.block;
-      out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}">${blockHtml(b)}</${TAG[b.kind]}>`);
+      const st = blockStyle(b);
+      out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}"${st ? ` style="${esc(st)}"` : ''}>` +
+               `${blockHtml(b)}</${TAG[b.kind]}>`);
     }
   }
   // The DOM pass (numberXrefs) and this string pass fill the SAME atoms from

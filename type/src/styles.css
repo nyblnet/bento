@@ -530,3 +530,62 @@ html, body {
 .t-paper .t-toc-n, .t-paper .t-toc-p { color: var(--paper-ink-2); }
 /* the entries are not prose: no justification, no first-line indent */
 .t-paper .t-toc { text-align: start; }
+/* ————— paragraph layout & page setup (layout.ts) —————
+
+   ENGAGED, NOT ALWAYS ON. `data-lay` is set on the paper only when the document
+   carries its own paragraph defaults, so a document that never opened Page
+   Setup renders through the rules above, untouched. Per-paragraph properties
+   are inline styles and beat both.
+
+   The page stays UNTHEMED here as everywhere else: the break rule is drawn in
+   a --paper token, because it is furniture ON the page and has to be visible
+   against white paper at midnight, not against the chrome. */
+.t-paper[data-lay] p,
+.t-paper[data-lay] li {
+  text-align: var(--lay-align, justify);
+  line-height: var(--lay-lh, 1.62);
+}
+.t-paper[data-lay] p {
+  /* the `p + p` pair below is what the defaults replace: overriding one half of
+     a margin/padding hack and leaving the other is how spacing goes wrong by
+     exactly 10px */
+  margin-top: var(--lay-sb, 0px);
+  margin-bottom: var(--lay-sa, 10px);
+  padding-top: 0;
+  text-indent: 0;
+}
+.t-paper[data-lay] p + p { text-indent: var(--lay-ind, 1.4em); }
+
+/* Asymmetric margins. The padding shorthand above sets both sides from
+   --mar-x; this overrides the inline axis when a bound document gives the two
+   sides different widths, and falls back to --mar-x when it does not. */
+.t-paper { padding-inline: var(--mar-l, var(--mar-x)) var(--mar-r, var(--mar-x)); }
+
+/* An author's page break, while pagination has not been taught to honour it:
+   the paragraph that starts a page is marked where it starts. */
+.t-paper [data-break] {
+  border-top: 1.5px dashed var(--paper-rule);
+  margin-top: 18px; padding-top: 12px;
+}
+
+/* the Layout panel */
+.t-lay-g { margin-bottom: 14px; }
+.t-lay-h {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 0 0 6px;
+}
+.t-lay-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.t-lay-row label { flex: 1 1 auto; color: var(--ink-2); font-size: 12px; }
+.t-lay-row .t-select { flex: 0 0 auto; }
+.t-lay-unit { color: var(--muted); font-size: 11px; width: 18px; }
+.t-lay-check {
+  display: flex; align-items: center; gap: 7px;
+  color: var(--ink-2); font-size: 12px; margin-bottom: 5px; cursor: pointer;
+}
+.t-input {
+  font: inherit; font-size: 12px; color: var(--ink);
+  background: var(--field); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 6px; width: 68px; min-width: 0;
+}
+.t-input:focus { border-color: var(--blue); outline: none; }
+.t-dlg .t-input { width: 90px; }
