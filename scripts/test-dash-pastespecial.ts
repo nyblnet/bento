@@ -435,7 +435,10 @@ console.log('\n-- the key map, and the chord actually reaching the command')
   const main = readFileSync(new URL('../dash/src/main.ts', import.meta.url), 'utf8')
   ok(/kind === 'pasteSpecial'[\s\S]{0,120}openPasteSpecial\(\)/.test(main),
     'main.ts dispatches the action to the menu')
-  ok(main.includes('data-a="paste-special"') && main.includes('hooks.pasteSpecial('),
+  // THE MENU MOVED to gridmenu.ts, so a rig can drive a real right-click at it
+  // (scripts/test-dash-menu.ts). main.ts still owns the chord and the hook.
+  const menu = readFileSync(new URL('../dash/src/gridmenu.ts', import.meta.url), 'utf8')
+  ok(menu.includes('data-a="paste-special"') && menu.includes('hooks.pasteSpecial('),
     'and the cell menu offers it too, for the reader who never learns a chord')
 
   // THE ORDERING BUG THIS CATCHES: ⌘X clears the selection, so a clip taken

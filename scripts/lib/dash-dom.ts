@@ -216,8 +216,29 @@ export class Doc {
 
   createElement(tag: string): El { return new El(tag, this) }
   createRange() { return { selectNodeContents() {}, collapse() {} } }
-  addEventListener(): void { /* the rig calls handlers directly */ }
-  removeEventListener(): void { /* … */ }
+
+  /**
+   * DOCUMENT-level listeners are KEPT, not dropped.
+   *
+   * They used to be discarded with the note "the rig calls handlers directly",
+   * which was true while everything under test hung its handlers on elements.
+   * A context menu does not: `popover` closes on a document keydown, and the
+   * only way to prove Escape closes a menu is to deliver one to the document
+   * the way a browser does. Nothing that previously relied on the no-op can
+   * notice — a listener that is never fired behaves exactly like one that was
+   * never registered. Use `fireDoc` to deliver an event.
+   */
+  docListeners = new Map<string, Array<(e: unknown) => void>>()
+
+  addEventListener(type?: string, fn?: (e: unknown) => void): void {
+    if (!type || !fn) return
+    this.docListeners.set(type, [...(this.docListeners.get(type) ?? []), fn])
+  }
+
+  removeEventListener(type?: string, fn?: (e: unknown) => void): void {
+    if (!type || !fn) return
+    this.docListeners.set(type, (this.docListeners.get(type) ?? []).filter((f) => f !== fn))
+  }
   querySelector(sel: string): El | null { return this.documentElement.querySelector(sel) }
   querySelectorAll(sel: string): El[] { return this.documentElement.querySelectorAll(sel) }
 }
@@ -339,10 +360,32 @@ export function installDom(): { doc: Doc; host: El } {
   g.document = doc
   g.getSelection = () => ({ removeAllRanges() {}, addRange() {} })
   if (!g.navigator) g.navigator = { language: 'en', clipboard: { writeText: () => Promise.resolve() } }
+  // `popover` clamps its position against the viewport. No layout happens here,
+  // so the numbers only have to exist — but they DO have to exist, or every
+  // menu opens at NaN and the test of where it opened is a test of nothing.
+  if (g.innerWidth === undefined) g.innerWidth = 1200
+  if (g.innerHeight === undefined) g.innerHeight = 800
   const host = doc.createElement('div')
   doc.body.appendChild(host)
   return { doc, host }
 }
+
+/**
+ * Deliver an event to the DOCUMENT's own listeners — the ones a browser routes
+ * through `document`, which no element dispatch can reach. A copy of the list
+ * is iterated because a handler that closes a popover removes itself while it
+ * runs.
+ */
+export function fireDoc(doc: Doc, type: string, ev: Record<string, unknown> = {}): void {
+  for (const fn of [...(doc.docListeners.get(type) ?? [])]) fn(ev)
+}
+
+/** A right-click, which is what opens every menu in the grid. */
+export const contextmenu = (el: El, extra: Record<string, unknown> = {}): void =>
+  el.dispatchEvent({
+    type: 'contextmenu', button: 2, clientX: 10, clientY: 20,
+    preventDefault() {}, stopPropagation() {}, ...extra,
+  })
 
 /** A left mousedown on an element, the way the grid's own handlers see one. */
 export const mousedown = (el: El, extra: Record<string, unknown> = {}): void =>

@@ -347,7 +347,10 @@ console.log('\n-- the command is reachable, on both kinds of sheet')
   const main = readFileSync(new URL('../dash/src/main.ts', import.meta.url), 'utf8')
   ok(/kind === 'textToColumns'[\s\S]{0,120}textToColumns\(\)/.test(main),
     'main.ts dispatches the action')
-  ok(main.includes('data-a="split"') && main.includes('hooks.split()'),
+  // gridmenu.ts owns the three grid menus now — see scripts/test-dash-menu.ts,
+  // which asserts the items a real right-click produces rather than the source.
+  const menu = readFileSync(new URL('../dash/src/gridmenu.ts', import.meta.url), 'utf8')
+  ok(menu.includes('data-a="split"') && menu.includes('hooks.split()'),
     'and the dataset cell menu offers it')
   // A SPREADSHEET HAS NO CELL MENU (grid.ts declines to open the dataset one
   // over a canvas), so the chord is the only route there and it must not be

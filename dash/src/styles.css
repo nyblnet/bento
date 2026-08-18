@@ -1319,6 +1319,26 @@ html, body {
 .dg-add-gutter { font-weight: 700; }
 .dg-add-row:hover .dg-cell { background: var(--hover); }
 
+/* …and the same invitation past the last COLUMN, which the sheet had in one
+   direction only. Narrow (28px, against a column's 130) because it is a
+   control and not a column: at full width the eye reads it as an empty column
+   the sheet already has, which is the confusion the row appender's `+` gutter
+   exists to avoid. Muted until hovered, like its row counterpart. */
+.dg-add-col {
+  width: 28px;
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--grid-head);
+  user-select: none;
+}
+.dg-add-col:hover { background: var(--hover); color: var(--accent); }
+
 /* Text for assistive technology only. Not `display:none` and not
    `visibility:hidden` — both remove the node from the accessibility tree, which
    is the one place this text is FOR. */

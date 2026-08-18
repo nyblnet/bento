@@ -743,6 +743,23 @@ jobs:
         # worse than one that does nothing.
         run: node scripts/test-dash-frontier.ts
 
+      - name: dash grid context menus
+        # The three menus a right-click produces — cell, row-number gutter,
+        # column header — asserted from real `contextmenu` events on a mounted
+        # grid, never from the builders. Two features have shipped complete and
+        # UNREACHABLE (the conditional-format rules, and the two gutters, which
+        # did nothing at all on a right-click), and in both cases a rig that
+        # called the builder would have been green over an app with the feature
+        # invisible on screen. So the negative control here is a grid with
+        # `installGridMenus` NOT called: the same right-clicks must produce
+        # nothing. Also pinned: the labels count the selection and the ops do
+        # that many; Escape closes a menu and its listener does not outlive it;
+        # the `+` column appender exists, is absent read-only, and costs
+        # nothing until its dialog is answered; and finding 11 — a per-cell
+        # formula is carried into a new row only when the column proves it
+        # repeats, and the reader is told either way.
+        run: node scripts/test-dash-menu.ts
+
       - name: dash accessibility
         # All of these fail silently to a sighted developer. The load-bearing
         # check is aria-rowindex under virtualisation: about forty rows of a

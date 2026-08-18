@@ -247,7 +247,11 @@ console.log('\n7 · the callers mount it')
 {
   // The checks above all hold of a section nobody builds. These two are what
   // make the feature exist on screen.
-  const main = readFileSync(new URL('../dash/src/main.ts', import.meta.url), 'utf8')
+  // gridmenu.ts, not main.ts: the grid's context menus moved out of the boot
+  // file so that a rig can drive a real right-click at them
+  // (scripts/test-dash-menu.ts). This check stays a source read because what it
+  // is about is the RULE-WRITING code, which that rig does not duplicate.
+  const main = readFileSync(new URL('../dash/src/gridmenu.ts', import.meta.url), 'utf8')
   const panels = readFileSync(new URL('../dash/src/panels.ts', import.meta.url), 'utf8')
   ok(/buildCondFmtColumnSection\(sheet\)/.test(panels) && /buildCondFmtSection\(\{/.test(panels),
     'the properties panel builds the section for the selected column')

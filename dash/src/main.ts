@@ -72,11 +72,13 @@ import { cellKey, isFormula, recalcWorkbook, workbookSources } from './cellformu
 import { Store, type Patch, setColumnType } from './store.ts'
 import { starterDoc } from './starter.ts'
 import { inferComputedType } from './computedtype.ts'
-import {
-  blankCondFmtRule, condFmtPatch, describeCondFmtRule, readCondFmt, readOperand,
-} from './condfmtui.ts'
 import { validateDoc } from './validate.ts'
 import { mountHelp } from './help.ts'
+// The grid's three context menus, and the popover every menu in this file is
+// drawn in. They live outside main.ts because main.ts BOOTS ON EVALUATION and
+// so can never be imported by a rig — and a context menu whose items nothing
+// asserts is exactly how findings 5 and 8 shipped. See gridmenu.ts's header.
+import { popover, installGridMenus, type MenuHooks } from './gridmenu.ts'
 import { keyToAction, normalize } from './select.ts'
 import {
   appearancePatch, overrideKeys, ridAt, toggleTarget,
@@ -100,7 +102,7 @@ import { TYPE_LABEL } from './format.ts'
 import { defaultBinding, renderChart, chartHeading, type ChartBinding } from './chart.ts'
 import { readCell } from './store.ts'
 import {
-  insertRowsAt, deleteRowsAt, insertColumn, deleteColumn, resizeColumn,
+  resizeColumn,
   autoFitWidth, setHidden, freezeAt, readFrozen, hiddenSet } from './rowcol.ts'
 import { FUNCTIONS, dependencies, recalc } from './formula.ts'
 import { buildScene, defaultViz3d, mountViz3d, type Viz3dBinding, type Viz3dKind } from './viz3d.ts'
@@ -666,11 +668,28 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // mountPanels above this would break the chaining of grid.onSelectionChange
   // that the comment at its call site is about.
   let panels: Panels | null = null
-  grid.onContextMenu = (row, ci, x, y) => openCellMenu(store, grid, row, ci, x, y, {
+  // ALL THREE MENUS, in one call. The cell menu, the row gutter's and the
+  // column header's are wired inside gridmenu.ts so that the wiring itself is
+  // reachable from `scripts/test-dash-menu.ts` — a menu that exists only in a
+  // function nobody called is the shape both of the unreachable-feature
+  // findings took.
+  const menuHooks: MenuHooks = {
+    askForm: (o) => askForm(o),
+    notice: (msgs) => showFindings(findingsEl, msgs.map((message) => ({ message }))),
+    toast: (m) => toast(m),
+    copy: (cut) => doCopy(cut),
+    paste: () => { void doPaste() },
     pasteSpecial: (px, py) => openPasteSpecial(px, py),
     split: () => { void textToColumns() },
     condFmt: () => panels?.reveal(t('Conditional formatting')),
-  })
+    filterMenu: (colId, px, py) => openFilterMenu(store, grid, colId, px, py, viewEl),
+  }
+  installGridMenus(store, grid, menuHooks)
+  // What appending a row did to the formulas in it — finding 11. The grid says
+  // it because only the grid knows; the strip shows it because that is where
+  // every other sentence the document has to make lands, and a toast would be
+  // gone before the reader looked up from the row they just typed.
+  grid.onNotice = (msgs) => showFindings(findingsEl, msgs.map((message) => ({ message })))
 
   // keyboard: the grid owns the key set when nothing else has focus
   document.addEventListener('keydown', (e) => {
@@ -1515,6 +1534,53 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   }
 
   /**
+   * Copy and Cut FROM A MENU — the same two steps the ⌘C keydown takes, in the
+   * same order, because they are the same command reached with a mouse.
+   *
+   * `rememberClip` FIRST, and that ordering is the whole of it: a cut clears
+   * the selection, so a snapshot taken after the grid has run is a rectangle of
+   * blanks. That is why the keydown handler above calls it before `handleKey`,
+   * and why this function exists rather than the menu calling `grid` directly.
+   */
+  function doCopy(cut: boolean): void {
+    rememberClip(cut)
+    grid.copyToClipboard(cut)
+  }
+
+  /**
+   * Paste FROM A MENU.
+   *
+   * ⌘V never reaches this: the browser delivers a `paste` EVENT carrying the
+   * data, and the listener below handles it. A menu item has no such event, so
+   * it has to ASK for the clipboard — and `readText()` is permission-gated and
+   * is refused outright in some embeddings. So there are two answers and the
+   * reader gets whichever is true:
+   *
+   *   • the system clipboard, when the browser hands it over. Same text, same
+   *     `pasteTsv`, same result as ⌘V.
+   *   • dash's OWN last copy, when it does not. That is the clip Paste Special
+   *     already pastes from, so a refused permission costs formulas-and-formats
+   *     fidelity nothing; what it costs is content copied from ANOTHER
+   *     application, which dash never saw.
+   *
+   * And when neither exists it says so, rather than looking broken.
+   */
+  async function doPaste(): Promise<void> {
+    if (store.readOnly) return
+    let text: string | null = null
+    try {
+      text = (await navigator.clipboard?.readText()) ?? null
+    } catch {
+      text = null                              // denied, or no clipboard at all
+    }
+    if (text) { grid.pasteTsv(text); return }
+    if (clip) { runPasteSpecial('all', false); return }
+    showFindings(findingsEl, [{
+      message: t('There is nothing to paste. This browser will not hand a menu the system clipboard, so ⌘V pastes what a menu cannot reach.'),
+    }])
+  }
+
+  /**
    * The menu's English, as LITERALS inside t().
    *
    * pastespecial.ts returns ids and refusal CODES and no prose, because the
@@ -2240,23 +2306,6 @@ function askForm(opts: {
   })
 }
 
-function popover(x: number, y: number, html: string): HTMLElement {
-  document.querySelector('.dx-pop')?.remove()
-  const el = document.createElement('div')
-  el.className = 'dx-pop'
-  el.style.left = `${Math.min(x, innerWidth - 260)}px`
-  el.style.top = `${Math.min(y, innerHeight - 40)}px`
-  el.innerHTML = html
-  document.body.appendChild(el)
-  setTimeout(() => {
-    const off = (e: MouseEvent) => {
-      if (!el.contains(e.target as Node)) { el.remove(); document.removeEventListener('mousedown', off) }
-    }
-    document.addEventListener('mousedown', off)
-  }, 0)
-  return el
-}
-
 /** Sort and filter for one column — the caret in its header. */
 function openFilterMenu(
   store: Store, grid: Grid, colId: string, x: number, y: number, viewEl: HTMLElement,
@@ -2411,114 +2460,3 @@ async function saveXlsx(
 
 const readCellOf = (sheet: TableSheet, colId: string, row: number): unknown =>
   readCell(sheet.data[colId], row)
-
-/** Right-click on the grid: the structural operations. */
-function openCellMenu(
-  store: Store, grid: Grid, row: number, ci: number, x: number, y: number,
-  // The two data-shaping commands. Passed in rather than imported because they
-  // are closures over the live grid and the findings strip, and this menu is a
-  // module-level function; the alternative was a second copy of the wiring.
-  hooks: {
-    pasteSpecial: (x: number, y: number) => void
-    split: () => void
-    /** open the panel's full rule editor — every kind the engine implements */
-    condFmt: () => void
-  },
-): void {
-  const sheet = grid.sheet
-  const col = sheet.columns[ci]
-  const el = popover(x, y,
-    `<button data-a="irow-above">${t('Insert row above')}</button>` +
-    `<button data-a="irow-below">${t('Insert row below')}</button>` +
-    `<button data-a="drow">${t('Delete row')}</button>` +
-    `<div class="dx-pop-sep"></div>` +
-    `<button data-a="icol">${t('Insert column')}</button>` +
-    `<button data-a="dcol">${t('Delete column')}</button>` +
-    `<div class="dx-pop-sep"></div>` +
-    `<button data-a="fill">${t('Fill down')}</button>` +
-    `<button data-a="clear">${t('Clear contents')}</button>` +
-    `<div class="dx-pop-sep"></div>` +
-    `<button data-a="paste-special">${t('Paste special…')}</button>` +
-    `<button data-a="split">${t('Split into columns…')}</button>` +
-    `<div class="dx-pop-sep"></div>` +
-    `<button data-a="cf-gt">${t('Highlight cells greater than…')}</button>` +
-    `<button data-a="cf-dup">${t('Highlight duplicate values')}</button>` +
-    `<button data-a="cf-scale">${t('Colour scale')}</button>` +
-    `<button data-a="cf-bar">${t('Data bars')}</button>` +
-    `<button data-a="cf-more">${t('More conditional formatting…')}</button>` +
-    `<button data-a="cf-off">${t('Remove formatting')}</button>`)
-  el.querySelectorAll<HTMLElement>('button').forEach((b) => {
-    b.onclick = () => {
-      const a = b.dataset.a
-      // `row` is a VISIBLE index and every structural op takes a canonical
-      // one. They differ the moment somebody sorts, and passing the wrong one
-      // deletes the wrong row — silently, because the view re-sorts over the
-      // evidence. Each edit also carries the reference shift for the cell
-      // formulas, in the SAME commit: a document where the rows have moved and
-      // the formulas have not is a workbook of plausible wrong numbers.
-      const at = grid.canonicalRow(row)
-      if (a === 'irow-above') {
-        store.commit([...insertRowsAt(sheet, at, 1), ...grid.shiftFormulas('row', at, 1)])
-      } else if (a === 'irow-below') {
-        store.commit([...insertRowsAt(sheet, at + 1, 1), ...grid.shiftFormulas('row', at + 1, 1)])
-      } else if (a === 'drow') {
-        store.commit([...deleteRowsAt(sheet, at, 1), ...grid.shiftFormulas('row', at, -1)])
-      } else if (a === 'icol') {
-        const cAt = sheet.columns.findIndex((c) => c.id === col?.id) + 1
-        void askForm({
-          title: t('New column'),
-          fields: [{ key: 'name', label: t('Column name'), value: t('New column') }],
-          submit: t('Insert'),
-        }).then((got) => {
-          if (!got) return
-          const id = `c-${Math.floor(Date.now() % 1e8).toString(36)}`
-          store.commit([...insertColumn(sheet, cAt, { id, name: got.name.trim() || t('New column'), type: 'text' }),
-            ...grid.shiftFormulas('col', cAt, 1)])
-        })
-      } else if (a === 'dcol' && col) {
-        const cAt = sheet.columns.findIndex((c) => c.id === col.id)
-        store.commit([...deleteColumn(sheet, col.id), ...grid.shiftFormulas('col', cAt, -1)])
-      }
-      else if (a === 'fill') grid.fillDownSelection()
-      else if (a === 'clear') grid.clearSelection()
-      else if (a === 'paste-special') hooks.pasteSpecial(x, y)
-      else if (a === 'split') hooks.split()
-      else if (a === 'cf-more') hooks.condFmt()
-      else if (col && a === 'cf-gt') {
-        // THE ONE EVERYBODY REACHES FOR, one click from where they right-clicked.
-        // "Flag anyone over 40 hours" was the task that found this feature
-        // unreachable, and routing it through the panel would answer it in three
-        // moves. The panel is still there for the other five kinds and for the
-        // colours; this is the shortcut, and it writes the same rule object.
-        void askForm({
-          title: t('Highlight cells greater than…'),
-          fields: [{ key: 'n', label: t('Value'), value: '0' }],
-          submit: t('Highlight'),
-          check: (v) => (v.n.trim() === '' ? t('A value to compare against.') : null),
-        }).then((got) => {
-          if (!got) return
-          const rule = blankCondFmtRule('cellValue')
-          if (rule.kind === 'cellValue') rule.value = readOperand('>', got.n)
-          const next = [...readCondFmt(sheet, col.id), rule]
-          store.commit(condFmtPatch(sheet, col.id, next) as Patch)
-          toast(describeCondFmtRule(rule))
-        })
-      } else if (col && a === 'cf-dup') {
-        // Job 4's other half, and the same story: implemented, persisted,
-        // painted, and unreachable.
-        const rule = blankCondFmtRule('duplicates')
-        store.commit(condFmtPatch(sheet, col.id, [...readCondFmt(sheet, col.id), rule]) as Patch)
-        toast(describeCondFmtRule(rule))
-      } else if (col && (a === 'cf-scale' || a === 'cf-bar' || a === 'cf-off')) {
-        // Conditional formats are DOCUMENT data — they travel with the file —
-        // and live in an additive field, so an older build keeps them. The two
-        // presets REPLACE the column's rules rather than appending, which is
-        // what they have always done: a colour scale is a whole-column
-        // treatment and stacking two of them is never what the click meant.
-        const rules = a === 'cf-off' ? [] : [blankCondFmtRule(a === 'cf-scale' ? 'colorScale' : 'dataBar')]
-        store.commit(condFmtPatch(sheet, col.id, rules) as Patch)
-      }
-      el.remove()
-    }
-  })
-}
