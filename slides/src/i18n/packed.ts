@@ -15,6 +15,17 @@ export const PACKED_LOCALES = ["ja","zh-Hans","zh-Hant","es","fr","de","it","pt"
 
 /** English source string -> translations, positional by PACKED_LOCALES. */
 export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
+  "This text box is already bold": ["このテキストボックスはすでにボールドです","此文本框已是粗体","此文字方塊已是粗體","Este cuadro de texto ya está en negrita","Cette zone de texte est déjà en gras","Dieses Textfeld ist bereits fett","Questa casella di testo è già in grassetto","Esta caixa de texto já está em negrito"],
+  "Italic": ["斜体","斜体","斜體","Cursiva","Italique","Kursiv","Corsivo","Itálico"],
+  "Underline": ["下線","下划线","底線","Subrayado","Souligné","Unterstrichen","Sottolineato","Sublinhado"],
+  "Strikethrough": ["取り消し線","删除线","刪除線","Tachado","Barré","Durchgestrichen","Barrato","Tachado"],
+  "Code": ["コード","代码","程式碼","Código","Code","Code","Codice","Código"],
+  "Title text": ["タイトル文字","标题文字","標題文字","Texto de título","Texte de titre","Titeltext","Testo del titolo","Texto de título"],
+  "Heading": ["見出し","小标题","小標題","Encabezado","Titre","Überschrift","Intestazione","Cabeçalho"],
+  "Body text": ["本文","正文","內文","Texto normal","Corps de texte","Fließtext","Testo normale","Texto normal"],
+  "Bulleted list": ["箇条書き","项目符号列表","項目符號清單","Lista con viñetas","Liste à puces","Aufzählung","Elenco puntato","Lista com marcadores"],
+  "Numbered list": ["番号付きリスト","编号列表","編號清單","Lista numerada","Liste numérotée","Nummerierte Liste","Elenco numerato","Lista numerada"],
+  "Clear formatting": ["書式をクリア","清除格式","清除格式","Borrar formato","Effacer la mise en forme","Formatierung entfernen","Cancella formattazione","Limpar formatação"],
   "Insert — text, shapes, images, media, tables, charts": ["挿入 — テキスト、図形、画像、メディア、表、グラフ","插入 — 文本、形状、图片、媒体、表格、图表","插入 — 文字、形狀、圖片、媒體、表格、圖表","Insertar — texto, formas, imágenes, multimedia, tablas, gráficos","Insérer — texte, formes, images, médias, tableaux, graphiques","Einfügen — Text, Formen, Bilder, Medien, Tabellen, Diagramme","Inserisci — testo, forme, immagini, media, tabelle, grafici","Inserir — texto, formas, imagens, mídia, tabelas, gráficos"],
   "More actions": ["その他の操作","更多操作","更多操作","Más acciones","Plus d’actions","Weitere Aktionen","Altre azioni","Mais ações"],
   "Slides — show or hide the slide list": ["スライド — スライド一覧の表示/非表示","幻灯片 — 显示或隐藏幻灯片列表","投影片 — 顯示或隱藏投影片清單","Diapositivas — mostrar u ocultar la lista","Diapos — afficher ou masquer la liste","Folien — Folienliste ein- oder ausblenden","Diapositive — mostra o nascondi l’elenco","Slides — mostrar ou ocultar a lista"],

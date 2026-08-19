@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "This text box is already bold": "此文本框已是粗体",
+  "Italic": "斜体",
+  "Underline": "下划线",
+  "Strikethrough": "删除线",
+  "Code": "代码",
+  "Title text": "标题文字",
+  "Heading": "小标题",
+  "Body text": "正文",
+  "Bulleted list": "项目符号列表",
+  "Numbered list": "编号列表",
+  "Clear formatting": "清除格式",
   "Insert — text, shapes, images, media, tables, charts": "插入 — 文本、形状、图片、媒体、表格、图表",
   "More actions": "更多操作",
   "Slides — show or hide the slide list": "幻灯片 — 显示或隐藏幻灯片列表",

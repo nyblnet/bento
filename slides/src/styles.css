@@ -2389,3 +2389,94 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 [dir="rtl"] .ed-chart-json {
   direction: ltr;
 }
+
+/* --- rich text inside a box ------------------------------------------------
+   Every size here is in `em`, never px: the element's own `fontSize` is the
+   type scale, so a heading is "larger than this box" rather than a fixed size
+   that would fight the box it lives in — and resizing the box keeps the whole
+   hierarchy in proportion. Shared by the canvas, thumbnails, present and
+   print, because they all go through render.ts. */
+.bento-text-inner ul,
+.bento-text-inner ol {
+  margin: 0;
+  padding-inline-start: 1.35em;
+  list-style-position: outside;
+}
+/* Centred or right-aligned text: an `outside` marker stays pinned to the box's
+   start edge while its line moves away from it, so the bullet ends up floating
+   on its own. Keeping the marker inside the line keeps the two together — at
+   the cost of the hanging indent, which only reads as an indent when the text
+   is start-aligned anyway. */
+.bento-text-inner[data-align='center'] ul,
+.bento-text-inner[data-align='center'] ol,
+.bento-text-inner[data-align='right'] ul,
+.bento-text-inner[data-align='right'] ol {
+  padding-inline-start: 0;
+  list-style-position: inside;
+}
+.bento-text-inner li { margin: 0.12em 0; }
+.bento-text-inner ul { list-style: disc; }
+.bento-text-inner ol { list-style: decimal; }
+.bento-text-inner ul ul { list-style: circle; }
+.bento-text-inner h1,
+.bento-text-inner h2 {
+  margin: 0 0 0.2em;
+  line-height: 1.15;
+  font-weight: 700;
+}
+.bento-text-inner h1 { font-size: 1.55em; }
+.bento-text-inner h2 { font-size: 1.25em; }
+/* A heading that opens the box has nothing to separate itself from. */
+.bento-text-inner > :first-child { margin-top: 0; }
+
+/* --- selection formatting bar (editor/richtext.ts) -------------------------
+   Positioned from JS against the VIEWPORT, so the canvas scroller, a side
+   panel or the topbar can never clip it. */
+.ed-fmtbar {
+  position: fixed;
+  z-index: 130; /* above the context menu (120), which it can outlive */
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(20 30 45 / 0.20);
+  user-select: none;
+}
+.ed-fmtbar-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ed-fmtbar-btn:hover { background: var(--hover, #f2f5f9); }
+.ed-fmtbar-btn.is-on { background: var(--blue, #5b8def); color: #fff; }
+.ed-fmtbar-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--line); }
+/* the letter buttons should read as what they do */
+.ed-fmtbar-btn[data-cmd='bold'] { font-weight: 700; }
+.ed-fmtbar-btn[data-cmd='italic'] { font-style: italic; }
+.ed-fmtbar-btn[data-cmd='underline'] { text-decoration: underline; }
+.ed-fmtbar-btn[data-cmd='strikeThrough'] { text-decoration: line-through; }
+.ed-fmtbar-btn[data-code] { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+/* On a phone the bar is the only route to formatting, so it must not be
+   narrower than a thumb — and it may need to wrap rather than run off. */
+@media (max-width: 700px) {
+  .ed-fmtbar {
+    max-width: calc(100vw - 16px);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ed-fmtbar-btn { min-width: 36px; height: 36px; }
+}
+.ed-fmtbar-btn:disabled { opacity: 0.35; cursor: default; }
+.ed-fmtbar-btn:disabled:hover { background: transparent; }

@@ -11,6 +11,7 @@ import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
+import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
 import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors } from './lineedit'
 import { BezierEditor, isCurve } from './beziereditor'
@@ -44,6 +45,8 @@ export class SlideCanvas {
   private editingShowedRaw = false
   /** when editing a table cell, which cell (else null → text element edit) */
   private editingCell: { r: number; c: number } | null = null
+  /** tears down the selection watcher that drives the formatting bar */
+  private stopSelectionWatch: (() => void) | null = null
   /** a repaint arrived (e.g. a remote collab op) while an inline edit was in
    *  progress and was deferred so it wouldn't tear the edited node out from
    *  under the caret; flushed when the edit commits. */
@@ -1043,6 +1046,44 @@ export class SlideCanvas {
 
   // --- text editing -----------------------------------------------------------
 
+  /**
+   * Follow the selection inside an open editable and raise the formatting bar
+   * over it. `selectionchange` fires on the DOCUMENT only — there is no
+   * per-element event — so the listener lives for the length of the edit and
+   * comes off when it commits.
+   *
+   * Deferred a frame because the selection reported DURING a command is the
+   * one from before the DOM moved; reading it afterwards is what makes the
+   * pressed states and the bar's position agree with what is on screen.
+   */
+  private watchSelection(inner: HTMLElement) {
+    this.stopSelectionWatch?.()
+    let queued = false
+    const onChange = () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        // the edit may have committed between the event and this frame
+        if (!this.editing || !inner.isConnected || inner.contentEditable !== 'true') {
+          hideFormatBar()
+          return
+        }
+        syncFormatBar(inner)
+      })
+    }
+    document.addEventListener('selectionchange', onChange)
+    // the canvas can move under a live selection (a zoom, a pan, a remote edit)
+    this.scroller.addEventListener('scroll', onChange, { passive: true })
+    this.stopSelectionWatch = () => {
+      document.removeEventListener('selectionchange', onChange)
+      this.scroller.removeEventListener('scroll', onChange)
+      this.stopSelectionWatch = null
+      hideFormatBar()
+    }
+    onChange()
+  }
+
   startTextEdit(node: HTMLElement) {
     if (this.store.readOnly) return // live viewer — no inline editing
     if (this.editing === node) return
@@ -1074,6 +1115,7 @@ export class SlideCanvas {
     inner.focus()
     document.getSelection()?.selectAllChildren(inner)
     this.syncTargets()
+    this.watchSelection(inner)
     this.onTextEditChange?.(node.dataset.elId)
 
     inner.addEventListener('keydown', (ev) => {
@@ -1095,7 +1137,7 @@ export class SlideCanvas {
         const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
         if (cmd) {
           ev.preventDefault()
-          document.execCommand(cmd)
+          execFormat(cmd)
         }
       }
     })
@@ -1118,6 +1160,10 @@ export class SlideCanvas {
   onTextEditChange: ((elId: string | undefined) => void) | null = null
 
   commitTextEdit() {
+    // Ahead of every early return below, and ahead of the delegation to
+    // commitCellEdit: a watcher left running would keep the formatting bar up
+    // over a box that is no longer being edited.
+    this.stopSelectionWatch?.()
     const node = this.editing
     if (!node) return
     if (this.editingCell) { this.commitCellEdit(node); return }
@@ -1191,6 +1237,7 @@ export class SlideCanvas {
     inner.focus()
     document.getSelection()?.selectAllChildren(inner)
     this.syncTargets()
+    this.watchSelection(inner)
     this.onTextEditChange?.(id)
 
     inner.addEventListener('keydown', (ev) => {
@@ -1201,7 +1248,7 @@ export class SlideCanvas {
       if (ev.metaKey || ev.ctrlKey) {
         if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) { if (undoAutoformat()) ev.preventDefault(); return }
         const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
-        if (cmd) { ev.preventDefault(); document.execCommand(cmd) }
+        if (cmd) { ev.preventDefault(); execFormat(cmd) }
       }
     })
     inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() })

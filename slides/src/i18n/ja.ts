@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "This text box is already bold": "このテキストボックスはすでにボールドです",
+  "Italic": "斜体",
+  "Underline": "下線",
+  "Strikethrough": "取り消し線",
+  "Code": "コード",
+  "Title text": "タイトル文字",
+  "Heading": "見出し",
+  "Body text": "本文",
+  "Bulleted list": "箇条書き",
+  "Numbered list": "番号付きリスト",
+  "Clear formatting": "書式をクリア",
   "Insert — text, shapes, images, media, tables, charts": "挿入 — テキスト、図形、画像、メディア、表、グラフ",
   "More actions": "その他の操作",
   "Slides — show or hide the slide list": "スライド — スライド一覧の表示/非表示",

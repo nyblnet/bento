@@ -4,6 +4,17 @@
 import type { Catalog } from '../i18n'
 
 export const fr: Catalog = {
+  "This text box is already bold": "Cette zone de texte est déjà en gras",
+  "Italic": "Italique",
+  "Underline": "Souligné",
+  "Strikethrough": "Barré",
+  "Code": "Code",
+  "Title text": "Texte de titre",
+  "Heading": "Titre",
+  "Body text": "Corps de texte",
+  "Bulleted list": "Liste à puces",
+  "Numbered list": "Liste numérotée",
+  "Clear formatting": "Effacer la mise en forme",
   "Insert — text, shapes, images, media, tables, charts": "Insérer — texte, formes, images, médias, tableaux, graphiques",
   "More actions": "Plus d’actions",
   "Slides — show or hide the slide list": "Diapos — afficher ou masquer la liste",
