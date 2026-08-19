@@ -169,56 +169,167 @@ ${PAGE_STYLES}
     max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0;
   }
   .hero-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-  .logout-link {
-    flex-shrink: 0; font-size: 13px; color: var(--text-dim); background: none; border: none;
-    cursor: pointer; text-decoration: underline; padding: 4px 0;
-  }
-  .logout-link:hover { color: var(--text); }
   @media (max-width: 600px) {
     pre.prompt { max-height: 220px; font-size: 12px; }
+  }
+
+  /* deck history sidebar — a ChatGPT-style session list, added alongside
+     the wizard rather than replacing its layout: .main-content just becomes
+     the flex sibling of .sidebar, .wrap inside it is unchanged. */
+  .app-shell { display: flex; align-items: stretch; min-height: 100vh; }
+  .sidebar {
+    width: 260px; flex: 0 0 260px; background: var(--bg-elev); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 20px 14px; box-sizing: border-box;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .sidebar-brand { font-weight: 800; font-size: 15px; margin: 0 0 16px; padding: 0 2px; }
+  .sidebar-brand span { color: var(--accent); }
+  .new-deck-btn { width: 100%; justify-content: center; margin-bottom: 16px; }
+  .deck-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .deck-list-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-dim); padding: 0 10px; margin: 4px 0 6px;
+  }
+  .deck-item {
+    display: block; padding: 8px 10px; border-radius: 8px; color: var(--text); text-decoration: none;
+    font-size: 13px; overflow: hidden;
+  }
+  .deck-item:hover { background: rgba(245,247,250,0.07); }
+  .deck-item .deck-title {
+    display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .deck-item .deck-time { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .deck-list-empty, .deck-list-loading { color: var(--text-dim); font-size: 13px; padding: 8px 10px; }
+  .sidebar-footer { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+  .logout-link {
+    display: block; width: 100%; text-align: left; font-size: 13px; color: var(--text-dim);
+    background: none; border: none; cursor: pointer; padding: 6px 10px;
+  }
+  .logout-link:hover { color: var(--text); }
+  .main-content { flex: 1; min-width: 0; }
+  .menu-toggle { display: none; }
+  .sidebar-backdrop { display: none; }
+
+  @media (max-width: 860px) {
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; z-index: 30; transform: translateX(-100%);
+      transition: transform 0.2s ease; box-shadow: 2px 0 16px rgba(0,0,0,0.5);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-backdrop {
+      display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 25;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+    }
+    .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+    .menu-toggle {
+      display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+      border-radius: 8px; border: 1px solid var(--border-strong); background: transparent; color: var(--text);
+      cursor: pointer; font-size: 18px; flex-shrink: 0; margin-bottom: 12px;
+    }
   }
 </style>
 </head>
 <body>
-<div class="wrap">
-<header class="hero hero-row">
-  <div>
-    <h1>Bento platform <span>·</span> compile &amp; create</h1>
-    <p class="subtitle">Two steps: get an outline from an AI you're already talking to, paste it back here, get a deck.</p>
-  </div>
-  <button id="logout" class="logout-link" type="button">Log out</button>
-</header>
+<div class="app-shell">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">Bento platform <span>·</span> decks</div>
+    <button id="newDeck" class="primary new-deck-btn" type="button">+ New deck</button>
+    <div class="deck-list-label">History</div>
+    <div class="deck-list" id="deckList">
+      <div class="deck-list-loading">Loading…</div>
+    </div>
+    <div class="sidebar-footer">
+      <button id="logout" class="logout-link" type="button">Log out</button>
+    </div>
+  </aside>
+  <main class="main-content">
+    <div class="wrap">
+      <header class="hero hero-row">
+        <div>
+          <button class="menu-toggle" id="menuToggle" type="button" aria-label="Toggle deck history">☰</button>
+          <h1>Bento platform <span>·</span> compile &amp; create</h1>
+          <p class="subtitle">Two steps: get an outline from an AI you're already talking to, paste it back here, get a deck.</p>
+        </div>
+      </header>
 
-<section class="card">
-  <div class="step-label">Step 1</div>
-  <h2>Get an outline from your AI chat</h2>
-  <p><strong>First, chat with an AI</strong> (ChatGPT, Claude, whatever) about your topic until
-  you're happy with what a page-by-page outline should cover. Then copy the prompt below and
-  paste it as your <strong>next message in that same conversation</strong> — the AI already has
-  the context, so it turns what you discussed into JSON matching our schema without you
-  re-explaining anything.</p>
-  <pre class="prompt" id="promptText">${escapeHtml(PROMPT_TEMPLATE)}</pre>
-  <div class="actions">
-    <button id="copyPrompt" class="primary" type="button">Copy prompt</button>
-  </div>
-</section>
+      <section class="card">
+        <div class="step-label">Step 1</div>
+        <h2>Get an outline from your AI chat</h2>
+        <p><strong>First, chat with an AI</strong> (ChatGPT, Claude, whatever) about your topic until
+        you're happy with what a page-by-page outline should cover. Then copy the prompt below and
+        paste it as your <strong>next message in that same conversation</strong> — the AI already has
+        the context, so it turns what you discussed into JSON matching our schema without you
+        re-explaining anything.</p>
+        <pre class="prompt" id="promptText">${escapeHtml(PROMPT_TEMPLATE)}</pre>
+        <div class="actions">
+          <button id="copyPrompt" class="primary" type="button">Copy prompt</button>
+        </div>
+      </section>
 
-<section class="card">
-  <div class="step-label">Step 2</div>
-  <h2>Paste the AI's JSON and create your deck</h2>
-  <p>Paste whatever the AI replied with. We'll detect whether it's outline JSON (from step 1) or
-  a full <code>bento/slides</code> document (the "advanced" path — paste one directly to skip the
-  AI entirely) and create the deck either way.</p>
-  <textarea id="input" spellcheck="false"></textarea>
-  <div class="actions">
-    <button id="loadOutlineExample" type="button">Load example outline</button>
-    <button id="loadExample" type="button">Load example doc (advanced)</button>
-    <button id="create" class="primary" type="button">Create deck →</button>
-  </div>
-  <div id="status" class="status"></div>
-</section>
+      <section class="card">
+        <div class="step-label">Step 2</div>
+        <h2>Paste the AI's JSON and create your deck</h2>
+        <p>Paste whatever the AI replied with. We'll detect whether it's outline JSON (from step 1) or
+        a full <code>bento/slides</code> document (the "advanced" path — paste one directly to skip the
+        AI entirely) and create the deck either way.</p>
+        <textarea id="input" spellcheck="false"></textarea>
+        <div class="actions">
+          <button id="loadOutlineExample" type="button">Load example outline</button>
+          <button id="loadExample" type="button">Load example doc (advanced)</button>
+          <button id="create" class="primary" type="button">Create deck →</button>
+        </div>
+        <div id="status" class="status"></div>
+      </section>
+    </div>
+  </main>
 </div>
 <script>
+function relativeTime(ms) {
+  const diff = Date.now() - ms
+  const min = Math.round(diff / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return min + 'm ago'
+  const hr = Math.round(min / 60)
+  if (hr < 24) return hr + 'h ago'
+  const day = Math.round(hr / 24)
+  if (day < 30) return day + 'd ago'
+  return new Date(ms).toLocaleDateString()
+}
+async function loadDeckList() {
+  const list = document.getElementById('deckList')
+  try {
+    const res = await fetch('/api/decks')
+    if (!res.ok) throw new Error('failed to load')
+    const body = await res.json()
+    const decks = body.decks || []
+    if (decks.length === 0) {
+      list.innerHTML = '<div class="deck-list-empty">No decks yet — create your first one →</div>'
+      return
+    }
+    list.innerHTML = decks.map(d =>
+      '<a class="deck-item" href="/d/' + d.id + '">' +
+      '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
+      '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
+      '</a>'
+    ).join('')
+  } catch (e) {
+    list.innerHTML = '<div class="deck-list-empty">Couldn\\'t load deck history.</div>'
+  }
+}
+loadDeckList()
+
+document.getElementById('newDeck').onclick = () => location.reload()
+
+const sidebar = document.getElementById('sidebar')
+const backdrop = document.getElementById('sidebarBackdrop')
+function closeSidebar() { sidebar.classList.remove('open'); backdrop.classList.remove('open') }
+document.getElementById('menuToggle').onclick = () => {
+  sidebar.classList.toggle('open')
+  backdrop.classList.toggle('open')
+}
+backdrop.onclick = closeSidebar
+
 document.getElementById('logout').onclick = async () => {
   await fetch('/api/logout', { method: 'POST' })
   location.href = '/login'
@@ -298,6 +409,7 @@ document.getElementById('create').onclick = async () => {
       'Open it:  ' + location.origin + '/d/' + body.id + '\\n' +
       'Present:  ' + location.origin + '/d/' + body.id + '#present\\n' +
       'Download: ' + location.origin + '/d/' + body.id + '/download'
+    loadDeckList()
   } catch (e) {
     status.className = 'status err'
     status.textContent = 'Request failed: ' + e.message
