@@ -719,6 +719,23 @@ export class Editor {
     // the canvas wrap resizes; its ResizeObserver re-fits the stage
   }
 
+  /**
+   * Below 700px the two side panels stop being columns and become overlay
+   * DRAWERS (styles.css) — they cover the canvas rather than sitting beside it.
+   * That is the width at which "leave the panel open" stops being free.
+   */
+  private get panelsAreDrawers(): boolean {
+    return this.phoneQuery?.matches ?? window.innerWidth <= 700
+  }
+
+  /** Close a panel if it is open — idempotent, unlike togglePanel. */
+  private closePanel(side: 'left' | 'right') {
+    const el = side === 'left' ? this.sidebar : this.props
+    if (el.classList.contains('ed-collapsed')) return
+    el.classList.add('ed-collapsed')
+    this.updatePanelChevrons()
+  }
+
   // --- Save dropdown: copy / new deck / template -----------------------------
 
   private saveDropdown(): HTMLElement {
@@ -1575,7 +1592,14 @@ export class Editor {
       btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, t('Delete slide')),
     )
     item.append(num, surface, tools)
-    item.addEventListener('click', () => this.store.goTo(i))
+    item.addEventListener('click', () => {
+      this.store.goTo(i)
+      // On a phone the slide list is a drawer laid OVER the canvas, so picking
+      // a slide left the answer hidden behind the question — you had to find
+      // and press the ☰ toggle again to see the slide you just chose. On a wide
+      // screen the list is a column beside the canvas and rightly stays put.
+      if (this.panelsAreDrawers) this.closePanel('left')
+    })
     if (!isState) this.wireThumbDrag(item, i)
     return item
   }
