@@ -101,60 +101,18 @@ Still true, and worth knowing before cutting `dash-v0.3.0`:
   `bento.page/releases/dash/manifest.json`; switch on → none. Gate holds.
 
 
-- **No file write-back.** slides silently rewrites the real file every 2.5s once
-  it holds a handle. dash writes an IndexedDB snapshot and never touches the
-  file, so everything since the last manual ⌘S depends on recovery. *(The
-  honesty half is done: `putRecovery`'s false result is now surfaced.)*
+- ~~**No file write-back.**~~ **Done** (`92c34b6`) — writeback.ts rides the existing 2.5s debounce; a failed write is never recorded as a baseline, so a permanent failure cannot be reported once and then silently skipped.
 - ~~**`Grid.setSheet` clears `filters`/`sorts` but not `store.order[id]`.**~~
   **Done**, as a side effect of the status line — a truthful description of the
   view made the phantom view impossible to leave in.
-- **A DROPPED workbook's read-only flag is not applied.** `adoptOpenedDoc`
-  (saveui.ts) is what locks a read-only workbook and mints a fresh identity for
-  a template, and it is called from exactly ONE place: `main.ts:239`, the boot
-  path. `dropopen.ts` never calls it. Both it and `recovery.ts swapWorkbook`
-  test `host.store.readOnly` — the CURRENT workbook's flag — not the incoming
-  document's. So dropping a read-only workbook onto an editable one gives you
-  an editable copy of a file whose author marked it read-only, and dropping a
-  template keeps the template's identity instead of forking it. Read-only is
-  one of the three file modes; enforcing it on one open path and not the other
-  is the kind of gap that is invisible until someone relies on it.
-  *(Found while adding file write-back, which defends itself by checking
-  `doc.readonly` and `doc.template` directly — but ⌘S does not.)*
+- ~~**A DROPPED workbook's read-only flag is not applied.**~~ **Done** (`1da3263`) — adoptOpenedDoc split into forkTemplate + applyDocLock, applied on opposite sides of the swap.
 - **`releaseFileHandle()` is missing from the kernel.** Three dash call sites
   now cast `null as never` into `adoptFileHandle` to let go of a handle. The
   cast is the same one `dropopen.ts` already documents. It belongs in
   `kernel/src/save.ts`, and the kernel zone is serialised, so it is a separate
   change rather than a drive-by.
-- **`dashboard.ts:741` spreads one argument per row.** A 400k-row workbook
-  renders, then throws `RangeError: Maximum call stack size exceeded`, and the
-  loader paints an opaque error card over a working app. `condfmt.ts:52` already
-  documents the hazard and avoids it.
-
-## 2 · Expected of any spreadsheet, and absent
-
-- **THE GRID ENDS AT THE DATA, and pretends otherwise.** An 8-row sheet has no
-  row 9: ArrowDown from the last row does nothing, and pressing `=` there opens
-  the editor on the LAST DATA CELL — so the universal gesture, "click below the
-  numbers and type `=SUM(`", silently targets a cell holding real data instead.
-  The ruled lines under the total look exactly like empty rows and are
-  `.dg-table` background paint; clicking them selects nothing (measured).
-  Consequences: the footer total is not a formula and cannot be one (it is
-  `sheet.totals`, a column property), and reaching the 91 functions requires
-  either the `fx` column button or typing `=` into a row that already exists —
-  so writing `=SUM(Value)` in a cell means inserting a row first, which nobody
-  will discover.
-
-  This is the model tension, not a bug to patch: dash says *a sheet is a typed
-  table*, Excel says *a sheet is an infinite canvas where data sits top-left*.
-  The typed model earns the column formulas, the type refusals and the columnar
-  speed. But the current state is the worst of both — it LOOKS like the canvas
-  model and behaves like the table model, with no signal about which. The fix
-  is real empty rows past the data that append on first type (Sheets' answer),
-  which is what the background is already impersonating.
-  *(Found by the first person to look at the totals row and ask why it was not
-  a formula.)*
-
-
+- ~~**`dashboard.ts:741` spreads one argument per row.**~~ **Done** — seriesExtent walks in one pass; the sweep found three more sites (MIN/MAX, MINIFS/MAXIFS, the xlsx totals row).
+- ~~**THE GRID ENDS AT THE DATA.**~~ **Done** — one appender row, and the ruled lattice now stops at the data instead of impersonating empty cells. The unbounded answer is the spreadsheet kind.
 - ~~**The totals row cannot be clicked.**~~ **Done.** The footer cell IS the
   control: click it for sum/avg/count/min/max/No total, written through the
   existing `totalsPatch` so there is still one path to `sheet.totals`. An empty
@@ -163,16 +121,8 @@ Still true, and worth knowing before cutting `dash-v0.3.0`:
   bottom edge. Two display bugs surfaced by making it reachable: `count` was
   borrowing the column's money format (`count £8.00`), and a custom-formula
   total rendered as `[object Object]`.
-- **No print, no PDF.** Zero `@media print` rules. Printing today emits one page
-  of app chrome with the table crushed into a column and the right-hand columns
-  clipped. Rows are virtualised, so a naive print can only ever emit the ~55
-  rows on screen — this needs a real page builder, repeated headers and page
-  breaks, as slides has.
-- **No cell formatting on the DATASET kind.** `CellOverride` carries value and
-  formula only, so ⌘B and ⌘I have nothing to bind to there. The SPREADSHEET kind
-  now has format, bold, alignment and colours per cell — the format always
-  carried them and the panel finally offers them — so this is a gap in one kind,
-  not in the app. Italic, underline, borders and wrap are absent from both.
+- ~~**No print, no PDF.**~~ **Done** (`6dadf71`) — a real page builder over the view vector. Measured in a browser: 3,001 rows printed from a grid holding 46.
+- ~~**No cell formatting on the DATASET kind.**~~ **Done** — one appearance vocabulary shared by both kinds, plus italic/underline/borders/wrap which neither had.
 - ~~**Stale readouts.**~~ **Done.** `applyView()` — which every sort, filter,
   clear, sheet switch and structural edit funnels through — now announces, and
   the status text lives in `grid.ts` (`viewStatusText`) because the grid owns
@@ -186,22 +136,10 @@ Still true, and worth knowing before cutting `dash-v0.3.0`:
   screen, and refuses with a reason on a spreadsheet rather than silently
   exporting a different sheet.
 
-- **Pivot and canvas sheets cannot be renamed.** `applySheetProps` narrows
-  through `table(doc, id)` and throws otherwise, so the tab strip ships a
-  deliberately disabled menu item.
-- **A sheet reorder's undo entry stringifies the whole sheet** for byte
-  accounting. Correct, but O(sheet) for an O(1) operation; a dedicated
-  `reorderSheets` op fixes it.
-- **About's version restore is not undoable** while the recovery banner's is —
-  `recovery.ts` holds the pre-restore document and offers "Undo restore", and
-  About should use the same pattern rather than a `confirm()`.
-- **The grid is invisible to assistive technology.** No `role="grid"`, no
-  `gridcell`, no `aria-*`; after clicking a cell `document.activeElement` is
-  `BODY`. Keyboard navigation itself is complete and good, which makes this
-  more fixable than it sounds.
-
-## 4 · Tidying
-
+- ~~**Pivot and canvas sheets cannot be renamed.**~~ **Done** — the narrowing was in three places, including crdt.ts committable, where it would have shipped as "rename works, except on a shared workbook".
+- ~~**A sheet reorder's undo entry stringifies the whole sheet.**~~ **Done** — a dedicated reorderSheets op: 132,813 bytes per drag at 20k rows became 44.
+- ~~**About's version restore is not undoable.**~~ **Done** — both paths call offerUndoRestore; Replace-from-JSON keeps its confirm, because a paste has no earlier state worth naming back.
+- ~~**The grid is invisible to assistive technology.**~~ **Done** — role/aria throughout, indices describing the FULL view rather than the ~46-row window, and focus that lands on the cell instead of BODY.
 - `panels.css` carries ~90 dead rules (`.dp-left`, `.dp-sheet*`, `.dp-add`, the
   phone-drawer rules) left by the sheet list moving to the tab strip.
 - No i18n language **packs** — the seven catalogs are bundled core only. slides
