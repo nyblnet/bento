@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const zhHant: Catalog = {
+  "Cut": "剪下",
+  "Copy": "複製",
+  "Paste": "貼上",
+  "Bring to front": "移至最上層",
+  "Send to back": "移至最下層",
+  "Ungroup": "取消群組",
+  "Edit text": "編輯文字",
+  "Nothing to paste — use ⌘V": "沒有可貼上的內容 — 請使用 ⌘V",
   "Insert — text, shapes, images, media, tables, charts": "插入 — 文字、形狀、圖片、媒體、表格、圖表",
   "More actions": "更多操作",
   "Slides — show or hide the slide list": "投影片 — 顯示或隱藏投影片清單",

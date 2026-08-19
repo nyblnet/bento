@@ -2389,3 +2389,52 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 [dir="rtl"] .ed-chart-json {
   direction: ltr;
 }
+
+/* --- context menu ---------------------------------------------------------
+   Positioned from JS against the VIEWPORT (ctxmenu.ts), so it is never clipped
+   by the canvas scroller, the topbar's own scroller, or a side panel. Shares
+   the dropdown look so a right-click and a bar menu read as the same object. */
+.ed-ctxmenu {
+  position: fixed;
+  z-index: 120; /* above the drawers (40) and the bar menus (50) */
+  display: flex;
+  flex-direction: column;
+  min-width: 184px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(20 30 45 / 0.18);
+  user-select: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ed-ctxmenu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  /* 40px, not the bar's 44: this list is read top-to-bottom with the finger
+     already on it, where run length matters more than target area. */
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.ed-ctxmenu-item:hover:not(:disabled) { background: var(--hover, #f2f5f9); }
+.ed-ctxmenu-item:disabled { opacity: 0.4; cursor: default; }
+.ed-ctxmenu-item kbd {
+  font: inherit;
+  font-size: 11.5px;
+  color: #8a95a6;
+  white-space: nowrap;
+}
+.ed-ctxmenu-danger:not(:disabled) { color: #b4232a; }
+.ed-ctxmenu-danger:hover:not(:disabled) { background: #fdeced; }
+.ed-ctxmenu-sep { height: 1px; margin: 4px 2px; background: var(--line); }

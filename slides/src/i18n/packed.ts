@@ -15,6 +15,14 @@ export const PACKED_LOCALES = ["ja","zh-Hans","zh-Hant","es","fr","de","it","pt"
 
 /** English source string -> translations, positional by PACKED_LOCALES. */
 export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
+  "Cut": ["切り取り","剪切","剪下","Cortar","Couper","Ausschneiden","Taglia","Recortar"],
+  "Copy": ["コピー","复制","複製","Copiar","Copier","Kopieren","Copia","Copiar"],
+  "Paste": ["貼り付け","粘贴","貼上","Pegar","Coller","Einfügen","Incolla","Colar"],
+  "Bring to front": ["最前面へ移動","置于顶层","移至最上層","Traer al frente","Mettre au premier plan","In den Vordergrund","Porta in primo piano","Trazer para a frente"],
+  "Send to back": ["最背面へ移動","置于底层","移至最下層","Enviar al fondo","Mettre à l’arrière-plan","In den Hintergrund","Porta in secondo piano","Enviar para trás"],
+  "Ungroup": ["グループ解除","取消组合","取消群組","Desagrupar","Dissocier","Gruppierung aufheben","Separa","Desagrupar"],
+  "Edit text": ["テキストを編集","编辑文本","編輯文字","Editar texto","Modifier le texte","Text bearbeiten","Modifica testo","Editar texto"],
+  "Nothing to paste — use ⌘V": ["貼り付けるものがありません — ⌘V を使用してください","没有可粘贴的内容 — 请使用 ⌘V","沒有可貼上的內容 — 請使用 ⌘V","No hay nada que pegar: usa ⌘V","Rien à coller — utilisez ⌘V","Nichts zum Einfügen — ⌘V verwenden","Niente da incollare — usa ⌘V","Nada para colar — use ⌘V"],
   "Insert — text, shapes, images, media, tables, charts": ["挿入 — テキスト、図形、画像、メディア、表、グラフ","插入 — 文本、形状、图片、媒体、表格、图表","插入 — 文字、形狀、圖片、媒體、表格、圖表","Insertar — texto, formas, imágenes, multimedia, tablas, gráficos","Insérer — texte, formes, images, médias, tableaux, graphiques","Einfügen — Text, Formen, Bilder, Medien, Tabellen, Diagramme","Inserisci — testo, forme, immagini, media, tabelle, grafici","Inserir — texto, formas, imagens, mídia, tabelas, gráficos"],
   "More actions": ["その他の操作","更多操作","更多操作","Más acciones","Plus d’actions","Weitere Aktionen","Altre azioni","Mais ações"],
   "Slides — show or hide the slide list": ["スライド — スライド一覧の表示/非表示","幻灯片 — 显示或隐藏幻灯片列表","投影片 — 顯示或隱藏投影片清單","Diapositivas — mostrar u ocultar la lista","Diapos — afficher ou masquer la liste","Folien — Folienliste ein- oder ausblenden","Diapositive — mostra o nascondi l’elenco","Slides — mostrar ou ocultar a lista"],
