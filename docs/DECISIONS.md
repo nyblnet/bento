@@ -14,6 +14,59 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-19 — Production postmortem: PBKDF2 iteration cap, and a `return`-without-`await` bug that had been silent since the very first PR
+
+**What happened.** The day after Stage A (single-owner auth) merged and
+deployed, `POST /api/setup` 500'd for the actual owner trying to create the
+one account this whole feature exists for. Root cause found via
+`wrangler tail` against the live Worker (`npx wrangler tail bento`), not
+guessed: `NotSupportedError: Pbkdf2 failed: iteration counts above 100000
+are not supported (requested 300000)`. `auth.ts` used 300,000 iterations,
+copied from `kernel/src/save.ts`'s `bento/enc` password encryption — which
+runs in a **browser**, with no such cap. The Workers runtime (`workerd`)
+hard-rejects PBKDF2 above 100,000. Fixed by dropping to 100,000 (the actual
+ceiling, not a tuning choice) and exporting the constant so
+`auth.spec.ts` can assert on it directly — **Node's WebCrypto does not
+enforce this limit**, so the entire test suite was green throughout; this
+class of bug is invisible to `npm test` by construction and only ever shows
+up in production. The regression-guard test doesn't run the real PBKDF2
+call, it just pins the constant `<= 100_000` in prose, which is the most
+that's honestly achievable without a workerd-based test harness this
+project doesn't have.
+
+**The second, worse bug this uncovered.** The 500 wasn't a clean JSON error
+from `index.ts`'s own `catch` block — it was Cloudflare's raw "error code:
+1101" page, meaning the exception never reached that `catch` at all. Cause:
+every route dispatch in `fetch()` was written `return handleXxx(...)`
+(returning the handler's promise directly) instead of
+`return await handleXxx(...)`. In JS, `return promise` inside a `try` block
+lets the `try` complete (and the surrounding `catch`'s scope close) the
+instant the promise is *returned*, not when it *settles* — so a later
+rejection of that promise is never caught by that `catch`. This had been
+true of **every single route** since the very first PR, invisible the whole
+time because no handler had thrown an uncaught rejection in production
+until this PBKDF2 call did. Fixed by awaiting every handler call before
+returning it, with a comment on the `try` block explaining why this
+particular pattern is load-bearing here (it's easy to "clean up" back to
+the shorter unawaited form without realizing what it silently breaks).
+
+**Also found and fixed while investigating**: `wrangler.toml`'s `name` had
+said `"bento-platform"` since it was first committed, but the Worker
+Workers Builds is actually connected to is named `"bento"` — a
+`wrangler-platform` Worker never existed. This was harmless for the
+automated CI deploy path (Workers Builds targets whatever Worker it's
+connected to, evidently ignoring this field), which is exactly why it went
+unnoticed through several merges — but it broke `wrangler deployments list
+--name bento-platform` when debugging this incident locally ("this Worker
+does not exist"), which is how it surfaced. Corrected to `name = "bento"`.
+
+**Process note.** All three bugs were found by reproducing directly against
+the live Worker (`curl`, then `wrangler tail` while re-triggering the
+request) rather than by re-reading the source and guessing — the tail
+output named the exact exception and iteration count on the first attempt.
+Worth remembering next time a production error is vague: reach for the real
+logs before reasoning from the code.
+
 ## 2026-08-18 — Single-owner auth: stateful D1 sessions, not signed cookies; edit tokens retired
 
 **Decision.** `platform/worker/src/auth.ts` (migration `0002_auth.sql`) adds

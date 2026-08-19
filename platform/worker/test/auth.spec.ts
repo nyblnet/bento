@@ -10,6 +10,7 @@ import {
   createSession,
   touchSession,
   deleteSession,
+  PASSWORD_ITERATIONS,
 } from '../src/auth.ts'
 import type { Env } from '../src/env.ts'
 
@@ -76,6 +77,19 @@ function makeEnv(): Env {
 }
 
 console.log('auth.ts')
+
+await check('PASSWORD_ITERATIONS stays within the Workers PBKDF2 ceiling', () => {
+  // Node's WebCrypto (what this whole suite runs under) does NOT enforce
+  // Cloudflare Workers' "iteration counts above 100000 are not supported"
+  // limit — this shipped broken once already (300_000, copied from
+  // kernel/save.ts's browser-only code) and every real POST /api/setup
+  // 500'd in production with every other check here still green, because
+  // nothing exercised the actual Workers runtime. This is the only line in
+  // the suite that would have caught it: a plain range assertion against
+  // the real ceiling, checked in prose so raising it back up is a visible,
+  // deliberate edit rather than a silent regression.
+  assert(PASSWORD_ITERATIONS <= 100_000, `PASSWORD_ITERATIONS (${PASSWORD_ITERATIONS}) exceeds the Workers PBKDF2 ceiling of 100,000 — this WILL 500 in production even though Node-based tests can't detect it`)
+})
 
 await check('createConfig + verifyPassword: correct credentials verify', async () => {
   const env = makeEnv()

@@ -115,9 +115,14 @@ so logout is just deleting the row (`auth.ts`). This is a deliberate choice
 for a single-owner, low-traffic project — no signing-key management, no JWT
 library, one small D1 row per active session.
 
-Passwords are hashed with PBKDF2-SHA-256 at 300,000 iterations — the same
-construction `kernel/src/save.ts` already uses for `bento/enc` password-
-protected decks, reused rather than reinvented. **The salt is always
+Passwords are hashed with PBKDF2-SHA-256 at **100,000 iterations — the
+maximum the Workers runtime allows**, not a tuning choice (`workerd` hard-
+rejects anything above that: `NotSupportedError: Pbkdf2 failed: iteration
+counts above 100000 are not supported`). Same PBKDF2-SHA-256 family
+`kernel/src/save.ts` uses for `bento/enc` password-protected decks, but
+*not* the same count — that code runs in a browser, which has no such cap,
+and its 300,000 will 500 immediately if copied into a Worker (this shipped
+that exact bug once; see `docs/DECISIONS.md`). **The salt is always
 generated server-side** (`crypto.getRandomValues`); there is no code path
 that accepts or stores a caller-supplied salt.
 
@@ -202,21 +207,25 @@ version pin, not a timestamp to keep fresh):
 | `database_name` under `[[d1_databases]]` | your D1 database's name |
 | `database_id` under `[[d1_databases]]` | your D1 database's ID |
 
-Leave `name = "bento-platform"` and `main = "src/index.ts"` alone — the
-Worker you create in step 3 needs to match `name` exactly, and it's simplest
-to just keep the committed value rather than change two places in sync.
+Leave `name = "bento"` and `main = "src/index.ts"` alone — the Worker you
+create in step 3 needs to match `name` exactly, and it's simplest to just
+keep the committed value rather than change two places in sync. (In
+practice, Workers Builds' CI deploy targets whatever Worker it's connected
+to regardless of this field — this only actually matters if you ever run
+`wrangler deploy` by hand. Keep it correct anyway: a wrong `name` here is
+invisible until someone runs a manual command against it and gets "this
+Worker does not exist.")
 
 ### 3. Create the Worker and connect it to this repo
 
 - Dashboard → **Workers & Pages** → **Create** → **Worker**. Name it
-  **exactly `bento-platform`** (matching `wrangler.toml`'s `name` — this is
-  what lets `wrangler deploy` find the right Worker later). Any starter
+  **exactly `bento`** (matching `wrangler.toml`'s `name`). Any starter
   template is fine to deploy initially; the first automated build replaces
   it entirely.
 - Open the new Worker → **Settings** → **Builds** → connect a repository.
   (Some accounts offer a "Connect to Git"/"Import a repository" option right
   in the Create-Worker flow instead — that shortcut works too, as long as the
-  resulting Worker still ends up named exactly `bento-platform`.) You'll be
+  resulting Worker still ends up named exactly `bento`.) You'll be
   prompted to install/authorize Cloudflare's GitHub app — grant it access to
   this repository (or all your repos, your choice), then pick this repo.
   This is a multi-step wizard ("Select a method" → "Select a repository" →
