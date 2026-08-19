@@ -198,7 +198,7 @@
 // Optional, not needed for correctness: a "Equation" entry in main.ts's block
 // style select, so display math is reachable from the same place as headings.
 
-import { registerKey, registerMenuItem, registerPanel, registerTool,
+import { registerKey, registerPanel, registerTool,
          type FeatureContext } from './features.ts';
 import { t } from './i18n.ts';
 import { spliceText, uid, type Block } from './model.ts';
@@ -380,11 +380,16 @@ registerTool({
   run: ctx => insertInlineMath(ctx),
 });
 
-registerMenuItem({
+// A display equation is a SECOND kind of insert, not an action — it puts
+// something in the document, so it belongs beside Formula in the Insert menu
+// rather than in ⋯ where it was competing with Print and Sign.
+registerTool({
   id: 'math-display',
-  get label() { return t('Equation block'); },
   icon: RADICAL_ICON,
-  order: 40,
+  get title() { return t('Insert a display equation on its own line'); },
+  group: 'insert',
+  label: () => t('Equation block'),
+  order: 41,
   run: ctx => insertDisplayMath(ctx),
 });
 

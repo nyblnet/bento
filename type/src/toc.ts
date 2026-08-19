@@ -538,12 +538,9 @@ features.registerTool({
 
 // 'Number sections' is a document PROPERTY and lives in the properties panel.
 
-features.registerMenuItem({
-  id: 'toc-exclude',
-  get label() { return t('Do not number this heading'); },
-  order: 41,
-  run: toggleExclude,
-});
+// NO ⋯ entry for excluding a heading: it is a property of the heading under
+// the caret, and it lives as a checkbox in the properties panel's Text section,
+// where it can SHOW its state instead of only offering to flip it.
 
 /**
  * Soft wiring.

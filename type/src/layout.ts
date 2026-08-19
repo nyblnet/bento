@@ -158,7 +158,7 @@
 // — the module is complete and testable, the FILE is not durable.
 
 import type { Block, PageSpec, TypeDoc } from './model.ts';
-import { registerKey, registerMenuItem, registerPanel, type FeatureContext } from './features.ts';
+import { registerKey, registerPanel, type FeatureContext } from './features.ts';
 import { locale, t } from './i18n.ts';
 
 // ────────────────────────────────────────────────────────────────── geometry
@@ -602,7 +602,6 @@ const ALIGN_ICON: Record<Align, string> = {
   right: svg('<line x1="3" y1="5" x2="21" y2="5"/><line x1="9" y1="9.5" x2="21" y2="9.5"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="9" y1="18.5" x2="21" y2="18.5"/>'),
   justify: svg('<line x1="3" y1="5" x2="21" y2="5"/><line x1="3" y1="9.5" x2="21" y2="9.5"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="18.5" x2="21" y2="18.5"/>'),
 };
-const ICON_BREAK = svg('<line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="3 3"/><path d="M8 7V3h8v4"/><path d="M8 17v4h8v-4"/>');
 
 /**
  * The unit this reader measures in.
@@ -1068,13 +1067,10 @@ registerPanel({
 // Page setup is reached from the Document section of the properties panel;
 // it is a property, not an action, and the ⋯ menu is for actions.
 
-registerMenuItem({
-  id: 'page-break',
-  label: t('Page break here (⌘⏎)'),
-  icon: ICON_BREAK,
-  order: 31,
-  run: togglePageBreak,
-});
+// NO ⋯ entry: "page break here" IS the breakBefore property, which is already
+// a checkbox in the Page breaking group of this panel. Offering it twice, once
+// as an action and once as a property, made the two look like different things.
+// The keyboard shortcut stays — that is the fast path, not a second home.
 
 // ⌘⏎ for the break and ⌘⇧L/E/R/J for alignment — the shortcuts every word
 // processor has had for thirty years. A person should not have to learn ours.

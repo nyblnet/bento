@@ -26,7 +26,7 @@ import { ICONS } from './icons.ts';
 import { t } from './i18n.ts';
 import { MAX_TABLE_COLS, type Block, type BlockKind } from './model.ts';
 import { PAPER, openPageSetup, withSize, withOrientation, type SizeId } from './layout.ts';
-import { sectionSettings, setNumbered } from './toc.ts';
+import { isHeading, EXCLUDE_ROLE, sectionSettings, setNumbered, toggleExclude } from './toc.ts';
 
 // ─────────────────────────────────────────────────────────────── small parts
 
@@ -128,6 +128,22 @@ function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
     { icon: ICONS.strike, title: t('Strikethrough'), on: active.has('s'), run: () => ctx.editor.toggle('s') },
     { icon: ICONS.code, title: t('Code'), on: active.has('code'), run: () => ctx.editor.toggle('code') },
   ]);
+
+  // Whether THIS heading is numbered is a property of the heading, so it is a
+  // checkbox here rather than the ⋯ entry it used to be — an action named "Do
+  // not number this heading" gave no way to see the current state, only a way
+  // to flip it, and no way at all to tell which heading it would act on.
+  //
+  // Shown only when the document numbers its sections: with numbering off there
+  // is nothing to exclude a heading from, and a control that cannot do anything
+  // is worse than an absent one.
+  if (isHeading(b) && sectionSettings(ctx.store.doc).numbered) {
+    const box = el('input') as HTMLInputElement;
+    box.type = 'checkbox';
+    box.checked = (b.role ?? '') !== EXCLUDE_ROLE;
+    box.addEventListener('change', () => toggleExclude(ctx));
+    row(body, t('Number this heading'), box);
+  }
 }
 
 function imageSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {

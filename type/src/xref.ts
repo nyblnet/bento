@@ -158,7 +158,7 @@
 
 import type { Block, TypeDoc } from './model.ts';
 import { blockHtml, TAG } from './render.ts';
-import { registerKey, registerMenuItem, registerPanel, registerTool,
+import { registerKey, registerPanel, registerTool,
          type FeatureContext } from './features.ts';
 import { t } from './i18n.ts';
 
@@ -721,11 +721,9 @@ registerTool({
   run: openPicker,
 });
 
-registerMenuItem({
-  id: 'xref-insert', order: 30,
-  get label() { return t('Cross-reference…'); },
-  run: openPicker,
-});
+// NO ⋯ entry: this is the same action as the Insert tool above, and a thing
+// with two homes teaches that neither is where it lives. Inserting is what the
+// Insert menu is for; ⋯ is for document-level actions.
 
 // ⌥⌘R: R for reference. ⌘R is the browser's reload and ⇧⌘R its hard reload, so
 // neither is available; Alt keeps it out of both.
