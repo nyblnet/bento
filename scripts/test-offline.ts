@@ -93,12 +93,38 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
-const sources = ['kernel/src', 'slides/src', 'dash/src', 'spaces/src']
-  .flatMap((d) => walk(join(root, d)))
+/**
+ * Every app, DISCOVERED rather than listed. A hand-written list is the same
+ * hazard as a hand-written call-site audit, one level up: the app that is
+ * missing from it is exempt from the policy, and nothing says so. bento/type
+ * was about to arrive as a fourth app with a model, an editor and a sync
+ * binding, and it would have been silently outside this scan — which matters
+ * most for exactly that app, because fetching a font or a remote image is an
+ * obvious feature for a word processor and neither reads as "networking" when
+ * you write it.
+ *
+ * So: any top-level directory with a src/ is in scope, and a new app joins the
+ * policy by existing.
+ */
+const APP_DIRS = readdirSync(root)
+  .filter((d) => !d.startsWith('.') && d !== 'node_modules')
+  .filter((d) => { try { return statSync(join(root, d, 'src')).isDirectory() } catch { return false } })
+  .sort()
+
+const sources = APP_DIRS
+  .flatMap((d) => walk(join(root, d, 'src')))
   .map((p) => relative(root, p))
   .filter((p) => p !== CHOKEPOINT)
 
-ok(sources.length > 50, `the policy scan actually found sources to scan (${sources.length} files)`)
+ok(sources.length > 50, `the policy scan actually found sources to scan (${sources.length} files in ${APP_DIRS.length} apps: ${APP_DIRS.join(', ')})`)
+// Discovery that silently finds nothing is the failure this rig exists to
+// prevent, one level up — a green run over an empty list looks identical to a
+// green run over the whole repo.
+for (const known of ['kernel', 'slides']) {
+  ok(APP_DIRS.includes(known), `discovery found the ${known} sources — it has not silently stopped matching`)
+}
+ok(!APP_DIRS.includes('docs') && !APP_DIRS.includes('scripts'),
+  'discovery does not sweep in directories that are not apps')
 
 const offenders: string[] = []
 for (const rel of sources) {

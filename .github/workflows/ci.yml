@@ -51,6 +51,7 @@ jobs:
             slides/package-lock.json
             spaces/package-lock.json
             dash/package-lock.json
+            type/package-lock.json
 
       - name: Install
         working-directory: slides
@@ -143,6 +144,31 @@ jobs:
         # probes run in child processes with timeouts, because a hang cannot be
         # reported by the process it hangs.
         run: node scripts/test-spaces-agent.ts
+
+      - name: Spaces journal rig (several timezones)
+        # Every part of a daily note that can be wrong is wrong QUIETLY and on
+        # someone else's machine: "today" in UTC is the wrong day for hours at
+        # a time outside Greenwich, adding 86,400,000 ms is not adding a day on
+        # the two DST boundaries, and `new Date('2026-08-06')` is UTC midnight
+        # by spec. A date test that only ever runs in one timezone has not been
+        # run — so this runs in five, including a half-hour DST offset.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-journal.ts
+          done
+
+      - name: Magic notes evaluator (several timezones)
+        # Two failure modes, and the second is what would make the feature worse
+        # than not having it: a WRONG answer (silent, confident, in somebody's
+        # notes), and an answer where there should be none — "Meet Ana at 3" is
+        # a sentence. The parser must consume the whole line or return nothing.
+        # Dates run in several timezones for the reasons journal.ts records.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-calc.ts
+          done
 
       - name: Spaces shell size ceiling
         # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
@@ -294,6 +320,47 @@ jobs:
         # decision is pure logic over an options bag, so it is checkable here
         # rather than by reloading an extension and pressing Cmd-S.
         run: node scripts/test-webext-bridge.ts
+
+      - name: WebExtension route rig
+        # Turning an absolute path into "where this granted folder lives", from
+        # paths the extension did not choose — browser history, for files that
+        # may have moved or never been in a grant at all. Getting it wrong does
+        # not produce a broken link; it records a folder at the wrong place and
+        # every document in it silently opens something else. So it must prove,
+        # never guess: the route resolves inside the grant AND dir.resolve()
+        # agrees with the path's own tail.
+        run: node scripts/test-webext-route.ts
+
+      - name: WebExtension document-library rig
+        # The popup is a document browser, and everything in it is DERIVED from
+        # files on disk: the title out of the document block, the thumbnail out
+        # of the preview block, the openable path out of a learned prefix. Each
+        # is a parse against a format that moves, and each fails quietly — a row
+        # showing a filename instead of a title, or a blank square. Nothing
+        # throws, so nothing reports it.
+        #
+        # Runs AFTER the slides build on purpose: it reads the real shell, and
+        # with a document spliced in at the real offset. Hand-written fixtures
+        # would have passed the bug this replaces, where a metadata reader hunted
+        # for the document block's CLOSING tag and so found nothing in any
+        # document carrying an image.
+        run: node scripts/test-webext-library.ts
+
+      - name: WebExtension update-notice rig
+        # Store installs update themselves; one loaded unpacked never will, and
+        # Chrome ignores update_url for a development install. So the GitHub
+        # route has to be told — and told in exactly one direction: a store user
+        # must never see a notice they cannot act on, and must not even cost a
+        # request. Every failure mode here is silent by nature.
+        run: node scripts/test-webext-update.ts
+
+      - name: WebExtension localisation rig
+        # Every failure mode of a message catalogue is silent: a key the code
+        # uses but English lacks renders as the key name, a locale missing a key
+        # falls back so a German page carries English sentences, and a dropped
+        # $1 leaves a hole in a translated sentence. All of them are visible
+        # only to someone who reads that language.
+        run: node scripts/test-webext-i18n.ts
 
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
@@ -869,6 +936,62 @@ jobs:
         # is the regression.
         run: node scripts/test-layouts.ts
 
+      # bento/type: the word processor. Same pipeline, same gate.
+      - name: Install (type)
+        working-directory: type
+        run: npm ci
+
+      - name: Typecheck (type)
+        working-directory: type
+        run: node_modules/.bin/tsc -b
+
+      - name: Build single-file shell (type)
+        working-directory: type
+        run: npm run build:single
+
+      - name: Splice conformance gate (type)
+        run: node scripts/shell-gate.mjs type/dist-single/Bento_Type.bento.html
+
+      - name: Type inline-formatting rig
+        # A block stores plain text + marks over character ranges, and the
+        # round trip render→read must be exact: if it is not, formatting
+        # silently mutates on every re-render, which surfaces as a signed
+        # document that stops verifying. Includes a 2,000-case fuzz — it found
+        # two bugs no hand-written case did.
+        run: node scripts/test-type-inline.ts
+
+      - name: Type model rig
+        # The load contract (an unreadable file must never become an empty one
+        # over live data), deterministic id repair, and the rule that marks and
+        # footnote anchors move together — separating them is what put a
+        # footnote marker in the middle of a word.
+        run: node scripts/test-type-model.ts
+
+      - name: Type store rig
+        # A typed word is ONE undo press, and a scoped snapshot really is
+        # scoped: 200 edits cost ~94KB rather than ~21.7MB.
+        run: node scripts/test-type-store.ts
+
+      - name: Type redline rig
+        # accept(all) == what they sent back, reject(all) == what you sent.
+        # Without both, "review these changes" is a lie.
+        run: node scripts/test-type-redline.ts
+
+      - name: Type paginated-output rig
+        # The printed page count must be the one the editor computed — if print
+        # re-paginates, "page 14 paragraph 3" stops meaning anything, which is
+        # the whole reason documents like this are exchanged as PDF. Also pins
+        # that footnotes reach the page their reference lands on, and that a
+        # document's own page size is what prints.
+        run: node scripts/test-type-print.ts
+
+      - name: Type theme rig
+        # Static checks so a theme cannot rot: both themes define the same
+        # roles, the document surface is never themed, and no chrome rule
+        # borrows a document token — that last one shipped a select at 1.92:1
+        # against a WCAG AA floor of 4.5.
+        run: node scripts/test-type-theme.mjs
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
@@ -921,3 +1044,59 @@ jobs:
         # format half is REPORTED, not asserted, because the fix is a decision
         # nobody has taken yet; STRICT=1 turns it into a gate the day it is.
         run: SEEDS=250 STEPS=80 ACTORS=4 node scripts/test-sync-spaces.ts
+
+      - name: collaborative text on a parent node
+        # The token RGA — what lets two people type in one paragraph without
+        # destroying each other's work — was reachable only on CHILD nodes,
+        # because both shipped apps put their text there. bento/type does not:
+        # a block IS the paragraph. Bound naively it would get a
+        # last-writer-wins register for prose and lose an edit SILENTLY, with a
+        # document that stays valid and converges. Every other sync rig stayed
+        # green through that bug, so this one carries a negative control: the
+        # same scenario with the RGA off MUST lose an edit.
+        run: node scripts/test-sync-parent-text.ts
+
+      - name: a flat document shape
+        # bento/type is one level deep — `body` holds blocks and nothing sits
+        # beneath them — so `children` is null and there is no element layer.
+        # Binds type's real shape and checks both halves: text still merges
+        # token-by-token, and the document keeps its shape. The second matters
+        # because an engine that quietly wrote `elements: []` onto every block
+        # would converge perfectly while corrupting the format.
+        run: node scripts/test-sync-flat.ts
+
+      - name: bento/type under the shared engine
+        # Convergence for the flat ('body', null, 'text') binding, AND a report
+        # on whether what the replicas converge on is a legal bento/type
+        # document. Those are different questions: `text` merges token by token
+        # through the RGA while `marks` and `notes` — character offsets INTO
+        # that text — merge as ordinary registers, so two legal concurrent
+        # edits can converge on offsets that no longer describe the text they
+        # index. Reported, not asserted, exactly as the spaces tree question
+        # is: it is a format decision nobody has taken. STRICT=1 makes it a
+        # gate the day one is.
+        run: SEEDS=250 STEPS=80 ACTORS=4 node scripts/test-sync-type.ts
+
+      - name: the sync session layer
+        # The session — differ hook, shadow, presence, catch-up, the empty
+        # document repair — had NO tests before it was moved into the kernel
+        # and parameterized for three apps. This was written against the
+        # implementation as it shipped and run unchanged after the move, which
+        # is the only thing that makes "behaviour is identical" a claim rather
+        # than a hope. It drives the REAL session over the REAL store through a
+        # REAL BroadcastChannel; two sessions in one process are two tabs.
+        # The last four sections bind bento/type to the same kernel session —
+        # flat document, text on the parent, a store with one listener and no
+        # dirty flag — so a surviving slides assumption shows up there.
+        run: node --no-warnings scripts/test-sync-session.ts
+
+      - name: the spaces binding of the sync session
+        # Only what bento/spaces answers DIFFERENTLY, because three of the five
+        # host answers are not slides' answers and each one is invisible until
+        # two people are live: a repair id that must be DERIVED (a spare blank
+        # slide is one click to delete; a spare page is a phantom), a view that
+        # clamps by page identity to the nearest surviving ANCESTOR rather than
+        # to home, and a remote op that must not raise this app's 'doc' event —
+        # which paints "Edited" and would credit a colleague's typing to you.
+        # The last section is two real sessions over a real BroadcastChannel.
+        run: node --no-warnings scripts/test-sync-spaces-session.ts

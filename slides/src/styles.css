@@ -714,8 +714,14 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   flex-direction: column;
   gap: 8px;
   padding: 11px 13px;
+  /* An even 1px rule, like every other surface in this dialog. The card used
+     to carry a 3px peach stripe down its leading edge — the generic
+     "callout" tic, and the only accent stripe anywhere in the app (the two
+     other thick borders are a CSS triangle and a quiet neutral rule on
+     .ed-lang-warn). It was redundant as well as out of place: the heading
+     names the version and the primary button already carries the accent. It
+     was also a hard-coded #FF9E8A, so it ignored the theme tokens. */
   border: 1px solid var(--line);
-  border-inline-start: 3px solid #FF9E8A;
   border-radius: 10px;
 }
 .ed-about-release {
@@ -2067,6 +2073,34 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   max-height: calc(100dvh - 96px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+/* A demoted widget's own popover opens INLINE, inside the ⋯ list.
+   The rule above bounds the height of a menu that can outgrow the screen, and
+   `overflow-y: auto` cannot be had on its own — a browser computes
+   `overflow-x` to `auto` too, so that menu silently became a CLIPPING box for
+   anything positioned inside it. Share is the case that showed it: phone
+   chrome demotes the whole dropdown into ⋯, and `.ed-share-pop` is a 250px
+   popover anchored to its parent's end, so inside a 200px menu it hung 55px
+   off the left edge and 69px below the bottom. Both overhangs were cut away,
+   and since the properties panel sits under exactly that strip, the panel
+   showed THROUGH the gap — the popover looked interleaved with the panel
+   behind it.
+   A floating child cannot escape a scroll container, so it stops floating:
+   inside ⋯ these render as a section of the list, scrolling with it and
+   taking its width. Nothing can be clipped because nothing overhangs. */
+.ed-topbar.ed-bar-fold .ed-menu .ed-menu {
+  position: static;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-block: 1px solid var(--line);
+  margin-block: 3px;
+  padding-inline: 6px;
 }
 
 /* --- phones proper: viewport-scoped chrome that is about TOUCH and small

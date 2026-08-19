@@ -12,12 +12,14 @@
 import { type SpacesDoc, type Page, type Block, isRemote } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
-import { t } from './i18n'
+import { t, locale } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE } from './blocks'
 import {
   fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
-  passesFilter, filterCount, unknownFilterKeys, type FieldSpec,
+  passesFilter, filterCount, unknownFilterKeys,
+  sortRows, unknownSortKeys, type ViewSort, type FieldSpec,
 } from './fields'
+import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 
 export interface RenderOpts {
@@ -54,6 +56,10 @@ export interface RenderOpts {
  */
 export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): DocumentFragment {
   const frag = document.createDocumentFragment()
+  // MAGIC NOTES' CONTEXT, accumulated as the pass goes. A name is defined by a
+  // line and usable by the lines BELOW it — the same direction a person reads
+  // in, and the reason this needs no second pass and cannot cycle.
+  const calc: CalcCtx = freshContext()
   // stack of open containers, innermost last: [blockId, element]
   const stack: Array<[string, HTMLElement]> = []
   let list: { el: HTMLElement; kind: 'ul' | 'ol'; under: string } | null = null
@@ -80,8 +86,16 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   }
 
   page.blocks.forEach((b, i) => {
+    // MAGIC NOTES' CONTEXT IS FED AFTER THE BLOCK IS DRAWN, not before, and the
+    // order is the whole difference between `sum above` working and reading 0:
+    // an answering line ENDS the run of figures it summarises, so feeding it
+    // first cleared the very run its own answer needed. After means a line sees
+    // exactly what is above it and nothing of itself — which is also what makes
+    // a name usable by the lines below and by none above.
+    const takeIn = () => feed(calc, textFromHtml(b.html))
     if (strip && i < head) {
-      strip.appendChild(renderBlock(b, doc, opts))
+      strip.appendChild(renderBlock(b, doc, opts, calc))
+      takeIn()
       return
     }
     const host = hostFor(b.parent)
@@ -99,7 +113,8 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       list = null
     }
 
-    const node = renderBlock(b, doc, opts)
+    const node = renderBlock(b, doc, opts, calc)
+    takeIn()
     ;(kind && list ? list.el : host).appendChild(node)
 
     // A CONTAINER owns the blocks whose parent is its id. Which types those are
@@ -133,7 +148,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   return frag
 }
 
-export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HTMLElement {
+export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, calc: CalcCtx = {}): HTMLElement {
   const type = b.type
   const el = document.createElement(TAG_OF[type] ?? 'div')
   el.dataset.blockId = b.id
@@ -225,7 +240,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       // the checkbox is a control, not text: it must not be inside the
       // editable host or typing would land in it
       el.appendChild(box)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       if (b.done) el.classList.add('sp-done')
       return el
     }
@@ -301,7 +316,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       label.textContent = toneLabel(raw)
       chip.append(mark, label)
       el.appendChild(chip)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
     }
 
@@ -313,12 +328,12 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       twist.setAttribute('aria-label', 'Toggle section')
       twist.textContent = '▸'
       el.appendChild(twist)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
     }
 
     default:
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
   }
 }
@@ -369,6 +384,28 @@ function calloutMark(host: HTMLElement, b: Block, known: string): void {
     return
   }
   host.innerHTML = ICONS[(TONE.get(known) ?? TONE.get('note')!).icon]
+}
+
+/**
+ * The editable host, plus the ANSWER when the line asks for one.
+ *
+ * The answer is a SIBLING of the editable span, never inside it. Inside, it
+ * would be part of what contentEditable hands back on the next keystroke, and
+ * the derived answer would be committed into `html` — which is exactly the
+ * frozen-result design this feature exists to avoid. It is also
+ * contenteditable=false and aria-hidden: it is output, not text, and a screen
+ * reader should hear the line once.
+ */
+function hostAndAnswer(el: HTMLElement, b: Block, opts: RenderOpts, ctx: CalcCtx): void {
+  el.appendChild(inlineHost(b, opts))
+  const ans = answer(textFromHtml(b.html), ctx, locale())
+  if (ans === null) return
+  const out = document.createElement('span')
+  out.className = 'sp-ans'
+  out.contentEditable = 'false'
+  out.setAttribute('aria-hidden', 'true')
+  out.textContent = ans
+  el.appendChild(out)
 }
 
 /** The editable text host. Per-block, never one big editable container — that
@@ -570,8 +607,9 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
+  const sort = (b as { sort?: unknown }).sort
   const all = issuesOf(doc)
-  const rows = all.filter((r) => passesFilter(doc, r.values, filter))
+  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
 
   const head = document.createElement('div')
   head.className = 'sp-view-head'
@@ -587,22 +625,48 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   // chip: a reader, a printout and a locked space get the view, not the buttons
   // that change what it holds.
   if (opts.editable) {
+    const btn = (attr: string, label: string, title: string, on = false): HTMLButtonElement => {
+      const el2 = document.createElement('button')
+      el2.type = 'button'
+      el2.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
+      el2.dataset[attr] = '1'
+      el2.textContent = label
+      el2.title = title
+      el2.setAttribute('aria-label', title)
+      return el2
+    }
+
+    // LAYOUT. Both shapes have always rendered; only the board was reachable,
+    // so a view block could hold `layout:'list'` that nothing in the app could
+    // produce or undo. One button, because there are two of them and a menu to
+    // choose between two things is a menu too many.
+    const asList = layout === 'list'
+    const layoutB = btn('viewLayout', asList ? t('List') : t('Board'),
+      asList ? t('Show as a board') : t('Show as a list'))
+
+    // GROUP BY. Only fields with declared options: a board's columns ARE the
+    // option list, so grouping by a free-text field would make one column per
+    // distinct string and call it a board.
+    const groupB = btn('viewGroup', field ? `${t('Group')} · ${field.label}` : t('Group'),
+      t('Choose the field the columns come from'))
+
+    const sortKey = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+    const sortField = sortKey && fieldByKey(doc, sortKey.key)
+    const sortB = btn('viewSort',
+      sortField ? `${t('Sort')} · ${sortField.label}` : t('Sort'),
+      t('Choose the order'), !!sortField)
+
     const on = !!(filter as { open?: unknown } | undefined)?.open
-    const openB = document.createElement('button')
-    openB.type = 'button'
-    openB.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
-    openB.dataset.viewOpen = '1'
-    openB.textContent = t('Open only')
+    const openB = btn('viewOpen', t('Open only'), t('Open only'), on)
     openB.setAttribute('aria-pressed', String(on))
-    const filterB = document.createElement('button')
-    filterB.type = 'button'
-    filterB.className = 'sp-btn sp-view-btn'
-    filterB.dataset.viewFilter = '1'
     const n = filterCount(filter)
     // the count rather than a list of chips: what matters is that the view is
     // narrowed at all, and the popover says by what
-    filterB.textContent = n ? `${t('Filter')} · ${n}` : t('Filter')
-    head.append(openB, filterB)
+    const filterB = btn('viewFilter', n ? `${t('Filter')} · ${n}` : t('Filter'), t('Filter'), !!n)
+
+    // a LIST has no columns, so the field the columns would come from is not a
+    // question it can be asked
+    head.append(layoutB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -613,6 +677,16 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     const note = document.createElement('p')
     note.className = 'sp-view-empty'
     note.textContent = t('A filter here is newer than this build and was not applied.')
+    host.appendChild(note)
+  }
+  // Same rule, same honesty: a sort key naming a field this build has no schema
+  // for is skipped, and the order you are looking at is not the one the author
+  // asked for. Silently showing a different order is the failure additivity
+  // trades for.
+  if (unknownSortKeys(doc, sort).length) {
+    const note = document.createElement('p')
+    note.className = 'sp-view-empty'
+    note.textContent = t('A sort here is newer than this build and was not applied.')
     host.appendChild(note)
   }
 

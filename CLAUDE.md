@@ -603,6 +603,19 @@ names provisional.
    never fix this; only the ceiling moves. Same trap for any future chrome that
    must escape the bar. Diagnose with `document.elementsFromPoint()` — the menu
    sat fourth in the stack under its own coordinates.
+10. **`overflow-y: auto` also clips HORIZONTALLY.** There is no such thing as
+   scrolling one axis while the other still overflows visibly: set either axis
+   to a non-`visible` value and the browser computes the other to `auto`. So
+   the moment `.ed-topbar.ed-bar-fold .ed-menu` gained `max-height` +
+   `overflow-y: auto` (so a long ⋯ menu could scroll), that menu became a
+   CLIPPING BOX for everything positioned inside it. Phone chrome demotes whole
+   dropdown widgets (Share, Language) into ⋯, and `.ed-share-pop` is a 250px
+   popover anchored to its parent's end — inside the 200px menu it hung 55px
+   off the left and 69px below, both silently cut, and the properties panel
+   underneath showed through the gap so the popover looked interleaved with it.
+   A floating child can never escape a scroll container: inside ⋯ these render
+   `position: static`, as a section of the list. Anything else demoted into a
+   menu must do the same.
 
 - **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script

@@ -42,6 +42,7 @@ export const ICONS = {
   down: svg('<path d="m6 9 6 6 6-6"/>'),
   chevronLeft: svg('<path d="m15 18-6-6 6-6"/>'),
   chevronRight: svg('<path d="m9 18 6-6-6-6"/>'),
+  people: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
   more: svg('<circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"/>'),
   unarchive: svg('<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><polyline points="9 15 12 12 15 15"/><line x1="12" y1="12" x2="12" y2="18"/>'),
   replace: svg('<path d="M14 4h5v5"/><path d="M19 4 5 18"/><path d="M9 4H5v4"/><path d="m15 15 4 4-4 4"/>'),

@@ -1,13 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "Bento Tray",
+  "name": "__MSG_appName__",
   "version": "1.0.0",
-  "description": "Save a Bento document back to the file you opened, without a destination prompt.",
+  "description": "__MSG_appDesc__",
   "minimum_chrome_version": "116",
   "permissions": [
+    "contextMenus",
+    "notifications",
+    "sidePanel",
     "storage"
   ],
-  "options_page": "src/options.html",
+  "optional_permissions": [
+    "history"
+  ],
+  "options_page": "src/home.html",
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
@@ -41,13 +47,25 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Bento Tray",
-    "default_popup": "src/popup.html",
+    "default_title": "Bento Tray \u2014 your documents",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
       "48": "icons/icon-48.png",
       "128": "icons/icon-128.png"
     }
-  }
+  },
+  "side_panel": {
+    "default_path": "src/panel.html"
+  },
+  "commands": {
+    "open-panel": {
+      "suggested_key": {
+        "default": "Alt+B",
+        "mac": "Alt+B"
+      },
+      "description": "Open the Bento Tray panel beside this document"
+    }
+  },
+  "default_locale": "en"
 }

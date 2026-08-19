@@ -71,10 +71,14 @@ load contract and format additivity.
 | `src/model.ts` | the format, `buildIndex()` (tree, backlinks), id repair |
 | `src/sanitize.ts` | the inline allowlist — the only thing between a file someone mailed you and script execution |
 | `src/store.ts` | undo, and the **typing run** |
+| `src/journal.ts` | daily notes — the date is `page.journal`, never the title |
+| `src/calc.ts` | magic notes — the evaluator behind a line ending in `=`. No eval, ever |
 | `src/render.ts` | model → DOM, shared by the editor, reading view and print |
 | `src/highlight.ts` | the code lexer — text → `{kind, a, b}` ranges, no DOM, no strings |
 | `src/markdown.ts` | markdown → blocks, the folder tree → the page tree, `[[wikilinks]]` → `#p/` links. Pure and DOM-free, so the import is tested in node |
 | `src/editor.ts` | topbar, sidebar, block menu, `[[` picker, ⌘K, ⌘F, archive |
+| `src/collabui.ts` | who else is here — presence in the tree, the people panel, the live control |
+| `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |
 | `src/agent.ts` | the agent surface — `validate()`, `outline()`, `stats()`, and the patch verbs behind `window.bento` |
 | `src/assets.ts` | content-addressed images and the downscale |
 | `src/about.ts` | updates, language, password, exports |
@@ -134,10 +138,10 @@ pages are one document rather than one file each.
 
 ## Not built yet
 
-- **Collaboration.** No CRDT wiring. The sync engine is slides-shaped
-  (composite `slideId ␟ elementId` node keys); spaces needs `pageId ␟ blockId`
-  and a token RGA over `html`, which is the same shape — but genericizing it is
-  its own project, and PLATFORM §10 permits shipping without collab rather than
-  with a half-secure version.
-- **Tables, embeds, and databases.** Deliberate: the format is permanent, so a
-  block type ships when its model is right, not when its UI is ready.
+- **Fine-grained sharing.** There is a people panel, presence in the page tree
+  and a live session, but no per-person roles or invite links yet — the file is
+  still the capability, so anyone you send it to can edit.
+- **Tables and embeds.** Deliberate: the format is permanent, so a block type
+  ships when its model is right, not when its UI is ready. (Databases DID ship —
+  as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a
+  `view` block is a board or a list of them. `src/fields.ts` is the core.)

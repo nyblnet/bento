@@ -604,7 +604,21 @@ async function pickHandle(
       // update onwards opens where the first one saved.
       ...(fileHandle ? { startIn: fileHandle } : {}),
       id: pickerIdFor(purpose),
-      types: [{ description: appConfig().appName, accept: { 'text/html': ['.html'] } }],
+      // `.bento.html`, NOT `.html`, and the compound extension is the point.
+      //
+      // `suggestedFileName` has always produced `.bento.html`, but the picker
+      // accepted `.html` — so an author who edited the name to "Q3" got
+      // `Q3.html`, and a document named that is a second-class citizen
+      // everywhere the convention is what identifies us: tray/webext injects
+      // its save bridge on `file:///*.bento.html`, so such a file opens fine
+      // and then asks where to save, and tray/ios matches the same way.
+      //
+      // Bento was manufacturing the exception and then being asked to cope with
+      // it. Accepting only the compound extension means the browser appends it
+      // to a bare name, which is what everybody meant. Compound suffixes are
+      // explicitly legal here (`.tar.gz` is the spec's own example) and the
+      // limit is 16 characters against this one's 11.
+      types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
     })
   } catch (err: any) {
     if (err?.name === 'AbortError') return null
@@ -764,7 +778,7 @@ export async function writeBackupBeside(html: string, name: string): Promise<'be
       const handle = await (window as any).showSaveFilePicker({
         suggestedName: name,
         id: pickerIdFor('backup'),
-        types: [{ description: appConfig().appName, accept: { 'text/html': ['.html'] } }],
+        types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
       })
       if (handle) {
         await writeHandle(handle, html)

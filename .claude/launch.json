@@ -170,6 +170,23 @@
         "working"
       ],
       "port": 5193
+    },
+    {
+      "name": "type-dev",
+      "comment": "LOOPBACK ONLY, see spaces-dev.",
+      "cwd": "type",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "5191",
+        "--strictPort"
+      ],
+      "port": 5191
     }
   ]
 }

@@ -1,13 +1,27 @@
-# bento/tray — iOS
+# bento/tray
 
-A thin native host that runs **any self-contained HTML document** and lets it
-**save itself in place** on iOS.
+Thin native hosts that run **any self-contained HTML document** and let it
+**save itself in place**, on platforms where a browser will not.
 
-Bento decks are the reason it exists, but nothing in the Swift is Bento-specific
-— it never parses the document, it is a courier. Any single-file HTML app that
-saves itself through the File System Access API works the same way, which on iOS
-is otherwise impossible: every browser there is WebKit and none of them ship
-that API.
+Three of them, under `tray/<platform>/`:
+
+| | what it hosts | why it exists |
+|---|---|---|
+| `ios/` | UIDocument + WKWebView | every iOS browser is WebKit, and none ship the File System Access API |
+| `android/` | Storage Access Framework + WebView | Chrome on Android has no File System Access API either |
+| `webext/` | a directory grant, in the browser | `file://` pages get no persistent handle |
+
+Bento decks are the reason they exist, but nothing in the Swift or the Kotlin is
+Bento-specific — neither ever parses the document, both are couriers. Any
+single-file HTML app that saves itself through the File System Access API works
+the same way.
+
+**The web-side half is ONE file, `tray/bridge.js`,** shared by iOS and Android.
+It polyfills the single call Bento tests for, and the interesting part of it is
+not the transport but the `FileSystemWritableFileStream` semantics — whose
+comments record a bug that wrote users' documents out as zero bytes. A second
+copy would be a second chance to reintroduce exactly that, so the per-platform
+part is the ~15 lines of transport at the top and nothing else.
 
 ## Why this exists
 
@@ -64,8 +78,8 @@ doubt, prompt.**
 
 Pinned by `scripts/test-savepurpose.ts`.
 
-So `Resources/bridge.js` polyfills that over a `UIDocument` bridge — three
-methods. Two consequences:
+So `tray/bridge.js` polyfills that — over `UIDocument` on iOS, over the Storage
+Access Framework on Android, from the one shared file. Two consequences:
 
 - **No web-side changes at all.** Every in-place path (⌘S, autosave write-back,
   self-update, the capability-aware messaging) already routes through that one
@@ -97,6 +111,68 @@ mean more than "any document that saves the way Bento does":
   Files under Bento Tray) with a collision-safe name and a confirmation. A
   picker per save would punish an app that saves often, and a download cannot
   overwrite the user's original anyway — that is what the FSA path is for.
+
+### Finding the sender's file: route, don't search
+
+A `FileSystemDirectoryHandle` knows its own **name** but not its path, and no
+API exposes one — so a grant and a `sender.url` cannot be compared directly.
+The webext host used to resolve by walking the granted tree looking for a
+matching filename, depth-capped at 4 and declining whenever two files shared a
+name.
+
+It no longer searches. **A directory's name must appear in the path of every
+file inside it**, so the name locates the split point in the sender's path and
+everything after it is the route: one `getDirectoryHandle` per segment, then
+`getFileHandle`. O(path depth), nothing enumerated. Measured: a file inside a
+500-entry grant resolves with **zero directory scans**.
+
+Three things follow, and they are the reason for it:
+
+- a grant can be **any size**. A home directory costs what a decks folder costs,
+  which is what makes "grant everything" a reasonable thing to offer.
+- **several grants** are cheap — each attempt is a few lookups, so the store
+  holds a list (`dirs`), not one folder.
+- **two documents sharing a filename stop being ambiguous.** The old walk found
+  both and declined; only one route leads to one file. Anyone with per-client
+  folders hit that on every save.
+
+The split point is checked, not guessed: a wrong one fails at the first missing
+segment, and `resolve()` re-verifies the file it lands on against the sender's
+path regardless (the identity check that stopped a same-named file elsewhere
+from being overwritten). A grant covering a whole home directory raises the cost
+of a resolution bug, so that check matters more, not less.
+
+`findByName` survives as a fallback for paths the route cannot place.
+
+### The grant lapses on every browser restart
+
+MEASURED 2026-08-14: a `showDirectoryPicker` grant survives service-worker
+eviction — which is constant, and why nothing is cached between messages — but
+Chrome drops it back to `prompt` when the extension restarts **and when the
+browser restarts**. The HANDLE survives in IndexedDB; only the permission goes.
+
+So the recovery is `requestPermission()` on the handle already held — one
+confirmation, no folder to re-find — and it must happen on an **extension page**,
+because it needs a user gesture and the service worker has none. That is what
+the per-folder **Renew** button is. `background.js` only ever queries.
+
+**But Chrome's permission dialog offers "Allow on every visit"**, alongside
+"Allow this time", and it offers it to the EXTENSION origin — observed
+2026-08-14 on `chrome-extension://…/src/options.html`. So persistent File System
+Access permission is available here, and an earlier claim in this file that it
+was scoped to installed web apps was simply wrong.
+
+Whether "every visit" survives a full browser restart for an extension origin is
+NOT yet measured. Until it is, the UI says which button to choose and does not
+promise what follows. If it holds, the grant is once and for all. If it does
+not, the ceiling is one **Renew** click per browser session, since
+`chrome.downloads` can only write inside the downloads folder and durable access
+would then need a native messaging host — a separate decision, because it
+changes how the thing is distributed.
+
+The choice is the browser's to offer and the user's to make; nothing in the
+extension can pick it. All the code can do is point at the one that ends the
+chore.
 
 ### Which file a save targets
 
@@ -185,21 +261,15 @@ back to downloading the rollback copy, which is where it used to go.
   set to `.never`; left at its default UIKit insets the scroll view by the safe
   area, which in landscape left visible bands down the left, right and bottom of
   a slideshow. The document owns its margins; the host adds none.
-- **The host shows nothing while the page presents.** `webView.fullscreenState`
-  is observed, and entering fullscreen hides both the nav bar and the floating
-  exit — a control sitting over a slideshow is exactly the chrome presenting is
-  meant to shed. (Contrary to one analysis, `fullscreenState` IS usable here,
-  because element fullscreen genuinely works — see below.)
-- **Element fullscreen is enabled** (`preferences.isElementFullscreenEnabled`).
-  iPhone Safari has never offered element fullscreen to web pages, which is why
-  Bento's present mode falls back to filling its view in a browser — but
-  WKWebView exposes it as an opt-in. So a hosted document presents properly
-  where the very same file in Safari cannot: verified on an iPhone 17 Pro Max,
-  the status bar, the nav bar and Bento's own toolbar all disappear, the deck
-  letterboxes on black with a native ✕, and swiping advances slides. This is a
-  case where the wrapper is not merely restoring parity with desktop but doing
-  something the browser cannot. Credit to #87 for finding the flag.
-- **`bridge.js` is injected `.atDocumentStart`.** Bento decides whether it can
+- **The host shows nothing while the page presents.** The floating exit fades out
+  when nothing is happening and comes back on touch — a control sitting over a
+  slideshow is exactly the chrome presenting is meant to shed. It is done by idle
+  timer rather than by observing `fullscreenState`, because the host no longer
+  takes element fullscreen at all: see "Element fullscreen is DECLINED" below,
+  which is the authoritative account. (An earlier version of this list claimed
+  the opt-in was enabled and credited #87 for finding the flag. The flag is real
+  and the credit stands; the conclusion did not survive being measured.)
+- **`bridge.js` is injected at document start.** Bento decides whether it can
   save during boot; injected later, the editor has already concluded it cannot.
 
 ## Getting documents in
@@ -359,3 +429,192 @@ Still to do:
 
 - App icon, launch screen, signing, an Apple Developer account ($99/yr).
 - Decide whether a `.bento.html` UTI is worth declaring over plain `public.html`.
+
+## Android
+
+Same thesis as iOS, and for the same reason: Chrome on Android does not ship the
+File System Access API either, so a deck opened in a browser there can only ever
+hand back downloaded copies. `tray/android/` is ~700 lines of Kotlin with one
+dependency, and it keeps both of the decisions the iOS host is built on — the
+document is served through an origin we control, and the app bundles no runtime
+for rendering.
+
+**Origin: [#87](https://github.com/nyblnet/bento/pull/87), by
+[savrum](https://github.com/savrum)**, which asked for native wrapper apps
+before either host existed and is the branch this landed on. The Gradle layout,
+the `keystore.properties` pattern and the device-picker ergonomics come from
+there; so did `isElementFullscreenEnabled`, which `tray/ios` used until
+measurement sent it the other way. The architecture changed — a host that
+bundles a deck and updates itself over the air is the thing tray exists not to
+be — but the question it asked was the right one, and it was asked first.
+
+### Parity with the iOS host
+
+The two hosts are meant to behave identically from inside the document. Where
+they cannot, it is because the platform forces it — and that is written down
+here rather than discovered later.
+
+| behaviour | `tray/ios` | `tray/android` | |
+|---|---|---|---|
+| FSA polyfill | `tray/bridge.js` | `tray/bridge.js` | **one shared file** |
+| per-document origin | `bento-tray://<sha24>` custom scheme | `https://<sha24>.bento-tray.invalid`, intercepted | same |
+| document served from memory, never parsed | ✓ | ✓ | same |
+| bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
+| bridge reachable only from the document | `forMainFrameOnly` | `allowedOriginRules` + `isMainFrame` | same |
+| first `begin` = open document, later = export | ✓ | ✓ | same |
+| an export can never address the open file | `exportName` + `targetsOpenDocument` | identical logic | same |
+| page-supplied filenames sanitised | `safeFileName` | `safeFileName` | same |
+| in-place write | `UIDocument.save(.forOverwriting)` | `openOutputStream(uri, "wt")` | same |
+| export destination chosen by the author | `UIDocumentPickerViewController` | `ACTION_CREATE_DOCUMENT` | same |
+| `alert` / `confirm` / `prompt` | `WKUIDelegate` | `WebChromeClient` | same |
+| `<input type="file">` | native | `onShowFileChooser` | same |
+| element fullscreen | declined | declined | same |
+| safe-area insets, natively + `--tray-safe-*` | ✓ | ✓ | same |
+| new document from the bundled seed | ✓ | ✓ | same |
+| way back out | floating exit, fades when idle | system back gesture | platform-forced |
+| root screen | `UIDocumentBrowserViewController` | own recents list over SAF | platform-forced |
+| `<a download>` lands | app's Documents folder, silently | wherever the author picks | platform-forced |
+| write access to an opened document | always | **may be read-only** | platform-forced |
+| status bar while editing | hidden on iPad | always shown | **known gap** |
+| finding a document by its contents | — | — | **gap on both**, see below |
+
+Two gaps, both named rather than quietly left out.
+
+**The status bar.** iOS hides it on iPad because nothing else keeps the page off
+the whole screen there; the Android equivalent would be to hide it on tablets
+(`smallestScreenWidthDp >= 600`). Not done, because it cannot be tested without a
+tablet target, and shipping an untested behaviour is worse than naming an
+untested one.
+
+**Search — and note this table compares the two NATIVE hosts to each other,
+which flatters both.** Against `tray/webext` there is a third axis neither has:
+the extension scans every granted folder and searches **the document's own
+prose**, so a deck is findable by a phrase on a slide. iOS gets only the system
+document browser's search field, and the app contributes nothing to it (no
+CoreSpotlight, no `NSUserActivity`); Android has no search at all. Both platforms
+*could* support it — `ACTION_OPEN_DOCUMENT_TREE` on Android, the folder-mode
+document picker on iOS — so this is "not built", not "can't". The direction is
+settled in `docs/DECISIONS.md` (2026-08-16): native list UI on each host, the
+extraction ported per platform and pinned against one shared fixture, rather than
+a shared HTML library screen in a WebView — which was measured at ~0.5s of extra
+cold start and would cost iOS its system document browser.
+
+### What is genuinely different
+
+Three things, and none of them are stylistic.
+
+**There is no document browser to host.** iOS hands over
+`UIDocumentBrowserViewController` — a whole file browser, showing iCloud and
+every File Provider on the device. Android's picker is a one-shot dialog that
+returns a URI and closes. So the root screen is the app's own list of documents
+it holds **persistable URI permissions** for, which is Android's analogue of a
+security-scoped bookmark. On iOS the app is a lens onto the filesystem; on
+Android it is a keyring. Both end at the same place.
+
+**Write access is not implied by being handed a document.** A document opened
+through the app's own picker (`ACTION_OPEN_DOCUMENT`) carries a persistable
+read+write grant. A document arriving by `ACTION_VIEW` — tapped in a file
+manager, opened from Drive or Gmail — usually carries **read only**, because
+that is all the sender chose to grant, and no API lets the receiver ask for
+more. So `canWriteInPlace` is checked rather than assumed, and when it is false
+every save becomes a Save-As and the user is told once, up front. This follows
+the rule stated above for the whole project: **when in doubt, prompt** — a
+silently failing save is the worst outcome available.
+
+`ACTION_GET_CONTENT` is never used. It hands back a *copy*, which is the entire
+problem this app exists to solve.
+
+**The origin is an `https://` host that never resolves.** iOS registers a custom
+`bento-tray://` scheme; Android has no equivalent hook, so the document is served
+from `https://<sha256-of-uri>.bento-tray.invalid/` and every request to it is
+answered from memory in `shouldInterceptRequest`. `.invalid` is reserved by
+RFC 6761 and can never resolve, so a missed intercept fails dead rather than
+quietly reaching somebody's server. Per-document for the same reason as iOS: a
+shared origin would let one document read another's `localStorage`.
+
+### The one dependency
+
+`androidx.webkit`, and it earns its place twice:
+
+- **`addDocumentStartJavaScript`** is the exact equivalent of
+  `WKUserScript(.atDocumentStart)`. Bento decides whether it can save *during
+  boot*, so a bridge injected from `onPageStarted`/`onPageFinished` races the
+  page — and the symptom is not a crash, it is an editor that quietly believes
+  it cannot save.
+- **`addWebMessageListener`** is **origin-scoped**. `addJavascriptInterface`, the
+  dependency-free alternative that most WebView wrappers reach for, is injected
+  into *every frame*, so a remote iframe inside an untrusted document would be
+  handed a channel that writes the user's file.
+
+It also removes a hazard the iOS host still carries: replies travel as JSON over
+a message channel rather than as an evaluated JS call, so there is no
+string-literal encoding step to get wrong. (On iOS a raw newline in a `read`
+reply — which returns the *whole document* — is a syntax error that hangs the
+page's promise forever. That is handled there; here it cannot arise.)
+
+### Building
+
+Needs a JDK 17 and the Android SDK; no Android Studio required.
+
+```sh
+brew install openjdk@17 && brew install --cask android-commandlinetools
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+```
+
+```sh
+cd tray/android && ./gradlew :app:assembleDebug
+```
+
+`ANDROID_HOME` must point at the SDK (`/opt/homebrew/share/android-commandlinetools`
+for the cask above) and `JAVA_HOME` at the JDK. AGP 8.x **cannot run on Gradle
+9.6+**, so the wrapper is pinned to 8.14.3 — use `./gradlew`, never a system
+`gradle`.
+
+The starter shell and `bridge.js` are staged into assets by the build
+(`stageTrayAssets`), mirroring the iOS pre-build step. Neither is committed: a
+587KB binary in git would churn on every release, and the seed ages harmlessly
+because a new deck self-updates through the normal signed channel.
+
+The launcher icon is **generated from the same mark as iOS**, not redrawn.
+`tray/assets/tray-icon.svg` is the source for both; Android needs the rounded
+rectangles re-expressed as path data because vector drawables have no `<rect>`,
+and doing that by hand produces four opaque `M…A…V…Z` strings nobody will ever
+diff against the SVG — so a change to the mark would land on iOS and silently
+miss Android.
+
+```sh
+node tray/assets/make-icons.mjs           # regenerate the Android drawables
+node tray/assets/make-icons.mjs --check   # fail if they drifted (for CI)
+```
+
+The tray is drawn at **56 units of the 108 canvas, not the full 72 safe zone**.
+At 72 it exactly filled the visible area, so every launcher mask cut its corners
+off and the navy frame that makes the mark read was never drawn at all.
+
+
+### State: the document cycle works, on an emulator only
+
+Verified end to end on a Pixel 7 / Android 16 emulator, driven through the real
+UI rather than a harness:
+
+- **New** creates a document where the user chooses, seeds it from the bundled
+  shell, and opens it — the full Bento editor renders in the WebView
+- the document's own runtime is live: its update check reached the network and
+  reported v1.0.18
+- **a save lands in place, with no picker** — 686,232 → 908,246 bytes, the
+  activity never left `EditorActivity`
+- the written file is a valid deck: `id="bento-doc"` present, preview markers
+  present, well-formed from `<!DOCTYPE html>` to `</body></html>`, `docId` minted
+- the document reopens from the recents list on its persisted grant
+- the adaptive icon renders correctly under a circular launcher mask
+
+Not yet verified:
+
+- **anything on real hardware**, and no signing keystore exists yet
+- the `ACTION_VIEW` route in (opening from a file manager, Drive, Gmail) and the
+  read-only path it usually implies — the branch is written, not exercised
+- Save-As / export, and the `<a download>` + `blob:` readback path
+- a third-party self-saving app (TiddlyWiki) through the polyfill's params branch
+- presenting: element fullscreen is declined, as on iOS, but Android's
+  `onShowCustomView` gives a host full control of the fullscreen chrome — unlike
+  WebKit's un-hideable ✕ — so this is worth revisiting rather than settling
