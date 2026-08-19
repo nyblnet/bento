@@ -593,6 +593,7 @@ function mountPanel(host: HTMLElement, ctx: FeatureContext): void {
 registerPanel({
   id: 'cite',
   label: t('Sources'),
+  host: 'citeHost',
   order: 40,
   mount: mountPanel,
   update: (_host, ctx) => { paintCitations(document, ctx.store.doc); },

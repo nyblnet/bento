@@ -141,13 +141,31 @@ app.innerHTML = `
   <div class="t-main">
     <div class="t-side">
       <div class="t-tabs">
-        <button data-tab="outline" class="on"></button>
+        <button data-tab="navigate" class="on"></button>
         <button data-tab="review"></button>
-        <button data-tab="sigs"></button>
+        <button data-tab="sources"></button>
       </div>
-      <div class="t-panel on" data-panel="outline"><div class="t-outline" id="outline"></div></div>
-      <div class="t-panel" data-panel="review"><div id="reviewPanel"></div></div>
-      <div class="t-panel" data-panel="sigs"><div id="sigsPanel"></div></div>
+      <div class="t-panel on" data-panel="navigate">
+        <div class="t-seg" id="navSeg">
+          <button data-view="headings" class="on"></button>
+          <button data-view="pages"></button>
+          <button data-view="figures"></button>
+          <button data-view="results"></button>
+        </div>
+        <div class="t-view on" data-view="headings"><div class="t-outline" id="outline"></div></div>
+        <div class="t-view" data-view="pages"><div class="t-outline" id="pages"></div></div>
+        <div class="t-view" data-view="figures"><div id="figuresHost"></div></div>
+        <div class="t-view" data-view="results"><div id="findHost"></div></div>
+      </div>
+      <div class="t-panel" data-panel="review">
+        <div class="t-sub" data-sub="comments"></div>
+        <div id="commentsHost"></div>
+        <div class="t-sub" data-sub="changes"></div>
+        <div id="reviewPanel"></div>
+        <div class="t-sub" data-sub="sigs"></div>
+        <div id="sigsPanel"></div>
+      </div>
+      <div class="t-panel" data-panel="sources"><div id="citeHost"></div></div>
     </div>
     <div class="t-scroll"><div class="t-wrap">
       <div class="t-paper" id="paper"></div><div class="t-deco" id="deco"></div>
@@ -219,7 +237,24 @@ const showAbout = () => openAbout({
 byId('mark').addEventListener('click', showAbout);
 byId('about').addEventListener('click', showAbout);
 
-for (const [tab, text] of [['outline', t('Outline')], ['review', t('Review')], ['sigs', t('Signatures')]] as const) {
+for (const [sub, text] of [['comments', t('Comments')], ['changes', t('Tracked changes')],
+                           ['sigs', t('Signatures')]] as const) {
+  const n = document.querySelector<HTMLElement>(`.t-sub[data-sub="${sub}"]`);
+  if (n) n.textContent = text;
+}
+// An empty section under a heading explains nothing, and this one is empty
+// until someone has taken a snapshot — which is exactly the step a person does
+// not know about yet. So the empty state IS the instruction.
+{
+  const box = document.getElementById('reviewPanel');
+  if (box && !box.children.length) {
+    const hint = document.createElement('p');
+    hint.className = 't-hint';
+    hint.textContent = t('Take a Snapshot from ⋯, edit, then Review changes to see what moved.');
+    box.appendChild(hint);
+  }
+}
+for (const [tab, text] of [['navigate', t('Navigate')], ['review', t('Review')], ['sources', t('Sources')]] as const) {
   const b = document.querySelector<HTMLElement>(`.t-tabs [data-tab="${tab}"]`);
   if (b) b.textContent = text;
 }
@@ -375,16 +410,26 @@ const refreshMenuLabels = () => {
   }
 };
 
-// LEFT — navigation: what is in this document.
+// LEFT — navigation and review: facts about the document as a whole.
+//
+// A panel that names a `host` becomes a SECTION of one of the three tabs
+// declared above; only a panel without one still gets a tab of its own. That
+// is what took the sidebar from eight tabs to three.
 for (const spec of panels('left')) {
-  const tab = document.createElement('button');
-  tab.dataset.tab = spec.id;
-  tab.textContent = labelText(spec.label);
-  document.querySelector('.t-tabs')!.appendChild(tab);
-  const panel = document.createElement('div');
-  panel.className = 't-panel';
-  panel.dataset.panel = spec.id;
-  document.querySelector('.t-side')!.appendChild(panel);
+  let panel: HTMLElement;
+  const host = spec.host ? document.getElementById(spec.host) : null;
+  if (host) {
+    panel = host;
+  } else {
+    const tab = document.createElement('button');
+    tab.dataset.tab = spec.id;
+    tab.textContent = labelText(spec.label);
+    document.querySelector('.t-tabs')!.appendChild(tab);
+    panel = document.createElement('div');
+    panel.className = 't-panel';
+    panel.dataset.panel = spec.id;
+    document.querySelector('.t-side')!.appendChild(panel);
+  }
   spec.mount(panel, featureCtx);
   // `update` was declared on PanelSpec and never called, so a panel that
   // implemented it was silently dead. Wired to the same signal everything else
@@ -468,6 +513,7 @@ const repaginate = () => {
   // page numbers are knowable only here, so anything that shows one is told now
   for (const f of paginatedFns()) f(featureCtx, metrics, paper);
   buildOutline();
+  buildPages();
   paint();
   void paintSigs();
 };
@@ -553,6 +599,52 @@ function showTab(name: string) {
 }
 document.querySelectorAll<HTMLElement>('.t-tabs button')
   .forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab!)));
+
+/**
+ * The Navigate tab's four views — Headings, Pages, Figures, Results.
+ *
+ * A SEGMENTED CONTROL rather than four more tabs, because these are four
+ * answers to one question ("where is it?") and tabs would say they are four
+ * different tools. Word's navigation pane has worked this way since 2010.
+ */
+function showView(name: string) {
+  document.querySelectorAll<HTMLElement>('#navSeg button')
+    .forEach(b => b.classList.toggle('on', b.dataset.view === name));
+  document.querySelectorAll<HTMLElement>('.t-view')
+    .forEach(p => p.classList.toggle('on', p.dataset.view === name));
+}
+for (const [view, text] of [['headings', t('Headings')], ['pages', t('Pages')],
+                            ['figures', t('Figures')], ['results', t('Results')]] as const) {
+  const b = document.querySelector<HTMLElement>(`#navSeg [data-view="${view}"]`);
+  if (b) { b.textContent = text; b.addEventListener('click', () => showView(view)); }
+}
+
+/** Pages, each with the first heading that lands on it. */
+function buildPages() {
+  const box = document.getElementById('pages');
+  if (!box) return;
+  box.replaceChildren();
+  const paperTop = paper.getBoundingClientRect().top + store.doc.page.marginTop;
+  // Where each heading sits, measured once rather than per page.
+  const heads = store.doc.body
+    .filter(b => b.kind === 'h1' || b.kind === 'h2' || b.kind === 'h3')
+    .map(b => {
+      const node = paper.querySelector<HTMLElement>(`[data-id="${CSS.escape(b.id)}"]`);
+      return { text: b.text, y: node ? node.getBoundingClientRect().top - paperTop : 0 };
+    });
+  for (const pg of metrics.pages) {
+    const first = heads.find(h => h.y >= pg.start - 1 && (!isFinite(pg.end) || h.y < pg.end));
+    const a = el('a', 'pagerow') as HTMLAnchorElement;
+    a.innerHTML = `<span class="pg">${pg.n}</span>${esc(first ? first.text : t('(no heading)'))}`;
+    a.addEventListener('click', () => {
+      // scroll to the page's own top, not to a heading it may not contain
+      paper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const wrap = paper.closest('.t-scroll');
+      if (wrap) wrap.scrollTop = Math.max(0, pg.start);
+    });
+    box.appendChild(a);
+  }
+}
 
 /** The outline, with the page each heading lands on. */
 function buildOutline() {

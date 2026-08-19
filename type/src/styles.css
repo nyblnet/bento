@@ -138,6 +138,29 @@ html, body {
 .t-tabs button.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 600; }
 .t-panel { display: none; padding: 10px 12px; }
 .t-panel.on { display: block; }
+
+/* The Navigate tab's segmented control. Quieter than the tabs above it on
+   purpose: these are four views of one question, and giving them the same
+   weight as Navigate/Review/Sources would read as seven tabs again. */
+.t-seg { display: flex; gap: 2px; margin-bottom: 9px; padding: 2px;
+  background: var(--chrome-2); border-radius: 7px; }
+.t-seg button { flex: 1; border: 0; border-radius: 5px; background: transparent;
+  color: var(--muted); padding: 4px 2px; font: inherit; font-size: 11px;
+  cursor: pointer; white-space: nowrap; }
+.t-seg button:hover { color: var(--ink-2); }
+.t-seg button.on { background: var(--chrome); color: var(--ink); font-weight: 600; }
+.t-view { display: none; }
+.t-view.on { display: block; }
+.t-outline a.pagerow .pg { float: none; margin-inline-end: 8px; }
+
+/* Review stacks three sections in one tab, so each says what it is. Without
+   the rule a comment card and a tracked change sat flush against each other
+   and read as one list of two unrelated things. */
+.t-side .t-sub { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin: 14px 0 7px; }
+.t-side .t-sub:first-child { margin-top: 0; }
+.t-side #reviewPanel:not(:empty), .t-side #sigsPanel:not(:empty) {
+  border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
 .t-hint { color: var(--muted); font-size: 11.5px; line-height: 1.55; }
 .t-outline a { display: block; color: var(--ink-2); text-decoration: none; padding: 3px 6px;
   border-radius: 4px; font-size: 12px; line-height: 1.35; cursor: pointer; }

@@ -528,6 +528,10 @@ registerPanel({
   // before the viewer's locale is resolved (i18n.ts). The registry reads it
   // when it builds the tab, which is late enough.
   get label() { return t('Find'); },
+  // the Results view of the Navigate tab — Word's navigation pane has held
+  // headings, pages and search results together for twenty years, and search
+  // results ARE navigation: a list of places to go
+  host: 'findHost',
   order: 40,
   mount(host, ctx) { panel = new FindPanel(host, ctx); },
 });

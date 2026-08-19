@@ -408,6 +408,10 @@ registerKey({ key: 'm', mod: true, run: ctx => insertInlineMath(ctx) });
 registerPanel({
   id: 'math',
   get label() { return t('Math'); },
+  // RIGHT, not left: this panel edits the SOURCE OF THE FORMULA UNDER THE
+  // CARET, which is a property of the selection, not a list of what is in the
+  // document. It sat on the left only because that was where panels went.
+  side: 'right',
   order: 60,
   mount(host, ctx) {
     host.innerHTML = '';

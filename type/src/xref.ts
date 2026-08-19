@@ -732,6 +732,8 @@ registerKey({ key: 'r', mod: true, alt: true, run: openPicker });
 registerPanel({
   id: 'figures', order: 30,
   get label() { return t('Figures'); },
+  // a VIEW of the Navigate tab: a figure list answers "where is it"
+  host: 'figuresHost',
   mount(host, ctx) {
     paintPanel(host, ctx);
     // PanelSpec.update is declared in features.ts and main.ts never calls it,

@@ -96,6 +96,20 @@ export interface PanelSpec {
    * paragraph" in the column that answers "what is in this document".
    */
   side?: 'left' | 'right';
+  /**
+   * Mount into an EXISTING element instead of creating a tab of its own.
+   *
+   * Every left-hand feature registering its own tab is how the sidebar reached
+   * eight of them — Outline, Review, Signatures, Comments, Figures, Sources,
+   * Find, Math — which is more than fits, and more importantly is not eight
+   * kinds of thing. They are three: where things are, what people did to the
+   * document, and what it cites.
+   *
+   * So a panel can now say "I am a SECTION of the Review tab" rather than "I am
+   * a tab". The tabs are declared once, in main.ts, by someone looking at the
+   * whole sidebar; features fill them.
+   */
+  host?: string;
   order?: number;
   /** called once with the panel's host element */
   mount(host: HTMLElement, ctx: FeatureContext): void;

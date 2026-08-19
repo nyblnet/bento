@@ -805,6 +805,9 @@ registerKey({ key: 'm', mod: true, shift: true, run: addComment });
 registerPanel({
   id: 'comments',
   get label() { return t('Comments'); },
+  // a SECTION of the Review tab: comments are one of the things people did to
+  // this document, alongside tracked changes and signatures
+  host: 'commentsHost',
   order: 20,
   mount(host, ctx) {
     const render = () => {
