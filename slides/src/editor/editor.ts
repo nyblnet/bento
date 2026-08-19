@@ -327,6 +327,11 @@ export class Editor {
     insertD.append(
       btn(ICONS.plus, t('Insert'), () => insertD.classList.toggle('open'), t('Insert — text, shapes, images, media, tables, charts')),
       insertMenu)
+    // These two were the only dropdowns in the bar without an outside-press
+    // dismissal, and they are the two that exist ONLY on a phone — so the menus
+    // hardest to escape were the ones a thumb could not escape at all. Picking
+    // an item closes them; anything else left them standing over the canvas.
+    this.closeOnOutsidePress(insertD)
     const moreMenu = div('ed-menu')
     const moreD = div('ed-dropdown ed-phone-only')
     moreD.append(
@@ -337,6 +342,7 @@ export class Editor {
         moreD.classList.toggle('open')
       }, t('More actions')),
       moreMenu)
+    this.closeOnOutsidePress(moreD)
     const slidesB = btn(ICONS.panelLeft, t('Slides'), () => this.togglePanel('left'), t('Slides — show or hide the slide list'))
     slidesB.classList.add('ed-phone-only')
     const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Format — show or hide the properties panel'))
@@ -455,6 +461,7 @@ export class Editor {
       attributes: true, attributeFilter: ['style', 'hidden'],
     })
 
+    this.wireDrawerDismiss()
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
@@ -717,6 +724,53 @@ export class Editor {
     el.classList.toggle('ed-collapsed')
     this.updatePanelChevrons()
     // the canvas wrap resizes; its ResizeObserver re-fits the stage
+  }
+
+  /**
+   * Below 700px the two side panels stop being columns and become overlay
+   * DRAWERS (styles.css) — they cover the canvas rather than sitting beside it.
+   * That is the width at which "leave the panel open" stops being free.
+   */
+  private get panelsAreDrawers(): boolean {
+    return this.phoneQuery?.matches ?? window.innerWidth <= 700
+  }
+
+  /** Close a panel if it is open — idempotent, unlike togglePanel. */
+  private closePanel(side: 'left' | 'right') {
+    const el = side === 'left' ? this.sidebar : this.props
+    if (el.classList.contains('ed-collapsed')) return
+    el.classList.add('ed-collapsed')
+    this.updatePanelChevrons()
+  }
+
+  /** Dismiss an open dropdown when a press lands outside it — the behaviour the
+   *  bar's other menus already wire up one by one. */
+  private closeOnOutsidePress(wrap: HTMLElement) {
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    })
+  }
+
+  /**
+   * Tapping away from a drawer dismisses it — the gesture every sheet on a
+   * phone answers to, and the only one available when the drawer covers the
+   * control that opened it.
+   *
+   * Two conditions keep it honest. It only runs while the panels ARE drawers:
+   * on a wide screen they are columns beside the canvas, where a click on the
+   * canvas is just a click on the canvas. And a press inside the topbar is
+   * exempt, because ☰ and Format must keep working as TOGGLES — closing on
+   * their pointerdown would let the click that follows reopen what it just
+   * closed, and the buttons would never shut anything.
+   */
+  private wireDrawerDismiss() {
+    document.addEventListener('pointerdown', (ev) => {
+      if (!this.panelsAreDrawers) return
+      const target = ev.target as Node
+      if (target instanceof Element && target.closest('.ed-topbar')) return
+      if (!this.sidebar.contains(target)) this.closePanel('left')
+      if (!this.props.contains(target)) this.closePanel('right')
+    }, true)
   }
 
   // --- Save dropdown: copy / new deck / template -----------------------------
@@ -1575,7 +1629,14 @@ export class Editor {
       btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, t('Delete slide')),
     )
     item.append(num, surface, tools)
-    item.addEventListener('click', () => this.store.goTo(i))
+    item.addEventListener('click', () => {
+      this.store.goTo(i)
+      // On a phone the slide list is a drawer laid OVER the canvas, so picking
+      // a slide left the answer hidden behind the question — you had to find
+      // and press the ☰ toggle again to see the slide you just chose. On a wide
+      // screen the list is a column beside the canvas and rightly stays put.
+      if (this.panelsAreDrawers) this.closePanel('left')
+    })
     if (!isState) this.wireThumbDrag(item, i)
     return item
   }
