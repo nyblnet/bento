@@ -1043,6 +1043,17 @@ export class SlideCanvas {
 
   // --- text editing -----------------------------------------------------------
 
+  /** Open the inline editor for an element by id — the entry point for callers
+   *  that have an id rather than a node (the context menu). A table opens its
+   *  first cell, since a menu has no point to aim at. */
+  editElement(id: string) {
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+    if (!node) return
+    if (node.classList.contains('bento-el-text')) { this.startTextEdit(node); return }
+    const td = node.querySelector<HTMLElement>('td[data-c]')
+    if (td) this.editCellFromTd(td)
+  }
+
   startTextEdit(node: HTMLElement) {
     if (this.store.readOnly) return // live viewer — no inline editing
     if (this.editing === node) return
@@ -1276,6 +1287,13 @@ export class SlideCanvas {
 
   get isEditingText() {
     return !!this.editing
+  }
+
+  /** The element node whose text is open for editing, if any. Callers that run
+   *  on a PRESS need this: the press itself blurs the caret and commits, so by
+   *  the event after it the answer has already changed. */
+  get editingNode(): HTMLElement | null {
+    return this.editing
   }
 
   get isDrawing() {

@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const zhHans: Catalog = {
+  "Cut": "剪切",
+  "Copy": "复制",
+  "Paste": "粘贴",
+  "Bring to front": "置于顶层",
+  "Send to back": "置于底层",
+  "Ungroup": "取消组合",
+  "Edit text": "编辑文本",
+  "Nothing to paste — use ⌘V": "没有可粘贴的内容 — 请使用 ⌘V",
   "Insert — text, shapes, images, media, tables, charts": "插入 — 文本、形状、图片、媒体、表格、图表",
   "More actions": "更多操作",
   "Slides — show or hide the slide list": "幻灯片 — 显示或隐藏幻灯片列表",

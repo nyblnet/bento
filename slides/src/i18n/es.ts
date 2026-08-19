@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const es: Catalog = {
+  "Cut": "Cortar",
+  "Copy": "Copiar",
+  "Paste": "Pegar",
+  "Bring to front": "Traer al frente",
+  "Send to back": "Enviar al fondo",
+  "Ungroup": "Desagrupar",
+  "Edit text": "Editar texto",
+  "Nothing to paste — use ⌘V": "No hay nada que pegar: usa ⌘V",
   "Insert — text, shapes, images, media, tables, charts": "Insertar — texto, formas, imágenes, multimedia, tablas, gráficos",
   "More actions": "Más acciones",
   "Slides — show or hide the slide list": "Diapositivas — mostrar u ocultar la lista",

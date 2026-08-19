@@ -7,6 +7,14 @@
 import type { Catalog } from '../i18n'
 
 export const pt: Catalog = {
+  "Cut": "Recortar",
+  "Copy": "Copiar",
+  "Paste": "Colar",
+  "Bring to front": "Trazer para a frente",
+  "Send to back": "Enviar para trás",
+  "Ungroup": "Desagrupar",
+  "Edit text": "Editar texto",
+  "Nothing to paste — use ⌘V": "Nada para colar — use ⌘V",
   "Insert — text, shapes, images, media, tables, charts": "Inserir — texto, formas, imagens, mídia, tabelas, gráficos",
   "More actions": "Mais ações",
   "Slides — show or hide the slide list": "Slides — mostrar ou ocultar a lista",

@@ -4,6 +4,14 @@
 import type { Catalog } from '../i18n'
 
 export const ja: Catalog = {
+  "Cut": "切り取り",
+  "Copy": "コピー",
+  "Paste": "貼り付け",
+  "Bring to front": "最前面へ移動",
+  "Send to back": "最背面へ移動",
+  "Ungroup": "グループ解除",
+  "Edit text": "テキストを編集",
+  "Nothing to paste — use ⌘V": "貼り付けるものがありません — ⌘V を使用してください",
   "Insert — text, shapes, images, media, tables, charts": "挿入 — テキスト、図形、画像、メディア、表、グラフ",
   "More actions": "その他の操作",
   "Slides — show or hide the slide list": "スライド — スライド一覧の表示/非表示",

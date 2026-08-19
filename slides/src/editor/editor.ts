@@ -18,6 +18,15 @@ import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { openCtxMenu, type CtxItem } from './ctxmenu'
+
+/** How long a finger must rest before a press becomes a menu. 500ms is what
+ *  iOS itself uses for the callout, so it matches the muscle memory already on
+ *  the device. */
+const LONG_PRESS_MS = 500
+/** …and how far it may wander first. Past this it was a drag or a pan. */
+const LONG_PRESS_SLOP = 10
+
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
@@ -99,6 +108,7 @@ export class Editor {
     })
     this.wireAutosave()
     this.wirePaste()
+    this.wireContextMenu()
     store.on('doc', () => this.syncLinkedCharts())
     store.on('doc', () => this.syncConnectors())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
@@ -2028,40 +2038,50 @@ export class Editor {
         const file = imgItem.getAsFile()
         if (file) { ev.preventDefault(); this.pasteImageFile(file); return }
       }
-      const text = dt.getData('text/plain')
-      // 2) Bento elements / slides copied from this or another deck
-      const clip = parseClip(text)
-      if (clip?.kind === 'elements') {
-        ev.preventDefault()
-        let added: SlideElement[] = []
-        this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
-        if (clip.fonts?.length) injectFonts(this.store.doc)
-        this.store.select(added.map((e) => e.id))
-        this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
-        return
-      }
-      if (clip?.kind === 'slides') {
-        ev.preventDefault()
-        const at = this.store.currentIndex + 1
-        let made: Slide[] = []
-        this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
-        if (clip.fonts?.length) injectFonts(this.store.doc)
-        this.rebuildSidebar()
-        this.store.goTo(at)
-        this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
-        return
-      }
-      // 3) plain text → a text element
-      if (text && text.trim()) {
-        ev.preventDefault()
-        const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
-        const { width } = this.store.doc.size
-        const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
-        this.store.commit(() => this.store.slide.elements.push(el))
-        this.store.select([el.id])
-        this.toast(t('Text pasted'))
-      }
+      if (this.pasteFromText(dt.getData('text/plain'))) ev.preventDefault()
     })
+  }
+
+  /**
+   * Paste from a plain-text payload: Bento elements, Bento slides, or ordinary
+   * text that becomes a text box. Returns whether anything was pasted.
+   *
+   * Split out of the paste EVENT so the context menu's Paste is the same code
+   * rather than a second, drifting copy — the menu has to fetch the clipboard
+   * itself (`readText`), because a click carries no clipboardData.
+   */
+  private pasteFromText(text: string): boolean {
+    // 2) Bento elements / slides copied from this or another deck
+    const clip = parseClip(text)
+    if (clip?.kind === 'elements') {
+      let added: SlideElement[] = []
+      this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
+      if (clip.fonts?.length) injectFonts(this.store.doc)
+      this.store.select(added.map((e) => e.id))
+      this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
+      return true
+    }
+    if (clip?.kind === 'slides') {
+      const at = this.store.currentIndex + 1
+      let made: Slide[] = []
+      this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
+      if (clip.fonts?.length) injectFonts(this.store.doc)
+      this.rebuildSidebar()
+      this.store.goTo(at)
+      this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
+      return true
+    }
+    // 3) plain text → a text element
+    if (text && text.trim()) {
+      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      const { width } = this.store.doc.size
+      const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
+      this.store.commit(() => this.store.slide.elements.push(el))
+      this.store.select([el.id])
+      this.toast(t('Text pasted'))
+      return true
+    }
+    return false
   }
 
   private pasteImageFile(file: File) {
@@ -2693,11 +2713,7 @@ export class Editor {
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
         if (this.store.selection.length) {
           ev.preventDefault()
-          const ids = new Set(this.store.selection)
-          this.store.commit(() => {
-            this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
-          })
-          this.store.select([])
+          this.deleteSelection()
         }
         return
       }
@@ -2754,6 +2770,213 @@ export class Editor {
     const clones = els.map((el) => cloneElement(el))
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))
+  }
+
+  /** Remove the selected elements. Shared by ⌫ and the context menu. */
+  private deleteSelection() {
+    if (!this.store.selection.length) return
+    const ids = new Set(this.store.selection)
+    this.store.commit(() => {
+      this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
+    })
+    this.store.select([])
+  }
+
+  /** Put the selection (or, with nothing selected, the slide) on the system
+   *  clipboard as a Bento payload. Shared by ⌘C and the context menu. */
+  private copySelection() {
+    const text = this.store.selection.length
+      ? serializeElements(this.store.selectedElements, this.store.doc)
+      : serializeSlides([this.store.slide], this.store.doc)
+    void navigator.clipboard?.writeText?.(text).catch(() => {})
+  }
+
+  // --- context menu -------------------------------------------------------
+
+  /** The element id under a viewport point on the canvas, or null.
+   *  Walks the stack rather than taking the topmost node, because once
+   *  something is selected Moveable's control box covers it. */
+  private elementIdAtPoint(x: number, y: number): string | null {
+    for (const n of document.elementsFromPoint(x, y)) {
+      const el = n.closest<HTMLElement>('.bento-el')
+      if (el?.dataset.elId && el.closest('.ed-stage-scale')) return el.dataset.elId
+    }
+    return null
+  }
+
+  private wireContextMenu() {
+    // A right-click COMMITS a live text edit — the press blurs the caret —
+    // and it does so BEFORE `contextmenu` is dispatched, so asking the canvas
+    // then always hears "not editing". The press is the last honest moment.
+    // Geometry, not DOM containment: Moveable's control box sits ON TOP of the
+    // text being edited, so a press aimed squarely at the caret is delivered to
+    // a resize handle and `node.contains(target)` answers false.
+    let pressInsideEdit = false
+    document.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 2) return
+      const node = this.canvas.editingNode
+      if (!node) { pressInsideEdit = false; return }
+      const r = node.getBoundingClientRect()
+      pressInsideEdit =
+        ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom
+    }, true)
+
+    document.addEventListener('contextmenu', (ev) => {
+      const target = ev.target as HTMLElement | null
+      if (pressInsideEdit) return
+      if (this.openContextMenuAt(target, ev.clientX, ev.clientY)) ev.preventDefault()
+    })
+
+    this.wireLongPress()
+  }
+
+  /**
+   * Open the right menu for whatever is at (x, y), or return false to say "not
+   * mine" — which is how the browser's own menu survives wherever it is the
+   * better one: form fields, links, and text mid-edit, where the system
+   * carries spelling, dictation, look-up and a real paste.
+   *
+   * Shared by the right-click and the long press, so the two can never drift.
+   */
+  private openContextMenuAt(target: HTMLElement | null, x: number, y: number): boolean {
+    if (!target?.closest) return false
+    if (target.closest('input, textarea, a, [contenteditable="true"]')) return false
+    if (this.store.readOnly || this.presenting) return false
+
+    const thumb = target.closest<HTMLElement>('.ed-sidebar .ed-thumb')
+    if (thumb) {
+      openCtxMenu(x, y, this.slideMenuItems(Number(thumb.dataset.index), thumb))
+      return true
+    }
+    if (!target.closest('.ed-scroll')) return false // not the canvas — leave it alone
+    const id = this.elementIdAtPoint(x, y)
+    if (!id) {
+      openCtxMenu(x, y, this.canvasMenuItems())
+      return true
+    }
+    // Aiming outside the selection moves it there first — the rule every editor
+    // follows, and the only way the menu's verbs can be honest about what they
+    // will act on.
+    if (!this.store.selection.includes(id)) this.store.select([id])
+    openCtxMenu(x, y, this.elementMenuItems())
+    return true
+  }
+
+  /**
+   * Touch: a press held in place IS the right-click.
+   *
+   * It has to be recognised by hand. iOS fires no `contextmenu` event for an
+   * ordinary element — a long press there raises the system callout, not a
+   * menu — so without this the whole feature above is mouse-only, and a phone
+   * keeps having no way to reach Duplicate, Delete, Group or the z-order.
+   *
+   * Cancelled by movement (that press was a drag or a pan) and by an early
+   * lift (that was a tap). Both matter: this listener sits on the same surface
+   * Moveable drags elements on, and stealing a drag would be worse than having
+   * no menu at all.
+   */
+  private wireLongPress() {
+    // TOUCH events, not pointer events. A pointer handler runs for a mouse too
+    // and has to filter itself back out by pointerType; cancelling the touchend
+    // then stops the browser SYNTHESIZING the tap that ends the press, instead
+    // of racing it with a listener that swallows mouse events after the fact.
+    // Same reasoning as the tap-to-edit recogniser in canvas.ts.
+    let press: { x: number; y: number; target: HTMLElement; timer: number; opened: boolean } | null = null
+    const cancel = () => {
+      if (!press) return
+      clearTimeout(press.timer)
+      press = null
+    }
+    this.root.addEventListener('touchstart', (ev) => {
+      cancel()
+      // a second finger is a pinch or a two-finger pan, never a press
+      if (ev.touches.length !== 1) return
+      const t = ev.touches[0]
+      const target = ev.target as HTMLElement | null
+      if (!target) return
+      const x = t.clientX
+      const y = t.clientY
+      const p: NonNullable<typeof press> = {
+        x, y, target, opened: false,
+        timer: window.setTimeout(() => {
+          // The element under the finger can have changed while the finger was
+          // down (a remote edit, a re-render), so the target is re-read here.
+          const at = (document.elementFromPoint(x, y) as HTMLElement | null) ?? target
+          p.opened = this.openContextMenuAt(at, x, y)
+        }, LONG_PRESS_MS),
+      }
+      press = p
+    }, true)
+    this.root.addEventListener('touchmove', (ev) => {
+      const t = ev.touches[0]
+      if (press && t && Math.hypot(t.clientX - press.x, t.clientY - press.y) > LONG_PRESS_SLOP) cancel()
+    }, true)
+    // non-passive: this is the listener that has to be able to cancel
+    this.root.addEventListener('touchend', (ev) => {
+      const p = press
+      cancel()
+      // The lift would otherwise be replayed as a click ON the menu that just
+      // appeared under the finger, and the row beneath it would fire itself.
+      if (p?.opened && ev.cancelable) ev.preventDefault()
+    }, { passive: false })
+    this.root.addEventListener('touchcancel', cancel, true)
+  }
+
+  private elementMenuItems(): CtxItem[] {
+    const els = this.store.selectedElements
+    const one = els.length === 1 ? els[0] : null
+    const openable = !!one && (one.type === 'text' || one.type === 'table')
+    const grouped = els.some((e) => e.groupId)
+    return [
+      { label: t('Edit text'), disabled: !openable, run: () => one && this.canvas.editElement(one.id) },
+      'sep',
+      { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection() } },
+      { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },
+      { label: t('Duplicate'), hint: '⌘D', run: () => this.duplicateSelection() },
+      'sep',
+      { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
+      { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
+      'sep',
+      grouped
+        ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
+        : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
+      'sep',
+      { label: t('Delete'), hint: '⌫', danger: true, run: () => this.deleteSelection() },
+    ]
+  }
+
+  /** The slide background: the verbs here act on the SLIDE, which is the thing
+   *  that was actually right-clicked. */
+  private canvasMenuItems(): CtxItem[] {
+    const i = this.store.currentIndex
+    return [
+      { label: t('Paste'), hint: '⌘V', run: () => void this.pasteFromClipboard() },
+      'sep',
+      { label: t('Duplicate slide'), run: () => this.duplicateSlide(i) },
+      { label: t('Delete slide'), danger: true, run: () => this.deleteSlide(i) },
+    ]
+  }
+
+  private slideMenuItems(i: number, thumb: HTMLElement): CtxItem[] {
+    return [
+      { label: t('New slide'), run: () => this.openLayoutPicker(thumb, { kind: 'insert', at: i + 1 }) },
+      { label: t('Duplicate slide'), run: () => this.duplicateSlide(i) },
+      'sep',
+      { label: t('Delete slide'), danger: true, run: () => this.deleteSlide(i) },
+    ]
+  }
+
+  /** Menu Paste. A click carries no clipboardData, so the text has to be
+   *  fetched — and asking can be refused (Safari prompts, Firefox has no
+   *  readText at all), which is a real answer and not an error to swallow. */
+  private async pasteFromClipboard() {
+    let text = ''
+    try {
+      text = (await navigator.clipboard?.readText?.()) ?? ''
+    } catch {
+      text = ''
+    }
+    if (!text || !this.pasteFromText(text)) this.toast(t('Nothing to paste — use ⌘V'))
   }
 
   // --- toast ------------------------------------------------------------------
