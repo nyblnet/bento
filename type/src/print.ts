@@ -27,6 +27,7 @@ import { blockHtml, groupBlocks, TAG } from './render.ts';
 import type { Metrics } from './paginate.ts';
 import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
 import { blockStyle } from './layout.ts';
+import { embedHtml } from './embed.ts';
 
 export interface PrintOptions {
   /** running head text; omitted = the document title */
@@ -158,6 +159,9 @@ function bodyHtml(body: Block[], lang: string): string {
     if (tok.t === 'open') out.push(`<${tok.kind}>`);
     else if (tok.t === 'close') out.push(`</${tok.kind}>`);
     else if (tok.t === 'table') out.push(tableHtml(tok.rows, tok.head));
+    // An embed prints as its STATIC RENDER — which is the tier that exists for
+    // exactly this, and why the render is mandatory rather than a cache.
+    else if (tok.block.kind === 'embed') out.push(embedHtml(tok.block));
     else if (tok.block.kind === 'image') {
       const b = tok.block, im = b.image;
       const w = im?.w ? ` style="width:${Math.round(im.w * 100)}%"` : '';

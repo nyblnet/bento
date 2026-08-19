@@ -938,3 +938,14 @@ html, body {
   border: 1px solid var(--line); background: var(--chrome); color: var(--ink-2);
   border-radius: 5px; cursor: pointer; }
 .t-trk-row button:hover { background: var(--chrome-2); color: var(--ink); }
+
+
+/* An embedded Bento artifact. Centred and bounded by the text column: an
+   embed is a figure, and a chart wider than the words it explains reads as a
+   different document interrupting this one. */
+.t-paper .t-embed { margin: 16px 0; text-align: center; }
+.t-paper .t-embed-view { display: inline-block; max-width: min(100%, var(--embed-w, 100%)); }
+.t-paper .t-embed-view svg { max-width: 100%; height: auto; }
+.t-paper .t-embed figcaption { margin-top: 6px; font-size: 12px; color: var(--paper-ink-2); font-style: italic; }
+.t-paper .t-embed-missing { padding: 22px 14px; border: 1px dashed var(--paper-rule);
+  border-radius: 8px; color: var(--paper-ink-2); font-size: 12.5px; }

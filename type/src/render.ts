@@ -14,6 +14,7 @@ import { captionPrefixHtml, isXrefAtom, refAtoms, readXrefs, numberXrefs } from 
 import { blockStyle } from './layout.ts';
 import { citeInject, isCiteAtom, mergeInject, paintCitations, readCiteAtoms } from './cite.ts';
 import { displayMathHtml, inlineMathHtml, isMathMark } from './math.ts';
+import { renderEmbed } from './embed.ts';
 
 export const TAG: Record<Block['kind'], string> = {
   para: 'p', h1: 'h1', h2: 'h2', h3: 'h3', quote: 'blockquote',
@@ -21,8 +22,8 @@ export const TAG: Record<Block['kind'], string> = {
   // <table> around them are not in the model — see groupBlocks, and Block.level
   // / Block.cell for why the document stays flat.
   ul: 'li', ol: 'li', cell: 'td',
-  // atomic: rendered by renderImage, never by the generic path
-  image: 'figure', caption: 'figcaption', toc: 'nav', math: 'div',
+  // atomic: rendered by renderImage/renderEmbed, never by the generic path
+  image: 'figure', caption: 'figcaption', toc: 'nav', math: 'div', embed: 'figure',
 };
 
 /**
@@ -199,6 +200,7 @@ export function renderImage(b: Block): HTMLElement {
 
 export function renderBlock(b: Block): HTMLElement {
   if (b.kind === 'image') return renderImage(b);
+  if (b.kind === 'embed') return renderEmbed(b);
   if (b.kind === 'math') {
     // A display formula is atomic: it has height and, once typeset, may hold no
     // text node pagination can measure — so it carries data-atomic like a
