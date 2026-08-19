@@ -3,14 +3,20 @@
 //
 // Single-owner authentication (migrations/0002_auth.sql). Two concerns:
 //
-//   - Password hashing (config table, set once via POST /api/setup). Same
-//     PBKDF2-SHA-256 construction kernel/src/save.ts already uses for
-//     bento/enc password-protected decks (ENC_ITERATIONS = 300_000) — reused
-//     for consistency, not reinvented. The salt is always
-//     crypto.getRandomValues()'d here, server-side; there is no code path
-//     that accepts a caller-supplied salt (docs/DECISIONS.md would need
-//     updating if that ever changes — it's a deliberate constraint, not an
-//     oversight).
+//   - Password hashing (config table, set once via POST /api/setup).
+//     PBKDF2-SHA-256, same family kernel/src/save.ts uses for bento/enc
+//     password-protected decks — but NOT the same iteration count: that
+//     code runs in a browser, which has no cap on PBKDF2 iterations, and
+//     used 300_000. The Workers runtime (workerd) hard-rejects PBKDF2 above
+//     100_000 iterations (`NotSupportedError: Pbkdf2 failed: iteration
+//     counts above 100000 are not supported`) — this shipped once with
+//     300_000 and every POST /api/setup 500'd in production until this was
+//     caught via `wrangler tail`, see docs/DECISIONS.md. 100_000 is the
+//     platform's hard ceiling, not a tuning choice — it can't be raised.
+//     The salt is always crypto.getRandomValues()'d here, server-side;
+//     there is no code path that accepts a caller-supplied salt
+//     (docs/DECISIONS.md would need updating if that ever changes — it's a
+//     deliberate constraint, not an oversight).
 //   - Sessions (sessions table). Stateful, not a signed cookie: for a
 //     single-owner, low-traffic project a session is one small D1 row,
 //     logout is just deleting it, and there's no signing-key story to get
@@ -19,7 +25,12 @@
 import type { Env } from './env.ts'
 import { randomToken } from './ids.ts'
 
-const PASSWORD_ITERATIONS = 300_000
+// Cloudflare Workers' PBKDF2 implementation rejects anything above this —
+// see the file header. Do not raise it. Exported so auth.spec.ts can assert
+// on it directly: Node's WebCrypto (what the test suite runs under) does
+// NOT enforce this Workers-specific limit, so a regression here is
+// invisible to `npm test` otherwise — it only fails in production.
+export const PASSWORD_ITERATIONS = 100_000
 const SALT_BYTES = 16
 const HASH_BITS = 256
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days, sliding

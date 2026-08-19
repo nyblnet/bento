@@ -261,20 +261,29 @@ export default {
     const parts = url.pathname.split('/').filter(Boolean)
 
     try {
+      // Every branch below MUST `await` its handler before returning, even
+      // though every handler already returns a Promise<Response> that a
+      // bare `return handler(...)` would type-check against just fine.
+      // `return promise` (not awaited) makes the try block complete
+      // immediately, handing back a still-pending promise — so a REJECTION
+      // that promise has later never runs through this catch at all; it
+      // surfaces to the Workers runtime as an uncaught exception (Cloudflare's
+      // generic "error code: 1101" page instead of our JSON error response).
+      // Caught in production the hard way once already — see docs/DECISIONS.md.
       if (parts[0] === 'setup' && parts.length === 1) {
-        if (req.method === 'GET') return handleSetupPage(env)
+        if (req.method === 'GET') return await handleSetupPage(env)
       }
       if (parts[0] === 'login' && parts.length === 1) {
-        if (req.method === 'GET') return handleLoginPage(req, env)
+        if (req.method === 'GET') return await handleLoginPage(req, env)
       }
       if (parts[0] === 'api' && parts[1] === 'setup' && parts.length === 2 && req.method === 'POST') {
-        return handleSetupSubmit(req, env)
+        return await handleSetupSubmit(req, env)
       }
       if (parts[0] === 'api' && parts[1] === 'login' && parts.length === 2 && req.method === 'POST') {
-        return handleLoginSubmit(req, env)
+        return await handleLoginSubmit(req, env)
       }
       if (parts[0] === 'api' && parts[1] === 'logout' && parts.length === 2 && req.method === 'POST') {
-        return handleLogout(req, env)
+        return await handleLogout(req, env)
       }
 
       if (parts.length === 0 && req.method === 'GET') {
@@ -286,41 +295,41 @@ export default {
       if (parts[0] === 'api' && parts[1] === 'compile' && parts.length === 2 && req.method === 'POST') {
         const denied = await requireOwnerApi(req, env)
         if (denied) return denied
-        return handleCompile(req)
+        return await handleCompile(req)
       }
 
       if (parts[0] === 'api' && parts[1] === 'decks') {
         if (parts.length === 2 && req.method === 'POST') {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
-          return handleCreate(req, env)
+          return await handleCreate(req, env)
         }
         if (parts.length === 3 && req.method === 'GET') {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
-          return handleGetDoc(env, parts[2]!)
+          return await handleGetDoc(env, parts[2]!)
         }
         if (parts.length === 3 && req.method === 'PATCH') {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
-          return handleReplace(req, env, parts[2]!)
+          return await handleReplace(req, env, parts[2]!)
         }
         if (parts.length === 4 && parts[3] === 'assets' && req.method === 'POST') {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
-          return handleUploadAsset(req, env, parts[2]!)
+          return await handleUploadAsset(req, env, parts[2]!)
         }
       }
 
       if (parts[0] === 'd' && parts.length === 2 && req.method === 'GET') {
-        return handleView(env, parts[1]!, false)
+        return await handleView(env, parts[1]!, false)
       }
       if (parts[0] === 'd' && parts.length === 3 && parts[2] === 'download' && req.method === 'GET') {
-        return handleView(env, parts[1]!, true)
+        return await handleView(env, parts[1]!, true)
       }
 
       if (parts[0] === 'a' && parts.length === 3 && req.method === 'GET') {
-        return handleAsset(env, parts[1]!, parts[2]!)
+        return await handleAsset(env, parts[1]!, parts[2]!)
       }
 
       if (parts[0] === 'healthz') return json({ ok: true, shellVersion: SHELL_VERSION })
