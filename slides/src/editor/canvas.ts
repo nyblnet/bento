@@ -21,6 +21,12 @@ type DrawKind = 'line' | 'path' | 'connector' | 'free' | 'poly'
 import { CommentsUI } from './comments'
 import type { Peer } from '../sync/session'
 
+/** How far a finger may travel and still count as a tap rather than a drag.
+ *  10px matches what a thumb does on glass while trying to hold still. */
+const TAP_SLOP = 10
+/** …and how long it may rest. Past this it is a press, not a tap. */
+const TAP_HOLD_MS = 700
+
 export class SlideCanvas {
   private stage: HTMLElement
   private scaleHost: HTMLElement
@@ -258,6 +264,81 @@ export class SlideCanvas {
       const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
       if (td) this.editCellFromTd(td)
     })
+
+    // Touch has no double-click. Selecto and Moveable preventDefault the touch
+    // stream they handle, so the synthesized mouse events never arrive on the
+    // canvas — not click, and not dblclick. The route above is therefore
+    // unreachable from a phone, and text simply could not be edited there.
+    //
+    // The gesture every touch editor uses for "open this" is a tap on the thing
+    // a previous tap already selected, so that is what enters editing. Checking
+    // the selection first is what keeps it safe: the tap that SELECTS an element
+    // can never be the one that opens it, so nothing is swallowed.
+    //
+    // TOUCH events, not pointer events, and deliberately so. A pointer handler
+    // runs for a mouse as well and has to filter itself back out by
+    // pointerType; the compatibility mouse burst it leaves behind then has to
+    // be filtered too — two separate chances to change desktop behaviour by
+    // accident. A touch handler cannot fire for a mouse at all, and cancelling
+    // the touchend stops the browser SYNTHESIZING that burst in the first
+    // place, so there is nothing left to filter. (Suggested by @7jameslondon,
+    // who tested the pointer version on a real iPhone.)
+    let tap: { x: number; y: number; t: number; id: string | null; wasSelected: boolean } | null = null
+    this.scroller.addEventListener('touchstart', (ev) => {
+      // a second finger means a pinch, never a tap
+      if (ev.touches.length !== 1) { tap = null; return }
+      const t = ev.touches[0]
+      const id = this.topElementAt(t.clientX, t.clientY)
+      const sel = this.store.selection
+      tap = {
+        x: t.clientX, y: t.clientY, t: ev.timeStamp, id,
+        // Asked HERE and not on release, because Selecto selects on the press:
+        // by the time the finger lifts, the tap that merely selected has
+        // already made this element the selection and would open the editor
+        // on the FIRST tap.
+        wasSelected: !!id && sel.length === 1 && sel[0] === id,
+      }
+    }, true)
+    this.scroller.addEventListener('touchmove', (ev) => {
+      const t = ev.touches[0]
+      if (!tap || !t) return
+      // a moved finger was a drag or a pan, not a tap
+      if (Math.hypot(t.clientX - tap.x, t.clientY - tap.y) > TAP_SLOP) tap = null
+    }, true)
+    // non-passive: this is the listener that has to be able to cancel
+    this.scroller.addEventListener('touchend', (ev) => {
+      const start = tap
+      tap = null
+      if (!start || ev.touches.length || this.store.readOnly) return
+      if (this.editing || this.editingCell || this.isPathEditing) return
+      const t = ev.changedTouches[0]
+      if (!t) return
+      if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > TAP_SLOP) return
+      if (ev.timeStamp - start.t > TAP_HOLD_MS) return // a held finger is a press
+      if (!start.wasSelected) return // this tap is the one that selects
+      const id = this.topElementAt(t.clientX, t.clientY)
+      if (!id || id !== start.id) return // started and ended on the same element
+      const sel = this.store.selection
+      if (sel.length !== 1 || sel[0] !== id) return // selection moved under us
+      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+      if (!node) return
+      let opened = false
+      if (node.classList.contains('bento-el-text')) {
+        this.startTextEdit(node)
+        opened = true
+      } else if (node.classList.contains('bento-el-table')) {
+        // a table opens the CELL under the thumb. Its <td>s are real DOM boxes,
+        // so they can be hit-tested directly — but the control box is above
+        // them, hence the whole stack rather than the topmost node.
+        opened = this.editCellUnder(node, t.clientX, t.clientY)
+      }
+      // Cancel the tap we consumed. Without this the browser replays it as
+      // mousedown → mouseup → click ~300ms later at the ORIGINAL screen point,
+      // which focus() has by then scrolled away from to reveal the caret — so
+      // Selecto read the ghost press as "outside the text being edited" and
+      // committed the edit a blink after it opened.
+      if (opened && ev.cancelable) ev.preventDefault()
+    }, { passive: false })
 
     new ResizeObserver(() => this.relayout()).observe(wrap)
 
@@ -536,6 +617,31 @@ export class SlideCanvas {
     const out = new Set(ids)
     for (const el of els) if (el.groupId && groups.has(el.groupId)) out.add(el.id)
     return [...out]
+  }
+
+  /** Open the table cell under a client point. Reports whether it found one. */
+  private editCellUnder(node: HTMLElement, x: number, y: number): boolean {
+    const td = document
+      .elementsFromPoint(x, y)
+      .map((n) => (n as HTMLElement).closest?.<HTMLElement>('td[data-c]'))
+      .find((n): n is HTMLElement => !!n && node.contains(n))
+    if (!td) return false
+    this.editCellFromTd(td)
+    return true
+  }
+
+  /** The element a client point lands on — the same answer Selecto's own click
+   *  selection gives, because it is the same question: what is painted here?
+   *  (A model-box hit test is NOT equivalent: decorative full-bleed elements
+   *  overlap smaller ones in model space while sitting behind or beside them
+   *  on screen.) Walking the whole stack rather than taking elementFromPoint is
+   *  what steps over Moveable's control box, which covers whatever is selected. */
+  private topElementAt(clientX: number, clientY: number): string | null {
+    for (const n of document.elementsFromPoint(clientX, clientY)) {
+      const el = n.closest<HTMLElement>('.bento-el')
+      if (el && this.scaleHost.contains(el) && el.dataset.elId) return el.dataset.elId
+    }
+    return null
   }
 
   /** Alt-click: select the element under (px, py), digging one step deeper
