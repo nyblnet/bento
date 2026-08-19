@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
 import { isMacOS } from '../screens'
@@ -435,7 +435,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
+    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —
@@ -446,6 +446,7 @@ export class PropsPanel {
     if (el.type === 'chart') this.buildChartProps(el)
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
+    if (el.type === 'code') this.buildCodeProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -1102,6 +1103,62 @@ export class PropsPanel {
     input.click()
   }
 
+  private embedGrammar(el: CodeElement) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const contents = JSON.parse(String(reader.result))
+        const name = contents['name']
+        const assetId = `grammar:${name}`
+        this.store.commit(() => {
+          const doc = this.store.doc
+          doc.assets = { ...(doc.assets ?? {}), [assetId]: JSON.stringify(contents) }
+          this.mutate(el.id, (e) => {
+            const el = e as CodeElement
+            el.grammarName = name
+            el.grammarAssetId = assetId
+          }, true)
+        })
+        this.toast(`"Grammar ${name}" embedded into this file`)
+      }
+      reader.readAsText(file)
+    })
+    input.click()
+  }
+
+  private embedTheme(el: CodeElement) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const contents = JSON.parse(String(reader.result))
+        const name = contents['name']
+        const assetId = `theme:${name}`
+        this.store.commit(() => {
+          const doc = this.store.doc
+          doc.assets = { ...(doc.assets ?? {}), [assetId]: JSON.stringify(contents) }
+          this.mutate(el.id, (e) => {
+            const el = e as CodeElement
+            el.themeAssetId = assetId
+            el.themeName = name
+          }, true)
+        })
+        this.toast(`"Theme ${name}" embedded into this file`)
+      }
+      reader.readAsText(file)
+    })
+    input.click()
+  }
+
   private buildShapeProps(el: ShapeElement) {
     this.section(t('Fill & stroke'))
     const grad = el.fillGradient
@@ -1737,6 +1794,123 @@ export class PropsPanel {
           if (v) m.poster = v; else delete m.poster
         }, true))
       this.row('Poster', poster)
+    }
+  }
+
+  private buildCodeProps(el: CodeElement) {
+    this.section(t('Source Code'))
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    this.host.appendChild(status)
+    // Font Size
+    // Shown in POINTS (the unit office users know); the model stores slide-space
+    // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
+    this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+      this.mutate(el.id, (e) => {
+        (e as CodeElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
+      }, fin)))
+    // Alignment
+    this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).align = v as CodeElement['align'] }, true)))
+    // V-Alignment
+    this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).valign = v as CodeElement['valign'] }, true)))
+    // Line height
+    this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).lineHeight = Math.max(v, 0.5) }, fin)))
+    const assets = this.store.doc.assets ?? {}
+    const grammar = el.grammarAssetId ? assets[el.grammarAssetId] : ''
+    const theme = el.themeAssetId ? assets[el.themeAssetId] : ''
+    if (!grammar) status.textContent = t('Pick a TextMate Language')
+    else if (!theme) status.textContent = t('Pick a TextMate Theme')
+    else status.textContent = t('Ready')
+    // Pickers
+    this.grammarSelect(el)
+    this.themeSelect(el)
+    // Grammar
+    const embedGrammar = document.createElement('button')
+    embedGrammar.className = 'ed-btn ed-btn-block'
+    embedGrammar.textContent = t('＋ Add TextMate Grammar')
+    embedGrammar.title = t('Bundle a TextMate Grammar and use it here')
+    embedGrammar.addEventListener('click', () => this.embedGrammar(el))
+    this.host.appendChild(embedGrammar)
+    // Theme
+    const embedTheme = document.createElement('button')
+    embedTheme.className = 'ed-btn ed-btn-block'
+    embedTheme.textContent = t('＋ Add TextMate Theme')
+    embedTheme.title = t('Bundle a TextMate Theme and use it here')
+    embedTheme.addEventListener('click', () => this.embedTheme(el))
+    this.host.appendChild(embedTheme)
+    this.host.appendChild(status)
+  }
+
+  private grammarSelect(el: CodeElement) {
+    const assets = this.store.doc.assets ?? {}
+    const keys = Object.keys(assets)
+    const grammars = keys.filter(k => k.startsWith('grammar:'))
+    if (grammars && grammars.length > 0) {
+      const sel = document.createElement('select')
+      const add = (label: string, value: string, selected: boolean) => {
+        const o = document.createElement('option')
+        o.value = value
+        o.textContent = label
+        o.selected = selected
+        sel.appendChild(o)
+        return o
+      }
+      // Placeholder
+      add('<select grammar>', '', !el.grammarAssetId)
+      for (const grammar of grammars) {
+        let matched = false
+        if (el.grammarAssetId === grammar) matched = true
+        const name = grammar.replace('grammar:', '')
+        add(name, grammar, matched)
+      }
+      sel.addEventListener('change', () => {
+        this.mutate(el.id, (e) => {
+          // value is the actual grammar assetId
+          const value = sel.value
+          const el = e as CodeElement
+          el.grammarName = value.replace('grammar:', '')
+          el.grammarAssetId = value
+        }, true)
+      })
+      this.row('Grammar', sel)
+    }
+  }
+
+  private themeSelect(el: CodeElement) {
+    const assets = this.store.doc.assets ?? {}
+    const keys = Object.keys(assets)
+    const themes = keys.filter(k => k.startsWith('theme:'))
+    if (themes && themes.length > 0) {
+      const sel = document.createElement('select')
+      const add = (label: string, value: string, selected: boolean) => {
+        const o = document.createElement('option')
+        o.value = value
+        o.textContent = label
+        o.selected = selected
+        sel.appendChild(o)
+        return o
+      }
+      // Placeholder
+      add('<select theme>', '', !el.themeAssetId)
+      for (const theme of themes) {
+        let matched = false
+        if (el.themeAssetId === theme) matched = true
+        const name = theme.replace('theme:', '')
+        add(name, theme, matched)
+      }
+      sel.addEventListener('change', () => {
+        this.mutate(el.id, (e) => {
+          // value is the actual theme assetId
+          const value = sel.value
+          const el = e as CodeElement
+          el.themeName = value.replace('theme:', '')
+          el.themeAssetId = value
+        }, true)
+      })
+      this.row('Theme', sel)
     }
   }
 
