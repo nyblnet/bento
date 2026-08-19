@@ -81,7 +81,7 @@ platform/
       authPages.ts           — /setup and /login page markup
       pageStyles.ts           — shared CSS (demo.ts + the auth pages)
       ids.ts                — random ids/tokens, sha256
-      demo.ts               — prompt→paste→create wizard served at `/` (owner-only)
+      demo.ts               — prompt→paste→create wizard + deck history sidebar, served at `/` (owner-only)
       env.ts                — Env (binding) interface
       compile/
         schema.ts            — the outline schema + parseOutline() validator
@@ -333,6 +333,7 @@ problem for whenever that app exists, not solved here.
 | `/api/login` | POST | none | `{username, password}` → starts a session on success |
 | `/api/logout` | POST | none | ends the current session |
 | `/api/compile` | POST | owner session | `{outline}` → `{doc}`. Pure — nothing is stored |
+| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt}]}`, most-recently-touched first — the sidebar's data source |
 | `/api/decks` | POST | owner session | `{doc}` → `{id, url}`. Validates, strips `collab`, mints `docId` |
 | `/api/decks/:id` | GET | owner session | `{doc}` |
 | `/api/decks/:id` | PATCH | owner session | `{doc}` → replaces the stored doc |
@@ -357,10 +358,13 @@ for every deck regardless of session — see "Known gaps".
   that lets the owner explicitly share a deck anonymously (read-only present
   mode for a non-owner visitor; the owner always gets the full editor on
   their own decks, public or not).
-- **No deck history/dashboard.** `/` is still a one-shot wizard; there's no
-  list of decks you've already created to browse back into. Planned as its
-  own follow-up once visibility exists (a deck's list entry needs to show
-  its public/private state).
+- **The deck history sidebar has no public/private indicator yet.** `/` now
+  shows a ChatGPT-style sidebar (`GET /api/decks`, most-recently-touched
+  first) with a "+ New deck" action and a clickable entry per deck — but
+  every entry looks the same regardless of visibility, since visibility
+  itself doesn't exist yet (see the gap above). No pagination either;
+  `listDecks` is capped at 200 rows, which is fine at this project's
+  declared scale and not worth solving before it's a real problem.
 - **Edits made in the live-served editor aren't saved back.** Opening `/d/:id`
   while logged in serves the full, editable Bento app, but the in-browser
   editor still only holds its state in the browser (same as opening any

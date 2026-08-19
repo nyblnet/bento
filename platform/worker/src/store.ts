@@ -81,6 +81,20 @@ export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null
   return row ?? null
 }
 
+const LIST_LIMIT = 200
+
+/** All decks, most-recently-touched first — the sidebar's deck history list.
+ *  Bounded at LIST_LIMIT; pagination is a later concern, not needed at this
+ *  project's declared scale. */
+export async function listDecks(env: Env): Promise<DeckMeta[]> {
+  const result = await env.DB.prepare(
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes FROM decks ORDER BY updated_at DESC LIMIT ?`,
+  )
+    .bind(LIST_LIMIT)
+    .all<DeckMeta>()
+  return result.results
+}
+
 /** Overwrite a deck's doc in place. Caller must have already verified the
  *  owner session and that `doc` passed validate.ts. */
 export async function replaceDeckDoc(env: Env, id: string, doc: Record<string, unknown>): Promise<void> {

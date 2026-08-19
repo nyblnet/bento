@@ -8,8 +8,9 @@
 //   GET  /login                 owner login form
 //   POST /api/login              verify credentials, start a session
 //   POST /api/logout             end the current session
-//   GET  /                     compile+create wizard (demo.ts) — OWNER ONLY
+//   GET  /                     compile+create wizard + deck history sidebar (demo.ts) — OWNER ONLY
 //   POST /api/compile           outline JSON -> compiled bento/slides doc JSON (no storage) — OWNER ONLY
+//   GET  /api/decks             list decks, most-recently-touched first (sidebar data) — OWNER ONLY
 //   POST /api/decks             create a deck: { doc } -> { id } — OWNER ONLY
 //   GET  /api/decks/:id         fetch a deck's doc JSON — OWNER ONLY
 //   PATCH /api/decks/:id        replace a deck's doc JSON — OWNER ONLY
@@ -26,12 +27,13 @@
 // column and its own review), not folded into this one — see
 // docs/DECISIONS.md.
 //
-// No wrangler.toml — bindings (env.DOCS, env.DB) are added by hand in the CF
-// dashboard after pasting dist/worker.js via Quick Edit. See platform/README.md.
+// wrangler.toml (bindings, no secrets) drives the primary Workers Builds
+// deploy path; the "paste dist/worker.js into Quick Edit" fallback documented
+// in platform/README.md doesn't touch this file at all. See platform/README.md.
 import type { Env } from './env.ts'
 import { spliceDoc, SHELL_VERSION } from './splice.ts'
 import { validateIncomingDoc } from './validate.ts'
-import { createDeck, getDeckDoc, replaceDeckDoc, putAsset, getAsset } from './store.ts'
+import { createDeck, getDeckDoc, replaceDeckDoc, putAsset, getAsset, listDecks } from './store.ts'
 import { renderDemoPage } from './demo.ts'
 import { renderSetupPage, renderLoginPage } from './authPages.ts'
 import { parseOutline } from './compile/schema.ts'
@@ -157,6 +159,13 @@ async function handleLogout(req: Request, env: Env): Promise<Response> {
 }
 
 // --- deck routes ---------------------------------------------------------
+
+async function handleListDecks(env: Env): Promise<Response> {
+  const decks = await listDecks(env)
+  return json({
+    decks: decks.map((d) => ({ id: d.id, title: d.title, createdAt: d.created_at, updatedAt: d.updated_at })),
+  })
+}
 
 async function handleCreate(req: Request, env: Env): Promise<Response> {
   let body: unknown
@@ -299,6 +308,11 @@ export default {
       }
 
       if (parts[0] === 'api' && parts[1] === 'decks') {
+        if (parts.length === 2 && req.method === 'GET') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleListDecks(env)
+        }
         if (parts.length === 2 && req.method === 'POST') {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied

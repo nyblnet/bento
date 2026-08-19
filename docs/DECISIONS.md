@@ -14,6 +14,34 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-19 — Deck history sidebar: client-fetched, not server-embedded; opening a deck leaves the sidebar behind
+
+**Decision.** `/` gained a ChatGPT-style sidebar (`GET /api/decks`, owner-
+only, most-recently-updated first, capped at 200 rows) listing past decks
+with a "+ New deck" action above it. Two things worth recording because a
+future change could plausibly go the other way without realizing why this
+way was chosen:
+
+- **The list is fetched client-side on load** (`loadDeckList()`), not
+  embedded into the server-rendered HTML by threading deck data through
+  `renderDemoPage()`. Keeps `demo.ts`'s render function taking no arguments
+  and free of a request-scoped data dependency, and means "refresh the
+  sidebar after creating a deck" is the same function called twice, not a
+  second code path.
+- **Clicking a deck entry navigates straight to `/d/:id`** — the real Bento
+  editor, no platform chrome around it. There is no "sidebar visible while
+  editing a deck" mode, and this is deliberate, not a missing feature: giving
+  `/d/:id` platform chrome would mean injecting UI into the spliced shell,
+  which is exactly the kind of shell modification `docs/PLATFORM.md`'s
+  splice contract exists to keep out of app-specific hands. The sidebar's
+  job ends at picking which deck to open.
+
+Deck titles are rendered via `innerHTML` (for the ellipsis/wrapping
+behavior a plain text node makes awkward), so they're escaped by hand
+(`&`/`<` only, matching `demo.ts`'s existing `escapeHtml`) rather than
+trusted — verified in a browser with a title containing a literal
+`<script>` tag, which rendered as inert escaped text, not live markup.
+
 ## 2026-08-19 — Production postmortem: PBKDF2 iteration cap, and a `return`-without-`await` bug that had been silent since the very first PR
 
 **What happened.** The day after Stage A (single-owner auth) merged and

@@ -100,6 +100,13 @@ function makeD1() {
           if (sql.includes('FROM decks')) return decks.get(boundArgs[0]) ?? null
           return null
         },
+        async all() {
+          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes FROM decks')) {
+            const results = [...decks.values()].sort((a, b) => b.updated_at - a.updated_at)
+            return { results, success: true }
+          }
+          return { results: [], success: true }
+        },
       }
       return stmt
     },
@@ -245,11 +252,14 @@ await check('POST /api/login succeeds with the right credentials and starts a se
   assert(ownerCookie.startsWith('bento_session='), `expected a session cookie, got ${ownerCookie}`)
 })
 
-await check('GET / with a valid session renders the wizard', async () => {
+await check('GET / with a valid session renders the wizard and deck history sidebar', async () => {
   const res = await worker.fetch(new Request('https://platform.example/', { headers: { cookie: ownerCookie } }), env)
   const { text } = await readBody(res)
   assert(res.status === 200, `expected 200, got ${res.status}`)
   assert(text.includes('id="promptText"'), 'wizard page did not render')
+  assert(text.includes('id="deckList"'), 'sidebar deck list missing — template structure likely broken')
+  assert(text.includes("getElementById('newDeck')"), 'new-deck button wiring missing')
+  assert(text.includes("fetch('/api/decks')"), 'sidebar fetch wiring missing')
 })
 
 // --- deck + compile flow, authenticated with the session above --------------
@@ -432,6 +442,37 @@ await check('POST /api/decks/:id/assets stores an image and it is fetchable', as
   const assetRes = await worker.fetch(new Request(`https://platform.example${data.path}`), env)
   assert(assetRes.status === 200, `asset fetch expected 200, got ${assetRes.status}`)
   assert(assetRes.headers.get('content-type') === 'image/png', 'wrong content-type on stored asset')
+})
+
+await check('GET /api/decks without a session is rejected', async () => {
+  const res = await worker.fetch(new Request('https://platform.example/api/decks'), env)
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+let secondDeckId
+await check('GET /api/decks lists decks most-recently-updated first', async () => {
+  // deckId was PATCHed ("Updated title") earlier in this run; create a
+  // second, untouched deck so there are two rows with a clear order.
+  const createRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Second deck' } }),
+    }),
+    env,
+  )
+  const { data: created } = await readBody(createRes)
+  secondDeckId = created.id
+
+  const res = await worker.fetch(new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }), env)
+  const { data, text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(Array.isArray(data.decks) && data.decks.length >= 2, 'expected at least two decks listed')
+  const ids = data.decks.map((d) => d.id)
+  assert(ids.indexOf(secondDeckId) < ids.indexOf(deckId), 'the more-recently-created/updated deck should sort first')
+  const listed = data.decks.find((d) => d.id === secondDeckId)
+  assert(listed.title === 'Second deck', 'listed deck has the wrong title')
+  assert(typeof listed.updatedAt === 'number' && typeof listed.createdAt === 'number', 'listed deck missing timestamps')
 })
 
 const exampleOutline = {
