@@ -32,6 +32,9 @@ export class SlideCanvas {
   private fitScale = 1
   /** user zoom, multiplier on the fitted scale (1 = fit to window) */
   private zoom = 1
+  /** a two-finger pinch owns the scroller: the Moveable gesture lock below has
+   *  to stand down for it, or every scroll the zoom makes is snapped back. */
+  private pinching = false
   private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
   /** Slide identity captured when an inline edit begins. Element ids may be
@@ -188,12 +191,58 @@ export class SlideCanvas {
 
     // Mobile Safari: a two-finger pinch over the canvas zooms the PAGE, which
     // (mid-marquee) throws Selecto's coordinates off and has crashed the page.
-    // Swallow multi-touch gestures on the canvas — the editor has its own zoom,
-    // and page-pinch-zooming an editor surface is never what you want. Single
-    // touch (scroll / marquee) is untouched. Non-passive so preventDefault works.
-    const swallowPinch = (ev: TouchEvent) => { if (ev.touches.length > 1) ev.preventDefault() }
-    this.scroller.addEventListener('touchstart', swallowPinch, { passive: false })
-    this.scroller.addEventListener('touchmove', swallowPinch, { passive: false })
+    // So multi-touch is still swallowed here — page-pinch-zooming an editor
+    // surface is never what you want. Single touch (scroll / marquee) is
+    // untouched. Non-passive so preventDefault works.
+    //
+    // But swallowing it left the gesture meaning NOTHING. The editor has its own
+    // zoom and, on a phone, only the two 44px buttons in the corner reach it —
+    // while the deck opens at 19–27% on a handset, i.e. always needing zoom.
+    // A pinch drives that zoom instead, and the fingers also pan, which is the
+    // other half of the same gesture on every map and canvas ever shipped.
+    let pinch: { d: number; zoom: number; mx: number; my: number } | null = null
+    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const midX = (t: TouchList) => (t[0].clientX + t[1].clientX) / 2
+    const midY = (t: TouchList) => (t[0].clientY + t[1].clientY) / 2
+    const startPinch = (t: TouchList) => {
+      pinch = { d: Math.max(1, spread(t)), zoom: this.zoom, mx: midX(t), my: midY(t) }
+      // The first finger has already told Moveable a drag is starting, which
+      // both moves an element under the pinch and PINS the scroller to where
+      // that finger landed — so without this the zoom's own scrolling is
+      // snapped straight back and the slide zooms about the wrong point.
+      this.pinching = true
+      ;(this.moveable as unknown as { stopDrag?: () => void }).stopDrag?.()
+    }
+    this.scroller.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length < 2) { pinch = null; return }
+      ev.preventDefault()
+      startPinch(ev.touches)
+    }, { passive: false })
+    this.scroller.addEventListener('touchmove', (ev) => {
+      if (ev.touches.length < 2) return
+      ev.preventDefault()
+      // A finger can arrive mid-gesture (a second one lands after a drag has
+      // begun); treat that as the start rather than measuring against nothing.
+      if (!pinch) { startPinch(ev.touches); return }
+      const d = spread(ev.touches)
+      const mx = midX(ev.touches)
+      const my = midY(ev.touches)
+      if (d >= 1) this.zoomAround(pinch.zoom * (d / pinch.d), mx, my)
+      // …and the midpoint's own travel pans, so one gesture both scales and
+      // moves. Applied AFTER the zoom, which has already corrected the scroll
+      // to keep the pinched point under the fingers.
+      this.scroller.scrollLeft -= mx - pinch.mx
+      this.scroller.scrollTop -= my - pinch.my
+      pinch.mx = mx
+      pinch.my = my
+    }, { passive: false })
+    const endPinch = (ev: TouchEvent) => {
+      if (ev.touches.length >= 2) return
+      pinch = null
+      this.pinching = false
+    }
+    this.scroller.addEventListener('touchend', endPinch)
+    this.scroller.addEventListener('touchcancel', endPinch)
 
     // Pin the scroller during Moveable gestures: snap guidelines can overflow
     // the stage and grow the scroll area, which made the slide jump around
@@ -202,7 +251,7 @@ export class SlideCanvas {
     let lockL = 0
     let lockT = 0
     this.scroller.addEventListener('scroll', () => {
-      if (gestureLock) {
+      if (gestureLock && !this.pinching) {
         this.scroller.scrollLeft = lockL
         this.scroller.scrollTop = lockT
       }
@@ -366,6 +415,31 @@ export class SlideCanvas {
     // keep the view centred on the slide as it grows/shrinks
     this.scroller.scrollLeft = (this.scroller.scrollWidth - this.scroller.clientWidth) / 2
     this.scroller.scrollTop = (this.scroller.scrollHeight - this.scroller.clientHeight) / 2
+  }
+
+  /**
+   * Zoom while keeping the slide point under (clientX, clientY) still — what a
+   * pinch means. setZoom re-centres on the slide instead, which is right for a
+   * button and wrong for a gesture: the thing being pinched would slide out
+   * from under the fingers doing the pinching.
+   */
+  private zoomAround(zoom: number, clientX: number, clientY: number) {
+    const before = this.slidePointAt(clientX, clientY)
+    const next = Math.min(Math.max(zoom, 0.5), 8)
+    if (next === this.zoom) return
+    this.zoom = next
+    this.relayout()
+    const after = this.slidePointAt(clientX, clientY)
+    // put the same slide point back under the fingers
+    this.scroller.scrollLeft += (before.x - after.x) * this.scale
+    this.scroller.scrollTop += (before.y - after.y) * this.scale
+  }
+
+  /** Slide-local coordinates for a viewport point (the inverse of the stage
+   *  transform). */
+  private slidePointAt(clientX: number, clientY: number): { x: number; y: number } {
+    const r = this.scaleHost.getBoundingClientRect()
+    return { x: (clientX - r.left) / this.scale, y: (clientY - r.top) / this.scale }
   }
 
   zoomIn() { this.setZoom(this.zoom * 1.25) }
