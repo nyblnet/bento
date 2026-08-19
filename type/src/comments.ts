@@ -540,6 +540,21 @@ const COMMENT_ICON =
   '<path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.4-4.2A8 8 0 0 1 13 4a8 8 0 0 1 8 8z"/>' +
   '<line x1="8.5" y1="11" x2="15.5" y2="11"/><line x1="8.5" y1="14.5" x2="13" y2="14.5"/></svg>';
 
+/**
+ * Who you are IF you have already said — never asks.
+ *
+ * authorName() below prompts when it does not know, which is right when you
+ * have just chosen to leave a comment and wrong on a keystroke: tracked changes
+ * attribute every edit, and a modal in the middle of a sentence would be
+ * unusable. Tracking asks once, when it is switched on.
+ */
+export function knownAuthor(): string {
+  try { return localStorage.getItem(AUTHOR_KEY) || ''; } catch { return ''; }
+}
+
+/** Ask for a name if there isn't one, without the caller needing a comment. */
+export const ensureAuthor = (): string => authorName();
+
 /** Who you are, as bento/slides records it — one suite, one answer. */
 function authorName(): string {
   let who = '';

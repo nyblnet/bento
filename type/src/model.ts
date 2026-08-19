@@ -249,6 +249,19 @@ export interface TypeDoc {
   type?: { family?: string; size?: number };
   revisions: Revision[];
   signatures: Signature[];
+  /**
+   * Is the document recording edits as tracked changes?
+   *
+   * DOCUMENT-level, not a viewer preference — unlike the locale, reduced motion
+   * or hidden comments. Whether edits are recorded is a property of the
+   * agreement everyone is working on: if it were per-viewer, one collaborator
+   * would silently make untracked edits to a document another believes is
+   * fully tracked, which is the one failure a tracked document cannot have.
+   *
+   * Absent means off, so every file written before this existed is untracked
+   * and reads identically.
+   */
+  track?: boolean;
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>;
   assets?: Record<string, string>;
   readonly?: boolean;
@@ -483,6 +496,7 @@ export function parseDoc(raw: string): ParseResult {
     page: isObj(json.page) ? { ...LETTER, ...(json.page as object) } as PageSpec : { ...LETTER },
     body, footnotes,
     revisions: Array.isArray(json.revisions) ? json.revisions as Revision[] : [],
+    ...(json.track === true ? { track: true } : {}),
     signatures: Array.isArray(json.signatures) ? json.signatures as Signature[] : [],
   };
   if (typeof json.docId !== 'string' || !json.docId) repaired.push('minted a missing docId');
@@ -499,8 +513,41 @@ export function parseDoc(raw: string): ParseResult {
 /** The document's text, in order — what gets measured, searched and diffed. */
 export const plainText = (doc: TypeDoc): string => doc.body.map(b => b.text).join('\n');
 
+/**
+ * Words as a READER would count them: insertions in, tracked deletions out.
+ *
+ * A tracked deletion leaves its characters in `b.text` — that is what makes it
+ * rejectable — so counting the raw string reports words the document no longer
+ * says. Deleting a sentence would make the count go UP, since the struck text
+ * stays and the count has no way to know it is struck.
+ *
+ * This is the general hazard of the representation, and every other place that
+ * reads a block as prose has the same decision to make.
+ */
 export const wordCount = (doc: TypeDoc): number =>
-  doc.body.reduce((n, b) => n + (b.text.trim() ? b.text.trim().split(/\s+/).length : 0), 0);
+  doc.body.reduce((n, b) => {
+    const t = readerText(b).trim();
+    return n + (t ? t.split(/\s+/).length : 0);
+  }, 0);
+
+/**
+ * `b.text` with tracked deletions removed — the prose a reader sees.
+ *
+ * It lives HERE, the module with no dependencies, rather than in track.ts,
+ * because track.ts imports this one and the reverse would be a cycle. track.ts
+ * re-exports it as textOf(). One implementation: a second copy would be two
+ * answers to "what does this document say", and they would diverge.
+ */
+export function readerText(b: Block): string {
+  const dels = (b.marks ?? []).filter(m => m.t === 'del').sort((x, y) => x.from - y.from);
+  if (!dels.length) return b.text;
+  let out = '', at = 0;
+  for (const d of dels) {
+    if (d.from > at) out += b.text.slice(at, d.from);
+    at = Math.max(at, d.to);
+  }
+  return out + b.text.slice(at);
+}
 
 /**
  * Replace [at, at+removed) of a block's text with `added`, keeping marks and

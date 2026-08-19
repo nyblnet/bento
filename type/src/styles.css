@@ -26,6 +26,14 @@
   --paper-ink-2: #3a3d44;
   --paper-rule: #c3cad4;
   --paper-link-underline: #a9bcd8;
+  /* Tracked changes are PAPER ink, so they sit in the unthemed block with the
+     rest of it. The page is white in dark mode — it is paper — and a tracked
+     insertion that lightened with the chrome would be the one thing on the
+     sheet that changed colour with a preference. It also means the screen and
+     the print are the same ink, which is what a signed-off redline needs. */
+  --paper-trk: #1a6b4a;
+  --paper-trk-bg: #eaf3ef;
+  --paper-trk-del: #a3312a;
 
   /* geometry */
   --radius: 10px;
@@ -913,3 +921,20 @@ html, body {
   font-size: 17px; color: var(--ink);
   background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px;
 }
+
+
+/* Tracked changes. Word's convention — coloured underline for an insertion,
+   strike for a deletion — because a document full of them is read by people who
+   have read a thousand of them elsewhere, and inventing a new visual language
+   for the most conventional feature in the category helps nobody. */
+.t-paper ins.t-trk { text-decoration: underline; text-decoration-thickness: 1px;
+  text-underline-offset: 2px; color: var(--paper-trk); background: var(--paper-trk-bg); }
+.t-paper del.t-trk { text-decoration: line-through; color: var(--paper-trk-del); opacity: .75; }
+/* Nothing to override for print: the ink is unthemed, so what is on screen is
+   what comes out of the printer — which is the point, since a tracked document
+   is usually printed precisely to be read and signed off on paper. */
+.t-trk-row { display: flex; gap: 5px; margin-top: 6px; }
+.t-trk-row button { flex: 1; padding: 3px 6px; font: inherit; font-size: 11px;
+  border: 1px solid var(--line); background: var(--chrome); color: var(--ink-2);
+  border-radius: 5px; cursor: pointer; }
+.t-trk-row button:hover { background: var(--chrome-2); color: var(--ink); }

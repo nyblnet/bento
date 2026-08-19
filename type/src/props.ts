@@ -27,6 +27,7 @@ import { t } from './i18n.ts';
 import { MAX_TABLE_COLS, type Block, type BlockKind } from './model.ts';
 import { PAPER, openPageSetup, withSize, withOrientation, type SizeId } from './layout.ts';
 import { isHeading, EXCLUDE_ROLE, sectionSettings, setNumbered, toggleExclude } from './toc.ts';
+import { ensureAuthor } from './comments.ts';
 
 // ─────────────────────────────────────────────────────────────── small parts
 
@@ -372,6 +373,21 @@ function documentSection(host: HTMLElement, ctx: FeatureContext): void {
     ctx.refresh();
   });
   row(body, t('Number sections'), num);
+
+  // ---- tracked changes. A DOCUMENT property, so it sits here beside the other
+  // document properties rather than in ⋯: it has a state, everyone working on
+  // the file shares it, and an action could only offer to flip it.
+  const trk = el('input') as HTMLInputElement;
+  trk.type = 'checkbox';
+  trk.checked = doc.track === true;
+  trk.addEventListener('change', () => {
+    // Ask for a name at the moment tracking is switched ON — the one place a
+    // prompt is expected. Every keystroke afterwards is attributed silently.
+    if (trk.checked) ensureAuthor();
+    ctx.store.commit(d => { if (trk.checked) d.track = true; else delete d.track; });
+    ctx.refresh();
+  });
+  row(body, t('Track changes'), trk);
   const note = el('p', 't-note');
   note.textContent = t('Off by default: most documents already carry their numbers in the heading text.');
   body.appendChild(note);

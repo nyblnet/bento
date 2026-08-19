@@ -22,6 +22,7 @@ import { Store } from './store.ts';
 import { Editor } from './editor.ts';
 import { paginate, drawPages, type Metrics } from './paginate.ts';
 import { redline, apply as applyRedline, describe, type ChangeSet } from './redline.ts';
+import { changes as trackedChanges, resolve as resolveOne, resolveAll } from './track.ts';
 import { printDocument, buildPrintDocument } from './print.ts';
 import { sign as signDoc, verifyChain, newKey } from './canon.ts';
 import { uid as newId } from './model.ts';
@@ -245,15 +246,82 @@ for (const [sub, text] of [['comments', t('Comments')], ['changes', t('Tracked c
 // An empty section under a heading explains nothing, and this one is empty
 // until someone has taken a snapshot — which is exactly the step a person does
 // not know about yet. So the empty state IS the instruction.
-{
+/**
+ * The tracked-changes list.
+ *
+ * This is the LIVE list — every ins/del mark in the document, accept or reject
+ * one at a time or all at once. It shares the panel with the snapshot redline
+ * because they answer the same question from two directions: redline compares
+ * two versions, tracking records the edits as they happen, and both end up as
+ * ins/del marks. One list, either way in.
+ */
+function buildTracked() {
   const box = document.getElementById('reviewPanel');
-  if (box && !box.children.length) {
-    const hint = document.createElement('p');
-    hint.className = 't-hint';
-    hint.textContent = t('Take a Snapshot from ⋯, edit, then Review changes to see what moved.');
+  if (!box) return;
+  box.replaceChildren();
+  const list = trackedChanges(store.doc);
+  if (!list.length) {
+    const hint = el('p', 't-hint');
+    hint.textContent = store.doc.track
+      ? t('Tracking is on. Edits you make from now on are recorded here.')
+      : t('Turn on "Track changes" in the properties panel, or take a Snapshot from ⋯ and use Review changes.');
     box.appendChild(hint);
+    return;
+  }
+  const head = el('p', 't-hint');
+  head.textContent = list.length === 1 ? t('1 tracked change')
+    : t('{n} tracked changes').replace('{n}', String(list.length));
+  head.style.marginBottom = '8px';
+  box.appendChild(head);
+
+  const all = el('div', 't-trk-row');
+  for (const [text, accept] of [[t('Accept all'), true], [t('Reject all'), false]] as const) {
+    const b = el('button') as HTMLButtonElement;
+    b.textContent = text;
+    b.addEventListener('click', () => {
+      store.commit(d => resolveAll(d, accept));
+      editor.render(); markDirty(); paint(); schedule();
+    });
+    all.appendChild(b);
+  }
+  box.appendChild(all);
+
+  for (const ch of list) {
+    const card = el('div', 't-card');
+    const who = el('div', 'who');
+    who.textContent = `${ch.mark.by ?? t('Someone')} · ${ch.mark.t === 'ins' ? t('inserted') : t('deleted')}`;
+    const what = el('div', 'what');
+    // the CHANGED TEXT ONLY, in the same ins/del styling the page uses, so the
+    // card and the paragraph it points at read as the same thing
+    what.innerHTML = ch.mark.t === 'ins'
+      ? `<ins>${esc(ch.text)}</ins>` : `<del>${esc(ch.text)}</del>`;
+    card.append(who, what);
+    const row = el('div', 't-trk-row');
+    for (const [label, accept] of [[t('Accept'), true], [t('Reject'), false]] as const) {
+      const b = el('button') as HTMLButtonElement;
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        store.commit(d => {
+          const i = d.body.findIndex(x => x.id === ch.block);
+          if (i >= 0) d.body[i] = resolveOne(d.body[i], ch.mark, accept);
+        });
+        editor.render(); markDirty(); paint(); schedule();
+      });
+      row.appendChild(b);
+    }
+    card.appendChild(row);
+    card.addEventListener('click', e => {
+      if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+      paper.querySelector(`[data-id="${CSS.escape(ch.block)}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    box.appendChild(card);
   }
 }
+// Called at the END of this file, not here — see the note above the readyFns
+// loop. `buildTracked` reaches `el()`, a const declared 200 lines below, so
+// calling it beside its own definition throws in the temporal dead zone and the
+// app boots with a rendered page and no window.bento: it LOOKS fine.
 for (const [tab, text] of [['navigate', t('Navigate')], ['review', t('Review')], ['sources', t('Sources')]] as const) {
   const b = document.querySelector<HTMLElement>(`.t-tabs [data-tab="${tab}"]`);
   if (b) b.textContent = text;
@@ -1000,3 +1068,9 @@ dirty = false; paintTitle();
 if (window.innerWidth < 1566) document.querySelector('.t-main')!.classList.add('t-props-off');
 
 for (const f of readyFns()) f(featureCtx);
+
+// The tracked-changes list, painted once and on every change. Down here for
+// the temporal-dead-zone reason given above — it uses el(), store, editor and
+// paper, and the last of those is only safe after the whole module has run.
+buildTracked();
+store.on(() => buildTracked());

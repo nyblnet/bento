@@ -23,6 +23,8 @@ import { toggleMark, activeAt, type MarkType } from './inline.ts';
 import { isList, uid, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import type { Store } from './store.ts';
 import { commentsOnEdit, commentsOnSplit, commentsOnMerge } from './comments.ts';
+import { knownAuthor } from './comments.ts';
+import { tracking, trackEdit, editSpan, caretAfter } from './track.ts';
 
 export interface Caret { id: string; at: number; to?: number }
 
@@ -148,17 +150,44 @@ export class Editor {
     if (!prev) return;
     const next = readBlock(el, prev);
     if (next.text === prev.text && JSON.stringify(next.marks) === JSON.stringify(prev.marks)) return;
+
+    // TRACKED CHANGES are applied HERE, at the one point where the editor knows
+    // both the before and the after of a block. Deleted characters are put
+    // BACK and marked, so the DOM the browser just produced is no longer what
+    // the model says — which is why this path re-renders and re-places the
+    // caret, and the untracked path (overwhelmingly the common one) does not.
+    const tracked = tracking(this.store.doc)
+      ? trackEdit(prev, next, knownAuthor() || 'Anonymous', new Date().toISOString())
+      : next;
+    // Re-render whenever tracking CHANGED anything — not only when it restored
+    // deleted characters. An insertion leaves the text identical, so the first
+    // version of this skipped the render and the new ins mark sat in the model
+    // with nothing on screen to show for it: you typed into a tracked document
+    // and saw ordinary text.
+    const rerender = tracking(this.store.doc)
+      && (tracked.text !== next.text
+          || JSON.stringify(tracked.marks) !== JSON.stringify(next.marks));
+    const caretAt = rerender ? caretAfter(editSpan(prev, next)) : undefined;
+
     // one undo step per typing run, per block
     this.#runId ??= `type:${c.id}:${Date.now()}`;
     this.store.commit(d => {
       const i = d.body.findIndex(b => b.id === c.id);
-      if (i >= 0) d.body[i] = next;
+      if (i >= 0) d.body[i] = tracked;
       // INSIDE the commit deliberately: an anchor that moved outside it would
       // survive a ⌘Z that put the words back, leaving the comment pointing at
       // text nobody wrote. Returns false when the block carries no comment, so
       // an ordinary paragraph never widens anybody's undo scope.
       commentsOnEdit(d, c.id, prev.text, next.text);
     }, { scope: { block: c.id }, run: this.#runId });
+    if (rerender) {
+      // Just THIS block, not the whole body: tracking re-renders on nearly
+      // every keystroke, and renderBody rebuilds every paragraph in the
+      // document — on a long contract that is a visible stall per character.
+      const fresh = renderBlock(tracked);
+      el.replaceWith(fresh);
+      if (caretAt !== undefined) this.setCaret({ id: c.id, at: caretAt });
+    }
     this.onChange?.();
   };
 

@@ -36,7 +36,7 @@
 // place instead of leaking into four.
 
 /** The formatting a run of text can carry. Deliberately small. */
-export type MarkType = 'b' | 'i' | 'u' | 's' | 'code' | 'link' | 'math';
+export type MarkType = 'b' | 'i' | 'u' | 's' | 'code' | 'link' | 'math' | 'ins' | 'del';
 
 export interface Mark {
   t: MarkType;
@@ -46,11 +46,31 @@ export interface Mark {
   to: number;
   /** link target — only for t:'link' */
   href?: string;
+  /**
+   * Who made this tracked change, and when — only for t:'ins' and t:'del'.
+   *
+   * TRACKED CHANGES ARE MARKS, and that decision is worth stating here because
+   * every other word processor keeps a parallel revision log beside the text.
+   * A mark is a range over the same string everything else is a range over, so
+   * it moves when the text moves (spliceText already does it), merges under the
+   * CRDT like any other mark, survives save and reopen, prints, and needs no
+   * second thing to keep in step. A revision log would need all of that written
+   * again, and would drift the first time someone edited offline.
+   *
+   * A deletion does NOT remove the characters: it marks them. That is what
+   * makes a rejection possible, and it is why `del` text must be skipped by
+   * anything that reads a block as prose — see textOf() in track.ts.
+   */
+  by?: string;
+  at?: string;
 }
 
 /** The tag each mark renders as. `link` is special-cased (it carries an href). */
 const TAG: Record<Exclude<MarkType, 'link'>, string> = {
   b: 'strong', i: 'em', u: 'u', s: 's', code: 'code',
+  // <ins>/<del> are the elements HTML already has for exactly this, so a
+  // printed or pasted tracked change carries its meaning outside Bento too.
+  ins: 'ins', del: 'del',
   // `math` never reaches here: a math range is replaced wholesale by `ranges`
   // below, so its source characters are never emitted as text inside a tag.
   // The entry exists because the type demands one, and a wrong tag would be a
@@ -76,7 +96,16 @@ export function normalize(marks: Mark[], len: number): Mark[] {
     const from = Math.max(0, Math.min(m.from, len));
     const to = Math.max(0, Math.min(m.to, len));
     if (to - from <= 0) continue;
-    out.push(m.href !== undefined ? { t: m.t, from, to, href: m.href } : { t: m.t, from, to });
+    // Rebuilt field by field rather than spread, so an unknown key can never
+    // ride along into the canonical form. `by`/`at` are listed EXPLICITLY: a
+    // tracked change whose author was dropped here would still render as a
+    // change, so nothing would look broken — it would just stop being able to
+    // say who made it, which is the entire point of tracking.
+    const n: Mark = { t: m.t, from, to };
+    if (m.href !== undefined) n.href = m.href;
+    if (m.by !== undefined) n.by = m.by;
+    if (m.at !== undefined) n.at = m.at;
+    out.push(n);
   }
   // Merge PER KIND, not against whatever happens to sort next to it.
   //
@@ -93,7 +122,10 @@ export function normalize(marks: Mark[], len: number): Mark[] {
     // in source makes git and grep treat the whole file as binary, which hid
     // it from ordinary tooling — the same trap this repo hit in DECISIONS.md,
     // and it cost a debugging cycle here before anyone noticed.
-    const key = `${m.t}\u0000${m.href ?? ''}`;
+    // The AUTHOR is part of the key: two people's insertions that happen to
+    // abut are two changes, and merging them would attribute both to whoever
+    // sorted first. Untracked marks have no `by`, so they key exactly as before.
+    const key = `${m.t}\u0000${m.href ?? ''}\u0000${m.by ?? ''}`;
     (byKind.get(key) ?? byKind.set(key, []).get(key)!).push(m);
   }
   const merged: Mark[] = [];
@@ -107,7 +139,8 @@ export function normalize(marks: Mark[], len: number): Mark[] {
     merged.push(cur);
   }
   merged.sort((a, b) => a.from - b.from || a.to - b.to || a.t.localeCompare(b.t)
-                        || (a.href ?? '').localeCompare(b.href ?? ''));
+                        || (a.href ?? '').localeCompare(b.href ?? '')
+                        || (a.by ?? '').localeCompare(b.by ?? ''));
   return merged;
 }
 
@@ -209,6 +242,16 @@ export const safeHref = (raw: string): string | null => {
 };
 
 const openTag = (m: Mark) => {
+  if (m.t === 'ins' || m.t === 'del') {
+    // The author and time ride on the element so the UI can group changes and
+    // show whose they are without a second lookup. escAttr, not esc: `by` is
+    // document data, and a name containing a quote would otherwise close the
+    // attribute — the same hole that link hrefs had.
+    const who = m.by ? ` data-by="${escAttr(m.by)}"` : '';
+    const when = m.at ? ` data-at="${escAttr(m.at)}"` : '';
+    const title = m.by ? ` title="${escAttr(m.t === 'ins' ? `Inserted by ${m.by}` : `Deleted by ${m.by}`)}"` : '';
+    return `<${TAG[m.t]} class="t-trk"${who}${when}${title}>`;
+  }
   if (m.t !== 'link') return `<${TAG[m.t]}>`;
   const href = safeHref(m.href ?? '');
   return href === null ? '<a>' : `<a href="${escAttr(href)}">`;
