@@ -62,7 +62,10 @@ export function formatValue(v: unknown, col: Pick<Column, 'type' | 'format'>): s
   const p = readPattern(col.format)
   const isPct = p.pct || t === 'percent'
   const shown = isPct ? n * 100 : n
-  const dp = p.dp ?? (t === 'money' ? 2 : isPct ? 0 : shown % 1 === 0 ? 0 : 2)
+  // Intl.NumberFormat throws for more than 100 fraction digits, so a format
+  // string like "0.000…" (long enough) would break the never-throws contract.
+  const rawDp = p.dp ?? (t === 'money' ? 2 : isPct ? 0 : shown % 1 === 0 ? 0 : 2)
+  const dp = Math.max(0, Math.min(100, rawDp))
 
   // Intl does the punctuation, so the VIEWER's separators apply to the
   // AUTHOR's precision — the split this file exists to make.
