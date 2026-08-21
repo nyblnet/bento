@@ -22,6 +22,7 @@ import { appConfig } from '../../kernel/src/app.ts'
 import { addPack, removePack, type LanguagePack } from '../../kernel/src/i18n.ts'
 import { readShellBlocks, type ShellBlock } from '../../kernel/src/save.ts'
 import { fetchPinned, verifySigned } from '../../kernel/src/update.ts'
+import { netFetch } from '../../kernel/src/net.ts'
 // Extension-explicit like the kernel imports above, so this module also loads
 // under plain node — scripts/test-packs.ts exercises the real thing.
 import { PACKED } from './i18n/packed.ts'
@@ -138,7 +139,7 @@ export async function fetchPack(listing: PackListing): Promise<LanguagePack | Pa
     // offline / it isn't published" from "those bytes are not the pack we
     // were promised". Either way nothing unverified is returned.
     try {
-      return (await fetch(url, { cache: 'no-store', method: 'HEAD' })).ok ? 'unverified' : 'offline'
+      return (await netFetch(url, { cache: 'no-store', method: 'HEAD' })).ok ? 'unverified' : 'offline'
     } catch {
       return 'offline'
     }
@@ -227,7 +228,7 @@ export function shellBlocksForPacks(): ShellBlock[] {
  */
 async function fetchIndex(): Promise<PackListing[]> {
   try {
-    const res = await fetch(`${channel()}/packs.json`, { cache: 'no-store' })
+    const res = await netFetch(`${channel()}/packs.json`, { cache: 'no-store' })
     if (!res.ok) return []
     const payload = (await verifySigned(await res.text(), 'language pack index')) as {
       app?: unknown

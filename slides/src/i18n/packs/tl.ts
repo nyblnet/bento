@@ -227,6 +227,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Hindi kayang i-rewrite nang direkta ng browser na ito ang mga file — may bagong kopyang napunta sa Downloads",
   "This document": "Ang dokumentong ito",
   "This file carries its own app — it works offline, forever, as is.": "Dala ng file na ito ang sarili nitong app — gumagana ito offline, habambuhay, kung ano ang nandito.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Tumatakbo pa rin sa v{v} ang window na ito — i-reload para matapos. Na-save ang isang backup na v{v} katabi ng file na ito.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Tumatakbo pa rin sa v{v} ang window na ito — i-reload para matapos. Na-download ang isang backup na v{v}.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Tumatakbo pa rin sa v{v} ang window na ito. Kung na-overwrite mo ang file na bukas dito, i-reload; kung hindi, buksan ang file na na-save mo.",
   "This window keeps running v{v} until you open the downloaded file.": "Mananatiling tumatakbo sa v{v} ang window na ito hangga’t hindi mo binubuksan ang na-download na file.",

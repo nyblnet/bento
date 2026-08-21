@@ -206,6 +206,7 @@ export const es: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Este navegador no puede reescribir archivos en el sitio — una copia nueva fue a Descargas",
   "This document": "Este documento",
   "This file carries its own app — it works offline, forever, as is.": "Este archivo lleva su propia aplicación — funciona sin conexión, para siempre, tal cual.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Esta ventana sigue en v{v} — recarga para terminar. Se guardó una copia de seguridad v{v} junto a este archivo.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Esta ventana sigue en v{v} — recarga para terminar. Se descargó una copia de seguridad v{v}.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Esta ventana sigue en v{v}. Si sobrescribiste el archivo abierto aquí, recarga; si no, abre el archivo que guardaste.",
   "This window keeps running v{v} until you open the downloaded file.": "Esta ventana seguirá en v{v} hasta que abras el archivo descargado.",
@@ -737,4 +738,10 @@ export const es: Catalog = {
   "Zoom in and out": "Acercar y alejar",
   "Space-drag": "Espacio + arrastrar",
   "Pan as well, if your mouse has a middle button": "También desplaza, si tu ratón tiene botón central",
+  "Hide slide": "Ocultar diapositiva",
+  "Number hidden slides": "Numerar diapositivas ocultas",
+  "Hidden — skipped while presenting and left out of PDF export": "Oculta: se omite al presentar y no se incluye en la exportación a PDF",
+  "Appearance": "Apariencia",
+  "Match my system": "Según el sistema",
+  "Dark": "Oscuro",
 }

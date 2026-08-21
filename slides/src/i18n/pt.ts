@@ -198,6 +198,7 @@ export const pt: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Este navegador não consegue regravar arquivos no lugar — uma nova cópia foi para Downloads",
   "This document": "Este documento",
   "This file carries its own app — it works offline, forever, as is.": "Este arquivo carrega o próprio aplicativo — funciona offline, para sempre, do jeito que está.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "Esta janela ainda está executando a v{v} — recarregue para concluir. Um backup da v{v} foi salvo ao lado deste arquivo.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "Esta janela ainda está executando a v{v} — recarregue para concluir. Um backup da v{v} foi baixado.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "Esta janela ainda está executando a v{v}. Se você sobrescreveu o arquivo aberto aqui, recarregue; caso contrário, abra o arquivo que salvou.",
   "This window keeps running v{v} until you open the downloaded file.": "Esta janela continua executando a v{v} até você abrir o arquivo baixado.",
@@ -735,4 +736,10 @@ export const pt: Catalog = {
   "Zoom in and out": "Ampliar e reduzir",
   "Space-drag": "Espaço + arrastar",
   "Pan as well, if your mouse has a middle button": "Também desloca, se o rato tiver botão do meio",
+  "Hide slide": "Ocultar diapositivo",
+  "Number hidden slides": "Numerar diapositivos ocultos",
+  "Hidden — skipped while presenting and left out of PDF export": "Oculto — ignorado ao apresentar e excluído da exportação para PDF",
+  "Appearance": "Aspeto",
+  "Match my system": "Acompanhar o sistema",
+  "Dark": "Escuro",
 }

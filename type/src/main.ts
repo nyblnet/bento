@@ -1,0 +1,530 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// Boot. Read the embedded document, build the store and the editor, wire the
+// chrome. Kernel integration (save splice, autosave, encryption, signed
+// updates, i18n) comes next — PLATFORM §10.
+
+import './styles.css';
+import { configureApp } from '../../kernel/src/app.ts';
+import {
+  capturePristine, readEmbeddedDoc, saveFile, currentFileName, canWriteInPlace,
+} from '../../kernel/src/save.ts';
+import { startTheme, setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
+import { parseDoc, emptyDoc, uid, wordCount, type TypeDoc } from './model.ts';
+import { Store } from './store.ts';
+import { Editor } from './editor.ts';
+import { paginate, drawPages, type Metrics } from './paginate.ts';
+import { redline, apply as applyRedline, describe, type ChangeSet } from './redline.ts';
+import { printDocument, buildPrintDocument } from './print.ts';
+import { sign as signDoc, verifyChain, newKey } from './canon.ts';
+import { uid as newId } from './model.ts';
+import type { MarkType } from './inline.ts';
+
+// Tell the kernel who this app is — must precede any kernel module use
+// (window title suffix, save-picker label, update manifest).
+configureApp({
+  appId: 'bento-type',
+  appName: 'bento/type',
+  manifestUrl: 'https://bento.page/releases/type/manifest.json',
+});
+
+// The pristine capture must happen BEFORE any DOM mutation: saves re-serialize
+// the captured clone, so anything the app injects afterwards (theme attributes,
+// the editor's rendered blocks, measuring probes) never reaches a saved file.
+capturePristine();
+
+// Theme after the capture, for exactly that reason — `data-theme` is a viewer
+// preference and must not travel in the document.
+startTheme();
+
+// ───────────────────────────────────────────────────────────── the document
+
+const SAMPLE: Array<[string, string]> = [
+  ['h1', 'Master Services Agreement'],
+  ['h2', '1. Scope of Work'],
+  ['para', 'The Supplier shall provide the services described in Schedule A, exercising the degree of skill and care reasonably expected of a professional supplier of comparable services. Where Schedule A conflicts with this agreement, this agreement governs.'],
+  ['para', 'The Supplier may not subcontract any part of the services without the prior written consent of the Customer, such consent not to be unreasonably withheld or delayed.'],
+  ['h2', '2. Fees and Payment'],
+  ['para', 'Payment is due within 30 days of invoice, without set-off. Invoices shall be issued monthly in arrears and shall itemise the services performed during the period to which they relate.'],
+  ['quote', 'Time for payment is of the essence.'],
+  ['h2', '3. Limitation of Liability'],
+  ['para', 'Subject to the foregoing, the total aggregate liability of each party under this agreement shall not exceed the total fees paid in the twelve months preceding the event giving rise to the claim.'],
+];
+
+function sampleDoc(): TypeDoc {
+  const d = emptyDoc();
+  d.title = 'Master Services Agreement';
+  d.meta = { author: 'A. Nyblom', company: 'Example Ltd' };
+  d.body = SAMPLE.map(([kind, text]) => ({ id: uid(), kind: kind as never, text }));
+  // one bold run and one footnote, so both mechanisms are visible on open
+  const pay = d.body.find(b => b.text.includes('30 days'))!;
+  const at = pay.text.indexOf('30 days');
+  pay.marks = [{ t: 'b', from: at, to: at + '30 days'.length }];
+  const nid = uid('n');
+  d.footnotes[nid] = 'Time runs from receipt of a valid invoice at the address in Schedule B.';
+  pay.notes = [{ id: nid, at: pay.text.indexOf('without set-off.') + 'without set-off.'.length }];
+  return d;
+}
+
+const embedded = readEmbeddedDoc() ?? '';
+const parsed = parseDoc(embedded);
+let doc: TypeDoc;
+let loadNote = '';
+if (parsed.ok) {
+  doc = parsed.doc;
+  if (parsed.repaired.length) loadNote = `repaired: ${parsed.repaired.join('; ')}`;
+} else if (parsed.err === 'empty') {
+  doc = sampleDoc();
+} else {
+  // NEVER silently start a new document over a file we could not read — the
+  // spaces load contract (model.ts). Say what happened and stop.
+  document.body.innerHTML =
+    `<div style="max-width:44rem;margin:12vh auto;padding:0 2rem;font:15px/1.6 system-ui;color:#e6e9ef">
+       <h1 style="font-size:20px">This file could not be opened</h1>
+       <p>${parsed.detail}</p>
+       <p style="color:#8d95a3">Nothing has been changed. Close this tab rather than saving over it.</p>
+     </div>`;
+  throw new Error(`bento/type: ${parsed.detail}`);
+}
+
+// ───────────────────────────────────────────────────────────────── chrome
+
+const app = document.getElementById('app')!;
+app.innerHTML = `
+  <div class="t-bar">
+    <div class="t-brand">bento/<b>type</b></div>
+    <div class="t-sep"></div>
+    <button id="save" class="primary" title="Save (⌘S)">Save</button>
+    <div class="t-sep"></div>
+    <select id="kind" title="Block style">
+      <option value="para">Body</option>
+      <option value="h1">Title</option>
+      <option value="h2">Heading</option>
+      <option value="h3">Subheading</option>
+      <option value="quote">Quote</option>
+    </select>
+    <div class="t-sep"></div>
+    <button id="mb" title="Bold (⌘B)"><b>B</b></button>
+    <button id="mi" title="Italic (⌘I)"><i>I</i></button>
+    <button id="mu" title="Underline (⌘U)"><u>U</u></button>
+    <button id="mc" title="Code">&lt;/&gt;</button>
+    <div class="t-sep"></div>
+    <button id="undo" title="Undo (⌘Z)">↶</button>
+    <button id="redo" title="Redo (⇧⌘Z)">↷</button>
+    <div class="t-sep"></div>
+    <button id="theme" title="Theme: follow the system, light, or dark"></button>
+    <div class="t-sep"></div>
+    <button id="snap" title="Record a revision to compare against later">Snapshot</button>
+    <button id="review" title="Compare with the last snapshot">Review…</button>
+    <div class="t-sep"></div>
+    <button id="sign" title="Sign this revision">Sign</button>
+    <div class="t-sep"></div>
+    <button id="print" title="Print or save as PDF (⌘P)">Print…</button>
+    <div class="t-spacer"></div>
+    <div class="t-stat" id="stat"></div>
+  </div>
+  <div class="t-main">
+    <div class="t-side">
+      <div class="t-tabs">
+        <button data-tab="outline" class="on">Outline</button>
+        <button data-tab="review">Review</button>
+        <button data-tab="sigs">Signatures</button>
+      </div>
+      <div class="t-panel on" data-panel="outline"><div class="t-outline" id="outline"></div></div>
+      <div class="t-panel" data-panel="review"><div id="reviewPanel"></div></div>
+      <div class="t-panel" data-panel="sigs"><div id="sigsPanel"></div></div>
+    </div>
+    <div class="t-scroll"><div class="t-wrap">
+      <div class="t-paper" id="paper"></div><div class="t-deco" id="deco"></div>
+    </div></div>
+  </div>`;
+
+const paper = document.getElementById('paper')!;
+const deco = document.getElementById('deco')!;
+const statEl = document.getElementById('stat')!;
+
+const store = new Store(doc);
+const editor = new Editor(paper, store);
+
+let metrics: Metrics = { pages: [], ms: 0 };
+
+/**
+ * Re-measure and redraw. Deliberately NOT on every keystroke: pagination reads
+ * layout, so calling it per character would force a synchronous reflow on each
+ * one. It runs on an idle beat instead, which is what makes typing feel free.
+ */
+let idle: number | undefined;
+const repaginate = () => {
+  metrics = paginate(store.doc, paper);
+  drawPages(store.doc, paper, deco, metrics);
+  buildOutline();
+  paint();
+  void paintSigs();
+};
+const schedule = () => {
+  clearTimeout(idle);
+  idle = setTimeout(repaginate, 180) as unknown as number;
+};
+
+const paint = () => {
+  const d = store.doc;
+  const notes = Object.keys(d.footnotes).length;
+  statEl.textContent =
+    `${metrics.pages.length || 1} ${metrics.pages.length === 1 ? 'page' : 'pages'}` +
+    ` · ${wordCount(d).toLocaleString()} words` +
+    (notes ? ` · ${notes} note${notes > 1 ? 's' : ''}` : '') +
+    ` · ${metrics.ms.toFixed(0)}ms` +
+    (loadNote ? ` · ${loadNote}` : '');
+};
+
+const refresh = () => { markDirty(); paint(); schedule(); };
+editor.onChange = refresh;
+store.on(refresh);
+
+const MARK_BTN: Array<[string, MarkType]> = [['mb', 'b'], ['mi', 'i'], ['mu', 'u'], ['mc', 'code']];
+for (const [id, t] of MARK_BTN) {
+  document.getElementById(id)!.addEventListener('mousedown', (e) => {
+    e.preventDefault();                      // keep the selection alive
+    editor.toggle(t);
+  });
+}
+editor.onSelection = (active) => {
+  for (const [id, t] of MARK_BTN) document.getElementById(id)!.classList.toggle('on', active.has(t));
+};
+document.getElementById('kind')!.addEventListener('change', (e) => {
+  editor.setKind((e.target as HTMLSelectElement).value as never);
+});
+document.getElementById('undo')!.addEventListener('mousedown', (e) => {
+  e.preventDefault(); store.undo(); editor.render(); refresh();
+});
+document.getElementById('redo')!.addEventListener('mousedown', (e) => {
+  e.preventDefault(); store.redo(); editor.render(); refresh();
+});
+
+// ────────────────────────────────────────────────────────── sidebar
+
+const esc = (t: string) => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
+const el = (tag: string, cls?: string) => {
+  const n = document.createElement(tag); if (cls) n.className = cls; return n;
+};
+function showTab(name: string) {
+  document.querySelectorAll<HTMLElement>('.t-tabs button')
+    .forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelectorAll<HTMLElement>('.t-panel')
+    .forEach(p => p.classList.toggle('on', p.dataset.panel === name));
+}
+document.querySelectorAll<HTMLElement>('.t-tabs button')
+  .forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab!)));
+
+/** The outline, with the page each heading lands on. */
+function buildOutline() {
+  const box = document.getElementById('outline')!;
+  const heads = store.doc.body.filter(b => b.kind === 'h2' || b.kind === 'h3');
+  box.replaceChildren();
+  if (!heads.length) {
+    const h = el('div', 't-hint'); h.textContent = 'Headings appear here.';
+    box.appendChild(h); return;
+  }
+  const paperTop = paper.getBoundingClientRect().top + store.doc.page.marginTop;
+  for (const b of heads) {
+    const node = paper.querySelector<HTMLElement>(`[data-id="${CSS.escape(b.id)}"]`);
+    const y = node ? node.getBoundingClientRect().top - paperTop : 0;
+    const pg = metrics.pages.find(p => y >= p.start - 1 && (!isFinite(p.end) || y < p.end));
+    const a = el('a', b.kind) as HTMLAnchorElement;
+    a.innerHTML = `<span class="pg">${pg ? pg.n : ''}</span>${esc(b.text)}`;
+    a.addEventListener('click', () =>
+      paper.querySelector(`[data-id="${CSS.escape(b.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    box.appendChild(a);
+  }
+}
+
+// ───────────────────────────────────────────── revisions and redlining
+
+let currentSet: ChangeSet | null = null;
+const decided = new Map<string, boolean>();
+
+document.getElementById('snap')!.addEventListener('click', () => {
+  const label = `Revision ${store.doc.revisions.length + 1}`;
+  store.commit(d => {
+    d.revisions.push({ id: newId('rev'), at: new Date().toISOString(), label,
+                       body: JSON.parse(JSON.stringify(d.body)) });
+  });
+  markDirty(); paint();
+  toast(`${label} recorded — edit, then Review`);
+});
+
+document.getElementById('review')!.addEventListener('click', () => {
+  if (!store.doc.revisions.length) { toast('Take a Snapshot first, then edit, then Review'); return; }
+  const base = store.doc.revisions[store.doc.revisions.length - 1];
+  currentSet = redline({ docId: store.doc.docId, body: base.body },
+                       { docId: store.doc.docId, body: store.doc.body },
+                       { author: store.doc.meta?.author || 'you' });
+  decided.clear();
+  showTab('review');
+  buildReview(base.label, base.body);
+});
+
+function buildReview(label: string, baseBody: typeof store.doc.body) {
+  const box = document.getElementById('reviewPanel')!;
+  box.replaceChildren();
+  const head = el('div', 't-hint');
+  head.textContent = currentSet!.changes.length
+    ? `${currentSet!.changes.length} change${currentSet!.changes.length > 1 ? 's' : ''} since ${label}`
+    : `No changes since ${label}. Edit the document, then press Review again.`;
+  head.style.marginBottom = '9px';
+  box.appendChild(head);
+  if (!currentSet!.changes.length) return;
+
+  const bar = el('div'); bar.style.cssText = 'display:flex;gap:6px;margin-bottom:9px';
+  for (const [text, val] of [['Accept all', true], ['Reject all', false]] as const) {
+    const b = el('button') as HTMLButtonElement;
+    b.textContent = text; b.style.flex = '1';
+    b.addEventListener('click', () => {
+      for (const c of currentSet!.changes) decided.set(c.id, val);
+      applyDecisions(label, baseBody);
+    });
+    bar.appendChild(b);
+  }
+  box.appendChild(bar);
+
+  for (const c of currentSet!.changes) {
+    const card = el('div', 't-card');
+    const what = c.kind === 'text'
+      ? `${c.removed ? `<del>${esc(c.removed)}</del>` : ''}${c.added ? `<ins>${esc(c.added)}</ins>` : ''}`
+      : esc(describe(c));
+    card.innerHTML = `<div class="who">${esc(c.author)} · ${c.kind}</div><div class="what">${what}</div>`;
+    const btns = el('div', 'btns');
+    for (const [text, val] of [['Accept', true], ['Reject', false]] as const) {
+      const b = el('button') as HTMLButtonElement;
+      b.textContent = text;
+      b.addEventListener('click', () => {
+        decided.set(c.id, val);
+        card.classList.add('done');
+        card.querySelectorAll('button').forEach(x => (x as HTMLButtonElement).disabled = true);
+        applyDecisions(label, baseBody);
+      });
+      btns.appendChild(b);
+    }
+    card.appendChild(btns);
+    box.appendChild(card);
+  }
+}
+
+/**
+ * Rebuild from the BASE plus the accepted changes.
+ *
+ * Rebuilding from the base rather than patching the live document is what makes
+ * "reject" mean anything — the rejected text has to come back. Undecided
+ * changes stay as the author left them, so nothing vanishes while you think.
+ */
+function applyDecisions(_label: string, baseBody: typeof store.doc.body) {
+  const accepted = new Set([...decided].filter(([, v]) => v).map(([k]) => k));
+  const undecided = currentSet!.changes.filter(c => !decided.has(c.id)).map(c => c.id);
+  const take = new Set([...accepted, ...undecided]);
+  try {
+    const next = applyRedline({ docId: store.doc.docId, body: baseBody }, currentSet!, take);
+    store.commit(d => { d.body = next.body; });
+    editor.render(); markDirty(); repaginate();
+    toast(decided.size === currentSet!.changes.length
+      ? 'All changes resolved' : `${decided.size}/${currentSet!.changes.length} resolved`);
+  } catch (e) { toast(`Could not apply: ${(e as Error).message}`); }
+}
+
+// ─────────────────────────────────────────────────────────── signatures
+
+const KEYSTORE = 'bento-type-key';
+let deviceKey: CryptoKeyPair | null = null;
+async function getKey(): Promise<CryptoKeyPair> {
+  if (deviceKey) return deviceKey;
+  let saved: string | null = null;
+  try { saved = localStorage.getItem(KEYSTORE); } catch { /* storage blocked */ }
+  const EC = { name: 'ECDSA', namedCurve: 'P-256' } as const;
+  if (saved) {
+    const j = JSON.parse(saved);
+    deviceKey = {
+      privateKey: await crypto.subtle.importKey('jwk', j.priv, EC, true, ['sign']),
+      publicKey: await crypto.subtle.importKey('jwk', j.pub, EC, true, ['verify']),
+    };
+    return deviceKey;
+  }
+  const k = await newKey();
+  try {
+    localStorage.setItem(KEYSTORE, JSON.stringify({
+      priv: await crypto.subtle.exportKey('jwk', k.privateKey),
+      pub: await crypto.subtle.exportKey('jwk', k.publicKey),
+    }));
+  } catch { /* an unsaved key still signs this session */ }
+  deviceKey = k;
+  return k;
+}
+const fingerprint = (pub: string) =>
+  pub.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24).match(/.{1,4}/g)!.join(' ').toUpperCase();
+
+document.getElementById('sign')!.addEventListener('click', async () => {
+  let who = '';
+  try { who = localStorage.getItem('bento-type-name') ?? ''; } catch { /* ignore */ }
+  const name = window.prompt('Your name, shown beside the signature', who);
+  if (!name) return;
+  try { localStorage.setItem('bento-type-name', name); } catch { /* ignore */ }
+  const key = await getKey();
+  const prev = store.doc.signatures[store.doc.signatures.length - 1] ?? null;
+  const entry = await signDoc(store.doc, key, { name, prev });
+  entry.at = new Date().toISOString();
+  store.commit(d => { d.signatures.push(entry); });
+  markDirty(); showTab('sigs'); await paintSigs();
+  toast('Signed');
+});
+
+async function paintSigs() {
+  const box = document.getElementById('sigsPanel')!;
+  const sigs = store.doc.signatures;
+  box.replaceChildren();
+  if (!sigs.length) {
+    const h = el('div', 't-hint');
+    h.innerHTML = `Nothing signed yet.<br><br>A signature covers the document's <b>content</b> —
+      not its timestamp, not which theme you are using — so re-saving never breaks one, but
+      changing a word, or even a bold run, always does.<br><br>Each signature also commits to the
+      one before it, which proves the <b>order</b> people signed in without trusting anyone's clock.`;
+    box.appendChild(h);
+    return;
+  }
+  const res = await verifyChain(store.doc, sigs);
+  sigs.forEach((s, i) => {
+    const r = res.entries[i];
+    const card = el('div', 't-card');
+    const state = r.ok && r.linked ? `<span class="t-ok">✓ valid</span>`
+      : (!r.ok && r.why === 'content-changed'
+        ? `<span class="t-bad">✕ the document has changed since this was signed</span>`
+        : !r.linked ? `<span class="t-warn">⚠ not linked to the previous signature</span>`
+        : `<span class="t-bad">✕ invalid signature</span>`);
+    card.innerHTML =
+      `<div class="what" style="font-weight:600">${esc(s.name || 'unnamed')}</div>` +
+      `<div class="t-fp">${fingerprint(s.pub)}</div>` +
+      `<div class="who" style="margin:5px 0 0">${state}` +
+      `${i > 0 ? ` · after ${esc(sigs[i - 1].name || 'previous')}` : ''}</div>`;
+    box.appendChild(card);
+  });
+  // two names on one key is exactly what a signature cannot prove
+  const byKey = new Map<string, Set<string>>();
+  for (const s of sigs) {
+    if (!byKey.has(s.pub)) byKey.set(s.pub, new Set());
+    byKey.get(s.pub)!.add(s.name || 'unnamed');
+  }
+  const shared = [...byKey.values()].find(n => n.size > 1);
+  if (shared) {
+    const w = el('div', 't-hint');
+    w.style.cssText = 'margin-top:10px;border-inline-start:2px solid var(--warnc);padding-inline-start:9px';
+    w.innerHTML = `<span class="t-warn">Two names, one key.</span> ${[...shared].map(esc).join(' and ')}
+      signed with the <b>same</b> key — on this device that is simply you signing twice. Between real
+      parties it would mean one of the names is a claim the signature does not support.`;
+    box.appendChild(w);
+  }
+  const foot = el('div', 't-hint');
+  foot.style.marginTop = '10px';
+  foot.innerHTML = res.ok
+    ? `The chain is intact. Verify a signer by reading their fingerprint aloud — nothing here proves
+       <i>who</i> holds a key, only that the same key signed these exact words, in this order.`
+    : `<span class="t-bad">This chain no longer verifies.</span> Either the text changed after
+       signing, or a signature was altered or removed.`;
+  box.appendChild(foot);
+}
+
+// ─────────────────────────────────────────────────────────── a small toast
+let toastEl: HTMLElement | null = null, toastT: number | undefined;
+function toast(msg: string) {
+  if (!toastEl) {
+    toastEl = el('div');
+    toastEl.style.cssText = 'position:fixed;left:50%;bottom:26px;transform:translateX(-50%);' +
+      'background:var(--ink);color:var(--chrome);padding:9px 15px;border-radius:8px;font-size:12.5px;' +
+      'box-shadow:0 10px 34px rgb(0 0 0 / .35);opacity:0;transition:opacity .18s;pointer-events:none;z-index:99';
+    document.body.appendChild(toastEl);
+  }
+  toastEl.textContent = msg;
+  toastEl.style.opacity = '1';
+  clearTimeout(toastT);
+  toastT = setTimeout(() => { toastEl!.style.opacity = '0'; }, 2200) as unknown as number;
+}
+
+// ─────────────────────────────────────────────────────────────── saving
+//
+// The whole platform promise in one button: this file rewrites ITSELF. The
+// kernel owns the splice, the File System Access path and the download
+// fallback, so the app only has to say when and with what.
+let dirty = false;
+const markDirty = () => { dirty = true; paintTitle(); };
+
+function paintTitle() {
+  const name = currentFileName();
+  const t = store.doc.title || 'Untitled';
+  document.title = `${dirty ? '• ' : ''}${t} — bento/type`;
+  const btn = document.getElementById('save')!;
+  btn.textContent = dirty ? 'Save' : 'Saved';
+  btn.classList.toggle('primary', dirty);
+  btn.title = name
+    ? `${dirty ? 'Save' : 'Saved to'} ${name}${canWriteInPlace() ? '' : ' (downloads a copy)'}`
+    : 'Save (⌘S)';
+}
+
+async function save(forcePicker = false) {
+  const result = await saveFile(store.doc, forcePicker);
+  if (result === 'cancelled') return;
+  dirty = false;
+  paintTitle();
+}
+
+document.getElementById('save')!.addEventListener('click', () => void save());
+addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    void save(e.shiftKey);          // ⇧⌘S = save as
+  }
+});
+// Leaving with unsaved work should cost a prompt. A document that edits itself
+// has no server-side copy to fall back on.
+addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// ─────────────────────────────────────────────────────────────── printing
+//
+// Print uses the SAME page breaks the editor computed, so the printed
+// pagination is the one the outline and the page numbers already showed. It
+// repaginates first rather than trusting a stale measurement — the alternative
+// is a document that prints differently from the one on screen, which is the
+// exact failure the deterministic-pagination promise exists to prevent.
+function doPrint() {
+  repaginate();
+  printDocument(store.doc, metrics, { pageNumbers: true, bareFirstPage: false });
+}
+document.getElementById('print')!.addEventListener('click', doPrint);
+addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') { e.preventDefault(); doPrint(); }
+});
+
+// theme picker — cycles auto → light → dark, and says which it is
+const themeBtn = document.getElementById('theme')!;
+const THEME_LABEL: Record<ThemeChoice, string> = { auto: '◐ Auto', light: '☀ Light', dark: '☾ Dark' };
+const paintTheme = () => { themeBtn.textContent = THEME_LABEL[themeChoice()]; };
+themeBtn.addEventListener('click', () => {
+  const order: ThemeChoice[] = ['auto', 'light', 'dark'];
+  const next = order[(order.indexOf(themeChoice()) + 1) % order.length];
+  setTheme(next);
+  paintTheme();
+  // the page shadow and grid change with the theme, so re-measure
+  repaginate();
+});
+paintTheme();
+
+repaginate();
+dirty = false; paintTitle();
+
+// scripting surface, per PLATFORM §7
+(window as unknown as Record<string, unknown>).bento = {
+  format: store.doc.format,
+  get doc() { return store.doc; },
+  store, editor,
+  save: (picker = false) => save(picker),
+  print: () => doPrint(),
+  printHtml: () => { repaginate(); return buildPrintDocument(store.doc, metrics, { pageNumbers: true }); },
+  paginate: () => { repaginate(); return metrics; },
+  get pages() { return metrics.pages; },
+};

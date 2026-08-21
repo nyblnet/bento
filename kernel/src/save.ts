@@ -208,6 +208,39 @@ export function previewAllowed(body: string, encrypted = isEncryptionActive()): 
 const SCRIPT_OPEN = '<scr' + 'ipt'
 const SCRIPT_CLOSE_START = '</scr' + 'ipt'
 const NOSCRIPT_CLOSE = '</nosc' + 'ript'
+const STYLE_OPEN = '<sty' + 'le'
+const STYLE_CLOSE_START = '</sty' + 'le'
+
+/**
+ * The preview's one stylesheet, and nothing hiding inside it.
+ *
+ * `<style>` is a RAW TEXT element: its content is not escaped on the way out, so
+ * whatever a provider puts in it is written to the file verbatim. Every app's
+ * preview has one (slides and dash hoist repeated declarations into it, spaces
+ * writes a sheet), and every one of them builds declarations out of AUTHOR
+ * data — colours, fonts, sizes. A single `</style>` in one of those values ends
+ * the element early and everything after it is live markup in the reader's DOM,
+ * outside `#bento-doc`, at parse time, before the remover runs.
+ *
+ * A flat "refuse any `<style`" would be simpler and would refuse EVERY preview,
+ * so the rule is shaped like the tokenizer instead: at most one style element,
+ * no `<` anywhere in its text (the breakout attempt is itself a `<`), and no
+ * second opener or stray closer anywhere around it. That last clause is what
+ * catches the tidy version of the attack, which re-opens a style after the
+ * markup it smuggled in and leaves the tag counts balanced.
+ */
+function styleIsInert(lower: string): boolean {
+  const open = lower.indexOf(STYLE_OPEN)
+  if (open < 0) return !lower.includes(STYLE_CLOSE_START)
+  if (lower.slice(0, open).includes(STYLE_CLOSE_START)) return false
+  const gt = lower.indexOf('>', open)
+  if (gt < 0) return false
+  const end = lower.indexOf(STYLE_CLOSE_START, gt)
+  if (end < 0) return false
+  const rest = lower.slice(end + STYLE_CLOSE_START.length)
+  return !lower.slice(gt + 1, end).includes('<') &&
+    !rest.includes(STYLE_OPEN) && !rest.includes(STYLE_CLOSE_START)
+}
 
 /**
  * Refuse any preview markup that could unbalance the file.
@@ -224,13 +257,15 @@ const NOSCRIPT_CLOSE = '</nosc' + 'ript'
  *
  * The app sanitizes its own output; this is the kernel refusing to take its
  * word for it. Dropping the preview costs a thumbnail. Emitting it anyway could
- * brick the file.
+ * brick the file — or, through the preview's own stylesheet, put live markup in
+ * the reader's DOM; see styleIsInert for the half escaping cannot reach.
  *
  * Exported for `scripts/test-preview.ts`, like previewAllowed.
  */
 export function previewIsSafe(html: string): boolean {
   const lower = html.toLowerCase()
-  return !lower.includes(SCRIPT_OPEN) && !lower.includes(SCRIPT_CLOSE_START) && !lower.includes(NOSCRIPT_CLOSE)
+  if (lower.includes(SCRIPT_OPEN) || lower.includes(SCRIPT_CLOSE_START) || lower.includes(NOSCRIPT_CLOSE)) return false
+  return styleIsInert(lower)
 }
 
 /**
@@ -346,7 +381,23 @@ export interface EncEnvelope {
   data: string
 }
 
-const ENC_ITERATIONS = 300_000
+/**
+ * PBKDF2 rounds for NEW envelopes only.
+ *
+ * A .bento.html is offline at-rest storage: the ciphertext sits in a file that
+ * gets mailed, synced and backed up, so an attacker guesses passwords at their
+ * own pace with no rate limit anywhere. 300k was half of current guidance
+ * (OWASP: 600k for PBKDF2-HMAC-SHA256), and it is the cheapest possible thing
+ * to fix — one number, and the cost lands on a keypress the user already waits
+ * through.
+ *
+ * READING IS UNAFFECTED, deliberately: the count travels in the envelope (`it`)
+ * and `decryptEnvelope` derives with THAT number, never this one. Every deck
+ * encrypted by an older build keeps opening with its own 300k, and re-saving it
+ * re-encrypts at the new count. A file that stops opening would be far worse
+ * than a weak KDF, so `scripts/test-preview.ts` pins a real 300k envelope.
+ */
+const ENC_ITERATIONS = 600_000
 
 const eb64 = {
   enc(bytes: Uint8Array): string {
@@ -477,8 +528,11 @@ export const canWriteInPlace = () => hasFsAccess()
  * · `copy`     — "Save a copy…". A second file, chosen by the author.
  * · `share`    — a suffixed export: view-only, presentation package, invite,
  *                template. Deliberately a new file, and never the ⌘S target.
+ * · `backup`   — the rollback copy a self-update leaves behind. Belongs BESIDE
+ *                the document it backs up, and is the one save the author never
+ *                asked for, so it is also the one that must never interrupt.
  */
-export type SavePurpose = 'in-place' | 'copy' | 'share'
+export type SavePurpose = 'in-place' | 'copy' | 'share' | 'backup'
 
 /**
  * The picker `id` for a purpose — and, incidentally, the only signal a HOST has
@@ -499,7 +553,35 @@ export type SavePurpose = 'in-place' | 'copy' | 'share'
  * recovered from anything else in it.
  */
 export const pickerIdFor = (purpose: SavePurpose): string =>
-  purpose === 'in-place' ? 'bento-doc' : purpose === 'copy' ? 'bento-copy' : 'bento-share'
+  purpose === 'in-place' ? 'bento-doc'
+    : purpose === 'copy' ? 'bento-copy'
+      : purpose === 'backup' ? 'bento-backup'
+        : 'bento-share'
+
+/**
+ * Is a HOST polyfilling the picker — tray/ios, tray/webext — rather than the
+ * browser's own?
+ *
+ * The kernel cannot infer this. `showSaveFilePicker` exists either way, and a
+ * host that declines a request is indistinguishable from one that is not there:
+ * both end in the native dialog. So a host that can do more than the bare
+ * contract announces itself, and this is the only thing the kernel reads.
+ *
+ * It gates exactly one decision — see `writeBackupBeside`. Nothing else may
+ * branch on it: every in-place path must keep working when it is false, because
+ * that is the plain-browser case and it is the majority one.
+ *
+ * PRESENCE IS NOT ENOUGH, so this asks about a named capability. A host that
+ * announced itself but did not recognise `bento-backup` would pass the request
+ * through to the native picker — producing exactly the dialog this exists to
+ * remove, and only for people who installed the host. Decks outlive host
+ * versions in both directions; neither side may assume the other is current.
+ */
+export const hostCan = (op: string): boolean => {
+  const host = (window as any).__bentoHost
+  return !!host && Array.isArray(host.ops) && host.ops.includes(op)
+    && typeof (window as any).showSaveFilePicker === 'function'
+}
 
 async function pickHandle(
   doc: KernelDoc, suffix = '', suggestedName?: string, purpose: SavePurpose = 'in-place',
@@ -522,7 +604,21 @@ async function pickHandle(
       // update onwards opens where the first one saved.
       ...(fileHandle ? { startIn: fileHandle } : {}),
       id: pickerIdFor(purpose),
-      types: [{ description: appConfig().appName, accept: { 'text/html': ['.html'] } }],
+      // `.bento.html`, NOT `.html`, and the compound extension is the point.
+      //
+      // `suggestedFileName` has always produced `.bento.html`, but the picker
+      // accepted `.html` — so an author who edited the name to "Q3" got
+      // `Q3.html`, and a document named that is a second-class citizen
+      // everywhere the convention is what identifies us: tray/webext injects
+      // its save bridge on `file:///*.bento.html`, so such a file opens fine
+      // and then asks where to save, and tray/ios matches the same way.
+      //
+      // Bento was manufacturing the exception and then being asked to cope with
+      // it. Accepting only the compound extension means the browser appends it
+      // to a bare name, which is what everybody meant. Compound suffixes are
+      // explicitly legal here (`.tar.gz` is the spec's own example) and the
+      // limit is 16 characters against this one's 11.
+      types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
     })
   } catch (err: any) {
     if (err?.name === 'AbortError') return null
@@ -632,13 +728,18 @@ export async function writeUpdatedFile(html: string): Promise<void> {
 export async function writeUpdatedFileAs(
   html: string,
   doc: KernelDoc,
-  opts: { suffix?: string; keepHandle?: boolean; suggestedName?: string } = {},
+  opts: { suffix?: string; keepHandle?: boolean; suggestedName?: string; purpose?: SavePurpose } = {},
 ): Promise<boolean> {
   if (!hasFsAccess()) {
     downloadFile(html, opts.suggestedName ?? suggestedFileName(doc, opts.suffix))
     return true
   }
-  const handle = await pickHandle(doc, opts.suffix, opts.suggestedName, 'share')
+  // `share` is the right default — every caller but one is an export. The
+  // exception is the self-update, which is overwriting the open document and
+  // must say so: a host reads only the picker id, and `bento-share` tells it
+  // "a new file the author will choose", so it correctly declines and the
+  // author gets a dialog for the one save that should never need one.
+  const handle = await pickHandle(doc, opts.suffix, opts.suggestedName, opts.purpose ?? 'share')
   if (!handle) return false
   // Share/export artifacts must NOT become the ⌘S target — otherwise the next
   // save would overwrite e.g. a view-only copy with the FULL document (owner
@@ -646,4 +747,48 @@ export async function writeUpdatedFileAs(
   if (opts.keepHandle) fileHandle = handle
   await writeHandle(handle, html)
   return true
+}
+
+/**
+ * Leave the rollback copy an in-place update depends on.
+ *
+ * WHY THIS IS NOT JUST `downloadFile`. It was, and the backup landed in
+ * ~/Downloads: detached from the document it backs up, one per update, and — for
+ * anyone with Chrome's "ask where to save each file" enabled — behind a save
+ * dialog. Reported 2026-08-14 against 1.0.16. That is the wrong outcome twice
+ * over: an update that rewrites the file in place, silently, ended with the one
+ * prompt in the flow being for a file the author never asked for, and the
+ * rollback it produced was somewhere they would have to go hunting for.
+ *
+ * With a host, the backup goes where it belongs — beside the original, inside
+ * the folder already granted. The host derives the directory itself, from the
+ * sender's own resolved path; `name` is only ever validated against that, never
+ * trusted as a path. See tray/webext/src/background.js `backup`.
+ *
+ * Without a host this stays a download, because the alternative is a picker and
+ * a picker is strictly worse than the status quo for the majority case.
+ *
+ * Never throws: a backup that fails must not take the update down with it. The
+ * caller decides what to tell the author, which is why the outcome comes back
+ * as a value.
+ */
+export async function writeBackupBeside(html: string, name: string): Promise<'beside' | 'downloaded'> {
+  if (hostCan('backup')) {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: name,
+        id: pickerIdFor('backup'),
+        types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
+      })
+      if (handle) {
+        await writeHandle(handle, html)
+        return 'beside'
+      }
+    } catch {
+      // Declined, cancelled, or the grant lapsed. Fall through — a backup in
+      // Downloads is a worse place, not a lost one.
+    }
+  }
+  downloadFile(html, name)
+  return 'downloaded'
 }

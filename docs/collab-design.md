@@ -348,9 +348,16 @@ already gives key-holders content integrity; `g` adds *authorization*.
   cooperative locally (editing UI disabled), enforced over the network.
 - A malicious *relay* could still withhold/reorder frames or serve a stale
   snapshot; it cannot forge writer ops (no private key) nor read content.
-  Optional client-side `g` verification (defence against a hostile relay
-  injecting old ciphertext) is a later, additive hardening — not required for
-  the read-only guarantee.
+- **Client-side verification is REQUIRED, not optional hardening.** An earlier
+  draft of this document called it "not required for the read-only guarantee";
+  that sentence was the assumption behind a real hole. Relay enforcement only
+  covers what the relay *persists*. Every reader holds the room key, so a
+  read-only copy can encrypt a well-formed op batch and send it — and a blind
+  relay, which cannot tell the ciphertext of an op batch from the ciphertext of
+  a presence beat, fans it out. Live peers would apply it. So a client in a
+  signed room must accept only frames the relay vouched for (see "Phase 1 wire
+  format"), and drop the rest. Legacy `r` rooms have no signatures at all and
+  stay on the pre-signing trust model — gating them would drop every frame.
 - `writerPriv` in a writer file is only as protected as the file. Anyone with
   a writer copy can write — expected: the writer file *is* the write cap.
 
@@ -389,6 +396,20 @@ the read capability.*
 - The relay pins the verified key PER SOCKET and checks every persisted
   frame's `g` against it. Direct (hash-matching) keys cover the owner and
   legacy 1.0.2 shared-writer rooms unchanged.
+- **The relay STAMPS what it verified**, so a client can tell a checked frame
+  from one that merely passed through: a persisted frame comes back carrying
+  its sequence number, and a signed frame it fanned out comes back with its
+  signature echoed. In a signed room the client accepts only stamped frames —
+  that is the client half of the read-only guarantee described under *Threat
+  model / limits*, and it is why the stamp exists at all. (The relay is being
+  changed concurrently; treat the stamp fields in `sync/online.ts` as the
+  authority for their exact names.)
+- **Blob write tickets**: a writer that understands them announces `bt=1` on
+  connect, and the relay — which only mints a ticket once it has seen such a
+  writer — hands one back on the room's ready message (`wt`), reissuing it when
+  a member is revoked. The client uses it to authorize blob uploads, so blob
+  writes are gated by the same per-socket verification as ops instead of by
+  mere possession of the room key.
 - Revocation: owner sends `{ctl:'revoke', p, o, g}`; the relay stores `p` in a
   `rev` set, closes matching sockets, fans out `{ctl:'revoked', p}` (clients
   seeing their own key stand down permanently), and refuses future connects/

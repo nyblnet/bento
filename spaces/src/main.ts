@@ -14,7 +14,7 @@ import {
 } from '../../kernel/src/save.ts'
 import { putRecovery, getRecovery, clearRecovery, pruneOld } from '../../kernel/src/autosave.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
-import { t, applyDirection } from './i18n'
+import { t, locale, applyDirection } from './i18n'
 import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult } from './model'
 import {
   validateDoc, outlineDoc, statsDoc,
@@ -24,10 +24,13 @@ import {
   type Plan, type PlanError, type IssueQuery,
 } from './agent'
 import { starterDoc } from './starter'
+import { todayISO, isISO, journalFor } from './journal'
 import { textOf } from './sanitize'
+import { evaluate, format, pageContext } from './calc'
 import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
+import { SyncSession } from './sync/session.ts'
 import { downloadMarkdown } from './about'
 
 configureApp({
@@ -189,6 +192,16 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // understand the file and must not rewrite it.
   if (frozen || doc.readonly) store.readOnly = true
   const editor = new Editor(document.getElementById('app')!, store)
+
+  // Live collaboration. Constructing the session is enough to make same-machine
+  // tabs of one file sync (BroadcastChannel, keyed on docId); the RELAY is not
+  // dialled here — the kernel's shareEligible() gate decides that, and it says
+  // connect only when the document ARRIVED carrying collab credentials (it was
+  // saved or shared) or the user opted in this session. A fresh starter space
+  // and a template tire-kicker stay dormant, which is the rule this app already
+  // wrote down: "A space does not phone home when it is opened".
+  const session = new SyncSession(store)
+  editor.connectSync(session)
 
   if (!frozen && doc.readonly) {
     banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))
@@ -354,6 +367,39 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
      * / menu, no way to type — so an agent creating one would hand a human a
      * page they cannot write in.
      */
+    /**
+     * Today's entry, or any day's — created if it does not exist yet.
+     *
+     * The same path the button and ⌘⇧J take, so an agent writing a daily note
+     * lands in the same page a person would, and calling it twice in a day
+     * returns the same page rather than making a second one.
+     *
+     * `date` is an ISO `YYYY-MM-DD`. Anything else is refused rather than
+     * guessed at: "06/08/2026" is two different days depending on who wrote it.
+     */
+    journal: (date?: string) => {
+      if (store.readOnly) return null
+      const iso = date === undefined ? todayISO() : String(date)
+      if (!isISO(iso)) return null
+      editor.openJournal(iso)
+      return journalFor(store.doc, iso)?.id ?? null
+    },
+    /**
+     * Work out an expression the way a line ending in `=` would.
+     *
+     * `bento.calc('20% of 340')` → 68. With a page id, the names defined on
+     * that page are in scope, so an agent sees exactly what a reader sees.
+     * Returns null for anything the grammar does not fully understand — the
+     * same refusal the page makes, rather than a guess.
+     */
+    calc: (expr: string, pageId?: string) => {
+      const page = pageId ? store.index.page.get(pageId) : undefined
+      const ctx = page
+        ? pageContext(page.blocks.map((b) => ({ id: b.id, text: textOf(b.html ?? '') })), '')
+        : {}
+      const v = evaluate(String(expr ?? ''), ctx)
+      return v ? { value: v.n, text: format(v, locale()) } : null
+    },
     newPage: (title: string, parent?: string) => {
       if (store.readOnly) return null
       // A TITLE, not something that stringifies into one. This takes a string

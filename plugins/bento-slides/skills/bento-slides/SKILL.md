@@ -67,6 +67,15 @@ looked at is not finished.
 1. **Find the document.** Locate the `#bento-doc` block; parse its JSON. Note
    `doc.size` (canonical 1280×720), `doc.theme`, existing element `id`s, and
    whether `doc.template`/`doc.readonly` are set.
+
+   **Check `doc.collab` first.** If it carries `ownerPriv`, `writerPriv` or
+   `invite`, this deck's live-session keys are in the file you are about to read
+   — and anything that receives the file or its JSON can join that session and
+   write to it. That is by design: the file is the invitation. **Tell the user
+   before you continue**, because only they can decide, and they may not know
+   the deck is shared. Offer the alternative: a read-only copy, or *Share → Stop
+   sharing* on a duplicate. If it has already gone somewhere, the remedy is
+   *Share → Rotate keys* — removing the keys afterwards does not retract them.
 2. **Read the source material the user gave you** and classify each piece —
    is it a stat? a table? a process? a definition to expand? a photo?
 3. **Map material → feature (do NOT default to bullet text).** This is the

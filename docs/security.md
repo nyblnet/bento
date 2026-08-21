@@ -82,10 +82,16 @@ and the *public* half of the writer key.
 Independently of collaboration, a document can be **password-encrypted at
 rest**: the on-disk `#bento-doc` block holds a `bento/enc` envelope —
 AES-GCM-256 over the document JSON, with the key derived from your password via
-**PBKDF2-SHA-256, 300,000 iterations**
-([`slides/src/save.ts`](../slides/src/save.ts)). The password is held only in
-memory so autosave and self-update keep writing encrypted. This protects the
-file itself; it is orthogonal to the room key that protects live frames.
+**PBKDF2-SHA-256, 600,000 iterations** (the current OWASP figure for
+PBKDF2-HMAC-SHA256; [`kernel/src/save.ts`](../kernel/src/save.ts)). The password
+is held only in memory so autosave and self-update keep writing encrypted. This
+protects the file itself; it is orthogonal to the room key that protects live
+frames.
+
+**Files encrypted by older builds still open.** The iteration count travels in
+the envelope itself (`it`), and decryption derives with *that* number — so a deck
+written at the previous 300,000 is unaffected, and re-saving it re-encrypts at
+the current count.
 
 ## Signed writes — read-only that the relay enforces (v0.9.18)
 

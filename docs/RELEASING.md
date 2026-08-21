@@ -13,13 +13,23 @@ verify the manifest signature against the public key embedded in every shell.
    printed). Losing it orphans the update channel for every shipped file;
    leaking it hands the update channel to an attacker. Never commit it, never
    put it in CI secrets.
-2. **Two repos** (GitHub Pages needs a public repo on the free plan; source
-   stays private until launch): private `nyblnet/bento` (this repo, `main`
-   only) + public `nyblnet/bento-site` (the published site — a sibling clone
-   at `../bento-site`, deployed by Pages from its `main` branch, root). The
-   `CNAME` file in the site sets the custom domain; after the certificate is
-   issued, tick *Enforce HTTPS* (mandatory for `.page` anyway). Release
-   artifacts never enter the source repo's history.
+2. **Two repos, BOTH PUBLIC**: `nyblnet/bento` (this repo, `main` only) +
+   `nyblnet/bento-site` (the published site — a sibling clone at
+   `../bento-site`, deployed by Pages from its `main` branch, root). They are
+   separate so release artifacts never enter the source repo's history, not for
+   secrecy — this is an open-source project and the source repo is world
+   readable, including its full history.
+
+   Said plainly because the stale wording here ("source stays private until
+   launch") outlived the launch and was believed: a 2026-08-09 audit treated
+   this repo's history as private on the strength of it, and had to be
+   corrected by an anonymous fetch returning 200. **Nothing in a commit is
+   private.** The signing key, the guestbook admin token and the room owner
+   keys stay out by `.gitignore` and by never being committed — never by
+   repository visibility.
+
+   The `CNAME` file in the site sets the custom domain; after the certificate
+   is issued, tick *Enforce HTTPS* (mandatory for `.page` anyway).
 3. **DNS at the registrar** for the apex `bento.page`:
    - `A` records → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
    - `AAAA` records → `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`
