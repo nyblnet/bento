@@ -107,6 +107,21 @@ export function popover(x: number, y: number, html: string): HTMLElement {
   // reader meant for the cell editor or the help card, which is a worse bug
   // than the one Escape was added to fix. So both listeners stand down the
   // moment the node is detached.
+  return dismissable(el) && el
+}
+
+/**
+ * Give a popover the four ways out, for anything that builds its own element.
+ *
+ * `filterui.ts` does exactly that — `el.className = 'dx-pop dfx'` — so it took
+ * the STYLING of a popover and none of the behaviour, and Escape did nothing on
+ * the column menu while working everywhere else. One class name, two builders,
+ * one of them with listeners: measured in a browser, not caught by either
+ * rig, because each rig only knew about its own menu.
+ *
+ * Exported so there is one answer rather than a second copy of these listeners.
+ */
+export function dismissable(el: HTMLElement): true {
   const gone = (): boolean => el.parentElement === null
   const onKey = (e: KeyboardEvent): void => {
     if (gone()) { close(); return }
@@ -127,7 +142,7 @@ export function popover(x: number, y: number, html: string): HTMLElement {
   // The click that OPENED the menu must not also close it, which is what the
   // zero-delay timeout is for: mousedown is still travelling when this runs.
   setTimeout(() => document.addEventListener('mousedown', off), 0)
-  return el
+  return true
 }
 
 const sep = '<div class="dx-pop-sep"></div>'

@@ -58,6 +58,7 @@
 // drive the decisions rather than the pixels.
 
 import './filter.css'
+import { dismissable } from './gridmenu.ts'
 import { t } from './i18n.ts'
 import type { CompareOp } from './condfmt.ts'
 import type { ColumnType, TableSheet } from './model.ts'
@@ -486,6 +487,14 @@ export function openColumnMenu(o: ColumnMenuOpts): HTMLElement | null {
   el.style.left = `${Math.max(4, Math.min(o.x, vw - 300))}px`
   el.style.top = `${Math.max(4, Math.min(o.y, vh - 80))}px`
   root.appendChild(el)
+
+  // The four ways out — Escape, a click outside, an item, a replacement — from
+  // gridmenu, so the two things wearing `.dx-pop` behave the same. This built
+  // its own element and therefore took the styling of a popover and none of
+  // the behaviour: Escape did nothing on the column menu while working on
+  // every other menu in the app. Found in a browser; neither rig could see it,
+  // because each only knew about its own menu.
+  dismissable(el)
 
   const close = (): void => { el.remove() }
 

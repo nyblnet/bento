@@ -49,6 +49,7 @@
 //      reader is told. Silence is the state this replaces, so the assertion is
 //      on the MESSAGE as much as on the cell.
 
+import { readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 
 registerHooks({
@@ -552,6 +553,39 @@ console.log('\n6 · an imported per-cell formula, and the row that follows it')
     || sheetOf(store).cells?.['total:5'] === undefined,
     'inserting at the TOP carries nothing: there is no row above it to read a ' +
     'pattern from, and one row is not a pattern anyway')
+}
+
+console.log('\nevery .dx-pop behaves like a .dx-pop')
+{
+  // TWO DEFECTS, BOTH FOUND IN A BROWSER AND NEITHER VISIBLE TO A RIG THAT
+  // MOUNTS ONE MENU ON ONE SHEET.
+  //
+  // 1. `filterui.ts` builds its own element — `el.className = 'dx-pop dfx'` —
+  //    so it took the STYLING of a popover and none of the behaviour. Escape
+  //    did nothing on the column menu while working on every other menu in the
+  //    app. One class name, two builders, one of them with listeners.
+  // 2. A menu survived a SHEET SWITCH. A column menu is about a column, and
+  //    after the switch that column may not exist: going from a dataset to a
+  //    spreadsheet left "Sort A → Z / Hide this column / Freeze up to this
+  //    column" hanging over a sheet with no columns, still wired to the sheet
+  //    behind it.
+  //
+  // Source checks, because both are about which code path a builder took, and
+  // comments are stripped so prose about `.dx-pop` cannot satisfy them.
+  const src = (f: string) => readFileSync(new URL(`../dash/src/${f}`, import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+
+  const filterui = src('filterui.ts')
+  ok(/dismissable\(el\)/.test(filterui),
+    'the column menu takes gridmenu’s dismissal wiring, so Escape closes it like every other menu')
+  ok(/className = 'dx-pop/.test(filterui) === /dismissable\(/.test(filterui),
+    'and anything wearing the .dx-pop class in that file is wired, not just styled')
+
+  ok(/dismissable/.test(src('gridmenu.ts')),
+    'gridmenu exports one dismissal implementation rather than keeping it private to popover()')
+
+  ok(/setSheet\(id: string\): void \{\s*document\.querySelector\('\.dx-pop'\)\?\.remove\(\)/.test(src('grid.ts')),
+    'and switching sheets closes any open menu — it belonged to the sheet you left')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

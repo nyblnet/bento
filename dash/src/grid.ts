@@ -659,6 +659,13 @@ export class Grid {
   showingId(): string { return this.sheetId }
 
   setSheet(id: string): void {
+    // ANY OPEN MENU BELONGS TO THE SHEET YOU WERE ON. A column menu is about a
+    // column, and after this line that column may not exist — switching from a
+    // dataset to a spreadsheet left "Sort A → Z / Hide this column / Freeze up
+    // to this column" hanging over a sheet that has no columns at all, still
+    // wired to the sheet behind it. Measured in a browser after both menus
+    // landed; neither rig could see it, because each mounts one sheet.
+    document.querySelector('.dx-pop')?.remove()
     this.sheetId = id
     this.sort = null
     this.filters = []
