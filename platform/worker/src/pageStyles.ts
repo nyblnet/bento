@@ -70,6 +70,8 @@ export const PAGE_STYLES = `
   .status { margin-top: 16px; padding: 12px 14px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; display: none; }
   .status.err { display: block; background: var(--err-bg); color: var(--err-fg); }
   .status.ok { display: block; background: var(--ok-bg); color: var(--ok-fg); }
+  .status a { color: inherit; text-decoration: underline; font-weight: 600; }
+  .status a:hover { opacity: 0.8; }
   code { background: rgba(245,247,250,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
   @media (max-width: 600px) {
     .wrap { padding: 32px 16px 60px; }

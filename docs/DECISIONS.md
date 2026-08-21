@@ -14,6 +14,27 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-21 — The "Present link doesn't work" report was the "links aren't clickable" bug, not a `#present` bug
+
+**Decision — recorded so nobody re-investigates `#present` itself.** A user
+report ("Present link goes to the edit page instead") turned out to have two
+parts, and only one was real: `demo.ts`'s post-create success message used
+`status.textContent`, so the `Open it` / `Present` / `Download` URLs were
+never actual links — copying plain text by hand is exactly the kind of
+interaction that drops a `#present` fragment or adds whitespace. Fixed by
+switching to real `<a target="_blank" rel="noopener">` elements built from
+`body.id` (server-minted via `randomId()`, alphanumeric-only — safe to
+interpolate into `innerHTML` unescaped, unlike the sidebar's deck *titles*,
+which are attacker-reachable and stay hand-escaped).
+
+Before assuming `#present` itself was broken, it was verified directly:
+created a real deck through the actual worker, navigated straight to
+`/d/:id#present`, and used `document.elementFromPoint()` (which respects
+real stacking/z-index, unlike a plain text-content dump) to confirm
+`.bento-present-overlay` genuinely renders on top and shows the slide.
+`editor.present(true)` in `slides/src/main.ts`'s boot path works correctly;
+it was never the bug.
+
 ## 2026-08-19 — Deck history sidebar: client-fetched, not server-embedded; opening a deck leaves the sidebar behind
 
 **Decision.** `/` gained a ChatGPT-style sidebar (`GET /api/decks`, owner-
