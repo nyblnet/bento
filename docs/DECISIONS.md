@@ -14,7 +14,38 @@ Decision. Why. Pointers.
 
 ---
 
-## 2026-08-21 — The "Present link doesn't work" report was the "links aren't clickable" bug, not a `#present` bug
+## 2026-08-21 — Deck access is three states (private/view/edit), not a boolean — `is_editable` lasted one day
+
+**Decision.** `platform/worker/migrations/0003_editable.sql`'s `decks.is_editable`
+boolean is superseded by `migrations/0004_access.sql`'s `decks.access` column
+(`'private' | 'view' | 'edit'`), same day it shipped. The boolean only
+answered "can a non-owner edit this deck" — it had no way to express "don't
+let anyone without my session open it AT ALL," which turned out to be a real,
+requested third state, not a hypothetical. Bolting a "private" case onto a
+boolean (a nullable third value, a second column, whatever) would have meant
+two overlapping flags where `is_editable`'s value stops mattering once
+`private` is true — a `DeckAccess` enum says the same thing without a state
+that can contradict another state.
+
+**What `'private'` actually means, precisely, because it's easy to get
+almost-right:** `handleView`/`handleAsset` (index.ts) return the *same 404*
+an unknown id gets — never a 403, never a distinct error page. A private
+deck's *existence* isn't observable without the owner's session, not just its
+content. This is also why the private-deck asset path pins
+`cache-control: private, no-store` even for the owner's own request — a
+shared/edge cache holding a `public, immutable` response for that URL would
+let a later anonymous request skip the access check entirely by being served
+straight from cache. `is_editable` is left in the table, unused, same
+treatment as `edit_token_hash` before it (migrations/0002_auth.sql) — it's
+cheap to leave a dead column with a satisfied NOT NULL constraint, not cheap
+to guess whether some other in-flight branch still reads it.
+
+**Pointers.** `store.ts`'s `DeckAccess`/`DECK_ACCESS_LEVELS`; `index.ts`'s
+`handleView`/`handleAsset`/`handleSetAccess`; the sidebar's ⚙️ dialog +
+status icon in `demo.ts` (deliberately a body-level modal, not a popover
+anchored inside `.deck-list` — that container is `overflow-y:auto`, and
+CLAUDE.md's hard-won lesson #10 already documents exactly why a floating
+child positioned inside a scroll container gets silently clipped).
 
 **Decision — recorded so nobody re-investigates `#present` itself.** A user
 report ("Present link goes to the edit page instead") turned out to have two

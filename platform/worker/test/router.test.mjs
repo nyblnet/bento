@@ -82,12 +82,12 @@ function makeD1() {
             const [id] = boundArgs
             sessions.delete(id)
           } else if (sql.startsWith('INSERT INTO decks')) {
-            const [id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, is_editable] = boundArgs
-            decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, is_editable })
-          } else if (sql.startsWith('UPDATE decks SET is_editable')) {
-            const [is_editable, id] = boundArgs
+            const [id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access] = boundArgs
+            decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access })
+          } else if (sql.startsWith('UPDATE decks SET access')) {
+            const [access, id] = boundArgs
             const row = decks.get(id)
-            if (row) row.is_editable = is_editable
+            if (row) row.access = access
           } else if (sql.startsWith('UPDATE decks')) {
             const [title, updated_at, doc_bytes, id] = boundArgs
             const row = decks.get(id)
@@ -105,7 +105,7 @@ function makeD1() {
           return null
         },
         async all() {
-          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes, is_editable FROM decks')) {
+          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access FROM decks')) {
             const results = [...decks.values()].sort((a, b) => b.updated_at - a.updated_at)
             return { results, success: true }
           }
@@ -477,44 +477,56 @@ await check('GET /api/decks lists decks most-recently-updated first', async () =
   const listed = data.decks.find((d) => d.id === secondDeckId)
   assert(listed.title === 'Second deck', 'listed deck has the wrong title')
   assert(typeof listed.updatedAt === 'number' && typeof listed.createdAt === 'number', 'listed deck missing timestamps')
-  assert(listed.editable === true, 'a freshly created deck should default to editable')
+  assert(listed.access === 'edit', 'a freshly created deck should default to edit access')
 })
 
-// --- per-deck editable flag ------------------------------------------------
+// --- per-deck access level (private / view / edit) -------------------------
 
-let lockedDeckId
-await check('POST /api/decks with editable:false creates a non-editable deck', async () => {
+let viewDeckId
+await check('POST /api/decks with access:"view" creates a view-only deck', async () => {
   const res = await worker.fetch(
     new Request('https://platform.example/api/decks', {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie: ownerCookie },
-      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Locked deck' }, editable: false }),
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'View-only deck' }, access: 'view' }),
     }),
     env,
   )
   const { data, text } = await readBody(res)
   assert(res.status === 201, `expected 201, got ${res.status}: ${text}`)
-  lockedDeckId = data.id
+  viewDeckId = data.id
 
   const listRes = await worker.fetch(
     new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
     env,
   )
   const { data: listData } = await readBody(listRes)
-  const listed = listData.decks.find((d) => d.id === lockedDeckId)
-  assert(listed?.editable === false, 'the sidebar listing should report the deck as non-editable')
+  const listed = listData.decks.find((d) => d.id === viewDeckId)
+  assert(listed?.access === 'view', 'the sidebar listing should report the deck as view-only')
 })
 
-await check('GET /d/:id for a non-editable deck serves a read-only doc to an anonymous viewer', async () => {
-  const res = await worker.fetch(new Request(`https://platform.example/d/${lockedDeckId}`), env)
+await check('POST /api/decks rejects an unknown access value', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: exampleDoc, access: 'public' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+await check('GET /d/:id for a view-only deck serves a read-only doc to an anonymous viewer', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${viewDeckId}`), env)
   const { text } = await readBody(res)
   assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
   assert(text.includes('"readonly":true'), 'expected readonly:true spliced into the anonymous view')
 })
 
-await check('GET /d/:id for a non-editable deck still serves the full editable doc to its owner', async () => {
+await check('GET /d/:id for a view-only deck still serves the full editable doc to its owner', async () => {
   const res = await worker.fetch(
-    new Request(`https://platform.example/d/${lockedDeckId}`, { headers: { cookie: ownerCookie } }),
+    new Request(`https://platform.example/d/${viewDeckId}`, { headers: { cookie: ownerCookie } }),
     env,
   )
   const { text } = await readBody(res)
@@ -522,50 +534,120 @@ await check('GET /d/:id for a non-editable deck still serves the full editable d
   assert(!text.includes('"readonly":true'), 'the owner should never be handed the read-only copy of their own deck')
 })
 
-await check('GET /d/:id for an editable deck never carries readonly:true, owner or not', async () => {
+await check('GET /d/:id for an edit-access deck never carries readonly:true, owner or not', async () => {
   const res = await worker.fetch(new Request(`https://platform.example/d/${deckId}`), env)
   const { text } = await readBody(res)
-  assert(!text.includes('"readonly":true'), 'an editable deck should not be marked readonly for anonymous viewers')
+  assert(!text.includes('"readonly":true'), 'an edit-access deck should not be marked readonly for anonymous viewers')
 })
 
-await check('PATCH /api/decks/:id/editable without a session is rejected', async () => {
+let privateDeckId
+await check('POST /api/decks with access:"private" creates a private deck', async () => {
   const res = await worker.fetch(
-    new Request(`https://platform.example/api/decks/${lockedDeckId}/editable`, {
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Private deck' }, access: 'private' }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 201, `expected 201, got ${res.status}: ${text}`)
+  privateDeckId = data.id
+})
+
+await check('GET /d/:id for a private deck is 404 for an anonymous viewer', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${privateDeckId}`), env)
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+await check('GET /d/:id/download for a private deck is 404 for an anonymous viewer', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${privateDeckId}/download`), env)
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+await check('GET /d/:id for a private deck still serves the owner', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/d/${privateDeckId}`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(text.includes('Private deck'), 'owner should still see the real deck content')
+})
+
+await check('GET /a/:id/:key for a private deck is 404 for an anonymous viewer, cache-safe', async () => {
+  const uploadRes = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${privateDeckId}/assets`, {
+      method: 'POST',
+      headers: { 'content-type': 'image/png', cookie: ownerCookie },
+      body: new Uint8Array([1, 2, 3, 4]),
+    }),
+    env,
+  )
+  const { data: asset } = await readBody(uploadRes)
+  const res = await worker.fetch(new Request(`https://platform.example${asset.path}`), env)
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+  const ownerRes = await worker.fetch(
+    new Request(`https://platform.example${asset.path}`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  assert(ownerRes.status === 200, `owner expected 200, got ${ownerRes.status}`)
+  assert(
+    ownerRes.headers.get('cache-control') === 'private, no-store',
+    "a private deck's asset must never be shared-cacheable, even for the owner's own request",
+  )
+})
+
+await check('PATCH /api/decks/:id/access without a session is rejected', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${viewDeckId}/access`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editable: true }),
+      body: JSON.stringify({ access: 'edit' }),
     }),
     env,
   )
   assert(res.status === 401, `expected 401, got ${res.status}`)
 })
 
-await check('PATCH /api/decks/:id/editable for an unknown deck is 404', async () => {
+await check('PATCH /api/decks/:id/access for an unknown deck is 404', async () => {
   const res = await worker.fetch(
-    new Request('https://platform.example/api/decks/does-not-exist/editable', {
+    new Request('https://platform.example/api/decks/does-not-exist/access', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', cookie: ownerCookie },
-      body: JSON.stringify({ editable: true }),
+      body: JSON.stringify({ access: 'edit' }),
     }),
     env,
   )
   assert(res.status === 404, `expected 404, got ${res.status}`)
 })
 
-await check('PATCH /api/decks/:id/editable flips the flag, unlocking the deck for anonymous viewers', async () => {
-  const patchRes = await worker.fetch(
-    new Request(`https://platform.example/api/decks/${lockedDeckId}/editable`, {
+await check('PATCH /api/decks/:id/access rejects an invalid value', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${viewDeckId}/access`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', cookie: ownerCookie },
-      body: JSON.stringify({ editable: true }),
+      body: JSON.stringify({ access: 'nope' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/access changes the level, unlocking the deck for anonymous viewers', async () => {
+  const patchRes = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${viewDeckId}/access`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ access: 'edit' }),
     }),
     env,
   )
   const { data, text } = await readBody(patchRes)
   assert(patchRes.status === 200, `expected 200, got ${patchRes.status}: ${text}`)
-  assert(data.editable === true, 'response should echo the new editable state')
+  assert(data.access === 'edit', 'response should echo the new access level')
 
-  const viewRes = await worker.fetch(new Request(`https://platform.example/d/${lockedDeckId}`), env)
+  const viewRes = await worker.fetch(new Request(`https://platform.example/d/${viewDeckId}`), env)
   const { text: viewText } = await readBody(viewRes)
   assert(!viewText.includes('"readonly":true'), 'the deck should now serve as editable to anonymous viewers')
 })

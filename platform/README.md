@@ -90,7 +90,8 @@ platform/
     migrations/            — numbered, additive D1 schema files (see "Deploy" step 1)
       0001_init.sql          — decks table
       0002_auth.sql           — config (single-owner account) + sessions tables
-      0003_editable.sql       — decks.is_editable (per-deck edit-vs-present-only flag)
+      0003_editable.sql       — decks.is_editable (superseded same-day by 0004, unused now)
+      0004_access.sql         — decks.access ('private'|'view'|'edit', per-deck access level)
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
     ci-build.mjs           — Workers Builds' "Build command": produces generated/shell.ts
     build.mjs              — esbuild bundle → dist/worker.js, used by test:router (below), not by deploy
@@ -127,19 +128,26 @@ that exact bug once; see `docs/DECISIONS.md`). **The salt is always
 generated server-side** (`crypto.getRandomValues`); there is no code path
 that accepts or stores a caller-supplied salt.
 
-`GET /d/:id`, `GET /d/:id/download`, and `GET /a/:id/:key` are **not** gated
-by this — every deck is still reachable by anyone holding its unguessable id,
-same as before auth existed. What a non-owner gets there now depends on the
-deck's **editable flag** (`PATCH /api/decks/:id/editable`, `migrations/
-0003_editable.sql`, default true, toggle in the sidebar's 🔓/🔒 button or the
-checkbox on create): editable → the same live editor the owner sees;
-non-editable → the doc served with `readonly: true` spliced in, which boots
-Bento straight into its own PLAYER mode (a "▶ Present" card, no editor
-chrome — the same code path as the editor's own "Save as presentation
-package…" export) instead of the live editor. The owner's own session always
-gets the full editable doc regardless of the flag. Requiring *login* to view
-a deck at all (true public/private) is still a separate, later concern — see
-"Known gaps".
+`GET /d/:id`, `GET /d/:id/download`, and `GET /a/:id/:key` route around this
+gate entirely — what a non-owner (no valid session) gets there depends
+instead on the deck's own **access level** (`PATCH /api/decks/:id/access`,
+`migrations/0004_access.sql`'s `access` column, default `'edit'`; changed
+anytime from the sidebar's ⚙️ dialog, or picked upfront in the create form's
+dropdown — three states, one per option:
+
+- **`'private'`** — nobody without the owner's session can reach it at all.
+  `handleView`/`handleAsset` return the same 404 an unknown id would; a
+  private deck's existence isn't observable, not just its content.
+- **`'view'`** — anyone with the link, but read-only: `handleView` splices
+  `readonly: true` into the served doc, which boots Bento straight into its
+  own PLAYER mode (a "▶ Present" card, no editor chrome — the same code path
+  as the editor's own "Save as presentation package…" export) instead of a
+  bespoke read-only renderer.
+- **`'edit'`** — the same live editor the owner sees. The default, matching
+  how every deck link behaved before this column existed.
+
+The owner's own session always gets the full editable doc/assets regardless
+of `access` — the column only affects anonymous viewers.
 
 ## Deploy
 
@@ -192,8 +200,8 @@ with your own**, not fill in blanks.
   see a **Database ID** (looks like `9408e034-8812-402a-ac21-42bd78f9f24f`)
   — write that down too, you need both the name and the ID. Then open its
   **Console** tab and run each file in `platform/worker/migrations/` **in
-  numeric order** — paste `0001_init.sql`, run it, then `0002_auth.sql`, then
-  `0003_editable.sql`. That's the whole migration step — no CLI, no separate
+  numeric order** — `0001_init.sql`, `0002_auth.sql`, `0003_editable.sql`,
+  `0004_access.sql`. That's the whole migration step — no CLI, no separate
   tool. (If you already ran `0001` from an earlier version of this project
   under its old name, `schema.sql` — same file, just moved and renumbered —
   you only need to run whichever numbered files come after the one you last
@@ -343,46 +351,43 @@ problem for whenever that app exists, not solved here.
 | `/api/login` | POST | none | `{username, password}` → starts a session on success |
 | `/api/logout` | POST | none | ends the current session |
 | `/api/compile` | POST | owner session | `{outline}` → `{doc}`. Pure — nothing is stored |
-| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, editable}]}`, most-recently-touched first — the sidebar's data source |
-| `/api/decks` | POST | owner session | `{doc, editable?}` → `{id, url}`. Validates, strips `collab`, mints `docId`. `editable` defaults to `true` |
+| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access}]}`, most-recently-touched first — the sidebar's data source |
+| `/api/decks` | POST | owner session | `{doc, access?}` → `{id, url}`. Validates, strips `collab`, mints `docId`. `access` is one of `'private'\|'view'\|'edit'`, defaults to `'edit'` |
 | `/api/decks/:id` | GET | owner session | `{doc}` |
 | `/api/decks/:id` | PATCH | owner session | `{doc}` → replaces the stored doc |
-| `/api/decks/:id/editable` | PATCH | owner session | `{editable}` → `{ok, editable}`. Flips whether anonymous viewers get the live editor or a read-only presentation. 404 for an unknown id |
+| `/api/decks/:id/access` | PATCH | owner session | `{access}` → `{ok, access}`. Changes what anonymous viewers get. 422 on an invalid value, 404 on an unknown id |
 | `/api/decks/:id/assets` | POST | owner session | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
-| `/d/:id` | GET | none | the deck spliced into the shell. Editable deck, or the owner's own session → a real, editable page. Non-editable deck viewed anonymously → `readonly: true` spliced in, boots straight into Bento's own present-only PLAYER mode |
-| `/d/:id/download` | GET | none | same content rules as `/d/:id`, with `Content-Disposition: attachment` |
-| `/a/:id/:key` | GET | none | an uploaded asset's bytes |
+| `/d/:id` | GET | depends on the deck's `access` | `'private'` → 404 unless it's the owner's session. `'view'` (non-owner) → `readonly: true` spliced in, boots Bento's present-only PLAYER mode. `'edit'`, or any owner session → the real, live editor page |
+| `/d/:id/download` | GET | same as `/d/:id` | same content rules as `/d/:id`, with `Content-Disposition: attachment` |
+| `/a/:id/:key` | GET | same as `/d/:id` | an uploaded asset's bytes; 404 for a non-owner if the deck is `'private'` |
 
 "Owner session" = the `bento_session` cookie set by `/api/login` (or
 `/api/setup`, which logs you in immediately) — see "Authentication" above.
 The previous per-deck capability-token model (`editToken`, `Authorization:
 Bearer`) is gone; every mutation now checks the single owner's session
-instead. Viewing (`/d/:id`, `/d/:id/download`, `/a/:id/:key`) is unauthenticated
-for every deck regardless of session — the deck's own `editable` flag decides
-what an anonymous viewer sees there, not a login check; see "Known gaps" for
-what's still not covered (requiring login to view at all).
+instead. Viewing (`/d/:id`, `/d/:id/download`, `/a/:id/:key`) never checks a
+session for a `'view'` or `'edit'` deck, but a `'private'` deck's owner
+session IS checked there too — it's the one thing standing between "reachable
+by anyone" and "404 for everyone but you." See "Known gaps" for what's still
+not covered.
 
 ## Known gaps (deliberately out of scope for this PR)
 
-- **Viewing a deck still doesn't require login.** `/d/:id`, `/d/:id/download`,
-  and `/a/:id/:key` stay reachable by anyone with the deck's unguessable id —
-  what changed (migrations/0003_editable.sql) is only what a non-owner *gets*
-  there: the per-deck `is_editable` flag (default true, owner-flippable via
-  `PATCH /api/decks/:id/editable` or the sidebar's 🔓/🔒 button) switches an
-  anonymous visitor between the live editor and a read-only present-only view
-  (`readonly: true` spliced in, Bento's own PLAYER mode). A deck marked
-  non-editable is still *reachable* by anyone with the link, just not
-  *editable* by them. True public/private — gating the id itself behind
-  login — is still a separate, later concern if it's ever needed.
-- **The deck history sidebar's editable indicator is a lock icon, not a
-  general visibility model.** `/` shows a ChatGPT-style sidebar
-  (`GET /api/decks`, most-recently-touched first) with a "+ New deck" action,
-  a clickable entry per deck, and now a 🔓/🔒 toggle reflecting/flipping each
-  deck's `editable` flag — but there's no bulk action, no "editable" filter,
-  and no audit trail of who flipped what (single-owner project, so "who"
-  is always the one account). No pagination either; `listDecks` is capped at
-  200 rows, which is fine at this project's declared scale and not worth
-  solving before it's a real problem.
+- **The deck history sidebar's access dialog is per-deck only, not a general
+  visibility model.** `/` shows a ChatGPT-style sidebar (`GET /api/decks`,
+  most-recently-touched first) with a "+ New deck" action, a clickable entry
+  per deck, a status icon (🔓/👁️/🔒), and a ⚙️ button opening a small modal to
+  change access — but there's no bulk action, no "show only private decks"
+  filter, and no audit trail of who changed what (single-owner project, so
+  "who" is always the one account). No pagination either; `listDecks` is
+  capped at 200 rows, which is fine at this project's declared scale and not
+  worth solving before it's a real problem.
+- **A private deck's title still round-trips through the sidebar and the
+  `/api/decks` list** — those stay owner-session-gated, so this isn't a leak,
+  but it means "private" specifically means "invisible to anyone without my
+  session," not "encrypted" or "hidden from me too." That's the intended
+  scope (the threat model is "randoms with the link," per the request that
+  added this), not an oversight.
 - **Edits made in the live-served editor aren't saved back.** Opening `/d/:id`
   while logged in serves the full, editable Bento app, but the in-browser
   editor still only holds its state in the browser (same as opening any
