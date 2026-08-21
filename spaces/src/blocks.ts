@@ -21,6 +21,7 @@
 // `custom: true`; everything the registry can express lives here.
 
 import type { Block } from './model'
+import { effectiveParents } from './model.ts'
 import type { IconName } from './icons'
 
 export interface BlockSpec {
@@ -86,7 +87,22 @@ export interface BlockSpec {
    * inline markdown; `indent` is set for a nested block. Absent = the text
    * alone, which is also what an UNKNOWN type gets.
    */
-  toMd?: (b: Block, text: string, indent: string, titleOf: (id: string) => string | undefined) => string[]
+  toMd?: (b: Block, text: string, indent: string, ctx: MdCtx) => string[]
+}
+
+/**
+ * What the exporter can answer for a block that describes OTHER content.
+ *
+ * A pagelink needs one title; a view needs the issues it stands for. Both are
+ * questions about the document, and a block cannot see the document — so they
+ * arrive here rather than as a second export path that would drift from this
+ * one. A context object rather than a growing parameter list, because the next
+ * derived block type will want a third question.
+ */
+export interface MdCtx {
+  titleOf: (id: string) => string | undefined
+  /** the rows a `view` block stands for, already filtered and ordered */
+  rowsOf: (b: Block) => Array<{ id: string; title: string; group?: string; fields: string }>
 }
 
 export const SPECS: BlockSpec[] = [
@@ -192,7 +208,7 @@ export const SPECS: BlockSpec[] = [
   {
     type: 'pagelink', label: 'Link to page', hint: 'A card that opens a page', icon: 'link',
     tag: 'div', custom: true,
-    toMd: (b, _text, _indent, titleOf) => [`→ [[${titleOf(String(b.page)) ?? '?'}]]`],
+    toMd: (b, _text, _indent, ctx) => [`→ [[${ctx.titleOf(String(b.page)) ?? '?'}]]`],
   },
   {
     // A FIELD VALUE on a page. Unlisted: fields are added from the issue header,
@@ -203,7 +219,21 @@ export const SPECS: BlockSpec[] = [
     // is the whole reason values are blocks rather than page keys.
     type: 'prop', label: 'Field', hint: 'A typed value on this page', icon: 'tag',
     tag: 'div', custom: true, unlisted: true,
-    toMd: (b) => [`**${String((b as { key?: unknown }).key ?? 'field')}:** ${String((b as { value?: unknown }).value ?? '')}`],
+    // FROM THE READABLE FORM, not from the raw value. `html` already says
+    // "Status: In progress" — that string is the entire reason a prop block
+    // degrades instead of vanishing, and exporting `**status:** doing` from
+    // beside it published the option ID to the one audience that has no schema
+    // to look it up in. `text` is that html, already converted.
+    //
+    // The label is bolded by splitting at the first ": " the readable form
+    // itself uses; anything unexpected is emitted whole rather than guessed at.
+    toMd: (b, text) => {
+      const at = text.indexOf(': ')
+      const raw = String((b as { value?: unknown }).value ?? '')
+      if (at < 0) return [`**${text || String((b as { key?: unknown }).key ?? 'field')}**`]
+      const shown = text.slice(at + 2)
+      return [`**${text.slice(0, at)}:** ${shown || raw || '—'}`]
+    },
   },
   {
     // A SAVED VIEW — a board or a list of the issues in this space. Also just a
@@ -211,7 +241,28 @@ export const SPECS: BlockSpec[] = [
     // anything else, and an older build shows its description instead.
     type: 'view', label: 'Board or list', hint: 'Issues, grouped or listed', icon: 'board',
     tag: 'div', custom: true,
-    toMd: (b) => [`_${String(b.html ?? 'View')}_`],
+    // THE ISSUES, not the word "Issues". A board exported as its own italic
+    // title and nothing else — so a tracker downloaded as Markdown showed a
+    // heading where the work was, and a reader had to reconstruct the board
+    // from the pages that follow. The rows are derived (the export applies the
+    // same filter and sort the screen does), which is why they arrive through
+    // the context rather than off the block.
+    toMd: (b, text, indent, ctx) => {
+      const rows = ctx.rowsOf(b)
+      const out = [`**${text || 'Issues'}**`, '']
+      if (!rows.length) return [...out, `${indent}_No issues._`]
+      let group: string | undefined
+      for (const r of rows) {
+        // grouped exactly as the board groups, and a flat list when it is one
+        if (r.group !== undefined && r.group !== group) {
+          group = r.group
+          out.push('', `${indent}**${group}**`, '')
+        }
+        const meta = r.fields ? ` — ${r.fields}` : ''
+        out.push(`${indent}- [${r.title}](#p/${r.id})${meta}`)
+      }
+      return out
+    },
   },
   {
     type: 'image', label: 'Image', hint: 'Embedded in the file', icon: 'image',
@@ -313,9 +364,20 @@ export function mdLayout(blocks: Block[]): Array<{ quote: string; indent: string
   // blocks can name each other. The renderer is a pre-order pass and cannot
   // loop; an ancestor walk can, and would hang an export of a document that
   // displays perfectly well.
+  // The ancestor chain, by model.ts's ONE rule — `parent` must exist in this
+  // page AND appear strictly earlier. This followed the raw `parent` graph with
+  // a hop cap of 32, which is a cap because the graph can cycle; under the
+  // positional rule it cannot, so the walk terminates by construction and the
+  // cap is gone. (Held: an EXPORT that silently truncated at depth 32 would
+  // have been a quiet wrong answer, not an error.)
+  const eff = effectiveParents({ blocks } as never)
   const owners = (b: Block): Block[] => {
     const chain: Block[] = []
-    for (let o = b.parent ? byId.get(b.parent) : undefined; o && chain.length < 32; o = o.parent ? byId.get(o.parent) : undefined) chain.push(o)
+    for (let id = eff.get(b.id); id; id = eff.get(id)) {
+      const o = byId.get(id)
+      if (!o) break
+      chain.push(o)
+    }
     return chain
   }
   const wraps = (b: Block | undefined): boolean => !!b && SPEC.get(b.type)?.mdQuoteChildren === true

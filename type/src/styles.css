@@ -1,0 +1,235 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   bento/type — chrome and page.
+
+   The token set is the suite's, character for character, from
+   slides/src/styles.css and spaces/src/styles.css. Do not fork it: a person
+   with two Bento apps open should not be able to tell they were built
+   separately, and the accent is doing brand work in all three.
+
+   The page sits on LIGHT chrome and is separated by a shadow, exactly as a
+   slide does on the slides canvas (.ed-stage). Dark surround is the obvious
+   instinct for a document editor and it is not what this suite does. */
+
+/* ————— tokens —————
+   Split in two on purpose:
+
+   THEMED (chrome) flips with the theme. NOT THEMED (paper, geometry) does not.
+   Dark theme dims the APP, never the document: a slide's background is data the
+   author chose, and a page is white because paper is white. Somebody proofing a
+   contract at midnight still has to see what will print. */
+
+:root {
+  /* document surface — deliberately outside the themed set */
+  --paper: #fff;
+  --paper-ink: #1a1a1a;
+  --paper-ink-2: #3a3d44;
+  --paper-rule: #c3cad4;
+  --paper-link-underline: #a9bcd8;
+
+  /* geometry */
+  --radius: 10px;
+  --page-w: 816px; --page-h: 1056px;
+  --mar-x: 104px; --mar-t: 104px; --mar-b: 104px;
+  --gutter: 250px;
+}
+
+/* LIGHT — the suite's shared palette, character for character with
+   slides/src/styles.css and spaces/src/styles.css. */
+:root, :root[data-theme="light"] {
+  --ink: #1e2a3a;
+  --ink-2: #31445c;
+  --chrome: #f5f7fa;
+  --chrome-2: #eceff4;
+  --line: #e3e8ef;
+  --muted: #5b6472;
+  --accent: #f7a600;
+  --accent-ink: #7a5200;
+  --blue: #5b8def;
+  --field: #ffffff;          /* form-control surface — CHROME, not paper */
+  --grid-dot: #d5dbe4;
+  --good: #1c7a45;
+  --bad: #c0392b;
+  --warnc: #a06a12;
+  --page-shadow: 0 10px 40px rgb(20 30 45 / 0.18), 0 2px 8px rgb(20 30 45 / 0.10);
+}
+
+/* DARK — the same roles, not the same values. `--ink` is the chrome's
+   FOREGROUND, so it inverts; `--accent` does not, because it is brand. */
+:root[data-theme="dark"] {
+  --ink: #e7eaf0;
+  --ink-2: #b3bcca;
+  --chrome: #1b1f26;
+  --chrome-2: #262b34;
+  --line: #333a45;
+  --muted: #8b95a4;
+  --accent: #f7a600;
+  --accent-ink: #3a2a00;      /* text ON the accent, so it flips */
+  --blue: #7aa5f5;            /* lifted: #5b8def is too dark to read here */
+  --field: #12151a;
+  --grid-dot: #2b313b;
+  /* deeper, because a white page on a dark canvas needs more separation than
+     the same page on a light one */
+  --good: #5fb87a;
+  --bad: #e06c5c;
+  --warnc: #e0a33c;
+  --page-shadow: 0 14px 48px rgb(0 0 0 / 0.55), 0 2px 10px rgb(0 0 0 / 0.4);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--chrome);
+  overscroll-behavior: none;
+}
+#app { display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: hidden; }
+.t-main { display: grid; grid-template-columns: 250px 1fr; overflow: hidden; }
+.t-side { background: var(--chrome); border-inline-end: 1px solid var(--line); overflow: auto; }
+.t-tabs { display: flex; position: sticky; top: 0; z-index: 5;
+  background: var(--chrome); border-bottom: 1px solid var(--line); }
+.t-tabs button { flex: 1; border: 0; border-radius: 0; background: transparent;
+  color: var(--muted); padding: 9px 4px; font-size: 11.5px; cursor: pointer; }
+.t-tabs button:hover { background: var(--chrome-2); }
+.t-tabs button.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 600; }
+.t-panel { display: none; padding: 10px 12px; }
+.t-panel.on { display: block; }
+.t-hint { color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.t-outline a { display: block; color: var(--ink-2); text-decoration: none; padding: 3px 6px;
+  border-radius: 4px; font-size: 12px; line-height: 1.35; cursor: pointer; }
+.t-outline a:hover { background: var(--chrome-2); }
+.t-outline a.h3 { padding-inline-start: 18px; color: var(--muted); font-size: 11.5px; }
+.t-outline .pg { float: inline-end; color: var(--muted);
+  font: 10px/1.5 ui-monospace, SFMono-Regular, monospace; }
+.t-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px;
+  margin-bottom: 7px; background: var(--field); }
+.t-card .who { font-size: 10.5px; color: var(--muted); margin-bottom: 4px; }
+.t-card .what { font-size: 12px; line-height: 1.45; word-break: break-word; color: var(--ink); }
+.t-card .what del { color: var(--bad); text-decoration: line-through; }
+.t-card .what ins { color: var(--good); text-decoration: none; }
+.t-card .btns { display: flex; gap: 5px; margin-top: 7px; }
+.t-card .btns button { flex: 1; padding: 3px 6px; font-size: 11px; font: inherit;
+  border: 1px solid var(--line); background: var(--chrome); color: var(--ink-2);
+  border-radius: 6px; cursor: pointer; }
+.t-card .btns button:hover { background: var(--chrome-2); }
+.t-card.done { opacity: .45; }
+.t-fp { font: 10px/1.5 ui-monospace, SFMono-Regular, monospace; color: var(--muted);
+  word-break: break-all; margin-top: 3px; }
+.t-ok { color: var(--good); } .t-bad { color: var(--bad); } .t-warn { color: var(--warnc); }
+
+/* ————— toolbar ————— */
+.t-bar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--line);
+}
+.t-brand {
+  font-weight: 600; color: var(--ink); margin-inline-end: 6px;
+  letter-spacing: .01em; white-space: nowrap;
+}
+.t-brand small { color: var(--muted); font-weight: 400; margin-inline-start: 4px; }
+
+.t-bar button {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 13px;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.t-bar button:hover { background: var(--chrome-2); }
+.t-bar button:active { background: var(--line); }
+.t-bar button.on {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600;
+}
+.t-bar button.primary { background: var(--ink); color: var(--chrome); padding: 6px 14px; }
+.t-bar button.primary:hover { background: var(--ink-2); }
+.t-bar select {
+  font: inherit; font-size: 13px; color: var(--ink-2);
+  background: var(--field); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 8px; cursor: pointer;
+}
+.t-sep { width: 1px; height: 20px; background: var(--line); margin: 0 5px; }
+.t-spacer { flex: 1; }
+.t-stat {
+  color: var(--muted);
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+/* ————— the page ————— */
+.t-scroll {
+  overflow: auto; padding: 28px 0 200px; scrollbar-gutter: stable both-edges;
+  /* the slides canvas texture, so a page and a slide sit on the same surface */
+  background:
+    radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--chrome);
+}
+.t-wrap { position: relative; margin: 0 auto; width: calc(var(--page-w) + var(--gutter)); }
+.t-paper {
+  background: var(--paper);
+  width: var(--page-w); min-height: var(--page-h);
+  padding: var(--mar-t) var(--mar-x) var(--mar-b);
+  /* the slides canvas shadow, so a page and a slide read as the same object */
+  box-shadow: var(--page-shadow);
+  border-radius: 2px;
+  position: relative; z-index: 1;
+  color: var(--paper-ink);
+  font: 17px/1.62 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  hyphens: auto; -webkit-hyphens: auto;
+}
+.t-paper:focus { outline: none; }
+.t-paper h1 { font-size: 26px; line-height: 1.24; font-weight: 600; margin: 0 0 14px; hyphens: none; }
+.t-paper h2 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; hyphens: none; break-after: avoid; }
+.t-paper h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--paper-ink-2); hyphens: none; }
+.t-paper p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
+.t-paper p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+.t-paper blockquote {
+  margin: 12px 0 12px 24px; padding-inline-start: 14px;
+  border-inline-start: 2px solid var(--line);
+  color: var(--paper-ink-2); font-style: italic;
+}
+.t-paper strong { font-weight: 600; }
+.t-paper code {
+  font: 0.88em/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--chrome-2); padding: 1px 4px; border-radius: 3px;
+}
+.t-paper a { color: var(--blue); text-decoration: none; border-bottom: .5px solid var(--paper-link-underline); }
+.t-paper sup.t-note {
+  font: 600 9px/1 -apple-system, system-ui, sans-serif;
+  color: var(--accent-ink); vertical-align: super; cursor: pointer; padding: 0 1px;
+}
+.t-paper sup.t-note:hover { background: rgb(247 166 0 / 0.22); border-radius: 2px; }
+
+/* Decorations live OUTSIDE the editable: they cannot be typed into, cannot
+   enter the undo stack, and cannot perturb layout. */
+.t-deco { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.t-deco .rule {
+  position: absolute; left: var(--mar-x);
+  width: calc(var(--page-w) - var(--mar-x) * 2);
+  border-top: 1px solid var(--line);
+}
+.t-deco .tick { position: absolute; width: 10px; border-top: 1px solid var(--paper-rule); }
+.t-deco .num {
+  position: absolute; color: var(--muted);
+  font: 10px/1 -apple-system, system-ui, sans-serif; letter-spacing: .07em;
+}
+.t-deco .sidenote {
+  position: absolute; left: var(--page-w);
+  width: calc(var(--gutter) - 26px); margin-inline-start: 22px;
+  font: 11.5px/1.42 -apple-system, system-ui, sans-serif;
+  color: var(--muted);
+  padding-inline-start: 11px;
+  border-inline-start: 2px solid var(--accent);
+}
+.t-deco .sidenote b {
+  font: 600 9px/1 -apple-system, system-ui, sans-serif;
+  color: var(--accent-ink); vertical-align: super; margin-inline-end: 4px;
+}

@@ -14,6 +14,52 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **The toolbar fits itself.** It used to fold at two fixed widths that were
+  measured in English; German needs 50px more for the same buttons, and eight
+  languages ship in every file. It now measures itself and steps down when it
+  actually runs out of room — at any zoom level, text size or language.
+
+- **You can see who else is here.** A coloured initial sits on the page each
+  person is reading, so a shared space shows at a glance where everyone is
+  working. Click somebody in the people panel to go to them.
+
+  The button beside ⋯ tells you the truth about three different situations:
+  live with others, open in another window on this computer, or not shared at
+  all. Nothing leaves the file until you start a session.
+
+- **Live collaboration.** Two tabs of the same space, or two people with the
+  same file, now edit it together: changes merge per character, and the file
+  you save carries the state so a copy edited on a plane rejoins as a fork
+  rather than overwriting anyone.
+
+  A space goes live only when it arrived carrying a session — a file that was
+  saved or shared — or when you start one. A fresh space and a template stay
+  offline, as they always have.
+
+  When somebody else deletes the page you are reading, you surface at the page
+  above it rather than being thrown back to the start. And their typing never
+  says "Edited" in your window; only the unsaved dot moves, because the file on
+  disk is out of date either way.
+
+- **Fixed: Save was partly off the screen on a phone.** Measured on a 390×844
+  viewport, the topbar laid out 467px wide inside 390 and the Save button's
+  right edge landed at x = 426 — 36px past the edge, on the one control that
+  must never be unreachable. A phone now also folds the wordmark, undo/redo and
+  the other-ways-to-save caret into the ⋯ menu, which already held the six
+  secondary actions, and the ＋ Insert button keeps its icon without its word.
+  Nothing is removed — undo and redo are in ⋯ carrying their shortcuts and their
+  disabled state, and Save a copy / Export as Markdown join them there. The same
+  fold now starts at the drawer breakpoint (820px) rather than 720, because at
+  768 — an iPad in portrait — the save caret still ended 27px off the screen.
+  The bar fits exactly at 320, 375, 390 and 768px, and is unchanged at 1280.
+
+- **Fixed: every block cost a whole row of chrome on a phone.** The ＋/grip
+  gutter is shown rather than hovered on touch (there is no hover), but it was
+  laid out IN the flow: a one-line paragraph measured 68.4px tall, 36px of it
+  affordances. The gutter moves into a reserved 44px start margin, out of the
+  flow, keeping the grip — whose menu already offers "Add below". A one-line
+  paragraph is 32.4px now; the reading column gives up 26px of width for it.
+
 - **Callouts.** A boxed note, tip, important, warning or caution — `/callout`,
   the Insert menu, or type `[!warning] ` on an empty line. Press ⏎ inside one
   and the next line goes in with it; an empty line and ⌫ takes you back out.
@@ -70,6 +116,32 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   the API cannot put anything in a file that the app itself could not have
   written.
 
+- **A board can be a list, grouped by any field, in any order.** The view's
+  controls were two buttons; they are five. **Board ⇄ List** switches the shape —
+  the list has always rendered, but nothing in the app could produce one, so a
+  view could hold a layout you could not undo. **Group** picks the field the
+  columns come from. **Sort** orders by any field, and clicking the field you
+  are already sorted by reverses it; **Manual order** is always the first item,
+  because a board somebody arranged by dragging must be one click from getting
+  that order back. A select sorts by its declared order, never alphabetically —
+  "Backlog, Todo, In progress, Done" is a direction — and an unset value sorts
+  last in both directions, because a blank estimate is not the cheapest issue.
+  A sorted board still accepts a dragged card; it just stops pretending you can
+  choose where in the column it lands.
+
+- **Fixed: a field exported as `status: doing`.** Every field block carries a
+  readable form — "Status: In progress" — which is the whole reason the format
+  degrades instead of vanishing for an older build, a thumbnailer or a grep. The
+  Markdown export was the one consumer ignoring it, and published the internal
+  option id to the audience with no schema to look it up in. It now exports
+  **Status:** In progress.
+
+- **Fixed: a board exported as the word "Issues".** Downloading a tracker as
+  Markdown gave you the view's title in italics and nothing else. A board now
+  exports its issues — grouped as the board groups them, in the board's column
+  order, each one a link back to its page, carrying the same chips the card
+  shows — with the same filter and sort the screen is using applied.
+
 - **A new space opens with a tracker in it.** The starter space gains a
   **Tracker** page — a board, and five issues nested under it that explain
   themselves: open a card and you are in an ordinary page with fields along the
@@ -88,6 +160,56 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   is the mistake a caller actually makes — and it made a page called
   `[object Object]` and reported success. It now refuses, as does `newIssue` and
   `updatePage` for the same argument.
+
+- **Fixed: pages could disappear from the sidebar and from the Markdown
+  export.** Two people dragging pages onto each other — or one hand-edited
+  file — could leave a pair each nested inside the other. Neither was reachable
+  from the top, so both dropped out of the sidebar and out of exported
+  Markdown while still sitting in the file, with nothing to say so. They are
+  listed at the top level now.
+
+- **Fixed: deleting a block could take blocks you did not select.** "What is
+  nested under this?" was answered four different ways in four places, and on a
+  document where a block's parent sits *after* it, one of those answers
+  returned the whole tangle — including the block itself. There is one answer
+  now, and it cannot tangle: a block is nested under its parent only when that
+  parent is genuinely above it on the page.
+
+- **Lines that work things out.** End a line with `=` and it answers:
+  `budget - flights =`, `20% of 340 =`, `940 km in miles =`, `today + 3 weeks =`,
+  `9:30 + 45 min =`, `sum above =`. Give something a name — `budget = 2400` —
+  and the lines below can use it.
+
+  **The answer is never written into your file.** The line stores what you
+  typed, and the number is worked out each time the page is drawn. Change the
+  budget at the top and every line below follows. Search, export and older
+  versions of the app all see the expression, which reads perfectly well on its
+  own.
+
+  Type a sum *without* the `=` and it shows you the answer first, quietly, with
+  a `Tab` to keep it — so nothing appears in your notes that you did not ask
+  for. A line it cannot fully work out gets nothing at all: "Meet Ana at 3"
+  stays a sentence.
+
+  `bento.calc('20% of 340')` answers the same way for an agent.
+
+- **Daily notes.** `⌘⇧J` opens today's journal — a page per day, made the first
+  time you write in it rather than one for every day you happen to open the
+  file. Arrows either side of the date walk to yesterday and tomorrow, and the
+  entries nest under a **Journal** page, newest first, however out of order you
+  wrote them.
+
+  An entry is an ordinary page, so it searches, links, back-links, prints and
+  exports like everything else — and you can rename one to "Monday — sprint
+  kickoff" without it ceasing to be that day's. The date, not the title, is
+  what makes it a journal. Logseq derives the same thing from a formatted page
+  title, and their tracker carries the data loss that follows when the format
+  changes.
+
+  The date is stored as `2026-08-06` and SHOWN in your own language and format —
+  Japanese readers see 2026年8月6日木曜日, German readers Donnerstag, 6. August
+  2026, from the same file. `bento.journal()` opens today's for an agent, and
+  `bento.journal('2026-08-06')` any day's.
 
 ## [0.1.0] — 2026-08-03
 

@@ -28,6 +28,7 @@ import type { DashDoc } from '../model.ts'
 import type { Op, SyncStateJSON } from './crdt.ts'
 import type { Frame, RefusalCode, SyncSession, Transport } from './session.ts'
 import { offlineEnabled } from '../../../kernel/src/update.ts'
+import { netWebSocket } from '../../../kernel/src/net.ts'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
 
 export const DEFAULT_SYNC_HOST = 'wss://sync.bento.page'
@@ -328,9 +329,11 @@ export class OnlineTransport implements Transport {
     this.setStatus('connecting')
     let ws: WebSocket
     try {
-      ws = new WebSocket(`${this.url}&since=${this.seq}`)
+      ws = netWebSocket(`${this.url}&since=${this.seq}`)
     } catch {
-      this.retry()
+      // Offline is a decision, not an outage: retrying would spin until the
+      // switch flips, and net.ts has closed anything already open anyway.
+      if (!offlineEnabled()) this.retry()
       return
     }
     this.ws = ws

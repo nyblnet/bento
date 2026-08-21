@@ -6,6 +6,8 @@
 import './styles.css'
 import { anim } from './anim'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
+import { startTheme } from '../../kernel/src/theme.ts'
+import { startNetGuard } from '../../kernel/src/net.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, downloadFile,
   suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword,
@@ -40,6 +42,23 @@ configureApp({
 registerPreview((doc) => buildSlidePreview(doc as BentoDoc))
 
 capturePristine()
+
+// Theme: after capturePristine, before the first paint.
+//
+// AFTER, because capturePristine clones the LIVE document and saves
+// re-serialize that clone — so `data-theme` and `color-scheme` on <html> must
+// not exist yet, or a viewer's preference would travel inside every file they
+// save. Same rule applyDirection follows two lines below for dir/lang.
+//
+// BEFORE the paint, because applying it later renders the interface light and
+// then flips it, which reads as a bug rather than a preference. Nothing here
+// lays anything out — it sets two attributes on the root element.
+startTheme()
+
+// Watch the offline switch in OTHER tabs. `storage` fires only in the tabs
+// that did not make the change — which is precisely the set that has an open
+// socket it does not yet know to close (GHSA-5c3x-xqp6-g94r).
+startNetGuard()
 
 // Chrome direction follows the VIEWER's language (Arabic/Hebrew/… get an RTL
 // interface). Deliberately AFTER capturePristine: saves re-serialize the

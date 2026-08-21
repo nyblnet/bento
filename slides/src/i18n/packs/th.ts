@@ -218,6 +218,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "เบราว์เซอร์นี้เขียนทับไฟล์ในที่เดิมไม่ได้ — สำเนาใหม่ถูกบันทึกไว้ในโฟลเดอร์ดาวน์โหลด",
   "This document": "เอกสารนี้",
   "This file carries its own app — it works offline, forever, as is.": "ไฟล์นี้พกแอปของตัวเองมาด้วย — ใช้งานออฟไลน์ได้ตลอดไปในสภาพนี้",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "หน้าต่างนี้ยังใช้ v{v} อยู่ — โหลดซ้ำเพื่อให้เสร็จสมบูรณ์ ระบบบันทึกไฟล์สำรอง v{v} ไว้ข้างไฟล์นี้แล้ว",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "หน้าต่างนี้ยังใช้ v{v} อยู่ — โหลดซ้ำเพื่อให้เสร็จสมบูรณ์ ระบบดาวน์โหลดไฟล์สำรอง v{v} ไว้แล้ว",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "หน้าต่างนี้ยังใช้ v{v} อยู่ ถ้าคุณเขียนทับไฟล์ที่เปิดอยู่นี้แล้ว ให้โหลดซ้ำ ถ้าไม่ใช่ ให้เปิดไฟล์ที่เพิ่งบันทึก",
   "This window keeps running v{v} until you open the downloaded file.": "หน้าต่างนี้จะใช้ v{v} ต่อไปจนกว่าคุณจะเปิดไฟล์ที่ดาวน์โหลดมา",

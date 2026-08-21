@@ -23,37 +23,25 @@ import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
 import {
   serializeDocInto, serializeAuto, suggestedFileName, downloadFile, openedFileName, fileBase,
-  hasFileHandle, writeUpdatedFile, writeUpdatedFileAs,
+  hasFileHandle, writeUpdatedFile, writeUpdatedFileAs, writeBackupBeside, hostCan,
 } from './save.ts'
 import { lsDel, lsGet, lsSet } from './storage.ts'
+import { netFetch } from './net.ts'
 
 declare const __APP_VERSION__: string
 
 /** Version of the running app shell (baked in at build from package.json). */
 export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
 
-/** Per-browser preference: check for updates automatically at launch. */
 /**
- * Offline mode: a hard, viewer-side switch that blocks EVERY network touch —
- * update checks and online collaboration alike. Same-machine tab sync
- * (BroadcastChannel) is not networking and stays on. The guarantee this
- * buys: with the switch on, nothing about you or a document ever leaves
- * this computer.
+ * The offline switch and every network primitive now live in net.ts — one
+ * chokepoint, so a call site cannot forget to consult the switch (that is
+ * exactly how GHSA-5c3x-xqp6-g94r happened: the gate below used to sit on the
+ * auto-check CALL SITE while checkForUpdates() fetched unconditionally).
+ * Re-exported here because this has been update.ts's public surface since
+ * 0.9.x and shipped code imports it from here.
  */
-export const offlineEnabled = (): boolean => {
-  try {
-    return lsGet('bento-offline') === 'on'
-  } catch {
-    return false
-  }
-}
-export const setOffline = (on: boolean): void => {
-  try {
-    lsSet('bento-offline', on ? 'on' : 'off')
-  } catch {
-    /* storage unavailable */
-  }
-}
+export { offlineEnabled, setOffline, OfflineError, startNetGuard } from './net.ts'
 
 export const autoCheckEnabled = (): boolean => lsGet('bento-auto-check') !== 'off'
 export const setAutoCheck = (on: boolean): void => {
@@ -188,7 +176,7 @@ export async function fetchPinned(url: string, sha256: string): Promise<ArrayBuf
   if (!/^[0-9a-f]{64}$/i.test(sha256 ?? '')) return null
   let bytes: ArrayBuffer
   try {
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await netFetch(url, { cache: 'no-store' })
     if (!res.ok) return null
     bytes = await res.arrayBuffer()
   } catch {
@@ -217,7 +205,7 @@ async function verifyManifest(raw: string): Promise<ReleaseInfo> {
 export async function checkForUpdates(manifestUrl?: string): Promise<UpdateCheck> {
   const url = manifestUrl ?? lsGet('bento-update-url') ?? updateManifestUrl()
   try {
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await netFetch(url, { cache: 'no-store' })
     if (!res.ok) throw new Error(`release server answered ${res.status}`)
     const release = await verifyManifest(await res.text())
     if (compareVersions(release.version, APP_VERSION) <= 0)
@@ -248,7 +236,7 @@ export function registerUpdatePrepare(fn: (version: string) => Promise<void>): v
 }
 
 export async function buildUpdatedFile(release: ReleaseInfo, doc: KernelDoc): Promise<string> {
-  const res = await fetch(release.url, { cache: 'no-store' })
+  const res = await netFetch(release.url, { cache: 'no-store' })
   if (!res.ok) throw new Error(`downloading the update failed (${res.status})`)
   const bytes = await res.arrayBuffer()
   // Same pin as fetchPinned, spelled out here because THIS path distinguishes
@@ -285,34 +273,73 @@ export async function applyUpdate(release: ReleaseInfo, doc: KernelDoc): Promise
   downloadFile(await buildUpdatedFile(release, doc), openedFileName() ?? suggestedFileName(doc))
 }
 
-/** Can we rewrite the open file directly (a FS Access handle is held)? */
-export const canUpdateInPlace = hasFileHandle
+/**
+ * Can we rewrite the open file directly, with no destination prompt?
+ *
+ * Two ways to be able to. A held FS Access handle is the browser's own, earned
+ * by an earlier save. A HOST needs no handle at all: it resolves the file from
+ * the page's own URL against a folder the author granted once, which is the
+ * whole reason a double-clicked document can be written without a picker.
+ *
+ * This only decides what the button PROMISES ("Update this file" vs "…"), so
+ * being wrong is a mislabelled button rather than a lost file — but it was
+ * wrong in the direction that undersells: with a host installed and no handle
+ * yet, it offered to ask where to save something it could simply write.
+ */
+export const canUpdateInPlace = (): boolean => hasFileHandle() || hostCan('write')
+
+/** What an in-place update actually did with the rollback copy. */
+export type InPlaceOutcome = { backup: 'beside' | 'downloaded' | 'none' }
 
 /**
  * Update the file on disk, then a reload boots the new app with this document.
  *
- * With a held handle: download a backup of the current version first, then
- * overwrite the file in place silently.
+ * A rollback copy of the CURRENT version is written first, whenever the update
+ * itself is going to be silent — see `writeBackupBeside` for where it lands and
+ * why that stopped being a download.
+ *
+ * With a held handle: overwrite the file in place.
  *
  * Without a handle (e.g. the file was double-clicked open — the browser grants
- * no handle on open): use a save picker AND KEEP the resulting handle, so this
- * update and every later one can rewrite the file in place. The picker is
+ * no handle on open): fall to a save picker AND KEEP the resulting handle, so
+ * this update and every later one can rewrite the file in place. The picker is
  * pre-filled with the open file's own NAME (taken from the document URL); its
  * DIRECTORY still cannot be set — the API accepts a handle, never a path — so
  * the caller must still tell the user to overwrite the file they have open.
- * Once they do, it is a one-time grant. Returns false if cancelled.
+ *
+ * That path declares `in-place`, and the distinction is not cosmetic. It is
+ * overwriting the document on screen, which is what `in-place` means, and a
+ * host reads the picker id and nothing else. Sending `share` here — as this did
+ * — told every host "a new file the author will choose", so the one save that
+ * should never need a dialog was the one that always got one.
+ *
+ * Returns null if the picker was cancelled.
  */
-export async function applyUpdateInPlace(release: ReleaseInfo, doc: KernelDoc): Promise<boolean> {
+export async function applyUpdateInPlace(
+  release: ReleaseInfo, doc: KernelDoc,
+): Promise<InPlaceOutcome | null> {
   const html = await buildUpdatedFile(release, doc)
   // Both names below follow the OPEN FILE, not the deck title: the backup sits
   // beside the original, and the picker opens pre-filled with the very file the
   // user is being asked to overwrite.
   const current = openedFileName()
+  const base = fileBase(current ?? suggestedFileName(doc))
+
+  // Only back up when the write that follows is going to happen without asking.
+  // On a plain browser with no handle the author is about to CHOOSE a
+  // destination, and may well choose a new file — the original survives on its
+  // own, and an unasked-for download on top of that is noise.
+  const silent = hasFileHandle() || hostCan('write')
+  const backup = silent
+    ? await writeBackupBeside(await serializeAuto(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
+    : 'none'
+
   if (hasFileHandle()) {
-    const base = fileBase(current ?? suggestedFileName(doc))
-    downloadFile(await serializeAuto(doc), `${base}.v${APP_VERSION}-backup.bento.html`)
     await writeUpdatedFile(html)
-    return true
+    return { backup }
   }
-  return writeUpdatedFileAs(html, doc, { keepHandle: true, suggestedName: current ?? undefined })
+  const written = await writeUpdatedFileAs(html, doc, {
+    keepHandle: true, suggestedName: current ?? undefined, purpose: 'in-place',
+  })
+  return written ? { backup } : null
 }

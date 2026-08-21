@@ -11,6 +11,149 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.0.18] — 2026-08-15
+
+- **Security: offline mode did not block everything it promised.** The switch
+  says "nothing leaves this computer", and five things still went out with it
+  on: a manual *Check for updates* called the release server, *Manage
+  languages…* downloaded the pack index and any pack you added, a deck's video
+  or image pointing at a web address still loaded from it, requests already
+  running were left to finish, and a second tab that was already in a live
+  session kept syncing edits.
+
+  The last two matter most. A remote image or video in a document is the
+  cheapest tracking beacon there is — it tells whoever hosts it that you opened
+  the file, and when — and offline mode is exactly what you would turn on
+  before opening a deck you did not write. The second tab was worse: real
+  document content kept moving.
+
+  Separately, where a browser blocks site data — a private window, or a
+  locked-down setup — the checkbox showed the switch on while nothing had been
+  stored, so it did nothing at all. It now holds for the session regardless and
+  says plainly that it will not survive a reload.
+
+  Offline mode now covers all of it: the network is reachable from exactly one
+  place in the code, flipping the switch cuts requests and connections that are
+  already open rather than only the next one, and a deck's remote images and
+  video are left unloaded. Reported privately, with a reproduction — and found
+  by watching real traffic after reading the code twice suggested there was
+  nothing wrong.
+
+- **Updating a file no longer interrupts you.** With Bento Tray installed and a
+  folder granted, "Update this file" now finishes without a single dialog. The
+  backup it leaves behind is saved **beside your document** instead of being
+  downloaded — so the copy you would roll back to sits next to the thing it
+  backs up, rather than in your downloads folder. Without the extension it is
+  still a download, exactly as before.
+
+  Two things caused the prompt. The backup was handed to the browser's download
+  machinery, which asks where to put things if you have told Chrome to; and an
+  update of a double-clicked file described itself to the extension as an
+  export, so the extension — correctly — refused to write it for you.
+
+- **Fix: Share opened cut in half on a narrow window.** Once the window is
+  narrow enough to fold the toolbar into ⋯, opening **Share** from that menu
+  drew the popover sliced down its left edge, with the properties panel showing
+  through the gap where the rest of it should have been. Share and Language now
+  open as a section of the ⋯ list itself — full width, scrolling with it,
+  nothing hanging over an edge to be cut off.
+
+  The ⋯ menu scrolls when it has more in it than fits on screen, and a box that
+  scrolls in one direction quietly clips the other whether you asked for that or
+  not. Anything floating inside it was always going to be trimmed. Wide windows
+  were never affected: the fold only happens when the toolbar runs out of room.
+
+- **The update card drops its peach stripe.** The "Version X is available" card
+  in About carried a thick accent rule down its leading edge — the only stripe
+  of its kind anywhere in the app, and a hard-coded colour, so it stayed peach
+  while everything around it moved into dark mode. It now has the same quiet
+  1px border as every other surface in the dialog and themes along with them.
+  The accent stays where it earns its place: on the button you press.
+
+## [1.0.17] — 2026-08-10
+
+- **Security: update this file. A deck could run code hidden in its own
+  content.** Ordinary-looking document content — an image, a shape, an embedded
+  drawing — could carry script that ran when the slide was drawn, or quietly
+  send the reader somewhere else. No unusual file was needed and nothing looked
+  wrong on screen.
+
+  That matters more here than in most applications, because a Bento file is not
+  a passive document: the page holding it also holds the live-session keys, the
+  local autosave copy, and — where the browser allows it — permission to write
+  back to the file on disk. Anything running inside the page inherits all of it.
+
+  Every path that turns author content into a page is now sanitised: the
+  renderer, the still image written for file-manager thumbnails, and the PDF
+  export. The iOS host no longer trusts a filename a document supplies, blob
+  fetches verify what they received, and new password-protected files use a
+  stronger key derivation.
+
+  **Two exports were also leaking.** "Copy document JSON" carried the live
+  room's private keys — while suggesting you paste the result into an AI chat —
+  and "Save as template…" wrote readable content out of a password-protected
+  deck. A third case kept a key in an invite copy that should not have had one.
+  All three now strip, through one list in one place rather than three
+  independent decisions.
+
+  **If you have already shared a live deck** — its JSON, or the file itself, to
+  a chat, a ticket or an agent — updating does not retract that. Use *Share →
+  Rotate keys*, which mints a new room and revokes the old one, then re-share
+  the new copy. If you published a template made from a password-protected
+  deck, treat its contents as disclosed: rotation cannot take back what the
+  template already wrote in the clear.
+
+  Found by auditing this repository rather than by a report, with an
+  independent adversarial review on each round, and every fix was checked to
+  fail against the previous build before being kept. The collaboration relay is
+  deliberately **not** part of this release — a relay deployment cannot be
+  undone by a file update, so it ships separately once its own regression is
+  resolved.
+
+- **A dark interface, if you want one.** *About → Appearance* offers Match my
+  system, Light or Dark. It follows your machine by default and changes as your
+  machine does, so a laptop that dims at sunset takes the editor with it.
+
+  **Your deck does not invert.** Dark dims the chrome around the slide; the
+  slide itself stays exactly as authored, because its background is your data
+  and someone proofing at midnight still needs to see what will be projected.
+  The presenter window stays dark in both themes — you present in a dark room.
+
+  The theme is a viewer preference, stored on your machine and never written
+  into the file, so it never travels to whoever you send a deck to. Same rule
+  the interface language and reduced motion already follow.
+
+- **Hide a slide from the show.** Toggle *Hide slide* in the Slide panel and it
+  stays in the deck, fully editable, but drops out of the walk: arrow keys pass
+  over it, PDF export leaves it out, and it is never picked as the file's
+  thumbnail. An element `link` still reaches it, which is the point — backup
+  numbers, an appendix, the detail slide you only open if somebody asks.
+
+  Hidden slides do not take a page number, so `{{page}}`/`{{pages}}` stay
+  contiguous for the audience: the same rule interactive states already follow,
+  rather than a second one to remember. If you prefer the office-suite
+  behaviour, where a hidden slide keeps its number so the visible ones do not
+  renumber while you toggle slides during rehearsal, turn on *Number hidden
+  slides* under Slideshow.
+
+  The sidebar shows what the audience would count — a hidden slide's number is
+  struck through, or replaced by a dash when it has none — because a slide you
+  have forgotten you hid is a slide you find out about mid-presentation.
+
+- **A deck that is being shared now says so before an agent reads it.** A file
+  with live collaboration switched on carries the keys to its own session —
+  that is what makes sharing work without accounts, and it means anything
+  receiving the file receives the room: a chat, a ticket, an agent harness.
+  Nothing about a document looks like a credential, so this was easy to do by
+  accident.
+
+  The agent guide and the packaged skill now open by checking for it and
+  saying so, and `window.bento.validate()` reports it as
+  `collab-secrets-present` — only when private key material is actually there,
+  so a read-only copy stays quiet. Removing the keys afterwards does not
+  retract them; if a shared deck has already gone somewhere, *Share → Rotate
+  keys* is the remedy.
+
 - **Fix: a live session could crash when two people created the same element at
   the same moment.** Sharing an element id across slides is the morph idiom —
   it is what id continuity is *for* — so two collaborators inserting one
@@ -21,6 +164,35 @@ pre-1.0.
   defect as the two before it in this engine — a debug string built eagerly
   around a value that can legitimately be absent — and it is now pinned by a
   test with a deterministic trigger rather than left to a random rig's depth.
+
+- **Fix: the end of the toolbar could be cut off the right edge.** Between
+  roughly 1200 and 1250 pixels wide, the buttons on the right ran past the
+  window while their labels were still showing — the bar collapsed to icons at
+  1200px, but it actually needed 1250px to fit. A fixed width was never going
+  to be right, because the same buttons need a different amount of room
+  depending on browser zoom, system text size, the language the interface is
+  in, and whether the update chip is showing. The bar now measures itself and
+  steps down through its tiers until it fits, whatever is in it.
+
+- **Fix: on a narrow window, the ⋯ menu could not be clicked.** With the
+  properties panel open, the menu opened and drew in full, but every click on
+  it landed on the panel behind instead. The toolbar sits in its own painting
+  layer, and that layer was ranked below the panel — so nothing the menu itself
+  could do would bring it forward. The toolbar now sits above the panels, where
+  a menu that escapes it belongs.
+
+- **Fix: choosing a custom slide size now reveals its width and height.** The
+  page-size picker rebuilt the properties panel before recording any custom
+  state, so a preset-sized deck immediately snapped back to its preset and the
+  two inputs never appeared. Custom mode now reveals the existing controls
+  without changing the document until a dimension is actually edited.
+
+- **Fix: the toolbar keeps its height as you resize the window.** Narrowing
+  past 760px used to shave 4px off it and then, below 700px, add 14px back for
+  touch-sized buttons — so the bar shrank and then grew while a window was
+  being dragged. It now narrows horizontally only, which is where the room was
+  needed anyway, and has two heights with a reason each: normal, and taller on
+  a phone where every button is a 44px target.
 
 ## [1.0.16] — 2026-08-03
 

@@ -35,7 +35,7 @@ import CryptoKit
 ///    the same release as everyone else on the same day — no App Store
 ///    submission per release, no drift. What the app ships is file access.
 final class EditorViewController: UIViewController, WKScriptMessageHandler, WKURLSchemeHandler,
-                                  WKNavigationDelegate, WKDownloadDelegate {
+                                  WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
     private let document: BentoDocument
     private var webView: WKWebView!
 
@@ -43,12 +43,12 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// a picker when it holds no handle — afterwards ⌘S, autosave write-back and
     /// in-place update all reuse it. So the FIRST request targets this document
     /// and needs no UI; any later one is a genuine Save-As or export and must
-    /// not overwrite it. Comparing filenames instead would fail: Bento derives
-    /// its suggested name from the deck TITLE, so it rarely matches.
+    /// not overwrite it. Deciding that from the suggested name instead would
+    /// fail: Bento derives it from the deck TITLE, so it rarely matches, and
+    /// every save would wrongly prompt.
     private var openDocumentVended = false
     private var isPresentingFullscreen = false
     private var fullscreenObs: NSKeyValueObservation?
-    private var pendingExportName: String?
 
     /// Stable per-document host: a truncated SHA-256 of the file's path. Hex
     /// only, so it is always a valid host component.
@@ -265,6 +265,9 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         // frame is driven by viewDidLayoutSubviews, not autoresizing
         webView.allowsBackForwardNavigationGestures = false
         webView.navigationDelegate = self
+        // Without this, alert() does nothing and confirm() returns false — see
+        // the WKUIDelegate section below.
+        webView.uiDelegate = self
         // Full bleed. WKWebView does NOT hand safe-area insets to CSS here —
         // measured both ways: with `.never` the page filled the screen and
         // env(safe-area-inset-*) read 0px on all four sides; with the default it
@@ -343,7 +346,13 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         else { completionHandler(nil); return }
-        var dest = docs.appendingPathComponent(suggestedFilename)
+        // suggestedFilename is page-influenced (`<a download>` carries it), and
+        // WebKit's sanitisation of it is undocumented — so it goes through the
+        // same filter as an export name rather than resting on that. SUBSTITUTED
+        // rather than refused, unlike an export: refusing loses a save the user
+        // asked for, and here the directory is fixed and the loop below can only
+        // create a new file, so a bad name costs a name, never a file.
+        var dest = docs.appendingPathComponent(safeFileName(suggestedFilename) ?? "download.html")
         // never clobber: downloads are new files by definition
         var n = 2
         let ext = dest.pathExtension
@@ -374,6 +383,57 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         present(a, animated: true)
     }
 
+    // MARK: - page dialogs
+    //
+    // WKWebView does not show `alert()`, `confirm()` or `prompt()` on its own.
+    // Without a WKUIDelegate it does not merely skip them — it answers wrongly
+    // and says nothing: alert() is a no-op, and **confirm() returns false**.
+    //
+    // That is not cosmetic. Every one of the runtime's seven uses is shaped
+    // `if (!confirm(…)) return`, so the feature behind each one silently did
+    // nothing when tapped: delete this slide, remove a collaborator, reset
+    // access, replace all slides, embed an oversized file. No error, nothing in
+    // the log, and the same on Android for the same reason — fixed there in the
+    // same change (`TrayChromeClient`).
+    //
+    // The panels are presented from `self` and the completion handler is called
+    // on EVERY path including dismissal, because a WebKit dialog callback that
+    // is never invoked deadlocks the page.
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping () -> Void) {
+        let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""),
+                                  style: .default) { _ in completionHandler() })
+        present(a, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (Bool) -> Void) {
+        let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: ""),
+                                  style: .cancel) { _ in completionHandler(false) })
+        a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""),
+                                  style: .default) { _ in completionHandler(true) })
+        present(a, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+                 defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        let a = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+        a.addTextField { $0.text = defaultText }
+        a.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: ""),
+                                  style: .cancel) { _ in completionHandler(nil) })
+        a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""),
+                                  style: .default) { [weak a] _ in
+            completionHandler(a?.textFields?.first?.text)
+        })
+        present(a, animated: true)
+    }
+
     // MARK: - the save bridge
 
     func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -388,8 +448,12 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             } else {
                 // A copy/template/read-only export. Ask where it goes; it must
                 // never land on the open document.
-                pendingExportName = (m["suggestedName"] as? String) ?? "deck.bento.html"
-                reply(id, ok: true, value: pendingExportName!)
+                //
+                // Normalised HERE as well as at the write, because this name is
+                // handed back to the page and comes straight back as the write
+                // target: sanitising only one end would leave the two disagreeing
+                // about what file the handle refers to.
+                reply(id, ok: true, value: exportName(m["suggestedName"] as? String))
             }
 
         case "read":
@@ -397,7 +461,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             // currently on disk. Only the OPEN document is readable — an export
             // target is somewhere we were handed once and do not hold.
             let want = (m["name"] as? String) ?? ""
-            if want == document.fileURL.lastPathComponent {
+            if targetsOpenDocument(want) {
                 reply(id, ok: true, value: String(data: document.html, encoding: .utf8) ?? "")
             } else {
                 reply(id, ok: true, value: nil)
@@ -406,7 +470,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         case "write":
             let text = (m["text"] as? String) ?? ""
             let name = (m["name"] as? String) ?? ""
-            if name == document.fileURL.lastPathComponent {
+            if targetsOpenDocument(name) {
                 document.html = Data(text.utf8)
                 // updateChangeCount + autosave is the sanctioned path: it
                 // coordinates with iCloud and file coordination rather than
@@ -426,9 +490,92 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         }
     }
 
+    /// The name to vend for an export handle: sanitised, and never the open
+    /// document's.
+    ///
+    /// The vended name IS the handle as far as this bridge is concerned — read
+    /// and write carry nothing else to tell two handles apart — so an export
+    /// vended under the open document's filename would BE the open document's
+    /// handle, and its close() would overwrite the original in place. That is
+    /// the loss exportCopy exists to prevent (an export carries different
+    /// credentials: a read-only copy has the owner keys stripped), and it is not
+    /// exotic: Bento suggests an export name derived from the deck TITLE, so a
+    /// deck saved under its own title — "Notes" as Notes.bento.html — makes
+    /// "Duplicate as new deck…" suggest exactly the open file's name.
+    ///
+    /// Disambiguated rather than refused, because the export is a save the user
+    /// asked for and the picker still shows them where it lands. Prefixed rather
+    /// than numbered, because ".bento.html" is a DOUBLE extension that
+    /// deletingPathExtension splits down the middle ("Notes.bento 2.html").
+    private func exportName(_ suggested: String?) -> String {
+        let name = safeFileName(suggested) ?? "deck.bento.html"
+        return name == document.fileURL.lastPathComponent ? "copy of \(name)" : name
+    }
+
+    /// Does a read/write from the page address the OPEN document, or an export?
+    ///
+    /// Both halves are load-bearing. Comparing names is only sound because
+    /// exportName() guarantees no export handle is ever vended under this name;
+    /// requiring that the document was actually vended means a name the page
+    /// produced on its own — no handle for it ever handed out — cannot address
+    /// the file on disk. Routing on `openDocumentVended` alone could not work:
+    /// the page can hold the document's handle AND an export's at once, so which
+    /// handle a write came through is the question, not how many exist.
+    private func targetsOpenDocument(_ name: String) -> Bool {
+        openDocumentVended && name == document.fileURL.lastPathComponent
+    }
+
     private func reply(_ id: Int, ok: Bool, value: String?) {
-        let arg = value.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" } ?? "null"
-        webView.evaluateJavaScript("window.__bentoNativeReply(\(id), \(ok), \(arg))")
+        webView.evaluateJavaScript("window.__bentoNativeReply(\(id), \(ok), \(value.map(jsString) ?? "null"))")
+    }
+
+    /// Encode one string as a JavaScript literal for the reply call.
+    ///
+    /// Escaping just `"` by hand was not enough, and the `read` op is the proof:
+    /// it returns the WHOLE document HTML, which carries newlines and
+    /// backslashes. A raw newline inside a JS string literal is a syntax error,
+    /// so the reply never runs, `__bentoNativeReply` never fires and the promise
+    /// in bridge.js waits forever — getFile() and createWritable({keepExistingData})
+    /// hang rather than fail. A backslash is quieter and worse: save.ts writes
+    /// every `<` in the data block as a JSON unicode escape, and interpolated
+    /// raw the JS parser CONSUMES that escape — the page gets back a document
+    /// whose `#bento-doc` block now contains a literal `<`, which is the one
+    /// thing the splice contract escapes it to prevent.
+    ///
+    /// JSON strings are JS strings, so a JSON encoder is the whole answer.
+    ///
+    /// The unreachable failure branch replies `null`, not `""`: for the `read`
+    /// op an empty string is a CLAIM — that the file on disk is empty — and a
+    /// page acting on it would save a document built on nothing. `null` is the
+    /// same thing the nil path already sends, and bridge.js turns it into an
+    /// empty File either way, so nothing is lost by declining to assert.
+    private func jsString(_ s: String) -> String {
+        guard let d = try? JSONSerialization.data(withJSONObject: s, options: [.fragmentsAllowed]),
+              let out = String(data: d, encoding: .utf8) else { return "null" }
+        // JSON leaves U+2028/2029 bare; ES2019 made them legal in a string
+        // literal, but this costs nothing and does not bet on the engine vintage.
+        return out.replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+                  .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+    }
+
+    /// Reduce a page-supplied filename to ONE plain component, or refuse it.
+    ///
+    /// The name arrives from the document, and this host treats documents as
+    /// mutually untrusted (that is why the origin is per-document). Passed
+    /// straight to appendingPathComponent, `../Documents/Notes.bento.html`
+    /// escapes the temp directory and overwrites a deck the user downloaded
+    /// earlier and will later open and trust — and since the write lands BEFORE
+    /// the export picker appears, the only thing they are shown is a picker for
+    /// a different file. Refused rather than repaired: a legitimate export name
+    /// is already a single filename, so anything else is not worth guessing at.
+    private func safeFileName(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        // lastPathComponent drops any directory part; the remaining tests catch
+        // what it leaves behind — "" from an empty name, "/" from bare root, and
+        // a leading dot, which covers ".." and hidden files in one.
+        let name = (raw as NSString).lastPathComponent
+        guard !name.isEmpty, !name.contains("/"), !name.hasPrefix(".") else { return nil }
+        return name
     }
 
     /// Write an exported copy to a temp file and let the user place it. Kept
@@ -436,7 +583,17 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// different credentials (a read-only copy has the owner keys stripped), so
     /// overwriting the original with one would be a real data loss.
     private func exportCopy(named name: String, text: String, done: @escaping (Bool, String?) -> Void) {
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        guard let safe = safeFileName(name) else { done(false, "unsafe name"); return }
+        let dir = FileManager.default.temporaryDirectory
+        let tmp = dir.appendingPathComponent(safe)
+        // Belt and braces over safeFileName. The write is the step that cannot be
+        // taken back, so prove the resolved path is still inside the temp
+        // directory instead of trusting that the name tests caught everything.
+        // Both sides are standardized from the SAME base url, so this compares
+        // like with like rather than /var against /private/var.
+        guard tmp.standardizedFileURL.path.hasPrefix(dir.standardizedFileURL.path + "/") else {
+            done(false, "unsafe name"); return
+        }
         do { try Data(text.utf8).write(to: tmp) } catch { done(false, "\(error)"); return }
         let picker = UIDocumentPickerViewController(forExporting: [tmp], asCopy: true)
         present(picker, animated: true) { done(true, nil) }
