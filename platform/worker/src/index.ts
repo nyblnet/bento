@@ -14,6 +14,7 @@
 //   POST /api/decks             create a deck: { doc } -> { id } — OWNER ONLY
 //   GET  /api/decks/:id         fetch a deck's doc JSON — OWNER ONLY
 //   PATCH /api/decks/:id        replace a deck's doc JSON — OWNER ONLY
+//   PATCH /api/decks/:id/editable  flip the deck's editable flag — OWNER ONLY
 //   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
 //   GET  /d/:id                the deck spliced into the shell (a real .bento.html page)
 //   GET  /d/:id/download        same, as a downloadable attachment
@@ -21,11 +22,16 @@
 //
 // "OWNER ONLY" = gated by a session cookie (auth.ts) — single account,
 // created once via /setup, no signup. Viewing a deck (/d/:id, /a/:id/:key)
-// is NOT yet gated here — every deck is reachable by anyone who has its
-// unguessable id, same as before auth existed. Per-deck public/private
-// access control is deliberately a separate PR (it needs its own `decks`
-// column and its own review), not folded into this one — see
-// docs/DECISIONS.md.
+// is NOT gated behind login — every deck is reachable by anyone who has its
+// unguessable id, same as before auth existed. What a non-owner sees there
+// now depends on the deck's `is_editable` flag (migrations/0003_editable.sql,
+// default true): editable → the live editor, same as always; non-editable →
+// handleView serves the doc with `readonly: true` spliced in, which boots
+// Bento straight into its own PLAYER mode (present-only, no editor chrome —
+// see CLAUDE.md's "File modes" section) instead of building a second,
+// bespoke read-only renderer. The OWNER's own session always gets the full
+// editable doc regardless of the flag — the flag only affects anonymous
+// viewers. See docs/DECISIONS.md.
 //
 // wrangler.toml (bindings, no secrets) drives the primary Workers Builds
 // deploy path; the "paste dist/worker.js into Quick Edit" fallback documented
@@ -33,7 +39,7 @@
 import type { Env } from './env.ts'
 import { spliceDoc, SHELL_VERSION } from './splice.ts'
 import { validateIncomingDoc } from './validate.ts'
-import { createDeck, getDeckDoc, replaceDeckDoc, putAsset, getAsset, listDecks } from './store.ts'
+import { createDeck, getDeckDoc, getDeckMeta, replaceDeckDoc, setDeckEditable, putAsset, getAsset, listDecks } from './store.ts'
 import { renderDemoPage } from './demo.ts'
 import { renderSetupPage, renderLoginPage } from './authPages.ts'
 import { parseOutline } from './compile/schema.ts'
@@ -163,7 +169,13 @@ async function handleLogout(req: Request, env: Env): Promise<Response> {
 async function handleListDecks(env: Env): Promise<Response> {
   const decks = await listDecks(env)
   return json({
-    decks: decks.map((d) => ({ id: d.id, title: d.title, createdAt: d.created_at, updatedAt: d.updated_at })),
+    decks: decks.map((d) => ({
+      id: d.id,
+      title: d.title,
+      createdAt: d.created_at,
+      updatedAt: d.updated_at,
+      editable: !!d.is_editable,
+    })),
   })
 }
 
@@ -174,11 +186,27 @@ async function handleCreate(req: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: 'invalid JSON body' }, { status: 400 })
   }
-  const doc = (body as { doc?: unknown })?.doc
+  const { doc, editable } = (body as { doc?: unknown; editable?: unknown }) ?? {}
   const result = validateIncomingDoc(doc)
   if (!result.ok) return json({ errors: result.errors }, { status: 422 })
-  const { id } = await createDeck(env, result.doc!)
+  // Defaults to editable (true) unless the caller explicitly opts out —
+  // matches how every deck link has behaved since before this flag existed.
+  const { id } = await createDeck(env, result.doc!, editable !== false)
   return json({ id, url: `/d/${id}` }, { status: 201 })
+}
+
+async function handleSetEditable(req: Request, env: Env, id: string): Promise<Response> {
+  if (!(await getDeckMeta(env, id))) return notFound()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const editable = (body as { editable?: unknown })?.editable
+  if (typeof editable !== 'boolean') return json({ error: 'editable must be a boolean' }, { status: 422 })
+  await setDeckEditable(env, id, editable)
+  return json({ ok: true, editable })
 }
 
 async function handleCompile(req: Request): Promise<Response> {
@@ -238,10 +266,17 @@ async function handleUploadAsset(req: Request, env: Env, id: string): Promise<Re
   return json(result, { status: 201 })
 }
 
-async function handleView(env: Env, id: string, download: boolean): Promise<Response> {
-  const doc = await getDeckDoc(env, id)
-  if (!doc) return notFound()
-  const spliced = spliceDoc(doc)
+async function handleView(req: Request, env: Env, id: string, download: boolean): Promise<Response> {
+  const [doc, meta, owner] = await Promise.all([getDeckDoc(env, id), getDeckMeta(env, id), isAuthenticated(req, env)])
+  if (!doc || !meta) return notFound()
+  // The owner's own session always gets the full editable doc. A non-owner
+  // viewing a deck the owner marked non-editable gets `readonly: true`
+  // spliced in instead — Bento's own PLAYER file mode (boots straight into
+  // the show, no editor chrome, see CLAUDE.md) rather than a bespoke
+  // read-only renderer. Only the served copy is touched; the stored doc
+  // (and the owner's own view of it) is never mutated.
+  const served = owner || meta.is_editable ? doc : { ...(doc as Record<string, unknown>), readonly: true }
+  const spliced = spliceDoc(served)
   const headers: HeadersInit = {}
   if (download) {
     const title = typeof (doc as { title?: unknown }).title === 'string' ? (doc as { title: string }).title : 'deck'
@@ -333,13 +368,18 @@ export default {
           if (denied) return denied
           return await handleUploadAsset(req, env, parts[2]!)
         }
+        if (parts.length === 4 && parts[3] === 'editable' && req.method === 'PATCH') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleSetEditable(req, env, parts[2]!)
+        }
       }
 
       if (parts[0] === 'd' && parts.length === 2 && req.method === 'GET') {
-        return await handleView(env, parts[1]!, false)
+        return await handleView(req, env, parts[1]!, false)
       }
       if (parts[0] === 'd' && parts.length === 3 && parts[2] === 'download' && req.method === 'GET') {
-        return await handleView(env, parts[1]!, true)
+        return await handleView(req, env, parts[1]!, true)
       }
 
       if (parts[0] === 'a' && parts.length === 3 && req.method === 'GET') {

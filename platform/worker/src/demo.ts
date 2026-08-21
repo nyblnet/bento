@@ -169,6 +169,11 @@ ${PAGE_STYLES}
     max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0;
   }
   .hero-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .editable-toggle {
+    display: flex; align-items: flex-start; gap: 8px; font-size: 13px; font-weight: 400;
+    color: var(--text-dim); margin: 12px 0 0; text-transform: none; letter-spacing: normal;
+  }
+  .editable-toggle input { margin-top: 2px; flex-shrink: 0; }
   @media (max-width: 600px) {
     pre.prompt { max-height: 220px; font-size: 12px; }
   }
@@ -191,14 +196,24 @@ ${PAGE_STYLES}
     color: var(--text-dim); padding: 0 10px; margin: 4px 0 6px;
   }
   .deck-item {
-    display: block; padding: 8px 10px; border-radius: 8px; color: var(--text); text-decoration: none;
-    font-size: 13px; overflow: hidden;
+    display: flex; align-items: center; gap: 4px; padding: 2px 2px 2px 10px; border-radius: 8px;
+    font-size: 13px;
   }
   .deck-item:hover { background: rgba(245,247,250,0.07); }
+  .deck-item-link {
+    flex: 1; min-width: 0; padding: 6px 0; color: var(--text); text-decoration: none; overflow: hidden;
+  }
   .deck-item .deck-title {
     display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .deck-item .deck-time { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .deck-lock {
+    flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px; font-size: 13px;
+    opacity: 0.7;
+  }
+  .deck-lock:hover { opacity: 1; background: rgba(245,247,250,0.1); color: var(--text); }
+  .deck-lock[data-editable="0"] { color: var(--accent); opacity: 1; }
   .deck-list-empty, .deck-list-loading { color: var(--text-dim); font-size: 13px; padding: 8px 10px; }
   .sidebar-footer { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
   .logout-link {
@@ -274,6 +289,11 @@ ${PAGE_STYLES}
         a full <code>bento/slides</code> document (the "advanced" path — paste one directly to skip the
         AI entirely) and create the deck either way.</p>
         <textarea id="input" spellcheck="false"></textarea>
+        <label class="editable-toggle">
+          <input type="checkbox" id="editableToggle" checked>
+          Anyone with the link can edit this deck (uncheck to share it as a locked, present-only link —
+          you can still change this later from the sidebar)
+        </label>
         <div class="actions">
           <button id="loadOutlineExample" type="button">Load example outline</button>
           <button id="loadExample" type="button">Load example doc (advanced)</button>
@@ -308,16 +328,43 @@ async function loadDeckList() {
       return
     }
     list.innerHTML = decks.map(d =>
-      '<a class="deck-item" href="/d/' + d.id + '">' +
+      '<div class="deck-item">' +
+      '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
       '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
       '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
-      '</a>'
+      '</a>' +
+      '<button class="deck-lock" type="button" data-id="' + d.id + '" data-editable="' + (d.editable ? '1' : '0') + '" ' +
+      'title="' + (d.editable ? 'Editable by anyone with the link — click to lock as present-only' : 'Locked as present-only — click to allow editing') + '">' +
+      (d.editable ? '🔓' : '🔒') +
+      '</button>' +
+      '</div>'
     ).join('')
   } catch (e) {
     list.innerHTML = '<div class="deck-list-empty">Couldn\\'t load deck history.</div>'
   }
 }
 loadDeckList()
+
+document.getElementById('deckList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.deck-lock')
+  if (!btn) return
+  e.preventDefault()
+  const id = btn.dataset.id
+  const nextEditable = btn.dataset.editable !== '1'
+  btn.disabled = true
+  try {
+    const res = await fetch('/api/decks/' + id + '/editable', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ editable: nextEditable }),
+    })
+    if (!res.ok) throw new Error('failed')
+    loadDeckList()
+  } catch (err) {
+    btn.disabled = false
+    alert('Could not change that deck\\'s edit lock. Try again.')
+  }
+})
 
 document.getElementById('newDeck').onclick = () => location.reload()
 
@@ -392,10 +439,11 @@ document.getElementById('create').onclick = async () => {
   }
 
   try {
+    const editable = document.getElementById('editableToggle').checked
     const res = await fetch('/api/decks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ doc }),
+      body: JSON.stringify({ doc, editable }),
     })
     const body = await res.json()
     if (!res.ok) {
@@ -406,7 +454,8 @@ document.getElementById('create').onclick = async () => {
     status.className = 'status ok'
     const viewUrl = location.origin + '/d/' + body.id
     status.innerHTML =
-      'Created <strong>' + body.id + '</strong><br>' +
+      'Created <strong>' + body.id + '</strong>' +
+      (editable ? '' : ' — locked as present-only for anyone but you') + '<br>' +
       '<a href="' + viewUrl + '" target="_blank" rel="noopener">Open it</a> · ' +
       '<a href="' + viewUrl + '#present" target="_blank" rel="noopener">Present</a> · ' +
       '<a href="' + viewUrl + '/download" target="_blank" rel="noopener">Download</a>'
