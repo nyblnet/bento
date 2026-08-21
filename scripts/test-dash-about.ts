@@ -38,7 +38,7 @@ registerHooks({
   },
 })
 
-const { planReplace, duplicateWorkbook, workbookStats } =
+const { planReplace, duplicateWorkbook, workbookStats, shouldCheckAtLaunch } =
   await import('../dash/src/about.ts')
 const { parseDoc } = await import('../dash/src/model.ts')
 type DashDoc = import('../dash/src/model.ts').DashDoc
@@ -158,6 +158,30 @@ const workbook = (sheetIds: string[], extra: Record<string, unknown> = {}): Dash
   const s = workbookStats(mixed)
   ok(s.sheets === 2 && s.tables === 1 && s.rows === 3,
     'a canvas sheet counts as a sheet and contributes no rows or columns')
+}
+
+// ================================================= the launch update check
+//
+// PLATFORM §6 says a shipped file checks the signed channel at launch. PLATFORM
+// §5 says a fresh template or demo must never phone home, and the two meet
+// here, in a predicate whose every failure is SILENT: a check that fires when
+// it should not is a network request nobody asked for and nobody sees, and one
+// that never fires looks exactly like a channel with nothing new on it.
+//
+// The shipped shell's #bento-doc block is EMPTY — the live demo at
+// bento.page/dash and every fresh download boot the starter through it — so
+// `saved: false` is precisely the never-been-anybody's-file case.
+{
+  ok(shouldCheckAtLaunch({ saved: true, autoCheck: true, offline: false }) === true,
+    'a saved workbook with the defaults checks at launch')
+  ok(shouldCheckAtLaunch({ saved: false, autoCheck: true, offline: false }) === false,
+    'the STARTER never checks — a workbook nobody has saved has no owner to tell (PLATFORM §5)')
+  ok(shouldCheckAtLaunch({ saved: true, autoCheck: false, offline: false }) === false,
+    'the per-browser opt-out is honoured')
+  ok(shouldCheckAtLaunch({ saved: true, autoCheck: true, offline: true }) === false,
+    'Offline mode wins over everything, including an explicit opt-in')
+  ok(shouldCheckAtLaunch({ saved: false, autoCheck: false, offline: true }) === false,
+    'and all three off is still off (no accidental OR)')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

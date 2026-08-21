@@ -1,0 +1,115 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Data validation: the in-cell dropdown arrow, its menu, and the mark on a
+   cell whose value breaks its rule.
+
+   Three rules and nothing else. Everything in the properties panel is a
+   `.dp-row` built by panels.ts's own kit — a second stylesheet describing the
+   same row is how a panel starts to look like two panels (cellprops.css says
+   the same thing, and this file is deliberately shorter than it). */
+
+/* ————— the in-cell arrow —————
+   Sits at the right edge of the cell, INSIDE it, the way every spreadsheet
+   draws one. `position:absolute` against the cell rather than a flex child,
+   because the value span is what the grid's alignment and its find-marks are
+   written against and a second flex item would move the text under them. */
+.dg-cell.dv-list {
+  position: relative;
+}
+
+.dg-cell .dv-arrow {
+  position: absolute;
+  right: 1px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--grid-head);
+  border-left: 1px solid var(--line);
+  cursor: pointer;
+  /* Only visible on the cell you are on, or the pointer is over — a column of
+     five hundred arrows is a column of noise, and the value is what the reader
+     came to read. Excel shows the arrow on the active cell alone; this adds
+     hover, which is the only affordance a mouse user has for finding it. */
+  opacity: 0;
+}
+
+.dg-cell:hover .dv-arrow,
+.dg-cell.dg-cursor .dv-arrow {
+  opacity: 1;
+}
+
+.dg-cell .dv-arrow:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+/* ————— a value that breaks its rule —————
+   A ring rather than a fill: the cell may already carry a conditional format
+   or a hand-set background (cellfmt.ts), and painting over one would trade a
+   thing the author chose for a thing the app noticed. Excel draws a red oval
+   for exactly this reason. `inset` so it lands inside the cell's own border
+   and cannot shift the lattice by a pixel. */
+.dg-cell.dv-bad {
+  box-shadow: inset 0 0 0 1.5px var(--err-ink);
+}
+
+/* The cell editor while a `reject` rule is refusing what is in it. The editor
+   stays OPEN with the text still there — nothing is committed and nothing is
+   discarded — so it has to look refused rather than merely selected. */
+.dg-cell.dv-refused {
+  box-shadow: inset 0 0 0 2px var(--err-ink);
+  background: var(--err-bg);
+}
+
+/* ————— the list menu —————
+   `position:fixed` on the body: the grid's cells clip, so a menu inside one is
+   a menu with two entries and a scrollbar. The geometry is the repo's floating
+   surface — var(--radius-lg), var(--shadow-pop) — so it reads as the same
+   application as every other popover. */
+.dv-menu {
+  position: fixed;
+  z-index: 60;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+
+.dv-opt {
+  display: block;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-ui);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dv-opt:hover {
+  background: var(--hover);
+}
+
+.dv-opt-on {
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
+.dv-opt-clear {
+  margin-top: 3px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius);
+  color: var(--muted);
+}

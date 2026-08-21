@@ -179,7 +179,12 @@ const loader = `
     var s = document.getElementById('bento-splash'); if (s) s.remove()
   }
   if (typeof DecompressionStream === 'undefined') {
-    fail('This file needs a browser from 2023 or later (Chrome 80+, Edge, Firefox 113+, Safari 16.4+).<br>The document itself is intact \\u2014 open this file in a newer browser.')
+    // The old text said "2023 or later" and then listed Chrome 80, which is
+    // 2020 — a reader checking their version against it learns nothing. It also
+    // never said what kind of file this is, and never mentioned that the data
+    // is plain readable JSON in this same file, which is the one route out that
+    // works with no capable browser at all.
+    fail('<b>This is a bento/dash spreadsheet.</b><br>Opening it needs a browser released in 2023 or later \\u2014 Safari 16.4+, Firefox 113+, or a current Chrome or Edge.<br><br>Nothing is lost: your data is stored as plain readable JSON inside this same file. Open it in a newer browser, or open it in a text editor and look for the block marked "bento-doc".')
     return
   }
   var inflate = async function (id) {

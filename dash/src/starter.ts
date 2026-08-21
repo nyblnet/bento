@@ -46,9 +46,16 @@ export function starterSheet(): TableSheet {
       region: { enc: 'dict', dict: ['North', 'South', 'East'], idx: REGION.map((r) => ['North', 'South', 'East'].indexOf(r)) },
       owner: { enc: 'dict', dict: ['Priya', 'Sam', 'Lee'], idx: OWNER.map((o) => ['Priya', 'Sam', 'Lee'].indexOf(o)) },
       stage: { enc: 'dict', dict: ['Won', 'Open', 'Lost'], idx: STAGE.map((s) => ['Won', 'Open', 'Lost'].indexOf(s)) },
-      value: { enc: 'raw', v: VALUE },
-      closed: { enc: 'raw', v: CLOSED },
-      prob: { enc: 'raw', v: PROB },
+      // COPIED, not referenced. These are module-level constants, so handing
+      // the arrays themselves out made every starter share one set of values:
+      // edit one workbook and the next `starterDoc()` came back already
+      // edited. The app builds one starter per boot so a reader never saw it,
+      // but a rig that builds two and mutates the first is then measuring the
+      // second through the first's changes — a false result that looks like a
+      // finding, which is the worst kind.
+      value: { enc: 'raw', v: [...VALUE] },
+      closed: { enc: 'raw', v: [...CLOSED] },
+      prob: { enc: 'raw', v: [...PROB] },
     },
     // The totals row is the Excel *table* total, not =SUM(D2:D9): it cannot
     // fall out of range when somebody appends a row, which the range form does

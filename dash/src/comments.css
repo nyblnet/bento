@@ -1,0 +1,273 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Comment markers, the thread popover and the sheet's comment pill.
+
+   NOTHING HERE RE-STATES A SURFACE. The popover is `.dx-pop` — the same
+   floating panel as the filter menu, the retype menu, the cell menu and the
+   save menu — and this file adds only what a THREAD needs on top of it. A
+   comment popover that invented its own border, radius and shadow would read
+   as a fifth kind of object in an application that has deliberately got down
+   to one (styles.css, "popover menus").
+
+   COLOURS COME FROM TOKENS, with one exception noted below. styles.css's
+   palette header states the rule: reach for a token, and if none fits add one
+   THERE with both of its values rather than writing a hex where it is used. */
+
+:root {
+  /* THE ONE NEW PAIR, AND IT WANTS MOVING. A comment marker cannot be
+     `--accent`: amber already means "the app did something here" — a filtered
+     header, a formula chip, `dg-noted`'s override bar — and a comment means
+     "a person said something here", which is a different claim about the same
+     cell. Violet is the only hue in dash that is not already spoken for.
+     These two lines belong in styles.css :root beside --err-ink; they are here
+     only because this file may not edit that one. */
+  --cmt: light-dark(#7c3aed, #a78bfa);
+  --cmt-wash: light-dark(#f5f0ff, #2a2140);
+}
+
+/* ————— the marker —————
+   A corner triangle: Excel's placement, Sheets' placement, and the one shape
+   that marks a cell without covering a digit. It sits in the cell's top-RIGHT
+   because `dg-noted` (a cell override) already owns the left edge as an inset
+   bar — two different claims about a cell must not be the same mark in the
+   same place. `.dg-cell` is `position: relative` already, so this needs no
+   overlay layer and no coordinate arithmetic: it rides the cell through
+   sorting, filtering, frozen panes and column resizing for free. */
+
+.dxc-mark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: 0;
+  border-top: 7px solid var(--cmt);
+  border-left: 7px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  z-index: 2;
+}
+/* The hit area is bigger than the ink. A 7px triangle is a fine mark and an
+   unusable target — slides' hard-won detail #8, in a grid. */
+.dxc-mark::after {
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: -1px;
+  width: 14px;
+  height: 14px;
+}
+.dxc-mark:hover { border-top-width: 10px; border-left-width: 10px; }
+.dxc-mark.dxc-done { border-top-color: var(--muted); opacity: 0.6; }
+
+/* A COLUMN comment marks the header, and it goes in the header's own flow —
+   before the filter caret — rather than floating over it. The header is two
+   tight lines carrying a letter, a type chip, a name, an fx badge, a warning
+   and a caret in 130px; anything absolutely positioned there lands on top of
+   one of them. */
+.dxc-hmark {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cmt);
+  cursor: pointer;
+  font-size: 0;
+}
+.dxc-hmark.dxc-done { background: var(--muted); opacity: 0.6; }
+
+/* A thread just created announces itself once, then stops. Without it a new
+   comment lands as a 7px triangle in a screen of numbers and is genuinely hard
+   to find — the same reason slides pulses a fresh marker. */
+@keyframes dxc-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.9); }
+}
+.dxc-fresh { animation: dxc-pulse 0.5s ease 3; transform-origin: top right; }
+@media (prefers-reduced-motion: reduce) {
+  .dxc-fresh { animation: none; }
+}
+
+/* ————— the pill —————
+   The single entry point, floating at the grid's bottom-right the way slides
+   floats its present buttons at the canvas's bottom-left. It is small and
+   quiet when there is nothing open, and it carries the count when there is —
+   an unresolved thread is the one thing in a workbook that wants a badge. */
+
+.dxc-pill {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 20;
+  font: inherit;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+  font-variant-numeric: tabular-nums;
+}
+.dxc-pill:hover { color: var(--ink); border-color: var(--cmt); }
+.dxc-pill.dxc-pill-on { color: var(--cmt); border-color: var(--cmt); background: var(--cmt-wash); }
+
+/* ————— the popover ————— */
+
+.dxc-pop {
+  width: 300px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  gap: 0;
+  padding: 10px;
+}
+.dxc-pop.dxc-list { width: 320px; }
+
+.dxc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+/* the anchor label is the useful half and it must not be pushed out by a badge */
+.dxc-head > span:first-child {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dxc-badge {
+  flex: 0 0 auto;
+  color: var(--err-ink);
+  background: var(--err-bg);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+}
+
+.dxc-note {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.dxc-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+  border-left: 2px solid var(--cmt);
+  padding-left: 8px;
+}
+.dxc-entry b { font-size: 12px; }
+.dxc-entry .dxc-when { font-size: 11px; color: var(--muted); margin-left: 6px; }
+.dxc-entry p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  /* a comment is prose someone typed: it wraps, and a pasted formula or URL
+     breaks rather than widening the popover past the screen */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dxc-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.dxc-who input { flex: 1 1 auto; min-width: 0; }
+
+.dxc-text {
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  resize: vertical;
+}
+.dxc-text:focus { outline: none; border-color: var(--cmt); }
+
+.dxc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+/* `.dx-pop button` is a full-width MENU ROW; a thread's footer is a row of
+   real buttons, so it opts out here rather than the popover opting out of the
+   shared surface. */
+.dxc-pop .dxc-btn {
+  font: inherit;
+  font-size: 12px;
+  width: auto;
+  text-align: center;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.dxc-pop .dxc-btn:hover { background: var(--hover); border-color: var(--muted); }
+.dxc-pop .dxc-primary { border-color: var(--cmt); color: var(--cmt); }
+.dxc-pop .dxc-primary:hover { background: var(--cmt-wash); }
+.dxc-pop .dxc-danger:hover { color: var(--err-ink); border-color: var(--err-ink); }
+
+/* ————— the list ————— */
+
+.dxc-group {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 10px 0 4px;
+}
+.dxc-pop .dxc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius);
+  padding: 5px 7px;
+  cursor: pointer;
+  color: inherit;
+}
+.dxc-pop .dxc-item:hover { background: var(--hover); }
+.dxc-where { font-size: 11px; color: var(--cmt); }
+.dxc-item.dxc-done .dxc-where { color: var(--muted); }
+.dxc-line {
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dxc-item.dxc-done .dxc-line { color: var(--muted); text-decoration: line-through; }

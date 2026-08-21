@@ -88,7 +88,7 @@
   width: 100%;
 }
 .dx-about-in:focus,
-.dx-about select:focus { outline: none; border-color: var(--accent); }
+.dx-about select:focus { outline: none; border-color: var(--blue); }
 .dx-about-in[disabled] { background: var(--panel); color: var(--muted); }
 
 .dx-about-actions {
@@ -110,7 +110,7 @@
   background: var(--surface);
   color: inherit;
 }
-.dx-about-paste:focus { outline: none; border-color: var(--accent); }
+.dx-about-paste:focus { outline: none; border-color: var(--blue); }
 
 .dx-about-vers {
   display: flex;
@@ -142,12 +142,42 @@
 
 .dx-about-close { margin-top: 18px; }
 
+/* The two viewer switches (launch check, Offline mode). A label wrapping its
+   own box, so the text is part of the hit target. */
+.dx-about-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  cursor: pointer;
+  user-select: none;
+}
+.dx-about-check input { accent-color: var(--accent); margin: 0; flex: 0 0 auto; }
+
+/* An update was found at launch. The badge sits on the ways INTO About — the
+   ⓘ button and the version chip — because an update is never urgent enough to
+   interrupt: the file works forever exactly as it is. The button carries the
+   dot as well as the chip, since styles.css hides the chip under 1040px. */
+.dx-update-badge { position: relative; color: var(--accent); }
+.dx-update-badge::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 /* The wordmark and the version chip are the way in — say so on hover, since
    neither looks like a control. */
 .dx-mark[data-about], .dx-ver[data-about] { cursor: pointer; }
 .dx-mark[data-about]:hover, .dx-ver[data-about]:hover { color: var(--accent); }
+/* --blue, like every other focus ring in the app: the amber is 2.02:1 on white
+   and misses SC 1.4.11's 3:1. See .dx-btn:focus-visible in styles.css. */
 .dx-mark[data-about]:focus-visible, .dx-ver[data-about]:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--blue);
   outline-offset: 2px;
   border-radius: 4px;
 }

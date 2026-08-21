@@ -22,15 +22,26 @@
 
 import './about.css'
 import {
-  APP_VERSION, applyUpdate, applyUpdateInPlace, canUpdateInPlace, checkForUpdates,
-  offlineEnabled, type ReleaseInfo,
+  APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace,
+  checkForUpdates, offlineEnabled, setAutoCheck, setOffline,
+  type ReleaseInfo, type UpdateCheck,
 } from '../../kernel/src/update.ts'
+import { disconnectOnline, joinFromDoc } from './sync/online.ts'
+import type { SyncSession } from './sync/session.ts'
 import {
   canWriteInPlace, isEncryptionActive, openedFileName, saveFile, setEncryptionPassword,
 } from '../../kernel/src/save.ts'
 import {
   addVersion, clearRecovery, clearVersions, listVersions,
 } from '../../kernel/src/autosave.ts'
+// CIRCULAR, DELIBERATELY, and safe: recovery.ts imports `planReplace` from
+// here. Both directions are used only inside function bodies — nothing at
+// module scope reads across the cycle — so the live bindings are resolved by
+// the time either is called, under Node's loader and Vite's bundler alike.
+// The alternative was a third module for one banner, or a hook wired through
+// main.ts that a future edit could quietly forget to pass, which would put the
+// two restore paths straight back into disagreeing about reversibility.
+import { offerUndoRestore } from './recovery.ts'
 import { t, locale, localeChoices, setLocale } from './i18n.ts'
 import { docBudget, docBytes, parseDoc, rowCount, type DashDoc, type DocMeta } from './model.ts'
 import type { Store } from './store.ts'
@@ -48,6 +59,81 @@ export interface AboutHooks {
    * lose it" for a field the author just typed.
    */
   onDirty: () => void
+  /**
+   * The live session, when the app has one.
+   *
+   * Offline mode is a HARD switch — "nothing about you or this document leaves
+   * this computer" — and a switch that only stops the NEXT connection while an
+   * open socket keeps streaming edits does not mean that. `online.ts` guards
+   * every join with `offlineEnabled()`, so the missing half is hanging up the
+   * one that is already open. Optional: an app with no session still gets the
+   * update half of the switch.
+   */
+  sync?: SyncSession
+}
+
+// --- the launch-time update check (PLATFORM §6) -------------------------------
+
+/**
+ * Should this file ask the release channel for a newer app, unprompted?
+ *
+ * THREE CONDITIONS, and the first is the one that is easy to miss. A workbook
+ * that has never been saved is the STARTER this build just made — the demo at
+ * bento.page/dash, a template someone is kicking the tyres on — and it has no
+ * user, no history and nothing to update. PLATFORM §5 makes dormancy the rule
+ * for collaboration in as many words ("a fresh template or demo must never
+ * phone home"), and an update check is the same promise: opening the app must
+ * not be an event anybody's server sees. Once the file exists on disk it is
+ * somebody's document, and telling its owner that a newer app exists is the
+ * whole point of the signed channel.
+ *
+ * The other two are the viewer's own settings — the launch check is opt-OUT
+ * (`bento-auto-check`), Offline mode is an absolute no.
+ *
+ * Pure, and exported, because every one of these failures is silent: a check
+ * that never fires looks exactly like a channel with nothing new on it.
+ */
+export function shouldCheckAtLaunch(i: {
+  /** did this workbook arrive in the file, or did this build just mint it? */
+  saved: boolean
+  autoCheck: boolean
+  offline: boolean
+}): boolean {
+  return i.saved && i.autoCheck && !i.offline
+}
+
+/** The launch check's result, for the status line in About. */
+let launchCheck: UpdateCheck | null = null
+
+/**
+ * Run the launch check and badge the way in.
+ *
+ * WHY A BADGE AND NOT A DIALOG: an update is not urgent and the file works
+ * forever as it is, so it waits behind the door the reader already has. Both
+ * the ⓘ button and the version chip open About — the chip is `display: none`
+ * under 1040px (styles.css), which is why the button carries the dot.
+ *
+ * Deferred a beat so the first paint, the grid and the recovery banner are not
+ * competing with a fetch, and so a workbook opened and closed in a second never
+ * makes the request at all.
+ */
+export function checkAtLaunch(opts: { saved: boolean; delayMs?: number }): void {
+  if (!shouldCheckAtLaunch({
+    saved: opts.saved, autoCheck: autoCheckEnabled(), offline: offlineEnabled(),
+  })) return
+  setTimeout(() => {
+    void checkForUpdates().then((res) => {
+      launchCheck = res
+      if (res.status !== 'update') return
+      const v = res.release.version
+      for (const el of document.querySelectorAll<HTMLElement>('[data-act="about"], .dx-ver')) {
+        el.classList.add('dx-update-badge')
+        el.title = t('Version {v} is available — open About to update.', { v })
+      }
+      const chip = document.querySelector<HTMLElement>('.dx-ver')
+      if (chip) chip.textContent = `v${APP_VERSION} → v${v}`
+    })
+  }, opts.delayMs ?? 1500)
 }
 
 // --- pure decisions, testable without a DOM ---------------------------------
@@ -383,6 +469,49 @@ export function openAbout(hooks: AboutHooks): void {
   card.append(upStatus)
   const upActions = actions()
   card.append(upActions)
+
+  /** Offer a release: one button, and the two shapes taking it can have. */
+  const offer = (rel: ReleaseInfo) => {
+    upStatus.textContent = t('Version {v} is available.', { v: rel.version })
+    // Once. `offer` can be reached twice — the launch check found one, then the
+    // reader pressed Check anyway — and a second notes paragraph plus a second
+    // Update button is what that looked like.
+    if (upActions.querySelector('.dx-about-take')) return
+    // The release notes ride INSIDE the signed manifest, so they are as
+    // tamper-proof as the shell — worth showing while someone decides.
+    if (rel.notes) card.insertBefore(note(rel.notes), upActions)
+    const take = button(t('Update this file'), () => {
+      upStatus.textContent = t('Downloading and verifying…')
+      // Two shapes, and the difference is worth stating because one of them
+      // leaves the file on disk untouched and the other does not.
+      const run = canUpdateInPlace()
+        ? applyUpdateInPlace(rel, store.doc).then((ok) => ok
+          ? t('Updated. A backup of the old version was downloaded beside it — reload to run {v}.', { v: rel.version })
+          : t('Cancelled — nothing was changed.'))
+        : applyUpdate(rel, store.doc).then(() =>
+          t('Downloaded. Open the new file — this one is unchanged.'))
+      void run
+        .then((msg) => { upStatus.textContent = msg })
+        .catch((err: unknown) => {
+          upStatus.textContent = t('The update was refused: {why}', {
+            why: err instanceof Error ? err.message : String(err),
+          })
+        })
+    })
+    take.classList.add('dx-about-take')
+    upActions.append(take)
+  }
+
+  // What the LAUNCH check found, if it ran. Without this the dialog is silent
+  // about a check the file already made on the reader's behalf — and the badge
+  // that brought them here would have nothing to explain itself with.
+  if (launchCheck?.status === 'update') offer(launchCheck.release)
+  else if (launchCheck?.status === 'current') {
+    upStatus.textContent = t('Checked at launch — you have the newest version ({v}).', { v: APP_VERSION })
+  } else if (launchCheck?.status === 'error') {
+    upStatus.textContent = t('The launch check could not reach the release channel ({why}). Try again below.', { why: launchCheck.message })
+  }
+
   upActions.append(button(t('Check for updates'), () => {
     if (offlineEnabled()) {
       upStatus.textContent = t('Offline mode is on, so nothing was contacted.')
@@ -390,6 +519,7 @@ export function openAbout(hooks: AboutHooks): void {
     }
     upStatus.textContent = t('Checking…')
     void checkForUpdates().then((res) => {
+      launchCheck = res
       if (res.status === 'current') {
         upStatus.textContent = t('You have the newest version ({v}).', { v: APP_VERSION })
         return
@@ -398,28 +528,69 @@ export function openAbout(hooks: AboutHooks): void {
         upStatus.textContent = t('Could not check for updates: {why}', { why: res.message })
         return
       }
-      const rel: ReleaseInfo = res.release
-      upStatus.textContent = t('Version {v} is available.', { v: rel.version })
-      upActions.append(button(t('Update this file'), () => {
-        upStatus.textContent = t('Downloading and verifying…')
-        // Two shapes, and the difference is worth stating because one of them
-        // leaves the file on disk untouched and the other does not.
-        const run = canUpdateInPlace()
-          ? applyUpdateInPlace(rel, store.doc).then((ok) => ok
-            ? t('Updated. A backup of the old version was downloaded beside it — reload to run {v}.', { v: rel.version })
-            : t('Cancelled — nothing was changed.'))
-          : applyUpdate(rel, store.doc).then(() =>
-            t('Downloaded. Open the new file — this one is unchanged.'))
-        void run
-          .then((msg) => { upStatus.textContent = msg })
-          .catch((err: unknown) => {
-            upStatus.textContent = t('The update was refused: {why}', {
-              why: err instanceof Error ? err.message : String(err),
-            })
-          })
-      }))
+      offer(res.release)
     })
   }))
+
+  // The two switches. Both are the VIEWER's, kept in this browser and never in
+  // the workbook — the same rule as the language and the theme.
+  const check = (label: string, on: boolean, onChange: (v: boolean) => void) => {
+    const l = document.createElement('label')
+    l.className = 'dx-about-check'
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    box.checked = on
+    box.addEventListener('change', () => onChange(box.checked))
+    l.append(box, document.createTextNode(' ' + label))
+    return l
+  }
+  card.append(check(
+    t('Check for updates automatically when this file is opened'),
+    autoCheckEnabled(),
+    (on) => setAutoCheck(on),
+  ))
+  // THE HARD NO-NETWORK SWITCH, and until now dash could only READ it: about.ts
+  // printed "Offline mode is on, so nothing was contacted" for a setting no
+  // part of the app could set. For an app with live collaboration in it, the
+  // privacy switch has to be reachable without a console.
+  const offNote = note('')
+  // `stuck` is setOffline's return: whether the preference PERSISTED. It is
+  // session state, not a setting, so it resets with the dialog rather than
+  // being remembered.
+  let stuck = true
+  const sayOffline = () => {
+    offNote.textContent = offlineEnabled()
+      ? t('Offline mode is on: no update checks, no relay. Nothing leaves this computer. Sheets sync between tabs on this machine as before — that is not networking.')
+      : t('Network features are available: the signed update check, and live collaboration when you start it.')
+    // A switch that will not survive a reload still has to say so. This is the
+    // half the gate cannot tell you: `offlineEnabled()` now answers from the
+    // session flag, so the note above is TRUE for this tab either way, and the
+    // only thing left to be wrong about is how long it lasts.
+    if (!stuck) {
+      offNote.textContent += ' ' + t('This choice could not be saved — site data is blocked or full — so it holds for this tab and will be forgotten when you reload.')
+    }
+  }
+  sayOffline()
+  card.append(check(
+    t('Offline mode — block every network feature (updates, live collaboration)'),
+    offlineEnabled(),
+    (on) => {
+      // Take the RETURN. Swallowing it is the shipped bug this replaces:
+      // the checkbox was seeded once from offlineEnabled() and thereafter
+      // showed its own DOM state, so with storage blocked, ticking Offline
+      // left the box TICKED while the note under it read "Network features
+      // are available" — measured, the dialog contradicting itself on screen.
+      stuck = setOffline(on)
+      // HANG UP, do not merely refuse the next call. Every join path in
+      // online.ts already checks offlineEnabled(); an open socket does not.
+      if (hooks.sync) {
+        if (on) disconnectOnline(hooks.sync)
+        else joinFromDoc(hooks.sync, store) // re-joins only if this doc is shared
+      }
+      sayOffline()
+    },
+  ))
+  card.append(offNote)
 
   // --- language -------------------------------------------------------------
   card.append(h(t('Language')))
@@ -503,7 +674,7 @@ export function openAbout(hooks: AboutHooks): void {
   const versions = document.createElement('div')
   versions.className = 'dx-about-vers'
   card.append(versions)
-  card.append(note(t('Versions are kept in this browser only — never in the file, never online. Restoring replaces the whole workbook and cannot be undone.')))
+  card.append(note(t('Versions are kept in this browser only — never in the file, never online. Restoring replaces the whole workbook, and offers one undo.')))
   void listVersions(store.doc.docId).then((list) => {
     if (!list.length) {
       versions.replaceChildren(note(t('No versions kept yet — they accumulate as you edit.')))
@@ -513,10 +684,11 @@ export function openAbout(hooks: AboutHooks): void {
       const b = document.createElement('button')
       b.className = 'dx-about-ver'
       b.disabled = store.readOnly
-      const when = document.createElement('span')
-      when.textContent = new Date(snap.at).toLocaleString([], {
+      const stamp = new Date(snap.at).toLocaleString([], {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      }) + (i === 0 ? ` · ${t('most recent')}` : '')
+      })
+      const when = document.createElement('span')
+      when.textContent = stamp + (i === 0 ? ` · ${t('most recent')}` : '')
       const doIt = document.createElement('span')
       doIt.textContent = t('Restore')
       b.append(when, doIt)
@@ -525,9 +697,21 @@ export function openAbout(hooks: AboutHooks): void {
         // trusted: it may predate an id repair, or a sheet this build refuses.
         const res = parseDoc(snap.json)
         if (!res.ok) { alert(t('That version could not be read.')); return }
-        if (!confirm(t('Restore this version? The current workbook is replaced and this cannot be undone.'))) return
-        if (replaceWorkbook(hooks, res.doc)) close()
-        else alert(t('That version has no table sheet to show.'))
+        // Held BEFORE the swap: `replaceDoc` empties both undo stacks, so this
+        // object is the only route back to the workbook on screen right now.
+        const before = store.doc
+        if (!replaceWorkbook(hooks, res.doc)) {
+          alert(t('That version has no table sheet to show.'))
+          return
+        }
+        close()
+        // THE SAME OFFER THE RECOVERY BANNER MAKES, from the same function.
+        // This was a `confirm()` reading "this cannot be undone" — which was a
+        // second answer to a question the app had already answered one way, and
+        // the weaker one: it asks BEFORE, when the reader cannot yet see what
+        // they would be agreeing to, instead of handing them a way back AFTER,
+        // when they can.
+        offerUndoRestore(hooks, before, t('Restored the version from {when}.', { when: stamp }))
       })
       return b
     }))

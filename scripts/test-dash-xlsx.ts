@@ -131,8 +131,10 @@ const have = (cmd: string, ...args: string[]): boolean => {
   ok(!liveFormula('[1]Other!A1').ok, 'nor an external workbook reference')
   ok(!liveFormula('Table1[Amount]').ok, 'nor a structured table reference')
   ok(liveFormula('VLOOKUP(A1,B1:C9,2,0)').ok, 'VLOOKUP goes live — dash implements it')
-  ok(!liveFormula('SUMPRODUCT(A1:A9,B1:B9)').ok,
-    'but SUMPRODUCT does not, and a live #NAME? where a number used to be is not an import')
+  ok(liveFormula('SUMPRODUCT(A1:A9,B1:B9)').ok,
+    'SUMPRODUCT goes live too — it was the example here while dash lacked it, and now dash has it')
+  ok(!liveFormula('OFFSET(A1,1,1)').ok,
+    'but OFFSET does not, and a live #NAME? where a number used to be is not an import')
   ok(liveFormula('IF(A1>0,"up","down")').ok, 'a string containing nothing special is fine')
   ok(liveFormula('"a!b"&A1').ok, 'and a `!` inside a quoted string is not a sheet qualifier')
 }
