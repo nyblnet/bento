@@ -1102,3 +1102,11 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
 }
 .sp-paction:hover { background: var(--chrome-2); }
 .sp-paction span { color: var(--muted); font-size: 12px; }
+
+/* A heading inside a menu: the three width rows are a CHOICE among themselves,
+   not three more actions in the list above them. */
+.sp-menu-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 10px 4px; margin-top: 4px;
+  border-top: 1px solid var(--line);
+}

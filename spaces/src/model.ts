@@ -116,6 +116,22 @@ export interface Page {
    * the field untouched.
    */
   journal?: string
+  /**
+   * How wide this page's column is: absent = the theme measure (prose),
+   * 'wide' = room for a board, 'full' = the whole window.
+   *
+   * ON THE PAGE, not on the theme. `theme.measure` is one number for the whole
+   * document, and the right answer genuinely differs per page: a page of notes
+   * wants a comfortable line, a board wants the room. The renderer ALREADY
+   * knew that — a page carrying a `view` block silently jumped to 1500px — but
+   * it decided for you and offered no way to disagree. This makes that rule
+   * explicit and overridable in one field: a board page with no `width` still
+   * gets its room, and a board page set to normal now gets to be narrow.
+   *
+   * Additive. Absent on every page written before this, and an unknown value
+   * falls back to the measure rather than to nothing.
+   */
+  width?: 'wide' | 'full'
   /** the one page daily entries hang from, so the sidebar stays a tree */
   journalHome?: boolean
   /** out of the sidebar, still searchable and linkable, and ENUMERATED at

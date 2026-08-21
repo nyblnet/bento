@@ -14,6 +14,40 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-19 — How wide a page is belongs to the PAGE, not the theme
+
+`theme.measure` is one number for the whole document — "text column width in px
+— DOCUMENT data: the same for every reader". The right answer genuinely differs
+per page, and the renderer already knew it: a page carrying a `view` block
+silently jumped from 720px to 1500px, with a good comment explaining that a
+board is not a line of text.
+
+The problem was that it decided for you and offered no way to disagree. MEASURED
+at a 1600px viewport: a 720px column with 631px of the page empty beside it, and
+0 of the 15 blocks on the starter's Welcome page reaching the limit at all. The
+line length was never the complaint — 720px at 16px is ~88 characters, already
+at the upper end of comfortable. Having no say was.
+
+`Page.width?: 'wide' | 'full'` now, offered in the page menu as Column / Wide /
+Full width. It makes the board rule EXPLICIT rather than magic: a board page
+with no key still gets its room, and a board page set to Column now gets to be
+narrow.
+
+THE DEFAULT IS AN ABSENT KEY, never a stored `'normal'` — the rule `editView`
+already follows. A page somebody set to wide and back is byte-identical to one
+never touched, and a file written before this control existed stays that way. An
+unknown value from a newer build falls back to the measure rather than to no
+width at all.
+
+Not raised: `theme.measure` itself stays 720. Widening it would push past 88
+characters for every page in the document to solve a complaint about empty
+space, which is the wrong lever.
+
+Measured after: column 720, wide 1500, full 1895 at a 2200px viewport; a board
+page with no key still 1500. +1,128 B, no ceiling change.
+
+---
+
 ## 2026-08-18 — The spaces topbar fits itself by measuring, not by px breakpoints
 
 The bar folded at 820px and again at 600px. Those numbers moved once already

@@ -374,6 +374,49 @@ for (const [label, input, err] of [
 // not be saved on a phone, and nothing said so: the controls were in the DOM,
 // laid out, and simply painted past the edge.
 //
+// ---------------------------------------------------------------------------
+// HOW WIDE A PAGE IS.
+//
+// The renderer already varied this — a page carrying a `view` block jumped to
+// 1500px — but it decided for you and offered no way to disagree. Measured at
+// a 1600px viewport before the control existed: a 720px column with 631px of
+// the page empty beside it, and 0 of the 15 blocks on the starter's Welcome
+// page even reaching the limit. The line length was never the problem.
+//
+// What must not regress: the default is an ABSENT key (so a file written
+// before this stays byte-identical), a board with no key keeps its room, and
+// an unknown value from a newer build falls back to the measure rather than to
+// no width at all.
+{
+  const fs = await import('node:fs')
+  const render = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const editor = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const model = fs.readFileSync(new URL('../spaces/src/model.ts', import.meta.url), 'utf8')
+
+  ok(/width\?: 'wide' \| 'full'/.test(model), "Page.width is 'wide' | 'full' — absent is the default")
+  ok(/\[extra: string\]: unknown/.test(model), '…on a Page that still round-trips unknown fields')
+
+  // the board default survives, and the page overrides it
+  ok(/page\.blocks\.some\(\(b\) => b\.type === 'view'\)/.test(render),
+    'a board page is still the DEFAULT wide case')
+  ok(/page\.width === 'wide' \|\| page\.width === 'full' \? page\.width/.test(render),
+    '…and an explicit page width wins over it')
+  ok(/page\.width === undefined \? auto/.test(render),
+    '…while an absent key falls through to the board default')
+  ok(/maxWidth = 'none'/.test(render), "'full' removes the cap rather than picking a big number")
+  ok(/maxWidth = `\$\{doc\.theme\.measure\}px`/.test(render), 'and the prose default is still the theme measure')
+
+  // THE DEFAULT IS AN ABSENT KEY. A page set to wide and back must be
+  // byte-identical to one never touched — the same rule editView follows.
+  ok(/if \(v === 'normal'\) delete pg\.width/.test(editor),
+    'choosing the default DELETES the key rather than storing "normal"')
+  ok(/t\('Width'\)/.test(editor) && /t\('Column'\)/.test(editor) &&
+     /t\('Wide'\)/.test(editor) && /t\('Full width'\)/.test(editor),
+    'the page menu offers all three, translated')
+  ok(/selected: current === 'normal'/.test(editor),
+    '…and marks the one in force, so the menu says what the page already is')
+}
+
 // The rule (slides' rule) is: drop text and fold, never scroll. The failure
 // mode to guard is not the CSS — it is the SECOND LIST: a ⋯ menu maintained by
 // hand as a copy of the desktop row drifts the first time either changes, and

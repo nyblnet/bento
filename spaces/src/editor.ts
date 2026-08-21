@@ -2709,6 +2709,35 @@ export class Editor {
         })
       }))
 
+    // HOW WIDE THIS PAGE IS. The renderer already varied it — a page carrying a
+    // board jumped to 1500px — but it decided for you silently. Measured at a
+    // 1600px viewport: the default column is 720px with 631px of the page left
+    // empty beside it, and nothing on the starter pages even reaches the limit
+    // (0 of 15 blocks wrap). The line length was never the problem; having no
+    // say was.
+    pop.append(el('div', 'sp-menu-label', t('Width')))
+    const current: 'normal' | 'wide' | 'full' =
+      page.width === 'wide' ? 'wide' : page.width === 'full' ? 'full' : 'normal'
+    const setWidth = (v: 'normal' | 'wide' | 'full') => {
+      this.closeOverlay()
+      s.commit(() => {
+        const pg = s.index.page.get(pageId)
+        if (!pg) return
+        // THE DEFAULT IS AN ABSENT KEY, never a stored 'normal'. A page somebody
+        // set to wide and back is then byte-identical to one never touched, and
+        // a file written before this control existed stays that way.
+        if (v === 'normal') delete pg.width
+        else pg.width = v
+      }, { scope: 'doc' })
+      this.paintPage()
+    }
+    pop.append(this.menuItem('widthNarrow', t('Column'), t('Comfortable for reading'),
+      () => setWidth('normal'), { selected: current === 'normal' }))
+    pop.append(this.menuItem('widthWide', t('Wide'), t('Room for a board or a table'),
+      () => setWidth('wide'), { selected: current === 'wide' }))
+    pop.append(this.menuItem('widthFull', t('Full width'), t('Fills the window'),
+      () => setWidth('full'), { selected: current === 'full' }))
+
     pop.append(this.menuItem('trash', t('Delete…'), t('Links to it become dead'), () => {
       this.closeOverlay()
       this.deletePage(pageId)

@@ -14,6 +14,11 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **A page can be as wide as it needs to be.** Column, Wide or Full width, in
+  the page menu. Pages of writing keep a comfortable line; a page with a board
+  on it can have the room. Boards already widened themselves — now they say so,
+  and you can disagree.
+
 - **The toolbar fits itself.** It used to fold at two fixed widths that were
   measured in English; German needs 50px more for the same buttons, and eight
   languages ship in every file. It now measures itself and steps down when it

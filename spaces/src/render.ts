@@ -568,9 +568,18 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   // squeezing one into 720px shows two and a half columns of a six-column
   // board. A page carrying a view gets the room instead; a page of writing
   // keeps its measure.
-  const wide = page.blocks.some((b) => b.type === 'view')
-  if (doc.theme.measure) inner.style.maxWidth = wide ? '1500px' : `${doc.theme.measure}px`
-  if (wide) inner.classList.add('sp-wide')
+  // The page decides; a board is only the DEFAULT for a page that has not.
+  // `width` absent on a board page keeps the room it always had, and an
+  // unknown value from a newer build falls back to the measure rather than to
+  // no width at all.
+  const auto: 'wide' | undefined = page.blocks.some((b) => b.type === 'view') ? 'wide' : undefined
+  const width = page.width === 'wide' || page.width === 'full' ? page.width
+    : page.width === undefined ? auto
+    : undefined
+  if (width === 'full') inner.style.maxWidth = 'none'
+  else if (width === 'wide') inner.style.maxWidth = '1500px'
+  else if (doc.theme.measure) inner.style.maxWidth = `${doc.theme.measure}px`
+  if (width) inner.classList.add('sp-wide')
 
   const h = document.createElement('h1')
   h.className = 'sp-title'
