@@ -169,11 +169,15 @@ ${PAGE_STYLES}
     max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0;
   }
   .hero-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-  .editable-toggle {
-    display: flex; align-items: flex-start; gap: 8px; font-size: 13px; font-weight: 400;
-    color: var(--text-dim); margin: 12px 0 0; text-transform: none; letter-spacing: normal;
+  .access-field { margin: 12px 0 0; }
+  .access-field label {
+    font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: normal; margin-bottom: 4px;
   }
-  .editable-toggle input { margin-top: 2px; flex-shrink: 0; }
+  .access-field select {
+    display: block; width: 100%; background: var(--bg-elev); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px;
+  }
+  .access-field select:focus { outline: none; border-color: var(--accent); }
   @media (max-width: 600px) {
     pre.prompt { max-height: 220px; font-size: 12px; }
   }
@@ -207,14 +211,44 @@ ${PAGE_STYLES}
     display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .deck-item .deck-time { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-  .deck-lock {
+  .deck-status {
+    flex: 0 0 auto; width: 20px; text-align: center; font-size: 12px; opacity: 0.85;
+  }
+  .deck-gear {
     flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
     border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px; font-size: 13px;
-    opacity: 0.7;
+    opacity: 0.6;
   }
-  .deck-lock:hover { opacity: 1; background: rgba(245,247,250,0.1); color: var(--text); }
-  .deck-lock[data-editable="0"] { color: var(--accent); opacity: 1; }
+  .deck-gear:hover { opacity: 1; background: rgba(245,247,250,0.1); color: var(--text); }
   .deck-list-empty, .deck-list-loading { color: var(--text-dim); font-size: 13px; padding: 8px 10px; }
+
+  /* access dialog — a body-level centered modal, deliberately NOT anchored
+     inside .deck-list: that container is overflow-y:auto, and a floating
+     child positioned inside a scroll container gets clipped the moment its
+     box would extend past it (CLAUDE.md hard-won lesson #10) — the exact
+     trap a sidebar-anchored popover here would fall into. */
+  .access-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .access-modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; width: 360px; max-width: 100%; box-sizing: border-box;
+  }
+  .access-modal h3 { margin: 0 0 4px; font-size: 16px; }
+  .access-modal-sub { color: var(--text-dim); font-size: 12px; margin: 0 0 14px; }
+  .access-option {
+    display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+    background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; cursor: pointer; color: var(--text); font: inherit;
+  }
+  .access-option:hover { border-color: var(--border-strong); }
+  .access-option.current { border-color: var(--accent); background: rgba(232,68,46,0.1); }
+  .access-option:disabled { opacity: 0.6; cursor: default; }
+  .access-option .access-icon { font-size: 17px; flex-shrink: 0; line-height: 1.3; }
+  .access-option .access-label { font-weight: 700; font-size: 13px; display: block; }
+  .access-option .access-desc { display: block; font-weight: 400; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .access-modal-close { width: 100%; margin-top: 2px; }
   .sidebar-footer { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
   .logout-link {
     display: block; width: 100%; text-align: left; font-size: 13px; color: var(--text-dim);
@@ -289,11 +323,14 @@ ${PAGE_STYLES}
         a full <code>bento/slides</code> document (the "advanced" path — paste one directly to skip the
         AI entirely) and create the deck either way.</p>
         <textarea id="input" spellcheck="false"></textarea>
-        <label class="editable-toggle">
-          <input type="checkbox" id="editableToggle" checked>
-          Anyone with the link can edit this deck (uncheck to share it as a locked, present-only link —
-          you can still change this later from the sidebar)
-        </label>
+        <div class="access-field">
+          <label for="accessSelect">Who can open this deck's link? (changeable anytime from the sidebar's ⚙️)</label>
+          <select id="accessSelect">
+            <option value="edit" selected>Editable — anyone with the link can edit it, like you</option>
+            <option value="view">View only — anyone with the link can view/present it, not edit</option>
+            <option value="private">Private — only you; a 404 for anyone else, even with the link</option>
+          </select>
+        </div>
         <div class="actions">
           <button id="loadOutlineExample" type="button">Load example outline</button>
           <button id="loadExample" type="button">Load example doc (advanced)</button>
@@ -316,6 +353,15 @@ function relativeTime(ms) {
   if (day < 30) return day + 'd ago'
   return new Date(ms).toLocaleDateString()
 }
+const ACCESS_LEVELS = [
+  { value: 'edit', icon: '🔓', label: 'Editable', desc: 'Anyone with the link can edit it, just like you' },
+  { value: 'view', icon: '👁️', label: 'View only', desc: 'Anyone with the link can view/present it, not edit' },
+  { value: 'private', icon: '🔒', label: 'Private', desc: 'Only you — a 404 for anyone else, even with the link' },
+]
+function accessMeta(value) {
+  return ACCESS_LEVELS.find(a => a.value === value) || ACCESS_LEVELS[0]
+}
+
 async function loadDeckList() {
   const list = document.getElementById('deckList')
   try {
@@ -327,43 +373,72 @@ async function loadDeckList() {
       list.innerHTML = '<div class="deck-list-empty">No decks yet — create your first one →</div>'
       return
     }
-    list.innerHTML = decks.map(d =>
-      '<div class="deck-item">' +
-      '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
-      '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
-      '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
-      '</a>' +
-      '<button class="deck-lock" type="button" data-id="' + d.id + '" data-editable="' + (d.editable ? '1' : '0') + '" ' +
-      'title="' + (d.editable ? 'Editable by anyone with the link — click to lock as present-only' : 'Locked as present-only — click to allow editing') + '">' +
-      (d.editable ? '🔓' : '🔒') +
-      '</button>' +
-      '</div>'
-    ).join('')
+    list.innerHTML = decks.map(d => {
+      const a = accessMeta(d.access)
+      return (
+        '<div class="deck-item">' +
+        '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
+        '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
+        '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
+        '</a>' +
+        '<span class="deck-status" title="' + a.label + ' — ' + a.desc + '">' + a.icon + '</span>' +
+        '<button class="deck-gear" type="button" data-id="' + d.id + '" data-access="' + d.access + '" title="Manage access">⚙️</button>' +
+        '</div>'
+      )
+    }).join('')
   } catch (e) {
     list.innerHTML = '<div class="deck-list-empty">Couldn\\'t load deck history.</div>'
   }
 }
 loadDeckList()
 
-document.getElementById('deckList').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.deck-lock')
+function openAccessModal(id, current) {
+  const backdrop = document.createElement('div')
+  backdrop.className = 'access-modal-backdrop'
+  backdrop.innerHTML =
+    '<div class="access-modal">' +
+    '<h3>Deck access</h3>' +
+    '<p class="access-modal-sub">Choose who can open this deck\\'s link.</p>' +
+    ACCESS_LEVELS.map(a =>
+      '<button type="button" class="access-option' + (a.value === current ? ' current' : '') + '" data-value="' + a.value + '">' +
+      '<span class="access-icon">' + a.icon + '</span>' +
+      '<span><span class="access-label">' + a.label + '</span>' +
+      '<span class="access-desc">' + a.desc + '</span></span>' +
+      '</button>'
+    ).join('') +
+    '<button type="button" class="access-modal-close">Close</button>' +
+    '</div>'
+  document.body.appendChild(backdrop)
+  const close = () => backdrop.remove()
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close() })
+  backdrop.querySelector('.access-modal-close').onclick = close
+  backdrop.querySelectorAll('.access-option').forEach(btn => {
+    btn.onclick = async () => {
+      const value = btn.dataset.value
+      if (value === current) { close(); return }
+      backdrop.querySelectorAll('.access-option').forEach(b => b.disabled = true)
+      try {
+        const res = await fetch('/api/decks/' + id + '/access', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ access: value }),
+        })
+        if (!res.ok) throw new Error('failed')
+        close()
+        loadDeckList()
+      } catch (err) {
+        backdrop.querySelectorAll('.access-option').forEach(b => b.disabled = false)
+        alert('Could not change this deck\\'s access. Try again.')
+      }
+    }
+  })
+}
+
+document.getElementById('deckList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.deck-gear')
   if (!btn) return
   e.preventDefault()
-  const id = btn.dataset.id
-  const nextEditable = btn.dataset.editable !== '1'
-  btn.disabled = true
-  try {
-    const res = await fetch('/api/decks/' + id + '/editable', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ editable: nextEditable }),
-    })
-    if (!res.ok) throw new Error('failed')
-    loadDeckList()
-  } catch (err) {
-    btn.disabled = false
-    alert('Could not change that deck\\'s edit lock. Try again.')
-  }
+  openAccessModal(btn.dataset.id, btn.dataset.access)
 })
 
 document.getElementById('newDeck').onclick = () => location.reload()
@@ -439,11 +514,11 @@ document.getElementById('create').onclick = async () => {
   }
 
   try {
-    const editable = document.getElementById('editableToggle').checked
+    const access = document.getElementById('accessSelect').value
     const res = await fetch('/api/decks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ doc, editable }),
+      body: JSON.stringify({ doc, access }),
     })
     const body = await res.json()
     if (!res.ok) {
@@ -453,9 +528,11 @@ document.getElementById('create').onclick = async () => {
     }
     status.className = 'status ok'
     const viewUrl = location.origin + '/d/' + body.id
+    const note = access === 'private' ? ' — private, only you can open it'
+      : access === 'view' ? ' — view only for anyone but you'
+      : ''
     status.innerHTML =
-      'Created <strong>' + body.id + '</strong>' +
-      (editable ? '' : ' — locked as present-only for anyone but you') + '<br>' +
+      'Created <strong>' + body.id + '</strong>' + note + '<br>' +
       '<a href="' + viewUrl + '" target="_blank" rel="noopener">Open it</a> · ' +
       '<a href="' + viewUrl + '#present" target="_blank" rel="noopener">Present</a> · ' +
       '<a href="' + viewUrl + '/download" target="_blank" rel="noopener">Download</a>'

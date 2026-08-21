@@ -17,11 +17,24 @@
 // auth.ts (migrations/0002_auth.sql) — every mutating route now checks the
 // caller's session instead, so nothing here mints or checks a token anymore.
 // The column stays in the table (existing rows still have a NOT NULL value
-// to satisfy), just unused. `is_editable` (migrations/0003_editable.sql)
-// gates what an ANONYMOUS viewer of /d/:id gets — see index.ts's handleView.
+// to satisfy), just unused. Same fate now for `is_editable`
+// (migrations/0003_editable.sql, a same-day boolean superseded by the
+// three-state `access` column below before it ever reached most users) —
+// gates what an ANONYMOUS viewer of /d/:id and /a/:id/:key get, see
+// index.ts's handleView/handleAsset.
 import type { Env } from './env.ts'
 import { randomId, sha256Hex } from './ids.ts'
 import { SHELL_VERSION } from './splice.ts'
+
+/** Who can reach a deck without the owner's own session.
+ *  - 'private' — nobody; handleView/handleAsset 404 exactly like an unknown
+ *    id, so a private deck's existence isn't distinguishable from no deck
+ *    at all.
+ *  - 'view'    — anyone with the link, but read-only (Bento's PLAYER mode).
+ *  - 'edit'    — anyone with the link, full live editor — the default,
+ *    matching how every deck link behaved before this column existed. */
+export type DeckAccess = 'private' | 'view' | 'edit'
+export const DECK_ACCESS_LEVELS: readonly DeckAccess[] = ['private', 'view', 'edit']
 
 export interface DeckMeta {
   id: string
@@ -30,7 +43,7 @@ export interface DeckMeta {
   updated_at: number
   shell_version: string
   doc_bytes: number
-  is_editable: number // D1 has no boolean type; 0/1
+  access: DeckAccess
 }
 
 export interface CreateResult {
@@ -46,14 +59,13 @@ function titleOf(doc: Record<string, unknown>): string {
 }
 
 /** Create a new deck, writes R2 + D1. `doc` must already be validated
- *  (validate.ts) — this function trusts its shape. `editable` defaults to
- *  true, matching how every deck link has behaved since before this flag
- *  existed: reachable and editable by anyone holding the id. Pass false to
- *  share the deck as a read-only presentation instead (see handleView). */
+ *  (validate.ts) — this function trusts its shape. `access` defaults to
+ *  'edit', matching how every deck link has behaved since before this
+ *  column existed: reachable and editable by anyone holding the id. */
 export async function createDeck(
   env: Env,
   doc: Record<string, unknown>,
-  editable = true,
+  access: DeckAccess = 'edit',
 ): Promise<CreateResult> {
   const id = randomId()
   const now = Date.now()
@@ -66,10 +78,10 @@ export async function createDeck(
 
   await env.DOCS.put(deckDocKey(id), json, { httpMetadata: { contentType: 'application/json' } })
   await env.DB.prepare(
-    `INSERT INTO decks (id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, is_editable)
+    `INSERT INTO decks (id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, titleOf(stored), now, now, '', SHELL_VERSION, json.length, editable ? 1 : 0)
+    .bind(id, titleOf(stored), now, now, '', SHELL_VERSION, json.length, access)
     .run()
 
   return { id }
@@ -83,7 +95,7 @@ export async function getDeckDoc(env: Env, id: string): Promise<unknown | null> 
 
 export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null> {
   const row = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, is_editable FROM decks WHERE id = ?`,
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access FROM decks WHERE id = ?`,
   )
     .bind(id)
     .first<DeckMeta>()
@@ -97,21 +109,19 @@ const LIST_LIMIT = 200
  *  project's declared scale. */
 export async function listDecks(env: Env): Promise<DeckMeta[]> {
   const result = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, is_editable FROM decks ORDER BY updated_at DESC LIMIT ?`,
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access FROM decks ORDER BY updated_at DESC LIMIT ?`,
   )
     .bind(LIST_LIMIT)
     .all<DeckMeta>()
   return result.results
 }
 
-/** Flip a deck's editable flag — the owner-only toggle behind the sidebar's
- *  lock icon. Anonymous viewers of a non-editable deck get a read-only
- *  presentation instead of the live editor (handleView in index.ts); the
- *  owner's own session always keeps full edit access either way. */
-export async function setDeckEditable(env: Env, id: string, editable: boolean): Promise<void> {
-  await env.DB.prepare(`UPDATE decks SET is_editable = ? WHERE id = ?`)
-    .bind(editable ? 1 : 0, id)
-    .run()
+/** Change a deck's access level — the owner-only setting behind the
+ *  sidebar's ⚙️ dialog. Anonymous viewers get whatever `access` says
+ *  (handleView/handleAsset in index.ts); the owner's own session always
+ *  keeps full edit access regardless of it. */
+export async function setDeckAccess(env: Env, id: string, access: DeckAccess): Promise<void> {
+  await env.DB.prepare(`UPDATE decks SET access = ? WHERE id = ?`).bind(access, id).run()
 }
 
 /** Overwrite a deck's doc in place. Caller must have already verified the

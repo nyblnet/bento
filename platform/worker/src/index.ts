@@ -14,24 +14,29 @@
 //   POST /api/decks             create a deck: { doc } -> { id } — OWNER ONLY
 //   GET  /api/decks/:id         fetch a deck's doc JSON — OWNER ONLY
 //   PATCH /api/decks/:id        replace a deck's doc JSON — OWNER ONLY
-//   PATCH /api/decks/:id/editable  flip the deck's editable flag — OWNER ONLY
+//   PATCH /api/decks/:id/access  change the deck's access level — OWNER ONLY
 //   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
 //   GET  /d/:id                the deck spliced into the shell (a real .bento.html page)
 //   GET  /d/:id/download        same, as a downloadable attachment
 //   GET  /a/:id/:key            an uploaded asset's bytes
 //
 // "OWNER ONLY" = gated by a session cookie (auth.ts) — single account,
-// created once via /setup, no signup. Viewing a deck (/d/:id, /a/:id/:key)
-// is NOT gated behind login — every deck is reachable by anyone who has its
-// unguessable id, same as before auth existed. What a non-owner sees there
-// now depends on the deck's `is_editable` flag (migrations/0003_editable.sql,
-// default true): editable → the live editor, same as always; non-editable →
-// handleView serves the doc with `readonly: true` spliced in, which boots
-// Bento straight into its own PLAYER mode (present-only, no editor chrome —
-// see CLAUDE.md's "File modes" section) instead of building a second,
-// bespoke read-only renderer. The OWNER's own session always gets the full
-// editable doc regardless of the flag — the flag only affects anonymous
-// viewers. See docs/DECISIONS.md.
+// created once via /setup, no signup. What a non-owner (no valid session)
+// gets from /d/:id, /d/:id/download, and /a/:id/:key depends on the deck's
+// `access` column (migrations/0004_access.sql, store.ts's DeckAccess,
+// default 'edit' — matches how every deck link behaved before this column
+// existed):
+//   'private' — handleView/handleAsset 404, identically to an unknown id.
+//     A private deck's very existence isn't observable without the owner's
+//     session; there is no "it exists but you can't open it" response.
+//   'view'    — handleView serves the doc with `readonly: true` spliced in,
+//     which boots Bento straight into its own PLAYER mode (present-only, no
+//     editor chrome — see CLAUDE.md's "File modes" section) instead of a
+//     bespoke read-only renderer. Assets still serve (needed to render it).
+//   'edit'    — the live editor, same as always.
+// The OWNER's own session always gets the full editable doc/assets
+// regardless of `access` — the column only affects anonymous viewers. See
+// docs/DECISIONS.md.
 //
 // wrangler.toml (bindings, no secrets) drives the primary Workers Builds
 // deploy path; the "paste dist/worker.js into Quick Edit" fallback documented
@@ -39,7 +44,18 @@
 import type { Env } from './env.ts'
 import { spliceDoc, SHELL_VERSION } from './splice.ts'
 import { validateIncomingDoc } from './validate.ts'
-import { createDeck, getDeckDoc, getDeckMeta, replaceDeckDoc, setDeckEditable, putAsset, getAsset, listDecks } from './store.ts'
+import {
+  createDeck,
+  getDeckDoc,
+  getDeckMeta,
+  replaceDeckDoc,
+  setDeckAccess,
+  putAsset,
+  getAsset,
+  listDecks,
+  DECK_ACCESS_LEVELS,
+  type DeckAccess,
+} from './store.ts'
 import { renderDemoPage } from './demo.ts'
 import { renderSetupPage, renderLoginPage } from './authPages.ts'
 import { parseOutline } from './compile/schema.ts'
@@ -166,6 +182,10 @@ async function handleLogout(req: Request, env: Env): Promise<Response> {
 
 // --- deck routes ---------------------------------------------------------
 
+function isDeckAccess(v: unknown): v is DeckAccess {
+  return typeof v === 'string' && (DECK_ACCESS_LEVELS as readonly string[]).includes(v)
+}
+
 async function handleListDecks(env: Env): Promise<Response> {
   const decks = await listDecks(env)
   return json({
@@ -174,7 +194,7 @@ async function handleListDecks(env: Env): Promise<Response> {
       title: d.title,
       createdAt: d.created_at,
       updatedAt: d.updated_at,
-      editable: !!d.is_editable,
+      access: d.access,
     })),
   })
 }
@@ -186,16 +206,19 @@ async function handleCreate(req: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: 'invalid JSON body' }, { status: 400 })
   }
-  const { doc, editable } = (body as { doc?: unknown; editable?: unknown }) ?? {}
+  const { doc, access } = (body as { doc?: unknown; access?: unknown }) ?? {}
   const result = validateIncomingDoc(doc)
   if (!result.ok) return json({ errors: result.errors }, { status: 422 })
-  // Defaults to editable (true) unless the caller explicitly opts out —
-  // matches how every deck link has behaved since before this flag existed.
-  const { id } = await createDeck(env, result.doc!, editable !== false)
+  if (access !== undefined && !isDeckAccess(access)) {
+    return json({ error: `access must be one of: ${DECK_ACCESS_LEVELS.join(', ')}` }, { status: 422 })
+  }
+  // Defaults to 'edit' unless the caller explicitly picks something else —
+  // matches how every deck link has behaved since before this column existed.
+  const { id } = await createDeck(env, result.doc!, access ?? 'edit')
   return json({ id, url: `/d/${id}` }, { status: 201 })
 }
 
-async function handleSetEditable(req: Request, env: Env, id: string): Promise<Response> {
+async function handleSetAccess(req: Request, env: Env, id: string): Promise<Response> {
   if (!(await getDeckMeta(env, id))) return notFound()
   let body: unknown
   try {
@@ -203,10 +226,12 @@ async function handleSetEditable(req: Request, env: Env, id: string): Promise<Re
   } catch {
     return json({ error: 'invalid JSON body' }, { status: 400 })
   }
-  const editable = (body as { editable?: unknown })?.editable
-  if (typeof editable !== 'boolean') return json({ error: 'editable must be a boolean' }, { status: 422 })
-  await setDeckEditable(env, id, editable)
-  return json({ ok: true, editable })
+  const access = (body as { access?: unknown })?.access
+  if (!isDeckAccess(access)) {
+    return json({ error: `access must be one of: ${DECK_ACCESS_LEVELS.join(', ')}` }, { status: 422 })
+  }
+  await setDeckAccess(env, id, access)
+  return json({ ok: true, access })
 }
 
 async function handleCompile(req: Request): Promise<Response> {
@@ -269,13 +294,16 @@ async function handleUploadAsset(req: Request, env: Env, id: string): Promise<Re
 async function handleView(req: Request, env: Env, id: string, download: boolean): Promise<Response> {
   const [doc, meta, owner] = await Promise.all([getDeckDoc(env, id), getDeckMeta(env, id), isAuthenticated(req, env)])
   if (!doc || !meta) return notFound()
-  // The owner's own session always gets the full editable doc. A non-owner
-  // viewing a deck the owner marked non-editable gets `readonly: true`
-  // spliced in instead — Bento's own PLAYER file mode (boots straight into
-  // the show, no editor chrome, see CLAUDE.md) rather than a bespoke
-  // read-only renderer. Only the served copy is touched; the stored doc
-  // (and the owner's own view of it) is never mutated.
-  const served = owner || meta.is_editable ? doc : { ...(doc as Record<string, unknown>), readonly: true }
+  // A private deck is 404 for anyone but the owner — indistinguishable from
+  // no deck at all, so its existence isn't observable either. The owner's
+  // own session always gets the full editable doc regardless of `access`.
+  if (!owner && meta.access === 'private') return notFound()
+  // 'view' gets `readonly: true` spliced in instead of the plain doc — Bento's
+  // own PLAYER file mode (boots straight into the show, no editor chrome, see
+  // CLAUDE.md) rather than a bespoke read-only renderer. Only the served copy
+  // is touched; the stored doc (and the owner's own view of it) never is.
+  const served =
+    owner || meta.access === 'edit' ? doc : { ...(doc as Record<string, unknown>), readonly: true }
   const spliced = spliceDoc(served)
   const headers: HeadersInit = {}
   if (download) {
@@ -286,13 +314,25 @@ async function handleView(req: Request, env: Env, id: string, download: boolean)
   return html(spliced, { headers })
 }
 
-async function handleAsset(env: Env, id: string, key: string): Promise<Response> {
+async function handleAsset(req: Request, env: Env, id: string, key: string): Promise<Response> {
+  const [meta, owner] = await Promise.all([getDeckMeta(env, id), isAuthenticated(req, env)])
+  if (!meta) return notFound()
+  // Same 404-not-403 rule as handleView: a private deck's assets are just as
+  // unreachable, and just as invisible, to anyone without the owner's session.
+  if (!owner && meta.access === 'private') return notFound()
   const obj = await getAsset(env, id, key)
   if (!obj) return notFound()
+  // Content-addressed keys make `public, immutable` caching safe for
+  // 'view'/'edit' decks. A 'private' deck must never be handed a
+  // shared-cacheable response, even to its owner — a CDN edge caching it
+  // once would let a later anonymous request for the same URL skip the
+  // access check above entirely by being served straight from cache.
+  const cacheControl =
+    meta.access === 'private' ? 'private, no-store' : 'public, max-age=31536000, immutable'
   return new Response(obj.body, {
     headers: {
       'content-type': obj.httpMetadata?.contentType ?? 'application/octet-stream',
-      'cache-control': 'public, max-age=31536000, immutable',
+      'cache-control': cacheControl,
     },
   })
 }
@@ -368,10 +408,10 @@ export default {
           if (denied) return denied
           return await handleUploadAsset(req, env, parts[2]!)
         }
-        if (parts.length === 4 && parts[3] === 'editable' && req.method === 'PATCH') {
+        if (parts.length === 4 && parts[3] === 'access' && req.method === 'PATCH') {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
-          return await handleSetEditable(req, env, parts[2]!)
+          return await handleSetAccess(req, env, parts[2]!)
         }
       }
 
@@ -383,7 +423,7 @@ export default {
       }
 
       if (parts[0] === 'a' && parts.length === 3 && req.method === 'GET') {
-        return await handleAsset(env, parts[1]!, parts[2]!)
+        return await handleAsset(req, env, parts[1]!, parts[2]!)
       }
 
       if (parts[0] === 'healthz') return json({ ok: true, shellVersion: SHELL_VERSION })
