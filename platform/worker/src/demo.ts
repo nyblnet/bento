@@ -404,11 +404,12 @@ document.getElementById('create').onclick = async () => {
       return
     }
     status.className = 'status ok'
-    status.textContent =
-      'Created ' + body.id + '\\n' +
-      'Open it:  ' + location.origin + '/d/' + body.id + '\\n' +
-      'Present:  ' + location.origin + '/d/' + body.id + '#present\\n' +
-      'Download: ' + location.origin + '/d/' + body.id + '/download'
+    const viewUrl = location.origin + '/d/' + body.id
+    status.innerHTML =
+      'Created <strong>' + body.id + '</strong><br>' +
+      '<a href="' + viewUrl + '" target="_blank" rel="noopener">Open it</a> · ' +
+      '<a href="' + viewUrl + '#present" target="_blank" rel="noopener">Present</a> · ' +
+      '<a href="' + viewUrl + '/download" target="_blank" rel="noopener">Download</a>'
     loadDeckList()
   } catch (e) {
     status.className = 'status err'
