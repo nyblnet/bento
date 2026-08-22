@@ -279,7 +279,7 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
       add({ page: p.id, code: 'no-blocks', severity: 'error', path: 'blocks',
         message: `Page "${p.title}" has no blocks, so there is nothing in it to put a caret in — it cannot be typed into.`,
         fix: 'Give it at least one block, e.g. { "type": "p", "html": "" }.' })
-    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'pagelink' || b.type === 'divider')) {
+    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'divider')) {
       add({ page: p.id, code: 'empty-page', severity: 'info',
         message: `Page "${p.title}" has blocks but no content.`,
         fix: 'Write something, or remove the page. A deliberately blank page (an inbox, a stub) is fine — this is only a note.' })
@@ -419,18 +419,31 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
 
       const src = typeof b.src === 'string' ? b.src : ''
       if (src.startsWith('asset:')) usedAssets.add(src.slice(6))
-      if (b.type === 'image') {
+      // a video's poster is a second reference into the asset table, and one
+      // this sweep did not see — so the still an author picked would read as an
+      // orphan and validate() would advise deleting it
+      const posterRef = typeof b.poster === 'string' ? b.poster : ''
+      if (posterRef.startsWith('asset:')) usedAssets.add(posterRef.slice(6))
+      if (b.type === 'image' || b.type === 'media') {
+        const what = b.type === 'media'
+          ? (String(b.kind ?? 'video') === 'audio' ? 'An audio' : 'A video')
+          : 'An image'
         if (!src) {
-          add({ ...at, code: 'image-no-src', severity: 'error', path: 'src',
-            message: 'An image block has no src, so nothing renders.',
-            fix: 'Set src to asset:<key>, or a data: URI.' })
+          add({ ...at, code: `${b.type}-no-src`, severity: b.type === 'media' ? 'warning' : 'error', path: 'src',
+            // a media block with no src is a CHOOSER, not a hole: the editor
+            // inserts one and asks for the file second, so an unfinished block
+            // is a normal intermediate state rather than a broken document
+            message: b.type === 'media'
+              ? `${what} block has no src, so it renders as a "choose a file" box.`
+              : 'An image block has no src, so nothing renders.',
+            fix: 'Set src to asset:<key>, a data: URI, or an https: address.' })
         } else if (src.startsWith('asset:') && !(src.slice(6) in assets)) {
           add({ ...at, code: 'missing-asset', severity: 'error', path: 'src',
             message: `src references asset "${src.slice(6)}", which is not in doc.assets — nothing renders.`,
             fix: 'Add the data: URI to doc.assets under that key, or point src at one that is there.' })
         } else if (isRemote(src)) {
-          add({ ...at, code: 'remote-image', severity: 'warning', path: 'src',
-            message: `src is remote (${src.slice(0, 48)}), so it shows a placeholder naming the host until the reader clicks "Load this image". Opening a document never contacts a third party.`,
+          add({ ...at, code: b.type === 'media' ? 'remote-media' : 'remote-image', severity: 'warning', path: 'src',
+            message: `src is remote (${src.slice(0, 48)}), so it shows a placeholder naming the host until the reader agrees to load it. Opening a document never contacts a third party.`,
             fix: 'Embed the bytes: put the data: URI in doc.assets and reference it as asset:<key>.' })
         }
         if (!String(b.alt ?? '').trim()) {

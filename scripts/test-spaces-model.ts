@@ -43,7 +43,7 @@ import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
 import { escText } from '../spaces/src/sanitize.ts'
 import {
-  SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout,
+  SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout, mediaPlayback,
 } from '../spaces/src/blocks.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
 
@@ -1626,6 +1626,115 @@ for (const [label, input, err] of [
     'editor.indent outdents through the effective parent')
   ok(/seen: Set<string>/.test(src('store.ts')),
     'Store.tree carries a visited set')
+}
+
+
+// ---- video and audio: the model, and the rule about autoplay ---------------
+//
+// The MEDIA block is one type with a `kind`, and the one thing about it that
+// can never be got wrong is that nothing in this app starts playing by itself.
+// A space has no surface that owns playback — an editor, a reading view, a
+// printout and a file-manager still, and a clip that starts itself is wrong in
+// all four. That rule is a pure function (blocks.ts mediaPlayback) precisely so
+// it can be pinned here rather than asserted about one renderer that the next
+// surface would have to rediscover.
+{
+  const spec = SPEC.get('media')
+  ok(!!spec, 'there is a media block spec')
+  ok(spec?.custom === true, 'media renders through its own case, not tag + inline host')
+  ok(MENU_SPECS.some((s) => s.type === 'media'), 'and it is reachable from the / menu')
+  ok(TAG_OF.media === 'div' && !LIST_OF.media, 'a clip is a block, not a list item')
+
+  // init sets the kind that degrades usefully, and never clobbers one that is
+  // already there — the same rule every other init follows (a bullet turned
+  // into a to-do keeps a `done` someone ticked)
+  const fresh: Block = { id: 'm1', type: 'media' }
+  spec?.init?.(fresh)
+  ok(fresh.kind === 'video', 'a fresh media block is a video until a file says otherwise')
+  const already: Block = { id: 'm2', type: 'media', kind: 'audio' }
+  spec?.init?.(already)
+  ok(already.kind === 'audio', '…and init never overwrites a kind that is already set')
+
+  // THE AUTOPLAY RULE. Stated three ways, because a file someone mailed you can
+  // say anything and a future build may legitimately write this field.
+  ok(mediaPlayback({ id: 'x', type: 'media' }).autoplay === false,
+    'playback never autoplays by default')
+  ok(mediaPlayback({ id: 'x', type: 'media', autoplay: true }).autoplay === false,
+    'a block that ASKS to autoplay still does not — the field round-trips, it is not obeyed')
+  ok(mediaPlayback({ id: 'x', type: 'media', autoplay: true, kind: 'audio', loop: true }).autoplay === false,
+    '…and no combination of the other flags unlocks it')
+
+  // the flags that ARE honoured, and their defaults
+  ok(mediaPlayback({ id: 'x', type: 'media' }).controls === true,
+    'controls are shown unless the document says otherwise — a player with none is a rectangle')
+  ok(mediaPlayback({ id: 'x', type: 'media', controls: false }).controls === false,
+    'and controls: false is honoured')
+  const flags = mediaPlayback({ id: 'x', type: 'media', loop: true, muted: true })
+  ok(flags.loop === true && flags.muted === true, 'loop and muted are plain author choices')
+  ok(mediaPlayback({ id: 'x', type: 'media', kind: 'audio' }).kind === 'audio', 'kind audio is audio')
+  ok(mediaPlayback({ id: 'x', type: 'media', kind: 'holo-tape' }).kind === 'video',
+    'a kind from a newer build degrades to video, which plays an audio file anyway')
+
+  // MARKDOWN HAS NO VIDEO. A link is the one form correct in every renderer;
+  // `![](clip.mp4)` is image syntax and draws a broken-image glyph everywhere.
+  const md = (b: Block): string =>
+    (SPEC.get('media')!.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] })).join('\n')
+  ok(md({ id: 'x', type: 'media', src: 'asset:k1' }) === '[Video](asset:k1)',
+    'a clip exports as a markdown LINK, not as an image')
+  ok(md({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' }) === '[Audio](https://h/x.mp3)',
+    '…named for what it is')
+  ok(md({ id: 'x', type: 'media', src: 'asset:k1', alt: 'The demo' }) === '[The demo](asset:k1)',
+    '…using alt as the label when there is one, exactly as the image exporter does')
+  ok(md({ id: 'x', type: 'media' }) === '_Video_',
+    'and a block with no source yet exports as a word, never as an empty link')
+
+  // ADDITIVITY: every playback field survives a round trip untouched, including
+  // the one this build refuses to obey. There is no server to migrate a file.
+  const round = parseDoc(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'd1', title: 'T',
+    pages: [{ id: 'p1', title: 'One', blocks: [{
+      id: 'b1', type: 'media', kind: 'audio', src: 'asset:k',
+      autoplay: true, loop: true, muted: true, controls: false,
+      poster: 'asset:p', captions: 'asset:vtt',
+    }] }],
+  }))
+  const back = round.ok ? round.doc.pages[0].blocks[0] : undefined
+  ok(back?.autoplay === true, 'autoplay survives the round trip even though nothing reads it')
+  ok(back?.poster === 'asset:p' && (back as Record<string, unknown>)?.captions === 'asset:vtt',
+    '…as does a field this build has never heard of')
+}
+
+// ---- the surfaces obey the rule, checked as SOURCE -------------------------
+//
+// mediaPlayback cannot return autoplay:true, but a renderer could still set the
+// attribute by hand, and the whole point of the field being in the format is
+// that someone later will be tempted to. These are the two files that draw a
+// clip; a node rig cannot run them (they need a DOM), so they are read.
+{
+  const fs3 = await import('node:fs')
+  const src = (f: string) => fs3.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const render = src('render.ts')
+  ok(/mediaPlayback/.test(render), 'render.ts asks the registry what it may apply')
+  ok(!/\.autoplay\s*=/.test(render) && !/autoplay\s*=\s*['"]/.test(render),
+    'render.ts never sets autoplay — on any element, by any spelling')
+  ok(/opts\.printing[\s\S]{0,400}mediaStill/.test(render),
+    'paper and thumbnails get a still, and the branch is BEFORE any player is built')
+  ok(/preload\s*=\s*'metadata'/.test(render),
+    'a clip fetches metadata, never the whole file, for a page nobody pressed play on')
+  // the remote gate is the image gate, and a clip needs it MORE: a <video> asks
+  // its host for byte ranges the moment it is parsed
+  ok(/isRemote\(rawSrc\)[\s\S]{0,200}remotePlaceholder/.test(render),
+    'a linked clip is not loaded until the reader agrees, naming the host')
+
+  const preview = src('preview.ts')
+  ok(/video,audio/.test(preview),
+    'the file-manager still bans player tags outright, as defence in depth')
+
+  // `src` is not inline html, so it never passes through sanitize.ts — the URL
+  // box is the only gate between a typed `javascript:` and an element attribute
+  const editor = src('editor.ts')
+  ok(/\^https\?:/.test(editor),
+    'the clip URL box allowlists http(s) rather than blocklisting javascript:')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

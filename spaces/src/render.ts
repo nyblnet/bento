@@ -13,7 +13,7 @@ import { type SpacesDoc, type Page, type Block, isRemote } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
-import { TAG_OF, LIST_OF, SPEC, TONE } from './blocks'
+import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys,
@@ -193,7 +193,8 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       // those the reader gets a placeholder naming the host and a button. One
       // click, per image, informed — the model every mail client settled on.
       if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
-        fig.appendChild(remoteImagePlaceholder(rawSrc, b, opts))
+        fig.appendChild(remotePlaceholder(rawSrc, b, opts,
+          t('Image from {host}', { host: remoteHost(rawSrc) }), t('Load this image')))
         if (b.caption) {
           const cap = document.createElement('figcaption')
           cap.innerHTML = sanitizeInline(String(b.caption))
@@ -218,6 +219,118 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       }
       el.appendChild(fig)
       return el
+    }
+
+    case 'media': {
+      const fig = document.createElement('figure')
+      const play = mediaPlayback(b)
+      const rawSrc = String(b.src ?? '')
+      el.dataset.kind = play.kind
+      const done = () => {
+        if (b.caption) {
+          const cap = document.createElement('figcaption')
+          cap.innerHTML = sanitizeInline(String(b.caption))
+          fig.appendChild(cap)
+        }
+        el.appendChild(fig)
+        return el
+      }
+
+      // NO SOURCE YET. Inserting the block and choosing the file are two
+      // gestures — a picker can be cancelled, and a link has to be typed
+      // somewhere — so the empty state is part of the block rather than a
+      // failure of it. The editor wires these two buttons; a reader, a
+      // printout and a still see the same box saying what is missing, which is
+      // more honest than a gap.
+      if (!rawSrc) {
+        const box = document.createElement('div')
+        box.className = 'sp-media-empty'
+        const line = document.createElement('div')
+        line.className = 'sp-remote-line'
+        line.textContent = play.kind === 'audio' ? t('Audio') : t('Video')
+        box.appendChild(line)
+        if (opts.editable && !opts.printing) {
+          const pick = document.createElement('button')
+          pick.type = 'button'
+          pick.className = 'sp-btn sp-remote-load'
+          pick.textContent = t('Choose a file…')
+          pick.dataset.pickMedia = b.id
+          const link = document.createElement('button')
+          link.type = 'button'
+          link.className = 'sp-btn sp-remote-load'
+          link.textContent = t('Use a link…')
+          link.dataset.linkMedia = b.id
+          const row = document.createElement('div')
+          row.className = 'sp-media-actions'
+          row.append(pick, link)
+          box.appendChild(row)
+        }
+        fig.appendChild(box)
+        return done()
+      }
+
+      // THE SAME CONSENT GATE AS AN IMAGE, and it matters MORE here. A remote
+      // <video> asks its host for byte ranges the moment the element is
+      // parsed, so an autoplaying tracker is not even needed: opening the
+      // space is the ping. Same rule, same host named, different words.
+      if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
+        const host = remoteHost(rawSrc)
+        fig.appendChild(remotePlaceholder(rawSrc, b, opts,
+          play.kind === 'audio' ? t('Audio from {host}', { host }) : t('Video from {host}', { host }),
+          play.kind === 'audio' ? t('Load this audio') : t('Load this video')))
+        return done()
+      }
+
+      // PAPER AND THUMBNAILS GET A STILL, NEVER A PLAYER.
+      //
+      // `printing` is the flag both of those surfaces already pass (print, and
+      // preview.ts's file-manager render), and it is the honest test: it means
+      // "this output cannot be interacted with". A <video> on paper prints as
+      // a black rectangle; in a file-manager preview it would be an element
+      // that decodes, buffers and — with scripting off, where nothing can stop
+      // it — sits there holding a source open. preview.ts also BANS the tags
+      // outright, which is defence in depth rather than the mechanism: by the
+      // time it runs there is nothing to ban.
+      if (opts.printing) {
+        fig.appendChild(mediaStill(b, doc, opts, play.kind))
+        return done()
+      }
+
+      const m = document.createElement(play.kind === 'audio' ? 'audio' : 'video') as
+        HTMLVideoElement | HTMLAudioElement
+      m.className = 'sp-media'
+      m.src = resolveSrc(rawSrc, doc)
+      // metadata, not auto: enough to draw the first frame and a duration, and
+      // no more. `auto` on a linked clip downloads the whole thing to display a
+      // page nobody has pressed play on.
+      m.preload = 'metadata'
+      // A block with controls off is a rectangle you cannot use, which is fine
+      // for a reader looking at a caption-and-poster figure and useless to the
+      // author who has to click it to change it. So the editor always has them.
+      m.controls = play.controls || opts.editable === true
+      m.loop = play.loop
+      // NOTHING SETS `m.autoplay`. mediaPlayback() cannot return true for it,
+      // and this is the surface that would have obeyed it — see blocks.ts.
+      if (play.kind === 'video') {
+        const v = m as HTMLVideoElement
+        // iOS otherwise takes the clip fullscreen on play, which throws the
+        // reader out of the page they were reading
+        v.playsInline = true
+        // muted is a VIDEO choice: a silent audio block is a block that does
+        // nothing, so the editor does not offer it and neither does this
+        v.muted = play.muted
+        const poster = String(b.poster ?? '')
+        // a remote poster is the same tracking pixel as a remote image, so it
+        // goes through the same consent
+        if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+          const resolved = resolveSrc(poster, doc)
+          if (resolved) v.poster = resolved
+        }
+        if (b.w && b.h) { v.width = Number(b.w); v.height = Number(b.h) }
+        if (b.width) v.style.width = `${Math.max(10, Math.min(100, Number(b.width)))}%`
+      }
+      fig.appendChild(m)
+      return done()
     }
 
     case 'pagelink': {
@@ -509,18 +622,26 @@ function remoteHost(src: string): string {
 }
 
 /**
- * What stands in for an unloaded remote image: what it is, WHERE it would come
- * from, and a button. Naming the host is the point — "load images" with no
+ * What stands in for an unloaded remote resource: what it is, WHERE it would
+ * come from, and a button. Naming the host is the point — "load images" with no
  * indication of who is being contacted is not consent.
+ *
+ * `line` and `action` are passed rather than derived from the block, because a
+ * video and an audio clip are the same gate with different words, and the
+ * strings have to be LITERAL t() calls somewhere for the i18n sweep to find
+ * them (scripts/build-spaces-i18n.mjs reads the source). Their call sites say
+ * them; this says the part that is identical.
  */
-function remoteImagePlaceholder(src: string, b: Block, opts: RenderOpts): HTMLElement {
+function remotePlaceholder(
+  src: string, b: Block, opts: RenderOpts, line0: string, action: string,
+): HTMLElement {
   const box = document.createElement('div')
   box.className = 'sp-remote'
   box.dataset.remoteSrc = src
 
   const line = document.createElement('div')
   line.className = 'sp-remote-line'
-  line.textContent = t('Image from {host}', { host: remoteHost(src) })
+  line.textContent = line0
   box.appendChild(line)
 
   const why = document.createElement('div')
@@ -543,10 +664,47 @@ function remoteImagePlaceholder(src: string, b: Block, opts: RenderOpts): HTMLEl
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'sp-btn sp-remote-load'
-    btn.textContent = t('Load this image')
+    btn.textContent = action
     btn.dataset.loadRemote = src
     box.appendChild(btn)
   }
+  return box
+}
+
+/**
+ * What a clip looks like where nothing can play it: paper, and a file-manager
+ * thumbnail.
+ *
+ * The POSTER if there is one — that is the frame the author chose, and it is
+ * the whole reason the field is worth having — and otherwise a quiet box that
+ * says what is there. Not nothing: a printed handbook that silently omits the
+ * paragraph where the demo video was is the same class of bug as a toggle that
+ * prints shut.
+ *
+ * A remote poster is skipped rather than fetched. preview.ts passes no
+ * `allowRemote` at all, so a still built for a file manager can never make a
+ * request — which is the point, because nobody is there to consent.
+ */
+function mediaStill(b: Block, doc: SpacesDoc, opts: RenderOpts, kind: 'video' | 'audio'): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'sp-media-still'
+  const poster = String(b.poster ?? '')
+  if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+    const resolved = resolveSrc(poster, doc)
+    if (resolved) {
+      const img = document.createElement('img')
+      img.src = resolved
+      img.alt = String(b.alt ?? '')
+      box.appendChild(img)
+      box.classList.add('sp-has-poster')
+    }
+  }
+  const badge = document.createElement('span')
+  badge.className = 'sp-media-badge'
+  // the triangle is the universal mark and needs no font; the word beside it
+  // is what makes it readable aloud and in monochrome
+  badge.textContent = `\u25B8 ${kind === 'audio' ? t('Audio') : t('Video')}`
+  box.appendChild(badge)
   return box
 }
 
