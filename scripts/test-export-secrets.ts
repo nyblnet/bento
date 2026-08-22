@@ -236,5 +236,50 @@ for (const [name, src] of editor) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// EVERY APP, NOT JUST SLIDES.
+//
+// This rig was written when slides shipped the owner private key on the
+// clipboard, and every path in it above is hardcoded to slides/. So when
+// bento/spaces grew a "Copy document JSON" of its own it reintroduced the
+// identical bug — `JSON.stringify(store.doc, null, 2)`, credentials included,
+// under a note inviting the copy — and the rig that exists to prevent exactly
+// this was structurally incapable of seeing it. Measured on the shipped build:
+// ownerPriv, key and room all present in what reached the clipboard.
+//
+// A guard that covers one app of four is a guard against one app's mistakes.
+
+console.log('\nclipboard exports, in every app that has one')
+
+const CLIP_APPS = ['spaces', 'dash', 'type']
+for (const app of CLIP_APPS) {
+  for (const file of ['about.ts', 'main.ts', 'editor.ts']) {
+    const rel = `${app}/src/${file}`
+    let src: string
+    try { src = read(rel) } catch { continue }
+    const masked = mask(src)
+    // any clipboard write that stringifies a document must go through a
+    // stripper first. The shape is deliberately loose — it is looking for a
+    // NEW leak, not enforcing one spelling.
+    for (const m of masked.matchAll(/writeText\(([^)]*)/g)) {
+      const arg = src.slice(m.index! + 'writeText('.length, m.index! + m[0].length + 60)
+      if (!/JSON\.stringify/.test(arg)) continue
+      ok(/docForExport|stripCollab|forExport|Export\(/.test(arg),
+        `${rel}: a clipboard copy of the document goes through a stripper, not the raw doc`)
+    }
+  }
+}
+
+// …and the stripper, where it exists, must REMOVE rather than allow-list, so a
+// private field added to CollabCreds later is covered without anyone acting.
+for (const app of CLIP_APPS) {
+  let src: string
+  try { src = read(`${app}/src/model.ts`) } catch { continue }
+  if (!/docForExport/.test(src)) continue
+  const body = src.slice(src.indexOf('export function docForExport'))
+  ok(/\.\.\.rest|delete .*collab|const \{ collab/.test(body.slice(0, 400)),
+    `${app}/src/model.ts: docForExport strips by REMOVING collab, not by listing fields to keep`)
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

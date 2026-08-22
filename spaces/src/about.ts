@@ -15,6 +15,7 @@ import {
 import { clearVersions, clearRecovery } from '../../kernel/src/autosave.ts'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { inertBody, esc } from './sanitize'
+import { docForExport } from './model'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
@@ -202,7 +203,12 @@ export function openAbout({ store, onRepaint, onSaveCopy, onImport }: AboutHooks
   exports.className = 'sp-actions'
   exports.append(
     button(t('Copy document JSON'), () => {
-      void navigator.clipboard?.writeText(JSON.stringify(store.doc, null, 2))
+      // STRIPPED. This lands on a clipboard, and the note two lines below
+      // invites the copy — "the whole document is plain JSON in this file" —
+      // so the next stop is very often a chat window. The document's collab
+      // block holds the read key, the write key and the owner key that can
+      // also revoke.
+      void navigator.clipboard?.writeText(JSON.stringify(docForExport(store.doc), null, 2))
     }),
     button(t('Export as Markdown'), () => downloadMarkdown(store)),
     button(t('Save a copy…'), () => { close(); onSaveCopy() }),
