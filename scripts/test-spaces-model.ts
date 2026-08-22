@@ -29,8 +29,10 @@
 import {
   parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
   effectiveParents, descendantsOf,
+  tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
   type SpacesDoc,
 } from '../spaces/src/model.ts'
+import nodeFs from 'node:fs'
 import { countOutsideTags, replaceOutsideTags } from '../spaces/src/findreplace.ts'
 import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
@@ -684,6 +686,139 @@ for (const [label, input, err] of [
   const code = (s: string) => s.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
   ok(!/\bin ICONS\b/.test(code(ren)) && !/\bin ICONS\b/.test(code(ed)),
     'an icon NAME from a document is matched with hasOwn, never `in` (which finds Object.prototype)')
+}
+
+// ---- the table block -------------------------------------------------------
+// A table is CONTENT (working/spaces-design.md §2.6) — no formulas, nothing
+// that recalculates, and not the database case, which already shipped as the
+// tracker. What is pinned here is the part that is PERMANENT: the shape of the
+// model, the `html` fallback that is the whole of format additivity for a new
+// block type, and the pipe-table round trip.
+{
+  const spec = SPEC.get('table')!
+  ok(!!spec && spec.tag === 'div' && spec.custom === true && spec.text !== true,
+    'table is a custom div whose text lives in its cells, not in a block host')
+  ok(!MD_SPECS.some(([, type]) => type === 'table'),
+    'a table has no markdown autoformat trigger — `|` is punctuation people type')
+
+  // THE SHAPE IS READ, NEVER REPAIRED. Every field is optional in the format
+  // and the file may be hand-written, agent-written or written by a build that
+  // is not this one, so a ragged table is an ordinary input.
+  const t = (b: Partial<Block>) => tableOf({ id: 'x', type: 'table', ...b } as Block)
+  ok(t({ rows: [['a', 'b'], ['c']] }).rows[1][1] === '',
+    'a ragged row is padded to the widest row, at read time')
+  ok(t({ rows: [['a'], ['b', 'c']] }).w === 2, '…and the width is the widest row, not the first')
+  ok(t({}).rows.length === 1 && t({}).rows[0].length === 1,
+    'a table with no rows at all still has one cell to click in')
+  ok(t({ rows: 'nope' as never }).w === 1, 'a `rows` that is not an array does not throw')
+  ok(t({ rows: [[1 as never, 'b']] }).rows[0][0] === '', 'a cell that is not a string reads as empty')
+  ok(t({ rows: [['a', 'b']] }).cols.length === 2 && t({ rows: [['a', 'b']] }).cols[0] === 1,
+    'absent cols means equal columns, one weight per column')
+  ok(t({ rows: [['a', 'b', 'c']], cols: [3] }).cols.join() === '3,1,1',
+    'a cols of the wrong length is filled out rather than believed')
+  ok(t({ rows: [['a']], cols: [0] }).cols[0] === 1 && t({ rows: [['a']], cols: [-4] }).cols[0] === 1,
+    'a zero or negative weight would divide the table by zero — it reads as 1')
+  ok(t({ rows: [['a', 'b']], colAlign: ['centre', 'right'] }).colAlign.join() === ',right',
+    'an alignment this build does not know reads as none, and the known one survives')
+  ok(t({}).header === true && t({ header: false }).header === false,
+    'ABSENT header means TRUE — a pipe table always has one, so that is the case with no field')
+  ok(t({ rows: Array.from({ length: 500 }, () => ['a']) }).h === TABLE_MAX_ROWS,
+    'a generated file cannot ask the renderer for an unbounded number of rows')
+  ok(t({ rows: [Array.from({ length: 80 }, () => 'a')] }).w === TABLE_MAX_COLS, '…or columns')
+
+  // THE FALLBACK IS THE WHOLE OF ADDITIVITY FOR A NEW BLOCK TYPE. A build that
+  // predates this one has no 'table' case, so it renders `html` — and if there
+  // is no html it renders nothing, which is a table that VANISHES when the
+  // space is opened by the build someone already has.
+  {
+    const b: Block = { id: 'x', type: 'table' }
+    writeTable(b, { rows: [['Name', 'Ships'], ['<b>Slides</b>', 'yes']], cols: [1, 1], colAlign: ['', ''], header: true })
+    ok(b.html === 'Name · Ships<br><b>Slides</b> · yes',
+      'the fallback html is the cells joined — what a build with no table case shows')
+    ok(b.cols === undefined && b.colAlign === undefined && b.header === undefined,
+      'defaults are OMITTED, so a minimal hand-written table is byte-identical to one made here')
+    ok(tableFallbackHtml([['see <a href="#p/p1">that page</a>']]).includes('#p/p1'),
+      'the fallback keeps a cell’s LINKS, so buildIndex still finds the backlink')
+    // and it really does: the index reads block.html and knows nothing of rows
+    const idx = buildIndex({
+      format: FORMAT, version: 1, docId: 'd', title: 'T', theme: {} as never,
+      pages: [
+        { id: 'p1', title: 'One', blocks: [] },
+        { id: 'p2', title: 'Two', blocks: [{ id: 'b1', type: 'table', html: tableFallbackHtml([['<a href="#p/p1">One</a>']]) }] },
+      ],
+    } as unknown as SpacesDoc)
+    ok((idx.backlinks.get('p1') ?? []).length === 1, 'a link typed in a CELL produces a backlink')
+  }
+
+  // …and the writer is the ONLY writer, so html can never drift from rows
+  {
+    const src = fsTable('editor.ts') + fsTable('markdown.ts')
+    ok(/writeTable\(/.test(src) && !/\.rows\s*=[^=]/.test(src),
+      'nothing assigns a block’s rows directly — every table write goes through writeTable, so the html fallback cannot drift')
+  }
+
+  // MARKDOWN. A pipe table is the interchange format for a content table, and
+  // this app both writes and reads one.
+  const md = (b: Partial<Block>, indent = '') =>
+    spec.toMd!({ id: 'x', type: 'table', ...b } as Block, '', indent,
+      { titleOf: () => undefined, rowsOf: () => [], inline: (h) => h }).join('\n')
+  ok(md({ rows: [['A', 'B'], ['1', '2']] }) === '| A | B |\n| --- | --- |\n| 1 | 2 |',
+    'a table exports as a GitHub-flavoured pipe table')
+  ok(md({ rows: [['A', 'B']], colAlign: ['center', 'right'] }).split('\n')[1] === '| :---: | ---: |',
+    'column alignment exports in the rule row, which is the only place GFM can say it')
+  ok(md({ rows: [['A'], ['1']], header: false }).split('\n')[0] === '|   |',
+    'a headerless table exports an EMPTY header row — GFM has no other way to say it')
+  ok(md({ rows: [['a | b']] }).split('\n')[0] === '| a \\| b |',
+    'a pipe inside a cell is escaped, or it becomes a column boundary')
+  ok(md({ rows: [['a\nb']] }).split('\n')[0] === '| a<br>b |',
+    'a line break inside a cell cannot become a row break')
+  ok(md({ rows: [['', 'b']] }).split('\n')[0] === '|   | b |',
+    'an empty cell is a space, never `||` — that is a column count nobody meant')
+  ok(md({ rows: [['A']] }, '  ').split('\n')[0] === '  | A |', 'a nested table carries its indent')
+
+  // …and back. The importer USED to keep a pipe table verbatim in a code block,
+  // under a comment saying it was "mechanically upgradable the day a table
+  // block ships".
+  {
+    const note = parseNote('| Name | Qty |\n| :--- | ---: |\n| Rice | 2 |\n| Salt | 1 |\n', 'F')
+    const b = note.blocks[0]
+    ok(b.type === 'table', 'a pipe table imports as a table, not as a code block')
+    ok(JSON.stringify(b.rows) === JSON.stringify([['Name', 'Qty'], ['Rice', '2'], ['Salt', '1']]),
+      '…with its rows')
+    ok(JSON.stringify(b.colAlign) === JSON.stringify(['left', 'right']), '…and its column alignment')
+    ok(b.html === 'Name · Qty<br>Rice · 2<br>Salt · 1', '…and a fallback for older builds')
+    ok(parseNote('Name | Qty\n--- | ---\nRice | 2\n', 'F').blocks[0].rows?.[0].join() === 'Name,Qty',
+      'the outer pipes are optional in GFM, so a row without them is still a row')
+    ok(parseNote('| a \\| b |\n| --- |\n', 'F').blocks[0].rows?.[0][0] === 'a | b',
+      'an escaped pipe is one cell, not two')
+    ok(parseNote('| A | B |\n| --- | --- |\n| 1 |\n', 'F').blocks[0].rows?.[1].join() === '1,',
+      'a short body row is padded against the header, which is GFM’s own rule')
+    ok(parseNote('| **a** |\n| --- |\n', 'F').blocks[0].rows?.[0][0] === '<strong>a</strong>',
+      'a cell is INLINE HTML through the same converter every other block uses')
+    // the round trip the two halves owe each other
+    const round = parseNote(md({ rows: [['A', 'B'], ['1', '2']], colAlign: ['', 'center'] }) + '\n', 'F').blocks[0]
+    ok(JSON.stringify(round.rows) === JSON.stringify([['A', 'B'], ['1', '2']]) &&
+       JSON.stringify(round.colAlign) === JSON.stringify(['', 'center']),
+      'export → import is the identity on rows and alignment')
+    const headless = parseNote(md({ rows: [['1', '2']], header: false }) + '\n', 'F').blocks[0]
+    ok(headless.header === false && JSON.stringify(headless.rows) === JSON.stringify([['1', '2']]),
+      '…including a headerless table, whose empty header row reads back as headerless')
+  }
+
+  // A CELL IS NOT A BLOCK HOST. `data-edit` means "this element's html IS the
+  // block's html", so a cell carrying it would make the generic input handler
+  // write one cell over the whole table.
+  {
+    const ren = fsTable('render.ts')
+    ok(/td\.dataset\.cell = b\.id/.test(ren) && !/td\.dataset\.edit/.test(ren),
+      'a table cell is data-cell, never data-edit')
+    ok(/createElement\(head \? 'th' : 'td'\)/.test(ren),
+      'a header cell is a real <th> — that is what buys row/column announcement and a repeating header in print')
+  }
+}
+
+function fsTable(f: string): string {
+  return nodeFs.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
 }
 
 // ---- four things that were wrong in a shipped file ------------------------

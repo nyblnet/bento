@@ -14,6 +14,23 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **Tables.** A real table block: `/` → Table, then type. Tab walks the cells
+  and appends a row when it runs off the end; rows and columns are added and
+  removed from the bar above the table, column widths drag, and the header row
+  can be turned off. Cells hold ordinary rich text, so a cell can be bold, hold
+  code, or link to another page — and a link in a cell shows up in that page's
+  backlinks like any other.
+
+  It exports as a GitHub pipe table, alignment included, and a Markdown file
+  you import now becomes a table instead of being kept as text. Older builds of
+  bento/spaces show the table's contents as a line of text rather than nothing
+  at all, so a space with tables in it is still readable in a copy of the app
+  that predates them.
+
+  What this is NOT is a spreadsheet: no formulas, nothing that recalculates.
+  That is bento/dash's job, and typed properties with saved views are already
+  here as the tracker.
+
 - **A page can be as wide as it needs to be.** Column, Wide or Full width, in
   the page menu. Pages of writing keep a comfortable line; a page with a board
   on it can have the room. Boards already widened themselves — now they say so,

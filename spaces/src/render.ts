@@ -9,7 +9,7 @@
 // story, native ⌘F, print fidelity and lossless markdown export at once, from
 // one decision.
 
-import { type SpacesDoc, type Page, type Block, isRemote } from './model'
+import { type SpacesDoc, type Page, type Block, isRemote, tableOf } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
@@ -220,6 +220,11 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       return el
     }
 
+    case 'table': {
+      el.appendChild(renderTable(b, opts))
+      return el
+    }
+
     case 'pagelink': {
       const a = document.createElement('a')
       const target = String(b.page ?? '')
@@ -336,6 +341,80 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       hostAndAnswer(el, b, opts, calc)
       return el
   }
+}
+
+/**
+ * A table — the same DOM in the editor, the reading view, print and the still
+ * preview, because there is one renderer.
+ *
+ * REAL `<table>`, `<thead>`, `<th>`, exactly as this renderer emits real
+ * headings and real list items: that is what buys the screen-reader story
+ * (row and column announcement), native ⌘F, print fidelity and a lossless
+ * markdown export, all from one decision. A grid of divs would need four
+ * separate answers.
+ *
+ * The widths are a `<colgroup>` over `table-layout: fixed` — the one layout
+ * mode in which a column's width is what the document SAYS rather than what
+ * this reader's font measured, so a table looks the same to everyone the file
+ * is mailed to. Percentages, never px: `cols` holds fractions (model.ts) and
+ * the text column is a theme concern.
+ *
+ * Cells are editable HOSTS in the editor and inert `<td>`s everywhere else, and
+ * the editable one is the cell itself rather than a span inside it — a cell is
+ * a box you click into, and a nested host makes a 1px strip around its edge
+ * that swallows the click.
+ */
+function renderTable(b: Block, opts: RenderOpts): HTMLElement {
+  const t = tableOf(b)
+  const wrap = document.createElement('div')
+  // A wide table SCROLLS rather than widening the prose column: the measure is
+  // the document's, and a five-column table must not push the paragraph above
+  // it off the screen on a phone.
+  wrap.className = 'sp-tb-wrap'
+  const table = document.createElement('table')
+  table.className = 'sp-tb'
+  const total = t.cols.reduce((s, n) => s + n, 0) || t.w
+  const group = document.createElement('colgroup')
+  for (const w of t.cols) {
+    const col = document.createElement('col')
+    col.style.width = `${((w / total) * 100).toFixed(3)}%`
+    group.appendChild(col)
+  }
+  table.appendChild(group)
+
+  const body = document.createElement('tbody')
+  t.rows.forEach((row, r) => {
+    const head = t.header && r === 0
+    const tr = document.createElement('tr')
+    row.forEach((cell, c) => {
+      const td = document.createElement(head ? 'th' : 'td')
+      td.className = 'sp-tb-cell'
+      td.dataset.r = String(r)
+      td.dataset.c = String(c)
+      if (head) td.setAttribute('scope', 'col')
+      if (t.colAlign[c]) td.style.textAlign = t.colAlign[c]
+      // per cell, for the reason text blocks carry it: a table of Arabic terms
+      // beside English ones must lay each column out by what is IN it
+      td.dir = 'auto'
+      if (opts.editable) {
+        td.contentEditable = 'true'
+        // NOT `data-edit`: that name means "this element's html IS the block's
+        // html", and the editor's generic input handler would write one cell
+        // over the whole table. A cell says which block AND which cell it is.
+        td.dataset.cell = b.id
+      }
+      td.innerHTML = sanitizeInline(cell)
+      tr.appendChild(td)
+    })
+    if (head) {
+      const thead = document.createElement('thead')
+      thead.appendChild(tr)
+      table.appendChild(thead)
+    } else body.appendChild(tr)
+  })
+  table.appendChild(body)
+  wrap.appendChild(table)
+  return wrap
 }
 
 /**
