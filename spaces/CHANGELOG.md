@@ -14,6 +14,23 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **A properties panel, on the right.** One place that answers "what can I
+  change about this thing". The block the caret is in gets its own settings —
+  a table's rows, columns and header row; a code block's language; a callout's
+  tone and mark; an image's width and alt text; a clip's poster, loop, mute and
+  controls; every field of a link card — and the page underneath it gets its
+  icon, its width, whether it is archived, and what is actually in it. Sections
+  collapse and remember whether you left them open, the way slides' panel does.
+
+  **It starts closed, and while it is closed it costs the page nothing.** The
+  column you read in is the same width with the panel there as without it —
+  measured at 1280px and at 2560px, and pinned by the model rig. Open it from
+  the chevron on its edge or with `]`; it remembers what you chose. On a narrow
+  screen it is an overlay reached from ⋯, never a third column.
+
+  Nothing was taken away to make room for it: the language chip on a code
+  block, the mark on a callout and the tools on an image are all still there.
+
 - **Wide screens get wide pages.** The column grows with the window instead of
   sitting at a fixed 720px, and "Use this width for every page" in the page
   menu makes your choice stick across the whole space. It is remembered for

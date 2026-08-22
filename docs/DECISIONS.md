@@ -4726,3 +4726,72 @@ Store.
 **Cost.** Shell 166,482 → 175,690 B (+9,208, 5.5%); `scripts/size-budgets.json`
 raised 176,128 → 184,320 in the same commit, because 438 B of headroom is inside
 the packer's own cross-node-version spread and would fail CI for no reason.
+
+## 2026-08-22 — bento/spaces: a properties panel that defaults to closed
+
+**Decision.** bento/spaces gets a right-hand properties panel (`spaces/src/props.ts`),
+structurally the page tree's mirror image — same `.sp-resizer` strip, same
+chevron, same drag-to-resize and double-click-to-reset, same
+`localStorage`-only state. It shows BLOCK properties for the block the caret or
+the last click was in, and PAGE properties underneath, in accordion sections
+whose open state is remembered per title exactly as slides' `.ed-section`
+retrofit does.
+
+**Why a panel at all.** The settings existed; the place to look for them did
+not. A table's shape came from a bar above the table, a code block's language
+from a hover chip, an image's width from a floating tool row, a link card's
+fields from a per-block menu, and the page's own width from the PAGE menu. Each
+is discoverable only by someone who already knows it is there, and none of them
+answers the question in the general case. **The old surfaces stay** — the chip
+on a callout is still the fastest way to change a tone, and deleting it to
+justify a panel would be a worse editor with a tidier diagram.
+
+**CLOSED BY DEFAULT, and this is the load-bearing part.** `spaces: a wide screen
+gets a wide page` (aacf7e2) had just given the reading column the window's
+slack, after the complaint that a 720px column on a 2560px screen used 31% of
+the area. A panel holding 280px of that open on every screen forever, for
+settings most people change once a month, takes the fix straight back. So:
+`inspClosed = true`, and only an explicit `'0'` in `bento-sp-insp-closed`
+(written when somebody opens it) makes it open — an absent key, a new browser
+or a storage exception all mean closed. While closed the panel is
+`flex-basis: 0` with no inline padding and no border, so `.sp-main`'s
+`flex: 1 1 auto` takes the width straight back.
+
+MEASURED, closed, against the same shell without this change: at 1280px the
+reading column is 720px either way; at 2560px it is 900px either way. The whole
+cost is the 5px chevron strip (main 1031 → 1026 and 2311 → 2306), which is what
+buys a control on the panel's own edge instead of one in a toolbar across the
+room.
+
+**Below 820px it is an overlay, not a column** — the bargain the page list
+already makes at the same breakpoint, with the same `.sp-scrim` to tap away.
+
+**Its topbar button exists only where the chevron cannot.** Above 820px the
+strip carries the control, so a second one in the bar would be the duplication
+`.sp-panel-toggle` already documents avoiding. Below 820px the button leads —
+until `fitTopbar` folds the bar, when it moves into ⋯ with undo/redo and the
+export actions. MEASURED at 375px: leaving the 40px button in a folded bar took
+the document title from 70px to 26px, which is a title nobody can read in
+exchange for a control that is one row of an already-open menu.
+
+**One control, one commit, one ⌘Z.** Every block edit goes through a single
+helper wrapping one `store.commit`, and every text field commits on `change`
+rather than `input` — `input` would buy an undo entry per keystroke, which is
+the exact thing `store.ts`'s typing run exists to avoid.
+
+**Which block the panel means** is tracked on `focusin` AND `mousedown`, capture
+phase, on `.sp-main`. `focusin` alone answers for text and stays silent for
+tables, images, clips and cards — exactly the types with settings worth a panel.
+`mousedown` rather than `pointerdown` because a real click fires both while a
+driven one may not, the same wall CLAUDE.md records for Gesto in slides.
+
+**Guarded.** `scripts/test-spaces-model.ts` pins the default-closed preference,
+the three properties of the closed geometry, that nothing about the panel
+reaches the document, the overlay below the breakpoint, the accordion's
+persistence, the one-commit rule, and that the block chips survived.
+
+**Cost.** Shell 196,950 → 203,654 B (+6,704, 3.4%); `scripts/size-budgets.json`
+raised 204,800 → 212,992 in the same commit, because 1,146 B of headroom is
+inside the packer's own cross-node-version spread and would fail CI for no
+reason.
+

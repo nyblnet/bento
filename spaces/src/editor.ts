@@ -37,6 +37,7 @@ import {
 } from './journal'
 import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
 import { ICONS, type IconName } from './icons'
+import { PropsPanel } from './props'
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
@@ -122,6 +123,21 @@ export class Editor {
   private static readonly PANE_DEFAULT = 244
   private paneW = Editor.PANE_DEFAULT
   private paneClosed = false
+
+  // The properties panel — the reader's, like the page list, and CLOSED unless
+  // this reader has opened it. See props.ts on why the default is that way
+  // round.
+  private inspector!: HTMLElement
+  private inspTab: HTMLButtonElement | null = null
+  private inspRz: HTMLElement | null = null
+  private props: PropsPanel | null = null
+  private static readonly INSP_MIN = 200
+  private static readonly INSP_MAX = 420
+  private static readonly INSP_DEFAULT = 280
+  private inspW = Editor.INSP_DEFAULT
+  private inspClosed = true
+  /** the block the panel is describing: the last one the caret or a click was in */
+  private inspOn: string | null = null
   /** review threads — markers in the end margin, badges in the tree */
   private comments: CommentsUi
   onSave: (() => void) | null = null
@@ -146,6 +162,12 @@ export class Editor {
       const w = Number(localStorage.getItem('bento-sp-pane'))
       if (Number.isFinite(w) && w > 0) this.paneW = Math.min(Editor.PANE_MAX, Math.max(Editor.PANE_MIN, w))
       this.paneClosed = localStorage.getItem('bento-sp-pane-closed') === '1'
+      const iw = Number(localStorage.getItem('bento-sp-insp'))
+      if (Number.isFinite(iw) && iw > 0) this.inspW = Math.min(Editor.INSP_MAX, Math.max(Editor.INSP_MIN, iw))
+      // ABSENT MEANS CLOSED. Only an explicit '0' — this reader opened it once —
+      // gives the panel any width, so a fresh file opens as the page and nothing
+      // else.
+      this.inspClosed = localStorage.getItem('bento-sp-insp-closed') !== '0'
     } catch { /* storage throws on a locked-down origin; the defaults are fine */ }
     this.build()
     // AFTER build(): `main` exists by then, and the marker layer is painted
@@ -157,6 +179,21 @@ export class Editor {
       paintTree: () => this.paintTree(),
     })
     if (this.paneClosed) this.sidebar.classList.add('sp-pane-closed')
+    this.props = new PropsPanel(this.inspector, {
+      store: this.store,
+      target: () => this.inspOn,
+      locked: () => this.store.readOnly || this.reading,
+      repaint: () => this.paintPage(),
+      pickPoster: (id) => void this.pickPoster(id),
+      pickMedia: (id) => void this.pickMedia(id),
+      openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
+      pageIcon: (icon) => pageIcon(icon),
+      openLinkCard: (id) => this.openLinkCard(id),
+      addTableRow: (id, at) => this.addTableRow(id, at),
+      removeTableRow: (id, at) => this.removeTableRow(id, at),
+      addTableCol: (id, at) => this.addTableCol(id, at),
+      removeTableCol: (id, at) => this.removeTableCol(id, at),
+    })
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
     this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty() })
@@ -280,6 +317,17 @@ export class Editor {
       // (35px) and the save caret (48px) are what a phone gives up so that the
       // document title beside them is still wide enough to read. Nothing is
       // lost: they are all one tap away, here.
+      // THE PROPERTIES PANEL, ONCE THE BAR HAS FOLDED. Its inline button is a
+      // 40px control, and measured at 375px it took the document title from
+      // 70px to 26px — a title nobody can read, to reach a panel that is one
+      // more row in a menu that is already open. So below the fold it comes
+      // here, the way undo/redo and the other ways to save already do.
+      if (this.isFolded()) {
+        menu.append(this.menuItem('panelRight', t('Properties'),
+          t('This block’s settings, and the page’s'), () => {
+            close(); this.toggleInsp()
+          }))
+      }
       if (this.isFolded()) {
         menu.append(this.menuItem('undo', t('Undo (⌘Z)'), '', () => {
           close(); this.store.undo(); this.repaint()
@@ -351,8 +399,12 @@ export class Editor {
     history.append(this.undoB, this.redoB)
     const saveGroup = el('div', 'sp-split')
     saveGroup.append(saveB, saveMore)
+    const inspB = iconBtn('panelRight', t('Properties — show or hide this block’s settings'),
+      () => this.toggleInsp())
+    inspB.classList.add('sp-insp-toggle')
+
     const right = el('div', 'sp-group sp-group-right')
-    right.append(insert, search, ...inlineSecondary, this.liveSlot, more, saveGroup)
+    right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
 
     bar.append(pagesB, mark, title, this.statusEl, history, right)
 
@@ -384,11 +436,37 @@ export class Editor {
     this.sidebar.setAttribute('aria-label', t('Pages'))
     this.main = el('main', 'sp-main')
 
+    this.inspector = el('aside', 'sp-insp')
+    this.inspector.setAttribute('aria-label', t('Properties'))
+    if (this.inspClosed) this.inspector.classList.add('sp-pane-closed')
+
     const body = el('div', 'sp-body')
-    body.append(this.sidebar, this.makeResizer(), this.main)
+    body.append(this.sidebar, this.makeResizer(), this.main, this.makeInspResizer(), this.inspector)
     this.root.append(bar, body)
     this.applyPaneWidth()
     this.syncPaneChevron()
+    this.applyInspWidth()
+    this.syncInspChevron()
+
+    // WHICH BLOCK THE PANEL MEANS. Capture-phase on the page, because the
+    // interesting blocks are the ones with no editable host to focus — a table,
+    // an image, a clip, a card. `focusin` alone would answer for text and stay
+    // silent for exactly the types that have settings worth a panel.
+    //
+    // `mousedown` rather than `pointerdown`: a real click fires both, so the
+    // two are the same to a user, but only the mouse event is reliably what a
+    // driven click produces — CLAUDE.md's testing note records the same wall in
+    // slides, where synthetic pointer events never reach Gesto. Choosing the
+    // one both a hand and a rig emit costs nothing.
+    for (const ev of ['focusin', 'mousedown'] as const) {
+      this.main.addEventListener(ev, (e: Event) => {
+        const n = e.target as Node | null
+        const host = (n instanceof HTMLElement ? n : n?.parentElement)
+          ?.closest<HTMLElement>('[data-block-id]')
+        this.inspOn = host?.dataset.blockId ?? null
+        this.props?.retarget()
+      }, true)
+    }
 
     this.paintTree()
     this.paintPage()
@@ -429,6 +507,7 @@ export class Editor {
     this.readB?.setAttribute('aria-pressed', String(this.reading))
     document.querySelector('.sp-findbar')?.remove()
     this.paintPage()
+    this.props?.refresh()
     this.status(this.reading ? t('Reading view — press Esc or the eye to edit') : t('Editing'))
   }
 
@@ -565,6 +644,102 @@ export class Editor {
 
   private applyPaneWidth(): void {
     this.sidebar.style.setProperty('--sp-panew', `${this.paneW}px`)
+  }
+
+  /**
+   * The properties panel's edge — the page list's strip, mirrored.
+   *
+   * Deliberately a second small method rather than a parameterised one: the two
+   * differ in which direction widens (the panel is docked to the END edge, so a
+   * drag toward the start makes it bigger) and in which way the chevron points,
+   * and a `side` flag threaded through both would be harder to read than this.
+   */
+  private makeInspResizer(): HTMLElement {
+    const handle = el('div', 'sp-resizer sp-insp-rz')
+    handle.title = t('Drag to resize · double-click to reset')
+    if (this.inspClosed) handle.classList.add('sp-shut')
+    this.inspRz = handle
+
+    const tab = document.createElement('button')
+    tab.className = 'sp-pane-tab'
+    tab.type = 'button'
+    tab.addEventListener('click', (e) => { e.stopPropagation(); this.toggleInsp() })
+    this.inspTab = tab
+    handle.append(tab)
+
+    handle.addEventListener('mousedown', (down) => {
+      if (down.target === tab) return
+      if (this.inspClosed) return
+      down.preventDefault()
+      const startX = down.clientX
+      const startW = this.inspW
+      this.inspector.classList.add('sp-noanim')
+      document.body.classList.add('sp-col-resizing')
+      const move = (ev: MouseEvent) => {
+        // the panel is on the END edge, so dragging toward the START widens it
+        const dx = startX - ev.clientX
+        const widens = document.dir === 'rtl' ? -dx : dx
+        this.inspW = Math.min(Editor.INSP_MAX, Math.max(Editor.INSP_MIN, startW + widens))
+        this.applyInspWidth()
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', move)
+        window.removeEventListener('mouseup', up)
+        this.inspector.classList.remove('sp-noanim')
+        document.body.classList.remove('sp-col-resizing')
+        try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
+      }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+    })
+
+    handle.addEventListener('dblclick', () => {
+      this.inspW = Editor.INSP_DEFAULT
+      this.applyInspWidth()
+      try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
+    })
+    return handle
+  }
+
+  private applyInspWidth(): void {
+    this.inspector.style.setProperty('--sp-inspw', `${this.inspW}px`)
+  }
+
+  private syncInspChevron(): void {
+    if (!this.inspTab) return
+    const rtl = document.dir === 'rtl'
+    // points the way it will MOVE the panel
+    const closing = this.inspClosed === rtl
+    this.inspTab.innerHTML = closing ? ICONS.chevronRight : ICONS.chevronLeft
+    this.inspTab.title = this.inspClosed ? t('Show properties (])') : t('Hide properties (])')
+    this.inspTab.setAttribute('aria-label', this.inspTab.title)
+    this.inspTab.setAttribute('aria-expanded', String(!this.inspClosed))
+  }
+
+  /** Collapse or restore the properties panel. On a phone it is an overlay. */
+  toggleInsp(force?: boolean): void {
+    if (this.isDrawer()) {
+      const open = force !== undefined ? force : !this.inspector.classList.contains('sp-open')
+      this.inspector.classList.toggle('sp-open', open)
+      // The same scrim the page list gets, for the same reason: an overlay you
+      // can only close from the menu you opened it from is one people leave
+      // open over the page they wanted to read.
+      document.querySelector('.sp-scrim')?.remove()
+      if (open) {
+        const scrim = el('div', 'sp-scrim')
+        scrim.addEventListener('click', () => this.toggleInsp(false))
+        document.body.append(scrim)
+      }
+      return
+    }
+    this.inspector.classList.remove('sp-open')
+    this.inspClosed = force !== undefined ? !force : !this.inspClosed
+    this.inspector.classList.toggle('sp-pane-closed', this.inspClosed)
+    this.inspRz?.classList.toggle('sp-shut', this.inspClosed)
+    this.syncInspChevron()
+    // '0' means OPEN. Absent is closed, which is what a reader who has never
+    // touched this gets — see the constructor.
+    try { localStorage.setItem('bento-sp-insp-closed', this.inspClosed ? '1' : '0') } catch { /* storage can throw */ }
   }
 
   private syncPaneChevron(): void {
@@ -2657,6 +2832,11 @@ export class Editor {
     // reaches here when nothing is being edited (the text path returns above,
     // where `[` is the page-link trigger).
     if (!mod && e.key === '[') { e.preventDefault(); this.togglePane(); return }
+    // `]` is the properties panel's `[`. Guarded on what is FOCUSED rather than
+    // on where the handler sits: `]` is an ordinary character, and a bare-key
+    // shortcut that fires while somebody is typing one into a paragraph is a
+    // shortcut that eats their text.
+    if (!mod && e.key === ']' && !isTyping()) { e.preventDefault(); this.toggleInsp(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); this.newIssue(); return }
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault()
@@ -4456,6 +4636,19 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   n.className = cls
   if (text) n.textContent = text
   return n
+}
+
+/**
+ * Is a bare keystroke going to land in something the reader is writing in?
+ *
+ * The block hosts are contenteditable, the topbar title and the panel's own
+ * fields are inputs, and every one of them takes `]` as a character. A
+ * bare-key panel shortcut has to ask this first.
+ */
+function isTyping(): boolean {
+  const a = document.activeElement as HTMLElement | null
+  if (!a) return false
+  return a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'
 }
 
 function iconBtn(name: IconName, label: string, onClick: () => void): HTMLButtonElement {
