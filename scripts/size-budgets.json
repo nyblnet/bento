@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 204800,
-      "//": "200 KiB. All of M3 and M4 landed together — tables, media, link cards, comments, and export-page-as-space plus subtree import — measured 166,482 B before and 195,434 B after, +28,952 B for five features. That is the single largest step this shell has taken and it is the last of the roadmap's v0.1 content work, so the number should now go sideways rather than up. Zopfli is already applied; it is what kept this under 200. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 212992,
+      "//": "200 KiB. All of M3 and M4 landed together — tables, media, link cards, comments, and export-page-as-space plus subtree import — measured 166,482 B before and 195,434 B after, +28,952 B for five features. That is the single largest step this shell has taken and it is the last of the roadmap's v0.1 content work, so the number should now go sideways rather than up. Zopfli is already applied; it is what kept this under 200. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts. RAISED to 208 KiB for the floating selection toolbar and the Range mark engine under it: 196,950 B before, 206,446 B after (+9,496 B) for marks.ts, formatbar.ts, the inline-mark, palette and toolbar CSS, and 35 UI strings in eight catalogs. The old 204,800 left 1,210 B of headroom, which is LESS than the 1,151 B the note above measures between two node versions of the same commit — a ceiling that tight fails in CI on a build nobody changed."
     }
   }
 }

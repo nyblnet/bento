@@ -11,13 +11,16 @@
 // policies differ in BOTH directions: spaces must reject DIV/P (slides permits
 // them) and spaces adds the suite's first attribute allowlist.
 
+import { canonicalMarks, keepClasses } from './marks.ts'
+
 /** Inline tags a block may contain. Nothing here can carry block structure. */
 const ALLOWED = new Set([
   'B', 'I', 'U', 'S', 'EM', 'STRONG', 'CODE', 'BR', 'SPAN', 'MARK', 'SUB', 'SUP', 'A',
 ])
 
 /**
- * The only attribute any tag may keep, and only on `A`.
+ * The href test. One of the format's TWO attributes — the other is a palette
+ * `class` on SPAN/MARK, whose pattern lives in marks.ts (CLASS_OK).
  *
  * MATCHED AGAINST `getAttribute('href')`, NEVER the `.href` IDL property.
  *
@@ -127,8 +130,22 @@ export function sanitizeInline(html: string): string {
       }
 
       for (const attr of [...el.attributes]) {
-        const keep = tag === 'A' && attr.name === 'href' && HREF_OK.test(attr.value)
-        if (!keep) el.removeAttribute(attr.name)
+        if (tag === 'A' && attr.name === 'href' && HREF_OK.test(attr.value)) continue
+        // THE SECOND ATTRIBUTE THIS FORMAT HAS: a palette class on SPAN or
+        // MARK, and only a name matching CLASS_OK (marks.ts). Filtered per
+        // TOKEN, so `class="sp-fg-red onclick-bait"` keeps the first and drops
+        // the second rather than failing whole and losing the colour.
+        //
+        // A CLASS, NOT A `style`. A style attribute would make this function a
+        // CSS parser — and CSS is a language with `url()` in it — while a class
+        // name can only ever select a rule in OUR stylesheet or select nothing.
+        if (tag === 'SPAN' || tag === 'MARK') {
+          if (attr.name === 'class') {
+            const kept = keepClasses(attr.value)
+            if (kept) { el.setAttribute('class', kept); continue }
+          }
+        }
+        el.removeAttribute(attr.name)
       }
       // an <a> that lost its href is no longer a link — unwrap it
       if (tag === 'A' && !el.getAttribute('href')) {
@@ -167,18 +184,18 @@ function stripAllTags(html: string): string {
  * would re-trip text merging on every keystroke.
  */
 export function canonicalize(html: string): string {
-  let out = sanitizeInline(html)
-  // one pass of adjacent-run coalescing per tag, repeated to a fixed point so
-  // <b>a</b><b>b</b><b>c</b> collapses fully
-  for (let i = 0; i < 4; i++) {
-    const before = out
-    for (const tag of ['b', 'i', 'u', 's', 'em', 'strong', 'code', 'mark']) {
-      out = out.replaceAll(`</${tag}><${tag}>`, '')
-    }
-    out = out.replace(/<(b|i|u|s|em|strong|code|mark)><\/\1>/g, '') // empty runs
-    if (out === before) break
-  }
-  return out
+  // TWO STAGES, and only the first one needs a browser. sanitizeInline decides
+  // what is ALLOWED to be here (a DOM question — it has to parse hostile markup
+  // inertly to answer it); canonicalMarks decides what SHAPE the allowed marks
+  // take, which is a string question and therefore one a rig can test.
+  //
+  // This used to be a fixed-point loop of `</b><b>` → `''` string replacements.
+  // It coalesced adjacent runs and dropped empty ones, and it could do nothing
+  // at all about §2.3's other half — nesting order — because "is this <i>
+  // inside or outside that <b>" is not a question a replaceAll can ask. So
+  // `<b><i>x</i></b>` and `<i><b>x</b></i>` were both canonical, which makes
+  // every diff and every CRDT merge of the same visible text a conflict.
+  return canonicalMarks(sanitizeInline(html))
 }
 
 /** Plain text of a block, for search and for markdown export. */

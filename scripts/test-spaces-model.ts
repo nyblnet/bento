@@ -43,6 +43,10 @@ import {
   sortRows, unknownSortKeys, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
+import {
+  canonicalMarks, applyMark, clearMarks, markActive, linkAt, linkAttrs, htmlToMd,
+  CLASS_OK, keepClasses,
+} from '../spaces/src/marks.ts'
 import { extractSpace, planGraft, subtreeIds } from '../spaces/src/portable.ts'
 import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
@@ -2265,6 +2269,152 @@ function fsTable(f: string): string {
   const rr = parseDoc(JSON.stringify(mergedDoc))
   ok(rr.ok === true && rr.repaired.length === 0,
     'the merged document parses with NOTHING to repair — the import needed no rescue')
+}
+
+// ---------------------------------------------------------------------------
+// INLINE MARKS — the canonical form, and the cases that go wrong quietly.
+//
+// The mark engine is a pure function over (inline html, plain-text offsets) so
+// that it can be pinned HERE rather than only in a browser. The
+// partial-selection group is the one that silently produced plausible garbage
+// in every naive implementation of this: half a bold run, unbolded, either
+// takes the whole run with it or does nothing, and for one character both look
+// fine.
+{
+  // ---- canonical form ----------------------------------------------------
+  // ONE nesting order, whatever order the tags arrived in. Two spellings of
+  // the same visible text is a conflict in every diff and every CRDT merge.
+  ok(canonicalMarks('<b><i>x</i></b>') === '<strong><em>x</em></strong>',
+    'b/i fold to strong/em, the spelling the markdown importer already emits')
+  ok(canonicalMarks('<i><b>x</b></i>') === canonicalMarks('<b><i>x</i></b>'),
+    'the SAME html whichever way round the author nested it')
+  ok(canonicalMarks('<code><em><strong>q</strong></em></code>') === '<strong><em><code>q</code></em></strong>',
+    'the order is a > mark > strong > em > u > s > sub > sup > code, outermost first')
+  ok(canonicalMarks('<b>a</b><b>b</b><b>c</b>') === '<strong>abc</strong>',
+    'adjacent identical runs coalesce all the way, not one pass deep')
+  ok(canonicalMarks('<b></b>hi<span>there</span>') === 'hithere',
+    'empty runs and attribute-less spans are debris, not content')
+  ok(canonicalMarks(canonicalMarks('<i><b>x</b></i><b>y</b>')) === canonicalMarks('<i><b>x</b></i><b>y</b>'),
+    'IDEMPOTENT — a materialize→DOM→re-serialize round trip must not keep changing it')
+  ok(canonicalMarks('a&amp;b&nbsp;c&lt;d') === 'a&amp;b&nbsp;c&lt;d',
+    'entities round-trip byte-identically to what innerHTML hands back — NBSP verbatim')
+  ok(canonicalMarks('<a href="https://x/">a</a><a href="https://x/">b</a>') === '<a href="https://x/">ab</a>',
+    'two links to the same address coalesce; a link is one hover target, not two')
+
+  // ---- apply -------------------------------------------------------------
+  ok(applyMark('hello world', 0, 5, 'strong') === '<strong>hello</strong> world',
+    'a mark over part of a plain run wraps exactly that part')
+  ok(applyMark('<strong>hello</strong> world', 0, 11, 'strong') === '<strong>hello world</strong>',
+    'extending a mark over its neighbour leaves ONE run, not two abutting ones')
+
+  // ---- THE PARTIAL-SELECTION CASE ----------------------------------------
+  ok(applyMark('<strong>hello world</strong>', 0, 5, 'strong') === 'hello<strong> world</strong>',
+    'unbolding the HEAD of a bold run splits it and keeps the tail bold')
+  ok(applyMark('<strong>hello world</strong>', 6, 11, 'strong') === '<strong>hello </strong>world',
+    'unbolding the TAIL splits the other way')
+  ok(applyMark('<strong>hello world</strong>', 2, 5, 'strong') === '<strong>he</strong>llo<strong> world</strong>',
+    'unbolding the MIDDLE leaves three runs — the case that needs a real split')
+  ok(applyMark('<em>abcdef</em>', 2, 4, 'em') === '<em>ab</em>cd<em>ef</em>',
+    '…and it is the TAG that moves: not one character of text changes')
+  ok(markActive('<strong>hello</strong> world', 0, 5, 'strong') === true &&
+     markActive('<strong>hello</strong> world', 0, 7, 'strong') === false,
+    'a mark is ACTIVE only when it covers the whole selection')
+  ok(applyMark('<strong>hello</strong> world', 0, 7, 'strong') === '<strong>hello w</strong>orld',
+    '…so toggling a half-covered selection EXTENDS the mark rather than removing it')
+
+  // ---- links and clearing -------------------------------------------------
+  const linked = applyMark('abc', 1, 2, 'a', { op: 'on', attrs: linkAttrs('https://x/?a=1&b=2') })
+  ok(linked === 'a<a href="https://x/?a=1&amp;b=2" rel="noopener noreferrer" target="_blank">b</a>c',
+    'a new link is spelled EXACTLY as sanitizeInline would leave it, ampersand and all')
+  ok(linkAt(linked, 1, 2) === 'https://x/?a=1&b=2' && linkAt(linked, 0, 3) === '',
+    'linkAt reports a link only when it covers the whole selection')
+  ok(clearMarks('<a href="https://x/"><strong>hi</strong></a> there', 0, 2) === 'hi there',
+    'clear formatting takes the link with it — a link is formatting too')
+  ok(applyMark('a<br>b', 0, 3, 'em') === '<em>a<br>b</em>',
+    'a <br> is ONE character of offset, so a mark after a line break lands on the right words')
+
+  // ---- markdown, both ways ------------------------------------------------
+  // EVERY mark the toolbar can apply must survive an export. A control that
+  // produces something the exporter drops is worse than no control, because
+  // the loss only shows up in a file somebody has already sent. Four of these
+  // WERE dropped before this rig existed.
+  const MARK_MD: Array<[string, string]> = [
+    ['<strong>x</strong>', '**x**'],
+    ['<em>x</em>', '*x*'],
+    ['<u>x</u>', '<u>x</u>'],
+    ['<s>x</s>', '~~x~~'],
+    ['<code>x</code>', '`x`'],
+    ['<mark>x</mark>', '==x=='],
+    ['<sub>x</sub>', '<sub>x</sub>'],
+    ['<sup>x</sup>', '<sup>x</sup>'],
+    ['<a href="https://x/">x</a>', '[x](https://x/)'],
+  ]
+  for (const [html, md] of MARK_MD) {
+    ok(htmlToMd(html) === md, `${html} exports as ${md}`)
+    ok(canonicalMarks(inlineHtml(md)) === canonicalMarks(html),
+      `…and ${md} imports back as the same mark — export→import is the identity`)
+  }
+  ok(htmlToMd('<a href="https://x/"><strong>x</strong></a>') === '[**x**](https://x/)',
+    'the canonical order puts the link outermost, which is the only nesting markdown can spell')
+  ok(htmlToMd('a<br>b') === 'a\nb', 'a line break exports as one')
+}
+
+// ---------------------------------------------------------------------------
+// TEXT AND BACKGROUND COLOUR — the format's SECOND attribute.
+//
+// The vocabulary is closed (marks.ts PALETTE) and the sanitizer matches a
+// PATTERN rather than the nine names, so a colour added in a later build
+// survives an older one instead of being deleted by it. That is the property
+// worth pinning: everything else about colour is a stylesheet.
+{
+  const red = ' class="sp-fg-red"'
+  ok(applyMark('hello', 0, 5, 'span', { op: 'on', attrs: red }) === '<span class="sp-fg-red">hello</span>',
+    'ink colour is a class on a SPAN, never a style attribute')
+  ok(applyMark('<span class="sp-fg-red">hello</span>', 0, 5, 'span', { op: 'off' }) === 'hello',
+    'and "Default" REMOVES it — a paragraph coloured back to default is byte-identical to one never coloured')
+  ok(applyMark('<span class="sp-fg-red">hello</span>', 0, 5, 'span', { op: 'on', attrs: ' class="sp-fg-blue"' })
+      === '<span class="sp-fg-blue">hello</span>',
+    'a second colour REPLACES the first rather than nesting two spans')
+  ok(applyMark('<span class="sp-fg-red">hello</span>', 0, 2, 'span', { op: 'off' })
+      === 'he<span class="sp-fg-red">llo</span>',
+    'colour splits on a partial selection exactly as bold does')
+  ok(canonicalMarks('<span>a</span><span class="sp-fg-red">b</span>') === 'a<span class="sp-fg-red">b</span>',
+    'a span with NO palette class is contentEditable debris and is dropped; one with a class is content')
+  ok(canonicalMarks('<span class="sp-fg-red">a</span><span class="sp-fg-red">b</span>')
+      === '<span class="sp-fg-red">ab</span>',
+    'two runs of the same colour coalesce; two different ones cannot')
+  ok(canonicalMarks('<strong><span class="sp-fg-red">x</span></strong>')
+      === '<span class="sp-fg-red"><strong>x</strong></span>',
+    'colour sits outside the emphasis marks in the canonical order, whichever way it was written')
+  ok(canonicalMarks('<mark class="sp-bg-green">x</mark>') === '<mark class="sp-bg-green">x</mark>' &&
+     canonicalMarks('<mark>x</mark>') === '<mark>x</mark>',
+    'a background is a class on MARK, and a plain highlight stays exactly what it was')
+
+  // THE ADDITIVITY PROPERTY, which is the reason CLASS_OK is a pattern.
+  ok(CLASS_OK.test('sp-fg-teal') && CLASS_OK.test('sp-bg-teal'),
+    'a colour this build has never heard of still MATCHES — an old build must not delete a new palette')
+  ok(canonicalMarks('<span class="sp-fg-teal">x</span>') === '<span class="sp-fg-teal">x</span>',
+    '…and round-trips byte-for-byte through a build with no rule for it: unstyled, not lost')
+  ok(!CLASS_OK.test('sp-fg-') && !CLASS_OK.test('sp-xx-red') && !CLASS_OK.test('anything-else') &&
+     !CLASS_OK.test('sp-fg-0123456789abcdefg'),
+    'and the pattern is still bounded: two roles, a short name, nothing else')
+  ok(keepClasses('sp-fg-red not-ours sp-bg-blue') === 'sp-fg-red sp-bg-blue',
+    'a class list is filtered per TOKEN — one bad name must not cost the colour beside it')
+
+  // MARKDOWN. Colour has no syntax at all, so it exports as the raw inline
+  // html GFM permits, and the importer keeps the class — otherwise "export,
+  // edit the .md, import" would be a colour-stripping round trip.
+  const COLOUR_MD: Array<[string, string]> = [
+    ['<span class="sp-fg-red">x</span>', '<span class="sp-fg-red">x</span>'],
+    ['<mark class="sp-bg-green">x</mark>', '<mark class="sp-bg-green">x</mark>'],
+  ]
+  for (const [html, md] of COLOUR_MD) {
+    ok(htmlToMd(html) === md, `${html} exports as itself`)
+    ok(canonicalMarks(inlineHtml(md)) === canonicalMarks(html),
+      `…and imports back with the class intact — export→import is the identity`)
+  }
+  ok(htmlToMd('<mark>x</mark>') === '==x==',
+    'the PLAIN highlight keeps ==x==, which Obsidian and Pandoc both read')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
