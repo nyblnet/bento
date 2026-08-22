@@ -141,7 +141,14 @@ pages are one document rather than one file each.
 - **Fine-grained sharing.** There is a people panel, presence in the page tree
   and a live session, but no per-person roles or invite links yet — the file is
   still the capability, so anyone you send it to can edit.
-- **Tables and embeds.** Deliberate: the format is permanent, so a block type
-  ships when its model is right, not when its UI is ready. (Databases DID ship —
-  as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a
-  `view` block is a board or a list of them. `src/fields.ts` is the core.)
+- **Embeds.** Deliberate: the format is permanent, so a block type ships when
+  its model is right, not when its UI is ready.
+
+  Tables and databases DID ship, as two separate things, which is the whole of
+  working/spaces-design.md §2.6. A **table** is content — a `table` block whose
+  `rows` are inline html, with no formulas and nothing that recalculates
+  (`tableOf`/`writeTable` in `src/model.ts`, the pipe-table export in
+  `src/blocks.ts`). A **database** is the tracker: `doc.fields` is the schema, a
+  `prop` block is a value, and a `view` block is a board or a list of them
+  (`src/fields.ts`). Recalculation is bento/dash's, and cross-app data arrives
+  as a snapshot with provenance, never as a nested runtime.

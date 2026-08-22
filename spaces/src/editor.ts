@@ -8,7 +8,10 @@
 // and merging blocks can never re-mint an id, and ids are what links,
 // backlinks and (later) collaboration key on.
 
-import { type Block, newBlock, newPage, effectiveParents } from './model'
+import {
+  type Block, type TableShape, newBlock, newPage, effectiveParents,
+  tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS,
+} from './model'
 import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
@@ -163,6 +166,9 @@ export class Editor {
           this.paintPage()
           if (item.type === 'pagelink') this.insertPageCard(fresh.id)
           else if (item.type === 'image') void this.pickImage(fresh.id)
+          // a table has no block-level host to focus — the caret belongs in the
+          // first cell, which is also where a person starts typing
+          else if (item.type === 'table') this.focusCell(fresh.id, 0, 0)
           else this.focusBlock(fresh.id)
         }))
       }
@@ -1852,6 +1858,7 @@ export class Editor {
         })
       }
       this.wireBoard(view)
+      this.wireTables(view)
     }
 
     // "Load this image" — the reader's consent to contact one remote host.
@@ -1990,6 +1997,323 @@ export class Editor {
     host.addEventListener('compositionend', () => { composing = false; sync(true) })
     host.addEventListener('input', () => { if (!this.painting) sync(!composing) })
     host.addEventListener('blur', () => { if (!this.painting) s.endRun() })
+  }
+
+  // ---- tables -------------------------------------------------------------
+  //
+  // A block editor edits a table differently from a canvas: there is no
+  // properties panel to put row and column controls in, and the block IS the
+  // table, so the controls ride on the block the way the image tools do. What
+  // is copied from slides is the MODEL (fractional weights, rows of cells, a
+  // header flag, whole-value LWW under collab); what is not is any of this.
+
+  /** The cell the caret is in — `data-cell` is the block, `data-r`/`data-c` the
+   *  seat. Deliberately NOT `data-edit`: that name means "this element's html
+   *  IS the block's html", and the generic input handler would then write one
+   *  cell over the whole table. */
+  private cellAt(node: Node | null): { id: string; r: number; c: number; td: HTMLElement } | null {
+    const td = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>('[data-cell]')
+    if (!td) return null
+    return { id: td.dataset.cell!, r: Number(td.dataset.r), c: Number(td.dataset.c), td }
+  }
+
+  private focusCell(id: string, r: number, c: number): void {
+    afterPaint(() => {
+      const td = this.main.querySelector<HTMLElement>(
+        `[data-cell="${CSS.escape(id)}"][data-r="${r}"][data-c="${c}"]`)
+      if (!td) return
+      td.focus()
+      caretToEnd(td)
+    })
+  }
+
+  /**
+   * Change a table's shape, then put the caret back where the change means it
+   * should be.
+   *
+   * Every table write goes through here and through model.writeTable, so the
+   * derived `html` fallback — the thing a build that predates tables shows —
+   * can never drift from the cells. It is a `commit`, so it is one undo step.
+   */
+  private editTable(id: string, fn: (t: TableShape) => { r: number; c: number } | void): void {
+    const s = this.store
+    const b = s.block(id)
+    if (!b || s.readOnly || this.reading) return
+    let seat: { r: number; c: number } | undefined
+    const shape = tableOf(b)
+    s.commit(() => { seat = fn(shape) || undefined; writeTable(b, shape) })
+    this.paintPage()
+    // where the change means the caret should be, or where it already was —
+    // clamped, because the row it was in may be the row that just went
+    const here = this.cell?.id === id ? this.cell : null
+    const to = seat ?? here
+    if (!to) return
+    const t = tableOf(b)
+    this.focusCell(id, Math.min(to.r, t.h - 1), Math.min(to.c, t.w - 1))
+  }
+
+  /** The last cell the caret was in, so a toolbar button knows which row and
+   *  column it means. A toolbar click blurs the cell, so this cannot be read
+   *  from the Selection at the moment the button fires. */
+  private cell: { id: string; r: number; c: number } | null = null
+
+  /** A fresh row or column of the right width. */
+  private static blank(n: number): string[] { return Array<string>(n).fill('') }
+
+  addTableRow(id: string, at?: number): void {
+    this.editTable(id, (t) => {
+      if (t.h >= TABLE_MAX_ROWS) return
+      const r = at === undefined ? t.h : at + 1
+      t.rows.splice(r, 0, Editor.blank(t.w))
+      return { r, c: 0 }
+    })
+  }
+
+  addTableCol(id: string, at?: number): void {
+    this.editTable(id, (t) => {
+      if (t.w >= TABLE_MAX_COLS) return
+      const c = at === undefined ? t.w : at + 1
+      for (const row of t.rows) row.splice(c, 0, '')
+      t.cols.splice(c, 0, t.cols[Math.min(c, t.cols.length - 1)] ?? 1)
+      t.colAlign.splice(c, 0, '')
+      return { r: 0, c }
+    })
+  }
+
+  /** A table always keeps one row and one column: a table with none is not an
+   *  empty table, it is a block with nothing to click on and no way back. */
+  removeTableRow(id: string, at: number): void {
+    this.editTable(id, (t) => {
+      if (t.h <= 1) return
+      t.rows.splice(Math.min(at, t.h - 1), 1)
+      return { r: Math.max(0, Math.min(at, t.rows.length - 1)), c: 0 }
+    })
+  }
+
+  removeTableCol(id: string, at: number): void {
+    this.editTable(id, (t) => {
+      if (t.w <= 1) return
+      const c = Math.min(at, t.w - 1)
+      for (const row of t.rows) row.splice(c, 1)
+      t.cols.splice(c, 1)
+      t.colAlign.splice(c, 1)
+      return { r: 0, c: Math.max(0, c - 1) }
+    })
+  }
+
+  /**
+   * Attach a table's editing behaviour: the cells, the tools, the grips.
+   *
+   * Called only when the document is editable — the renderer already emits
+   * inert `<td>`s in the reading view and in print, so wiring them anyway would
+   * contradict it, which is the exact mistake the callout chip made once.
+   */
+  private wireTables(view: HTMLElement): void {
+    const s = this.store
+
+    for (const td of view.querySelectorAll<HTMLElement>('[data-cell]')) {
+      const id = td.dataset.cell!
+      const r = Number(td.dataset.r), c = Number(td.dataset.c)
+      td.addEventListener('focus', () => { this.cell = { id, r, c } })
+      td.addEventListener('input', () => {
+        if (this.painting) return
+        // ONE RUN PER CELL, not per block: the run key carries the seat, so
+        // moving to the next cell closes the run and Tab-typing across a row is
+        // five undo steps rather than one that swallows the whole row.
+        s.runEdit(`${id}:${r}:${c}`, () => {
+          const b = s.block(id)
+          if (!b) return
+          const t = tableOf(b)
+          if (!t.rows[r]) return
+          t.rows[r][c] = td.innerHTML
+          writeTable(b, t)
+        })
+      })
+      td.addEventListener('blur', () => {
+        if (this.painting) return
+        s.endRun()
+        const b = s.block(id)
+        if (!b) return
+        const t = tableOf(b)
+        const clean = canonicalize(t.rows[r]?.[c] ?? '')
+        if (clean === t.rows[r]?.[c]) return
+        t.rows[r][c] = clean
+        writeTable(b, t)
+        td.innerHTML = clean
+      })
+    }
+
+    for (const node of view.querySelectorAll<HTMLElement>('.sp-b-table')) {
+      const id = node.dataset.blockId!
+      const b = s.block(id)
+      if (!b) continue
+      const shape = tableOf(b)
+      const tools = el('div', 'sp-tb-tools')
+      const btn = (label: string, title: string, run: () => void, on = false) => {
+        const x = document.createElement('button')
+        x.type = 'button'
+        x.className = 'sp-btn' + (on ? ' sp-on' : '')
+        x.textContent = label
+        x.title = title
+        x.setAttribute('aria-label', title)
+        // mousedown, not click: a click would first blur the cell, and `this.cell`
+        // is read to decide WHICH row the button means. Blur still runs (the
+        // cell's own handler closes its typing run) — it just runs after the
+        // seat has been used.
+        x.addEventListener('mousedown', (e) => { e.preventDefault(); run() })
+        return x
+      }
+      const seat = () => (this.cell?.id === id ? this.cell : null)
+      tools.append(
+        btn('＋', t('Add a row below'), () => this.addTableRow(id, seat()?.r)),
+        btn('＋|', t('Add a column after'), () => this.addTableCol(id, seat()?.c)),
+        btn('－', t('Remove this row'), () => this.removeTableRow(id, seat()?.r ?? shape.h - 1)),
+        btn('－|', t('Remove this column'), () => this.removeTableCol(id, seat()?.c ?? shape.w - 1)),
+        btn('H', t('Header row'), () => this.editTable(id, (x) => { x.header = !x.header }), shape.header),
+      )
+      node.append(tools)
+
+      // COLUMN GRIPS on the first row's cells, all but the last: a boundary
+      // moves two columns, and there is no boundary after the last one.
+      // COLUMN GRIPS. They live in the WRAPPER, absolutely positioned over each
+      // boundary — NOT inside the first row's cells, which is where they went
+      // first and which was wrong in two ways at once, both measured in the
+      // browser: the cell's `innerHTML` is the model, so every grip was written
+      // into the document as the cell's content; and `caretToEnd` put the caret
+      // INSIDE the trailing <button>, so the first word typed into a column
+      // landed in the button and was then eaten by the sanitizer on blur (a
+      // <button> is not on the inline allowlist, so it goes with its text).
+      // Editor chrome never belongs inside an editable host. The image tools and
+      // the language chip sit outside theirs for the same reason.
+      const wrap = node.querySelector<HTMLElement>('.sp-tb-wrap')
+      const table = node.querySelector<HTMLElement>('.sp-tb')
+      if (!wrap || !table || shape.w < 2) continue
+      const grips: HTMLElement[] = []
+      // `offsetLeft` is measured against the WRAP (the nearest positioned
+      // ancestor), which is also what the grips are positioned in — so the two
+      // agree inside the horizontal scroller as well, and scroll together.
+      const place = () => {
+        const row = [...node.querySelectorAll<HTMLElement>('[data-cell][data-r="0"]')]
+        grips.forEach((g, c) => {
+          const td = row[c]
+          if (!td) return
+          // physical `left`, to match the physical `offsetLeft` it comes from
+          g.style.left = `${td.offsetLeft + td.offsetWidth - 3}px`
+          g.style.height = `${table.offsetHeight}px`
+        })
+      }
+      for (let c = 0; c < shape.w - 1; c++) {
+        const grip = document.createElement('button')
+        grip.type = 'button'
+        grip.className = 'sp-tb-grip'
+        grip.tabIndex = -1
+        grip.setAttribute('aria-label', t('Drag to resize this column'))
+        grip.addEventListener('mousedown', (down) => this.startColResize(down, id, c, node, place))
+        grips.push(grip)
+        wrap.append(grip)
+      }
+      place()
+      // the column boundaries move when the window does, and a grip that is no
+      // longer over its boundary is worse than no grip
+      new ResizeObserver(place).observe(table)
+    }
+  }
+
+  /**
+   * Drag a column boundary.
+   *
+   * The DOM is updated live and the model ONLY on release — a commit per
+   * mousemove would be sixty undo steps for one drag, and repainting the page
+   * under the cursor would drop the pointer capture on the first frame.
+   *
+   * Two adjacent weights are traded so the total is unchanged: `cols` are
+   * fractions of the table's own width (model.ts), so a drag can never make a
+   * table that does not add up.
+   */
+  private startColResize(down: MouseEvent, id: string, c: number, node: HTMLElement, place: () => void): void {
+    down.preventDefault()
+    const table = node.querySelector<HTMLElement>('.sp-tb')
+    const b = this.store.block(id)
+    if (!table || !b) return
+    const shape = tableOf(b)
+    const cols = [...table.querySelectorAll<HTMLElement>('col')]
+    const width = table.getBoundingClientRect().width || 1
+    const total = shape.cols.reduce((s, n) => s + n, 0) || shape.w
+    const startX = down.clientX
+    const a0 = shape.cols[c], b0 = shape.cols[c + 1]
+    // a column never shrinks past a width you could still grab
+    const min = (total * 40) / width
+    document.body.classList.add('sp-col-resizing')
+
+    const move = (m: MouseEvent) => {
+      const d = ((m.clientX - startX) / width) * total
+      const a = Math.max(min, Math.min(a0 + b0 - min, a0 + d))
+      shape.cols[c] = a
+      shape.cols[c + 1] = a0 + b0 - a
+      for (let i = 0; i < cols.length; i++) {
+        cols[i].style.width = `${((shape.cols[i] / total) * 100).toFixed(3)}%`
+      }
+      // the grips follow the boundaries they ARE; the table's own size does not
+      // change during a column drag, so the ResizeObserver never fires for this
+      place()
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      document.body.classList.remove('sp-col-resizing')
+      this.store.commit(() => { writeTable(b, shape) }, { structure: false })
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
+  /**
+   * The keymap INSIDE a cell. Returns true when it handled the key.
+   *
+   * Tab and Enter walk the grid, and Tab off the last cell appends a row —
+   * exactly what slides' canvas table does, because it is what every table in
+   * every application does and muscle memory is not a thing to be clever with.
+   * Shift+Enter is the line break, since plain Enter is spent on navigation.
+   */
+  private tableKey(e: KeyboardEvent, at: { id: string; r: number; c: number }): boolean {
+    const b = this.store.block(at.id)
+    if (!b) return false
+    const t = tableOf(b)
+    const go = (r: number, c: number) => { e.preventDefault(); this.focusCell(at.id, r, c) }
+
+    if (e.key === 'Tab') {
+      const next = at.c + (e.shiftKey ? -1 : 1)
+      if (next >= 0 && next < t.w) { go(at.r, next); return true }
+      if (e.shiftKey) {
+        if (at.r === 0) { e.preventDefault(); return true }
+        go(at.r - 1, t.w - 1)
+        return true
+      }
+      if (at.r + 1 < t.h) { go(at.r + 1, 0); return true }
+      // off the end: a new row, which is how a table is filled in
+      e.preventDefault()
+      this.addTableRow(at.id)
+      return true
+    }
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // the browser inserts a <div> or a <p> into a td left to itself, and
+        // block structure is never markup here — insertLineBreak is a <br>
+        e.preventDefault()
+        document.execCommand('insertLineBreak')
+        return true
+      }
+      if (at.r + 1 < t.h) { go(at.r + 1, at.c); return true }
+      e.preventDefault()
+      this.addTableRow(at.id)
+      return true
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      return true
+    }
+    return false
   }
 
   /** Choose what a code block is highlighted as. */
@@ -2164,6 +2488,18 @@ export class Editor {
     if (e.key === 'Escape' && this.reading && !this.overlay) { e.preventDefault(); this.toggleReading(false); return }
     if (this.overlay) return // the overlay owns the keyboard while it is open
 
+    // A TABLE CELL IS NOT A BLOCK HOST, so the block keymap below does not
+    // apply to it — the same ruling a code block gets, one level earlier.
+    // ⏎ walks the grid rather than splitting a block, ⇥ walks it rather than
+    // re-parenting, and neither has any meaning for a cell. This must come
+    // before `focused()`, which looks for `[data-edit]` and finds nothing in a
+    // cell — so without it every key here fell through to the browser, and ⏎
+    // inserted a `<div>` into the cell's html.
+    const inCell = this.cellAt(document.activeElement)
+    if (inCell && !s.readOnly && !this.reading) {
+      if (this.tableKey(e, inCell)) return
+    }
+
     const cur = this.focused()
     if (!cur) return
     const b = s.block(cur.id)
@@ -2331,7 +2667,10 @@ export class Editor {
       SPEC.get(type)?.init?.(b)
     })
     this.paintPage()
-    this.focusBlock(id)
+    // a table's text is in its cells, so there is no block host to put the
+    // caret in — the first cell is the equivalent place
+    if (type === 'table') this.focusCell(id, 0, 0)
+    else this.focusBlock(id)
   }
 
   // ---- overlays -----------------------------------------------------------
@@ -3058,7 +3397,7 @@ export class Editor {
         lines.push(t('{n} page(s) had frontmatter, kept verbatim in a folded block.', { n: plan.stats.frontmatter }))
       }
       if (plan.stats.tables) {
-        lines.push(t('{n} table(s) kept as text: there is no table block in this format yet.', { n: plan.stats.tables }))
+        lines.push(t('{n} table(s) imported, with their column alignment.', { n: plan.stats.tables }))
       }
       if (embedded) lines.push(t('{n} image(s) embedded ({size}).', { n: embedded, size: humanBytes(embeddedBytes) }))
       if (unresolved) {

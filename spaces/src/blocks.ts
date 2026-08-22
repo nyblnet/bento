@@ -21,7 +21,7 @@
 // `custom: true`; everything the registry can express lives here.
 
 import type { Block } from './model'
-import { effectiveParents } from './model.ts'
+import { effectiveParents, tableOf, writeTable } from './model.ts'
 import type { IconName } from './icons'
 
 export interface BlockSpec {
@@ -103,6 +103,16 @@ export interface MdCtx {
   titleOf: (id: string) => string | undefined
   /** the rows a `view` block stands for, already filtered and ordered */
   rowsOf: (b: Block) => Array<{ id: string; title: string; group?: string; fields: string }>
+  /**
+   * Inline html → inline markdown.
+   *
+   * The exporter hands every block its own `html` already converted, which is
+   * the whole of the text for every type that HAS one string of it. A table has
+   * one per cell, and the converter needs a DOM (about.ts htmlToMd parses
+   * inert), which this file deliberately does not — so it arrives through the
+   * context, exactly like the two questions above.
+   */
+  inline: (html: string) => string
 }
 
 export const SPECS: BlockSpec[] = [
@@ -206,6 +216,29 @@ export const SPECS: BlockSpec[] = [
     toMd: () => ['---'],
   },
   {
+    // A CONTENT table: rows and columns of inline html, no formulas and nothing
+    // that recalculates (working/spaces-design.md §2.6). Custom, because a
+    // <table> is structure the default tag-plus-inline-host renderer cannot
+    // express, and `text: false` because its editable text lives in the CELLS —
+    // a block-level inline host beside them would be a second place to type
+    // that nothing displays.
+    type: 'table', label: 'Table', hint: 'Rows and columns', icon: 'table',
+    tag: 'div', custom: true,
+    // Also the CONVERSION path (editor.setType), so it must not clobber: a
+    // table turned into a paragraph and back keeps its rows. A paragraph turned
+    // INTO a table keeps its words, in the first header cell — the alternative
+    // is a block menu entry that silently discards the line you typed.
+    init: (b) => {
+      if (Array.isArray(b.rows) && b.rows.length) return
+      const first = typeof b.html === 'string' ? b.html : ''
+      writeTable(b, {
+        rows: [[first, '', ''], ['', '', ''], ['', '', '']],
+        cols: [1, 1, 1], colAlign: ['', '', ''], header: true,
+      })
+    },
+    toMd: (b, _text, indent, ctx) => tableToMd(b, indent, ctx.inline),
+  },
+  {
     type: 'pagelink', label: 'Link to page', hint: 'A card that opens a page', icon: 'link',
     tag: 'div', custom: true,
     toMd: (b, _text, _indent, ctx) => [`→ [[${ctx.titleOf(String(b.page)) ?? '?'}]]`],
@@ -270,6 +303,38 @@ export const SPECS: BlockSpec[] = [
     toMd: (b) => [`![${String(b.alt ?? '')}](${String(b.src ?? '')})`],
   },
 ]
+
+/** The `:---:` rule row's four forms, which are the whole of what GFM can say
+ *  about alignment — and the reason `colAlign` is per column, not per cell. */
+const RULE: Record<string, string> = { left: ':---', center: ':---:', right: '---:' }
+
+/**
+ * A table as a GitHub-flavoured pipe table.
+ *
+ * THE HEADER ROW IS NOT OPTIONAL IN GFM: a table without one is not a table,
+ * it is three lines of prose full of pipes. So a `header: false` table exports
+ * with an EMPTY header row, which is the form every generator uses and which
+ * this app's own importer reads back as `header: false`.
+ *
+ * Two characters end a cell early and both can arrive from a file someone
+ * mailed you: a literal `|` (escaped) and a newline, which `<br>` in a cell
+ * becomes on the way through the inline converter (turned back into `<br>`,
+ * which GFM renders inside a cell — a real newline would end the row).
+ * An EMPTY cell is emitted as a space: `||` is a column count nobody meant.
+ */
+export function tableToMd(b: Block, indent: string, inline: (html: string) => string): string[] {
+  const t = tableOf(b)
+  const cell = (html: string): string =>
+    inline(html).replace(/\|/g, '\\|').replace(/\n/g, '<br>').trim() || ' '
+  const line = (cells: string[]): string => `${indent}| ${cells.join(' | ')} |`
+  const head = t.header ? t.rows[0] : Array<string>(t.w).fill('')
+  const body = t.header ? t.rows.slice(1) : t.rows
+  return [
+    line(head.map(cell)),
+    line(t.colAlign.map((a) => RULE[a] ?? '---')),
+    ...body.map((r) => line(r.map(cell))),
+  ]
+}
 
 /**
  * Callout tones — a PERMANENT vocabulary.

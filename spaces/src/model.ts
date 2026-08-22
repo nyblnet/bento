@@ -71,6 +71,54 @@ export interface Block {
   h?: number
   /** pagelink: the target page id */
   page?: string
+
+  /**
+   * table: the cells, row-major, each one INLINE HTML.
+   *
+   * A cell is a bare string rather than slides' `{html, color, bg, bold}`
+   * object, and that is the one real divergence from the model this is
+   * otherwise copied from. Slides' cells carry presentation because a canvas
+   * has no cascade — every table there paints its own colours. A space has a
+   * theme and a stylesheet, so the only thing left in a cell is its content,
+   * and its content is already rich: **bold** in a cell is `<b>`, exactly as in
+   * every other block, through the same allowlist. Nothing is lost and the
+   * whole style object goes away.
+   *
+   * Row 0 is the header unless `header` is false — see below.
+   *
+   * UNDER COLLABORATION this whole field is one last-writer-wins register, so
+   * two people editing DIFFERENT cells at the same time keep only one of the
+   * two edits. Slides' table has the identical limitation and documents it;
+   * the fix (a node per cell) is a format change, so it is written down here
+   * rather than half-built.
+   */
+  rows?: string[][]
+  /**
+   * table: fractional column weights, one per column. Absent = equal columns.
+   *
+   * FRACTIONS, never pixels, for the reason `Block.width` is a percentage: the
+   * text column is a theme concern and the same file is read at 320px and at
+   * 1600px. Dragging a column boundary changes two weights and nothing else.
+   */
+  cols?: number[]
+  /**
+   * table: per-COLUMN text alignment — '' | 'left' | 'center' | 'right'.
+   *
+   * Per column, not per cell, because that is what a pipe table can say: GFM
+   * encodes alignment in the `:---:` rule row and nowhere else. Per-cell
+   * alignment would export as a lie on every second row.
+   */
+  colAlign?: string[]
+  /**
+   * table: false when the first row is ordinary data.
+   *
+   * ABSENT MEANS TRUE, which is the opposite of every other boolean here and is
+   * deliberate: a GFM pipe table always has a header, so the header case is
+   * what a table imported from markdown, written by an agent, or hand-authored
+   * with the two fields above will be — and it should be the case that needs no
+   * field. A headerless table says so, and exports with an empty header row.
+   */
+  header?: boolean
   /**
    * callout: which kind of callout this is — one of blocks.ts CALLOUT_TONES.
    *
@@ -482,4 +530,99 @@ export const homePage = (doc: SpacesDoc): Page | undefined =>
 export function isRemote(src: string): boolean {
   if (!src) return false
   return !src.startsWith('asset:') && !src.startsWith('data:')
+}
+
+// ---- tables ----------------------------------------------------------------
+// A table is CONTENT (working/spaces-design.md §2.6): no formulas, no
+// recalculation, no cross-document references. The line the suite draws is
+// "would you print it → folio; does it recalculate → dash; does it link to
+// pages → spaces", and a table whose cells are inline html — so a cell can
+// hold a `#p/` link — is squarely on this side of it. The DATABASE case already
+// shipped, as the tracker (doc.fields + prop + view blocks), and is not this.
+
+/** The upper bound on a table's shape. A file can be hand-edited or generated,
+ *  and the renderer should not be asked for a hundred thousand cells. */
+export const TABLE_MAX_COLS = 32
+export const TABLE_MAX_ROWS = 400
+
+export interface TableShape {
+  rows: string[][]
+  cols: number[]
+  colAlign: string[]
+  header: boolean
+  /** columns and rows, after normalisation */
+  w: number
+  h: number
+}
+
+/**
+ * ONE answer to "what shape is this table" — for the renderer, the editor and
+ * the markdown exporter alike.
+ *
+ * Every table field is optional in the format, and the file may have been
+ * written by hand, by an agent, or by a build that is not this one. So a ragged
+ * `rows`, a `cols` of the wrong length, and a `rows` that is not an array at
+ * all are ordinary inputs here rather than errors.
+ *
+ * It normalises AT READ TIME and never by rewriting the document — the same
+ * choice `effectiveParents` makes, for the same reason: two readers of one file
+ * agree without exchanging an op, and merely opening a space repairs nothing.
+ */
+export function tableOf(b: Block): TableShape {
+  const raw = Array.isArray(b.rows) ? (b.rows as unknown[]) : []
+  const asRow = (r: unknown): string[] =>
+    (Array.isArray(r) ? r : []).slice(0, TABLE_MAX_COLS).map((c) => (typeof c === 'string' ? c : ''))
+  let rows = raw.slice(0, TABLE_MAX_ROWS).map(asRow)
+  const w = Math.max(1, ...rows.map((r) => r.length))
+  rows = rows.map((r) => (r.length === w ? r : [...r, ...Array(w - r.length).fill('')]))
+  if (!rows.length) rows = [Array(w).fill('')]
+  const num = (v: unknown): number => (typeof v === 'number' && v > 0 && Number.isFinite(v) ? v : 1)
+  const src = Array.isArray(b.cols) ? (b.cols as unknown[]) : []
+  const cols = Array.from({ length: w }, (_, i) => num(src[i]))
+  const al = Array.isArray(b.colAlign) ? (b.colAlign as unknown[]) : []
+  const colAlign = Array.from({ length: w }, (_, i) =>
+    al[i] === 'left' || al[i] === 'center' || al[i] === 'right' ? String(al[i]) : '')
+  return { rows, cols, colAlign, header: b.header !== false, w, h: rows.length }
+}
+
+/**
+ * What a build that has never heard of a `table` block shows.
+ *
+ * The format is additive forever, and for a block TYPE additive means the
+ * unknown type falls back to rendering its `html` (spaces/README.md). So a
+ * table keeps one — derived, rewritten on every edit, never authored.
+ *
+ * It is the cells' OWN INLINE HTML joined, not their plain text: a `#p/` link
+ * in a cell then still produces a backlink (buildIndex reads `html`), still
+ * turns up in ⌘F, and still exports from an older build as a link rather than
+ * as a bare word.
+ *
+ * It costs a second copy of the table's text in the file, and that is the price
+ * of a permanent format. The alternative is a table that VANISHES when the
+ * space is opened by the build someone already has, which is not a trade worth
+ * making for a few hundred bytes.
+ */
+export function tableFallbackHtml(rows: string[][]): string {
+  return rows.map((r) => r.filter((c) => c.trim()).join(' · ')).filter(Boolean).join('<br>')
+}
+
+/**
+ * Write a shape back onto a block — the ONE writer, so `html` can never drift
+ * from `rows`.
+ *
+ * Defaults are OMITTED rather than written: equal columns store no `cols`, no
+ * alignment stores no `colAlign`, a header stores no `header`. A table built
+ * here and a table parsed out of a pipe table are then the same bytes, and the
+ * minimal hand-written `{ type: 'table', rows: [[…]] }` is a first-class
+ * document rather than something this build would "fix" on the next edit.
+ */
+export function writeTable(b: Block, t: Pick<TableShape, 'rows' | 'cols' | 'colAlign' | 'header'>): void {
+  b.rows = t.rows
+  if (t.cols.some((c) => c !== t.cols[0])) b.cols = t.cols
+  else delete b.cols
+  if (t.colAlign.some(Boolean)) b.colAlign = t.colAlign
+  else delete b.colAlign
+  if (t.header) delete b.header
+  else b.header = false
+  b.html = tableFallbackHtml(t.rows)
 }

@@ -14,6 +14,62 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-22 — bento/spaces gets a CONTENT table, and its cells are strings
+
+**Decision.** A `table` block: `rows` (row-major, each cell INLINE HTML), `cols`
+(fractional column weights), `colAlign` (per COLUMN), `header` (absent = TRUE).
+No formulas, no recalculation, no cross-document references — the line from
+`working/spaces-design.md` §2.6. The database case is unaffected: it already
+shipped as the tracker (`doc.fields` + `prop` + `view`), and this is not a
+second one.
+
+**A cell is a bare string, not slides' `{html, color, bg, bold}`.** Slides' cells
+carry presentation because a canvas has no cascade; a space has a theme and a
+stylesheet, and a spaces cell's content is already rich — bold in a cell is
+`<b>`, through the same allowlist as every other block. So the entire `style`
+object and every per-cell override go away, and the only thing left in a cell is
+what someone typed. Alignment stays per COLUMN because that is exactly what a
+GFM rule row can say; per-cell alignment would export as a lie on every row.
+
+**`header` absent means TRUE**, which is the opposite of every other boolean in
+the model and is deliberate: a pipe table always has a header, so the header case
+is the one that should need no field, and a minimal hand-written
+`{type:'table', rows:[[…]]}` is then a first-class document. A headerless table
+exports with an EMPTY header row (GFM has no other way to say it) and the
+importer reads that back as `header:false`, dropping the empty row — otherwise a
+round trip grows a blank row each time.
+
+**The `html` fallback is the whole of format additivity for a block type**, so it
+is derived and rewritten on every table edit by the ONE writer (`writeTable`),
+never authored. It is the cells' own inline html joined, not their text, so a
+`#p/` link in a cell still produces a backlink (`buildIndex` reads `html`) and
+still exports as a link from a build that has no table case. It costs a second
+copy of the table's text in the file; a table that VANISHES in the build someone
+already has is not the cheaper option.
+
+**Shape is normalised at READ time (`tableOf`), never by repairing the file** —
+the same rule as `effectiveParents`, so two readers agree without exchanging an
+op and opening a space repairs nothing. Under collaboration `rows` is one
+last-writer-wins register: two people editing different cells at once keep one of
+the two edits. Slides' table has the identical limitation; the fix is a node per
+cell, which is a format change, so it is written down rather than half-built.
+
+**Editor chrome never goes inside an editable host.** The column grips first went
+into the first row's cells and were written into the document as cell content —
+and `caretToEnd` put the caret INSIDE the trailing `<button>`, so the first word
+typed in a column landed in the button and was eaten by the sanitizer on blur.
+They live in the wrapper now, absolutely positioned over each boundary. A cell is
+`data-cell` + `data-r`/`data-c`, never `data-edit`: that name means "this
+element's html IS the block's html", and the generic input handler would write
+one cell over the whole table.
+
+Details: `spaces/src/model.ts` (`tableOf`, `writeTable`, `tableFallbackHtml`),
+`spaces/src/blocks.ts` (the registry entry and `tableToMd`), `spaces/src/render.ts`
+(`renderTable`), `spaces/src/editor.ts` (`wireTables`, `tableKey`,
+`startColResize`), `spaces/src/markdown.ts` (the pipe-table branch, which replaced
+the "kept verbatim in a code block, mechanically upgradable the day a table block
+ships" workaround), and the table section of `scripts/test-spaces-model.ts`.
+
 ## 2026-08-19 — The shells are packed with zopfli, and the format does not move
 
 Every Bento file carries its whole runtime, so the packer's efficiency is a
