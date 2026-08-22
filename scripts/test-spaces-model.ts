@@ -406,10 +406,15 @@ for (const [label, input, err] of [
     'a board page is still the DEFAULT wide case')
   ok(/page\.width === 'wide' \|\| page\.width === 'full' \? page\.width/.test(render),
     '…and an explicit page width wins over it')
-  ok(/page\.width === undefined \? auto/.test(render),
-    '…while an absent key falls through to the board default')
+  // These two were written against the FIRST version, where an absent key fell
+  // straight through to the board default and the prose case was a flat
+  // `theme.measure` in px. Both changed when the reader preference and the
+  // growing default landed; the intent they were pinning has not.
+  ok(/page\.width === undefined \? \(opts\.readerWidth \?\? auto\)/.test(render),
+    '…while an absent key falls through to the reader, and then to the board default')
   ok(/maxWidth = 'none'/.test(render), "'full' removes the cap rather than picking a big number")
-  ok(/maxWidth = `\$\{doc\.theme\.measure\}px`/.test(render), 'and the prose default is still the theme measure')
+  ok(/theme\.measure/.test(render) && /42vw/.test(render),
+    'and the prose default is still built from the theme measure, now growing with the viewport')
 
   // THE DEFAULT IS AN ABSENT KEY. A page set to wide and back must be
   // byte-identical to one never touched — the same rule editView follows.
@@ -1873,6 +1878,39 @@ function fsTable(f: string): string {
   const editor = src('editor.ts')
   ok(/\^https\?:/.test(editor),
     'the clip URL box allowlists http(s) rather than blocklisting javascript:')
+}
+
+// ---- HOW WIDE A PAGE IS, and whose business that is ------------------------
+// The per-page control answered "this page needs the room". It did not answer
+// "I have a wide screen", and making somebody set a width on every page in a
+// space to say so is the wrong shape of work. MEASURED at a 2560px viewport
+// before this: a 720px column using 31% of the area, 1,591px of it empty.
+//
+// So there are two settings, and the split is the point: the PAGE says what it
+// needs (document data, travels with the file), the READER says what their
+// screen is (viewer data, localStorage, never written to the file) — the same
+// rule locale and reduced motion already follow.
+{
+  const render = nodeFs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const editor = nodeFs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/readerWidth\?: 'wide' \| 'full'/.test(render), 'the renderer takes a reader width')
+  ok(/page\.width === undefined \? \(opts\.readerWidth \?\? auto\)/.test(render),
+    'the PAGE wins over the reader, and the reader wins over the board default')
+  ok(/min\(max\(\$\{m\}px, 42vw\), \$\{Math\.round\(m \* 1\.25\)\}px\)/.test(render),
+    'and the built-in default GROWS with the viewport, capped so a line cannot run away')
+
+  ok(/localStorage\.getItem\('bento-sp-width'\)/.test(editor),
+    "the reader's width is viewer state, in localStorage beside the language")
+  ok(!/theme\.width|doc\.width|\.width = readerWidth/.test(editor),
+    '…and is NEVER written into the document')
+
+  // PRINT MUST NOT INHERIT IT. Paper has a fixed width; the size of the
+  // monitor somebody happens to be sitting at is not a fact about the page
+  // they are printing.
+  const printCall = editor.slice(editor.indexOf('printing: true'))
+  ok(!/readerWidth/.test(printCall.slice(0, 400)),
+    'the print path does not take the reader width')
 }
 
 // ---- LINK CARDS point outward, and never reach outward ----------------------

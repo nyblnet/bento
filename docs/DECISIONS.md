@@ -8,6 +8,44 @@ Reversing a decision = a new entry that supersedes the old one, not an edit.
 Format:
 
 ```
+## 2026-08-19 — Page width has TWO settings, because it answers two questions
+
+The per-page control shipped in #325 answered "this page needs the room". It
+did not answer "I have a wide screen", and it made somebody say so on every
+page in a space one page at a time. Reported as still-narrow after it shipped,
+and MEASURED at a 2560px viewport: a 720px column using 31% of the area with
+1,591px empty beside it.
+
+Two settings now, and the split is the whole point:
+
+  · `Page.width`  — DOCUMENT data. What this page needs; travels with the file.
+  · `bento-sp-width` — VIEWER data, in localStorage. What this reader's SCREEN
+    is; never written to the file.
+
+Precedence: the page, then the reader, then the board default, then the
+measure. A reader who sets it once gets it on every page that has not asked for
+something specific, and the document is byte-unchanged — verified: four pages
+at 1500px with no `width` key stored on any of them and no `"width"` anywhere
+in the serialized doc.
+
+That split is the rule locale and reduced motion already follow (PLATFORM §8):
+two people opening one space on a laptop and a 27-inch monitor should each get
+their own answer, and neither should write theirs into the file the other
+opens.
+
+THE BUILT-IN DEFAULT ALSO GROWS, `min(max(measure, 42vw), measure × 1.25)` —
+720px on a laptop, 900px at 2560px. Capped deliberately: 720px is already ~88
+characters at 16px, and past ~95 a line gets harder to read rather than easier,
+so the cap is a typographic limit and not a shortage of nerve. Filling a 2560px
+screen with one column of prose is not the goal; not showing a ribbon in the
+middle of it is.
+
+PRINT DOES NOT INHERIT THE READER WIDTH. Paper has a fixed width, and the size
+of the monitor somebody happens to be sitting at is not a fact about the page
+they are printing. Pinned in the rig.
+
+---
+
 ## YYYY-MM-DD — Title
 Decision. Why. Pointers.
 ```

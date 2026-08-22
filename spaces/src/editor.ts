@@ -69,6 +69,29 @@ const IMPORT_IMAGE_BUDGET = 12 * 1024 * 1024
 interface PickedFile { path: string; file: File }
 
 
+/**
+ * This reader's preferred page width, or undefined for the built-in default.
+ *
+ * VIEWER-SCOPED, in localStorage beside the language and the pane width, and
+ * never in the document: it describes the screen somebody is sitting at, not
+ * anything about the space. Two people opening one file on a laptop and a
+ * 27-inch monitor should each get their own answer, and neither should write
+ * theirs into a file the other opens.
+ */
+export function readerWidth(): 'wide' | 'full' | undefined {
+  try {
+    const v = localStorage.getItem('bento-sp-width')
+    return v === 'wide' || v === 'full' ? v : undefined
+  } catch { return undefined }
+}
+
+export function setReaderWidth(v: 'wide' | 'full' | undefined): void {
+  try {
+    if (v) localStorage.setItem('bento-sp-width', v)
+    else localStorage.removeItem('bento-sp-width')
+  } catch { /* a locked-down origin just gets the default */ }
+}
+
 export class Editor {
   readonly store: Store
   private root: HTMLElement
@@ -910,6 +933,7 @@ export class Editor {
       editable: !s.readOnly && !this.reading,
       titleOf: (id) => s.index.page.get(id)?.title,
       allowRemote: (src) => this.allowedRemote.has(src),
+      readerWidth: readerWidth(),
     })
     // the icon lives beside the title, where changing it is discoverable
     const inner = view.querySelector('.sp-page-inner')
@@ -3368,6 +3392,25 @@ export class Editor {
       () => setWidth('wide'), { selected: current === 'wide' }))
     pop.append(this.menuItem('widthFull', t('Full width'), t('Fills the window'),
       () => setWidth('full'), { selected: current === 'full' }))
+
+    // AND THE SAME CHOICE, FOR EVERY PAGE. Setting a width page by page answers
+    // "this page needs the room"; it does not answer "I have a wide screen",
+    // which is one fact about one person and was costing a visit to every page
+    // in the space. This one is a VIEWER preference — localStorage, never the
+    // file — so it follows the reader rather than the document, and somebody
+    // opening the same space on a laptop is unaffected.
+    const pref = readerWidth()
+    const applyAll = (v: 'wide' | 'full' | undefined) => {
+      this.closeOverlay()
+      setReaderWidth(v)
+      this.paintPage()
+      this.status(v ? t('Every page opens wide on this screen from now on')
+                    : t('Pages open at their normal width again'))
+    }
+    pop.append(this.menuItem(pref ? 'widthNarrow' : 'widthWide',
+      pref ? t('Stop widening every page') : t('Use this width for every page'),
+      pref ? t('Only pages that ask for it') : t('On this screen only — it is not saved in the file'),
+      () => applyAll(pref ? undefined : (current === 'full' ? 'full' : 'wide'))))
 
     pop.append(this.menuItem('trash', t('Delete…'), t('Links to it become dead'), () => {
       this.closeOverlay()

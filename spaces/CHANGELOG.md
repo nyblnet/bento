@@ -14,6 +14,12 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **Wide screens get wide pages.** The column grows with the window instead of
+  sitting at a fixed 720px, and "Use this width for every page" in the page
+  menu makes your choice stick across the whole space. It is remembered for
+  your screen, not written into the file — someone opening the same space on a
+  laptop is unaffected.
+
 - **Tables.** A real table block: `/` → Table, then type. Tab walks the cells
   and appends a row when it runs off the end; rows and columns are added and
   removed from the bar above the table, column widths drag, and the header row

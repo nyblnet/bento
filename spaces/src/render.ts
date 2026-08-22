@@ -27,6 +27,14 @@ export interface RenderOpts {
   editable?: boolean
   /** resolve a page id to its title, for link chips and pagelink blocks */
   titleOf?: (pageId: string) => string | undefined
+  /**
+   * This READER's preferred width for a page that does not state one.
+   *
+   * Viewer-scoped, like locale and the pane width — never a document field. It
+   * is a fact about the screen somebody is sitting at, so two people opening
+   * one space each get their own answer, and neither writes it into the file.
+   */
+  readerWidth?: 'wide' | 'full'
   /** collapsed toggles render OPEN — print always passes this */
   forceOpen?: boolean
   /** rendering to paper: no controls, because paper has no buttons */
@@ -899,12 +907,29 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   // unknown value from a newer build falls back to the measure rather than to
   // no width at all.
   const auto: 'wide' | undefined = page.blocks.some((b) => b.type === 'view') ? 'wide' : undefined
+  // PRECEDENCE: what the PAGE says, then what this READER prefers, then the
+  // board default, then the measure.
+  //
+  // The reader's preference is the piece this was missing. A per-page control
+  // answers "this page needs the room"; it does not answer "I have a 27-inch
+  // monitor", which is a fact about the person and not about any document —
+  // and making them set it page by page is the wrong shape of work. It lives
+  // in localStorage beside the language and the pane width, never in the file,
+  // for the reason PLATFORM §8 gives about locale: two people opening one
+  // space on different screens should each get their own answer.
   const width = page.width === 'wide' || page.width === 'full' ? page.width
-    : page.width === undefined ? auto
+    : page.width === undefined ? (opts.readerWidth ?? auto)
     : undefined
   if (width === 'full') inner.style.maxWidth = 'none'
   else if (width === 'wide') inner.style.maxWidth = '1500px'
-  else if (doc.theme.measure) inner.style.maxWidth = `${doc.theme.measure}px`
+  else if (doc.theme.measure) {
+    // AND THE DEFAULT ITSELF GROWS. 720px is ~88 characters at 16px, which is
+    // already at the long end — so this does not widen the line much; what it
+    // does is stop a 2560px screen showing a 720px ribbon using 31% of it.
+    // Capped, because past ~95 characters a line is harder to read, not easier.
+    const m = doc.theme.measure
+    inner.style.maxWidth = `min(max(${m}px, 42vw), ${Math.round(m * 1.25)}px)`
+  }
   if (width) inner.classList.add('sp-wide')
 
   const h = document.createElement('h1')
