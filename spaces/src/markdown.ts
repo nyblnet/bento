@@ -18,15 +18,17 @@
 // `scripts/test-spaces-model.ts`, which node resolves without a bundler.
 import { type Block, type Page, uid, writeTable } from './model.ts'
 import { esc } from './sanitize.ts'
+import { keepClasses } from './marks.ts'
 
 /** A tab indents four columns. Nothing here depends on the exact number; it
  *  only has to be the same everywhere so nesting is consistent. */
 const TAB = '    '
 
-/** Inline tags a raw html span may keep — sanitize.ts's ALLOWED, minus the
- *  ability to carry attributes. Restated rather than imported because that
- *  module's set is a DOM-side control and this one is a parser convenience;
- *  if they ever diverge, the sanitizer still wins, because it runs last. */
+/** Inline tags a raw html span may keep — sanitize.ts's ALLOWED, carrying no
+ *  attributes except a palette `class` on span/mark (see cleanRawTag).
+ *  Restated rather than imported because that module's set is a DOM-side
+ *  control and this one is a parser convenience; if they ever diverge, the
+ *  sanitizer still wins, because it runs last. */
 const INLINE_OK = new Set(['b', 'i', 'u', 's', 'em', 'strong', 'code', 'br', 'span', 'mark', 'sub', 'sup'])
 
 /**
@@ -55,6 +57,16 @@ function cleanRawTag(tag: string): string | null {
     return /^(https?:|mailto:)/i.test(url) ? `<a href="${esc(url)}">` : null
   }
   if (!INLINE_OK.has(name)) return null
+  // A PALETTE CLASS SURVIVES ON SPAN AND MARK. Colour has no markdown syntax
+  // at all, so the exporter writes it as raw inline html — and an importer that
+  // threw the class away would make "export, edit the .md, import" a
+  // colour-stripping round trip, which is the failure mode the export was
+  // written to avoid in the first place.
+  if (!close && (name === 'span' || name === 'mark')) {
+    const c = /class\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(m[3])
+    const kept = keepClasses(c ? (c[1] ?? c[2] ?? c[3] ?? '') : '')
+    if (kept) return `<${name} class="${esc(kept)}">`
+  }
   return close ? `</${name}>` : `<${name}>`
 }
 

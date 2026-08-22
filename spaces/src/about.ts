@@ -14,7 +14,8 @@ import {
 } from '../../kernel/src/save.ts'
 import { clearVersions, clearRecovery } from '../../kernel/src/autosave.ts'
 import { t, localeChoices, locale, setLocale } from './i18n'
-import { inertBody, esc } from './sanitize'
+import { esc } from './sanitize'
+import { htmlToMd } from './marks.ts'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
@@ -332,29 +333,17 @@ export function toMarkdown(store: Store): string {
   return out.join('\n').replace(/\n{3,}/g, '\n\n')
 }
 
-/** Inline html → inline markdown. Links become `[text](#p/id)` so a reader can
- *  still see which page was meant even outside the space. */
-function htmlToMd(html: string): string {
-  // INERT parse — exporting must not run what it is exporting. A detached div
-  // still loads its own resources, so `<img src="404" onerror>` in a block
-  // would fire on "Download as Markdown". See sanitize.ts inertBody().
-  const d = inertBody(html)
-  const walk = (n: Node): string => {
-    if (n.nodeType === Node.TEXT_NODE) return n.textContent ?? ''
-    if (!(n instanceof HTMLElement)) return ''
-    const inner = [...n.childNodes].map(walk).join('')
-    switch (n.tagName) {
-      case 'B': case 'STRONG': return `**${inner}**`
-      case 'I': case 'EM': return `*${inner}*`
-      case 'CODE': return `\`${inner}\``
-      case 'S': return `~~${inner}~~`
-      case 'BR': return '\n'
-      case 'A': return `[${inner}](${n.getAttribute('href') ?? ''})`
-      default: return inner
-    }
-  }
-  return [...d.childNodes].map(walk).join('').trim()
-}
+/**
+ * Inline html → inline markdown.
+ *
+ * Lives in marks.ts now, with the mark table it has to agree with. It used to
+ * be a DOM walk here, which meant it could not be tested — the rigs are plain
+ * node — so "does every mark survive an export" was a question only a human
+ * with a browser could answer. Four of them did not: `u`, `mark`, `sub` and
+ * `sup` fell through to their text. It is a pure function over the same run
+ * list the canonicaliser uses, so a mark the model can hold and the exporter
+ * cannot spell is now a rig failure.
+ */
 
 export function downloadMarkdown(store: Store): void {
   const blob = new Blob([toMarkdown(store)], { type: 'text/markdown' })
