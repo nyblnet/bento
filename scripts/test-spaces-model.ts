@@ -2266,6 +2266,36 @@ function fsTable(f: string): string {
   ok(rr.ok === true && rr.repaired.length === 0,
     'the merged document parses with NOTHING to repair — the import needed no rescue')
 }
+// ---- A BARE-KEY SHORTCUT MUST NOT EAT A CHARACTER ---------------------------
+// `[` collapses the page list. It was unguarded, and the text path that would
+// have claimed the key first sits ~90 lines BELOW it — so every `[` typed in a
+// block was preventDefault()ed into a sidebar toggle. `[[` is how this app
+// makes links and is what the starter space tells you to type; it could not be
+// typed at all. Shipped since #237, found while building the properties panel.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/if \(!mod && e\.key === '\[' && !this\.editingText\(\)\)/.test(ed),
+    'the bare `[` shortcut is guarded by whether text is being edited')
+  ok(/private editingText\(\): boolean/.test(ed), 'and that guard exists')
+  ok(/el\.isContentEditable/.test(ed) && /tag === 'INPUT' \|\| tag === 'TEXTAREA'/.test(ed),
+    '…covering block hosts, the page title, table cells and plain inputs alike')
+
+  // the general rule, so the next bare-key shortcut cannot reintroduce this:
+  // every unmodified single-character binding in onKey must ask the guard.
+  const onKey = ed.slice(ed.indexOf('private onKey('), ed.indexOf('private onKey(') + 4000)
+  // NB the tail is captured up to the line end, not up to the first ')': the
+  // guard's own parentheses are inside it, and a lazier pattern silently
+  // matched nothing and failed its own assertion.
+  const bare = [...onKey.matchAll(/if \(!mod && e\.key === '(.)'(.*)$/gm)]
+  for (const m of bare) {
+    ok(/editingText/.test(m[2]),
+      `the bare \`${m[1]}\` binding asks editingText() before it swallows the key`)
+  }
+  ok(bare.length > 0, 'and there is at least one such binding to check')
+}
+
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
