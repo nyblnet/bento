@@ -748,8 +748,18 @@ $('new').addEventListener('click', async (ev) => {
         // extension: a document made here is the same build everyone else has
         // today, and the extension never needs re-reviewing to keep up.
         const made = await newDocument(target, 'Untitled', { app: app.id })
-        toast(t('createdIn', made.base, `${made.app} ${made.version}`, target.name))
         await load()
+        toast(t('createdIn', made.base, `${made.app} ${made.version}`, target.name))
+        // Creating a document is not the goal — writing in it is. Open it, the
+        // way saving a new file in any editor leaves you inside the file.
+        //
+        // Conditional because it HAS to be: a tab needs an absolute path, and a
+        // folder handle does not carry one (see locateFolders above). If this
+        // folder has never been placed, `path` is null and there is nothing to
+        // navigate to — the card lands in the grid marked unplaced, which
+        // already explains itself, rather than a tab opening on `file://null`.
+        const fresh = state.docs.find((d) => d.folder === target.name && d.base === made.base)
+        if (fresh?.path) openDoc(fresh)
       } catch (e) {
         toast(e.message)
       } finally {
