@@ -2139,6 +2139,37 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   /* the 16px resizer chevrons are replaced by real buttons in the bar */
   .ed-panel-toggle { display: none; }
   .ed-title { min-width: 0; }
+
+  /* Folding is not enough on the narrowest phones. Even fully folded the bar
+     needs ~356px — six 44px targets, the mark and the title — and an iPhone SE
+     (or any iPhone with Display Zoom on) is 320px wide. `.ed-root` sets
+     `overflow: hidden` so a wide bar can never turn into DOCUMENT scroll, and
+     the consequence was that the overflow was simply CUT OFF: ⋯ — which on a
+     phone carries Redo, Comment, PDF, Share, Language, Help and the whole
+     save-as list — hung 36px off the edge and could not be reached at all.
+     So the bar scrolls itself. The clipped button is now a partly-visible one,
+     which is its own affordance, and the fix keeps scaling if the bar ever
+     gains another control. */
+  .ed-topbar {
+    overflow-x: auto;
+    /* a sideways flick on the bar must not rubber-band the page behind it */
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ed-topbar::-webkit-scrollbar { display: none; }
+  /* A scroll container clips its children in BOTH axes, so the menus hanging
+     off ＋ and ⋯ would now be cut off by the bar itself. `fixed` takes them out
+     of that clip; it costs nothing extra to anchor, because the rule above
+     already pins these menus to the end of the screen rather than to their
+     trigger. The only thing they still need from the layout is where the bar
+     ends, which editor.ts publishes as --ed-bar-bottom. */
+  .ed-topbar .ed-dropdown.open > .ed-menu {
+    position: fixed;
+    top: calc(var(--ed-bar-bottom, 56px) + 4px);
+    inset-inline-end: max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
+    inset-inline-start: auto;
+  }
 }
 
 /* panel collapse chevrons live ON the resizer strips, not in the topbar */
