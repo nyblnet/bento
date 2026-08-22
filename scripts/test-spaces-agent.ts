@@ -33,7 +33,7 @@
 // construction (it plans mutations; the editor applies them), which is what
 // makes this rig possible at all — and is worth preserving.
 
-import { parseDoc, FORMAT, type SpacesDoc } from '../spaces/src/model.ts'
+import { parseDoc, buildIndex, FORMAT, type SpacesDoc } from '../spaces/src/model.ts'
 import { starterDoc } from '../spaces/src/starter.ts'
 import {
   validateDoc, outlineDoc, statsDoc,
@@ -148,6 +148,120 @@ console.log('bento/spaces agent surface\n')
   // where the board says it is
   ok(issues.every((pg) => !!pg.parent && starter.pages.some((q) => q.id === pg.parent)),
     'every starter issue is nested under a page that exists')
+}
+
+// ---- the starter is DETERMINISTIC -----------------------------------------
+// Ids here are CRDT node keys, not tidiness. Two people opening the shipped
+// file have to agree on every one of them, and `starterDoc()` mints them from
+// a counter — so anything that reads the clock, calls uid() or depends on an
+// iteration order gives two readers two documents that look identical and
+// cannot merge. Compared as JSON because that is exactly what gets saved.
+{
+  ok(JSON.stringify(starterDoc()) === JSON.stringify(starterDoc()),
+    'starterDoc() emits the same document twice, byte for byte')
+}
+
+// ---- the starter's own links all land -------------------------------------
+// The starter is the one document nobody proof-reads twice, and every defect in
+// it ships to every new user. validate() covers broken links and dead hrefs
+// already; these are the structural invariants it does NOT check.
+{
+  const starter = starterDoc() as unknown as SpacesDoc
+  const byId = new Map(starter.pages.map((pg) => [pg.id, pg]))
+
+  // PRE-ORDER, not merely "the parent exists": a child that precedes its parent
+  // in doc.pages breaks the invariant the sidebar, the export and the journal
+  // insertion all rest on.
+  const seen = new Set<string>()
+  const badParents: string[] = []
+  for (const pg of starter.pages) {
+    const parent = (pg as { parent?: string }).parent
+    if (parent && !seen.has(parent)) badParents.push(`${pg.title} → ${parent}`)
+    seen.add(pg.id)
+  }
+  ok(badParents.length === 0,
+    `every page's parent exists and comes before it (${badParents.join('; ') || 'all good'})`)
+
+  // and no page is stranded: walking parents from anywhere reaches a root
+  const orphans = starter.pages.filter((pg) => {
+    let cur: string | undefined = (pg as { parent?: string }).parent
+    for (let i = 0; cur && i < starter.pages.length; i++) {
+      const up: unknown = byId.get(cur)
+      if (!up) return true
+      cur = (up as { parent?: string }).parent
+    }
+    return !!cur
+  })
+  ok(orphans.length === 0, `no starter page is orphaned (${orphans.map((pg) => pg.title).join(', ') || 'all reachable'})`)
+
+  // every `#p/` href and every pagelink card lands on a page that is here
+  const dead: string[] = []
+  for (const pg of starter.pages) {
+    for (const bl of pg.blocks) {
+      for (const m of String(bl.html ?? '').matchAll(/href="#p\/([^"]+)"/g)) {
+        const raw = m[1]
+        const cut = raw.lastIndexOf('/')
+        const target = byId.has(raw) || cut <= 0 ? raw : raw.slice(0, cut)
+        if (!byId.has(target)) dead.push(`${pg.title}: #p/${raw}`)
+      }
+      if (bl.type === 'pagelink' && !byId.has(String((bl as { page?: unknown }).page))) {
+        dead.push(`${pg.title}: pagelink → ${String((bl as { page?: unknown }).page)}`)
+      }
+    }
+  }
+  ok(dead.length === 0, `every starter link resolves (${dead.join('; ') || 'all good'})`)
+
+  // …and the ones the starter CLAIMS produce backlinks actually do. The table
+  // on "Tables, pictures and clips" says its link shows up in Writing's
+  // "Linked from", which is only true because the table went through
+  // writeTable and its fallback html carries the cell's link: a hand-written
+  // `rows` puts a working link on the page that back-links to nothing.
+  const ix = buildIndex(starter)
+  const from = new Set((ix.backlinks.get('sd-writing') ?? []).map((r) => r.pageId))
+  ok(from.has('sd-media'), `the link in the starter's table back-links (from: ${[...from].join(', ') || 'nobody'})`)
+}
+
+// ---- the starter DEMONSTRATES what shipped --------------------------------
+// "A feature the starter does not demonstrate is a feature the starter denies"
+// (spaces/src/starter.ts). Every one of these arrived AFTER the starter was
+// written and was absent from it until somebody read the changelog beside it —
+// which is the failure this asserts against, because it is silent: the app
+// works, the tour simply stops mentioning half of it.
+{
+  const starter = starterDoc() as unknown as SpacesDoc
+  const blocks = starter.pages.flatMap((pg) => pg.blocks)
+  const has = (type: string) => blocks.some((bl) => bl.type === type)
+
+  const demos: Array<[string, boolean]> = [
+    ['a table', has('table')],
+    ['a clip', has('media')],
+    ['a link card', has('link')],
+    ['a picture, embedded as an asset', blocks.some((bl) => bl.type === 'image' && String(bl.src ?? '').startsWith('asset:'))],
+    ['a page-link card', has('pagelink')],
+    ['a callout', has('callout')],
+    ['a toggle that starts FOLDED, so print-expanded is visible', blocks.some((bl) => bl.type === 'toggle' && bl.open === false)],
+    ['a calculating line', blocks.some((bl) => /=\s*$/.test(String(bl.html ?? '')))],
+    ['a highlight and a colour from the palette', blocks.some((bl) => /class="sp-(bg|fg)-/.test(String(bl.html ?? '')))],
+    ['a comment thread', blocks.some((bl) => Array.isArray(bl.comments) && bl.comments.length > 0)],
+    ['an archived page', starter.pages.some((pg) => pg.archived === true)],
+    ['a journal home for ⌘⇧J to hang entries from', starter.pages.some((pg) => pg.journalHome === true)],
+    ['a page that sets its own width', starter.pages.some((pg) => !!pg.width)],
+  ]
+  for (const [what, present] of demos) ok(present, `the starter shows ${what}`)
+
+  // the archived page is the ⌘K-only one: nothing may link to it, or the
+  // demonstration on the Welcome page is a lie
+  const archived = starter.pages.filter((pg) => pg.archived === true).map((pg) => pg.id)
+  const linked = blocks.some((bl) =>
+    archived.some((id) => String(bl.html ?? '').includes(`#p/${id}`) || bl.page === id))
+  ok(!linked, 'nothing links to the archived page — ⌘K is the way in, as the starter says')
+
+  // every asset it ships is used, and every used asset ships
+  const keys = Object.keys(starter.assets ?? {})
+  const refs = new Set(blocks.flatMap((bl) => [String(bl.src ?? ''), String(bl.poster ?? '')])
+    .filter((s) => s.startsWith('asset:')).map((s) => s.slice(6)))
+  ok(keys.length > 0 && keys.every((k) => refs.has(k)) && [...refs].every((k) => keys.includes(k)),
+    `the starter's assets and its references agree (${keys.length} asset(s))`)
 }
 
 // ---- a title has to BE a title --------------------------------------------

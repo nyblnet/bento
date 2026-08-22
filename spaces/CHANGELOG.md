@@ -42,6 +42,40 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
   **Paper stays light**, and a file-manager thumbnail still shows the
   document's own colours: neither of those has a reader to have a preference.
+- **A new space opens showing what it can actually do.** The starter space was
+  written once and left, and about half of what shipped since had never appeared
+  in it: no table, no clip, no link card, no comment, no calculating line, no
+  daily notes, no colour, nothing about page width, exporting a page, importing
+  a space, or the properties panel — and its limits page still said live
+  collaboration was coming, months after it arrived.
+
+  It is eight pages now, and each one demonstrates the thing it describes rather
+  than describing it. The page about tables holds one, with a link in a cell that
+  really does turn up in the linked page's backlinks. The page about pictures
+  holds an embedded drawing and a clip you can press play on. The page about
+  archiving *is* the archived page — out of the sidebar, found by typing ⌘K, and
+  named on the limits page because sending someone the file sends them that too.
+  There is a comment thread with a reply on it, waiting in the margin. The
+  Journal page is where ⌘⇧J puts today.
+
+  **The limits page says what is true now.** Live collaboration exists, so it
+  explains it — including the awkward part, which is that a session is a room
+  whose keys live in the file: whoever holds a copy holds the room, and rotating
+  the keys is what revocation looks like when there are no accounts.
+
+  The demonstration pages are meant to be deleted, and say so.
+
+- **Fixed: a link in a table cell could be a link to nowhere in the backlinks.**
+  A table written by hand — by an agent, or in a file somebody edited — carried
+  its cells but not the readable fallback the rest of the app reads, so a link
+  inside one worked when clicked and appeared in no page's "Linked from". Tables
+  made in the editor were never affected. Found by writing a starter space that
+  claims the feature and watching the claim fail.
+
+- **Fixed: `validate()` asked audio clips for their pixel size.** Every
+  correctly-authored audio block was told it had no intrinsic width and height —
+  numbers an audio player does not have. A validator that is wrong about good
+  documents is a validator agents learn to ignore.
 
 - **A properties panel, on the right.** One place that answers "what can I
   change about this thing". The block the caret is in gets its own settings —

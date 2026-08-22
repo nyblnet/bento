@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 235520,
-      "//": "230 KiB. The About dialog was rebuilt on slides' (sections with real headings, the update card with signed release notes, an auto-check switch, document properties, a content readout, and the two irreversible actions given their own weight). Measured on this stack, same machine, same node: 213,434 B before and 229,634 B after — +16,200 B. Nearly all of it is language, not layout: packed.ts alone grew 22,644 B raw for 49 new keys \u00d7 8 locales (29 of them lifted from slides' catalogs, which is why they cost bytes and no translation), while the dialog's own code and CSS came to roughly 4 KB raw. Headroom stays deliberate for the reason the previous note gives: the shell is one compressed block and the packer's output differs across node versions, so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 229376,
+      "//": "224 KiB. Raised from 216 KiB by the starter space rewrite: 213,434 B before, 220,434 B after — +7,000 B, of which 5,336 B is prose and 1,664 B is the two files it ships (a hand-written SVG drawing and a 1.2s test tone, both chosen to deflate to almost nothing; see spaces/src/starterdata.ts). What bought it is the doctrine that a feature the starter does not demonstrate is a feature the starter denies: tables, clips, link cards, comments, calculating lines, daily notes, page width, export-a-page, subtree import, the mark palette, live collaboration and the properties panel had all shipped without ever appearing in the document every new user reads first. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }
