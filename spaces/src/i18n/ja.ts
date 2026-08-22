@@ -440,4 +440,10 @@ export const ja: Catalog = {
   "{pages} page(s) and {blocks} block(s) added from {files} file(s).": "{files} 個のファイルから {pages} ページ・{blocks} ブロックを追加しました。",
   "{pages} page(s) and {blocks} block(s) will travel.": "{pages} ページ、{blocks} ブロックが移動します。",
   "⌘Z removes the imported pages again.": "⌘Z で、読み込んだページを取り消せます。",
+  "Appearance": "外観",
+  "Interface theme": "表示テーマ",
+  "Match my system": "システムに合わせる",
+  "Light": "ライト",
+  "Dark": "ダーク",
+  "The theme follows whoever opens the file. It is never written into the document.": "テーマはファイルを開いた人に従います。ドキュメントには書き込まれません。",
 }

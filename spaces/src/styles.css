@@ -7,14 +7,96 @@
    differently read as two products. What differs is only what the app IS: a
    reading column instead of a canvas. */
 
-:root {
+/* ————— THEME TOKENS —————————————————————————————————————————————————————
+   A THEME IS A VIEWER PREFERENCE, NEVER DOCUMENT DATA (PLATFORM §8, and
+   kernel/src/theme.ts). It lives in localStorage exactly as the interface
+   language does, and for the same reason: two people opening one space are two
+   readers in two rooms, and a theme written into the file would travel to
+   whoever received it — and make the bytes depend on who last looked.
+
+   WHAT DARK COVERS, AND WHY IT IS NOT SLIDES' ANSWER. slides themes only the
+   chrome AROUND the deck: a slide is a bounded page on a canvas, its
+   background is data the author chose, and someone proofing at midnight still
+   needs to see what will be projected. A space has no such page. `--bg` is
+   THE ONE GROUND — the toolbar, both panels and the reading column all sit on
+   it, with hairlines and nothing else between them (see `html, body` below),
+   which is the whole point of the chrome-reads-as-one-document work. A dark
+   interface with a white reading column would be a white rectangle filling
+   most of the window: not a dark interface, and a re-introduction of the
+   floating-card look that was deliberately removed.
+
+   So in spaces the reading surface IS chrome, and it follows the reader.
+   `doc.theme.background/color/accent` still exist in the format and are still
+   the DOCUMENT's own colours — but the only thing that paints them is the
+   static file-manager preview (preview.ts), which renders with scripting off,
+   has no reader and no localStorage to ask, and is a thumbnail of the author's
+   document. That surface stays the author's, unconditionally and in both
+   themes; nothing here reaches it.
+
+   What DOES follow the reader, deliberately, is the document's own colour
+   vocabulary: `--c-*` (the nine `sp-fg-*`/`sp-bg-*` marks) and the callout
+   tone hues. The author picked "red", not `#c0392b` — the closed vocabulary
+   exists precisely so the value under each name can be tuned for the surface,
+   which is what the palette comment two hundred lines down already says. An
+   ink measured against white is not the same ink on a near-black ground.
+
+   THREE STATES, and the dark values appear TWICE because of it. A reader has
+   chosen light, chosen dark, or chosen nothing. An explicit choice stamps
+   `data-theme` on <html>; the default follows the OS. So dark must be defined
+   under `@media (prefers-color-scheme: dark)` — guarded `:not([data-theme="light"])`
+   so an explicit light choice still wins — AND under `[data-theme="dark"]`, or
+   the toggle only works in one direction. The two blocks are byte-identical and
+   the model rig asserts they stay that way.
+
+   BOTH ARE @media screen, WHICH IS HOW PAPER STAYS LIGHT. Print matches
+   neither, so on paper the light block below is the only one that applies and
+   the print sheet needs no third copy of the palette. Dark is a screen theme;
+   toner is not a screen. */
+
+/* LIGHT — the suite's shared palette, character for character with
+   slides/src/styles.css and type/src/styles.css. Do not let these drift. */
+:root, :root[data-theme="light"] {
   --ink: #1e2a3a;
   --ink-2: #31445c;
   /* THE ONE GROUND. Named rather than spelled `#fff` at each site, because the
-     dark interface that slides already ships (#285) redefines exactly these
-     tokens and nothing else — a literal at a use site is a thing that stays
-     white when the theme flips. */
+     dark interface redefines exactly these tokens and nothing else — a literal
+     at a use site is a thing that stays white when the theme flips. */
   --bg: #ffffff;
+  /* raised above the ground: the bar, menus, popovers, dialogs, the row you
+     are on. In light it is the same white — the hairlines carry the separation
+     — and in dark it has to lift, which is why it is a token and not `--bg`. */
+  --surface: #ffffff;
+  /* recessed below it: form controls, which read as holes, not cards */
+  --field: #ffffff;
+  --chrome: #f5f7fa;
+  --chrome-2: #eceff4;
+  --line: #e3e8ef;
+  /* a border that has to be SEEN — hover and selected states, one step past
+     the resting hairline */
+  --edge: #b9c3d2;
+  --muted: #5b6472;
+  --accent: #f7a600;
+  /* the accent as INK ON THE GROUND: the magic-note answer, the live chip, the
+     banner. It flips with the ground, so in dark it lifts to a light amber. */
+  --accent-ink: #7a5200;
+  /* the accent as ink ON THE ACCENT FILL — the comment badge. The fill does
+     not flip (it is brand), so neither does this. */
+  --accent-on: #7a5200;
+  --blue: #5b8def;
+  /* the wordmark's coral, and the splash's. BRAND, so it is the same value in
+     both themes — it is a name, not a foreground, and it reads on either
+     ground. Named only so a literal cannot be mistaken for chrome later. */
+  --brand: #ff9e8a;
+  /* the prompt inside an empty block, and the gutter's affordances: both are
+     "not yet content", so both are quieter than --muted */
+  --ph: #b9c2ce;
+  --ghost: #aab4c2;
+  /* SHADOWS ARE ONE TOKEN, as CHANNELS rather than a colour, so every
+     `rgb(var(--shade) / …)` in this file keeps its own alpha. Eleven shadows
+     needed eleven tokens otherwise. Dark goes to pure black: a navy shadow is
+     invisible on a navy ground. */
+  --shade: 20 30 45;
+
   /* READING SIZE, and it grows with the screen.
      A 5120px display showed a 900px column of 16px text: 110 characters, 18%
      of the screen, and lines past the range anyone reads comfortably. The fix
@@ -26,20 +108,128 @@
      would fight the browser's own accessibility control. The floor means zoom
      can only ever land on today's size or larger. */
   --sp-read: clamp(16px, 11px + 0.3125vw, 19px);
-  --chrome: #f5f7fa;
-  --chrome-2: #eceff4;
-  --line: #e3e8ef;
-  --muted: #5b6472;
-  --accent: #f7a600;
-  --accent-ink: #7a5200;
-  --blue: #5b8def;
   --radius: 10px;
+
+  /* ————— the document's colour vocabulary —————
+     NINE COLOURS IN TWO ROLES: `sp-fg-*` is the ink on a SPAN, `sp-bg-*` is
+     the band behind it on a MARK. The band is a color-mix into `transparent`,
+     so it needs no second set — alpha lands correctly on any ground. The INKS
+     do: these are measured to clear 4.5:1 on white, and their dark twins are
+     measured on `--bg` dark. */
+  --c-gray: #5b6472;   --c-brown: #8a5a3c;  --c-orange: #b35c00;
+  --c-yellow: #8a6a00; --c-green: #1f7a4d;  --c-blue: #1f5fbf;
+  --c-purple: #6b3fbf; --c-pink: #b3327a;   --c-red: #c0392b;
+
+  /* ————— syntax colours —————
+     Six roles, chosen to survive the places code is read: an editor in either
+     theme, and a printed page. The light four clear 4.5:1 against the code
+     well AND against white, because a browser drops the block's background
+     when printing and keeps the ink — a palette tuned only against the tinted
+     well goes pale on paper. Hue does the work, not lightness, so the block
+     still reads as prose at 13px and stays legible in greyscale.
+     Comments reuse --muted and numbers reuse --accent-ink: the suite's palette
+     already had the right two, and a syntax theme that invents a ninth grey is
+     a syntax theme nobody can restyle. */
+  --code-str: #1c6b4b;
+  --code-key: #6b3fa0;
+  --code-lit: #0d6382;
+  --code-prop: #1c4fb5;
+
+  /* ————— callout tone hues —————
+     ONE HUE PER TONE, and the fill and the label DERIVE from it against the
+     current ground (see .sp-b-callout). That is why there is no second set:
+     `color-mix(hue, --bg)` is a pale tint on white and a deep one on near
+     black, and `color-mix(hue, --ink)` darkens the label in light and lifts it
+     in dark, from the same five numbers. Fifteen hand-tuned values would have
+     needed thirty. */
+  --tone-note: #7d9cbd;
+  --tone-tip: #4f9e79;
+  --tone-important: #8a72cc;
+  --tone-warning: #d9a326;
+  --tone-caution: #cd6a63;
+
+  /* The BROWSER's own furniture — scrollbars, form controls, the canvas behind
+     a rubber-band scroll — follows this, and CSS cannot reach any of it.
+     `only` keeps a force-dark engine from inverting what we have already
+     decided. kernel/src/theme.ts restates the resolved value inline on <html>,
+     which is what makes the choice win over the media query below. */
+  color-scheme: only light;
 }
 
-/* The editor chrome is LIGHT-ONLY, the same ruling slides made: on a dark-mode
-   phone the engine renders NATIVE controls dark while our ink stays dark, so
-   dropdowns read as blank. Pair with the color-scheme meta in index.html. */
-:root { color-scheme: only light; }
+/* DARK — the same roles, not the same values. `--ink` is the chrome's
+   FOREGROUND, so it inverts; `--accent` does not, because it is brand.
+   THE NEXT TWO BLOCKS ARE IDENTICAL BY CONTRACT. See the three-state note
+   above; scripts/test-spaces-model.ts compares them character for character. */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e7eaf0;
+    --ink-2: #b3bcca;
+    --bg: #14181e;
+    --surface: #1b2027;
+    --field: #10141a;
+    --chrome: #1e232b;
+    --chrome-2: #272d36;
+    --line: #2e353f;
+    --edge: #454e5c;
+    --muted: #8b95a4;
+    --accent: #f7a600;
+    --accent-ink: #f0b74e;
+    --accent-on: #7a5200;
+    --blue: #7aa5f5;
+    --brand: #ff9e8a;
+    --ph: #4a5464;
+    --ghost: #5c6675;
+    --shade: 0 0 0;
+    --c-gray: #9aa3b2;   --c-brown: #d09a72;  --c-orange: #ef9a3d;
+    --c-yellow: #d8b64a; --c-green: #4fbe86;  --c-blue: #7aa8f5;
+    --c-purple: #b294f0; --c-pink: #ee7ab4;   --c-red: #f0796a;
+    --code-str: #6fd39b;
+    --code-key: #c4a2f5;
+    --code-lit: #62c1e0;
+    --code-prop: #82abf5;
+    --tone-note: #7d9cbd;
+    --tone-tip: #4f9e79;
+    --tone-important: #8a72cc;
+    --tone-warning: #d9a326;
+    --tone-caution: #cd6a63;
+    color-scheme: only dark;
+  }
+}
+@media screen {
+  :root[data-theme="dark"] {
+    --ink: #e7eaf0;
+    --ink-2: #b3bcca;
+    --bg: #14181e;
+    --surface: #1b2027;
+    --field: #10141a;
+    --chrome: #1e232b;
+    --chrome-2: #272d36;
+    --line: #2e353f;
+    --edge: #454e5c;
+    --muted: #8b95a4;
+    --accent: #f7a600;
+    --accent-ink: #f0b74e;
+    --accent-on: #7a5200;
+    --blue: #7aa5f5;
+    --brand: #ff9e8a;
+    --ph: #4a5464;
+    --ghost: #5c6675;
+    --shade: 0 0 0;
+    --c-gray: #9aa3b2;   --c-brown: #d09a72;  --c-orange: #ef9a3d;
+    --c-yellow: #d8b64a; --c-green: #4fbe86;  --c-blue: #7aa8f5;
+    --c-purple: #b294f0; --c-pink: #ee7ab4;   --c-red: #f0796a;
+    --code-str: #6fd39b;
+    --code-key: #c4a2f5;
+    --code-lit: #62c1e0;
+    --code-prop: #82abf5;
+    --tone-note: #7d9cbd;
+    --tone-tip: #4f9e79;
+    --tone-important: #8a72cc;
+    --tone-warning: #d9a326;
+    --tone-caution: #cd6a63;
+    color-scheme: only dark;
+  }
+}
 
 * { box-sizing: border-box; }
 html, body {
@@ -58,6 +248,12 @@ html, body {
 #app { height: 100%; }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
 select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; user-select: auto; }
+/* Native controls follow the theme through `color-scheme` on :root, so a
+   <select> is dark when the chrome is. Its ink and ground are still stated
+   here: a force-dark engine that ignores color-scheme would otherwise paint a
+   dark popup and leave our dark ink on it. */
+select, input, textarea { background: var(--field); color: var(--ink); }
+option { background: var(--field); color: var(--ink); }
 
 /* ————— shell ————— */
 .sp-app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
@@ -65,7 +261,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 .sp-bar {
   display: flex; align-items: center; gap: 6px;
   padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
-  background: #fff; border-bottom: 1px solid var(--line);
+  background: var(--surface); border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
 .sp-mark {
@@ -77,7 +273,9 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 }
 .sp-mark:hover { background: var(--chrome-2); }
 .sp-mark-svg { display: block; flex: 0 0 auto; }
-.sp-mark-word span { color: #FF9E8A; }
+/* the coral is BRAND: the splash's `.bs-word b`, and the mark in every app
+   of the suite. It reads on both grounds, so it is one value, not two. */
+.sp-mark-word span { color: var(--brand); }
 .sp-doctitle {
   /* Sized, not greedy: a title input that eats the slack pushed undo/redo away
      from the document they belong to and left them floating mid-bar. The
@@ -88,7 +286,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   border-radius: 8px; padding: 5px 8px;
 }
 .sp-doctitle:hover { background: var(--chrome); }
-.sp-doctitle:focus { background: #fff; border-color: var(--blue); outline: none; }
+.sp-doctitle:focus { background: var(--field); border-color: var(--blue); outline: none; }
 .sp-status {
   font-size: 12px; color: var(--muted); white-space: nowrap;
   opacity: 0; transition: opacity .18s;
@@ -106,7 +304,9 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 .sp-btn:active { background: var(--line); }
 .sp-btn svg { display: block; }
 .sp-btn[disabled] { opacity: .45; cursor: default; }
-.sp-primary { background: var(--ink); color: #fff; padding: 6px 14px; }
+/* filled with the foreground, so its ink is the ground: `#fff` here would
+   have been white on near-white the moment the theme flipped. */
+.sp-primary { background: var(--ink); color: var(--bg); padding: 6px 14px; }
 .sp-primary:hover { background: var(--ink-2); }
 
 .sp-body { display: flex; flex: 1 1 auto; min-height: 0; }
@@ -138,7 +338,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sp-treelink:hover { background: var(--chrome-2); }
-.sp-treelink.sp-here { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(20 30 45 / .07); }
+.sp-treelink.sp-here { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(var(--shade) / .07); }
 .sp-treelink.sp-drop { box-shadow: inset 0 0 0 2px var(--accent); }
 .sp-tree-ico { flex: 0 0 auto; width: 16px; text-align: center; font-size: 13px; }
 .sp-side-empty { color: var(--muted); font-size: 13px; padding: 10px; }
@@ -154,7 +354,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   margin: 0 0 6px; letter-spacing: -0.02em;
 }
 .sp-title:focus { outline: none; }
-.sp-title[data-empty]::before { content: attr(data-ph); color: #b9c2ce; }
+.sp-title[data-empty]::before { content: attr(data-ph); color: var(--ph); }
 .sp-crumb { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; display: flex; gap: 6px; align-items: center; }
 .sp-crumb a { color: var(--muted); text-decoration: none; }
 .sp-crumb a:hover { color: var(--ink); text-decoration: underline; }
@@ -169,7 +369,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 .sp-ghost {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 24px; padding: 0; border: 0; border-radius: 5px;
-  color: #aab4c2; background: transparent; cursor: pointer;
+  color: var(--ghost); background: transparent; cursor: pointer;
 }
 .sp-ghost:hover { background: var(--chrome-2); color: var(--ink-2); }
 .sp-ghost[draggable='true'] { cursor: grab; }
@@ -199,7 +399,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 }
 /* the accent at a tint a paragraph can be read through, and an explicit ink:
    `mark`'s UA default is black on yellow, which is not this document's ink */
-.sp-body mark { background: rgb(247 166 0 / .3); color: inherit; border-radius: 3px; padding: 0 .08em; }
+.sp-body mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 .08em; }
 /* No blanket link colour here. There was one — `.sp-body a { color: var(--blue) }`
    — and it never painted a single prose link: `.sp-page a` sets the ink at the
    same specificity and later in the sheet, so it won every time. What the rule
@@ -217,14 +417,12 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
    document could be none of that.
 
    TOKENS, so the two roles cannot drift: one hue per colour, the ink at full
-   strength and the band as a tint of the same hue. The inks are all dark
-   enough to pass on white body text; the tints are all light enough to keep
-   black text readable through them. Chosen by measuring, not by eye. */
-:root {
-  --c-gray: #5b6472;   --c-brown: #8a5a3c;  --c-orange: #b35c00;
-  --c-yellow: #8a6a00; --c-green: #1f7a4d;  --c-blue: #1f5fbf;
-  --c-purple: #6b3fbf; --c-pink: #b3327a;   --c-red: #c0392b;
-}
+   strength and the band as a tint of the same hue. Chosen by measuring, not by
+   eye — and measured TWICE, because the ground moved. The `--c-*` values live
+   in the theme blocks at the top of this file: an ink that clears 4.5:1 on
+   white is a smudge on a near-black ground, so each name carries a light value
+   and a dark one. The BAND needs only one set, because it mixes into
+   `transparent` and lands correctly on either. */
 .sp-body .sp-fg-gray { color: var(--c-gray); }
 .sp-body .sp-fg-brown { color: var(--c-brown); }
 .sp-body .sp-fg-orange { color: var(--c-orange); }
@@ -266,8 +464,8 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
    menu or dialog that opens over a selection is the thing being used. */
 .sp-fmt {
   position: fixed; z-index: 58; display: flex; align-items: center; gap: 2px;
-  padding: 3px; background: #fff; border: 1px solid var(--line);
-  border-radius: 9px; box-shadow: 0 6px 22px rgb(20 30 45 / .17);
+  padding: 3px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 9px; box-shadow: 0 6px 22px rgb(var(--shade) / .17);
   max-width: calc(100vw - 16px);
 }
 .sp-fmt-btn {
@@ -283,7 +481,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   font: inherit; font-size: 13px; width: 240px; max-width: 46vw;
   padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
 }
-.sp-fmt-url.sp-fmt-bad { border-color: #c0392b; }
+.sp-fmt-url.sp-fmt-bad { border-color: var(--c-red); }
 .sp-fmt-go { color: var(--blue); font-weight: 600; }
 /* the palette takes the bar over while it is open — two rows, so the bar
    becomes a column for as long as it is showing */
@@ -292,7 +490,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 .sp-fmt-sw-row { display: flex; gap: 3px; }
 .sp-fmt-sw {
   width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
-  background: #fff; color: var(--ink); cursor: pointer;
+  background: var(--surface); color: var(--ink); cursor: pointer;
   font: inherit; font-size: 13px; font-weight: 700; line-height: 1;
 }
 .sp-fmt-sw:hover { border-color: var(--ink-2); }
@@ -304,15 +502,15 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 .sp-fmt-sw.sp-fg-green { color: var(--c-green); } .sp-fmt-sw.sp-fg-blue { color: var(--c-blue); }
 .sp-fmt-sw.sp-fg-purple { color: var(--c-purple); } .sp-fmt-sw.sp-fg-pink { color: var(--c-pink); }
 .sp-fmt-sw.sp-fg-red { color: var(--c-red); }
-.sp-fmt-sw.sp-bg-gray { background: color-mix(in srgb, var(--c-gray) 22%, #fff); }
-.sp-fmt-sw.sp-bg-brown { background: color-mix(in srgb, var(--c-brown) 22%, #fff); }
-.sp-fmt-sw.sp-bg-orange { background: color-mix(in srgb, var(--c-orange) 22%, #fff); }
-.sp-fmt-sw.sp-bg-yellow { background: color-mix(in srgb, var(--c-yellow) 26%, #fff); }
-.sp-fmt-sw.sp-bg-green { background: color-mix(in srgb, var(--c-green) 22%, #fff); }
-.sp-fmt-sw.sp-bg-blue { background: color-mix(in srgb, var(--c-blue) 20%, #fff); }
-.sp-fmt-sw.sp-bg-purple { background: color-mix(in srgb, var(--c-purple) 20%, #fff); }
-.sp-fmt-sw.sp-bg-pink { background: color-mix(in srgb, var(--c-pink) 20%, #fff); }
-.sp-fmt-sw.sp-bg-red { background: color-mix(in srgb, var(--c-red) 20%, #fff); }
+.sp-fmt-sw.sp-bg-gray { background: color-mix(in srgb, var(--c-gray) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-brown { background: color-mix(in srgb, var(--c-brown) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-orange { background: color-mix(in srgb, var(--c-orange) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-yellow { background: color-mix(in srgb, var(--c-yellow) 26%, var(--surface)); }
+.sp-fmt-sw.sp-bg-green { background: color-mix(in srgb, var(--c-green) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-blue { background: color-mix(in srgb, var(--c-blue) 20%, var(--surface)); }
+.sp-fmt-sw.sp-bg-purple { background: color-mix(in srgb, var(--c-purple) 20%, var(--surface)); }
+.sp-fmt-sw.sp-bg-pink { background: color-mix(in srgb, var(--c-pink) 20%, var(--surface)); }
+.sp-fmt-sw.sp-bg-red { background: color-mix(in srgb, var(--c-red) 20%, var(--surface)); }
 .sp-fmt-back { align-self: flex-start; margin-top: 2px; color: var(--muted); }
 /* A COARSE POINTER GETS THE BOTTOM EDGE, not the selection. The OS callout and
    the selection handles own the pixels around a touch selection; sharing them
@@ -322,7 +520,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   max-width: none; border-radius: 0; border-inline: 0; border-bottom: 0;
   justify-content: center; flex-wrap: wrap;
   padding: 6px max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
-  box-shadow: 0 -6px 22px rgb(20 30 45 / .14);
+  box-shadow: 0 -6px 22px rgb(var(--shade) / .14);
 }
 /* All nine on ONE row at 375px — measured: at 40px wide they wrapped, and
    "Clear formatting" sat alone on a second row looking like a separate
@@ -347,9 +545,17 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
    The BODY TEXT stays --ink, never the tone colour. Coloured prose is a
    readability tax on the sentence that mattered enough to put in a box. */
 .sp-b-callout {
-  /* the neutral fallback: a tone class always lands on top of it, but a
-     stylesheet that only works with one is a stylesheet with a hole in it */
-  --tone-bg: var(--chrome); --tone-line: var(--line); --tone-ink: var(--ink-2);
+  /* THE TONE IS ONE HUE, AND THE BOX IS DERIVED FROM IT AGAINST THE GROUND.
+     The fill is that hue mixed into --bg and the label is it mixed into --ink,
+     so the same five numbers give a pale tint with a dark label on white and a
+     deep tint with a lifted label on near-black. Fifteen hand-tuned values
+     would have needed thirty, and thirty values drift.
+     --tone-h is the neutral fallback: a tone class always lands on top of it,
+     but a stylesheet that only works with one is a stylesheet with a hole. */
+  --tone-h: var(--muted);
+  --tone-bg: color-mix(in srgb, var(--tone-h) 13%, var(--bg));
+  --tone-line: var(--tone-h);
+  --tone-ink: color-mix(in srgb, var(--tone-h) 50%, var(--ink));
   display: block; margin: 10px 0; padding: 9px 14px 10px;
   border: 1px solid var(--tone-line); border-inline-start-width: 4px;
   border-radius: var(--radius); background: var(--tone-bg);
@@ -375,13 +581,17 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-callout-body > .sp-b:first-child { margin-top: 4px; }
 .sp-b-callout .sp-list { padding-inline-start: 20px; }
 
-.sp-tone-note { --tone-bg: #eef3f9; --tone-line: #7d9cbd; --tone-ink: #2b4a68; }
-.sp-tone-tip { --tone-bg: #e9f6ef; --tone-line: #4f9e79; --tone-ink: #1c5a41; }
-.sp-tone-important { --tone-bg: #f2eefb; --tone-line: #8a72cc; --tone-ink: #493081; }
-.sp-tone-warning { --tone-bg: #fdf4e3; --tone-line: #d9a326; --tone-ink: var(--accent-ink); }
-.sp-tone-caution { --tone-bg: #fdeeed; --tone-line: #cd6a63; --tone-ink: #8a2f28; }
+.sp-tone-note { --tone-h: var(--tone-note); }
+.sp-tone-tip { --tone-h: var(--tone-tip); }
+.sp-tone-important { --tone-h: var(--tone-important); }
+.sp-tone-warning { --tone-h: var(--tone-warning); }
+.sp-tone-caution { --tone-h: var(--tone-caution); }
+/* the same tone, outside a callout: the search result's icon has no
+   .sp-b-callout above it to derive --tone-ink, so it derives its own */
 .sp-result-ico.sp-tone-note, .sp-result-ico.sp-tone-tip, .sp-result-ico.sp-tone-important,
-.sp-result-ico.sp-tone-warning, .sp-result-ico.sp-tone-caution { color: var(--tone-ink); }
+.sp-result-ico.sp-tone-warning, .sp-result-ico.sp-tone-caution {
+  color: color-mix(in srgb, var(--tone-h) 50%, var(--ink));
+}
 
 .sp-tonepop { width: 244px; }
 .sp-dditem.sp-sel { background: var(--chrome-2); }
@@ -406,7 +616,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-text:focus { outline: none; }
 /* the prompt shows on the block you are IN, not on every empty one — a page of
    "Type / for blocks" reads as clutter, not as help */
-.sp-text[data-empty]:focus::before { content: attr(data-ph); color: #b9c2ce; pointer-events: none; }
+.sp-text[data-empty]:focus::before { content: attr(data-ph); color: var(--ph); pointer-events: none; }
 
 .sp-b-code { position: relative; }
 .sp-b-code pre {
@@ -417,23 +627,10 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-b-code code:focus { outline: none; }
 
 /* ————— syntax colours —————
-   Six roles, chosen to survive the two places code is read: a light editor and
-   a printed page. Every one clears 4.5:1 against the code well (#f5f7fa) AND
-   against white, because a browser drops the block's background when printing
-   and keeps the ink — a palette tuned only against the tinted well goes pale on
-   paper. Hue does the work, not lightness, so the block still reads as prose at
-   13px and stays legible in greyscale.
-
-   Comments reuse --muted and numbers reuse --accent-ink: the suite's palette
-   already had the right two, and a syntax theme that invents a ninth grey is a
-   syntax theme nobody can restyle. The remaining four are new because nothing
-   in the chrome palette means "string". */
-:root {
-  --code-str: #1c6b4b;
-  --code-key: #6b3fa0;
-  --code-lit: #0d6382;
-  --code-prop: #1c4fb5;
-}
+   Six roles. `--code-*` are defined per theme at the top of this file; the
+   other two reuse the suite's palette — comments are --muted and numbers are
+   --accent-ink, because a syntax theme that invents a ninth grey is a syntax
+   theme nobody can restyle. Both of those flip with the ground already. */
 .sp-t-c { color: var(--muted); font-style: italic; }
 .sp-t-s { color: var(--code-str); }
 .sp-t-n { color: var(--accent-ink); }
@@ -450,8 +647,8 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-langchip {
   position: absolute; top: 10px; inset-inline-end: 10px;
   font-size: 11px; padding: 3px 8px; color: var(--muted);
-  background: rgb(255 255 255 / .94); border-color: var(--line);
-  box-shadow: 0 2px 8px rgb(20 30 45 / .12);
+  background: color-mix(in srgb, var(--surface) 94%, transparent); border-color: var(--line);
+  box-shadow: 0 2px 8px rgb(var(--shade) / .12);
   opacity: 0; transition: opacity .12s;
 }
 .sp-b-code:hover .sp-langchip, .sp-langchip:focus { opacity: 1; }
@@ -467,7 +664,17 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-toggle-body { flex: 1 0 100%; padding-inline-start: 22px; }
 
 .sp-b-image figure { margin: 12px 0; }
-.sp-b-image img { max-width: 100%; height: auto; border-radius: var(--radius); display: block; }
+/* AN IMAGE ON A DARK GROUND. A photograph is fine; a screenshot, a diagram
+   or a logo exported with a transparent background is a shape floating in
+   nothing, and a white-on-transparent diagram disappears entirely. So a
+   picture in the reading column always has a ground of its OWN to sit on —
+   white in both themes, because that is the ground the author exported
+   against — and a hairline so its edge is where the author put it. The
+   picture is document content: it is not inverted, dimmed or filtered. */
+.sp-b-image img {
+  max-width: 100%; height: auto; border-radius: var(--radius); display: block;
+  background: #fff; box-shadow: 0 0 0 1px rgb(var(--shade) / .12);
+}
 .sp-b-image figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
 
 /* ————— tables —————
@@ -499,7 +706,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-tb-tools {
   position: absolute; inset-block-start: -13px; inset-inline-end: 0;
   display: flex; gap: 4px; opacity: 0; transition: opacity .12s;
-  background: #fff; padding: 2px; border-radius: 8px; z-index: 2;
+  background: var(--surface); padding: 2px; border-radius: 8px; z-index: 2;
 }
 .sp-b-table:hover .sp-tb-tools, .sp-tb-tools:focus-within, .sp-b-table:focus-within .sp-tb-tools { opacity: 1; }
 .sp-tb-tools .sp-btn { font-size: 12px; padding: 2px 7px; }
@@ -514,14 +721,14 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   position: absolute; top: 0; width: 7px;
   cursor: col-resize; z-index: 1; background: transparent; border: 0; padding: 0;
 }
-.sp-tb-grip:hover, body.sp-col-resizing .sp-tb-grip { background: rgb(91 141 239 / .45); }
+.sp-tb-grip:hover, body.sp-col-resizing .sp-tb-grip { background: color-mix(in srgb, var(--blue) 45%, transparent); }
 
 .sp-pagecard {
   display: flex; align-items: center; gap: 9px;
   padding: 10px 12px; margin: 6px 0;
   border: 1px solid var(--line); border-radius: var(--radius);
   color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px;
-  background: #fff;
+  background: var(--surface);
 }
 .sp-pagecard:hover { background: var(--chrome); }
 .sp-pagecard.sp-dead { color: var(--muted); font-style: italic; font-weight: 400; }
@@ -535,7 +742,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   display: flex; align-items: stretch; gap: 12px;
   padding: 12px 14px; margin: 6px 0;
   border: 1px solid var(--line); border-radius: var(--radius);
-  color: var(--ink); text-decoration: none; background: #fff;
+  color: var(--ink); text-decoration: none; background: var(--surface);
 }
 .sp-linkcard:hover { background: var(--chrome); }
 .sp-page a.sp-linkcard { text-decoration: none; }
@@ -562,7 +769,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-linkcard-edit {
   position: absolute; inset-block-start: 4px; inset-inline-end: 6px;
-  border: 1px solid var(--line); border-radius: 5px; background: #fff;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
   font: inherit; font-size: 11px; color: var(--muted);
   padding: 2px 7px; cursor: pointer; opacity: 0;
 }
@@ -570,7 +777,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* an EMPTY card's button is the only way in, so it never hides */
 .sp-linkcard.sp-dead + .sp-linkcard-edit { opacity: 1; }
 
-.sp-page a { color: var(--ink); text-decoration: underline; text-decoration-color: rgb(247 166 0 / .55); text-underline-offset: 2px; }
+.sp-page a { color: var(--ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); text-underline-offset: 2px; }
 .sp-page a:hover { text-decoration-color: var(--accent); }
 
 /* ————— backlinks ————— */
@@ -588,14 +795,14 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 
 /* ————— menus + overlays ————— */
 .sp-overlay {
-  position: fixed; inset: 0; background: rgb(20 30 45 / .34);
+  position: fixed; inset: 0; background: rgb(var(--shade) / .34);
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: 11vh; z-index: 60;
 }
 .sp-card {
   width: min(560px, 92vw); max-height: 72vh; overflow: auto;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 18px 48px rgb(20 30 45 / .22); padding: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgb(var(--shade) / .22); padding: 12px;
 }
 .sp-card-h {
   font-size: 11px; font-weight: 600; text-transform: uppercase;
@@ -603,7 +810,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-find {
   width: 100%; font: inherit; font-size: 14px; padding: 9px 11px; color: var(--ink);
-  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--field); border: 1px solid var(--line); border-radius: 8px;
 }
 .sp-find:focus { border-color: var(--blue); outline: none; }
 .sp-results { list-style: none; margin: 8px 0 0; padding: 0; }
@@ -627,22 +834,24 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* the block menu is anchored to the caret, not centred on the screen */
 .sp-pop {
   position: fixed; z-index: 60; width: 260px; max-height: 44vh; overflow: auto;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(20 30 45 / .2); padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 6px;
 }
 
 /* ————— banners + gates ————— */
 .sp-banner {
   display: flex; align-items: center; gap: 10px; padding: 8px 14px;
-  background: #fff6dd; color: var(--accent-ink);
-  border-bottom: 1px solid rgb(247 166 0 / .35); font-size: 13.5px;
+  /* an accent WASH on whatever the ground is: `#fff6dd` was cream on white
+     and a bright card on a dark chrome. */
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg)); color: var(--accent-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); font-size: 13.5px;
 }
-.sp-banner .sp-btn { color: var(--accent-ink); border-color: rgb(122 82 0 / .25); }
+.sp-banner .sp-btn { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 30%, transparent); }
 .sp-gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--chrome); }
 .sp-gate-card {
-  max-width: 620px; background: #fff; padding: 26px;
+  max-width: 620px; background: var(--surface); padding: 26px;
   border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 14px 40px rgb(20 30 45 / .12);
+  box-shadow: 0 14px 40px rgb(var(--shade) / .12);
 }
 .sp-gate-card h1 { font-size: 21px; margin: 0 0 8px; letter-spacing: -0.01em; }
 .sp-gate-card p { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
@@ -661,7 +870,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-about-blurb { margin: 0 4px 10px; font-size: 14px; }
 .sp-note { color: var(--muted); font-size: 12.5px; margin: 6px 4px 10px; line-height: 1.55; }
 .sp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px; font-size: 14px; }
-.sp-select { font: inherit; font-size: 13px; padding: 6px 8px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.sp-select { font: inherit; font-size: 13px; padding: 6px 8px; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
 .sp-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px; }
 .sp-mono { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 
@@ -677,11 +886,11 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   .sp-side { display: none; }
   .sp-side.sp-open {
     display: block; position: fixed; inset: 0 auto 0 0; width: 268px;
-    z-index: 50; box-shadow: 0 0 50px rgb(20 30 45 / .3);
+    z-index: 50; box-shadow: 0 0 50px rgb(var(--shade) / .3);
     padding-top: max(14px, env(safe-area-inset-top));
   }
   [dir='rtl'] .sp-side.sp-open { inset: 0 0 0 auto; }
-  .sp-scrim { position: fixed; inset: 0; background: rgb(20 30 45 / .3); z-index: 45; }
+  .sp-scrim { position: fixed; inset: 0; background: rgb(var(--shade) / .3); z-index: 45; }
   .sp-main { padding: 26px 18px 45vh; }
   /* THE MARGIN THE GUTTER LIVES IN — see below — and it hangs off the PAGE, not
      off `.sp-main`. `.sp-main` is chrome and follows the interface direction;
@@ -723,7 +932,17 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
      while printing is whatever window happened to be open — so without this the
      same document would set larger printed from a 27-inch monitor than from a
      laptop. Pinned. */
-  :root { --sp-read: 16px; }
+  :root {
+    --sp-read: 16px;
+    /* PAPER IS LIGHT, AND IT COSTS NOTHING TO SAY SO. Both dark blocks at the
+       top of this file are `@media screen`, so none of their tokens reach
+       here and the light palette is simply what applies — no third copy.
+       What DOES reach here is kernel/src/theme.ts's `color-scheme` on the
+       <html> element, which is an inline style and beats a media query; an
+       author !important is the one thing that beats an inline style. Without
+       it a dark reader's UA furniture prints dark over our white. */
+    color-scheme: only light !important;
+  }
   .sp-bar, .sp-side, .sp-insp, .sp-insp-rz, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
   .sp-tb-tools, .sp-tb-grip { display: none !important; }
   .sp-main { overflow: visible; padding: 0; background: #fff; }
@@ -763,8 +982,8 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-ddmenu {
   display: none; position: absolute; top: calc(100% + 5px); inset-inline-start: 0;
   min-width: 250px; flex-direction: column; z-index: 60;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(20 30 45 / .2); padding: 5px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 5px;
 }
 .sp-dd.sp-open .sp-ddmenu { display: flex; }
 .sp-dd:last-child .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
@@ -804,7 +1023,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-choices { display: flex; gap: 8px; margin: 4px 0 12px; }
 .sp-choice {
   flex: 1 1 0; text-align: start; font: inherit; color: var(--ink);
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 10px 12px; cursor: pointer;
 }
 .sp-choice:hover { background: var(--chrome); }
@@ -840,9 +1059,9 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-b-image:hover .sp-imgtools, .sp-imgtools:focus-within { opacity: 1; }
 .sp-imgtools .sp-btn {
-  background: rgb(255 255 255 / .94); border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 94%, transparent); border-color: var(--line);
   font-size: 12px; padding: 4px 8px;
-  box-shadow: 0 2px 8px rgb(20 30 45 / .12);
+  box-shadow: 0 2px 8px rgb(var(--shade) / .12);
 }
 .sp-imgtools .sp-badge { color: var(--accent-ink); }
 .sp-b-image figure { position: relative; }
@@ -865,9 +1084,9 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-b-media:hover .sp-mediatools, .sp-mediatools:focus-within { opacity: 1; }
 .sp-mediatools .sp-btn {
-  background: rgb(255 255 255 / .94); border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 94%, transparent); border-color: var(--line);
   font-size: 12px; padding: 4px 8px;
-  box-shadow: 0 2px 8px rgb(20 30 45 / .12);
+  box-shadow: 0 2px 8px rgb(var(--shade) / .12);
 }
 /* The still that paper and a file-manager thumbnail get instead of a player. */
 .sp-media-still {
@@ -902,7 +1121,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   color: var(--muted); background: transparent; cursor: pointer; opacity: 0;
 }
 .sp-treelink:hover .sp-rowmore, .sp-rowmore:focus { opacity: 1; }
-.sp-rowmore:hover { background: rgb(20 30 45 / .1); color: var(--ink); }
+.sp-rowmore:hover { background: var(--chrome-2); color: var(--ink); }
 .sp-rowmore svg { width: 14px; height: 14px; }
 
 /* ————— archived ————— */
@@ -922,12 +1141,12 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-findbar {
   position: absolute; top: 54px; inset-inline-end: 18px; z-index: 55;
   display: flex; align-items: center; gap: 6px; padding: 7px;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(20 30 45 / .2);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2);
 }
 .sp-findbar .sp-find { width: 190px; padding: 6px 9px; font-size: 13.5px; }
 .sp-findcount { font-size: 12px; color: var(--muted); min-width: 68px; text-align: center; }
-.sp-b.sp-hit { background: rgb(247 166 0 / .22); border-radius: 4px; transition: background .5s; }
+.sp-b.sp-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; transition: background .5s; }
 
 /* ————— reading view ————— */
 .sp-app.sp-reading .sp-main { padding-top: 56px; }
@@ -955,7 +1174,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   /* .sp-btn is transparent by design (the topbar is icon-only), so this one
      states itself: it asks the reader to make a decision. */
   margin-top: 6px;
-  background: #fff;
+  background: var(--surface);
   border-color: var(--line);
   color: var(--ink);
   font-weight: 550;
@@ -1078,7 +1297,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   height: 100%; padding: 6px 6px;
   border-start-start-radius: 0; border-end-start-radius: 0;
   margin-inline-start: 1px;
-  background: var(--ink); color: #fff;
+  background: var(--ink); color: var(--bg);
 }
 .sp-split .sp-caret > .sp-btn:hover { background: var(--ink-2); }
 
@@ -1130,7 +1349,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   transition: background .12s ease .08s;
 }
 .sp-resizer:hover,
-body.sp-col-resizing .sp-resizer { background: rgb(91 141 239 / .45); }
+body.sp-col-resizing .sp-resizer { background: color-mix(in srgb, var(--blue) 45%, transparent); }
 body.sp-col-resizing { cursor: col-resize; user-select: none; }
 .sp-noanim { transition: none !important; }
 
@@ -1143,12 +1362,12 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   transform: translate(-50%, -50%);
   width: 16px; height: 44px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: #fff; color: #5d6b80;
+  background: var(--surface); color: var(--muted);
   border: 1px solid var(--line); border-radius: 8px;
   cursor: pointer; z-index: 15;
-  box-shadow: 0 1px 4px rgb(20 30 45 / .12);
+  box-shadow: 0 1px 4px rgb(var(--shade) / .12);
 }
-.sp-pane-tab:hover { color: var(--ink); border-color: #b9c3d2; }
+.sp-pane-tab:hover { color: var(--ink); border-color: var(--edge); }
 .sp-pane-tab svg { width: 13px; height: 13px; display: block; }
 
 /* Collapsed: the panel takes no width and the strip carries only the chevron,
@@ -1239,7 +1458,7 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 .sp-insp-row > :not(.sp-insp-lbl) { flex: 0 0 auto; max-width: 60%; }
 .sp-insp-txt, .sp-insp-num {
   font: inherit; font-size: 12.5px; color: var(--ink);
-  background: #fff; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--field); border: 1px solid var(--line); border-radius: 7px;
   padding: 4px 7px; width: 148px; min-width: 0;
 }
 .sp-insp-num { width: 64px; }
@@ -1262,7 +1481,7 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   .sp-insp { display: none; }
   .sp-insp.sp-open {
     display: block; position: fixed; inset: 0 0 0 auto; width: 288px;
-    z-index: 50; box-shadow: 0 0 50px rgb(20 30 45 / .3);
+    z-index: 50; box-shadow: 0 0 50px rgb(var(--shade) / .3);
     padding-top: max(14px, env(safe-area-inset-top));
   }
   [dir='rtl'] .sp-insp.sp-open { inset: 0 auto 0 0; }
@@ -1297,7 +1516,7 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 .sp-pop.sp-sheet {
   position: fixed; inset-inline: 8px; bottom: max(8px, env(safe-area-inset-bottom));
   top: auto; width: auto; max-height: 62vh; border-radius: 14px;
-  padding: 8px; box-shadow: 0 -8px 40px rgb(20 30 45 / .28);
+  padding: 8px; box-shadow: 0 -8px 40px rgb(var(--shade) / .28);
   transform: translateY(8px); opacity: 0;
   transition: transform .16s ease, opacity .16s ease;
 }
@@ -1322,7 +1541,7 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--line); border-radius: 7px;
   padding: 3px 9px; cursor: pointer;
 }
-button.sp-prop-val:hover { background: #fff; border-color: #b9c3d2; }
+button.sp-prop-val:hover { background: var(--surface); border-color: var(--edge); }
 .sp-prop-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--line); flex: 0 0 auto;
@@ -1332,7 +1551,7 @@ button.sp-prop-val:hover { background: #fff; border-color: #b9c3d2; }
 .sp-view-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .sp-view-btn { font-size: 12.5px; padding: 4px 9px; }
 .sp-view-btn:first-of-type { margin-inline-start: auto; }
-.sp-view-btn.sp-on { background: var(--chrome-2); border-color: #b9c3d2; color: var(--ink); }
+.sp-view-btn.sp-on { background: var(--chrome-2); border-color: var(--edge); color: var(--ink); }
 /* a field's name above its values, in the filter picker */
 .sp-fgroup { display: block; padding: 9px 9px 3px; font-size: 12px; color: var(--muted); }
 .sp-view-title { font-weight: 650; font-size: 15px; }
@@ -1366,10 +1585,10 @@ button.sp-prop-val:hover { background: #fff; border-color: #b9c3d2; }
    is the fix that cannot come back. */
 .sp-issue {
   display: block; position: relative; color: inherit;
-  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
   padding: 9px 10px; margin-bottom: 7px;
 }
-.sp-issue:hover { border-color: #b9c3d2; box-shadow: 0 2px 8px rgb(20 30 45 / .07); }
+.sp-issue:hover { border-color: var(--edge); box-shadow: 0 2px 8px rgb(var(--shade) / .07); }
 /* `.sp-page a` underlines every link in the reading column and out-specifies a
    bare class — a card title is a card, not a link in a sentence. */
 .sp-page a.sp-issue-title, .sp-issue-title { display: block; font-size: 13.5px; line-height: 1.4; color: inherit; text-decoration: none; }
@@ -1390,7 +1609,7 @@ button.sp-issue-set {
   /* a finger's target, not a mouse's */
   padding: 4px 8px; min-height: 26px;
 }
-button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; }
+button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edge); }
 /* A FINGER: the status button is the only way to move an issue where HTML5
    drag does not exist, so on a touch device it gets a target worth aiming at.
    BOTH predicates — `coarse` is the honest one, and the width is the one a
@@ -1495,6 +1714,8 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
 .sp-dot {
   width: 16px; height: 16px; border-radius: 50%;
   display: inline-grid; place-items: center;
+  /* the dot's fill is a generated saturated hue set inline by collabui, so
+     its ink is white on both grounds — not a chrome surface. */
   font-size: 9px; font-weight: 700; color: #fff;
   text-transform: uppercase; letter-spacing: 0;
 }
@@ -1547,14 +1768,14 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   position: absolute; inset-inline-end: -34px; top: 2px;
   min-width: 21px; height: 21px; padding: 0 5px;
   border: 1px solid var(--line); border-radius: 10px 10px 10px 3px;
-  background: #fff; color: var(--muted);
+  background: var(--surface); color: var(--muted);
   font: inherit; font-size: 11px; font-weight: 650; line-height: 19px;
   cursor: pointer;
 }
 .sp-cm-mark:hover { border-color: var(--accent); color: var(--accent-ink); }
 /* resolved is QUIET, never gone: the argument is still in the file */
 .sp-cm-done { opacity: .45; }
-.sp-cm-new { box-shadow: 0 0 0 4px rgb(247 166 0 / .3); }
+.sp-cm-new { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent); }
 /* the page-level row is in the flow, so its markers are too */
 .sp-cm-row { display: flex; gap: 4px; margin: 0 0 10px; }
 .sp-cm-row .sp-cm-mark { position: static; }
@@ -1562,7 +1783,8 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
 .sp-cm-badge {
   margin-inline-start: auto; flex: 0 0 auto;
   min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
-  background: var(--accent); color: var(--accent-ink);
+  /* ink ON the fill, and the fill is brand: --accent-on does not flip. */
+  background: var(--accent); color: var(--accent-on);
   font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center;
 }
 .sp-cm-pop { width: 290px; }
@@ -1582,7 +1804,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
 .sp-cm-entry p { margin: 2px 0 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sp-cm-reply {
   width: 100%; resize: vertical; font: inherit; font-size: 13px;
-  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--field);
 }
 .sp-cm-foot { display: flex; gap: 6px; padding: 8px 6px 4px; }
 @media (max-width: 820px) {

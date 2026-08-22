@@ -2539,5 +2539,146 @@ function fsTable(f: string): string {
     'the PLAIN highlight keeps ==x==, which Obsidian and Pandoc both read')
 }
 
+// ---- the theme gate --------------------------------------------------------
+//
+// EVERY FAILURE HERE IS INVISIBLE IN THE LIGHT THEME, which is the one the
+// author is looking at while they write the rule. A surface pinned to `#fff`
+// keeps its white background when the chrome goes dark and puts light text on
+// it; slides measured that at 1.21:1 against WCAG AA's 4.5 floor before its own
+// gate existed, and it looked perfect the whole time.
+//
+// Three properties, and the third is the one that is not about contrast at all:
+// a theme is a VIEWER preference (PLATFORM §8), so it must never reach the
+// document — not through doc.theme, and not through the pristine clone every
+// save re-serializes.
+{
+  const fs = await import('node:fs')
+  const src = (f: string) =>
+    fs.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const css = src('styles.css')
+
+  // Strip comments first: prose about `#fff` is not a rule painting `#fff`,
+  // and a failure that names a comment sends the reader to the wrong line.
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  // ---- 1. both dark blocks exist, and they are the same block --------------
+  // Three states: a reader chose light, chose dark, or chose nothing. The
+  // choice stamps data-theme; the default follows the OS. So dark has to be
+  // stated under the MEDIA QUERY (guarded, so an explicit light still wins)
+  // AND under the ATTRIBUTE, or the picker only works in one direction.
+  const body = (sel: string): string | null => {
+    const i = bare.indexOf(sel)
+    if (i < 0) return null
+    const open = bare.indexOf('{', i)
+    return bare.slice(open + 1, bare.indexOf('}', open))
+  }
+  const roles = (b: string) =>
+    new Map([...b.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)]
+      .map((m) => [m[1], m[2].trim().toLowerCase()] as [string, string]))
+
+  const light = body(':root, :root[data-theme="light"]')
+  const media = body(':root:not([data-theme="light"])')
+  const attr = body(':root[data-theme="dark"]')
+  ok(!!light && !!media && !!attr,
+    'dark is defined BOTH under prefers-color-scheme and under [data-theme="dark"]')
+  ok(/@media screen and \(prefers-color-scheme: dark\)/.test(css),
+    '…and the media block is a screen block, which is what keeps paper light')
+  if (light && media && attr) {
+    const L = roles(light), M = roles(media), A = roles(attr)
+    // byte-identical, or the picker and the OS default drift apart silently
+    const drift = [...M].filter(([k, v]) => A.get(k) !== v).map(([k]) => k)
+    ok(drift.length === 0 && M.size === A.size,
+      `the two dark blocks are identical${drift.length ? ` — ${drift.join(', ')}` : ''}`)
+    // --sp-read and --radius are GEOMETRY. They live in the light block
+    // because that is where the tokens are, but a reading size and a corner
+    // radius are the same in the dark; only colour has two answers.
+    const METRIC = /^--(sp-read|radius)$/
+    const missing = [...L.keys()].filter((r) => !M.has(r) && !METRIC.test(r))
+    ok(missing.length === 0,
+      `dark defines every role light does${missing.length ? ` — missing ${missing.join(', ')}` : ''}`)
+    const extra = [...M.keys()].filter((r) => !L.has(r))
+    ok(extra.length === 0,
+      `dark invents no role light lacks${extra.length ? ` — extra ${extra.join(', ')}` : ''}`)
+    // A token defined twice and referenced nowhere is not harmless: it is a
+    // wire that was never connected, and the literal it was meant to replace
+    // is still in the sheet painting a light value in dark.
+    const unused = [...L.keys()].filter((r) => !new RegExp(`var\\(${r}[,)]`).test(css))
+    ok(unused.length === 0,
+      `every themed role is referenced by a rule${unused.length ? ` — unused: ${unused.join(', ')}` : ''}`)
+    // and the light palette has not forked from slides and type
+    const SUITE: Record<string, string> = {
+      '--ink': '#1e2a3a', '--ink-2': '#31445c', '--chrome': '#f5f7fa',
+      '--chrome-2': '#eceff4', '--line': '#e3e8ef', '--muted': '#5b6472',
+      '--accent': '#f7a600', '--accent-ink': '#7a5200', '--blue': '#5b8def',
+    }
+    const wrong = Object.entries(SUITE)
+      .filter(([k, v]) => L.get(k) !== v)
+      .map(([k, v]) => `${k} is ${L.get(k) ?? 'missing'}, suite says ${v}`)
+    ok(wrong.length === 0,
+      `the light palette still matches the suite${wrong.length ? `\n        ${wrong.join('\n        ')}` : ''}`)
+  }
+
+  // ---- 2. no literal colour survives outside the tokens and the paper -----
+  // The token blocks are where a colour is allowed to be written down; the
+  // print sheet is the other place, because paper is white for reasons that
+  // have nothing to do with anybody's preference. Everywhere else a literal is
+  // a value that will not move when the theme does.
+  //
+  // The listed exceptions are surfaces that deliberately do not follow the
+  // chrome, each named rather than silently tolerated:
+  //   .sp-b-image img   a picture gets a white ground of its own in BOTH
+  //                     themes — a transparent-background diagram exported
+  //                     against white vanishes on a dark one
+  //   .sp-b-media video the letterbox behind a clip, black in both
+  //   .sp-dot           the fill is a generated hue set inline by collabui, so
+  //                     the initial on it is white on either ground
+  const HEX = /#[0-9a-fA-F]{3,8}\b/
+  const EXEMPT = /^(\.sp-b-image img|\.sp-b-media video|\.sp-dot)\b/
+  // everything up to the first token block, then everything after the last —
+  // simpler and more honest than trying to parse nesting: cut the three token
+  // blocks and both @media print blocks out, and audit what is left
+  let audit = bare
+  for (const cut of [/:root, :root\[data-theme="light"\][\s\S]*?\n}\n/,
+                     /@media screen and \(prefers-color-scheme: dark\)[\s\S]*?\n}\n/,
+                     /@media screen \{\s*\n  :root\[data-theme="dark"\][\s\S]*?\n}\n/]) {
+    const m = audit.match(cut)
+    ok(!!m, `the theme gate can find its token block (${String(cut).slice(0, 46)}…)`)
+    if (m) audit = audit.replace(cut, '\n')
+  }
+  audit = audit.replace(/@media print \{[\s\S]*?\n}\n/g, '\n')
+  const stray: string[] = []
+  for (const [, sel, decls] of audit.matchAll(/(^|\n)([^@{}\n][^{}]*)\{([^}]*)\}/g)) {
+    if (!HEX.test(decls)) continue
+    const s0 = sel.trim().split(',')[0].trim()
+    if (EXEMPT.test(s0)) continue
+    stray.push(`${s0} → ${decls.trim().replace(/\s+/g, ' ').slice(0, 60)}`)
+  }
+  ok(stray.length === 0,
+    `no literal colour outside the token blocks and the print sheet${stray.length ? `\n        ${stray.join('\n        ')}` : ''}`)
+
+  // ---- 3. the preference never reaches the document ----------------------
+  // startTheme() writes data-theme + color-scheme onto <html>. capturePristine
+  // clones the LIVE document and every save re-serializes that clone, so the
+  // call has to come AFTER it — otherwise a reader's theme ships inside every
+  // file they save and lands on whoever they send it to. Same ordering
+  // applyDirection already depends on for dir/lang.
+  const main = src('main.ts')
+  ok(main.indexOf('startTheme()') > main.indexOf('capturePristine()'),
+    'startTheme() runs after capturePristine(), so no theme reaches a saved file')
+  // and nothing writes it into the model
+  const app = src('appearance.ts')
+  ok(!/store|doc\.|commit/.test(app.replace(/\/\/[^\n]*/g, '')),
+    'the Appearance control never touches the store or the document')
+  ok(!/theme/i.test(src('model.ts').match(/export interface Theme[\s\S]*?\n}/)?.[0]
+       .replace(/^export interface Theme/, '') ?? '') ||
+     !/data-theme|bento-theme|prefers-color-scheme/.test(src('model.ts')),
+    'the FORMAT knows nothing about the interface theme')
+  // the still preview renders the AUTHOR's colours, in both themes
+  // the prose above it says exactly this, so audit the CODE, not the comment
+  const previewCode = src('preview.ts').replace(/^\s*\/\/[^\n]*$/gm, '')
+  ok(!/prefers-color-scheme|data-theme/.test(previewCode),
+    'the static file-manager preview has no theme of its own — it is the author’s document')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

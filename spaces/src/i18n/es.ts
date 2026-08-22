@@ -440,4 +440,10 @@ export const es: Catalog = {
   "{pages} page(s) and {blocks} block(s) added from {files} file(s).": "{pages} página(s) y {blocks} bloque(s) añadidos desde {files} archivo(s).",
   "{pages} page(s) and {blocks} block(s) will travel.": "Viajarán {pages} página(s) y {blocks} bloque(s).",
   "⌘Z removes the imported pages again.": "⌘Z vuelve a quitar las páginas importadas.",
+  "Appearance": "Apariencia",
+  "Interface theme": "Tema de la interfaz",
+  "Match my system": "Según el sistema",
+  "Light": "Claro",
+  "Dark": "Oscuro",
+  "The theme follows whoever opens the file. It is never written into the document.": "El tema sigue a quien abre el archivo. Nunca se escribe en el documento.",
 }
