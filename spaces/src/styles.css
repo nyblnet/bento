@@ -1110,3 +1110,58 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   color: var(--muted); padding: 10px 10px 4px; margin-top: 4px;
   border-top: 1px solid var(--line);
 }
+
+/* ————— review comments —————
+   A marker sits in the END margin, opposite the block gutter: outside the text
+   column, so it never reflows the prose it is about, and beside the line it
+   refers to. Page-level threads sit in a row under the title instead, because
+   the page's identity is what they are about. Both are chrome — the print
+   sheet below drops them, and the reading view never paints them. */
+.sp-cm-mark {
+  position: absolute; inset-inline-end: -34px; top: 2px;
+  min-width: 21px; height: 21px; padding: 0 5px;
+  border: 1px solid var(--line); border-radius: 10px 10px 10px 3px;
+  background: #fff; color: var(--muted);
+  font: inherit; font-size: 11px; font-weight: 650; line-height: 19px;
+  cursor: pointer;
+}
+.sp-cm-mark:hover { border-color: var(--accent); color: var(--accent-ink); }
+/* resolved is QUIET, never gone: the argument is still in the file */
+.sp-cm-done { opacity: .45; }
+.sp-cm-new { box-shadow: 0 0 0 4px rgb(247 166 0 / .3); }
+/* the page-level row is in the flow, so its markers are too */
+.sp-cm-row { display: flex; gap: 4px; margin: 0 0 10px; }
+.sp-cm-row .sp-cm-mark { position: static; }
+/* the tree badge: a page with unanswered comments, seen from another page */
+.sp-cm-badge {
+  margin-inline-start: auto; flex: 0 0 auto;
+  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center;
+}
+.sp-cm-pop { width: 290px; }
+.sp-cm-head {
+  display: flex; align-items: baseline; gap: 8px; justify-content: space-between;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); padding: 4px 6px 8px;
+}
+.sp-cm-me {
+  border: 0; background: none; font: inherit; font-size: 11px; text-transform: none;
+  letter-spacing: 0; color: var(--muted); cursor: pointer; padding: 0;
+}
+.sp-cm-me:hover { color: var(--ink); }
+.sp-cm-entries { display: flex; flex-direction: column; gap: 8px; padding: 0 6px 8px; }
+.sp-cm-entry b { font-size: 12.5px; }
+.sp-cm-time { color: var(--muted); font-size: 11px; margin-inline-start: 6px; }
+.sp-cm-entry p { margin: 2px 0 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sp-cm-reply {
+  width: 100%; resize: vertical; font: inherit; font-size: 13px;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff;
+}
+.sp-cm-foot { display: flex; gap: 6px; padding: 8px 6px 4px; }
+@media (max-width: 820px) {
+  /* no end margin is reserved at this width — the marker tucks into the
+     column's own end edge rather than off the side of the screen */
+  .sp-cm-mark { inset-inline-end: 0; }
+}
+@media print { .sp-cm-mark, .sp-cm-row { display: none !important; } }

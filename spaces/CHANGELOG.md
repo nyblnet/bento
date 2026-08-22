@@ -14,6 +14,20 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **Comments.** Leave a remark on a block (Block options → Comment) or on a
+  whole page (the page's ⋯ → Comment on this page), reply to it, and resolve it
+  when it is settled. Markers sit in the margin beside what they are about, so
+  they never move the writing; a page with something still open shows a count
+  in the page list.
+
+  A comment is workspace, not document: it is saved in the file so it travels
+  with it, and it never appears in the reading view or on paper. The text is
+  plain text — a comment cannot carry formatting, and cannot carry anything
+  else either. Your name is the one the people panel already knows.
+
+  Agents get the whole list in one call: `bento.comments()`, each thread saying
+  whether it is about a block or a page.
+
 - **A page can be as wide as it needs to be.** Column, Wide or Full width, in
   the page menu. Pages of writing keep a comfortable line; a page with a board
   on it can have the room. Boards already widened themselves — now they say so,

@@ -78,6 +78,7 @@ load contract and format additivity.
 | `src/markdown.ts` | markdown → blocks, the folder tree → the page tree, `[[wikilinks]]` → `#p/` links. Pure and DOM-free, so the import is tested in node |
 | `src/editor.ts` | topbar, sidebar, block menu, `[[` picker, ⌘K, ⌘F, archive |
 | `src/collabui.ts` | who else is here — presence in the tree, the people panel, the live control |
+| `src/comments.ts` | review threads — markers in the end margin, the thread popover, the tree badge |
 | `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |
 | `src/agent.ts` | the agent surface — `validate()`, `outline()`, `stats()`, and the patch verbs behind `window.bento` |
 | `src/assets.ts` | content-addressed images and the downscale |
@@ -141,6 +142,11 @@ pages are one document rather than one file each.
 - **Fine-grained sharing.** There is a people panel, presence in the page tree
   and a live session, but no per-person roles or invite links yet — the file is
   still the capability, so anyone you send it to can edit.
+- **Comments on a text RANGE.** A thread anchors to a block or to a page. A
+  range inside a block needs an offset pair that survives the concurrent edit
+  that moved it, and the format is permanent — so the anchor ships when its
+  model is right.
+
 - **Tables and embeds.** Deliberate: the format is permanent, so a block type
   ships when its model is right, not when its UI is ready. (Databases DID ship —
   as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a

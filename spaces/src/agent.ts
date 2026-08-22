@@ -30,7 +30,7 @@
 // an undo entry that undoes nothing. Planning first also makes the whole write
 // path testable in node, where there is no store and no DOM.
 
-import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf } from './model.ts'
+import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, commentsOn } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
@@ -1332,4 +1332,78 @@ export function planNewIssue(doc: SpacesDoc, spec: unknown): Plan<NewIssueResult
     ...(warnings.length ? { warnings } : {}),
     apply() { doc.pages.push(page) },
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// review comments
+// ---------------------------------------------------------------------------
+
+/** One thread, with the anchor spelled out rather than implied by where it sat. */
+export interface CommentReport {
+  id: string
+  /** 'block' = about that block, 'page' = about the page as a whole */
+  anchor: 'block' | 'page'
+  pageId: string
+  pageTitle: string
+  /** present only for an anchor of 'block' */
+  blockId?: string
+  /** the href that reaches the page it is on */
+  url: string
+  author: string
+  at: string
+  /** PLAIN TEXT (model.ts CommentEntry) — never html, in or out */
+  text: string
+  resolved: boolean
+  replies: Array<{ id: string; author: string; at: string; text: string }>
+}
+
+export interface CommentQuery {
+  /** only open threads (`false`) or only settled ones (`true`) */
+  resolved?: boolean
+  /** one page's threads */
+  pageId?: string
+}
+
+/**
+ * Every review thread in the space, flat, with a TYPED ANCHOR.
+ *
+ * This is the entry point for an agent working through what a human flagged:
+ * one call gives the whole backlog of remarks, in document order, each one
+ * saying what it is about. Flat rather than nested because the caller's
+ * question is "what is outstanding", not "what does this page hold" — and
+ * because the two anchors live in two places in the file, which is a storage
+ * decision (model.ts explains why) and no business of the reader's.
+ *
+ * Defensive about every field: a comment arrives in a file somebody mailed
+ * you, so a hostile or hand-edited `replies: 3` must read as no replies rather
+ * than throw inside a report an agent is about to branch on.
+ */
+export function commentsReport(doc: SpacesDoc, query: CommentQuery = {}): CommentReport[] {
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+  const out: CommentReport[] = []
+  for (const page of doc.pages) {
+    if (query.pageId && page.id !== query.pageId) continue
+    for (const at of commentsOn(page)) {
+      const c = at.comment
+      const resolved = c.resolved === true
+      if (query.resolved !== undefined && query.resolved !== resolved) continue
+      out.push({
+        id: c.id,
+        anchor: at.blockId ? 'block' : 'page',
+        pageId: page.id,
+        pageTitle: page.title,
+        ...(at.blockId ? { blockId: at.blockId } : {}),
+        url: `#p/${page.id}`,
+        author: str(c.author),
+        at: str(c.at),
+        text: str(c.text),
+        resolved,
+        replies: (Array.isArray(c.replies) ? c.replies : [])
+          .filter((r) => r && typeof r === 'object')
+          .map((r) => ({ id: str(r.id), author: str(r.author), at: str(r.at), text: str(r.text) })),
+      })
+    }
+  }
+  return out
 }

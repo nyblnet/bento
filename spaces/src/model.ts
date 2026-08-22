@@ -93,7 +93,63 @@ export interface Block {
    */
   icon?: string
 
+  /**
+   * Review threads anchored to THIS block. See `Comment` below for why they
+   * live on the block rather than in one list on the page.
+   */
+  comments?: Comment[]
+
   [extra: string]: unknown
+}
+
+/** One message in a thread. The first one IS the thread (`Comment` extends it). */
+export interface CommentEntry {
+  id: string
+  author: string
+  /** ISO datetime */
+  at: string
+  /**
+   * PLAIN TEXT, never html, and the only field in this format that is.
+   *
+   * A block's `html` earns its markup and pays for it with sanitize.ts. A
+   * comment has nothing to gain from bold — and it arrives in a file somebody
+   * mailed you, from a person who is by definition not the author of the
+   * document. So the answer is not "sanitize it too" but "there is nothing to
+   * sanitize": it is stored as a string and written to the screen with
+   * `textContent`, so `<img onerror>` in a comment is four words a reader can
+   * see rather than a parse this app has to be careful about.
+   */
+  text: string
+}
+
+/**
+ * A review thread. Saved in the file so it travels with the document, and
+ * EDITOR-ONLY: `render.ts` never emits one, so it cannot reach the reading
+ * view or the printed page. A comment is workspace, not document.
+ *
+ * WHERE A THREAD LIVES IS ITS ANCHOR. A deck is a canvas, so slides can point
+ * at an (x, y); a space is a tree of pages of blocks, and the block is the
+ * thing that already has a durable identity — ids are unique document-wide and
+ * are never reused, which is exactly what links and backlinks key on. So there
+ * are two anchors and no third: `Block.comments` is a thread about that block,
+ * `Page.comments` is a thread about the page. A text RANGE inside a block is
+ * deliberately not one: an offset pair has no meaning after the concurrent
+ * edit that moved it, and inventing one now would freeze the wrong answer into
+ * every file.
+ *
+ * Storing a block thread ON THE BLOCK is a collaboration decision, not a
+ * filing one. Under the CRDT every non-container property is one
+ * last-writer-wins register (kernel/src/sync/crdt.ts), so one `Page.comments`
+ * array would make every thread on a page contend for a single register: two
+ * people commenting on two different paragraphs at the same moment, and one
+ * comment is gone with nothing said. Per block, that case converges. What
+ * remains — two people commenting on the SAME block, or on the same page,
+ * concurrently — is still last-writer-wins, exactly as slides' table `rows`
+ * is, and is written down rather than pretended away.
+ */
+export interface Comment extends CommentEntry {
+  resolved?: boolean
+  replies?: CommentEntry[]
 }
 
 export interface Page {
@@ -137,6 +193,8 @@ export interface Page {
   /** out of the sidebar, still searchable and linkable, and ENUMERATED at
    *  share time — an author archived a page precisely because it was sensitive */
   archived?: boolean
+  /** review threads about the page as a whole — see `Comment` */
+  comments?: Comment[]
   created?: string
   edited?: string
   [extra: string]: unknown
@@ -466,8 +524,42 @@ export function buildIndex(doc: SpacesDoc): SpaceIndex {
   return { page, children, block, backlinks }
 }
 
+/** A thread, with the anchor it was found at. `blockId` absent = the page. */
+export interface CommentAt {
+  comment: Comment
+  pageId: string
+  blockId?: string
+}
+
+/**
+ * Every thread on a page, page-level first, then block threads in page order.
+ *
+ * The ONE reader of both anchors, so the badge, the marker layer and the agent
+ * report cannot disagree about what a page holds. Defensive about the shape
+ * because this data arrives in a file: `comments: "yes"` must be ignored, not
+ * iterated.
+ */
+export function commentsOn(page: Page): CommentAt[] {
+  const out: CommentAt[] = []
+  const take = (list: unknown, blockId?: string) => {
+    if (!Array.isArray(list)) return
+    for (const c of list) {
+      if (c && typeof c === 'object' && typeof (c as Comment).id === 'string') {
+        out.push({ comment: c as Comment, pageId: page.id, ...(blockId ? { blockId } : {}) })
+      }
+    }
+  }
+  take(page.comments)
+  for (const b of page.blocks) take(b.comments, b.id)
+  return out
+}
+
+/** How many threads on this page are still open — the sidebar badge. */
+export const unresolvedOn = (page: Page): number =>
+  commentsOn(page).reduce((n, c) => n + (c.comment.resolved ? 0 : 1), 0)
+
 /** The page a reader lands on. */
-export const homePage = (doc: SpacesDoc): Page | undefined =>
+export const homePage =(doc: SpacesDoc): Page | undefined =>
   (doc.home ? doc.pages.find((p) => p.id === doc.home) : undefined) ?? doc.pages[0]
 
 /**

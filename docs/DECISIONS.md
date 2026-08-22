@@ -14,6 +14,81 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-22 — spaces comments: the anchor IS where the thread is stored, and the block is why
+
+**Two anchors, and no third.** A thread is about a BLOCK or about a PAGE. A
+deck is a canvas, so slides can anchor a comment to an (x, y) and to nothing
+else; a space is a tree of pages of blocks, and the block is the thing that
+already has durable identity — ids are unique document-wide, never reused, and
+are what links, backlinks and the CRDT key on. A text RANGE inside a block is
+deliberately not an anchor: an offset pair has no meaning after the concurrent
+edit that moved it, the format is permanent, and shipping the wrong answer now
+would put it in every file. It is listed under "Not built yet" in
+`spaces/README.md` rather than half-built.
+
+**The anchor is expressed as STORAGE, not as a field.** `Block.comments` is a
+thread about that block; `Page.comments` is a thread about the page. That is a
+collaboration decision rather than a filing one. Under the shared engine
+(`kernel/src/sync/crdt.ts`) every non-container property is one
+last-writer-wins register per (node, key), so ONE `Page.comments` array — the
+slides shape, transliterated — would make every thread on a page contend for a
+single register: two people commenting on two different paragraphs in the same
+moment, and one comment is gone with nothing said. Per block, that case
+converges, because each block is its own CRDT node.
+
+**The caveat that remains, stated rather than pretended away.** Two people
+commenting on the SAME block concurrently, or on the same page, is still
+last-writer-wins on that one array — the same limitation slides' table `rows`
+carries, and for the same reason. Replies and resolve are in the array too, so
+a reply that races another reply on the same thread can lose. Making that
+converge means threads as their own CRDT nodes, which is an engine change, and
+kernel changes are serialized (docs/PARALLEL-WORK.md). It is not shipped
+blind: it is written in `model.ts` beside the type.
+
+Storing on the block also settles two lifecycle questions for free: deleting a
+block takes its threads with it (undoably, in the same step), and moving a
+block to another page carries them along.
+
+**Where the UI lives.** Not the gutter — a block already has one at the start
+edge, and it holds exactly two controls because a phone reserves 44px and fits
+one (2026-08-10, above); a third affordance there is a control no thumb can
+reach. Not a sidebar panel — the sidebar is the page tree, the one navigation
+this app has. Markers sit in the END margin, opposite the gutter, outside the
+text column so they never reflow the prose they are about (measured: block
+column ends at x = 1124.5, the marker sits at 1137.5). Page-level threads sit
+in a row under the title. The thread itself is the editor's existing popover —
+bottom sheet on a phone — so it dismisses like every other menu. The page tree
+carries only a COUNT of unresolved threads, which is the one comment fact worth
+knowing from another page.
+
+**Editor-only, structurally.** `render.ts` — the single renderer behind the
+editor, the reading view and print — has never heard of comments, and the
+editor paints markers only when it is not in the reading view. Verified in a
+real browser on the actual print tree: the whole-space print root rendered 11
+pages, 0 markers, and no occurrence of the substring at all. The print
+stylesheet drops them anyway, as a second line. `scripts/test-spaces-model.ts`
+pins all three as source assertions.
+
+**Comment text is PLAIN TEXT.** Not "sanitized like block html" — there is
+nothing to sanitize, because nothing is ever parsed as html: the model stores a
+string and the UI writes it with `textContent`. A comment arrives in a file
+somebody mailed you, written by a person who is by definition not the author of
+the document, and it has nothing to gain from bold. Verified in the browser: a
+comment reading `plain <b>text</b> please` renders as those characters.
+
+**The agent verb is READ-ONLY.** `bento.comments({resolved?, pageId?})` returns
+every thread, flat, each stating its anchor. Acting on a remark is the agent's
+job; resolving it is the commenter's — an agent that closed the thread it was
+asked to address would make the record untrue. Every field is coerced to the
+type the report promises, so a hand-edited file cannot make it throw halfway
+through and tell the caller the first two pages are all there is.
+
+**The name is `bento-author`**, the key the people panel already reads and
+writes. Two keys would let one file disagree with itself about who you are.
+
+**Cost.** +4,396 B on the shipped shell (166,482 → 170,878 B), inside the
+existing 176,128 B ceiling (97.0%); no budget change.
+
 ## 2026-08-19 — The shells are packed with zopfli, and the format does not move
 
 Every Bento file carries its whole runtime, so the packer's efficiency is a
