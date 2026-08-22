@@ -4,7 +4,7 @@
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
       "max": 176128,
-      "//": "172 KiB. Raised from 160: the collaboration UI costs 11,612 B compressed — the people panel, the presence dots in the page tree, the live control, the refusal messages, and 24 strings x 8 locales, which is roughly a fifth of it. Measured 159,446 B before and 171,058 B after. Twelve of those strings were LIFTED from the bento/slides catalogs rather than reworded, which is both cheaper and keeps one message consistent across the suite. Headroom is deliberate: the shell is mostly a zlib block and zlib differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "//": "172 KiB, and there is real headroom under it again. Zopfli (scripts/postbuild-compress.mjs) took the shell from 173,598 to 166,482 B — 7,116 B, 4.1% — WITHOUT dropping a feature, so the ceiling deliberately stays where the collaboration UI put it: the next feature spends genuine headroom instead of triggering a fifth raise. Measured savings elsewhere from the same change: slides 26,300 B, dash 4,804 B, type 616 B. Headroom is also deliberate for a duller reason — the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }

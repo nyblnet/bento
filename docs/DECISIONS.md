@@ -14,6 +14,59 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-19 — The shells are packed with zopfli, and the format does not move
+
+Every Bento file carries its whole runtime, so the packer's efficiency is a
+property of every document anybody saves. Zopfli emits a stream in the SAME
+deflate format as zlib, just searched harder — so the shipped loader is
+untouched, already-saved files keep working, and an old updater splicing into a
+new shell sees exactly what it saw before.
+
+MEASURED, all four shells:
+
+    spaces   173,598 -> 166,482    -7,116 B   4.10%
+    slides   690,060 -> 663,760   -26,300 B   3.81%
+    dash     169,617 -> 164,813    -4,804 B   2.83%
+    type      33,899 ->  33,283      -616 B   1.82%
+
+Verified rather than assumed, because "the format does not move" is the whole
+argument. A zopfli payload handed to Chrome 148's native
+`DecompressionStream('deflate-raw')` inflated to a byte-identical result
+(SHA-256 matched) in 2.2 ms, and all four shells boot and render from
+zopfli-packed payloads — checked in a browser, not only through the gate.
+
+15 iterations, not 100: 100 buys 36 more bytes on spaces for three times the
+time. The cost is about a second of build time per shell, paid once per
+release.
+
+THE DEPENDENCY IS PER APP, RESOLVED FROM THE CALLER. `scripts/` has no
+package.json and neither does the repo root, so a bare import from
+postbuild-compress.mjs would look in the wrong place — but every app runs the
+script from its own directory, which is where `@gfx/zopfli` is declared. It
+ships WASM embedded as JSON: no node-gyp, no compiler, no platform binaries,
+140 KB, one transitive dependency. `node-zopfli` (native) would not have been
+reproducible on CI.
+
+A MISSING DEPENDENCY FAILS THE BUILD rather than falling back. Verified: exit
+code 1, with a message naming the fix. A release quietly built 4% larger
+because someone's node_modules was stale is a regression nobody would ever
+notice. `ZOPFLI=0` is the deliberate escape hatch for a local build and says in
+the same message that it is never for a release.
+
+THE SPACES CEILING DOES NOT MOVE DOWN. 166,482 of 176,128 is 94.5%, and that
+9,646 B of headroom is the point: the win is spent on the next feature rather
+than banked by re-tightening the budget, which would have meant a fifth raise
+the first time anything grew.
+
+Two alternatives measured and rejected earlier, recorded so they are not
+re-derived: BROTLI would save 20,580 B more but Chrome's DecompressionStream
+accepts only deflate, deflate-raw and gzip, and a JS decoder costs more than it
+saves; a DENSER PAYLOAD ALPHABET (basE91) would save 9,676 B but shell-gate.mjs
+hard-fails any data block containing a literal `<`, and base64 is relied on for
+being zero-`<` by construction against hostile payloads.
+
+---
+
 ## 2026-08-19 — How wide a page is belongs to the PAGE, not the theme
 
 `theme.measure` is one number for the whole document — "text column width in px
