@@ -111,6 +111,19 @@
 
   /* Which Bento a document is, and whether it is named like one. Both sit on
      the picture so they never push the title around. */
+
+  .badges { position: absolute; top: 7px; inset-inline-end: 7px; display: flex; gap: 4px }
+  .badges span { background: var(--panel); border: 1px solid var(--line); color: var(--dim);
+    font-size: 10.5px; line-height: 1; padding: 3px 5px; border-radius: 5px;
+    letter-spacing: .02em;
+    /* Every badge is a Latin technical string — an app name, or the literal
+       extension `.html`. Under `dir="rtl"` the leading dot is bidi-NEUTRAL and
+       gets reordered to the end, so the badge read `html.` in Arabic, Persian,
+       Hebrew and Urdu. Isolating each badge pins its own direction without
+       affecting the order the badges themselves sit in, which must still
+       mirror. */
+    direction: ltr; unicode-bidi: isolate }
+
   /* ------------------------------------------------------------ list mode */
   /* The SAME card markup, relaid out. The thumbnail re-fits itself because
      decorate() scales the preview iframe from a ResizeObserver on `.shot`
@@ -128,13 +141,18 @@
   .as-list .cardbody { padding: 0; flex: 1; min-width: 0; align-items: center }
   .as-list .cardbody b { white-space: nowrap }
   /* Out of the picture and onto the row: at 84px wide they would cover the
-     thumbnail they are meant to annotate. */
+     thumbnail they are meant to annotate.
+     ORDER was the fiddly part. `.more` lives inside `.cardbody`, so a badge
+     placed after the body rendered after the ⋯ and the two read as one
+     control; moving the badge before the body instead pushed the THUMBNAILS
+     out of alignment by the badge's width, which is the one thing a list is
+     for avoiding. So the ⋯ is pinned to the row end and everything else keeps
+     its natural order — thumbnails flush, badges beside the text they
+     annotate. */
+  .as-list .card { padding-inline-end: 32px }
   .as-list .badges { position: static; flex: none; order: 2 }
-
-  .badges { position: absolute; top: 7px; inset-inline-end: 7px; display: flex; gap: 4px }
-  .badges span { background: var(--panel); border: 1px solid var(--line); color: var(--dim);
-    font-size: 10.5px; line-height: 1; padding: 3px 5px; border-radius: 5px;
-    letter-spacing: .02em }
+  .as-list .more { position: absolute; inset-inline-end: 8px; top: 50%;
+    transform: translateY(-50%) }
 
   /* ------------------------------------------------------- empty and set-up */
   .empty { max-width: 52ch; color: var(--dim); padding: 20px 0 }
