@@ -14,6 +14,7 @@
 // There is no server; a break here is permanent.
 
 import type { CollabCreds } from './sync/crdt.ts'
+import { esc, externalHref } from './sanitize.ts'
 
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
@@ -71,6 +72,31 @@ export interface Block {
   h?: number
   /** pagelink: the target page id */
   page?: string
+
+  /**
+   * link: the address the card opens. `https:`, `http:` or `mailto:` only —
+   * anything else is not made clickable (see `linkCard`).
+   */
+  url?: string
+  /** link: the headline. Absent falls back to the url itself, never to a blank
+   *  box — an empty field must still leave a working link. */
+  title?: string
+  /** link: the author's one-line description of what is at the other end. */
+  desc?: string
+  /** link: the site's name. Absent is DERIVED from the url's host, which needs
+   *  no network — it is string parsing, not a lookup. */
+  site?: string
+  /**
+   * link: a thumbnail, `asset:<key>` or `data:` and NOTHING ELSE.
+   *
+   * A remote thumbnail is the tracking pixel of the 2026-08-03 decision wearing
+   * a card for a hat: it would fire on open, in a document whose whole premise
+   * is that you can mail it. `linkCard` drops one rather than deferring it
+   * behind a placeholder, because an image block's placeholder stands in for
+   * the block's entire content while a card's thumbnail is decoration — there
+   * is nothing for a reader to consent to and nothing lost by its absence.
+   */
+  image?: string
   /**
    * callout: which kind of callout this is — one of blocks.ts CALLOUT_TONES.
    *
@@ -482,4 +508,77 @@ export const homePage = (doc: SpacesDoc): Page | undefined =>
 export function isRemote(src: string): boolean {
   if (!src) return false
   return !src.startsWith('asset:') && !src.startsWith('data:')
+}
+
+/** A link card, with every field already decided. */
+export interface LinkCard {
+  /** '' when the stored url is not an outward link — then the card is not clickable */
+  url: string
+  /** never '' when there is a url: it falls back to the url itself */
+  title: string
+  desc: string
+  /** stored, else the url's host */
+  site: string
+  /** an emoji or a short mark, capped */
+  icon: string
+  /** '' unless the thumbnail is local (`asset:` or `data:`) */
+  image: string
+}
+
+/**
+ * What a `link` block SHOWS — resolved here, once, for every surface.
+ *
+ * EVERYTHING IS ALREADY IN THE FILE. There is no fetch on this path and there
+ * cannot be one: PLATFORM §1 says a document needs no network to open, and
+ * "A space does not phone home when it is opened" (DECISIONS, 2026-08-03) says
+ * it in this app's own words. A link card in Notion or Slack is a server
+ * fetching OpenGraph tags; a link card here is what the author typed. So this
+ * function's whole job is falling back gracefully — a card with three empty
+ * fields still has to be a working link, and a card with no url at all still
+ * has to be something a reader can look at without wondering what broke.
+ *
+ * PURE and DOM-FREE, so the fallbacks are testable in node — including the
+ * negative one, that a remote `image` yields no src for a renderer to load.
+ */
+export function linkCard(b: Block): LinkCard {
+  const url = externalHref(b.url)
+  const title = String(b.title ?? '').trim()
+  const site = String(b.site ?? '').trim()
+  const image = String(b.image ?? '')
+  return {
+    url,
+    // the url is the honest headline for an untitled card: a reader can see
+    // where it goes, which is the one thing a link has to say
+    title: title || url,
+    desc: String(b.desc ?? '').trim(),
+    site: site || hostOf(url),
+    // capped because it is drawn in a fixed slot and it comes from a file
+    // someone mailed you — a 400-character "emoji" is a layout attack
+    icon: String(b.icon ?? '').trim().slice(0, 8),
+    image: image && !isRemote(image) ? image : '',
+  }
+}
+
+/**
+ * The card's READABLE FORM, as `Block.html`.
+ *
+ * The same contract a `prop` block keeps, for the same reason: `html` is what a
+ * build that has never heard of this type renders (render.ts's default case),
+ * so a card written today is still a working link in a shell built last year.
+ * Format additivity is a promise about what OLD builds do, and it is only kept
+ * by writing the fallback at the same moment as the fields.
+ *
+ * Every path that sets a card's fields goes through the one writer that also
+ * calls this (editor.applyLinkCard), so the two cannot fall out of step.
+ */
+export function linkCardHtml(c: LinkCard): string {
+  const tail = c.desc ? ` — ${esc(c.desc)}` : ''
+  if (!c.url) return esc([c.title, c.desc].filter(Boolean).join(' — '))
+  return `<a href="${esc(c.url)}">${esc(c.title || c.url)}</a>${tail}`
+}
+
+/** The host part of a url, or '' — parsing, never a lookup. */
+function hostOf(url: string): string {
+  if (!url) return ''
+  try { return new URL(url).host.replace(/^www\./, '') } catch { return '' }
 }

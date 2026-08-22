@@ -4346,3 +4346,83 @@ document carrying `theme.dir: 'rtl'` the padding therefore went left while the
 gutter went right — measured at 390px, the gutter landed at x = 378…412 and the
 column scrolled to 412. It is reserved on `.sp-page-inner` now, so the two flip
 together; the ltr metrics are byte-identical.
+
+## 2026-08-22 — A link card is what the author typed; nothing is fetched, ever
+
+**Decision.** bento/spaces gets a `link` block: a card for an address on the
+web, carrying `url`, `title`, `desc`, `site`, `icon` and an optional `image`.
+**Every field is stored in the file.** There is no fetch at render time, and
+there is no fetch at authoring time either — not even an explicit, opt-in one.
+The author fills the card in, and the dialog says so in the first line the eye
+lands on: "Nothing is fetched. A card shows what you type here — opening this
+space never contacts the site."
+
+**Why not at render.** Settled already: PLATFORM §1 (no network to open, edit,
+read or save) and "A space does not phone home when it is opened"
+(2026-08-03). A card that fetched on open would be the tracking pixel that
+decision was written about, wearing a card for a hat.
+
+**Why not an opt-in fetch in the EDITOR either** — the interesting half, since
+about.ts's update check is precedent that an explicit, documented, opt-out
+network touch can be on-platform. Three reasons, in order of weight.
+
+1. **It cannot work.** Reading a url's OpenGraph tags means reading a
+   cross-origin HTML body. `fetch` gets an opaque response under `no-cors` and
+   a CORS failure otherwise; from `file://` — the origin this format exists for
+   — it fails outright. Notion and Slack do this on a SERVER, which is exactly
+   the component Bento does not have. The only way to ship it is a proxy we
+   run, i.e. a backend, i.e. off-platform. A feature that needs a server is not
+   a feature this app can have a debate about.
+2. **The update check is a different shape.** It contacts ONE origin we
+   control, on a schedule the reader can turn off, to verify a signature
+   against a key already in the file. A metadata fetch contacts an ARBITRARY
+   third party named by the document — the author's choice, made with the
+   editor's user's IP address. That is a category the update channel is not in.
+3. **The honest v1 is the one that stays honest.** A stored card is legible in
+   the JSON, diffable, works offline, and cannot rot into a request when
+   someone later "just adds a refresh button".
+
+**The url is untrusted input.** It is a block FIELD, so it never passes through
+`sanitizeInline` — `sanitize.ts` exports `externalHref()` for it, the outward
+half of `HREF_OK` (`https:`, `http:`, `mailto:`), tested against the RAW string
+for the documented `.href` reason. An allowlist, not a blocklist: the URL
+parser strips tabs, newlines and leading whitespace from a scheme, so
+`ja\tvascript:` and ` javascript:` are both `javascript:` when followed and
+neither starts with `https:`. A url outside the list renders as a DEAD card
+that keeps its title — it degrades, it does not vanish, and it is never an `<a>`
+that goes nowhere. Pinned with eleven hostile forms in the model rig.
+
+**No remote images, and no placeholder either.** `image` is `asset:` or `data:`
+and nothing else; a remote one is DROPPED by `linkCard()` rather than deferred
+behind a "load this image" button. The image block's placeholder stands in for
+the block's entire content, so a reader has something to consent TO; a card's
+thumbnail is decoration beside a link that already works. The editor's picker
+runs the same `prepareImage` → `internAsset` path an image block does, so a
+picked thumbnail is embedded bytes.
+
+**`html` is written beside the fields**, exactly as a `prop` block does it, by
+ONE writer (`editor.applyLinkCard`). Format additivity is a promise about what
+OLD builds do, and it is only kept if the readable fallback is written at the
+same moment as the fields.
+
+**In Markdown a link card is a link** — `[title](url) — description`, with
+brackets escaped and the angle form for a url holding a space. Not a table, not
+an html `<div>`: every card-shaped export stops being a link the moment it
+leaves this app, and where it points is the one fact that cannot be
+reconstructed. A card with no valid url exports as its plain text, so a reader
+is never handed something to click that goes nowhere.
+
+**Deliberately NOT in this change:** pasting a bare url as a card. That belongs
+to the paste pipeline, which is another agent's zone right now, and a second
+document-level `paste` listener would race the first. The insert paths are the
+`/` menu and the Insert dropdown.
+
+**Verified.** 514/514 in `scripts/test-spaces-model.ts` (up from 460), which
+now includes the negative: `linkCard()` drops six shapes of remote image, and
+`render.ts` contains no `fetch`/XHR/`new Image()` and reads its only `img.src`
+from the filtered value. In Chrome, on a served copy carrying four cards —
+including one whose `image` is `https://tracker.invalid/pixel.png` and one
+whose url is `javascript:alert(1)` — `performance.getEntriesByType('resource')`
+was EMPTY and the network panel showed one `blob:` (the shell's own inflated
+module) and nothing else. Shell 166,482 → 171,074 B, inside the 176,128 ceiling;
+no budget change.

@@ -77,12 +77,36 @@ unique ids the first time.
 | `divider` | — | `<hr>` |
 | `image` | `src` (see below), `alt`, `caption`, `width` (10–100 **%**), `w`/`h` (intrinsic px) | `<figure>` |
 | `pagelink` | `page` | a card linking to another page |
+| `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
 | `view` | `layout`, `groupBy`, `html` | a board or list of this space's issues |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
 there is no `props` object.
+
+### Link cards
+
+A `link` block is a card for somewhere on the web. **Every field is stored in
+the file and nothing is ever fetched** — there is no server to read a url's
+OpenGraph tags with, and opening a space must never contact a third party
+(PLATFORM §1). So write the card yourself:
+
+```jsonc
+{ "id": "b7", "type": "link",
+  "url": "https://example.com/docs",   // https:, http: or mailto: — nothing else is made clickable
+  "title": "The guide",                // absent falls back to the url
+  "desc": "Everything about the thing",
+  "site": "example.com",               // absent is derived from the url's host
+  "icon": "📘",                        // one emoji
+  "image": "asset:<key>",              // OPTIONAL, and asset:/data: only — a remote one is DROPPED
+  "html": "<a href=\"https://example.com/docs\">The guide</a> — Everything about the thing" }
+```
+
+Write `html` too: it is what a build that predates this type renders, exactly
+as it is for `prop`. A `javascript:` or `data:` url renders as a dead card that
+keeps its title rather than as a link — `validate()` reports both that and a
+remote `image`. Use `pagelink`, not this, for a page inside the space.
 
 ### Callouts
 

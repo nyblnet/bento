@@ -9,7 +9,7 @@
 // story, native ⌘F, print fidelity and lossless markdown export at once, from
 // one decision.
 
-import { type SpacesDoc, type Page, type Block, isRemote } from './model'
+import { type SpacesDoc, type Page, type Block, isRemote, linkCard } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
@@ -229,6 +229,95 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       a.textContent = title ?? '(missing page)'
       if (!title) a.classList.add('sp-dead')
       el.appendChild(a)
+      return el
+    }
+
+    case 'link': {
+      // A CARD DRAWN ENTIRELY FROM THE FILE.
+      //
+      // There is no fetch here and there is no deferred one either. Every value
+      // was typed by the author and stored; the only thing derived at render
+      // time is the site name, and that is `new URL(url).host` — parsing, not a
+      // request. PLATFORM §1 and the 2026-08-03 decision both land on this
+      // line, so the negative test in scripts/test-spaces-model.ts pins it.
+      const c = linkCard(b)
+      el.classList.add('sp-link')
+
+      // AN ANCHOR ONLY WHEN THERE IS SOMEWHERE TO GO. A card whose url is
+      // empty, or is a `javascript:`/`data:` string out of a mailed file, is a
+      // <div>: `linkCard` returns '' for all three, and an <a> with no href is
+      // a link a keyboard can focus and a screen reader will announce, leading
+      // nowhere.
+      const card = document.createElement(c.url ? 'a' : 'div')
+      card.className = 'sp-linkcard'
+      if (c.url) {
+        const a = card as HTMLAnchorElement
+        a.href = c.url
+        // the same treatment sanitizeInline gives an external link: this leaves
+        // the document, so it must not be able to reach back through opener
+        a.rel = 'noopener noreferrer'
+        a.target = '_blank'
+      } else {
+        card.classList.add('sp-dead')
+      }
+
+      // THE THUMBNAIL IS LOCAL OR IT IS ABSENT. `linkCard` has already dropped
+      // a remote one — this cannot be re-tested here, because a check that can
+      // be forgotten in one of four surfaces is a check that will be.
+      if (c.image) {
+        const img = document.createElement('img')
+        img.src = resolveSrc(c.image, doc)
+        img.alt = ''
+        img.className = 'sp-linkcard-img'
+        card.appendChild(img)
+      }
+
+      const body = document.createElement('span')
+      body.className = 'sp-linkcard-body'
+
+      const title = document.createElement('span')
+      title.className = 'sp-linkcard-title'
+      // an empty card is not an empty box: it says what it is and, in the
+      // editor, offers the way to fill it in
+      title.textContent = c.title || t('A link with nothing in it yet')
+      body.appendChild(title)
+
+      if (c.desc) {
+        const desc = document.createElement('span')
+        desc.className = 'sp-linkcard-desc'
+        desc.textContent = c.desc
+        body.appendChild(desc)
+      }
+
+      const foot = document.createElement('span')
+      foot.className = 'sp-linkcard-site'
+      if (c.icon) {
+        const mark = document.createElement('span')
+        mark.className = 'sp-linkcard-mark'
+        // textContent, never innerHTML: this is one field out of a mailed file
+        mark.textContent = c.icon
+        foot.appendChild(mark)
+      }
+      const site = document.createElement('span')
+      site.textContent = c.site || c.url
+      foot.appendChild(site)
+      if (c.site || c.url || c.icon) body.appendChild(foot)
+
+      card.appendChild(body)
+      el.appendChild(card)
+
+      // The card itself opens the link, so editing needs its own control — and
+      // only where there is an editor. Reading view, print and a locked space
+      // must not paint a button that does nothing (the callout chip's rule).
+      if (opts.editable) {
+        const edit = document.createElement('button')
+        edit.type = 'button'
+        edit.className = 'sp-linkcard-edit'
+        edit.dataset.editLink = b.id
+        edit.title = t('Edit this link card')
+        edit.textContent = c.url ? t('Edit') : t('Add a link')
+        el.appendChild(edit)
+      }
       return el
     }
 
