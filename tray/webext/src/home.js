@@ -114,6 +114,10 @@ function show(view) {
   $('searchWrap').hidden = !docs
   $('sort').hidden = !docs
   $('new').hidden = !docs
+  // How documents are DRAWN is meaningless where none are: Settings and Help
+  // replace the scroller entirely, so the toggle would sit over a page it
+  // cannot affect.
+  $('layout').hidden = !docs
   $('settings').setAttribute('aria-current', String(view === 'settings'))
   $('help').setAttribute('aria-current', String(view === 'help'))
   $('navAll').setAttribute('aria-current', String(docs && state.folder === null))
@@ -958,8 +962,24 @@ try {
 } catch { /* the default is a perfectly good answer */ }
 paintLayout()
 
-if (location.hash === '#welcome' || location.hash === '#help') show('help')
+// Which screen the window was ASKED for. `#welcome` is the worker's post-install
+// landing; `#settings` is what `options_page` points at, because Chrome's
+// "Options" entry means "configure this extension" and answering it with a grid
+// of documents ignores the question. Applied twice on purpose — once before the
+// documents load so the right screen paints immediately, once after, because
+// `load()` finishes by showing the grid.
+const routeHash = () => {
+  const view = { '#welcome': 'help', '#help': 'help', '#settings': 'settings' }[location.hash]
+  if (view) show(view)
+  return !!view
+}
+
+routeHash()
 
 await load()
 await renderNotice()
-if (location.hash === '#welcome' || location.hash === '#help') show('help')
+routeHash()
+
+// A hash change while the page is already open (Chrome reuses an existing
+// options tab rather than opening a second one) must still move the view.
+addEventListener('hashchange', routeHash)
