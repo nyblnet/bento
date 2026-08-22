@@ -36,6 +36,7 @@ import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
+  sortRows, unknownSortKeys, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import { planUpdatePage } from '../spaces/src/agent.ts'
@@ -373,6 +374,49 @@ for (const [label, input, err] of [
 // not be saved on a phone, and nothing said so: the controls were in the DOM,
 // laid out, and simply painted past the edge.
 //
+// ---------------------------------------------------------------------------
+// HOW WIDE A PAGE IS.
+//
+// The renderer already varied this — a page carrying a `view` block jumped to
+// 1500px — but it decided for you and offered no way to disagree. Measured at
+// a 1600px viewport before the control existed: a 720px column with 631px of
+// the page empty beside it, and 0 of the 15 blocks on the starter's Welcome
+// page even reaching the limit. The line length was never the problem.
+//
+// What must not regress: the default is an ABSENT key (so a file written
+// before this stays byte-identical), a board with no key keeps its room, and
+// an unknown value from a newer build falls back to the measure rather than to
+// no width at all.
+{
+  const fs = await import('node:fs')
+  const render = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const editor = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const model = fs.readFileSync(new URL('../spaces/src/model.ts', import.meta.url), 'utf8')
+
+  ok(/width\?: 'wide' \| 'full'/.test(model), "Page.width is 'wide' | 'full' — absent is the default")
+  ok(/\[extra: string\]: unknown/.test(model), '…on a Page that still round-trips unknown fields')
+
+  // the board default survives, and the page overrides it
+  ok(/page\.blocks\.some\(\(b\) => b\.type === 'view'\)/.test(render),
+    'a board page is still the DEFAULT wide case')
+  ok(/page\.width === 'wide' \|\| page\.width === 'full' \? page\.width/.test(render),
+    '…and an explicit page width wins over it')
+  ok(/page\.width === undefined \? auto/.test(render),
+    '…while an absent key falls through to the board default')
+  ok(/maxWidth = 'none'/.test(render), "'full' removes the cap rather than picking a big number")
+  ok(/maxWidth = `\$\{doc\.theme\.measure\}px`/.test(render), 'and the prose default is still the theme measure')
+
+  // THE DEFAULT IS AN ABSENT KEY. A page set to wide and back must be
+  // byte-identical to one never touched — the same rule editView follows.
+  ok(/if \(v === 'normal'\) delete pg\.width/.test(editor),
+    'choosing the default DELETES the key rather than storing "normal"')
+  ok(/t\('Width'\)/.test(editor) && /t\('Column'\)/.test(editor) &&
+     /t\('Wide'\)/.test(editor) && /t\('Full width'\)/.test(editor),
+    'the page menu offers all three, translated')
+  ok(/selected: current === 'normal'/.test(editor),
+    '…and marks the one in force, so the menu says what the page already is')
+}
+
 // The rule (slides' rule) is: drop text and fold, never scroll. The failure
 // mode to guard is not the CSS — it is the SECOND LIST: a ⋯ menu maintained by
 // hand as a copy of the desktop row drifts the first time either changes, and
@@ -386,10 +430,71 @@ for (const [label, input, err] of [
   ok(/secondary\.map\(/.test(ed), '…the inline row is built from that list')
   ok(/for \(const a of secondary\)/.test(ed), '…and the ⋯ menu is built from the SAME list')
 
-  ok(/@media \(max-width: 720px\)/.test(css), 'there is a narrow-width breakpoint')
-  const narrow = css.slice(css.indexOf('@media (max-width: 720px)'))
-  ok(/\.sp-sec \{ display: none/.test(narrow), 'narrow hides the inline secondary row')
-  ok(/\.sp-more \{ display: inline-flex/.test(narrow), 'narrow reveals the ⋯ menu')
+  // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
+  // no longer px media queries. They were (820 and 600), and the numbers moved
+  // once already (720 -> 820, because at 768 the save caret still ended 27px
+  // off the screen). They moved because a px guess cannot answer the question:
+  // the same buttons need different room at the same viewport width depending
+  // on browser zoom, OS text scaling, and the reader's language. Measured on
+  // the shipped shell: the control group is 568px in English and 618px in
+  // German — 50px the old threshold was never calibrated for, and eight
+  // catalogs ship inside every file.
+  //
+  // So the tiers are CLASSES now, applied by measuring, and what is worth
+  // pinning is that each control is dropped by the right tier.
+  const inTier = (tier: string, sel: RegExp): boolean => {
+    const re = new RegExp('\\.sp-bar-' + tier + '\\s+' + sel.source)
+    return re.test(css)
+  }
+  ok(inTier('compact', /\.sp-btnlabel \{ display: none/), 'compact drops the button words')
+  ok(inTier('compact', /\.sp-primary span\.sp-savelabel \{ display: none/), "…including Save's")
+  ok(inTier('tight', /\.sp-mark-word \{ display: none/), 'tight drops the wordmark, keeping the mark')
+  ok(inTier('fold', /\.sp-sec \{ display: none/), 'fold moves the secondary row into ⋯')
+  ok(inTier('fold', /\.sp-more \{ display: inline-flex/), '…which is where ⋯ appears')
+  ok(inTier('fold', /\.sp-mark \{ display: none/), '…and the mark goes (About is in ⋯)')
+  ok(inTier('fold', /\.sp-group-history \{ display: none/), '…and the history pair')
+  ok(inTier('fold', /\.sp-split \.sp-caret \{ display: none/), '…and the save caret')
+  ok(/\.sp-bar-fold \.sp-status \{\n\s*position: absolute/.test(css),
+    'the status message leaves the flow when folded, so it cannot move Save')
+
+  // NO px query may govern the fold any more. A stray one would re-introduce
+  // exactly the disagreement this replaced: CSS folding at one width while the
+  // menu decides its contents at another.
+  const foldSelectors = [/\.sp-sec \{ display: none/, /\.sp-mark \{ display: none/,
+    /\.sp-group-history \{ display: none/, /\.sp-split \.sp-caret \{ display: none/]
+  for (const sel of foldSelectors) {
+    const i = css.search(sel)
+    const opener = i < 0 ? null : [...css.slice(0, i).matchAll(/@media \(max-width: (\d+)px\)/g)].pop()
+    const closer = i < 0 ? -1 : css.lastIndexOf('\n}', i)
+    const inQuery = !!opener && closer < (opener.index ?? 0)
+    ok(!inQuery, `${sel.source.slice(0, 28)} is not inside a width query`)
+  }
+
+  // The bar is sized by MEASUREMENT, and the measurement is the overflow of
+  // the bar's own box — not a number written down twice.
+  ok(/private fitTopbar\(\): void \{/.test(ed), 'fitTopbar exists')
+  ok(/bar\.scrollWidth - bar\.clientWidth/.test(ed), '…and it measures overflow rather than matching a width')
+  ok(/new ResizeObserver\(\(\) => this\.fitTopbar\(\)\)/.test(ed), 'a ResizeObserver drives it on viewport change')
+  ok(/new MutationObserver\(\(\) => this\.fitTopbar\(\)\)/.test(ed),
+    '…and a MutationObserver for content that changes width at a fixed viewport')
+  ok(/attributeFilter: \['style', 'hidden'\]/.test(ed),
+    "…which does NOT watch 'class', or its own tier flips would feed it")
+  ok(/this\.barMO\?\.takeRecords\(\)/.test(ed), '…and it drops the records its own mutations queue')
+
+  // THE JS GATE ASKS THE DOM. It used to be matchMedia with the phone number
+  // written down a second time, and the comment beside it admitted as much;
+  // when the two disagreed the symptom was a menu offering Undo while Undo sat
+  // in the bar two centimetres away.
+  ok(/isFolded\(\): boolean \{[\s\S]{0,160}?classList\.contains\('sp-bar-fold'\)/.test(ed),
+    'isFolded() reads the tier off the bar instead of re-deriving it from a width')
+  // Comments STRIPPED before this one: the doc comment above isFolded quotes
+  // the expression it replaced, and an assertion that reads prose is an
+  // assertion that fails when somebody explains themselves.
+  const edCode = ed.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  ok(!/matchMedia\('\(max-width: 600px\)'\)/.test(edCode),
+    'no phone breakpoint is duplicated in the editor CODE')
+  ok(/if \(this\.isFolded\(\)\)/.test(ed) && /t\('Undo \(⌘Z\)'\)/.test(ed) && /t\('Redo \(⇧⌘Z\)'\)/.test(ed),
+    '…and the ⋯ menu picks up undo/redo exactly when the bar has folded them away')
 
   // the bar must never become a scroller — that hides the same controls, just
   // less honestly, and it is the fix everyone reaches for first
@@ -521,7 +626,8 @@ for (const [label, input, err] of [
   { const b: Block = { id: 'x', type: 'callout', tone: 'caution' }; spec.init!(b); ok(b.tone === 'caution', 'init never overwrites a tone that is already there') }
 
   const md = (b: Partial<Block>, text = 'x') =>
-    spec.toMd!({ id: 'c', type: 'callout', ...b } as Block, text, '', () => undefined).join('\n')
+    spec.toMd!({ id: 'c', type: 'callout', ...b } as Block, text, '',
+      { titleOf: () => undefined, rowsOf: () => [] }).join('\n')
   ok(md({ tone: 'warning' }) === '> [!WARNING]\n> x', 'a callout exports as a GitHub alert')
   ok(md({}) === '> [!NOTE]\n> x', 'an absent tone exports as NOTE')
   ok(md({ tone: 'success' }) === '> [!SUCCESS]\n> x',
@@ -1107,6 +1213,19 @@ for (const [label, input, err] of [
   const narrow = css.slice(css.indexOf('@media (max-width: 820px)'))
   ok(!/\.sp-gutter \{ display: none/.test(narrow), 'the gutter is not hidden on touch')
   ok(/\.sp-gutter \{ opacity: 1/.test(narrow), '…it is shown rather than hovered')
+  // …AND IT DOES NOT TAKE A ROW. The first fix for "no hover on touch" put the
+  // gutter in the flow (position: static), which cost 36px of height on EVERY
+  // block: measured at 390px, a one-line paragraph was 68.4px tall and half of
+  // that was the two affordances. It belongs in the start margin, out of flow.
+  ok(!/\.sp-gutter \{[^}]*position: static/.test(narrow),
+    '…and it is out of the flow, so a block does not pay a row for it')
+  // …reserved on the PAGE, not on the scroller: `.sp-main` follows the
+  // interface direction and a block follows the document's (theme.dir), so an
+  // rtl document put the padding on one side and the gutter on the other.
+  ok(/\.sp-page-inner \{ padding-inline-start: 26px/.test(narrow),
+    'the page reserves the margin the gutter sits in, on the side the blocks start')
+  ok(!/\.sp-main \{[^}]*padding-inline-start/.test(narrow),
+    '…and the scroller does not, so the two cannot disagree under rtl')
   ok(/sp-sheet/.test(css) && /isDrawer\(\)/.test(ed),
     'and the menu becomes a bottom sheet where a 5px anchor would be unusable')
 
@@ -1333,8 +1452,111 @@ for (const [label, input, err] of [
     'the board refuses to wire itself in a locked space or in reading view')
   ok(/const own = opts\.editable && field && propBlockOf/.test(ren),
     'the renderer emits a card status BUTTON only for an editable document')
-  ok(/if \(opts\.editable\) \{\s*const on = /.test(ren),
-    '…and the view controls likewise, so a reader and a printout get neither')
+  // …and EVERY view control likewise. Pinned as "each control name appears
+  // between the editable guard and the head being mounted", rather than to one
+  // line of the block — this assertion used to name the first statement inside
+  // the guard, so adding a control above it broke the test without breaking
+  // anything, and adding one BELOW the guard would have broken the app without
+  // breaking the test.
+  const guarded = ren.slice(ren.indexOf('if (opts.editable) {'), ren.indexOf('host.appendChild(head)'))
+  const controls = ['viewLayout', 'viewGroup', 'viewSort', 'viewOpen', 'viewFilter']
+  ok(guarded.length > 0 && controls.every((c) => guarded.includes(c)),
+    `…and the view controls likewise, so a reader and a printout get neither (${
+      controls.filter((c) => !guarded.includes(c)).join(', ') || 'all inside the guard'})`)
+  // the whole point of the guard is that it is the ONLY place they are made
+  ok(controls.every((c) => (ren.split(c).length - 1) === (guarded.split(c).length - 1)),
+    'no view control is created outside that guard')
+}
+
+// ---- a view's ORDER --------------------------------------------------------
+// The properties that go wrong silently: a sort that reorders a board somebody
+// arranged by hand, a blank promoted to the top when the direction flips, and a
+// select sorted into alphabetical order, which throws away the one thing a
+// status list was telling you.
+{
+  const doc = { fields: DEFAULT_FIELDS } as unknown as SpacesDoc
+  const row = (id: string, v: Record<string, unknown>): IssueRow =>
+    ({ page: { id, title: id, blocks: [] } as Page, values: new Map(Object.entries(v)) })
+
+  const rows = [
+    row('a', { status: 'done', estimate: 3 }),
+    row('b', { status: 'backlog', estimate: 1 }),
+    row('c', { status: 'doing' }),
+    row('d', { status: 'todo', estimate: 2 }),
+  ]
+  const ids = (rs: IssueRow[]) => rs.map((r) => r.page.id).join('')
+
+  ok(sortRows(doc, rows, undefined) === rows,
+    'no sort returns the SAME array — a view nobody sorted keeps the page order it had')
+  ok(sortRows(doc, rows, []) === rows, 'and so does an empty one')
+  ok(ids(sortRows(doc, rows, [{ key: 'status' }])) === 'bdca',
+    'a select sorts by its DECLARED order (backlog, todo, doing, done), never alphabetically')
+  ok(ids(sortRows(doc, rows, [{ key: 'status', dir: 'desc' }])) === 'acdb',
+    '…and reverses on request')
+  ok(ids(sortRows(doc, rows, [{ key: 'estimate' }])) === 'bdac',
+    'a number sorts numerically, with the one that has none at the end')
+
+  // the one that bites: absence is not a small value
+  const asc = sortRows(doc, rows, [{ key: 'estimate' }])
+  const desc = sortRows(doc, rows, [{ key: 'estimate', dir: 'desc' }])
+  ok(asc[asc.length - 1].page.id === 'c' && desc[desc.length - 1].page.id === 'c',
+    'an UNSET value sorts last in BOTH directions — a blank estimate is not the cheapest issue')
+
+  // ties keep the page order, so a hand-arranged board still reads that way
+  // inside each band
+  const tied = [row('x', { status: 'todo' }), row('y', { status: 'todo' }), row('z', { status: 'todo' })]
+  ok(ids(sortRows(doc, tied, [{ key: 'status' }])) === 'xyz', 'ties are stable — page order survives')
+
+  // additivity: a key from a newer build is skipped and SAID SO, never guessed
+  ok(sortRows(doc, rows, [{ key: 'sprint' }]) === rows,
+    'a sort key this build has no field for changes nothing')
+  ok(unknownSortKeys(doc, [{ key: 'sprint' }, { key: 'status' }]).join() === 'sprint',
+    '…and is reported, so the view can say the order is not the one its author asked for')
+  ok(unknownSortKeys(doc, undefined).length === 0 && unknownSortKeys(doc, 'nonsense').length === 0,
+    'a malformed sort reports nothing rather than throwing — it came out of a file someone sent you')
+
+  // a value a newer build wrote has no declared seat: it goes last, not first
+  const newer = [row('m', { status: 'todo' }), row('n', { status: 'blocked' })]
+  ok(ids(sortRows(doc, newer, [{ key: 'status' }])) === 'mn',
+    'a status from a newer build sorts after every one this build knows')
+}
+
+// ---- what a board and a field EXPORT ---------------------------------------
+// The readable `html` on a prop block is the whole reason the format degrades
+// instead of vanishing. The exporter is its most important consumer and was the
+// one place ignoring it.
+{
+  const propSpec = SPEC.get('prop')!
+  const ctx = { titleOf: () => undefined, rowsOf: () => [] }
+  const line = propSpec.toMd!(
+    { id: 'b', type: 'prop', key: 'status', value: 'doing', html: 'Status: In progress' } as Block,
+    'Status: In progress', '', ctx)[0]
+  ok(line === '**Status:** In progress',
+    `a field exports the words a reader can use, not the option id (got ${line})`)
+  ok(!line.includes('doing'), '…and the raw value does not appear at all')
+
+  // a schema whose label holds a colon, and a prop whose html is not the
+  // expected shape: emitted whole rather than split at a guess
+  const odd = propSpec.toMd!({ id: 'b', type: 'prop', key: 'k', value: 'v', html: 'plain' } as Block,
+    'plain', '', ctx)[0]
+  ok(odd === '**plain**', `an unexpected readable form is exported whole (got ${odd})`)
+
+  const viewSpec = SPEC.get('view')!
+  const md = viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', {
+    titleOf: () => undefined,
+    rowsOf: () => [
+      { id: 'p1', title: 'First', group: 'Todo', fields: 'High' },
+      { id: 'p2', title: 'Second', group: 'Todo', fields: '' },
+      { id: 'p3', title: 'Third', group: 'Done', fields: '' },
+    ],
+  }).join('\n')
+  ok(md.includes('[First](#p/p1)') && md.includes('[Third](#p/p3)'),
+    'a board exports its ISSUES, each one a link back to its page')
+  ok(md.includes('**Todo**') && md.includes('**Done**'), '…grouped as the board groups them')
+  ok(md.indexOf('**Todo**') < md.indexOf('**Done**'), '…in the board\'s column order')
+  ok(md.includes('[First](#p/p1) — High'), '…carrying the same chips the card shows')
+  ok(viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', ctx).join('\n').includes('_No issues._'),
+    'an empty board says so rather than exporting a bare heading')
 }
 
 // ---- ONE answer to "what is this nested under" ------------------------------

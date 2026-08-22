@@ -13,6 +13,8 @@
 // meeting a future 'kanban' block keeps it and renders its html fallback.
 // There is no server; a break here is permanent.
 
+import type { CollabCreds } from './sync/crdt.ts'
+
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
 
@@ -103,6 +105,35 @@ export interface Page {
   icon?: string
   /** flat, pre-order; nesting via Block.parent */
   blocks: Block[]
+  /**
+   * This page IS the daily entry for an ISO `YYYY-MM-DD` date.
+   *
+   * The DATE, not the title, is what makes a journal a journal — see
+   * src/journal.ts. Logseq derives the same thing from a formatted page title
+   * and their tracker carries the data loss that follows when the format
+   * changes; a title is display and this is data. Absent on every other page,
+   * so a build that predates journals renders an ordinary page and round-trips
+   * the field untouched.
+   */
+  journal?: string
+  /**
+   * How wide this page's column is: absent = the theme measure (prose),
+   * 'wide' = room for a board, 'full' = the whole window.
+   *
+   * ON THE PAGE, not on the theme. `theme.measure` is one number for the whole
+   * document, and the right answer genuinely differs per page: a page of notes
+   * wants a comfortable line, a board wants the room. The renderer ALREADY
+   * knew that — a page carrying a `view` block silently jumped to 1500px — but
+   * it decided for you and offered no way to disagree. This makes that rule
+   * explicit and overridable in one field: a board page with no `width` still
+   * gets its room, and a board page set to normal now gets to be narrow.
+   *
+   * Additive. Absent on every page written before this, and an unknown value
+   * falls back to the measure rather than to nothing.
+   */
+  width?: 'wide' | 'full'
+  /** the one page daily entries hang from, so the sidebar stays a tree */
+  journalHome?: boolean
   /** out of the sidebar, still searchable and linkable, and ENUMERATED at
    *  share time — an author archived a page precisely because it was sensitive */
   archived?: boolean
@@ -141,8 +172,17 @@ export interface SpacesDoc {
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   readonly?: boolean
   template?: boolean
-  /** RESERVED — collaboration credentials, unused until collab ships */
-  collab?: unknown
+  /**
+   * Collaboration credentials (PLATFORM §2).
+   *
+   * Was `unknown` and marked RESERVED "unused until collab ships". It has:
+   * sync/session.ts binds this app to the kernel session. The type is the
+   * KERNEL's so there is one definition of what a room, a key and an invite
+   * chain are — the deployed relay verifies against that shape, and a second
+   * local description of it is how a client and the worker drift apart.
+   * `import type` is erased, so this adds no runtime dependency.
+   */
+  collab?: CollabCreds
   [extra: string]: unknown
 }
 

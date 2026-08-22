@@ -420,13 +420,37 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   [dir='rtl'] .sp-side.sp-open { inset: 0 0 0 auto; }
   .sp-scrim { position: fixed; inset: 0; background: rgb(20 30 45 / .3); z-index: 45; }
   .sp-main { padding: 26px 18px 45vh; }
-  /* THE GUTTER STAYS ON TOUCH. It used to be display:none here, on the
-     reasoning that there is no hover — but hover was how you reached the only
-     controls a block has, so hiding it meant a block could not be reordered or
-     deleted on a phone AT ALL. It is shown rather than hovered, and sized for
-     a thumb. */
-  .sp-gutter { opacity: 1; position: static; display: flex; justify-content: flex-end; margin-bottom: 2px; }
-  .sp-gutter .sp-ghost { width: 40px; height: 34px; }
+  /* THE MARGIN THE GUTTER LIVES IN — see below — and it hangs off the PAGE, not
+     off `.sp-main`. `.sp-main` is chrome and follows the interface direction;
+     the gutter is anchored to a block, and blocks follow the DOCUMENT's
+     direction (`renderPage` puts `theme.dir` on `.sp-page-inner`). Reserving it
+     on the scroller sent the padding left while an rtl document sent the gutter
+     right: measured at 390px on a doc with `theme.dir: 'rtl'`, the gutter
+     landed at x = 378…412 and the column scrolled to 412. On the inner element
+     the two flip together. The end side is untouched: the page is not centred
+     at this width, so widening both would cost twice. */
+  .sp-page-inner { padding-inline-start: 26px; }
+  /* THE GUTTER STAYS ON TOUCH, AND STOPS TAKING A ROW.
+     It used to be display:none here, on the reasoning that there is no hover —
+     but hover was how you reached the only controls a block has, so hiding it
+     meant a block could not be reordered or deleted on a phone AT ALL. The fix
+     for that made it `position: static`, which put it IN the flow: measured at
+     390px, a one-line paragraph was 68px tall and 36px of that was the two
+     affordances. Half the page was chrome.
+     So it goes back to being absolutely positioned, the way it is on a desktop,
+     in a 44px start margin reserved for it — visible at rest (no hover to
+     discover it with), out of the flow, and costing 0px of height. It keeps ONE
+     control: the grip, whose menu already offers "Add below", so the ＋ is a
+     second button for something a thumb can already reach.
+     Measured: one-line paragraph 68.4px → 32.4px; the column loses 26px of
+     width (354 → 328) to buy it back. */
+  .sp-gutter { opacity: 1; top: 0; inset-inline-start: -40px; }
+  .sp-gutter .sp-ghost-add { display: none; }
+  /* 34×32 rather than a full 44: it must fit beside a 26px line of text without
+     overlapping the block above or below it, and the margin it sits in is
+     coming out of the prose. */
+  .sp-gutter .sp-ghost { width: 34px; height: 32px; }
+  .sp-gutter .sp-ghost svg { width: 17px; height: 17px; }
   .sp-title { font-size: 27px; }
 }
 
@@ -630,14 +654,61 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    toolbar hides the same controls, just less honestly. */
 .sp-more { display: none; }
 
-@media (max-width: 720px) {
-  .sp-sec { display: none; }
-  .sp-more { display: inline-flex; }
-  /* Save keeps its icon; the word costs 44px and says nothing the icon doesn't */
-  .sp-bar .sp-primary span.sp-savelabel { display: none; }
-  .sp-bar { gap: 2px; }
-  .sp-doctitle { font-size: 13px; }
+/* The tier starts at the DRAWER breakpoint (820px), not at 720. It was 720, and
+   measured at 768 — an iPad in portrait — the bar still laid out 795px wide: the
+   save caret ended at x = 795, 27px off the screen. 721–820 is the band where
+   the page list is already an overlay rather than a column, which is exactly the
+   band where the bar is competing with the document for width. One breakpoint,
+   one meaning. */
+/* ————— the topbar fits itself by MEASURING —————
+   These three tiers are applied by editor.ts fitTopbar(), which steps down
+   while the bar still overflows its own box. They were px media queries (820
+   and 600) until it became clear a px guess cannot answer the question being
+   asked: the same buttons need different room at the same viewport width
+   depending on browser zoom, OS text scaling, how long the labels are in the
+   reader's language — eight catalogs ship in every file — and live content
+   like the people count appearing when somebody joins. Slides settled this
+   first (#239); this is its pattern, with this app's controls. */
+
+/* compact: the words beside the icons go. Measured: Insert 76.6px labelled
+   against 40px as an icon; Save's word costs 44px and says nothing the icon
+   does not. */
+.sp-bar-compact .sp-primary span.sp-savelabel { display: none; }
+.sp-bar-compact .sp-btnlabel { display: none; }
+.sp-bar-compact { gap: 2px; }
+.sp-bar-compact .sp-doctitle { font-size: 13px; }
+
+/* tight: the wordmark loses its word, keeping the mark — which is the route
+   to About, and the corner every app in the suite puts it in. */
+.sp-bar-tight .sp-mark-word { display: none; }
+
+/* fold: whole controls move into ⋯. Nothing is lost, everything is one tap
+   away, and the editor asks the DOM which tier is live rather than re-deriving
+   it from a width — see fitTopbar. */
+.sp-bar-fold .sp-sec { display: none; }
+.sp-bar-fold .sp-more { display: inline-flex; }
+.sp-bar-fold .sp-mark { display: none; }
+.sp-bar-fold .sp-group-history { display: none; }
+.sp-bar-fold .sp-split .sp-caret { display: none; }
+/* with the caret gone Save is one button again, not the left half of two */
+.sp-bar-fold .sp-split > .sp-btn:first-child {
+  border-start-end-radius: 8px; border-end-end-radius: 8px;
+  padding-inline-end: 14px;
 }
+/* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
+   ("Reading view — press Esc or the eye to edit" is ~250px) would shove the
+   bar into overflow for the 1.8s it is up and put Save off-screen again.
+   Overlaid on the title strip it says its piece and costs no width. */
+.sp-bar-fold { position: relative; }
+.sp-bar-fold .sp-status {
+  position: absolute; z-index: 2; pointer-events: none;
+  inset-inline: 46px 96px; bottom: 2px; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; background: var(--bg);
+}
+
+/* Belt and braces at every width: a status message can shrink and clip, but it
+   can never be the reason a control leaves the bar. */
+.sp-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Hit targets: a 30px button is a miss on a touch screen. */
 @media (pointer: coarse) {
@@ -701,12 +772,24 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-dirty.sp-on { opacity: 1; }
 
-@media (max-width: 720px) {
-  /* the mark stays — it is the route to About — but loses its word */
-  .sp-mark { display: inline-flex; }
-  .sp-mark-word { display: none; }
-}
+/* ————— phone topbar: the second tier —————
+   The first tier folds the six secondary actions into ⋯. That was not enough:
+   measured on a 390×844 viewport with a coarse pointer, the bar still laid out
+   467px wide inside 390px and Save's right edge landed at x = 426 — the primary
+   action, 36px off the screen. What is left after ⋯ is still eleven controls'
+   worth of 40px touch targets, and eleven of those do not fit in 390.
 
+   So a phone gives up, in this order and for these reasons:
+     · the wordmark — About is the first thing in ⋯, and the mark is only a
+       route to it (35px)
+     · undo/redo — added to ⋯ instead, where they carry their shortcut and
+       their disabled state (84px)
+     · the save caret — every one of its four items is in ⋯ or in About: Print
+       and About directly, Save-a-copy and Export-as-Markdown appended there on
+       a phone, Password inside About (48px)
+   Save itself never moves. Measured after, coarse pointer, scrollWidth ==
+   clientWidth at every one: 320 (Save's right edge 308), 375 (363), 390 (378),
+   768 (725, and the rightmost control at 756). */
 /* About opens with the suite's mark, as slides does — a dialog that starts on a
    section heading does not say what you are looking at. */
 .sp-about-head { margin-bottom: 4px; }
@@ -912,6 +995,16 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   .sp-prop-val { background: none; }
 }
 
+/* Journal: the day strip above an entry's title. Quiet by default — it is
+   navigation, not content — and the date reads at the weight of a subtitle. */
+.sp-jnav { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.sp-jdate { font-size: 13px; color: var(--muted); }
+.sp-jstep {
+  border: 0; background: none; cursor: pointer; color: var(--muted);
+  font: inherit; font-size: 13px; line-height: 1; padding: 3px 6px; border-radius: 6px;
+}
+.sp-jstep:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-jtoday { margin-inline-start: 2px; }
 /* Magic notes. The answer is OUTPUT, not text: it sits beside the line in the
    accent, lighter than the writing, so a page of prose with one sum in it
    still reads as prose. The ghost preview is the same thing at half strength —
@@ -949,4 +1042,71 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
 @media (prefers-reduced-motion: no-preference) {
   .sp-preview { animation: sp-ghost-in .12s ease-out }
   @keyframes sp-ghost-in { from { opacity: 0 } to { opacity: .75 } }
+}
+
+/* ---- who else is here ---------------------------------------------------
+   Presence has to be legible without being loud: a shared space is still a
+   document, and a colleague reading a page two levels down the tree is not an
+   event. Dots, not banners. */
+
+.sp-live {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  border-radius: 8px; padding: 5px 8px; cursor: pointer; font: inherit; line-height: 1;
+}
+.sp-live:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-live .sp-ico { display: inline-flex; }
+.sp-live .sp-ico svg { width: 17px; height: 17px; }
+.sp-live-n:empty { display: none; }
+.sp-live-n { font-size: 12px; font-variant-numeric: tabular-nums; }
+/* LIVE is a state worth seeing at a glance, and OFF must not look broken —
+   the overwhelmingly common case is a document nobody is sharing, and a red
+   or struck-through control would make normal use look like a fault. */
+.sp-live-on { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 45%, var(--line)); }
+.sp-live-off { opacity: .75; }
+
+.sp-presence { display: inline-flex; gap: 2px; margin-inline-start: auto; padding-inline-start: 6px; }
+.sp-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  font-size: 9px; font-weight: 700; color: #fff;
+  text-transform: uppercase; letter-spacing: 0;
+}
+.sp-dot-more { background: var(--chrome-2); color: var(--muted); }
+
+.sp-people { min-width: 260px; padding: 10px; }
+.sp-pop-title { font-weight: 650; margin: 0 0 8px; }
+.sp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.sp-field-lbl { font-size: 12px; color: var(--muted); }
+.sp-input {
+  font: inherit; padding: 6px 8px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%;
+}
+.sp-plist { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.sp-pitem {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 0; background: none; font: inherit; color: inherit;
+  padding: 5px 6px; border-radius: 7px; cursor: pointer; text-align: start;
+}
+.sp-pitem:hover { background: var(--chrome-2); }
+.sp-pname { font-weight: 550; }
+/* where they are, quietly — the page title is context, not the subject */
+.sp-ppage { color: var(--muted); font-size: 12px; margin-inline-start: auto;
+  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-pempty, .sp-pnote { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.sp-pacts { display: flex; flex-direction: column; gap: 4px; }
+.sp-paction {
+  display: flex; flex-direction: column; gap: 1px; text-align: start;
+  border: 0; background: none; font: inherit; color: inherit;
+  padding: 7px 8px; border-radius: 7px; cursor: pointer;
+}
+.sp-paction:hover { background: var(--chrome-2); }
+.sp-paction span { color: var(--muted); font-size: 12px; }
+
+/* A heading inside a menu: the three width rows are a CHOICE among themselves,
+   not three more actions in the list above them. */
+.sp-menu-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 10px 4px; margin-top: 4px;
+  border-top: 1px solid var(--line);
 }

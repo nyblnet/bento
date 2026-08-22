@@ -9,6 +9,8 @@
 // backlinks and (later) collaboration key on.
 
 import { type Block, newBlock, newPage, effectiveParents } from './model'
+import * as collabUi from './collabui.ts'
+import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
@@ -16,13 +18,17 @@ import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
-  reorderPages, columnMoves, ISSUE_FIELDS, type DropAim, type FieldSpec, type ViewFilter,
+  reorderPages, columnMoves, ISSUE_FIELDS,
+  type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
 import { openAbout } from './about'
+import {
+  todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
+} from './journal'
 import { canWriteInPlace } from '../../kernel/src/save.ts'
 import { ICONS, type IconName } from './icons'
 import { internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, blobToDataUri } from './assets'
@@ -100,6 +106,9 @@ export class Editor {
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
     this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty() })
+    // A REMOTE change moves the unsaved dot without claiming you made it —
+    // 'doc' paints "Edited", 'dirty' paints only the dot. See store.setDirty.
+    this.store.on('dirty', () => this.syncDirty())
     window.addEventListener('popstate', () => this.fromHash())
     this.fromHash()
   }
@@ -180,6 +189,7 @@ export class Editor {
       keep?: (b: HTMLButtonElement) => void
     }> = [
       { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
+      { icon: 'book', label: t("Today's journal"), hint: '⌘⇧J', run: () => this.openJournal() },
       { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
       { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
         run: () => this.makeIssue() },
@@ -199,11 +209,39 @@ export class Editor {
     })
 
     const more = this.dropdown('more', '', t('More'), (menu, close) => {
+      // On a PHONE the ⋯ menu also carries the history pair and the other ways
+      // to save. Measured at 390px with a coarse pointer: eleven bar controls
+      // wanted 467px of a 390px viewport, and Save — the one action that must
+      // never be off-screen — ended at x = 426. Undo/redo (84px), the wordmark
+      // (35px) and the save caret (48px) are what a phone gives up so that the
+      // document title beside them is still wide enough to read. Nothing is
+      // lost: they are all one tap away, here.
+      if (this.isFolded()) {
+        menu.append(this.menuItem('undo', t('Undo (⌘Z)'), '', () => {
+          close(); this.store.undo(); this.repaint()
+        }, { off: !this.store.canUndo }))
+        menu.append(this.menuItem('redo', t('Redo (⇧⌘Z)'), '', () => {
+          close(); this.store.redo(); this.repaint()
+        }, { off: !this.store.canRedo }))
+      }
       for (const a of secondary) {
         menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
       }
+      if (this.isFolded()) {
+        menu.append(this.menuItem('copy', t('Save a copy…'), t('A second file — the original is left alone'), () => {
+          close(); void this.saveAs('copy')
+        }))
+        menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
+          close(); this.exportMarkdown()
+        }))
+      }
     })
     more.classList.add('sp-more', 'sp-dd-end')
+
+    // The live control sits BEFORE ⋯ and is replaced in place once the session
+    // exists (connectSync). A placeholder rather than a conditional build, so
+    // the bar's widths do not shift when a document turns out to be shared.
+    this.liveSlot = el('span', 'sp-live-slot')
 
     // save is a split control, as in slides: the common action, and the
     // less-common ways of writing this document somewhere else
@@ -244,9 +282,33 @@ export class Editor {
     const saveGroup = el('div', 'sp-split')
     saveGroup.append(saveB, saveMore)
     const right = el('div', 'sp-group sp-group-right')
-    right.append(insert, search, ...inlineSecondary, more, saveGroup)
+    right.append(insert, search, ...inlineSecondary, this.liveSlot, more, saveGroup)
 
     bar.append(pagesB, mark, title, this.statusEl, history, right)
+
+    // Drive the fit now, and again whenever the bar's size or its CONTENT
+    // changes. The ResizeObserver is the primary width signal — it fires for
+    // every viewport change, including a phone rotating, where matchMedia
+    // change events are unreliable under a driven viewport. The MutationObserver
+    // catches the constant-width case: the people count appearing when someone
+    // joins, the "Saved" tag flashing, the update chip arriving. Each of those
+    // clipped the end of the bar under the old breakpoints.
+    this.topbar = bar
+    this.barRO?.disconnect()
+    this.barRO = new ResizeObserver(() => this.fitTopbar())
+    this.barRO.observe(bar)
+    this.barMO?.disconnect()
+    this.barMO = new MutationObserver(() => this.fitTopbar())
+    this.barMO.observe(bar, {
+      childList: true, subtree: true, characterData: true,
+      // NOT 'class': fitTopbar's own tier flips are class changes on this very
+      // element, and observing them makes the fix for the loop (takeRecords)
+      // the only thing standing between here and a spin. Slides omits it for
+      // the same reason.
+      attributes: true, attributeFilter: ['style', 'hidden'],
+    })
+    // …and once the bar is actually in the document and has a width to measure
+    queueMicrotask(() => this.fitTopbar())
 
     this.sidebar = el('nav', 'sp-side')
     this.sidebar.setAttribute('aria-label', t('Pages'))
@@ -321,7 +383,10 @@ export class Editor {
     b.className = 'sp-btn'
     b.type = 'button'
     b.innerHTML = ICONS[icon]
-    if (label) b.append(document.createTextNode(label))
+    // The word is a SPAN, not a bare text node, so a narrow bar can drop it and
+    // keep the icon — slides' rule, and the only way to collapse a labelled
+    // control without also losing it.
+    if (label) b.append(el('span', 'sp-btnlabel', label))
     b.title = tip
     b.setAttribute('aria-label', tip)
     b.setAttribute('aria-haspopup', 'menu')
@@ -342,10 +407,29 @@ export class Editor {
     return wrap
   }
 
-  private menuItem(icon: IconName, label: string, hint: string, onClick: () => void): HTMLElement {
+  /**
+   * One row in a dropdown menu.
+   *
+   * `state` carries BOTH meanings the menus need, because they arrived from
+   * two directions and mean different things: `off` is a command that exists
+   * but cannot run right now (folded undo/redo on a phone — disabled, not
+   * hidden, so the menu does not change shape as you edit), and `selected` is
+   * the choice a view is currently on (layout, group-by, sort). A row can be
+   * neither; nothing yet is both. They were separate 5th parameters on two
+   * branches, which is exactly the collision an options object avoids.
+   */
+  private menuItem(
+    icon: IconName,
+    label: string,
+    hint: string,
+    onClick: () => void,
+    state: { off?: boolean; selected?: boolean } = {},
+  ): HTMLElement {
     const b = document.createElement('button')
-    b.className = 'sp-dditem'
+    b.className = 'sp-dditem' + (state.off ? ' sp-off' : '') + (state.selected ? ' sp-sel' : '')
     b.type = 'button'
+    if (state.off) b.setAttribute('aria-disabled', 'true')
+    if (state.selected) b.setAttribute('aria-current', 'true')
     b.setAttribute('role', 'menuitem')
     b.innerHTML = `<span class="sp-result-ico">${ICONS[icon]}</span>` +
       `<span class="sp-result-txt"><strong>${escapeHtml(label)}</strong>` +
@@ -439,6 +523,62 @@ export class Editor {
   }
 
   /**
+   * Has the bar FOLDED — are undo/redo and the save caret currently inside ⋯
+   * rather than in the bar?
+   *
+   * This used to be `matchMedia('(max-width: 600px)')`, with a comment saying
+   * the number was duplicated from the stylesheet on purpose. It is not needed
+   * at all now: fitTopbar puts the tier on the bar as a class, so the menu can
+   * ASK what is on screen instead of re-deriving it from a width and hoping
+   * the two agree. When they disagreed the symptom was a menu offering Undo
+   * while Undo sat in the bar two centimetres away.
+   */
+  private isFolded(): boolean {
+    return !!this.topbar?.classList.contains('sp-bar-fold')
+  }
+
+  /**
+   * Size the topbar by MEASURING it, not by width breakpoints.
+   *
+   * A px guess cannot answer the question being asked. The same buttons need
+   * different room at the same viewport width depending on browser zoom, OS
+   * text scaling, and how long the labels are in the reader's language — eight
+   * catalogs ship inside every file, and "Insert" is 76px in English and
+   * nothing like that in German. The bar's own CONTENT changes width too, at a
+   * fixed viewport: the people count appears when somebody joins a session.
+   * Each of those cases clipped the end of the bar under the old 820/600
+   * breakpoints. Slides settled this first (#239); this is its pattern.
+   *
+   * Start from the widest layout, step down a tier while the bar still
+   * overflows its own box.
+   */
+  private fitTopbar(): void {
+    const bar = this.topbar
+    if (!bar || !bar.isConnected) return
+    const tiers = ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold']
+    // Re-fitting starts by UNFOLDING, which would slam shut a menu somebody is
+    // reading — and the ⋯ menu's contents depend on the tier, so rebuilding it
+    // mid-read would change it under them. The next resize runs this again.
+    if (this.overlay) return
+    // scrollWidth counts content sticking out of the padding box even with
+    // overflow visible, so this IS the clipped-controls condition. 1px of
+    // slack absorbs subpixel rounding at fractional zoom.
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // The title is the only shrinkable thing in the bar, so flexbox crushes it
+    // toward its floor before anything overflows. Waiting for hard overflow
+    // would mean full labels beside an unreadable document title.
+    const title = bar.querySelector<HTMLElement>('.sp-doctitle')
+    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 110)
+    bar.classList.remove(...tiers)
+    if (cramped()) bar.classList.add('sp-bar-compact')
+    if (cramped()) bar.classList.add('sp-bar-tight')
+    if (cramped()) bar.classList.add('sp-bar-fold')
+    // the class flips above queued mutation records of their own; drop them,
+    // or the observer re-runs this forever
+    this.barMO?.takeRecords()
+  }
+
+  /**
    * Dismiss the PHONE DRAWER after navigating. On anything wider this does
    * nothing, deliberately.
    *
@@ -470,11 +610,50 @@ export class Editor {
     }
   }
 
+  /**
+   * Bind the live session to the UI.
+   *
+   * Called once from main.ts with the session that already exists — the
+   * session is constructed whether or not anyone shares, because two tabs of
+   * one file sync locally regardless; what this adds is the ability to SEE it.
+   */
+  connectSync(session: import('./sync/session.ts').SyncSession): void {
+    const { CollabUi } = collabUi
+    this.collab = new CollabUi({
+      store: this.store,
+      session,
+      status: (m) => this.status(m),
+      paintTree: () => this.paintTree(),
+      popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
+      goToPage: (id) => { this.store.goToPage(id); this.closeDrawer() },
+      invite: () => { void this.saveAs('copy') },
+    })
+    session.onPeers(() => this.collab?.onPeersChanged())
+    // The relay refuses things the user can act on — too large, room full. For
+    // the permanent codes their change stays in this copy and reaches nobody,
+    // which they must be told rather than left to discover.
+    session.onNotice((n) => this.status(syncNoticeText(n)))
+    this.collab.tryJoin()
+    // a document REPLACED under us (Replace-from-JSON, a restored version) may
+    // be a different document with different credentials
+    this.store.on('doc', () => this.collab?.tryJoin())
+    if (this.liveSlot) this.liveSlot.replaceWith(this.collab.button())
+  }
+
   status(msg: string): void {
     this.statusEl.textContent = msg
     this.statusEl.classList.add('sp-on')
     clearTimeout((this.statusEl as any)._t)
-    ;(this.statusEl as any)._t = setTimeout(() => this.statusEl.classList.remove('sp-on'), 1800)
+    ;(this.statusEl as any)._t = setTimeout(() => {
+      this.statusEl.classList.remove('sp-on')
+      // The word must LEAVE the bar, not just fade out of it. This span is
+      // nowrap, so once "Edited" had been written once it held ~40px of the
+      // topbar for the rest of the session — and on a phone that width came
+      // out of the controls beside it. Cleared after the fade, never during.
+      setTimeout(() => {
+        if (!this.statusEl.classList.contains('sp-on')) this.statusEl.textContent = ''
+      }, 260)
+    }, 1800)
   }
 
   // ---- the page tree ------------------------------------------------------
@@ -501,8 +680,13 @@ export class Editor {
       const ico = el('span', 'sp-tree-ico')
       ico.innerHTML = pageIcon(page.icon)
       const label = document.createElement('span')
-      label.textContent = page.title || t('Untitled')
+      label.textContent = this.pageLabel(page)
       a.append(ico, label)
+      // who else is reading this page. A space is a TREE, so "where is
+      // everyone" is a question about pages, not about carets — this is the
+      // spaces answer to the cursors slides paints on its canvas.
+      const dots = this.collab?.dotsFor(page.id)
+      if (dots) a.append(dots)
       a.draggable = true
       a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
       a.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text/bento-page', page.id))
@@ -552,7 +736,7 @@ export class Editor {
         const ico = el('span', 'sp-tree-ico')
         ico.innerHTML = pageIcon(page.icon)
         const label = document.createElement('span')
-        label.textContent = page.title || t('Untitled')
+        label.textContent = this.pageLabel(page)
         a.append(ico, label)
         a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
         const un = document.createElement('button')
@@ -595,6 +779,53 @@ export class Editor {
       if (parent) page.parent = parent
       else delete page.parent
     })
+  }
+
+  /**
+   * The reader's own name for a page.
+   *
+   * An entry stores its title as the ISO date — locale-neutral in the file, the
+   * same for every reader, and what search and the Markdown export see. The
+   * SIDEBAR shows it in the reader's own format, because "2026-08-06" is a key
+   * and "Thu 6 Aug" is a date. An entry the author has RENAMED keeps its name:
+   * the rename was the point.
+   */
+  pageLabel(page: { title: string; journal?: unknown }): string {
+    if (isJournal(page as never) && page.title === page.journal) {
+      return journalShort(String(page.journal), locale())
+    }
+    return page.title || t('Untitled')
+  }
+
+  /**
+   * Open a day's entry, creating it if this is the first note of the day.
+   *
+   * ONE COMMIT for the whole plan (the Journal page and the entry, when both
+   * are new), so ⌘Z takes back "I opened today's journal" in a single step
+   * rather than leaving a stray empty parent behind.
+   */
+  openJournal(iso = todayISO()): void {
+    const s = this.store
+    if (s.readOnly) return
+    const plan = planJournal(s.doc, iso)
+    if (plan.add.length) {
+      s.commit(() => {
+        for (const { page, after } of plan.add) {
+          const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
+          if (at >= 0) s.doc.pages.splice(at + 1, 0, page)
+          else s.doc.pages.push(page)
+        }
+      })
+    }
+    s.goToPage(plan.page.id)
+    this.status(journalLabel(iso, locale()))
+  }
+
+  /** The day before or after the entry in view. */
+  stepJournal(n: number): void {
+    const cur = this.store.page
+    if (!cur || !isJournal(cur)) return
+    this.openJournal(stepDay(String(cur.journal), n))
   }
 
   newPage(parent?: string): void {
@@ -642,6 +873,50 @@ export class Editor {
       inner.prepend(pick)
     }
 
+    // A DAY HAS A DAY EITHER SIDE OF IT. Without this, reaching yesterday means
+    // finding it in the sidebar, which is the one navigation a journal should
+    // never need. The strip carries the reader's own long-form date because the
+    // title above it is the ISO key, and a date nobody can read at a glance is
+    // not much of a journal.
+    if (inner && isJournal(page)) {
+      const iso = String(page.journal)
+      const nav = el('div', 'sp-jnav')
+      const step = (n: number, glyph: string, title: string) => {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.className = 'sp-jstep'
+        b.textContent = glyph
+        b.title = title
+        b.setAttribute('aria-label', title)
+        b.addEventListener('click', () => this.stepJournal(n))
+        return b
+      }
+      nav.append(step(-1, '‹', t('The day before')), step(1, '›', t('The day after')))
+      if (iso !== todayISO()) {
+        const today = document.createElement('button')
+        today.type = 'button'
+        today.className = 'sp-jstep sp-jtoday'
+        today.textContent = t('Today')
+        today.addEventListener('click', () => this.openJournal())
+        nav.append(today)
+      }
+      inner.prepend(nav)
+
+      // THE HEADING READS AS A DATE, not as a key. The title is stored as the
+      // ISO string so the file is locale-neutral and sorts — but "2026-08-01"
+      // as a page's own H1 is a filename, not a day.
+      //
+      // Slides solves the same shape for dynamic fields by swapping the RAW
+      // token back while editing, and that is deliberately NOT copied here: a
+      // `{{page}}` token is something the author means to keep, whereas an ISO
+      // date is a key nobody wants to type. Someone renaming an entry starts
+      // from the date they can read and appends to it — which is the rename
+      // they were going to make anyway. The date itself lives in `journal` and
+      // is untouched by any of it, so a renamed entry is still that day's.
+      const h = inner.querySelector<HTMLElement>('[data-page-title]')
+      if (h && page.title === iso) h.textContent = journalLabel(iso, locale())
+    }
+
     if (trail.length) {
       const crumb = el('nav', 'sp-crumb')
       crumb.setAttribute('aria-label', t('Breadcrumb'))
@@ -672,7 +947,9 @@ export class Editor {
   private addGutter(node: HTMLElement, blockId: string): void {
     const g = el('div', 'sp-gutter')
     const add = document.createElement('button')
-    add.className = 'sp-ghost'
+    // Named, because a phone drops it: there is only room for ONE control in a
+    // 44px margin, and "Add below" is the second item of the grip's own menu.
+    add.className = 'sp-ghost sp-ghost-add'
     add.type = 'button'
     add.innerHTML = ICONS.plus
     add.title = t('Add a block below')
@@ -887,6 +1164,20 @@ export class Editor {
       })
       const fb = v.querySelector<HTMLElement>('[data-view-filter]')
       fb?.addEventListener('click', () => this.openViewFilter(v.dataset.blockId!, fb))
+      const lb = v.querySelector<HTMLElement>('[data-view-layout]')
+      lb?.addEventListener('click', () => this.toggleViewLayout(v.dataset.blockId!))
+      const gb = v.querySelector<HTMLElement>('[data-view-group]')
+      gb?.addEventListener('click', () => this.openViewGroup(v.dataset.blockId!, gb))
+      const sb = v.querySelector<HTMLElement>('[data-view-sort]')
+      sb?.addEventListener('click', () => this.openViewSort(v.dataset.blockId!, sb))
+
+      // A SORTED BOARD HAS NO HAND ORDER TO DROP INTO. The sort decides where a
+      // card sits, so offering a drop position would write an order into
+      // doc.pages that the very next paint discards — a gesture that appears to
+      // do nothing, and a stray undo step. The column still accepts the card;
+      // only the position within it stops being a question.
+      const sorted = Array.isArray((vb as { sort?: unknown } | undefined)?.sort)
+        && ((vb as { sort?: unknown[] }).sort!).length > 0
 
       for (const btn of v.querySelectorAll<HTMLElement>('[data-set-field]')) {
         btn.addEventListener('click', (e) => {
@@ -933,8 +1224,9 @@ export class Editor {
         col.addEventListener('dragover', (e) => {
           if (!e.dataTransfer?.types.includes('text/bento-issue')) return
           e.preventDefault()
-          const aim = this.aimAt(col, e.clientY)
           col.classList.add('sp-drop')
+          if (sorted) return
+          const aim = this.aimAt(col, e.clientY)
           if (aim.before) col.querySelector(`[data-issue="${CSS.escape(aim.before)}"]`)?.classList.add('sp-dropbefore')
           else col.classList.add('sp-dropend')
         })
@@ -942,7 +1234,7 @@ export class Editor {
           const moved = e.dataTransfer?.getData('text/bento-issue')
           if (!moved) return
           e.preventDefault()
-          const aim = this.aimAt(col, e.clientY)
+          const aim = sorted ? null : this.aimAt(col, e.clientY)
           marks()
           this.dropIssue(moved, groupKey, col.dataset.group!, aim)
         })
@@ -967,7 +1259,7 @@ export class Editor {
    *
    * Both halves are ONE commit, because one drag is one user action.
    */
-  private dropIssue(pageId: string, key: string, optId: string, aim: DropAim): void {
+  private dropIssue(pageId: string, key: string, optId: string, aim: DropAim | null): void {
     const s = this.store
     const page = s.index.page.get(pageId)
     const f = fieldByKey(s.doc, key)
@@ -977,10 +1269,13 @@ export class Editor {
     // The no-op test is about the COLUMN, not the page array — those are
     // different orders the moment a board has two columns, and judging by page
     // adjacency let a drop that visibly did nothing rewrite doc.pages.
+    //
+    // A null aim is a SORTED board: there is no position to land in, so the
+    // drop is only ever the value change.
     const cards = [...document.querySelectorAll<HTMLElement>(`.sp-col[data-group="${CSS.escape(optId)}"] .sp-issue[data-issue]`)]
       .map((c) => c.dataset.issue!)
-    const moves = columnMoves(cards, pageId, aim)
-    const order = moves ? reorderPages(s.doc.pages, pageId, aim) : null
+    const moves = !!aim && columnMoves(cards, pageId, aim)
+    const order = moves && aim ? reorderPages(s.doc.pages, pageId, aim) : null
     if (!setting && !order) return
 
     s.commit(() => {
@@ -1019,6 +1314,119 @@ export class Editor {
     this.paintPage()
   }
 
+  /**
+   * A small menu anchored to a button — a bottom sheet on a phone.
+   *
+   * Four of these had grown the same twelve lines of boilerplate (build, trap,
+   * sheet-or-place, dismiss on a click away), which is three copies too many
+   * for something whose dismissal behaviour has to be identical everywhere:
+   * a menu that closes differently from the one beside it reads as a bug.
+   */
+  private popover(anchor: HTMLElement, build: (pop: HTMLElement) => void): void {
+    this.closeOverlay()
+    const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
+    pop.setAttribute('role', 'menu')
+    this.trapAndClose(pop)
+    build(pop)
+    this.overlay = pop
+    document.body.append(pop)
+    if (this.isDrawer()) pop.classList.add('sp-sheet-in')
+    else place(pop, anchor)
+    const away = (ev: MouseEvent) => {
+      if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
+    }
+    setTimeout(() => document.addEventListener('mousedown', away), 0)
+  }
+
+  /**
+   * Edit a key on a `view` block — layout, groupBy, sort.
+   *
+   * The same discipline as editViewFilter: an edit that says "the default"
+   * DELETES the key rather than storing it, so a view somebody switched to a
+   * list and back is byte-identical to one that was never touched, and a file
+   * written before this control existed stays that way.
+   */
+  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort', value: unknown): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    s.commit(() => {
+      const rec = b as unknown as Record<string, unknown>
+      if (value === undefined || value === null) delete rec[key]
+      else rec[key] = value
+    }, { scope: 'page' })
+    this.paintPage()
+  }
+
+  /** Board ⇄ list. `board` is the default, so it is stored as an ABSENT key. */
+  private toggleViewLayout(blockId: string): void {
+    const b = this.store.block(blockId)
+    const now = String((b as { layout?: unknown } | undefined)?.layout ?? 'board')
+    this.editView(blockId, 'layout', now === 'list' ? undefined : 'list')
+  }
+
+  /**
+   * Which field the columns come from.
+   *
+   * Only fields with declared options are offered. A board's columns ARE the
+   * option list — grouping by a free-text field would make one column per
+   * distinct string, which is a pivot table wearing a board's clothes.
+   */
+  private openViewGroup(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    const now = String((b as { groupBy?: unknown }).groupBy ?? 'status')
+    const groupable = fieldsOf(s.doc).filter((f) => f.options?.length)
+    this.popover(anchor, (pop) => {
+      for (const f of groupable) {
+        pop.append(this.menuItem('board', f.label, '', () => {
+          this.closeOverlay()
+          // `status` is the default the renderer assumes, so choosing it clears
+          // the key instead of writing what absence already means
+          this.editView(blockId, 'groupBy', f.key === 'status' ? undefined : f.key)
+        }, { selected: f.key === now }))
+      }
+      if (!groupable.length) pop.append(el('div', 'sp-fgroup', t('No field here has options to group by')))
+    })
+  }
+
+  /**
+   * The order. One key, though the format holds a list — see fields.ts.
+   *
+   * "Manual order" is the ABSENCE of a sort, not a sort called manual: it is
+   * the page order, which is the order somebody arranged by dragging, and it
+   * has to be reachable from here or a board is one click away from being
+   * un-arrangeable forever.
+   */
+  private openViewSort(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    const cur = (Array.isArray((b as { sort?: unknown }).sort)
+      ? ((b as { sort?: ViewSort[] }).sort ?? [])[0] : undefined) as ViewSort | undefined
+    this.popover(anchor, (pop) => {
+      pop.append(this.menuItem('grip', t('Manual order'), '', () => {
+        this.closeOverlay()
+        this.editView(blockId, 'sort', undefined)
+      }, { selected: !cur }))
+      pop.append(el('div', 'sp-fgroup', t('Sort')))
+      for (const f of fieldsOf(s.doc)) {
+        const mine = cur?.key === f.key
+        // clicking the field you are already sorted by REVERSES it — the second
+        // thing you want after "sort by priority" is "…the other way", and a
+        // separate direction control for a one-key sort is a control nobody
+        // finds
+        const dir: 'asc' | 'desc' = mine && cur?.dir !== 'desc' ? 'desc' : 'asc'
+        const hint = mine ? (cur?.dir === 'desc' ? t('Ascending') : t('Descending')) : ''
+        pop.append(this.menuItem('arrowDown', f.label, hint, () => {
+          this.closeOverlay()
+          this.editView(blockId, 'sort', [dir === 'asc' ? { key: f.key } : { key: f.key, dir }])
+        }, { selected: mine }))
+      }
+    })
+  }
+
   /** Toggle one value of one field in a view's filter. */
   private toggleViewValue(blockId: string, key: string, id: string): void {
     this.editViewFilter(blockId, (f) => {
@@ -1045,12 +1453,8 @@ export class Editor {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
-    this.closeOverlay()
-    const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
-    pop.setAttribute('role', 'menu')
-    this.trapAndClose(pop)
     const cur = ((b as { filter?: ViewFilter }).filter ?? {}) as ViewFilter
-
+    this.popover(anchor, (pop) => {
     for (const f of fieldsOf(s.doc)) {
       if (!f.options?.length) continue
       pop.append(el('div', 'sp-fgroup', f.label))
@@ -1077,21 +1481,12 @@ export class Editor {
         pop.append(item)
       }
     }
-    const clear = this.menuItem('trash', t('Clear filter'), '', () => {
+    pop.append(this.menuItem('trash', t('Clear filter'), '', () => {
       this.closeOverlay()
       // unknown keys survive: this clears what this build put there
       this.editViewFilter(blockId, (f) => { delete f.is; delete f.open })
+    }))
     })
-    pop.append(clear)
-
-    this.overlay = pop
-    document.body.append(pop)
-    if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
-    const away = (ev: MouseEvent) => {
-      if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
-    }
-    setTimeout(() => document.addEventListener('mousedown', away), 0)
   }
 
   /**
@@ -1642,6 +2037,11 @@ export class Editor {
     }, 0)
   }
 
+  private collab: import('./collabui.ts').CollabUi | null = null
+  private liveSlot!: HTMLElement
+  private topbar: HTMLElement | null = null
+  private barRO: ResizeObserver | null = null
+  private barMO: MutationObserver | null = null
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private paintTreeSoon(): void {
     clearTimeout(this.treeTimer)
@@ -1749,6 +2149,7 @@ export class Editor {
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
     // `[` collapses the page list, as in slides. Bare, not modified: it only
     // reaches here when nothing is being edited (the text path returns above,
     // where `[` is the page-link trigger).
@@ -2307,6 +2708,35 @@ export class Editor {
           else p.archived = true
         })
       }))
+
+    // HOW WIDE THIS PAGE IS. The renderer already varied it — a page carrying a
+    // board jumped to 1500px — but it decided for you silently. Measured at a
+    // 1600px viewport: the default column is 720px with 631px of the page left
+    // empty beside it, and nothing on the starter pages even reaches the limit
+    // (0 of 15 blocks wrap). The line length was never the problem; having no
+    // say was.
+    pop.append(el('div', 'sp-menu-label', t('Width')))
+    const current: 'normal' | 'wide' | 'full' =
+      page.width === 'wide' ? 'wide' : page.width === 'full' ? 'full' : 'normal'
+    const setWidth = (v: 'normal' | 'wide' | 'full') => {
+      this.closeOverlay()
+      s.commit(() => {
+        const pg = s.index.page.get(pageId)
+        if (!pg) return
+        // THE DEFAULT IS AN ABSENT KEY, never a stored 'normal'. A page somebody
+        // set to wide and back is then byte-identical to one never touched, and
+        // a file written before this control existed stays that way.
+        if (v === 'normal') delete pg.width
+        else pg.width = v
+      }, { scope: 'doc' })
+      this.paintPage()
+    }
+    pop.append(this.menuItem('widthNarrow', t('Column'), t('Comfortable for reading'),
+      () => setWidth('normal'), { selected: current === 'normal' }))
+    pop.append(this.menuItem('widthWide', t('Wide'), t('Room for a board or a table'),
+      () => setWidth('wide'), { selected: current === 'wide' }))
+    pop.append(this.menuItem('widthFull', t('Full width'), t('Fills the window'),
+      () => setWidth('full'), { selected: current === 'full' }))
 
     pop.append(this.menuItem('trash', t('Delete…'), t('Links to it become dead'), () => {
       this.closeOverlay()

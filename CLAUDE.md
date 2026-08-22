@@ -619,6 +619,12 @@ names provisional.
 
 - **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
+  blocks with ZOPFLI (same deflate format, packed harder — the loader and every
+  saved file are untouched; ~4% off each shell, verified byte-identical through
+  Chrome's native `DecompressionStream('deflate-raw')`). `@gfx/zopfli` is a
+  devDependency of each APP, and the script resolves it from the caller's cwd
+  because scripts/ has no package.json of its own; `ZOPFLI=0` falls back to zlib
+  for a local build, never for a release.
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
   PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).

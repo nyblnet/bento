@@ -16,10 +16,20 @@ rules exist to keep N parallel workstreams from dissolving into merge hell.
   `src/i18n.ts` facade.
 - **Kernel zone — `kernel/src/`** — `save.ts` (splice + bento/enc),
   `autosave.ts`, `update.ts`, `anim.ts`, `charts.ts`, the `i18n.ts` engine,
-  `app.ts`, `doc.ts`, `sync/crdt.ts` (the CRDT engine); plus the rest of
-  `slides/src/sync/` (session, transport, blobs) and `server/`, which are
-  shared in effect even though they still live app-side. See
-  `docs/PLATFORM.md` §9.
+  `app.ts`, `doc.ts`, and the whole of `sync/` — `crdt.ts` (the CRDT engine),
+  `session.ts`, `online.ts` (the relay transport) and `blobs.ts`; plus
+  `server/`, which is shared in effect even though it lives outside the kernel.
+  See `docs/PLATFORM.md` §9.
+
+  This entry used to add "plus the rest of `slides/src/sync/` (session,
+  transport, blobs) … shared in effect even though they still live app-side".
+  They no longer live app-side: the session and transport moved into
+  `kernel/src/sync/` behind a small per-app `SyncHost`, and
+  `slides/src/sync/*` are facades. The rule they were under has not changed —
+  they were always serialized, and the parenthetical existed only to say so
+  about files whose location disagreed with their status. Each app's
+  `src/sync/crdt.ts` and `src/sync/session.ts` facade, which pin that app's
+  document shape and its five host decisions, are APP zone.
   This zone is:
   **serialize, don't parallelize.** One coordinated change at a time, reviewed
   against the platform invariants. If your app task needs a kernel change,
