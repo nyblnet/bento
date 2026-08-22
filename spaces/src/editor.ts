@@ -9,8 +9,9 @@
 // backlinks and (later) collaboration key on.
 
 import {
-  type Block, type TableShape, newBlock, newPage, effectiveParents, isRemote,
+  type Block, type TableShape, type SpacesDoc, newBlock, newPage, effectiveParents, isRemote,
   tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS, linkCard, linkCardHtml, unresolvedOn,
+  parseDoc, uid,
 } from './model'
 import { CommentsUi, commentBadge } from './comments.ts'
 import * as collabUi from './collabui.ts'
@@ -26,6 +27,7 @@ import {
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
+import { extractSpace, planGraft } from './portable'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
@@ -33,7 +35,7 @@ import { openAbout } from './about'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
-import { canWriteInPlace } from '../../kernel/src/save.ts'
+import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
 import { ICONS, type IconName } from './icons'
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
@@ -49,6 +51,9 @@ const AUTOFORMAT = MD_SPECS
 const SLASH_ITEMS = MENU_SPECS
 /** What counts as a note when a folder is dropped on the app. */
 const NOTE_EXT = /\.(md|markdown|mdown|mkd)$/i
+/** …and what counts as another SPACE: a saved shell, or the bare document JSON
+ *  the AI round-trip hands around. Both carry the same `#bento-doc` payload. */
+const SPACE_EXT = /\.(html|htm|json)$/i
 
 /**
  * When an import stops embedding images by itself and ASKS.
@@ -98,6 +103,16 @@ export class Editor {
   private comments: CommentsUi
   onSave: (() => void) | null = null
   onSaveAs: ((suffix: string) => void) | null = null
+  /**
+   * Write a DIFFERENT document out as its own file — the page extract.
+   *
+   * Supplied by main.ts, because serializing a shell is a boot-time concern
+   * (the pristine capture) and the editor has no business holding it. It is
+   * separate from `onSaveAs` on purpose: every suffix there writes THIS
+   * document, and an export that went through it would have to smuggle the
+   * extract in through a global.
+   */
+  onExportSpace: ((doc: SpacesDoc) => Promise<boolean>) | null = null
   onPrint: (() => void) | null = null
 
   constructor(root: HTMLElement, store: Store) {
@@ -260,6 +275,9 @@ export class Editor {
         menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
           close(); this.exportMarkdown()
         }))
+        menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
+          close(); this.openExportSpace()
+        }))
       }
     })
     more.classList.add('sp-more', 'sp-dd-end')
@@ -290,6 +308,9 @@ export class Editor {
       }))
       menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
         close(); this.exportMarkdown()
+      }))
+      menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
+        close(); this.openExportSpace()
       }))
       menu.append(this.menuItem('print', t('Print / PDF…'), t('The whole space, or just this page'), () => {
         close(); this.openPrint()
@@ -3635,13 +3656,35 @@ export class Editor {
    * rather than left to be discovered.
    */
   openImport(): void {
-    this.openOverlay(t('Import Markdown'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Import Markdown')))
+    this.openOverlay(t('Bring notes in'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Bring notes in')))
 
       const what = document.createElement('p')
       what.className = 'sp-note'
       what.textContent = t('Each .md file becomes a page, folders become the page tree, and [[wikilinks]] become real links. Pages are added — nothing here is replaced.')
       card.append(what)
+
+      // WHERE the arriving pages land, and it governs BOTH ways in. An import
+      // that can only append at the root is an import into a pile: the point of
+      // a space is the tree, and "under the page I am reading" is what somebody
+      // taking a second set of notes into a working space actually means.
+      const under = document.createElement('select')
+      under.className = 'sp-select'
+      const top = document.createElement('option')
+      top.value = ''
+      top.textContent = t('Top level')
+      under.append(top)
+      for (const { page, depth } of this.store.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === this.store.pageId) o.selected = true
+        under.append(o)
+      }
+      const whereRow = el('div', 'sp-row')
+      whereRow.append(el('span', '', t('Add pages under')), under)
+      card.append(whereRow)
+      const where = () => under.value || undefined
 
       const zone = el('div', 'sp-dropzone', t('Drop .md files or a folder here'))
       zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('sp-drop') })
@@ -3651,8 +3694,9 @@ export class Editor {
         e.stopPropagation()
         zone.classList.remove('sp-drop')
         const picked = collectDrop(e.dataTransfer)
+        const at = where()
         close()
-        void picked.then((files) => this.importFiles(files))
+        void picked.then((files) => this.importFiles(files, { under: at }))
       })
       card.append(zone)
 
@@ -3662,12 +3706,26 @@ export class Editor {
         input.multiple = true
         if (folder) input.webkitdirectory = true
         else input.accept = '.md,.markdown,.mdown,.mkd,image/*'
+        const at = where()
         input.addEventListener('change', () => {
           close()
           // webkitRelativePath is the folder tree; a plain multi-select has
           // none, and those files import as a flat set of pages
           void this.importFiles([...(input.files ?? [])]
-            .map((file) => ({ path: file.webkitRelativePath || file.name, file })))
+            .map((file) => ({ path: file.webkitRelativePath || file.name, file })), { under: at })
+        })
+        input.click()
+      }
+
+      const pickSpace = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.html,text/html,application/json'
+        const at = where()
+        input.addEventListener('change', () => {
+          close()
+          const file = input.files?.[0]
+          if (file) void this.importSpace(file, at)
         })
         input.click()
       }
@@ -3676,8 +3734,14 @@ export class Editor {
       acts.append(
         plainBtn(t('Choose .md files…'), () => pick(false), true),
         plainBtn(t('Choose a folder…'), () => pick(true)),
+        plainBtn(t('Choose a space…'), pickSpace),
       )
       card.append(acts)
+
+      const spaces = document.createElement('p')
+      spaces.className = 'sp-note'
+      spaces.textContent = t('Another bento/spaces file arrives as pages under the one you choose — its images come too, and the links inside it keep working.')
+      card.append(spaces)
 
       const imgs = document.createElement('p')
       imgs.className = 'sp-note'
@@ -3685,6 +3749,153 @@ export class Editor {
       // do for them: it has no way to open `../attachments/x.png` itself
       imgs.textContent = t('Include the image files and they are embedded too. An image this browser cannot open is kept as its path rather than as a broken picture.')
       card.append(imgs)
+    })
+  }
+
+  /**
+   * Another space, grafted into this one — the way IN that answers the page
+   * extract's way out.
+   *
+   * The file is UNTRUSTED and takes the ordinary load path, with no friendlier
+   * door beside it: the document block is read out of an INERT parse (DOMParser
+   * builds no browsing context, so no script runs and no resource loads),
+   * `parseDoc` decides whether it is a space at all — refusing rather than
+   * degrading, the same load contract main.ts boots under — and
+   * `sanitizeInline` runs over every arriving block before any of it reaches
+   * the document.
+   */
+  async importSpace(file: File, under?: string): Promise<void> {
+    const s = this.store
+    if (s.readOnly) { this.status(t('This file is open read-only')); return }
+    let text: string
+    try { text = await file.text() } catch { this.status(t('That file could not be read')); return }
+
+    const body = spaceBlockOf(text)
+    if (body === 'encrypted') {
+      // The password is not ours to ask for, and the honest instruction is the
+      // one that works: open the file where the password already is.
+      this.status(t('That space is password-protected. Open it, then export the pages you want.'))
+      return
+    }
+    const res = parseDoc(body ?? '')
+    if (!res.ok) {
+      this.status(res.err === 'format'
+        ? t('That file is not a bento/spaces document')
+        : t('That file could not be read'))
+      return
+    }
+
+    const plan = planGraft(s.doc, res.doc, { under })
+    // THE security gate, in the same place the Markdown import puts it.
+    for (const page of plan.pages) {
+      for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
+    }
+
+    // ONE step: pages, images and fonts land together or not at all.
+    s.commit(() => {
+      s.doc.pages.push(...plan.pages)
+      if (Object.keys(plan.assets).length) Object.assign((s.doc.assets ??= {}), plan.assets)
+      if (plan.fonts.length) (s.doc.fonts ??= []).push(...plan.fonts)
+    })
+    if (plan.pages[0]) s.goToPage(plan.pages[0].id)
+    this.repaint()
+
+    this.openOverlay(t('Imported a space'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Imported a space')))
+      const lines = [
+        t('{pages} page(s) and {blocks} block(s) added from that space.',
+          { pages: plan.stats.pages, blocks: plan.stats.blocks }),
+      ]
+      // Renaming is the outcome a reader cannot see for themselves, and the one
+      // that would break every link if it were done carelessly — so it is
+      // reported together with the repair that keeps the links pointing right.
+      if (plan.stats.renamed) {
+        lines.push(t('{n} id(s) were renamed because this space already used them, and the links inside the import follow them.',
+          { n: plan.stats.renamed }))
+      }
+      if (plan.stats.dropped) {
+        lines.push(t('{n} link(s) named pages that were not in that file, and are kept as text.', { n: plan.stats.dropped }))
+      }
+      if (plan.stats.assets) lines.push(t('{n} image(s) came too.', { n: plan.stats.assets }))
+      lines.push(t('⌘Z removes the imported pages again.'))
+      for (const line of lines) {
+        const p = document.createElement('p')
+        p.className = 'sp-note'
+        p.textContent = line
+        card.append(p)
+      }
+      card.append(plainBtn(t('Close'), close, true))
+    })
+  }
+
+  /**
+   * A page — and, by choice, what is under it — leaves as its own space.
+   *
+   * The counts come from the REAL extract and move as the choices do, rather
+   * than being described in the abstract: how much travels, and how many links
+   * point out of the selection and will become text. Those two facts are what
+   * decide whether this is the extract somebody meant.
+   */
+  openExportSpace(): void {
+    const s = this.store
+    this.openOverlay(t('Export a page as a space'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Export a page as a space')))
+
+      const what = document.createElement('p')
+      what.className = 'sp-note'
+      what.textContent = t('The page becomes a new file of its own: a whole space, with a new document id and none of this one’s sharing keys.')
+      card.append(what)
+
+      const pick = document.createElement('select')
+      pick.className = 'sp-select'
+      for (const { page, depth } of s.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === s.pageId) o.selected = true
+        pick.append(o)
+      }
+      const pageRow = el('div', 'sp-row')
+      pageRow.append(el('span', '', t('Page')), pick)
+      card.append(pageRow)
+
+      const kids = document.createElement('input')
+      kids.type = 'checkbox'
+      kids.checked = true
+      const kidsRow = el('div', 'sp-row')
+      kidsRow.append(el('span', '', t('Include the pages nested under it')), kids)
+      card.append(kidsRow)
+
+      const summary = document.createElement('p')
+      summary.className = 'sp-note'
+      const recount = () => {
+        const r = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: 'preview', now: '' })
+        const parts = [t('{pages} page(s) and {blocks} block(s) will travel.',
+          { pages: r.stats.pages, blocks: r.stats.blocks })]
+        if (r.stats.unlinked) {
+          parts.push(t('{n} link(s) point outside them and are kept as text naming the page they meant.',
+            { n: r.stats.unlinked }))
+        }
+        if (r.stats.assets) parts.push(t('{n} image(s) go with them; the rest stay here.', { n: r.stats.assets }))
+        summary.textContent = parts.join(' ')
+      }
+      pick.addEventListener('change', recount)
+      kids.addEventListener('change', recount)
+      recount()
+      card.append(summary)
+
+      const acts = el('div', 'sp-actions')
+      acts.append(
+        plainBtn(t('Export'), () => {
+          const out = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: uid('doc') })
+          close()
+          void this.onExportSpace?.(out.doc).then((ok) => {
+            if (ok) this.status(t('Exported {n} page(s) as a new space', { n: out.stats.pages }))
+          })
+        }, true),
+        plainBtn(t('Close'), close),
+      )
+      card.append(acts)
     })
   }
 
@@ -3697,11 +3908,18 @@ export class Editor {
    * `placeImage` is shaped this way: a half-applied import is not something a
    * single ⌘Z could put back.
    */
-  async importFiles(picked: PickedFile[]): Promise<void> {
+  async importFiles(picked: PickedFile[], opts: { under?: string } = {}): Promise<void> {
     const s = this.store
     if (s.readOnly) { this.status(t('This file is open read-only')); return }
     const notes = picked.filter((p) => NOTE_EXT.test(p.path))
-    if (!notes.length) { this.status(t('No Markdown files in that selection')); return }
+    if (!notes.length) {
+      // A space is a legitimate thing to drop on the import, and it arrives by
+      // the same gesture: one route in, whatever kind of notes they are.
+      const space = picked.find((p) => SPACE_EXT.test(p.path))
+      if (space) { await this.importSpace(space.file, opts.under); return }
+      this.status(t('No Markdown files in that selection'))
+      return
+    }
     if (notes.length > 500 &&
       !confirm(t('That is {n} files — importing them all may take a moment. Continue?', { n: notes.length }))) return
 
@@ -3783,6 +4001,15 @@ export class Editor {
     // block before any of it reaches the document (see markdown.ts's header).
     for (const page of plan.pages) {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
+    }
+
+    // The import already lands under exactly one root (planImport wraps a mixed
+    // selection); re-homing that root is the whole of "add these under this
+    // page", and it keeps the one-root, one-⌘Z shape intact.
+    const under = opts.under && s.index.page.has(opts.under) ? opts.under : undefined
+    if (under) {
+      const arrived = new Set(plan.pages.map((p) => p.id))
+      for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
     s.commit(() => { s.doc.pages.push(...plan.pages) })
@@ -4135,6 +4362,7 @@ export class Editor {
       onRepaint: () => this.build(),
       onSaveCopy: () => { void this.saveAs('copy') },
       onImport: () => this.openImport(),
+      onExportSpace: () => this.openExportSpace(),
     })
   }
 
@@ -4244,6 +4472,28 @@ function joinPath(dir: string, ref: string): string {
   return out.join('/').toLowerCase()
 }
 
+/**
+ * The `#bento-doc` payload inside another Bento file.
+ *
+ * INERT: `DOMParser` builds a document with no browsing context, so nothing in
+ * that html runs and nothing it references is fetched — the same reasoning
+ * sanitize.ts records for `inertBody`, and the reason the file can be read
+ * before anyone has decided to trust it. A bare `{` is the document JSON
+ * itself (the AI round-trip's interchange unit), which needs no parse at all.
+ *
+ * An ENCRYPTED space is reported rather than guessed at: the bytes are there,
+ * the password is not, and asking for one here would be asking for a password
+ * to a file this space has no business holding.
+ */
+function spaceBlockOf(text: string): string | null | 'encrypted' {
+  const body = /^\s*\{/.test(text)
+    ? text
+    : new DOMParser().parseFromString(text, 'text/html')
+      .getElementById('bento-doc')?.textContent ?? null
+  if (!body) return null
+  return parseEnvelope(body) ? 'encrypted' : body
+}
+
 /** `my%20photo.png` is one file name, not two — editors percent-encode spaces. */
 function decodePath(ref: string): string {
   try { return decodeURI(ref) } catch { return ref }
@@ -4294,7 +4544,7 @@ async function walkEntry(entry: FileSystemEntry, base: string, out: PickedFile[]
 /** Is this drop an IMPORT (markdown, or any folder) rather than an image? */
 function isImportDrop(dt: DataTransfer | null): boolean {
   if (!dt) return false
-  if ([...dt.files].some((f) => NOTE_EXT.test(f.name))) return true
+  if ([...dt.files].some((f) => NOTE_EXT.test(f.name) || SPACE_EXT.test(f.name))) return true
   return [...dt.items].some((i) => i.webkitGetAsEntry?.()?.isDirectory)
 }
 

@@ -52,6 +52,23 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
   Agents get the whole list in one call: `bento.comments()`, each thread saying
   whether it is about a block or a page.
+- **A page leaves as its own space, and a space arrives inside another one.**
+  "Export page as a space…" writes the page you choose — and, if you want, the
+  pages under it — as a new .bento.html file: a whole space, not an attachment.
+  It gets a new document id and none of this file's sharing keys, so it is a
+  new document rather than a fork that would try to join this one's session.
+  Only the images those pages use travel with them, and a link pointing at a
+  page that stayed behind becomes text naming that page rather than a link to
+  nowhere.
+
+  The import does the same trip backwards: choose a .bento.html space (or drop
+  it on the window) and its pages arrive under any page you pick. Ids that this
+  space already uses are renamed — derived from the bytes, so the answer is the
+  same everywhere — and the links inside the import follow them, so nothing
+  arrives pre-broken and no link lands on a stranger page that happened to hold
+  that id. Shared images are stored once. It is one ⌘Z, as the Markdown import
+  is, and the imported file goes through exactly the same load contract and
+  sanitizer as any other file you open.
 
 - **A page can be as wide as it needs to be.** Column, Wide or Full width, in
   the page menu. Pages of writing keep a comfortable line; a page with a board

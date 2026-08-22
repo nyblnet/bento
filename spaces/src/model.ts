@@ -389,8 +389,13 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
  * `template: true` re-mints on every open, so a docId-derived id gives two
  * readers of one file DIFFERENT ids: exactly the failure repair exists to
  * prevent).
+ *
+ * EXPORTED because the subtree import needs exactly this and must not invent a
+ * second scheme: an arriving id that collides with one this space already uses
+ * is renamed here, under the same derivation and the same reasoning
+ * (src/portable.ts planGraft).
  */
-function repairId(scope: string, ordinal: number, content: string, salt = 0): string {
+export function repairId(scope: string, ordinal: number, content: string, salt = 0): string {
   let h = 0x811c9dc5
   const s = `${scope}${ordinal}${content}${salt}`
   for (let i = 0; i < s.length; i++) {
