@@ -68,12 +68,41 @@
   #aboutBody p { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.55 }
   /* The invitation back to the project — the same one bento/slides makes. */
   .ab-promo { color: var(--dim); font-size: 13px; line-height: 1.55 }
-  .ab-promo a { color: var(--ink) }
+  /* `bento.page` and `GitHub` are Latin runs sitting inside Arabic, Persian,
+     Hebrew or Urdu prose. Isolating each one stops the surrounding paragraph's
+     bidi resolution from dragging its neighbouring punctuation to the wrong
+     side of it — the same class of bug as the `.html` badge, but embedded in a
+     sentence rather than standing alone. */
+  .ab-promo a { color: var(--ink); unicode-bidi: isolate }
   /* Version status reuses the `.row` shape Settings uses, so the two screens
      look like one product saying one thing. */
   .ab-ver { margin: 0 }
   .ab-note, .ab-foot { color: var(--dim); font-size: 12.5px; line-height: 1.5 }
   .ab-foot { border-top: 1px solid var(--line); padding-top: 10px }
+  .dlghead .home { display: flex; align-items: center; gap: 9px; text-decoration: none;
+    color: inherit; border-radius: 7px; padding: 2px 4px; margin-inline-start: -4px }
+  .dlghead .home:hover { background: var(--hover) }
+
+  /* WHY NOT BUTTONS. These were four `.btn` pills that wrapped 3-then-1 and
+     read as four actions of equal weight — in a dialog whose only real action
+     is "Check now". Two of them also repeated links the promo sentence above
+     already carries, so the same destination was offered twice in one box.
+     A quiet dot-separated row says "here is where this lives" without
+     competing with the button that does something. */
+  .ab-links { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0;
+    font-size: 12.5px }
+  .ab-links a { color: var(--dim); text-decoration: none; padding: 2px 0;
+    unicode-bidi: isolate }
+  .ab-links a:hover { color: var(--ink); text-decoration: underline }
+  /* Separator drawn by CSS, not typed into the markup — a literal '·' between
+     anchors would be a bidi-neutral character sitting between links, and in
+     RTL it lands on the wrong side of the one it follows. */
+  /* Half-strength DIM, not `--line`. `--line` is a BORDER colour: measured
+     against the dialog's own background in dark mode its contrast was so low
+     that the separators were invisible, and the row read as three items with
+     odd gaps rather than a list. */
+  .ab-links a:not(:last-child)::after { content: '·'; color: var(--dim); opacity: .5;
+    margin-inline: 9px; text-decoration: none; display: inline-block }
 
   #notice { display: grid; gap: 8px; padding: 0 22px 10px }
   #notice:empty { padding: 0 }
@@ -268,8 +297,10 @@
      Content is built in home.js so the version and the links stay in one place. -->
 <dialog id="aboutDlg" class="dlg">
   <div class="dlghead">
-    <img class="mark" src="../icons/icon.svg" alt="">
-    <b>bento<i>/</i>tray</b>
+    <a class="home" href="https://bento.page" target="_blank" rel="noopener" title="bento.page">
+      <img class="mark" src="../icons/icon.svg" alt="">
+      <b>bento<i>/</i>tray</b>
+    </a>
     <span class="ver" id="aboutVer"></span>
     <span class="grow"></span>
     <button class="x" id="aboutClose" data-i18n-title="close">✕</button>

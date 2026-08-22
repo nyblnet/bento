@@ -593,16 +593,17 @@ async function openAbout() {
   }
   add('ab-note', esc(selfManaged ? t('setVersionUnpacked') : t('setVersionStore')))
 
+  // bento.page is deliberately absent: the wordmark above links there, and the
+  // promo sentence says it in words. Offering it a third time as a pill was
+  // what made this row look like leftover chrome.
   const links = document.createElement('div')
-  links.className = 'links'
+  links.className = 'ab-links'
   for (const [label, href] of [
-    ['bento.page', 'https://bento.page'],
     [t('linkSource'), 'https://github.com/nyblnet/bento'],
     [t('linkIssues'), 'https://github.com/nyblnet/bento/issues'],
     [t('linkReleases'), 'https://github.com/nyblnet/bento/releases'],
   ]) {
     const a = document.createElement('a')
-    a.className = 'btn'
     a.href = href
     a.target = '_blank'
     a.rel = 'noopener'
