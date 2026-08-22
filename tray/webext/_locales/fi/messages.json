@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Tarkistetaan…"
+  },
+  "surveyTitle": {
+    "message": "Etsi missä asiakirjasi ovat"
+  },
+  "surveySub": {
+    "message": "Selain tietää, mitkä Bento-asiakirjat olet avannut. Se voi kertoa, missä kansioissa ne ovat."
+  },
+  "surveyDeclined": {
+    "message": "Ei se mitään — voit lisätä kansiot käsin."
+  },
+  "surveyAllCovered": {
+    "message": "Kaikki $1 asiakirjaa, jotka tämä selain on nähnyt, ovat jo lisätyssä kansiossa."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> asiakirjaa on kaikkien lisättyjen kansioiden ulkopuolella. $2 on jo katettu."
+  },
+  "surveyCovers": {
+    "message": "kattaa $1"
+  },
+  "surveyAdd": {
+    "message": "Lisää tämä kansio…"
+  },
+  "surveyAdded": {
+    "message": "$1 lisätty — sen asiakirjat ovat valmiina"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 lisätty, mutta asiakirjat eivät ole siellä — avaa yksi Finderissa kerran."
+  },
+  "surveyOnlySeen": {
+    "message": "Näin löytyvät vain tässä selaimessa avatut asiakirjat."
   }
 }

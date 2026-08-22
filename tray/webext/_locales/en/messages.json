@@ -512,5 +512,35 @@
   "checking": {
     "message": "Checking…",
     "description": "Shown in the About version row while a manual update check is running."
+  },
+  "surveyTitle": {
+    "message": "Find where your documents are"
+  },
+  "surveySub": {
+    "message": "The browser knows which Bento documents you have opened. It can say which folders they are in."
+  },
+  "surveyDeclined": {
+    "message": "No problem — you can add folders by hand."
+  },
+  "surveyAllCovered": {
+    "message": "All $1 documents this browser has seen are already in a folder you added."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documents are outside every folder you added. $2 are already covered."
+  },
+  "surveyCovers": {
+    "message": "covers $1"
+  },
+  "surveyAdd": {
+    "message": "Add this folder…"
+  },
+  "surveyAdded": {
+    "message": "Added $1 — the documents in it are ready"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Added $1, but the documents are not in it — open one from Finder once."
+  },
+  "surveyOnlySeen": {
+    "message": "Only documents opened in this browser can be found this way."
   }
 }

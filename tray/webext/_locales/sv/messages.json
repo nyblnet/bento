@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Kontrollerar…"
+  },
+  "surveyTitle": {
+    "message": "Hitta var dina dokument finns"
+  },
+  "surveySub": {
+    "message": "Webbläsaren vet vilka Bento-dokument du har öppnat. Den kan säga vilka mappar de ligger i."
+  },
+  "surveyDeclined": {
+    "message": "Ingen fara — du kan lägga till mappar för hand."
+  },
+  "surveyAllCovered": {
+    "message": "Alla $1 dokument som den här webbläsaren har sett ligger redan i en tillagd mapp."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokument ligger utanför alla tillagda mappar. $2 är redan täckta."
+  },
+  "surveyCovers": {
+    "message": "täcker $1"
+  },
+  "surveyAdd": {
+    "message": "Lägg till den här mappen…"
+  },
+  "surveyAdded": {
+    "message": "$1 tillagd — dokumenten i den är redo"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 tillagd, men dokumenten ligger inte där — öppna ett från Finder en gång."
+  },
+  "surveyOnlySeen": {
+    "message": "Bara dokument som öppnats i den här webbläsaren kan hittas så här."
   }
 }

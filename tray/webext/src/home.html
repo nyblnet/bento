@@ -106,6 +106,15 @@
   .ab-links a:not(:last-child)::after { content: '·'; color: var(--dim); opacity: .5;
     margin-inline: 9px; text-decoration: none; display: inline-block }
 
+  /* the folder survey */
+  .survey { margin-top: 9px }
+  .survey-out:not(:empty) { margin-top: 10px; display: grid; gap: 6px }
+  .survey-out .row { margin-bottom: 0 }
+  .survey-out .sub { margin: 0; font-size: 12.5px; color: var(--dim) }
+  .survey-out b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    direction: ltr; unicode-bidi: isolate }
+
   #notice { display: grid; gap: 8px; padding: 0 22px 10px }
   #notice:empty { padding: 0 }
 

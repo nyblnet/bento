@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "확인 중…"
+  },
+  "surveyTitle": {
+    "message": "문서가 어디에 있는지 찾기"
+  },
+  "surveySub": {
+    "message": "브라우저는 당신이 연 Bento 문서를 알고 있습니다. 어떤 폴더에 있는지 알려줄 수 있습니다."
+  },
+  "surveyDeclined": {
+    "message": "괜찮습니다. 폴더는 직접 추가할 수도 있습니다."
+  },
+  "surveyAllCovered": {
+    "message": "이 브라우저가 본 $1개의 문서는 모두 이미 추가한 폴더 안에 있습니다."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b>개의 문서가 추가한 어떤 폴더에도 없습니다. $2개는 이미 포함되어 있습니다."
+  },
+  "surveyCovers": {
+    "message": "$1개 포함"
+  },
+  "surveyAdd": {
+    "message": "이 폴더 추가…"
+  },
+  "surveyAdded": {
+    "message": "$1 추가됨 — 안의 문서를 쓸 수 있습니다"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1을(를) 추가했지만 문서는 그 안에 없습니다 — Finder에서 한 번 열어 주세요."
+  },
+  "surveyOnlySeen": {
+    "message": "이 방법으로는 이 브라우저에서 연 문서만 찾을 수 있습니다."
   }
 }

@@ -487,5 +487,35 @@
   },
   "checking": {
     "message": "正在檢查…"
+  },
+  "surveyTitle": {
+    "message": "找出文件所在的位置"
+  },
+  "surveySub": {
+    "message": "瀏覽器知道你開啟過哪些 Bento 文件，可以指出它們在哪些資料夾裡。"
+  },
+  "surveyDeclined": {
+    "message": "沒關係，你也可以手動新增資料夾。"
+  },
+  "surveyAllCovered": {
+    "message": "這個瀏覽器看過的 $1 份文件都已在你新增的資料夾中。"
+  },
+  "surveyUncovered": {
+    "message": "有 <b>$1</b> 份文件不在你新增的任何資料夾裡，$2 份已涵蓋。"
+  },
+  "surveyCovers": {
+    "message": "包含 $1 份"
+  },
+  "surveyAdd": {
+    "message": "新增這個資料夾…"
+  },
+  "surveyAdded": {
+    "message": "已新增 $1 — 其中的文件已就緒"
+  },
+  "surveyAddedElsewhere": {
+    "message": "已新增 $1，但文件並不在其中 — 請先從 Finder 開啟一份。"
+  },
+  "surveyOnlySeen": {
+    "message": "這種方式只能找到在此瀏覽器中開啟過的文件。"
   }
 }

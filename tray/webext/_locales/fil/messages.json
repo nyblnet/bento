@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Sinusuri…"
+  },
+  "surveyTitle": {
+    "message": "Hanapin kung nasaan ang mga dokumento mo"
+  },
+  "surveySub": {
+    "message": "Alam ng browser kung anong mga dokumentong Bento ang binuksan mo. Masasabi nito kung anong mga folder ang kinalalagyan."
+  },
+  "surveyDeclined": {
+    "message": "Walang problema — puwede mong idagdag nang manu-mano ang mga folder."
+  },
+  "surveyAllCovered": {
+    "message": "Lahat ng $1 dokumentong nakita ng browser na ito ay nasa folder nang naidagdag mo."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumento ang wala sa alinmang folder na idinagdag mo. $2 ang saklaw na."
+  },
+  "surveyCovers": {
+    "message": "saklaw ang $1"
+  },
+  "surveyAdd": {
+    "message": "Idagdag ang folder na ito…"
+  },
+  "surveyAdded": {
+    "message": "Naidagdag ang $1 — handa na ang mga dokumento rito"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Naidagdag ang $1, pero wala roon ang mga dokumento — magbukas ng isa mula sa Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "Ang mga dokumentong binuksan sa browser na ito lang ang makikita sa paraang ito."
   }
 }

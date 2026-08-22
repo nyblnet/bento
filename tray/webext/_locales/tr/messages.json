@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Denetleniyor…"
+  },
+  "surveyTitle": {
+    "message": "Belgelerinizin nerede olduğunu bulun"
+  },
+  "surveySub": {
+    "message": "Tarayıcı hangi Bento belgelerini açtığınızı bilir. Hangi klasörlerde olduklarını söyleyebilir."
+  },
+  "surveyDeclined": {
+    "message": "Sorun değil — klasörleri elle de ekleyebilirsiniz."
+  },
+  "surveyAllCovered": {
+    "message": "Bu tarayıcının gördüğü $1 belgenin tamamı zaten eklediğiniz bir klasörde."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> belge eklediğiniz hiçbir klasörde değil. $2 tanesi zaten kapsanıyor."
+  },
+  "surveyCovers": {
+    "message": "$1 belge içeriyor"
+  },
+  "surveyAdd": {
+    "message": "Bu klasörü ekle…"
+  },
+  "surveyAdded": {
+    "message": "$1 eklendi — içindeki belgeler hazır"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 eklendi, ama belgeler orada değil — Finder'dan bir tanesini bir kez açın."
+  },
+  "surveyOnlySeen": {
+    "message": "Bu yolla yalnızca bu tarayıcıda açılmış belgeler bulunabilir."
   }
 }

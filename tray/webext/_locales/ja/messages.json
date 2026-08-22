@@ -487,5 +487,35 @@
   },
   "checking": {
     "message": "確認中…"
+  },
+  "surveyTitle": {
+    "message": "ドキュメントの場所を探す"
+  },
+  "surveySub": {
+    "message": "ブラウザーは、あなたが開いた Bento ドキュメントを把握しています。どのフォルダーにあるかを教えられます。"
+  },
+  "surveyDeclined": {
+    "message": "問題ありません。フォルダーは手動でも追加できます。"
+  },
+  "surveyAllCovered": {
+    "message": "このブラウザーが見た $1 件のドキュメントは、すべて追加済みのフォルダーにあります。"
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> 件のドキュメントが、追加したどのフォルダーにもありません。$2 件は対象済みです。"
+  },
+  "surveyCovers": {
+    "message": "$1 件を含む"
+  },
+  "surveyAdd": {
+    "message": "このフォルダーを追加…"
+  },
+  "surveyAdded": {
+    "message": "$1 を追加しました。中のドキュメントは利用できます"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 を追加しましたが、ドキュメントはその中にありません。Finder から一度開いてください。"
+  },
+  "surveyOnlySeen": {
+    "message": "この方法で見つかるのは、このブラウザーで開いたドキュメントだけです。"
   }
 }

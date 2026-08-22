@@ -80,6 +80,104 @@ async function locateFolders() {
   return { learned, declined: false }
 }
 
+/**
+ * Which folders would cover the documents nobody has granted yet.
+ *
+ * `locateFolders` above already asks history where documents are — and then
+ * throws away every path that is not inside a folder already granted. That
+ * discarded set is the interesting one: it is precisely "documents this
+ * browser has seen that the tray cannot manage".
+ *
+ * THE SHAPE OF THE ANSWER. Not a list of documents — a list of FOLDERS, fewest
+ * first, because a grant covers everything inside it. Greedy set cover: take
+ * the directory that accounts for the most uncovered documents, drop what it
+ * covers, repeat. Ties go to the SHALLOWER directory, since one broad grant is
+ * the thing the setup screen already recommends.
+ *
+ * WHY IT WILL NOT PROPOSE YOUR HOME DIRECTORY. `MIN_SEGMENTS` stops the walk
+ * three segments in, so `/Users/you/Documents` is proposable and `/Users/you`,
+ * `/Users` and `/` are not. Covering everything by granting the lot is a real
+ * answer and a bad one to put in front of somebody as a suggestion.
+ */
+const MIN_SEGMENTS = 3
+const MAX_PROPOSALS = 4
+
+export function proposeFolders(paths, minSegments = MIN_SEGMENTS, max = MAX_PROPOSALS) {
+  const dirsOf = (p) => {
+    const parts = p.split('/').filter(Boolean)
+    parts.pop()                       // the file itself
+    const out = []
+    for (let i = minSegments; i <= parts.length; i++) out.push('/' + parts.slice(0, i).join('/'))
+    return out
+  }
+  let left = paths.filter((p) => dirsOf(p).length)
+  const picked = []
+  while (left.length && picked.length < max) {
+    const count = new Map()
+    for (const p of left) for (const d of dirsOf(p)) count.set(d, (count.get(d) ?? 0) + 1)
+    let best = null
+    for (const [dir, n] of count) {
+      const depth = dir.split('/').length
+      if (!best || n > best.n || (n === best.n && depth < best.depth)) best = { dir, n, depth }
+    }
+    if (!best) break
+    // A REAL document path from under this directory travels with the proposal.
+    // Verifying the folder the user actually picked means walking one of its
+    // own documents' routes (`prefixFor`) — a made-up filename would fail that
+    // walk and the folder would be added but never placed.
+    const sample = left.find((p) => dirsOf(p).includes(best.dir))
+    picked.push({
+      dir: best.dir, count: best.n, sample,
+      name: best.dir.split('/').filter(Boolean).pop(),
+    })
+    left = left.filter((p) => !dirsOf(p).includes(best.dir))
+  }
+  return { proposals: picked, uncovered: paths.length, unplaceable: left.length }
+}
+
+/**
+ * Everything the browser knows about where Bento documents live.
+ *
+ * Returns what is already covered, and what a grant would still need to reach.
+ * The history permission is requested and handed straight back, exactly as
+ * `locateFolders` does — this is the same question asked more completely.
+ */
+async function surveyDocuments() {
+  const granted = await chrome.permissions.request({ permissions: ['history'] })
+  if (!granted) return { declined: true }
+
+  const paths = []
+  let covered = 0
+  try {
+    const items = await chrome.history.search({ text: '.bento.html', maxResults: 5000, startTime: 0 })
+    const grants = await getGrants()
+    const seen = new Set()
+    for (const it of items) {
+      if (!it.url?.startsWith('file://')) continue
+      let path
+      try { path = decodeURIComponent(new URL(it.url).pathname) } catch { continue }
+      if (!path.endsWith('.bento.html') || seen.has(path)) continue
+      seen.add(path)
+      let inside = false
+      for (const dir of grants) {
+        if (await dir.queryPermission({ mode: 'readwrite' }) !== 'granted') continue
+        const prefix = await prefixFor(dir, path)
+        if (!prefix) continue
+        // Free of charge: walking the route to test containment also PLACES
+        // the folder, which is the whole job of "Find my folders".
+        await learnPrefix(dir.name, prefix)
+        inside = true
+        break
+      }
+      if (inside) covered++
+      else paths.push(path)
+    }
+  } finally {
+    await chrome.permissions.remove({ permissions: ['history'] }).catch(() => {})
+  }
+  return { declined: false, covered, ...proposeFolders(paths) }
+}
+
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -225,6 +323,95 @@ function visible() {
  * short list that shows which are done, not a paragraph explaining why nothing
  * works.
  */
+/**
+ * The survey, as something you can look at and act on.
+ *
+ * One builder, used by the first-run screen and by Settings, because "where are
+ * my documents" is the same question whether you are new or have been using
+ * this for a month — and two implementations would drift.
+ */
+function surveyPanel(onDone) {
+  const box = document.createElement('div')
+  box.className = 'survey'
+
+  const go = document.createElement('button')
+  go.className = 'btn primary'
+  go.textContent = t('findFolders')
+  box.appendChild(go)
+
+  const out = document.createElement('div')
+  out.className = 'survey-out'
+  box.appendChild(out)
+
+  go.addEventListener('click', async () => {
+    go.disabled = true
+    go.textContent = t('looking')
+    let r
+    try { r = await surveyDocuments() } catch (e) { toast(e.message); r = null }
+    go.disabled = false
+    go.textContent = t('findFolders')
+    if (!r) return
+    if (r.declined) { out.innerHTML = `<p class="sub">${t('surveyDeclined')}</p>`; return }
+
+    out.textContent = ''
+    const line = document.createElement('p')
+    line.className = 'sub'
+    // Three different answers, and they are not the same news.
+    line.innerHTML = r.uncovered === 0
+      ? t('surveyAllCovered', r.covered)
+      : t('surveyUncovered', r.uncovered, r.covered)
+    out.appendChild(line)
+
+    for (const prop of r.proposals) {
+      const row = document.createElement('div')
+      row.className = 'row'
+      row.innerHTML = `<b>${esc(prop.dir)}</b>`
+        + `<span class="note">${esc(t('surveyCovers', prop.count))}</span>`
+      const add = document.createElement('button')
+      add.className = 'btn'
+      add.textContent = t('surveyAdd')
+      add.addEventListener('click', async () => {
+        add.disabled = true
+        try {
+          // The picker is unavoidable: Chrome grants a directory to the USER's
+          // choice, in a real dialog, and an extension cannot pre-select a path
+          // — `startIn` takes a well-known name or an existing handle, never an
+          // arbitrary one. So the proposal is a signpost, not a shortcut.
+          const dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+          await dir.requestPermission({ mode: 'readwrite' })
+          const dirs = await getGrants()
+          for (const existing of dirs) if (await existing.isSameEntry(dir)) { add.disabled = false; return }
+          await putGrants([...dirs, dir])
+          // Did they pick the folder that was proposed? Verified, not assumed:
+          // walking one of its own documents' routes both proves containment
+          // and PLACES the folder, so it is openable immediately instead of
+          // waiting for someone to open a file from Finder.
+          const probe = prop.sample ?? `${prop.dir}/x.bento.html`
+          const prefix = await prefixFor(dir, probe)
+          if (prefix) await learnPrefix(dir.name, prefix)
+          await load()
+          await renderNotice()
+          toast(prefix ? t('surveyAdded', dir.name) : t('surveyAddedElsewhere', dir.name))
+          onDone?.()
+        } catch { /* the picker was dismissed, which is an answer */ }
+        add.disabled = false
+      })
+      row.appendChild(add)
+      out.appendChild(row)
+    }
+
+    // History only knows what this browser has opened. Saying so stops "it
+    // missed some" reading as a fault.
+    const caveat = document.createElement('p')
+    caveat.className = 'sub'
+    caveat.textContent = t('surveyOnlySeen')
+    out.appendChild(caveat)
+    onDone?.()
+  })
+
+  return box
+}
+
 function firstRun() {
   const el = document.createElement('div')
   el.className = 'empty'
@@ -246,6 +433,18 @@ function firstRun() {
   pick.textContent = t('chooseFolder')
   pick.onclick = () => $('addFolder').click()
   step(1, !!state.grants, t('setupStep1'), t('setupStep1Note'), pick)
+  // The survey belongs HERE most of all. On a fresh install the answer to "which
+  // folder?" is knowable — the browser has the paths — and asking somebody to
+  // guess at a directory tree when the extension could just tell them is the
+  // worse half of this screen.
+  if (!state.grants) {
+    const s = document.createElement('div')
+    s.className = 'step'
+    s.innerHTML = `<span class="num">?</span>`
+      + `<span class="txt"><b>${esc(t('surveyTitle'))}</b><small>${t('surveySub')}</small></span>`
+    s.querySelector('.txt').appendChild(surveyPanel(() => { void renderGrid() }))
+    steps.appendChild(s)
+  }
 
   step(2, state.fileAccess === true, t('setupStep2'), t('setupStep2Note'))
 
@@ -961,6 +1160,11 @@ async function renderSettings() {
   lnote.textContent = t('setLangNote')
   lrow.appendChild(lnote)
   lang.appendChild(lrow)
+
+  // Where else are documents? The same question the first-run screen asks,
+  // still worth asking later: folders get added over time.
+  const find = section(t('surveyTitle'), t('surveySub'))
+  find.appendChild(surveyPanel(() => { void renderSettings() }))
 
   // --- light or dark, or whatever the browser is doing
   //

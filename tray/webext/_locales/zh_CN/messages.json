@@ -487,5 +487,35 @@
   },
   "checking": {
     "message": "正在检查…"
+  },
+  "surveyTitle": {
+    "message": "找到文档所在的位置"
+  },
+  "surveySub": {
+    "message": "浏览器知道你打开过哪些 Bento 文档，可以指出它们在哪些文件夹里。"
+  },
+  "surveyDeclined": {
+    "message": "没关系，你也可以手动添加文件夹。"
+  },
+  "surveyAllCovered": {
+    "message": "这个浏览器见过的 $1 个文档都已在你添加的文件夹中。"
+  },
+  "surveyUncovered": {
+    "message": "有 <b>$1</b> 个文档不在你添加的任何文件夹里，$2 个已覆盖。"
+  },
+  "surveyCovers": {
+    "message": "包含 $1 个"
+  },
+  "surveyAdd": {
+    "message": "添加此文件夹…"
+  },
+  "surveyAdded": {
+    "message": "已添加 $1 — 其中的文档已就绪"
+  },
+  "surveyAddedElsewhere": {
+    "message": "已添加 $1，但文档并不在其中 — 请先从访达打开一个。"
+  },
+  "surveyOnlySeen": {
+    "message": "这种方式只能找到在此浏览器中打开过的文档。"
   }
 }

@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "בודק…"
+  },
+  "surveyTitle": {
+    "message": "מצאו איפה המסמכים שלכם"
+  },
+  "surveySub": {
+    "message": "הדפדפן יודע אילו מסמכי Bento פתחתם, והוא יכול לומר באילו תיקיות הם נמצאים."
+  },
+  "surveyDeclined": {
+    "message": "אין בעיה — אפשר להוסיף תיקיות ידנית."
+  },
+  "surveyAllCovered": {
+    "message": "כל $1 המסמכים שהדפדפן הזה ראה כבר נמצאים בתיקייה שהוספתם."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> מסמכים נמצאים מחוץ לכל התיקיות שהוספתם. $2 כבר מכוסים."
+  },
+  "surveyCovers": {
+    "message": "מכילה $1"
+  },
+  "surveyAdd": {
+    "message": "הוספת התיקייה הזאת…"
+  },
+  "surveyAdded": {
+    "message": "$1 נוספה — המסמכים בתוכה מוכנים"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 נוספה, אבל המסמכים אינם בה — פתחו אחד מ־Finder פעם אחת."
+  },
+  "surveyOnlySeen": {
+    "message": "כך אפשר למצוא רק מסמכים שנפתחו בדפדפן הזה."
   }
 }

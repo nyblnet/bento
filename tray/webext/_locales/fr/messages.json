@@ -487,5 +487,35 @@
   },
   "checking": {
     "message": "Vérification…"
+  },
+  "surveyTitle": {
+    "message": "Trouver où sont vos documents"
+  },
+  "surveySub": {
+    "message": "Le navigateur sait quels documents Bento vous avez ouverts. Il peut dire dans quels dossiers ils se trouvent."
+  },
+  "surveyDeclined": {
+    "message": "Pas de souci — vous pouvez ajouter des dossiers à la main."
+  },
+  "surveyAllCovered": {
+    "message": "Les $1 documents que ce navigateur a vus sont déjà dans un dossier ajouté."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documents sont hors de tous les dossiers ajoutés. $2 sont déjà couverts."
+  },
+  "surveyCovers": {
+    "message": "couvre $1"
+  },
+  "surveyAdd": {
+    "message": "Ajouter ce dossier…"
+  },
+  "surveyAdded": {
+    "message": "$1 ajouté — les documents qu’il contient sont prêts"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 ajouté, mais les documents n’y sont pas — ouvrez-en un depuis le Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "Seuls les documents ouverts dans ce navigateur peuvent être trouvés ainsi."
   }
 }

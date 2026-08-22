@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Đang kiểm tra…"
+  },
+  "surveyTitle": {
+    "message": "Tìm xem tài liệu của bạn ở đâu"
+  },
+  "surveySub": {
+    "message": "Trình duyệt biết bạn đã mở những tài liệu Bento nào và có thể cho biết chúng nằm trong thư mục nào."
+  },
+  "surveyDeclined": {
+    "message": "Không sao — bạn có thể thêm thư mục thủ công."
+  },
+  "surveyAllCovered": {
+    "message": "Cả $1 tài liệu trình duyệt này từng thấy đều đã nằm trong thư mục bạn đã thêm."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> tài liệu nằm ngoài mọi thư mục bạn đã thêm. $2 tài liệu đã được bao gồm."
+  },
+  "surveyCovers": {
+    "message": "chứa $1"
+  },
+  "surveyAdd": {
+    "message": "Thêm thư mục này…"
+  },
+  "surveyAdded": {
+    "message": "Đã thêm $1 — tài liệu bên trong đã sẵn sàng"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Đã thêm $1, nhưng tài liệu không nằm trong đó — hãy mở một tài liệu từ Finder một lần."
+  },
+  "surveyOnlySeen": {
+    "message": "Cách này chỉ tìm được tài liệu đã mở trong trình duyệt này."
   }
 }

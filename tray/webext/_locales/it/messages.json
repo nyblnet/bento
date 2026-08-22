@@ -487,5 +487,35 @@
   },
   "checking": {
     "message": "Controllo…"
+  },
+  "surveyTitle": {
+    "message": "Trova dove sono i tuoi documenti"
+  },
+  "surveySub": {
+    "message": "Il browser sa quali documenti Bento hai aperto. Può dire in quali cartelle si trovano."
+  },
+  "surveyDeclined": {
+    "message": "Nessun problema: puoi aggiungere le cartelle a mano."
+  },
+  "surveyAllCovered": {
+    "message": "Tutti i $1 documenti visti da questo browser sono già in una cartella aggiunta."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documenti sono fuori da ogni cartella aggiunta. $2 sono già coperti."
+  },
+  "surveyCovers": {
+    "message": "contiene $1"
+  },
+  "surveyAdd": {
+    "message": "Aggiungi questa cartella…"
+  },
+  "surveyAdded": {
+    "message": "$1 aggiunta — i documenti al suo interno sono pronti"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 aggiunta, ma i documenti non sono lì: aprine uno dal Finder una volta."
+  },
+  "surveyOnlySeen": {
+    "message": "Così si trovano solo i documenti aperti in questo browser."
   }
 }

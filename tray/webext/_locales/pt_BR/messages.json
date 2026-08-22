@@ -487,5 +487,35 @@
   },
   "checking": {
     "message": "Verificando…"
+  },
+  "surveyTitle": {
+    "message": "Descubra onde estão seus documentos"
+  },
+  "surveySub": {
+    "message": "O navegador sabe quais documentos Bento você abriu. Ele pode dizer em quais pastas estão."
+  },
+  "surveyDeclined": {
+    "message": "Sem problema — você pode adicionar pastas manualmente."
+  },
+  "surveyAllCovered": {
+    "message": "Todos os $1 documentos que este navegador viu já estão em uma pasta adicionada."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documentos estão fora de todas as pastas adicionadas. $2 já estão cobertos."
+  },
+  "surveyCovers": {
+    "message": "abrange $1"
+  },
+  "surveyAdd": {
+    "message": "Adicionar esta pasta…"
+  },
+  "surveyAdded": {
+    "message": "$1 adicionada — os documentos nela estão prontos"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 adicionada, mas os documentos não estão lá — abra um pelo Finder uma vez."
+  },
+  "surveyOnlySeen": {
+    "message": "Só é possível encontrar assim os documentos abertos neste navegador."
   }
 }

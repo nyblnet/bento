@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Sjekker…"
+  },
+  "surveyTitle": {
+    "message": "Finn hvor dokumentene dine er"
+  },
+  "surveySub": {
+    "message": "Nettleseren vet hvilke Bento-dokumenter du har åpnet. Den kan si hvilke mapper de ligger i."
+  },
+  "surveyDeclined": {
+    "message": "Helt greit — du kan legge til mapper for hånd."
+  },
+  "surveyAllCovered": {
+    "message": "Alle $1 dokumenter denne nettleseren har sett ligger allerede i en lagt til mappe."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumenter ligger utenfor alle mappene du har lagt til. $2 er allerede dekket."
+  },
+  "surveyCovers": {
+    "message": "dekker $1"
+  },
+  "surveyAdd": {
+    "message": "Legg til denne mappen…"
+  },
+  "surveyAdded": {
+    "message": "$1 lagt til — dokumentene i den er klare"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 lagt til, men dokumentene ligger ikke der — åpne ett fra Finder én gang."
+  },
+  "surveyOnlySeen": {
+    "message": "Bare dokumenter som er åpnet i denne nettleseren kan finnes slik."
   }
 }

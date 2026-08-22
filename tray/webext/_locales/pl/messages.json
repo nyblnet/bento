@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Sprawdzanie…"
+  },
+  "surveyTitle": {
+    "message": "Znajdź, gdzie są Twoje dokumenty"
+  },
+  "surveySub": {
+    "message": "Przeglądarka wie, które dokumenty Bento otwierałeś. Może powiedzieć, w których folderach są."
+  },
+  "surveyDeclined": {
+    "message": "Nic nie szkodzi — foldery możesz dodać ręcznie."
+  },
+  "surveyAllCovered": {
+    "message": "Wszystkie $1 dokumentów widzianych przez tę przeglądarkę są już w dodanym folderze."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumentów jest poza wszystkimi dodanymi folderami. $2 są już objęte."
+  },
+  "surveyCovers": {
+    "message": "obejmuje $1"
+  },
+  "surveyAdd": {
+    "message": "Dodaj ten folder…"
+  },
+  "surveyAdded": {
+    "message": "Dodano $1 — dokumenty w nim są gotowe"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Dodano $1, ale dokumentów tam nie ma — otwórz jeden z Findera."
+  },
+  "surveyOnlySeen": {
+    "message": "W ten sposób znajdziesz tylko dokumenty otwarte w tej przeglądarce."
   }
 }

@@ -487,5 +487,35 @@
   },
   "checking": {
     "message": "Wird geprüft…"
+  },
+  "surveyTitle": {
+    "message": "Finden, wo Ihre Dokumente liegen"
+  },
+  "surveySub": {
+    "message": "Der Browser weiß, welche Bento-Dokumente Sie geöffnet haben. Er kann sagen, in welchen Ordnern sie liegen."
+  },
+  "surveyDeclined": {
+    "message": "Kein Problem — Sie können Ordner von Hand hinzufügen."
+  },
+  "surveyAllCovered": {
+    "message": "Alle $1 Dokumente, die dieser Browser gesehen hat, liegen bereits in einem hinzugefügten Ordner."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> Dokumente liegen außerhalb aller hinzugefügten Ordner. $2 sind bereits abgedeckt."
+  },
+  "surveyCovers": {
+    "message": "enthält $1"
+  },
+  "surveyAdd": {
+    "message": "Diesen Ordner hinzufügen…"
+  },
+  "surveyAdded": {
+    "message": "$1 hinzugefügt — die Dokumente darin sind bereit"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 hinzugefügt, aber die Dokumente liegen nicht darin — öffnen Sie eines einmal im Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "So lassen sich nur Dokumente finden, die in diesem Browser geöffnet wurden."
   }
 }

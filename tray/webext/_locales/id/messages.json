@@ -454,5 +454,35 @@
   },
   "checking": {
     "message": "Memeriksa…"
+  },
+  "surveyTitle": {
+    "message": "Temukan di mana dokumen Anda berada"
+  },
+  "surveySub": {
+    "message": "Peramban tahu dokumen Bento mana yang pernah Anda buka. Ia bisa menyebut folder tempatnya."
+  },
+  "surveyDeclined": {
+    "message": "Tidak masalah — Anda bisa menambahkan folder secara manual."
+  },
+  "surveyAllCovered": {
+    "message": "Semua $1 dokumen yang pernah dilihat peramban ini sudah ada di folder yang Anda tambahkan."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumen berada di luar semua folder yang Anda tambahkan. $2 sudah tercakup."
+  },
+  "surveyCovers": {
+    "message": "mencakup $1"
+  },
+  "surveyAdd": {
+    "message": "Tambahkan folder ini…"
+  },
+  "surveyAdded": {
+    "message": "$1 ditambahkan — dokumen di dalamnya siap"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 ditambahkan, tetapi dokumennya tidak di sana — buka satu lewat Finder sekali."
+  },
+  "surveyOnlySeen": {
+    "message": "Cara ini hanya menemukan dokumen yang pernah dibuka di peramban ini."
   }
 }
