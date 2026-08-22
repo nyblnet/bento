@@ -14,6 +14,35 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **A dark interface.** About → Appearance offers *Match my system*, *Light* or
+  *Dark*, follows the OS by default, and tracks it live if the OS flips while
+  the file is open.
+
+  **The theme is yours, not the file's.** It lives in this browser
+  (localStorage), exactly as the interface language already does — send someone
+  a space and they read it in their own theme, in their own room. Nothing about
+  it is written into the document, so the same bytes come back whoever last
+  looked at them.
+
+  **Dark covers the whole window, including the page you are reading.** That is
+  deliberately not what bento/slides does, where a slide keeps the background
+  its author chose. A space has no such page: the toolbar, the page list and
+  the column are one surface with hairlines between them, and a white reading
+  column inside a dark window would be a white rectangle over most of the
+  screen. The colours the document itself carries — the nine text and highlight
+  colours, and the five callout tones — keep their NAMES and change their
+  values with the ground, because "red" measured against white is a smudge
+  against near-black. Measured: every one of them, plus body text, muted text,
+  code, tables and callout labels, clears WCAG AA in both themes.
+
+  **A picture now sits on a white card of its own, in both themes.** A
+  screenshot or diagram exported with a transparent background used to be a
+  shape floating in nothing; black-on-transparent artwork disappeared entirely
+  on a dark ground.
+
+  **Paper stays light**, and a file-manager thumbnail still shows the
+  document's own colours: neither of those has a reader to have a preference.
+
 - **A properties panel, on the right.** One place that answers "what can I
   change about this thing". The block the caret is in gets its own settings —
   a table's rows, columns and header row; a code block's language; a callout's

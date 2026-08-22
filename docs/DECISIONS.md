@@ -4855,3 +4855,86 @@ raised 204,800 → 212,992 in the same commit, because 1,146 B of headroom is
 inside the packer's own cross-node-version spread and would fail CI for no
 reason.
 
+## 2026-08-22 — bento/spaces goes dark, and its reading column goes with it
+
+**The theme is a VIEWER preference and never document data.** localStorage
+`bento-theme`, through `kernel/src/theme.ts`, which slides already shipped
+(#285) — the same rule the interface locale and reduced motion follow, and
+PLATFORM §8's. Two people opening one space are two readers in two rooms; a
+theme in the file would travel to the recipient and override theirs, and it
+would make a file's bytes depend on who last looked at it. `startTheme()` runs
+AFTER `capturePristine()` in main.ts for exactly that reason, and the saved
+`<html>` tag was measured bare: no `data-theme`, no `color-scheme`.
+
+**WHERE THIS DIVERGES FROM SLIDES, AND WHY.** slides themes only the chrome
+AROUND the deck: a slide is a bounded page on a canvas, its background is data
+the author chose, and someone proofing at midnight still needs to see what will
+be projected. Spaces has no such page. `--bg` is THE ONE GROUND — bar, both
+panels and the reading column all sit on it with hairlines and nothing else
+between them, which is what the chrome-reads-as-one-document work settled one
+commit earlier. A dark interface with a white reading column would be a white
+rectangle filling most of the window: not a dark interface, and a
+re-introduction of the floating-card look that was deliberately removed. So in
+spaces the reading surface IS chrome and it follows the reader.
+
+`doc.theme.background/color/accent` still exist in the format and are still the
+DOCUMENT's colours — but nothing in the live app paints them; the only consumer
+is `preview.ts`, the static file-manager still. That surface stays the author's
+in both themes, unconditionally: it renders with scripting off, so there is no
+localStorage, no reader and no preference to honour — only a file manager
+drawing a thumbnail. A `prefers-color-scheme` block there would be a guess made
+on someone's behalf. If it ever changes it changes with the FORMAT.
+
+**The document's own colour VOCABULARY does follow the reader**, and that is
+the same ruling read from the other side. The nine `sp-fg-*`/`sp-bg-*` marks
+and the five callout tones are a closed vocabulary of NAMES — the author picked
+"red", not `#c0392b` — which is precisely why the value under each name can be
+tuned per surface, as the palette comment has said since the marks shipped. An
+ink measured to clear 4.5:1 on white is a smudge on a near-black ground, so
+each `--c-*` carries a light value and a dark one. The BANDS need only one set:
+they mix into `transparent` and land correctly on either.
+
+**Callout tones are ONE HUE each, and the box derives from it.** The fill is
+that hue mixed into `--bg`, the label is it mixed into `--ink` — a pale tint
+with a dark label on white, a deep tint with a lifted label on near-black, from
+five numbers instead of thirty. Measured both ways: labels 4.98–6.49:1 light,
+6.5–8.4:1 dark.
+
+**THREE STATES, so the dark values appear TWICE.** A reader chose light, chose
+dark, or chose nothing. The choice stamps `data-theme`; the default follows the
+OS. So dark is stated under `@media (prefers-color-scheme: dark)` guarded
+`:not([data-theme="light"])` AND under `[data-theme="dark"]`, or the picker
+only works in one direction. Verified with the attribute removed: dark OS →
+dark, light OS → white, `data-theme="light"` under a dark OS → white.
+
+**BOTH ARE @media screen, AND THAT IS HOW PAPER STAYS LIGHT.** Print matches
+neither, so on paper the unconditional light block is simply what applies and
+the print sheet needs no third copy of the palette. It carries one line the
+media query cannot: `color-scheme: light only !important`, because theme.ts
+writes `color-scheme` INLINE on `<html>` and an author `!important` is the only
+thing that beats an inline style.
+
+**An image gets a white ground in both themes.** Document content is never
+inverted, dimmed or filtered — but a diagram or logo exported against a
+transparent background is a shape floating in nothing on a dark page, and
+black-on-transparent artwork vanishes outright. So `.sp-b-image img` paints
+white behind itself and takes a hairline, in light as well, so the two themes
+frame a picture the same way.
+
+**Where the control lives.** About → Appearance, directly above Language: they
+are the same kind of thing, preferences belonging to whoever opened the file.
+It is built in its own `spaces/src/appearance.ts` and costs about.ts one import
+and one `card.append(...)` — about.ts is a 355-line function that several
+branches edit at once, and this is the smallest seam that still puts the
+control in the right place.
+
+**Guarded.** `scripts/test-spaces-model.ts` gained twelve checks: both dark
+blocks exist and are byte-identical, they define every role light does and
+invent none, every themed role is actually referenced by a rule, the light
+palette has not forked from slides and type, no literal colour survives outside
+the token blocks and the print sheet (three named exceptions), `startTheme()`
+runs after `capturePristine()`, the Appearance control never touches the store,
+and the still preview has no theme of its own.
+
+**Cost.** Shell 213,434 → 215,002 B (+1,568, 0.7%). No budget raise: the
+ceiling stays 221,184.

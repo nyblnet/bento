@@ -27,6 +27,21 @@
 // scoped sheet. It is a SEPARATE, deliberately plain sheet rather than an
 // extract of the real one: it renders the document honestly at a glance, and it
 // is not trying to be pixel-identical to the editor.
+//
+// AND THIS SURFACE HAS NO THEME — deliberately, now that the editor has one.
+//
+// The app's dark interface is a VIEWER preference: localStorage, read at boot
+// by kernel/src/theme.ts. Nothing here can ask for it. This render exists
+// precisely for the readers that run no script, so there is no boot, no
+// localStorage and no reader to hold a preference — there is a file manager
+// drawing a thumbnail. A `prefers-color-scheme` block here would not be the
+// reader's choice; it would be a guess made on their behalf, and it would
+// fight the one thing this render legitimately does have: `doc.theme`, the
+// colours the AUTHOR gave the document, which the sheet below paints.
+//
+// So the preview is the one surface in this app that stays the author's in
+// both themes, exactly as a thumbnail of a document should. If that ever
+// changes it has to change with the FORMAT, not with a media query.
 
 import type { SpacesDoc, Page } from './model'
 import { renderPage } from './render'

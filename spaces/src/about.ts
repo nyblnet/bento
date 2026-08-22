@@ -14,6 +14,7 @@ import {
 } from '../../kernel/src/save.ts'
 import { clearVersions, clearRecovery } from '../../kernel/src/autosave.ts'
 import { t, localeChoices, locale, setLocale } from './i18n'
+import { appearanceSection } from './appearance'
 import { esc } from './sanitize'
 import { htmlToMd } from './marks.ts'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
@@ -136,6 +137,11 @@ export function openAbout({ store, onRepaint, onSaveCopy, onImport, onExportSpac
     card.insertBefore(apply, upStatus.nextSibling)
   })
   card.append(checkBtn)
+
+  // ---- appearance --------------------------------------------------------
+  // Beside Language, because they are the same kind of thing: preferences that
+  // belong to whoever opened the file, not to the file.
+  card.append(...appearanceSection())
 
   // ---- language ----------------------------------------------------------
   card.append(h(t('Language')))

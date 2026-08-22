@@ -6,6 +6,7 @@
 
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
+import { startTheme } from '../../kernel/src/theme.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, registerPreview,
   saveFile, parseEnvelope, canWriteInPlace, decryptEnvelope, setEncryptionPassword,
@@ -47,6 +48,19 @@ configureApp({
 registerPreview((doc) => buildSpacePreview(doc as unknown as SpacesDoc))
 
 capturePristine()
+
+// The interface theme: AFTER capturePristine, before the first paint.
+//
+// AFTER, because capturePristine clones the LIVE document and every save
+// re-serializes that clone — so `data-theme` and `color-scheme` must not be on
+// <html> yet, or a reader's preference would ride inside every file they save
+// and land on whoever they sent it to. Exactly the ordering applyDirection
+// depends on for dir/lang, one line below, and for the same reason.
+//
+// BEFORE the paint, because applying it later paints the interface light and
+// then flips it, which reads as a bug rather than as a preference. Nothing
+// here lays anything out: it sets two attributes on the root element.
+startTheme()
 applyDirection()
 
 const embedded = readEmbeddedDoc()

@@ -440,4 +440,10 @@ export const zh_Hant: Catalog = {
   "{pages} page(s) and {blocks} block(s) added from {files} file(s).": "從 {files} 個檔案新增了 {pages} 個頁面、{blocks} 個區塊。",
   "{pages} page(s) and {blocks} block(s) will travel.": "將帶走 {pages} 個頁面、{blocks} 個區塊。",
   "⌘Z removes the imported pages again.": "按 ⌘Z 可以把匯入的頁面再撤銷掉。",
+  "Appearance": "外觀",
+  "Interface theme": "介面主題",
+  "Match my system": "跟隨系統",
+  "Light": "淺色",
+  "Dark": "深色",
+  "The theme follows whoever opens the file. It is never written into the document.": "主題取決於開啟檔案的人，永遠不會寫入文件中。",
 }
