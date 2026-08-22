@@ -31,6 +31,7 @@ import {
   effectiveParents, descendantsOf,
   tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
   effectiveParents, descendantsOf, linkCard, linkCardHtml,
+  effectiveParents, descendantsOf, commentsOn, unresolvedOn,
   type SpacesDoc,
 } from '../spaces/src/model.ts'
 import nodeFs from 'node:fs'
@@ -1984,6 +1985,67 @@ function fsTable(f: string): string {
     "…and its only img src comes from linkCard's already-filtered image, never from the raw block")
   ok(!/b\.image|b\.url/.test(linkCase),
     '…so the renderer never reads a card field around the gate')
+// ---- 8. review comments ----------------------------------------------------
+// Two properties, and both of them fail silently. A thread is DOCUMENT DATA
+// that no build before this one has heard of, so it has to survive a build
+// that does not understand it; and it is EDITOR-ONLY, so it must never reach
+// the reading view or a printed handbook — a private remark on somebody's
+// draft, printed into the copy they hand a customer, is not a cosmetic bug.
+{
+  const withComments = doc({
+    pages: [{
+      id: 'p1', title: 'One',
+      comments: [{ id: 'c0', author: 'Ada', at: '2026-08-20T09:00:00Z', text: 'about the page' }],
+      blocks: [{
+        id: 'b1', type: 'p', html: 'hi',
+        comments: [
+          { id: 'c1', author: 'Ada', at: '2026-08-20T10:00:00Z', text: 'open one', mood: 'from a later build' },
+          { id: 'c2', author: 'Bo', at: '2026-08-20T11:00:00Z', text: 'settled', resolved: true },
+        ],
+      }],
+    }],
+  })
+  const r = parseDoc(withComments)
+  ok(r.ok === true, 'a document carrying comments parses')
+  const page = (r as { doc: SpacesDoc }).doc.pages[0]
+  ok(JSON.stringify(page.comments) === JSON.stringify(JSON.parse(withComments).pages[0].comments),
+    'a page thread round-trips byte-for-byte')
+  ok((page.blocks[0].comments as Array<{ mood?: string }>)[0].mood === 'from a later build',
+    'and an unknown field INSIDE a comment survives too (PLATFORM §3)')
+
+  const at = commentsOn(page)
+  ok(at.length === 3, 'commentsOn reads both anchors')
+  ok(at[0].blockId === undefined && at[0].comment.id === 'c0',
+    'the page thread comes first, with no block id — that IS the anchor')
+  ok(at[1].blockId === 'b1' && at[2].blockId === 'b1', 'block threads carry the block they are on')
+  ok(unresolvedOn(page) === 2, 'the badge counts what is still open, not what has been settled')
+
+  // this data arrives in a file somebody mailed you
+  const hostile = { id: 'h', title: 'H', comments: 'yes', blocks: [
+    { id: 'hb', type: 'p', html: '', comments: [null, { noId: 1 }, { id: 'k', author: 'A', at: '', text: 'x' }] },
+  ] } as unknown as Page
+  ok(commentsOn(hostile).length === 1 && commentsOn(hostile)[0].comment.id === 'k',
+    'a comments field that is not an array, and entries with no id, are ignored rather than iterated')
+  ok(unresolvedOn(hostile) === 1, 'and the count agrees with the list')
+
+  // EDITOR-ONLY, as source. The behaviour needs a DOM and a print dialog; the
+  // mistake is made in the source, which is where the model rig checks the
+  // other four properties of this shape.
+  const fs3 = await import('node:fs')
+  const spSrc = (f: string) => fs3.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  // `comments` as a PROPERTY or a class, not the word — render.ts's own prose
+  // discusses html comments, and a gate that trips on its documentation gets
+  // deleted rather than fixed.
+  ok(!/\.comments\b|\bsp-cm-/.test(spSrc('render.ts')),
+    'render.ts — the ONE renderer behind the editor, the reading view and print — never reads a thread')
+  ok(/if \(!this\.reading\) this\.comments\?\.refresh\(\)/.test(spSrc('editor.ts')),
+    'the editor paints markers only when it is not in the reading view')
+  ok(/@media print \{ \.sp-cm-mark, \.sp-cm-row \{ display: none/.test(spSrc('styles.css')),
+    'and the print sheet drops them even if a future path paints them anyway')
+  // PLAIN TEXT, and the sanitizer discipline that follows from it: there is
+  // nothing to sanitize because nothing is ever parsed as html.
+  ok(!/innerHTML/.test(spSrc('comments.ts')),
+    'no comment text ever reaches innerHTML — it is written with textContent')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

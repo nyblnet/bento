@@ -19,9 +19,9 @@ import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult
 import {
   validateDoc, outlineDoc, statsDoc,
   planInsertBlocks, planUpdateBlock, planRemoveBlocks, planMoveBlock, planUpdatePage, planRemovePage,
-  fieldsReport, issuesReport, planSetField, planNewIssue,
+  fieldsReport, issuesReport, planSetField, planNewIssue, commentsReport,
   plainTitle, badTitle,
-  type Plan, type PlanError, type IssueQuery,
+  type Plan, type PlanError, type IssueQuery, type CommentQuery,
 } from './agent'
 import { starterDoc } from './starter'
 import { todayISO, isISO, journalFor } from './journal'
@@ -326,6 +326,17 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     outline: (target?: SpacesDoc) => outlineDoc(target ?? store.doc),
     /** where the bytes are */
     stats: (target?: SpacesDoc) => statsDoc(target ?? store.doc),
+    /**
+     * What a human flagged: every review thread, flat, each with a typed
+     * anchor ('block' with a `blockId`, or 'page').
+     *
+     * READ ONLY, deliberately. The verbs beside it change the document an
+     * agent was asked to work on; a comment is the other half of a
+     * CONVERSATION, and an agent quietly resolving the remark it was supposed
+     * to act on is the one move that makes the record untrue. Filter with
+     * `comments({ resolved: false })` for the outstanding ones.
+     */
+    comments: (query?: CommentQuery) => commentsReport(store.doc, query ?? {}),
 
     /**
      * ONE undoable step. Without this an agent appending a paragraph has to
