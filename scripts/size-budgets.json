@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 184320,
-      "//": "180 KiB. Raised from 176,128 in the portability commit: the page extract and the subtree import (spaces/src/portable.ts, the graft UI, 24 new strings x 8 catalogs) took the shell from 166,482 to 175,690 B — 9,208 B, 5.5%. That left 438 B under the old ceiling, which is inside the packer's own cross-node-version spread (measured elsewhere at ~1.1 KB), so the ceiling moves to keep CI honest rather than flaky. Headroom is deliberate for that reason and CI is the number that counts. Zopfli bought the previous round 7,116 B without dropping a feature; this round spends genuine headroom on the two exits the format promised."
+      "max": 204800,
+      "//": "200 KiB. All of M3 and M4 landed together — tables, media, link cards, comments, and export-page-as-space plus subtree import — measured 166,482 B before and 195,434 B after, +28,952 B for five features. That is the single largest step this shell has taken and it is the last of the roadmap's v0.1 content work, so the number should now go sideways rather than up. Zopfli is already applied; it is what kept this under 200. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }

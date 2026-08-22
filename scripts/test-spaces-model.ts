@@ -30,8 +30,8 @@ import {
   parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
   effectiveParents, descendantsOf,
   tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
-  effectiveParents, descendantsOf, linkCard, linkCardHtml,
-  effectiveParents, descendantsOf, commentsOn, unresolvedOn,
+  linkCard, linkCardHtml,
+  commentsOn, unresolvedOn,
   type SpacesDoc,
 } from '../spaces/src/model.ts'
 import nodeFs from 'node:fs'
@@ -1873,6 +1873,8 @@ function fsTable(f: string): string {
   const editor = src('editor.ts')
   ok(/\^https\?:/.test(editor),
     'the clip URL box allowlists http(s) rather than blocklisting javascript:')
+}
+
 // ---- LINK CARDS point outward, and never reach outward ----------------------
 // A link card in Notion or Slack is a server fetching a url for its OpenGraph
 // tags. bento/spaces has no server and must not phone home (PLATFORM §1;
@@ -1986,6 +1988,8 @@ function fsTable(f: string): string {
     "…and its only img src comes from linkCard's already-filtered image, never from the raw block")
   ok(!/b\.image|b\.url/.test(linkCase),
     '…so the renderer never reads a card field around the gate')
+}
+
 // ---- 8. review comments ----------------------------------------------------
 // Two properties, and both of them fail silently. A thread is DOCUMENT DATA
 // that no build before this one has heard of, so it has to survive a build
@@ -2047,6 +2051,8 @@ function fsTable(f: string): string {
   // nothing to sanitize because nothing is ever parsed as html.
   ok(!/innerHTML/.test(spSrc('comments.ts')),
     'no comment text ever reaches innerHTML — it is written with textContent')
+}
+
 // ---- 12. the portability round trip ----------------------------------------
 //
 // A page LEAVES as its own space, and a space ARRIVES inside another one. Both
