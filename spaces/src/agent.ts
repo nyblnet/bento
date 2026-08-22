@@ -49,6 +49,11 @@ import {
 const KNOWN_BLOCK_TYPES = SPECS.map((s) => s.type)
 const KNOWN = new Set<string>(KNOWN_BLOCK_TYPES)
 
+/** A media block whose kind is audio — anything else is drawn as video, which
+ *  is the same rule renderers and exporters here already apply. */
+const isAudio = (b: Block): boolean =>
+  b.type === 'media' && String((b as { kind?: unknown }).kind ?? 'video') === 'audio'
+
 const words = (s: string): number => (s.trim() ? s.trim().split(/\s+/).length : 0)
 
 const utf8len = (s: string): number =>
@@ -326,6 +331,11 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
               fix: 'Use a block type that can carry it (image, code, quote), or inline tags only: b i u s em strong code a span mark sub sup br.' })
           }
         }
+        // A TABLE CELL'S LINKS ARE IN `html` TOO, so this scan already sees
+        // them: `writeTable` is the one writer and it keeps the fallback html
+        // as the cells joined, links intact — which is also how buildIndex
+        // finds a backlink from a cell. Scanning `rows` as well would report
+        // the same dead link twice.
         for (const m of b.html.matchAll(LINK_RE)) {
           const href = m[1]
           if (href.startsWith('#p/')) {
@@ -469,10 +479,17 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
         }
         if (!String(b.alt ?? '').trim()) {
           add({ ...at, code: 'image-no-alt', severity: 'warning', path: 'alt',
-            message: 'This image has no alt text — screen readers get nothing, and alt is what a reader SEES if the image is remote and unloaded.',
-            fix: 'Write what the image shows, in a sentence.' })
+            message: `${what} block has no alt text — screen readers get nothing, and alt is what a reader SEES if it is remote and unloaded.`,
+            fix: 'Write what it shows, in a sentence.' })
         }
-        if (!b.w || !b.h) {
+        // AUDIO HAS NO PIXELS. The intrinsic size is about the aspect box that
+        // holds the layout still while a picture decodes, and an audio player
+        // is a fixed-height control that never reflows anything — so asking for
+        // w/h on one is asking an author to write down a number that does not
+        // exist. Every correctly-authored audio block would have carried this
+        // finding, which is the false positive that teaches an agent to stop
+        // reading them.
+        if (!isAudio(b) && (!b.w || !b.h)) {
           add({ ...at, code: 'image-no-size', severity: 'info', path: 'w',
             message: 'No intrinsic w/h, so the page reflows under the reader as the image decodes.',
             fix: 'Set w and h to the image\'s pixel size.' })

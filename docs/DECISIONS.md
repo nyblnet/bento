@@ -52,6 +52,53 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-22 — The starter space is a release gate, not a document somebody updates when they remember
+
+`spaces/src/starter.ts` had been written once and left. Everything that shipped
+after it — tables, clips, link cards, comments, calculating lines, daily notes,
+page width, export-a-page, subtree import, the mark palette with its colours,
+live collaboration and presence, the properties panel — was absent from the one
+document every new user reads first, and its "Sharing & limits" page still said
+live collaboration was coming, months after it arrived. A starter that silent is
+not neutral: **a feature the starter does not demonstrate is a feature the
+starter denies**, and the tour was denying about half the app.
+
+So the doctrine is now ASSERTED rather than remembered. `scripts/test-spaces-agent.ts`
+structurally requires the starter to carry a table, a clip, a link card, an
+`asset:` picture, a page-link card, a callout, a FOLDED toggle, a calculating
+line, a palette colour, a comment thread, an archived page, a journal home and a
+page that sets its own width — plus determinism (two calls, byte-identical: ids
+here are CRDT node keys), every parent resolving IN PRE-ORDER, every `#p/` and
+pagelink target existing, no orphaned page, and assets and references agreeing.
+Adding a feature and not the demonstration now fails a rig instead of shipping.
+
+WRITING THE STARTER IS HOW THE CLAIMS GET TESTED, which is the whole argument
+for the doctrine. Two defects fell straight out of writing this one. A hand-authored
+table with `rows` and no fallback `html` put a working link on a page that
+back-linked to nothing — `buildIndex` reads `html`, and `writeTable` is the one
+writer that keeps the two in step, so the starter goes through it exactly as the
+issues go through `propBlock`. And `validate()` asked every AUDIO block for
+intrinsic `w`/`h`: pixels an audio player does not have, on a finding that would
+have fired for every correctly-authored clip in existence.
+
+THE ARCHIVED PAGE IS THE ⌘K DEMONSTRATION, one page doing both jobs the brief
+asked for: it is out of the sidebar, so search is the way in, and "Sharing &
+limits" names it by name because sending the file sends it too.
+
+IT COST 7,000 B, measured on the stack: 5,336 B of prose and 1,664 B of the two
+files it ships (`spaces/src/starterdata.ts` — a hand-written SVG drawing and a
+1.2 s test tone, both chosen so that deflate reduces them to almost nothing: the
+tone is exactly periodic and packs to 204 B). The ceiling moved 216 → 224 KiB in
+the same commit, with the numbers in `scripts/size-budgets.json`.
+
+THE STARTER IS NOT TRANSLATED, and that is deliberate rather than pending. The
+interface follows the reader (PLATFORM §8); a document is written in a language,
+and this one is written in English. Nine starters would be nine feature tours to
+keep in step, and the space a user then writes in would be the only untranslated
+one of the ten.
+
+---
+
 ## 2026-08-22 — Inline marks: one canonical form, and the format's SECOND attribute
 
 Two decisions, taken together because the second only makes sense inside the

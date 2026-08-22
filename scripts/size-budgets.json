@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 221184,
-      "//": "216 KiB. Everything from the roadmap's M3/M4 content work plus the formatting UI: tables, media, link cards, comments, export-page-as-space and subtree import, then a properties panel and a selection toolbar with a real mark engine. 166,482 B before the batch and 213,370 B after — +46,888 B, and by far the largest step this shell has taken. Seven branches each measured a raise against the same stale baseline and landed on four different numbers; this one is measured on the stack itself, which is the only place the real figure exists. Zopfli is already applied and is what keeps this near 200 rather than past 220. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 229376,
+      "//": "224 KiB. Raised from 216 KiB by the starter space rewrite: 213,434 B before, 220,434 B after — +7,000 B, of which 5,336 B is prose and 1,664 B is the two files it ships (a hand-written SVG drawing and a 1.2s test tone, both chosen to deflate to almost nothing; see spaces/src/starterdata.ts). What bought it is the doctrine that a feature the starter does not demonstrate is a feature the starter denies: tables, clips, link cards, comments, calculating lines, daily notes, page width, export-a-page, subtree import, the mark palette, live collaboration and the properties panel had all shipped without ever appearing in the document every new user reads first. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }
