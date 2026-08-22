@@ -17,7 +17,8 @@ import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '.
 import { prefixFor } from './route.js'
 import { learnPrefix, GRANT, get, put } from './db.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
-import { t, localize } from './i18n.js'
+import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
+  from './i18n.js'
 
 /**
  * Find the granted folders on disk, without sending anyone to Finder.
@@ -827,6 +828,45 @@ async function renderSettings() {
   add.onclick = () => $('addFolder').click()
   folders.appendChild(add)
 
+  // --- the language, which Chrome will not let you change on macOS
+  //
+  // `chrome.i18n` follows the browser's UI language and cannot be redirected,
+  // and on macOS that language comes from the SYSTEM — so without this the only
+  // way to read the extension in Japanese was to run the whole computer in it.
+  // bento/slides has had a picker in its About dialog all along; this is the
+  // same control, in the place a tray preference belongs.
+  const lang = section(t('setLangTitle'), t('setLangSub'))
+  const lrow = document.createElement('div')
+  lrow.className = 'row'
+  const sel = document.createElement('select')
+  const auto = document.createElement('option')
+  auto.value = ''
+  auto.textContent = t('langAutomatic')
+  sel.appendChild(auto)
+  // Sorted by what each language calls ITSELF, in that language's own
+  // collation — the order an English speaker would impose is not the order the
+  // reader is scanning in.
+  for (const code of [...LOCALES].sort((a, b) => localeLabel(a).localeCompare(localeLabel(b)))) {
+    const o = document.createElement('option')
+    o.value = code
+    o.textContent = localeLabel(code)
+    sel.appendChild(o)
+  }
+  sel.value = localeOverride() ?? ''
+  sel.addEventListener('change', async () => {
+    await setLocale(sel.value || null)
+    // Everything on screen is now in the wrong language, including the static
+    // markup filled at load, so both are redone rather than just this view.
+    localize()
+    show('settings')
+  })
+  lrow.appendChild(sel)
+  const lnote = document.createElement('span')
+  lnote.className = 'note'
+  lnote.textContent = t('setLangNote')
+  lrow.appendChild(lnote)
+  lang.appendChild(lrow)
+
   // --- the permission nothing can request
   const access = section(t('setAccessTitle'), t('setAccessSub'))
   const row = document.createElement('div')
@@ -952,6 +992,9 @@ document.addEventListener('visibilitychange', () => {
 // A fresh install is sent here by the worker (`#welcome`), because the first
 // question is "what did I just install and what does it want" — and a grid of
 // documents it cannot see yet answers none of it.
+// Before ANY painting: a saved language choice has to be in hand, or the page
+// renders in the browser's language and visibly re-renders a moment later.
+await initI18n()
 localize()
 
 // Read BEFORE the first grid render, so someone who chose list mode never

@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Sluiten"
+  },
+  "setLangTitle": {
+    "message": "Taal"
+  },
+  "setLangSub": {
+    "message": "Welke taal deze extensie spreekt. Normaal volgt ze de browser."
+  },
+  "langAutomatic": {
+    "message": "Automatisch — de browser volgen"
+  },
+  "setLangNote": {
+    "message": "De naam en beschrijving van de extensie zelf komen van de browser en veranderen niet."
   }
 }

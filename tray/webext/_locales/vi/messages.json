@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Đóng"
+  },
+  "setLangTitle": {
+    "message": "Ngôn ngữ"
+  },
+  "setLangSub": {
+    "message": "Ngôn ngữ mà tiện ích này sử dụng. Thường thì nó theo trình duyệt."
+  },
+  "langAutomatic": {
+    "message": "Tự động — theo trình duyệt"
+  },
+  "setLangNote": {
+    "message": "Tên và mô tả của chính tiện ích đến từ trình duyệt và không thay đổi."
   }
 }

@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Isara"
+  },
+  "setLangTitle": {
+    "message": "Wika"
+  },
+  "setLangSub": {
+    "message": "Kung anong wika ang ginagamit ng extension na ito. Karaniwang sumusunod ito sa browser."
+  },
+  "langAutomatic": {
+    "message": "Awtomatiko — sundan ang browser"
+  },
+  "setLangNote": {
+    "message": "Ang pangalan at paglalarawan mismo ng extension ay galing sa browser at hindi nagbabago."
   }
 }

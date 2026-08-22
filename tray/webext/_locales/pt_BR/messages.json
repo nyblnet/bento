@@ -454,5 +454,17 @@
   },
   "close": {
     "message": "Fechar"
+  },
+  "setLangTitle": {
+    "message": "Idioma"
+  },
+  "setLangSub": {
+    "message": "Em qual idioma esta extensão fala. Normalmente segue o navegador."
+  },
+  "langAutomatic": {
+    "message": "Automático — seguir o navegador"
+  },
+  "setLangNote": {
+    "message": "O nome e a descrição da própria extensão vêm do navegador e não mudam."
   }
 }

@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Tutup"
+  },
+  "setLangTitle": {
+    "message": "Bahasa"
+  },
+  "setLangSub": {
+    "message": "Bahasa yang digunakan sambungan ini. Biasanya ia mengikut pelayar."
+  },
+  "langAutomatic": {
+    "message": "Automatik — ikut pelayar"
+  },
+  "setLangNote": {
+    "message": "Nama dan perihal sambungan itu sendiri datang daripada pelayar dan tidak berubah."
   }
 }

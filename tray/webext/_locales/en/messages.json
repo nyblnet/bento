@@ -468,5 +468,21 @@
   "close": {
     "message": "Close",
     "description": "Tooltip on the About dialog close button."
+  },
+  "setLangTitle": {
+    "message": "Language",
+    "description": "Settings section heading for the language picker."
+  },
+  "setLangSub": {
+    "message": "Which language this extension speaks. It normally follows the browser.",
+    "description": "Sub-line under the Language heading. REVIEW: \"the browser\" means Chrome/Edge itself."
+  },
+  "langAutomatic": {
+    "message": "Automatic — follow the browser",
+    "description": "First entry in the language picker — follow the browser rather than choosing."
+  },
+  "setLangNote": {
+    "message": "The extension's own name and description come from the browser and do not change.",
+    "description": "REVIEW: explains that the extension NAME on the chrome://extensions card is set by the browser and a choice here cannot change it."
   }
 }

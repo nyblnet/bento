@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Tutup"
+  },
+  "setLangTitle": {
+    "message": "Bahasa"
+  },
+  "setLangSub": {
+    "message": "Bahasa yang digunakan ekstensi ini. Biasanya mengikuti peramban."
+  },
+  "langAutomatic": {
+    "message": "Otomatis — ikuti peramban"
+  },
+  "setLangNote": {
+    "message": "Nama dan deskripsi ekstensi ini sendiri berasal dari peramban dan tidak berubah."
   }
 }

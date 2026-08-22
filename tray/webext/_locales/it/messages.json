@@ -454,5 +454,17 @@
   },
   "close": {
     "message": "Chiudi"
+  },
+  "setLangTitle": {
+    "message": "Lingua"
+  },
+  "setLangSub": {
+    "message": "In quale lingua parla questa estensione. Di norma segue il browser."
+  },
+  "langAutomatic": {
+    "message": "Automatico — segui il browser"
+  },
+  "setLangNote": {
+    "message": "Il nome e la descrizione dell'estensione stessa vengono dal browser e non cambiano."
   }
 }

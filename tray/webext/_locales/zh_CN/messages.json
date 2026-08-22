@@ -454,5 +454,17 @@
   },
   "close": {
     "message": "关闭"
+  },
+  "setLangTitle": {
+    "message": "语言"
+  },
+  "setLangSub": {
+    "message": "此扩展程序使用的语言。通常跟随浏览器。"
+  },
+  "langAutomatic": {
+    "message": "自动 — 跟随浏览器"
+  },
+  "setLangNote": {
+    "message": "扩展程序自身的名称和说明来自浏览器，不会改变。"
   }
 }

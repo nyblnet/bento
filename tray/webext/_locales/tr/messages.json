@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Kapat"
+  },
+  "setLangTitle": {
+    "message": "Dil"
+  },
+  "setLangSub": {
+    "message": "Bu uzantının konuştuğu dil. Normalde tarayıcıyı izler."
+  },
+  "langAutomatic": {
+    "message": "Otomatik — tarayıcıyı izle"
+  },
+  "setLangNote": {
+    "message": "Uzantının kendi adı ve açıklaması tarayıcıdan gelir ve değişmez."
   }
 }

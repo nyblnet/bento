@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "닫기"
+  },
+  "setLangTitle": {
+    "message": "언어"
+  },
+  "setLangSub": {
+    "message": "이 확장 프로그램이 사용하는 언어입니다. 보통은 브라우저를 따릅니다."
+  },
+  "langAutomatic": {
+    "message": "자동 — 브라우저를 따름"
+  },
+  "setLangNote": {
+    "message": "확장 프로그램 자체의 이름과 설명은 브라우저에서 오므로 바뀌지 않습니다."
   }
 }

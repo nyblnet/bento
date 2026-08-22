@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Luk"
+  },
+  "setLangTitle": {
+    "message": "Sprog"
+  },
+  "setLangSub": {
+    "message": "Hvilket sprog denne udvidelse taler. Normalt følger den browseren."
+  },
+  "langAutomatic": {
+    "message": "Automatisk — følg browseren"
+  },
+  "setLangNote": {
+    "message": "Udvidelsens eget navn og beskrivelse kommer fra browseren og ændrer sig ikke."
   }
 }

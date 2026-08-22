@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Sulje"
+  },
+  "setLangTitle": {
+    "message": "Kieli"
+  },
+  "setLangSub": {
+    "message": "Millä kielellä tämä laajennus puhuu. Yleensä se seuraa selainta."
+  },
+  "langAutomatic": {
+    "message": "Automaattinen — seuraa selainta"
+  },
+  "setLangNote": {
+    "message": "Laajennuksen oma nimi ja kuvaus tulevat selaimesta eivätkä muutu."
   }
 }

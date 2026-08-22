@@ -454,5 +454,17 @@
   },
   "close": {
     "message": "閉じる"
+  },
+  "setLangTitle": {
+    "message": "言語"
+  },
+  "setLangSub": {
+    "message": "この拡張機能が話す言語です。通常はブラウザーに従います。"
+  },
+  "langAutomatic": {
+    "message": "自動 — ブラウザーに従う"
+  },
+  "setLangNote": {
+    "message": "拡張機能自体の名前と説明はブラウザーから来るため、変わりません。"
   }
 }

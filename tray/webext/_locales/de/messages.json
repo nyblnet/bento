@@ -454,5 +454,17 @@
   },
   "close": {
     "message": "Schließen"
+  },
+  "setLangTitle": {
+    "message": "Sprache"
+  },
+  "setLangSub": {
+    "message": "In welcher Sprache diese Erweiterung spricht. Normalerweise folgt sie dem Browser."
+  },
+  "langAutomatic": {
+    "message": "Automatisch — dem Browser folgen"
+  },
+  "setLangNote": {
+    "message": "Name und Beschreibung der Erweiterung selbst stammen vom Browser und ändern sich nicht."
   }
 }

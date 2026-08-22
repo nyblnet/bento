@@ -454,5 +454,17 @@
   },
   "close": {
     "message": "關閉"
+  },
+  "setLangTitle": {
+    "message": "語言"
+  },
+  "setLangSub": {
+    "message": "此擴充功能使用的語言。通常跟隨瀏覽器。"
+  },
+  "langAutomatic": {
+    "message": "自動 — 跟隨瀏覽器"
+  },
+  "setLangNote": {
+    "message": "擴充功能本身的名稱和說明來自瀏覽器，不會改變。"
   }
 }

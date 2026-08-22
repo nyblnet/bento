@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Stäng"
+  },
+  "setLangTitle": {
+    "message": "Språk"
+  },
+  "setLangSub": {
+    "message": "Vilket språk det här tillägget talar. Normalt följer det webbläsaren."
+  },
+  "langAutomatic": {
+    "message": "Automatiskt — följ webbläsaren"
+  },
+  "setLangNote": {
+    "message": "Tilläggets eget namn och beskrivning kommer från webbläsaren och ändras inte."
   }
 }

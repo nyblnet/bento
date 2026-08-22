@@ -421,5 +421,17 @@
   },
   "close": {
     "message": "Zamknij"
+  },
+  "setLangTitle": {
+    "message": "Język"
+  },
+  "setLangSub": {
+    "message": "W jakim języku mówi to rozszerzenie. Zwykle podąża za przeglądarką."
+  },
+  "langAutomatic": {
+    "message": "Automatycznie — podążaj za przeglądarką"
+  },
+  "setLangNote": {
+    "message": "Nazwa i opis samego rozszerzenia pochodzą z przeglądarki i się nie zmieniają."
   }
 }
