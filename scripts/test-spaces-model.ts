@@ -2267,5 +2267,81 @@ function fsTable(f: string): string {
     'the merged document parses with NOTHING to repair — the import needed no rescue')
 }
 
+// ---- THE PROPERTIES PANEL COSTS NOTHING UNTIL IT IS ASKED FOR ---------------
+// The wide-page work one commit earlier gave the reading column the window's
+// slack. A right-hand panel is the obvious way to undo that: 280px held open on
+// every screen, forever, for settings most readers change once a month. So the
+// panel's DEFAULT-CLOSED and its zero-cost-while-closed geometry are pinned
+// here rather than left to whoever next edits the stylesheet.
+//
+// This is a SOURCE scan, deliberately. There is no DOM in node, so the honest
+// thing to assert is the two rules the browser then follows — what the stored
+// preference has to say before the panel opens, and what the closed panel
+// contributes to the flex row — rather than a mock that would agree with
+// whatever it was written beside.
+{
+  const props = fsTable('props.ts')
+  const editor = fsTable('editor.ts')
+  const css = fsTable('styles.css')
+
+  // 1. CLOSED UNLESS THIS READER OPENED IT. The field initialises to true and
+  //    only the explicit '0' — written by toggleInsp — opens it, so an absent
+  //    key (a fresh file, a new browser, a locked-down origin that threw)
+  //    means closed.
+  ok(/private inspClosed = true/.test(editor),
+    'the properties panel is CLOSED by default')
+  ok(/localStorage\.getItem\('bento-sp-insp-closed'\) !== '0'/.test(editor),
+    "…and only an explicit '0' opens it, so an absent preference is still closed")
+  ok(/localStorage\.setItem\('bento-sp-insp-closed'/.test(editor),
+    'the open/closed state PERSISTS, so it is chosen once and not every session')
+
+  // 2. WHILE CLOSED IT TAKES NO WIDTH. `.sp-main` is `flex: 1 1 auto`, so a
+  //    closed panel that zeroes its basis, its inline padding and its border is
+  //    a panel the reading column cannot feel. Any one of the three left in
+  //    place is width off the page on every screen.
+  const shut = css.slice(css.indexOf('.sp-insp.sp-pane-closed'))
+  const rule = shut.slice(0, shut.indexOf('}') + 1)
+  ok(/flex-basis:\s*0/.test(rule), 'a closed properties panel has flex-basis 0')
+  ok(/padding-inline:\s*0/.test(rule), '…no inline padding')
+  ok(/border-inline-start-width:\s*0/.test(rule), '…and no border')
+  ok(/\.sp-main \{\s*\n?\s*flex: 1 1 auto/.test(css),
+    'the reading column is flex:1 1 auto, so the width a closed panel gives up goes back to it')
+
+  // 3. THE PANEL IS THE READER'S, NEVER THE DOCUMENT'S — the same rule the page
+  //    list's width, the language and the reader width already follow. A panel
+  //    state written into the file would arrive open in somebody else's copy.
+  ok(!/doc\.(insp|panel)|theme\.(insp|panel)/.test(editor + props),
+    'nothing about the panel is written into the document')
+
+  // 4. BELOW THE DRAWER BREAKPOINT IT IS AN OVERLAY, not a third column — the
+  //    bargain the page list already makes at the same 820px.
+  const phone = css.slice(css.indexOf('@media (max-width: 820px) {\n  .sp-insp-rz'))
+  ok(/\.sp-insp \{ display: none; \}/.test(phone.slice(0, 400)),
+    'below 820px the panel is absent until asked for')
+  ok(/\.sp-insp\.sp-open \{[^}]*position: fixed/.test(phone.slice(0, 800)),
+    '…and then it is a fixed overlay, never a column')
+
+  // 5. THE ACCORDION IS SLIDES', including the persisted-per-title open state,
+  //    so a section added below is collapsible without anyone remembering.
+  ok(/querySelectorAll<HTMLElement>\('\.sp-insp-sec'\)/.test(props) &&
+     /localStorage\.setItem\(OPEN_KEY/.test(props),
+    'sections collapse and their open state is remembered per title')
+
+  // 6. ONE CHANGE IS ONE UNDO STEP. Every control commits through one helper
+  //    that wraps a single `store.commit`, and every text field commits on
+  //    `change` rather than on `input` — an undo entry per keystroke is what
+  //    `input` would buy.
+  ok(/private commit\(id: string, fn: \(b: Block\) => void\): void \{[\s\S]{0,300}?s\.commit\(/.test(props),
+    'block edits go through ONE store.commit')
+  ok(!/addEventListener\('input'/.test(props),
+    'no control commits on every keystroke')
+
+  // 7. IT DOES NOT REPLACE THE SURFACES IT DUPLICATES. The chip on a callout
+  //    and the language chip on a code block are still the fast route; a panel
+  //    that justified itself by removing them would be a worse editor.
+  ok(/sp-callout-chip/.test(editor) && /sp-langchip/.test(editor),
+    'the block chips survive the panel')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

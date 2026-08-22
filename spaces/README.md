@@ -77,6 +77,7 @@ load contract and format additivity.
 | `src/highlight.ts` | the code lexer — text → `{kind, a, b}` ranges, no DOM, no strings |
 | `src/markdown.ts` | markdown → blocks, the folder tree → the page tree, `[[wikilinks]]` → `#p/` links. Pure and DOM-free, so the import is tested in node |
 | `src/editor.ts` | topbar, sidebar, block menu, `[[` picker, ⌘K, ⌘F, archive |
+| `src/props.ts` | the right-hand properties panel — what a block and a page can be, and the one thing it must not cost: the page's width |
 | `src/collabui.ts` | who else is here — presence in the tree, the people panel, the live control |
 | `src/comments.ts` | review threads — markers in the end margin, the thread popover, the tree badge |
 | `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |

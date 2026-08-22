@@ -546,7 +546,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 
 /* ————— print: the only export-to-PDF path, so it is a contract ————— */
 @media print {
-  .sp-bar, .sp-side, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
+  .sp-bar, .sp-side, .sp-insp, .sp-insp-rz, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
   .sp-tb-tools, .sp-tb-grip { display: none !important; }
   .sp-main { overflow: visible; padding: 0; background: #fff; }
   .sp-toggle-body[hidden] { display: block !important; }  /* toggles print OPEN */
@@ -1000,6 +1000,109 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 @media (max-width: 820px) {
   .sp-panel-toggle { display: inline-flex; }
 }
+
+/* ————— the properties panel —————
+   The sibling of the page list, on the other edge, with the SAME resizer strip
+   and the SAME chevron. Two collapse idioms in one window would be two things
+   to learn for one behaviour.
+
+   IT COSTS NOTHING WHILE CLOSED, and that is the whole point of the rule
+   rather than a nicety: the wide-page work that shipped one commit before this
+   gives the column the window's slack, and a panel holding 280px of it open by
+   default would take that back on every screen. Closed is `flex-basis: 0`, no
+   padding and no border — `.sp-main` is `flex: 1 1 auto`, so the column is the
+   width it would be if this file did not exist. */
+.sp-insp {
+  flex: 0 0 var(--sp-inspw, 280px); min-width: 0;
+  transition: flex-basis .18s ease, padding .18s ease;
+  border-inline-start: 1px solid var(--line); background: var(--chrome);
+  overflow: auto; padding: 10px 10px max(16px, env(safe-area-inset-bottom));
+}
+.sp-insp.sp-pane-closed {
+  flex-basis: 0; padding-inline: 0; border-inline-start-width: 0; overflow: hidden;
+}
+/* Mirror of the page list's strip. The chevron docks to the END edge when the
+   panel is shut, so there is always a way back in. */
+.sp-insp-rz.sp-shut { cursor: default; }
+.sp-insp-rz.sp-shut:hover { background: transparent; }
+.sp-insp-rz.sp-shut .sp-pane-tab {
+  inset-inline-end: 0; left: auto; transform: translateY(-50%);
+}
+
+.sp-insp-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted);
+  margin: 2px 6px 8px;
+}
+/* The accordion header. Clicking anywhere on it opens or shuts the group — the
+   same retrofit slides applies to `.ed-section`, so a section added below is
+   collapsible without anyone remembering to make it so. */
+.sp-insp-sec {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 4px; padding: 5px 6px;
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  border-radius: 7px; cursor: pointer; user-select: none;
+}
+.sp-insp-sec:hover { background: var(--chrome-2); }
+.sp-insp-sec::before {
+  content: '▾'; font-size: 9px; color: var(--muted); width: 9px;
+}
+.sp-insp-sec.sp-shut::before { content: '▸'; }
+.sp-insp-sub {
+  margin-inline-start: auto; font-weight: 400; font-size: 11.5px;
+  color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-insp-body { display: block; }
+.sp-insp-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 4px 6px; font-size: 13px;
+}
+.sp-insp-lbl { color: var(--ink-2); flex: 0 1 auto; min-width: 0; }
+.sp-insp-row > :not(.sp-insp-lbl) { flex: 0 0 auto; max-width: 60%; }
+.sp-insp-txt, .sp-insp-num {
+  font: inherit; font-size: 12.5px; color: var(--ink);
+  background: #fff; border: 1px solid var(--line); border-radius: 7px;
+  padding: 4px 7px; width: 148px; min-width: 0;
+}
+.sp-insp-num { width: 64px; }
+.sp-insp-txt:focus, .sp-insp-num:focus { outline: none; border-color: var(--blue); }
+.sp-insp-tog { width: 15px; height: 15px; accent-color: var(--blue); }
+.sp-insp-step { display: inline-flex; align-items: center; gap: 2px; }
+.sp-insp-step .sp-btn { padding: 2px 8px; line-height: 1.2; }
+.sp-insp-n { min-width: 26px; text-align: center; font-variant-numeric: tabular-nums; }
+.sp-insp-icon { padding: 4px 8px; }
+.sp-insp-icon svg { width: 15px; height: 15px; }
+.sp-insp-hint {
+  margin: 4px 6px 8px; font-size: 12px; line-height: 1.45; color: var(--muted);
+}
+.sp-insp .sp-select { max-width: 100%; }
+
+/* THE SAME BARGAIN THE PAGE LIST MAKES BELOW THE BREAKPOINT: an overlay, not a
+   third column. 820px of window does not hold two panels and a page. */
+@media (max-width: 820px) {
+  .sp-insp-rz { display: none; }
+  .sp-insp { display: none; }
+  .sp-insp.sp-open {
+    display: block; position: fixed; inset: 0 0 0 auto; width: 288px;
+    z-index: 50; box-shadow: 0 0 50px rgb(20 30 45 / .3);
+    padding-top: max(14px, env(safe-area-inset-top));
+  }
+  [dir='rtl'] .sp-insp.sp-open { inset: 0 auto 0 0; }
+}
+
+/* Above the breakpoint the chevron on the strip IS the control, so a second one
+   in the topbar would be the duplication `.sp-panel-toggle` documents avoiding.
+   Below it there is no strip, so the button is the only way in. */
+.sp-insp-toggle { display: none; }
+@media (max-width: 820px) {
+  .sp-insp-toggle { display: inline-flex; }
+}
+/* …AND NOT EVEN THERE ONCE THE BAR HAS FOLDED. Measured at 375px: the 40px
+   button took the document title from 70px to 26px. fitTopbar hands out the
+   tier as a class precisely so a control can ask "is there room for me" rather
+   than re-derive a breakpoint; below the fold this one lives in the ⋯ menu, the
+   same place undo/redo and the other ways to save go. */
+.sp-bar-fold .sp-insp-toggle { display: none; }
 
 /* A disabled action is shown, not hidden: "move up" missing from the top block
    is a menu that changes shape, and a menu that changes shape is one you have
