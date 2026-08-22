@@ -39,6 +39,7 @@ import { clearVersions, clearRecovery } from '../../kernel/src/autosave.ts'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
+import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
@@ -525,9 +526,13 @@ export function openAbout(hooks: AboutHooks): void {
     // capability — the room, the read key and the private halves that grant
     // writing and revoking — so the copy strips the block outright, the way
     // the page extract does. It used to copy the live document whole.
-    const clone = JSON.parse(JSON.stringify(store.doc)) as SpacesDoc
-    delete clone.collab
-    navigator.clipboard?.writeText(JSON.stringify(clone, null, 2))
+    //
+    // Through model.docForExport, not a local clone-and-delete: this landed on
+    // main independently while this dialog was being rebuilt, and two strippers
+    // for one rule is how the two of them start to disagree. The shared one
+    // also strips by REMOVING, so a private field added to the credentials
+    // later is covered without either call site being touched.
+    navigator.clipboard?.writeText(JSON.stringify(docForExport(store.doc), null, 2))
       .then(() => { copyJson.textContent = t('Copied ✓'); say(t('Document JSON copied')) })
       .catch(() => { copyJson.textContent = t('Couldn’t access the clipboard') })
       .finally(() => { setTimeout(() => { copyJson.textContent = t('Copy document JSON') }, 1800) })

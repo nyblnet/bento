@@ -22,6 +22,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '../tray/webext/src/library.js'
+import { releaseSigner, sha256Hex } from './lib/release-sign.ts'
 
 let failures = 0
 let checks = 0
@@ -323,26 +324,52 @@ if (existsSync(REAL)) {
 }
 
 // ---- 4. new document --------------------------------------------------------
-const fakeNet = (version = '1.0.17', html = '<html>shell</html>') => async (url: string) => ({
-  ok: true,
-  async json() { return { version, url: 'https://bento.page/releases/slides/Bento_Slides.bento.html' } },
-  async text() { return html },
-  url,
-})
+// The release channel is SIGNED, and these fixtures are signed too — with a
+// throwaway key, handed to `newDocument` through the same seam that substitutes
+// `fetch`. What this section tests is naming and dispatch; the trust chain
+// itself, and the real captured manifest that pins its format, live in
+// `scripts/test-webext-release.ts`.
+//
+// They are signed here rather than faked because the fixture in this slot used
+// to be `{version, url}` flat — the shape the CODE wanted, not the shape the
+// SERVER sends — and it passed, cheerfully, for a `newDocument` that threw on
+// every real invocation. A fixture that is not the real shape tests nothing.
+const SHELL = '<html>shell</html>'
+const signer = await releaseSigner()
+const RELEASE_URL = 'https://bento.page/releases/slides/Bento_Slides.bento.html'
+
+const fakeNet = (version = '1.0.17', html = SHELL, app = 'bento-slides') => {
+  // The manifest pins the shell it is serving. Computed from the bytes this
+  // fixture will actually hand back, so the fixture cannot drift out of its own
+  // pin — and so a test that wants a MISMATCH has to arrange one deliberately.
+  const envelope = sha256Hex(new TextEncoder().encode(html))
+    .then((sha256) => signer.envelope({ app, version, url: RELEASE_URL, sha256 }))
+  return async (url: string) => url.endsWith('manifest.json')
+    ? { ok: true, status: 200, async text() { return await envelope }, url }
+    : {
+        ok: true,
+        status: 200,
+        async arrayBuffer() { return new TextEncoder().encode(html).buffer },
+        url,
+      }
+}
+const signedDeps = (net: any, extra: Record<string, unknown> = {}) =>
+  ({ fetch: net, jwk: signer.jwk, ...extra })
+
 {
   written.clear()
   const tree: Record<string, any> = {}
   const dir = dirHandle('Decks', tree)
-  const made = await newDocument(dir as any, 'Untitled', { fetch: fakeNet() })
+  const made = await newDocument(dir as any, 'Untitled', signedDeps(fakeNet()))
   ok(made.name === 'Untitled.bento.html', 'the first new document is Untitled.bento.html')
-  ok(written.get('Untitled.bento.html') === '<html>shell</html>',
+  ok(written.get('Untitled.bento.html') === SHELL,
     'and carries the downloaded release, so it is the same version everyone else has')
 }
 {
   written.clear()
   const tree: Record<string, any> = { 'Untitled.bento.html': fileHandle('Untitled.bento.html') }
   const dir = dirHandle('Decks', tree)
-  const made = await newDocument(dir as any, 'Untitled', { fetch: fakeNet() })
+  const made = await newDocument(dir as any, 'Untitled', signedDeps(fakeNet()))
   // UIKit's own de-duplicator produces "Untitled.bento 2.html" here, because it
   // reads `.bento.html` as the name "Untitled.bento" plus extension "html" and
   // counts before the LAST extension only. tray/ios had to write its own for
@@ -354,17 +381,18 @@ const fakeNet = (version = '1.0.17', html = '<html>shell</html>') => async (url:
 {
   const dir = dirHandle('Decks', {})
   let threw = ''
-  await newDocument(dir as any, 'X', { fetch: async () => ({ ok: false, status: 503 }) })
+  await newDocument(dir as any, 'X', signedDeps(async () => ({ ok: false, status: 503 })))
     .catch((e: any) => { threw = e.message })
   ok(/release server/.test(threw), `an unreachable release server is reported, not silent (${threw})`)
 }
 {
   const dir = dirHandle('Decks', {})
   let threw = ''
-  await newDocument(dir as any, 'X', {
-    fetch: async () => ({ ok: true, async json() { return {} } }),
-  }).catch((e: any) => { threw = e.message })
-  ok(/did not offer a build/.test(threw), 'a manifest with no build is reported rather than written as empty')
+  await newDocument(dir as any, 'X', signedDeps(
+    async () => ({ ok: true, status: 200, async text() { return '{}' } })))
+    .catch((e: any) => { threw = e.message })
+  ok(/not signed/.test(threw),
+    `a manifest that offers no signed build is reported rather than written as empty (${threw})`)
 }
 
 // ---- 5. duplicate and rename ------------------------------------------------
@@ -470,27 +498,21 @@ const fakeNet = (version = '1.0.17', html = '<html>shell</html>') => async (url:
 {
   written.clear()
   const asked: string[] = []
-  const net = async (url: string) => {
-    asked.push(url)
-    return {
-      ok: true,
-      async json() { return { version: '1.0.0', url: 'https://bento.page/x.bento.html' } },
-      async text() { return '<html>spaces</html>' },
-    }
-  }
+  const inner = fakeNet('1.0.0', '<html>spaces</html>', 'bento-spaces')
+  const net = async (url: string) => { asked.push(url); return inner(url) }
   const dir = dirHandle('Decks', {})
-  const made = await newDocument(dir as any, 'Untitled', { fetch: net, app: 'spaces' })
+  const made = await newDocument(dir as any, 'Untitled', signedDeps(net, { app: 'spaces' }))
   ok(asked[0].includes('/spaces/'), `the chosen app's channel is used (${asked[0]})`)
   ok(made.app === 'Spaces', `and the result says what was made (${made.app})`)
+  ok(written.get('Untitled.bento.html') === '<html>spaces</html>',
+    'and it is the Spaces build that lands, not whatever the first channel serves')
 }
 {
   // An unknown app must not silently fetch nothing, nor pick at random.
   const asked: string[] = []
-  const net = async (url: string) => {
-    asked.push(url)
-    return { ok: true, async json() { return { version: '1', url: 'https://x/y' } }, async text() { return 'x' } }
-  }
-  await newDocument(dirHandle('Decks', {}) as any, 'Untitled', { fetch: net, app: 'nonsense' })
+  const inner = fakeNet()
+  const net = async (url: string) => { asked.push(url); return inner(url) }
+  await newDocument(dirHandle('Decks', {}) as any, 'Untitled', signedDeps(net, { app: 'nonsense' }))
   ok(asked[0] === APPS[0].manifest,
     'an unknown app falls back to the first, rather than requesting an invented URL')
 }

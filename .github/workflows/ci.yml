@@ -334,6 +334,20 @@ jobs:
         # document carrying an image.
         run: node scripts/test-webext-library.ts
 
+      - name: WebExtension release-trust rig
+        # Creating a document downloads an app shell and writes it to the user's
+        # disk, where they later double-click it — executable HTML they go on to
+        # trust. So the manifest's signature is checked against the key compiled
+        # into the extension, and the download against the digest that signature
+        # covers. Signature over the pin, pin over the bytes.
+        #
+        # It also reads a REAL manifest captured from the release origin, which
+        # is the check that could not be faked into passing: the shipped code
+        # read `url` off the top level of a SIGNED ENVELOPE that has no top-level
+        # url, so the + button had never worked in any version — and the rig
+        # agreed, because its fixture was written to the shape the code wanted.
+        run: node scripts/test-webext-release.ts
+
       - name: WebExtension update-notice rig
         # Store installs update themselves; one loaded unpacked never will, and
         # Chrome ignores update_url for a development install. So the GitHub

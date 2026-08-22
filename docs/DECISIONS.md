@@ -562,6 +562,104 @@ a notes app may never blur — while a page changes only when somebody
 navigates, which is the rate presence is worth.
 
 ---
+## 2026-08-16 — Creating a document: every host VERIFIES the release it downloads
+
+**Decision.** Starter shells are bundled in no host (settled separately the same
+day: they change too often, and there are three apps with more coming), so
+fetch-from-the-release-channel is the ONLY way any tray host creates a document.
+That path must therefore verify, in this order, in every host:
+
+1. fetch the manifest **as text** — it is a signed envelope, `{payload, sig}`,
+   and the fields (`app`, `version`, `sha256`, `url`) are inside the payload
+   STRING; there is nothing useful at the top level;
+2. verify the ECDSA P-256 / SHA-256 signature over the payload's **exact UTF-8
+   bytes** (no canonicalisation) against the release public key;
+3. check the payload's `app` matches the channel being read — the channels are
+   sibling paths on one origin, so a genuine manifest from the wrong path hands
+   somebody a different application;
+4. download the shell and check its sha256 against the payload's pin;
+5. only then touch a file handle. A refusal writes **nothing**.
+
+**Why.** The shell is executable HTML written to the user's own disk, which they
+subsequently double-click and trust. Without the chain, whoever can answer for
+the release origin — compromised host, bad CDN edge, hostile-network proxy —
+chooses what code the user creates. Signature over the pin, pin over the bytes;
+neither half is worth anything alone.
+
+Step 3 is the one that is invisible to the other two, so it is the one that gets
+skipped: a `bento-slides` manifest and a `bento-dash` manifest are both
+genuinely signed by the same key, and the shell each points at really does hash
+to what its payload pins. Serving one on the other's channel passes the
+signature AND the digest — every byte authentic, just not what was asked for.
+Only identity catches a swap between two REAL releases, which is exactly what
+survives an origin or CDN compromise where the attacker cannot forge but can
+re-serve. The check must be made against the app that was **requested**, not
+against the payload's own claim about itself, and an ABSENT `app` must not read
+as a match. (`tray/ios` found both native hosts missing this while reviewing
+webext's rig — PR #315, PR #318.)
+
+**Ask for BYTES: send `Accept: */*` explicitly on every release fetch.**
+Measured against the live shell URL on 2026-08-17, independently by tray/ios and
+tray/webext: the wildcard returns 689,316 bytes and matches the signed pin; a
+browser's own `Accept: text/html,…` returns 689,675 and does not. The extra 359
+bytes are a Cloudflare Web Analytics beacon the edge injects before `</body>`
+into anything it reads as a page being browsed. Same URL, same `.bento.html`
+extension both times, so the trigger is the header — fortunate, because a
+path-keyed injection could not be avoided by any host. Most platforms already
+default to the wildcard; set it anyway, because the default is the platform's
+and not ours. (An earlier note that this was "fixed at the origin" was wrong and
+is retracted — it is live as of this entry.)
+
+**NO DOWNGRADES: every host keeps a per-app version floor.** Decided by Andy on
+2026-08-17, after `tray/ios` implemented one and `tray/webext` held pending the
+call — it is a policy trade, not a pure security win, and three hosts
+half-adopting it would be worse than one landing late. A replayed OLD release
+passes signature, app identity AND digest: it is genuinely signed and its shell
+really does hash to its pin. Only memory catches it, because a document being
+created carries no version to be monotonic against (unlike the shell's own
+update, which measures from its running build). Two details that bite:
+
+- **Raise the floor only AFTER the downloaded bytes pass their hash.** Raising
+  it on a merely-verified manifest lets one forged-but-unfetchable release lock
+  the host out of every real release below it — a failed attack made permanent.
+- **An EQUAL version must be accepted.** Re-fetching the version already held is
+  the normal case (the second document somebody creates), and refusing it breaks
+  creation on its second use rather than at some exotic edge.
+
+An unreadable store reads as NO floor: availability over protection in a case
+that is not an attack. An unparsable version component sorts as 0 rather than
+throwing — verified identical in `kernel/src/update.ts`, `tray/webext`'s
+`compareVersions` and `Releases.swift`, since `Number('x')` is NaN and
+`NaN || 0` is 0. **The accepted cost:** a deliberate maintainer rollback is
+refused until the version moves past the floor. That is the same trade
+`kernel/src/update.ts` already makes, so the whole system is at least
+consistent.
+
+**A 404 on a channel is an ANSWER, not a fault.** Only Slides is published
+today; the app list is aspirational on every host. All three say
+"<App> has not been released yet" rather than surfacing an HTTP status.
+
+**Status.** `tray/webext` done (`src/release.js`, used by `library.js
+newDocument`); `tray/ios` done (`Releases.swift`, PR #315); `tray/android` in
+progress.
+
+**Pointers.** `kernel/src/update.ts` is the reference implementation
+(`verifySigned` / `fetchPinned` / `verifyManifest`) and hosts should reuse it
+where they can import it. The extension **cannot** — it ships as unbundled ES
+modules Chrome loads from disk, and adding a bundler would mean the shipped
+package is no longer the reviewed source — so `tray/webext/src/release.js` is a
+deliberate line-by-line mirror, with the resulting obligation stated in the
+file: *if the key or the envelope format moves in the kernel, it moves here
+too.* `scripts/test-webext-release.ts` pins both ends against a REAL captured
+manifest (`scripts/fixtures/release-manifest-slides.json`).
+
+**The failure this came out of, because it generalises.** `newDocument` read
+`manifest.url` off the envelope's top level, where there is no `url`, and so
+threw on every invocation: the `+` button had never worked in any version. Its
+rig passed, because the fixture was written to the shape the CODE expected
+rather than the shape the SERVER sends. A fixture that is not the real shape
+proves only that the code agrees with itself — hence the captured manifest, and
+hence the same warning for android and ios.
 
 ## 2026-08-16 — Document search: the list stays native, the indexer is shared by FIXTURE
 

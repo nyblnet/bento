@@ -353,6 +353,30 @@ export interface SpacesDoc {
   [extra: string]: unknown
 }
 
+/**
+ * The document with its collaboration SECRETS removed, for anything a person
+ * copies, pastes or hands to somebody else.
+ *
+ * `doc.collab` is minted at creation, so EVERY space has one from its first
+ * save — and it holds the read capability (`key`), the write capability
+ * (`writerPriv`), the owner key that can also revoke (`ownerPriv`) and any
+ * invite's private half. "Copy document JSON" put all of that on the
+ * clipboard, under a note inviting exactly that copy ("the whole document is
+ * plain JSON in this file"), and the natural next step is pasting it into a
+ * chat window. bento/slides had this same bug, fixed it, and wrote a rig to
+ * stop it coming back — the rig only ever looked at slides/.
+ *
+ * DERIVED BY REMOVING, not by listing what to keep: a private field added to
+ * CollabCreds later is stripped by this without anyone remembering to.
+ * `room` and `key` go too — together they ARE the read capability, and a room
+ * id is the thing the relay keys on.
+ */
+export function docForExport(doc: SpacesDoc): SpacesDoc {
+  const { collab, ...rest } = doc as SpacesDoc & { collab?: unknown }
+  void collab
+  return rest as SpacesDoc
+}
+
 export const uid = (p = 'b'): string => {
   const r = globalThis.crypto?.randomUUID?.()
   return r ? `${p}-${r.slice(0, 8)}` : `${p}-${Math.random().toString(36).slice(2, 10)}`
