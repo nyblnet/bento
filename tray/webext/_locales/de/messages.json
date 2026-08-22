@@ -466,5 +466,8 @@
   },
   "setLangNote": {
     "message": "Name und Beschreibung der Erweiterung selbst stammen vom Browser und ändern sich nicht."
+  },
+  "aboutPromo": {
+    "message": "Neu bei Bento? Vorlagen, die Galerie und den KI-Bearbeitungsleitfaden gibt es auf $1 — oder gib dem Projekt einen Stern auf $2."
   }
 }

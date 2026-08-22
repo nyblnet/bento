@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Udvidelsens eget navn og beskrivelse kommer fra browseren og ændrer sig ikke."
+  },
+  "aboutPromo": {
+    "message": "Ny med Bento? Find skabeloner, galleriet og AI-redigeringsguiden på $1 — eller giv den en stjerne på $2."
   }
 }

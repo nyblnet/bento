@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Uzantının kendi adı ve açıklaması tarayıcıdan gelir ve değişmez."
+  },
+  "aboutPromo": {
+    "message": "Bento'da yeni misiniz? Şablonlar, galeri ve yapay zekâ düzenleme rehberi $1 adresinde — ya da $2 üzerinde yıldız verin."
   }
 }

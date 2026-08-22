@@ -466,5 +466,8 @@
   },
   "setLangNote": {
     "message": "Il nome e la descrizione dell'estensione stessa vengono dal browser e non cambiano."
+  },
+  "aboutPromo": {
+    "message": "Nuovo su Bento? Trovi modelli, la galleria e la guida all’editing con l’IA su $1 — o lascia una stella su $2."
   }
 }

@@ -466,5 +466,8 @@
   },
   "setLangNote": {
     "message": "El nombre y la descripción de la propia extensión vienen del navegador y no cambian."
+  },
+  "aboutPromo": {
+    "message": "¿Nuevo en Bento? Encuentra plantillas, la galería y la guía de edición con IA en $1, o dale una estrella en $2."
   }
 }

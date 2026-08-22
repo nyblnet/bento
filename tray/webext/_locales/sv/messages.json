@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Tilläggets eget namn och beskrivning kommer från webbläsaren och ändras inte."
+  },
+  "aboutPromo": {
+    "message": "Ny med Bento? Hitta mallar, galleriet och AI-redigeringsguiden på $1 — eller ge den en stjärna på $2."
   }
 }

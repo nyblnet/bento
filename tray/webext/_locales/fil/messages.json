@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Ang pangalan at paglalarawan mismo ng extension ay galing sa browser at hindi nagbabago."
+  },
+  "aboutPromo": {
+    "message": "Bago sa Bento? Makikita ang mga template, ang gallery at ang gabay sa pag-edit gamit ang AI sa $1 — o bigyan ito ng star sa $2."
   }
 }

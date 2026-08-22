@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "De naam en beschrijving van de extensie zelf komen van de browser en veranderen niet."
+  },
+  "aboutPromo": {
+    "message": "Nieuw bij Bento? Sjablonen, de galerie en de AI-bewerkingsgids vind je op $1 — of geef het een ster op $2."
   }
 }

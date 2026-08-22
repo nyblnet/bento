@@ -63,8 +63,17 @@
   .dlg .x { border: 0; background: none; color: var(--dim); font: inherit; cursor: pointer;
     padding: 3px 6px; border-radius: 6px; line-height: 1 }
   .dlg .x:hover { background: var(--hover); color: var(--ink) }
-  #aboutBody { padding: 0 16px 16px }
-  #aboutBody p { margin: 0 0 12px; color: var(--dim); font-size: 13px; line-height: 1.55 }
+  .dlghead .ver { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums }
+  #aboutBody { padding: 0 16px 16px; display: grid; gap: 10px }
+  #aboutBody p { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.55 }
+  /* The invitation back to the project — the same one bento/slides makes. */
+  .ab-promo { color: var(--dim); font-size: 13px; line-height: 1.55 }
+  .ab-promo a { color: var(--ink) }
+  /* Version status reuses the `.row` shape Settings uses, so the two screens
+     look like one product saying one thing. */
+  .ab-ver { margin: 0 }
+  .ab-note, .ab-foot { color: var(--dim); font-size: 12.5px; line-height: 1.5 }
+  .ab-foot { border-top: 1px solid var(--line); padding-top: 10px }
 
   #notice { display: grid; gap: 8px; padding: 0 22px 10px }
   #notice:empty { padding: 0 }
@@ -261,6 +270,7 @@
   <div class="dlghead">
     <img class="mark" src="../icons/icon.svg" alt="">
     <b>bento<i>/</i>tray</b>
+    <span class="ver" id="aboutVer"></span>
     <span class="grow"></span>
     <button class="x" id="aboutClose" data-i18n-title="close">✕</button>
   </div>

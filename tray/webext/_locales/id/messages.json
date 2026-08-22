@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Nama dan deskripsi ekstensi ini sendiri berasal dari peramban dan tidak berubah."
+  },
+  "aboutPromo": {
+    "message": "Baru di Bento? Temukan templat, galeri, dan panduan penyuntingan AI di $1 — atau beri bintang di $2."
   }
 }

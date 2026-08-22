@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Nama dan perihal sambungan itu sendiri datang daripada pelayar dan tidak berubah."
+  },
+  "aboutPromo": {
+    "message": "Baharu dengan Bento? Cari templat, galeri dan panduan penyuntingan AI di $1 — atau beri bintang di $2."
   }
 }

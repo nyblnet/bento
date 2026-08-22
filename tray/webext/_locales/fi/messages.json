@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Laajennuksen oma nimi ja kuvaus tulevat selaimesta eivätkä muutu."
+  },
+  "aboutPromo": {
+    "message": "Bento uutta sinulle? Mallit, galleria ja tekoälymuokkausopas löytyvät osoitteesta $1 — tai anna tähti palvelussa $2."
   }
 }

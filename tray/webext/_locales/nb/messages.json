@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Utvidelsens eget navn og beskrivelse kommer fra nettleseren og endrer seg ikke."
+  },
+  "aboutPromo": {
+    "message": "Ny med Bento? Finn maler, galleriet og AI-redigeringsguiden på $1 — eller gi den en stjerne på $2."
   }
 }

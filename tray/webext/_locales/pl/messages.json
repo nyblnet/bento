@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Nazwa i opis samego rozszerzenia pochodzą z przeglądarki i się nie zmieniają."
+  },
+  "aboutPromo": {
+    "message": "Pierwszy raz w Bento? Szablony, galerię i przewodnik po edycji z AI znajdziesz na $1 — albo daj gwiazdkę na $2."
   }
 }

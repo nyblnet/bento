@@ -433,5 +433,8 @@
   },
   "setLangNote": {
     "message": "Tên và mô tả của chính tiện ích đến từ trình duyệt và không thay đổi."
+  },
+  "aboutPromo": {
+    "message": "Mới dùng Bento? Bạn có thể tìm mẫu, thư viện và hướng dẫn chỉnh sửa bằng AI tại $1 — hoặc gắn sao trên $2."
   }
 }

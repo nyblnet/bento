@@ -538,11 +538,60 @@ $('sort').addEventListener('change', (e) => { state.sort = e.target.value; rende
 // already uses, so the same question is asked the same way across the suite.
 // <dialog> is used for what it gives free: Esc closes it, focus is trapped and
 // restored, and the backdrop is inert without a click-outside handler of ours.
-function openAbout() {
+async function openAbout() {
   const dlg = $('aboutDlg')
   const body = $('aboutBody')
   const mine = chrome.runtime.getManifest().version
-  body.innerHTML = `<p>${t('helpAboutSub', esc(mine))}</p>`
+  const selfManaged = await isSelfManaged()
+  const upd = await pendingUpdate()
+
+  body.textContent = ''
+  const add = (cls, html) => {
+    const el = document.createElement('div')
+    el.className = cls
+    el.innerHTML = html
+    body.appendChild(el)
+    return el
+  }
+
+  // The route back to the project. bento/slides carries the same invitation in
+  // its About dialog; someone who installed the tray may never have seen the
+  // gallery or the agent guide, and this is the one screen where telling them
+  // is not an interruption.
+  add('ab-promo', t('aboutPromo',
+    '<a href="https://bento.page" target="_blank" rel="noopener">bento.page</a>',
+    '<a href="https://github.com/nyblnet/bento" target="_blank" rel="noopener">GitHub</a>'))
+
+  // Version, and what that means for updates — the same three states Settings
+  // shows, derived the same way, because two screens disagreeing about whether
+  // you are up to date is worse than one screen not saying.
+  const row = add('ab-ver row',
+    `<span class="dot ${upd?.version ? 'meh' : 'ok'}"></span><b>${esc(mine)}</b>`
+    + `<span class="note">${upd?.version
+      ? t('versionAvailable', esc(upd.version))
+      : selfManaged ? t('versionUpToDate') : t('versionManaged')}</span>`)
+  if (upd?.version) {
+    const a = document.createElement('a')
+    a.className = 'btn'
+    a.href = upd.url
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.textContent = t('getIt')
+    row.appendChild(a)
+  }
+  if (selfManaged) {
+    const now = document.createElement('button')
+    now.className = 'btn'
+    now.textContent = t('checkNow')
+    now.onclick = async () => {
+      now.disabled = true
+      // `force`: pressing a button IS the consent the preference stands in for.
+      try { await checkForUpdate({ force: true }) } finally { now.disabled = false }
+      await openAbout()   // repaint with whatever the check found
+    }
+    row.appendChild(now)
+  }
+  add('ab-note', esc(selfManaged ? t('setVersionUnpacked') : t('setVersionStore')))
 
   const links = document.createElement('div')
   links.className = 'links'
@@ -561,7 +610,12 @@ function openAbout() {
     links.appendChild(a)
   }
   body.appendChild(links)
-  dlg.showModal()
+
+  add('ab-foot', esc(t('helpAboutSub', mine)))
+
+  // The version belongs beside the wordmark, as it does in bento/slides.
+  $('aboutVer').textContent = `v${mine}`
+  if (!dlg.open) dlg.showModal()
 }
 
 $('brand').addEventListener('click', openAbout)
