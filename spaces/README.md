@@ -81,6 +81,7 @@ load contract and format additivity.
 | `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |
 | `src/agent.ts` | the agent surface — `validate()`, `outline()`, `stats()`, and the patch verbs behind `window.bento` |
 | `src/assets.ts` | content-addressed images and the downscale |
+| `src/portable.ts` | the two exits: a page out as its own space, another space in under a page |
 | `src/about.ts` | updates, language, password, exports |
 | `src/i18n/` | per-locale catalogs; `packed.ts` is generated and is what ships |
 
@@ -111,6 +112,37 @@ An image referenced by a relative path is resolved against the files that were
 actually selected; when it is not there, the block becomes text quoting the
 path, because a browser cannot open `../attachments/x.png` and a broken `<img>`
 would be a lie about what is in the file.
+
+### Getting notes out again, and back in
+
+`src/portable.ts` is both exits, pure and DOM-free like `markdown.ts`, so the
+round trip is asserted in node rather than clicked through.
+
+**Out:** `extractSpace(doc, pageId, {subtree, docId})` returns a complete
+`bento/spaces` document holding one page and, if asked, its subtree. It carries
+a **fresh `docId`** and **no `collab` at all** — an extract that kept either
+would be a fork of the space it came from, and opening it would join that room
+and sync three pages over two hundred. Only the assets those pages reference
+travel (fonts excepted — the theme names them, so every page references them).
+A link out of the extracted set becomes the literal `[[Page title]]`, the same
+thing an unresolvable wikilink becomes on the way in, so it is honest, still
+searchable, and resolves again if the two halves are ever reunited.
+
+**In:** `planGraft(host, incoming, {under})` nests another space's pages under a
+page of this one. An arriving id is KEPT when this space does not use it and
+only a collision is renamed — through `repairId`, the same derivation-from-the-
+bytes the load path uses, for the same reason. Links inside the import follow
+the rename; a link naming a page that was not in the file becomes text rather
+than a live link onto whatever host page holds that id. Assets are
+content-addressed, so a shared image merges to nothing; a key holding DIFFERENT
+bytes (which the store cannot produce, but a hand-written file can) mints a
+`~n` variant instead of overwriting the host's image. The whole graft is ONE
+`store.commit`, so it is one ⌘Z.
+
+The imported file is UNTRUSTED and gets no side door: its document block is
+read from an inert `DOMParser` document, `parseDoc` decides whether it is a
+space (refusing rather than degrading), and `sanitizeInline` runs over every
+arriving block before any of it reaches the document.
 
 ### Links are fragments
 

@@ -35,11 +35,13 @@ export interface AboutHooks {
    * buttons, and the assertion now reads every file.
    */
   onSaveCopy: () => void
-  /** open the markdown importer — the way IN, opposite the ways out below */
+  /** open the importer — the way IN, opposite the ways out below */
   onImport?: () => void
+  /** take ONE page out as a space of its own */
+  onExportSpace?: () => void
 }
 
-export function openAbout({ store, onRepaint, onSaveCopy, onImport }: AboutHooks): void {
+export function openAbout({ store, onRepaint, onSaveCopy, onImport, onExportSpace }: AboutHooks): void {
   const back = document.createElement('div')
   back.className = 'sp-overlay'
   const card = document.createElement('div')
@@ -194,6 +196,13 @@ export function openAbout({ store, onRepaint, onSaveCopy, onImport }: AboutHooks
     inNote.className = 'sp-note'
     inNote.textContent = t('A folder of .md files becomes pages, with the folder tree and the [[wikilinks]] intact.')
     card.append(inNote)
+    const spaceNote = document.createElement('p')
+    spaceNote.className = 'sp-note'
+    // Said HERE because this is where somebody looks for it, and because the
+    // same dialog claims below that a space is never a dead end. A promise made
+    // in one direction only is half a promise.
+    spaceNote.textContent = t('Another bento/spaces file can arrive the same way, nested under any page.')
+    card.append(spaceNote)
   }
 
   // ---- ways out ----------------------------------------------------------
@@ -205,6 +214,7 @@ export function openAbout({ store, onRepaint, onSaveCopy, onImport }: AboutHooks
       void navigator.clipboard?.writeText(JSON.stringify(store.doc, null, 2))
     }),
     button(t('Export as Markdown'), () => downloadMarkdown(store)),
+    ...(onExportSpace ? [button(t('Export page as a space…'), () => { close(); onExportSpace() })] : []),
     button(t('Save a copy…'), () => { close(); onSaveCopy() }),
   )
   card.append(exports)

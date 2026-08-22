@@ -9,7 +9,7 @@ import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, registerPreview,
   saveFile, parseEnvelope, canWriteInPlace, decryptEnvelope, setEncryptionPassword,
-  writeUpdatedFileAs,
+  writeUpdatedFileAs, suggestedFileName,
   isEncryptionActive,
 } from '../../kernel/src/save.ts'
 import { putRecovery, getRecovery, clearRecovery, pruneOld } from '../../kernel/src/autosave.ts'
@@ -238,6 +238,24 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
       .then((html) => writeUpdatedFileAs(html, store.doc, { suffix: suffix === 'copy' ? 'copy' : suffix }))
       .then((ok) => { if (ok) editor.status(t('Copy saved — you are still editing the original')) })
   }
+  /**
+   * Write a DIFFERENT document out as its own file — the page extract.
+   *
+   * `serializeAuto`, not `serializeFile`: it is the encryption-aware path, so
+   * an extract taken out of a password-protected space is written encrypted
+   * with the same password the author is already holding. A page pulled out of
+   * an encrypted space arriving in the clear would defeat the encryption
+   * silently, on a file whose whole point is that it does not.
+   *
+   * `keepHandle` stays false (the default), which is the lesson slides paid
+   * for: an export that becomes the ⌘S target means the next save overwrites
+   * the extract with the whole document.
+   */
+  editor.onExportSpace = async (out: SpacesDoc): Promise<boolean> => {
+    const html = await serializeAuto(out)
+    return writeUpdatedFileAs(html, out, { suggestedName: suggestedFileName(out) })
+  }
+
   async function doSave(): Promise<void> {
     store.endRun()
     editor.status(t('Saving…'))

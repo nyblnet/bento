@@ -4346,3 +4346,68 @@ document carrying `theme.dir: 'rtl'` the padding therefore went left while the
 gutter went right — measured at 390px, the gutter landed at x = 378…412 and the
 column scrolled to 412. It is reserved on `.sp-page-inner` now, so the two flip
 together; the ltr metrics are byte-identical.
+
+
+## 2026-08-22 — The two portability exits for bento/spaces, and what each one refuses to carry
+
+**Decision.** `spaces/src/portable.ts` owns both directions of "a space is never
+a dead end": `extractSpace()` cuts one page (optionally its subtree) out as a
+complete `bento/spaces` file, and `planGraft()` nests another space's pages
+under a page of this one. Pure and DOM-free like `markdown.ts`; the browser
+halves are `editor.openExportSpace` / `editor.importSpace` and one hook in
+`main.ts`. Five things were settled, all of them the kind that fail silently.
+
+**A fresh `docId`, and no `collab` whatsoever.** An extract that kept the parent
+document's id is a FORK of it: `SyncSession` keys BroadcastChannel on `docId`
+and the saved file IS the capability, so a three-page extract would join the
+two-hundred-page space's room and sync into it. Keeping `collab` is worse than
+that — `room`, `key`, `writerPriv`, `ownerPriv` and the invite chain are the
+capability to read and write the WHOLE space, and handing them to someone you
+sent three pages to is the leak the reader-copy paths already strip for. So the
+extract mints a new id and carries no credential at all. `template` goes too (it
+re-mints `docId` on every open, which would undo the identity just given);
+`readonly` STAYS, because upgrading a reading copy is not the exporter's call.
+
+**A link out of the extracted set becomes the literal `[[Page title]]`** — the
+same thing an unresolvable wikilink becomes on the way IN (`resolveWikilinks`).
+Text that names the page is honest, searchable, exports as correct Markdown, and
+re-resolves if the halves are reunited. The alternatives are worse in both
+directions: a silently unlinked label lies about what the file said, and a live
+`#p/<id>` that resolves to nothing looks fine until it is clicked — and after an
+import it can land on a STRANGER page that happens to hold that id.
+
+**Only referenced assets travel.** Images are the only thing in a space with
+real weight; an export carrying the whole document's assets is a copy with pages
+hidden. Fonts are the exception and not really one: `doc.fonts` is named by the
+theme, so every page references them.
+
+**Ids on the way in: keep, and rename only a collision** — via model.ts's
+`repairId`, now exported. Ids are unique across a document and never reused, so
+pages and blocks are claimed from one namespace; keeping the ones that do not
+collide means links, backlinks and future CRDT node keys survive an import that
+did not have to touch them, and the derivation is FROM THE BYTES for exactly the
+reason written beside `repairId` (never `Math.random`, never `docId`, which
+`template: true` moves). Links inside the import follow the rename in the same
+pass, so nothing arrives pre-broken. Assets merge on content addressing, with
+the byte-compare and `~n` variant `internAsset` already uses — trusting a key
+alone would replace the host's image with the visitor's, silently, in a file the
+author then mails.
+
+**The imported file is untrusted and gets no side door.** Its document block is
+read from an inert `DOMParser` document (no browsing context: nothing runs, no
+resource loads), `parseDoc` decides whether it is a space and REFUSES rather
+than degrading (the load contract), an encrypted envelope is reported instead of
+guessed at, and `sanitizeInline` runs over every arriving block before any of it
+reaches the document. The graft is one `store.commit`, so it is one ⌘Z, like the
+Markdown import.
+
+**Guarded.** `scripts/test-spaces-model.ts` runs the whole round trip — extract a
+subtree, import it into a space that collides on every id and on an asset key —
+and asserts no id collision, no dangling link, no credential in the bytes, the
+asset merge in both directions, and additivity through both legs. The one-undo-
+step half is in `scripts/test-spaces-undo.ts`, which is bundled and has the real
+Store.
+
+**Cost.** Shell 166,482 → 175,690 B (+9,208, 5.5%); `scripts/size-budgets.json`
+raised 176,128 → 184,320 in the same commit, because 438 B of headroom is inside
+the packer's own cross-node-version spread and would fail CI for no reason.
