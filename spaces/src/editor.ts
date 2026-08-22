@@ -4624,6 +4624,11 @@ export class Editor {
       onSaveCopy: () => { void this.saveAs('copy') },
       onImport: () => this.openImport(),
       onExportSpace: () => this.openExportSpace(),
+      // "Duplicate as a new space…" writes a DIFFERENT document, so it takes
+      // the extract's writer rather than the copy path: that one keeps no file
+      // handle, which is what leaves you editing this space afterwards.
+      onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
+      onStatus: (msg) => this.status(msg),
     })
   }
 

@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 221184,
-      "//": "216 KiB. Everything from the roadmap's M3/M4 content work plus the formatting UI: tables, media, link cards, comments, export-page-as-space and subtree import, then a properties panel and a selection toolbar with a real mark engine. 166,482 B before the batch and 213,370 B after — +46,888 B, and by far the largest step this shell has taken. Seven branches each measured a raise against the same stale baseline and landed on four different numbers; this one is measured on the stack itself, which is the only place the real figure exists. Zopfli is already applied and is what keeps this near 200 rather than past 220. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 235520,
+      "//": "230 KiB. The About dialog was rebuilt on slides' (sections with real headings, the update card with signed release notes, an auto-check switch, document properties, a content readout, and the two irreversible actions given their own weight). Measured on this stack, same machine, same node: 213,434 B before and 229,634 B after — +16,200 B. Nearly all of it is language, not layout: packed.ts alone grew 22,644 B raw for 49 new keys \u00d7 8 locales (29 of them lifted from slides' catalogs, which is why they cost bytes and no translation), while the dialog's own code and CSS came to roughly 4 KB raw. Headroom stays deliberate for the reason the previous note gives: the shell is one compressed block and the packer's output differs across node versions, so a tight ceiling fails in CI for no reason. CI is the number that counts."
     }
   }
 }
