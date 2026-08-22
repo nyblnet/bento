@@ -20,6 +20,8 @@ import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
+import { FormatBar } from './formatbar'
+import type { MarkTag } from './marks'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
@@ -140,6 +142,7 @@ export class Editor {
   private inspOn: string | null = null
   /** review threads — markers in the end margin, badges in the tree */
   private comments: CommentsUi
+  private format!: FormatBar
   onSave: (() => void) | null = null
   onSaveAs: ((suffix: string) => void) | null = null
   /**
@@ -177,6 +180,14 @@ export class Editor {
       main: () => this.main,
       popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
       paintTree: () => this.paintTree(),
+    })
+    // Also after build(). `editable()` is asked on every selectionchange, and
+    // it is the ONE place the bar is kept out of the reading view, out of a
+    // readonly/reader-role file, and out from under an open modal.
+    this.format = new FormatBar({
+      store: this.store,
+      main: () => this.main,
+      editable: () => !this.store.readOnly && !this.reading && !this.overlay,
     })
     if (this.paneClosed) this.sidebar.classList.add('sp-pane-closed')
     this.props = new PropsPanel(this.inspector, {
@@ -1093,6 +1104,9 @@ export class Editor {
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    // The bar holds a reference to the block host it is floating over, and this
+    // is about to replace every one of them.
+    this.format?.close()
     this.main.innerHTML = ''
     if (!page) { this.main.append(el('p', 'sp-empty', t('This space has no pages.'))); return }
 
@@ -2822,8 +2836,20 @@ export class Editor {
     const s = this.store
     const mod = (e as any)[CTRL] as boolean
 
-    if (mod && e.key.toLowerCase() === 'k' && !e.shiftKey) { e.preventDefault(); this.openSearch(); return }
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); this.onSave?.(); return }
+    // ⌘K IS TWO COMMANDS, decided by whether anything is selected — the same
+    // split Notion and Confluence make, and the reason it is not a second
+    // shortcut: on a selection it is "link these words", and with nothing
+    // selected there is nothing to link, so it stays the quick-open it has
+    // always been. `link()` answers false when the selection is not markable,
+    // and the search opens as before.
+    if (mod && e.key.toLowerCase() === 'k' && !e.shiftKey) {
+      e.preventDefault()
+      if (!this.format?.link()) this.openSearch()
+      return
+    }
+    // `!e.shiftKey`: ⇧⌘S is strikethrough, and this branch had no shift test,
+    // so without it the save dialog opened every time someone struck text out.
+    if (mod && e.key.toLowerCase() === 's' && !e.shiftKey) { e.preventDefault(); this.onSave?.(); return }
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
@@ -2891,7 +2917,7 @@ export class Editor {
       if (e.key === 'Enter') { e.preventDefault(); insertText('\n'); return }
       if (e.key === 'Tab') { e.preventDefault(); if (!e.shiftKey) insertText('  '); return }
       if (e.key === '/' || e.key === '[') return
-      if (mod && ['b', 'i', 'u'].includes(e.key.toLowerCase())) { e.preventDefault(); return }
+      if (markKey(e, mod)) { e.preventDefault(); return }
     }
 
     if (e.key === 'Enter' && !e.shiftKey && b.type !== 'code') {
@@ -2934,10 +2960,14 @@ export class Editor {
       setTimeout(() => this.openPagePicker(cur.id, cur.host), 0)
       return
     }
-    if (mod && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+    const mark = markKey(e, mod)
+    if (mark) {
+      // ALWAYS preventDefault, even with nothing selected. ⌘B is a browser
+      // command too, and letting it through would put contentEditable's own
+      // `<b>` into the block — the exact non-canonical markup, from the exact
+      // engine, that §2.4(b) forbids and that this replaced.
       e.preventDefault()
-      document.execCommand(({ b: 'bold', i: 'italic', u: 'underline' } as any)[e.key.toLowerCase()])
-      s.runEdit(cur.id, () => { const bb = s.block(cur.id); if (bb) bb.html = cur.host.innerHTML })
+      this.format?.toggle(mark)
       return
     }
   }
@@ -4636,6 +4666,23 @@ export class Editor {
   }
 
   repaint(): void { this.paintTree(); this.paintPage() }
+}
+
+/**
+ * The mark a keystroke means, or null.
+ *
+ * ⌘B/⌘I/⌘U/⇧⌘S/⌘E/⇧⌘H, which is Notion's set — the only set most people who
+ * will ever type them already have in their fingers. ⌘K is not here because it
+ * is two commands (see onKey).
+ *
+ * `e.key` and not `e.code`: on a non-QWERTY layout the letter the person is
+ * looking at is the one they mean, and ⌘B has to be the key marked B.
+ */
+function markKey(e: KeyboardEvent, mod: boolean): MarkTag | null {
+  if (!mod || e.altKey) return null
+  const k = e.key.toLowerCase()
+  if (e.shiftKey) return k === 's' ? 's' : k === 'h' ? 'mark' : null
+  return k === 'b' ? 'strong' : k === 'i' ? 'em' : k === 'u' ? 'u' : k === 'e' ? 'code' : null
 }
 
 // ---- small dom helpers ------------------------------------------------------

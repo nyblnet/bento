@@ -52,6 +52,66 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-22 — Inline marks: one canonical form, and the format's SECOND attribute
+
+Two decisions, taken together because the second only makes sense inside the
+first. Details in `spaces/src/marks.ts`; pinned in `scripts/test-spaces-model.ts`.
+
+**A block's marks have ONE canonical spelling.** §2.3 asked for "fixed mark
+nesting order, adjacent runs coalesced, no style" and only the middle third was
+implemented: `canonicalize` was a fixed-point loop of `</b><b>` → `''` string
+replacements, which cannot ask whether an `<i>` is inside or outside a `<b>`. So
+`<b><i>x</i></b>` and `<i><b>x</b></i>` were both canonical — one visible string,
+two byte spellings, and therefore a conflict in every diff and every future CRDT
+merge. The order, outermost first, is
+
+    a > mark > span > strong > em > u > s > sub > sup > code
+
+and `b`/`i` FOLD to `strong`/`em` on parse (the markdown importer already emitted
+the semantic pair; contentEditable emitted the presentational one, so files
+already carry a mix). `a` is outermost because a link split in two by a bold
+boundary is two links; `code` is innermost so its box hugs the text.
+
+**The engine is a pure string function, not DOM surgery.** `document.execCommand`
+is forbidden by §2.4(b) and ⌘B/I/U were calling it anyway. The replacement takes
+(inline html, plain-text offsets) and returns inline html — so the hard case,
+un-bolding half of a bold run, is pinned in a `node` rig instead of only in a
+browser. The DOM appears in two functions at the bottom of the file that convert
+a live Range to those offsets and back. `canonicalize` is now
+`canonicalMarks(sanitizeInline(html))`: what is ALLOWED needs a browser, what
+SHAPE it takes does not.
+
+**Colour is a CLASS on SPAN/MARK, matched by PATTERN, and never a `style`.** The
+vocabulary is Notion's — nine colours in two roles, `sp-fg-<name>` for the ink
+and `sp-bg-<name>` for the band behind it — and a closed vocabulary is the whole
+safety argument: the sanitizer matches a NAME instead of parsing CSS, and CSS is
+a language with `url()` in it. The allowlist is `/^sp-(fg|bg)-[a-z0-9-]{1,16}$/`
+and NOT an enumeration of today's nine, because of PLATFORM §3: with no server to
+migrate anything, a build that strips what it does not recognise DESTROYS
+documents written by a later one, so an enumeration would delete a tenth colour
+added in two years, silently, on the next edit touching the block. A pattern
+keeps it, round-trips it byte-for-byte, and renders it unstyled — degraded, which
+is recoverable. Values live in the app's stylesheet, so they can be tuned for the
+surface; an arbitrary hex in the document could not be.
+
+**Colour survives printing, and this is deliberately the opposite of the callout
+ruling.** A callout keeps its box, its rule, its tone's shape and its tone's
+name, so dropping the fill costs nothing. An inline colour has no second cue:
+drop it and the distinction the author drew is silently gone. `print-color-adjust:
+exact`, scoped to inline marks only.
+
+**Markdown: every mark the toolbar can apply exports, and imports back.** `mark`
+→ `==x==`, which is native Obsidian syntax and a Pandoc extension, so it
+round-trips outside this app too — the same standard the callout tones were held
+to. `u`, `sub`, `sup` and colour → raw inline html, which GFM permits and which
+is what Obsidian users fall back to as well; `_x_` for underline was rejected
+outright because it re-imports as ITALIC, and a mark that comes back as a
+DIFFERENT mark is worse than one that comes back as nothing. `htmlToMd` moved out
+of about.ts (where it was a DOM walk and therefore untestable, and where it had
+been silently dropping four marks) into marks.ts, over the same run list.
+
+---
+
 ## 2026-08-22 — bento/spaces gets a CONTENT table, and its cells are strings
 
 **Decision.** A `table` block: `rows` (row-major, each cell INLINE HTML), `cols`

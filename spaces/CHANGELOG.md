@@ -30,6 +30,40 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
   Nothing was taken away to make room for it: the language chip on a code
   block, the mark on a callout and the tools on an image are all still there.
+- **A formatting toolbar, over the text you selected.** Select any words and a
+  small bar appears above them: bold, italic, underline, strikethrough, inline
+  code, highlight, colour, link, and clear formatting. Before this the only
+  formatting a space had was ⌘B, ⌘I and ⌘U — which you had to already know
+  about — and there was no strikethrough, no inline code, no link and no
+  highlight at all.
+
+  Shortcuts come with it: ⇧⌘S strikethrough, ⌘E inline code, ⇧⌘H highlight,
+  and ⌘K makes a link out of whatever is selected (with nothing selected it
+  still opens search, as before). On a phone or tablet the same buttons dock to
+  the bottom of the screen instead of floating over the words, where they would
+  fight the selection handles and the system Copy menu. The bar never appears in
+  reading view, in a read-only file, or on paper.
+
+- **Text and background colour**, in the palette shape Notion uses: nine
+  colours, each usable as the ink or as the band behind the words. Not a colour
+  picker — a fixed set means the colours can be chosen to stay readable on the
+  page and on a printout, and it means the file never carries a stylesheet of
+  its own. Colour prints, deliberately: unlike a callout, which keeps its box
+  and its name on paper, a coloured phrase has no second cue, so dropping the
+  colour would silently drop the distinction the writer drew.
+
+- **Formatting now has one spelling.** Marks are stored in a fixed nesting
+  order and adjacent runs of the same mark are merged, so the same visible
+  sentence is always the same bytes — which keeps diffs honest and will keep
+  collaborative merges from fighting over text nobody changed. Un-formatting
+  part of a formatted run now splits it correctly, which the old ⌘B could not
+  do: it handed the job to the browser, whose markup this format does not
+  accept.
+
+- **Markdown export no longer drops formatting.** Underline, highlight,
+  subscript, superscript and colour were exported as plain text; every mark now
+  round-trips, and re-importing the exported file gives back what you had.
+  Highlights use `==this==`, which Obsidian and Pandoc both read.
 
 - **Wide screens get wide pages.** The column grows with the window instead of
   sitting at a fixed 720px, and "Use this width for every page" in the page

@@ -164,6 +164,151 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   margin: 8px 0; padding: 2px 0 2px 15px;
   border-inline-start: 3px solid var(--line); color: var(--ink-2);
 }
+/* ————— inline marks —————
+   The six marks the floating toolbar applies. `b/strong`, `i/em` and `u` need
+   nothing — the browser's defaults are right — but `code` and `mark` inside
+   prose had NO styling at all, so "inline code" and "highlight" were controls
+   that appeared to do nothing. Scoped under .sp-body so the block-level code
+   block (.sp-b-code code, its own rule) is untouched. */
+.sp-body :is(p, li, h1, h2, h3, blockquote, td, th, figcaption) code {
+  font: 0.92em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 5px;
+  padding: 0.1em 0.32em; word-break: break-word;
+}
+/* the accent at a tint a paragraph can be read through, and an explicit ink:
+   `mark`'s UA default is black on yellow, which is not this document's ink */
+.sp-body mark { background: rgb(247 166 0 / .3); color: inherit; border-radius: 3px; padding: 0 .08em; }
+.sp-body a { color: var(--blue); }
+
+/* ————— the colour palette —————
+   NINE COLOURS IN TWO ROLES: `sp-fg-*` is the ink on a SPAN, `sp-bg-*` is the
+   band behind it on a MARK. Notion's shape, and its shape is what makes it
+   safe — a closed vocabulary means the sanitizer matches a NAME instead of
+   parsing CSS, and it means these values live here, in the app's stylesheet,
+   where they can be tuned for the surface. A `style="color:#…"` in the
+   document could be none of that.
+
+   TOKENS, so the two roles cannot drift: one hue per colour, the ink at full
+   strength and the band as a tint of the same hue. The inks are all dark
+   enough to pass on white body text; the tints are all light enough to keep
+   black text readable through them. Chosen by measuring, not by eye. */
+:root {
+  --c-gray: #5b6472;   --c-brown: #8a5a3c;  --c-orange: #b35c00;
+  --c-yellow: #8a6a00; --c-green: #1f7a4d;  --c-blue: #1f5fbf;
+  --c-purple: #6b3fbf; --c-pink: #b3327a;   --c-red: #c0392b;
+}
+.sp-body .sp-fg-gray { color: var(--c-gray); }
+.sp-body .sp-fg-brown { color: var(--c-brown); }
+.sp-body .sp-fg-orange { color: var(--c-orange); }
+.sp-body .sp-fg-yellow { color: var(--c-yellow); }
+.sp-body .sp-fg-green { color: var(--c-green); }
+.sp-body .sp-fg-blue { color: var(--c-blue); }
+.sp-body .sp-fg-purple { color: var(--c-purple); }
+.sp-body .sp-fg-pink { color: var(--c-pink); }
+.sp-body .sp-fg-red { color: var(--c-red); }
+.sp-body mark.sp-bg-gray { background: color-mix(in srgb, var(--c-gray) 22%, transparent); }
+.sp-body mark.sp-bg-brown { background: color-mix(in srgb, var(--c-brown) 22%, transparent); }
+.sp-body mark.sp-bg-orange { background: color-mix(in srgb, var(--c-orange) 22%, transparent); }
+.sp-body mark.sp-bg-yellow { background: color-mix(in srgb, var(--c-yellow) 26%, transparent); }
+.sp-body mark.sp-bg-green { background: color-mix(in srgb, var(--c-green) 22%, transparent); }
+.sp-body mark.sp-bg-blue { background: color-mix(in srgb, var(--c-blue) 20%, transparent); }
+.sp-body mark.sp-bg-purple { background: color-mix(in srgb, var(--c-purple) 20%, transparent); }
+.sp-body mark.sp-bg-pink { background: color-mix(in srgb, var(--c-pink) 20%, transparent); }
+.sp-body mark.sp-bg-red { background: color-mix(in srgb, var(--c-red) 20%, transparent); }
+
+/* ON PAPER, COLOUR SURVIVES — and this is deliberately the OPPOSITE of the
+   callout ruling forty lines below, which drops its tint. The difference is
+   what else carries the meaning. A callout keeps its box, its heavier start
+   rule, its tone's SHAPE and the tone's NAME spelled out, so the fill is
+   decoration and dropping it costs nothing. An inline colour has no second
+   cue at all: drop it and the sentence prints as ordinary prose, with the
+   distinction the author drew silently gone — data loss, not decluttering.
+   The area is also a few words rather than a paragraph-sized block of ink.
+   `print-color-adjust: exact` because browsers drop backgrounds on paper by
+   default, so without it the band would go while the ink stayed. */
+@media print {
+  .sp-body [class*='sp-fg-'], .sp-body mark {
+    print-color-adjust: exact; -webkit-print-color-adjust: exact;
+  }
+}
+
+/* ————— the floating selection toolbar —————
+   Body-mounted (see formatbar.ts (1)), so it is positioned in VIEWPORT
+   coordinates and owes nothing to the page's layout. Below .sp-pop's 60: a
+   menu or dialog that opens over a selection is the thing being used. */
+.sp-fmt {
+  position: fixed; z-index: 58; display: flex; align-items: center; gap: 2px;
+  padding: 3px; background: #fff; border: 1px solid var(--line);
+  border-radius: 9px; box-shadow: 0 6px 22px rgb(20 30 45 / .17);
+  max-width: calc(100vw - 16px);
+}
+.sp-fmt-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; height: 30px; padding: 0 7px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2); cursor: pointer;
+  font: inherit; font-size: 13px;
+}
+.sp-fmt-btn:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-fmt-btn.sp-fmt-on { background: var(--chrome-2); color: var(--blue); }
+.sp-fmt-gap { margin-inline-start: 4px; border-inline-start: 1px solid var(--line); border-radius: 0 6px 6px 0; }
+.sp-fmt-url {
+  font: inherit; font-size: 13px; width: 240px; max-width: 46vw;
+  padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
+}
+.sp-fmt-url.sp-fmt-bad { border-color: #c0392b; }
+.sp-fmt-go { color: var(--blue); font-weight: 600; }
+/* the palette takes the bar over while it is open — two rows, so the bar
+   becomes a column for as long as it is showing */
+.sp-fmt-pal { flex-direction: column; align-items: stretch; gap: 3px; padding: 7px; }
+.sp-fmt-pal-h { font-size: 11px; font-weight: 600; color: var(--muted); padding: 2px 2px 0; }
+.sp-fmt-sw-row { display: flex; gap: 3px; }
+.sp-fmt-sw {
+  width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; color: var(--ink); cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 700; line-height: 1;
+}
+.sp-fmt-sw:hover { border-color: var(--ink-2); }
+/* the swatch SHOWS what it does: an A in the ink for the text row, an A on the
+   band for the background row. A grid of anonymous squares makes you click one
+   to find out what it was. */
+.sp-fmt-sw.sp-fg-gray { color: var(--c-gray); } .sp-fmt-sw.sp-fg-brown { color: var(--c-brown); }
+.sp-fmt-sw.sp-fg-orange { color: var(--c-orange); } .sp-fmt-sw.sp-fg-yellow { color: var(--c-yellow); }
+.sp-fmt-sw.sp-fg-green { color: var(--c-green); } .sp-fmt-sw.sp-fg-blue { color: var(--c-blue); }
+.sp-fmt-sw.sp-fg-purple { color: var(--c-purple); } .sp-fmt-sw.sp-fg-pink { color: var(--c-pink); }
+.sp-fmt-sw.sp-fg-red { color: var(--c-red); }
+.sp-fmt-sw.sp-bg-gray { background: color-mix(in srgb, var(--c-gray) 22%, #fff); }
+.sp-fmt-sw.sp-bg-brown { background: color-mix(in srgb, var(--c-brown) 22%, #fff); }
+.sp-fmt-sw.sp-bg-orange { background: color-mix(in srgb, var(--c-orange) 22%, #fff); }
+.sp-fmt-sw.sp-bg-yellow { background: color-mix(in srgb, var(--c-yellow) 26%, #fff); }
+.sp-fmt-sw.sp-bg-green { background: color-mix(in srgb, var(--c-green) 22%, #fff); }
+.sp-fmt-sw.sp-bg-blue { background: color-mix(in srgb, var(--c-blue) 20%, #fff); }
+.sp-fmt-sw.sp-bg-purple { background: color-mix(in srgb, var(--c-purple) 20%, #fff); }
+.sp-fmt-sw.sp-bg-pink { background: color-mix(in srgb, var(--c-pink) 20%, #fff); }
+.sp-fmt-sw.sp-bg-red { background: color-mix(in srgb, var(--c-red) 20%, #fff); }
+.sp-fmt-back { align-self: flex-start; margin-top: 2px; color: var(--muted); }
+/* A COARSE POINTER GETS THE BOTTOM EDGE, not the selection. The OS callout and
+   the selection handles own the pixels around a touch selection; sharing them
+   is how a toolbar becomes a thing you dismiss rather than a thing you use. */
+.sp-fmt-dock {
+  inset-inline: 0; bottom: 0; top: auto !important; left: 0 !important;
+  max-width: none; border-radius: 0; border-inline: 0; border-bottom: 0;
+  justify-content: center; flex-wrap: wrap;
+  padding: 6px max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  box-shadow: 0 -6px 22px rgb(20 30 45 / .14);
+}
+/* All nine on ONE row at 375px — measured: at 40px wide they wrapped, and
+   "Clear formatting" sat alone on a second row looking like a separate
+   control. 36px is still comfortably over the 34px touch target this app's
+   other phone chrome uses. */
+.sp-fmt-dock { gap: 1px; }
+.sp-fmt-dock .sp-fmt-btn { min-width: 36px; height: 38px; padding: 0 2px; }
+.sp-fmt-dock .sp-fmt-gap { margin-inline-start: 2px; }
+.sp-fmt-dock .sp-fmt-url { width: auto; flex: 1 1 160px; max-width: none; }
+/* It is chrome, and chrome is never on paper. Belt as well as braces: the bar
+   is also removed the moment the selection collapses, and print does not run
+   in the reading view's way. */
+@media print { .sp-fmt { display: none !important; } }
+
 /* ————— callouts —————
    The tone is carried by the MARK'S SHAPE (circle, bulb, square, triangle,
    octagon) and by its name spelled out beside it. The tint is decoration: it
