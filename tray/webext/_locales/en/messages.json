@@ -488,5 +488,25 @@
   "aboutPromo": {
     "message": "New to Bento? Find templates, the gallery and the AI editing guide at $1 — or star it on $2.",
     "description": "About dialog: invitation back to the project. $1 is a link to bento.page, $2 a link to GitHub. REVIEW: keep both placeholders — they are rendered as links."
+  },
+  "setThemeTitle": {
+    "message": "Appearance",
+    "description": "Settings section heading for light/dark."
+  },
+  "setThemeSub": {
+    "message": "The browser's setting is the default, not a requirement.",
+    "description": "Settings section blurb under Appearance."
+  },
+  "themeAuto": {
+    "message": "Match the browser",
+    "description": "Theme option: follow the browser/OS setting. REVIEW: the wording browsers use for \"system\" in this language."
+  },
+  "themeLight": {
+    "message": "Light",
+    "description": "Theme option: light."
+  },
+  "themeDark": {
+    "message": "Dark",
+    "description": "Theme option: dark."
   }
 }

@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Baru di Bento? Temukan templat, galeri, dan panduan penyuntingan AI di $1 — atau beri bintang di $2."
+  },
+  "setThemeTitle": {
+    "message": "Tampilan"
+  },
+  "setThemeSub": {
+    "message": "Setelan peramban adalah default, bukan keharusan."
+  },
+  "themeAuto": {
+    "message": "Ikuti peramban"
+  },
+  "themeLight": {
+    "message": "Terang"
+  },
+  "themeDark": {
+    "message": "Gelap"
   }
 }

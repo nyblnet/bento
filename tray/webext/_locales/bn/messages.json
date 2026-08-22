@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Bento-তে নতুন? টেমপ্লেট, গ্যালারি আর AI সম্পাদনার নির্দেশিকা পাবেন $1-এ — কিংবা $2-এ একটি স্টার দিন।"
+  },
+  "setThemeTitle": {
+    "message": "চেহারা"
+  },
+  "setThemeSub": {
+    "message": "ব্রাউজারের সেটিং হলো ডিফল্ট, বাধ্যতামূলক নয়।"
+  },
+  "themeAuto": {
+    "message": "ব্রাউজার অনুসারে"
+  },
+  "themeLight": {
+    "message": "উজ্জ্বল"
+  },
+  "themeDark": {
+    "message": "গাঢ়"
   }
 }

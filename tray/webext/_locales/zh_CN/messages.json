@@ -469,5 +469,20 @@
   },
   "aboutPromo": {
     "message": "第一次使用 Bento？模板、图库和 AI 编辑指南都在 $1，也欢迎在 $2 上点个星。"
+  },
+  "setThemeTitle": {
+    "message": "外观"
+  },
+  "setThemeSub": {
+    "message": "浏览器的设置只是默认值，并非强制。"
+  },
+  "themeAuto": {
+    "message": "跟随浏览器"
+  },
+  "themeLight": {
+    "message": "浅色"
+  },
+  "themeDark": {
+    "message": "深色"
   }
 }

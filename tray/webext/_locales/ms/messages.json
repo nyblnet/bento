@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Baharu dengan Bento? Cari templat, galeri dan panduan penyuntingan AI di $1 — atau beri bintang di $2."
+  },
+  "setThemeTitle": {
+    "message": "Penampilan"
+  },
+  "setThemeSub": {
+    "message": "Tetapan pelayar ialah lalai, bukan kewajipan."
+  },
+  "themeAuto": {
+    "message": "Ikut pelayar"
+  },
+  "themeLight": {
+    "message": "Cerah"
+  },
+  "themeDark": {
+    "message": "Gelap"
   }
 }

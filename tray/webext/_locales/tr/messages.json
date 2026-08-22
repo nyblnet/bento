@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Bento'da yeni misiniz? Şablonlar, galeri ve yapay zekâ düzenleme rehberi $1 adresinde — ya da $2 üzerinde yıldız verin."
+  },
+  "setThemeTitle": {
+    "message": "Görünüm"
+  },
+  "setThemeSub": {
+    "message": "Tarayıcının ayarı varsayılandır, zorunluluk değil."
+  },
+  "themeAuto": {
+    "message": "Tarayıcıyla aynı"
+  },
+  "themeLight": {
+    "message": "Açık"
+  },
+  "themeDark": {
+    "message": "Koyu"
   }
 }

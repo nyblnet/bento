@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Bento में नए हैं? टेम्पलेट, गैलरी और AI संपादन गाइड $1 पर मिलेंगे — या $2 पर स्टार दें।"
+  },
+  "setThemeTitle": {
+    "message": "रूप-रंग"
+  },
+  "setThemeSub": {
+    "message": "ब्राउज़र की सेटिंग डिफ़ॉल्ट है, अनिवार्य नहीं।"
+  },
+  "themeAuto": {
+    "message": "ब्राउज़र के अनुसार"
+  },
+  "themeLight": {
+    "message": "हल्का"
+  },
+  "themeDark": {
+    "message": "गहरा"
   }
 }

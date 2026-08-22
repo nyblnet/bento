@@ -469,5 +469,20 @@
   },
   "aboutPromo": {
     "message": "Novo no Bento? Encontre modelos, a galeria e o guia de edição com IA em $1 — ou dê uma estrela no $2."
+  },
+  "setThemeTitle": {
+    "message": "Aparência"
+  },
+  "setThemeSub": {
+    "message": "A configuração do navegador é o padrão, não uma exigência."
+  },
+  "themeAuto": {
+    "message": "Igual ao navegador"
+  },
+  "themeLight": {
+    "message": "Claro"
+  },
+  "themeDark": {
+    "message": "Escuro"
   }
 }

@@ -469,5 +469,20 @@
   },
   "aboutPromo": {
     "message": "Bento は初めてですか？テンプレート、ギャラリー、AI 編集ガイドは $1 にあります。$2 でスターを付けることもできます。"
+  },
+  "setThemeTitle": {
+    "message": "外観"
+  },
+  "setThemeSub": {
+    "message": "ブラウザーの設定は既定値であって、強制ではありません。"
+  },
+  "themeAuto": {
+    "message": "ブラウザーに合わせる"
+  },
+  "themeLight": {
+    "message": "ライト"
+  },
+  "themeDark": {
+    "message": "ダーク"
   }
 }

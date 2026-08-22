@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Bento پر نئے ہیں؟ ٹیمپلیٹس، گیلری اور AI ایڈیٹنگ گائیڈ $1 پر ملیں گے — یا $2 پر ستارہ دیں۔"
+  },
+  "setThemeTitle": {
+    "message": "ظاہری شکل"
+  },
+  "setThemeSub": {
+    "message": "براؤزر کی ترتیب پہلے سے طے شدہ ہے، لازمی نہیں۔"
+  },
+  "themeAuto": {
+    "message": "براؤزر کے مطابق"
+  },
+  "themeLight": {
+    "message": "روشن"
+  },
+  "themeDark": {
+    "message": "گہرا"
   }
 }

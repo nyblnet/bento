@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Bento가 처음이신가요? 템플릿과 갤러리, AI 편집 가이드는 $1에 있습니다. $2에서 별을 눌러 주셔도 좋습니다."
+  },
+  "setThemeTitle": {
+    "message": "모양"
+  },
+  "setThemeSub": {
+    "message": "브라우저 설정은 기본값일 뿐, 강제 사항은 아닙니다."
+  },
+  "themeAuto": {
+    "message": "브라우저 설정 따르기"
+  },
+  "themeLight": {
+    "message": "밝게"
+  },
+  "themeDark": {
+    "message": "어둡게"
   }
 }

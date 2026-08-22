@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Nieuw bij Bento? Sjablonen, de galerie en de AI-bewerkingsgids vind je op $1 — of geef het een ster op $2."
+  },
+  "setThemeTitle": {
+    "message": "Weergave"
+  },
+  "setThemeSub": {
+    "message": "De instelling van de browser is de standaard, geen vereiste."
+  },
+  "themeAuto": {
+    "message": "Zoals de browser"
+  },
+  "themeLight": {
+    "message": "Licht"
+  },
+  "themeDark": {
+    "message": "Donker"
   }
 }

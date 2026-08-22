@@ -469,5 +469,20 @@
   },
   "aboutPromo": {
     "message": "Nuovo su Bento? Trovi modelli, la galleria e la guida all’editing con l’IA su $1 — o lascia una stella su $2."
+  },
+  "setThemeTitle": {
+    "message": "Aspetto"
+  },
+  "setThemeSub": {
+    "message": "L’impostazione del browser è il valore predefinito, non un obbligo."
+  },
+  "themeAuto": {
+    "message": "Come il browser"
+  },
+  "themeLight": {
+    "message": "Chiaro"
+  },
+  "themeDark": {
+    "message": "Scuro"
   }
 }

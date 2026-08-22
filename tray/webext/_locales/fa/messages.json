@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "تازه با Bento آشنا شده‌اید؟ الگوها، نگارخانه و راهنمای ویرایش با هوش مصنوعی در $1 هستند — یا در $2 ستاره بدهید."
+  },
+  "setThemeTitle": {
+    "message": "ظاهر"
+  },
+  "setThemeSub": {
+    "message": "تنظیم مرورگر پیش‌فرض است، نه الزام."
+  },
+  "themeAuto": {
+    "message": "مطابق مرورگر"
+  },
+  "themeLight": {
+    "message": "روشن"
+  },
+  "themeDark": {
+    "message": "تیره"
   }
 }

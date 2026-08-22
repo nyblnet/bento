@@ -469,5 +469,20 @@
   },
   "aboutPromo": {
     "message": "Neu bei Bento? Vorlagen, die Galerie und den KI-Bearbeitungsleitfaden gibt es auf $1 — oder gib dem Projekt einen Stern auf $2."
+  },
+  "setThemeTitle": {
+    "message": "Erscheinungsbild"
+  },
+  "setThemeSub": {
+    "message": "Die Einstellung des Browsers ist die Vorgabe, keine Pflicht."
+  },
+  "themeAuto": {
+    "message": "Wie der Browser"
+  },
+  "themeLight": {
+    "message": "Hell"
+  },
+  "themeDark": {
+    "message": "Dunkel"
   }
 }

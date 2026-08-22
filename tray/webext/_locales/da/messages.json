@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Ny med Bento? Find skabeloner, galleriet og AI-redigeringsguiden på $1 — eller giv den en stjerne på $2."
+  },
+  "setThemeTitle": {
+    "message": "Udseende"
+  },
+  "setThemeSub": {
+    "message": "Browserens indstilling er standarden, ikke et krav."
+  },
+  "themeAuto": {
+    "message": "Følg browseren"
+  },
+  "themeLight": {
+    "message": "Lys"
+  },
+  "themeDark": {
+    "message": "Mørk"
   }
 }

@@ -922,6 +922,31 @@ async function renderSettings() {
   lrow.appendChild(lnote)
   lang.appendChild(lrow)
 
+  // --- light or dark, or whatever the browser is doing
+  //
+  // The same shape as Language directly above, and for the same reason: the
+  // browser's answer is a good DEFAULT and a bad requirement. Semantics come
+  // from theme.js, which mirrors `kernel/src/theme.ts` so bento/slides and
+  // bento/tray mean the same three things by the same three words.
+  const theme = section(t('setThemeTitle'), t('setThemeSub'))
+  const trow = document.createElement('div')
+  trow.className = 'row'
+  const tsel = document.createElement('select')
+  for (const [value, label] of [
+    ['auto', t('themeAuto')],
+    ['light', t('themeLight')],
+    ['dark', t('themeDark')],
+  ]) {
+    const o = document.createElement('option')
+    o.value = value
+    o.textContent = label
+    tsel.appendChild(o)
+  }
+  tsel.value = globalThis.bentoTheme?.choice() ?? 'auto'
+  tsel.addEventListener('change', () => { globalThis.bentoTheme?.set(tsel.value) })
+  trow.appendChild(tsel)
+  theme.appendChild(trow)
+
   // --- the permission nothing can request
   const access = section(t('setAccessTitle'), t('setAccessSub'))
   const row = document.createElement('div')

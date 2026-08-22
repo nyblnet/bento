@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "חדשים ב־Bento? תבניות, הגלריה ומדריך העריכה עם AI נמצאים ב־$1 — או תנו כוכב ב־$2."
+  },
+  "setThemeTitle": {
+    "message": "מראה"
+  },
+  "setThemeSub": {
+    "message": "ההגדרה של הדפדפן היא ברירת המחדל, לא חובה."
+  },
+  "themeAuto": {
+    "message": "לפי הדפדפן"
+  },
+  "themeLight": {
+    "message": "בהיר"
+  },
+  "themeDark": {
+    "message": "כהה"
   }
 }

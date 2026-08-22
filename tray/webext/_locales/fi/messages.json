@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Bento uutta sinulle? Mallit, galleria ja tekoälymuokkausopas löytyvät osoitteesta $1 — tai anna tähti palvelussa $2."
+  },
+  "setThemeTitle": {
+    "message": "Ulkoasu"
+  },
+  "setThemeSub": {
+    "message": "Selaimen asetus on oletus, ei vaatimus."
+  },
+  "themeAuto": {
+    "message": "Seuraa selainta"
+  },
+  "themeLight": {
+    "message": "Vaalea"
+  },
+  "themeDark": {
+    "message": "Tumma"
   }
 }

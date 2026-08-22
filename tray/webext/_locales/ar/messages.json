@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "جديد على Bento؟ ستجد القوالب والمعرض ودليل التحرير بالذكاء الاصطناعي على $1 — أو ضع نجمة على $2."
+  },
+  "setThemeTitle": {
+    "message": "المظهر"
+  },
+  "setThemeSub": {
+    "message": "إعداد المتصفح هو الافتراضي، وليس إلزاميًا."
+  },
+  "themeAuto": {
+    "message": "حسب المتصفح"
+  },
+  "themeLight": {
+    "message": "فاتح"
+  },
+  "themeDark": {
+    "message": "داكن"
   }
 }

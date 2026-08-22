@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Pierwszy raz w Bento? Szablony, galerię i przewodnik po edycji z AI znajdziesz na $1 — albo daj gwiazdkę na $2."
+  },
+  "setThemeTitle": {
+    "message": "Wygląd"
+  },
+  "setThemeSub": {
+    "message": "Ustawienie przeglądarki jest domyślne, a nie obowiązkowe."
+  },
+  "themeAuto": {
+    "message": "Tak jak przeglądarka"
+  },
+  "themeLight": {
+    "message": "Jasny"
+  },
+  "themeDark": {
+    "message": "Ciemny"
   }
 }

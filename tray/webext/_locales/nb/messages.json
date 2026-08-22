@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Ny med Bento? Finn maler, galleriet og AI-redigeringsguiden på $1 — eller gi den en stjerne på $2."
+  },
+  "setThemeTitle": {
+    "message": "Utseende"
+  },
+  "setThemeSub": {
+    "message": "Nettleserens innstilling er standarden, ikke et krav."
+  },
+  "themeAuto": {
+    "message": "Følg nettleseren"
+  },
+  "themeLight": {
+    "message": "Lyst"
+  },
+  "themeDark": {
+    "message": "Mørkt"
   }
 }

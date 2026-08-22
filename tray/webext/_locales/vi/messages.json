@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Mới dùng Bento? Bạn có thể tìm mẫu, thư viện và hướng dẫn chỉnh sửa bằng AI tại $1 — hoặc gắn sao trên $2."
+  },
+  "setThemeTitle": {
+    "message": "Giao diện"
+  },
+  "setThemeSub": {
+    "message": "Thiết lập của trình duyệt là mặc định, không phải bắt buộc."
+  },
+  "themeAuto": {
+    "message": "Theo trình duyệt"
+  },
+  "themeLight": {
+    "message": "Sáng"
+  },
+  "themeDark": {
+    "message": "Tối"
   }
 }

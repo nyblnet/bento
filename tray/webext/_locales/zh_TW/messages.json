@@ -469,5 +469,20 @@
   },
   "aboutPromo": {
     "message": "第一次使用 Bento？範本、藝廊和 AI 編輯指南都在 $1，也歡迎到 $2 給顆星。"
+  },
+  "setThemeTitle": {
+    "message": "外觀"
+  },
+  "setThemeSub": {
+    "message": "瀏覽器的設定只是預設值，並非強制。"
+  },
+  "themeAuto": {
+    "message": "跟隨瀏覽器"
+  },
+  "themeLight": {
+    "message": "淺色"
+  },
+  "themeDark": {
+    "message": "深色"
   }
 }

@@ -21,14 +21,21 @@
   --lift: 0 2px 6px rgba(20,35,60,.10), 0 14px 34px rgba(20,35,60,.12);
   --r: 9px;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1720;    --panel: #16202b;   --ink: #e7edf4;   --dim: #90a1b4;
-    --line: #24313f;  --hover: #1d2937;   --accent: #e7edf4; --peach: #ff9e8a;
-    --on-accent: #0f1720;  /* --on-good stays white: it sits on green in both themes */
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.34);
-    --lift: 0 2px 6px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.46);
-  }
+/* Keyed on the ATTRIBUTE, not on `prefers-color-scheme`.
+ *
+ * theme.js resolves auto/light/dark before the first paint and stamps the
+ * answer on <html>, exactly as `kernel/src/theme.ts` does for bento/slides —
+ * whose stylesheet likewise contains no media query. Doing it in CSS as well
+ * would mean writing every dark value a second time, and the rule at the top
+ * of this file is that a colour appearing twice is a mistake. It would also be
+ * wrong: a media query cannot be overridden by a user who wants light chrome
+ * on a dark machine, which is the whole point of offering the choice. */
+:root[data-theme="dark"] {
+  --bg: #0f1720;    --panel: #16202b;   --ink: #e7edf4;   --dim: #90a1b4;
+  --line: #24313f;  --hover: #1d2937;   --accent: #e7edf4; --peach: #ff9e8a;
+  --on-accent: #0f1720;  /* --on-good stays white: it sits on green in both themes */
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.34);
+  --lift: 0 2px 6px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.46);
 }
 
 * { box-sizing: border-box }

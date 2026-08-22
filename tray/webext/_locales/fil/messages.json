@@ -436,5 +436,20 @@
   },
   "aboutPromo": {
     "message": "Bago sa Bento? Makikita ang mga template, ang gallery at ang gabay sa pag-edit gamit ang AI sa $1 — o bigyan ito ng star sa $2."
+  },
+  "setThemeTitle": {
+    "message": "Anyo"
+  },
+  "setThemeSub": {
+    "message": "Ang setting ng browser ang default, hindi kinakailangan."
+  },
+  "themeAuto": {
+    "message": "Sundin ang browser"
+  },
+  "themeLight": {
+    "message": "Maliwanag"
+  },
+  "themeDark": {
+    "message": "Madilim"
   }
 }
