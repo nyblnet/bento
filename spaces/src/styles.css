@@ -297,6 +297,52 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-b-image img { max-width: 100%; height: auto; border-radius: var(--radius); display: block; }
 .sp-b-image figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
 
+/* ————— tables —————
+   The block is `sp-b-table`; everything inside it is `sp-tb-*`. NOT `sp-col-*`
+   or `sp-cell-*`: `.sp-col` is already the board's column and `sp-col-resizing`
+   is already a body class, so a table column reusing either name would style
+   the tracker's board from four hundred lines away. */
+.sp-b-table { margin: 14px 0; position: relative; }
+/* A WIDE TABLE SCROLLS. The measure belongs to the document, so a six-column
+   table must not widen the prose column on a phone — it gets its own scroller
+   and the paragraph above it keeps its line length. */
+.sp-tb-wrap { overflow-x: auto; position: relative; }
+.sp-tb {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+  font-size: 15px; line-height: 1.5;
+}
+.sp-tb-cell {
+  border: 1px solid var(--line); padding: 7px 10px;
+  text-align: start; vertical-align: top; word-break: break-word;
+}
+.sp-tb thead .sp-tb-cell { background: var(--chrome); font-weight: 600; }
+/* Every cell gets a line box even when it is empty, or a table of blanks
+   collapses into a stack of hairlines with nowhere to click. A pseudo-element,
+   so it is not in the cell's innerHTML and can never reach the model. */
+.sp-tb-cell::after { content: ''; display: inline-block; width: 0; height: 1.5em; vertical-align: text-bottom; }
+.sp-tb-cell:focus { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+/* the tools ride over the block like .sp-imgtools, and appear on hover/focus */
+.sp-tb-tools {
+  position: absolute; inset-block-start: -13px; inset-inline-end: 0;
+  display: flex; gap: 4px; opacity: 0; transition: opacity .12s;
+  background: #fff; padding: 2px; border-radius: 8px; z-index: 2;
+}
+.sp-b-table:hover .sp-tb-tools, .sp-tb-tools:focus-within, .sp-b-table:focus-within .sp-tb-tools { opacity: 1; }
+.sp-tb-tools .sp-btn { font-size: 12px; padding: 2px 7px; }
+.sp-tb-tools .sp-on { background: var(--chrome-2); }
+
+/* The column-boundary grip: a hit target wider than the line it moves. It sits
+   in the WRAPPER, over the boundary, never inside a cell — a cell's innerHTML
+   is the model, so chrome parked in one gets written into the document (and
+   the caret lands in it). Editor chrome, added in wire(): the renderer is the
+   same for the reading view, print and the still preview. */
+.sp-tb-grip {
+  position: absolute; top: 0; width: 7px;
+  cursor: col-resize; z-index: 1; background: transparent; border: 0; padding: 0;
+}
+.sp-tb-grip:hover, body.sp-col-resizing .sp-tb-grip { background: rgb(91 141 239 / .45); }
+
 .sp-pagecard {
   display: flex; align-items: center; gap: 9px;
   padding: 10px 12px; margin: 6px 0;
@@ -457,10 +503,23 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* ————— print: the only export-to-PDF path, so it is a contract ————— */
 @media print {
   .sp-bar, .sp-side, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
+  .sp-tb-tools, .sp-tb-grip { display: none !important; }
   .sp-main { overflow: visible; padding: 0; background: #fff; }
   .sp-toggle-body[hidden] { display: block !important; }  /* toggles print OPEN */
   .sp-b-h1, .sp-b-h2, .sp-b-h3, .sp-title { break-after: avoid; }
   .sp-b-code, .sp-b-image figure, .sp-b-quote { break-inside: avoid; }
+  /* A TABLE ON PAPER. The scroller is a screen affordance and would CLIP on
+     paper (an overflow box prints what fits and drops the rest), so it is
+     unwound; the header tint goes the way the callout's does, because browsers
+     do not print backgrounds by default and a table whose only header cue was
+     a fill would print with no header at all. The rules are what survive, and
+     they are black on white. A header row repeats across a page break, which
+     is the whole reason <thead> is a real element here. */
+  .sp-tb-wrap { overflow: visible; }
+  .sp-tb-cell { border-color: #999; }
+  .sp-tb thead .sp-tb-cell { background: none; border-bottom-width: 2px; }
+  .sp-tb thead { display: table-header-group; }
+  .sp-tb tr { break-inside: avoid; }
   /* A CALLOUT ON PAPER, IN BLACK AND WHITE.
      The tint is dropped rather than trusted: browsers do not print backgrounds
      by default, so a callout whose only cue was its fill would print as bare

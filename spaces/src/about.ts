@@ -239,6 +239,10 @@ export function toMarkdown(store: Store): string {
   const out: string[] = []
   const ctx: MdCtx = {
     titleOf: (id) => store.index.page.get(id)?.title,
+    // THE SAME converter every other block's text goes through, handed to the
+    // one type whose text is not a single string. A table with its own inline
+    // rules would be the second place `**bold**` is decided.
+    inline: htmlToMd,
     // DERIVED THE SAME WAY THE SCREEN DERIVES IT — same filter, same sort, same
     // grouping — so the file you download is the board you were looking at. A
     // second traversal here is how an export starts quietly disagreeing with

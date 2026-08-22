@@ -91,6 +91,7 @@ export const ICONS = {
   toneWarning: svg('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9.5" x2="12" y2="14"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
   toneCaution: svg('<polygon points="7.9 2.5 16.1 2.5 21.5 7.9 21.5 16.1 16.1 21.5 7.9 21.5 2.5 16.1 2.5 7.9"/><line x1="12" y1="7.5" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
   image: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5L6 23"/>'),
+  table: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14.5" x2="21" y2="14.5"/><line x1="9.5" y1="9" x2="9.5" y2="20"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS

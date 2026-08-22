@@ -86,6 +86,13 @@ const SHEET = (doc: SpacesDoc): string => {
     `border:1px solid #E3E8EF;border-inline-start:3px solid ${accent};background:#F8FAFC}`,
     `.bp code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}`,
     `.bp a{color:inherit;text-decoration:none;border-bottom:1px solid ${accent}}`,
+    // A table with no rules is four columns of words running together, which is
+    // exactly the "shows a loading animation instead of the document" failure
+    // this file exists to fix, one level down.
+    `.bp table{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:15px;table-layout:fixed}`,
+    `.bp th,.bp td{border:1px solid #E3E8EF;padding:6px 9px;text-align:start;`,
+    `vertical-align:top;word-break:break-word}`,
+    `.bp th{background:#F5F7FA;font-weight:600}`,
   ].join('')
 }
 
