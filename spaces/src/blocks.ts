@@ -302,6 +302,36 @@ export const SPECS: BlockSpec[] = [
     tag: 'div', custom: true,
     toMd: (b) => [`![${String(b.alt ?? '')}](${String(b.src ?? '')})`],
   },
+  {
+    type: 'media', label: 'Video or audio', hint: 'Plays in the page', icon: 'play',
+    tag: 'div', custom: true,
+    // A fresh block has no src yet — the renderer draws a chooser and the
+    // editor wires it. `kind` is set the moment a file or a link arrives, from
+    // what the file actually IS, so the default here only has to be the shape
+    // that degrades usefully.
+    init: (b) => { if (b.kind === undefined) b.kind = 'video' },
+    // MARKDOWN HAS NO VIDEO, and pretending otherwise loses the block.
+    //
+    // Three candidates, and only one of them is right in more than one place.
+    // `![](clip.mp4)` is IMAGE syntax: every renderer that has ever existed
+    // draws a broken-image glyph for it. A bare URL on its own line becomes a
+    // player on github.com and on nothing else, so it exports as a naked
+    // string everywhere a reader is likelier to open the file. A LINK is
+    // correct in all of them: it says what the thing is and where it is, and
+    // the one renderer that could do better still shows something you can
+    // click.
+    //
+    // The target is `src` verbatim, `asset:` and data: included, exactly as
+    // the image exporter already writes it. That link does not resolve outside
+    // the space — which is the truth about an embedded clip, and a truthful
+    // dead link beats a silently dropped block.
+    toMd: (b) => {
+      const kind = String(b.kind ?? 'video') === 'audio' ? 'Audio' : 'Video'
+      const label = String(b.alt ?? '') || kind
+      const src = String(b.src ?? '')
+      return [src ? `[${label}](${src})` : `_${kind}_`]
+    },
+  },
 ]
 
 /** The `:---:` rule row's four forms, which are the whole of what GFM can say
@@ -334,6 +364,46 @@ export function tableToMd(b: Block, indent: string, inline: (html: string) => st
     line(t.colAlign.map((a) => RULE[a] ?? '---')),
     ...body.map((r) => line(r.map(cell))),
   ]
+}
+
+/**
+ * THE PLAYBACK FLAGS A SURFACE MAY APPLY — and the one it may not.
+ *
+ * `autoplay` IS ALWAYS FALSE HERE, whatever the block says. Slides learned
+ * this the expensive way: autoplay set at render time fires on the editing
+ * canvas and in every thumbnail, so it lives in present mode, which is the one
+ * surface that owns playback. A space has no such surface. It has an editor, a
+ * reading view, a printout and a file-manager still, and a clip that starts
+ * itself is wrong in every one of them — the reading view because a page you
+ * scrolled past should not start talking, the still because it is a picture.
+ *
+ * So the rule is not "the renderer happens not to set it" — that is a property
+ * of one function that the next surface would have to rediscover. It is this
+ * function, which every surface goes through, and which cannot return true.
+ * `Block.autoplay` still round-trips (PLATFORM §3); it is simply not obeyed.
+ *
+ * Pure and DOM-free, so scripts/test-spaces-model.ts pins it directly.
+ */
+export interface MediaPlayback {
+  kind: 'video' | 'audio'
+  /** absent = shown: a player with no controls is a rectangle you cannot use */
+  controls: boolean
+  loop: boolean
+  /** browsers require muted for video autoplay — kept as a plain author choice
+   *  here, because nothing in this app autoplays for it to unlock */
+  muted: boolean
+  /** ALWAYS false. See above. */
+  autoplay: false
+}
+
+export function mediaPlayback(b: Block): MediaPlayback {
+  return {
+    kind: String(b.kind ?? 'video') === 'audio' ? 'audio' : 'video',
+    controls: b.controls !== false,
+    loop: b.loop === true,
+    muted: b.muted === true,
+    autoplay: false,
+  }
 }
 
 /**

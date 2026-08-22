@@ -59,10 +59,45 @@ export interface Block {
    *  Toggles always PRINT expanded — silently omitting content from a printed
    *  handbook is a data-loss-shaped bug. */
   open?: boolean
-  /** image: 'asset:<key>' | data: | https: */
+  /** image, media: 'asset:<key>' | data: | https: */
   src?: string
   alt?: string
   caption?: string
+  /**
+   * media: 'video' | 'audio'.
+   *
+   * ONE block type with a kind, not two types, because everything else about
+   * them is identical — the same hybrid src, the same remote-consent gate, the
+   * same still in print and preview, the same playback flags. Two types would
+   * mean two registry entries, two renderer cases and two exporters that have
+   * to be kept saying the same thing.
+   *
+   * An OPEN string, like `type` and `tone`: a kind a future build adds must
+   * round-trip through this one. Anything that is not 'audio' is drawn as
+   * video, which is the shape that degrades usefully — a video element with an
+   * audio file in it plays the audio.
+   */
+  kind?: string
+  /** media: a still frame, same three src forms. Shown before play, and it is
+   *  what print and the file-manager preview draw instead of a player. */
+  poster?: string
+  /** media: playback controls for the reader. Absent = shown. */
+  controls?: boolean
+  /** media: repeat at the end. */
+  loop?: boolean
+  /** media: start silent. */
+  muted?: boolean
+  /**
+   * media: RECORDED, NEVER HONOURED. See blocks.ts mediaPlayback().
+   *
+   * A space has no surface that owns playback the way slides' present mode
+   * does — it has an editor, a reading view, a printout and a file-manager
+   * still, and a clip that starts itself is wrong in all four. The field
+   * exists so a document written by a build that DOES have such a surface
+   * round-trips untouched (PLATFORM §3), and so that the rule has somewhere to
+   * be written down. It is not read by this app.
+   */
+  autoplay?: boolean
   /** image width as a PERCENTAGE of the text column (10..100). No block
    *  carries absolute px — the column width is a theme concern. */
   width?: number

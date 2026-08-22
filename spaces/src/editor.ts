@@ -9,7 +9,7 @@
 // backlinks and (later) collaboration key on.
 
 import {
-  type Block, type TableShape, newBlock, newPage, effectiveParents,
+  type Block, type TableShape, newBlock, newPage, effectiveParents, isRemote,
   tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS,
 } from './model'
 import * as collabUi from './collabui.ts'
@@ -34,7 +34,9 @@ import {
 } from './journal'
 import { canWriteInPlace } from '../../kernel/src/save.ts'
 import { ICONS, type IconName } from './icons'
-import { internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, blobToDataUri } from './assets'
+import {
+  internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
+} from './assets'
 
 const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctrlKey'
 
@@ -169,6 +171,10 @@ export class Editor {
           // a table has no block-level host to focus — the caret belongs in the
           // first cell, which is also where a person starts typing
           else if (item.type === 'table') this.focusCell(fresh.id, 0, 0)
+          // straight to the picker, exactly like Image. Cancelling is not a
+          // dead end: the block renders its own chooser (render.ts 'media'),
+          // which is also the only route the / menu needs.
+          else if (item.type === 'media') void this.pickMedia(fresh.id)
           else this.focusBlock(fresh.id)
         }))
       }
@@ -1878,7 +1884,7 @@ export class Editor {
       const cur = this.blockAt(document.activeElement)
       if (e.clipboardData?.files?.length) {
         e.preventDefault()
-        void this.imageFromTransfer(e.clipboardData, cur?.id)
+        void this.fileFromTransfer(e.clipboardData, cur?.id)
       }
     })
     view.addEventListener('dragover', (e) => {
@@ -1893,7 +1899,7 @@ export class Editor {
       if (isImportDrop(e.dataTransfer)) return
       e.preventDefault()
       const near = (e.target as HTMLElement)?.closest?.('[data-block-id]') as HTMLElement | null
-      void this.imageFromTransfer(e.dataTransfer, near?.dataset.blockId)
+      void this.fileFromTransfer(e.dataTransfer, near?.dataset.blockId)
     })
 
     // The language chip. It belongs to the EDITOR, not the renderer: a reader
@@ -1942,6 +1948,92 @@ export class Editor {
         tools.append(badge)
       }
       fig.append(tools)
+    }
+
+    // VIDEO AND AUDIO. The chooser on an empty block, and the playback
+    // switches on a full one. All of it is editor chrome, deliberately: the
+    // renderer draws the clip, and a reader, a printout and a locked space get
+    // the clip without the switches that change it — the same rule the callout
+    // chip and the language chip follow.
+    for (const node of view.querySelectorAll<HTMLElement>('.sp-b-media')) {
+      const id = node.dataset.blockId!
+      for (const btn of node.querySelectorAll<HTMLElement>('[data-pick-media]')) {
+        btn.addEventListener('click', () => void this.pickMedia(id))
+      }
+      for (const btn of node.querySelectorAll<HTMLElement>('[data-link-media]')) {
+        btn.addEventListener('click', () => this.linkMedia(id))
+      }
+      const b = s.block(id)
+      if (s.readOnly || this.reading || !b || !b.src) continue
+      const kind = String(b.kind ?? 'video') === 'audio' ? 'audio' : 'video'
+      const tools = el('div', 'sp-mediatools')
+      const flip = (label: string, title: string, on: boolean, set: (v: boolean) => void) => {
+        const btn = document.createElement('button')
+        btn.className = 'sp-btn' + (on ? ' sp-on' : '')
+        btn.type = 'button'
+        btn.textContent = label
+        btn.title = title
+        btn.setAttribute('aria-pressed', String(on))
+        btn.addEventListener('click', () => {
+          s.commit(() => { const bb = s.block(id); if (bb) set(!on) })
+          this.paintPage()
+        })
+        tools.append(btn)
+      }
+
+      // WIDTH IS A VIDEO QUESTION. An <audio> is a control bar of the
+      // browser's own height; a percentage of the measure would only make it
+      // a shorter control bar.
+      if (kind === 'video') {
+        const sizeBtn = document.createElement('button')
+        sizeBtn.className = 'sp-btn'
+        sizeBtn.type = 'button'
+        sizeBtn.textContent = `${b.width ?? 100}%`
+        sizeBtn.title = t('Width in the text column')
+        sizeBtn.addEventListener('click', () => {
+          const steps = [100, 75, 50, 33]
+          const cur = Number(b.width ?? 100)
+          const next = steps[(steps.indexOf(cur) + 1) % steps.length]
+          s.commit(() => { const bb = s.block(id); if (bb) bb.width = next })
+          this.paintPage()
+        })
+        tools.append(sizeBtn)
+
+        const poster = document.createElement('button')
+        poster.className = 'sp-btn' + (b.poster ? ' sp-on' : '')
+        poster.type = 'button'
+        poster.textContent = t('Poster…')
+        poster.title = t('A still frame, shown before play — and what a printout or a file preview shows')
+        poster.addEventListener('click', () => void this.pickPoster(id))
+        tools.append(poster)
+
+        flip(t('Muted'), t('Start silent'), b.muted === true,
+          (v) => { const bb = s.block(id); if (bb) bb.muted = v })
+      }
+      flip(t('Loop'), t('Repeat when it reaches the end'), b.loop === true,
+        (v) => { const bb = s.block(id); if (bb) bb.loop = v })
+      // absent means shown, so the OFF state is the one that is written down
+      flip(t('Controls'), t('Show playback controls to the reader'), b.controls !== false,
+        (v) => { const bb = s.block(id); if (bb) { if (v) delete bb.controls; else bb.controls = false } })
+
+      const replace = document.createElement('button')
+      replace.className = 'sp-btn'
+      replace.type = 'button'
+      replace.textContent = t('Replace…')
+      replace.title = t('Choose a different file')
+      replace.addEventListener('click', () => void this.pickMedia(id))
+      tools.append(replace)
+
+      // a linked clip says so, because it is the one that stops working on a
+      // train — and the badge is the only place that fact is visible
+      if (typeof b.src === 'string' && isRemote(b.src)) {
+        const badge = document.createElement('span')
+        badge.className = 'sp-btn sp-badge'
+        badge.textContent = t('Linked')
+        badge.title = t('Not in this file: it needs the network, and the site is told when someone opens the page')
+        tools.append(badge)
+      }
+      node.append(tools)
     }
 
     // intra-space links navigate without leaving the document
@@ -3198,14 +3290,159 @@ export class Editor {
       }))
   }
 
-  /** Drop or paste an image straight onto the page. */
-  private async imageFromTransfer(dt: DataTransfer | null, afterId?: string): Promise<boolean> {
-    const file = [...(dt?.files ?? [])].find((f) => f.type.startsWith('image/'))
-      ?? [...(dt?.items ?? [])].filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile())[0]
-    if (!file) return false
+  /**
+   * Drop or paste an image — or a clip — straight onto the page.
+   *
+   * Images win a tie. A drag that carries both (a screenshot alongside a
+   * screen recording, which is what a Finder multi-select of a bug report
+   * looks like) takes the image, because that is the one an author is far more
+   * often reaching for and the one that costs nothing to be wrong about.
+   */
+  private async fileFromTransfer(dt: DataTransfer | null, afterId?: string): Promise<boolean> {
+    const pick = (kind: string): File | undefined =>
+      [...(dt?.files ?? [])].find((f) => f.type.startsWith(kind))
+      ?? [...(dt?.items ?? [])].filter((i) => i.type.startsWith(kind)).map((i) => i.getAsFile())[0]
+      ?? undefined
     if (!this.store.page) return false
-    await this.placeImage(null, file, { insertAfter: afterId ?? null })
+    const img = pick('image/')
+    if (img) { await this.placeImage(null, img, { insertAfter: afterId ?? null }); return true }
+    const clip = pick('video/') ?? pick('audio/')
+    if (!clip) return false
+    await this.placeMedia(null, clip, { insertAfter: afterId ?? null })
     return true
+  }
+
+  // ---- video and audio -------------------------------------------------------
+  /**
+   * Choose a clip and put it in the document.
+   *
+   * `accept` names both kinds and the KIND IS READ BACK OFF THE FILE, never
+   * asked for. A picker that made you say "video" first would be a question
+   * the file already answers, and answers correctly for the odd cases — an
+   * .m4a that a phone wrote as video/mp4 plays either way.
+   */
+  async pickMedia(blockId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/*,audio/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (file) void this.placeMedia(blockId, file)
+    })
+    input.click()
+  }
+
+  /**
+   * Embed one clip.
+   *
+   * Shaped like placeImage and for the same reason: everything asynchronous —
+   * reading the bytes, hashing them — happens BEFORE the commit, so the asset
+   * and the reference land in one synchronous mutation and one undo step.
+   *
+   * NOTHING IS RE-ENCODED. prepareImage exists because a phone photo is 4000px
+   * wide in a 720px column and the detail is invisible; there is no equivalent
+   * cheap win for video, and transcoding in a browser tab means shipping an
+   * encoder and taking minutes over it. So a clip is either small enough to
+   * embed or a link — which is what MEDIA_EMBED_BUDGET asks about.
+   */
+  async placeMedia(
+    blockId: string | null,
+    file: File | Blob,
+    opts: { insertAfter?: string | null } = {},
+  ): Promise<void> {
+    const s = this.store
+    this.status(t('Reading file…'))
+    let dataUri: string
+    try {
+      dataUri = await blobToDataUri(file)
+    } catch {
+      this.status(t('That file could not be read'))
+      return
+    }
+    const kind = (file as File).type?.startsWith('audio/') ? 'audio' : 'video'
+
+    if (dataUri.length > MEDIA_EMBED_BUDGET) {
+      // A browser file picker hands over BYTES, never a path, so "keep it on
+      // disk and point at it" is not a thing this can offer. The honest
+      // alternatives are: embed it anyway, or paste a URL — which is what the
+      // block's own chooser offers, and where a no lands you.
+      const go = confirm(t(
+        'This clip is {size} and travels inside the file, making it that much bigger for everyone you send it to. Embed it anyway?',
+        { size: humanBytes(dataUri.length) },
+      ))
+      if (!go) { this.status(''); return }
+    }
+
+    const ref = await internAsset(s.doc, dataUri)
+    this.writeMedia(blockId, opts.insertAfter ?? null, (b) => { b.src = ref; b.kind = kind })
+    this.status(t('Clip added ({size})', { size: humanBytes(dataUri.length) }))
+  }
+
+  /**
+   * The escape hatch: a clip that lives somewhere else.
+   *
+   * The only way to have a small file with a big video in it, and the reason
+   * `src` is hybrid at all. It is a real trade and it is stated at the point of
+   * the decision — a linked clip needs the network to play, and asking for it
+   * tells that host somebody opened the space, which is why the READER is
+   * asked before it loads (render.ts).
+   */
+  linkMedia(blockId: string | null, insertAfter: string | null = null): void {
+    const url = prompt(t('Address of a video or audio file'))?.trim()
+    if (!url) return
+    // http(s) only, and checked HERE as well as in the sanitizer: `src` is not
+    // inline html, so it never passes through sanitize.ts at all — a
+    // `javascript:` typed into this box would be written straight onto the
+    // element. The allowlist is the test, never a `javascript:` blocklist.
+    if (!/^https?:\/\//i.test(url)) { this.status(t('That needs to be an http or https address')); return }
+    const kind = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba)(\?|#|$)/i.test(url) ? 'audio' : 'video'
+    this.writeMedia(blockId, insertAfter, (b) => { b.src = url; b.kind = kind })
+    this.status('')
+  }
+
+  /** ONE commit, whether the block exists already or is being created here —
+   *  the placeImage rule: an inserted clip must not cost two undos. */
+  private writeMedia(blockId: string | null, insertAfter: string | null, fill: (b: Block) => void): void {
+    const s = this.store
+    const apply = (b: Block) => {
+      b.type = 'media'
+      b.html = ''
+      fill(b)
+    }
+    s.commit(() => {
+      if (blockId) { const b = s.block(blockId); if (b) apply(b); return }
+      const page = s.page
+      if (!page) return
+      const fresh = newBlock('media')
+      apply(fresh)
+      const at = insertAfter ? page.blocks.findIndex((b) => b.id === insertAfter) + 1 : page.blocks.length
+      page.blocks.splice(at < 1 ? page.blocks.length : at, 0, fresh)
+    })
+    this.paintPage()
+  }
+
+  /** A still frame for a video — the same pipeline an image goes through, so
+   *  it is downscaled and content-addressed like any other picture. */
+  private async pickPoster(blockId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      void (async () => {
+        this.status(t('Reading image…'))
+        let prepared
+        try { prepared = await prepareImage(file) } catch {
+          this.status(t('That file could not be read as an image')); return
+        }
+        const ref = await internAsset(this.store.doc, prepared.dataUri)
+        this.store.commit(() => { const b = this.store.block(blockId); if (b) b.poster = ref })
+        this.paintPage()
+        this.status('')
+      })()
+    })
+    input.click()
   }
 
   // ---- importing existing notes ---------------------------------------------

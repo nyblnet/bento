@@ -36,7 +36,16 @@ import { homePage } from './model'
  *  is a courtesy; it must never be why a file is large. */
 export const PREVIEW_BUDGET = 64 * 1024
 
-/** Anything that could run, load, or accept input has no business in a still. */
+/**
+ * Anything that could run, load, or accept input has no business in a still.
+ *
+ * `video`/`audio` are DEFENCE IN DEPTH rather than the mechanism: the render
+ * below passes `printing: true`, and render.ts draws a `media` block as a
+ * poster still under that flag, so no player element is ever built here. This
+ * catches one arriving by some other route — a future block type that embeds
+ * one, or a hand-written document — before a file manager is asked to decode
+ * video to draw an icon.
+ */
 const BANNED = 'script,iframe,object,embed,video,audio,canvas,form,input,textarea,select,button,link,meta'
 
 /** Attributes the runtime uses to find things. A still has no runtime. */
@@ -84,6 +93,17 @@ const SHEET = (doc: SpacesDoc): string => {
     `.bp figcaption{font-size:13px;color:#5B6472;margin-top:5px}`,
     `.bp aside{margin:0 0 14px;padding:12px 14px;border-radius:10px;`,
     `border:1px solid #E3E8EF;border-inline-start:3px solid ${accent};background:#F8FAFC}`,
+    // A clip's still: the author's poster frame if there is one, and a quiet
+    // labelled box if not. Flat rules only — QuickLook's WebKit is the
+    // conservative renderer this sheet is written for, so no :has(), no
+    // grid tricks, nothing that could fail to a blank rectangle.
+    `.bp .sp-media-still{margin:0 0 14px;padding:12px;border-radius:8px;`,
+    `border:1px solid #E3E8EF;background:#F8FAFC;text-align:center}`,
+    `.bp .sp-media-still img{max-width:100%;height:auto;border-radius:6px;`,
+    `display:block;margin:0 auto 8px}`,
+    `.bp .sp-media-badge{font-size:13px;color:#5B6472}`,
+    `.bp .sp-media-empty{margin:0 0 14px;padding:12px;border-radius:8px;`,
+    `border:1px dashed #E3E8EF;color:#5B6472;font-size:13px;text-align:center}`,
     `.bp code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}`,
     `.bp a{color:inherit;text-decoration:none;border-bottom:1px solid ${accent}}`,
     // A table with no rules is four columns of words running together, which is

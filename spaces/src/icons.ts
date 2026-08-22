@@ -92,6 +92,11 @@ export const ICONS = {
   toneCaution: svg('<polygon points="7.9 2.5 16.1 2.5 21.5 7.9 21.5 16.1 16.1 21.5 7.9 21.5 2.5 16.1 2.5 7.9"/><line x1="12" y1="7.5" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
   image: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5L6 23"/>'),
   table: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14.5" x2="21" y2="14.5"/><line x1="9.5" y1="9" x2="9.5" y2="20"/>'),
+  // ONE glyph for both kinds, because `media` is one block type with a kind.
+  // A play triangle in a frame reads as "a thing that plays" for audio as
+  // readily as for video; a film reel and a speaker would be two menu entries
+  // for one entry's worth of block.
+  play: svg('<rect x="2" y="4" width="20" height="16" rx="2.5"/><path d="M10.5 9.2 15 12l-4.5 2.8z" fill="currentColor"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS
