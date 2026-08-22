@@ -4346,3 +4346,72 @@ document carrying `theme.dir: 'rtl'` the padding therefore went left while the
 gutter went right — measured at 390px, the gutter landed at x = 378…412 and the
 column scrolled to 412. It is reserved on `.sp-page-inner` now, so the two flip
 together; the ltr metrics are byte-identical.
+
+## 2026-08-22 — spaces plays video and audio, and nothing in it ever autoplays
+
+`bento/spaces` gains a `media` block: ONE type carrying `kind: 'video' |
+'audio'`, mirroring `image` down to the hybrid `src` (`asset:` · `data:` ·
+`https:`), the remote-consent gate and the percentage width. Two types would
+have meant two registry entries, two renderer cases and two exporters kept
+saying the same thing, and everything that actually differs between a clip and
+a soundtrack is one branch wide.
+
+**Autoplay is recorded and never obeyed, and that lives in a FUNCTION.** Slides
+learned the shape of this the expensive way: autoplay set at render time fires
+on the editing canvas and in every thumbnail, so it belongs to present mode —
+the one surface that owns playback. A space has no such surface. It has an
+editor, a reading view, a printout and a file-manager still, and a clip that
+starts itself is wrong in all four: the reading view because a page you scrolled
+past should not start talking, the still because it is a picture.
+
+So the rule is not "the renderer happens not to set it", which is a property of
+one function that the next surface would have to rediscover. `blocks.ts
+mediaPlayback(b)` returns the flags a surface may apply and its `autoplay` is
+typed `false` — it cannot return anything else. `Block.autoplay` still
+round-trips untouched (PLATFORM §3), because a build that DOES have a
+playback-owning surface may legitimately write it. Pinned three ways in
+`scripts/test-spaces-model.ts`, including against a block that asks for it, plus
+a source assertion that `render.ts` never sets the attribute by any spelling.
+
+**Paper and thumbnails get a still, gated on `printing`.** That flag already
+means "this output cannot be interacted with", and both surfaces pass it —
+print, and `preview.ts`'s file-manager render. The still is the author's poster
+frame if there is one and a labelled box if not; never nothing, because a
+printed handbook that silently omits the paragraph where the demo video was is
+the same class of bug as a toggle that prints shut. `preview.ts` also bans
+`video,audio` outright, which is now defence in depth rather than the mechanism:
+by the time it runs there is nothing to ban.
+
+**A linked clip needs the reader's consent more than a linked image does.** A
+remote `<video>` asks its host for byte ranges the moment the element is parsed,
+so no autoplay is needed to make it a beacon — opening the space is the ping.
+Same gate, same host named, different words ("Video from {host}" / "Load this
+video"). The preview passes no `allowRemote` at all, so a still built for a file
+manager can never make a request: verified, the emitted preview carries zero
+`src` attributes.
+
+**The URL box is its own gate.** `src` is not inline html, so it never passes
+through `sanitize.ts` — a `javascript:` typed into "Use a link…" would be
+written straight onto the element. It is an `^https?://` ALLOWLIST, never a
+`javascript:` blocklist, matching the reasoning behind `HREF_OK`.
+
+**A clip exports as a markdown LINK.** Markdown has no video. `![](clip.mp4)` is
+image syntax and draws a broken-image glyph in every renderer that has ever
+existed; a bare URL becomes a player on github.com and on nothing else. A link
+is correct everywhere: it says what the thing is and where it is. The target is
+`src` verbatim, `asset:` and `data:` included, exactly as the image exporter
+already writes it — a link that does not resolve outside the space is the truth
+about an embedded clip, and a truthful dead link beats a dropped block.
+
+**Nothing is re-encoded.** `prepareImage` exists because a phone photo is 4000px
+wide in a 720px column; there is no equivalent cheap win for video, and
+transcoding in a browser tab means shipping an encoder and taking minutes over
+it. So `MEDIA_EMBED_BUDGET` (8MB, twice the image budget, matching slides) is
+the point at which the question is worth asking rather than a size we can
+rescue. A browser file picker hands over bytes and never a path, so "keep it on
+disk and point at it" cannot be offered — the URL field is the whole escape
+hatch, and it is where a "no" lands you.
+
+**Cost.** 166,482 → 172,722 B on the shipped shell (+6,240 B, +3.7%), and the
+`scripts/size-budgets.json` ceiling moves 172 → 176 KiB. That is the zopfli
+headroom being spent on a feature, which is what it was left for.

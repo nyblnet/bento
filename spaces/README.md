@@ -80,7 +80,7 @@ load contract and format additivity.
 | `src/collabui.ts` | who else is here — presence in the tree, the people panel, the live control |
 | `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |
 | `src/agent.ts` | the agent surface — `validate()`, `outline()`, `stats()`, and the patch verbs behind `window.bento` |
-| `src/assets.ts` | content-addressed images and the downscale |
+| `src/assets.ts` | content-addressed images and clips, and the image downscale |
 | `src/about.ts` | updates, language, password, exports |
 | `src/i18n/` | per-locale catalogs; `packed.ts` is generated and is what ships |
 

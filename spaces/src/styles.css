@@ -460,7 +460,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   .sp-main { overflow: visible; padding: 0; background: #fff; }
   .sp-toggle-body[hidden] { display: block !important; }  /* toggles print OPEN */
   .sp-b-h1, .sp-b-h2, .sp-b-h3, .sp-title { break-after: avoid; }
-  .sp-b-code, .sp-b-image figure, .sp-b-quote { break-inside: avoid; }
+  .sp-b-code, .sp-b-image figure, .sp-b-media figure, .sp-b-quote { break-inside: avoid; }
   /* A CALLOUT ON PAPER, IN BLACK AND WHITE.
      The tint is dropped rather than trusted: browsers do not print backgrounds
      by default, so a callout whose only cue was its fill would print as bare
@@ -565,6 +565,43 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-imgtools .sp-badge { color: var(--accent-ink); }
 .sp-b-image figure { position: relative; }
 .sp-page.sp-filedrop { outline: 2px dashed var(--blue); outline-offset: 8px; border-radius: var(--radius); }
+
+/* ————— video and audio —————
+   Same shape as an image: a <figure> in the column, tools that appear on
+   hover. A video is sized as a percentage of the measure like an image; an
+   audio element is a control bar, so it takes the full width and ignores the
+   width stepper (the editor does not offer one). */
+.sp-b-media { position: relative; }
+.sp-b-media figure { margin: 12px 0; position: relative; }
+.sp-b-media video { max-width: 100%; height: auto; border-radius: var(--radius); display: block; background: #000; }
+.sp-b-media audio { width: 100%; display: block; }
+.sp-b-media figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.sp-mediatools {
+  position: absolute; top: 8px; inset-inline-end: 8px;
+  display: flex; gap: 4px; opacity: 0; transition: opacity .12s;
+  flex-wrap: wrap; justify-content: flex-end;
+}
+.sp-b-media:hover .sp-mediatools, .sp-mediatools:focus-within { opacity: 1; }
+.sp-mediatools .sp-btn {
+  background: rgb(255 255 255 / .94); border-color: var(--line);
+  font-size: 12px; padding: 4px 8px;
+  box-shadow: 0 2px 8px rgb(20 30 45 / .12);
+}
+/* The still that paper and a file-manager thumbnail get instead of a player. */
+.sp-media-still {
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  background: var(--chrome-2); text-align: center;
+}
+.sp-media-still img { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 0 auto 8px; }
+.sp-media-badge { font-size: 13px; color: var(--muted); }
+/* A block whose source has not been chosen yet. */
+.sp-media-empty {
+  border: 1px dashed var(--line); border-radius: 10px; padding: 18px 20px;
+  background: var(--chrome-2);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+}
+.sp-media-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media print { .sp-media-empty { border-color: #999; background: none; } }
 
 /* ————— import ————— */
 .sp-dropzone {
