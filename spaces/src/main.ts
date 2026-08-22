@@ -32,7 +32,7 @@ import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
-import { downloadMarkdown } from './about'
+import { downloadMarkdown, launchUpdateCheck } from './about'
 
 configureApp({
   appId: 'bento-spaces',
@@ -473,6 +473,26 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     // stated rather than discovered — the product-defining limitation on iOS
     console.info('[bento/spaces] this browser cannot write back to the file; every save makes a new copy')
   }
+
+  /**
+   * Ask the release server whether this app is current — and NOTHING else.
+   *
+   * This is the one request bento/spaces makes on its own, and it is worth
+   * being precise about how it sits beside "A space does not phone home when
+   * it is opened" (DECISIONS, 2026-08-03). That rule is about the DOCUMENT: an
+   * author who mails you a file must not learn your address and the moment you
+   * opened it, which is what a remote `<img>` delivers. This is the APP asking
+   * its own release origin for a signed manifest, on the reader's behalf and
+   * under the reader's switch — the same check slides has run at launch since
+   * v0.9, reading the same `bento-auto-check` preference, so turning it off in
+   * one app turns it off in both. It sends no id, carries nothing from the
+   * document, and is the mechanism by which a file that will outlive its
+   * browser ever learns that it should be updated.
+   *
+   * Never fatal, and never in the way: the result only changes a sentence in
+   * the About dialog.
+   */
+  void launchUpdateCheck().catch(() => { /* an unreachable server is not an error here */ })
 }
 
 function banner(text: string, actions: Array<[string, () => void]> = []): void {

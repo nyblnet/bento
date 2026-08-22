@@ -4938,3 +4938,36 @@ and the still preview has no theme of its own.
 
 **Cost.** Shell 213,434 → 215,002 B (+1,568, 0.7%). No budget raise: the
 ceiling stays 221,184.
+
+## 2026-08-22 — bento/spaces checks for updates at launch, and the About dialog says so
+
+**Decision.** bento/spaces asks its release server for a signed manifest once at
+launch, gated on the kernel's `bento-auto-check` preference, and the About
+dialog carries the switch that turns it off. It was manual-only before, which
+left the switch nothing to switch.
+
+**Why this is not "phoning home."** The 2026-08-03 rule ("A space does not phone
+home when it is opened") is about the DOCUMENT: an author who mails you a file
+must not learn your address and the moment you opened it, which is what a remote
+`<img>` in a page delivers. This is the APP asking its own release origin
+whether it is current, on the reader's behalf and under the reader's switch. It
+sends no id and carries nothing from the document; a remote `src` in a document
+still renders as a placeholder naming the host, unchanged. The two rules answer
+different questions and both still hold.
+
+**Same preference as slides,** which has checked at launch since v0.9. One key,
+`bento-auto-check`, so turning it off in one app turns it off in both — a suite
+where the same switch means different things in two apps is worse than a suite
+with no switch.
+
+**The result only changes a sentence.** The check is `void`ed and its failure
+swallowed: a launch with no network reads "Launch check couldn't reach the
+release server (…). Check manually below." and nothing else about the app
+differs. There is no badge, no banner and no automatic download; updating is
+still a button somebody presses.
+
+**Where it is stated.** In the dialog, beside the switch, in the reader's own
+language: "An update check is the only network this app makes on its own. It
+asks the release server for a signed manifest and sends nothing about you or
+this document — no ids, no telemetry." Live collaboration is network too, but
+it is network the reader started.

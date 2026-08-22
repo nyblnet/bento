@@ -864,11 +864,133 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-empty { color: var(--muted); }
 
-/* ————— about ————— */
-.sp-about .sp-card-h { margin-top: 20px; }
-.sp-about .sp-card-h:first-child { margin-top: 2px; }
-.sp-about-blurb { margin: 0 4px 10px; font-size: 14px; }
+/* ————— about —————
+   Slides' dialog, in this app's tokens: one scrolling card, sections with real
+   headings, and the weightier things last and marked. Everything that opens
+   inside it opens IN FLOW — the card scrolls, and a scroll container clips
+   BOTH axes (hard-won #10), so a floating child of it would be cut on the left
+   and the bottom with nothing to show for it. */
 .sp-note { color: var(--muted); font-size: 12.5px; margin: 6px 4px 10px; line-height: 1.55; }
+/* The card is a column with its own scroll, sized off the VIEWPORT rather than
+   a breakpoint: 375px wide with a 12px gutter and 1600px wide are the same
+   rule. `.sp-card`'s 72vh is for a find palette that wants to sit high; a
+   dialog this long wants the height, so it takes 88vh and centres. */
+.sp-overlay-about { align-items: center; padding: 12px; padding-top: 12px; }
+.sp-about {
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(88vh, calc(100vh - 24px));
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 2px;
+  /* Sections are flex items, and a flex item SHRINKS by default — which is how
+     slides' update block collapsed to its min-height and spilled its children
+     over the controls beneath it. Let the card scroll instead; that is what
+     its overflow is for. */
+  overscroll-behavior: contain;
+}
+.sp-about > * { flex-shrink: 0; }
+.sp-ab-sec {
+  padding-top: 14px; margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sp-about .sp-card-h { margin: 0 2px 8px; }
+/* the head and the promo line are the title of the dialog, not a section */
+.sp-ab-promo { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 6px 4px 2px; }
+.sp-ab-promo a { color: var(--blue); text-decoration: none; }
+.sp-ab-promo a:hover { text-decoration: underline; }
+
+/* What is in this file. Four numbers, and then the sentence that explains
+   them — a space is big because of its images, always. */
+.sp-ab-stats {
+  /* 112px, not 96: at 96 a 351px card fitted THREE and left the fourth alone
+     on its own row. 112 makes it 2×2 on a phone and one row of four on a
+     desktop card, which is the same readout either way rather than a ragged
+     one. Measured inner widths: 315px at 375, 524px at 1600. */
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px; margin: 0 2px 4px;
+}
+.sp-ab-stat {
+  background: var(--chrome); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; min-width: 0;
+}
+.sp-ab-stat b {
+  display: block; font-size: 17px; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.sp-ab-stat span { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+/* a labelled field, the shape slides' document properties use */
+.sp-ab-field { display: flex; align-items: center; gap: 10px; padding: 2px 4px 8px; }
+.sp-ab-field label { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
+.sp-ab-field .sp-input { flex: 1 1 auto; min-width: 0; }
+
+/* `.sp-btn` is transparent by design — the topbar is icon-only and a row of
+   outlined boxes there would be noise. In THIS card the same class has to read
+   as a control against a white panel with no hover to help it, so the dialog
+   gives every non-primary button its border back. Slides' about does exactly
+   this, for exactly this reason. */
+.sp-about .sp-btn { border-color: var(--line); background: var(--chrome); }
+.sp-about .sp-btn:hover { background: var(--chrome-2); }
+.sp-about .sp-primary { border-color: var(--ink); background: var(--ink); color: #fff; }
+.sp-about .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
+
+.sp-ab-check {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; color: var(--muted); cursor: pointer;
+  user-select: none; padding: 2px 4px 4px;
+}
+.sp-ab-status { display: flex; flex-direction: column; gap: 8px; }
+
+/* the one moment in the dialog with a decision in it, given its own room */
+.sp-ab-update {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 11px 13px; margin: 2px 4px;
+  border: 1px solid var(--line); border-radius: 10px;
+}
+.sp-ab-update .sp-note { margin: 0; }
+.sp-ab-new { font-weight: 650; font-size: 13.5px; }
+.sp-ab-release {
+  color: var(--ink-2); background: var(--chrome); border-radius: 8px;
+  padding: 9px 12px; line-height: 1.5; font-size: 12.5px;
+  /* Its OWN scroll region, sized off the viewport: release.mjs caps the notes
+     at five bullets plus an "…and N more" line, which fits whole at any normal
+     height, and anything longer scrolls HERE rather than the whole dialog. */
+  max-height: min(300px, 42vh); overflow-y: auto; overflow-wrap: anywhere;
+}
+.sp-ab-release > div + div { margin-top: 5px; }
+/* hanging indent: a wrapped bullet lines up under its own text, not the marker */
+.sp-ab-note { padding-inline-start: 14px; text-indent: -14px; }
+.sp-ab-note::before { content: '•\00a0'; }
+.sp-ab-more { color: var(--muted); font-style: italic; }
+.sp-ab-link { border-color: var(--line); }
+
+/* Weightier by construction: a marked button, and a confirmation that says
+   what will happen before the verb is offered. */
+.sp-about .sp-ab-danger { color: #a3231a; border-color: rgb(163 35 26 / .3); }
+.sp-about .sp-ab-danger:hover { background: #fdeceb; }
+.sp-ab-confirm {
+  margin: 8px 4px 2px; padding: 11px 13px;
+  background: #fdf4f3; border: 1px solid rgb(163 35 26 / .28); border-radius: 10px;
+}
+.sp-ab-confirm strong { display: block; font-size: 13.5px; }
+.sp-ab-confirm .sp-note { margin: 5px 0 8px; }
+.sp-ab-confirm .sp-actions { padding: 0; }
+.sp-about .sp-ab-go { background: #a3231a; color: #fff; border-color: #a3231a; }
+.sp-about .sp-ab-go:hover { background: #8a1d15; }
+.sp-ab-json {
+  width: 100%; margin-bottom: 8px;
+  font: 11.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink); background: #fff;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px; resize: vertical;
+}
+.sp-ab-json.sp-ab-bad { border-color: #a3231a; }
+
+.sp-ab-fine {
+  font-size: 10.5px; line-height: 1.5; color: var(--muted);
+  border-top: 1px solid var(--line); margin: 14px 4px 0; padding-top: 10px;
+}
+/* Close stays reachable at the end of the list rather than pinned over it: a
+   sticky footer inside a scroll container is one more thing to clip. */
+.sp-ab-foot { display: flex; justify-content: flex-end; padding: 10px 4px 2px; }
 .sp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px; font-size: 14px; }
 .sp-select { font: inherit; font-size: 13px; padding: 6px 8px; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
 .sp-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px; }
@@ -1335,8 +1457,14 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   display: inline-flex; align-items: center; gap: 10px;
   text-decoration: none; color: inherit;
 }
-.sp-about-logo b { display: block; font-size: 15px; letter-spacing: -0.01em; }
-.sp-about-logo span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.sp-about-logo b { display: block; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; }
+/* `b + span`, NOT a bare `span`. The wordmark's peach slash is a `<span>`
+   INSIDE the `<b>`, so a rule for "the version line" was making it
+   display:block — and a block in the middle of a line breaks the line on both
+   sides. The mark rendered as three stacked lines ("bento" / "/" / "spaces")
+   from the day it shipped; measured with a Range over the b's text: rects at
+   y=79 (w 42), y=98 (w 4) and y=112 (w 51). The selector is the whole fix. */
+.sp-about-logo b + span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
 .sp-about-logo:hover b { text-decoration: underline; }
 
 /* ————— the panel edge: resize here, collapse here —————
