@@ -508,5 +508,9 @@
   "themeDark": {
     "message": "Dark",
     "description": "Theme option: dark."
+  },
+  "checking": {
+    "message": "Checking…",
+    "description": "Shown in the About version row while a manual update check is running."
   }
 }

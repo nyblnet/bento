@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Gelap"
+  },
+  "checking": {
+    "message": "Memeriksa…"
   }
 }

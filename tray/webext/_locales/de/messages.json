@@ -484,5 +484,8 @@
   },
   "themeDark": {
     "message": "Dunkel"
+  },
+  "checking": {
+    "message": "Wird geprüft…"
   }
 }

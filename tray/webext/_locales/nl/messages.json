@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Donker"
+  },
+  "checking": {
+    "message": "Controleren…"
   }
 }

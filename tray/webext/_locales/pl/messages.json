@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Ciemny"
+  },
+  "checking": {
+    "message": "Sprawdzanie…"
   }
 }

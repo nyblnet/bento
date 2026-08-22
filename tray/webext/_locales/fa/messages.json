@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "تیره"
+  },
+  "checking": {
+    "message": "در حال بررسی…"
   }
 }

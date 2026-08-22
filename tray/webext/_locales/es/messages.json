@@ -484,5 +484,8 @@
   },
   "themeDark": {
     "message": "Oscuro"
+  },
+  "checking": {
+    "message": "Comprobando…"
   }
 }

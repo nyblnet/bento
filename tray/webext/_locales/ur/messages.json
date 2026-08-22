@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "گہرا"
+  },
+  "checking": {
+    "message": "جانچا جا رہا ہے…"
   }
 }

@@ -109,8 +109,26 @@ const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs', lay
  * design system, one back-and-forth-free navigation, and one place that knows
  * what a folder is.
  */
+/**
+ * Which screen the URL names. Kept in sync BOTH ways.
+ *
+ * It used to be one-way — the hash was read at boot and then left to rot while
+ * the view moved on. Chrome matches an already-open options tab BY URL, so a
+ * page still claiming `#settings` while showing the documents grid got focused
+ * rather than re-routed, and the second "Options" click landed you on the
+ * documents home. Writing the view back means the URL is either honest (Chrome
+ * focuses a tab that really is Settings) or different (Chrome opens one that
+ * is). `replaceState` rather than assignment: this is a correction to the
+ * address, not a place in history, and it fires no `hashchange` to loop on.
+ */
+const VIEW_HASH = { docs: '', settings: '#settings', help: '#help' }
+
 function show(view) {
   state.view = view
+  const want = VIEW_HASH[view] ?? ''
+  if (location.hash !== want) {
+    try { history.replaceState(null, '', want || location.pathname) } catch { /* not fatal */ }
+  }
   const docs = view === 'docs'
   $('searchWrap').hidden = !docs
   $('sort').hidden = !docs
@@ -583,11 +601,23 @@ async function openAbout() {
     const now = document.createElement('button')
     now.className = 'btn'
     now.textContent = t('checkNow')
+    // A check that finds nothing repaints to exactly what was already on
+    // screen, so without saying so the button reads as broken — press, nothing,
+    // press again. It says what it is doing, then says what it found.
     now.onclick = async () => {
+      const note = row.querySelector('.note')
+      const was = note.textContent
       now.disabled = true
-      // `force`: pressing a button IS the consent the preference stands in for.
-      try { await checkForUpdate({ force: true }) } finally { now.disabled = false }
-      await openAbout()   // repaint with whatever the check found
+      note.textContent = t('checking')
+      let found = null
+      try { found = await checkForUpdate({ force: true }) } catch { /* offline */ }
+      now.disabled = false
+      if (found?.version) {
+        await openAbout()          // a real update: repaint, it changes the row
+      } else {
+        note.textContent = was
+        toast(t('versionUpToDate'))
+      }
     }
     row.appendChild(now)
   }

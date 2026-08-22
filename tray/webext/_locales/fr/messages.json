@@ -484,5 +484,8 @@
   },
   "themeDark": {
     "message": "Sombre"
+  },
+  "checking": {
+    "message": "Vérification…"
   }
 }

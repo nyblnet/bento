@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "داكن"
+  },
+  "checking": {
+    "message": "جارٍ التحقق…"
   }
 }

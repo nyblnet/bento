@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Madilim"
+  },
+  "checking": {
+    "message": "Sinusuri…"
   }
 }

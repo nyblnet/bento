@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Tối"
+  },
+  "checking": {
+    "message": "Đang kiểm tra…"
   }
 }

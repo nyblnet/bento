@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Mørk"
+  },
+  "checking": {
+    "message": "Tjekker…"
   }
 }

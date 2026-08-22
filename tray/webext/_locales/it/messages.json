@@ -484,5 +484,8 @@
   },
   "themeDark": {
     "message": "Scuro"
+  },
+  "checking": {
+    "message": "Controllo…"
   }
 }

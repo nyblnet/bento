@@ -484,5 +484,8 @@
   },
   "themeDark": {
     "message": "ダーク"
+  },
+  "checking": {
+    "message": "確認中…"
   }
 }

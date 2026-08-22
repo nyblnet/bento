@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Tumma"
+  },
+  "checking": {
+    "message": "Tarkistetaan…"
   }
 }

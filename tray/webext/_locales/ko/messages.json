@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "어둡게"
+  },
+  "checking": {
+    "message": "확인 중…"
   }
 }

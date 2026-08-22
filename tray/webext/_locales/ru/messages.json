@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "Тёмное"
+  },
+  "checking": {
+    "message": "Проверка…"
   }
 }

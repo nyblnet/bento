@@ -451,5 +451,8 @@
   },
   "themeDark": {
     "message": "गहरा"
+  },
+  "checking": {
+    "message": "जाँच हो रही है…"
   }
 }
