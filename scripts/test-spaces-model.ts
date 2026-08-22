@@ -39,6 +39,7 @@ import {
   sortRows, unknownSortKeys, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
+import { extractSpace, planGraft, subtreeIds } from '../spaces/src/portable.ts'
 import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
 import { escText } from '../spaces/src/sanitize.ts'
@@ -1626,6 +1627,182 @@ for (const [label, input, err] of [
     'editor.indent outdents through the effective parent')
   ok(/seen: Set<string>/.test(src('store.ts')),
     'Store.tree carries a visited set')
+}
+
+// ---- 12. the portability round trip ----------------------------------------
+//
+// A page LEAVES as its own space, and a space ARRIVES inside another one. Both
+// directions move ids, links and images between documents, and every way they
+// can go wrong is silent: an id that collides makes two pages one node, a link
+// that is not repointed either dies or — worse — lands on a STRANGER page that
+// happens to hold that id, and a credential that rides along in an extract
+// hands over the whole space it came from.
+//
+// So this is a real round trip: extract a subtree out of one space, import it
+// into a DIFFERENT space that deliberately collides with it on every id and on
+// an asset key, and assert on what came out. (The remaining property — that
+// the import is ONE undo step — needs the real Store, which imports './model'
+// extensionless; it is asserted in scripts/test-spaces-undo.ts, which is
+// bundled.)
+{
+  const IMG_A = 'data:image/png;base64,AAAA'
+  const IMG_B = 'data:image/png;base64,BBBB'
+  const source: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-source', title: 'Whole space',
+    home: 'p-root', theme: {},
+    // a future build's field, at the top level and on a page: additivity is
+    // not suspended because a document is being cut in half
+    futureThing: { keep: 'me' },
+    assets: { imgA: IMG_A, imgB: IMG_B },
+    collab: {
+      room: 'w-room', key: 'read-cap', on: true,
+      writerPub: 'WP', writerPriv: 'WS', owner: 'OP', ownerPriv: 'OS',
+      invite: { pub: 'IP', priv: 'IS', role: 'writer', sig: 'SIG' },
+      sync: { v: 2 },
+    },
+    pages: [
+      { id: 'p-root', title: 'Handbook', futurePageField: 7, blocks: [
+        { id: 'b-1', type: 'p', html: 'see <a href="#p/p-kid">the kid</a> and <a href="#p/p-away">Elsewhere</a>' },
+      ] },
+      { id: 'p-kid', title: 'Kid', parent: 'p-root', blocks: [
+        { id: 'b-2', type: 'image', src: 'asset:imgA', alt: 'a picture' },
+        { id: 'b-3', type: 'pagelink', page: 'p-away' },
+        { id: 'b-4', type: 'kanban', html: 'a type this build has never heard of' },
+      ] },
+      { id: 'p-away', title: 'Elsewhere', blocks: [
+        { id: 'b-5', type: 'image', src: 'asset:imgB' },
+      ] },
+    ],
+  }))
+
+  ok(subtreeIds(source, 'p-root').join(',') === 'p-root,p-kid',
+    'a subtree is the page and its descendants, in document order')
+  ok(subtreeIds(source, 'p-root', false).join(',') === 'p-root',
+    '…and just the page when the subtree is not asked for')
+
+  const cut = extractSpace(source, 'p-root', { docId: 'doc-extract', now: '2026-08-22T00:00:00.000Z' })
+  const out = cut.doc
+
+  // IDENTITY. A fork joins the room it forked from; an extract must not.
+  ok(out.docId === 'doc-extract' && out.docId !== source.docId,
+    'the extract carries a FRESH docId, so it is a new document and not a fork')
+  ok(out.collab === undefined,
+    'and no collaboration credentials at all — the room, the read key and every private key')
+  ok(!JSON.stringify(out).includes('WS') && !JSON.stringify(out).includes('OS') &&
+     !JSON.stringify(out).includes('read-cap'),
+    'no writer, owner or invite secret survives anywhere in the bytes')
+
+  // WHAT TRAVELLED.
+  ok(out.pages.map((p) => p.id).join(',') === 'p-root,p-kid', 'the subtree travelled, and nothing else')
+  ok(out.home === 'p-root' && out.pages.some((p) => p.id === out.home),
+    'doc.home names a page that exists in the new file')
+  ok(out.pages[0].parent === undefined, 'the root of the extract is a root page')
+  ok(out.title === 'Handbook', 'the new space is named after the page it was cut from')
+
+  // LINKS. Out of the set is not left dangling and not silently unlinked.
+  const rootHtml = out.pages[0].blocks[0].html ?? ''
+  ok(rootHtml.includes('href="#p/p-kid"'), 'a link INSIDE the extract still resolves')
+  ok(!rootHtml.includes('#p/p-away') && rootHtml.includes('[[Elsewhere]]'),
+    'a link OUT of it becomes the literal [[Elsewhere]] — text that still says what it meant')
+  const kid = out.pages[1]
+  ok(kid.blocks[1].type === 'p' && !('page' in kid.blocks[1]) &&
+     (kid.blocks[1].html ?? '').includes('[[Elsewhere]]'),
+    'a pagelink whose target stayed behind becomes the same honest text')
+  ok(cut.stats.unlinked === 2, 'and both are counted for the report')
+
+  // ASSETS. An extract that carries the whole document is a copy.
+  ok(Object.keys(out.assets ?? {}).join(',') === 'imgA',
+    'only the images the extracted pages reference travel')
+
+  // ADDITIVITY, in both halves.
+  ok((out as Record<string, unknown>).futureThing !== undefined &&
+     (out.pages[0] as Record<string, unknown>).futurePageField === 7,
+    'unknown top-level and per-page fields survive the extract untouched')
+  ok(kid.blocks[2].type === 'kanban', 'an unknown block type travels as itself')
+
+  // The extract must be a document this app can OPEN — the load contract, not
+  // an approximation of it.
+  const reread = parseDoc(JSON.stringify(out))
+  ok(reread.ok === true, 'the extracted document parses as a bento/spaces file')
+  ok(reread.ok === true && reread.repaired.length === 0,
+    '…with no ids to repair: the extract is internally consistent')
+
+  // ---- and back IN, to a space that collides on everything ----------------
+  const hostDoc: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-host', title: 'Somewhere else',
+    home: 'p-root', theme: {},
+    // the SAME key holding DIFFERENT bytes: a content-addressed store cannot
+    // produce this, a hand-written file can, and trusting the key would replace
+    // the host's picture with the visitor's
+    assets: { imgA: 'data:image/png;base64,ZZZZ' },
+    pages: [
+      { id: 'p-root', title: 'Host root', blocks: [{ id: 'b-1', type: 'p', html: 'mine' }] },
+      { id: 'p-target', title: 'Put it here', blocks: [{ id: 'b-9', type: 'p', html: '' }] },
+    ],
+  }))
+
+  const plan = planGraft(hostDoc, out, { under: 'p-target' })
+
+  // IDS. Unique across the WHOLE merged document, and never reused.
+  const merged = [...hostDoc.pages, ...plan.pages]
+  const allIds = merged.flatMap((p) => [p.id, ...p.blocks.map((b) => b.id)])
+  ok(new Set(allIds).size === allIds.length, 'NO ID COLLISION: every id in the merged document is unique')
+  ok(plan.stats.renamed === 2, 'the two ids this space already used were renamed, and only those')
+  ok(plan.pages[1].id === 'p-kid' && plan.pages[1].blocks[0].id === 'b-2',
+    'ids that did NOT collide are kept, so links and node keys outside the collision survive')
+
+  // …and deterministically, from the bytes: two readers of one file agree.
+  const again = planGraft(hostDoc, JSON.parse(JSON.stringify(out)), { under: 'p-target' })
+  ok(JSON.stringify(again.pages) === JSON.stringify(plan.pages),
+    'the same import planned twice produces the same ids (derived from the bytes, never Math.random)')
+
+  // LINKS. Nothing arrives pre-broken, and nothing points at a stranger.
+  const pageIds = new Set(merged.map((p) => p.id))
+  const dangling: string[] = []
+  for (const p of plan.pages) {
+    for (const b of p.blocks) {
+      for (const m of (b.html ?? '').matchAll(/href="#p\/([^"]+)"/g)) {
+        if (!pageIds.has(m[1])) dangling.push(m[1])
+      }
+    }
+  }
+  ok(dangling.length === 0, `NO DANGLING LINK: every #p/ target in the import resolves (${dangling.join(',') || 'none'})`)
+  const grafted = plan.pages[0].blocks[0].html ?? ''
+  ok(grafted.includes(`href="#p/${plan.pages[1].id}"`),
+    'the internal link followed the rename rather than pointing at the HOST page that took its id')
+  ok(!grafted.includes('href="#p/p-root"'),
+    '…and specifically does not point at the host page it collided with')
+  ok((plan.pages[1].blocks[1].html ?? '').includes('[[Elsewhere]]'),
+    'text left by the extract stays text — an import invents no links')
+
+  // WHERE IT LANDED.
+  ok(plan.pages[0].parent === 'p-target', 'the import nests under the page that was chosen')
+  ok(plan.pages[1].parent === plan.pages[0].id, 'and its own tree is preserved inside that')
+
+  // ASSETS. Merged without collision, and without duplicating what is shared.
+  ok(plan.assets['imgA'] === undefined && plan.assets['imgA~1'] === IMG_A,
+    'a key clash with DIFFERENT bytes mints a variant rather than overwriting the host image')
+  ok((plan.pages[1].blocks[0].src) === 'asset:imgA~1',
+    '…and the block that referenced it now points at the variant')
+  ok(hostDoc.assets!['imgA'] === 'data:image/png;base64,ZZZZ',
+    'the host keeps its own bytes: planGraft mutates nothing it was handed')
+
+  const shared: SpacesDoc = JSON.parse(JSON.stringify(hostDoc))
+  shared.assets = { imgA: IMG_A }
+  const dedupe = planGraft(shared, out, {})
+  ok(Object.keys(dedupe.assets).length === 0 && dedupe.pages[1].blocks[0].src === 'asset:imgA',
+    'the SAME image already in the host is reused, not stored twice — content addressing does the work')
+
+  // ADDITIVITY survives the second leg too.
+  ok((plan.pages[0] as Record<string, unknown>).futurePageField === 7 &&
+     plan.pages[1].blocks[2].type === 'kanban',
+    'unknown fields and unknown block types survive the import as well')
+
+  // The merged document is one this app can open.
+  const mergedDoc = { ...hostDoc, pages: merged, assets: { ...hostDoc.assets, ...plan.assets } }
+  const rr = parseDoc(JSON.stringify(mergedDoc))
+  ok(rr.ok === true && rr.repaired.length === 0,
+    'the merged document parses with NOTHING to repair — the import needed no rescue')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
