@@ -25,7 +25,7 @@
 // release.mjs runs a frozen v0.1.0-style splice against the output as a gate.
 
 import { readFileSync, writeFileSync } from 'node:fs'
-import { deflateRawSync } from 'node:zlib'
+import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
@@ -63,11 +63,33 @@ try {
   if (process.env.ZOPFLI !== '0') process.exit(1)
 }
 
-/** deflate-raw, packed by zopfli unless it was explicitly turned off */
+/**
+ * deflate-raw, packed by zopfli unless it was explicitly turned off.
+ *
+ * THE OUTPUT IS INFLATED AND COMPARED BACK, every time, with node's own zlib.
+ * This is not paranoia about a bug — zopfli is old and well used — it is about
+ * what this script feeds. The bytes it emits ARE the application, and the
+ * shell built from them is signed: a packer that emitted a VALID deflate
+ * stream carrying different JavaScript would be signed as genuine and would
+ * self-update its way onto every install. A round trip through a different
+ * implementation makes that undetectable-in-principle failure impossible in
+ * practice, and it costs about 2ms per shell.
+ *
+ * It also covers the duller case a signature never would: a wrong build, a
+ * truncated write, a future iteration-count change that trips a corner.
+ */
 const deflate = async (buf) => {
-  if (!zopfli || process.env.ZOPFLI === '0') return deflateRawSync(buf, { level: 9 })
-  return await new Promise((res, rej) =>
-    zopfli.deflate(buf, { numiterations: iterations }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
+  const packed = (!zopfli || process.env.ZOPFLI === '0')
+    ? deflateRawSync(buf, { level: 9 })
+    : await new Promise((res, rej) =>
+        zopfli.deflate(buf, { numiterations: iterations }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
+  if (!inflateRawSync(packed).equals(buf)) {
+    console.error('postbuild-compress: the packed payload does not inflate back to what went in.\n' +
+      '  Refusing to write a shell whose runtime cannot be recovered. This is a bug in the\n' +
+      '  packer or a corrupted install — do not sign anything built from this tree.')
+    process.exit(1)
+  }
+  return packed
 }
 
 const path = process.argv[2]
