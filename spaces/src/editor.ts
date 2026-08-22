@@ -518,6 +518,22 @@ export class Editor {
     try { localStorage.setItem('bento-sp-pane-closed', this.paneClosed ? '1' : '0') } catch { /* storage can throw */ }
   }
 
+  /**
+   * Is the caret somewhere text is being typed?
+   *
+   * Bare-key shortcuts must not fire while somebody is writing. `blockAt`
+   * covers block hosts; the page title and any other contentEditable (a table
+   * cell, a comment box) are covered by the editable check, because a
+   * shortcut that eats a character is worse than a shortcut that is missing.
+   */
+  private editingText(): boolean {
+    const el = document.activeElement as HTMLElement | null
+    if (!el) return false
+    if (el.isContentEditable) return true
+    const tag = el.tagName
+    return tag === 'INPUT' || tag === 'TEXTAREA'
+  }
+
   private isDrawer(): boolean {
     return window.matchMedia('(max-width: 820px)').matches
   }
@@ -2150,10 +2166,23 @@ export class Editor {
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
-    // `[` collapses the page list, as in slides. Bare, not modified: it only
-    // reaches here when nothing is being edited (the text path returns above,
-    // where `[` is the page-link trigger).
-    if (!mod && e.key === '[') { e.preventDefault(); this.togglePane(); return }
+    // `[` collapses the page list, as in slides — but ONLY when nothing is
+    // being edited.
+    //
+    // The comment here used to claim "the text path returns above". It does
+    // not: the text path is ~90 lines BELOW this, so every bare `[` was
+    // caught here first, preventDefault()ed, and turned into a sidebar toggle.
+    // Typing `[` in a block put no character in the block and collapsed the
+    // page list instead — which meant `[[`, the way this app makes links and
+    // the thing the starter space tells you to type, could not be typed at
+    // all. Shipped since #237.
+    //
+    // The guard is the same question the text path asks: is the caret in a
+    // block? blockAt(activeElement) answers it, and answers it for the page
+    // TITLE too, which is equally editable and equally deserves its brackets.
+    if (!mod && e.key === '[' && !this.editingText()) {
+      e.preventDefault(); this.togglePane(); return
+    }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); this.newIssue(); return }
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault()
