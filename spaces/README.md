@@ -141,6 +141,12 @@ pages are one document rather than one file each.
 - **Fine-grained sharing.** There is a people panel, presence in the page tree
   and a live session, but no per-person roles or invite links yet — the file is
   still the capability, so anyone you send it to can edit.
+- **Fetched link previews.** A `link` block is a card for an address on the
+  web, and every field in it is typed by the author and stored. Nothing is
+  fetched — not at render and not in the editor: reading a url's OpenGraph tags
+  means a cross-origin HTML body, which needs a server, which is the component
+  this format does not have. See `docs/DECISIONS.md`.
+
 - **Tables and embeds.** Deliberate: the format is permanent, so a block type
   ships when its model is right, not when its UI is ready. (Databases DID ship —
   as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a

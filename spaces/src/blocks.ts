@@ -21,7 +21,7 @@
 // `custom: true`; everything the registry can express lives here.
 
 import type { Block } from './model'
-import { effectiveParents } from './model.ts'
+import { effectiveParents, linkCard } from './model.ts'
 import type { IconName } from './icons'
 
 export interface BlockSpec {
@@ -209,6 +209,39 @@ export const SPECS: BlockSpec[] = [
     type: 'pagelink', label: 'Link to page', hint: 'A card that opens a page', icon: 'link',
     tag: 'div', custom: true,
     toMd: (b, _text, _indent, ctx) => [`→ [[${ctx.titleOf(String(b.page)) ?? '?'}]]`],
+  },
+  {
+    // A LINK TO SOMEWHERE ON THE WEB — the outward-facing sibling of pagelink.
+    //
+    // Every field is STORED. Notion and Slack build this card by fetching the
+    // url on a server and reading its OpenGraph tags; there is no server here
+    // and there is not going to be one, so what the card shows is what the
+    // author typed. See docs/DECISIONS.md for why not even an editor-time,
+    // opt-in fetch is on the table.
+    type: 'link', label: 'Link to the web', hint: 'A card for an address you type', icon: 'globe',
+    tag: 'div', custom: true,
+    // A LINK CARD IN MARKDOWN IS A LINK. Not a table, not a blockquote, not an
+    // html <div> — every one of those is a card-shaped thing that stops being a
+    // link the moment it leaves this app, and the ONE fact a link card carries
+    // that cannot be reconstructed is where it points.
+    //
+    // Built from the FIELDS rather than from `text`. `html` holds the same
+    // link, so the default export would already be close — but `html` is a
+    // fallback for old builds, and an export that reads it would silently
+    // export nothing at all for a card an agent wrote fields-only.
+    toMd: (b) => {
+      const c = linkCard(b)
+      // no url, no link: a card that is not clickable must not export as
+      // something a reader will click
+      if (!c.url) return [[c.title, c.desc].filter(Boolean).join(' — ')]
+      const tail = c.desc ? ` — ${c.desc}` : ''
+      // `[` and `]` in a title end the link text early and leave the url as
+      // loose parenthesised prose; a url holding a space or a bracket needs the
+      // angle form, which is what <> is FOR in CommonMark
+      const label = c.title.replace(/([[\]])/g, '\\$1')
+      const href = /[\s()<>]/.test(c.url) ? `<${c.url}>` : c.url
+      return [`[${label}](${href})${tail}`]
+    },
   },
   {
     // A FIELD VALUE on a page. Unlisted: fields are added from the issue header,

@@ -36,6 +36,32 @@ const ALLOWED = new Set([
 const HREF_OK = /^(https?:|mailto:|#p\/)/i
 
 /**
+ * The OUTWARD half of HREF_OK, for an href that is not inline html.
+ *
+ * A link card's `url` is a block FIELD, so it never passes through
+ * sanitizeInline — and a block field out of a mailed file is exactly as
+ * untrusted as an attribute in one. Returns the url to use, or '' for anything
+ * that is not an outward link, so the caller's test is "did I get a string
+ * back" rather than a boolean it can forget to act on.
+ *
+ * ALLOWLIST, and on the RAW string, for both of sanitizeInline's reasons. A
+ * blocklist of `javascript:` loses to the parser's own leniency: `ja&#9;vascript:x`
+ * and ` javascript:x` are both `javascript:` by the time an href is followed,
+ * because the URL parser strips tabs, newlines and leading whitespace from a
+ * scheme. Neither one starts with `https:`, so both fail this test — an
+ * allowlist fails CLOSED against a normalisation nobody has thought of yet.
+ *
+ * `#p/` is deliberately NOT here. An internal page link is a pagelink block,
+ * which is a different type with a different renderer; letting a link card hold
+ * one would be a second way to say the same thing, differing only in which of
+ * the two a future build fixes a bug in.
+ */
+export function externalHref(raw: unknown): string {
+  const url = typeof raw === 'string' ? raw.trim() : ''
+  return /^(https?:|mailto:)/i.test(url) ? url : ''
+}
+
+/**
  * Tags whose CONTENT should survive when the tag itself is dropped.
  *
  * Exported because validate() tells an agent which block-level tags get

@@ -307,6 +307,50 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-pagecard:hover { background: var(--chrome); }
 .sp-pagecard.sp-dead { color: var(--muted); font-style: italic; font-weight: 400; }
 
+/* ————— link cards (outward) —————
+   Deliberately the page card's sibling: same border, radius and hover, so the
+   two read as one family and the difference a reader sees is the one that
+   matters — a host name at the foot means this one leaves the space. */
+.sp-b-link { position: relative; }
+.sp-linkcard {
+  display: flex; align-items: stretch; gap: 12px;
+  padding: 12px 14px; margin: 6px 0;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--ink); text-decoration: none; background: #fff;
+}
+.sp-linkcard:hover { background: var(--chrome); }
+.sp-page a.sp-linkcard { text-decoration: none; }
+.sp-linkcard.sp-dead { color: var(--muted); }
+.sp-linkcard-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.sp-linkcard-title { font-weight: 600; font-size: 14px; }
+.sp-linkcard.sp-dead .sp-linkcard-title { font-style: italic; font-weight: 400; }
+.sp-linkcard-desc {
+  font-size: 13px; color: var(--muted);
+  /* two lines, then an ellipsis: a card is a summary, and a pasted paragraph
+     must not turn one into a page of its own */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.sp-linkcard-site {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--muted);
+  /* a long url has no spaces to wrap at and would push the card wide */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-linkcard-mark { font-size: 13px; line-height: 1; }
+.sp-linkcard-img {
+  width: 88px; height: 66px; object-fit: cover; flex: none;
+  border-radius: calc(var(--radius) - 3px); background: var(--chrome);
+}
+.sp-linkcard-edit {
+  position: absolute; inset-block-start: 4px; inset-inline-end: 6px;
+  border: 1px solid var(--line); border-radius: 5px; background: #fff;
+  font: inherit; font-size: 11px; color: var(--muted);
+  padding: 2px 7px; cursor: pointer; opacity: 0;
+}
+.sp-b-link:hover .sp-linkcard-edit, .sp-linkcard-edit:focus-visible { opacity: 1; }
+/* an EMPTY card's button is the only way in, so it never hides */
+.sp-linkcard.sp-dead + .sp-linkcard-edit { opacity: 1; }
+
 .sp-page a { color: var(--ink); text-decoration: underline; text-decoration-color: rgb(247 166 0 / .55); text-underline-offset: 2px; }
 .sp-page a:hover { text-decoration-color: var(--accent); }
 
