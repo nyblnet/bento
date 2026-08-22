@@ -152,3 +152,13 @@ pages are one document rather than one file each.
   `prop` block is a value, and a `view` block is a board or a list of them
   (`src/fields.ts`). Recalculation is bento/dash's, and cross-app data arrives
   as a snapshot with provenance, never as a nested runtime.
+- **Fetched link previews.** A `link` block is a card for an address on the
+  web, and every field in it is typed by the author and stored. Nothing is
+  fetched — not at render and not in the editor: reading a url's OpenGraph tags
+  means a cross-origin HTML body, which needs a server, which is the component
+  this format does not have. See `docs/DECISIONS.md`.
+
+- **Tables and embeds.** Deliberate: the format is permanent, so a block type
+  ships when its model is right, not when its UI is ready. (Databases DID ship —
+  as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a
+  `view` block is a board or a list of them. `src/fields.ts` is the core.)

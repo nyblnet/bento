@@ -10,7 +10,7 @@
 
 import {
   type Block, type TableShape, newBlock, newPage, effectiveParents, isRemote,
-  tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS,
+  tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS, linkCard, linkCardHtml,
 } from './model'
 import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
@@ -167,6 +167,9 @@ export class Editor {
           this.store.commit(() => { page.blocks.push(fresh) })
           this.paintPage()
           if (item.type === 'pagelink') this.insertPageCard(fresh.id)
+          // the block is already a `link` — dismissing the dialog leaves an
+          // empty card with its own way back in, never a half-made block
+          else if (item.type === 'link') this.openLinkCard(fresh.id)
           else if (item.type === 'image') void this.pickImage(fresh.id)
           // a table has no block-level host to focus — the caret belongs in the
           // first cell, which is also where a person starts typing
@@ -1042,6 +1045,14 @@ export class Editor {
     const si = sibs.findIndex((b) => b.id === id)
 
     return [
+      // FIRST, and only for a link card. The card's own edit button appears on
+      // hover, which is a gesture a touch screen does not have — this menu is
+      // the touch sheet too, so without an entry here a card could be made on a
+      // phone and never changed.
+      ...(blocks[at]?.type === 'link'
+        ? [{ icon: 'globe' as const, label: t('Edit this link card'), hint: '',
+          run: () => this.openLinkCard(id) }]
+        : []),
       { icon: 'text', label: t('Turn into…'), hint: t('Change this block’s type'),
         run: () => this.openSlash(id) },
       { icon: 'plus', label: t('Add below'), hint: '⏎', run: () => this.insertAfter(id) },
@@ -2035,6 +2046,14 @@ export class Editor {
       }
       node.append(tools)
     }
+    // A link card OPENS its link, so its editing control is a separate button —
+    // rendered only where there is an editor (render.ts), wired here.
+    view.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-edit-link]')
+      if (!btn) return
+      e.preventDefault()
+      this.openLinkCard(btn.dataset.editLink!)
+    })
 
     // intra-space links navigate without leaving the document
     view.addEventListener('click', (e) => {
@@ -2885,6 +2904,7 @@ export class Editor {
       // the "/" that opened the menu is a command, not content
       if (blk && (blk.html ?? '').trim() === '/') blk.html = ''
       if (item.type === 'pagelink') this.insertPageCard(blockId)
+      else if (item.type === 'link') { this.setType(blockId, 'link'); this.openLinkCard(blockId) }
       else this.setType(blockId, item.type)
     }
     const paint = () => {
@@ -2940,6 +2960,132 @@ export class Editor {
         if (b) { b.type = 'pagelink'; b.page = pageId; b.html = '' }
       })
       this.paintPage()
+    })
+  }
+
+  /**
+   * THE ONE WRITER for a link card's fields.
+   *
+   * Fields and `html` move together, always — the same rule as a field value
+   * (applyField above), for the same reason: `html` is what a build that has
+   * never heard of `link` renders, and format additivity is a promise about
+   * what OLD builds do. A card whose fields were written without it is a card
+   * that vanishes when the file is opened in last year's shell.
+   */
+  private applyLinkCard(b: Block, next: Partial<Block>): void {
+    b.type = 'link'
+    for (const k of ['url', 'title', 'desc', 'site', 'icon', 'image'] as const) {
+      const v = next[k]
+      // an EMPTY field is an absent field: a card carrying `"desc": ""` is
+      // bytes in every copy of the file that say nothing
+      if (typeof v === 'string' && v.trim()) (b as Record<string, unknown>)[k] = v.trim()
+      else delete (b as Record<string, unknown>)[k]
+    }
+    b.html = linkCardHtml(linkCard(b))
+  }
+
+  /**
+   * The link card's editor — and the whole of this feature's honesty.
+   *
+   * A link card in Notion or Slack is a SERVER fetching the url and reading its
+   * OpenGraph tags. There is no server here, and a fetch on this path would
+   * break the one promise the format is built on. So the author fills the card
+   * in, the dialog says so plainly, and nothing about opening a space ever
+   * contacts the site it links to.
+   */
+  private openLinkCard(blockId: string): void {
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    const at = s.block(blockId)
+    if (!at) return
+    // a draft, so Escape leaves the block exactly as it was
+    const draft: Record<string, string> = {
+      url: String(at.url ?? ''), title: String(at.title ?? ''),
+      desc: String(at.desc ?? ''), site: String(at.site ?? ''),
+      icon: String(at.icon ?? ''), image: String(at.image ?? ''),
+    }
+
+    this.openOverlay(t('Link card'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Link card')))
+
+      const why = document.createElement('p')
+      why.className = 'sp-note'
+      why.textContent = t('Nothing is fetched. A card shows what you type here — opening this space never contacts the site.')
+      card.append(why)
+
+      const field = (key: string, label: string, hint?: string): HTMLInputElement => {
+        const wrap = el('div', 'sp-field')
+        wrap.append(el('label', 'sp-field-lbl', label))
+        const input = document.createElement('input')
+        input.className = 'sp-input'
+        input.value = draft[key]
+        if (hint) input.placeholder = hint
+        input.addEventListener('input', () => { draft[key] = input.value })
+        wrap.append(input)
+        card.append(wrap)
+        return input
+      }
+
+      const url = field('url', t('Web address'), 'https://example.com')
+      url.type = 'url'
+      field('title', t('Title'), t('What this is'))
+      field('desc', t('Description'), t('One line about what is there'))
+      // the host is what shows when this is blank, so the placeholder is the
+      // answer rather than an example
+      field('site', t('Site name'), t('Taken from the address if blank'))
+      field('icon', t('Icon'), t('One emoji'))
+
+      // THE THUMBNAIL IS EMBEDDED, never linked. `prepareImage` downscales and
+      // `internAsset` stores the bytes in the file, exactly as an image block
+      // does — which is why a card can carry a picture at all without becoming
+      // a request on open.
+      const row = el('div', 'sp-actions')
+      const pick = document.createElement('button')
+      pick.className = 'sp-btn'
+      pick.type = 'button'
+      const paintPick = () => {
+        pick.textContent = draft.image ? t('Replace picture') : t('Add a picture')
+        drop.hidden = !draft.image
+      }
+      pick.addEventListener('click', () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.addEventListener('change', () => {
+          const file = input.files?.[0]
+          if (!file) return
+          void (async () => {
+            try {
+              const prepared = await prepareImage(file)
+              draft.image = await internAsset(s.doc, prepared.dataUri)
+            } catch { this.status(t('That file could not be read as an image')); return }
+            paintPick()
+          })()
+        })
+        input.click()
+      })
+      const drop = document.createElement('button')
+      drop.className = 'sp-btn'
+      drop.type = 'button'
+      drop.textContent = t('Remove the picture')
+      drop.addEventListener('click', () => { draft.image = ''; paintPick() })
+      paintPick()
+      row.append(pick, drop)
+      card.append(row)
+
+      const done = el('div', 'sp-actions')
+      const save = document.createElement('button')
+      save.className = 'sp-btn sp-primary'
+      save.type = 'button'
+      save.textContent = t('Save')
+      save.addEventListener('click', () => {
+        close()
+        s.commit(() => { const b = s.block(blockId); if (b) this.applyLinkCard(b, draft) })
+        this.paintPage()
+      })
+      done.append(save)
+      card.append(done)
+      url.focus()
     })
   }
 

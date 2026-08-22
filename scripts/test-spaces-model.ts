@@ -30,6 +30,7 @@ import {
   parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
   effectiveParents, descendantsOf,
   tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
+  effectiveParents, descendantsOf, linkCard, linkCardHtml,
   type SpacesDoc,
 } from '../spaces/src/model.ts'
 import nodeFs from 'node:fs'
@@ -43,7 +44,7 @@ import {
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
-import { escText } from '../spaces/src/sanitize.ts'
+import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
   SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout, mediaPlayback,
 } from '../spaces/src/blocks.ts'
@@ -1870,6 +1871,119 @@ function fsTable(f: string): string {
   const editor = src('editor.ts')
   ok(/\^https\?:/.test(editor),
     'the clip URL box allowlists http(s) rather than blocklisting javascript:')
+// ---- LINK CARDS point outward, and never reach outward ----------------------
+// A link card in Notion or Slack is a server fetching a url for its OpenGraph
+// tags. bento/spaces has no server and must not phone home (PLATFORM §1;
+// DECISIONS 2026-08-03), so every field is stored and the card is resolved from
+// the file alone. The three things that can fail SILENTLY here — a hostile url
+// becoming clickable, a remote thumbnail becoming a request on open, and an
+// empty card becoming an empty box — are each pinned below.
+{
+  const card = (over: Record<string, unknown>): Block => ({ id: 'l1', type: 'link', ...over })
+
+  // --- the url allowlist, on the raw string --------------------------------
+  ok(externalHref('https://example.com/a') === 'https://example.com/a', 'an https url is a link')
+  ok(externalHref('http://example.com') === 'http://example.com', '…so is http')
+  ok(externalHref('MAILTO:a@b.c') === 'MAILTO:a@b.c', '…and mailto, whatever its case')
+  ok(externalHref('  https://example.com  ') === 'https://example.com', 'surrounding space is trimmed, not rejected')
+  for (const hostile of [
+    'javascript:alert(1)',
+    ' javascript:alert(1)',
+    '\tjavascript:alert(1)',
+    'JaVaScRiPt:alert(1)',
+    'ja\tvascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:msgbox(1)',
+    'blob:https://example.com/x',
+    '//evil.example/x',
+    '/relative/path',
+    '#p/p1',
+  ]) {
+    ok(externalHref(hostile) === '', `"${hostile.slice(0, 22)}" never becomes a clickable link`)
+  }
+  ok(externalHref(undefined) === '' && externalHref(42) === '', 'a non-string url is not a link either')
+
+  // --- graceful degradation: an empty field is never an empty box ----------
+  const bare = linkCard(card({ url: 'https://example.com/docs' }))
+  ok(bare.title === 'https://example.com/docs', 'a card with no title falls back to its url')
+  ok(bare.site === 'example.com', '…and derives its site from the host, with no lookup')
+  ok(linkCard(card({ url: 'https://www.example.com/x' })).site === 'example.com', 'a www. prefix is dropped')
+  ok(linkCard(card({ url: 'https://a.b/x', site: ' Acme ' })).site === 'Acme', 'a stored site name wins over the host')
+  const empty = linkCard(card({}))
+  ok(empty.url === '' && empty.title === '' && empty.site === '',
+    'a card with nothing in it resolves to nothing — the renderer draws a dead card, not an <a> to nowhere')
+  const hostileCard = linkCard(card({ url: 'javascript:alert(1)', title: 'Click me' }))
+  ok(hostileCard.url === '' && hostileCard.title === 'Click me',
+    'a hostile url loses its link and KEEPS its title — the card degrades, it does not vanish')
+  ok(linkCard(card({ icon: '🙂'.repeat(40) })).icon.length <= 8,
+    'a 400-character "emoji" out of a mailed file cannot blow out the card')
+
+  // --- NO NETWORK AT RENDER: the thumbnail ---------------------------------
+  // The gate is here, in a pure function, rather than in the renderer, because
+  // a check that lives in one of four rendering surfaces is a check that will
+  // be missed in the fifth.
+  for (const remote of [
+    'https://tracker.example/pixel.png',
+    'http://tracker.example/pixel.png',
+    '//tracker.example/pixel.png',
+    '/attachments/local.png',
+    'blob:https://example.com/abc',
+    'filesystem:https://example.com/x',
+  ]) {
+    ok(linkCard(card({ url: 'https://a.b', image: remote })).image === '',
+      `a card's remote image (${remote.slice(0, 26)}) is DROPPED, so rendering it makes no request`)
+  }
+  ok(linkCard(card({ image: 'asset:k1' })).image === 'asset:k1', 'an interned asset thumbnail is kept')
+  ok(linkCard(card({ image: 'data:image/webp;base64,AA' })).image.startsWith('data:'), '…and so are embedded bytes')
+
+  // --- the html fallback an older build renders ----------------------------
+  const html = linkCardHtml(linkCard(card({ url: 'https://a.b/x', title: 'Docs', desc: 'The manual' })))
+  ok(html === '<a href="https://a.b/x">Docs</a> — The manual',
+    'the readable form is a plain inline link, so a build predating this type still shows one')
+  // The fallback link has to SURVIVE the inline sanitizer, which is what
+  // re-reads it on the next edit. sanitize.ts's own comment names the hazard: an
+  // href written under a permissive build gets stripped by a stricter later one,
+  // silently. So the two allowlists are cross-checked against each other rather
+  // than trusted to stay in step by eye. (sanitizeInline itself needs a DOM and
+  // is exercised in the browser, not here.)
+  const fs3 = await import('node:fs')
+  const ssrc = fs3.readFileSync(new URL('../spaces/src/sanitize.ts', import.meta.url), 'utf8')
+  const inlineOk = new RegExp(/const HREF_OK = (\/.+\/)i/.exec(ssrc)![1].slice(1, -1), 'i')
+  for (const u of ['https://a.b/x', 'http://a.b/x', 'mailto:a@b.c', 'MAILTO:A@B.C']) {
+    ok(externalHref(u) !== '' && inlineOk.test(u),
+      `"${u}" is accepted by BOTH allowlists, so the html fallback keeps its link`)
+  }
+  ok(!linkCardHtml(linkCard(card({ url: 'javascript:alert(1)', title: 'x' }))).includes('javascript'),
+    'a hostile url never reaches the html fallback either')
+  ok(linkCardHtml(linkCard(card({ title: '<b>hi</b>' }))) === '&lt;b&gt;hi&lt;/b&gt;',
+    'a title is escaped, not interpreted — these fields are untrusted input')
+
+  // --- markdown: a link card is a link -------------------------------------
+  const linkSpec = SPEC.get('link')!
+  const md = (b: Block) => linkSpec.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] }).join('\n')
+  ok(md(card({ url: 'https://a.b/x', title: 'Docs' })) === '[Docs](https://a.b/x)',
+    'a link card exports as a markdown link')
+  ok(md(card({ url: 'https://a.b/x', title: 'Docs', desc: 'The manual' })) === '[Docs](https://a.b/x) — The manual',
+    '…with its description alongside')
+  ok(md(card({ url: 'https://a.b/x' })) === '[https://a.b/x](https://a.b/x)',
+    'an untitled card exports the url as its own label, never an empty link text')
+  ok(md(card({ url: 'https://a.b/x', title: 'A [thing]' })) === '[A \\[thing\\]](https://a.b/x)',
+    'brackets in a title are escaped, or they end the link early')
+  ok(md(card({ url: 'https://a.b/a (1)', title: 'T' })) === '[T](<https://a.b/a (1)>)',
+    'a url holding a space or a bracket takes the angle form')
+  ok(md(card({ title: 'Just words', desc: 'no url' })) === 'Just words — no url',
+    'a card that is not clickable does not export as something a reader will click')
+
+  // --- and the renderer really is on that path ------------------------------
+  const rsrc = fs3.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  ok(!/\bfetch\s*\(|XMLHttpRequest|new Image\s*\(|navigator\.sendBeacon/.test(rsrc),
+    'render.ts contains no fetch, no XHR and no image preloader — the render path cannot reach the network')
+  const linkCase = rsrc.slice(rsrc.indexOf("case 'link':"), rsrc.indexOf("case 'todo':"))
+  ok(linkCase.length > 200, 'the link case was found in render.ts')
+  ok(/img\.src = resolveSrc\(c\.image, doc\)/.test(linkCase),
+    "…and its only img src comes from linkCard's already-filtered image, never from the raw block")
+  ok(!/b\.image|b\.url/.test(linkCase),
+    '…so the renderer never reads a card field around the gate')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

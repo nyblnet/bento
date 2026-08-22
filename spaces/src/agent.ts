@@ -30,7 +30,7 @@
 // an undo entry that undoes nothing. Planning first also makes the whole write
 // path testable in node, where there is no store and no DOM.
 
-import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf } from './model.ts'
+import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, linkCard } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
@@ -279,7 +279,7 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
       add({ page: p.id, code: 'no-blocks', severity: 'error', path: 'blocks',
         message: `Page "${p.title}" has no blocks, so there is nothing in it to put a caret in — it cannot be typed into.`,
         fix: 'Give it at least one block, e.g. { "type": "p", "html": "" }.' })
-    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'divider')) {
+    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'link' || b.type === 'divider')) {
       add({ page: p.id, code: 'empty-page', severity: 'info',
         message: `Page "${p.title}" has blocks but no content.`,
         fix: 'Write something, or remove the page. A deliberately blank page (an inbox, a stub) is fine — this is only a note.' })
@@ -359,6 +359,27 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
           add({ ...at, code: 'broken-link', severity: 'error', path: 'page',
             message: `A pagelink card points at "${target || '(nothing)'}", which is not a page — it renders as "(missing page)".`,
             fix: 'Set page to a real page id, or remove the block.' })
+        }
+      }
+
+      if (b.type === 'link') {
+        // A CARD IS NOT A LINK UNTIL ITS URL IS ONE. `linkCard` returns '' for
+        // an empty url and for anything outside https:/http:/mailto: — and a
+        // card that is not clickable renders as a dead card rather than as a
+        // link that silently goes nowhere, so this is the only way to find out.
+        const c = linkCard(b)
+        if (!c.url) {
+          const raw = String(b.url ?? '')
+          add({ ...at, code: raw ? 'dead-href' : 'link-no-url', severity: raw ? 'warning' : 'error', path: 'url',
+            message: raw
+              ? `A link card's url "${raw.slice(0, 40)}" is outside the allowlist (https:, mailto:), so the card renders but is not clickable.`
+              : 'A link card has no url, so it renders as an empty card that goes nowhere.',
+            fix: 'Set url to an https: or mailto: address. Use a pagelink block for a page in this space.' })
+        }
+        if (isRemote(String(b.image ?? ''))) {
+          add({ ...at, code: 'remote-image', severity: 'warning', path: 'image',
+            message: `A link card's image (${String(b.image).slice(0, 48)}) is remote, so it is DROPPED at render — opening a space never contacts a third party.`,
+            fix: 'Embed the bytes: put the data: URI in doc.assets and reference it as asset:<key>.' })
         }
       }
 

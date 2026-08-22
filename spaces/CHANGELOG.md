@@ -30,6 +30,15 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   What this is NOT is a spreadsheet: no formulas, nothing that recalculates.
   That is bento/dash's job, and typed properties with saved views are already
   here as the tracker.
+- **Link cards.** `/` → *Link to the web* makes a card for an address: title,
+  description, site, an emoji and (if you want one) a picture, laid out like
+  the page card it sits beside. Nothing is fetched — not when you make the
+  card and not when someone opens the space. Other apps build this card on a
+  server that reads the page's OpenGraph tags; a Bento file has no server and
+  must not contact one, so the card shows what you type and the dialog says
+  so. A card with empty fields is still a working link; a card with no address
+  is a plain box that offers to become one. In Markdown it exports as a link,
+  because that is what it is.
 
 - **A page can be as wide as it needs to be.** Column, Wide or Full width, in
   the page menu. Pages of writing keep a comfortable line; a page with a board
