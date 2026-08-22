@@ -3,8 +3,8 @@
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 229376,
-      "//": "224 KiB. Raised from 216 KiB by the starter space rewrite: 213,434 B before, 220,434 B after — +7,000 B, of which 5,336 B is prose and 1,664 B is the two files it ships (a hand-written SVG drawing and a 1.2s test tone, both chosen to deflate to almost nothing; see spaces/src/starterdata.ts). What bought it is the doctrine that a feature the starter does not demonstrate is a feature the starter denies: tables, clips, link cards, comments, calculating lines, daily notes, page width, export-a-page, subtree import, the mark palette, live collaboration and the properties panel had all shipped without ever appearing in the document every new user reads first. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "max": 245760,
+      "//": "240 KiB. The whole spaces build-out in one branch: M3/M4 content work (tables, media, link cards, comments, export-page-as-space, subtree import), then the formatting UI (a properties panel, a selection toolbar with a real mark engine and a colour palette), a dark interface, a rebuilt About dialog, and a starter space that finally demonstrates all of it. 166,482 B before any of it and 238,862 B after. Six branches each measured a raise against a baseline none of them shared; this is measured on the stack, which is the only place the real figure exists. About a third of the growth is LANGUAGE — 473 strings x 8 locales — which is the honest cost of an app that opens in eight languages from one file. Zopfli is applied and is worth about 4% of it. Headroom is deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason."
     }
   }
 }
