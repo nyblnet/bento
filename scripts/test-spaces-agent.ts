@@ -39,7 +39,7 @@ import {
   validateDoc, outlineDoc, statsDoc,
   planInsertBlocks, planUpdateBlock, planRemoveBlocks, planMoveBlock,
   planUpdatePage, planRemovePage,
-  fieldsReport, issuesReport, planSetField, planNewIssue,
+  fieldsReport, issuesReport, planSetField, planNewIssue, commentsReport,
 } from '../spaces/src/agent.ts'
 import { DEFAULT_FIELDS, ISSUE_FIELDS, propHtml, isIssue, valuesOf, columnMoves } from '../spaces/src/fields.ts'
 
@@ -748,6 +748,66 @@ const issue = (id: string, values: Record<string, unknown>, extra: Record<string
   }
   ok(columnMoves(col, 'i5', { before: 'i1' } as never), 'a real move is a move')
   ok(columnMoves(col, 'newcomer', { before: 'i3' } as never), 'a card from another column always moves')
+}
+
+
+// ---- comments(): the flat typed-anchor list ---------------------------------
+// This is what an agent reads before it acts on what a human flagged, so the
+// two things that must be true are that the ANCHOR is stated rather than
+// implied by where the thread was stored, and that a hostile or hand-edited
+// file cannot make the report throw halfway through — a verb that dies on the
+// third page has told the agent the first two are all there is.
+{
+  const doc = load([
+    p('p1', [
+      { id: 'b1', type: 'p', html: 'one', comments: [
+        { id: 'c1', author: 'Ada', at: '2026-08-20T10:00:00Z', text: 'is this right?',
+          replies: [{ id: 'c2', author: 'Bo', at: '2026-08-20T11:00:00Z', text: 'no' }] },
+      ] },
+      { id: 'b2', type: 'p', html: 'two', comments: [
+        { id: 'c3', author: 'Bo', at: '2026-08-20T12:00:00Z', text: 'settled', resolved: true },
+      ] },
+    ]),
+    p('p2', [b('b3')]),
+  ])
+  ;(doc.pages[1] as { comments?: unknown }).comments = [
+    { id: 'c4', author: 'Ada', at: '2026-08-20T13:00:00Z', text: 'this page needs a title' },
+  ]
+
+  const all = commentsReport(doc)
+  ok(all.length === 3, `every thread on every page, flat (${all.length})`)
+  const c1 = all.find((c) => c.id === 'c1')!
+  ok(c1.anchor === 'block' && c1.blockId === 'b1' && c1.pageId === 'p1',
+    'a block thread reports anchor "block", its block and its page')
+  ok(c1.url === '#p/p1', 'and the href that reaches it')
+  ok(c1.replies.length === 1 && c1.replies[0].author === 'Bo', 'replies come with it')
+  const c4 = all.find((c) => c.id === 'c4')!
+  ok(c4.anchor === 'page' && c4.blockId === undefined,
+    'a page thread reports anchor "page" and NO block id')
+  ok(all.every((c) => typeof c.resolved === 'boolean'),
+    'resolved is always a boolean — absent means open, never undefined')
+
+  ok(commentsReport(doc, { resolved: false }).length === 2, 'the open ones filter out the settled')
+  ok(commentsReport(doc, { resolved: true }).map((c) => c.id).join() === 'c3', '…and back again')
+  ok(commentsReport(doc, { pageId: 'p2' }).map((c) => c.id).join() === 'c4', 'one page at a time')
+
+  // The one thing this must not do is act. A comment is half a conversation,
+  // and a verb that resolved the remark it was asked to address would make the
+  // record untrue.
+  ok(commentsReport(doc).length === 3 && doc.pages[0].blocks[0].comments!.length === 1,
+    'reporting changes nothing in the document')
+
+  // hostile shapes: everything below arrives in a file somebody mailed you
+  const nasty = load([p('h1', [
+    { id: 'x1', type: 'p', html: 'a', comments: 'yes' },
+    { id: 'x2', type: 'p', html: 'b', comments: [null, 7, { noId: true }] },
+    { id: 'x3', type: 'p', html: 'c', comments: [{ id: 'k1', author: 3, at: null, text: { evil: 1 }, replies: 3 }] },
+  ])])
+  const rep = commentsReport(nasty)
+  ok(rep.length === 1 && rep[0].id === 'k1',
+    'a comments field that is not an array, and entries with no id, are ignored')
+  ok(rep[0].author === '' && rep[0].text === '' && rep[0].at === '' && rep[0].replies.length === 0,
+    'every field is coerced to the type the report promises')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

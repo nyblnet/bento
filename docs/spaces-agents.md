@@ -273,6 +273,7 @@ bento.search(q)                            // [{pageId, title, blockId}]
 bento.outline()                            // the whole space as a tree
 bento.validate()                           // what is wrong or suspect
 bento.stats()                              // pages, blocks, words, bytes, biggest assets
+bento.comments(query?)                     // review threads, flat, with a typed anchor
 
 // write — each one is ONE undoable step
 bento.fields()                             // the field schema in force
@@ -381,6 +382,25 @@ This answers "why is this file 30 MB". It is always the images: prose is free
 (2,000 pages of it is about 5 MB). `used` is how many blocks reference that
 asset — `0` means it is dead weight, and deleting the key is pure savings. The
 app shell adds a fixed ~80 KB on top of `bytes.document`.
+
+### `bento.comments()`
+
+```js
+bento.comments({ resolved, pageId })
+// [{ id, anchor:'block'|'page', pageId, pageTitle, blockId?, url:'#p/<id>',
+//    author, at, text, resolved, replies:[{id, author, at, text}] }]
+```
+
+What a person flagged, from every page, in document order. `anchor` says what
+the thread is about: a `block` (and `blockId` names it) or the `page` as a
+whole. `text` is **plain text** — never html, in or out. Start with
+`bento.comments({ resolved: false })`: those are the ones still asking for
+something.
+
+It is **read-only, deliberately**. Acting on a remark is your job; marking it
+resolved is the commenter's, and an agent that closed the thread it was asked
+to address would make the record untrue. Say what you did in a block, and leave
+the thread open.
 
 ### The patch verbs, exactly
 

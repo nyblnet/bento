@@ -8,7 +8,8 @@
 // and merging blocks can never re-mint an id, and ids are what links,
 // backlinks and (later) collaboration key on.
 
-import { type Block, newBlock, newPage, effectiveParents } from './model'
+import { type Block, newBlock, newPage, effectiveParents, unresolvedOn } from './model'
+import { CommentsUi, commentBadge } from './comments.ts'
 import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
@@ -88,6 +89,8 @@ export class Editor {
   private static readonly PANE_DEFAULT = 244
   private paneW = Editor.PANE_DEFAULT
   private paneClosed = false
+  /** review threads — markers in the end margin, badges in the tree */
+  private comments: CommentsUi
   onSave: (() => void) | null = null
   onSaveAs: ((suffix: string) => void) | null = null
   onPrint: (() => void) | null = null
@@ -102,6 +105,14 @@ export class Editor {
       this.paneClosed = localStorage.getItem('bento-sp-pane-closed') === '1'
     } catch { /* storage throws on a locked-down origin; the defaults are fine */ }
     this.build()
+    // AFTER build(): `main` exists by then, and the marker layer is painted
+    // into whatever the page paint just produced.
+    this.comments = new CommentsUi({
+      store: this.store,
+      main: () => this.main,
+      popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
+      paintTree: () => this.paintTree(),
+    })
     if (this.paneClosed) this.sidebar.classList.add('sp-pane-closed')
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
@@ -687,6 +698,10 @@ export class Editor {
       // spaces answer to the cursors slides paints on its canvas.
       const dots = this.collab?.dotsFor(page.id)
       if (dots) a.append(dots)
+      // Unresolved threads badge the page they are on: the tree is the only
+      // place you can see that another page is waiting on you.
+      const badge = commentBadge(unresolvedOn(page))
+      if (badge) a.append(badge)
       a.draggable = true
       a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
       a.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text/bento-page', page.id))
@@ -933,6 +948,11 @@ export class Editor {
     this.main.append(view)
     this.wire(view)
     view.querySelector('.sp-page-inner')?.append(this.backlinks(page.id))
+    // Comments are EDITOR-ONLY. The gate is here rather than in comments.ts
+    // because this is the object that knows which view it is in — and the
+    // renderer, which print and the reading view share, has never heard of
+    // them at all.
+    if (!this.reading) this.comments?.refresh()
     this.painting = false
   }
 
@@ -1038,6 +1058,9 @@ export class Editor {
       { icon: 'down', label: t('Move down'), hint: '', off: si < 0 || si >= sibs.length - 1,
         run: () => { if (si >= 0 && si < sibs.length - 1) this.moveBlock(id, sibs[si + 1].id) } },
       { icon: 'copy', label: t('Duplicate'), hint: '', run: () => this.duplicateBlock(id) },
+      // The gutter holds two controls and a phone fits one, so commenting
+      // lives in the menu BOTH of them open — which is also the touch sheet.
+      { icon: 'comment', label: t('Comment'), hint: '', run: () => this.comments.openNew(id) },
       { icon: 'trash', label: t('Delete'), hint: '⌫', run: () => this.deleteBlock(id) },
     ]
   }
@@ -2696,6 +2719,16 @@ export class Editor {
       this.closeOverlay()
       this.newPage(pageId)
     }))
+
+    // A thread about the PAGE — the second and last anchor. It is offered
+    // where the page's own actions are, and only for the page in view,
+    // because a thread is written into the page you are looking at.
+    if (pageId === s.pageId && !s.readOnly) {
+      pop.append(this.menuItem('comment', t('Comment on this page'), '', () => {
+        this.closeOverlay()
+        this.comments.openNew()
+      }))
+    }
 
     pop.append(this.menuItem(page.archived ? 'unarchive' : 'archive',
       page.archived ? t('Restore to the page list') : t('Archive'),
