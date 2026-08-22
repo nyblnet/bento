@@ -241,7 +241,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .ed-btn-primary {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   padding: 6px 14px;
 }
 .ed-btn-primary:hover { background: var(--ink-2); }
@@ -461,7 +461,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-setchip:hover { background: var(--chrome-2); }
 .ed-setchip.active {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
 }
 
 /* ————— slide surface (shared by canvas, thumbs, present) ————— */
@@ -772,7 +772,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   bottom: 26px;
   transform: translate(-50%, 12px);
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   font-size: 13px;
   padding: 9px 16px;
   border-radius: 999px;
@@ -2058,6 +2058,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
    set of buttons and is the least-used half. The list it opens is not lost —
    editor.ts appends it to the bottom of ⋯ while the fold is on. */
 .ed-topbar.ed-bar-fold .ed-split-caret { display: none; }
+.ed-topbar.ed-bar-fold .ed-split > .ed-btn:first-child {
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
+  border-inline-end: 1px solid var(--line);
+}
 /* ⋯ carries the demoted buttons AND that list, so it can outgrow the
    screen in BOTH directions.
    Down: without a bound it runs off the bottom, and a dropdown is absolutely
