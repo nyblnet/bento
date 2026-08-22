@@ -1901,8 +1901,19 @@ function fsTable(f: string): string {
   ok(/readerWidth\?: 'wide' \| 'full'/.test(render), 'the renderer takes a reader width')
   ok(/page\.width === undefined \? \(opts\.readerWidth \?\? auto\)/.test(render),
     'the PAGE wins over the reader, and the reader wins over the board default')
-  ok(/min\(max\(\$\{m\}px, 42vw\), \$\{Math\.round\(m \* 1\.25\)\}px\)/.test(render),
-    'and the built-in default GROWS with the viewport, capped so a line cannot run away')
+  // The cap moved from PIXELS to CHARACTERS, and that is the assertion worth
+  // having: a px cap does not hold a line length. Capped at measure x 1.25 =
+  // 900px, a 5120px screen rendered 110 characters — past the range this very
+  // comment claimed to enforce. In `ch` it is ~94 at every width, because `ch`
+  // scales with the reading size and the reading size is what grows.
+  ok(/min\(75ch, max\(\$\{m\}px, 42vw\)\)/.test(render),
+    'the column is capped in CHARACTERS, so a wide screen buys bigger type rather than a longer line')
+  const cssSrc = (await import('node:fs')).readFileSync(
+    new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
+  ok(/--sp-read: clamp\(16px,/.test(cssSrc),
+    'and the reading size grows with the viewport from a PX floor')
+  ok(/@media print[\s\S]{0,400}--sp-read: 16px/.test(cssSrc),
+    '…but paper is pinned: a document must not set larger because the window was wide')
 
   ok(/localStorage\.getItem\('bento-sp-width'\)/.test(editor),
     "the reader's width is viewer state, in localStorage beside the language")

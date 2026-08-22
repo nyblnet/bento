@@ -921,14 +921,37 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
     : page.width === undefined ? (opts.readerWidth ?? auto)
     : undefined
   if (width === 'full') inner.style.maxWidth = 'none'
-  else if (width === 'wide') inner.style.maxWidth = '1500px'
+  // WIDE IS A PROPORTION, not a number. It was a flat 1500px, which is wider
+  // than the reading area of any laptop — so it clamped to the container and
+  // came out identical to Full. Measured at a 1440px viewport: column 720,
+  // wide 1130, full 1130. Two of the three choices did the same thing, and the
+  // one screen where they differed was a 27-inch monitor.
+  //
+  // 80% keeps a visible step at every size, and the 1500px cap keeps Wide from
+  // becoming an unreadable line on a very large screen — at which point Full is
+  // the thing to pick, deliberately.
+  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, 80%)'
   else if (doc.theme.measure) {
     // AND THE DEFAULT ITSELF GROWS. 720px is ~88 characters at 16px, which is
     // already at the long end — so this does not widen the line much; what it
     // does is stop a 2560px screen showing a 720px ribbon using 31% of it.
     // Capped, because past ~95 characters a line is harder to read, not easier.
+    // THE CAP IS IN CHARACTERS, not pixels — that is the whole point.
+    // A px cap does not hold a line length: capped at measure x 1.25 = 900px,
+    // a 5120px screen rendered 110 characters, past the range anyone reads
+    // comfortably, while the comment above it claimed ~95 was the limit.
+    //
+    // 75ch, not 90ch: `ch` is the width of the digit ZERO, and prose averages
+    // narrower than that — measured here, 9.77px against 8.16px — so 75ch
+    // renders about 90 real characters and 90ch would render 108. The unit
+    // flatters itself by about a fifth.
+    //
+    // And because `ch` scales with --sp-read, the column grows in PIXELS on a
+    // large screen while holding the same character count. That is what the
+    // extra pixels are for: bigger type at a longer viewing distance, not a
+    // longer line.
     const m = doc.theme.measure
-    inner.style.maxWidth = `min(max(${m}px, 42vw), ${Math.round(m * 1.25)}px)`
+    inner.style.maxWidth = `min(75ch, max(${m}px, 42vw))`
   }
   if (width) inner.classList.add('sp-wide')
 

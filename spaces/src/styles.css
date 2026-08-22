@@ -10,6 +10,22 @@
 :root {
   --ink: #1e2a3a;
   --ink-2: #31445c;
+  /* THE ONE GROUND. Named rather than spelled `#fff` at each site, because the
+     dark interface that slides already ships (#285) redefines exactly these
+     tokens and nothing else — a literal at a use site is a thing that stays
+     white when the theme flips. */
+  --bg: #ffffff;
+  /* READING SIZE, and it grows with the screen.
+     A 5120px display showed a 900px column of 16px text: 110 characters, 18%
+     of the screen, and lines past the range anyone reads comfortably. The fix
+     is NOT a wider column — it is bigger type holding the SAME character
+     count, because at that width you are also sitting further away.
+     16px to about 1600px wide, then up to 19px by 2560, capped there.
+     THE FLOOR IS A PX VALUE ON PURPOSE: `vw` shrinks when a reader zooms in
+     (zoom reduces the CSS-pixel viewport), so a purely viewport-driven size
+     would fight the browser's own accessibility control. The floor means zoom
+     can only ever land on today's size or larger. */
+  --sp-read: clamp(16px, 11px + 0.3125vw, 19px);
   --chrome: #f5f7fa;
   --chrome-2: #eceff4;
   --line: #e3e8ef;
@@ -30,7 +46,13 @@ html, body {
   margin: 0; height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: var(--ink);
-  background: var(--chrome);
+  /* ONE GROUND for the whole app. The panels used to sit on a --chrome tint
+     with the page white on top of it, so the page read as a card floating on
+     a slightly different grey — three surfaces where there is one document.
+     The hairline borders carry the separation; a second background does not
+     need to. --chrome is still what CHIPS and inset controls sit on, which is
+     what it was for. */
+  background: var(--bg);
   overscroll-behavior: none;
 }
 #app { height: 100%; }
@@ -94,7 +116,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   /* the reader's width, restored from localStorage — never the document's */
   flex: 0 0 var(--sp-panew, 244px); min-width: 0;
   transition: flex-basis .18s ease, padding .18s ease;
-  border-inline-end: 1px solid var(--line); background: var(--chrome);
+  border-inline-end: 1px solid var(--line); background: var(--bg);
   overflow: auto; padding: 10px 8px max(16px, env(safe-area-inset-bottom));
 }
 .sp-side-head {
@@ -123,12 +145,12 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 
 /* ————— the reading column ————— */
 .sp-main {
-  flex: 1 1 auto; overflow: auto; background: #fff;
+  flex: 1 1 auto; overflow: auto; background: var(--bg);
   padding: 44px 28px 40vh;
 }
-.sp-page-inner { margin: 0 auto; }
+.sp-page-inner { margin: 0 auto; font-size: var(--sp-read); }
 .sp-title {
-  font-size: 33px; line-height: 1.18; font-weight: 700;
+  font-size: 2.06em; line-height: 1.18; font-weight: 700;
   margin: 0 0 6px; letter-spacing: -0.02em;
 }
 .sp-title:focus { outline: none; }
@@ -157,9 +179,9 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   background: var(--blue); border-radius: 2px;
 }
 
-.sp-b-h1 { font-size: 25px; font-weight: 700; margin: 24px 0 2px; letter-spacing: -0.01em; }
-.sp-b-h2 { font-size: 20px; font-weight: 700; margin: 20px 0 2px; }
-.sp-b-h3 { font-size: 16.5px; font-weight: 700; margin: 16px 0 2px; }
+.sp-b-h1 { font-size: 1.56em; font-weight: 700; margin: 24px 0 2px; letter-spacing: -0.01em; }
+.sp-b-h2 { font-size: 1.25em; font-weight: 700; margin: 20px 0 2px; }
+.sp-b-h3 { font-size: 1.03em; font-weight: 700; margin: 16px 0 2px; }
 .sp-b-quote {
   margin: 8px 0; padding: 2px 0 2px 15px;
   border-inline-start: 3px solid var(--line); color: var(--ink-2);
@@ -178,7 +200,13 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 /* the accent at a tint a paragraph can be read through, and an explicit ink:
    `mark`'s UA default is black on yellow, which is not this document's ink */
 .sp-body mark { background: rgb(247 166 0 / .3); color: inherit; border-radius: 3px; padding: 0 .08em; }
-.sp-body a { color: var(--blue); }
+/* No blanket link colour here. There was one — `.sp-body a { color: var(--blue) }`
+   — and it never painted a single prose link: `.sp-page a` sets the ink at the
+   same specificity and later in the sheet, so it won every time. What the rule
+   DID reach was the page list, which `.sp-body` also wraps, where it beat
+   `.sp-treelink`'s 0-1-0 and turned every page in the tree the blue of a
+   hyperlink to somewhere else. A rule with no intended effect and one
+   unintended one is not worth scoping; it is worth deleting. */
 
 /* ————— the colour palette —————
    NINE COLOURS IN TWO ROLES: `sp-fg-*` is the ink on a SPAN, `sp-bg-*` is the
@@ -691,6 +719,11 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 
 /* ————— print: the only export-to-PDF path, so it is a contract ————— */
 @media print {
+  /* PAPER IS NOT A SCREEN. --sp-read grows with the viewport, and the viewport
+     while printing is whatever window happened to be open — so without this the
+     same document would set larger printed from a 27-inch monitor than from a
+     laptop. Pinned. */
+  :root { --sp-read: 16px; }
   .sp-bar, .sp-side, .sp-insp, .sp-insp-rz, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
   .sp-tb-tools, .sp-tb-grip { display: none !important; }
   .sp-main { overflow: visible; padding: 0; background: #fff; }
@@ -1160,7 +1193,7 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 .sp-insp {
   flex: 0 0 var(--sp-inspw, 280px); min-width: 0;
   transition: flex-basis .18s ease, padding .18s ease;
-  border-inline-start: 1px solid var(--line); background: var(--chrome);
+  border-inline-start: 1px solid var(--line); background: var(--bg);
   overflow: auto; padding: 10px 10px max(16px, env(safe-area-inset-bottom));
 }
 .sp-insp.sp-pane-closed {
@@ -1235,13 +1268,17 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   [dir='rtl'] .sp-insp.sp-open { inset: 0 auto 0 0; }
 }
 
-/* Above the breakpoint the chevron on the strip IS the control, so a second one
-   in the topbar would be the duplication `.sp-panel-toggle` documents avoiding.
-   Below it there is no strip, so the button is the only way in. */
-.sp-insp-toggle { display: none; }
-@media (max-width: 820px) {
-  .sp-insp-toggle { display: inline-flex; }
-}
+/* THE BUTTON IS SHOWN AT EVERY WIDTH, and this is a correction.
+   It was hidden above the breakpoint on the reasoning that the chevron on the
+   resizer strip is already the control, and that a second one would be the
+   duplication `.sp-panel-toggle` avoids. That argument holds for the PAGE LIST,
+   which is open by default: its chevron sits on the visible edge of a visible
+   panel. This panel is closed by default — deliberately, so it costs the
+   reading column nothing — which leaves a 5px strip as the only affordance.
+   Measured at 2560px: a 5×1353 target at x=2555, hard against the screen edge,
+   for a panel that is 0px wide. Reported as "how can I show the right panel?",
+   which is the question a control nobody can find produces. */
+.sp-insp-toggle { display: inline-flex; }
 /* …AND NOT EVEN THERE ONCE THE BAR HAS FOLDED. Measured at 375px: the 40px
    button took the document title from 70px to 26px. fitTopbar hands out the
    tier as a class precisely so a control can ask "is there room for me" rather
