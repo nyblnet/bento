@@ -3,13 +3,13 @@
 // Copyright (c) 2026 The Bento authors
 // bento/spaces share-copy rig — what an invite carries, and what it must not.
 //
-//   slides/node_modules/.bin/esbuild scripts/test-spaces-invite.ts --bundle \
-//     --platform=node --format=esm --outfile=$TMP/test-spaces-invite.mjs
-//   node $TMP/test-spaces-invite.mjs
+//   node scripts/test-spaces.mjs invite      # or just: node scripts/test-spaces.mjs
 //
 // (Bundled, not run directly: the kernel transport uses TypeScript parameter
-// properties, which node's strip-only loader refuses. Same reason the spaces
-// undo rig is bundled.)
+// properties, which node's strip-only loader refuses. Handing this file straight
+// to node fails in a way that looks like a broken product rather than a missing
+// build step — the runner above bundles it the way CI does. Same reason the
+// spaces undo rig is bundled.)
 //
 // WHAT THIS PROVES, and why it is a rig rather than a code review.
 //

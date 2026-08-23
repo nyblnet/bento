@@ -3,11 +3,13 @@
 // Copyright (c) 2026 The Bento authors
 // Undo: depth on a real document, and correctness across mixed scopes.
 //
-//   esbuild scripts/test-spaces-undo.ts --bundle --platform=node --format=esm …
+//   node scripts/test-spaces.mjs undo        # or just: node scripts/test-spaces.mjs
 //
 // (Bundled rather than run directly because store.ts imports './model' without
-// an extension, which node's ESM resolver cannot follow. Same pattern as the
-// autosave and validate rigs.)
+// an extension, which node's ESM resolver cannot follow. Handing this file
+// straight to node fails with ERR_MODULE_NOT_FOUND, which reads like a broken
+// product rather than a missing build step — the runner above does what CI
+// does. Same pattern as the autosave and validate rigs.)
 //
 // WHY. Every checkpoint used to stringify the WHOLE document. Measured on a
 // 200-page, 2.5 MB handbook: fifty edits left an undo depth of NINE, because
