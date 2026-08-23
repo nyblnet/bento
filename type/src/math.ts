@@ -487,11 +487,21 @@ registerPanel({
           area.disabled = false;
         }
       }
+      // HIDDEN when there is no formula at the caret. On the left this panel sat
+      // behind a tab, so an empty one cost nothing; stacked on the right it is
+      // always on screen, and a permanent "The formula at the caret" under a
+      // contract that contains no mathematics is just noise. A contextual panel
+      // that is never absent stops being contextual.
+      host.hidden = current === null;
       draw();
     };
     (host as HTMLElement & { _sync?: () => void })._sync!();
     document.addEventListener('selectionchange', () => {
-      if (host.classList.contains('on')) (host as HTMLElement & { _sync?: () => void })._sync!();
+      // `.on` is a LEFT-hand tab class. Right-hand panels are stacked and never
+      // carry it (.t-props .t-panel is display:block), so this guard was always
+      // false after the panel moved and the source stopped following the caret
+      // — it only refreshed when the document itself changed.
+      if (host.isConnected) (host as HTMLElement & { _sync?: () => void })._sync!();
     });
   },
   update(host) {

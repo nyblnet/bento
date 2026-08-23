@@ -117,6 +117,7 @@ html, body {
   overflow: auto; min-width: 0;
 }
 .t-props .t-panel { display: block; }
+.t-props .t-panel[hidden] { display: none; }
 /* the house geometry: 11px uppercase section headers, copied deliberately */
 .t-section {
   font-size: 11px; font-weight: 600; text-transform: uppercase;
