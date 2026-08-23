@@ -281,5 +281,107 @@ for (const app of CLIP_APPS) {
     `${app}/src/model.ts: docForExport strips by REMOVING collab, not by listing fields to keep`)
 }
 
+// ---------------------------------------------------------------------------
+// SHARE COPIES, in every app that can send one.
+//
+// The clipboard checks above are about a copy that must carry NO capability.
+// An invite is the opposite case and the harder one: it has to carry SOME
+// capability or it cannot join, so "did this path strip?" is not the question —
+// the question is WHICH capability it kept.
+//
+// Measured on bento/spaces, 2026-08-22: "Invite someone…" was
+// `invite: () => { void this.saveAs('copy') }`, and `saveAs` serializes
+// `store.doc`. Everyone invited to a space therefore received `ownerPriv` —
+// the root key of the room, which signs writes AND revocations — so an invited
+// person could remove the person who invited them. The hint under the button
+// read "Saves a copy that joins this session", which was true and was not the
+// whole truth.
+//
+// What is checked here is the SHAPE of the call site: a share copy is written
+// from a DERIVED document, never from the live one. The cryptographic proof
+// that the derived document holds no owner key lives in
+// scripts/test-spaces-invite.ts, which runs the real functions against real
+// keys; this is the cheap check that stops a new button from routing around
+// them.
+
+console.log('\nshare copies')
+
+/**
+ * The body of a MODULE-LEVEL `export function NAME(…)`.
+ *
+ * `bodies()` above cannot be used here and the reason is worth recording: its
+ * declaration pattern also matches any two-space-indented `name(` — which in a
+ * class file is a method and in a module file is an ordinary CALL. share.ts
+ * calls `stripCollabSecrets(out, …)` from inside two other functions, so the
+ * map's last-wins would hand back a call site, and the checks below would then
+ * pass or fail against the wrong text. Anchoring on `export function` is exact.
+ */
+function exportedBody(src: string, name: string): string {
+  const masked = mask(src)
+  const decl = new RegExp(`^export (?:async )?function ${name}\\s*\\(`, 'm')
+  const m = decl.exec(masked)
+  if (!m) return ''
+  let p = m.index + m[0].length - 1
+  for (let depth = 0; p < masked.length; p++) {
+    if (masked[p] === '(') depth++
+    else if (masked[p] === ')' && --depth === 0) break
+  }
+  const open = masked.indexOf('{', p)
+  if (open < 0) return ''
+  let depth = 0
+  let i = open
+  for (; i < masked.length; i++) {
+    if (masked[i] === '{') depth++
+    else if (masked[i] === '}' && --depth === 0) break
+  }
+  return src.slice(open, i + 1)
+}
+
+const SHARE_APPS = ['spaces']
+for (const app of SHARE_APPS) {
+  const rel = `${app}/src/share.ts`
+  let src: string
+  try { src = read(rel) } catch {
+    ok(false, `${rel} exists — share copies must be minted in one place`)
+    continue
+  }
+  const stripper = exportedBody(src, 'stripCollabSecrets')
+  ok(!!stripper, `${rel}: found stripCollabSecrets() — the checks below are worthless without it`)
+  ok(/delete doc\.collab\.ownerPriv\b/.test(stripper), `${rel}: the stripper drops ownerPriv`)
+  ok(/delete doc\.collab\.writerPriv\b/.test(stripper), `${rel}: the stripper drops writerPriv`)
+  ok(/delete doc\.collab\.invite\b/.test(stripper), `${rel}: the stripper drops any invite it holds`)
+  ok(/delete doc\.collab\b(?!\.)/.test(stripper),
+    `${rel}: the stripper drops the whole block by default — the room key is a capability too`)
+
+  const inviteFn = exportedBody(src, 'inviteCopy')
+  ok(/stripCollabSecrets\(\s*out\s*,\s*\{\s*keepRoom:\s*true\s*\}\s*\)/.test(inviteFn),
+    `${rel}: inviteCopy strips before it delegates`)
+  ok(/mintInvite\(/.test(inviteFn), `${rel}: inviteCopy mints a SCOPED invite rather than passing the room's own keys`)
+  const masked = mask(inviteFn)
+  ok(masked.indexOf('stripCollabSecrets(') < masked.indexOf('mintInvite('),
+    `${rel}: it strips FIRST — a stray writerPriv beside an invite is a second, unrevokable way in`)
+  ok(!/ownerPriv\s*[,}]/.test(mask(exportedBody(src, 'readerCopy'))),
+    `${rel}: readerCopy never re-attaches a private key`)
+
+  // The call site. A share copy must reach the file through a writer that takes
+  // a DOCUMENT — the ordinary save path serializes the open one.
+  const ed = read(`${app}/src/editor.ts`)
+  const share = bodies(ed).get('shareCopy') ?? ''
+  ok(!!share, `${app}/src/editor.ts has a shareCopy()`)
+  ok(/inviteCopy\(|readerCopy\(/.test(share),
+    `${app}: the share button derives its document (inviteCopy/readerCopy)`)
+  ok(!/saveAs\(/.test(mask(share)),
+    `${app}: the share button does NOT reach the ordinary copy path — that path writes store.doc, credentials and all`)
+  ok(/onShareCopy\?\.\(/.test(share), `${app}: it writes through the share-copy hook`)
+
+  // …and that hook must encrypt, and must not become the ⌘S target.
+  const main = read(`${app}/src/main.ts`)
+  const hook = main.slice(main.indexOf('editor.onShareCopy'), main.indexOf('editor.onShareCopy') + 400)
+  ok(/serializeAuto\(/.test(hook),
+    `${app}: onShareCopy writes through serializeAuto — an active password reaches the shared copy`)
+  ok(!/keepHandle:\s*true/.test(hook),
+    `${app}: onShareCopy does not retain the file handle — the next ⌘S must not overwrite the copy with the full document`)
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

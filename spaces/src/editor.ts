@@ -38,6 +38,9 @@ import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
 import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
+import { offlineEnabled } from '../../kernel/src/net.ts'
+import { startSharing } from '../../kernel/src/sync/online.ts'
+import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
 import { PropsPanel } from './props'
 import {
@@ -155,6 +158,17 @@ export class Editor {
    * extract in through a global.
    */
   onExportSpace: ((doc: SpacesDoc) => Promise<boolean>) | null = null
+  /**
+   * Write a SHARE copy — a different document, under this space's name plus a
+   * suffix that says which kind of copy it is.
+   *
+   * Separate from `onExportSpace` (which names the file after the extracted
+   * page) and from `onSaveAs` (every suffix there serializes THIS document,
+   * credentials and all — which is precisely how "Invite someone…" came to
+   * hand out the owner key). A share copy is always a derived document, so it
+   * needs a writer that takes one.
+   */
+  onShareCopy: ((doc: SpacesDoc, suffix: string) => Promise<boolean>) | null = null
   onPrint: (() => void) | null = null
 
   constructor(root: HTMLElement, store: Store) {
@@ -875,6 +889,7 @@ export class Editor {
    */
   connectSync(session: import('./sync/session.ts').SyncSession): void {
     const { CollabUi } = collabUi
+    this.session = session
     this.collab = new CollabUi({
       store: this.store,
       session,
@@ -882,7 +897,7 @@ export class Editor {
       paintTree: () => this.paintTree(),
       popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
       goToPage: (id) => { this.store.goToPage(id); this.closeDrawer() },
-      invite: () => { void this.saveAs('copy') },
+      shareCopy: (kind) => { void this.shareCopy(kind) },
     })
     session.onPeers(() => this.collab?.onPeersChanged())
     // The relay refuses things the user can act on — too large, room full. For
@@ -2730,6 +2745,8 @@ export class Editor {
   }
 
   private collab: import('./collabui.ts').CollabUi | null = null
+  /** the live session, once main.ts has handed it over (connectSync) */
+  private session: import('./sync/session.ts').SyncSession | null = null
   private liveSlot!: HTMLElement
   private topbar: HTMLElement | null = null
   private barRO: ResizeObserver | null = null
@@ -4614,6 +4631,52 @@ export class Editor {
 
   private async saveAs(suffix: string): Promise<void> {
     this.onSaveAs?.(suffix)
+  }
+
+  /**
+   * Save a copy that carries a SCOPED capability — the two ways to let someone
+   * into this space.
+   *
+   * Both go live first, because a copy that follows a session needs there to
+   * be one, and because "share" should be one action rather than a session to
+   * start and then a file to send.
+   *
+   * Both also write a DERIVED document (share.ts), never `store.doc`. That is
+   * the whole of the fix: `saveAs('copy')` serializes the open document, so
+   * inviting somebody used to hand them `collab.ownerPriv` — the root key of
+   * the room, which writes AND revokes, the inviter included.
+   */
+  private async shareCopy(kind: import('./share.ts').ShareKind): Promise<void> {
+    await this.goLive()
+    // Committed first for the same reason slides commits its text edit: a
+    // half-typed block that only exists in the DOM is not in the copy.
+    this.store.endRun()
+    // Copies rejoin as true FORKS: the stamped CRDT state is what lets an
+    // offline edit on either side merge two-way rather than clobber.
+    this.session?.stampInto(this.store.doc)
+    const out = kind === 'invite'
+      ? await shareModule.inviteCopy(this.store.doc)
+      : shareModule.readerCopy(this.store.doc)
+    if (!out) {
+      this.status(kind === 'invite'
+        ? t('Only the owner of this space can invite people')
+        : t('This space has no live session to follow'))
+      return
+    }
+    const ok = await this.onShareCopy?.(out, kind)
+    if (ok) {
+      this.status(kind === 'invite'
+        ? t('Editor copy saved — recipients join live with edit access')
+        : t('Read-only copy saved — it follows the live session, view only'))
+    }
+  }
+
+  /** Turn the live session on (idempotent). Sharing a copy calls this first. */
+  async goLive(): Promise<void> {
+    if (!this.session || offlineEnabled()) return
+    this.session.enableSharing()
+    await startSharing(this.session, this.store)
+    this.collab?.sync()
   }
 
   /** One About, one copy path — both entry points route through saveAs('copy'). */

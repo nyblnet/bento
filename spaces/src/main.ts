@@ -270,6 +270,27 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     return writeUpdatedFileAs(html, out, { suggestedName: suggestedFileName(out) })
   }
 
+  /**
+   * Write a SHARE copy — an invite, or (later) a view-only follower.
+   *
+   * `out` is a DERIVED document (share.ts), never `store.doc`: that is the
+   * whole of the fix for "Invite someone…", which reached the ordinary copy
+   * path and therefore handed every recipient `collab.ownerPriv`.
+   *
+   * `serializeAuto`, so an invite taken out of a password-protected space is
+   * written encrypted with the password its author is already holding — a
+   * shared copy arriving in the clear would defeat the encryption silently.
+   *
+   * `keepHandle` stays false (the default), and here it is load-bearing rather
+   * than tidy: retaining the handle would make the NEXT ⌘S overwrite the copy
+   * that just left with the full document — owner key included. Slides paid
+   * for that lesson once already.
+   */
+  editor.onShareCopy = async (out: SpacesDoc, suffix: string): Promise<boolean> => {
+    const html = await serializeAuto(out)
+    return writeUpdatedFileAs(html, out, { suffix })
+  }
+
   async function doSave(): Promise<void> {
     store.endRun()
     editor.status(t('Saving…'))

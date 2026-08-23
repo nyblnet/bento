@@ -30,6 +30,7 @@ import { ICONS } from './icons.ts'
 import type { Store } from './store.ts'
 import type { SyncSession } from './sync/session.ts'
 import { sharingOn, onlineTransport, joinFromDoc, startSharing, stopSharing } from '../../kernel/src/sync/online.ts'
+import type { ShareKind } from './share.ts'
 
 export interface Peerish {
   actor: string
@@ -71,8 +72,12 @@ export interface CollabUiHost {
   popover(anchor: HTMLElement, build: (pop: HTMLElement, close: () => void) => void): void
   /** navigate, for "click a person to go where they are" */
   goToPage(id: string): void
-  /** save a copy that carries this session */
-  invite(): void
+  /**
+   * Save a copy that carries a SCOPED capability — an owner-signed invite,
+   * never the open document. See share.ts for why that distinction is the
+   * whole of this change.
+   */
+  shareCopy(kind: ShareKind): void
 }
 
 export class CollabUi {
@@ -216,9 +221,15 @@ export class CollabUi {
 
       const acts = el('div', 'sp-pacts')
       if (live) {
-        acts.append(this.action(t('Invite someone…'), t('Saves a copy that joins this session'), () => {
-          close(); this.host.invite()
-        }))
+        // The label and the hint are bento/slides', word for word. They are
+        // exact about the consequence — "you stay the owner and can remove
+        // them" — where the old pair ("Invite someone…" / "Saves a copy that
+        // joins this session") was true about the mechanism and silent about
+        // the power it handed over. Two apps must not describe one guarantee
+        // in two ways.
+        acts.append(this.action(t('Invite to edit…'),
+          t('Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'),
+          () => { close(); this.host.shareCopy('invite') }))
         acts.append(this.action(t('Stop sharing'), t('This copy goes offline; the others carry on'), () => {
           close()
           stopSharing(this.host.session, store)
