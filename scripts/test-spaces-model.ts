@@ -2687,5 +2687,37 @@ function fsTable(f: string): string {
     'the static file-manager preview has no theme of its own — it is the author’s document')
 }
 
+// ---- THE `/` MENU IS NOT ENGLISH-ONLY ---------------------------------------
+// Block specs carry `label`/`hint` in a data table and the editor renders them
+// with `t(item.label)`. The i18n sweep anchors on a LITERAL `t('…')`, so it
+// never saw them: the slash menu, the Insert dropdown and ⌘K's block results
+// were English in all eight languages, for every block type, from the day the
+// table was written.
+//
+// The second half is the part worth pinning. Adding the strings to the
+// catalogs did NOT fix it — the packer builds PACKED from the swept key list,
+// so a catalog entry for a key the sweep misses is dropped on the way into the
+// shell. The catalogs read 504/504 complete while the shell shipped none of
+// them. Only teaching the SWEEP about them works.
+{
+  const fs = await import('node:fs')
+  const sweep = fs.readFileSync(new URL('../scripts/build-spaces-i18n.mjs', import.meta.url), 'utf8')
+  const packed = fs.readFileSync(new URL('../spaces/src/i18n/packed.ts', import.meta.url), 'utf8')
+
+  ok(/blocks\.ts'\)/.test(sweep) && /label\|hint/.test(sweep),
+    'the key sweep reads block spec labels and hints, not only literal t() calls')
+  for (const label of ['Bulleted list', 'Callout', 'Board or list', 'Video or audio']) {
+    ok(packed.includes(JSON.stringify(label)),
+      `"${label}" reaches the packed table, so the menu can be translated`)
+  }
+  // SYNTAX IS NOT LANGUAGE: a markdown trigger is what you literally type.
+  // Demanding eight translations of "-" would be noise in every catalog.
+  for (const syntax of ['"-"', '"1."', '"---"', '"[]"']) {
+    ok(!new RegExp('^\\s*' + syntax.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':', 'm').test(packed),
+      `${syntax} is a markdown trigger and stays out of the catalogs`)
+  }
+}
+
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
