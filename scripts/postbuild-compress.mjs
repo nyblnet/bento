@@ -252,6 +252,11 @@ const linkedRe = /<style[^>]*\brel="stylesheet"[^>]*>([\s\S]*?)<\/style>/
 const styleM = html.match(linkedRe)
   ?? headPart.match(/<style(?=[\s>])[^>]*>([\s\S]*?)<\/style>/)
 if (!styleM) throw new Error('app stylesheet not found')
+// Belt for the braces above: a matched block that is not CSS means the
+// extractor grabbed the wrong <style> again — refuse loudly, never ship it.
+if (!styleM[1].includes('{') || styleM[1].trimStart().startsWith('<')) {
+  throw new Error('extracted app stylesheet does not look like CSS')
+}
 
 const js = mod[1]
 const css = styleM[1]
