@@ -965,6 +965,19 @@ html, body {
 .dx-gate h1 { font-size: 20px; margin: 0 0 8px; }
 .dx-gate p { color: var(--muted); margin: 0 0 14px; }
 .dx-gate .dx-btn { margin-right: 8px; }
+/* The two lines under the raw block. The WARNING is the one that has to carry:
+   it appears only when the block could not be parsed, so its keys are still in
+   the text on screen and on the clipboard. `--accent-ink` is the token the
+   theme rig guards; a bare colour here is how the filtered-footer tint shipped
+   drawing nothing for a week. */
+.dx-gate-warn {
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.dx-gate-note { color: var(--muted); font-size: 13px; }
 .dx-gate code {
   display: block;
   background: var(--panel);

@@ -423,6 +423,8 @@ export const zhHant: Catalog = {
   "Save": "儲存",
   "Save a copy…": "儲存副本…",
   "Save an untouched copy": "儲存一份未經更動的副本",
+  "This block is not readable as JSON, so its collaboration keys could not be removed from what is shown or copied. Use “Save an untouched copy” to keep the file, and take care where you paste this.": "此資料區塊無法以 JSON 讀取，因此未能從顯示與複製的內容中移除協作金鑰。請使用「儲存原樣副本」保留檔案，並注意貼上的位置。",
+  "The collaboration keys have been left out of what is shown and copied. “Save an untouched copy” keeps the file exactly as it arrived.": "協作金鑰已從顯示與複製的內容中排除。「儲存原樣副本」會完整保留收到的檔案。",
   "Save anyway?": "仍要儲存嗎？",
   "Save as new workbook…": "另存為新活頁簿…",
   "Save as template…": "另存為範本…",

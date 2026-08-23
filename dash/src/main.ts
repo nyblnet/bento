@@ -38,7 +38,7 @@ import { installStory } from './story.ts'
 import { Dashboard } from './dashboard.ts'
 import { SyncSession } from './sync/session.ts'
 import { mountPeople } from './sync/people.ts'
-import { ridBase, ridBlockFor } from './model.ts'
+import { ridBase, ridBlockFor, docForExport } from './model.ts'
 import { setRidBlock } from './rowcol.ts'
 import { importXlsx, installNames, exportXlsx, xlsxFileName } from './xlsx.ts'
 import { runPivot, mountPivot, defaultPivot, newPivotSheet, type PivotSpec } from './pivot.ts'
@@ -233,9 +233,51 @@ function refuse(res: Extract<ParseResult, { ok: false }>): void {
     `<button class="dx-btn" id="dx-download">${t('Save an untouched copy')}</button>` +
     `</div>`
   const raw = readEmbeddedDoc() ?? ''
-  document.getElementById('dx-raw')!.textContent = raw.slice(0, 4000) || t('(the document block is empty)')
+
+  // THIS SCREEN SHOWED AND COPIED THE CREDENTIALS. #338 stripped `collab` from
+  // About's "Copy document JSON"; this is the OTHER button with that label, and
+  // it was missed because it copies the raw block rather than a stringified
+  // document — so the rig, which looks for a document reaching a clipboard,
+  // could not see it either.
+  //
+  // It matters more here than it looks. The refusal a reader actually hits is
+  // `format` — a workbook written by a NEWER dash, or another Bento app — and
+  // that block is perfectly good JSON with live keys in it. The screen invites
+  // exactly the wrong next step twice over: it prints the text under "take the
+  // contents out below", and an error screen is the thing people screenshot and
+  // paste into a chat window.
+  //
+  // So: parse what we can and strip through the SAME `docForExport` the other
+  // button uses — one stripper, and it removes rather than allow-lists. When
+  // the block is not JSON at all there is nothing to strip safely, and
+  // recovering the reader's data matters more than tidiness, so the raw text
+  // stands and the note says what is in it. "Save an untouched copy" beside
+  // this is the byte-exact route either way, which is why stripping here costs
+  // nothing.
+  const stripped = ((): { text: string; safe: boolean } => {
+    try {
+      const o: unknown = JSON.parse(raw)
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return { text: raw, safe: false }
+      if (!('collab' in (o as Record<string, unknown>))) return { text: raw, safe: true }
+      return { text: JSON.stringify(docForExport(o as never), null, 2), safe: true }
+    } catch { return { text: raw, safe: false } }
+  })()
+
+  const shown = stripped.text
+  document.getElementById('dx-raw')!.textContent = shown.slice(0, 4000) || t('(the document block is empty)')
+  if (raw && !stripped.safe && raw.includes('"collab"')) {
+    const warn = document.createElement('p')
+    warn.className = 'dx-gate-warn'
+    warn.textContent = t('This block is not readable as JSON, so its collaboration keys could not be removed from what is shown or copied. Use “Save an untouched copy” to keep the file, and take care where you paste this.')
+    document.getElementById('dx-raw')!.after(warn)
+  } else if (shown !== raw) {
+    const said = document.createElement('p')
+    said.className = 'dx-gate-note'
+    said.textContent = t('The collaboration keys have been left out of what is shown and copied. “Save an untouched copy” keeps the file exactly as it arrived.')
+    document.getElementById('dx-raw')!.after(said)
+  }
   document.getElementById('dx-copy')!.addEventListener('click', () => {
-    void navigator.clipboard?.writeText(raw)
+    void navigator.clipboard?.writeText(shown)
   })
   document.getElementById('dx-download')!.addEventListener('click', () => {
     // the file exactly as it arrived — no parse, no re-serialize

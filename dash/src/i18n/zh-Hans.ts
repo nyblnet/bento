@@ -423,6 +423,8 @@ export const zhHans: Catalog = {
   "Save": "保存",
   "Save a copy…": "保存副本…",
   "Save an untouched copy": "保存一份原样副本",
+  "This block is not readable as JSON, so its collaboration keys could not be removed from what is shown or copied. Use “Save an untouched copy” to keep the file, and take care where you paste this.": "此数据块无法按 JSON 读取，因此未能从显示和复制的内容中移除协作密钥。请使用“保存原样副本”保留文件，并注意粘贴位置。",
+  "The collaboration keys have been left out of what is shown and copied. “Save an untouched copy” keeps the file exactly as it arrived.": "协作密钥已从显示和复制的内容中排除。“保存原样副本”会完整保留收到的文件。",
   "Save anyway?": "仍要保存吗？",
   "Save as new workbook…": "另存为新工作簿…",
   "Save as template…": "另存为模板…",

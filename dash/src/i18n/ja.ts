@@ -423,6 +423,8 @@ export const ja: Catalog = {
   "Save": "保存",
   "Save a copy…": "コピーを保存…",
   "Save an untouched copy": "手を加えていないコピーを保存",
+  "This block is not readable as JSON, so its collaboration keys could not be removed from what is shown or copied. Use “Save an untouched copy” to keep the file, and take care where you paste this.": "このブロックは JSON として読み取れないため、表示およびコピーされる内容から共同編集の鍵を取り除けませんでした。ファイルを残すには「元のままのコピーを保存」を使い、貼り付け先にご注意ください。",
+  "The collaboration keys have been left out of what is shown and copied. “Save an untouched copy” keeps the file exactly as it arrived.": "共同編集の鍵は、表示およびコピーされる内容から除かれています。「元のままのコピーを保存」は届いたままのファイルを保持します。",
   "Save anyway?": "このまま保存しますか？",
   "Save as new workbook…": "新しいブックとして保存…",
   "Save as template…": "テンプレートとして保存…",

@@ -423,6 +423,8 @@ export const de: Catalog = {
   "Save": "Speichern",
   "Save a copy…": "Kopie speichern…",
   "Save an untouched copy": "Eine unveränderte Kopie speichern",
+  "This block is not readable as JSON, so its collaboration keys could not be removed from what is shown or copied. Use “Save an untouched copy” to keep the file, and take care where you paste this.": "Dieser Block ist nicht als JSON lesbar, daher konnten seine Kollaborationsschlüssel nicht aus dem Angezeigten und Kopierten entfernt werden. Nutze „Unveränderte Kopie speichern“, um die Datei zu behalten, und achte darauf, wohin du dies einfügst.",
+  "The collaboration keys have been left out of what is shown and copied. “Save an untouched copy” keeps the file exactly as it arrived.": "Die Kollaborationsschlüssel wurden aus dem Angezeigten und Kopierten herausgelassen. „Unveränderte Kopie speichern“ behält die Datei genau so, wie sie ankam.",
   "Save anyway?": "Trotzdem speichern?",
   "Save as new workbook…": "Als neue Arbeitsmappe speichern…",
   "Save as template…": "Als Vorlage speichern…",

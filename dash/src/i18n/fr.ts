@@ -423,6 +423,8 @@ export const fr: Catalog = {
   "Save": "Enregistrer",
   "Save a copy…": "Enregistrer une copie…",
   "Save an untouched copy": "Enregistrer une copie intacte",
+  "This block is not readable as JSON, so its collaboration keys could not be removed from what is shown or copied. Use “Save an untouched copy” to keep the file, and take care where you paste this.": "Ce bloc n’est pas lisible en JSON : ses clés de collaboration n’ont pas pu être retirées de ce qui est affiché et copié. Utilisez « Enregistrer une copie intacte » pour conserver le fichier, et faites attention à l’endroit où vous collez ceci.",
+  "The collaboration keys have been left out of what is shown and copied. “Save an untouched copy” keeps the file exactly as it arrived.": "Les clés de collaboration ont été retirées de ce qui est affiché et copié. « Enregistrer une copie intacte » conserve le fichier tel qu’il est arrivé.",
   "Save anyway?": "Enregistrer quand même ?",
   "Save as new workbook…": "Enregistrer comme nouveau classeur…",
   "Save as template…": "Enregistrer comme modèle…",

@@ -421,5 +421,42 @@ for (const app of SHARE_APPS) {
     'and replaceWorkbook itself is untouched, so Duplicate-as-new-workbook still forks its identity')
 }
 
+// --- the OTHER button with that label -----------------------------------------
+//
+// dash has TWO "Copy document JSON" buttons. #338 fixed About's. This is the
+// one on the REFUSAL surface — the screen shown when a file cannot be parsed —
+// and it was missed by the fix and by this rig alike, because it copies the raw
+// embedded block rather than a stringified document, so a check looking for a
+// document reaching a clipboard cannot see it.
+//
+// It also PRINTS that block on screen, and an error screen is the thing people
+// screenshot and paste into a chat window. A file whose `format` string is not
+// `bento/dash` — a slides deck, a space — refuses here and is perfectly good
+// JSON with live keys in it. (A newer VERSION does not refuse: format
+// additivity means it opens. Checked rather than assumed.)
+//
+// Parse what parses, strip through the SAME `docForExport`, and when the block
+// is not JSON at all leave it alone and SAY so — recovering somebody's data
+// matters more than tidiness, and "Save an untouched copy" beside it is the
+// byte-exact route regardless.
+{
+  const main = readFileSync(new URL('../dash/src/main.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+  const gate = main.slice(main.indexOf('function refuse('), main.indexOf('function refuse(') + 3000)
+
+  ok(/docForExport\(/.test(gate),
+    'the refusal screen strips through docForExport — the same stripper, not a second one')
+  ok(!/writeText\(raw\)/.test(gate),
+    'and the clipboard no longer gets the raw block with the keys still in it')
+  ok(/textContent = shown\./.test(gate),
+    'and the block PRINTED on screen is the stripped one too — an error screen gets screenshotted')
+  ok(/catch \{ return \{ text: raw, safe: false \} \}/.test(gate),
+    'an unparseable block still yields its raw text, because recovering the data is what this screen is for')
+  ok(/dx-gate-warn/.test(gate) && /take care where you paste this/.test(gate),
+    'and in that case it says the keys could not be removed, rather than leaving it to be discovered')
+  ok(/Save an untouched copy/.test(gate),
+    'with the byte-exact route still offered beside it, which is why stripping here costs nothing')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

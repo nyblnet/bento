@@ -423,6 +423,8 @@ export const es: Catalog = {
   "Save": "Guardar",
   "Save a copy…": "Guardar una copia…",
   "Save an untouched copy": "Guardar una copia intacta",
+  "This block is not readable as JSON, so its collaboration keys could not be removed from what is shown or copied. Use “Save an untouched copy” to keep the file, and take care where you paste this.": "Este bloque no se puede leer como JSON, así que no se han podido quitar sus claves de colaboración de lo que se muestra y se copia. Usa «Guardar una copia intacta» para conservar el archivo y ten cuidado con dónde lo pegas.",
+  "The collaboration keys have been left out of what is shown and copied. “Save an untouched copy” keeps the file exactly as it arrived.": "Las claves de colaboración se han dejado fuera de lo que se muestra y se copia. «Guardar una copia intacta» conserva el archivo tal y como llegó.",
   "Save anyway?": "¿Guardar de todos modos?",
   "Save as new workbook…": "Guardar como libro nuevo…",
   "Save as template…": "Guardar como plantilla…",
