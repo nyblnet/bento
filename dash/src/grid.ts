@@ -2503,7 +2503,20 @@ export class Grid {
           ? (this.findCur === fk ? ' dg-find dg-find-cur' : ' dg-find')
           : ''
         let st = `width:${this.canvasColW(s, c)}px;text-align:${canvasAlign(cell, v)}${hst}`
-        if (h !== ROW_H) st += `;line-height:${h - 1}px`
+        // A TALL ROW CENTRES ITS TEXT — unless the cell WRAPS, and then this
+        // same line hides it. `line-height` set to the row height is how one
+        // line sits in the middle of a tall row; on a wrapped cell it becomes
+        // the height of EVERY line, so a three-line sentence in a 56px row
+        // measured 165px of content in a 55px box and lines two and three were
+        // simply not on screen. Nothing looked broken: the first line rendered
+        // and stopped mid-sentence, which reads as a text that was too long
+        // rather than a layout that swallowed it.
+        //
+        // Two features that never met — row heights predate wrapping, and each
+        // is correct alone. A wrapped cell gets normal leading and sits at the
+        // top, which is what wrapping is for.
+        if (h !== ROW_H && !cell?.wrap) st += `;line-height:${h - 1}px`
+        else if (cell?.wrap) st += ';line-height:1.35;align-self:start;padding-top:3px'
         // The cell's OWN appearance. These were three hand-written lines for
         // the three fields `CanvasCell` carried since commit one; both kinds
         // now share one vocabulary, so this is `appearanceCss` and the dataset

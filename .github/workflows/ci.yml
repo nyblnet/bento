@@ -934,6 +934,20 @@ jobs:
         # build and from hand-edited JSON, which PLATFORM §7 makes a way in.
         run: node scripts/test-dash-coltype.ts
 
+      - name: dash starter workbook
+        # The starter ships INSIDE the shell, so it is what bento.page shows and
+        # what every downloaded copy opens with — the one document in this repo
+        # a stranger is guaranteed to see — and nothing guarded it. Two families:
+        # that it is a valid, self-consistent workbook (a starter that trips
+        # validateDoc ships the app's own warning banner to every new reader on
+        # first open), and that the NUMBERS are right. The second is the one that
+        # will catch something: the Scratch sheet reads across into the dataset
+        # by ADDRESS, so reordering, inserting or hiding a column silently
+        # re-points two totals on another sheet, and nothing about that is
+        # visible in a diff. The addresses are pinned by column NAME and the
+        # totals computed through the shipping code.
+        run: node scripts/test-dash-starter.ts
+
       - name: Data validation rig
         # In-cell dropdowns and typed entry rules — Excel's Data Validation,
         # which is NOT dash's validate.ts (that one asks whether a workbook
