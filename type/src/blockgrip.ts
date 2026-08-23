@@ -28,7 +28,7 @@
 
 import { t } from './i18n.ts';
 import { registerKey, registerPaginated, type FeatureContext } from './features.ts';
-import { moveUnit, units, canMove } from './move.ts';
+import { moveUnit, moveUnitTo, units, canMove, boundaries } from './move.ts';
 import type { Block } from './model.ts';
 
 const GRIP_ICON =
@@ -48,6 +48,16 @@ export function move(ctx: FeatureContext, id: string, dir: -1 | 1): boolean {
   // caret wherever the old offset now points would put it in a different
   // paragraph, which is how you keep typing into the wrong block.
   if (caret) ctx.editor.setCaret(caret);
+  ctx.refresh();
+  return true;
+}
+
+/** Drop the unit before `target`, which the engine snaps to a unit boundary. */
+function moveTo(ctx: FeatureContext, id: string, target: number): boolean {
+  const next = moveUnitTo(ctx.store.doc.body, id, target);
+  if (!next) return false;
+  ctx.store.commit(d => { d.body = next; });
+  ctx.editor.render();
   ctx.refresh();
   return true;
 }
@@ -120,6 +130,126 @@ function gripMenu(ctx: FeatureContext, id: string, at: HTMLElement): void {
 }
 
 /**
+ * ONE grip at a time — the block under the pointer.
+ *
+ * Revealing every grip on page hover put a column of handles down the margin
+ * of a document at rest, which is noise: nine of them beside a nine-paragraph
+ * contract, only ever one of which is wanted. bento/spaces reveals per BLOCK
+ * (.sp-b:hover > .sp-gutter) and that is the right behaviour; it is only
+ * expressed differently here because the grips live in an overlay rather than
+ * inside the block, so CSS cannot do it and this listener must.
+ */
+function trackPointer(paper: HTMLElement): void {
+  if ((paper as HTMLElement & { _gripTracked?: boolean })._gripTracked) return;
+  (paper as HTMLElement & { _gripTracked?: boolean })._gripTracked = true;
+
+  const wrap = paper.parentElement;
+  wrap?.addEventListener('pointermove', e => {
+    if (dragging) return;                       // a drag owns the pointer
+    const node = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const block = node?.closest('[data-id]') as HTMLElement | null;
+    // While the pointer is IN the margin the nearest grip stays lit, or moving
+    // towards a grip to press it would put it out.
+    const overGrip = node?.closest('.t-grip') as HTMLElement | null;
+    const want = overGrip?.dataset.for ?? blockUnitId(block?.dataset.id);
+    for (const g of wrap.querySelectorAll<HTMLElement>('.t-grip')) {
+      g.classList.toggle('on', !!want && g.dataset.for === want);
+    }
+  });
+  wrap?.addEventListener('pointerleave', () => {
+    if (dragging) return;
+    for (const g of wrap.querySelectorAll<HTMLElement>('.t-grip')) g.classList.remove('on');
+  });
+}
+
+/** The id the grip for this block carries — a unit's FIRST block. */
+let unitOf: (id: string | undefined) => string | undefined = () => undefined;
+const blockUnitId = (id: string | undefined) => unitOf(id);
+
+// ────────────────────────────────────────────────────────────────── drag
+
+let dragging: { id: string; from: number } | null = null;
+
+/** Where a drop at this y would go, and the y to draw the line at. */
+function dropAt(ctx: FeatureContext, paper: HTMLElement, clientY: number):
+    { target: number; y: number } | null {
+  const body = ctx.store.doc.body;
+  const top0 = paper.getBoundingClientRect().top;
+  const points: Array<{ target: number; y: number }> = [];
+  for (const b of boundaries(body)) {
+    if (b < body.length) {
+      const el = paper.querySelector<HTMLElement>(`[data-id="${CSS.escape(body[b].id)}"]`);
+      if (el) points.push({ target: b, y: el.getBoundingClientRect().top });
+    } else {
+      const last = body[body.length - 1];
+      const el = paper.querySelector<HTMLElement>(`[data-id="${CSS.escape(last.id)}"]`);
+      if (el) points.push({ target: b, y: el.getBoundingClientRect().bottom });
+    }
+  }
+  if (!points.length) return null;
+  const best = points.reduce((a, b) => Math.abs(b.y - clientY) < Math.abs(a.y - clientY) ? b : a);
+  return { target: best.target, y: best.y - top0 };
+}
+
+function startDrag(e: PointerEvent, ctx: FeatureContext, grip: HTMLElement,
+                   id: string, paper: HTMLElement): void {
+  e.preventDefault();
+  const startY = e.clientY;
+  const layer = grip.parentElement;
+  let line: HTMLElement | null = null;
+  let moved = false;
+
+  const onMove = (ev: PointerEvent) => {
+    // A few pixels of slop before it is a drag, so a click that wobbles still
+    // opens the menu rather than starting a move nobody asked for.
+    if (!moved && Math.abs(ev.clientY - startY) < 4) return;
+    if (!moved) {
+      moved = true;
+      dragging = { id, from: 0 };
+      grip.classList.add('t-grip-dragging');
+      document.body.classList.add('t-dragging');
+      line = document.createElement('div');
+      line.className = 't-droptip';
+      layer?.appendChild(line);
+    }
+    const at = dropAt(ctx, paper, ev.clientY);
+    if (at && line) line.style.top = `${at.y}px`;
+  };
+
+  const onUp = (ev: PointerEvent) => {
+    try { grip.releasePointerCapture?.(ev.pointerId); } catch { /* never captured */ }
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    grip.classList.remove('t-grip-dragging');
+    document.body.classList.remove('t-dragging');
+    line?.remove();
+    const wasDrag = moved;
+    dragging = null;
+    if (!wasDrag) {
+      // A click, not a drag — but the `click` event that follows this
+      // pointerup bubbles to the document listener that closes menus, so
+      // opening synchronously here opened and shut it in one gesture. The
+      // timeout puts the open AFTER that click has been dispatched.
+      setTimeout(() => gripMenu(ctx, id, grip), 0);
+      return;
+    }
+    const at = dropAt(ctx, paper, ev.clientY);
+    if (at) moveTo(ctx, id, at.target);
+  };
+
+  // LISTENERS FIRST, capture second and best-effort. setPointerCapture throws
+  // NotFoundError when the pointer is not active — always for a synthetic
+  // event, and possible for a real one that was released or captured
+  // elsewhere. Calling it first meant one throw took the whole gesture with
+  // it: no drag AND no menu, because the pointerup handler was never attached
+  // either. The drag does not need capture — every listener is on `window` —
+  // so a failure here should cost nothing.
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  try { grip.setPointerCapture?.(e.pointerId); } catch { /* not an active pointer */ }
+}
+
+/**
  * Paint a grip beside every unit.
  *
  * Runs from the PAGINATED hook: positions are only knowable once the paginator
@@ -150,6 +280,15 @@ function paintGrips(ctx: FeatureContext, _metrics: unknown, paper: HTMLElement):
   const body = ctx.store.doc.body;
   if (body.length < 2) return;                 // nothing to reorder
 
+  // Which unit any block belongs to — the pointer lands on a `td` or an `li`
+  // and the grip it should light is the one on that unit's first block.
+  const owner = new Map<string, string>();
+  for (const u of units(body)) {
+    for (let k = u.start; k < u.end; k++) owner.set(body[k].id, body[u.start].id);
+  }
+  unitOf = (id) => (id ? owner.get(id) : undefined);
+  trackPointer(paper);
+
   const paperRect = paper.getBoundingClientRect();
   // Inside the page's own left margin. The 250px gutter this layout allocates
   // is on the RIGHT and already holds footnote sidenotes and comment cards, so
@@ -169,15 +308,17 @@ function paintGrips(ctx: FeatureContext, _metrics: unknown, paper: HTMLElement):
     g.type = 'button';
     g.className = 't-grip';
     g.innerHTML = GRIP_ICON;
-    g.title = isMac() ? t('Move this block (⌃⇧↑ / ⌃⇧↓)') : t('Move this block (Alt+Shift+↑ / ↓)');
+    g.title = t('Drag to move, click for options') + ' · '
+      + (isMac() ? t('⌃⇧↑ / ⌃⇧↓') : t('Alt+Shift+↑ / ↓'));
     g.setAttribute('aria-label', t('Move this block'));
     g.dataset.for = first.id;
+    g.dataset.unit = String(u.start);
     g.style.top = `${r.top - paperRect.top + 1}px`;
     g.style.insetInlineStart = `${x}px`;
     // mousedown, not click: the caret must survive pressing it, exactly as the
     // toolbar buttons do
     g.addEventListener('mousedown', e => e.preventDefault());
-    g.addEventListener('click', e => { e.stopPropagation(); gripMenu(ctx, first.id, g); });
+    g.addEventListener('pointerdown', e => startDrag(e, ctx, g, first.id, paper));
     frag.appendChild(g);
   }
   layer.appendChild(frag);

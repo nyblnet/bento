@@ -100,6 +100,43 @@ export function moveUnit(body: readonly Block[], id: string, dir: -1 | 1): Block
   return out;
 }
 
+/** Every index a unit may be dropped BEFORE, plus the end of the body. */
+export const boundaries = (body: readonly Block[]): number[] =>
+  [...units(body).map(u => u.start), body.length];
+
+/**
+ * Move a unit so it sits before `target`.
+ *
+ * Drag needs this: a drop is an arbitrary destination, not a step. The target
+ * is SNAPPED to the nearest unit boundary rather than taken literally, so a
+ * drop can never land inside a table or between two bullets however sloppy the
+ * gesture was — the same guarantee moveUnit gives, enforced in the engine
+ * rather than trusted to the pointer.
+ *
+ * Returns null when the move would change nothing: dropping a unit on either
+ * of its own edges is the commonest gesture in a drag that the user thought
+ * better of, and it should not land on the undo stack.
+ */
+export function moveUnitTo(body: readonly Block[], id: string, target: number): Block[] | null {
+  const i = body.findIndex(b => b.id === id);
+  if (i < 0) return null;
+  const u = unitAt(body, i);
+
+  const edges = boundaries(body);
+  const snapped = edges.reduce((best, e) =>
+    Math.abs(e - target) < Math.abs(best - target) ? e : best, edges[0]);
+
+  // its own two edges are no-ops
+  if (snapped === u.start || snapped === u.end) return null;
+
+  const block = body.slice(u.start, u.end);
+  const rest = [...body.slice(0, u.start), ...body.slice(u.end)];
+  // after removing the unit, everything past it shifts left by its length
+  const at = snapped > u.start ? snapped - block.length : snapped;
+  rest.splice(at, 0, ...block);
+  return rest;
+}
+
 /** Can the unit containing `id` move that way? Drives the disabled state. */
 export const canMove = (body: readonly Block[], id: string, dir: -1 | 1): boolean =>
   moveUnit(body, id, dir) !== null;

@@ -966,7 +966,23 @@ html, body {
   opacity: 0; transition: opacity .12s;
   pointer-events: auto;
 }
-.t-wrap:hover .t-deco .t-grip { opacity: .7; }
+/* ONE at a time, not a column of them. Driven by script rather than :hover,
+   because the grips live in an overlay and CSS cannot ask which block the
+   pointer is over. */
+.t-deco .t-grip.on { opacity: .7; }
+.t-deco .t-grip.t-grip-dragging { opacity: 1; cursor: grabbing; }
+/* While a drag is live the whole page shows the grabbing cursor, or it
+   reverts the moment the pointer leaves the 26px handle. */
+body.t-dragging, body.t-dragging * { cursor: grabbing !important; user-select: none; }
+/* Where the block will land. */
+.t-deco .t-droptip {
+  position: absolute; inset-inline: 0; height: 2px; margin-top: -1px;
+  background: var(--accent); border-radius: 2px; pointer-events: none;
+}
+.t-deco .t-droptip::before {
+  content: ''; position: absolute; inset-inline-start: -3px; top: -3px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+}
 .t-deco .t-grip:hover, .t-deco .t-grip:focus-visible {
   opacity: 1; color: var(--paper-ink-2);
   background: color-mix(in srgb, var(--paper-ink) 8%, transparent);

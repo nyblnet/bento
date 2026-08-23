@@ -120,6 +120,38 @@ console.log('\n— up then down is the identity —');
   eq(ids(moveUnit(down, 'a', -1)!), ids(body), 'moving down then up restores the order');
 }
 
+console.log('\n— dropping a unit anywhere (what a drag does) —');
+{
+  const { moveUnitTo, boundaries } = await import('../type/src/move.ts');
+  const body = [p('a'), li('l1'), li('l2'), cell('t1', 't'), cell('t2', 't'), p('z')];
+  eq(boundaries(body), [0, 1, 3, 5, 6], 'the legal drop points are the unit edges and the end');
+
+  eq(ids(moveUnitTo(body, 'a', 6)!), ['l1', 'l2', 't1', 't2', 'z', 'a'], 'a paragraph dropped at the end');
+  eq(ids(moveUnitTo(body, 'z', 0)!), ['z', 'a', 'l1', 'l2', 't1', 't2'], 'and one dropped at the start');
+  eq(ids(moveUnitTo(body, 'l1', 6)!), ['a', 't1', 't2', 'z', 'l1', 'l2'], 'a whole list travels');
+  eq(ids(moveUnitTo(body, 't1', 1)!), ['a', 't1', 't2', 'l1', 'l2', 'z'], 'and a whole table');
+
+  // A sloppy drop must never land INSIDE a table or a list. Ties snap to the
+  // EARLIER boundary, which is arbitrary but deterministic; the UI measures in
+  // pixels, where an exact tie is vanishingly unlikely.
+  eq(ids(moveUnitTo(body, 'a', 4)!), ['l1', 'l2', 'a', 't1', 't2', 'z'],
+     'a drop aimed between two table cells snaps to the table edge');
+  eq(ids(moveUnitTo(body, 'z', 2)!), ['a', 'z', 'l1', 'l2', 't1', 't2'],
+     'and one aimed between two bullets snaps out of the list');
+  ok(moveUnitTo(body, 'a', 2) === null,
+     'a drop aimed into the list from the block right above it snaps back to where it already is');
+
+  ok(moveUnitTo(body, 'a', 0) === null, 'dropping a unit on its own leading edge is a no-op');
+  ok(moveUnitTo(body, 'a', 1) === null, 'and on its own trailing edge');
+  ok(moveUnitTo(body, 'nope', 0) === null, 'an unknown id moves nothing');
+
+  for (const target of [0, 1, 2, 3, 4, 5, 6]) {
+    const out = moveUnitTo(body, 'l1', target);
+    if (!out) continue;
+    eq(ids(out).slice().sort(), ids(body).slice().sort(), `drop at ${target} keeps every block`);
+  }
+}
+
 console.log('\n— the shortcut matcher, which every other shortcut shares —');
 {
   const { matchKey, registerKey } = await import('../type/src/features.ts');
