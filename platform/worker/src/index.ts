@@ -15,6 +15,8 @@
 //   GET  /api/decks/:id         fetch a deck's doc JSON — OWNER ONLY
 //   PATCH /api/decks/:id        replace a deck's doc JSON — OWNER ONLY
 //   PATCH /api/decks/:id/access  change the deck's access level — OWNER ONLY
+//   PATCH /api/decks/:id/title  rename a deck (sets doc.title) — OWNER ONLY
+//   DELETE /api/decks/:id       permanently delete a deck (D1 row + R2 doc/assets) — OWNER ONLY
 //   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
 //   GET  /d/:id                the deck spliced into the shell (a real .bento.html page)
 //   GET  /d/:id/download        same, as a downloadable attachment
@@ -50,6 +52,7 @@ import {
   getDeckMeta,
   replaceDeckDoc,
   setDeckAccess,
+  deleteDeck,
   putAsset,
   getAsset,
   listDecks,
@@ -74,7 +77,7 @@ import {
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
+  'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
   'access-control-allow-headers': 'content-type,authorization',
 }
 
@@ -232,6 +235,33 @@ async function handleSetAccess(req: Request, env: Env, id: string): Promise<Resp
   }
   await setDeckAccess(env, id, access)
   return json({ ok: true, access })
+}
+
+async function handleRename(req: Request, env: Env, id: string): Promise<Response> {
+  const doc = await getDeckDoc(env, id)
+  if (!doc) return notFound()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const title = (body as { title?: unknown })?.title
+  if (typeof title !== 'string' || !title.trim()) {
+    return json({ error: 'title must be a non-empty string' }, { status: 422 })
+  }
+  // The deck's displayed title IS doc.title — there's no separate cosmetic
+  // label — so renaming rewrites the document, same as any other edit.
+  // replaceDeckDoc's own titleOf() trims/truncates/defaults it consistently
+  // with every other title write path (create, live edits).
+  await replaceDeckDoc(env, id, { ...(doc as Record<string, unknown>), title: title.trim() })
+  return json({ ok: true })
+}
+
+async function handleDelete(env: Env, id: string): Promise<Response> {
+  if (!(await getDeckMeta(env, id))) return notFound()
+  await deleteDeck(env, id)
+  return json({ ok: true })
 }
 
 async function handleCompile(req: Request): Promise<Response> {
@@ -403,6 +433,11 @@ export default {
           if (denied) return denied
           return await handleReplace(req, env, parts[2]!)
         }
+        if (parts.length === 3 && req.method === 'DELETE') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleDelete(env, parts[2]!)
+        }
         if (parts.length === 4 && parts[3] === 'assets' && req.method === 'POST') {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
@@ -412,6 +447,11 @@ export default {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
           return await handleSetAccess(req, env, parts[2]!)
+        }
+        if (parts.length === 4 && parts[3] === 'title' && req.method === 'PATCH') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleRename(req, env, parts[2]!)
         }
       }
 

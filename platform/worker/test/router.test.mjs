@@ -47,6 +47,15 @@ function makeR2() {
         },
       }
     },
+    async list(opts) {
+      const prefix = opts?.prefix ?? ''
+      const objectsList = [...objects.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key }))
+      return { objects: objectsList, truncated: false }
+    },
+    async delete(keys) {
+      for (const key of Array.isArray(keys) ? keys : [keys]) objects.delete(key)
+    },
+    _objects: objects, // test-only escape hatch, not part of the real R2Bucket API
   }
 }
 
@@ -81,6 +90,9 @@ function makeD1() {
           } else if (sql.startsWith('DELETE FROM sessions')) {
             const [id] = boundArgs
             sessions.delete(id)
+          } else if (sql.startsWith('DELETE FROM decks')) {
+            const [id] = boundArgs
+            decks.delete(id)
           } else if (sql.startsWith('INSERT INTO decks')) {
             const [id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access] = boundArgs
             decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access })
@@ -650,6 +662,144 @@ await check('PATCH /api/decks/:id/access changes the level, unlocking the deck f
   const viewRes = await worker.fetch(new Request(`https://platform.example/d/${viewDeckId}`), env)
   const { text: viewText } = await readBody(viewRes)
   assert(!viewText.includes('"readonly":true'), 'the deck should now serve as editable to anonymous viewers')
+})
+
+// --- rename ------------------------------------------------------------
+
+await check('PATCH /api/decks/:id/title without a session is rejected', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deckId}/title`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Hijacked title' }),
+    }),
+    env,
+  )
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/title for an unknown deck is 404', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks/does-not-exist/title', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ title: 'New name' }),
+    }),
+    env,
+  )
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/title rejects a blank title', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deckId}/title`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ title: '   ' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/title renames the deck (rewrites doc.title, not just a label)', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deckId}/title`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ title: 'Renamed from the sidebar' }),
+    }),
+    env,
+  )
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === deckId)
+  assert(listed?.title === 'Renamed from the sidebar', 'sidebar listing should show the new title')
+
+  const docRes = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deckId}`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: docData } = await readBody(docRes)
+  assert(docData.doc.title === 'Renamed from the sidebar', "the deck's own doc.title must change, not a separate label")
+
+  const viewRes = await worker.fetch(new Request(`https://platform.example/d/${deckId}`), env)
+  const { text: viewText } = await readBody(viewRes)
+  assert(viewText.includes('Renamed from the sidebar'), 'the spliced view should reflect the new title too')
+})
+
+// --- delete --------------------------------------------------------------
+
+let deleteMeDeckId
+await check('DELETE /api/decks/:id without a session is rejected', async () => {
+  const createRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Delete me' } }),
+    }),
+    env,
+  )
+  const { data: created } = await readBody(createRes)
+  deleteMeDeckId = created.id
+
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deleteMeDeckId}`, { method: 'DELETE' }),
+    env,
+  )
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('DELETE /api/decks/:id for an unknown deck is 404', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks/does-not-exist', {
+      method: 'DELETE',
+      headers: { cookie: ownerCookie },
+    }),
+    env,
+  )
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+await check('DELETE /api/decks/:id removes the deck and its assets, and both become 404', async () => {
+  const uploadRes = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deleteMeDeckId}/assets`, {
+      method: 'POST',
+      headers: { 'content-type': 'image/png', cookie: ownerCookie },
+      body: new Uint8Array([9, 9, 9]),
+    }),
+    env,
+  )
+  const { data: asset } = await readBody(uploadRes)
+  const assetUrlBeforeDelete = await worker.fetch(new Request(`https://platform.example${asset.path}`, { headers: { cookie: ownerCookie } }), env)
+  assert(assetUrlBeforeDelete.status === 200, 'sanity check: asset should exist before delete')
+
+  const delRes = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deleteMeDeckId}`, {
+      method: 'DELETE',
+      headers: { cookie: ownerCookie },
+    }),
+    env,
+  )
+  assert(delRes.status === 200, `expected 200, got ${delRes.status}`)
+
+  const viewRes = await worker.fetch(new Request(`https://platform.example/d/${deleteMeDeckId}`), env)
+  assert(viewRes.status === 404, `deleted deck's /d/:id expected 404, got ${viewRes.status}`)
+
+  const assetRes = await worker.fetch(new Request(`https://platform.example${asset.path}`), env)
+  assert(assetRes.status === 404, `deleted deck's asset expected 404, got ${assetRes.status}`)
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  assert(!listData.decks.some((d) => d.id === deleteMeDeckId), 'deleted deck should no longer be listed')
 })
 
 const exampleOutline = {
