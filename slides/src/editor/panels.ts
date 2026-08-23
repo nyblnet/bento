@@ -435,7 +435,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
+    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —

@@ -141,6 +141,26 @@ export interface TextElement extends ElementBase {
   placeholder?: string
 }
 
+/**
+ * A code snippet. DEMO BUILD.
+ *
+ * Stores RAW TEXT and a language name — never highlighted HTML. Highlighting is
+ * derived at render time by kernel/src/tokenize.ts, so the document carries no
+ * grammar, no theme and no markup, and re-highlights itself for free when the
+ * text is edited.
+ */
+export interface CodeElement extends ElementBase {
+  type: 'code'
+  /** The raw source. The only thing about the code the document stores. */
+  content: string
+  /** A key into the tokenizer's table: 'ts', 'py', 'rust', 'diff', ... */
+  lang: string
+  /** Base colour, used by plain tokens. The other classes tint away from it. */
+  color: string
+  fontSize: number
+  lineHeight: number
+}
+
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
 
 /** Linear gradient fill. Colors are any CSS color, including rgba(). */
@@ -300,7 +320,7 @@ export interface MediaElement extends ElementBase {
 }
 
 export type SlideElement =
-  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement
+  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement | CodeElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while

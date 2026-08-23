@@ -4,6 +4,7 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
+import { tokensForGroup } from './codetokens'
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates } from './model'
 import { chartSnapshotSvg } from './charts'
@@ -76,6 +77,24 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
 }
 
 /** Resolve "asset:<key>" references against the document's asset table. */
+
+/**
+ * Seven classes, seven colours. DEMO BUILD — these would come from the deck's
+ * own palette rather than being fixed here, which is the point of not shipping
+ * a TextMate theme: code that matches the deck instead of matching GitHub.
+ */
+const CODE_COLORS: Record<string, string> = {
+  c: '#6b7f8f', // comment
+  s: '#c98a3e', // string
+  n: '#b0688f', // number
+  k: '#5b8def', // keyword
+  f: '#3fa9a0', // call
+  p: '#7c8794', // punctuation
+  a: '#3f9142', // diff: added
+  d: '#c25a43', // diff: removed
+  x: '',        // plain: inherit the element colour
+}
+
 export function resolveAsset(doc: BentoDoc, ref: string): string {
   return ref.startsWith('asset:') ? (doc.assets?.[ref.slice(6)] ?? '') : ref
 }
@@ -1034,6 +1053,29 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       img.draggable = false
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
+      break
+    }
+    case 'code': {
+      const code = el as any
+      const pre = document.createElement('pre')
+      pre.className = 'bento-code'
+      pre.style.cssText = `margin:0;font-family:ui-monospace,'SF Mono',Menlo,monospace;`
+        + `font-size:${code.fontSize ?? 22}px;line-height:${code.lineHeight ?? 1.45};`
+        + `white-space:pre;overflow:hidden;height:100%;color:${code.color ?? '#E7EAF0'}`
+      // The ids come from the whole morph GROUP, not this slide alone: a token
+      // keeps its identity for as long as it survives across the sequence.
+      const group = tokensForGroup(doc, el.morphId ?? el.id)
+      const toks = group.get(el.id) ?? []
+      for (const t of toks) {
+        const span = document.createElement('span')
+        span.dataset.sym = t.sym
+        span.textContent = t.v
+        const c = CODE_COLORS[t.t]
+        if (c) span.style.color = c
+        if (t.t === 'k' || t.t === 'f') span.style.fontWeight = '600'
+        pre.appendChild(span)
+      }
+      node.appendChild(pre)
       break
     }
     case 'media': {
