@@ -561,6 +561,7 @@ export const zhHans: Catalog = {
   "This workbook is open read-only, so this build will not write it.": "此工作簿以只读方式打开，当前版本不会写入它。",
   "This workbook is open read-only, so “{name}” was not opened into it.": "此工作簿以只读方式打开，因此没有把“{name}”打开到其中。",
   "This workbook is open read-only.": "此工作簿以只读方式打开。",
+  "Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.": "共享仍属于此工作簿：粘贴的 JSON 只替换内容，不会替换实时协作会话或其密钥。",
   "This workbook is {mb} MB.": "此工作簿为 {mb} MB。",
   "This workbook was written by a newer version of dash. It is open read-only so nothing is lost.": "此工作簿由更新版本的 dash 写入。为避免丢失内容，它以只读方式打开。",
   "Those changes could not be restored into this workbook.": "这些更改无法恢复到此工作簿中。",

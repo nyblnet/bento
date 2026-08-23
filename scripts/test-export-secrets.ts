@@ -383,5 +383,43 @@ for (const app of SHARE_APPS) {
     `${app}: onShareCopy does not retain the file handle — the next ⌘S must not overwrite the copy with the full document`)
 }
 
+// --- the OTHER half of the round trip: pasting one back in -------------------
+//
+// Stripping `collab` out of "Copy document JSON" is right, and it changed what
+// the documented AI round trip does on the way BACK. Both directions were
+// wrong; the strip turned the first from rare into routine.
+//
+//   · a STRIPPED paste — now the ordinary case — carried no credentials, so
+//     replacing SILENTLY ENDED the live session. Measured before the fix:
+//     sharing on / room `w-abc` before, sharing off / room gone after, nothing
+//     on screen, peers still editing.
+//   · a paste carrying SOMEBODY ELSE'S credentials silently JOINED their room.
+//     Measured: `w-MINE` became `w-THEIRS`, the next edit went out under their
+//     key, and they hold the owner key that can revoke.
+//
+// The rule is the one this file's own fix draws: a saved FILE carrying its own
+// capability is the design, and pasted text is not a file. So the room belongs
+// to the open workbook and the paste replaces content only. A dropped or opened
+// workbook is unaffected and still adopts its own room.
+{
+  const about = readFileSync(new URL('../dash/src/about.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+
+  ok(/const keep = \(store\.doc as \{ collab\?: unknown \}\)\.collab/.test(about),
+    'the paste path reads the OPEN workbook’s credentials')
+  ok(/collab: keep/.test(about),
+    'and carries them onto the pasted document, so a stripped paste cannot end the session ' +
+    'and a stranger’s paste cannot move it')
+  ok(/replaceWorkbook\(hooks, merged\)/.test(about),
+    'and it is the merged document that replaces, not the pasted one')
+
+  // NOT in replaceWorkbook itself: "Duplicate as new workbook" goes through it
+  // and mints fresh credentials deliberately. Folding the rule in there would
+  // make a fork keep its ancestor's room — the opposite of what it is for.
+  const dup = about.slice(about.indexOf('function replaceWorkbook'))
+  ok(!/collab: keep/.test(dup),
+    'and replaceWorkbook itself is untouched, so Duplicate-as-new-workbook still forks its identity')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

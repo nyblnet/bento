@@ -561,6 +561,7 @@ export const de: Catalog = {
   "This workbook is open read-only, so this build will not write it.": "Diese Arbeitsmappe ist schreibgeschützt geöffnet, dieser Build schreibt sie also nicht.",
   "This workbook is open read-only, so “{name}” was not opened into it.": "Diese Arbeitsmappe ist schreibgeschützt geöffnet, deshalb wurde „{name}“ nicht darin geöffnet.",
   "This workbook is open read-only.": "Diese Arbeitsmappe ist schreibgeschützt geöffnet.",
+  "Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.": "Die Freigabe bleibt bei dieser Arbeitsmappe: Das eingefügte JSON ersetzt den Inhalt, nicht die Live-Sitzung oder ihre Schlüssel.",
   "This workbook is {mb} MB.": "Diese Arbeitsmappe ist {mb} MB groß.",
   "This workbook was written by a newer version of dash. It is open read-only so nothing is lost.": "Diese Arbeitsmappe wurde von einer neueren Version von dash geschrieben. Sie ist schreibgeschützt geöffnet, damit nichts verloren geht.",
   "Those changes could not be restored into this workbook.": "Diese Änderungen konnten nicht in diese Arbeitsmappe zurückgeholt werden.",

@@ -561,6 +561,7 @@ export const es: Catalog = {
   "This workbook is open read-only, so this build will not write it.": "Este libro está abierto en solo lectura, así que esta versión no lo escribirá.",
   "This workbook is open read-only, so “{name}” was not opened into it.": "Este libro está abierto en solo lectura, así que “{name}” no se ha abierto dentro de él.",
   "This workbook is open read-only.": "Este libro está abierto en solo lectura.",
+  "Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.": "El uso compartido permanece en este libro: el JSON pegado reemplaza el contenido, no la sesión en vivo ni sus claves.",
   "This workbook is {mb} MB.": "Este libro ocupa {mb} MB.",
   "This workbook was written by a newer version of dash. It is open read-only so nothing is lost.": "Este libro lo ha escrito una versión más reciente de dash. Se abre en solo lectura para no perder nada.",
   "Those changes could not be restored into this workbook.": "No se han podido restaurar esos cambios en este libro.",

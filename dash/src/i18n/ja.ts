@@ -561,6 +561,7 @@ export const ja: Catalog = {
   "This workbook is open read-only, so this build will not write it.": "このブックは読み取り専用で開いているため、このビルドは書き込みません。",
   "This workbook is open read-only, so “{name}” was not opened into it.": "このブックは読み取り専用で開いているため、「{name}」は取り込まれませんでした。",
   "This workbook is open read-only.": "このブックは読み取り専用で開いています。",
+  "Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.": "共有はこのブックに残ります。貼り付けた JSON が置き換えるのは内容だけで、共同編集セッションやその鍵は置き換えません。",
   "This workbook is {mb} MB.": "このブックは {mb} MB です。",
   "This workbook was written by a newer version of dash. It is open read-only so nothing is lost.": "このブックは新しいバージョンの dash で書き込まれています。何も失われないよう、読み取り専用で開いています。",
   "Those changes could not be restored into this workbook.": "その変更をこのブックに復元できませんでした。",

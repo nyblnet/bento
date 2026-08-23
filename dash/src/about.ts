@@ -767,7 +767,31 @@ export function openAbout(hooks: AboutHooks): void {
       // Undo does NOT reach across this. Store.replaceDoc empties both stacks,
       // so unlike slides there is no ⌘Z back — say so before, not after.
       if (!confirm(t('Replace this workbook with the pasted JSON? This cannot be undone.'))) return
-      if (!replaceWorkbook(hooks, res.doc)) {
+      // THE ROOM BELONGS TO THIS FILE, NOT TO THE PASTED TEXT. Content is
+      // replaced; the collaboration credentials are this workbook's and stay.
+      //
+      // Both directions were wrong, and #338 turned the first from rare into
+      // routine by stripping `collab` out of "Copy document JSON":
+      //
+      //   · a STRIPPED paste — now the ordinary AI round trip — carried no
+      //     credentials, so replacing silently ENDED the live session. Measured:
+      //     sharing on / room `w-abc` before, sharing off / room gone after,
+      //     with nothing on screen saying so while peers kept editing.
+      //   · a paste carrying SOMEBODY ELSE'S credentials silently JOINED their
+      //     room. Measured: my room became `w-THEIRS` and my next edit went out
+      //     under their key, with them holding the owner key that can revoke.
+      //
+      // The line is the one #338 draws itself — a saved FILE carrying its own
+      // capability is the design, and pasted text is not a file. So a dropped
+      // or opened workbook still adopts its own room; this does not.
+      //
+      // Not folded into `replaceWorkbook`: "Duplicate as new workbook" goes
+      // through it too and mints fresh credentials ON PURPOSE.
+      const keep = (store.doc as { collab?: unknown }).collab
+      const merged = keep === undefined
+        ? res.doc
+        : { ...res.doc, collab: keep } as DashDoc
+      if (!replaceWorkbook(hooks, merged)) {
         outNote.textContent = t('That workbook has no table sheet to show.')
         return
       }
@@ -778,6 +802,16 @@ export function openAbout(hooks: AboutHooks): void {
     // Close, which on a dialog this tall means the panel opens below the fold
     // and the click reads as "nothing happened".
     card.insertBefore(ta, closeBtn)
+    // SAY WHAT IT KEEPS. The paste replaces the content and not the room, which
+    // is the right answer in both directions but is invisible either way — and
+    // a live session quietly ending or quietly moving is exactly the class of
+    // thing this app states rather than leaves to be discovered.
+    if ((store.doc as { collab?: { on?: boolean } }).collab?.on) {
+      card.insertBefore(
+        note(t('Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.')),
+        closeBtn,
+      )
+    }
     card.insertBefore(bar, closeBtn)
     ta.focus()
     ta.scrollIntoView({ block: 'nearest' })
