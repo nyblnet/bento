@@ -52,6 +52,72 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-23 — Sharing a space is a DERIVED document, and the sharer stays the owner
+
+bento/spaces' "Invite someone…" was `saveAs('copy')`, which serializes
+`store.doc`. `collab.ownerPriv` rides in that document and is the room's ROOT
+key — it signs writes and it signs revocations — so everyone invited to a space
+received the power to remove the person who invited them. Measured on the
+branch: the bytes that button wrote contained `ownerPriv` in full, and nothing
+about the copy looked wrong.
+
+**Every share copy is now derived, never the open document.**
+`spaces/src/share.ts` is the one place that says what a copy may carry:
+
+  invite     room + read key + owner PUBLIC key + an owner-signed INVITE
+             (a delegation keypair). Revocable per device, and per invite.
+  view-only  room + read key + public keys, and NO private half at all.
+  anything   no `collab` block, by dropping it whole — a template, a page
+  else       extract, the JSON on the clipboard.
+
+The stripper DELETES rather than rebuilds, so a private field added to
+`CollabCreds` later is covered without anyone acting. That is the same
+derive-by-removing rule `docForExport` already follows, and the two are NOT the
+same case: the clipboard copy must carry no capability, an invite must carry
+exactly one. Do not merge them.
+
+NO RELAY CHANGE WAS NEEDED OR MADE. v2 rooms, the owner → invite → member
+chain, per-socket key pinning and `rev.${pub}` are already deployed and already
+verified by the worker (docs/collab-design.md, "Phase 1 wire format"); this app
+was simply not using them. A new client that DEPENDS on relay behaviour still
+has to be sequenced after a relay deploy — that rule is unchanged and did not
+bind here.
+
+**Read-only is the relay's, the lock is a courtesy.** A view-only copy holds no
+signing key, so its socket presents no `?w=` and the relay stores and fans out
+nothing it sends. `main.ts` also opens it locked (`collab.role === 'reader'` →
+`store.readOnly`) with a banner, which is a THIRD reason to lock alongside
+`doc.readonly` (a sealed reading copy, no session) and `frozen` (a file this
+build does not understand). Only this one keeps receiving.
+
+**Five connection states, not two, and they must be repainted.** offline /
+view-only / live / connecting / off. Measured in a browser against the live
+relay: the button read "Connecting…" while the panel two inches below it read
+"Live — 1 connected". Both call the same `state()`; the panel is rebuilt on
+every open and the button was painted once at boot, because `onPeersChanged`
+was the only thing calling `sync()` — and in a room where nobody has arrived
+yet, that never fires. The transport's `onStatus` now drives it. Honest states
+are worth nothing if they are painted once.
+
+**Wording is lifted from bento/slides wherever the English string exists** —
+24 of the 31 new strings, including every sharing tooltip. Two apps must not
+describe one guarantee in two ways, and a reworded sentence costs eight fresh
+translations to say the same thing. The seven that were adapted say "space"
+where slides says "deck". (Noted in passing, not fixed here: the slides
+catalogs give "Editor copy saved — recipients join live with edit access" the
+translation of the ROLE word "Editor" in seven of eight locales. The spaces
+catalogs carry the correct sentence for that key.)
+
+Pinned by `scripts/test-spaces-invite.ts` — real WebCrypto keys, real
+functions, asserting on the bytes: the owner private key appears nowhere in an
+invite (the whole serialization is scanned, not the field), the owner's
+signature over the invite verifies the way the relay verifies it, and a member
+copy cannot mint invites. `scripts/test-export-secrets.ts` carries the cheap
+half, so a new button cannot route around the first rig.
+
+
+---
+
 ## 2026-08-22 — The starter space is a release gate, not a document somebody updates when they remember
 
 `spaces/src/starter.ts` had been written once and left. Everything that shipped

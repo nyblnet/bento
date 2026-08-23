@@ -866,8 +866,15 @@ function fsTable(f: string): string {
 
   // 2. doc.readonly was declared in the format and read by nothing: a space
   //    saved as a reading copy opened fully editable.
-  ok(/if \(frozen \|\| doc\.readonly\) store\.readOnly = true/.test(main),
+  ok(/if \(frozen \|\| doc\.readonly(?: \|\| .+?)?\) store\.readOnly = true/.test(main),
     'doc.readonly opens the space read-only')
+  //    …and so does a LIVE view-only copy, which is a different thing: a
+  //    reading copy is sealed and has no session, while `collab.role:'reader'`
+  //    keeps receiving and can never send. The editor lock is a courtesy to
+  //    whoever holds it; the enforcement is the relay refusing to store or fan
+  //    out anything from a socket that presented no signing key.
+  ok(/isReaderCopy\(doc\)\) store\.readOnly = true/.test(main),
+    'a view-only copy (collab.role: reader) also opens locked')
 
   // 3. the agent API must not report ids for blocks it did not write —
   //    store.commit early-returns on a read-only document, and the ids came

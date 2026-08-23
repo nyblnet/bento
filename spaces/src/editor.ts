@@ -898,6 +898,7 @@ export class Editor {
       popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
       goToPage: (id) => { this.store.goToPage(id); this.closeDrawer() },
       shareCopy: (kind) => { void this.shareCopy(kind) },
+      goLive: () => this.goLive(),
     })
     session.onPeers(() => this.collab?.onPeersChanged())
     // The relay refuses things the user can act on — too large, room full. For
@@ -4676,6 +4677,9 @@ export class Editor {
     if (!this.session || offlineEnabled()) return
     this.session.enableSharing()
     await startSharing(this.session, this.store)
+    // A transport made just now is a NEW object with its own callback slot —
+    // the one the boot-time watch was attached to no longer exists.
+    this.collab?.watchStatus()
     this.collab?.sync()
   }
 

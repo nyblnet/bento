@@ -32,6 +32,7 @@ import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
+import { isReaderCopy } from './share.ts'
 import { downloadMarkdown, launchUpdateCheck } from './about'
 
 configureApp({
@@ -204,7 +205,17 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   //
   // `frozen` is the other, unrelated reason to lock: this build does not
   // understand the file and must not rewrite it.
-  if (frozen || doc.readonly) store.readOnly = true
+  //
+  // `collab.role === 'reader'` is the THIRD, unrelated reason, and it is the
+  // only one of the three that keeps receiving: a view-only copy follows the
+  // live session and can never send to it. The lock here is a courtesy to the
+  // person holding it — the ENFORCEMENT is the relay, which pins a verified
+  // key per socket and drops op batches from a socket that presented none
+  // (docs/collab-design.md, "Signed writes"). Remote ops still land, because
+  // the kernel session applies them straight to `doc` rather than through
+  // `commit()` — deliberately, so a colleague's edit never joins this
+  // person's undo stack, and incidentally so `readOnly` cannot block it.
+  if (frozen || doc.readonly || isReaderCopy(doc)) store.readOnly = true
   const editor = new Editor(document.getElementById('app')!, store)
 
   // Live collaboration. Constructing the session is enough to make same-machine
@@ -219,6 +230,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
 
   if (!frozen && doc.readonly) {
     banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))
+  } else if (!frozen && isReaderCopy(doc)) {
+    banner(t('This is a view-only copy — it follows the live session but can’t change this space.'))
   }
   if (frozen) {
     banner(frozen === 'version'
@@ -271,11 +284,11 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   }
 
   /**
-   * Write a SHARE copy — an invite, or (later) a view-only follower.
+   * Write a SHARE copy — the invite, or the view-only follower.
    *
    * `out` is a DERIVED document (share.ts), never `store.doc`: that is the
-   * whole of the fix for "Invite someone…", which reached the ordinary copy
-   * path and therefore handed every recipient `collab.ownerPriv`.
+   * whole of the fix for "Invite someone…", which used to reach the ordinary
+   * copy path and therefore handed every recipient `collab.ownerPriv`.
    *
    * `serializeAuto`, so an invite taken out of a password-protected space is
    * written encrypted with the password its author is already holding — a

@@ -1837,6 +1837,9 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
    or struck-through control would make normal use look like a fault. */
 .sp-live-on { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 45%, var(--line)); }
 .sp-live-off { opacity: .75; }
+/* dialling, or retrying after a drop — not a failure yet, and not "off" */
+.sp-live-wait { opacity: .75; animation: sp-live-pulse 1.4s ease-in-out infinite; }
+@keyframes sp-live-pulse { 50% { opacity: 1; } }
 
 .sp-presence { display: inline-flex; gap: 2px; margin-inline-start: auto; padding-inline-start: 6px; }
 .sp-dot {
@@ -1877,6 +1880,25 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 }
 .sp-paction:hover { background: var(--chrome-2); }
 .sp-paction span { color: var(--muted); font-size: 12px; }
+
+/* THIS device's row in the People list: it is you, so it is not a target. */
+.sp-pme { cursor: default; }
+.sp-pme:hover { background: none; }
+
+/* Remove, on a peer row. Deliberately faint until the row is hovered — a
+   revocation is one click and it is not undoable, so it must not read as
+   part of the row's own affordance (clicking a person FOLLOWS them). */
+.sp-pkick {
+  margin-inline-start: 6px; padding: 0 4px; border-radius: 5px;
+  color: var(--muted); font-size: 12px; line-height: 1.6; opacity: 0;
+}
+.sp-pitem:hover .sp-pkick { opacity: 1; }
+.sp-pkick:hover { background: color-mix(in srgb, var(--c-red) 18%, transparent); color: var(--c-red); }
+
+/* The connection line. One glance = which of the five states this copy is in,
+   and the dot carries the colour so the words never have to. */
+.sp-pstatus { font-size: 12px; color: var(--muted); margin: 2px 0 8px; }
+.sp-pstatus.ok { color: var(--accent-ink); }
 
 /* A heading inside a menu: the three width rows are a CHOICE among themselves,
    not three more actions in the list above them. */
