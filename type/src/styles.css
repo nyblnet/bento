@@ -35,19 +35,6 @@
   --paper-trk-bg: #eaf3ef;
   --paper-trk-del: #a3312a;
 
-  /* The floating selection toolbar, which is DARK IN BOTH THEMES and so lives
-     here with the other theme-invariant values. It floats over the page, the
-     page is white whatever the viewer's theme, and a white bar on white paper
-     would need a border to exist at all — while a dark one reads instantly as
-     chrome rather than as something printed on the sheet. */
-  --selbar: #22272f;
-  --selbar-line: #333a45;
-  --selbar-hover: #333a45;
-  --selbar-sep: #3d4552;
-  --selbar-ink: #cfd6e0;
-  --selbar-ink-hi: #ffffff;
-  --selbar-on-ink: #1c1200;
-
   /* geometry */
   --radius: 10px;
   --page-w: 816px; --page-h: 1056px;
@@ -1027,26 +1014,32 @@ body.t-dragging, body.t-dragging * { cursor: grabbing !important; user-select: n
 @media print { .t-deco .t-grip-layer { display: none; } }
 
 
-/* The selection toolbar. Dark on both themes on purpose: it floats OVER the
-   page, and a white bar on white paper needs a border to exist at all, while a
-   dark one reads instantly as chrome rather than as part of the document. */
+/* The selection toolbar.
+   It FOLLOWS THE THEME, like every other floating surface in this app — the ⋯
+   menu, the grip menu, the comment cards. It was dark in both themes at first,
+   on the argument that a white bar over white paper would need a border to
+   exist; but the comment cards sit beside the paper in exactly these tokens,
+   with exactly that border, and read as chrome perfectly well. So the argument
+   was already disproved inside this stylesheet, and all the dark version
+   bought was the only dark UI in an otherwise light app. It borrows .t-menu's
+   surface and .t-btn.on's active state so it is the same object as the rest. */
 .t-selbar {
   position: absolute; z-index: 70;
   display: flex; align-items: center; gap: 1px;
-  padding: 4px; border-radius: 9px;
-  background: var(--selbar); border: 1px solid var(--selbar-line);
-  box-shadow: 0 10px 30px rgb(20 30 45 / .28), 0 2px 6px rgb(20 30 45 / .18);
+  padding: 4px; border-radius: 10px;
+  background: var(--field); border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgb(20 30 45 / .16), 0 2px 6px rgb(20 30 45 / .08);
 }
 .t-selbtn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; padding: 0;
-  border: 0; border-radius: 6px; background: transparent;
-  color: var(--selbar-ink); cursor: pointer;
+  border: 0; border-radius: 7px; background: transparent;
+  color: var(--ink-2); cursor: pointer;
 }
-.t-selbtn:hover { background: var(--selbar-hover); color: var(--selbar-ink-hi); }
-.t-selbtn.on { background: var(--accent); color: var(--selbar-on-ink); }
+.t-selbtn:hover { background: var(--chrome-2); color: var(--ink); }
+.t-selbtn.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .t-selbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.t-selsep { width: 1px; height: 18px; margin: 0 3px; background: var(--selbar-sep); }
+.t-selsep { width: 1px; height: 18px; margin: 0 3px; background: var(--line); }
 
 /* Neither of these is part of the document. */
 @media print { .t-selbar, .t-deco .t-grip-layer { display: none; } }
