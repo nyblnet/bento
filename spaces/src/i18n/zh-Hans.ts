@@ -327,6 +327,8 @@ export const zh_Hans: Catalog = {
   "Save (⌘S)": "保存 (⌘S)",
   "Save a copy…": "保存副本…",
   "Save an untouched copy…": "另存副本，原文件不动…",
+  "Save — download an updated copy (⌘S). This browser can’t rewrite the open file.": "保存 — 下载更新后的副本（⌘S）。此浏览器无法改写已打开的文件。",
+  "Save — rewrite this file in place (⌘S)": "保存 — 就地改写此文件 (⌘S)",
   "Saved": "已保存",
   "Saved a new copy": "已保存新副本",
   "Saves a copy that joins this session": "保存一个会加入此会话的副本",

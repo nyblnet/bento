@@ -327,6 +327,8 @@ export const ja: Catalog = {
   "Save (⌘S)": "保存 (⌘S)",
   "Save a copy…": "コピーを保存…",
   "Save an untouched copy…": "元のままのコピーを保存…",
+  "Save — download an updated copy (⌘S). This browser can’t rewrite the open file.": "保存 — 更新されたコピーをダウンロード（⌘S）。このブラウザは開いているファイルを上書きできません。",
+  "Save — rewrite this file in place (⌘S)": "保存 — このファイルを直接書き換え (⌘S)",
   "Saved": "保存しました",
   "Saved a new copy": "新しいコピーを保存しました",
   "Saves a copy that joins this session": "このセッションに参加するコピーを保存します",

@@ -327,6 +327,8 @@ export const es: Catalog = {
   "Save (⌘S)": "Guardar (⌘S)",
   "Save a copy…": "Guardar una copia…",
   "Save an untouched copy…": "Guardar una copia intacta…",
+  "Save — download an updated copy (⌘S). This browser can’t rewrite the open file.": "Guardar — descargar una copia actualizada (⌘S). Este navegador no puede reescribir el archivo abierto.",
+  "Save — rewrite this file in place (⌘S)": "Guardar — reescribe este archivo en el sitio (⌘S)",
   "Saved": "Guardado",
   "Saved a new copy": "Se guardó una copia nueva",
   "Saves a copy that joins this session": "Guarda una copia que se une a esta sesión",

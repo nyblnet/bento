@@ -327,6 +327,8 @@ export const de: Catalog = {
   "Save (⌘S)": "Speichern (⌘S)",
   "Save a copy…": "Kopie speichern…",
   "Save an untouched copy…": "Unveränderte Kopie speichern…",
+  "Save — download an updated copy (⌘S). This browser can’t rewrite the open file.": "Speichern — aktualisierte Kopie herunterladen (⌘S). Dieser Browser kann die geöffnete Datei nicht überschreiben.",
+  "Save — rewrite this file in place (⌘S)": "Speichern — Datei direkt überschreiben (⌘S)",
   "Saved": "Gespeichert",
   "Saved a new copy": "Neue Kopie gespeichert",
   "Saves a copy that joins this session": "Speichert eine Kopie, die dieser Sitzung beitritt",

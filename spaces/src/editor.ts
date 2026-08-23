@@ -371,7 +371,15 @@ export class Editor {
 
     // save is a split control, as in slides: the common action, and the
     // less-common ways of writing this document somewhere else
-    const saveB = iconBtn('save', t('Save (⌘S)'), () => this.onSave?.())
+    // THE BUTTON SAYS WHAT IT WILL DO. On Chrome and Edge ⌘S rewrites the file
+    // you opened; everywhere else the browser gives a page no way to write to
+    // its own file, so it downloads a new copy instead. That is the single
+    // most surprising thing about saving here, and the control said only
+    // "Save (⌘S)" — the dot beside it already explained the difference, which
+    // is the wrong half of the button to put it on. slides' wording, verbatim,
+    // because two apps should not describe one browser limitation two ways.
+    const saveB = iconBtn('save', saveTitle(), () => this.onSave?.())
+    this.saveB = saveB
     saveB.classList.add('sp-primary')
     const saveLabel = document.createElement('span')
     saveLabel.className = 'sp-savelabel'
@@ -526,6 +534,15 @@ export class Editor {
   /** The dot on Save, and the only place the file's state is visible. */
   syncDirty(): void {
     this.dirtyDot?.classList.toggle('sp-on', this.store.dirty)
+    // canWriteInPlace() is not fixed for the session: the first save can grant
+    // a handle, and the button would otherwise keep promising a download it no
+    // longer performs.
+    if (this.saveB) this.saveB.title = saveTitle()
+    if (this.dirtyDot) {
+      this.dirtyDot.title = canWriteInPlace()
+        ? t('Unsaved changes — ⌘S rewrites this file')
+        : t('Unsaved changes — ⌘S downloads an updated copy')
+    }
   }
 
   private syncHistoryButtons(): void {
@@ -2731,6 +2748,7 @@ export class Editor {
 
   private collab: import('./collabui.ts').CollabUi | null = null
   private liveSlot!: HTMLElement
+  private saveB: HTMLButtonElement | null = null
   private topbar: HTMLElement | null = null
   private barRO: ResizeObserver | null = null
   private barMO: MutationObserver | null = null
@@ -4705,6 +4723,13 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
  * fields are inputs, and every one of them takes `]` as a character. A
  * bare-key panel shortcut has to ask this first.
  */
+/** What ⌘S will actually do, in the reader's browser, right now. */
+function saveTitle(): string {
+  return canWriteInPlace()
+    ? t('Save — rewrite this file in place (⌘S)')
+    : t('Save — download an updated copy (⌘S). This browser can’t rewrite the open file.')
+}
+
 function isTyping(): boolean {
   const a = document.activeElement as HTMLElement | null
   if (!a) return false

@@ -2680,5 +2680,30 @@ function fsTable(f: string): string {
     'the static file-manager preview has no theme of its own — it is the author’s document')
 }
 
+// ---- THE SAVE BUTTON SAYS WHAT IT WILL DO ----------------------------------
+// On Chrome and Edge, ⌘S rewrites the file you opened. Everywhere else — Safari,
+// Firefox, every browser on iOS — a page has no way to write to its own file,
+// so it downloads a new copy. That is the most surprising thing about saving
+// here, and the button said only "Save (⌘S)": the explanation was on the
+// unsaved DOT, which is the half of the control you look at to answer a
+// different question. slides puts it on the button and branches its title.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/function saveTitle\(\): string \{[\s\S]{0,200}canWriteInPlace\(\)/.test(ed),
+    'the save title is derived from what this browser can actually do')
+  ok(/iconBtn\('save', saveTitle\(\)/.test(ed), '…and the button takes it')
+  // It must keep being true: the FIRST save can grant a handle, after which a
+  // button still promising a download is lying about the next keystroke.
+  ok(/syncDirty\(\): void \{[\s\S]{0,400}saveB\.title = saveTitle\(\)/.test(ed),
+    '…and it is re-derived as the answer changes, not fixed at build time')
+  // wording is slides', verbatim — one browser limitation, one sentence
+  ok(/Save — rewrite this file in place/.test(ed) &&
+     /This browser can’t rewrite the open file/.test(ed),
+    "and the wording is slides', so the suite does not describe one limitation two ways")
+}
+
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

@@ -327,6 +327,8 @@ export const zh_Hant: Catalog = {
   "Save (⌘S)": "儲存 (⌘S)",
   "Save a copy…": "儲存副本…",
   "Save an untouched copy…": "儲存原封不動的副本…",
+  "Save — download an updated copy (⌘S). This browser can’t rewrite the open file.": "儲存 — 下載更新後的副本（⌘S）。此瀏覽器無法改寫已開啟的檔案。",
+  "Save — rewrite this file in place (⌘S)": "儲存 — 就地改寫此檔案 (⌘S)",
   "Saved": "已儲存",
   "Saved a new copy": "已儲存新副本",
   "Saves a copy that joins this session": "儲存一份會加入此工作階段的副本",
