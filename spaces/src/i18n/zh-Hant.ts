@@ -556,4 +556,11 @@ export const zh_Hant: Catalog = {
   "{pages} page(s) and {blocks} block(s) added from {files} file(s).": "從 {files} 個檔案新增了 {pages} 個頁面、{blocks} 個區塊。",
   "{pages} page(s) and {blocks} block(s) will travel.": "將帶走 {pages} 個頁面、{blocks} 個區塊。",
   "⌘Z removes the imported pages again.": "按 ⌘Z 可以把匯入的頁面再撤銷掉。",
+  "History": "歷史記錄",
+  "Versions are kept in this browser only — never in the file, never online. Restoring is undoable.": "版本僅保存在此瀏覽器中，不會寫入檔案，也不會上傳。還原操作可以復原。",
+  "This space is encrypted, so no versions are kept.": "此空間已加密，因此不保存任何版本。",
+  "No versions yet — they build up as you write and save.": "尚無版本。隨著你的書寫與儲存，版本會逐漸累積。",
+  "most recent": "最新",
+  "That version could not be read": "無法讀取該版本",
+  "Restored the version from {when} — ⌘Z undoes it": "已還原 {when} 的版本，按 ⌘Z 可復原。",
 }

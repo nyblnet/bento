@@ -556,4 +556,11 @@ export const zh_Hans: Catalog = {
   "{pages} page(s) and {blocks} block(s) added from {files} file(s).": "从 {files} 个文件新增了 {pages} 个页面、{blocks} 个块。",
   "{pages} page(s) and {blocks} block(s) will travel.": "将带走 {pages} 个页面、{blocks} 个块。",
   "⌘Z removes the imported pages again.": "按 ⌘Z 可以把导入的页面再撤销掉。",
+  "History": "历史记录",
+  "Versions are kept in this browser only — never in the file, never online. Restoring is undoable.": "版本仅保存在此浏览器中，不会写入文件，也不会上传。恢复操作可以撤销。",
+  "This space is encrypted, so no versions are kept.": "此空间已加密，因此不保存任何版本。",
+  "No versions yet — they build up as you write and save.": "暂无版本。随着你的书写和保存，版本会逐渐累积。",
+  "most recent": "最新",
+  "That version could not be read": "无法读取该版本",
+  "Restored the version from {when} — ⌘Z undoes it": "已恢复 {when} 的版本，按 ⌘Z 可撤销。",
 }

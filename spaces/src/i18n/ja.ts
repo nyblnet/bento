@@ -556,4 +556,11 @@ export const ja: Catalog = {
   "{pages} page(s) and {blocks} block(s) added from {files} file(s).": "{files} 個のファイルから {pages} ページ・{blocks} ブロックを追加しました。",
   "{pages} page(s) and {blocks} block(s) will travel.": "{pages} ページ、{blocks} ブロックが移動します。",
   "⌘Z removes the imported pages again.": "⌘Z で、読み込んだページを取り消せます。",
+  "History": "履歴",
+  "Versions are kept in this browser only — never in the file, never online. Restoring is undoable.": "バージョンはこのブラウザーにのみ保存されます。ファイルにもオンラインにも残りません。復元は取り消せます。",
+  "This space is encrypted, so no versions are kept.": "このスペースは暗号化されているため、バージョンは保存されません。",
+  "No versions yet — they build up as you write and save.": "まだバージョンはありません。書いて保存するたびに増えていきます。",
+  "most recent": "最新",
+  "That version could not be read": "そのバージョンを読み込めませんでした",
+  "Restored the version from {when} — ⌘Z undoes it": "{when} のバージョンを復元しました。⌘Z で取り消せます。",
 }

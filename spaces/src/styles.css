@@ -1321,6 +1321,24 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* Print shows the placeholder text, never a blank gap the reader can't explain. */
 @media print { .sp-remote { border-color: #999; background: none; } .sp-remote-load { display: none !important; } }
 
+/* The version timeline. A row is one button so the whole strip is the target —
+   a "Restore" word alone is a 44px miss on a touch screen. */
+.sp-ab-versions { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px; }
+.sp-ab-version {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 9px; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--ink); font: inherit; font-size: 13px;
+  text-align: start; cursor: pointer;
+}
+.sp-ab-version:hover { background: var(--chrome-2); border-color: var(--line); }
+.sp-ab-version:focus-visible { border-color: var(--blue); outline: none; }
+.sp-ab-when { font-variant-numeric: tabular-nums; }
+.sp-ab-vtag { color: var(--muted); font-size: 12px; }
+/* the verb sits at the end and only colours up on approach, so a list of ten
+   rows does not read as ten buttons all shouting at once */
+.sp-ab-vdo { margin-inline-start: auto; color: var(--muted); }
+.sp-ab-version:hover .sp-ab-vdo, .sp-ab-version:focus-visible .sp-ab-vdo { color: var(--blue); }
+
 /* ————— narrow topbar: hide, never scroll —————
    Measured at 375px: the bar wanted 678px, so seven of eleven controls sat off
    the right edge — Save among them, which made the file unsaveable on a phone.

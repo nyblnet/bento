@@ -35,7 +35,7 @@ import {
   setEncryptionPassword, isEncryptionActive,
   canWriteInPlace, openedFileName,
 } from '../../kernel/src/save.ts'
-import { clearVersions, clearRecovery } from '../../kernel/src/autosave.ts'
+import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
@@ -520,6 +520,67 @@ export function openAbout(hooks: AboutHooks): void {
   }
 
   // ---- ways out ----------------------------------------------------------
+  // ---- the local timeline --------------------------------------------------
+  //
+  // Undo dies with the tab and the recovery snapshot only ever holds the last
+  // few seconds, so before this section the honest answer to "give me back what
+  // I wrote this morning" was that there wasn't one. The timeline lives in this
+  // browser's IndexedDB — never in the file, never online — which is why the
+  // note says so plainly: a space carried to another machine does not bring its
+  // history, and that is a property worth stating rather than discovering.
+  //
+  // Rendered ASYNC into a placeholder. Reading IndexedDB cannot be allowed to
+  // hold up the dialog opening, and a space with no versions yet is the common
+  // case on a first run — it says so rather than showing an empty box.
+  const histSec = section(t('History'))
+  const histBody = document.createElement('div')
+  histBody.className = 'sp-ab-versions'
+  histSec.append(histBody)
+  histSec.append(note(t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.')))
+
+  const renderVersions = (versions: Snapshot[]): void => {
+    histBody.textContent = ''
+    if (!versions.length) {
+      histBody.append(note(isEncryptionActive()
+        ? t('This space is encrypted, so no versions are kept.')
+        : t('No versions yet — they build up as you write and save.')))
+      return
+    }
+    for (const [i, v] of versions.entries()) {
+      const when = new Date(v.at).toLocaleString([], {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'sp-ab-version'
+      const left = document.createElement('span')
+      left.className = 'sp-ab-when'
+      left.textContent = when
+      const tag = document.createElement('span')
+      tag.className = 'sp-ab-vtag'
+      tag.textContent = i === 0 ? t('most recent') : ''
+      const doIt = document.createElement('span')
+      doIt.className = 'sp-ab-vdo'
+      doIt.textContent = t('Restore')
+      b.append(left, tag, doIt)
+      b.addEventListener('click', () => {
+        let restored: SpacesDoc
+        try { restored = JSON.parse(v.json) as SpacesDoc } catch {
+          say(t('That version could not be read')); return
+        }
+        // replaceDoc checkpoints undo first, so ⌘Z walks this back — the same
+        // contract the recovery banner's Restore already honours.
+        store.replaceDoc(restored)
+        onRepaint()
+        close()
+        say(t('Restored the version from {when} — ⌘Z undoes it', { when }))
+      })
+      histBody.append(b)
+    }
+  }
+  renderVersions([])
+  void listVersions(doc.docId).then(renderVersions).catch(() => { /* no store, no history */ })
+
   const outSec = section(t('Take it elsewhere'))
   const copyJson = button(t('Copy document JSON'), () => {
     // The clipboard copy is a HAND-OUT. Every field under `collab` is a bearer

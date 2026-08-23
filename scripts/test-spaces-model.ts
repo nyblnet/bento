@@ -337,6 +337,24 @@ for (const [label, input, err] of [
   // and turning encryption ON must remove what was written before it
   ok(/clearVersions\(/.test(about) && /clearRecovery\(/.test(about),
     'setting a password clears BOTH the version timeline and the recovery snapshot')
+
+  // THE TIMELINE HAS THE SAME OBLIGATION, and it is easier to get wrong: the
+  // recovery guard is an early `return` at the top of the debounce, so anything
+  // written further down inherits it — but the SAVE path is a second call site
+  // with no such shelter, and that one runs at the exact moment an author who
+  // has set a password is writing the file. Both guarded, or the timeline is a
+  // plaintext copy of what the encryption was for.
+  ok(/addVersion\(/.test(main), 'main.ts writes a version timeline at all')
+  const throttled = /Date\.now\(\) - lastVersionAt > VERSION_EVERY_MS[\s\S]{0,120}?addVersion/.test(main)
+  ok(throttled, '…on a throttle while editing, so one session cannot spend the cap')
+  const saveGuarded = /if \(!isEncryptionActive\(\)\) \{ void addVersion/.test(main)
+  ok(saveGuarded, '…and the SAVE path checks encryption itself, having no early return above it')
+
+  // The restore has to go through replaceDoc: it is the one path that
+  // checkpoints undo first, which is what makes the note "Restoring is
+  // undoable" true rather than reassuring.
+  ok(/listVersions\(/.test(about), 'About reads the timeline')
+  ok(/store\.replaceDoc\(restored\)/.test(about), '…and restores through replaceDoc, so ⌘Z walks it back')
 }
 
 // ---- find & replace: the number shown IS the number changed ----------------

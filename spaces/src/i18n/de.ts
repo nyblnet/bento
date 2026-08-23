@@ -556,4 +556,11 @@ export const de: Catalog = {
   "{pages} page(s) and {blocks} block(s) added from {files} file(s).": "{pages} Seite(n) und {blocks} Block/Blöcke aus {files} Datei(en) hinzugefügt.",
   "{pages} page(s) and {blocks} block(s) will travel.": "{pages} Seite(n) und {blocks} Block/Blöcke kommen mit.",
   "⌘Z removes the imported pages again.": "Mit ⌘Z verschwinden die importierten Seiten wieder.",
+  "History": "Verlauf",
+  "Versions are kept in this browser only — never in the file, never online. Restoring is undoable.": "Versionen liegen nur in diesem Browser — nie in der Datei, nie online. Das Wiederherstellen lässt sich rückgängig machen.",
+  "This space is encrypted, so no versions are kept.": "Dieser Space ist verschlüsselt, deshalb werden keine Versionen aufbewahrt.",
+  "No versions yet — they build up as you write and save.": "Noch keine Versionen — sie sammeln sich beim Schreiben und Speichern an.",
+  "most recent": "neueste",
+  "That version could not be read": "Diese Version konnte nicht gelesen werden",
+  "Restored the version from {when} — ⌘Z undoes it": "Version vom {when} wiederhergestellt — ⌘Z macht das rückgängig.",
 }

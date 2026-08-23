@@ -13,7 +13,7 @@ import {
   writeUpdatedFileAs, suggestedFileName,
   isEncryptionActive,
 } from '../../kernel/src/save.ts'
-import { putRecovery, getRecovery, clearRecovery, pruneOld } from '../../kernel/src/autosave.ts'
+import { putRecovery, getRecovery, clearRecovery, pruneOld, addVersion } from '../../kernel/src/autosave.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
 import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult } from './model'
@@ -304,6 +304,11 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     return writeUpdatedFileAs(html, out, { suffix })
   }
 
+  // Two minutes, as in slides. Short enough that a long writing session leaves
+  // a usable trail, long enough that the cap is not spent on one afternoon.
+  const VERSION_EVERY_MS = 120_000
+  let lastVersionAt = 0
+
   async function doSave(): Promise<void> {
     store.endRun()
     editor.status(t('Saving…'))
@@ -312,6 +317,13 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
       // the document is on disk now — the dot goes out
       store.dirty = false
       editor.syncDirty()
+    }
+    if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
+      // A SAVE IS THE MOMENT WORTH KEEPING. The throttle below catches long
+      // editing runs, but the point somebody chose to write the file is the
+      // point they would most want back, so it is never throttled away.
+      // Encrypted spaces keep nothing here, for the reason putRecovery does not.
+      if (!isEncryptionActive()) { void addVersion(store.doc); lastVersionAt = Date.now() }
     }
     if (res === 'saved') {
       void clearRecovery(store.doc.docId)
@@ -332,11 +344,30 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // off the disk — and it would do it every few seconds, for the one author who
   // demonstrably cares. The kernel's putRecovery does not guard this; the
   // caller must (slides has the same contract).
+  //
+  // RECOVERY IS NOT HISTORY. putRecovery keeps ONE snapshot per space — the
+  // answer to "the tab died", and nothing else. It is overwritten every few
+  // seconds, so it cannot answer "put back what I had before lunch", and undo
+  // cannot either: the undo stack lives in memory and dies with the reload.
+  // Spaces shipped with only the first of those, while slides and dash both
+  // keep a timeline. For the app people write PROSE in, that was the wrong one
+  // to leave out — a paragraph rewritten badly an hour ago was unrecoverable by
+  // any means the app offered.
+  //
+  // So a version is added on a throttle while editing, and unthrottled on save.
+  // The kernel caps and prunes the timeline; both stores stay empty while a
+  // password is set.
   let timer: ReturnType<typeof setTimeout> | undefined
   store.on('doc', () => {
     clearTimeout(timer)
     if (isEncryptionActive()) return
-    timer = setTimeout(() => { void putRecovery(store.doc) }, 2500)
+    timer = setTimeout(() => {
+      void putRecovery(store.doc)
+      if (Date.now() - lastVersionAt > VERSION_EVERY_MS) {
+        lastVersionAt = Date.now()
+        void addVersion(store.doc)
+      }
+    }, 2500)
   })
   void pruneOld()
   void offerRecovery(doc, store, editor)
