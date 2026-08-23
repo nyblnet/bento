@@ -433,7 +433,14 @@ export class Editor {
     const right = el('div', 'sp-group sp-group-right')
     right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
 
-    bar.append(pagesB, mark, title, this.statusEl, history, right)
+    // The status goes AFTER undo/redo, never before. It is transient text that
+    // grows from nothing to a whole sentence, and anything downstream of it in
+    // the flex flow gets shoved sideways every time it changes — measured at
+    // 36px on a plain edit and 246px entering reading view, which is more than
+    // a button's width, so undo lands where redo just was. Past the history
+    // group it grows into the slack the right group's margin-auto already
+    // holds, and nothing before it can move. Reported against slides as #300.
+    bar.append(pagesB, mark, title, history, this.statusEl, right)
 
     // Drive the fit now, and again whenever the bar's size or its CONTENT
     // changes. The ResizeObserver is the primary width signal — it fires for

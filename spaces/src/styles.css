@@ -1382,8 +1382,12 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 
 /* Belt and braces at every width: a status message can shrink and clip, but it
-   can never be the reason a control leaves the bar. */
-.sp-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+   can never be the reason a control leaves the bar — nor the reason the bar
+   changes tier. Basis 0 keeps the message out of the bar's intrinsic width, so
+   text arriving cannot push fitTopbar into hiding labels and resizing buttons
+   under the pointer; grow lets it use whatever slack is going, and it
+   ellipsises when there is none. */
+.sp-status { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Hit targets: a 30px button is a miss on a touch screen. */
 @media (pointer: coarse) {
