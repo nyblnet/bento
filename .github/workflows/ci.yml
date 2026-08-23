@@ -561,6 +561,16 @@ jobs:
         # the ciphertext is the leak the password exists to prevent.
         run: node scripts/test-dash-preview.ts
 
+      - name: convert engine rigs
+        # The pptx importer's resolver is where real decks' fidelity lives --
+        # 91% of colour and 71% of run properties are indirect, and every hop
+        # fails silently (a backwards clrMap still renders, just dark-on-dark).
+        # Seven rigs, 378 checks, negative controls proven against mutated
+        # implementations; load.ts is the gate that matters: every emitted
+        # document must pass the REAL slides parseDoc with zero validateDoc
+        # errors.
+        run: node scripts/test-convert.ts
+
       - name: bento/dash zip
         # Verified against real unzip implementations, not only our own reader:
         # a reader and a writer that share a bug agree with each other perfectly.
