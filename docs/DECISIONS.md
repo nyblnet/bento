@@ -14,6 +14,52 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-23 — The web demo gates on RETURN, not on save
+
+Someone works at `https://bento.page/slides/`, saves, comes back later and gets
+a fresh starter, because a never-saved deck stays dormant by design. It reads
+as lost work. It is not — the file is on disk — but nothing on screen says so,
+and two things genuinely do not survive: version history and recovery live in
+IndexedDB keyed to the `bento.page` ORIGIN and do not follow the file to
+`file://`, and neither does the session.
+
+**Blocking straight after the save was considered and rejected.** Once an FSA
+handle exists the editor silently rewrites the real file every 2.5s
+(`writeUpdatedFile`), so that tab is a working session writing to disk on every
+edit; interrupting it would sever something that is functioning and lose
+whatever was typed since the last write. The confusion happens on the NEXT
+visit, so that is where the gate goes. **"Start a new deck anyway" is always
+present** — some visitors do want a fresh one, and some cannot install
+anything.
+
+**Availability gating is required from day one, not added later.** The offer is
+`hasFsAccess()` × `hostCan('write')` × *which host actually has a release*.
+Hardcoding "install the extension" would tell an Android user to install a
+Chrome extension. `HOST_AVAILABLE` in `kernel/src/returngate.ts` carries that,
+and `scripts/test-return-gate.ts` pins both states — that the mobile rows say
+"keep the file" today, and that they become real offers the day the flag flips,
+so the flag is wired rather than decorative.
+
+**Capability decides what to SAY; the platform guess decides only which LINK.**
+`hasFsAccess()` is a real feature test, UA sniffing is a guess. A browser that
+gains the API is handled correctly on the day it ships with no change here. For
+Safari/Firefox desktop the honest answer is a different browser, not a pitch
+for an extension that cannot help them.
+
+State is viewer-scoped `localStorage`, never in the document — the same rule
+locale, theme and reduced motion follow. A deck carrying it would tell everyone
+you sent it to that you had once saved something.
+
+In `kernel/`, not `slides/`: Spaces, Dash and Type have the identical problem
+and would each grow their own copy. The kernel owns the remembering and the
+policy; the words and the markup are the app's. Spec (gitignored):
+`working/handover-web-demo-return-gate.md`, from the `tray-views` session.
+
+NOT done here, and worth weighing first: making **Download** the primary action
+on the landing page (it is currently `btn primary` on "Try it in your browser")
+would avoid the situation for most people and costs nothing. That is a site
+change, not an app one.
+
 ## 2026-08-19 — The shells are packed with zopfli, and the format does not move
 
 Every Bento file carries its whole runtime, so the packer's efficiency is a

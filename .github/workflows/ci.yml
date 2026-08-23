@@ -228,6 +228,15 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Return-gate rig
+        # The web demo always starts fresh, so someone who saved from
+        # bento.page and came back saw a blank starter and read it as lost
+        # work. The gate that fixes it can be worse than the silence it
+        # replaces: firing over a real document, or offering a host that has no
+        # release (telling an Android user to install a Chrome extension). This
+        # pins both, and that the mobile rows degrade until those hosts ship.
+        run: node scripts/test-return-gate.ts
+
       - name: Offline-mode rig
         # Offline mode promises "nothing leaves this computer" and was broken
         # five ways at once (GHSA-5c3x-xqp6-g94r): a manual update check, a
