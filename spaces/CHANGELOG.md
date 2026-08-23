@@ -14,6 +14,182 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **A dark interface.** About → Appearance offers *Match my system*, *Light* or
+  *Dark*, follows the OS by default, and tracks it live if the OS flips while
+  the file is open.
+
+  **The theme is yours, not the file's.** It lives in this browser
+  (localStorage), exactly as the interface language already does — send someone
+  a space and they read it in their own theme, in their own room. Nothing about
+  it is written into the document, so the same bytes come back whoever last
+  looked at them.
+
+  **Dark covers the whole window, including the page you are reading.** That is
+  deliberately not what bento/slides does, where a slide keeps the background
+  its author chose. A space has no such page: the toolbar, the page list and
+  the column are one surface with hairlines between them, and a white reading
+  column inside a dark window would be a white rectangle over most of the
+  screen. The colours the document itself carries — the nine text and highlight
+  colours, and the five callout tones — keep their NAMES and change their
+  values with the ground, because "red" measured against white is a smudge
+  against near-black. Measured: every one of them, plus body text, muted text,
+  code, tables and callout labels, clears WCAG AA in both themes.
+
+  **A picture now sits on a white card of its own, in both themes.** A
+  screenshot or diagram exported with a transparent background used to be a
+  shape floating in nothing; black-on-transparent artwork disappeared entirely
+  on a dark ground.
+
+  **Paper stays light**, and a file-manager thumbnail still shows the
+  document's own colours: neither of those has a reader to have a preference.
+- **A new space opens showing what it can actually do.** The starter space was
+  written once and left, and about half of what shipped since had never appeared
+  in it: no table, no clip, no link card, no comment, no calculating line, no
+  daily notes, no colour, nothing about page width, exporting a page, importing
+  a space, or the properties panel — and its limits page still said live
+  collaboration was coming, months after it arrived.
+
+  It is eight pages now, and each one demonstrates the thing it describes rather
+  than describing it. The page about tables holds one, with a link in a cell that
+  really does turn up in the linked page's backlinks. The page about pictures
+  holds an embedded drawing and a clip you can press play on. The page about
+  archiving *is* the archived page — out of the sidebar, found by typing ⌘K, and
+  named on the limits page because sending someone the file sends them that too.
+  There is a comment thread with a reply on it, waiting in the margin. The
+  Journal page is where ⌘⇧J puts today.
+
+  **The limits page says what is true now.** Live collaboration exists, so it
+  explains it — including the awkward part, which is that a session is a room
+  whose keys live in the file: whoever holds a copy holds the room, and rotating
+  the keys is what revocation looks like when there are no accounts.
+
+  The demonstration pages are meant to be deleted, and say so.
+
+- **Fixed: a link in a table cell could be a link to nowhere in the backlinks.**
+  A table written by hand — by an agent, or in a file somebody edited — carried
+  its cells but not the readable fallback the rest of the app reads, so a link
+  inside one worked when clicked and appeared in no page's "Linked from". Tables
+  made in the editor were never affected. Found by writing a starter space that
+  claims the feature and watching the claim fail.
+
+- **Fixed: `validate()` asked audio clips for their pixel size.** Every
+  correctly-authored audio block was told it had no intrinsic width and height —
+  numbers an audio player does not have. A validator that is wrong about good
+  documents is a validator agents learn to ignore.
+
+- **A properties panel, on the right.** One place that answers "what can I
+  change about this thing". The block the caret is in gets its own settings —
+  a table's rows, columns and header row; a code block's language; a callout's
+  tone and mark; an image's width and alt text; a clip's poster, loop, mute and
+  controls; every field of a link card — and the page underneath it gets its
+  icon, its width, whether it is archived, and what is actually in it. Sections
+  collapse and remember whether you left them open, the way slides' panel does.
+
+  **It starts closed, and while it is closed it costs the page nothing.** The
+  column you read in is the same width with the panel there as without it —
+  measured at 1280px and at 2560px, and pinned by the model rig. Open it from
+  the chevron on its edge or with `]`; it remembers what you chose. On a narrow
+  screen it is an overlay reached from ⋯, never a third column.
+
+  Nothing was taken away to make room for it: the language chip on a code
+  block, the mark on a callout and the tools on an image are all still there.
+- **A formatting toolbar, over the text you selected.** Select any words and a
+  small bar appears above them: bold, italic, underline, strikethrough, inline
+  code, highlight, colour, link, and clear formatting. Before this the only
+  formatting a space had was ⌘B, ⌘I and ⌘U — which you had to already know
+  about — and there was no strikethrough, no inline code, no link and no
+  highlight at all.
+
+  Shortcuts come with it: ⇧⌘S strikethrough, ⌘E inline code, ⇧⌘H highlight,
+  and ⌘K makes a link out of whatever is selected (with nothing selected it
+  still opens search, as before). On a phone or tablet the same buttons dock to
+  the bottom of the screen instead of floating over the words, where they would
+  fight the selection handles and the system Copy menu. The bar never appears in
+  reading view, in a read-only file, or on paper.
+
+- **Text and background colour**, in the palette shape Notion uses: nine
+  colours, each usable as the ink or as the band behind the words. Not a colour
+  picker — a fixed set means the colours can be chosen to stay readable on the
+  page and on a printout, and it means the file never carries a stylesheet of
+  its own. Colour prints, deliberately: unlike a callout, which keeps its box
+  and its name on paper, a coloured phrase has no second cue, so dropping the
+  colour would silently drop the distinction the writer drew.
+
+- **Formatting now has one spelling.** Marks are stored in a fixed nesting
+  order and adjacent runs of the same mark are merged, so the same visible
+  sentence is always the same bytes — which keeps diffs honest and will keep
+  collaborative merges from fighting over text nobody changed. Un-formatting
+  part of a formatted run now splits it correctly, which the old ⌘B could not
+  do: it handed the job to the browser, whose markup this format does not
+  accept.
+
+- **Markdown export no longer drops formatting.** Underline, highlight,
+  subscript, superscript and colour were exported as plain text; every mark now
+  round-trips, and re-importing the exported file gives back what you had.
+  Highlights use `==this==`, which Obsidian and Pandoc both read.
+
+- **Wide screens get wide pages.** The column grows with the window instead of
+  sitting at a fixed 720px, and "Use this width for every page" in the page
+  menu makes your choice stick across the whole space. It is remembered for
+  your screen, not written into the file — someone opening the same space on a
+  laptop is unaffected.
+
+- **Tables.** A real table block: `/` → Table, then type. Tab walks the cells
+  and appends a row when it runs off the end; rows and columns are added and
+  removed from the bar above the table, column widths drag, and the header row
+  can be turned off. Cells hold ordinary rich text, so a cell can be bold, hold
+  code, or link to another page — and a link in a cell shows up in that page's
+  backlinks like any other.
+
+  It exports as a GitHub pipe table, alignment included, and a Markdown file
+  you import now becomes a table instead of being kept as text. Older builds of
+  bento/spaces show the table's contents as a line of text rather than nothing
+  at all, so a space with tables in it is still readable in a copy of the app
+  that predates them.
+
+  What this is NOT is a spreadsheet: no formulas, nothing that recalculates.
+  That is bento/dash's job, and typed properties with saved views are already
+  here as the tracker.
+- **Link cards.** `/` → *Link to the web* makes a card for an address: title,
+  description, site, an emoji and (if you want one) a picture, laid out like
+  the page card it sits beside. Nothing is fetched — not when you make the
+  card and not when someone opens the space. Other apps build this card on a
+  server that reads the page's OpenGraph tags; a Bento file has no server and
+  must not contact one, so the card shows what you type and the dialog says
+  so. A card with empty fields is still a working link; a card with no address
+  is a plain box that offers to become one. In Markdown it exports as a link,
+  because that is what it is.
+- **Comments.** Leave a remark on a block (Block options → Comment) or on a
+  whole page (the page's ⋯ → Comment on this page), reply to it, and resolve it
+  when it is settled. Markers sit in the margin beside what they are about, so
+  they never move the writing; a page with something still open shows a count
+  in the page list.
+
+  A comment is workspace, not document: it is saved in the file so it travels
+  with it, and it never appears in the reading view or on paper. The text is
+  plain text — a comment cannot carry formatting, and cannot carry anything
+  else either. Your name is the one the people panel already knows.
+
+  Agents get the whole list in one call: `bento.comments()`, each thread saying
+  whether it is about a block or a page.
+- **A page leaves as its own space, and a space arrives inside another one.**
+  "Export page as a space…" writes the page you choose — and, if you want, the
+  pages under it — as a new .bento.html file: a whole space, not an attachment.
+  It gets a new document id and none of this file's sharing keys, so it is a
+  new document rather than a fork that would try to join this one's session.
+  Only the images those pages use travel with them, and a link pointing at a
+  page that stayed behind becomes text naming that page rather than a link to
+  nowhere.
+
+  The import does the same trip backwards: choose a .bento.html space (or drop
+  it on the window) and its pages arrive under any page you pick. Ids that this
+  space already uses are renamed — derived from the bytes, so the answer is the
+  same everywhere — and the links inside the import follow them, so nothing
+  arrives pre-broken and no link lands on a stranger page that happened to hold
+  that id. Shared images are stored once. It is one ⌘Z, as the Markdown import
+  is, and the imported file goes through exactly the same load contract and
+  sanitizer as any other file you open.
+
 - **A page can be as wide as it needs to be.** Column, Wide or Full width, in
   the page menu. Pages of writing keep a comfortable line; a page with a board
   on it can have the room. Boards already widened themselves — now they say so,

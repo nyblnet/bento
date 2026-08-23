@@ -77,12 +77,36 @@ unique ids the first time.
 | `divider` | — | `<hr>` |
 | `image` | `src` (see below), `alt`, `caption`, `width` (10–100 **%**), `w`/`h` (intrinsic px) | `<figure>` |
 | `pagelink` | `page` | a card linking to another page |
+| `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
 | `view` | `layout`, `groupBy`, `html` | a board or list of this space's issues |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
 there is no `props` object.
+
+### Link cards
+
+A `link` block is a card for somewhere on the web. **Every field is stored in
+the file and nothing is ever fetched** — there is no server to read a url's
+OpenGraph tags with, and opening a space must never contact a third party
+(PLATFORM §1). So write the card yourself:
+
+```jsonc
+{ "id": "b7", "type": "link",
+  "url": "https://example.com/docs",   // https:, http: or mailto: — nothing else is made clickable
+  "title": "The guide",                // absent falls back to the url
+  "desc": "Everything about the thing",
+  "site": "example.com",               // absent is derived from the url's host
+  "icon": "📘",                        // one emoji
+  "image": "asset:<key>",              // OPTIONAL, and asset:/data: only — a remote one is DROPPED
+  "html": "<a href=\"https://example.com/docs\">The guide</a> — Everything about the thing" }
+```
+
+Write `html` too: it is what a build that predates this type renders, exactly
+as it is for `prop`. A `javascript:` or `data:` url renders as a dead card that
+keeps its title rather than as a link — `validate()` reports both that and a
+remote `image`. Use `pagelink`, not this, for a page inside the space.
 
 ### Callouts
 
@@ -273,6 +297,7 @@ bento.search(q)                            // [{pageId, title, blockId}]
 bento.outline()                            // the whole space as a tree
 bento.validate()                           // what is wrong or suspect
 bento.stats()                              // pages, blocks, words, bytes, biggest assets
+bento.comments(query?)                     // review threads, flat, with a typed anchor
 
 // write — each one is ONE undoable step
 bento.fields()                             // the field schema in force
@@ -381,6 +406,25 @@ This answers "why is this file 30 MB". It is always the images: prose is free
 (2,000 pages of it is about 5 MB). `used` is how many blocks reference that
 asset — `0` means it is dead weight, and deleting the key is pure savings. The
 app shell adds a fixed ~80 KB on top of `bytes.document`.
+
+### `bento.comments()`
+
+```js
+bento.comments({ resolved, pageId })
+// [{ id, anchor:'block'|'page', pageId, pageTitle, blockId?, url:'#p/<id>',
+//    author, at, text, resolved, replies:[{id, author, at, text}] }]
+```
+
+What a person flagged, from every page, in document order. `anchor` says what
+the thread is about: a `block` (and `blockId` names it) or the `page` as a
+whole. `text` is **plain text** — never html, in or out. Start with
+`bento.comments({ resolved: false })`: those are the ones still asking for
+something.
+
+It is **read-only, deliberately**. Acting on a remark is your job; marking it
+resolved is the commenter's, and an agent that closed the thread it was asked
+to address would make the record untrue. Say what you did in a block, and leave
+the thread open.
 
 ### The patch verbs, exactly
 
