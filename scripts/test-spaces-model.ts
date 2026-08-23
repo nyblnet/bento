@@ -440,9 +440,17 @@ for (const [label, input, err] of [
   const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const css = fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
 
-  ok(/const secondary: Array<\{/.test(ed), 'the secondary topbar actions are declared as ONE list')
-  ok(/secondary\.map\(/.test(ed), '…the inline row is built from that list')
-  ok(/for \(const a of secondary\)/.test(ed), '…and the ⋯ menu is built from the SAME list')
+  // TWO lists now, and the split is the point. Everything used to be one list
+  // rendered BOTH inline and into ⋯ unconditionally, so on a desktop half of ⋯
+  // pointed at buttons already on screen. What still must not happen is a ⋯
+  // menu maintained BY HAND as a copy of the row — so each list is declared
+  // once and ⋯ takes the inline one only when the bar has actually dropped it.
+  ok(/const barActions: BarAction\[\]/.test(ed), 'the bar actions are declared as one typed list')
+  ok(/const menuActions: BarAction\[\]/.test(ed), '…the ⋯-only actions as another')
+  ok(/barActions\.map\(/.test(ed), '…the inline row is built from the bar list')
+  ok(/for \(const a of menuActions\)/.test(ed), '…⋯ always carries the menu-only actions')
+  ok(/isFolded\(\)\) \{\s*\n\s*for \(const a of barActions\)/.test(ed),
+    '…and picks up the bar list ONLY once folded, or ⋯ duplicates the visible row')
 
   // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
   // no longer px media queries. They were (820 and 600), and the numbers moved
@@ -464,7 +472,12 @@ for (const [label, input, err] of [
   ok(inTier('compact', /\.sp-primary span\.sp-savelabel \{ display: none/), "…including Save's")
   ok(inTier('tight', /\.sp-mark-word \{ display: none/), 'tight drops the wordmark, keeping the mark')
   ok(inTier('fold', /\.sp-sec \{ display: none/), 'fold moves the secondary row into ⋯')
-  ok(inTier('fold', /\.sp-more \{ display: inline-flex/), '…which is where ⋯ appears')
+  // ⋯ is no longer fold-only: it is the home of the once-a-session commands, so
+  // gating it on the fold would put New page, the journal, import, print and
+  // About out of a desktop user's reach entirely.
+  ok(/^\.sp-more \{ display: inline-flex/m.test(css),
+    '⋯ is in the bar at EVERY width, being a home and not only an overflow')
+  ok(!/\.sp-bar-fold \.sp-more \{ display/.test(css), '…so it is not gated on the fold any more')
   ok(inTier('fold', /\.sp-mark \{ display: none/), '…and the mark goes (About is in ⋯)')
   ok(inTier('fold', /\.sp-group-history \{ display: none/), '…and the history pair')
   ok(inTier('fold', /\.sp-split \.sp-caret \{ display: none/), '…and the save caret')

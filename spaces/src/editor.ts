@@ -248,7 +248,7 @@ export class Editor {
       '<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>' +
       '<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>' +
       '</svg><b class="sp-mark-word">bento<span>/</span>spaces</b>'
-    mark.title = t('About bento/spaces — version, updates, language, password')
+    mark.title = t('About this space')
     mark.addEventListener('click', () => this.openAbout())
 
     // Pages panel toggle — on every width, like slides' Slides/Format toggles.
@@ -298,38 +298,57 @@ export class Editor {
     this.redoB = iconBtn('redo', t('Redo (⇧⌘Z)'), () => { this.store.redo(); this.repaint() })
     const search = iconBtn('search', t('Search all pages (⌘K)'), () => this.openSearch())
 
-    // SECONDARY ACTIONS, declared ONCE.
+    // WHERE A COMMAND LIVES. One rule, because the bar used to have none and it
+    // showed: eight secondary buttons sat in the bar AND were repeated verbatim
+    // in the ⋯ menu at the same time, so half of ⋯ pointed at things already on
+    // screen. Print and Password each had two homes. About had three entry
+    // points under two different names — all calling one dialog.
     //
-    // Measured at 375px before this existed: the bar wanted 678px, so seven of
-    // eleven controls sat off the right edge — including Save. On a phone the
-    // file could not be saved at all.
+    //   · The bar carries what you reach for WHILE WRITING.
+    //   · ⋯ carries the rest, plus whatever the bar has had to drop.
+    //   · Save ▾ is only about writing THIS file somewhere.
+    //   · Nothing is listed in two places at the same width.
     //
-    // Below the breakpoint these collapse into the ⋯ menu and the inline copies
-    // are hidden. One list feeds both, because a phone menu maintained by hand
-    // as a copy of the desktop row drifts the first time either one changes.
-    const secondary: Array<{
+    // The measurement that produced the fold still holds: at 375px the old bar
+    // wanted 678px, so seven of eleven controls — Save included — sat off the
+    // right edge. Below the breakpoint the inline copies hide and ⋯ picks them
+    // up, one list feeding both, because a phone menu maintained by hand as a
+    // copy of the desktop row drifts the first time either one changes.
+    type BarAction = {
       icon: IconName
       label: string
       hint: string
       run: () => void
       keep?: (b: HTMLButtonElement) => void
-    }> = [
+    }
+
+    // Reached while writing, so it stays in the bar until the bar runs out of
+    // room. Reading view is a MODE — you leave and re-enter it while working,
+    // and a mode you cannot see the state of is a mode you lose track of.
+    const barActions: BarAction[] = [
+      { icon: 'eye', label: t('Reading view'), hint: t('The pages without the editing tools'),
+        run: () => this.toggleReading(),
+        keep: (b) => { this.readB = b } },
+    ]
+
+    // Reached once a session or less. A button in the bar for something you do
+    // once is a button in the way of everything you do constantly, so these
+    // live in ⋯ at every width — findable, out of the road, and each with the
+    // keyboard shortcut printed beside it.
+    const menuActions: BarAction[] = [
       { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
-      { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
-        run: () => this.openImport() },
       { icon: 'book', label: t("Today's journal"), hint: '⌘⇧J', run: () => this.openJournal() },
       { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
       { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
         run: () => this.makeIssue() },
-      { icon: 'eye', label: t('Reading view'), hint: t('The pages without the editing tools'),
-        run: () => this.toggleReading(),
-        keep: (b) => { this.readB = b } },
+      { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
+        run: () => this.openImport() },
       { icon: 'print', label: t('Print or save as PDF'), hint: '⌘P', run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), hint: t('Version, language, password, exports'),
         run: () => this.openAbout() },
     ]
 
-    const inlineSecondary = secondary.map((a) => {
+    const inlineSecondary = barActions.map((a) => {
       const b = iconBtn(a.icon, a.hint && a.hint.length < 12 ? `${a.label} (${a.hint})` : a.label, a.run)
       b.classList.add('sp-sec')
       a.keep?.(b)
@@ -363,8 +382,15 @@ export class Editor {
           close(); this.store.redo(); this.repaint()
         }, { off: !this.store.canRedo }))
       }
-      for (const a of secondary) {
+      for (const a of menuActions) {
         menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+      }
+      // …and only THEN what the bar itself has had to give up. Listing these
+      // unconditionally is what made ⋯ a duplicate of the visible row.
+      if (this.isFolded()) {
+        for (const a of barActions) {
+          menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+        }
       }
       if (this.isFolded()) {
         menu.append(this.menuItem('copy', t('Save a copy…'), t('A second file — the original is left alone'), () => {
@@ -409,12 +435,6 @@ export class Editor {
       }))
       menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
         close(); this.openExportSpace()
-      }))
-      menu.append(this.menuItem('print', t('Print / PDF…'), t('The whole space, or just this page'), () => {
-        close(); this.openPrint()
-      }))
-      menu.append(this.menuItem('lock', t('Password…'), t('Encrypt the document inside this file'), () => {
-        close(); this.openAbout()
       }))
     })
     saveMore.classList.add('sp-caret', 'sp-dd-end')

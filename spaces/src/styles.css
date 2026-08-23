@@ -1327,7 +1327,13 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    The rule is slides' rule: drop text and fold the less-used controls into ⋯,
    so every action stays reachable at every width. A horizontally scrolling
    toolbar hides the same controls, just less honestly. */
-.sp-more { display: none; }
+/* ⋯ IS A HOME, NOT JUST AN OVERFLOW. It used to be display:none until the bar
+   folded, which was right while every command it held also had a button in the
+   bar. It no longer does: the commands you reach for once a session live here
+   at every width, so hiding it on a desktop would make New page, the journal,
+   import, print and About unreachable with a mouse. It still ALSO collects
+   whatever the bar drops as the window narrows. */
+.sp-more { display: inline-flex; }
 
 /* The tier starts at the DRAWER breakpoint (820px), not at 720. It was 720, and
    measured at 768 — an iPad in portrait — the bar still laid out 795px wide: the
@@ -1361,7 +1367,6 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    away, and the editor asks the DOM which tier is live rather than re-deriving
    it from a width — see fitTopbar. */
 .sp-bar-fold .sp-sec { display: none; }
-.sp-bar-fold .sp-more { display: inline-flex; }
 .sp-bar-fold .sp-mark { display: none; }
 .sp-bar-fold .sp-group-history { display: none; }
 .sp-bar-fold .sp-split .sp-caret { display: none; }
