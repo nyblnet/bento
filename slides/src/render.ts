@@ -1070,7 +1070,12 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         audio.controls = el.controls !== false
         audio.loop = !!el.loop
         audio.preload = 'metadata'
-        audio.dataset.autoplay = el.autoplay ? '1' : ''
+        // OMITTED, not emptied, when autoplay is off. Reveal decides autoplay
+        // with hasAttribute('data-autoplay') — presence, not value — so
+        // data-autoplay="" made it play a clip the author had switched OFF
+        // (reported 2026-08-22). Our own startMediaIn reads [data-autoplay="1"]
+        // and was never the problem; Reveal simply gets there first.
+        if (el.autoplay) audio.dataset.autoplay = '1'
         audio.style.cssText = 'width:100%;display:block' + inert
         const wrap = document.createElement('div')
         wrap.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center'
@@ -1092,7 +1097,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       video.muted = el.muted !== false
       video.playsInline = true
       video.preload = 'metadata'
-      video.dataset.autoplay = el.autoplay ? '1' : ''
+      if (el.autoplay) video.dataset.autoplay = '1' // presence is the flag — see the audio case
       video.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};border-radius:${radius}px;display:block;background:#0b0f14` + inert
       if (!el.src) {
         const ph = document.createElement('div')

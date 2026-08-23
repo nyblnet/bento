@@ -228,6 +228,18 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Media autoplay rig
+        # An author set a clip's Autoplay to Off and it played anyway, every
+        # show, since media shipped in v0.9.16. render.ts wrote
+        # data-autoplay="" when off — PRESENT but empty — and Reveal decides
+        # autoplay with hasAttribute(), so it played what our own value-based
+        # selector correctly ignored. The property pinned here is that an
+        # autoplay-off element carries NO such attribute, because its presence
+        # is read by code we do not own. Measured on rendered DOM: the
+        # difference between assigning '' and not assigning is invisible to a
+        # grep. Self-skips without Chrome.
+        run: node scripts/test-media-autoplay.ts
+
       - name: Return-gate rig
         # The web demo always starts fresh, so someone who saved from
         # bento.page and came back saw a blank starter and read it as lost
