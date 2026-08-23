@@ -35,6 +35,19 @@
   --paper-trk-bg: #eaf3ef;
   --paper-trk-del: #a3312a;
 
+  /* The floating selection toolbar, which is DARK IN BOTH THEMES and so lives
+     here with the other theme-invariant values. It floats over the page, the
+     page is white whatever the viewer's theme, and a white bar on white paper
+     would need a border to exist at all — while a dark one reads instantly as
+     chrome rather than as something printed on the sheet. */
+  --selbar: #22272f;
+  --selbar-line: #333a45;
+  --selbar-hover: #333a45;
+  --selbar-sep: #3d4552;
+  --selbar-ink: #cfd6e0;
+  --selbar-ink-hi: #ffffff;
+  --selbar-on-ink: #1c1200;
+
   /* geometry */
   --radius: 10px;
   --page-w: 816px; --page-h: 1056px;
@@ -970,6 +983,10 @@ html, body {
    because the grips live in an overlay and CSS cannot ask which block the
    pointer is over. */
 .t-deco .t-grip.on { opacity: .7; }
+/* The + shares the grip's reveal: they are one gutter, two buttons, as in
+   bento/spaces. It sits further out so the grip stays nearest the text — the
+   handle you reach for while reading, with insertion one step beyond. */
+.t-deco .t-plus { cursor: pointer; }
 .t-deco .t-grip.t-grip-dragging { opacity: 1; cursor: grabbing; }
 /* While a drag is live the whole page shows the grabbing cursor, or it
    reverts the moment the pointer leaves the 26px handle. */
@@ -1008,3 +1025,28 @@ body.t-dragging, body.t-dragging * { cursor: grabbing !important; user-select: n
 
 /* It is chrome sitting ON the sheet, so it must never reach paper. */
 @media print { .t-deco .t-grip-layer { display: none; } }
+
+
+/* The selection toolbar. Dark on both themes on purpose: it floats OVER the
+   page, and a white bar on white paper needs a border to exist at all, while a
+   dark one reads instantly as chrome rather than as part of the document. */
+.t-selbar {
+  position: absolute; z-index: 70;
+  display: flex; align-items: center; gap: 1px;
+  padding: 4px; border-radius: 9px;
+  background: var(--selbar); border: 1px solid var(--selbar-line);
+  box-shadow: 0 10px 30px rgb(20 30 45 / .28), 0 2px 6px rgb(20 30 45 / .18);
+}
+.t-selbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent;
+  color: var(--selbar-ink); cursor: pointer;
+}
+.t-selbtn:hover { background: var(--selbar-hover); color: var(--selbar-ink-hi); }
+.t-selbtn.on { background: var(--accent); color: var(--selbar-on-ink); }
+.t-selbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.t-selsep { width: 1px; height: 18px; margin: 0 3px; background: var(--selbar-sep); }
+
+/* Neither of these is part of the document. */
+@media print { .t-selbar, .t-deco .t-grip-layer { display: none; } }

@@ -26,7 +26,6 @@ import { changes as trackedChanges, resolve as resolveOne, resolveAll } from './
 import { printDocument, buildPrintDocument } from './print.ts';
 import { sign as signDoc, verifyChain, newKey } from './canon.ts';
 import { uid as newId } from './model.ts';
-import type { MarkType } from './inline.ts';
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest).
@@ -126,9 +125,6 @@ app.innerHTML = `
       <div class="t-menuwrap">
         <button id="more" class="t-btn" type="button"></button>
         <div class="t-menu" id="moreMenu" hidden>
-          <button id="ms" type="button"></button>
-          <button id="mc" type="button"></button>
-          <div class="t-menu-sep"></div>
           <button id="snap" type="button"></button>
           <button id="review" type="button"></button>
           <button id="sign" type="button"></button>
@@ -199,8 +195,6 @@ label('props', ICONS.panelRight, t('Format — show or hide the properties panel
 // Strikethrough and code leave the BAR for the ⋯ menu: of the five character
 // formats they are the two nobody reaches for mid-sentence in the prose this
 // app is for, and bar width is the scarcest thing in the app.
-label('ms', ICONS.strike, t('Strikethrough'), t('Strikethrough'));
-label('mc', ICONS.code, t('Code'), t('Code'));
 label('undo', ICONS.undo, t('Undo (⌘Z)'));
 label('redo', ICONS.redo, t('Redo (⇧⌘Z)'));
 label('save', ICONS.save, t('Save (⌘S)'), t('Save'));
@@ -616,17 +610,14 @@ store.on(refresh);
 // than asserted: `getElementById(id)!` on a button that had moved was a
 // TypeError at boot that tsc could not see — the app rendered its paper and
 // then stopped before it published `window.bento`, so it looked like it worked.
-const MARK_BTN: Array<[string, MarkType]> = [['ms', 's'], ['mc', 'code']];
-for (const [id, t] of MARK_BTN) {
-  document.getElementById(id)?.addEventListener('mousedown', (e) => {
-    e.preventDefault();                      // keep the selection alive
-    editor.toggle(t);
-  });
-}
+// Strikethrough and code USED to live here as two loose buttons, exiled into ⋯
+// when the toolbar ran out of room. They have a proper home now — the
+// selection toolbar, which appears over the words they act on — so they are
+// gone from the overflow menu rather than being offered in two places at once.
 editor.onSelection = (active) => {
+  void active;
   paintToolStates();
   for (const f of selectionFns()) f(featureCtx);
-  for (const [id, t] of MARK_BTN) document.getElementById(id)?.classList.toggle('on', active.has(t));
 };
 // A list button TOGGLES: pressing Bulleted list on an item that is already
 // bulleted returns it to a paragraph. Without that the button is a one-way door

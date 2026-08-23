@@ -27,9 +27,14 @@
 // doubled, on every save.
 
 import { t } from './i18n.ts';
-import { registerKey, registerPaginated, type FeatureContext } from './features.ts';
+import { registerKey, registerPaginated, tools, type FeatureContext } from './features.ts';
 import { moveUnit, moveUnitTo, units, canMove, boundaries } from './move.ts';
 import type { Block } from './model.ts';
+
+const PLUS_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"'
+  + ' stroke="currentColor" stroke-width="2" stroke-linecap="round">'
+  + '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 
 const GRIP_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">'
@@ -105,6 +110,46 @@ for (const [key, dir] of [['arrowup', -1], ['arrowdown', 1]] as const) {
 let openMenu: HTMLElement | null = null;
 const closeMenu = () => { openMenu?.remove(); openMenu = null; };
 document.addEventListener('click', closeMenu);
+
+/**
+ * The margin's + — insert a block after this one.
+ *
+ * It renders `tools('insert')`, which is the SAME registry the toolbar's
+ * Insert menu renders. Not a second menu with its own list: one home, two
+ * triggers, so the tenth insert appears in both without anybody remembering
+ * to add it twice.
+ *
+ * The insert tools all act at the CARET, so this puts the caret at the end of
+ * the block it belongs to first. That means every one of them works here
+ * unmodified — including any added later, which is the point of going through
+ * the registry rather than calling the four we happen to know about.
+ */
+function plusMenu(ctx: FeatureContext, blockId: string, at: HTMLElement): void {
+  closeMenu();
+  const menu = document.createElement('div');
+  menu.className = 't-menu t-grip-menu';
+  for (const spec of tools('insert')) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const label = typeof spec.label === 'function' ? spec.label()
+      : (spec.label ?? (typeof spec.title === 'function' ? spec.title() : spec.title));
+    b.innerHTML = spec.icon + `<span>${label}</span>`;
+    b.addEventListener('mousedown', e => e.preventDefault());
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      closeMenu();
+      const blk = ctx.store.block(blockId);
+      if (blk) ctx.editor.setCaret({ id: blockId, at: blk.text.length });
+      spec.run(ctx);
+    });
+    menu.appendChild(b);
+  }
+  const r = at.getBoundingClientRect();
+  menu.style.top = `${r.bottom + window.scrollY + 4}px`;
+  menu.style.insetInlineStart = `${r.left + window.scrollX}px`;
+  document.body.appendChild(menu);
+  openMenu = menu;
+}
 
 function gripMenu(ctx: FeatureContext, id: string, at: HTMLElement): void {
   closeMenu();
@@ -319,7 +364,20 @@ function paintGrips(ctx: FeatureContext, _metrics: unknown, paper: HTMLElement):
     // toolbar buttons do
     g.addEventListener('mousedown', e => e.preventDefault());
     g.addEventListener('pointerdown', e => startDrag(e, ctx, g, first.id, paper));
-    frag.appendChild(g);
+
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 't-grip t-plus';
+    plus.innerHTML = PLUS_ICON;
+    plus.title = t('Insert below');
+    plus.setAttribute('aria-label', t('Insert a block below this one'));
+    plus.dataset.for = first.id;
+    plus.style.top = `${r.top - paperRect.top + 1}px`;
+    plus.style.insetInlineStart = `${x - 24}px`;
+    plus.addEventListener('mousedown', e => e.preventDefault());
+    plus.addEventListener('click', e => { e.stopPropagation(); plusMenu(ctx, first.id, plus); });
+
+    frag.append(plus, g);
   }
   layer.appendChild(frag);
 }

@@ -147,5 +147,35 @@ for (const [label, file] of actions) {
      `⋯ item "${label}" (${file}) is not a property of the selection`);
 }
 
+console.log('\n— every element the chrome reaches for actually exists —');
+{
+  // byId() is `document.getElementById(id) as T` — it returns null for a
+  // missing id and the cast hides that from tsc. label() then dereferences it
+  // and the whole boot dies AFTER the page has rendered its paper, so the app
+  // looks fine and simply never publishes window.bento.
+  //
+  // This has now happened twice: once when buttons moved into the ⋯ menu, and
+  // again when two of them were REMOVED from it and their label() calls were
+  // left behind. Both times the symptom was a working-looking page.
+  const src = readFileSync(join(SRC, 'main.ts'), 'utf8');
+
+  const declared = new Set<string>();
+  for (const m of src.matchAll(/\bid="([A-Za-z][\w-]*)"/g)) declared.add(m[1]);
+  // ids created in script rather than in the template
+  for (const m of src.matchAll(/\.id\s*=\s*'([^']+)'/g)) declared.add(m[1]);
+  for (const m of src.matchAll(/\.id\s*=\s*`([^`$]+)`/g)) declared.add(m[1]);
+
+  const referenced = new Map<string, string>();
+  for (const re of [/\blabel\(\s*'([^']+)'/g, /\bbyId(?:<[^>]*>)?\(\s*'([^']+)'/g]) {
+    for (const m of src.matchAll(re)) referenced.set(m[1], m[0].split('(')[0]);
+  }
+
+  ok(declared.size > 5, `the scan found the template's ids (${declared.size})`);
+  ok(referenced.size > 5, `and the lookups (${referenced.size})`);
+  for (const [id, how] of referenced) {
+    ok(declared.has(id), `${how}('${id}') refers to an element that exists`);
+  }
+}
+
 console.log(`\n${checks - bad}/${checks} checks passed`);
 if (bad) process.exit(1);

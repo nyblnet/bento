@@ -22,7 +22,7 @@
 // without changing a byte of the document.
 
 import { registerPanel, registerSelection, type FeatureContext } from './features.ts';
-import { ICONS } from './icons.ts';
+import { MARK_TOOLS } from './marks.ts';
 import { t } from './i18n.ts';
 import { MAX_TABLE_COLS, type Block, type BlockKind } from './model.ts';
 import { PAPER, openPageSetup, withSize, withOrientation, type SizeId } from './layout.ts';
@@ -132,14 +132,12 @@ function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
     v => { ctx.editor.setKind(v as BlockKind); ctx.refresh(); },
   ));
 
+  // ONE list, in marks.ts, rendered here and in the selection toolbar. It was
+  // written out twice before, and a third copy was about to be written.
   const active = ctx.editor.activeMarks() as Set<string>;
-  toggles(body, [
-    { icon: ICONS.bold, title: t('Bold (⌘B)'), on: active.has('b'), run: () => ctx.editor.toggle('b') },
-    { icon: ICONS.italic, title: t('Italic (⌘I)'), on: active.has('i'), run: () => ctx.editor.toggle('i') },
-    { icon: ICONS.underline, title: t('Underline (⌘U)'), on: active.has('u'), run: () => ctx.editor.toggle('u') },
-    { icon: ICONS.strike, title: t('Strikethrough'), on: active.has('s'), run: () => ctx.editor.toggle('s') },
-    { icon: ICONS.code, title: t('Code'), on: active.has('code'), run: () => ctx.editor.toggle('code') },
-  ]);
+  toggles(body, MARK_TOOLS.map(m => ({
+    icon: m.icon, title: m.title(), on: active.has(m.t), run: () => ctx.editor.toggle(m.t),
+  })));
 
   // ---- typeface and size, for the SELECTION.
   //
