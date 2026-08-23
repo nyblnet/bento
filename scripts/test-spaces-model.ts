@@ -2719,5 +2719,46 @@ function fsTable(f: string): string {
 }
 
 
+// ---- A LINK IN A TABLE CELL IS A LINK --------------------------------------
+// A table keeps its content in `rows` and mirrors it into `html`; writeTable is
+// the one writer that keeps the two in step. So a table the EDITOR produced
+// back-links from its cells, and a table that arrives any other way — hand
+// written, an agent calling updateBlock, an import — does not: the link works
+// when clicked and appears in no "Linked from". Silent, and exactly the one
+// failure a backlink index can have.
+//
+// `rows` is read ONLY when `html` is absent. Extending this to always scan
+// `rows` was tried during the starter work and reverted, because with both
+// fields present every cell link is counted twice.
+{
+  const cell = '<a href="#p/b">B</a>'
+  const docWith = (blk: Record<string, unknown>) => ({
+    format: FORMAT, version: 1, docId: 'd', title: 't', home: 'a',
+    theme: {}, pages: [
+      { id: 'a', title: 'A', blocks: [blk] },
+      { id: 'b', title: 'B', blocks: [] },
+    ],
+  }) as unknown as SpacesDoc
+  const backlinksToB = (blk: Record<string, unknown>) =>
+    (buildIndex(docWith(blk)).backlinks?.get('b') ?? []).length
+
+  ok(backlinksToB({ id: 'k', type: 'table', rows: [['x', cell]] }) === 1,
+    'a hand-authored table cell back-links, with no html fallback present')
+
+  const written: Record<string, unknown> = { id: 'k', type: 'table' }
+  writeTable(written as never, tableOf({ ...written, rows: [['x', cell]] } as never))
+  ok(backlinksToB(written) === 1, 'a table written by the editor back-links exactly once')
+
+  ok(backlinksToB({ id: 'k', type: 'table', rows: [[cell]], html: cell }) === 1,
+    '…and with BOTH fields present the same link is not counted twice')
+
+  // buildIndex runs on documents nobody has validated yet
+  let threw = false
+  try { backlinksToB({ id: 'k', type: 'table', rows: ['not-a-row', [null, 7, cell]] }) }
+  catch { threw = true }
+  ok(!threw, 'a malformed rows array does not take the index down')
+}
+
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

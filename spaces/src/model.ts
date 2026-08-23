@@ -550,6 +550,23 @@ export interface SpaceIndex {
   backlinks: Map<string, Array<{ pageId: string; blockId: string }>>
 }
 
+/**
+ * A table's cells as one string, for scanning only.
+ *
+ * Deliberately not `tableFallbackHtml`: this is never written anywhere, so it
+ * needs no separator, no escaping and no shape — it exists so one regex can
+ * find hrefs in cells the same way it finds them in prose. Tolerant of a
+ * malformed `rows` because it runs on documents nobody has validated yet.
+ */
+function tableCellsText(rows: unknown[]): string {
+  let out = ''
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue
+    for (const cell of row) if (typeof cell === 'string') out += cell + '\n'
+  }
+  return out
+}
+
 /** Every `#p/<id>` href in a block's html. */
 const LINK_RE = /href="#p\/([^"]+)"/g
 
@@ -649,8 +666,25 @@ export function buildIndex(doc: SpacesDoc): SpaceIndex {
     pushInto(children, p.parent && page.has(p.parent) ? p.parent : '', p)
     for (const b of p.blocks) {
       block.set(b.id, { block: b, pageId: p.id })
-      if (b.html) {
-        for (const m of b.html.matchAll(LINK_RE)) {
+      // WHERE A BLOCK'S LINKS LIVE. Normally in `html`. A table keeps its
+      // content in `rows` and mirrors it into `html` as a readable fallback,
+      // and `writeTable` is the one writer that keeps the two in step — so for
+      // a table the editor produced, scanning `html` finds the cells' links.
+      //
+      // It does not for a table that arrives any other way. A hand-written
+      // document, an agent calling updateBlock, an import: `rows` is set,
+      // `html` is absent, and a link in a cell then WORKS WHEN CLICKED and
+      // appears in no "Linked from" — the one failure a backlink index has,
+      // and silent. Measured before this: 0 backlinks, against 1 for the same
+      // table through writeTable.
+      //
+      // `rows` is read ONLY when `html` is absent. With both present they are
+      // the same links by construction, and scanning both would report every
+      // cell link twice — which is why extending this to always scan `rows`
+      // was tried during the starter work and reverted.
+      const linkSrc = b.html || (Array.isArray(b.rows) ? tableCellsText(b.rows) : '')
+      if (linkSrc) {
+        for (const m of linkSrc.matchAll(LINK_RE)) {
           pushInto(backlinks, linkTarget(m[1], page), { pageId: p.id, blockId: b.id })
         }
       }
