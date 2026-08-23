@@ -240,8 +240,16 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-btn svg { display: block; }
 
 .ed-btn-primary {
+  /* The button is always the INVERSE of the surface it sits on, which is the
+     only pairing that survives a theme flip. `color: #fff` did not: the
+     background follows --ink, so in dark mode it turned light while the text
+     stayed white — measured at 1.21:1, the same ratio that made the panel
+     inputs unreadable before the theme tokens existed. It looked right in the
+     About dialog only because that has its own peach override, so the six
+     other primary buttons in the app were the ones nobody saw.
+     After: 14.51:1 light, 12.61:1 dark. */
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   padding: 6px 14px;
 }
 .ed-btn-primary:hover { background: var(--ink-2); }
@@ -461,7 +469,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-setchip:hover { background: var(--chrome-2); }
 .ed-setchip.active {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
 }
 
 /* ————— slide surface (shared by canvas, thumbs, present) ————— */
@@ -772,7 +780,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   bottom: 26px;
   transform: translate(-50%, 12px);
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   font-size: 13px;
   padding: 9px 16px;
   border-radius: 999px;
@@ -1391,7 +1399,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 1;
   border: none;
   background: var(--blue);
-  color: #fff;
+  color: var(--surface);
   border-radius: 50%;
   width: 16px;
   height: 16px;
@@ -2153,7 +2161,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
-  color: #5d6b80;
+  /* --muted, not a literal: the background follows --surface, so a fixed
+     grey-blue that read at 5.41:1 on white sat at 2.81:1 on the dark surface,
+     under the 4.5 floor. With the token it is 5.98:1 light, 5.02:1 dark. */
+  color: var(--muted);
   font-size: 11px;
   line-height: 1;
   padding: 0;
