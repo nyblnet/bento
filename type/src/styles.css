@@ -972,7 +972,23 @@ html, body {
   background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
 }
 .t-deco .t-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.t-grip-menu { position: absolute; z-index: 60; display: block; }
+/* The grip menu borrows .t-menu's ITEM styling, but none of its placement.
+   .t-menu is built to hang from the right edge of a topbar button's wrapper,
+   so it sets inset-inline-end:0 — and this one is appended to <body> and
+   positioned by script from the left. With a left AND a right edge pinned, the
+   box stretched from the grip to the window edge: a full-width white band
+   across the document and the properties panel. */
+.t-grip-menu {
+  position: absolute; z-index: 60; display: block;
+  inset-inline-end: auto;          /* the whole bug: unpin the right edge */
+  top: auto;                       /* script places it, in page coordinates */
+  min-width: 150px; width: max-content;
+}
+/* A disabled item must LOOK disabled. "Move up" on the first block is
+   correctly inert, and rendered identically to "Move down" — so the menu
+   silently did nothing and looked like it had failed. */
+.t-menu button:disabled { opacity: .4; cursor: default; }
+.t-menu button:disabled:hover { background: transparent; }
 
 /* It is chrome sitting ON the sheet, so it must never reach paper. */
 @media print { .t-deco .t-grip-layer { display: none; } }
