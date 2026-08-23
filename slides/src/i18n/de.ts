@@ -744,4 +744,12 @@ export const de: Catalog = {
   "Appearance": "Darstellung",
   "Match my system": "Systemeinstellung folgen",
   "Dark": "Dunkel",
+  "You saved a deck from here before.": "Sie haben hier schon einmal ein Deck gespeichert.",
+  "This page always starts fresh. Open your file to carry on with it:": "Diese Seite startet immer neu. Öffnen Sie Ihre Datei, um daran weiterzuarbeiten:",
+  "Start a new deck anyway": "Trotzdem ein neues Deck beginnen",
+  "This page always starts a new deck — open this file to come back to it.": "Diese Seite startet immer ein neues Deck — öffnen Sie diese Datei, um zurückzukehren.",
+  "The bento/tray extension can reopen your files here.": "Die bento/tray-Erweiterung kann Ihre Dateien hier wieder öffnen.",
+  "The bento/tray app can keep your files on this device.": "Die bento/tray-App kann Ihre Dateien auf diesem Gerät behalten.",
+  "This browser cannot reopen a file in place — Chrome or Edge can.": "Dieser Browser kann eine Datei nicht direkt überschreiben — Chrome oder Edge schon.",
+  "Keep the file somewhere you can find it again.": "Bewahren Sie die Datei an einem Ort auf, den Sie wiederfinden.",
 }

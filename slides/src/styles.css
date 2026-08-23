@@ -2400,3 +2400,66 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 [dir="rtl"] .ed-chart-json {
   direction: ltr;
 }
+
+/* ————— saved-from-the-web notice, and the return gate ————————————————————
+   The web demo always starts a new deck. Someone who saved from it and came
+   back got a blank starter and read it as lost work (docs/DECISIONS.md
+   2026-08-23). Two surfaces: a persistent line after a save, and a gate on the
+   NEXT visit. Both use theme tokens rather than literals — the notice is
+   chrome, and a chrome surface pinned to white turns light text onto a light
+   background the moment a reader is in dark mode. */
+.ed-savednote {
+  position: fixed;
+  bottom: 18px;
+  inset-inline-start: 18px;
+  z-index: 60;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 26px rgb(15 23 36 / 0.18);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.ed-savednote-name { font-size: 13px; word-break: break-all; }
+.ed-savednote-body, .ed-savednote-offer { color: var(--muted); }
+
+.ed-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgb(15 23 36 / 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.ed-gate-card {
+  width: min(420px, 100%);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgb(15 23 36 / 0.28);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ed-gate-h { margin: 0; font-size: 17px; }
+.ed-gate-body { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+.ed-gate-name {
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--chrome);
+  border: 1px solid var(--line);
+  word-break: break-all;
+}
+.ed-gate-offer { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.ed-gate-acts { display: flex; justify-content: flex-end; margin-top: 4px; }
