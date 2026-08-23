@@ -135,6 +135,27 @@ export async function replaceDeckDoc(env: Env, id: string, doc: Record<string, u
     .run()
 }
 
+/** Permanently delete a deck: its D1 row, its doc.json, and every asset
+ *  blob under its namespace. R2 has no delete-by-prefix — list then batch
+ *  delete (list() pages at up to 1000 keys, same as delete()'s own batch
+ *  cap, so one delete call per list page is enough). Order matters only in
+ *  that the D1 row goes last: if a crash lands between the R2 deletes and
+ *  the D1 delete, the deck is an orphaned-but-still-listed row (annoying,
+ *  recoverable by retrying delete) rather than a listed-nowhere row whose
+ *  blobs leak forever. */
+export async function deleteDeck(env: Env, id: string): Promise<void> {
+  let cursor: string | undefined
+  do {
+    const listed = await env.DOCS.list({ prefix: `assets/${id}/`, cursor })
+    if (listed.objects.length) {
+      await env.DOCS.delete(listed.objects.map((o) => o.key))
+    }
+    cursor = listed.truncated ? listed.cursor : undefined
+  } while (cursor)
+  await env.DOCS.delete(deckDocKey(id))
+  await env.DB.prepare(`DELETE FROM decks WHERE id = ?`).bind(id).run()
+}
+
 const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',

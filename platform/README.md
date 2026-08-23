@@ -355,7 +355,9 @@ problem for whenever that app exists, not solved here.
 | `/api/decks` | POST | owner session | `{doc, access?}` → `{id, url}`. Validates, strips `collab`, mints `docId`. `access` is one of `'private'\|'view'\|'edit'`, defaults to `'edit'` |
 | `/api/decks/:id` | GET | owner session | `{doc}` |
 | `/api/decks/:id` | PATCH | owner session | `{doc}` → replaces the stored doc |
+| `/api/decks/:id` | DELETE | owner session | permanently deletes the deck: D1 row + `doc.json` + every asset blob under its R2 namespace. 404 on an unknown id |
 | `/api/decks/:id/access` | PATCH | owner session | `{access}` → `{ok, access}`. Changes what anonymous viewers get. 422 on an invalid value, 404 on an unknown id |
+| `/api/decks/:id/title` | PATCH | owner session | `{title}` → `{ok}`. Renames the deck by rewriting `doc.title` itself (there's no separate cosmetic label) — same effect as editing the title in the live editor. 422 on a blank title, 404 on an unknown id |
 | `/api/decks/:id/assets` | POST | owner session | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
 | `/d/:id` | GET | depends on the deck's `access` | `'private'` → 404 unless it's the owner's session. `'view'` (non-owner) → `readonly: true` spliced in, boots Bento's present-only PLAYER mode. `'edit'`, or any owner session → the real, live editor page |
 | `/d/:id/download` | GET | same as `/d/:id` | same content rules as `/d/:id`, with `Content-Disposition: attachment` |
@@ -373,15 +375,18 @@ not covered.
 
 ## Known gaps (deliberately out of scope for this PR)
 
-- **The deck history sidebar's access dialog is per-deck only, not a general
-  visibility model.** `/` shows a ChatGPT-style sidebar (`GET /api/decks`,
-  most-recently-touched first) with a "+ New deck" action, a clickable entry
-  per deck, a status icon (🔓/👁️/🔒), and a ⚙️ button opening a small modal to
-  change access — but there's no bulk action, no "show only private decks"
-  filter, and no audit trail of who changed what (single-owner project, so
-  "who" is always the one account). No pagination either; `listDecks` is
-  capped at 200 rows, which is fine at this project's declared scale and not
-  worth solving before it's a real problem.
+- **The deck history sidebar's ⚙️ dialog (rename, access, delete) is per-deck
+  only, not a general management view.** `/` shows a ChatGPT-style sidebar
+  (`GET /api/decks`, most-recently-touched first) with a "+ New deck" action,
+  a clickable entry per deck, a status icon (🔓/👁️/🔒), and a ⚙️ button opening
+  a small modal — but there's no bulk action (no multi-select delete, no
+  "show only private decks" filter), and no audit trail of who changed what
+  (single-owner project, so "who" is always the one account). No pagination
+  either; `listDecks` is capped at 200 rows, which is fine at this project's
+  declared scale and not worth solving before it's a real problem. Deletion
+  has no undo/trash — `DELETE /api/decks/:id` removes the D1 row and every R2
+  object (doc + assets) immediately; the confirmation prompt (a native
+  `confirm()`, naming the deck by title) is the only safety net.
 - **A private deck's title still round-trips through the sidebar and the
   `/api/decks` list** — those stay owner-session-gated, so this isn't a leak,
   but it means "private" specifically means "invisible to anyone without my

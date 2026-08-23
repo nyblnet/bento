@@ -248,7 +248,20 @@ ${PAGE_STYLES}
   .access-option .access-icon { font-size: 17px; flex-shrink: 0; line-height: 1.3; }
   .access-option .access-label { font-weight: 700; font-size: 13px; display: block; }
   .access-option .access-desc { display: block; font-weight: 400; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .rename-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .rename-row input {
+    flex: 1; min-width: 0; background: var(--bg-elev); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font: 13px/1.4 inherit;
+  }
+  .rename-row input:focus { outline: none; border-color: var(--accent); }
+  .rename-row button { flex: 0 0 auto; padding: 8px 14px; font-size: 13px; }
   .access-modal-close { width: 100%; margin-top: 2px; }
+  .access-danger {
+    width: 100%; margin: 4px 0 8px; padding: 10px 12px; border-radius: 10px; text-align: center;
+    background: transparent; border: 1px solid var(--err-fg); color: var(--err-fg); cursor: pointer; font: inherit;
+  }
+  .access-danger:hover { background: var(--err-bg); }
+  .access-danger:disabled { opacity: 0.6; cursor: default; }
   .sidebar-footer { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
   .logout-link {
     display: block; width: 100%; text-align: left; font-size: 13px; color: var(--text-dim);
@@ -362,6 +375,8 @@ function accessMeta(value) {
   return ACCESS_LEVELS.find(a => a.value === value) || ACCESS_LEVELS[0]
 }
 
+let deckIndex = {}
+
 async function loadDeckList() {
   const list = document.getElementById('deckList')
   try {
@@ -369,6 +384,8 @@ async function loadDeckList() {
     if (!res.ok) throw new Error('failed to load')
     const body = await res.json()
     const decks = body.decks || []
+    deckIndex = {}
+    decks.forEach(d => { deckIndex[d.id] = d })
     if (decks.length === 0) {
       list.innerHTML = '<div class="deck-list-empty">No decks yet — create your first one →</div>'
       return
@@ -382,7 +399,7 @@ async function loadDeckList() {
         '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
         '</a>' +
         '<span class="deck-status" title="' + a.label + ' — ' + a.desc + '">' + a.icon + '</span>' +
-        '<button class="deck-gear" type="button" data-id="' + d.id + '" data-access="' + d.access + '" title="Manage access">⚙️</button>' +
+        '<button class="deck-gear" type="button" data-id="' + d.id + '" title="Deck settings">⚙️</button>' +
         '</div>'
       )
     }).join('')
@@ -392,30 +409,61 @@ async function loadDeckList() {
 }
 loadDeckList()
 
-function openAccessModal(id, current) {
+function openAccessModal(id) {
+  const info = deckIndex[id] || { title: '', access: 'edit' }
   const backdrop = document.createElement('div')
   backdrop.className = 'access-modal-backdrop'
   backdrop.innerHTML =
     '<div class="access-modal">' +
-    '<h3>Deck access</h3>' +
-    '<p class="access-modal-sub">Choose who can open this deck\\'s link.</p>' +
+    '<h3>Deck settings</h3>' +
+    '<p class="access-modal-sub">Rename it, choose who can open its link, or delete it.</p>' +
+    '<div class="rename-row">' +
+    '<input type="text" id="renameInput" maxlength="200">' +
+    '<button type="button" id="renameSave">Rename</button>' +
+    '</div>' +
     ACCESS_LEVELS.map(a =>
-      '<button type="button" class="access-option' + (a.value === current ? ' current' : '') + '" data-value="' + a.value + '">' +
+      '<button type="button" class="access-option' + (a.value === info.access ? ' current' : '') + '" data-value="' + a.value + '">' +
       '<span class="access-icon">' + a.icon + '</span>' +
       '<span><span class="access-label">' + a.label + '</span>' +
       '<span class="access-desc">' + a.desc + '</span></span>' +
       '</button>'
     ).join('') +
+    '<button type="button" class="access-danger" id="deleteDeck">Delete this deck…</button>' +
     '<button type="button" class="access-modal-close">Close</button>' +
     '</div>'
   document.body.appendChild(backdrop)
+  const renameInput = backdrop.querySelector('#renameInput')
+  renameInput.value = info.title || ''
   const close = () => backdrop.remove()
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close() })
   backdrop.querySelector('.access-modal-close').onclick = close
+
+  const doRename = async () => {
+    const newTitle = renameInput.value.trim()
+    if (!newTitle || newTitle === info.title) return
+    const saveBtn = backdrop.querySelector('#renameSave')
+    saveBtn.disabled = true
+    try {
+      const res = await fetch('/api/decks/' + id + '/title', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      })
+      if (!res.ok) throw new Error('failed')
+      close()
+      loadDeckList()
+    } catch (err) {
+      saveBtn.disabled = false
+      alert('Could not rename this deck. Try again.')
+    }
+  }
+  backdrop.querySelector('#renameSave').onclick = doRename
+  renameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRename() })
+
   backdrop.querySelectorAll('.access-option').forEach(btn => {
     btn.onclick = async () => {
       const value = btn.dataset.value
-      if (value === current) { close(); return }
+      if (value === info.access) { close(); return }
       backdrop.querySelectorAll('.access-option').forEach(b => b.disabled = true)
       try {
         const res = await fetch('/api/decks/' + id + '/access', {
@@ -432,13 +480,28 @@ function openAccessModal(id, current) {
       }
     }
   })
+
+  backdrop.querySelector('#deleteDeck').onclick = async () => {
+    if (!confirm('Permanently delete "' + (info.title || 'this deck') + '"? This cannot be undone.')) return
+    const delBtn = backdrop.querySelector('#deleteDeck')
+    delBtn.disabled = true
+    try {
+      const res = await fetch('/api/decks/' + id, { method: 'DELETE' })
+      if (!res.ok) throw new Error('failed')
+      close()
+      loadDeckList()
+    } catch (err) {
+      delBtn.disabled = false
+      alert('Could not delete this deck. Try again.')
+    }
+  }
 }
 
 document.getElementById('deckList').addEventListener('click', (e) => {
   const btn = e.target.closest('.deck-gear')
   if (!btn) return
   e.preventDefault()
-  openAccessModal(btn.dataset.id, btn.dataset.access)
+  openAccessModal(btn.dataset.id)
 })
 
 document.getElementById('newDeck').onclick = () => location.reload()
