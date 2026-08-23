@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Export slides as images.** Save ▾ → "Export slides as images…" writes the
+  current slide as a PNG or JPEG, or every main slide as one ZIP of numbered
+  images (`slide-01.png`, …), at 1× or 2×. "All" skips hidden and state slides;
+  "current" exports either. The offline export refuses linked resources rather
+  than fetching them. Images and ZIPs from a password-protected deck are not
+  encrypted; the original `.bento.html` is unchanged. Measured in Chrome only.
+  
 ## [1.0.18] — 2026-08-15
 
 - **Security: offline mode did not block everything it promised.** The switch
