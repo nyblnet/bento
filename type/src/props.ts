@@ -108,6 +108,17 @@ function current(ctx: FeatureContext): Block | undefined {
   return c ? ctx.store.block(c.id) : undefined;
 }
 
+const FACES: Array<[string, string]> = [
+  ['"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif', 'Palatino (serif)'],
+  ['Georgia, "Times New Roman", Times, serif', 'Georgia (serif)'],
+  ['"Times New Roman", Times, serif', 'Times New Roman'],
+  ['Charter, "Bitstream Charter", Cambria, Georgia, serif', 'Charter (serif)'],
+  ['-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'System (sans)'],
+  ['Helvetica, Arial, sans-serif', 'Helvetica'],
+  ['Verdana, Geneva, sans-serif', 'Verdana'],
+  ['ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', 'Monospace'],
+];
+
 const STYLE_OPTIONS: Array<[BlockKind, string]> = [
   ['para', 'Body'], ['h1', 'Title'], ['h2', 'Heading'], ['h3', 'Subheading'],
   ['quote', 'Quote'], ['ul', 'Bulleted list'], ['ol', 'Numbered list'],
@@ -129,6 +140,50 @@ function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
     { icon: ICONS.strike, title: t('Strikethrough'), on: active.has('s'), run: () => ctx.editor.toggle('s') },
     { icon: ICONS.code, title: t('Code'), on: active.has('code'), run: () => ctx.editor.toggle('code') },
   ]);
+
+  // ---- typeface and size, for the SELECTION.
+  //
+  // A font is a character property: "make these three words Verdana" is the
+  // request, and the Document section's typeface is the DEFAULT these fall
+  // back to — the same relationship the paragraph controls already have with
+  // "Use document defaults" beneath them.
+  //
+  // Both controls are disabled without a selection, because there is nothing
+  // for them to act on: applying a font at a bare caret would either do
+  // nothing or silently restyle the whole paragraph, and a control that looks
+  // available and does nothing is worse than one that says it cannot.
+  const sel = ctx.editor.fontOfSelection();
+  const hasRange = (() => { const c = ctx.editor.caret(); return !!c && c.to !== undefined && c.to !== c.at; })();
+
+  const MIXED = '\u0000mixed';
+  const DEFAULT = '';
+  const faceOptions: Array<[string, string]> = [
+    [DEFAULT, t('Document default')],
+    ...FACES.map(([v, l]) => [v, l] as [string, string]),
+  ];
+  if (sel.family === 'mixed') faceOptions.unshift([MIXED, t('— mixed —')]);
+  // A family the document uses but this build does not list — from another
+  // editor, or a later version — is shown rather than silently relabelled as
+  // the default, which would rewrite it on the next click.
+  if (typeof sel.family === 'string' && sel.family !== 'mixed'
+      && !FACES.some(([v]) => v === sel.family)) faceOptions.push([sel.family, sel.family]);
+
+  const faceSel = select(faceOptions,
+    sel.family === 'mixed' ? MIXED : (sel.family ?? DEFAULT),
+    v => {
+      if (v === MIXED) return;
+      ctx.editor.setFontOn({ family: v === DEFAULT ? null : v });
+      ctx.refresh();
+    });
+  (faceSel as HTMLSelectElement).disabled = !hasRange;
+  row(body, t('Typeface'), faceSel);
+
+  const sizeField = numberField(
+    typeof sel.size === 'number' ? sel.size : undefined,
+    sel.size === 'mixed' ? t('mixed') : t('default'),
+    v => { ctx.editor.setFontOn({ size: v === undefined ? null : v }); ctx.refresh(); });
+  (sizeField as HTMLInputElement).disabled = !hasRange;
+  row(body, t('Size (px)'), sizeField);
 
   // Whether THIS heading is numbered is a property of the heading, so it is a
   // checkbox here rather than the ⋯ entry it used to be — an action named "Do
@@ -302,16 +357,7 @@ function captionSection(host: HTMLElement, ctx: FeatureContext, b: Block): void 
  * that every platform lands on something close. Embedding a real face is the
  * separate `doc.fonts` field, which is how a house typeface would travel.
  */
-const FACES: Array<[string, string]> = [
-  ['"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif', 'Palatino (serif)'],
-  ['Georgia, "Times New Roman", Times, serif', 'Georgia (serif)'],
-  ['"Times New Roman", Times, serif', 'Times New Roman'],
-  ['Charter, "Bitstream Charter", Cambria, Georgia, serif', 'Charter (serif)'],
-  ['-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'System (sans)'],
-  ['Helvetica, Arial, sans-serif', 'Helvetica'],
-  ['Verdana, Geneva, sans-serif', 'Verdana'],
-  ['ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', 'Monospace'],
-];
+
 
 function documentSection(host: HTMLElement, ctx: FeatureContext): void {
   const body = section(host, t('Document'));

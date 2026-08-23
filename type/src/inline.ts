@@ -36,7 +36,7 @@
 // place instead of leaking into four.
 
 /** The formatting a run of text can carry. Deliberately small. */
-export type MarkType = 'b' | 'i' | 'u' | 's' | 'code' | 'link' | 'math' | 'ins' | 'del';
+export type MarkType = 'b' | 'i' | 'u' | 's' | 'code' | 'link' | 'math' | 'ins' | 'del' | 'font';
 
 export interface Mark {
   t: MarkType;
@@ -63,11 +63,28 @@ export interface Mark {
    */
   by?: string;
   at?: string;
+  /**
+   * Typeface and size for a RUN of characters — only for t:'font'.
+   *
+   * A font is a character property, which is why it is a mark and not a block
+   * field: "make these three words Verdana" is the request, and a paragraph is
+   * the wrong unit for it. doc.type stays the document's DEFAULT, and a run
+   * without a font mark inherits it.
+   *
+   * Both are optional and independent. A mark may carry only a family, only a
+   * size, or both — which is what lets a size applied over part of a
+   * differently-fonted run do the obvious thing: the two render as nested
+   * spans and CSS inheritance resolves them, with no special case here.
+   */
+  family?: string;
+  size?: number;
 }
 
 /** The tag each mark renders as. `link` is special-cased (it carries an href). */
 const TAG: Record<Exclude<MarkType, 'link'>, string> = {
   b: 'strong', i: 'em', u: 'u', s: 's', code: 'code',
+  // a styled span; openTag builds the style attribute itself
+  font: 'span',
   // <ins>/<del> are the elements HTML already has for exactly this, so a
   // printed or pasted tracked change carries its meaning outside Bento too.
   ins: 'ins', del: 'del',
@@ -105,6 +122,8 @@ export function normalize(marks: Mark[], len: number): Mark[] {
     if (m.href !== undefined) n.href = m.href;
     if (m.by !== undefined) n.by = m.by;
     if (m.at !== undefined) n.at = m.at;
+    if (m.family !== undefined) n.family = m.family;
+    if (m.size !== undefined) n.size = m.size;
     out.push(n);
   }
   // Merge PER KIND, not against whatever happens to sort next to it.
@@ -125,7 +144,11 @@ export function normalize(marks: Mark[], len: number): Mark[] {
     // The AUTHOR is part of the key: two people's insertions that happen to
     // abut are two changes, and merging them would attribute both to whoever
     // sorted first. Untracked marks have no `by`, so they key exactly as before.
-    const key = `${m.t}\u0000${m.href ?? ''}\u0000${m.by ?? ''}`;
+    // The FONT is part of the key as well. Two adjacent runs, one Verdana and
+    // one Georgia, are not one run: merging by type alone would join them and
+    // give both whichever sorted first — the same bug two authors' insertions
+    // had before `by` joined this key.
+    const key = `${m.t}\u0000${m.href ?? ''}\u0000${m.by ?? ''}\u0000${m.family ?? ''}\u0000${m.size ?? ''}`;
     (byKind.get(key) ?? byKind.set(key, []).get(key)!).push(m);
   }
   const merged: Mark[] = [];
@@ -140,7 +163,9 @@ export function normalize(marks: Mark[], len: number): Mark[] {
   }
   merged.sort((a, b) => a.from - b.from || a.to - b.to || a.t.localeCompare(b.t)
                         || (a.href ?? '').localeCompare(b.href ?? '')
-                        || (a.by ?? '').localeCompare(b.by ?? ''));
+                        || (a.by ?? '').localeCompare(b.by ?? '')
+                        || (a.family ?? '').localeCompare(b.family ?? '')
+                        || (a.size ?? 0) - (b.size ?? 0));
   return merged;
 }
 
@@ -176,6 +201,84 @@ export function removeMark(marks: Mark[], len: number, from: number, to: number,
     if (m.to > to) out.push({ ...m, from: to });         // tail survives
   }
   return normalize(out, len);
+}
+
+export interface FontAttrs { family?: string | null; size?: number | null }
+
+/**
+ * Set a typeface and/or size across [from,to).
+ *
+ * Not addMark. A font mark REPLACES the one under it rather than nesting —
+ * choosing Verdana over a Georgia run must leave one mark, not two whose
+ * winner depends on render order.
+ *
+ * But the two attributes are INDEPENDENT, and that is the whole subtlety:
+ * setting a size across a run that is already Verdana must keep Verdana. So
+ * the range is cut at the existing marks' boundaries and each piece keeps what
+ * it had, with the new attribute laid over the top. A version that simply
+ * dropped the old marks lost the typeface every time someone changed a size.
+ *
+ * `null` means CLEAR — go back to the document's default — as distinct from
+ * `undefined`, which means leave this attribute alone.
+ */
+export function setFont(marks: Mark[], len: number, from: number, to: number, attrs: FontAttrs): Mark[] {
+  if (to <= from) return marks;
+
+  // boundaries of every existing font mark that overlaps the range
+  const cuts = new Set<number>([from, to]);
+  for (const m of marks) {
+    if (m.t !== 'font' || m.to <= from || m.from >= to) continue;
+    if (m.from > from) cuts.add(m.from);
+    if (m.to < to) cuts.add(m.to);
+  }
+  const edges = [...cuts].sort((a, b) => a - b);
+
+  // strip the old font marks inside the range, keeping the parts outside it
+  const kept = removeMark(marks, len, from, to, 'font');
+
+  const added: Mark[] = [];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const a = edges[i], b = edges[i + 1];
+    if (b <= a) continue;
+    const under = marks.find(m => m.t === 'font' && m.from <= a && m.to >= b);
+    const family = attrs.family === undefined ? under?.family : (attrs.family ?? undefined);
+    const size = attrs.size === undefined ? under?.size : (attrs.size ?? undefined);
+    // a mark carrying neither is not worth storing — the run simply inherits
+    if (family === undefined && size === undefined) continue;
+    const m: Mark = { t: 'font', from: a, to: b };
+    if (family !== undefined) m.family = family;
+    if (size !== undefined) m.size = size;
+    added.push(m);
+  }
+  return normalize([...kept, ...added], len);
+}
+
+/** The font in force at an offset, if any — what the picker shows. */
+export const fontAt = (marks: Mark[], at: number): Mark | undefined =>
+  marks.filter(m => m.t === 'font' && m.from <= at && m.to > at).pop();
+
+/**
+ * The font across a range: the value if every character agrees, else 'mixed'.
+ *
+ * A picker that showed the first character's font would silently relabel a
+ * three-font selection, and then apply that label to all of it on the next
+ * click.
+ */
+export function fontAcross(marks: Mark[], from: number, to: number):
+    { family: string | 'mixed' | undefined; size: number | 'mixed' | undefined } {
+  if (to <= from) {
+    const m = fontAt(marks, Math.max(0, from - 1));
+    return { family: m?.family, size: m?.size };
+  }
+  let family: string | 'mixed' | undefined;
+  let size: number | 'mixed' | undefined;
+  for (let i = from; i < to; i++) {
+    const m = fontAt(marks, i);
+    if (i === from) { family = m?.family; size = m?.size; continue; }
+    if (family !== 'mixed' && m?.family !== family) family = 'mixed';
+    if (size !== 'mixed' && m?.size !== size) size = 'mixed';
+  }
+  return { family, size };
 }
 
 /** ⌘B semantics: on if any of the range is unmarked, off if all of it is marked. */
@@ -241,7 +344,59 @@ export const safeHref = (raw: string): string | null => {
   return SAFE_HREF.test(flat) ? flat : null;
 };
 
+/**
+ * A font stack safe to put in a `style` attribute.
+ *
+ * This is the SAME class of hole as a link href, and it arrives the same way:
+ * `family` is document data, a document is untrusted input, and it is being
+ * written into CSS rather than into text. A family of
+ *
+ *   Georgia; background: url(https://tracker/x.png
+ *
+ * would close the declaration and open another — an off-document fetch from
+ * opening a file. So this is an ALLOW-LIST of what a font stack can contain:
+ * letters, digits, spaces, hyphens, underscores, commas and quotes. No
+ * semicolons, no parentheses, no colons, so neither another declaration nor a
+ * url() can be formed. Anything else and the family is dropped and the run
+ * renders in the document's default, which loses a typeface and nothing more.
+ */
+const SAFE_FAMILY = /^[\w \-,'"]{1,120}$/;
+export const safeFamily = (raw: string | undefined): string | null => {
+  const f = (raw ?? '').trim();
+  return f && SAFE_FAMILY.test(f) ? f : null;
+};
+
+/** A size in px, or null. Clamped rather than refused — 0.5px is not an attack. */
+export const safeSize = (raw: number | undefined): number | null => {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  const n = Math.round(raw * 10) / 10;
+  return n >= 4 && n <= 200 ? n : null;
+};
+
+/** The style attribute for a font mark — '' when it would carry nothing. */
+export function fontStyle(m: Mark): string {
+  const parts: string[] = [];
+  const fam = safeFamily(m.family);
+  if (fam) parts.push(`font-family:${fam}`);
+  const size = safeSize(m.size);
+  if (size !== null) parts.push(`font-size:${size}px`);
+  return parts.join(';');
+}
+
 const openTag = (m: Mark) => {
+  if (m.t === 'font') {
+    const style = fontStyle(m);
+    // A font mark carrying nothing usable still renders its span, so the text
+    // inside it is never lost — only its styling.
+    // The VALUES ride as data attributes as well as in the style. fromDom reads
+    // them back on every keystroke, and recovering a family by parsing the CSS
+    // it just wrote would be a second, lossier parser for data this module
+    // already has.
+    const fam = safeFamily(m.family);
+    const size = safeSize(m.size);
+    const data = (fam ? ` data-family="${escAttr(fam)}"` : '') + (size !== null ? ` data-size="${size}"` : '');
+    return style ? `<span class="t-font"${data} style="${escAttr(style)}">` : `<span class="t-font"${data}>`;
+  }
   if (m.t === 'ins' || m.t === 'del') {
     // The author and time ride on the element so the UI can group changes and
     // show whose they are without a second lookup. escAttr, not esc: `by` is
@@ -357,14 +512,42 @@ export function fromDom(root: Node, isAtom: (el: Element) => boolean = () => fal
       if (child.nodeType !== 1) continue;
       const el = child as Element;
       if (isAtom(el)) { atoms.push({ at: text.length, el }); continue; }
-      const t = BY_TAG[el.tagName.toLowerCase()];
+      const tag = el.tagName.toLowerCase();
+      // A mark that carries a PAYLOAD has to be recognised here or the payload
+      // is lost the moment anyone types in the paragraph — the editor reads a
+      // block back out of the DOM on every keystroke.
+      //
+      // This was a live bug for tracked changes before fonts existed: <ins>
+      // was in no map at all and vanished, and <del> mapped to a plain
+      // strikethrough, so a tracked deletion came back as ordinary struck text
+      // with its author and timestamp gone. `data-*` is checked rather than
+      // the tag alone so that a <del> PASTED from elsewhere still means
+      // strikethrough, which is what it means everywhere else on the web.
+      const trk = el.classList?.contains('t-trk') && (tag === 'ins' || tag === 'del');
+      const isFont = tag === 'span' && el.classList?.contains('t-font');
+      const t = trk ? (tag as 'ins' | 'del') : isFont ? 'font' : BY_TAG[tag];
       if (!t) { walk(el, active); continue; }
       const start = text.length;
       const href = t === 'link' ? (el.getAttribute('href') ?? '') : undefined;
       walk(el, active);
       if (text.length > start) {
-        marks.push(href !== undefined ? { t, from: start, to: text.length, href }
-                                      : { t, from: start, to: text.length });
+        const m: Mark = { t, from: start, to: text.length };
+        if (href !== undefined) m.href = href;
+        if (trk) {
+          const by = el.getAttribute('data-by');
+          const at = el.getAttribute('data-at');
+          if (by) m.by = by;
+          if (at) m.at = at;
+        }
+        if (isFont) {
+          const fam = el.getAttribute('data-family');
+          const size = Number(el.getAttribute('data-size'));
+          if (fam) m.family = fam;
+          if (Number.isFinite(size) && size > 0) m.size = size;
+          // a span carrying neither is not a font mark, just a span
+          if (m.family === undefined && m.size === undefined) continue;
+        }
+        marks.push(m);
       }
     }
   };

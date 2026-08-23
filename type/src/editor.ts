@@ -19,7 +19,7 @@
 //     model, so it is suppressed and every ⌘Z goes through the store.
 
 import { renderBody, renderBlock, readBlock, isNoteAtom, TAG } from './render.ts';
-import { toggleMark, activeAt, type MarkType } from './inline.ts';
+import { toggleMark, activeAt, setFont, fontAcross, type MarkType, type FontAttrs } from './inline.ts';
 import { isList, uid, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import type { Store } from './store.ts';
 import { commentsOnEdit, commentsOnSplit, commentsOnMerge } from './comments.ts';
@@ -294,6 +294,42 @@ export class Editor {
     this.render();
     this.setCaret({ id: c.id, at: from, to });
     this.onChange?.();
+  }
+
+  /**
+   * Set the typeface and/or size across the selection.
+   *
+   * Mirrors toggle(), but it is not a toggle: a font has a VALUE, so choosing
+   * Verdana over a Georgia run replaces it rather than turning something on
+   * and off. Pass null for an attribute to clear it back to the document
+   * default; leave it undefined to change only the other one.
+   */
+  setFontOn(attrs: FontAttrs): void {
+    const c = this.caret();
+    if (!c || c.to === undefined || c.to === c.at) return;   // nothing selected
+    const from = Math.min(c.at, c.to), to = Math.max(c.at, c.to);
+    if (!this.store.block(c.id)) return;
+    this.store.breakRun();
+    this.#runId = null;
+    this.store.commit(d => {
+      const i = d.body.findIndex(b => b.id === c.id);
+      if (i < 0) return;
+      const b = d.body[i];
+      const marks = setFont(b.marks ?? [], b.text.length, from, to, attrs);
+      if (marks.length) b.marks = marks; else delete b.marks;
+    }, { scope: { block: c.id } });
+    this.render();
+    this.setCaret({ id: c.id, at: from, to });
+    this.onChange?.();
+  }
+
+  /** The typeface across the selection — a value, 'mixed', or nothing. */
+  fontOfSelection(): { family: string | 'mixed' | undefined; size: number | 'mixed' | undefined } {
+    const c = this.caret();
+    const blk = c ? this.store.block(c.id) : undefined;
+    if (!c || !blk) return { family: undefined, size: undefined };
+    const from = Math.min(c.at, c.to ?? c.at), to = Math.max(c.at, c.to ?? c.at);
+    return fontAcross(blk.marks ?? [], from, to);
   }
 
   /** Change a block's kind — paragraph, heading, quote. */
