@@ -131,6 +131,18 @@ export interface KeySpec {
   mod?: boolean;      // ⌘ / Ctrl
   shift?: boolean;
   alt?: boolean;
+  /**
+   * The LITERAL Control key, as distinct from `mod`.
+   *
+   * `mod` deliberately conflates ⌘ and Ctrl, which is right for ⌘S/⌘B and
+   * every other shortcut that means the same thing on both platforms. It is
+   * wrong when a binding differs BY platform: Word moves a paragraph with
+   * Alt+Shift+Arrow on Windows and Ctrl+Shift+Arrow on a Mac, because macOS
+   * already uses Option+Shift+Arrow to extend a selection by paragraph. A
+   * shortcut that has to be Control on one platform and Alt on the other
+   * cannot be expressed with `mod`.
+   */
+  ctrl?: boolean;
   run(ctx: FeatureContext): void;
 }
 
@@ -186,7 +198,12 @@ export const keys = (): KeySpec[] => KEYS;
 /** Does this event match a registered shortcut? Returns the first match. */
 export function matchKey(e: KeyboardEvent): KeySpec | undefined {
   const mod = e.metaKey || e.ctrlKey;
-  return KEYS.find(k =>
-    k.key === e.key.toLowerCase() &&
-    !!k.mod === mod && !!k.shift === e.shiftKey && !!k.alt === e.altKey);
+  return KEYS.find(k => {
+    if (k.key !== e.key.toLowerCase()) return false;
+    if (!!k.shift !== e.shiftKey || !!k.alt !== e.altKey) return false;
+    // `ctrl` asks for Control SPECIFICALLY — and not Command, or a Mac user
+    // pressing ⌘⇧↑ (select to the start of the document) would move a block.
+    if (k.ctrl) return e.ctrlKey && !e.metaKey;
+    return !!k.mod === mod;
+  });
 }

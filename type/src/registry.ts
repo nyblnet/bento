@@ -16,6 +16,7 @@
 import './props.ts';   // the properties panel — Text, Picture, Table, Caption
 import './image.ts';   // pictures — insert, embed, atomic pagination
 import './embed.ts';   // embedded Bento artifacts — a Dash chart, a Slides deck
+import './blockgrip.ts';  // the margin handle that reorders a block, and ⌥⇧↑/↓
 import './find.ts';    // find and replace — panel, ⌘F, replace all
 // captions, automatic figure/table numbering and cross-references
 import './xref.ts';

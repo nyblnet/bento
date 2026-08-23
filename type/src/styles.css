@@ -950,3 +950,29 @@ html, body {
 .t-paper .t-embed figcaption { margin-top: 6px; font-size: 12px; color: var(--paper-ink-2); font-style: italic; }
 .t-paper .t-embed-missing { padding: 22px 14px; border: 1px dashed var(--paper-rule);
   border-radius: 8px; color: var(--paper-ink-2); font-size: 12.5px; }
+
+
+/* The block grip: a handle in the page's own left margin that reorders a
+   block. Hover-only, so a page at rest is just the document — the same rule
+   bento/spaces uses for its gutter, and the reason an affordance can exist at
+   all without becoming furniture. */
+.t-deco .t-grip-layer { position: absolute; inset: 0; pointer-events: none; }
+.t-deco .t-grip {
+  position: absolute; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 24px; padding: 0; border: 0; border-radius: 5px;
+  /* PAPER ink, not chrome ink: this floats over a white sheet, and the sheet
+     stays white in dark mode while every chrome token inverts. */
+  color: var(--paper-rule); background: transparent; cursor: grab;
+  opacity: 0; transition: opacity .12s;
+  pointer-events: auto;
+}
+.t-wrap:hover .t-deco .t-grip { opacity: .7; }
+.t-deco .t-grip:hover, .t-deco .t-grip:focus-visible {
+  opacity: 1; color: var(--paper-ink-2);
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.t-deco .t-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.t-grip-menu { position: absolute; z-index: 60; display: block; }
+
+/* It is chrome sitting ON the sheet, so it must never reach paper. */
+@media print { .t-deco .t-grip-layer { display: none; } }
