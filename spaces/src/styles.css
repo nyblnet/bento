@@ -370,7 +370,11 @@ option { background: var(--field); color: var(--ink); }
 /* Desktop gutters sit outside the prose. Phone gutters join the block flow,
    so their sizing and spacing stay with the phone rules below. */
 @media (min-width: 821px) {
-  .sp-gutter { top: 0; height: stretch; padding-top: inherit; }
+  /* bottom:0, not height:stretch — an abspos box stretches the same way
+     and `stretch` is Chrome-only (Firefox has none, Safari needs
+     -webkit-fill-available), where it would silently drop back to the
+     24px intrinsic height and lose the full-block hover/focus target. */
+  .sp-gutter { top: 0; bottom: 0; padding-top: inherit; }
   .sp-b-h2 > .sp-gutter { align-items: center; margin-bottom: 2px; }
   .sp-b-number > .sp-gutter { inset-inline-start: -68px; }
   .sp-b-bullet > .sp-gutter { inset-inline-start: -64px; }
