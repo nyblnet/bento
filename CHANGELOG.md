@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Fix: audio and video played in a show even with Autoplay switched off.**
+  Set a clip's *Autoplay* to Off and it still started the moment its slide came
+  up — every time, in a saved file, on any browser. The only way to stop it was
+  to remove the clip.
+
+  The flag was written as an empty attribute rather than left off, and the
+  slideshow engine treats an attribute that is *present* as a yes, whatever it
+  says. Bento's own check read the value and was right; it simply never got
+  asked. Present since audio and video arrived.
+
+
 ## [1.0.18] — 2026-08-15
 
 - **Security: offline mode did not block everything it promised.** The switch

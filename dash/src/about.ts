@@ -43,7 +43,7 @@ import {
 // two restore paths straight back into disagreeing about reversibility.
 import { offerUndoRestore } from './recovery.ts'
 import { t, locale, localeChoices, setLocale } from './i18n.ts'
-import { docBudget, docBytes, parseDoc, rowCount, type DashDoc, type DocMeta } from './model.ts'
+import { docBudget, docBytes, parseDoc, rowCount, type DashDoc, type DocMeta , docForExport } from './model.ts'
 import type { Store } from './store.ts'
 
 export interface AboutHooks {
@@ -737,7 +737,8 @@ export function openAbout(hooks: AboutHooks): void {
   duplicateBtn.disabled = store.readOnly
   card.append(actions(
     button(t('Copy document JSON'), () => {
-      void navigator.clipboard?.writeText(JSON.stringify(store.doc, null, 2))
+      // stripped — this lands on a clipboard and then, often, in a chat window
+      void navigator.clipboard?.writeText(JSON.stringify(docForExport(store.doc), null, 2))
         .then(() => { outNote.textContent = t('Copied — {size} of JSON.', { size: bytes(stats.bytes) }) })
         .catch(() => { outNote.textContent = t('This browser refused clipboard access.') })
     }),

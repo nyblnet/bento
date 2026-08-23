@@ -8,13 +8,20 @@
 // and merging blocks can never re-mint an id, and ids are what links,
 // backlinks and (later) collaboration key on.
 
-import { type Block, newBlock, newPage, effectiveParents } from './model'
+import {
+  type Block, type TableShape, type SpacesDoc, newBlock, newPage, effectiveParents, isRemote,
+  tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS, linkCard, linkCardHtml, unresolvedOn,
+  parseDoc, uid,
+} from './model'
+import { CommentsUi, commentBadge } from './comments.ts'
 import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
+import { FormatBar } from './formatbar'
+import type { MarkTag } from './marks'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
@@ -22,6 +29,7 @@ import {
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
+import { extractSpace, planGraft } from './portable'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
@@ -29,9 +37,15 @@ import { openAbout } from './about'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
-import { canWriteInPlace } from '../../kernel/src/save.ts'
+import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
+import { offlineEnabled } from '../../kernel/src/net.ts'
+import { startSharing } from '../../kernel/src/sync/online.ts'
+import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
-import { internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, blobToDataUri } from './assets'
+import { PropsPanel } from './props'
+import {
+  internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
+} from './assets'
 
 const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctrlKey'
 
@@ -43,6 +57,9 @@ const AUTOFORMAT = MD_SPECS
 const SLASH_ITEMS = MENU_SPECS
 /** What counts as a note when a folder is dropped on the app. */
 const NOTE_EXT = /\.(md|markdown|mdown|mkd)$/i
+/** …and what counts as another SPACE: a saved shell, or the bare document JSON
+ *  the AI round-trip hands around. Both carry the same `#bento-doc` payload. */
+const SPACE_EXT = /\.(html|htm|json)$/i
 
 /**
  * When an import stops embedding images by itself and ASKS.
@@ -57,6 +74,29 @@ const IMPORT_IMAGE_BUDGET = 12 * 1024 * 1024
 /** A picked or dropped file, with the path it had on disk. */
 interface PickedFile { path: string; file: File }
 
+
+/**
+ * This reader's preferred page width, or undefined for the built-in default.
+ *
+ * VIEWER-SCOPED, in localStorage beside the language and the pane width, and
+ * never in the document: it describes the screen somebody is sitting at, not
+ * anything about the space. Two people opening one file on a laptop and a
+ * 27-inch monitor should each get their own answer, and neither should write
+ * theirs into a file the other opens.
+ */
+export function readerWidth(): 'wide' | 'full' | undefined {
+  try {
+    const v = localStorage.getItem('bento-sp-width')
+    return v === 'wide' || v === 'full' ? v : undefined
+  } catch { return undefined }
+}
+
+export function setReaderWidth(v: 'wide' | 'full' | undefined): void {
+  try {
+    if (v) localStorage.setItem('bento-sp-width', v)
+    else localStorage.removeItem('bento-sp-width')
+  } catch { /* a locked-down origin just gets the default */ }
+}
 
 export class Editor {
   readonly store: Store
@@ -88,8 +128,47 @@ export class Editor {
   private static readonly PANE_DEFAULT = 244
   private paneW = Editor.PANE_DEFAULT
   private paneClosed = false
+
+  // The properties panel — the reader's, like the page list, and CLOSED unless
+  // this reader has opened it. See props.ts on why the default is that way
+  // round.
+  private inspector!: HTMLElement
+  private inspTab: HTMLButtonElement | null = null
+  private inspRz: HTMLElement | null = null
+  private props: PropsPanel | null = null
+  private static readonly INSP_MIN = 200
+  private static readonly INSP_MAX = 420
+  private static readonly INSP_DEFAULT = 280
+  private inspW = Editor.INSP_DEFAULT
+  private inspClosed = true
+  /** the block the panel is describing: the last one the caret or a click was in */
+  private inspOn: string | null = null
+  /** review threads — markers in the end margin, badges in the tree */
+  private comments: CommentsUi
+  private format!: FormatBar
   onSave: (() => void) | null = null
   onSaveAs: ((suffix: string) => void) | null = null
+  /**
+   * Write a DIFFERENT document out as its own file — the page extract.
+   *
+   * Supplied by main.ts, because serializing a shell is a boot-time concern
+   * (the pristine capture) and the editor has no business holding it. It is
+   * separate from `onSaveAs` on purpose: every suffix there writes THIS
+   * document, and an export that went through it would have to smuggle the
+   * extract in through a global.
+   */
+  onExportSpace: ((doc: SpacesDoc) => Promise<boolean>) | null = null
+  /**
+   * Write a SHARE copy — a different document, under this space's name plus a
+   * suffix that says which kind of copy it is.
+   *
+   * Separate from `onExportSpace` (which names the file after the extracted
+   * page) and from `onSaveAs` (every suffix there serializes THIS document,
+   * credentials and all — which is precisely how "Invite someone…" came to
+   * hand out the owner key). A share copy is always a derived document, so it
+   * needs a writer that takes one.
+   */
+  onShareCopy: ((doc: SpacesDoc, suffix: string) => Promise<boolean>) | null = null
   onPrint: (() => void) | null = null
 
   constructor(root: HTMLElement, store: Store) {
@@ -100,9 +179,46 @@ export class Editor {
       const w = Number(localStorage.getItem('bento-sp-pane'))
       if (Number.isFinite(w) && w > 0) this.paneW = Math.min(Editor.PANE_MAX, Math.max(Editor.PANE_MIN, w))
       this.paneClosed = localStorage.getItem('bento-sp-pane-closed') === '1'
+      const iw = Number(localStorage.getItem('bento-sp-insp'))
+      if (Number.isFinite(iw) && iw > 0) this.inspW = Math.min(Editor.INSP_MAX, Math.max(Editor.INSP_MIN, iw))
+      // ABSENT MEANS CLOSED. Only an explicit '0' — this reader opened it once —
+      // gives the panel any width, so a fresh file opens as the page and nothing
+      // else.
+      this.inspClosed = localStorage.getItem('bento-sp-insp-closed') !== '0'
     } catch { /* storage throws on a locked-down origin; the defaults are fine */ }
     this.build()
+    // AFTER build(): `main` exists by then, and the marker layer is painted
+    // into whatever the page paint just produced.
+    this.comments = new CommentsUi({
+      store: this.store,
+      main: () => this.main,
+      popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
+      paintTree: () => this.paintTree(),
+    })
+    // Also after build(). `editable()` is asked on every selectionchange, and
+    // it is the ONE place the bar is kept out of the reading view, out of a
+    // readonly/reader-role file, and out from under an open modal.
+    this.format = new FormatBar({
+      store: this.store,
+      main: () => this.main,
+      editable: () => !this.store.readOnly && !this.reading && !this.overlay,
+    })
     if (this.paneClosed) this.sidebar.classList.add('sp-pane-closed')
+    this.props = new PropsPanel(this.inspector, {
+      store: this.store,
+      target: () => this.inspOn,
+      locked: () => this.store.readOnly || this.reading,
+      repaint: () => this.paintPage(),
+      pickPoster: (id) => void this.pickPoster(id),
+      pickMedia: (id) => void this.pickMedia(id),
+      openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
+      pageIcon: (icon) => pageIcon(icon),
+      openLinkCard: (id) => this.openLinkCard(id),
+      addTableRow: (id, at) => this.addTableRow(id, at),
+      removeTableRow: (id, at) => this.removeTableRow(id, at),
+      addTableCol: (id, at) => this.addTableCol(id, at),
+      removeTableCol: (id, at) => this.removeTableCol(id, at),
+    })
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
     this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty() })
@@ -162,7 +278,17 @@ export class Editor {
           this.store.commit(() => { page.blocks.push(fresh) })
           this.paintPage()
           if (item.type === 'pagelink') this.insertPageCard(fresh.id)
+          // the block is already a `link` — dismissing the dialog leaves an
+          // empty card with its own way back in, never a half-made block
+          else if (item.type === 'link') this.openLinkCard(fresh.id)
           else if (item.type === 'image') void this.pickImage(fresh.id)
+          // a table has no block-level host to focus — the caret belongs in the
+          // first cell, which is also where a person starts typing
+          else if (item.type === 'table') this.focusCell(fresh.id, 0, 0)
+          // straight to the picker, exactly like Image. Cancelling is not a
+          // dead end: the block renders its own chooser (render.ts 'media'),
+          // which is also the only route the / menu needs.
+          else if (item.type === 'media') void this.pickMedia(fresh.id)
           else this.focusBlock(fresh.id)
         }))
       }
@@ -216,6 +342,17 @@ export class Editor {
       // (35px) and the save caret (48px) are what a phone gives up so that the
       // document title beside them is still wide enough to read. Nothing is
       // lost: they are all one tap away, here.
+      // THE PROPERTIES PANEL, ONCE THE BAR HAS FOLDED. Its inline button is a
+      // 40px control, and measured at 375px it took the document title from
+      // 70px to 26px — a title nobody can read, to reach a panel that is one
+      // more row in a menu that is already open. So below the fold it comes
+      // here, the way undo/redo and the other ways to save already do.
+      if (this.isFolded()) {
+        menu.append(this.menuItem('panelRight', t('Properties'),
+          t('This block’s settings, and the page’s'), () => {
+            close(); this.toggleInsp()
+          }))
+      }
       if (this.isFolded()) {
         menu.append(this.menuItem('undo', t('Undo (⌘Z)'), '', () => {
           close(); this.store.undo(); this.repaint()
@@ -233,6 +370,9 @@ export class Editor {
         }))
         menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
           close(); this.exportMarkdown()
+        }))
+        menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
+          close(); this.openExportSpace()
         }))
       }
     })
@@ -265,6 +405,9 @@ export class Editor {
       menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
         close(); this.exportMarkdown()
       }))
+      menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
+        close(); this.openExportSpace()
+      }))
       menu.append(this.menuItem('print', t('Print / PDF…'), t('The whole space, or just this page'), () => {
         close(); this.openPrint()
       }))
@@ -281,8 +424,12 @@ export class Editor {
     history.append(this.undoB, this.redoB)
     const saveGroup = el('div', 'sp-split')
     saveGroup.append(saveB, saveMore)
+    const inspB = iconBtn('panelRight', t('Properties — show or hide this block’s settings'),
+      () => this.toggleInsp())
+    inspB.classList.add('sp-insp-toggle')
+
     const right = el('div', 'sp-group sp-group-right')
-    right.append(insert, search, ...inlineSecondary, this.liveSlot, more, saveGroup)
+    right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
 
     bar.append(pagesB, mark, title, this.statusEl, history, right)
 
@@ -314,11 +461,37 @@ export class Editor {
     this.sidebar.setAttribute('aria-label', t('Pages'))
     this.main = el('main', 'sp-main')
 
+    this.inspector = el('aside', 'sp-insp')
+    this.inspector.setAttribute('aria-label', t('Properties'))
+    if (this.inspClosed) this.inspector.classList.add('sp-pane-closed')
+
     const body = el('div', 'sp-body')
-    body.append(this.sidebar, this.makeResizer(), this.main)
+    body.append(this.sidebar, this.makeResizer(), this.main, this.makeInspResizer(), this.inspector)
     this.root.append(bar, body)
     this.applyPaneWidth()
     this.syncPaneChevron()
+    this.applyInspWidth()
+    this.syncInspChevron()
+
+    // WHICH BLOCK THE PANEL MEANS. Capture-phase on the page, because the
+    // interesting blocks are the ones with no editable host to focus — a table,
+    // an image, a clip, a card. `focusin` alone would answer for text and stay
+    // silent for exactly the types that have settings worth a panel.
+    //
+    // `mousedown` rather than `pointerdown`: a real click fires both, so the
+    // two are the same to a user, but only the mouse event is reliably what a
+    // driven click produces — CLAUDE.md's testing note records the same wall in
+    // slides, where synthetic pointer events never reach Gesto. Choosing the
+    // one both a hand and a rig emit costs nothing.
+    for (const ev of ['focusin', 'mousedown'] as const) {
+      this.main.addEventListener(ev, (e: Event) => {
+        const n = e.target as Node | null
+        const host = (n instanceof HTMLElement ? n : n?.parentElement)
+          ?.closest<HTMLElement>('[data-block-id]')
+        this.inspOn = host?.dataset.blockId ?? null
+        this.props?.retarget()
+      }, true)
+    }
 
     this.paintTree()
     this.paintPage()
@@ -359,6 +532,7 @@ export class Editor {
     this.readB?.setAttribute('aria-pressed', String(this.reading))
     document.querySelector('.sp-findbar')?.remove()
     this.paintPage()
+    this.props?.refresh()
     this.status(this.reading ? t('Reading view — press Esc or the eye to edit') : t('Editing'))
   }
 
@@ -497,6 +671,102 @@ export class Editor {
     this.sidebar.style.setProperty('--sp-panew', `${this.paneW}px`)
   }
 
+  /**
+   * The properties panel's edge — the page list's strip, mirrored.
+   *
+   * Deliberately a second small method rather than a parameterised one: the two
+   * differ in which direction widens (the panel is docked to the END edge, so a
+   * drag toward the start makes it bigger) and in which way the chevron points,
+   * and a `side` flag threaded through both would be harder to read than this.
+   */
+  private makeInspResizer(): HTMLElement {
+    const handle = el('div', 'sp-resizer sp-insp-rz')
+    handle.title = t('Drag to resize · double-click to reset')
+    if (this.inspClosed) handle.classList.add('sp-shut')
+    this.inspRz = handle
+
+    const tab = document.createElement('button')
+    tab.className = 'sp-pane-tab'
+    tab.type = 'button'
+    tab.addEventListener('click', (e) => { e.stopPropagation(); this.toggleInsp() })
+    this.inspTab = tab
+    handle.append(tab)
+
+    handle.addEventListener('mousedown', (down) => {
+      if (down.target === tab) return
+      if (this.inspClosed) return
+      down.preventDefault()
+      const startX = down.clientX
+      const startW = this.inspW
+      this.inspector.classList.add('sp-noanim')
+      document.body.classList.add('sp-col-resizing')
+      const move = (ev: MouseEvent) => {
+        // the panel is on the END edge, so dragging toward the START widens it
+        const dx = startX - ev.clientX
+        const widens = document.dir === 'rtl' ? -dx : dx
+        this.inspW = Math.min(Editor.INSP_MAX, Math.max(Editor.INSP_MIN, startW + widens))
+        this.applyInspWidth()
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', move)
+        window.removeEventListener('mouseup', up)
+        this.inspector.classList.remove('sp-noanim')
+        document.body.classList.remove('sp-col-resizing')
+        try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
+      }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+    })
+
+    handle.addEventListener('dblclick', () => {
+      this.inspW = Editor.INSP_DEFAULT
+      this.applyInspWidth()
+      try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
+    })
+    return handle
+  }
+
+  private applyInspWidth(): void {
+    this.inspector.style.setProperty('--sp-inspw', `${this.inspW}px`)
+  }
+
+  private syncInspChevron(): void {
+    if (!this.inspTab) return
+    const rtl = document.dir === 'rtl'
+    // points the way it will MOVE the panel
+    const closing = this.inspClosed === rtl
+    this.inspTab.innerHTML = closing ? ICONS.chevronRight : ICONS.chevronLeft
+    this.inspTab.title = this.inspClosed ? t('Show properties (])') : t('Hide properties (])')
+    this.inspTab.setAttribute('aria-label', this.inspTab.title)
+    this.inspTab.setAttribute('aria-expanded', String(!this.inspClosed))
+  }
+
+  /** Collapse or restore the properties panel. On a phone it is an overlay. */
+  toggleInsp(force?: boolean): void {
+    if (this.isDrawer()) {
+      const open = force !== undefined ? force : !this.inspector.classList.contains('sp-open')
+      this.inspector.classList.toggle('sp-open', open)
+      // The same scrim the page list gets, for the same reason: an overlay you
+      // can only close from the menu you opened it from is one people leave
+      // open over the page they wanted to read.
+      document.querySelector('.sp-scrim')?.remove()
+      if (open) {
+        const scrim = el('div', 'sp-scrim')
+        scrim.addEventListener('click', () => this.toggleInsp(false))
+        document.body.append(scrim)
+      }
+      return
+    }
+    this.inspector.classList.remove('sp-open')
+    this.inspClosed = force !== undefined ? !force : !this.inspClosed
+    this.inspector.classList.toggle('sp-pane-closed', this.inspClosed)
+    this.inspRz?.classList.toggle('sp-shut', this.inspClosed)
+    this.syncInspChevron()
+    // '0' means OPEN. Absent is closed, which is what a reader who has never
+    // touched this gets — see the constructor.
+    try { localStorage.setItem('bento-sp-insp-closed', this.inspClosed ? '1' : '0') } catch { /* storage can throw */ }
+  }
+
   private syncPaneChevron(): void {
     if (!this.paneTab) return
     // points the way it will MOVE the panel, which is the only thing a chevron
@@ -619,6 +889,7 @@ export class Editor {
    */
   connectSync(session: import('./sync/session.ts').SyncSession): void {
     const { CollabUi } = collabUi
+    this.session = session
     this.collab = new CollabUi({
       store: this.store,
       session,
@@ -626,7 +897,8 @@ export class Editor {
       paintTree: () => this.paintTree(),
       popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
       goToPage: (id) => { this.store.goToPage(id); this.closeDrawer() },
-      invite: () => { void this.saveAs('copy') },
+      shareCopy: (kind) => { void this.shareCopy(kind) },
+      goLive: () => this.goLive(),
     })
     session.onPeers(() => this.collab?.onPeersChanged())
     // The relay refuses things the user can act on — too large, room full. For
@@ -687,6 +959,10 @@ export class Editor {
       // spaces answer to the cursors slides paints on its canvas.
       const dots = this.collab?.dotsFor(page.id)
       if (dots) a.append(dots)
+      // Unresolved threads badge the page they are on: the tree is the only
+      // place you can see that another page is waiting on you.
+      const badge = commentBadge(unresolvedOn(page))
+      if (badge) a.append(badge)
       a.draggable = true
       a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
       a.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text/bento-page', page.id))
@@ -844,6 +1120,9 @@ export class Editor {
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    // The bar holds a reference to the block host it is floating over, and this
+    // is about to replace every one of them.
+    this.format?.close()
     this.main.innerHTML = ''
     if (!page) { this.main.append(el('p', 'sp-empty', t('This space has no pages.'))); return }
 
@@ -859,6 +1138,7 @@ export class Editor {
       editable: !s.readOnly && !this.reading,
       titleOf: (id) => s.index.page.get(id)?.title,
       allowRemote: (src) => this.allowedRemote.has(src),
+      readerWidth: readerWidth(),
     })
     // the icon lives beside the title, where changing it is discoverable
     const inner = view.querySelector('.sp-page-inner')
@@ -933,6 +1213,11 @@ export class Editor {
     this.main.append(view)
     this.wire(view)
     view.querySelector('.sp-page-inner')?.append(this.backlinks(page.id))
+    // Comments are EDITOR-ONLY. The gate is here rather than in comments.ts
+    // because this is the object that knows which view it is in — and the
+    // renderer, which print and the reading view share, has never heard of
+    // them at all.
+    if (!this.reading) this.comments?.refresh()
     this.painting = false
   }
 
@@ -1030,6 +1315,14 @@ export class Editor {
     const si = sibs.findIndex((b) => b.id === id)
 
     return [
+      // FIRST, and only for a link card. The card's own edit button appears on
+      // hover, which is a gesture a touch screen does not have — this menu is
+      // the touch sheet too, so without an entry here a card could be made on a
+      // phone and never changed.
+      ...(blocks[at]?.type === 'link'
+        ? [{ icon: 'globe' as const, label: t('Edit this link card'), hint: '',
+          run: () => this.openLinkCard(id) }]
+        : []),
       { icon: 'text', label: t('Turn into…'), hint: t('Change this block’s type'),
         run: () => this.openSlash(id) },
       { icon: 'plus', label: t('Add below'), hint: '⏎', run: () => this.insertAfter(id) },
@@ -1038,6 +1331,9 @@ export class Editor {
       { icon: 'down', label: t('Move down'), hint: '', off: si < 0 || si >= sibs.length - 1,
         run: () => { if (si >= 0 && si < sibs.length - 1) this.moveBlock(id, sibs[si + 1].id) } },
       { icon: 'copy', label: t('Duplicate'), hint: '', run: () => this.duplicateBlock(id) },
+      // The gutter holds two controls and a phone fits one, so commenting
+      // lives in the menu BOTH of them open — which is also the touch sheet.
+      { icon: 'comment', label: t('Comment'), hint: '', run: () => this.comments.openNew(id) },
       { icon: 'trash', label: t('Delete'), hint: '⌫', run: () => this.deleteBlock(id) },
     ]
   }
@@ -1852,6 +2148,7 @@ export class Editor {
         })
       }
       this.wireBoard(view)
+      this.wireTables(view)
     }
 
     // "Load this image" — the reader's consent to contact one remote host.
@@ -1871,7 +2168,7 @@ export class Editor {
       const cur = this.blockAt(document.activeElement)
       if (e.clipboardData?.files?.length) {
         e.preventDefault()
-        void this.imageFromTransfer(e.clipboardData, cur?.id)
+        void this.fileFromTransfer(e.clipboardData, cur?.id)
       }
     })
     view.addEventListener('dragover', (e) => {
@@ -1886,7 +2183,7 @@ export class Editor {
       if (isImportDrop(e.dataTransfer)) return
       e.preventDefault()
       const near = (e.target as HTMLElement)?.closest?.('[data-block-id]') as HTMLElement | null
-      void this.imageFromTransfer(e.dataTransfer, near?.dataset.blockId)
+      void this.fileFromTransfer(e.dataTransfer, near?.dataset.blockId)
     })
 
     // The language chip. It belongs to the EDITOR, not the renderer: a reader
@@ -1936,6 +2233,100 @@ export class Editor {
       }
       fig.append(tools)
     }
+
+    // VIDEO AND AUDIO. The chooser on an empty block, and the playback
+    // switches on a full one. All of it is editor chrome, deliberately: the
+    // renderer draws the clip, and a reader, a printout and a locked space get
+    // the clip without the switches that change it — the same rule the callout
+    // chip and the language chip follow.
+    for (const node of view.querySelectorAll<HTMLElement>('.sp-b-media')) {
+      const id = node.dataset.blockId!
+      for (const btn of node.querySelectorAll<HTMLElement>('[data-pick-media]')) {
+        btn.addEventListener('click', () => void this.pickMedia(id))
+      }
+      for (const btn of node.querySelectorAll<HTMLElement>('[data-link-media]')) {
+        btn.addEventListener('click', () => this.linkMedia(id))
+      }
+      const b = s.block(id)
+      if (s.readOnly || this.reading || !b || !b.src) continue
+      const kind = String(b.kind ?? 'video') === 'audio' ? 'audio' : 'video'
+      const tools = el('div', 'sp-mediatools')
+      const flip = (label: string, title: string, on: boolean, set: (v: boolean) => void) => {
+        const btn = document.createElement('button')
+        btn.className = 'sp-btn' + (on ? ' sp-on' : '')
+        btn.type = 'button'
+        btn.textContent = label
+        btn.title = title
+        btn.setAttribute('aria-pressed', String(on))
+        btn.addEventListener('click', () => {
+          s.commit(() => { const bb = s.block(id); if (bb) set(!on) })
+          this.paintPage()
+        })
+        tools.append(btn)
+      }
+
+      // WIDTH IS A VIDEO QUESTION. An <audio> is a control bar of the
+      // browser's own height; a percentage of the measure would only make it
+      // a shorter control bar.
+      if (kind === 'video') {
+        const sizeBtn = document.createElement('button')
+        sizeBtn.className = 'sp-btn'
+        sizeBtn.type = 'button'
+        sizeBtn.textContent = `${b.width ?? 100}%`
+        sizeBtn.title = t('Width in the text column')
+        sizeBtn.addEventListener('click', () => {
+          const steps = [100, 75, 50, 33]
+          const cur = Number(b.width ?? 100)
+          const next = steps[(steps.indexOf(cur) + 1) % steps.length]
+          s.commit(() => { const bb = s.block(id); if (bb) bb.width = next })
+          this.paintPage()
+        })
+        tools.append(sizeBtn)
+
+        const poster = document.createElement('button')
+        poster.className = 'sp-btn' + (b.poster ? ' sp-on' : '')
+        poster.type = 'button'
+        poster.textContent = t('Poster…')
+        poster.title = t('A still frame, shown before play — and what a printout or a file preview shows')
+        poster.addEventListener('click', () => void this.pickPoster(id))
+        tools.append(poster)
+
+        flip(t('Muted'), t('Start silent'), b.muted === true,
+          (v) => { const bb = s.block(id); if (bb) bb.muted = v })
+      }
+      flip(t('Loop'), t('Repeat when it reaches the end'), b.loop === true,
+        (v) => { const bb = s.block(id); if (bb) bb.loop = v })
+      // absent means shown, so the OFF state is the one that is written down
+      flip(t('Controls'), t('Show playback controls to the reader'), b.controls !== false,
+        (v) => { const bb = s.block(id); if (bb) { if (v) delete bb.controls; else bb.controls = false } })
+
+      const replace = document.createElement('button')
+      replace.className = 'sp-btn'
+      replace.type = 'button'
+      replace.textContent = t('Replace…')
+      replace.title = t('Choose a different file')
+      replace.addEventListener('click', () => void this.pickMedia(id))
+      tools.append(replace)
+
+      // a linked clip says so, because it is the one that stops working on a
+      // train — and the badge is the only place that fact is visible
+      if (typeof b.src === 'string' && isRemote(b.src)) {
+        const badge = document.createElement('span')
+        badge.className = 'sp-btn sp-badge'
+        badge.textContent = t('Linked')
+        badge.title = t('Not in this file: it needs the network, and the site is told when someone opens the page')
+        tools.append(badge)
+      }
+      node.append(tools)
+    }
+    // A link card OPENS its link, so its editing control is a separate button —
+    // rendered only where there is an editor (render.ts), wired here.
+    view.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-edit-link]')
+      if (!btn) return
+      e.preventDefault()
+      this.openLinkCard(btn.dataset.editLink!)
+    })
 
     // intra-space links navigate without leaving the document
     view.addEventListener('click', (e) => {
@@ -1992,6 +2383,323 @@ export class Editor {
     host.addEventListener('blur', () => { if (!this.painting) s.endRun() })
   }
 
+  // ---- tables -------------------------------------------------------------
+  //
+  // A block editor edits a table differently from a canvas: there is no
+  // properties panel to put row and column controls in, and the block IS the
+  // table, so the controls ride on the block the way the image tools do. What
+  // is copied from slides is the MODEL (fractional weights, rows of cells, a
+  // header flag, whole-value LWW under collab); what is not is any of this.
+
+  /** The cell the caret is in — `data-cell` is the block, `data-r`/`data-c` the
+   *  seat. Deliberately NOT `data-edit`: that name means "this element's html
+   *  IS the block's html", and the generic input handler would then write one
+   *  cell over the whole table. */
+  private cellAt(node: Node | null): { id: string; r: number; c: number; td: HTMLElement } | null {
+    const td = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>('[data-cell]')
+    if (!td) return null
+    return { id: td.dataset.cell!, r: Number(td.dataset.r), c: Number(td.dataset.c), td }
+  }
+
+  private focusCell(id: string, r: number, c: number): void {
+    afterPaint(() => {
+      const td = this.main.querySelector<HTMLElement>(
+        `[data-cell="${CSS.escape(id)}"][data-r="${r}"][data-c="${c}"]`)
+      if (!td) return
+      td.focus()
+      caretToEnd(td)
+    })
+  }
+
+  /**
+   * Change a table's shape, then put the caret back where the change means it
+   * should be.
+   *
+   * Every table write goes through here and through model.writeTable, so the
+   * derived `html` fallback — the thing a build that predates tables shows —
+   * can never drift from the cells. It is a `commit`, so it is one undo step.
+   */
+  private editTable(id: string, fn: (t: TableShape) => { r: number; c: number } | void): void {
+    const s = this.store
+    const b = s.block(id)
+    if (!b || s.readOnly || this.reading) return
+    let seat: { r: number; c: number } | undefined
+    const shape = tableOf(b)
+    s.commit(() => { seat = fn(shape) || undefined; writeTable(b, shape) })
+    this.paintPage()
+    // where the change means the caret should be, or where it already was —
+    // clamped, because the row it was in may be the row that just went
+    const here = this.cell?.id === id ? this.cell : null
+    const to = seat ?? here
+    if (!to) return
+    const t = tableOf(b)
+    this.focusCell(id, Math.min(to.r, t.h - 1), Math.min(to.c, t.w - 1))
+  }
+
+  /** The last cell the caret was in, so a toolbar button knows which row and
+   *  column it means. A toolbar click blurs the cell, so this cannot be read
+   *  from the Selection at the moment the button fires. */
+  private cell: { id: string; r: number; c: number } | null = null
+
+  /** A fresh row or column of the right width. */
+  private static blank(n: number): string[] { return Array<string>(n).fill('') }
+
+  addTableRow(id: string, at?: number): void {
+    this.editTable(id, (t) => {
+      if (t.h >= TABLE_MAX_ROWS) return
+      const r = at === undefined ? t.h : at + 1
+      t.rows.splice(r, 0, Editor.blank(t.w))
+      return { r, c: 0 }
+    })
+  }
+
+  addTableCol(id: string, at?: number): void {
+    this.editTable(id, (t) => {
+      if (t.w >= TABLE_MAX_COLS) return
+      const c = at === undefined ? t.w : at + 1
+      for (const row of t.rows) row.splice(c, 0, '')
+      t.cols.splice(c, 0, t.cols[Math.min(c, t.cols.length - 1)] ?? 1)
+      t.colAlign.splice(c, 0, '')
+      return { r: 0, c }
+    })
+  }
+
+  /** A table always keeps one row and one column: a table with none is not an
+   *  empty table, it is a block with nothing to click on and no way back. */
+  removeTableRow(id: string, at: number): void {
+    this.editTable(id, (t) => {
+      if (t.h <= 1) return
+      t.rows.splice(Math.min(at, t.h - 1), 1)
+      return { r: Math.max(0, Math.min(at, t.rows.length - 1)), c: 0 }
+    })
+  }
+
+  removeTableCol(id: string, at: number): void {
+    this.editTable(id, (t) => {
+      if (t.w <= 1) return
+      const c = Math.min(at, t.w - 1)
+      for (const row of t.rows) row.splice(c, 1)
+      t.cols.splice(c, 1)
+      t.colAlign.splice(c, 1)
+      return { r: 0, c: Math.max(0, c - 1) }
+    })
+  }
+
+  /**
+   * Attach a table's editing behaviour: the cells, the tools, the grips.
+   *
+   * Called only when the document is editable — the renderer already emits
+   * inert `<td>`s in the reading view and in print, so wiring them anyway would
+   * contradict it, which is the exact mistake the callout chip made once.
+   */
+  private wireTables(view: HTMLElement): void {
+    const s = this.store
+
+    for (const td of view.querySelectorAll<HTMLElement>('[data-cell]')) {
+      const id = td.dataset.cell!
+      const r = Number(td.dataset.r), c = Number(td.dataset.c)
+      td.addEventListener('focus', () => { this.cell = { id, r, c } })
+      td.addEventListener('input', () => {
+        if (this.painting) return
+        // ONE RUN PER CELL, not per block: the run key carries the seat, so
+        // moving to the next cell closes the run and Tab-typing across a row is
+        // five undo steps rather than one that swallows the whole row.
+        s.runEdit(`${id}:${r}:${c}`, () => {
+          const b = s.block(id)
+          if (!b) return
+          const t = tableOf(b)
+          if (!t.rows[r]) return
+          t.rows[r][c] = td.innerHTML
+          writeTable(b, t)
+        })
+      })
+      td.addEventListener('blur', () => {
+        if (this.painting) return
+        s.endRun()
+        const b = s.block(id)
+        if (!b) return
+        const t = tableOf(b)
+        const clean = canonicalize(t.rows[r]?.[c] ?? '')
+        if (clean === t.rows[r]?.[c]) return
+        t.rows[r][c] = clean
+        writeTable(b, t)
+        td.innerHTML = clean
+      })
+    }
+
+    for (const node of view.querySelectorAll<HTMLElement>('.sp-b-table')) {
+      const id = node.dataset.blockId!
+      const b = s.block(id)
+      if (!b) continue
+      const shape = tableOf(b)
+      const tools = el('div', 'sp-tb-tools')
+      const btn = (label: string, title: string, run: () => void, on = false) => {
+        const x = document.createElement('button')
+        x.type = 'button'
+        x.className = 'sp-btn' + (on ? ' sp-on' : '')
+        x.textContent = label
+        x.title = title
+        x.setAttribute('aria-label', title)
+        // mousedown, not click: a click would first blur the cell, and `this.cell`
+        // is read to decide WHICH row the button means. Blur still runs (the
+        // cell's own handler closes its typing run) — it just runs after the
+        // seat has been used.
+        x.addEventListener('mousedown', (e) => { e.preventDefault(); run() })
+        return x
+      }
+      const seat = () => (this.cell?.id === id ? this.cell : null)
+      tools.append(
+        btn('＋', t('Add a row below'), () => this.addTableRow(id, seat()?.r)),
+        btn('＋|', t('Add a column after'), () => this.addTableCol(id, seat()?.c)),
+        btn('－', t('Remove this row'), () => this.removeTableRow(id, seat()?.r ?? shape.h - 1)),
+        btn('－|', t('Remove this column'), () => this.removeTableCol(id, seat()?.c ?? shape.w - 1)),
+        btn('H', t('Header row'), () => this.editTable(id, (x) => { x.header = !x.header }), shape.header),
+      )
+      node.append(tools)
+
+      // COLUMN GRIPS on the first row's cells, all but the last: a boundary
+      // moves two columns, and there is no boundary after the last one.
+      // COLUMN GRIPS. They live in the WRAPPER, absolutely positioned over each
+      // boundary — NOT inside the first row's cells, which is where they went
+      // first and which was wrong in two ways at once, both measured in the
+      // browser: the cell's `innerHTML` is the model, so every grip was written
+      // into the document as the cell's content; and `caretToEnd` put the caret
+      // INSIDE the trailing <button>, so the first word typed into a column
+      // landed in the button and was then eaten by the sanitizer on blur (a
+      // <button> is not on the inline allowlist, so it goes with its text).
+      // Editor chrome never belongs inside an editable host. The image tools and
+      // the language chip sit outside theirs for the same reason.
+      const wrap = node.querySelector<HTMLElement>('.sp-tb-wrap')
+      const table = node.querySelector<HTMLElement>('.sp-tb')
+      if (!wrap || !table || shape.w < 2) continue
+      const grips: HTMLElement[] = []
+      // `offsetLeft` is measured against the WRAP (the nearest positioned
+      // ancestor), which is also what the grips are positioned in — so the two
+      // agree inside the horizontal scroller as well, and scroll together.
+      const place = () => {
+        const row = [...node.querySelectorAll<HTMLElement>('[data-cell][data-r="0"]')]
+        grips.forEach((g, c) => {
+          const td = row[c]
+          if (!td) return
+          // physical `left`, to match the physical `offsetLeft` it comes from
+          g.style.left = `${td.offsetLeft + td.offsetWidth - 3}px`
+          g.style.height = `${table.offsetHeight}px`
+        })
+      }
+      for (let c = 0; c < shape.w - 1; c++) {
+        const grip = document.createElement('button')
+        grip.type = 'button'
+        grip.className = 'sp-tb-grip'
+        grip.tabIndex = -1
+        grip.setAttribute('aria-label', t('Drag to resize this column'))
+        grip.addEventListener('mousedown', (down) => this.startColResize(down, id, c, node, place))
+        grips.push(grip)
+        wrap.append(grip)
+      }
+      place()
+      // the column boundaries move when the window does, and a grip that is no
+      // longer over its boundary is worse than no grip
+      new ResizeObserver(place).observe(table)
+    }
+  }
+
+  /**
+   * Drag a column boundary.
+   *
+   * The DOM is updated live and the model ONLY on release — a commit per
+   * mousemove would be sixty undo steps for one drag, and repainting the page
+   * under the cursor would drop the pointer capture on the first frame.
+   *
+   * Two adjacent weights are traded so the total is unchanged: `cols` are
+   * fractions of the table's own width (model.ts), so a drag can never make a
+   * table that does not add up.
+   */
+  private startColResize(down: MouseEvent, id: string, c: number, node: HTMLElement, place: () => void): void {
+    down.preventDefault()
+    const table = node.querySelector<HTMLElement>('.sp-tb')
+    const b = this.store.block(id)
+    if (!table || !b) return
+    const shape = tableOf(b)
+    const cols = [...table.querySelectorAll<HTMLElement>('col')]
+    const width = table.getBoundingClientRect().width || 1
+    const total = shape.cols.reduce((s, n) => s + n, 0) || shape.w
+    const startX = down.clientX
+    const a0 = shape.cols[c], b0 = shape.cols[c + 1]
+    // a column never shrinks past a width you could still grab
+    const min = (total * 40) / width
+    document.body.classList.add('sp-col-resizing')
+
+    const move = (m: MouseEvent) => {
+      const d = ((m.clientX - startX) / width) * total
+      const a = Math.max(min, Math.min(a0 + b0 - min, a0 + d))
+      shape.cols[c] = a
+      shape.cols[c + 1] = a0 + b0 - a
+      for (let i = 0; i < cols.length; i++) {
+        cols[i].style.width = `${((shape.cols[i] / total) * 100).toFixed(3)}%`
+      }
+      // the grips follow the boundaries they ARE; the table's own size does not
+      // change during a column drag, so the ResizeObserver never fires for this
+      place()
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      document.body.classList.remove('sp-col-resizing')
+      this.store.commit(() => { writeTable(b, shape) }, { structure: false })
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
+  /**
+   * The keymap INSIDE a cell. Returns true when it handled the key.
+   *
+   * Tab and Enter walk the grid, and Tab off the last cell appends a row —
+   * exactly what slides' canvas table does, because it is what every table in
+   * every application does and muscle memory is not a thing to be clever with.
+   * Shift+Enter is the line break, since plain Enter is spent on navigation.
+   */
+  private tableKey(e: KeyboardEvent, at: { id: string; r: number; c: number }): boolean {
+    const b = this.store.block(at.id)
+    if (!b) return false
+    const t = tableOf(b)
+    const go = (r: number, c: number) => { e.preventDefault(); this.focusCell(at.id, r, c) }
+
+    if (e.key === 'Tab') {
+      const next = at.c + (e.shiftKey ? -1 : 1)
+      if (next >= 0 && next < t.w) { go(at.r, next); return true }
+      if (e.shiftKey) {
+        if (at.r === 0) { e.preventDefault(); return true }
+        go(at.r - 1, t.w - 1)
+        return true
+      }
+      if (at.r + 1 < t.h) { go(at.r + 1, 0); return true }
+      // off the end: a new row, which is how a table is filled in
+      e.preventDefault()
+      this.addTableRow(at.id)
+      return true
+    }
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // the browser inserts a <div> or a <p> into a td left to itself, and
+        // block structure is never markup here — insertLineBreak is a <br>
+        e.preventDefault()
+        document.execCommand('insertLineBreak')
+        return true
+      }
+      if (at.r + 1 < t.h) { go(at.r + 1, at.c); return true }
+      e.preventDefault()
+      this.addTableRow(at.id)
+      return true
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      return true
+    }
+    return false
+  }
+
   /** Choose what a code block is highlighted as. */
   private openLangPicker(blockId: string, anchor: HTMLElement): void {
     const s = this.store
@@ -2038,6 +2746,8 @@ export class Editor {
   }
 
   private collab: import('./collabui.ts').CollabUi | null = null
+  /** the live session, once main.ts has handed it over (connectSync) */
+  private session: import('./sync/session.ts').SyncSession | null = null
   private liveSlot!: HTMLElement
   private topbar: HTMLElement | null = null
   private barRO: ResizeObserver | null = null
@@ -2144,16 +2854,41 @@ export class Editor {
     const s = this.store
     const mod = (e as any)[CTRL] as boolean
 
-    if (mod && e.key.toLowerCase() === 'k' && !e.shiftKey) { e.preventDefault(); this.openSearch(); return }
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); this.onSave?.(); return }
+    // ⌘K IS TWO COMMANDS, decided by whether anything is selected — the same
+    // split Notion and Confluence make, and the reason it is not a second
+    // shortcut: on a selection it is "link these words", and with nothing
+    // selected there is nothing to link, so it stays the quick-open it has
+    // always been. `link()` answers false when the selection is not markable,
+    // and the search opens as before.
+    if (mod && e.key.toLowerCase() === 'k' && !e.shiftKey) {
+      e.preventDefault()
+      if (!this.format?.link()) this.openSearch()
+      return
+    }
+    // `!e.shiftKey`: ⇧⌘S is strikethrough, and this branch had no shift test,
+    // so without it the save dialog opened every time someone struck text out.
+    if (mod && e.key.toLowerCase() === 's' && !e.shiftKey) { e.preventDefault(); this.onSave?.(); return }
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
-    // `[` collapses the page list, as in slides. Bare, not modified: it only
-    // reaches here when nothing is being edited (the text path returns above,
-    // where `[` is the page-link trigger).
-    if (!mod && e.key === '[') { e.preventDefault(); this.togglePane(); return }
+    // `[` collapses the page list, `]` opens the properties panel — the pair
+    // slides uses. BOTH ask the same question first.
+    //
+    // `[` did not, and the comment beside it claimed it did not need to
+    // because "the text path returns above". The text path is ~90 lines BELOW
+    // it, so every bare `[` was caught here, preventDefault()ed, and turned
+    // into a sidebar toggle: `[[`, the way this app makes links and the thing
+    // the starter space tells you to type, could not be typed at all. Shipped
+    // since #237.
+    //
+    // ONE guard for both, not two. The panel work arrived with its own
+    // `isTyping()` while this was being fixed with an `editingText()` — same
+    // question, two names, and a second copy is how the two answers start to
+    // differ. `isTyping` is the survivor because it also covers SELECT, which
+    // takes a keystroke as readily as an input does.
+    if (!mod && e.key === '[' && !isTyping()) { e.preventDefault(); this.togglePane(); return }
+    if (!mod && e.key === ']' && !isTyping()) { e.preventDefault(); this.toggleInsp(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); this.newIssue(); return }
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault()
@@ -2163,6 +2898,18 @@ export class Editor {
     }
     if (e.key === 'Escape' && this.reading && !this.overlay) { e.preventDefault(); this.toggleReading(false); return }
     if (this.overlay) return // the overlay owns the keyboard while it is open
+
+    // A TABLE CELL IS NOT A BLOCK HOST, so the block keymap below does not
+    // apply to it — the same ruling a code block gets, one level earlier.
+    // ⏎ walks the grid rather than splitting a block, ⇥ walks it rather than
+    // re-parenting, and neither has any meaning for a cell. This must come
+    // before `focused()`, which looks for `[data-edit]` and finds nothing in a
+    // cell — so without it every key here fell through to the browser, and ⏎
+    // inserted a `<div>` into the cell's html.
+    const inCell = this.cellAt(document.activeElement)
+    if (inCell && !s.readOnly && !this.reading) {
+      if (this.tableKey(e, inCell)) return
+    }
 
     const cur = this.focused()
     if (!cur) return
@@ -2188,7 +2935,7 @@ export class Editor {
       if (e.key === 'Enter') { e.preventDefault(); insertText('\n'); return }
       if (e.key === 'Tab') { e.preventDefault(); if (!e.shiftKey) insertText('  '); return }
       if (e.key === '/' || e.key === '[') return
-      if (mod && ['b', 'i', 'u'].includes(e.key.toLowerCase())) { e.preventDefault(); return }
+      if (markKey(e, mod)) { e.preventDefault(); return }
     }
 
     if (e.key === 'Enter' && !e.shiftKey && b.type !== 'code') {
@@ -2231,10 +2978,14 @@ export class Editor {
       setTimeout(() => this.openPagePicker(cur.id, cur.host), 0)
       return
     }
-    if (mod && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+    const mark = markKey(e, mod)
+    if (mark) {
+      // ALWAYS preventDefault, even with nothing selected. ⌘B is a browser
+      // command too, and letting it through would put contentEditable's own
+      // `<b>` into the block — the exact non-canonical markup, from the exact
+      // engine, that §2.4(b) forbids and that this replaced.
       e.preventDefault()
-      document.execCommand(({ b: 'bold', i: 'italic', u: 'underline' } as any)[e.key.toLowerCase()])
-      s.runEdit(cur.id, () => { const bb = s.block(cur.id); if (bb) bb.html = cur.host.innerHTML })
+      this.format?.toggle(mark)
       return
     }
   }
@@ -2331,7 +3082,10 @@ export class Editor {
       SPEC.get(type)?.init?.(b)
     })
     this.paintPage()
-    this.focusBlock(id)
+    // a table's text is in its cells, so there is no block host to put the
+    // caret in — the first cell is the equivalent place
+    if (type === 'table') this.focusCell(id, 0, 0)
+    else this.focusBlock(id)
   }
 
   // ---- overlays -----------------------------------------------------------
@@ -2454,6 +3208,7 @@ export class Editor {
       // the "/" that opened the menu is a command, not content
       if (blk && (blk.html ?? '').trim() === '/') blk.html = ''
       if (item.type === 'pagelink') this.insertPageCard(blockId)
+      else if (item.type === 'link') { this.setType(blockId, 'link'); this.openLinkCard(blockId) }
       else this.setType(blockId, item.type)
     }
     const paint = () => {
@@ -2509,6 +3264,132 @@ export class Editor {
         if (b) { b.type = 'pagelink'; b.page = pageId; b.html = '' }
       })
       this.paintPage()
+    })
+  }
+
+  /**
+   * THE ONE WRITER for a link card's fields.
+   *
+   * Fields and `html` move together, always — the same rule as a field value
+   * (applyField above), for the same reason: `html` is what a build that has
+   * never heard of `link` renders, and format additivity is a promise about
+   * what OLD builds do. A card whose fields were written without it is a card
+   * that vanishes when the file is opened in last year's shell.
+   */
+  private applyLinkCard(b: Block, next: Partial<Block>): void {
+    b.type = 'link'
+    for (const k of ['url', 'title', 'desc', 'site', 'icon', 'image'] as const) {
+      const v = next[k]
+      // an EMPTY field is an absent field: a card carrying `"desc": ""` is
+      // bytes in every copy of the file that say nothing
+      if (typeof v === 'string' && v.trim()) (b as Record<string, unknown>)[k] = v.trim()
+      else delete (b as Record<string, unknown>)[k]
+    }
+    b.html = linkCardHtml(linkCard(b))
+  }
+
+  /**
+   * The link card's editor — and the whole of this feature's honesty.
+   *
+   * A link card in Notion or Slack is a SERVER fetching the url and reading its
+   * OpenGraph tags. There is no server here, and a fetch on this path would
+   * break the one promise the format is built on. So the author fills the card
+   * in, the dialog says so plainly, and nothing about opening a space ever
+   * contacts the site it links to.
+   */
+  private openLinkCard(blockId: string): void {
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    const at = s.block(blockId)
+    if (!at) return
+    // a draft, so Escape leaves the block exactly as it was
+    const draft: Record<string, string> = {
+      url: String(at.url ?? ''), title: String(at.title ?? ''),
+      desc: String(at.desc ?? ''), site: String(at.site ?? ''),
+      icon: String(at.icon ?? ''), image: String(at.image ?? ''),
+    }
+
+    this.openOverlay(t('Link card'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Link card')))
+
+      const why = document.createElement('p')
+      why.className = 'sp-note'
+      why.textContent = t('Nothing is fetched. A card shows what you type here — opening this space never contacts the site.')
+      card.append(why)
+
+      const field = (key: string, label: string, hint?: string): HTMLInputElement => {
+        const wrap = el('div', 'sp-field')
+        wrap.append(el('label', 'sp-field-lbl', label))
+        const input = document.createElement('input')
+        input.className = 'sp-input'
+        input.value = draft[key]
+        if (hint) input.placeholder = hint
+        input.addEventListener('input', () => { draft[key] = input.value })
+        wrap.append(input)
+        card.append(wrap)
+        return input
+      }
+
+      const url = field('url', t('Web address'), 'https://example.com')
+      url.type = 'url'
+      field('title', t('Title'), t('What this is'))
+      field('desc', t('Description'), t('One line about what is there'))
+      // the host is what shows when this is blank, so the placeholder is the
+      // answer rather than an example
+      field('site', t('Site name'), t('Taken from the address if blank'))
+      field('icon', t('Icon'), t('One emoji'))
+
+      // THE THUMBNAIL IS EMBEDDED, never linked. `prepareImage` downscales and
+      // `internAsset` stores the bytes in the file, exactly as an image block
+      // does — which is why a card can carry a picture at all without becoming
+      // a request on open.
+      const row = el('div', 'sp-actions')
+      const pick = document.createElement('button')
+      pick.className = 'sp-btn'
+      pick.type = 'button'
+      const paintPick = () => {
+        pick.textContent = draft.image ? t('Replace picture') : t('Add a picture')
+        drop.hidden = !draft.image
+      }
+      pick.addEventListener('click', () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.addEventListener('change', () => {
+          const file = input.files?.[0]
+          if (!file) return
+          void (async () => {
+            try {
+              const prepared = await prepareImage(file)
+              draft.image = await internAsset(s.doc, prepared.dataUri)
+            } catch { this.status(t('That file could not be read as an image')); return }
+            paintPick()
+          })()
+        })
+        input.click()
+      })
+      const drop = document.createElement('button')
+      drop.className = 'sp-btn'
+      drop.type = 'button'
+      drop.textContent = t('Remove the picture')
+      drop.addEventListener('click', () => { draft.image = ''; paintPick() })
+      paintPick()
+      row.append(pick, drop)
+      card.append(row)
+
+      const done = el('div', 'sp-actions')
+      const save = document.createElement('button')
+      save.className = 'sp-btn sp-primary'
+      save.type = 'button'
+      save.textContent = t('Save')
+      save.addEventListener('click', () => {
+        close()
+        s.commit(() => { const b = s.block(blockId); if (b) this.applyLinkCard(b, draft) })
+        this.paintPage()
+      })
+      done.append(save)
+      card.append(done)
+      url.focus()
     })
   }
 
@@ -2697,6 +3578,16 @@ export class Editor {
       this.newPage(pageId)
     }))
 
+    // A thread about the PAGE — the second and last anchor. It is offered
+    // where the page's own actions are, and only for the page in view,
+    // because a thread is written into the page you are looking at.
+    if (pageId === s.pageId && !s.readOnly) {
+      pop.append(this.menuItem('comment', t('Comment on this page'), '', () => {
+        this.closeOverlay()
+        this.comments.openNew()
+      }))
+    }
+
     pop.append(this.menuItem(page.archived ? 'unarchive' : 'archive',
       page.archived ? t('Restore to the page list') : t('Archive'),
       page.archived ? '' : t('Out of the sidebar, still searchable and linkable'), () => {
@@ -2708,6 +3599,54 @@ export class Editor {
           else p.archived = true
         })
       }))
+
+    // HOW WIDE THIS PAGE IS. The renderer already varied it — a page carrying a
+    // board jumped to 1500px — but it decided for you silently. Measured at a
+    // 1600px viewport: the default column is 720px with 631px of the page left
+    // empty beside it, and nothing on the starter pages even reaches the limit
+    // (0 of 15 blocks wrap). The line length was never the problem; having no
+    // say was.
+    pop.append(el('div', 'sp-menu-label', t('Width')))
+    const current: 'normal' | 'wide' | 'full' =
+      page.width === 'wide' ? 'wide' : page.width === 'full' ? 'full' : 'normal'
+    const setWidth = (v: 'normal' | 'wide' | 'full') => {
+      this.closeOverlay()
+      s.commit(() => {
+        const pg = s.index.page.get(pageId)
+        if (!pg) return
+        // THE DEFAULT IS AN ABSENT KEY, never a stored 'normal'. A page somebody
+        // set to wide and back is then byte-identical to one never touched, and
+        // a file written before this control existed stays that way.
+        if (v === 'normal') delete pg.width
+        else pg.width = v
+      }, { scope: 'doc' })
+      this.paintPage()
+    }
+    pop.append(this.menuItem('widthNarrow', t('Column'), t('Comfortable for reading'),
+      () => setWidth('normal'), { selected: current === 'normal' }))
+    pop.append(this.menuItem('widthWide', t('Wide'), t('Room for a board or a table'),
+      () => setWidth('wide'), { selected: current === 'wide' }))
+    pop.append(this.menuItem('widthFull', t('Full width'), t('Fills the window'),
+      () => setWidth('full'), { selected: current === 'full' }))
+
+    // AND THE SAME CHOICE, FOR EVERY PAGE. Setting a width page by page answers
+    // "this page needs the room"; it does not answer "I have a wide screen",
+    // which is one fact about one person and was costing a visit to every page
+    // in the space. This one is a VIEWER preference — localStorage, never the
+    // file — so it follows the reader rather than the document, and somebody
+    // opening the same space on a laptop is unaffected.
+    const pref = readerWidth()
+    const applyAll = (v: 'wide' | 'full' | undefined) => {
+      this.closeOverlay()
+      setReaderWidth(v)
+      this.paintPage()
+      this.status(v ? t('Every page opens wide on this screen from now on')
+                    : t('Pages open at their normal width again'))
+    }
+    pop.append(this.menuItem(pref ? 'widthNarrow' : 'widthWide',
+      pref ? t('Stop widening every page') : t('Use this width for every page'),
+      pref ? t('Only pages that ask for it') : t('On this screen only — it is not saved in the file'),
+      () => applyAll(pref ? undefined : (current === 'full' ? 'full' : 'wide'))))
 
     pop.append(this.menuItem('trash', t('Delete…'), t('Links to it become dead'), () => {
       this.closeOverlay()
@@ -2830,14 +3769,159 @@ export class Editor {
       }))
   }
 
-  /** Drop or paste an image straight onto the page. */
-  private async imageFromTransfer(dt: DataTransfer | null, afterId?: string): Promise<boolean> {
-    const file = [...(dt?.files ?? [])].find((f) => f.type.startsWith('image/'))
-      ?? [...(dt?.items ?? [])].filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile())[0]
-    if (!file) return false
+  /**
+   * Drop or paste an image — or a clip — straight onto the page.
+   *
+   * Images win a tie. A drag that carries both (a screenshot alongside a
+   * screen recording, which is what a Finder multi-select of a bug report
+   * looks like) takes the image, because that is the one an author is far more
+   * often reaching for and the one that costs nothing to be wrong about.
+   */
+  private async fileFromTransfer(dt: DataTransfer | null, afterId?: string): Promise<boolean> {
+    const pick = (kind: string): File | undefined =>
+      [...(dt?.files ?? [])].find((f) => f.type.startsWith(kind))
+      ?? [...(dt?.items ?? [])].filter((i) => i.type.startsWith(kind)).map((i) => i.getAsFile())[0]
+      ?? undefined
     if (!this.store.page) return false
-    await this.placeImage(null, file, { insertAfter: afterId ?? null })
+    const img = pick('image/')
+    if (img) { await this.placeImage(null, img, { insertAfter: afterId ?? null }); return true }
+    const clip = pick('video/') ?? pick('audio/')
+    if (!clip) return false
+    await this.placeMedia(null, clip, { insertAfter: afterId ?? null })
     return true
+  }
+
+  // ---- video and audio -------------------------------------------------------
+  /**
+   * Choose a clip and put it in the document.
+   *
+   * `accept` names both kinds and the KIND IS READ BACK OFF THE FILE, never
+   * asked for. A picker that made you say "video" first would be a question
+   * the file already answers, and answers correctly for the odd cases — an
+   * .m4a that a phone wrote as video/mp4 plays either way.
+   */
+  async pickMedia(blockId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/*,audio/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (file) void this.placeMedia(blockId, file)
+    })
+    input.click()
+  }
+
+  /**
+   * Embed one clip.
+   *
+   * Shaped like placeImage and for the same reason: everything asynchronous —
+   * reading the bytes, hashing them — happens BEFORE the commit, so the asset
+   * and the reference land in one synchronous mutation and one undo step.
+   *
+   * NOTHING IS RE-ENCODED. prepareImage exists because a phone photo is 4000px
+   * wide in a 720px column and the detail is invisible; there is no equivalent
+   * cheap win for video, and transcoding in a browser tab means shipping an
+   * encoder and taking minutes over it. So a clip is either small enough to
+   * embed or a link — which is what MEDIA_EMBED_BUDGET asks about.
+   */
+  async placeMedia(
+    blockId: string | null,
+    file: File | Blob,
+    opts: { insertAfter?: string | null } = {},
+  ): Promise<void> {
+    const s = this.store
+    this.status(t('Reading file…'))
+    let dataUri: string
+    try {
+      dataUri = await blobToDataUri(file)
+    } catch {
+      this.status(t('That file could not be read'))
+      return
+    }
+    const kind = (file as File).type?.startsWith('audio/') ? 'audio' : 'video'
+
+    if (dataUri.length > MEDIA_EMBED_BUDGET) {
+      // A browser file picker hands over BYTES, never a path, so "keep it on
+      // disk and point at it" is not a thing this can offer. The honest
+      // alternatives are: embed it anyway, or paste a URL — which is what the
+      // block's own chooser offers, and where a no lands you.
+      const go = confirm(t(
+        'This clip is {size} and travels inside the file, making it that much bigger for everyone you send it to. Embed it anyway?',
+        { size: humanBytes(dataUri.length) },
+      ))
+      if (!go) { this.status(''); return }
+    }
+
+    const ref = await internAsset(s.doc, dataUri)
+    this.writeMedia(blockId, opts.insertAfter ?? null, (b) => { b.src = ref; b.kind = kind })
+    this.status(t('Clip added ({size})', { size: humanBytes(dataUri.length) }))
+  }
+
+  /**
+   * The escape hatch: a clip that lives somewhere else.
+   *
+   * The only way to have a small file with a big video in it, and the reason
+   * `src` is hybrid at all. It is a real trade and it is stated at the point of
+   * the decision — a linked clip needs the network to play, and asking for it
+   * tells that host somebody opened the space, which is why the READER is
+   * asked before it loads (render.ts).
+   */
+  linkMedia(blockId: string | null, insertAfter: string | null = null): void {
+    const url = prompt(t('Address of a video or audio file'))?.trim()
+    if (!url) return
+    // http(s) only, and checked HERE as well as in the sanitizer: `src` is not
+    // inline html, so it never passes through sanitize.ts at all — a
+    // `javascript:` typed into this box would be written straight onto the
+    // element. The allowlist is the test, never a `javascript:` blocklist.
+    if (!/^https?:\/\//i.test(url)) { this.status(t('That needs to be an http or https address')); return }
+    const kind = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba)(\?|#|$)/i.test(url) ? 'audio' : 'video'
+    this.writeMedia(blockId, insertAfter, (b) => { b.src = url; b.kind = kind })
+    this.status('')
+  }
+
+  /** ONE commit, whether the block exists already or is being created here —
+   *  the placeImage rule: an inserted clip must not cost two undos. */
+  private writeMedia(blockId: string | null, insertAfter: string | null, fill: (b: Block) => void): void {
+    const s = this.store
+    const apply = (b: Block) => {
+      b.type = 'media'
+      b.html = ''
+      fill(b)
+    }
+    s.commit(() => {
+      if (blockId) { const b = s.block(blockId); if (b) apply(b); return }
+      const page = s.page
+      if (!page) return
+      const fresh = newBlock('media')
+      apply(fresh)
+      const at = insertAfter ? page.blocks.findIndex((b) => b.id === insertAfter) + 1 : page.blocks.length
+      page.blocks.splice(at < 1 ? page.blocks.length : at, 0, fresh)
+    })
+    this.paintPage()
+  }
+
+  /** A still frame for a video — the same pipeline an image goes through, so
+   *  it is downscaled and content-addressed like any other picture. */
+  private async pickPoster(blockId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      void (async () => {
+        this.status(t('Reading image…'))
+        let prepared
+        try { prepared = await prepareImage(file) } catch {
+          this.status(t('That file could not be read as an image')); return
+        }
+        const ref = await internAsset(this.store.doc, prepared.dataUri)
+        this.store.commit(() => { const b = this.store.block(blockId); if (b) b.poster = ref })
+        this.paintPage()
+        this.status('')
+      })()
+    })
+    input.click()
   }
 
   // ---- importing existing notes ---------------------------------------------
@@ -2851,13 +3935,35 @@ export class Editor {
    * rather than left to be discovered.
    */
   openImport(): void {
-    this.openOverlay(t('Import Markdown'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Import Markdown')))
+    this.openOverlay(t('Bring notes in'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Bring notes in')))
 
       const what = document.createElement('p')
       what.className = 'sp-note'
       what.textContent = t('Each .md file becomes a page, folders become the page tree, and [[wikilinks]] become real links. Pages are added — nothing here is replaced.')
       card.append(what)
+
+      // WHERE the arriving pages land, and it governs BOTH ways in. An import
+      // that can only append at the root is an import into a pile: the point of
+      // a space is the tree, and "under the page I am reading" is what somebody
+      // taking a second set of notes into a working space actually means.
+      const under = document.createElement('select')
+      under.className = 'sp-select'
+      const top = document.createElement('option')
+      top.value = ''
+      top.textContent = t('Top level')
+      under.append(top)
+      for (const { page, depth } of this.store.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === this.store.pageId) o.selected = true
+        under.append(o)
+      }
+      const whereRow = el('div', 'sp-row')
+      whereRow.append(el('span', '', t('Add pages under')), under)
+      card.append(whereRow)
+      const where = () => under.value || undefined
 
       const zone = el('div', 'sp-dropzone', t('Drop .md files or a folder here'))
       zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('sp-drop') })
@@ -2867,8 +3973,9 @@ export class Editor {
         e.stopPropagation()
         zone.classList.remove('sp-drop')
         const picked = collectDrop(e.dataTransfer)
+        const at = where()
         close()
-        void picked.then((files) => this.importFiles(files))
+        void picked.then((files) => this.importFiles(files, { under: at }))
       })
       card.append(zone)
 
@@ -2878,12 +3985,26 @@ export class Editor {
         input.multiple = true
         if (folder) input.webkitdirectory = true
         else input.accept = '.md,.markdown,.mdown,.mkd,image/*'
+        const at = where()
         input.addEventListener('change', () => {
           close()
           // webkitRelativePath is the folder tree; a plain multi-select has
           // none, and those files import as a flat set of pages
           void this.importFiles([...(input.files ?? [])]
-            .map((file) => ({ path: file.webkitRelativePath || file.name, file })))
+            .map((file) => ({ path: file.webkitRelativePath || file.name, file })), { under: at })
+        })
+        input.click()
+      }
+
+      const pickSpace = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.html,text/html,application/json'
+        const at = where()
+        input.addEventListener('change', () => {
+          close()
+          const file = input.files?.[0]
+          if (file) void this.importSpace(file, at)
         })
         input.click()
       }
@@ -2892,8 +4013,14 @@ export class Editor {
       acts.append(
         plainBtn(t('Choose .md files…'), () => pick(false), true),
         plainBtn(t('Choose a folder…'), () => pick(true)),
+        plainBtn(t('Choose a space…'), pickSpace),
       )
       card.append(acts)
+
+      const spaces = document.createElement('p')
+      spaces.className = 'sp-note'
+      spaces.textContent = t('Another bento/spaces file arrives as pages under the one you choose — its images come too, and the links inside it keep working.')
+      card.append(spaces)
 
       const imgs = document.createElement('p')
       imgs.className = 'sp-note'
@@ -2901,6 +4028,153 @@ export class Editor {
       // do for them: it has no way to open `../attachments/x.png` itself
       imgs.textContent = t('Include the image files and they are embedded too. An image this browser cannot open is kept as its path rather than as a broken picture.')
       card.append(imgs)
+    })
+  }
+
+  /**
+   * Another space, grafted into this one — the way IN that answers the page
+   * extract's way out.
+   *
+   * The file is UNTRUSTED and takes the ordinary load path, with no friendlier
+   * door beside it: the document block is read out of an INERT parse (DOMParser
+   * builds no browsing context, so no script runs and no resource loads),
+   * `parseDoc` decides whether it is a space at all — refusing rather than
+   * degrading, the same load contract main.ts boots under — and
+   * `sanitizeInline` runs over every arriving block before any of it reaches
+   * the document.
+   */
+  async importSpace(file: File, under?: string): Promise<void> {
+    const s = this.store
+    if (s.readOnly) { this.status(t('This file is open read-only')); return }
+    let text: string
+    try { text = await file.text() } catch { this.status(t('That file could not be read')); return }
+
+    const body = spaceBlockOf(text)
+    if (body === 'encrypted') {
+      // The password is not ours to ask for, and the honest instruction is the
+      // one that works: open the file where the password already is.
+      this.status(t('That space is password-protected. Open it, then export the pages you want.'))
+      return
+    }
+    const res = parseDoc(body ?? '')
+    if (!res.ok) {
+      this.status(res.err === 'format'
+        ? t('That file is not a bento/spaces document')
+        : t('That file could not be read'))
+      return
+    }
+
+    const plan = planGraft(s.doc, res.doc, { under })
+    // THE security gate, in the same place the Markdown import puts it.
+    for (const page of plan.pages) {
+      for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
+    }
+
+    // ONE step: pages, images and fonts land together or not at all.
+    s.commit(() => {
+      s.doc.pages.push(...plan.pages)
+      if (Object.keys(plan.assets).length) Object.assign((s.doc.assets ??= {}), plan.assets)
+      if (plan.fonts.length) (s.doc.fonts ??= []).push(...plan.fonts)
+    })
+    if (plan.pages[0]) s.goToPage(plan.pages[0].id)
+    this.repaint()
+
+    this.openOverlay(t('Imported a space'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Imported a space')))
+      const lines = [
+        t('{pages} page(s) and {blocks} block(s) added from that space.',
+          { pages: plan.stats.pages, blocks: plan.stats.blocks }),
+      ]
+      // Renaming is the outcome a reader cannot see for themselves, and the one
+      // that would break every link if it were done carelessly — so it is
+      // reported together with the repair that keeps the links pointing right.
+      if (plan.stats.renamed) {
+        lines.push(t('{n} id(s) were renamed because this space already used them, and the links inside the import follow them.',
+          { n: plan.stats.renamed }))
+      }
+      if (plan.stats.dropped) {
+        lines.push(t('{n} link(s) named pages that were not in that file, and are kept as text.', { n: plan.stats.dropped }))
+      }
+      if (plan.stats.assets) lines.push(t('{n} image(s) came too.', { n: plan.stats.assets }))
+      lines.push(t('⌘Z removes the imported pages again.'))
+      for (const line of lines) {
+        const p = document.createElement('p')
+        p.className = 'sp-note'
+        p.textContent = line
+        card.append(p)
+      }
+      card.append(plainBtn(t('Close'), close, true))
+    })
+  }
+
+  /**
+   * A page — and, by choice, what is under it — leaves as its own space.
+   *
+   * The counts come from the REAL extract and move as the choices do, rather
+   * than being described in the abstract: how much travels, and how many links
+   * point out of the selection and will become text. Those two facts are what
+   * decide whether this is the extract somebody meant.
+   */
+  openExportSpace(): void {
+    const s = this.store
+    this.openOverlay(t('Export a page as a space'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Export a page as a space')))
+
+      const what = document.createElement('p')
+      what.className = 'sp-note'
+      what.textContent = t('The page becomes a new file of its own: a whole space, with a new document id and none of this one’s sharing keys.')
+      card.append(what)
+
+      const pick = document.createElement('select')
+      pick.className = 'sp-select'
+      for (const { page, depth } of s.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === s.pageId) o.selected = true
+        pick.append(o)
+      }
+      const pageRow = el('div', 'sp-row')
+      pageRow.append(el('span', '', t('Page')), pick)
+      card.append(pageRow)
+
+      const kids = document.createElement('input')
+      kids.type = 'checkbox'
+      kids.checked = true
+      const kidsRow = el('div', 'sp-row')
+      kidsRow.append(el('span', '', t('Include the pages nested under it')), kids)
+      card.append(kidsRow)
+
+      const summary = document.createElement('p')
+      summary.className = 'sp-note'
+      const recount = () => {
+        const r = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: 'preview', now: '' })
+        const parts = [t('{pages} page(s) and {blocks} block(s) will travel.',
+          { pages: r.stats.pages, blocks: r.stats.blocks })]
+        if (r.stats.unlinked) {
+          parts.push(t('{n} link(s) point outside them and are kept as text naming the page they meant.',
+            { n: r.stats.unlinked }))
+        }
+        if (r.stats.assets) parts.push(t('{n} image(s) go with them; the rest stay here.', { n: r.stats.assets }))
+        summary.textContent = parts.join(' ')
+      }
+      pick.addEventListener('change', recount)
+      kids.addEventListener('change', recount)
+      recount()
+      card.append(summary)
+
+      const acts = el('div', 'sp-actions')
+      acts.append(
+        plainBtn(t('Export'), () => {
+          const out = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: uid('doc') })
+          close()
+          void this.onExportSpace?.(out.doc).then((ok) => {
+            if (ok) this.status(t('Exported {n} page(s) as a new space', { n: out.stats.pages }))
+          })
+        }, true),
+        plainBtn(t('Close'), close),
+      )
+      card.append(acts)
     })
   }
 
@@ -2913,11 +4187,18 @@ export class Editor {
    * `placeImage` is shaped this way: a half-applied import is not something a
    * single ⌘Z could put back.
    */
-  async importFiles(picked: PickedFile[]): Promise<void> {
+  async importFiles(picked: PickedFile[], opts: { under?: string } = {}): Promise<void> {
     const s = this.store
     if (s.readOnly) { this.status(t('This file is open read-only')); return }
     const notes = picked.filter((p) => NOTE_EXT.test(p.path))
-    if (!notes.length) { this.status(t('No Markdown files in that selection')); return }
+    if (!notes.length) {
+      // A space is a legitimate thing to drop on the import, and it arrives by
+      // the same gesture: one route in, whatever kind of notes they are.
+      const space = picked.find((p) => SPACE_EXT.test(p.path))
+      if (space) { await this.importSpace(space.file, opts.under); return }
+      this.status(t('No Markdown files in that selection'))
+      return
+    }
     if (notes.length > 500 &&
       !confirm(t('That is {n} files — importing them all may take a moment. Continue?', { n: notes.length }))) return
 
@@ -3001,6 +4282,15 @@ export class Editor {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
 
+    // The import already lands under exactly one root (planImport wraps a mixed
+    // selection); re-homing that root is the whole of "add these under this
+    // page", and it keeps the one-root, one-⌘Z shape intact.
+    const under = opts.under && s.index.page.has(opts.under) ? opts.under : undefined
+    if (under) {
+      const arrived = new Set(plan.pages.map((p) => p.id))
+      for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
+    }
+
     s.commit(() => { s.doc.pages.push(...plan.pages) })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
@@ -3029,7 +4319,7 @@ export class Editor {
         lines.push(t('{n} page(s) had frontmatter, kept verbatim in a folded block.', { n: plan.stats.frontmatter }))
       }
       if (plan.stats.tables) {
-        lines.push(t('{n} table(s) kept as text: there is no table block in this format yet.', { n: plan.stats.tables }))
+        lines.push(t('{n} table(s) imported, with their column alignment.', { n: plan.stats.tables }))
       }
       if (embedded) lines.push(t('{n} image(s) embedded ({size}).', { n: embedded, size: humanBytes(embeddedBytes) }))
       if (unresolved) {
@@ -3344,6 +4634,55 @@ export class Editor {
     this.onSaveAs?.(suffix)
   }
 
+  /**
+   * Save a copy that carries a SCOPED capability — the two ways to let someone
+   * into this space.
+   *
+   * Both go live first, because a copy that follows a session needs there to
+   * be one, and because "share" should be one action rather than a session to
+   * start and then a file to send.
+   *
+   * Both also write a DERIVED document (share.ts), never `store.doc`. That is
+   * the whole of the fix: `saveAs('copy')` serializes the open document, so
+   * inviting somebody used to hand them `collab.ownerPriv` — the root key of
+   * the room, which writes AND revokes, the inviter included.
+   */
+  private async shareCopy(kind: import('./share.ts').ShareKind): Promise<void> {
+    await this.goLive()
+    // Committed first for the same reason slides commits its text edit: a
+    // half-typed block that only exists in the DOM is not in the copy.
+    this.store.endRun()
+    // Copies rejoin as true FORKS: the stamped CRDT state is what lets an
+    // offline edit on either side merge two-way rather than clobber.
+    this.session?.stampInto(this.store.doc)
+    const out = kind === 'invite'
+      ? await shareModule.inviteCopy(this.store.doc)
+      : shareModule.readerCopy(this.store.doc)
+    if (!out) {
+      this.status(kind === 'invite'
+        ? t('Only the owner of this space can invite people')
+        : t('This space has no live session to follow'))
+      return
+    }
+    const ok = await this.onShareCopy?.(out, kind)
+    if (ok) {
+      this.status(kind === 'invite'
+        ? t('Editor copy saved — recipients join live with edit access')
+        : t('Read-only copy saved — it follows the live session, view only'))
+    }
+  }
+
+  /** Turn the live session on (idempotent). Sharing a copy calls this first. */
+  async goLive(): Promise<void> {
+    if (!this.session || offlineEnabled()) return
+    this.session.enableSharing()
+    await startSharing(this.session, this.store)
+    // A transport made just now is a NEW object with its own callback slot —
+    // the one the boot-time watch was attached to no longer exists.
+    this.collab?.watchStatus()
+    this.collab?.sync()
+  }
+
   /** One About, one copy path — both entry points route through saveAs('copy'). */
   private openAbout(): void {
     openAbout({
@@ -3351,6 +4690,12 @@ export class Editor {
       onRepaint: () => this.build(),
       onSaveCopy: () => { void this.saveAs('copy') },
       onImport: () => this.openImport(),
+      onExportSpace: () => this.openExportSpace(),
+      // "Duplicate as a new space…" writes a DIFFERENT document, so it takes
+      // the extract's writer rather than the copy path: that one keeps no file
+      // handle, which is what leaves you editing this space afterwards.
+      onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
+      onStatus: (msg) => this.status(msg),
     })
   }
 
@@ -3395,12 +4740,42 @@ export class Editor {
   repaint(): void { this.paintTree(); this.paintPage() }
 }
 
+/**
+ * The mark a keystroke means, or null.
+ *
+ * ⌘B/⌘I/⌘U/⇧⌘S/⌘E/⇧⌘H, which is Notion's set — the only set most people who
+ * will ever type them already have in their fingers. ⌘K is not here because it
+ * is two commands (see onKey).
+ *
+ * `e.key` and not `e.code`: on a non-QWERTY layout the letter the person is
+ * looking at is the one they mean, and ⌘B has to be the key marked B.
+ */
+function markKey(e: KeyboardEvent, mod: boolean): MarkTag | null {
+  if (!mod || e.altKey) return null
+  const k = e.key.toLowerCase()
+  if (e.shiftKey) return k === 's' ? 's' : k === 'h' ? 'mark' : null
+  return k === 'b' ? 'strong' : k === 'i' ? 'em' : k === 'u' ? 'u' : k === 'e' ? 'code' : null
+}
+
 // ---- small dom helpers ------------------------------------------------------
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
   const n = document.createElement(tag)
   n.className = cls
   if (text) n.textContent = text
   return n
+}
+
+/**
+ * Is a bare keystroke going to land in something the reader is writing in?
+ *
+ * The block hosts are contenteditable, the topbar title and the panel's own
+ * fields are inputs, and every one of them takes `]` as a character. A
+ * bare-key panel shortcut has to ask this first.
+ */
+function isTyping(): boolean {
+  const a = document.activeElement as HTMLElement | null
+  if (!a) return false
+  return a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'
 }
 
 function iconBtn(name: IconName, label: string, onClick: () => void): HTMLButtonElement {
@@ -3460,6 +4835,28 @@ function joinPath(dir: string, ref: string): string {
   return out.join('/').toLowerCase()
 }
 
+/**
+ * The `#bento-doc` payload inside another Bento file.
+ *
+ * INERT: `DOMParser` builds a document with no browsing context, so nothing in
+ * that html runs and nothing it references is fetched — the same reasoning
+ * sanitize.ts records for `inertBody`, and the reason the file can be read
+ * before anyone has decided to trust it. A bare `{` is the document JSON
+ * itself (the AI round-trip's interchange unit), which needs no parse at all.
+ *
+ * An ENCRYPTED space is reported rather than guessed at: the bytes are there,
+ * the password is not, and asking for one here would be asking for a password
+ * to a file this space has no business holding.
+ */
+function spaceBlockOf(text: string): string | null | 'encrypted' {
+  const body = /^\s*\{/.test(text)
+    ? text
+    : new DOMParser().parseFromString(text, 'text/html')
+      .getElementById('bento-doc')?.textContent ?? null
+  if (!body) return null
+  return parseEnvelope(body) ? 'encrypted' : body
+}
+
 /** `my%20photo.png` is one file name, not two — editors percent-encode spaces. */
 function decodePath(ref: string): string {
   try { return decodeURI(ref) } catch { return ref }
@@ -3510,7 +4907,7 @@ async function walkEntry(entry: FileSystemEntry, base: string, out: PickedFile[]
 /** Is this drop an IMPORT (markdown, or any folder) rather than an image? */
 function isImportDrop(dt: DataTransfer | null): boolean {
   if (!dt) return false
-  if ([...dt.files].some((f) => NOTE_EXT.test(f.name))) return true
+  if ([...dt.files].some((f) => NOTE_EXT.test(f.name) || SPACE_EXT.test(f.name))) return true
   return [...dt.items].some((i) => i.webkitGetAsEntry?.()?.isDirectory)
 }
 

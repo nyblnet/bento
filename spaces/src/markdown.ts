@@ -16,17 +16,19 @@
 
 // `.ts` extensions ON PURPOSE: this module is imported directly by
 // `scripts/test-spaces-model.ts`, which node resolves without a bundler.
-import { type Block, type Page, uid } from './model.ts'
+import { type Block, type Page, uid, writeTable } from './model.ts'
 import { esc } from './sanitize.ts'
+import { keepClasses } from './marks.ts'
 
 /** A tab indents four columns. Nothing here depends on the exact number; it
  *  only has to be the same everywhere so nesting is consistent. */
 const TAB = '    '
 
-/** Inline tags a raw html span may keep — sanitize.ts's ALLOWED, minus the
- *  ability to carry attributes. Restated rather than imported because that
- *  module's set is a DOM-side control and this one is a parser convenience;
- *  if they ever diverge, the sanitizer still wins, because it runs last. */
+/** Inline tags a raw html span may keep — sanitize.ts's ALLOWED, carrying no
+ *  attributes except a palette `class` on span/mark (see cleanRawTag).
+ *  Restated rather than imported because that module's set is a DOM-side
+ *  control and this one is a parser convenience; if they ever diverge, the
+ *  sanitizer still wins, because it runs last. */
 const INLINE_OK = new Set(['b', 'i', 'u', 's', 'em', 'strong', 'code', 'br', 'span', 'mark', 'sub', 'sup'])
 
 /**
@@ -55,6 +57,16 @@ function cleanRawTag(tag: string): string | null {
     return /^(https?:|mailto:)/i.test(url) ? `<a href="${esc(url)}">` : null
   }
   if (!INLINE_OK.has(name)) return null
+  // A PALETTE CLASS SURVIVES ON SPAN AND MARK. Colour has no markdown syntax
+  // at all, so the exporter writes it as raw inline html — and an importer that
+  // threw the class away would make "export, edit the .md, import" a
+  // colour-stripping round trip, which is the failure mode the export was
+  // written to avoid in the first place.
+  if (!close && (name === 'span' || name === 'mark')) {
+    const c = /class\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(m[3])
+    const kept = keepClasses(c ? (c[1] ?? c[2] ?? c[3] ?? '') : '')
+    if (kept) return `<${name} class="${esc(kept)}">`
+  }
   return close ? `</${name}>` : `<${name}>`
 }
 
@@ -288,19 +300,40 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       continue
     }
 
-    // A TABLE has no block type in this model yet, and turning one into
-    // paragraphs shreds it. Kept verbatim in a code block instead: aligned,
-    // searchable, exportable, and mechanically upgradable the day a table
-    // block ships. Losing the data to make it look tidier is not a trade.
+    // A PIPE TABLE. This used to be kept verbatim inside a CODE BLOCK —
+    // aligned, searchable and exportable, but not a table — under a comment
+    // saying it was "mechanically upgradable the day a table block ships".
+    // This is that day, and the upgrade is this branch.
     if (body.includes('|') && isTableRule(lines[i + 1])) {
       para = null; quote = null
       const owner = ownerFor(indent)
-      const buf = [body]
-      let j = i + 1
-      for (; j < lines.length && lines[j].includes('|'); j++) buf.push(lines[j].trim())
+      const head = splitRow(body)
+      const align = splitRow(lines[i + 1]).map(alignOf)
+      const raw = [head]
+      let j = i + 2
+      for (; j < lines.length && lines[j].includes('|'); j++) raw.push(splitRow(lines[j]))
       i = j - 1
       tables++
-      add(mk('code', { html: esc(buf.join('\n')) }), owner)
+      // THE HEADER ROW IS THE COLUMN COUNT, which is GFM's own rule: a body row
+      // with more cells is cut and one with fewer is padded (tableOf pads at
+      // read time, so only the overflow is handled here). A ragged table is
+      // completely ordinary in hand-written markdown.
+      const w = Math.max(1, head.length)
+      const table = mk('table')
+      // An EMPTY header row is how a headerless table is written in GFM — there
+      // is no other way to say it — and it is what this app's own exporter
+      // emits. So it reads back as `header: false` AND the empty row goes: a
+      // table that grows a blank first row every time it goes out and comes
+      // back is not a round trip.
+      const headed = head.some((c) => c.trim() !== '')
+      const rows = headed ? raw : raw.slice(1)
+      writeTable(table, {
+        rows: (rows.length ? rows : [[]]).map((r) => Array.from({ length: w }, (_, k) => inlineHtml(r[k] ?? ''))),
+        cols: Array<number>(w).fill(1),
+        colAlign: Array.from({ length: w }, (_, k) => align[k] ?? ''),
+        header: headed,
+      })
+      add(table, owner)
       continue
     }
 
@@ -398,6 +431,39 @@ function isTableRule(line: string | undefined): boolean {
   if (!line) return false
   const t = line.trim()
   return t.includes('-') && t.includes('|') && /^\|?[\s:|-]+$/.test(t)
+}
+
+/**
+ * One pipe-table row into its cells.
+ *
+ * The leading and trailing pipes are OPTIONAL in GFM — `a | b` is a row — so
+ * they are stripped only when present; splitting a fully-piped row without
+ * stripping them yields a phantom empty cell at each end, which would shift
+ * every column by one against the rule row.
+ *
+ * `\|` is the escape for a literal pipe and is unescaped after the split, not
+ * before: a lookbehind-free split has to keep the backslash to know not to cut
+ * there.
+ */
+function splitRow(line: string): string[] {
+  const t = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  const out: string[] = []
+  let cur = ''
+  for (let k = 0; k < t.length; k++) {
+    if (t[k] === '\\' && t[k + 1] === '|') { cur += '|'; k++; continue }
+    if (t[k] === '|') { out.push(cur.trim()); cur = ''; continue }
+    cur += t[k]
+  }
+  out.push(cur.trim())
+  return out
+}
+
+/** `:---:` → 'center'. The colons in the rule row are the only thing GFM can
+ *  say about alignment, which is why `colAlign` is per column. */
+function alignOf(rule: string): string {
+  const t = rule.trim()
+  const l = t.startsWith(':'), r = t.endsWith(':')
+  return l && r ? 'center' : r ? 'right' : l ? 'left' : ''
 }
 
 // ---- a folder of notes -----------------------------------------------------

@@ -25,7 +25,72 @@
 // release.mjs runs a frozen v0.1.0-style splice against the output as a gate.
 
 import { readFileSync, writeFileSync } from 'node:fs'
-import { deflateRawSync } from 'node:zlib'
+import { deflateRawSync, inflateRawSync } from 'node:zlib'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+
+/**
+ * ZOPFLI, not zlib.
+ *
+ * Zopfli emits a stream in the SAME deflate format, just packed harder — so
+ * the shipped loader is untouched, every already-saved file keeps working, and
+ * old updaters splicing into a new shell see exactly what they saw before.
+ * Verified rather than assumed: a zopfli payload handed to Chrome 148's native
+ * `DecompressionStream('deflate-raw')` inflated to a byte-identical result,
+ * SHA-256 matched, in 2.2 ms.
+ *
+ * Measured on the shipped shells: 172,470 -> 165,398 B for bento/spaces and
+ * 690,060 -> 663,760 B for bento/slides. About 4% off every file anyone saves,
+ * for a second of build time.
+ *
+ * RESOLVED FROM THE CALLER, not from this file. This script lives in scripts/
+ * and there is no package.json there or at the root, so a bare import would
+ * look in the wrong place; every app runs it from its OWN directory, which is
+ * where the dependency is declared. That is also why the failure below names
+ * the fix rather than falling back silently — a release quietly built 4%
+ * larger because someone's node_modules was stale is a regression nobody would
+ * ever notice.
+ */
+const iterations = Number(process.env.ZOPFLI_ITERS || 15)
+let zopfli
+try {
+  zopfli = createRequire(join(process.cwd(), 'package.json'))('@gfx/zopfli')
+} catch {
+  console.error(
+    'postbuild-compress: @gfx/zopfli is missing. Run `npm ci` in this app\'s\n' +
+    '  directory (it is a devDependency). Set ZOPFLI=0 to build with zlib\n' +
+    '  instead — the output is valid but about 4% larger, so never for a release.')
+  if (process.env.ZOPFLI !== '0') process.exit(1)
+}
+
+/**
+ * deflate-raw, packed by zopfli unless it was explicitly turned off.
+ *
+ * THE OUTPUT IS INFLATED AND COMPARED BACK, every time, with node's own zlib.
+ * This is not paranoia about a bug — zopfli is old and well used — it is about
+ * what this script feeds. The bytes it emits ARE the application, and the
+ * shell built from them is signed: a packer that emitted a VALID deflate
+ * stream carrying different JavaScript would be signed as genuine and would
+ * self-update its way onto every install. A round trip through a different
+ * implementation makes that undetectable-in-principle failure impossible in
+ * practice, and it costs about 2ms per shell.
+ *
+ * It also covers the duller case a signature never would: a wrong build, a
+ * truncated write, a future iteration-count change that trips a corner.
+ */
+const deflate = async (buf) => {
+  const packed = (!zopfli || process.env.ZOPFLI === '0')
+    ? deflateRawSync(buf, { level: 9 })
+    : await new Promise((res, rej) =>
+        zopfli.deflate(buf, { numiterations: iterations }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
+  if (!inflateRawSync(packed).equals(buf)) {
+    console.error('postbuild-compress: the packed payload does not inflate back to what went in.\n' +
+      '  Refusing to write a shell whose runtime cannot be recovered. This is a bug in the\n' +
+      '  packer or a corrupted install — do not sign anything built from this tree.')
+    process.exit(1)
+  }
+  return packed
+}
 
 const path = process.argv[2]
 if (!path || path.startsWith('--')) {
@@ -70,9 +135,9 @@ if (!styleM) throw new Error('app stylesheet not found in head')
 const js = mod[1]
 const css = styleM[1]
 
-const b64 = (s) => deflateRawSync(Buffer.from(s, 'utf8'), { level: 9 }).toString('base64')
-const jsB64 = b64(js)
-const cssB64 = b64(css)
+const b64 = async (s) => (await deflate(Buffer.from(s, 'utf8'))).toString('base64')
+const jsB64 = await b64(js)
+const cssB64 = await b64(css)
 
 // --- other parts ------------------------------------------------------------
 const notice = html.match(/<!--\s*NOTICE[\s\S]*?-->/)?.[0] ?? ''

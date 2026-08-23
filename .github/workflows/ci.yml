@@ -118,6 +118,22 @@ jobs:
         # build rather than shipping a half-translated interface.
         run: node scripts/build-spaces-i18n.mjs --check
 
+      - name: Spaces invite rig
+        # "Invite someone…" was `saveAs('copy')`, which serializes store.doc —
+        # so everyone invited to a space received `collab.ownerPriv`, the room's
+        # ROOT key: they could write, and they could revoke the person who
+        # invited them. Nothing about the copy looked wrong. This runs the real
+        # share functions against real WebCrypto keys and asserts on the bytes:
+        # the owner private key appears NOWHERE in an invite, the invite is a
+        # separate keypair that the owner actually signed (verified the way the
+        # relay verifies it), and a view-only copy holds no signing key at all.
+        # (Bundled: the kernel transport uses parameter properties, which node's
+        # strip-only TypeScript loader refuses.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-invite.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-invite.mjs"
+          node "$RUNNER_TEMP/test-spaces-invite.mjs"
+
       - name: Spaces undo rig
         # Every checkpoint used to stringify the WHOLE document: measured on a
         # 200-page, 2.5 MB handbook, fifty edits left an undo depth of NINE,
@@ -240,6 +256,27 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: Media autoplay rig
+        # An author set a clip's Autoplay to Off and it played anyway, every
+        # show, since media shipped in v0.9.16. render.ts wrote
+        # data-autoplay="" when off — PRESENT but empty — and Reveal decides
+        # autoplay with hasAttribute(), so it played what our own value-based
+        # selector correctly ignored. The property pinned here is that an
+        # autoplay-off element carries NO such attribute, because its presence
+        # is read by code we do not own. Measured on rendered DOM: the
+        # difference between assigning '' and not assigning is invisible to a
+        # grep. Self-skips without Chrome.
+        run: node scripts/test-media-autoplay.ts
+
+      - name: Return-gate rig
+        # The web demo always starts fresh, so someone who saved from
+        # bento.page and came back saw a blank starter and read it as lost
+        # work. The gate that fixes it can be worse than the silence it
+        # replaces: firing over a real document, or offering a host that has no
+        # release (telling an Android user to install a Chrome extension). This
+        # pins both, and that the mobile rows degrade until those hosts ship.
+        run: node scripts/test-return-gate.ts
+
       - name: Offline-mode rig
         # Offline mode promises "nothing leaves this computer" and was broken
         # five ways at once (GHSA-5c3x-xqp6-g94r): a manual update check, a
@@ -345,6 +382,20 @@ jobs:
         # for the document block's CLOSING tag and so found nothing in any
         # document carrying an image.
         run: node scripts/test-webext-library.ts
+
+      - name: WebExtension release-trust rig
+        # Creating a document downloads an app shell and writes it to the user's
+        # disk, where they later double-click it — executable HTML they go on to
+        # trust. So the manifest's signature is checked against the key compiled
+        # into the extension, and the download against the digest that signature
+        # covers. Signature over the pin, pin over the bytes.
+        #
+        # It also reads a REAL manifest captured from the release origin, which
+        # is the check that could not be faked into passing: the shipped code
+        # read `url` off the top level of a SIGNED ENVELOPE that has no top-level
+        # url, so the + button had never worked in any version — and the rig
+        # agreed, because its fixture was written to the shape the code wanted.
+        run: node scripts/test-webext-release.ts
 
       - name: WebExtension update-notice rig
         # Store installs update themselves; one loaded unpacked never will, and

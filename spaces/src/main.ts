@@ -6,10 +6,11 @@
 
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
+import { startTheme } from '../../kernel/src/theme.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, registerPreview,
   saveFile, parseEnvelope, canWriteInPlace, decryptEnvelope, setEncryptionPassword,
-  writeUpdatedFileAs,
+  writeUpdatedFileAs, suggestedFileName,
   isEncryptionActive,
 } from '../../kernel/src/save.ts'
 import { putRecovery, getRecovery, clearRecovery, pruneOld } from '../../kernel/src/autosave.ts'
@@ -19,9 +20,9 @@ import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult
 import {
   validateDoc, outlineDoc, statsDoc,
   planInsertBlocks, planUpdateBlock, planRemoveBlocks, planMoveBlock, planUpdatePage, planRemovePage,
-  fieldsReport, issuesReport, planSetField, planNewIssue,
+  fieldsReport, issuesReport, planSetField, planNewIssue, commentsReport,
   plainTitle, badTitle,
-  type Plan, type PlanError, type IssueQuery,
+  type Plan, type PlanError, type IssueQuery, type CommentQuery,
 } from './agent'
 import { starterDoc } from './starter'
 import { todayISO, isISO, journalFor } from './journal'
@@ -31,7 +32,8 @@ import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
-import { downloadMarkdown } from './about'
+import { isReaderCopy } from './share.ts'
+import { downloadMarkdown, launchUpdateCheck } from './about'
 
 configureApp({
   appId: 'bento-spaces',
@@ -47,6 +49,19 @@ configureApp({
 registerPreview((doc) => buildSpacePreview(doc as unknown as SpacesDoc))
 
 capturePristine()
+
+// The interface theme: AFTER capturePristine, before the first paint.
+//
+// AFTER, because capturePristine clones the LIVE document and every save
+// re-serializes that clone — so `data-theme` and `color-scheme` must not be on
+// <html> yet, or a reader's preference would ride inside every file they save
+// and land on whoever they sent it to. Exactly the ordering applyDirection
+// depends on for dir/lang, one line below, and for the same reason.
+//
+// BEFORE the paint, because applying it later paints the interface light and
+// then flips it, which reads as a bug rather than as a preference. Nothing
+// here lays anything out: it sets two attributes on the root element.
+startTheme()
 applyDirection()
 
 const embedded = readEmbeddedDoc()
@@ -190,7 +205,17 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   //
   // `frozen` is the other, unrelated reason to lock: this build does not
   // understand the file and must not rewrite it.
-  if (frozen || doc.readonly) store.readOnly = true
+  //
+  // `collab.role === 'reader'` is the THIRD, unrelated reason, and it is the
+  // only one of the three that keeps receiving: a view-only copy follows the
+  // live session and can never send to it. The lock here is a courtesy to the
+  // person holding it — the ENFORCEMENT is the relay, which pins a verified
+  // key per socket and drops op batches from a socket that presented none
+  // (docs/collab-design.md, "Signed writes"). Remote ops still land, because
+  // the kernel session applies them straight to `doc` rather than through
+  // `commit()` — deliberately, so a colleague's edit never joins this
+  // person's undo stack, and incidentally so `readOnly` cannot block it.
+  if (frozen || doc.readonly || isReaderCopy(doc)) store.readOnly = true
   const editor = new Editor(document.getElementById('app')!, store)
 
   // Live collaboration. Constructing the session is enough to make same-machine
@@ -205,6 +230,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
 
   if (!frozen && doc.readonly) {
     banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))
+  } else if (!frozen && isReaderCopy(doc)) {
+    banner(t('This is a view-only copy — it follows the live session but can’t change this space.'))
   }
   if (frozen) {
     banner(frozen === 'version'
@@ -238,6 +265,45 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
       .then((html) => writeUpdatedFileAs(html, store.doc, { suffix: suffix === 'copy' ? 'copy' : suffix }))
       .then((ok) => { if (ok) editor.status(t('Copy saved — you are still editing the original')) })
   }
+  /**
+   * Write a DIFFERENT document out as its own file — the page extract.
+   *
+   * `serializeAuto`, not `serializeFile`: it is the encryption-aware path, so
+   * an extract taken out of a password-protected space is written encrypted
+   * with the same password the author is already holding. A page pulled out of
+   * an encrypted space arriving in the clear would defeat the encryption
+   * silently, on a file whose whole point is that it does not.
+   *
+   * `keepHandle` stays false (the default), which is the lesson slides paid
+   * for: an export that becomes the ⌘S target means the next save overwrites
+   * the extract with the whole document.
+   */
+  editor.onExportSpace = async (out: SpacesDoc): Promise<boolean> => {
+    const html = await serializeAuto(out)
+    return writeUpdatedFileAs(html, out, { suggestedName: suggestedFileName(out) })
+  }
+
+  /**
+   * Write a SHARE copy — the invite, or the view-only follower.
+   *
+   * `out` is a DERIVED document (share.ts), never `store.doc`: that is the
+   * whole of the fix for "Invite someone…", which used to reach the ordinary
+   * copy path and therefore handed every recipient `collab.ownerPriv`.
+   *
+   * `serializeAuto`, so an invite taken out of a password-protected space is
+   * written encrypted with the password its author is already holding — a
+   * shared copy arriving in the clear would defeat the encryption silently.
+   *
+   * `keepHandle` stays false (the default), and here it is load-bearing rather
+   * than tidy: retaining the handle would make the NEXT ⌘S overwrite the copy
+   * that just left with the full document — owner key included. Slides paid
+   * for that lesson once already.
+   */
+  editor.onShareCopy = async (out: SpacesDoc, suffix: string): Promise<boolean> => {
+    const html = await serializeAuto(out)
+    return writeUpdatedFileAs(html, out, { suffix })
+  }
+
   async function doSave(): Promise<void> {
     store.endRun()
     editor.status(t('Saving…'))
@@ -326,6 +392,17 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     outline: (target?: SpacesDoc) => outlineDoc(target ?? store.doc),
     /** where the bytes are */
     stats: (target?: SpacesDoc) => statsDoc(target ?? store.doc),
+    /**
+     * What a human flagged: every review thread, flat, each with a typed
+     * anchor ('block' with a `blockId`, or 'page').
+     *
+     * READ ONLY, deliberately. The verbs beside it change the document an
+     * agent was asked to work on; a comment is the other half of a
+     * CONVERSATION, and an agent quietly resolving the remark it was supposed
+     * to act on is the one move that makes the record untrue. Filter with
+     * `comments({ resolved: false })` for the outstanding ones.
+     */
+    comments: (query?: CommentQuery) => commentsReport(store.doc, query ?? {}),
 
     /**
      * ONE undoable step. Without this an agent appending a paragraph has to
@@ -430,6 +507,26 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     // stated rather than discovered — the product-defining limitation on iOS
     console.info('[bento/spaces] this browser cannot write back to the file; every save makes a new copy')
   }
+
+  /**
+   * Ask the release server whether this app is current — and NOTHING else.
+   *
+   * This is the one request bento/spaces makes on its own, and it is worth
+   * being precise about how it sits beside "A space does not phone home when
+   * it is opened" (DECISIONS, 2026-08-03). That rule is about the DOCUMENT: an
+   * author who mails you a file must not learn your address and the moment you
+   * opened it, which is what a remote `<img>` delivers. This is the APP asking
+   * its own release origin for a signed manifest, on the reader's behalf and
+   * under the reader's switch — the same check slides has run at launch since
+   * v0.9, reading the same `bento-auto-check` preference, so turning it off in
+   * one app turns it off in both. It sends no id, carries nothing from the
+   * document, and is the mechanism by which a file that will outlive its
+   * browser ever learns that it should be updated.
+   *
+   * Never fatal, and never in the way: the result only changes a sentence in
+   * the About dialog.
+   */
+  void launchUpdateCheck().catch(() => { /* an unreachable server is not an error here */ })
 }
 
 function banner(text: string, actions: Array<[string, () => void]> = []): void {

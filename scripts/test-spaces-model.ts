@@ -29,8 +29,12 @@
 import {
   parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
   effectiveParents, descendantsOf,
+  tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
+  linkCard, linkCardHtml,
+  commentsOn, unresolvedOn,
   type SpacesDoc,
 } from '../spaces/src/model.ts'
+import nodeFs from 'node:fs'
 import { countOutsideTags, replaceOutsideTags } from '../spaces/src/findreplace.ts'
 import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
@@ -39,11 +43,16 @@ import {
   sortRows, unknownSortKeys, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
+import {
+  canonicalMarks, applyMark, clearMarks, markActive, linkAt, linkAttrs, htmlToMd,
+  CLASS_OK, keepClasses,
+} from '../spaces/src/marks.ts'
+import { extractSpace, planGraft, subtreeIds } from '../spaces/src/portable.ts'
 import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
-import { escText } from '../spaces/src/sanitize.ts'
+import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
-  SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout,
+  SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout, mediaPlayback,
 } from '../spaces/src/blocks.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
 
@@ -374,6 +383,54 @@ for (const [label, input, err] of [
 // not be saved on a phone, and nothing said so: the controls were in the DOM,
 // laid out, and simply painted past the edge.
 //
+// ---------------------------------------------------------------------------
+// HOW WIDE A PAGE IS.
+//
+// The renderer already varied this — a page carrying a `view` block jumped to
+// 1500px — but it decided for you and offered no way to disagree. Measured at
+// a 1600px viewport before the control existed: a 720px column with 631px of
+// the page empty beside it, and 0 of the 15 blocks on the starter's Welcome
+// page even reaching the limit. The line length was never the problem.
+//
+// What must not regress: the default is an ABSENT key (so a file written
+// before this stays byte-identical), a board with no key keeps its room, and
+// an unknown value from a newer build falls back to the measure rather than to
+// no width at all.
+{
+  const fs = await import('node:fs')
+  const render = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const editor = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const model = fs.readFileSync(new URL('../spaces/src/model.ts', import.meta.url), 'utf8')
+
+  ok(/width\?: 'wide' \| 'full'/.test(model), "Page.width is 'wide' | 'full' — absent is the default")
+  ok(/\[extra: string\]: unknown/.test(model), '…on a Page that still round-trips unknown fields')
+
+  // the board default survives, and the page overrides it
+  ok(/page\.blocks\.some\(\(b\) => b\.type === 'view'\)/.test(render),
+    'a board page is still the DEFAULT wide case')
+  ok(/page\.width === 'wide' \|\| page\.width === 'full' \? page\.width/.test(render),
+    '…and an explicit page width wins over it')
+  // These two were written against the FIRST version, where an absent key fell
+  // straight through to the board default and the prose case was a flat
+  // `theme.measure` in px. Both changed when the reader preference and the
+  // growing default landed; the intent they were pinning has not.
+  ok(/page\.width === undefined \? \(opts\.readerWidth \?\? auto\)/.test(render),
+    '…while an absent key falls through to the reader, and then to the board default')
+  ok(/maxWidth = 'none'/.test(render), "'full' removes the cap rather than picking a big number")
+  ok(/theme\.measure/.test(render) && /42vw/.test(render),
+    'and the prose default is still built from the theme measure, now growing with the viewport')
+
+  // THE DEFAULT IS AN ABSENT KEY. A page set to wide and back must be
+  // byte-identical to one never touched — the same rule editView follows.
+  ok(/if \(v === 'normal'\) delete pg\.width/.test(editor),
+    'choosing the default DELETES the key rather than storing "normal"')
+  ok(/t\('Width'\)/.test(editor) && /t\('Column'\)/.test(editor) &&
+     /t\('Wide'\)/.test(editor) && /t\('Full width'\)/.test(editor),
+    'the page menu offers all three, translated')
+  ok(/selected: current === 'normal'/.test(editor),
+    '…and marks the one in force, so the menu says what the page already is')
+}
+
 // The rule (slides' rule) is: drop text and fold, never scroll. The failure
 // mode to guard is not the CSS — it is the SECOND LIST: a ⋯ menu maintained by
 // hand as a copy of the desktop row drifts the first time either changes, and
@@ -643,6 +700,139 @@ for (const [label, input, err] of [
     'an icon NAME from a document is matched with hasOwn, never `in` (which finds Object.prototype)')
 }
 
+// ---- the table block -------------------------------------------------------
+// A table is CONTENT (working/spaces-design.md §2.6) — no formulas, nothing
+// that recalculates, and not the database case, which already shipped as the
+// tracker. What is pinned here is the part that is PERMANENT: the shape of the
+// model, the `html` fallback that is the whole of format additivity for a new
+// block type, and the pipe-table round trip.
+{
+  const spec = SPEC.get('table')!
+  ok(!!spec && spec.tag === 'div' && spec.custom === true && spec.text !== true,
+    'table is a custom div whose text lives in its cells, not in a block host')
+  ok(!MD_SPECS.some(([, type]) => type === 'table'),
+    'a table has no markdown autoformat trigger — `|` is punctuation people type')
+
+  // THE SHAPE IS READ, NEVER REPAIRED. Every field is optional in the format
+  // and the file may be hand-written, agent-written or written by a build that
+  // is not this one, so a ragged table is an ordinary input.
+  const t = (b: Partial<Block>) => tableOf({ id: 'x', type: 'table', ...b } as Block)
+  ok(t({ rows: [['a', 'b'], ['c']] }).rows[1][1] === '',
+    'a ragged row is padded to the widest row, at read time')
+  ok(t({ rows: [['a'], ['b', 'c']] }).w === 2, '…and the width is the widest row, not the first')
+  ok(t({}).rows.length === 1 && t({}).rows[0].length === 1,
+    'a table with no rows at all still has one cell to click in')
+  ok(t({ rows: 'nope' as never }).w === 1, 'a `rows` that is not an array does not throw')
+  ok(t({ rows: [[1 as never, 'b']] }).rows[0][0] === '', 'a cell that is not a string reads as empty')
+  ok(t({ rows: [['a', 'b']] }).cols.length === 2 && t({ rows: [['a', 'b']] }).cols[0] === 1,
+    'absent cols means equal columns, one weight per column')
+  ok(t({ rows: [['a', 'b', 'c']], cols: [3] }).cols.join() === '3,1,1',
+    'a cols of the wrong length is filled out rather than believed')
+  ok(t({ rows: [['a']], cols: [0] }).cols[0] === 1 && t({ rows: [['a']], cols: [-4] }).cols[0] === 1,
+    'a zero or negative weight would divide the table by zero — it reads as 1')
+  ok(t({ rows: [['a', 'b']], colAlign: ['centre', 'right'] }).colAlign.join() === ',right',
+    'an alignment this build does not know reads as none, and the known one survives')
+  ok(t({}).header === true && t({ header: false }).header === false,
+    'ABSENT header means TRUE — a pipe table always has one, so that is the case with no field')
+  ok(t({ rows: Array.from({ length: 500 }, () => ['a']) }).h === TABLE_MAX_ROWS,
+    'a generated file cannot ask the renderer for an unbounded number of rows')
+  ok(t({ rows: [Array.from({ length: 80 }, () => 'a')] }).w === TABLE_MAX_COLS, '…or columns')
+
+  // THE FALLBACK IS THE WHOLE OF ADDITIVITY FOR A NEW BLOCK TYPE. A build that
+  // predates this one has no 'table' case, so it renders `html` — and if there
+  // is no html it renders nothing, which is a table that VANISHES when the
+  // space is opened by the build someone already has.
+  {
+    const b: Block = { id: 'x', type: 'table' }
+    writeTable(b, { rows: [['Name', 'Ships'], ['<b>Slides</b>', 'yes']], cols: [1, 1], colAlign: ['', ''], header: true })
+    ok(b.html === 'Name · Ships<br><b>Slides</b> · yes',
+      'the fallback html is the cells joined — what a build with no table case shows')
+    ok(b.cols === undefined && b.colAlign === undefined && b.header === undefined,
+      'defaults are OMITTED, so a minimal hand-written table is byte-identical to one made here')
+    ok(tableFallbackHtml([['see <a href="#p/p1">that page</a>']]).includes('#p/p1'),
+      'the fallback keeps a cell’s LINKS, so buildIndex still finds the backlink')
+    // and it really does: the index reads block.html and knows nothing of rows
+    const idx = buildIndex({
+      format: FORMAT, version: 1, docId: 'd', title: 'T', theme: {} as never,
+      pages: [
+        { id: 'p1', title: 'One', blocks: [] },
+        { id: 'p2', title: 'Two', blocks: [{ id: 'b1', type: 'table', html: tableFallbackHtml([['<a href="#p/p1">One</a>']]) }] },
+      ],
+    } as unknown as SpacesDoc)
+    ok((idx.backlinks.get('p1') ?? []).length === 1, 'a link typed in a CELL produces a backlink')
+  }
+
+  // …and the writer is the ONLY writer, so html can never drift from rows
+  {
+    const src = fsTable('editor.ts') + fsTable('markdown.ts')
+    ok(/writeTable\(/.test(src) && !/\.rows\s*=[^=]/.test(src),
+      'nothing assigns a block’s rows directly — every table write goes through writeTable, so the html fallback cannot drift')
+  }
+
+  // MARKDOWN. A pipe table is the interchange format for a content table, and
+  // this app both writes and reads one.
+  const md = (b: Partial<Block>, indent = '') =>
+    spec.toMd!({ id: 'x', type: 'table', ...b } as Block, '', indent,
+      { titleOf: () => undefined, rowsOf: () => [], inline: (h) => h }).join('\n')
+  ok(md({ rows: [['A', 'B'], ['1', '2']] }) === '| A | B |\n| --- | --- |\n| 1 | 2 |',
+    'a table exports as a GitHub-flavoured pipe table')
+  ok(md({ rows: [['A', 'B']], colAlign: ['center', 'right'] }).split('\n')[1] === '| :---: | ---: |',
+    'column alignment exports in the rule row, which is the only place GFM can say it')
+  ok(md({ rows: [['A'], ['1']], header: false }).split('\n')[0] === '|   |',
+    'a headerless table exports an EMPTY header row — GFM has no other way to say it')
+  ok(md({ rows: [['a | b']] }).split('\n')[0] === '| a \\| b |',
+    'a pipe inside a cell is escaped, or it becomes a column boundary')
+  ok(md({ rows: [['a\nb']] }).split('\n')[0] === '| a<br>b |',
+    'a line break inside a cell cannot become a row break')
+  ok(md({ rows: [['', 'b']] }).split('\n')[0] === '|   | b |',
+    'an empty cell is a space, never `||` — that is a column count nobody meant')
+  ok(md({ rows: [['A']] }, '  ').split('\n')[0] === '  | A |', 'a nested table carries its indent')
+
+  // …and back. The importer USED to keep a pipe table verbatim in a code block,
+  // under a comment saying it was "mechanically upgradable the day a table
+  // block ships".
+  {
+    const note = parseNote('| Name | Qty |\n| :--- | ---: |\n| Rice | 2 |\n| Salt | 1 |\n', 'F')
+    const b = note.blocks[0]
+    ok(b.type === 'table', 'a pipe table imports as a table, not as a code block')
+    ok(JSON.stringify(b.rows) === JSON.stringify([['Name', 'Qty'], ['Rice', '2'], ['Salt', '1']]),
+      '…with its rows')
+    ok(JSON.stringify(b.colAlign) === JSON.stringify(['left', 'right']), '…and its column alignment')
+    ok(b.html === 'Name · Qty<br>Rice · 2<br>Salt · 1', '…and a fallback for older builds')
+    ok(parseNote('Name | Qty\n--- | ---\nRice | 2\n', 'F').blocks[0].rows?.[0].join() === 'Name,Qty',
+      'the outer pipes are optional in GFM, so a row without them is still a row')
+    ok(parseNote('| a \\| b |\n| --- |\n', 'F').blocks[0].rows?.[0][0] === 'a | b',
+      'an escaped pipe is one cell, not two')
+    ok(parseNote('| A | B |\n| --- | --- |\n| 1 |\n', 'F').blocks[0].rows?.[1].join() === '1,',
+      'a short body row is padded against the header, which is GFM’s own rule')
+    ok(parseNote('| **a** |\n| --- |\n', 'F').blocks[0].rows?.[0][0] === '<strong>a</strong>',
+      'a cell is INLINE HTML through the same converter every other block uses')
+    // the round trip the two halves owe each other
+    const round = parseNote(md({ rows: [['A', 'B'], ['1', '2']], colAlign: ['', 'center'] }) + '\n', 'F').blocks[0]
+    ok(JSON.stringify(round.rows) === JSON.stringify([['A', 'B'], ['1', '2']]) &&
+       JSON.stringify(round.colAlign) === JSON.stringify(['', 'center']),
+      'export → import is the identity on rows and alignment')
+    const headless = parseNote(md({ rows: [['1', '2']], header: false }) + '\n', 'F').blocks[0]
+    ok(headless.header === false && JSON.stringify(headless.rows) === JSON.stringify([['1', '2']]),
+      '…including a headerless table, whose empty header row reads back as headerless')
+  }
+
+  // A CELL IS NOT A BLOCK HOST. `data-edit` means "this element's html IS the
+  // block's html", so a cell carrying it would make the generic input handler
+  // write one cell over the whole table.
+  {
+    const ren = fsTable('render.ts')
+    ok(/td\.dataset\.cell = b\.id/.test(ren) && !/td\.dataset\.edit/.test(ren),
+      'a table cell is data-cell, never data-edit')
+    ok(/createElement\(head \? 'th' : 'td'\)/.test(ren),
+      'a header cell is a real <th> — that is what buys row/column announcement and a repeating header in print')
+  }
+}
+
+function fsTable(f: string): string {
+  return nodeFs.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+}
+
 // ---- four things that were wrong in a shipped file ------------------------
 {
   const fs2 = await import('node:fs')
@@ -676,8 +866,15 @@ for (const [label, input, err] of [
 
   // 2. doc.readonly was declared in the format and read by nothing: a space
   //    saved as a reading copy opened fully editable.
-  ok(/if \(frozen \|\| doc\.readonly\) store\.readOnly = true/.test(main),
+  ok(/if \(frozen \|\| doc\.readonly(?: \|\| .+?)?\) store\.readOnly = true/.test(main),
     'doc.readonly opens the space read-only')
+  //    …and so does a LIVE view-only copy, which is a different thing: a
+  //    reading copy is sealed and has no session, while `collab.role:'reader'`
+  //    keeps receiving and can never send. The editor lock is a courtesy to
+  //    whoever holds it; the enforcement is the relay refusing to store or fan
+  //    out anything from a socket that presented no signing key.
+  ok(/isReaderCopy\(doc\)\) store\.readOnly = true/.test(main),
+    'a view-only copy (collab.role: reader) also opens locked')
 
   // 3. the agent API must not report ids for blocks it did not write —
   //    store.commit early-returns on a read-only document, and the ids came
@@ -1583,6 +1780,911 @@ for (const [label, input, err] of [
     'editor.indent outdents through the effective parent')
   ok(/seen: Set<string>/.test(src('store.ts')),
     'Store.tree carries a visited set')
+}
+
+
+// ---- video and audio: the model, and the rule about autoplay ---------------
+//
+// The MEDIA block is one type with a `kind`, and the one thing about it that
+// can never be got wrong is that nothing in this app starts playing by itself.
+// A space has no surface that owns playback — an editor, a reading view, a
+// printout and a file-manager still, and a clip that starts itself is wrong in
+// all four. That rule is a pure function (blocks.ts mediaPlayback) precisely so
+// it can be pinned here rather than asserted about one renderer that the next
+// surface would have to rediscover.
+{
+  const spec = SPEC.get('media')
+  ok(!!spec, 'there is a media block spec')
+  ok(spec?.custom === true, 'media renders through its own case, not tag + inline host')
+  ok(MENU_SPECS.some((s) => s.type === 'media'), 'and it is reachable from the / menu')
+  ok(TAG_OF.media === 'div' && !LIST_OF.media, 'a clip is a block, not a list item')
+
+  // init sets the kind that degrades usefully, and never clobbers one that is
+  // already there — the same rule every other init follows (a bullet turned
+  // into a to-do keeps a `done` someone ticked)
+  const fresh: Block = { id: 'm1', type: 'media' }
+  spec?.init?.(fresh)
+  ok(fresh.kind === 'video', 'a fresh media block is a video until a file says otherwise')
+  const already: Block = { id: 'm2', type: 'media', kind: 'audio' }
+  spec?.init?.(already)
+  ok(already.kind === 'audio', '…and init never overwrites a kind that is already set')
+
+  // THE AUTOPLAY RULE. Stated three ways, because a file someone mailed you can
+  // say anything and a future build may legitimately write this field.
+  ok(mediaPlayback({ id: 'x', type: 'media' }).autoplay === false,
+    'playback never autoplays by default')
+  ok(mediaPlayback({ id: 'x', type: 'media', autoplay: true }).autoplay === false,
+    'a block that ASKS to autoplay still does not — the field round-trips, it is not obeyed')
+  ok(mediaPlayback({ id: 'x', type: 'media', autoplay: true, kind: 'audio', loop: true }).autoplay === false,
+    '…and no combination of the other flags unlocks it')
+
+  // the flags that ARE honoured, and their defaults
+  ok(mediaPlayback({ id: 'x', type: 'media' }).controls === true,
+    'controls are shown unless the document says otherwise — a player with none is a rectangle')
+  ok(mediaPlayback({ id: 'x', type: 'media', controls: false }).controls === false,
+    'and controls: false is honoured')
+  const flags = mediaPlayback({ id: 'x', type: 'media', loop: true, muted: true })
+  ok(flags.loop === true && flags.muted === true, 'loop and muted are plain author choices')
+  ok(mediaPlayback({ id: 'x', type: 'media', kind: 'audio' }).kind === 'audio', 'kind audio is audio')
+  ok(mediaPlayback({ id: 'x', type: 'media', kind: 'holo-tape' }).kind === 'video',
+    'a kind from a newer build degrades to video, which plays an audio file anyway')
+
+  // MARKDOWN HAS NO VIDEO. A link is the one form correct in every renderer;
+  // `![](clip.mp4)` is image syntax and draws a broken-image glyph everywhere.
+  const md = (b: Block): string =>
+    (SPEC.get('media')!.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] })).join('\n')
+  ok(md({ id: 'x', type: 'media', src: 'asset:k1' }) === '[Video](asset:k1)',
+    'a clip exports as a markdown LINK, not as an image')
+  ok(md({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' }) === '[Audio](https://h/x.mp3)',
+    '…named for what it is')
+  ok(md({ id: 'x', type: 'media', src: 'asset:k1', alt: 'The demo' }) === '[The demo](asset:k1)',
+    '…using alt as the label when there is one, exactly as the image exporter does')
+  ok(md({ id: 'x', type: 'media' }) === '_Video_',
+    'and a block with no source yet exports as a word, never as an empty link')
+
+  // ADDITIVITY: every playback field survives a round trip untouched, including
+  // the one this build refuses to obey. There is no server to migrate a file.
+  const round = parseDoc(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'd1', title: 'T',
+    pages: [{ id: 'p1', title: 'One', blocks: [{
+      id: 'b1', type: 'media', kind: 'audio', src: 'asset:k',
+      autoplay: true, loop: true, muted: true, controls: false,
+      poster: 'asset:p', captions: 'asset:vtt',
+    }] }],
+  }))
+  const back = round.ok ? round.doc.pages[0].blocks[0] : undefined
+  ok(back?.autoplay === true, 'autoplay survives the round trip even though nothing reads it')
+  ok(back?.poster === 'asset:p' && (back as Record<string, unknown>)?.captions === 'asset:vtt',
+    '…as does a field this build has never heard of')
+}
+
+// ---- the surfaces obey the rule, checked as SOURCE -------------------------
+//
+// mediaPlayback cannot return autoplay:true, but a renderer could still set the
+// attribute by hand, and the whole point of the field being in the format is
+// that someone later will be tempted to. These are the two files that draw a
+// clip; a node rig cannot run them (they need a DOM), so they are read.
+{
+  const fs3 = await import('node:fs')
+  const src = (f: string) => fs3.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const render = src('render.ts')
+  ok(/mediaPlayback/.test(render), 'render.ts asks the registry what it may apply')
+  ok(!/\.autoplay\s*=/.test(render) && !/autoplay\s*=\s*['"]/.test(render),
+    'render.ts never sets autoplay — on any element, by any spelling')
+  ok(/opts\.printing[\s\S]{0,400}mediaStill/.test(render),
+    'paper and thumbnails get a still, and the branch is BEFORE any player is built')
+  ok(/preload\s*=\s*'metadata'/.test(render),
+    'a clip fetches metadata, never the whole file, for a page nobody pressed play on')
+  // the remote gate is the image gate, and a clip needs it MORE: a <video> asks
+  // its host for byte ranges the moment it is parsed
+  ok(/isRemote\(rawSrc\)[\s\S]{0,200}remotePlaceholder/.test(render),
+    'a linked clip is not loaded until the reader agrees, naming the host')
+
+  const preview = src('preview.ts')
+  ok(/video,audio/.test(preview),
+    'the file-manager still bans player tags outright, as defence in depth')
+
+  // `src` is not inline html, so it never passes through sanitize.ts — the URL
+  // box is the only gate between a typed `javascript:` and an element attribute
+  const editor = src('editor.ts')
+  ok(/\^https\?:/.test(editor),
+    'the clip URL box allowlists http(s) rather than blocklisting javascript:')
+}
+
+// ---- HOW WIDE A PAGE IS, and whose business that is ------------------------
+// The per-page control answered "this page needs the room". It did not answer
+// "I have a wide screen", and making somebody set a width on every page in a
+// space to say so is the wrong shape of work. MEASURED at a 2560px viewport
+// before this: a 720px column using 31% of the area, 1,591px of it empty.
+//
+// So there are two settings, and the split is the point: the PAGE says what it
+// needs (document data, travels with the file), the READER says what their
+// screen is (viewer data, localStorage, never written to the file) — the same
+// rule locale and reduced motion already follow.
+{
+  const render = nodeFs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const editor = nodeFs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/readerWidth\?: 'wide' \| 'full'/.test(render), 'the renderer takes a reader width')
+  ok(/page\.width === undefined \? \(opts\.readerWidth \?\? auto\)/.test(render),
+    'the PAGE wins over the reader, and the reader wins over the board default')
+  // The cap moved from PIXELS to CHARACTERS, and that is the assertion worth
+  // having: a px cap does not hold a line length. Capped at measure x 1.25 =
+  // 900px, a 5120px screen rendered 110 characters — past the range this very
+  // comment claimed to enforce. In `ch` it is ~94 at every width, because `ch`
+  // scales with the reading size and the reading size is what grows.
+  ok(/min\(75ch, max\(\$\{m\}px, 42vw\)\)/.test(render),
+    'the column is capped in CHARACTERS, so a wide screen buys bigger type rather than a longer line')
+  const cssSrc = (await import('node:fs')).readFileSync(
+    new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
+  ok(/--sp-read: clamp\(16px,/.test(cssSrc),
+    'and the reading size grows with the viewport from a PX floor')
+  ok(/@media print[\s\S]{0,400}--sp-read: 16px/.test(cssSrc),
+    '…but paper is pinned: a document must not set larger because the window was wide')
+
+  ok(/localStorage\.getItem\('bento-sp-width'\)/.test(editor),
+    "the reader's width is viewer state, in localStorage beside the language")
+  ok(!/theme\.width|doc\.width|\.width = readerWidth/.test(editor),
+    '…and is NEVER written into the document')
+
+  // PRINT MUST NOT INHERIT IT. Paper has a fixed width; the size of the
+  // monitor somebody happens to be sitting at is not a fact about the page
+  // they are printing.
+  const printCall = editor.slice(editor.indexOf('printing: true'))
+  ok(!/readerWidth/.test(printCall.slice(0, 400)),
+    'the print path does not take the reader width')
+}
+
+// ---- LINK CARDS point outward, and never reach outward ----------------------
+// A link card in Notion or Slack is a server fetching a url for its OpenGraph
+// tags. bento/spaces has no server and must not phone home (PLATFORM §1;
+// DECISIONS 2026-08-03), so every field is stored and the card is resolved from
+// the file alone. The three things that can fail SILENTLY here — a hostile url
+// becoming clickable, a remote thumbnail becoming a request on open, and an
+// empty card becoming an empty box — are each pinned below.
+{
+  const card = (over: Record<string, unknown>): Block => ({ id: 'l1', type: 'link', ...over })
+
+  // --- the url allowlist, on the raw string --------------------------------
+  ok(externalHref('https://example.com/a') === 'https://example.com/a', 'an https url is a link')
+  ok(externalHref('http://example.com') === 'http://example.com', '…so is http')
+  ok(externalHref('MAILTO:a@b.c') === 'MAILTO:a@b.c', '…and mailto, whatever its case')
+  ok(externalHref('  https://example.com  ') === 'https://example.com', 'surrounding space is trimmed, not rejected')
+  for (const hostile of [
+    'javascript:alert(1)',
+    ' javascript:alert(1)',
+    '\tjavascript:alert(1)',
+    'JaVaScRiPt:alert(1)',
+    'ja\tvascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:msgbox(1)',
+    'blob:https://example.com/x',
+    '//evil.example/x',
+    '/relative/path',
+    '#p/p1',
+  ]) {
+    ok(externalHref(hostile) === '', `"${hostile.slice(0, 22)}" never becomes a clickable link`)
+  }
+  ok(externalHref(undefined) === '' && externalHref(42) === '', 'a non-string url is not a link either')
+
+  // --- graceful degradation: an empty field is never an empty box ----------
+  const bare = linkCard(card({ url: 'https://example.com/docs' }))
+  ok(bare.title === 'https://example.com/docs', 'a card with no title falls back to its url')
+  ok(bare.site === 'example.com', '…and derives its site from the host, with no lookup')
+  ok(linkCard(card({ url: 'https://www.example.com/x' })).site === 'example.com', 'a www. prefix is dropped')
+  ok(linkCard(card({ url: 'https://a.b/x', site: ' Acme ' })).site === 'Acme', 'a stored site name wins over the host')
+  const empty = linkCard(card({}))
+  ok(empty.url === '' && empty.title === '' && empty.site === '',
+    'a card with nothing in it resolves to nothing — the renderer draws a dead card, not an <a> to nowhere')
+  const hostileCard = linkCard(card({ url: 'javascript:alert(1)', title: 'Click me' }))
+  ok(hostileCard.url === '' && hostileCard.title === 'Click me',
+    'a hostile url loses its link and KEEPS its title — the card degrades, it does not vanish')
+  ok(linkCard(card({ icon: '🙂'.repeat(40) })).icon.length <= 8,
+    'a 400-character "emoji" out of a mailed file cannot blow out the card')
+
+  // --- NO NETWORK AT RENDER: the thumbnail ---------------------------------
+  // The gate is here, in a pure function, rather than in the renderer, because
+  // a check that lives in one of four rendering surfaces is a check that will
+  // be missed in the fifth.
+  for (const remote of [
+    'https://tracker.example/pixel.png',
+    'http://tracker.example/pixel.png',
+    '//tracker.example/pixel.png',
+    '/attachments/local.png',
+    'blob:https://example.com/abc',
+    'filesystem:https://example.com/x',
+  ]) {
+    ok(linkCard(card({ url: 'https://a.b', image: remote })).image === '',
+      `a card's remote image (${remote.slice(0, 26)}) is DROPPED, so rendering it makes no request`)
+  }
+  ok(linkCard(card({ image: 'asset:k1' })).image === 'asset:k1', 'an interned asset thumbnail is kept')
+  ok(linkCard(card({ image: 'data:image/webp;base64,AA' })).image.startsWith('data:'), '…and so are embedded bytes')
+
+  // --- the html fallback an older build renders ----------------------------
+  const html = linkCardHtml(linkCard(card({ url: 'https://a.b/x', title: 'Docs', desc: 'The manual' })))
+  ok(html === '<a href="https://a.b/x">Docs</a> — The manual',
+    'the readable form is a plain inline link, so a build predating this type still shows one')
+  // The fallback link has to SURVIVE the inline sanitizer, which is what
+  // re-reads it on the next edit. sanitize.ts's own comment names the hazard: an
+  // href written under a permissive build gets stripped by a stricter later one,
+  // silently. So the two allowlists are cross-checked against each other rather
+  // than trusted to stay in step by eye. (sanitizeInline itself needs a DOM and
+  // is exercised in the browser, not here.)
+  const fs3 = await import('node:fs')
+  const ssrc = fs3.readFileSync(new URL('../spaces/src/sanitize.ts', import.meta.url), 'utf8')
+  const inlineOk = new RegExp(/const HREF_OK = (\/.+\/)i/.exec(ssrc)![1].slice(1, -1), 'i')
+  for (const u of ['https://a.b/x', 'http://a.b/x', 'mailto:a@b.c', 'MAILTO:A@B.C']) {
+    ok(externalHref(u) !== '' && inlineOk.test(u),
+      `"${u}" is accepted by BOTH allowlists, so the html fallback keeps its link`)
+  }
+  ok(!linkCardHtml(linkCard(card({ url: 'javascript:alert(1)', title: 'x' }))).includes('javascript'),
+    'a hostile url never reaches the html fallback either')
+  ok(linkCardHtml(linkCard(card({ title: '<b>hi</b>' }))) === '&lt;b&gt;hi&lt;/b&gt;',
+    'a title is escaped, not interpreted — these fields are untrusted input')
+
+  // --- markdown: a link card is a link -------------------------------------
+  const linkSpec = SPEC.get('link')!
+  const md = (b: Block) => linkSpec.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] }).join('\n')
+  ok(md(card({ url: 'https://a.b/x', title: 'Docs' })) === '[Docs](https://a.b/x)',
+    'a link card exports as a markdown link')
+  ok(md(card({ url: 'https://a.b/x', title: 'Docs', desc: 'The manual' })) === '[Docs](https://a.b/x) — The manual',
+    '…with its description alongside')
+  ok(md(card({ url: 'https://a.b/x' })) === '[https://a.b/x](https://a.b/x)',
+    'an untitled card exports the url as its own label, never an empty link text')
+  ok(md(card({ url: 'https://a.b/x', title: 'A [thing]' })) === '[A \\[thing\\]](https://a.b/x)',
+    'brackets in a title are escaped, or they end the link early')
+  ok(md(card({ url: 'https://a.b/a (1)', title: 'T' })) === '[T](<https://a.b/a (1)>)',
+    'a url holding a space or a bracket takes the angle form')
+  ok(md(card({ title: 'Just words', desc: 'no url' })) === 'Just words — no url',
+    'a card that is not clickable does not export as something a reader will click')
+
+  // --- and the renderer really is on that path ------------------------------
+  const rsrc = fs3.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  ok(!/\bfetch\s*\(|XMLHttpRequest|new Image\s*\(|navigator\.sendBeacon/.test(rsrc),
+    'render.ts contains no fetch, no XHR and no image preloader — the render path cannot reach the network')
+  const linkCase = rsrc.slice(rsrc.indexOf("case 'link':"), rsrc.indexOf("case 'todo':"))
+  ok(linkCase.length > 200, 'the link case was found in render.ts')
+  ok(/img\.src = resolveSrc\(c\.image, doc\)/.test(linkCase),
+    "…and its only img src comes from linkCard's already-filtered image, never from the raw block")
+  ok(!/b\.image|b\.url/.test(linkCase),
+    '…so the renderer never reads a card field around the gate')
+}
+
+// ---- 8. review comments ----------------------------------------------------
+// Two properties, and both of them fail silently. A thread is DOCUMENT DATA
+// that no build before this one has heard of, so it has to survive a build
+// that does not understand it; and it is EDITOR-ONLY, so it must never reach
+// the reading view or a printed handbook — a private remark on somebody's
+// draft, printed into the copy they hand a customer, is not a cosmetic bug.
+{
+  const withComments = doc({
+    pages: [{
+      id: 'p1', title: 'One',
+      comments: [{ id: 'c0', author: 'Ada', at: '2026-08-20T09:00:00Z', text: 'about the page' }],
+      blocks: [{
+        id: 'b1', type: 'p', html: 'hi',
+        comments: [
+          { id: 'c1', author: 'Ada', at: '2026-08-20T10:00:00Z', text: 'open one', mood: 'from a later build' },
+          { id: 'c2', author: 'Bo', at: '2026-08-20T11:00:00Z', text: 'settled', resolved: true },
+        ],
+      }],
+    }],
+  })
+  const r = parseDoc(withComments)
+  ok(r.ok === true, 'a document carrying comments parses')
+  const page = (r as { doc: SpacesDoc }).doc.pages[0]
+  ok(JSON.stringify(page.comments) === JSON.stringify(JSON.parse(withComments).pages[0].comments),
+    'a page thread round-trips byte-for-byte')
+  ok((page.blocks[0].comments as Array<{ mood?: string }>)[0].mood === 'from a later build',
+    'and an unknown field INSIDE a comment survives too (PLATFORM §3)')
+
+  const at = commentsOn(page)
+  ok(at.length === 3, 'commentsOn reads both anchors')
+  ok(at[0].blockId === undefined && at[0].comment.id === 'c0',
+    'the page thread comes first, with no block id — that IS the anchor')
+  ok(at[1].blockId === 'b1' && at[2].blockId === 'b1', 'block threads carry the block they are on')
+  ok(unresolvedOn(page) === 2, 'the badge counts what is still open, not what has been settled')
+
+  // this data arrives in a file somebody mailed you
+  const hostile = { id: 'h', title: 'H', comments: 'yes', blocks: [
+    { id: 'hb', type: 'p', html: '', comments: [null, { noId: 1 }, { id: 'k', author: 'A', at: '', text: 'x' }] },
+  ] } as unknown as Page
+  ok(commentsOn(hostile).length === 1 && commentsOn(hostile)[0].comment.id === 'k',
+    'a comments field that is not an array, and entries with no id, are ignored rather than iterated')
+  ok(unresolvedOn(hostile) === 1, 'and the count agrees with the list')
+
+  // EDITOR-ONLY, as source. The behaviour needs a DOM and a print dialog; the
+  // mistake is made in the source, which is where the model rig checks the
+  // other four properties of this shape.
+  const fs3 = await import('node:fs')
+  const spSrc = (f: string) => fs3.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  // `comments` as a PROPERTY or a class, not the word — render.ts's own prose
+  // discusses html comments, and a gate that trips on its documentation gets
+  // deleted rather than fixed.
+  ok(!/\.comments\b|\bsp-cm-/.test(spSrc('render.ts')),
+    'render.ts — the ONE renderer behind the editor, the reading view and print — never reads a thread')
+  ok(/if \(!this\.reading\) this\.comments\?\.refresh\(\)/.test(spSrc('editor.ts')),
+    'the editor paints markers only when it is not in the reading view')
+  ok(/@media print \{ \.sp-cm-mark, \.sp-cm-row \{ display: none/.test(spSrc('styles.css')),
+    'and the print sheet drops them even if a future path paints them anyway')
+  // PLAIN TEXT, and the sanitizer discipline that follows from it: there is
+  // nothing to sanitize because nothing is ever parsed as html.
+  ok(!/innerHTML/.test(spSrc('comments.ts')),
+    'no comment text ever reaches innerHTML — it is written with textContent')
+}
+
+// ---- 12. the portability round trip ----------------------------------------
+//
+// A page LEAVES as its own space, and a space ARRIVES inside another one. Both
+// directions move ids, links and images between documents, and every way they
+// can go wrong is silent: an id that collides makes two pages one node, a link
+// that is not repointed either dies or — worse — lands on a STRANGER page that
+// happens to hold that id, and a credential that rides along in an extract
+// hands over the whole space it came from.
+//
+// So this is a real round trip: extract a subtree out of one space, import it
+// into a DIFFERENT space that deliberately collides with it on every id and on
+// an asset key, and assert on what came out. (The remaining property — that
+// the import is ONE undo step — needs the real Store, which imports './model'
+// extensionless; it is asserted in scripts/test-spaces-undo.ts, which is
+// bundled.)
+{
+  const IMG_A = 'data:image/png;base64,AAAA'
+  const IMG_B = 'data:image/png;base64,BBBB'
+  const source: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-source', title: 'Whole space',
+    home: 'p-root', theme: {},
+    // a future build's field, at the top level and on a page: additivity is
+    // not suspended because a document is being cut in half
+    futureThing: { keep: 'me' },
+    assets: { imgA: IMG_A, imgB: IMG_B },
+    collab: {
+      room: 'w-room', key: 'read-cap', on: true,
+      writerPub: 'WP', writerPriv: 'WS', owner: 'OP', ownerPriv: 'OS',
+      invite: { pub: 'IP', priv: 'IS', role: 'writer', sig: 'SIG' },
+      sync: { v: 2 },
+    },
+    pages: [
+      { id: 'p-root', title: 'Handbook', futurePageField: 7, blocks: [
+        { id: 'b-1', type: 'p', html: 'see <a href="#p/p-kid">the kid</a> and <a href="#p/p-away">Elsewhere</a>' },
+      ] },
+      { id: 'p-kid', title: 'Kid', parent: 'p-root', blocks: [
+        { id: 'b-2', type: 'image', src: 'asset:imgA', alt: 'a picture' },
+        { id: 'b-3', type: 'pagelink', page: 'p-away' },
+        { id: 'b-4', type: 'kanban', html: 'a type this build has never heard of' },
+      ] },
+      { id: 'p-away', title: 'Elsewhere', blocks: [
+        { id: 'b-5', type: 'image', src: 'asset:imgB' },
+      ] },
+    ],
+  }))
+
+  ok(subtreeIds(source, 'p-root').join(',') === 'p-root,p-kid',
+    'a subtree is the page and its descendants, in document order')
+  ok(subtreeIds(source, 'p-root', false).join(',') === 'p-root',
+    '…and just the page when the subtree is not asked for')
+
+  const cut = extractSpace(source, 'p-root', { docId: 'doc-extract', now: '2026-08-22T00:00:00.000Z' })
+  const out = cut.doc
+
+  // IDENTITY. A fork joins the room it forked from; an extract must not.
+  ok(out.docId === 'doc-extract' && out.docId !== source.docId,
+    'the extract carries a FRESH docId, so it is a new document and not a fork')
+  ok(out.collab === undefined,
+    'and no collaboration credentials at all — the room, the read key and every private key')
+  ok(!JSON.stringify(out).includes('WS') && !JSON.stringify(out).includes('OS') &&
+     !JSON.stringify(out).includes('read-cap'),
+    'no writer, owner or invite secret survives anywhere in the bytes')
+
+  // WHAT TRAVELLED.
+  ok(out.pages.map((p) => p.id).join(',') === 'p-root,p-kid', 'the subtree travelled, and nothing else')
+  ok(out.home === 'p-root' && out.pages.some((p) => p.id === out.home),
+    'doc.home names a page that exists in the new file')
+  ok(out.pages[0].parent === undefined, 'the root of the extract is a root page')
+  ok(out.title === 'Handbook', 'the new space is named after the page it was cut from')
+
+  // LINKS. Out of the set is not left dangling and not silently unlinked.
+  const rootHtml = out.pages[0].blocks[0].html ?? ''
+  ok(rootHtml.includes('href="#p/p-kid"'), 'a link INSIDE the extract still resolves')
+  ok(!rootHtml.includes('#p/p-away') && rootHtml.includes('[[Elsewhere]]'),
+    'a link OUT of it becomes the literal [[Elsewhere]] — text that still says what it meant')
+  const kid = out.pages[1]
+  ok(kid.blocks[1].type === 'p' && !('page' in kid.blocks[1]) &&
+     (kid.blocks[1].html ?? '').includes('[[Elsewhere]]'),
+    'a pagelink whose target stayed behind becomes the same honest text')
+  ok(cut.stats.unlinked === 2, 'and both are counted for the report')
+
+  // ASSETS. An extract that carries the whole document is a copy.
+  ok(Object.keys(out.assets ?? {}).join(',') === 'imgA',
+    'only the images the extracted pages reference travel')
+
+  // ADDITIVITY, in both halves.
+  ok((out as Record<string, unknown>).futureThing !== undefined &&
+     (out.pages[0] as Record<string, unknown>).futurePageField === 7,
+    'unknown top-level and per-page fields survive the extract untouched')
+  ok(kid.blocks[2].type === 'kanban', 'an unknown block type travels as itself')
+
+  // The extract must be a document this app can OPEN — the load contract, not
+  // an approximation of it.
+  const reread = parseDoc(JSON.stringify(out))
+  ok(reread.ok === true, 'the extracted document parses as a bento/spaces file')
+  ok(reread.ok === true && reread.repaired.length === 0,
+    '…with no ids to repair: the extract is internally consistent')
+
+  // ---- and back IN, to a space that collides on everything ----------------
+  const hostDoc: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-host', title: 'Somewhere else',
+    home: 'p-root', theme: {},
+    // the SAME key holding DIFFERENT bytes: a content-addressed store cannot
+    // produce this, a hand-written file can, and trusting the key would replace
+    // the host's picture with the visitor's
+    assets: { imgA: 'data:image/png;base64,ZZZZ' },
+    pages: [
+      { id: 'p-root', title: 'Host root', blocks: [{ id: 'b-1', type: 'p', html: 'mine' }] },
+      { id: 'p-target', title: 'Put it here', blocks: [{ id: 'b-9', type: 'p', html: '' }] },
+    ],
+  }))
+
+  const plan = planGraft(hostDoc, out, { under: 'p-target' })
+
+  // IDS. Unique across the WHOLE merged document, and never reused.
+  const merged = [...hostDoc.pages, ...plan.pages]
+  const allIds = merged.flatMap((p) => [p.id, ...p.blocks.map((b) => b.id)])
+  ok(new Set(allIds).size === allIds.length, 'NO ID COLLISION: every id in the merged document is unique')
+  ok(plan.stats.renamed === 2, 'the two ids this space already used were renamed, and only those')
+  ok(plan.pages[1].id === 'p-kid' && plan.pages[1].blocks[0].id === 'b-2',
+    'ids that did NOT collide are kept, so links and node keys outside the collision survive')
+
+  // …and deterministically, from the bytes: two readers of one file agree.
+  const again = planGraft(hostDoc, JSON.parse(JSON.stringify(out)), { under: 'p-target' })
+  ok(JSON.stringify(again.pages) === JSON.stringify(plan.pages),
+    'the same import planned twice produces the same ids (derived from the bytes, never Math.random)')
+
+  // LINKS. Nothing arrives pre-broken, and nothing points at a stranger.
+  const pageIds = new Set(merged.map((p) => p.id))
+  const dangling: string[] = []
+  for (const p of plan.pages) {
+    for (const b of p.blocks) {
+      for (const m of (b.html ?? '').matchAll(/href="#p\/([^"]+)"/g)) {
+        if (!pageIds.has(m[1])) dangling.push(m[1])
+      }
+    }
+  }
+  ok(dangling.length === 0, `NO DANGLING LINK: every #p/ target in the import resolves (${dangling.join(',') || 'none'})`)
+  const grafted = plan.pages[0].blocks[0].html ?? ''
+  ok(grafted.includes(`href="#p/${plan.pages[1].id}"`),
+    'the internal link followed the rename rather than pointing at the HOST page that took its id')
+  ok(!grafted.includes('href="#p/p-root"'),
+    '…and specifically does not point at the host page it collided with')
+  ok((plan.pages[1].blocks[1].html ?? '').includes('[[Elsewhere]]'),
+    'text left by the extract stays text — an import invents no links')
+
+  // WHERE IT LANDED.
+  ok(plan.pages[0].parent === 'p-target', 'the import nests under the page that was chosen')
+  ok(plan.pages[1].parent === plan.pages[0].id, 'and its own tree is preserved inside that')
+
+  // ASSETS. Merged without collision, and without duplicating what is shared.
+  ok(plan.assets['imgA'] === undefined && plan.assets['imgA~1'] === IMG_A,
+    'a key clash with DIFFERENT bytes mints a variant rather than overwriting the host image')
+  ok((plan.pages[1].blocks[0].src) === 'asset:imgA~1',
+    '…and the block that referenced it now points at the variant')
+  ok(hostDoc.assets!['imgA'] === 'data:image/png;base64,ZZZZ',
+    'the host keeps its own bytes: planGraft mutates nothing it was handed')
+
+  const shared: SpacesDoc = JSON.parse(JSON.stringify(hostDoc))
+  shared.assets = { imgA: IMG_A }
+  const dedupe = planGraft(shared, out, {})
+  ok(Object.keys(dedupe.assets).length === 0 && dedupe.pages[1].blocks[0].src === 'asset:imgA',
+    'the SAME image already in the host is reused, not stored twice — content addressing does the work')
+
+  // ADDITIVITY survives the second leg too.
+  ok((plan.pages[0] as Record<string, unknown>).futurePageField === 7 &&
+     plan.pages[1].blocks[2].type === 'kanban',
+    'unknown fields and unknown block types survive the import as well')
+
+  // The merged document is one this app can open.
+  const mergedDoc = { ...hostDoc, pages: merged, assets: { ...hostDoc.assets, ...plan.assets } }
+  const rr = parseDoc(JSON.stringify(mergedDoc))
+  ok(rr.ok === true && rr.repaired.length === 0,
+    'the merged document parses with NOTHING to repair — the import needed no rescue')
+}
+// ---- A BARE-KEY SHORTCUT MUST NOT EAT A CHARACTER ---------------------------
+// `[` collapses the page list. It was unguarded, and the text path that would
+// have claimed the key first sits ~90 lines BELOW it — so every `[` typed in a
+// block was preventDefault()ed into a sidebar toggle. `[[` is how this app
+// makes links and is what the starter space tells you to type; it could not be
+// typed at all. Shipped since #237, found while building the properties panel.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/if \(!mod && e\.key === '\[' && !isTyping\(\)\)/.test(ed),
+    'the bare `[` shortcut is guarded by whether text is being edited')
+  ok(/if \(!mod && e\.key === '\]' && !isTyping\(\)\)/.test(ed),
+    "…and so is `]`, which arrived with the properties panel")
+  ok(/function isTyping\(\): boolean/.test(ed), 'and that guard exists')
+  ok((ed.match(/function isTyping\(\): boolean/g) ?? []).length === 1 &&
+     !/editingText/.test(ed.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')),
+    'exactly ONE guard, not one per shortcut — two answers to one question drift')
+  ok(/a\.isContentEditable/.test(ed) && /a\.tagName === 'SELECT'/.test(ed),
+    '…covering contenteditable, inputs, textareas and selects alike')
+
+  // the general rule, so the next bare-key shortcut cannot reintroduce this:
+  // every unmodified single-character binding in onKey must ask the guard.
+  const onKey = ed.slice(ed.indexOf('private onKey('), ed.indexOf('private onKey(') + 4000)
+  // NB the tail is captured up to the line end, not up to the first ')': the
+  // guard's own parentheses are inside it, and a lazier pattern silently
+  // matched nothing and failed its own assertion.
+  const bare = [...onKey.matchAll(/if \(!mod && e\.key === '(.)'(.*)$/gm)]
+  for (const m of bare) {
+    ok(/isTyping/.test(m[2]),
+      `the bare \`${m[1]}\` binding asks isTyping() before it swallows the key`)
+  }
+  ok(bare.length > 0, 'and there is at least one such binding to check')
+}
+
+
+// ---- THE PROPERTIES PANEL COSTS NOTHING UNTIL IT IS ASKED FOR ---------------
+// The wide-page work one commit earlier gave the reading column the window's
+// slack. A right-hand panel is the obvious way to undo that: 280px held open on
+// every screen, forever, for settings most readers change once a month. So the
+// panel's DEFAULT-CLOSED and its zero-cost-while-closed geometry are pinned
+// here rather than left to whoever next edits the stylesheet.
+//
+// This is a SOURCE scan, deliberately. There is no DOM in node, so the honest
+// thing to assert is the two rules the browser then follows — what the stored
+// preference has to say before the panel opens, and what the closed panel
+// contributes to the flex row — rather than a mock that would agree with
+// whatever it was written beside.
+{
+  const props = fsTable('props.ts')
+  const editor = fsTable('editor.ts')
+  const css = fsTable('styles.css')
+
+  // 1. CLOSED UNLESS THIS READER OPENED IT. The field initialises to true and
+  //    only the explicit '0' — written by toggleInsp — opens it, so an absent
+  //    key (a fresh file, a new browser, a locked-down origin that threw)
+  //    means closed.
+  ok(/private inspClosed = true/.test(editor),
+    'the properties panel is CLOSED by default')
+  ok(/localStorage\.getItem\('bento-sp-insp-closed'\) !== '0'/.test(editor),
+    "…and only an explicit '0' opens it, so an absent preference is still closed")
+  ok(/localStorage\.setItem\('bento-sp-insp-closed'/.test(editor),
+    'the open/closed state PERSISTS, so it is chosen once and not every session')
+
+  // 2. WHILE CLOSED IT TAKES NO WIDTH. `.sp-main` is `flex: 1 1 auto`, so a
+  //    closed panel that zeroes its basis, its inline padding and its border is
+  //    a panel the reading column cannot feel. Any one of the three left in
+  //    place is width off the page on every screen.
+  const shut = css.slice(css.indexOf('.sp-insp.sp-pane-closed'))
+  const rule = shut.slice(0, shut.indexOf('}') + 1)
+  ok(/flex-basis:\s*0/.test(rule), 'a closed properties panel has flex-basis 0')
+  ok(/padding-inline:\s*0/.test(rule), '…no inline padding')
+  ok(/border-inline-start-width:\s*0/.test(rule), '…and no border')
+  ok(/\.sp-main \{\s*\n?\s*flex: 1 1 auto/.test(css),
+    'the reading column is flex:1 1 auto, so the width a closed panel gives up goes back to it')
+
+  // 3. THE PANEL IS THE READER'S, NEVER THE DOCUMENT'S — the same rule the page
+  //    list's width, the language and the reader width already follow. A panel
+  //    state written into the file would arrive open in somebody else's copy.
+  ok(!/doc\.(insp|panel)|theme\.(insp|panel)/.test(editor + props),
+    'nothing about the panel is written into the document')
+
+  // 4. BELOW THE DRAWER BREAKPOINT IT IS AN OVERLAY, not a third column — the
+  //    bargain the page list already makes at the same 820px.
+  const phone = css.slice(css.indexOf('@media (max-width: 820px) {\n  .sp-insp-rz'))
+  ok(/\.sp-insp \{ display: none; \}/.test(phone.slice(0, 400)),
+    'below 820px the panel is absent until asked for')
+  ok(/\.sp-insp\.sp-open \{[^}]*position: fixed/.test(phone.slice(0, 800)),
+    '…and then it is a fixed overlay, never a column')
+
+  // 5. THE ACCORDION IS SLIDES', including the persisted-per-title open state,
+  //    so a section added below is collapsible without anyone remembering.
+  ok(/querySelectorAll<HTMLElement>\('\.sp-insp-sec'\)/.test(props) &&
+     /localStorage\.setItem\(OPEN_KEY/.test(props),
+    'sections collapse and their open state is remembered per title')
+
+  // 6. ONE CHANGE IS ONE UNDO STEP. Every control commits through one helper
+  //    that wraps a single `store.commit`, and every text field commits on
+  //    `change` rather than on `input` — an undo entry per keystroke is what
+  //    `input` would buy.
+  ok(/private commit\(id: string, fn: \(b: Block\) => void\): void \{[\s\S]{0,300}?s\.commit\(/.test(props),
+    'block edits go through ONE store.commit')
+  ok(!/addEventListener\('input'/.test(props),
+    'no control commits on every keystroke')
+
+  // 7. IT DOES NOT REPLACE THE SURFACES IT DUPLICATES. The chip on a callout
+  //    and the language chip on a code block are still the fast route; a panel
+  //    that justified itself by removing them would be a worse editor.
+  ok(/sp-callout-chip/.test(editor) && /sp-langchip/.test(editor),
+    'the block chips survive the panel')
+}
+
+// ---------------------------------------------------------------------------
+// INLINE MARKS — the canonical form, and the cases that go wrong quietly.
+//
+// The mark engine is a pure function over (inline html, plain-text offsets) so
+// that it can be pinned HERE rather than only in a browser. The
+// partial-selection group is the one that silently produced plausible garbage
+// in every naive implementation of this: half a bold run, unbolded, either
+// takes the whole run with it or does nothing, and for one character both look
+// fine.
+{
+  // ---- canonical form ----------------------------------------------------
+  // ONE nesting order, whatever order the tags arrived in. Two spellings of
+  // the same visible text is a conflict in every diff and every CRDT merge.
+  ok(canonicalMarks('<b><i>x</i></b>') === '<strong><em>x</em></strong>',
+    'b/i fold to strong/em, the spelling the markdown importer already emits')
+  ok(canonicalMarks('<i><b>x</b></i>') === canonicalMarks('<b><i>x</i></b>'),
+    'the SAME html whichever way round the author nested it')
+  ok(canonicalMarks('<code><em><strong>q</strong></em></code>') === '<strong><em><code>q</code></em></strong>',
+    'the order is a > mark > strong > em > u > s > sub > sup > code, outermost first')
+  ok(canonicalMarks('<b>a</b><b>b</b><b>c</b>') === '<strong>abc</strong>',
+    'adjacent identical runs coalesce all the way, not one pass deep')
+  ok(canonicalMarks('<b></b>hi<span>there</span>') === 'hithere',
+    'empty runs and attribute-less spans are debris, not content')
+  ok(canonicalMarks(canonicalMarks('<i><b>x</b></i><b>y</b>')) === canonicalMarks('<i><b>x</b></i><b>y</b>'),
+    'IDEMPOTENT — a materialize→DOM→re-serialize round trip must not keep changing it')
+  ok(canonicalMarks('a&amp;b&nbsp;c&lt;d') === 'a&amp;b&nbsp;c&lt;d',
+    'entities round-trip byte-identically to what innerHTML hands back — NBSP verbatim')
+  ok(canonicalMarks('<a href="https://x/">a</a><a href="https://x/">b</a>') === '<a href="https://x/">ab</a>',
+    'two links to the same address coalesce; a link is one hover target, not two')
+
+  // ---- apply -------------------------------------------------------------
+  ok(applyMark('hello world', 0, 5, 'strong') === '<strong>hello</strong> world',
+    'a mark over part of a plain run wraps exactly that part')
+  ok(applyMark('<strong>hello</strong> world', 0, 11, 'strong') === '<strong>hello world</strong>',
+    'extending a mark over its neighbour leaves ONE run, not two abutting ones')
+
+  // ---- THE PARTIAL-SELECTION CASE ----------------------------------------
+  ok(applyMark('<strong>hello world</strong>', 0, 5, 'strong') === 'hello<strong> world</strong>',
+    'unbolding the HEAD of a bold run splits it and keeps the tail bold')
+  ok(applyMark('<strong>hello world</strong>', 6, 11, 'strong') === '<strong>hello </strong>world',
+    'unbolding the TAIL splits the other way')
+  ok(applyMark('<strong>hello world</strong>', 2, 5, 'strong') === '<strong>he</strong>llo<strong> world</strong>',
+    'unbolding the MIDDLE leaves three runs — the case that needs a real split')
+  ok(applyMark('<em>abcdef</em>', 2, 4, 'em') === '<em>ab</em>cd<em>ef</em>',
+    '…and it is the TAG that moves: not one character of text changes')
+  ok(markActive('<strong>hello</strong> world', 0, 5, 'strong') === true &&
+     markActive('<strong>hello</strong> world', 0, 7, 'strong') === false,
+    'a mark is ACTIVE only when it covers the whole selection')
+  ok(applyMark('<strong>hello</strong> world', 0, 7, 'strong') === '<strong>hello w</strong>orld',
+    '…so toggling a half-covered selection EXTENDS the mark rather than removing it')
+
+  // ---- links and clearing -------------------------------------------------
+  const linked = applyMark('abc', 1, 2, 'a', { op: 'on', attrs: linkAttrs('https://x/?a=1&b=2') })
+  ok(linked === 'a<a href="https://x/?a=1&amp;b=2" rel="noopener noreferrer" target="_blank">b</a>c',
+    'a new link is spelled EXACTLY as sanitizeInline would leave it, ampersand and all')
+  ok(linkAt(linked, 1, 2) === 'https://x/?a=1&b=2' && linkAt(linked, 0, 3) === '',
+    'linkAt reports a link only when it covers the whole selection')
+  ok(clearMarks('<a href="https://x/"><strong>hi</strong></a> there', 0, 2) === 'hi there',
+    'clear formatting takes the link with it — a link is formatting too')
+  ok(applyMark('a<br>b', 0, 3, 'em') === '<em>a<br>b</em>',
+    'a <br> is ONE character of offset, so a mark after a line break lands on the right words')
+
+  // ---- markdown, both ways ------------------------------------------------
+  // EVERY mark the toolbar can apply must survive an export. A control that
+  // produces something the exporter drops is worse than no control, because
+  // the loss only shows up in a file somebody has already sent. Four of these
+  // WERE dropped before this rig existed.
+  const MARK_MD: Array<[string, string]> = [
+    ['<strong>x</strong>', '**x**'],
+    ['<em>x</em>', '*x*'],
+    ['<u>x</u>', '<u>x</u>'],
+    ['<s>x</s>', '~~x~~'],
+    ['<code>x</code>', '`x`'],
+    ['<mark>x</mark>', '==x=='],
+    ['<sub>x</sub>', '<sub>x</sub>'],
+    ['<sup>x</sup>', '<sup>x</sup>'],
+    ['<a href="https://x/">x</a>', '[x](https://x/)'],
+  ]
+  for (const [html, md] of MARK_MD) {
+    ok(htmlToMd(html) === md, `${html} exports as ${md}`)
+    ok(canonicalMarks(inlineHtml(md)) === canonicalMarks(html),
+      `…and ${md} imports back as the same mark — export→import is the identity`)
+  }
+  ok(htmlToMd('<a href="https://x/"><strong>x</strong></a>') === '[**x**](https://x/)',
+    'the canonical order puts the link outermost, which is the only nesting markdown can spell')
+  ok(htmlToMd('a<br>b') === 'a\nb', 'a line break exports as one')
+}
+
+// ---------------------------------------------------------------------------
+// TEXT AND BACKGROUND COLOUR — the format's SECOND attribute.
+//
+// The vocabulary is closed (marks.ts PALETTE) and the sanitizer matches a
+// PATTERN rather than the nine names, so a colour added in a later build
+// survives an older one instead of being deleted by it. That is the property
+// worth pinning: everything else about colour is a stylesheet.
+{
+  const red = ' class="sp-fg-red"'
+  ok(applyMark('hello', 0, 5, 'span', { op: 'on', attrs: red }) === '<span class="sp-fg-red">hello</span>',
+    'ink colour is a class on a SPAN, never a style attribute')
+  ok(applyMark('<span class="sp-fg-red">hello</span>', 0, 5, 'span', { op: 'off' }) === 'hello',
+    'and "Default" REMOVES it — a paragraph coloured back to default is byte-identical to one never coloured')
+  ok(applyMark('<span class="sp-fg-red">hello</span>', 0, 5, 'span', { op: 'on', attrs: ' class="sp-fg-blue"' })
+      === '<span class="sp-fg-blue">hello</span>',
+    'a second colour REPLACES the first rather than nesting two spans')
+  ok(applyMark('<span class="sp-fg-red">hello</span>', 0, 2, 'span', { op: 'off' })
+      === 'he<span class="sp-fg-red">llo</span>',
+    'colour splits on a partial selection exactly as bold does')
+  ok(canonicalMarks('<span>a</span><span class="sp-fg-red">b</span>') === 'a<span class="sp-fg-red">b</span>',
+    'a span with NO palette class is contentEditable debris and is dropped; one with a class is content')
+  ok(canonicalMarks('<span class="sp-fg-red">a</span><span class="sp-fg-red">b</span>')
+      === '<span class="sp-fg-red">ab</span>',
+    'two runs of the same colour coalesce; two different ones cannot')
+  ok(canonicalMarks('<strong><span class="sp-fg-red">x</span></strong>')
+      === '<span class="sp-fg-red"><strong>x</strong></span>',
+    'colour sits outside the emphasis marks in the canonical order, whichever way it was written')
+  ok(canonicalMarks('<mark class="sp-bg-green">x</mark>') === '<mark class="sp-bg-green">x</mark>' &&
+     canonicalMarks('<mark>x</mark>') === '<mark>x</mark>',
+    'a background is a class on MARK, and a plain highlight stays exactly what it was')
+
+  // THE ADDITIVITY PROPERTY, which is the reason CLASS_OK is a pattern.
+  ok(CLASS_OK.test('sp-fg-teal') && CLASS_OK.test('sp-bg-teal'),
+    'a colour this build has never heard of still MATCHES — an old build must not delete a new palette')
+  ok(canonicalMarks('<span class="sp-fg-teal">x</span>') === '<span class="sp-fg-teal">x</span>',
+    '…and round-trips byte-for-byte through a build with no rule for it: unstyled, not lost')
+  ok(!CLASS_OK.test('sp-fg-') && !CLASS_OK.test('sp-xx-red') && !CLASS_OK.test('anything-else') &&
+     !CLASS_OK.test('sp-fg-0123456789abcdefg'),
+    'and the pattern is still bounded: two roles, a short name, nothing else')
+  ok(keepClasses('sp-fg-red not-ours sp-bg-blue') === 'sp-fg-red sp-bg-blue',
+    'a class list is filtered per TOKEN — one bad name must not cost the colour beside it')
+
+  // MARKDOWN. Colour has no syntax at all, so it exports as the raw inline
+  // html GFM permits, and the importer keeps the class — otherwise "export,
+  // edit the .md, import" would be a colour-stripping round trip.
+  const COLOUR_MD: Array<[string, string]> = [
+    ['<span class="sp-fg-red">x</span>', '<span class="sp-fg-red">x</span>'],
+    ['<mark class="sp-bg-green">x</mark>', '<mark class="sp-bg-green">x</mark>'],
+  ]
+  for (const [html, md] of COLOUR_MD) {
+    ok(htmlToMd(html) === md, `${html} exports as itself`)
+    ok(canonicalMarks(inlineHtml(md)) === canonicalMarks(html),
+      `…and imports back with the class intact — export→import is the identity`)
+  }
+  ok(htmlToMd('<mark>x</mark>') === '==x==',
+    'the PLAIN highlight keeps ==x==, which Obsidian and Pandoc both read')
+}
+
+// ---- the theme gate --------------------------------------------------------
+//
+// EVERY FAILURE HERE IS INVISIBLE IN THE LIGHT THEME, which is the one the
+// author is looking at while they write the rule. A surface pinned to `#fff`
+// keeps its white background when the chrome goes dark and puts light text on
+// it; slides measured that at 1.21:1 against WCAG AA's 4.5 floor before its own
+// gate existed, and it looked perfect the whole time.
+//
+// Three properties, and the third is the one that is not about contrast at all:
+// a theme is a VIEWER preference (PLATFORM §8), so it must never reach the
+// document — not through doc.theme, and not through the pristine clone every
+// save re-serializes.
+{
+  const fs = await import('node:fs')
+  const src = (f: string) =>
+    fs.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const css = src('styles.css')
+
+  // Strip comments first: prose about `#fff` is not a rule painting `#fff`,
+  // and a failure that names a comment sends the reader to the wrong line.
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  // ---- 1. both dark blocks exist, and they are the same block --------------
+  // Three states: a reader chose light, chose dark, or chose nothing. The
+  // choice stamps data-theme; the default follows the OS. So dark has to be
+  // stated under the MEDIA QUERY (guarded, so an explicit light still wins)
+  // AND under the ATTRIBUTE, or the picker only works in one direction.
+  const body = (sel: string): string | null => {
+    const i = bare.indexOf(sel)
+    if (i < 0) return null
+    const open = bare.indexOf('{', i)
+    return bare.slice(open + 1, bare.indexOf('}', open))
+  }
+  const roles = (b: string) =>
+    new Map([...b.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)]
+      .map((m) => [m[1], m[2].trim().toLowerCase()] as [string, string]))
+
+  const light = body(':root, :root[data-theme="light"]')
+  const media = body(':root:not([data-theme="light"])')
+  const attr = body(':root[data-theme="dark"]')
+  ok(!!light && !!media && !!attr,
+    'dark is defined BOTH under prefers-color-scheme and under [data-theme="dark"]')
+  ok(/@media screen and \(prefers-color-scheme: dark\)/.test(css),
+    '…and the media block is a screen block, which is what keeps paper light')
+  if (light && media && attr) {
+    const L = roles(light), M = roles(media), A = roles(attr)
+    // byte-identical, or the picker and the OS default drift apart silently
+    const drift = [...M].filter(([k, v]) => A.get(k) !== v).map(([k]) => k)
+    ok(drift.length === 0 && M.size === A.size,
+      `the two dark blocks are identical${drift.length ? ` — ${drift.join(', ')}` : ''}`)
+    // --sp-read and --radius are GEOMETRY. They live in the light block
+    // because that is where the tokens are, but a reading size and a corner
+    // radius are the same in the dark; only colour has two answers.
+    const METRIC = /^--(sp-read|radius)$/
+    const missing = [...L.keys()].filter((r) => !M.has(r) && !METRIC.test(r))
+    ok(missing.length === 0,
+      `dark defines every role light does${missing.length ? ` — missing ${missing.join(', ')}` : ''}`)
+    const extra = [...M.keys()].filter((r) => !L.has(r))
+    ok(extra.length === 0,
+      `dark invents no role light lacks${extra.length ? ` — extra ${extra.join(', ')}` : ''}`)
+    // A token defined twice and referenced nowhere is not harmless: it is a
+    // wire that was never connected, and the literal it was meant to replace
+    // is still in the sheet painting a light value in dark.
+    const unused = [...L.keys()].filter((r) => !new RegExp(`var\\(${r}[,)]`).test(css))
+    ok(unused.length === 0,
+      `every themed role is referenced by a rule${unused.length ? ` — unused: ${unused.join(', ')}` : ''}`)
+    // and the light palette has not forked from slides and type
+    const SUITE: Record<string, string> = {
+      '--ink': '#1e2a3a', '--ink-2': '#31445c', '--chrome': '#f5f7fa',
+      '--chrome-2': '#eceff4', '--line': '#e3e8ef', '--muted': '#5b6472',
+      '--accent': '#f7a600', '--accent-ink': '#7a5200', '--blue': '#5b8def',
+    }
+    const wrong = Object.entries(SUITE)
+      .filter(([k, v]) => L.get(k) !== v)
+      .map(([k, v]) => `${k} is ${L.get(k) ?? 'missing'}, suite says ${v}`)
+    ok(wrong.length === 0,
+      `the light palette still matches the suite${wrong.length ? `\n        ${wrong.join('\n        ')}` : ''}`)
+  }
+
+  // ---- 2. no literal colour survives outside the tokens and the paper -----
+  // The token blocks are where a colour is allowed to be written down; the
+  // print sheet is the other place, because paper is white for reasons that
+  // have nothing to do with anybody's preference. Everywhere else a literal is
+  // a value that will not move when the theme does.
+  //
+  // The listed exceptions are surfaces that deliberately do not follow the
+  // chrome, each named rather than silently tolerated:
+  //   .sp-b-image img   a picture gets a white ground of its own in BOTH
+  //                     themes — a transparent-background diagram exported
+  //                     against white vanishes on a dark one
+  //   .sp-b-media video the letterbox behind a clip, black in both
+  //   .sp-dot           the fill is a generated hue set inline by collabui, so
+  //                     the initial on it is white on either ground
+  const HEX = /#[0-9a-fA-F]{3,8}\b/
+  const EXEMPT = /^(\.sp-b-image img|\.sp-b-media video|\.sp-dot)\b/
+  // everything up to the first token block, then everything after the last —
+  // simpler and more honest than trying to parse nesting: cut the three token
+  // blocks and both @media print blocks out, and audit what is left
+  let audit = bare
+  for (const cut of [/:root, :root\[data-theme="light"\][\s\S]*?\n}\n/,
+                     /@media screen and \(prefers-color-scheme: dark\)[\s\S]*?\n}\n/,
+                     /@media screen \{\s*\n  :root\[data-theme="dark"\][\s\S]*?\n}\n/]) {
+    const m = audit.match(cut)
+    ok(!!m, `the theme gate can find its token block (${String(cut).slice(0, 46)}…)`)
+    if (m) audit = audit.replace(cut, '\n')
+  }
+  audit = audit.replace(/@media print \{[\s\S]*?\n}\n/g, '\n')
+  const stray: string[] = []
+  for (const [, sel, decls] of audit.matchAll(/(^|\n)([^@{}\n][^{}]*)\{([^}]*)\}/g)) {
+    if (!HEX.test(decls)) continue
+    const s0 = sel.trim().split(',')[0].trim()
+    if (EXEMPT.test(s0)) continue
+    stray.push(`${s0} → ${decls.trim().replace(/\s+/g, ' ').slice(0, 60)}`)
+  }
+  ok(stray.length === 0,
+    `no literal colour outside the token blocks and the print sheet${stray.length ? `\n        ${stray.join('\n        ')}` : ''}`)
+
+  // ---- 3. the preference never reaches the document ----------------------
+  // startTheme() writes data-theme + color-scheme onto <html>. capturePristine
+  // clones the LIVE document and every save re-serializes that clone, so the
+  // call has to come AFTER it — otherwise a reader's theme ships inside every
+  // file they save and lands on whoever they send it to. Same ordering
+  // applyDirection already depends on for dir/lang.
+  const main = src('main.ts')
+  ok(main.indexOf('startTheme()') > main.indexOf('capturePristine()'),
+    'startTheme() runs after capturePristine(), so no theme reaches a saved file')
+  // and nothing writes it into the model
+  const app = src('appearance.ts')
+  ok(!/store|doc\.|commit/.test(app.replace(/\/\/[^\n]*/g, '')),
+    'the Appearance control never touches the store or the document')
+  ok(!/theme/i.test(src('model.ts').match(/export interface Theme[\s\S]*?\n}/)?.[0]
+       .replace(/^export interface Theme/, '') ?? '') ||
+     !/data-theme|bento-theme|prefers-color-scheme/.test(src('model.ts')),
+    'the FORMAT knows nothing about the interface theme')
+  // the still preview renders the AUTHOR's colours, in both themes
+  // the prose above it says exactly this, so audit the CODE, not the comment
+  const previewCode = src('preview.ts').replace(/^\s*\/\/[^\n]*$/gm, '')
+  ok(!/prefers-color-scheme|data-theme/.test(previewCode),
+    'the static file-manager preview has no theme of its own — it is the author’s document')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

@@ -629,6 +629,26 @@ export interface DashDoc {
   [extra: string]: unknown
 }
 
+/**
+ * The document with its collaboration SECRETS removed, for anything a person
+ * copies or hands to somebody else.
+ *
+ * The same fix bento/spaces needed, found by the same rig on the same day: a
+ * SyncSession is constructed at boot, so `collab` is minted for every workbook,
+ * and "Copy document JSON" put the read key, the write key and the owner key
+ * (which can also revoke) on the clipboard. bento/slides hit this first and
+ * wrote the rig — whose every path was hardcoded to slides/, which is why two
+ * more apps reintroduced it.
+ *
+ * Strips by REMOVING, so a private field added to the credentials later is
+ * covered without anyone remembering to act.
+ */
+export function docForExport(doc: DashDoc): DashDoc {
+  const { collab, ...rest } = doc as DashDoc & { collab?: unknown }
+  void collab
+  return rest as DashDoc
+}
+
 // --- Budgets. App constants, never kernel — nothing in kernel/src reads an
 // app's budgets, and these are dash's alone.
 //
