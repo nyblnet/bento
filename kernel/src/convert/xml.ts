@@ -29,8 +29,13 @@
 // exact failure mode this engine exists to avoid.
 
 export class XmlError extends Error {
-  constructor(message: string, public offset: number) {
+  // NOT a constructor parameter property: rigs run under plain node type
+  // stripping, which refuses non-erasable TS syntax — a parameter property
+  // here made every convert rig unrunnable.
+  offset: number
+  constructor(message: string, offset: number) {
     super(`${message} (at offset ${offset})`)
+    this.offset = offset
   }
 }
 
