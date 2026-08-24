@@ -969,6 +969,10 @@ export function startPresentation(
       from &&
       ((forward && doc.slides[toIdx]?.transition === 'morph') ||
         (!forward && doc.slides[fromIdx]?.transition === 'morph'))
+    MT.cur = { step: `${fromIdx}\u2192${toIdx}`, morphing: !!morphing, reduceMotion,
+      hosts: 0, cacheHit: 0, pairs: 0, updates: 0, p: 0, maxPx: 0 }
+    MT.history.push(MT.cur)
+    if (MT.history.length > 6) MT.history.shift()
     if (morphing) {
       if (!reduceMotion) {
         runMorph(doc, from!, to, fromIdx, toIdx)
@@ -992,6 +996,8 @@ export function startPresentation(
     // symbol-morph on the way out. symbolOffsets normalises by the element's
     // own box, so measuring mid-morph is safe.
     cacheSlideSymbols(doc, to, toIdx)
+    setTimeout(paintMorphReport, 200)
+    setTimeout(paintMorphReport, 3000)
     updateSpeaker()
   }) as any)
 
@@ -1453,6 +1459,71 @@ function modelByMorphKey(doc: BentoDoc, index: number): Map<string, SlideElement
  * source for where a symbol WAS is a measurement taken while it was visible.
  * Captured on slide entry; read on slide exit.
  */
+/**
+ * DEMO INSTRUMENTATION. Reports what the morph actually DECIDED, on screen,
+ * after the fact. A live sampler was tried first and lied in both directions:
+ * it read zero while tokens were moving, and it cannot tell "no tween" from
+ * "tween I cannot see". The number that settles that is `updates` — how many
+ * times the tween's onUpdate ran. Zero pairs means the tokens never paired;
+ * pairs with zero updates means the clock never ticked; updates in the
+ * hundreds means it animated and the problem is elsewhere entirely.
+ */
+const MT: any = { history: [] }
+;(globalThis as any).__morph = MT
+
+/** Draw the last few transitions' decisions into the overlay, after the fact. */
+function paintMorphReport() {
+  const overlay = document.querySelector('.bento-present-overlay')
+  if (!overlay) return
+  let box = overlay.querySelector<HTMLElement>('.bento-morph-report')
+  if (!box) {
+    box = document.createElement('div')
+    box.className = 'bento-morph-report'
+    box.style.cssText = [
+      'position:absolute', 'left:12px', 'bottom:12px', 'z-index:2147483647',
+      'font:12px/1.5 ui-monospace,SF Mono,Menlo,monospace',
+      'background:rgba(8,14,24,0.93)', 'color:#DCE3EC', 'padding:9px 12px',
+      'border:1px solid #3a4b63', 'border-radius:8px', 'pointer-events:none',
+      'white-space:pre', 'max-width:70vw',
+    ].join(';')
+    overlay.appendChild(box)
+  }
+  // Is the browser running animation frames AT ALL? A backgrounded, occluded
+  // or minimised tab has rAF throttled to zero, and every tween silently does
+  // nothing — tokens never receive a transform, so the new layout just appears.
+  // That is indistinguishable from a broken morph unless you measure the clock.
+  if (!MT.clockStarted) {
+    MT.clockStarted = true
+    MT.frames = 0
+    const beat = () => { MT.frames++; requestAnimationFrame(beat) }
+    requestAnimationFrame(beat)
+    MT.frames0 = 0
+    setInterval(() => { MT.fps = MT.frames - MT.frames0; MT.frames0 = MT.frames }, 1000)
+  }
+  const rows = MT.history.map((h: any) => {
+    let verdict: string
+    if (!h.morphing) verdict = 'not a morph step (fade/none)'
+    else if (h.reduceMotion) verdict = 'BLOCKED: reduced motion is ON'
+    else if (!h.hosts) verdict = 'BLOCKED: no code/formula host on this slide'
+    else if (!h.cacheHit) verdict = 'BLOCKED: previous slide was never measured'
+    else if (!h.pairs) verdict = 'BLOCKED: no token paired across the slides'
+    else if (h.updates <= 1) verdict = `BLOCKED: ${h.pairs} paired, but the clock never ticked (updates=${h.updates})`
+    else verdict = `ANIMATED: ${h.pairs} tokens, ${h.updates} frames, ended p=${h.p}`
+    return `${h.step}  ${verdict}`
+  })
+  const clock = MT.fps === undefined ? 'measuring…'
+    : MT.fps === 0 ? `DEAD (0 fps) — this tab is not running animation frames`
+      : `${MT.fps} fps`
+  box.textContent = [
+    'morph report (most recent last)',
+    ...rows,
+    '',
+    `animation clock   ${clock}`,
+    `tab visibility    ${document.visibilityState}`,
+    `reduced motion    ${matchMedia('(prefers-reduced-motion: reduce)').matches ? 'ON (from OS)' : 'off'}`,
+  ].join('\n')
+}
+
 const symCache = new Map<string, Map<string, { x: number; y: number }>>()
 const symKey = (idx: number, flipId: string) => `${idx}${flipId}`
 
@@ -1506,7 +1577,9 @@ function morphMathSymbols(
   a: SlideElement,
   b: SlideElement,
 ): boolean {
+  if (MT.cur) MT.cur.hosts++
   if (!fromAt?.size || !to.querySelector('[data-sym]')) return false
+  if (MT.cur) MT.cur.cacheHit++
   const toAt = symbolOffsets(to, b.w, b.h)
   if (!toAt.size) return false
 
@@ -1537,6 +1610,7 @@ function morphMathSymbols(
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue // sits still — don't tween it
     pairs.push({ node: sym, dx, dy })
   }
+  if (MT.cur) MT.cur.pairs += pairs.length
   if (!pairs.length) return false
 
   const state = { p: 0 }
@@ -1547,6 +1621,8 @@ function morphMathSymbols(
     ease: MORPH_EASE,
     onUpdate() {
       const p = state.p
+      if (MT.cur) { MT.cur.updates++; MT.cur.p = +p.toFixed(3)
+        MT.cur.maxPx = Math.max(MT.cur.maxPx, ...pairs.map((q) => Math.abs(q.dy) * (1 - p))) }
       // undo the box tween's scale so the symbol delta stays in model units
       const sx = (a.w + (b.w - a.w) * p) / Math.max(b.w, 0.01)
       const sy = (a.h + (b.h - a.h) * p) / Math.max(b.h, 0.01)
