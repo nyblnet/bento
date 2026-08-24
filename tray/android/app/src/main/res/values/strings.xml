@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Bento Tray</string>
+    <string name="app_name">bento/home</string>
     <string name="tagline">Documents that save themselves</string>
-    <string name="open_with_label">Edit with Bento Tray</string>
+    <string name="open_with_label">Edit with bento/home</string>
 
     <string name="open_document">Open…</string>
     <string name="new_document">New</string>
@@ -17,7 +17,7 @@
     <string name="err_download">That download could not be saved.</string>
     <string name="err_webview_old">This device’s WebView is too old to save documents. Update Android System WebView from the Play Store.</string>
 
-    <string name="notice_read_only">This document was opened read-only, so saves will ask where to put a copy. To edit it in place, open it from Bento Tray’s own “Open…” button instead.</string>
+    <string name="notice_read_only">This document was opened read-only, so saves will ask where to put a copy. To edit it in place, open it from bento/home’s own “Open…” button instead.</string>
 
     <string name="search_hint">Search documents and their contents</string>
     <string name="folders">Folders</string>

@@ -55,7 +55,7 @@
 
             <!-- Opening a document from a file manager, Drive, Gmail, a share
                  sheet. LSHandlerRank has no Android equivalent — the chooser
-                 ranks by user habit — so this simply adds Bento Tray to the
+                 ranks by user habit — so this simply adds bento/home to the
                  list of apps offered for an HTML file rather than claiming it.
 
                  An ACTION_VIEW grant is usually READ-ONLY, which is why this is

@@ -225,7 +225,7 @@ function buildMark() {
   GENERATED from tray/assets/tray-logo.svg by tray/assets/make-icons.mjs.
   Do not edit: run \`node tray/assets/make-icons.mjs\` instead.
 
-  The bento/tray mark, for use inside the app. Same source as the launcher
+  The bento/home mark, for use inside the app. Same source as the launcher
   icon, so the two cannot drift apart.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"

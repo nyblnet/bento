@@ -187,7 +187,7 @@ class DocumentsActivity : AppCompatActivity() {
      *
      * `bento` + a PEACH slash + the app: lowercase, one weight, the slash the
      * only thing carrying colour. `tray/webext` does it as
-     * `<b>bento<i>/</i>tray</b>` and the slides editor as
+     * `<b>bento<i>/</i>home</b>` and the slides editor as
      * `bento<span style="color:#FF9E8A">/</span>slides`; this is the same mark
      * in a SpannableString.
      *
@@ -197,7 +197,7 @@ class DocumentsActivity : AppCompatActivity() {
      * the same reasoning that keeps the launcher icon's palette fixed.
      */
     private fun wordmark(): CharSequence {
-        val text = "bento/tray"
+        val text = "bento/home"
         val slash = text.indexOf('/')
         return SpannableString(text).apply {
             setSpan(ForegroundColorSpan(getColor(R.color.tray_peach)),
