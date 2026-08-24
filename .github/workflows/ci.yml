@@ -965,6 +965,21 @@ jobs:
         # totals computed through the shipping code.
         run: node scripts/test-dash-starter.ts
 
+      - name: dash — the off switch for a live session
+        # A polish sweep drove the app at 880px with a session running:
+        # collab.on true, the room live on the relay, and the string "Stop
+        # sharing" NOWHERE in the document — sync.css hid the toggle outright
+        # below 900px to buy width in the top bar, and that toggle is the only
+        # control that stops sharing. The nearest thing left was About's
+        # "Offline mode", which also kills the signed update check: to stop one
+        # workbook being shared you had to switch off the app's networking.
+        # The rule is narrow: a control that REPORTS nothing may stand down at a
+        # narrow width (the 390px measurement behind those rules is real and
+        # still honoured), a control that STOPS something already happening may
+        # not. Checked as CSS text because dash-dom.ts is a parser, not a layout
+        # engine, and cannot say what a viewport width does to a declaration.
+        run: node scripts/test-dash-stopsharing.ts
+
       - name: Grid surface rig
         # The sheet as an OBJECT ON A SURFACE. An eight-row dataset used to
         # fill the top 180px of a 1440x900 window and leave the rest blank in
