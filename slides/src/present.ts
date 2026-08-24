@@ -42,10 +42,26 @@ export function startPresentation(
   revealEl.appendChild(slidesEl)
   overlay.appendChild(revealEl)
 
-  doc.slides.forEach((slide) => {
+  doc.slides.forEach((slide, i) => {
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
-    section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
+    //
+    // A slide that PRECEDES a morph must not fade OUT either. Reveal takes the
+    // OUTGOING slide's transition on exit, and the morph's moving elements live
+    // on the INCOMING slide — which is already at full opacity from the first
+    // frame. So the outgoing dissolve paints a ghost of the old slide straight
+    // over the animation: measured at 450ms, against a 600ms morph, which reads
+    // as "the change just appeared" rather than as motion.
+    // Reveal has no `none-out`: its stylesheet carries `~="slide-out"` style
+    // rules for slide/zoom/convex/concave (24 of them) but none for `none`, so
+    // a split value like `fade-in none-out` matches nothing and the deck-level
+    // default transition wins — measured, the ghost was still there. Only the
+    // exact value `none` cuts, so a slide handing off to a morph cuts in as
+    // well as out. That is the deliberate trade: an instant cut into the
+    // "before" frame costs less than a dissolve painted over the morph itself.
+    const morphNext = doc.slides[i + 1]?.transition === 'morph'
+    section.dataset.transition =
+      slide.transition === 'morph' || morphNext ? 'none' : slide.transition
     if (!inLinearFlow(slide)) section.dataset.bentoState = '1' // dimmed in overview
     const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
     // reveal slides start with only the default hover set visible
