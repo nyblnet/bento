@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Builds the store-uploadable package for tray/webext.
+// Builds the store-uploadable package for home/webext.
 //
-//   node scripts/pack-webext.mjs            → dist/bento-tray-<version>.zip
+//   node scripts/pack-webext.mjs            → dist/bento-home-<version>.zip
 //   node scripts/pack-webext.mjs --check    → validate only, write nothing (CI)
 //
 // WHY THIS EXISTS RATHER THAN `zip -r`.
 //
-// **It refuses to ship the wrong files.** `tray/webext/` contains things that
+// **It refuses to ship the wrong files.** `home/webext/` contains things that
 // must NOT reach a listing: `probe/` is four capability probes that open local
 // files and talk across origins — harmless to us, alarming to a reviewer, and
 // nothing to do with the product — and `README.md` is 200 lines of internal
@@ -36,7 +36,7 @@ import { deflateRawSync, crc32 } from 'node:zlib'
 import { createHash } from 'node:crypto'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SRC = join(root, 'tray/webext')
+const SRC = join(root, 'home/webext')
 const OUT = join(root, 'dist')
 
 /** What ships. Anything in the tree and not matched here is an error. */
@@ -73,7 +73,7 @@ const payload = []
 for (const rel of all) {
   if (EXCLUDE.some((r) => r.test(rel))) continue
   if (INCLUDE.some((r) => r.test(rel))) { payload.push(rel); continue }
-  fail(`unexpected file in tray/webext — add it to INCLUDE or EXCLUDE deliberately: ${rel}`)
+  fail(`unexpected file in home/webext — add it to INCLUDE or EXCLUDE deliberately: ${rel}`)
 }
 
 // ---- the icons must have transparent corners -------------------------------
@@ -308,7 +308,7 @@ function zip(files) {
 }
 
 // ---- report ----------------------------------------------------------------
-console.log(`tray/webext → ${payload.length} files`)
+console.log(`home/webext → ${payload.length} files`)
 for (const p of payload) console.log(`  ${p}`)
 
 if (problems.length) {
@@ -324,7 +324,7 @@ if (process.argv.includes('--check')) {
 
 const bytes = zip(payload.map((name) => ({ name, data: readFileSync(join(SRC, name)) })))
 mkdirSync(OUT, { recursive: true })
-const out = join(OUT, `bento-tray-${manifest.version}.zip`)
+const out = join(OUT, `bento-home-${manifest.version}.zip`)
 writeFileSync(out, bytes)
 console.log(`\nwrote ${relative(root, out)} — ${(bytes.length / 1024).toFixed(1)}KB`)
 console.log('deterministic: the same tree always produces these bytes')
@@ -348,5 +348,5 @@ const release = {
 }
 const relOut = join(OUT, 'tray-release.json')
 writeFileSync(relOut, `${JSON.stringify(release, null, 2)}\n`)
-console.log(`wrote ${relative(root, relOut)} — publish at /releases/tray/manifest.json`)
+console.log(`wrote ${relative(root, relOut)} — publish at /releases/home/manifest.json`)
 console.log(`sha256 ${digest}`)

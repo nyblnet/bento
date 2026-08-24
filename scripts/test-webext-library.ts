@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext document-library rig.
+// home/webext document-library rig.
 //
 //   node scripts/test-webext-library.ts
 //
@@ -21,7 +21,7 @@
 // hand-written fixtures shaped to pass.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '../tray/webext/src/library.js'
+import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '../home/webext/src/library.js'
 import { releaseSigner, sha256Hex } from './lib/release-sign.ts'
 
 let failures = 0
@@ -372,7 +372,7 @@ const signedDeps = (net: any, extra: Record<string, unknown> = {}) =>
   const made = await newDocument(dir as any, 'Untitled', signedDeps(fakeNet()))
   // UIKit's own de-duplicator produces "Untitled.bento 2.html" here, because it
   // reads `.bento.html` as the name "Untitled.bento" plus extension "html" and
-  // counts before the LAST extension only. tray/ios had to write its own for
+  // counts before the LAST extension only. home/ios had to write its own for
   // exactly this; so does this.
   ok(made.name === 'Untitled 2.bento.html',
     `a second document counts on the base name, not inside the extension (${made.name})`)

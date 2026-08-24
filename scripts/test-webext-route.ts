@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext route rig.
+// home/webext route rig.
 //
 //   node scripts/test-webext-route.ts
 //
@@ -18,7 +18,7 @@
 // recorded at the wrong location, and every document in it opening something
 // else.
 
-import { pathFromSender, locateIn, prefixFor } from '../tray/webext/src/route.js'
+import { pathFromSender, locateIn, prefixFor } from '../home/webext/src/route.js'
 
 let failures = 0
 let checks = 0

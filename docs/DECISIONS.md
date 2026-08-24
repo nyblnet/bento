@@ -14,6 +14,41 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-24 — The tree moved to `home/`, and the identifiers moved with it
+
+**Decision.** `tray/` is now `home/`, `applicationId` and
+`PRODUCT_BUNDLE_IDENTIFIER` are `page.bento.home`, and the update channel is
+`https://bento.page/releases/home/manifest.json`. This supersedes the scope
+paragraph and the bundle-identifier bullet in the rename entry above.
+
+**Why the earlier decision was right when it was made, and wrong to keep.** It
+was written while `tray/ios` (#315) and the Android work were both open in
+`tray/`; moving the tree under them would have turned two mergeable branches
+into conflict resolution. That was a real cost and a correct call at the time.
+Both landed, and the reason expired.
+
+The bundle-identifier bullet expired differently. Its argument was explicitly
+conditional — changing the id "creates a different one that cannot update the
+installed copy". There was no installed copy, no App Store Connect record and no
+Play listing. Those three facts are what made it free, and all three stop being
+true at first publish. **This was the last moment the identifiers could move.**
+
+**What did NOT move, and why the line is there.** Rename what the outside world
+sees or what becomes permanent on publish; leave what is internal and guarded:
+
+- **The IndexedDB name stays `bento-tray`** (`home/webext/src/db.js`).
+  `scripts/test-webext-background.ts` asserts it — a deliberate guard against
+  silently orphaning every stored grant. Nobody outside the extension ever sees
+  it, so renaming it would have meant editing a gate to let a cosmetic change
+  through.
+- **`bento-tray://` (iOS) and `.bento-tray.invalid` (Android)** stay. They are
+  per-document origins, settled in their own entries, and invisible.
+
+**The cost, stated.** Every path reference moved: 18 files outside the tree, 35
+inside it, plus the Kotlin package `page.bento.tray` → `page.bento.home` and the
+`tray-icon`/`tray-logo`/`ic_tray_mark` assets. That churn is what the original
+entry warned about, and it was the price of not carrying a dead name forever.
+
 ## 2026-08-25 — The tray hosts are called `bento/home`
 
 **Decision.** All three hosts are named **`bento/home`** — lowercase, with the
@@ -33,16 +68,19 @@ is four independent attempts failing the same way, which is the signal that the
 premise was wrong rather than the words: the front door does not need a
 qualifier, because it is not one thing among several.
 
-**Scope: the PRODUCT is renamed, not the tree.** Directories stay `tray/ios`,
-`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name. Renaming
-paths would churn every import, every doc link and every open branch for no
-reader's benefit — the name people see is not the name the repo files it under.
+**Scope: the PRODUCT is renamed, not the tree.** ~~Directories stay `tray/ios`,
+`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name.~~
+**SUPERSEDED 2026-08-24 — see the entry below.** The reasoning held while
+branches were open in `tray/`; once they had all landed and nothing was
+published, the tree moved to `home/` and the identifiers went with it.
 
 **What must NOT change, on any host:**
 
-- **The bundle identifier.** `page.bento.tray` on iOS, and its Android
-  counterpart. To the OS and the store it IS the app: changing it does not rename
-  the app, it creates a different one that cannot update the installed copy.
+- ~~**The bundle identifier.** `page.bento.tray` on iOS, and its Android
+  counterpart.~~ **SUPERSEDED 2026-08-24.** The argument was conditional on an
+  installed copy existing — "creates a different one that cannot update the
+  installed copy". There were none, and no store record, so it was still free.
+  It is `page.bento.home` now, and this is the last moment that was possible.
 - **`PRODUCT_NAME` / `CFBundleName`** (iOS). They name the executable and the
   bundle, not the label. `CFBundleDisplayName` is the label, and it is the only
   key the rename touches.

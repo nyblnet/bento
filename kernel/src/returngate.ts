@@ -76,8 +76,8 @@ export const isWebOrigin = (): boolean => {
  */
 export const HOST_AVAILABLE = {
   desktopExtension: true,
-  ios: false,   // tray/ios — PR open, no release
-  android: false, // tray/android — on main via #87, no release
+  ios: false,   // home/ios — PR open, no release
+  android: false, // home/android — on main via #87, no release
 } as const
 
 export type Platform = 'desktop' | 'ios' | 'android' | 'unknown'
