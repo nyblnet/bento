@@ -44,43 +44,43 @@ const slide = (elements, o = {}) => ({
 const heading = (s) => text(s, 96, 96, 1088, 60, { size: 34, weight: 700 })
 const sub = (s) => text(s, 96, 140, 1088, 40, { size: 19, color: MIST })
 
-// Edits chosen to MOVE code rather than add it: a reorder, an indent shift, a
-// rename. Growing the snippet is the case where a morph has least to show —
-// most tokens are new, and new tokens have nowhere to travel from.
-const V1 = `function publish(deck) {
-  const html = render(deck)
-  const signed = sign(html)
-  upload(signed)
-}`
-// reorder: sign before render — the two lines trade places
-const V2 = `function publish(deck) {
-  const signed = sign(html)
-  const html = render(deck)
-  upload(signed)
-}`
-// rename: html -> page, used three times
-const V3 = `function publish(deck) {
-  const signed = sign(page)
-  const page = render(deck)
-  upload(signed)
-}`
-// indent: the whole body shifts right and down inside a guard
-const V4 = `function publish(deck) {
-  if (deck.ready) {
-    const signed = sign(page)
-    const page = render(deck)
-    upload(signed)
-  }
+// TWO techniques, so they can be compared in one deck.
+//
+// A. FILL-IN (slides 2-5). The skeleton — signature, comments, closing brace —
+//    is identical on every slide, so nothing has to move and the new lines
+//    simply fade in where a comment already reserved the space. This is the
+//    technique in the PR's own demo video, and it is the calmer of the two.
+// B. TRAVEL (slides 7-8). A reorder, where the same tokens genuinely change
+//    place. Nothing fades; the code rearranges itself.
+
+const SKEL = (a = '', b = '', c = '') => `export async function netFetch(input) {
+  // refuse when the switch is on
+${a}
+  // register what is in flight
+${b}
+  // and always clean up
+${c}
 }`
 
-const PY = `def fib(n):
-    if n < 2:
-        return n
-    return fib(n - 1) + fib(n - 2)`
-const PY2 = `def fib(n):
-    if n < 2:
-        return n
-    return fib(n - 2) + fib(n - 1)`
+const F1 = SKEL()
+const F2 = SKEL('  if (offlineEnabled()) throw new OfflineError(input)')
+const F3 = SKEL('  if (offlineEnabled()) throw new OfflineError(input)',
+                '  const ac = new AbortController()\n  inFlight.add(ac)')
+const F4 = SKEL('  if (offlineEnabled()) throw new OfflineError(input)',
+                '  const ac = new AbortController()\n  inFlight.add(ac)',
+                '  try { return await fetch(input, { signal: ac.signal }) }\n  finally { inFlight.delete(ac) }')
+
+// B: the same four statements, two of them swapped.
+const T1 = `function publish(deck) {
+  const html = render(deck)
+  const signed = sign(html)
+  upload(signed)
+}`
+const T2 = `function publish(deck) {
+  const signed = sign(html)
+  const html = render(deck)
+  upload(signed)
+}`
 
 const DIFF = `--- a/kernel/src/net.ts
 +++ b/kernel/src/net.ts
@@ -102,32 +102,27 @@ const doc = {
   present: { controls: false },
   slides: [
     slide([
-      text('Code that moves', 96, 250, 1088, 90, { size: 76, weight: 700 }),
-      text('Tokens keep their identity across slides, so the code rearranges itself instead of cross-fading.',
-        96, 350, 900, 80, { size: 24, color: MIST }),
-      text('77 languages · 6.7 KB · no highlighter dependency', 96, 440, 900, 40, { size: 18, color: '#FF9E8A' }),
-    ], { transition: 'fade', name: 'Title', notes: 'Press → to walk the code. Each step inserts lines; the tokens that survive glide into place.' }),
+      text('Code that writes itself', 96, 240, 1088, 90, { size: 72, weight: 700 }),
+      text('Two techniques, one tokenizer. Press → to walk through.', 96, 340, 900, 50, { size: 24, color: MIST }),
+      text('77 languages · 6.7 KB · no highlighter dependency', 96, 410, 900, 40, { size: 18, color: '#FF9E8A' }),
+    ], { transition: 'fade', name: 'Title', notes: 'Slides 2-5 fill in. Slides 7-8 rearrange. Watch which one you prefer.' }),
 
-    slide([heading('Four statements'), sub('watch these, not the words — every step below only REARRANGES them'), code(V1)],
-      { name: 'v1', notes: 'Nothing is added from here on. Every change moves code that is already on screen.' }),
+    slide([heading('A. Fill in the blanks'), sub('the comments hold the shape — nothing below them will move'), code(F1)],
+      { transition: 'fade', name: 'skeleton', notes: 'The skeleton is identical on the next three slides. Only the gaps fill.' }),
+    slide([heading('A. Fill in the blanks'), sub('the guard arrives where the comment reserved room'), code(F2)],
+      { name: 'fill-1', notes: 'The new line fades in. Everything else is exactly where it was.' }),
+    slide([heading('A. Fill in the blanks'), sub('two more, under the second comment'), code(F3)],
+      { name: 'fill-2' }),
+    slide([heading('A. Fill in the blanks'), sub('and the cleanup, under the third'), code(F4)],
+      { name: 'fill-3', notes: 'Nothing has travelled in this whole sequence. That is the point.' }),
 
-    slide([heading('Swap two lines'), sub('sign moves up, render moves down — they trade places'), code(V2)],
-      { name: 'v2', notes: 'A pure reorder: no token is new, so every one of them travels.' }),
+    slide([heading('B. Or let it rearrange'), sub('same four statements — now two of them swap places'), code(T1)],
+      { transition: 'fade', name: 'travel-a', notes: 'Now the opposite: no new code at all, only movement.' }),
+    slide([heading('B. Or let it rearrange'), sub('sign moves up, render moves down'), code(T2)],
+      { name: 'travel-b', notes: 'Every token here is old. They trade places rather than redraw.' }),
 
-    slide([heading('Rename a variable'), sub('html becomes page, in both places at once'), code(V3)],
-      { name: 'v3', notes: 'Everything around the rename holds still, which is what makes the rename readable.' }),
-
-    slide([heading('Wrap it in a guard'), sub('the whole body indents — every line moves right and down together'), code(V4)],
-      { name: 'v4', notes: 'The biggest movement in the deck: three lines shift on both axes at once.' }),
-
-    slide([heading('Another language, same machine'), sub('python — same machine, different keyword table'), code(PY, 'py')],
-      { transition: 'fade', name: 'py1', notes: 'The tokenizer is shared; only the table changes.' }),
-
-    slide([heading('Another language, same machine'), sub('the two recursive calls swap places'), code(PY2, 'py')],
-      { name: 'py2' }),
-
-    slide([heading('And a patch reads as a patch'), sub('diff is a line format, so it gets its own eleven lines of handling'), code(DIFF, 'diff')],
-      { transition: 'fade', name: 'diff', notes: 'Added and removed lines are their own token classes.' }),
+    slide([heading('Diff reads as a diff'), sub('a line format, eleven lines of its own handling'), code(DIFF, 'diff')],
+      { transition: 'fade', name: 'diff' }),
   ],
   modified: new Date().toISOString(),
 }
