@@ -32,3 +32,7 @@ import './toc.ts';        // section numbering + table of contents
 // Anchors ride inline.ts `shift`, so they move exactly as marks and footnote
 // anchors do; nothing here can reach print (see the header of comments.ts).
 import './comments.ts';
+// tracked-changes review: next/previous, accept/reject at the caret, and the
+// All markup/No markup/Original display modes. track.ts is the engine; this
+// is what makes an eighty-change document usable.
+import './review.ts';

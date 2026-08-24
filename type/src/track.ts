@@ -189,3 +189,82 @@ export function resolveAll(doc: TypeDoc, accept: boolean): void {
     doc.body[i] = b;
   }
 }
+
+// ─────────────────────────────────────────────────────────────── navigation
+//
+// review.ts needs to answer two questions to put "Next", "Previous" and
+// "N of M" on screen: which change (if any) contains the caret, and which
+// change is next from wherever the caret happens to be. Both are pure — they
+// take a caret POSITION, never touch the DOM, and are exactly the numbers a
+// UI needs to move a real caret and scroll a real element into view. Kept
+// here, not in review.ts, for the same reason the rest of this file is here:
+// so scripts/test-type-track.ts can run them under plain node.
+
+/** The index of the change in `list` whose range contains (blockId, at); -1 if none. */
+export function changeAt(list: readonly Change[], blockId: string, at: number): number {
+  return list.findIndex(c => c.block === blockId && at >= c.mark.from && at <= c.mark.to);
+}
+
+/**
+ * Step to the next (`dir` 1) or previous (`dir` -1) tracked change from a
+ * caret at (blockId, at), in DOCUMENT ORDER, wrapping past either end.
+ *
+ * `changes()` walks doc.body in order and, within a block, its marks —
+ * already sorted by `from` because `normalize` ends every mutation that way —
+ * so `list` arrives in document order already, and "nearest" is simply the
+ * first (dir 1) or last (dir -1) candidate in array order. No second sort.
+ *
+ * The two directions are NOT mirror images, on purpose. Both must skip the
+ * change the caret is currently inside — reachable by direct selection or by
+ * a previous step — so "Next" twice in a row always advances. `blockId` and
+ * `at` are read straight off `editor.caret()` after a step, which reports the
+ * START of the just-selected range: so a change's own `from` never counts as
+ * "after" it (excluded with a strict `>`), while a change's `to` DOES count
+ * as "before" it when the caret sits at or past that same `to` (non-strict
+ * `<=`) — because `at` there is some OTHER change's `from`, or plain text,
+ * never this change's own start. Get the strictness backwards and either
+ * "Next" repeats the change you are already on, or "Previous" does.
+ *
+ * `blockId` may be null (no caret): dir 1 starts at the first change in the
+ * document, dir -1 at the last — so pressing "next" with nothing selected
+ * lands on the first change instead of nowhere.
+ */
+export function stepChange(doc: TypeDoc, list: readonly Change[], blockId: string | null,
+                           at: number, dir: 1 | -1): number | null {
+  if (!list.length) return null;
+  if (blockId === null) return dir === 1 ? 0 : list.length - 1;
+  const order = new Map(doc.body.map((b, i) => [b.id, i]));
+  const here = order.get(blockId) ?? Number.MAX_SAFE_INTEGER;
+  const candidates: number[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    const ci = order.get(c.block) ?? Number.MAX_SAFE_INTEGER;
+    const hit = dir === 1
+      ? (ci > here || (ci === here && c.mark.from > at))
+      : (ci < here || (ci === here && c.mark.to <= at));
+    if (hit) candidates.push(i);
+  }
+  if (candidates.length) return dir === 1 ? candidates[0] : candidates[candidates.length - 1];
+  return dir === 1 ? 0 : list.length - 1;   // wrap
+}
+
+// ───────────────────────────────────────────────────────────── display mode
+//
+// How a reviewer chooses to SEE a tracked document — every mark shown, shown
+// as if every change were accepted, or shown as if every change were
+// rejected. A VIEWER preference, never the document's: two people opening the
+// same contract may want different views of it right now, and neither
+// answer belongs in bytes they both sign. Exactly the reasoning
+// commentsHidden() in comments.ts already follows, for the same reason.
+//
+// Kept as a closed, parseable string here — pure, no localStorage, no DOM —
+// so the one thing that must be provably true (choosing a view cannot alter
+// the document) is checkable by the node rig. review.ts owns the localStorage
+// key and the CSS class that actually hides anything; this is just its
+// vocabulary, validated.
+
+export type TrackView = 'all' | 'final' | 'original';
+
+/** A stored value, made safe. Anything unrecognised (or absent) is 'all'. */
+export const parseTrackView = (v: string | null | undefined): TrackView =>
+  v === 'final' || v === 'original' ? v : 'all';
