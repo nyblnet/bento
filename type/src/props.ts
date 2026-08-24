@@ -28,6 +28,12 @@ import { MAX_TABLE_COLS, type Block, type BlockKind } from './model.ts';
 import { PAPER, openPageSetup, withSize, withOrientation, type SizeId } from './layout.ts';
 import { isHeading, EXCLUDE_ROLE, sectionSettings, setNumbered, toggleExclude } from './toc.ts';
 import { ensureAuthor } from './comments.ts';
+import { stylesSection } from './docstyles.ts';
+// docstyles.ts's own panel styling — imported here rather than there so the
+// node test rigs, which load model.ts → comments.ts → render.ts → docstyles.ts
+// with no bundler in front of them, never meet a bare `.css` import. props.ts
+// is UI-only and reached only through features.ts, which no rig imports.
+import './docstyles.css';
 
 // ─────────────────────────────────────────────────────────────── small parts
 
@@ -108,7 +114,12 @@ function current(ctx: FeatureContext): Block | undefined {
   return c ? ctx.store.block(c.id) : undefined;
 }
 
-const FACES: Array<[string, string]> = [
+/**
+ * Faces that resolve everywhere without shipping a font file. Exported so
+ * docstyles.ts's typeface picker offers the SAME list rather than a second
+ * hand-copied one that drifts from this the first time someone edits either.
+ */
+export const FACES: Array<[string, string]> = [
   ['"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif', 'Palatino (serif)'],
   ['Georgia, "Times New Roman", Times, serif', 'Georgia (serif)'],
   ['"Times New Roman", Times, serif', 'Times New Roman'],
@@ -452,6 +463,11 @@ function build(host: HTMLElement, ctx: FeatureContext): void {
   // first, and the contextual sections appear beneath it rather than pushing it
   // around as the caret moves.
   textSection(host, ctx, b);
+  // Named styles — a SEPARATE section from Text's "Style" dropdown above: that
+  // one picks the block's KIND (which tag it is); this one picks how that kind
+  // LOOKS, which used to be a build constant (styles.css) and is now a
+  // document property. docstyles.ts no-ops for kinds with no default style.
+  stylesSection(host, ctx, b);
   if (b.kind === 'image') imageSection(host, ctx, b);
   if (b.kind === 'cell') tableSection(host, ctx, b);
   if (b.kind === 'caption') captionSection(host, ctx, b);

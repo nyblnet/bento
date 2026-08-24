@@ -12,6 +12,7 @@ import { toHtml, fromDom, type Mark } from './inline.ts';
 import { isList, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import { captionPrefixHtml, isXrefAtom, refAtoms, readXrefs, numberXrefs } from './xref.ts';
 import { blockStyle } from './layout.ts';
+import { activeStyleId, ensureStyleSheet } from './docstyles.ts';
 import { citeInject, isCiteAtom, mergeInject, paintCitations, readCiteAtoms } from './cite.ts';
 import { displayMathHtml, inlineMathHtml, isMathMark } from './math.ts';
 import { renderEmbed } from './embed.ts';
@@ -198,7 +199,20 @@ export function renderImage(b: Block): HTMLElement {
   return fig;
 }
 
-export function renderBlock(b: Block): HTMLElement {
+/**
+ * The document `renderBlock` styles a single block against, when the caller
+ * does not pass one explicitly.
+ *
+ * `renderBody` sets it on every pass, which is the common path; the one
+ * caller that renders a lone block WITHOUT the document in hand
+ * (editor.ts's live re-render of the block just typed in) still resolves
+ * named styles correctly because renderBody always ran at least once first —
+ * module state rather than a signature change on a function this module does
+ * not own the only caller of, mirroring layout.ts's own `painting` flag.
+ */
+let lastDoc: TypeDoc | undefined;
+
+export function renderBlock(b: Block, doc: TypeDoc | undefined = lastDoc): HTMLElement {
   if (b.kind === 'image') return renderImage(b);
   if (b.kind === 'embed') return renderEmbed(b);
   if (b.kind === 'math') {
@@ -217,8 +231,21 @@ export function renderBlock(b: Block): HTMLElement {
   const el = document.createElement(TAG[b.kind]);
   el.dataset.id = b.id;
   el.dataset.kind = b.kind;
+  // A named style's typography arrives through a STYLESHEET keyed by this
+  // attribute (docstyles.ts ensureStyleSheet/styleSheetCss), never through
+  // this element's `style` attribute — that one belongs to layout.ts's
+  // `blockStyle` alone below, and layout.ts repaints it independently (its
+  // own MutationObserver) whenever the paper's children change, which a
+  // render always causes. Two mechanisms writing the SAME attribute would
+  // have the second one silently erase the first the next time that
+  // observer fired; the split is what keeps them from ever colliding.
+  const sid = doc ? activeStyleId(doc, b) : undefined;
+  if (sid) el.dataset.styleId = sid;
   // The paragraph's OWN properties only — the document's defaults live on the
-  // paper, not on ten thousand copies of themselves.
+  // paper, not on ten thousand copies of themselves. This is an INLINE style,
+  // so it beats the stylesheet rule above for any property both set: a
+  // block's own align/sb/sa/lh/ind wins over its named style, for free, by
+  // CSS specificity — no coordination between the two mechanisms required.
   const st = blockStyle(b);
   if (st) el.setAttribute('style', st);
   el.innerHTML = blockHtml(b);
@@ -264,6 +291,8 @@ export function renderTable(rows: Block[][], head: boolean): HTMLElement {
 }
 
 export function renderBody(doc: TypeDoc, host: HTMLElement): void {
+  lastDoc = doc;
+  ensureStyleSheet(doc);
   const frag = document.createDocumentFragment();
   let cursor: Node = frag;
   for (const tok of groupBlocks(doc.body)) {
@@ -276,7 +305,7 @@ export function renderBody(doc: TypeDoc, host: HTMLElement): void {
     } else if (tok.t === 'table') {
       cursor.appendChild(renderTable(tok.rows, tok.head));
     } else {
-      cursor.appendChild(renderBlock(tok.block));
+      cursor.appendChild(renderBlock(tok.block, doc));
     }
   }
   host.replaceChildren(frag);
