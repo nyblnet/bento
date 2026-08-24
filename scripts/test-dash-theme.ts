@@ -78,9 +78,22 @@ const SET_ELSEWHERE: Record<string, string> = {
   '--tray-safe-left': 'bento/tray’s WKWebView host',
 }
 
+/**
+ * COMMENTS ARE STRIPPED FIRST, and that is not tidiness.
+ *
+ * The pattern below is `--name:` preceded by whitespace, which a sentence
+ * satisfies as readily as a declaration does. Writing `See --desk: an unbounded
+ * sheet …` in a comment therefore DECLARED --desk as far as this rig was
+ * concerned, and check 1 — the whole reason this file exists, the one that
+ * caught two rules that had never drawn anything — went quiet for that token.
+ * MEASURED: with the declaration deleted and only the prose left, the rig was
+ * green. A guard a comment can switch off is worse than no guard, because it
+ * is still reported as a pass.
+ */
 const declared = new Set<string>()
 for (const text of Object.values(css)) {
-  for (const m of text.matchAll(/(^|[;{\s])(--[a-z0-9-]+)\s*:/g)) declared.add(m[2])
+  const body = text.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const m of body.matchAll(/(^|[;{\s])(--[a-z0-9-]+)\s*:/g)) declared.add(m[2])
 }
 
 console.log('every var() a dash stylesheet reads is declared by one of them')

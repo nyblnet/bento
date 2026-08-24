@@ -201,6 +201,37 @@
      the page, the header band slightly above the lines. Ruling a dark sheet
      with a darker line would work, but every scrolled seam then disappears
      into the background the moment a shadow lands on it. */
+  /* ————— THE DESK: the ground a DATASET sits on —————
+     A dataset has exactly the rows it has, so its grid ends — and when the
+     ground under it was the same colour as its paper, "the table ended here"
+     and "the app stopped drawing" looked identical. At 1440x900 an eight-row
+     workbook filled the top 180px and left two thirds of the window blank
+     white, which is the single strongest unfinished signal the app had.
+
+     So the sheet is an OBJECT and this is what it lies on. It is NOT --panel:
+     the chrome bands (top bar, status bar) are furniture the object sits
+     between, and a desk the same colour as them would make the object float in
+     chrome rather than rest on a surface. ONE RULE decides both values — the
+     desk is one step further from the paper than the chrome band is, in
+     whichever direction "further" runs on that ground. MEASURED against --bg:
+     1.13:1 on the light sheet and 1.18:1 on the dark one, with --panel at
+     1.03:1 and 1.09:1 in between, so the three grounds are monotone on both.
+     The dark half is LIGHTER than the sheet and the light half is DARKER, the
+     same inversion --grid-line and --panel already make and for the same
+     reason: at #0e1319 there is no room left below the paper (a darker desk
+     came out at 1.04:1, invisible).
+
+     The SPREADSHEET kind never shows it. Its extent is a frontier rather than
+     a fact — it grows with the cursor and the window, and reports its size to
+     ARIA as unknown — so there is no edge to draw and a desk would claim a
+     bound the kind does not have. `.dg-canvas .dg-scroll` puts --bg back. That
+     the two kinds look different here is the product's argument made visible,
+     not an inconsistency.
+
+     Text on it: --muted is 5.28:1 (light) and 5.97:1 (dark), --ink 12.81:1 and
+     11.69:1 — the empty-state note is the only thing that ever lands here. */
+  --desk: light-dark(#eef1f6, #1b232d);
+
   --grid-line: light-dark(#edf0f4, #212a35);
   --grid-head: light-dark(#fbfcfd, #151c25); /* the header/gutter band */
   --grid-head-ink: light-dark(#4a5568, #a9b6c7);
@@ -815,14 +846,101 @@ html, body {
   .dx-body { flex-direction: column; }
   .dx-chart { flex: 0 0 45%; border-left: 0; border-top: 1px solid var(--line); }
 }
-.dg-scroll { position: absolute; inset: 0; overflow: auto; }
+/* ————— THE SHEET IS AN OBJECT ON A SURFACE —————
+   The scroller is the DESK; `.dg-table` is the thing lying on it. Everything
+   below is one idea: a dataset's extent is a FACT about the file, so it can be
+   drawn, and drawing it is what stops a short sheet from reading as a render
+   that gave up. Excel says the same thing with a ListObject's borders; Notion
+   and Airtable — both table-model, like the dataset kind — say it with a
+   bounded table on a plain ground.
+
+   WHAT WAS REJECTED, because each is the old lie in new paint:
+     • banding, or a lattice that fades out below the data. Any ruled or ruled-
+       ish treatment past the last row draws rows that are not there, which is
+       exactly what `frontierRow` and Grid.paintEmptyGrid were written to stop.
+       The desk must be PLAIN — flat colour, no gradient, no repeat.
+     • a card with a radius and a drop shadow. The corners would need
+       `overflow: hidden` on `.dg-table`, and that turns it into the nearest
+       scrollport, which is what `position: sticky` on the header and the
+       totals row resolves against — a rounded sheet is a sheet whose header
+       does not stick.
+     • filler rows past the data, which is the thing this whole area exists to
+       refuse. See the `frontierRow` note in grid.ts.
+
+   WHERE THE EDGES ARE, and why only two of them are drawn. A grid's origin is
+   its top-left corner, and the gutter and the heading strip are pinned there
+   the way they are in every spreadsheet ever shipped; there is no desk to the
+   left of column A or above row 1. The RIGHT and the BOTTOM are where a
+   dataset's extent is a claim, and those are the two edges it now draws. */
+.dg-scroll { position: absolute; inset: 0; overflow: auto; background: var(--desk); }
 /* 12.5px, not the 14px the rest of the UI runs at. A grid is read a hundred
    cells at a time and a spreadsheet's type is always a step smaller than its
    chrome's — Excel's default is 11pt against a 12pt UI, Sheets' 10pt against
    13px. At 14px in a 30px row the type filled the row and the grid read as
    prose; at 12.5 in a 20px row the figures have air on both sides, which is
    what makes a dense grid legible rather than merely small. */
-.dg-table { position: relative; min-width: max-content; font-size: 12.5px; }
+.dg-table {
+  position: relative;
+  /* SHRINK-WRAPPED, and this line is most of the fix. As a plain block the
+     table stretched to the window and its background bled to both edges, so
+     the columns stopped in the middle of a white field with no edge anywhere.
+     At max-content it ends where its last column ends and the desk begins. */
+  width: max-content;
+  min-width: max-content;
+  font-size: 12.5px;
+  /* the paper, stated: the scroller behind it is no longer the same colour */
+  background: var(--bg);
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  /* Room under the object when it is TALLER than the window, so a full sheet
+     still ends on desk rather than against the status bar. */
+  margin-bottom: 28px;
+}
+/* THE SPREADSHEET KIND KEEPS ITS FULL BLEED, deliberately. See the --desk note
+   in the palette: an unbounded sheet has no extent to draw, and a border round
+   a frontier would be a bound the kind does not have. Ruling to the window edge
+   is honest here and is what Excel and Sheets do. */
+.dg-canvas .dg-scroll { background: var(--bg); }
+.dg-canvas .dg-table {
+  width: auto;
+  border-right: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+/* ————— the empty states —————
+   Three screens that cannot explain themselves by showing their contents: a
+   dataset with no rows, a dataset with no columns, and a new spreadsheet. Each
+   says which kind it is and what the next gesture is (grid.ts `noteFor`).
+
+   Two placements, because the two kinds have different room. The dataset's
+   note is in FLOW under `.dg-table`, so it lands on the desk just below the
+   object — the desk says the table ended, the note says why there is so little
+   of it. The spreadsheet's FLOATS over the lattice near A1, because that kind
+   has no desk and its content box is a thousand rows tall; `pointer-events:
+   none` keeps it out of the way of the cells it is sitting on, which stay
+   clickable underneath it. */
+.dg-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 52ch;
+  padding: 20px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+/* `display: flex` above out-ranks the user-agent `[hidden] { display: none }`,
+   so the attribute needs saying again here or a hidden note is a visible one. */
+.dg-note[hidden] { display: none; }
+.dg-note b { color: var(--ink); font-size: var(--fs-ui); font-weight: 600; }
+.dg-note-float {
+  position: absolute;
+  top: calc(var(--row-h) * 3);
+  left: 64px;
+  padding: 0;
+  pointer-events: none;
+}
 /* the sizer is the ONLY absolutely-positioned region: header and totals stay in
    flow so `position: sticky` resolves against the scroller */
 .dg-sizer { position: relative; }

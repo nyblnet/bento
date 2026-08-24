@@ -751,6 +751,8 @@ export class Grid {
   private foot!: HTMLElement
   /** `.dg-table` — the element carrying `role="grid"` and the aria counts. */
   private gridEl!: HTMLElement
+  /** `.dg-note` — the empty state, a sibling of the grid. See `paintNote`. */
+  private noteEl!: HTMLElement
   /** the visually-hidden span the grid is `aria-describedby` */
   private descEl!: HTMLElement
 
@@ -784,7 +786,23 @@ export class Grid {
       '<div class="dg-head-row" role="row" aria-rowindex="1"></div>' +
       '<div class="dg-sizer" role="rowgroup"></div>' +
       '<div class="dg-foot-row" role="row"></div>' +
-      '</div></div>' +
+      '</div>' +
+      // THE EMPTY STATE lives OUTSIDE `.dg-table`, and that placement is the
+      // whole of its correctness. `.dg-table` carries `role="grid"` and the
+      // aria row/column counts; a paragraph inside it is a child of a grid
+      // that is neither a row nor a rowgroup, which is exactly the shape
+      // assistive technology drops on the floor. Out here it is ordinary prose
+      // in the scroller, beside the object rather than inside it — which is
+      // also where it belongs visually, because on the dataset kind it sits on
+      // the DESK below the table's bottom edge.
+      //
+      // ONE node, created once, updated in place. It must never be built per
+      // row: the grid windows ~46 rows of a 5,000-row sheet and anything that
+      // scales with the sheet rather than with the window is the virtualiser
+      // undone. `paintNote` is O(1) and writes nothing when the state has not
+      // changed.
+      '<div class="dg-note" hidden></div>' +
+      '</div>' +
       `<span class="dg-a11y" id="${descId}"></span>`
     // One number, written where the stylesheet can see it. See ROW_H.
     this.host.style.setProperty('--row-h', `${ROW_H}px`)
@@ -793,6 +811,7 @@ export class Grid {
     this.head = this.host.querySelector('.dg-head-row')!
     this.foot = this.host.querySelector('.dg-foot-row')!
     this.gridEl = this.host.querySelector('.dg-table')!
+    this.noteEl = this.host.querySelector('.dg-note')!
     this.descEl = this.host.querySelector('.dg-a11y')!
     this.scroller.addEventListener('scroll', () => this.paint(), { passive: true })
     // A WINDOW THAT CHANGES SIZE IS A DIFFERENT WINDOW, and until this the grid
@@ -1410,6 +1429,7 @@ export class Grid {
     if (s.name) this.gridEl.setAttribute('aria-label', s.name)
     if (this.store.readOnly) this.gridEl.setAttribute('aria-readonly', 'true')
     else this.gridEl.removeAttribute('aria-readonly')
+    this.paintNote()
     this.wire()
     this.restoreFocus(hadFocus)
     // AFTER wire(), so anything decorating cells finds the real nodes. The
@@ -1567,6 +1587,86 @@ export class Grid {
     this.table.parentElement!.style.backgroundSize =
       `${x}px ${contentH}px, ${x}px ${headH + contentH}px`
     this.table.parentElement!.style.backgroundRepeat = 'no-repeat, no-repeat'
+  }
+
+  // --- the empty states ------------------------------------------------------
+  //
+  // A SHEET WITH NOTHING IN IT IS THE ONE SCREEN THAT CANNOT EXPLAIN ITSELF by
+  // showing its contents, and dash had three of them that each showed a
+  // rectangle of nothing: a dataset with no rows (a heading strip and a `+`),
+  // a dataset with no columns (a corner box and a `+`, and no appender at all
+  // because `frontierRow` correctly refuses one when there is nothing to type
+  // into), and a brand-new spreadsheet (a lattice, and no reason to believe
+  // clicking it would do anything).
+  //
+  // Each note says WHICH KIND you are in and WHAT THE NEXT GESTURE IS, because
+  // those are the two facts a reader is missing and they are the two facts that
+  // differ between the kinds. This is the cheapest place in the app to teach
+  // the column/cell distinction: it is the only moment the reader has nothing
+  // else to look at.
+  //
+  // NOT SHOWN IN A READ-ONLY WORKBOOK — or rather, shown without its
+  // invitation. "Type here to add one" in a file that refuses every keystroke
+  // is the same lie the frontier rules already refuse to tell (see
+  // `frontierRow`: no appender in a read-only workbook), so the heading stays
+  // and the gesture is replaced by the reason there is not one.
+
+  /** What this sheet has to say when it is empty, or null when it is not. */
+  private noteFor(): { head: string; body: string } | null {
+    const ro = this.store.readOnly
+    const cv = this.canvas
+    if (cv) {
+      // O(1): the question is "is there ANY cell", never "how many". A
+      // spreadsheet is sparse and may be one entry or a hundred thousand.
+      for (const _k in cv.cells) return null
+      return {
+        head: t('This sheet is empty'),
+        body: ro
+          ? t('This workbook is read-only, so there is nothing to add here.')
+          : t('Click any cell and type. A spreadsheet is typed by cell and its grid does not end, so =SUM( works anywhere.'),
+      }
+    }
+    const s = this.sheet
+    if (cols(s).length === 0) {
+      return {
+        head: t('This dataset has no columns'),
+        body: ro
+          ? t('This workbook is read-only, so there is nothing to add here.')
+          : t('A dataset is typed by column: each one has a name and a type. Add the first with the + at the end of the heading row.'),
+      }
+    }
+    if (rowCount(s) > 0) return null
+    return {
+      head: t('This dataset has no rows'),
+      body: ro
+        ? t('This workbook is read-only, so there is nothing to add here.')
+        : t('Type in the row marked + above to write the first one, or paste a block of rows into it.'),
+    }
+  }
+
+  /**
+   * Put the empty state on screen, or take it off. Called once per paint.
+   *
+   * The DATASET's note is in NORMAL FLOW under `.dg-table`, so it lands on the
+   * desk immediately below the object's bottom edge — the desk is what says
+   * "the table ended here" and the note is what says why there is so little of
+   * it. The SPREADSHEET's floats over the lattice near A1 instead
+   * (`.dg-note-float`, pointer-events: none), because that kind has no desk to
+   * put anything on: its grid runs to the window edge by design and a note
+   * below the content would be a thousand rows down.
+   */
+  private paintNote(): void {
+    const el = this.noteEl
+    const n = this.noteFor()
+    if (!n) {
+      if (!el.hidden) { el.hidden = true; el.innerHTML = '' }
+      return
+    }
+    const cls = this.canvas ? 'dg-note dg-note-float' : 'dg-note'
+    const html = `<b>${esc(n.head)}</b><span>${esc(n.body)}</span>`
+    if (el.className !== cls) el.className = cls
+    if (el.innerHTML !== html) el.innerHTML = html
+    el.hidden = false
   }
 
   /** Value at a VISIBLE position — what the clipboard and the status bar read. */
@@ -2562,6 +2662,7 @@ export class Grid {
     if (s.name) this.gridEl.setAttribute('aria-label', s.name)
     if (this.store.readOnly) this.gridEl.setAttribute('aria-readonly', 'true')
     else this.gridEl.removeAttribute('aria-readonly')
+    this.paintNote()
     this.wireCanvas(s, rs)
     this.restoreFocus(hadFocus)
     this.onPaint?.()

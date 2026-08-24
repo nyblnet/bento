@@ -948,6 +948,24 @@ jobs:
         # totals computed through the shipping code.
         run: node scripts/test-dash-starter.ts
 
+      - name: Grid surface rig
+        # The sheet as an OBJECT ON A SURFACE. An eight-row dataset used to
+        # fill the top 180px of a 1440x900 window and leave the rest blank in
+        # the same white as the sheet, so "the table ended here" and "the app
+        # stopped drawing" looked identical — the strongest unfinished signal
+        # the app had. The fix is not more rows (test-dash-frontier.ts owns
+        # that decision and is unchanged): it is a bounded table on a --desk
+        # ground the spreadsheet kind deliberately does not get, plus the three
+        # empty states.
+        #
+        # Half of it is CSS, which has no type system and no runtime errors, so
+        # those checks read the stylesheet as text and MEASURE the palette
+        # rather than merely requiring tokens to be present — a desk 1.02:1
+        # from the paper satisfies every structural check and renders as the
+        # defect. The other half mounts a real Grid and asserts the note is one
+        # node that survives 5,000 rows.
+        run: node scripts/test-dash-surface.ts
+
       - name: Data validation rig
         # In-cell dropdowns and typed entry rules — Excel's Data Validation,
         # which is NOT dash's validate.ts (that one asks whether a workbook
