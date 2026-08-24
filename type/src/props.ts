@@ -194,6 +194,16 @@ function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
   (sizeField as HTMLInputElement).disabled = !hasRange;
   row(body, t('Size (px)'), sizeField);
 
+  // A disabled control that does not say why it is disabled is indistinguishable
+  // from a broken one — and this pair sits at the TOP of the panel, so it is the
+  // first thing reached for after clicking into a paragraph. Reported as "the
+  // dropdowns are not working", which is exactly right from the outside.
+  if (!hasRange) {
+    const why = el('p', 't-note');
+    why.textContent = t('Select some text to change its typeface or size. The document default is below.');
+    body.appendChild(why);
+  }
+
   // Whether THIS heading is numbered is a property of the heading, so it is a
   // checkbox here rather than the ⋯ entry it used to be — an action named "Do
   // not number this heading" gave no way to see the current state, only a way
@@ -374,7 +384,10 @@ function documentSection(host: HTMLElement, ctx: FeatureContext): void {
 
   // ---- typeface. A DOCUMENT property: a contract is typeset, and the person
   // who wrote it chose how it reads. The theme follows the reader; type does not.
-  row(body, t('Typeface'), select(
+  // "Default typeface", not "Typeface". The Text section above has a Typeface
+  // row too, and two identically-labelled controls — one of them inert unless
+  // text is selected — is how a working panel reads as a broken one.
+  row(body, t('Default typeface'), select(
     FACES.map(([v, l]) => [v, l] as [string, string]),
     doc.type?.family ?? FACES[0][0],
     v => {
@@ -382,7 +395,7 @@ function documentSection(host: HTMLElement, ctx: FeatureContext): void {
       ctx.refresh();
     },
   ));
-  row(body, t('Size (px)'), numberField(doc.type?.size ?? 17, '17', v => {
+  row(body, t('Default size (px)'), numberField(doc.type?.size ?? 17, '17', v => {
     ctx.store.commit(d => {
       if (v === undefined || !(v >= 6 && v <= 96)) delete d.type?.size;
       else d.type = { ...d.type, size: v };
