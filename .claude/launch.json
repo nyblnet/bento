@@ -167,6 +167,21 @@
         "--strictPort"
       ],
       "port": 5191
+    },
+    {
+      "name": "serve-type-built",
+      "comment": "LOOPBACK ONLY, see serve-built. Serves the shippable single-file build for collab/dormancy verification.",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5189",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "type/dist-single"
+      ],
+      "port": 5189
     }
   ]
 }

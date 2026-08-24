@@ -1065,3 +1065,8 @@ for (const f of readyFns()) f(featureCtx);
 // paper, and the last of those is only safe after the whole module has run.
 buildTracked();
 store.on(() => buildTracked());
+
+// Live collaboration (bento-sync) — dormant unless the doc carries collab
+// creds or the user opts in via the Share button; see src/collab.ts.
+import { initCollab } from './collab.ts';
+initCollab(store, editor);

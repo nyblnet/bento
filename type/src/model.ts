@@ -268,6 +268,41 @@ export interface TypeDoc {
   template?: boolean;
   /** volatile, never signed */
   modified?: string;
+  /**
+   * Live-collaboration credentials (bento-sync), minted AT CREATION so any
+   * copy of the file can join once sharing is turned on. `room` is the relay
+   * WebSocket URL (a random id committed to the owner pubkey — never derived
+   * from docId), `key` the base64url AES-GCM room read key. `on` gates
+   * auto-join: absent = true. `sync` is the saved CRDT state, stamped at
+   * save-time on shared documents, so an offline-edited copy rejoins as a
+   * true fork. See docs/collab-design.md and type/src/sync/session.ts.
+   *
+   * type mints v2 (fine-grained access) credentials ONLY — there is no
+   * pre-v2 history to carry forward, unlike bento/slides. The room commits to
+   * an OWNER pubkey; a shared copy carries an owner-signed INVITE instead of
+   * `ownerPriv`, and each device mints its own member identity (kept in
+   * localStorage, never in the file).
+   */
+  collab?: {
+    room: string;
+    key: string;
+    on?: boolean;
+    sync?: import('./sync/crdt.ts').SyncStateJSON;
+    v?: number;
+    owner?: string;
+    ownerPriv?: string;
+    /** 'reader' = this copy is a live viewer: receives updates, never sends. */
+    role?: 'writer' | 'reader';
+    invite?: {
+      pub: string;
+      priv: string;
+      role: 'writer' | 'commenter';
+      /** unix ms expiry; 0/absent = no expiry */
+      exp?: number;
+      /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
+      sig: string;
+    };
+  };
   /** unknown fields are PRESERVED — format additivity (PLATFORM §3) */
   [extra: string]: unknown;
 }
