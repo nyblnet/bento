@@ -190,6 +190,17 @@ const label = (id: string, html: string, tip: string, text = '') => {
   b.title = tip;
 };
 
+// LABEL RULE — every bar control gets a `title`, full stop (an icon with no
+// tooltip names nothing). A VISIBLE text label is rarer, and earned only one
+// of two ways: (1) the control's face reports STATE, not just an action — Save/
+// Saved and the theme cycle both change what they say depending on what
+// happens next, and an icon alone can't say that; or (2) the icon stands for a
+// whole HIDDEN CATEGORY rather than one verb — Insert's "+" could mean a
+// picture, a table, a citation… nothing short of a word says which. Every
+// other control (sidebar, props, link, comment, find, undo, redo, ⋯) is one
+// icon-legible verb with a universally-read glyph, so it stays icon-only and
+// leans on its tooltip. Breaking this into "some buttons happen to have text"
+// is how the bar drifted into its current mix with no rule at all.
 label('sidebar', ICONS.panelLeft, t('Outline — show or hide the document map'));
 label('props', ICONS.panelRight, t('Format — show or hide the properties panel'));
 // Strikethrough and code leave the BAR for the ⋯ menu: of the five character
@@ -336,43 +347,9 @@ store.on(() => {
   }
 });
 
-/**
- * Size the bar by MEASURING it, not by width breakpoints.
- *
- * The same reasoning as slides' fitTopbar, and the same tiers: start at the
- * widest layout and step down while the bar overflows its own box. Breakpoints
- * were wrong here for the reason they are wrong there — zoom, OS text scaling
- * and longer translations all change how much room the same buttons need at
- * one viewport width.
- *
- * The title is the only shrinkable item, so flexbox crushes it toward its floor
- * before anything technically overflows: stepping down only on hard overflow
- * would leave full labels beside an unusably narrow title. So squeeze counts
- * as overflow too.
- */
-const bar = document.querySelector<HTMLElement>('.t-bar')!;
-const TIERS = ['t-bar-compact', 't-bar-tight', 't-bar-fold'];
-function fitBar() {
-  if (!bar.isConnected) return;
-  bar.classList.remove(...TIERS);
-  const title = bar.querySelector<HTMLElement>('.t-doctitle');
-  const tooTight = () =>
-    bar.scrollWidth - bar.clientWidth > 1 || (title ? title.clientWidth < 96 : false);
-  for (const tier of TIERS) {
-    if (!tooTight()) return;
-    bar.classList.add(tier);
-  }
-}
-// BOTH signals, deliberately. ResizeObserver catches content-driven changes
-// (a longer title, a translated label) that no resize event reports; the
-// resize event catches viewport changes when RO callbacks are being throttled,
-// which happens whenever the page is not painting — a background tab, or a
-// hidden preview pane. Measured: with only the observer, the bar stayed
-// untiered and overflowed at 700px because the callback never ran.
-fitBar();
-new ResizeObserver(() => fitBar()).observe(bar);
-new ResizeObserver(() => fitBar()).observe(document.documentElement);
-window.addEventListener('resize', fitBar);
+// The bar's measured fit (fitBar) is wired up much further down, right after
+// every group and the ⋯ menu are actually mounted onto it — see the note
+// there for why the ordering matters.
 
 // ─────────────────────────────────────────────── the feature registry, rendered
 //
@@ -394,8 +371,17 @@ const toolButton = (spec: ReturnType<typeof tools>[number]) => {
   b.className = 't-btn';
   b.type = 'button';
   b.id = `tool-${spec.id}`;
-  b.innerHTML = spec.icon + (spec.label ? `<span class="t-lbl">${labelText(spec.label)}</span>` : '');
-  b.title = labelText(spec.title);
+  const titleText = labelText(spec.title);
+  // Icon-only buttons rely on `title` in the BAR, but a row folded into the ⋯
+  // menu (see fitBar/setBarFolded below) has no hover to reveal that — a menu
+  // row has to name itself. `.t-mlbl` costs nothing while the button lives in
+  // the bar: styles.css only shows it inside `.t-menu`. The parenthetical
+  // shortcut ("(⌘K)") is dropped — a shortcut hint is dead weight on a row you
+  // reach precisely because a shortcut wasn't an option.
+  b.innerHTML = spec.icon + (spec.label
+    ? `<span class="t-lbl">${labelText(spec.label)}</span>`
+    : `<span class="t-mlbl">${titleText.replace(/\s*\([^)]*\)\s*$/, '')}</span>`);
+  b.title = titleText;
   // mousedown, not click: the caret must survive pressing a toolbar button
   b.addEventListener('mousedown', e => { e.preventDefault(); spec.run(featureCtx); });
   return b;
@@ -471,6 +457,105 @@ const refreshMenuLabels = () => {
     if (span) span.textContent = labelText(spec.label);
   }
 };
+
+/**
+ * Size the bar by MEASURING it, not by width breakpoints.
+ *
+ * The same reasoning as slides' fitTopbar, and the same tiers: start at the
+ * widest layout and step down while the bar overflows its own box. Breakpoints
+ * were wrong here for the reason they are wrong there — zoom, OS text scaling
+ * and longer translations all change how much room the same buttons need at
+ * one viewport width.
+ *
+ * The title is the only shrinkable item, so flexbox crushes it toward its floor
+ * before anything technically overflows: stepping down only on hard overflow
+ * would leave full labels beside an unusably narrow title. So squeeze counts
+ * as overflow too.
+ *
+ * THIS BLOCK MUST COME AFTER the groups and the ⋯ menu are mounted (above),
+ * not before. Measured: with fitBar wired up where the "obvious" spot was —
+ * right after the title input, before mountTools('gFormat', …) etc. ran — its
+ * FIRST call and its ResizeObservers all saw a bar missing every format/
+ * insert/review button. Nothing observed afterward ever re-triggered it (the
+ * bar's own box size doesn't change just because overflowing children were
+ * appended inside it), so a page loaded directly at a narrow width — no
+ * interactive resize in between — stayed permanently untiered with real
+ * buttons hanging off the end of the bar (measured: 118px past the edge at
+ * 620px wide, forever, since nothing ever asked again).
+ */
+const bar = document.querySelector<HTMLElement>('.t-bar')!;
+const TIERS = ['t-bar-compact', 't-bar-tight', 't-bar-fold'];
+const ALL_BAR_CLASSES = [...TIERS, 't-bar-micro'];
+
+// Groups whose buttons are plain, POPOVER-FREE actions — safe to reparent
+// wholesale into the ⋯ menu when the fold tier engages. gInsert stays put: it
+// is ITSELF a dropdown, and nesting one popover inside another gets silently
+// clipped the moment the outer one scrolls (hard-won #10, CLAUDE.md — an
+// `overflow-y` menu clips any floating child, so a folded control must render
+// as a plain menu ROW, never a second floater). Reparenting the SAME button
+// nodes (not clones) keeps every listener intact for free.
+const FOLD_GROUPS = ['gFormat', 'gReview'];
+const foldHome = new WeakMap<HTMLElement, HTMLElement>();
+const foldSep = document.createElement('div');
+foldSep.className = 't-menu-sep';
+foldSep.hidden = true;
+byId('moreMenu').insertBefore(foldSep, byId('snap'));
+let barFolded = false;
+function setBarFolded(next: boolean) {
+  if (next === barFolded) return;
+  barFolded = next;
+  const menu = byId('moreMenu');
+  if (next) {
+    for (const gid of FOLD_GROUPS) {
+      const host = document.getElementById(gid);
+      if (!host) continue;
+      for (const btn of [...host.children] as HTMLElement[]) {
+        foldHome.set(btn, host);
+        menu.insertBefore(btn, foldSep);
+      }
+    }
+    foldSep.hidden = false;
+  } else {
+    // Walk the menu in DOM order so buttons land back in the same relative
+    // order they left it, and only touch the ones THIS moved (foldHome is
+    // empty for the menu's own static rows).
+    for (const btn of [...menu.children] as HTMLElement[]) {
+      const home = foldHome.get(btn);
+      if (home) { home.appendChild(btn); foldHome.delete(btn); }
+    }
+    foldSep.hidden = true;
+  }
+}
+
+function fitBar() {
+  if (!bar.isConnected) return;
+  bar.classList.remove(...ALL_BAR_CLASSES);
+  setBarFolded(false);
+  const title = bar.querySelector<HTMLElement>('.t-doctitle');
+  const tooTight = () =>
+    bar.scrollWidth - bar.clientWidth > 1 || (title ? title.clientWidth < 96 : false);
+  for (const tier of TIERS) {
+    if (!tooTight()) return;
+    bar.classList.add(tier);
+    if (tier === 't-bar-fold') setBarFolded(true);
+  }
+  // Folding the groups away is the last thing that can free width. If the bar
+  // is STILL too tight — or the title still can't clear its floor — the title
+  // has nowhere left to shrink to, so it drops out cleanly instead of being
+  // crushed below one legible character (measured: 24px wide at ~560px before
+  // this tier existed, narrower than a single glyph).
+  if (tooTight()) bar.classList.add('t-bar-micro');
+}
+// BOTH signals, deliberately. ResizeObserver catches content-driven changes
+// (a longer title, a translated label) that no resize event reports; the
+// resize event catches viewport changes when RO callbacks are being throttled,
+// which happens whenever the page is not painting — a background tab, or a
+// hidden preview pane. Measured: with only the observer, the bar stayed
+// untiered and overflowed at 700px because the callback never ran.
+fitBar();
+new ResizeObserver(() => fitBar()).observe(bar);
+new ResizeObserver(() => fitBar()).observe(document.documentElement);
+window.addEventListener('resize', fitBar);
 
 // LEFT — navigation and review: facts about the document as a whole.
 //
@@ -1000,10 +1085,28 @@ addEventListener('keydown', (e) => {
 });
 
 // theme picker — cycles auto → light → dark, and says which it is
-const themeBtn = document.getElementById('theme')!;
-const THEME_LABEL: Record<ThemeChoice, string> = { auto: '◐ Auto', light: '☀ Light', dark: '☾ Dark' };
-const paintTheme = () => { themeBtn.textContent = THEME_LABEL[themeChoice()]; };
-themeBtn.addEventListener('click', () => {
+//
+// Same recipe as icons.ts (24x24 box, 16px render, stroke currentColor at
+// width 2, round caps/joins) kept local rather than added to that file:
+// only this button needs it, and icons.ts is a different owner's file.
+const themeSvg = (body: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+const THEME_ICON: Record<ThemeChoice, string> = {
+  auto: themeSvg('<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/>'),
+  light: themeSvg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M2 12h2M20 12h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/>'),
+  dark: themeSvg('<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/>'),
+};
+const THEME_TEXT: Record<ThemeChoice, string> = { auto: t('Auto'), light: t('Light'), dark: t('Dark') };
+// This is control (1) of the label rule above: the face has to say what the
+// NEXT click leaves the app in, not just "theme", so it keeps its text label
+// like Save/Saved does.
+const paintTheme = () => {
+  const choice = themeChoice();
+  label('theme', THEME_ICON[choice],
+    t('Theme: {mode} — click to cycle auto/light/dark', { mode: THEME_TEXT[choice] }),
+    THEME_TEXT[choice]);
+};
+byId('theme').addEventListener('click', () => {
   const order: ThemeChoice[] = ['auto', 'light', 'dark'];
   const next = order[(order.indexOf(themeChoice()) + 1) % order.length];
   setTheme(next);

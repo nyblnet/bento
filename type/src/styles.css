@@ -229,7 +229,15 @@ html, body {
 .t-doctitle {
   /* Sized, not greedy — the right group's margin-inline-start:auto is the
      spacer, so a long title cannot push the tools off the bar. */
-  flex: 0 1 260px; min-width: 0;
+  flex: 0 1 260px;
+  /* A hard floor, not `min-width: 0`. Without it flexbox has nothing to stop
+     shrinking at and will crush the title toward zero before it ever counts
+     as "overflow" (measured: 16px wide, narrower than a single glyph) — the
+     t-bar-tight/-fold flex-basis steps below are what SHOULD do the shrinking;
+     this is the backstop for whatever gap remains, and the last width fitBar's
+     tooTight() check treats as still-readable before it gives up and folds
+     the title away entirely (see .t-bar-micro). */
+  min-width: 72px;
   font: inherit; font-size: 14px; color: var(--ink);
   background: transparent; border: 1px solid transparent; border-radius: 8px;
   padding: 5px 8px; text-overflow: ellipsis;
@@ -283,6 +291,20 @@ html, body {
 }
 .t-menu button:hover { background: var(--chrome-2); }
 .t-menu-sep { height: 1px; background: var(--line); margin: 5px 4px; }
+/* A bar button (`.t-btn`) reparented into the ⋯ menu at the fold tier
+   (main.ts setBarFolded) is still a `.t-btn` — its OWN rules (inline-flex,
+   fixed min-width) would make it a stray icon chip in a list of full-width
+   rows. `.t-menu button`'s selector is more specific (0,1,1 vs 0,1,0) so it
+   wins the conflicting properties without an !important war; this just
+   covers the one property that selector doesn't touch. */
+.t-menu .t-btn { width: 100%; justify-content: flex-start; }
+/* Icon-only bar buttons lean on `title` for their name; a menu row has no
+   hover to reveal that, so it needs visible text. `.t-mlbl` (main.ts
+   toolButton) is the fallback label those buttons carry for exactly this
+   case — invisible while the button lives in the bar, shown only once it is
+   actually inside a menu, so it costs nothing until it is needed. */
+.t-mlbl { display: none; }
+.t-menu .t-mlbl { display: inline; }
 
 /* RESPONSIVE, the suite's way: hide TEXT, never scroll the bar — and size it
    by MEASURING, not by width breakpoints (slides/src/editor/editor.ts
@@ -291,12 +313,30 @@ html, body {
    viewport width, and each one clipped the end of the bar).
    The tiers are applied by fitBar() in main.ts, widest first. */
 .t-bar-compact .t-lbl { display: none; }
+/* `#moreMenu` is DOM-nested inside `.t-bar` (`.t-menuwrap` sits in `.t-right`),
+   so the rule above also matched every `.t-lbl` INSIDE the ⋯ menu — meaning
+   Snapshot/Review/Sign/Print/About (main.ts, built with the same `label()`
+   helper as the bar's own buttons) silently lost their text the moment the
+   bar reached the compact tier, even though a menu row never participates in
+   the bar's width squeeze and its text was never optional. Same fix as
+   `.t-mlbl` above, for the label spans that already existed before it; same
+   specificity as the rule it corrects, so it only wins by coming after it. */
+.t-menu .t-lbl { display: inline; }
 .t-bar-compact .t-primary { padding: 6px 9px; }
 .t-bar-tight .t-mark-word { display: none; }
 .t-bar-tight .t-doctitle { flex-basis: 160px; }
 .t-bar-fold .t-status { display: none; }
 .t-bar-fold .t-doctitle { flex-basis: 110px; }
 .t-bar-fold .t-group + .t-group { margin-inline-start: 2px; padding-inline-start: 2px; }
+/* Everything the fold tier could move into ⋯ (main.ts FOLD_GROUPS) is gone
+   from the bar by the time this matters, so an emptied `.t-group` host is
+   left with no children — collapse it rather than let its `gap` reserve
+   space for buttons that are no longer there. */
+.t-bar-fold .t-group:empty { display: none; }
+/* The last resort: even folded, a bar can be too narrow for a title that has
+   nowhere left to shrink. Drop it cleanly instead of crushing it below one
+   legible character — the window title and the About dialog still show it. */
+.t-bar-micro .t-doctitle { display: none; }
 
 /* ————— the page ————— */
 .t-scroll {
