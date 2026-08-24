@@ -577,20 +577,23 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 3c · CODE MORPH (the edit reads as an edit) ────────────────────────
+    // ── 3c · CODE MORPH (one function, three eras of JavaScript) ───────────
     // Same mechanism as the formula: tokens carry identities across slides
-    // (Heckel diff on the kernel tokenizer), so a line that moves is SEEN to
-    // move. breathe() travels from fourth call to first — one clear motion,
-    // long enough to read at the deck's default tempo.
+    // (Heckel diff on the kernel tokenizer), so an edit reads as an edit.
+    // Three beats every developer has lived: callbacks -> promises -> await.
+    // load, deck, render, present and confetti keep ONE identity through all
+    // three (probed before authoring); the pyramid collapses, confetti() rises
+    // two lines to meet it, and the names return with const/await in the last
+    // beat. Point-free promises are deliberate — that era really did drop the
+    // parameter names, so slides/frame fading out is honest, not a diff miss.
     slide({
       transition: 'morph',
       notes:
-        'Code morphs the same way the formula did. The block on the next slide is the same ' +
-        'function with one line moved — press → and watch breathe() travel to the top while ' +
-        'the other calls step down to let it past. Tokens pair by a diff of the code itself, ' +
-        'so an edit reads as an edit, not a redraw: new lines fade in on the same beat, moved ' +
-        'lines travel. The block is a first-class element — 77 languages built in (about 7KB ' +
-        'of rules, no highlighter library), picked in the panel under Language.',
+        'And the same trick works on code. This function is about to be modernised twice — ' +
+        'press \u2192 and fifteen years of JavaScript happen in front of you. Watch load, render, ' +
+        'present and confetti: they keep their identity through every rewrite, because tokens ' +
+        'pair by a diff of the code itself. Code blocks are first-class elements — 77 languages ' +
+        'built in (about 7KB of rules, no highlighter library), picked in the panel.',
       elements: [
         grain(),
         glow(200, [
@@ -614,16 +617,16 @@ export function starterDoc(): BentoDoc {
           id: T_D, x: -70, y: -100, w: 240, h: 240, radius: 68, fill: 'transparent',
           stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
         }),
-        kicker('AND THE SAME TRICK ON CODE', { x: 340, y: 150, w: 600, h: 26, align: 'center' }),
+        kicker('AND THE SAME TRICK ON CODE', { x: 340, y: 148, w: 600, h: 26, align: 'center' }),
         {
-          ...defaultCode({ id: CODE, x: 390, y: 208, w: 520, h: 330 }),
-          content: "function launch(deck) {\n  polish(deck)\n  rehearse(deck)\n  focus(deck)\n  breathe()\n  present(deck)\n}",
-          grammarName: 'js', fontSize: 27, lineHeight: 1.7, color: '#DCE3EC',
+          ...defaultCode({ id: CODE, x: 330, y: 206, w: 620, h: 330 }),
+          content: "load(deck, (slides) => {\n  render(slides, (frame) => {\n    present(frame)\n  })\n})\nconfetti()",
+          grammarName: 'js', fontSize: 26, lineHeight: 1.62, color: '#DCE3EC',
           align: 'left', valign: 'top',
         },
         text({
-          x: 290, y: 560, w: 700, h: 60,
-          html: 'A code block is a first-class element — press <b>→</b> to edit this function.',
+          x: 290, y: 566, w: 700, h: 60,
+          html: 'One function, 2010 style. Press <b>\u2192</b> to modernise it — twice.',
           fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
         }),
       ],
@@ -632,11 +635,57 @@ export function starterDoc(): BentoDoc {
     slide({
       transition: 'morph',
       notes:
-        'One line moved, and it MOVED — breathe() went from fourth call to first, and every ' +
-        'call it passed stepped down one row. Nothing crossfaded and nothing redrew: each ' +
-        'token kept its identity across the edit, exactly like the a, b and c in the formula ' +
-        'two slides back. This is what code walkthroughs look like in a deck — duplicate the ' +
-        'slide, edit the code, and the transition explains the change for you.',
+        'Promises, mid-2010s. The pyramid flattened: the callback braces dissolved, .then ' +
+        'arrived, and confetti() ROSE two lines to meet the collapse — it did not redraw, it ' +
+        'travelled. Point-free style really did drop the parameter names, which is why slides ' +
+        'and frame faded out rather than moved: the diff is honest about what the edit did. ' +
+        'One more \u2192 to finish the story.',
+      elements: [
+        grain(),
+        glow(200, [
+          { at: 0, color: 'rgba(62,86,120,0.24)' },
+          { at: 0.55, color: 'rgba(15,23,36,0)' },
+          { at: 1, color: 'rgba(255,158,138,0.14)' },
+        ]),
+        shape('rect', {
+          id: T_A, x: -80, y: 460, w: 290, h: 290, radius: 88, fill: PEACH,
+          fillGradient: { angle: 45, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_B, x: 1044, y: -118, w: 330, h: 330, radius: 96, fill: STEEL,
+          fillGradient: { angle: 200, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_C, x: 1014, y: 480, w: 286, h: 286, radius: 84, fill: TILE_PAPER, opacity: 0.85,
+          fillGradient: { angle: 30, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: '#D8D3C6' }] },
+        }),
+        shape('rect', {
+          id: T_D, x: -80, y: -114, w: 260, h: 260, radius: 74, fill: 'transparent',
+          stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
+        }),
+        kicker('PROMISES FLATTEN THE PYRAMID', { x: 340, y: 148, w: 600, h: 26, align: 'center' }),
+        {
+          ...defaultCode({ id: CODE, x: 330, y: 206, w: 620, h: 330 }),
+          content: "load(deck)\n  .then(render)\n  .then(present)\nconfetti()",
+          grammarName: 'js', fontSize: 26, lineHeight: 1.62, color: '#DCE3EC',
+          align: 'left', valign: 'top',
+        },
+        text({
+          x: 290, y: 566, w: 700, h: 60,
+          html: 'The braces dissolved and <b>confetti() rose to meet the collapse</b>.',
+          fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
+        }),
+      ],
+    }),
+
+    slide({
+      transition: 'morph',
+      notes:
+        'async/await, 2017 — and it reads like prose. slides and frame came BACK (const and ' +
+        'await faded in around them), while load, deck, render, present and confetti have ' +
+        'kept one identity since the first beat. This is what a code walkthrough is in Bento: ' +
+        'duplicate the slide, edit the code, and the transition explains the change for you. ' +
+        'No recording, no screenshots — the deck IS the diff.',
       elements: [
         grain(),
         glow(200, [
@@ -660,16 +709,16 @@ export function starterDoc(): BentoDoc {
           id: T_D, x: -90, y: -130, w: 280, h: 280, radius: 80, fill: 'transparent',
           stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
         }),
-        kicker('BREATHE FIRST', { x: 340, y: 150, w: 600, h: 26, align: 'center' }),
+        kicker('AND AWAIT READS LIKE PROSE', { x: 340, y: 148, w: 600, h: 26, align: 'center' }),
         {
-          ...defaultCode({ id: CODE, x: 390, y: 208, w: 520, h: 330 }),
-          content: "function launch(deck) {\n  breathe()\n  polish(deck)\n  rehearse(deck)\n  focus(deck)\n  present(deck)\n}",
-          grammarName: 'js', fontSize: 27, lineHeight: 1.7, color: '#DCE3EC',
+          ...defaultCode({ id: CODE, x: 330, y: 206, w: 620, h: 330 }),
+          content: "const slides = await load(deck)\nconst frame = await render(slides)\npresent(frame)\nconfetti()",
+          grammarName: 'js', fontSize: 26, lineHeight: 1.62, color: '#DCE3EC',
           align: 'left', valign: 'top',
         },
         text({
-          x: 290, y: 560, w: 700, h: 60,
-          html: 'One line moved — and it <b>moved</b>. The diff is the animation.',
+          x: 290, y: 566, w: 700, h: 60,
+          html: 'Same tokens since 2010 — <b>the diff is the animation</b>.',
           fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
         }),
       ],
