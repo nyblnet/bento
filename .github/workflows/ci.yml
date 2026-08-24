@@ -647,6 +647,13 @@ jobs:
       - name: bento/dash side panels
         run: node scripts/test-dash-panels.ts
 
+      - name: bento/dash panel rhythm
+        # The panel's spacing has been reported broken three times. This pins
+        # the numbers — one row height, one pitch, one gutter, one radius — and
+        # refuses a second spelling of any of them, so the next drift is a build
+        # failure rather than a fourth screenshot.
+        run: node scripts/test-dash-panelrhythm.ts
+
       - name: bento/dash About dialog
         run: node scripts/test-dash-about.ts
 
