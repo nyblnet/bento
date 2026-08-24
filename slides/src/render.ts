@@ -1078,18 +1078,23 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         // measured: it cut the travelling tokens from 9 to 2.
         span.dataset.sym = t.sym
         span.textContent = t.v
-        // A transform does NOTHING to a non-replaced INLINE element — the
-        // browser accepts the property, reports it back on style.transform,
-        // and moves the box zero pixels. The morph tween was running perfectly
-        // (measured: 199 frames, 20 tokens, correct offsets) and painting
-        // nothing, and every DOM check "confirming" the morph was reading back
-        // a value it had just written. Tokens must be inline-block to move.
+        // Marks a token the morph is allowed to MOVE. styles.css gives these
+        // `display:inline-block`, because a transform does NOTHING to a
+        // non-replaced inline element — the browser accepts the property,
+        // reports it back on style.transform, and moves the box zero pixels.
+        // The tween ran perfectly (measured: 199 frames, 20 tokens, correct
+        // offsets) and painted nothing, and every DOM check "confirming" the
+        // morph was reading back a value it had just written.
         //
-        // Whitespace tokens are deliberately left inline: they carry newlines,
-        // and `white-space: pre` inside an inline-block box would make the box
-        // itself multi-line and wreck the layout. They are invisible, so their
-        // transform being a no-op costs nothing.
-        if (/\S/.test(t.v)) span.style.display = 'inline-block'
+        // The attribute exists so the rule can be SCOPED. A token carrying a
+        // newline must stay inline: inside any atomic inline-level box that
+        // newline stops breaking the line in the parent's `white-space: pre`
+        // flow, and the block collapses — measured, 9 lines became 1, under
+        // inline-block and inline-flex alike. So this is not about which
+        // display value is used; it is about never blockifying a token that
+        // contains a line break. Space-only tokens are harmless either way,
+        // but they never need to move, so the test is simply "has ink".
+        if (/\S/.test(t.v)) span.dataset.tok = ''
         const c = CODE_COLORS[t.t]
         if (c) span.style.color = c
         if (t.t === 'k' || t.t === 'f') span.style.fontWeight = '600'

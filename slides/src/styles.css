@@ -477,6 +477,18 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-slide { position: relative; overflow: hidden; }
 
 .bento-el { position: absolute; contain: layout style; }
+/* Code tokens the morph may MOVE. A CSS transform does nothing to a
+   non-replaced inline element — accepted, readable back on style.transform,
+   and zero pixels of movement — so a token has to be an atomic inline-level
+   box before it can travel. LOAD-BEARING: delete this and code morphs stop
+   animating silently, with no error anywhere.
+
+   Scoped to [data-tok] rather than to every span on purpose. render.ts sets
+   the attribute only on tokens with ink; a token carrying a newline must stay
+   inline, because inside an atomic box that newline no longer breaks the line
+   in the parent's `white-space: pre` flow. Measured: 9 lines collapse to 1,
+   identically under inline-block and inline-flex. */
+.bento-code [data-tok] { display: inline-block; }
 .bento-el-text .bento-text-inner {
   overflow-wrap: break-word;
   outline: none;
