@@ -68,6 +68,15 @@ export class El {
     if (k.startsWith('data-')) delete this.dataset[camel(k.slice(5))]
   }
 
+  /**
+   * `id` as an ATTRIBUTE, not a stray JS property. `style.id = 'dx-theme'` is
+   * how settings.ts names the theme override, and a shim that let that land as
+   * a plain property would make `getElementById` miss it — a test of nothing,
+   * passing.
+   */
+  get id(): string { return this.attrs.get('id') ?? '' }
+  set id(v: string) { this.setAttribute('id', v) }
+
   get className(): string { return this.attrs.get('class') ?? '' }
   set className(v: string) { this.setAttribute('class', v) }
 
@@ -110,6 +119,27 @@ export class El {
       if (typeof n === 'string') addText(this, n)
       else this.appendChild(n)
     }
+  }
+
+  /**
+   * `insertBefore` and `replaceChildren`, which the dialogs use: a paste panel
+   * lands ABOVE the footer (appending it puts it below the Close button, where
+   * it reads as "nothing happened"), and the version list replaces its own
+   * contents when the timeline comes back from IndexedDB.
+   */
+  insertBefore(node: El, ref: El | null): El {
+    node.parentElement = this
+    const at = ref ? this.children.indexOf(ref) : -1
+    if (at < 0) this.children.push(node)
+    else this.children.splice(at, 0, node)
+    return node
+  }
+
+  replaceChildren(...nodes: El[]): void {
+    for (const c of this.children) c.parentElement = null
+    this.children = []
+    this.text = ''
+    for (const n of nodes) this.appendChild(n)
   }
 
   /** Detach from the parent. `.dx-pop` and `.dx-ask-back` both remove themselves. */
@@ -209,12 +239,34 @@ export class Doc {
 
   constructor() {
     this.documentElement = new El('html', this)
+    this.head = new El('head', this)
     this.body = new El('body', this)
+    this.documentElement.appendChild(this.head)
     this.documentElement.appendChild(this.body)
     this.activeElement = this.body
   }
 
+  /**
+   * `head`, for the one node an app puts there: the transient <style> that
+   * pins `color-scheme` for a theme choice (settings.ts, and the reason it is
+   * a <style> and not an attribute on <html> is written there).
+   */
+  head: El
+
   createElement(tag: string): El { return new El(tag, this) }
+
+  /**
+   * A text node. Real enough for the checkbox labels, which are built as
+   * `label.append(box, document.createTextNode(' ' + text))` — a shim that
+   * dropped the text would make every one of them measure as an empty line.
+   */
+  createTextNode(text: string): El {
+    const n = new El('#text', this)
+    n.text = text
+    return n
+  }
+
+  getElementById(id: string): El | null { return this.querySelector(`#${id}`) }
   createRange() { return { selectNodeContents() {}, collapse() {} } }
 
   /**

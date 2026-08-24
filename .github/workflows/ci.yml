@@ -650,6 +650,16 @@ jobs:
       - name: bento/dash About dialog
         run: node scripts/test-dash-about.ts
 
+      - name: bento/dash dialog surfaces
+        # The About dialog held eight sections and measured 1361px in a 429px
+        # viewport — 3.2 screens. It is two surfaces now (About = what travels
+        # in the file; Settings = what this reader's browser remembers) plus the
+        # password, which moved to the Save menu with the other instructions
+        # about how the file gets written. This holds the seam AND the size:
+        # each surface fits a laptop screen without scrolling, measured through
+        # a box model of about.css calibrated against that 1361px.
+        run: node scripts/test-dash-surfaces.ts
+
       - name: bento/dash thumbnail preview
         # An encrypted workbook NEVER gets a preview — a plaintext title beside
         # the ciphertext is the leak the password exists to prevent.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// The Save split button: save, copy, new workbook, template, read-only copy.
+// The Save split button: save, copy, new workbook, template, read-only copy —
+// and the password.
 //
 // WHY A MENU AT ALL. One Save button can only mean "write this file", and a
 // workbook is the document type people fork constantly — a copy before a risky
@@ -34,6 +35,17 @@
 //      quietly countermands it is precisely the leak the preview's encryption
 //      veto exists to prevent.)
 //
+// WHY THE PASSWORD IS IN THIS MENU. It used to be a section of the About
+// dialog, which was the wrong shelf for it twice over: it is not a FACT about
+// the workbook (About's half of the split — identity, size, properties,
+// history) and it is not a preference of the READER's (Settings' half —
+// language, theme, updates). It is a standing instruction about how this file
+// gets written from now on, which is precisely what every other item in this
+// menu is, and rule 3 above already makes every one of them reason about it.
+// Sitting here, "Set a password…" is two items below "Save as template…", and
+// the relationship between them — the template of an encrypted workbook is
+// encrypted — is visible instead of being a paragraph in a different dialog.
+//
 // READ-ONLY IS ENFORCED HERE TOO, not merely offered: `adoptOpenedDoc` locks
 // the store when a file arrives carrying `readonly`. A tier you can mint and
 // nobody honours is worse than no tier at all.
@@ -41,7 +53,10 @@
 import './saveui.css'
 import {
   saveFile, serializeAuto, writeUpdatedFileAs, canWriteInPlace, adoptFileHandle,
+  isEncryptionActive, setEncryptionPassword,
 } from '../../kernel/src/save.ts'
+import { clearRecovery, clearVersions } from '../../kernel/src/autosave.ts'
+import { duplicateWorkbook } from './about.ts'
 import { docBytes, docBudget, type DashDoc } from './model.ts'
 import type { Store } from './store.ts'
 import { t } from './i18n.ts'
@@ -165,7 +180,7 @@ export function installSaveMenu(host: SaveMenuHost): void {
   caret.className = 'dx-btn dxs-caret'
   caret.type = 'button'
   caret.textContent = '▾'
-  caret.title = t('Save as… — copy, new workbook, template, read-only')
+  caret.title = t('Save as… — copy, new workbook, template, read-only, password')
   caret.setAttribute('aria-label', caret.title)
 
   const menu = document.createElement('div')
@@ -218,11 +233,13 @@ export function installSaveMenu(host: SaveMenuHost): void {
     item(t('Save as new workbook…'), t('A separate workbook — same data, new identity. Nothing links it back to this one.'),
       async () => {
         if (!confirmBudget(store.doc)) return
-        const next = clone(store.doc)
-        next.docId = newDocId()
-        // A fork must not inherit a live room: the file IS the capability
-        // (PLATFORM §5), so a copied credential is a copied invitation.
-        delete next.collab
+        // ONE implementation of the fork, in about.ts, which is where the rig
+        // that proves it lives (scripts/test-dash-about.ts). This was a second
+        // copy of the same three lines and it had already drifted: it kept
+        // `template: true`, so forking a template gave you another template —
+        // a file that re-mints its identity on every open, which is the exact
+        // opposite of "a separate workbook".
+        const next = duplicateWorkbook(store.doc, newDocId())
         store.replaceDoc(next)
         const r = await saveFile(store.doc, true)
         if (r === 'cancelled') {
@@ -270,6 +287,30 @@ export function installSaveMenu(host: SaveMenuHost): void {
         await writeExport(next, 'viewonly',
           t('Read-only copy saved — it opens locked'))
       })
+
+    menu.appendChild(Object.assign(document.createElement('div'), { className: 'dxs-sep' }))
+
+    // The password. Nothing is written here — it sets the standing instruction
+    // that every path above then honours through `serializeAuto`.
+    if (isEncryptionActive()) {
+      item(t('Remove password…'), t('The next save writes the workbook in the clear.'), () => {
+        if (!confirm(t('Remove the password? The next save writes the workbook in the clear.'))) return
+        setEncryptionPassword(null)
+        toast(t('Password removed. Save to write the workbook unencrypted.'))
+      })
+    } else {
+      item(t('Set a password…'), t('Encrypts the workbook inside the file. There is no recovery — lose it and the data is gone.'), () => {
+        const pw = prompt(t('Choose a password. There is no way to recover it.'))
+        if (!pw) return
+        setEncryptionPassword(pw)
+        // Snapshots written BEFORE this moment are plaintext copies of the very
+        // thing now being encrypted, sitting in IndexedDB. Both stores: the
+        // single recovery snapshot and the whole version timeline.
+        void clearRecovery(store.doc.docId)
+        void clearVersions(store.doc.docId)
+        toast(t('Password set. Save to write the workbook encrypted, and keep the password somewhere safe.'))
+      })
+    }
   }
 
   build()
