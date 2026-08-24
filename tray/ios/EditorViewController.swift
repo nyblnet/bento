@@ -322,7 +322,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     // nothing at all, which is the worst possible failure for a save.
     //
     // Downloads land in the app's Documents folder, which is visible in Files
-    // under Bento Tray. A picker per save would be punishing for an app that
+    // under bento/home. A picker per save would be punishing for an app that
     // saves often, and a download cannot overwrite the user's original anyway —
     // that is what the FSA path is for.
 

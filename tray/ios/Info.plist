@@ -3,23 +3,23 @@
 <plist version="1.0">
 <dict>
   <!--
-    The wordmark IS the name: `bento/tray`, matching the web editor's lockup and
+    The wordmark IS the name: `bento/home`, matching the web editor's lockup and
     the search screen's. This drives the home-screen label, the document
-    browser's title ("bento/tray Recents") and the app's folder in Browse.
+    browser's title ("bento/home Recents") and the app's folder in Browse.
 
     The slash is deliberate and it is SAFE. A display name never becomes a path:
     the container on disk is addressed by uuid, and iOS renders this string in
     presentation contexts only. Checked on iOS 26 — home screen, browser title
     and the Browse hierarchy all show it verbatim, with nothing escaped or
-    substituted. Do not "fix" it to "Bento Tray" on the assumption that a slash
-    in a name breaks something; it does not, and the plain form is the one that
-    is off-brand.
+    substituted. Do not "fix" it to "Bento Home" on the assumption that a slash
+    in a name breaks something; it does not, and a title-case form is the one
+    that is off-brand — the name is lowercase, always.
 
     In these places it is plain text, so the slash cannot be peach. Only the
     search screen draws the styled lockup (Brand.swift), which is the one screen
     that is ours rather than the system's.
   -->
-  <key>CFBundleDisplayName</key><string>bento/tray</string>
+  <key>CFBundleDisplayName</key><string>bento/home</string>
   <!-- Must be present and must reference the build setting: without it the app
        has no bundle id and `simctl install` refuses it ("Missing bundle ID"). -->
   <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>

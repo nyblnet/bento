@@ -156,7 +156,7 @@ function ios({ ground, tray, cells }) {
   const mark =
     `<!-- ${note} Do not edit. -->\n` +
     `<svg xmlns="http://www.w3.org/2000/svg" width="${ground.w * 4}" height="${ground.h * 4}"\n` +
-    `     viewBox="0 0 ${ground.w} ${ground.h}" role="img" aria-label="Bento Tray">\n` +
+    `     viewBox="0 0 ${ground.w} ${ground.h}" role="img" aria-label="bento home">\n` +
     [ground, tray, ...cells].map((r) =>
       `  <rect${r.x ? ` x="${f(r.x)}"` : ''}${r.y ? ` y="${f(r.y)}"` : ''}` +
       ` width="${f(r.w)}" height="${f(r.h)}"${r.r ? ` rx="${f(r.r)}"` : ''} fill="${r.fill}"/>`

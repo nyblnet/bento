@@ -1,5 +1,5 @@
 <!--
-  bento/tray mark.
+  bento/home mark.
 
   The mark inverts the parent rather than adding anything to it: the TRAY is the
   surface, filling the frame, and the Bento compartments sit on it. That changes
@@ -17,7 +17,7 @@
   with one shape instead of two.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 32 32"
-     role="img" aria-label="Bento Tray">
+     role="img" aria-label="bento home">
   <rect width="32" height="32" rx="7" fill="#16273E"/>
   <rect x="3.6" y="3.6" width="24.8" height="24.8" rx="5" fill="#F0EBE0"/>
   <rect x="6.400" y="6.400" width="6.109" height="19.200" rx="2.182" fill="#5E7699"/>

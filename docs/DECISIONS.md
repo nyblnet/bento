@@ -14,6 +14,65 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-08-25 — The tray hosts are called `bento/home`
+
+**Decision.** All three hosts are named **`bento/home`** — lowercase, with the
+slash, set like `bento/slides`. **Never "Bento Home"**, in any casing, in any
+surface a user reads. This supersedes the naming half of the 2026-07-26 entry
+below, which called the iOS app `bento/tray`.
+
+**Why `home`.** It is not a component that needs distinguishing from the brand —
+it is where documents live and where new ones start, on every host. The suite
+convention is `bento/<what you get>`, and what you get is your documents.
+
+**Why the qualifier route was abandoned, so it is not tried again.** The
+alternative was a distinguishing second word, and every candidate died to a live
+collision: **box** → BentoBox (and "bento box" is the literal object), **desk** →
+Addit's furniture line, **works** → Apple's iWork, **keep** → Google Keep. That
+is four independent attempts failing the same way, which is the signal that the
+premise was wrong rather than the words: the front door does not need a
+qualifier, because it is not one thing among several.
+
+**Scope: the PRODUCT is renamed, not the tree.** Directories stay `tray/ios`,
+`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name. Renaming
+paths would churn every import, every doc link and every open branch for no
+reader's benefit — the name people see is not the name the repo files it under.
+
+**What must NOT change, on any host:**
+
+- **The bundle identifier.** `page.bento.tray` on iOS, and its Android
+  counterpart. To the OS and the store it IS the app: changing it does not rename
+  the app, it creates a different one that cannot update the installed copy.
+- **`PRODUCT_NAME` / `CFBundleName`** (iOS). They name the executable and the
+  bundle, not the label. `CFBundleDisplayName` is the label, and it is the only
+  key the rename touches.
+- **The App Store listing name.** Per 2026-07-24, `/` is a mark and never a
+  stored name, and store names are stored. The listing keeps a slashless form;
+  the on-device label does not. Those are separate fields — see the note on the
+  2026-07-26 entry for why that pair is not a contradiction.
+
+`bento/home` is 10 characters, which fits the iOS home-screen label without
+truncation. (`bento/tray` was 10 too, so this was not at risk, but it is the
+constraint any future rename has to clear.)
+
+**Where it landed.** `tray/webext` first, in PR #360 / `50d1c40` — read that as
+the precedent for which strings change. `tray/ios` in PR #315: the display name,
+the search screen's lockup, and the mark's `aria-label`. `tray/android` follows.
+
+Screen readers get the spoken form, not the mark: `aria-label` and
+`accessibilityLabel` say "bento home", because a slash is read out as
+punctuation. Visible text keeps the slash, and only the search screen can colour
+it — the home-screen label, the browser title and the Browse folder are system
+chrome drawn as plain text.
+
+**One practical note for the listing, since it is cheap to record and expensive
+to rediscover:** App Store screenshots need documents that have been **saved at
+least once**. A preview is only written on save, so an unsaved document
+photographs as a "Not saved yet" placeholder — a whole screenshot set can be shot
+and only later found to be showing empty cards.
+
+---
+
 ## 2026-08-23 — The web demo gates on RETURN, not on save
 
 Someone works at `https://bento.page/slides/`, saves, comes back later and gets

@@ -27,7 +27,7 @@ final class SearchViewController: UIViewController {
     /// screen in the app that is OURS rather than the system's — the document
     /// browser is deliberately left as iOS designed it — so it is the right and
     /// only place to say whose app this is.
-    private let brand = Brand.lockup("tray", side: 34, style: .title2)
+    private let brand = Brand.lockup("home", side: 34, style: .title2)
     private var hits: [SearchHit] = []
 
     override func viewDidLoad() {

@@ -73,7 +73,7 @@ enum Brand {
     /// text face beside it looks like a different family. Scales with Dynamic Type
     /// rather than being pinned — a wordmark that ignores the reader's text size
     /// is a wordmark that looks broken at the sizes people actually use.
-    static func wordmark(_ app: String = "tray", style: UIFont.TextStyle = .title3) -> UILabel {
+    static func wordmark(_ app: String = "home", style: UIFont.TextStyle = .title3) -> UILabel {
         let label = UILabel()
         let base = UIFont.preferredFont(forTextStyle: style)
         let size = base.pointSize
@@ -93,7 +93,7 @@ enum Brand {
     }
 
     /// Mark and wordmark together, for a screen that needs to say whose it is.
-    static func lockup(_ app: String = "tray", side: CGFloat = 28,
+    static func lockup(_ app: String = "home", side: CGFloat = 28,
                        style: UIFont.TextStyle = .title3) -> UIStackView {
         let stack = UIStackView(arrangedSubviews: [markView(side: side), wordmark(app, style: style)])
         stack.axis = .horizontal
