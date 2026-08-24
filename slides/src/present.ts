@@ -15,7 +15,9 @@ import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from '
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
 
-const MORPH_DURATION = 0.65
+const MORPH_DURATION_DEFAULT = 0.65
+/** Set per-deck by doc.present.morphSeconds; clamped to something sane. */
+let MORPH_DURATION = MORPH_DURATION_DEFAULT
 const MORPH_EASE = 'power2.inOut'
 
 export interface PresentSession {
@@ -28,6 +30,8 @@ export function startPresentation(
   onExit: (lastIndex: number) => void,
   opts: { fullscreen?: boolean } = {},
 ): PresentSession {
+  MORPH_DURATION = Math.min(6, Math.max(0.1, doc.present?.morphSeconds ?? MORPH_DURATION_DEFAULT))
+
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
   overlay.style.setProperty('--bento-accent', doc.theme.accent)

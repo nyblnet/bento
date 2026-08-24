@@ -435,6 +435,14 @@ export interface BentoDoc {
     slideNumber?: boolean
     controls?: boolean
     progress?: boolean
+    /**
+     * Seconds a morph transition takes. Absent = 0.65, which is tuned for the
+     * usual case: a title sliding, a shape growing, distances of hundreds of
+     * pixels. Code token morphs move a single line-height — about 40px — and at
+     * the default that reads as a blink rather than as travel, so a deck built
+     * around them wants a slower beat. Clamped on read.
+     */
+    morphSeconds?: number
   }
   /** shared assets (raw SVG markup or data URIs), referenced by key */
   assets?: Record<string, string>
