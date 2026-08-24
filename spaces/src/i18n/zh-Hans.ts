@@ -563,4 +563,12 @@ export const zh_Hans: Catalog = {
   "most recent": "最新",
   "That version could not be read": "无法读取该版本",
   "Restored the version from {when} — ⌘Z undoes it": "已恢复 {when} 的版本，按 ⌘Z 可撤销。",
+  "Dismiss": "关闭",
+  "Toggle section": "展开或收起此节",
+  "{n} block": "{n} 个块",
+  "{n} blocks": "{n} 个块",
+  "{n} word": "{n} 个词",
+  "{n} words": "{n} 个词",
+  "{n} link to this page": "{n} 个链接指向此页",
+  "{n} links to this page": "{n} 个链接指向此页",
 }

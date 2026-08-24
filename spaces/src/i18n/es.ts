@@ -563,4 +563,12 @@ export const es: Catalog = {
   "most recent": "más reciente",
   "That version could not be read": "No se pudo leer esa versión",
   "Restored the version from {when} — ⌘Z undoes it": "Se restauró la versión del {when}: ⌘Z lo deshace.",
+  "Dismiss": "Descartar",
+  "Toggle section": "Mostrar u ocultar la sección",
+  "{n} block": "{n} bloque",
+  "{n} blocks": "{n} bloques",
+  "{n} word": "{n} palabra",
+  "{n} words": "{n} palabras",
+  "{n} link to this page": "{n} enlace a esta página",
+  "{n} links to this page": "{n} enlaces a esta página",
 }

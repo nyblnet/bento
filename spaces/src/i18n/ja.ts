@@ -563,4 +563,12 @@ export const ja: Catalog = {
   "most recent": "最新",
   "That version could not be read": "そのバージョンを読み込めませんでした",
   "Restored the version from {when} — ⌘Z undoes it": "{when} のバージョンを復元しました。⌘Z で取り消せます。",
+  "Dismiss": "閉じる",
+  "Toggle section": "セクションの開閉",
+  "{n} block": "{n} ブロック",
+  "{n} blocks": "{n} ブロック",
+  "{n} word": "{n} 語",
+  "{n} words": "{n} 語",
+  "{n} link to this page": "このページへのリンク {n} 件",
+  "{n} links to this page": "このページへのリンク {n} 件",
 }

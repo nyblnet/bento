@@ -563,4 +563,12 @@ export const zh_Hant: Catalog = {
   "most recent": "最新",
   "That version could not be read": "無法讀取該版本",
   "Restored the version from {when} — ⌘Z undoes it": "已還原 {when} 的版本，按 ⌘Z 可復原。",
+  "Dismiss": "關閉",
+  "Toggle section": "展開或收合此節",
+  "{n} block": "{n} 個區塊",
+  "{n} blocks": "{n} 個區塊",
+  "{n} word": "{n} 個詞",
+  "{n} words": "{n} 個詞",
+  "{n} link to this page": "{n} 個連結指向此頁",
+  "{n} links to this page": "{n} 個連結指向此頁",
 }

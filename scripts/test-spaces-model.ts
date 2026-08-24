@@ -357,6 +357,40 @@ for (const [label, input, err] of [
   ok(/store\.replaceDoc\(restored\)/.test(about), '…and restores through replaceDoc, so ⌘Z walks it back')
 }
 
+// ---- a popover is as tall as the room it has ------------------------------
+// .sp-pop carried `max-height: 44vh`. On a 900px window that is 396px, and the
+// share panel wants 543 — measured: 149px clipped, with "Start live session"
+// and "Reset access…" both below the fold. The primary action of the sharing
+// panel was reachable only by noticing that a box showing no scrollbar scrolls.
+// A 13" laptop is worse.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const css = fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
+  const props = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
+
+  ok(!/\.sp-pop \{[^}]*max-height: 44vh/.test(css), 'the popover is not capped at a fraction of the window')
+  ok(/pop\.style\.maxHeight = /.test(ed), '…place() gives it the room the anchor actually leaves')
+  // Both popover builders must route through the helper, or the one that does
+  // not will size itself once and stay that size while the window moves.
+  const viaHelper = (ed.match(/else this\.placed\(pop, anchor\)/g) ?? []).length
+  ok(viaHelper === 2, 'both popover call sites place through the same helper')
+  ok(/addEventListener\('resize', reflow\)/.test(ed), '…which re-places on resize')
+  ok(/removeEventListener\('resize', reflow\)/.test(ed), '…and takes the listener back off when it closes')
+
+  // THE EXTRACTOR SWEEPS LITERALS. A helper that picks a key —
+  // `t(n === 1 ? one : many)` — compiles, runs, and is never translated by
+  // anyone, because no catalog ever learns the strings exist. This cost a round
+  // trip while the plural was being written, and the model rig is where that
+  // lesson is cheap to keep.
+  for (const key of ['{n} block', '{n} blocks', '{n} word', '{n} words',
+                     '{n} link to this page', '{n} links to this page']) {
+    ok(props.includes(`t('${key}'`), `the panel's "${key}" is a literal at its own call site, so it is swept`)
+  }
+  ok(!/\{blocks\} blocks · \{words\} words/.test(props),
+    '…and the old one-string-three-plurals stat is gone (it read "1 blocks · 1 words")')
+}
+
 // ---- find & replace: the number shown IS the number changed ----------------
 // Replace-all is destructive and lands in one commit, so the count in the
 // readout, the count in the confirmation and the count of things that change

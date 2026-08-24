@@ -848,7 +848,11 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 
 /* the block menu is anchored to the caret, not centred on the screen */
 .sp-pop {
-  position: fixed; z-index: 60; width: 260px; max-height: 44vh; overflow: auto;
+  /* max-height is set per placement by editor.ts place(), from the room the
+     anchor actually leaves. The 44vh that used to live here clipped the share
+     panel's primary action off the bottom on an ordinary laptop. This value is
+     only the fallback for a popover placed some other way. */
+  position: fixed; z-index: 60; width: 260px; max-height: 80vh; overflow: auto;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 6px;
 }
@@ -1641,6 +1645,12 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 .sp-insp-icon svg { width: 15px; height: 15px; }
 .sp-insp-hint {
   margin: 4px 6px 8px; font-size: 12px; line-height: 1.45; color: var(--muted);
+}
+/* Measurements of the page, not advice about it. Set apart from the hint above
+   by a rule and tabular figures, so the numbers line up and read as data. */
+.sp-insp-stat {
+  margin: 10px 6px 8px; padding-top: 8px; border-top: 1px solid var(--line);
+  font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums;
 }
 .sp-insp .sp-select { max-width: 100%; }
 

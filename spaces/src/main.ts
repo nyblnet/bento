@@ -576,7 +576,7 @@ function banner(text: string, actions: Array<[string, () => void]> = []): void {
   const close = document.createElement('button')
   close.className = 'sp-btn'
   close.textContent = '✕'
-  close.setAttribute('aria-label', 'Dismiss')
+  close.setAttribute('aria-label', t('Dismiss'))
   close.addEventListener('click', () => bar.remove())
   bar.append(close)
   document.body.prepend(bar)

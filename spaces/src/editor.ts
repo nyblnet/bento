@@ -105,6 +105,8 @@ export class Editor {
   private sidebar!: HTMLElement
   private statusEl!: HTMLElement
   private overlay: HTMLElement | null = null
+  /** undo whatever the open popover attached to the window */
+  private overlayReflow: (() => void) | null = null
   /** set while the editor is writing the DOM, so input handlers stand down */
   private painting = false
   /** reading view: the document without the machinery for changing it */
@@ -1458,7 +1460,7 @@ export class Editor {
     this.overlay = pop
     document.body.append(pop)
     if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
+    else this.placed(pop, anchor)
     const away = (ev: MouseEvent) => {
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
@@ -1661,7 +1663,7 @@ export class Editor {
     this.overlay = pop
     document.body.append(pop)
     if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
+    else this.placed(pop, anchor)
     const away = (ev: MouseEvent) => {
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
@@ -3140,7 +3142,26 @@ export class Editor {
     card.querySelector<HTMLElement>('input,button,[tabindex]')?.focus()
   }
 
+  /**
+   * Place a popover AND keep it placed.
+   *
+   * place() sizes a popover to the room the window has right now, so its answer
+   * stops being true the moment the window changes. Stale in the small-to-large
+   * direction merely misplaces a box; stale the other way CLIPS it, which is
+   * the bug this change exists to remove — the 44vh it replaces at least
+   * tracked the viewport. Both popover call sites go through here so neither
+   * can forget.
+   */
+  private placed(pop: HTMLElement, anchor: HTMLElement): void {
+    place(pop, anchor)
+    const reflow = () => place(pop, anchor)
+    addEventListener('resize', reflow)
+    this.overlayReflow = () => removeEventListener('resize', reflow)
+  }
+
   private closeOverlay(): void {
+    this.overlayReflow?.()
+    this.overlayReflow = null
     this.overlay?.remove()
     this.overlay = null
   }
@@ -5020,17 +5041,36 @@ function caretRect(): DOMRect {
   return new DOMRect(80, 120, 0, 0)
 }
 
-/** Place a popover near an anchor without letting it leave the viewport. */
+/**
+ * Place a popover near an anchor without letting it leave the viewport.
+ *
+ * THE HEIGHT IS THE ROOM IT ACTUALLY HAS, not a fraction of the window. The
+ * CSS capped every popover at 44vh, which on a 900px-tall window is 396px —
+ * and the share panel wants 543. Measured before this: 149px clipped, with
+ * "Start live session" and "Reset access…" both below the fold. The primary
+ * action of the sharing panel was reachable only by noticing that a box with
+ * no visible scrollbar scrolls. A laptop at 800px fares worse.
+ *
+ * So the cap is computed per placement: pick the side with more room, give the
+ * popover that room, and only then measure to position it. The floor is 160px
+ * because a popover squeezed under a control near the bottom edge should flip
+ * rather than become a slot.
+ */
 function place(pop: HTMLElement, anchor: HTMLElement | DOMRect): void {
   const r = anchor instanceof HTMLElement ? anchor.getBoundingClientRect() : anchor
+  const GAP = 6, EDGE = 8
+  const below = innerHeight - r.bottom - GAP - EDGE
+  const above = r.top - GAP - EDGE
+  const useBelow = below >= above || below >= 320
+  pop.style.maxHeight = `${Math.max(160, useBelow ? below : above)}px`
+  // measured AFTER the cap, so a flip decides on the height the popover will
+  // actually have rather than the one CSS would have forced on it
   const w = pop.offsetWidth || 260
   const h = pop.offsetHeight || 260
   let left = r.left
-  let top = r.bottom + 6
-  if (left + w > innerWidth - 8) left = Math.max(8, innerWidth - w - 8)
-  if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 6)
-  pop.style.left = `${Math.max(8, left)}px`
-  pop.style.top = `${top}px`
+  if (left + w > innerWidth - EDGE) left = Math.max(EDGE, innerWidth - w - EDGE)
+  pop.style.left = `${Math.max(EDGE, left)}px`
+  pop.style.top = `${useBelow ? r.bottom + GAP : Math.max(EDGE, r.top - h - GAP)}px`
 }
 
 /**
