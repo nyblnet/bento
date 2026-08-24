@@ -168,6 +168,18 @@ export interface Block {
   /** citations, by offset into `text` — atoms, like `notes` */
   cites?: CiteRef[];
 
+  /**
+   * A named style this block carries BY REFERENCE — see docstyles.ts.
+   *
+   * Absent means "whatever `kind` implies by default", which is itself a named
+   * style (docstyles.ts's built-ins, keyed by kind) rather than special-cased —
+   * so editing "Heading 1" restyles every h1 that never set this field, which
+   * is the whole point of a styles system. A block that sets `styleId` opts
+   * INTO a different named look than its kind's default; it does not opt out
+   * of styling altogether.
+   */
+  styleId?: string;
+
   // ---- paragraph layout. ABSENT MEANS "the document's default", never a
   // value: a paragraph with no `align` is justified because the DOCUMENT says
   // so, and setting the current default deletes the field rather than writing
@@ -216,6 +228,38 @@ export interface Revision {
   body: Block[];
 }
 
+/**
+ * A named paragraph style — what Word calls "Heading 1": a bundle of
+ * typography a block can carry BY REFERENCE (`Block.styleId`) instead of by
+ * repeating every property on itself. See docstyles.ts for resolution
+ * (built-ins, kind defaults, the panel that edits these) and render.ts /
+ * print.ts for where the bundle becomes CSS.
+ *
+ * `align`/`sb`/`sa`/`lh`/`ind` are the SAME vocabulary `Block` already has —
+ * a style is those five properties stored once and shared, not a parallel
+ * dialect. `family`/`size`/`weight`/`italic`/`color` are new: nothing before
+ * this let a document say what a heading looks like at all.
+ */
+export interface DocStyle {
+  id: string;
+  name: string;
+  /** the block kind this style is FOR — informs the panel, never enforced:
+   *  nothing stops a style meant for h2 being applied to a quote */
+  kind: BlockKind;
+  /** a CSS font stack, like `TypeDoc.type.family` — no font files, no downloads */
+  family?: string;
+  /** px */ size?: number;
+  /** 100–900, CSS `font-weight` */ weight?: number;
+  italic?: boolean;
+  /** a CSS colour — hex, rgb()/rgba(), hsl()/hsla(), or a named colour */
+  color?: string;
+  align?: Block['align'];
+  /** space before, px */   sb?: number;
+  /** space after, px */    sa?: number;
+  /** line spacing, a multiple of the font size */ lh?: number;
+  /** first-line indent, px */ ind?: number;
+}
+
 export interface TypeDoc {
   format: typeof FORMAT;
   version: number;
@@ -233,6 +277,16 @@ export interface TypeDoc {
   comments?: Record<string, CommentThread>;
   /** document-wide paragraph defaults; absent means the built-in ones */
   layout?: { align?: Block['align']; sb?: number; sa?: number; lh?: number; ind?: number };
+  /**
+   * Named styles, by id — see DocStyle.
+   *
+   * Absent means every kind renders through docstyles.ts's built-in table,
+   * which is derived from styles.css exactly, so a document that never opened
+   * the Styles panel prints byte-for-byte what it always did. An entry here
+   * OVERRIDES the built-in of the same id (materialized the first time a
+   * built-in is edited); a document may also define ids the built-ins do not.
+   */
+  styles?: Record<string, DocStyle>;
   /**
    * The document's typeface and base size.
    *
@@ -383,6 +437,12 @@ export function parseDoc(raw: string): ParseResult {
     for (const k of ['keepNext', 'keepTogether', 'breakBefore'] as const) {
       if (out[k] !== true) delete out[k];
     }
+    // A styleId that resolves to nothing (a style since deleted, or a typo from
+    // hand-edited JSON) is kept rather than dropped, deliberately unlike a
+    // dangling footnote: docstyles.ts falls back to the block's KIND default
+    // when the id does not resolve, so an unknown id is never a rendering
+    // failure — only a "this named style no longer exists" the panel can show.
+    if (typeof b.styleId === 'string' && b.styleId) out.styleId = b.styleId; else delete out.styleId;
     delete out.level; delete out.cell; delete out.image; delete out.caption; delete out.refs; delete out.cites;
     if (typeof b.role === 'string') out.role = b.role;
     // `level` is clamped and only kept on list kinds. A level on a paragraph
@@ -487,6 +547,44 @@ export function parseDoc(raw: string): ParseResult {
   }
   if (dangling) repaired.push(`dropped ${dangling} footnote reference(s) with no note behind them`);
 
+  // Named styles (DocStyle) — same repair philosophy as everything above:
+  // validate and clamp what is known, drop what is not, never let a bad style
+  // definition reach docstyles.ts, which trusts the shape it is handed.
+  //
+  // `color` is document data written straight into a `style` attribute
+  // (render.ts, print.ts) — the same class of hole `safeHref`/`safeFamily`
+  // guard in inline.ts. This is an ALLOW-LIST for the same reason theirs is:
+  // no `;`, no `(` beyond a bare `rgb(`/`hsl(` function, so neither a second
+  // declaration nor a `url()` can be formed.
+  const SAFE_STYLE_COLOR = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]+\)|hsla?\([\d.,%\s]+\)|[a-zA-Z]{1,30})$/;
+  const numClamp = (v: unknown, lo: number, hi: number): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : undefined;
+  const styles: Record<string, DocStyle> = {};
+  if (isObj(json.styles)) {
+    const usedIds = new Set<string>();
+    for (const [key, raw0] of Object.entries(json.styles)) {
+      if (!isObj(raw0)) continue;
+      const raw = raw0 as Record<string, unknown>;
+      let id = typeof raw.id === 'string' && raw.id ? raw.id : key;
+      if (usedIds.has(id)) id = `${id}~${key}`;
+      usedIds.add(id);
+      const kind: BlockKind = ['para', 'h1', 'h2', 'h3', 'quote', 'ul', 'ol', 'cell', 'image', 'caption', 'toc', 'math', 'embed']
+        .includes(raw.kind as string) ? raw.kind as BlockKind : 'para';
+      const s: DocStyle = { id, name: typeof raw.name === 'string' && raw.name ? raw.name : id, kind };
+      if (typeof raw.family === 'string' && raw.family.trim()) s.family = raw.family.trim();
+      const size = numClamp(raw.size, 6, 96); if (size !== undefined) s.size = size;
+      const weight = numClamp(raw.weight, 100, 900); if (weight !== undefined) s.weight = Math.round(weight / 100) * 100;
+      if (raw.italic === true) s.italic = true;
+      if (typeof raw.color === 'string' && SAFE_STYLE_COLOR.test(raw.color.trim())) s.color = raw.color.trim();
+      if (['left', 'center', 'right', 'justify'].includes(raw.align as string)) s.align = raw.align as Block['align'];
+      const sb = numClamp(raw.sb, 0, 2000); if (sb !== undefined) s.sb = sb;
+      const sa = numClamp(raw.sa, 0, 2000); if (sa !== undefined) s.sa = sa;
+      const ind = numClamp(raw.ind, 0, 2000); if (ind !== undefined) s.ind = ind;
+      const lh = numClamp(raw.lh, 0.5, 4); if (lh !== undefined) s.lh = lh;
+      styles[id] = s;
+    }
+  }
+
   const doc: TypeDoc = {
     ...(json as object) as TypeDoc,          // unknown fields ride along
     format: FORMAT,
@@ -499,6 +597,7 @@ export function parseDoc(raw: string): ParseResult {
     ...(json.track === true ? { track: true } : {}),
     signatures: Array.isArray(json.signatures) ? json.signatures as Signature[] : [],
   };
+  if (Object.keys(styles).length) doc.styles = styles; else delete doc.styles;
   if (typeof json.docId !== 'string' || !json.docId) repaired.push('minted a missing docId');
   // Comment threads: parse totally, THEN repair. The order matters and the
   // feature's note says why — repairing before an anchor moves would clamp it

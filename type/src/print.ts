@@ -27,6 +27,7 @@ import { blockHtml, groupBlocks, TAG } from './render.ts';
 import type { Metrics } from './paginate.ts';
 import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
 import { blockStyle } from './layout.ts';
+import { docStyleCss } from './docstyles.ts';
 import { embedHtml } from './embed.ts';
 
 export interface PrintOptions {
@@ -153,7 +154,8 @@ function tableHtml(rows: Block[][], head: boolean): string {
  * here with a second implementation is exactly how print drifts from the
  * editor, which is the failure this whole module exists to avoid.
  */
-function bodyHtml(body: Block[], lang: string): string {
+function bodyHtml(doc: TypeDoc, lang: string): string {
+  const body = doc.body;
   const out: string[] = [];
   for (const tok of groupBlocks(body)) {
     if (tok.t === 'open') out.push(`<${tok.kind}>`);
@@ -172,7 +174,11 @@ function bodyHtml(body: Block[], lang: string): string {
     }
     else {
       const b = tok.block;
-      const st = blockStyle(b);
+      // Same composition as render.ts renderBlock, same order — the named
+      // style first, the block's own direct properties second, so print
+      // shows exactly what the screen does: a block's own align/sb/sa/lh/ind
+      // beats its style, both beat the document's plain CSS defaults.
+      const st = [docStyleCss(doc, b), blockStyle(b)].filter(Boolean).join(';');
       out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}"${st ? ` style="${esc(st)}"` : ''}>` +
                `${blockHtml(b)}</${TAG[b.kind]}>`);
     }
@@ -198,7 +204,7 @@ export function buildPrintDocument(doc: TypeDoc, metrics: Metrics, opts: PrintOp
   const head = opts.header ?? doc.title;
   // the DOCUMENT's language, not the reader's: a caption label is printed and
   // signed with the author's sentences, so it must not change per reader
-  const flow = bodyHtml(doc.body, docLang(doc));
+  const flow = bodyHtml(doc, docLang(doc));
   const contentH = p.height - p.marginTop - p.marginBottom;
 
   // footnote numbering is derived, in document order, exactly as on screen
