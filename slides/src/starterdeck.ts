@@ -17,7 +17,7 @@
 // Never let system-font defaults show: every text sets a face on purpose.
 
 import {
-  newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable,
+  newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable, defaultCode,
   type BentoDoc, type Slide, type SlideElement, type TextElement, type ShapeElement,
   type SvgElement, type TableElement,
 } from './model'
@@ -57,6 +57,7 @@ const T_C = 'sd-tile-c' // paper/white
 const T_D = 'sd-tile-d' // ink panel / card
 /** The formula that rearranges across the morph beat — one id, two slides. */
 const EQ = 'sd-eq'
+const CODE = 'sd-code'
 const TITLE = 'sd-title'
 const KICKER = 'sd-kicker'
 const GLOW = 'sd-glow'
@@ -571,6 +572,104 @@ export function starterDoc(): BentoDoc {
           // \$ escapes the delimiter so this line SHOWS "$…$" instead of
           // rendering it — the first thing anyone copying this deck will hit.
           html: 'Maths is plain <b>\\$…\\$</b> in a text box — the terms morph, not the picture.',
+          fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
+        }),
+      ],
+    }),
+
+    // ── 3c · CODE MORPH (the edit reads as an edit) ────────────────────────
+    // Same mechanism as the formula: tokens carry identities across slides
+    // (Heckel diff on the kernel tokenizer), so a line that moves is SEEN to
+    // move. breathe() travels from fourth call to first — one clear motion,
+    // long enough to read at the deck's default tempo.
+    slide({
+      transition: 'morph',
+      notes:
+        'Code morphs the same way the formula did. The block on the next slide is the same ' +
+        'function with one line moved — press → and watch breathe() travel to the top while ' +
+        'the other calls step down to let it past. Tokens pair by a diff of the code itself, ' +
+        'so an edit reads as an edit, not a redraw: new lines fade in on the same beat, moved ' +
+        'lines travel. The block is a first-class element — 77 languages built in (about 7KB ' +
+        'of rules, no highlighter library), picked in the panel under Language.',
+      elements: [
+        grain(),
+        glow(200, [
+          { at: 0, color: 'rgba(62,86,120,0.24)' },
+          { at: 0.55, color: 'rgba(15,23,36,0)' },
+          { at: 1, color: 'rgba(255,158,138,0.14)' },
+        ]),
+        shape('rect', {
+          id: T_A, x: -110, y: 430, w: 320, h: 320, radius: 96, fill: PEACH,
+          fillGradient: { angle: 45, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_B, x: 1020, y: -140, w: 360, h: 360, radius: 104, fill: STEEL,
+          fillGradient: { angle: 200, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_C, x: 1040, y: 500, w: 260, h: 260, radius: 78, fill: TILE_PAPER, opacity: 0.85,
+          fillGradient: { angle: 30, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: '#D8D3C6' }] },
+        }),
+        shape('rect', {
+          id: T_D, x: -70, y: -100, w: 240, h: 240, radius: 68, fill: 'transparent',
+          stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
+        }),
+        kicker('AND THE SAME TRICK ON CODE', { x: 340, y: 150, w: 600, h: 26, align: 'center' }),
+        {
+          ...defaultCode({ id: CODE, x: 390, y: 208, w: 520, h: 330 }),
+          content: "function launch(deck) {\n  polish(deck)\n  rehearse(deck)\n  focus(deck)\n  breathe()\n  present(deck)\n}",
+          grammarName: 'js', fontSize: 27, lineHeight: 1.7, color: '#DCE3EC',
+          align: 'left', valign: 'top',
+        },
+        text({
+          x: 290, y: 560, w: 700, h: 60,
+          html: 'A code block is a first-class element — press <b>→</b> to edit this function.',
+          fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
+        }),
+      ],
+    }),
+
+    slide({
+      transition: 'morph',
+      notes:
+        'One line moved, and it MOVED — breathe() went from fourth call to first, and every ' +
+        'call it passed stepped down one row. Nothing crossfaded and nothing redrew: each ' +
+        'token kept its identity across the edit, exactly like the a, b and c in the formula ' +
+        'two slides back. This is what code walkthroughs look like in a deck — duplicate the ' +
+        'slide, edit the code, and the transition explains the change for you.',
+      elements: [
+        grain(),
+        glow(200, [
+          { at: 0, color: 'rgba(62,86,120,0.24)' },
+          { at: 0.55, color: 'rgba(15,23,36,0)' },
+          { at: 1, color: 'rgba(255,158,138,0.14)' },
+        ]),
+        shape('rect', {
+          id: T_A, x: -60, y: 480, w: 260, h: 260, radius: 80, fill: PEACH,
+          fillGradient: { angle: 45, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_B, x: 1060, y: -100, w: 300, h: 300, radius: 90, fill: STEEL,
+          fillGradient: { angle: 200, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_C, x: 990, y: 460, w: 310, h: 310, radius: 92, fill: TILE_PAPER, opacity: 0.85,
+          fillGradient: { angle: 30, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: '#D8D3C6' }] },
+        }),
+        shape('rect', {
+          id: T_D, x: -90, y: -130, w: 280, h: 280, radius: 80, fill: 'transparent',
+          stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
+        }),
+        kicker('BREATHE FIRST', { x: 340, y: 150, w: 600, h: 26, align: 'center' }),
+        {
+          ...defaultCode({ id: CODE, x: 390, y: 208, w: 520, h: 330 }),
+          content: "function launch(deck) {\n  breathe()\n  polish(deck)\n  rehearse(deck)\n  focus(deck)\n  present(deck)\n}",
+          grammarName: 'js', fontSize: 27, lineHeight: 1.7, color: '#DCE3EC',
+          align: 'left', valign: 'top',
+        },
+        text({
+          x: 290, y: 560, w: 700, h: 60,
+          html: 'One line moved — and it <b>moved</b>. The diff is the animation.',
           fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
         }),
       ],

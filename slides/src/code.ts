@@ -72,7 +72,13 @@ function diffFor(doc: BentoDoc, morphKey: string) {
  */
 export function renderCodeInto(pre: HTMLElement, el: CodeElement, doc: BentoDoc): boolean {
   const morphKey = el.morphId ?? el.id
-  const slideIdx = doc.slides.findIndex((s) => s.elements.some((e) => e.id === el.id))
+  // REFERENCE equality, not id: the duplicate-a-slide idiom gives every twin
+  // the SAME element id across slides (that is the default morph pairing), so
+  // an id lookup finds the first twin and every later slide would render the
+  // first slide's tokens — same text, zero travel. The element handed to the
+  // renderer is the model object itself, so identity is exact. (The original
+  // implementation got this right; a rewrite briefly did not.)
+  const slideIdx = doc.slides.findIndex((s) => (s.elements as unknown[]).includes(el))
   if (slideIdx < 0) return false
   const states = diffFor(doc, morphKey)
   const slideStates = states.get(slideIdx)
