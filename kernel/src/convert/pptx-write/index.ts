@@ -40,6 +40,7 @@ import { Report, type FidelityReport } from '../report.ts'
 import { scrubC0, serialize, x, type XChild, type XNode } from '../xmlout.ts'
 import {
   CT, REL, contentTypes, relsPart, presentationXml, presentationRels,
+  presPropsXml, viewPropsXml, tableStylesXml,
   themeXml, slideMasterXml, slideMasterRels, slideLayoutXml, slideLayoutRels,
   notesMasterXml, notesMasterRels, notesSlideXml, notesSlideRels,
   slidePart, slideLayoutRel, type ContentTypeOverride, type RelEntry,
@@ -471,6 +472,9 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     { partName: '/ppt/theme/theme1.xml', contentType: CT.theme },
     { partName: '/ppt/slideMasters/slideMaster1.xml', contentType: CT.slideMaster },
     { partName: '/ppt/slideLayouts/slideLayout1.xml', contentType: CT.slideLayout },
+    { partName: '/ppt/presProps.xml', contentType: CT.presProps },
+    { partName: '/ppt/viewProps.xml', contentType: CT.viewProps },
+    { partName: '/ppt/tableStyles.xml', contentType: CT.tableStyles },
     ...(hasNotes ? [{ partName: '/ppt/notesMasters/notesMaster1.xml', contentType: CT.notesMaster }] : []),
     ...slideXml.map((_, i) => ({ partName: `/ppt/slides/slide${i + 1}.xml`, contentType: CT.slide })),
     ...extraOverrides, // charts + notesSlides, gathered in the walk
@@ -494,6 +498,9 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
       presentationXml(n, { cx: emu(doc.size.width), cy: emu(doc.size.height) }, hasNotes)) },
     { name: 'ppt/_rels/presentation.xml.rels', data: enc.encode(presentationRels(n, hasNotes)) },
     { name: 'ppt/theme/theme1.xml', data: enc.encode(themeXml(doc.theme)) },
+    { name: 'ppt/presProps.xml', data: enc.encode(presPropsXml()) },
+    { name: 'ppt/viewProps.xml', data: enc.encode(viewPropsXml()) },
+    { name: 'ppt/tableStyles.xml', data: enc.encode(tableStylesXml()) },
     { name: 'ppt/slideMasters/slideMaster1.xml', data: enc.encode(slideMasterXml()) },
     { name: 'ppt/slideMasters/_rels/slideMaster1.xml.rels', data: enc.encode(slideMasterRels()) },
     { name: 'ppt/slideLayouts/slideLayout1.xml', data: enc.encode(slideLayoutXml()) },

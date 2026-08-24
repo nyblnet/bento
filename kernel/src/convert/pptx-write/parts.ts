@@ -66,6 +66,9 @@ export const REL = {
   video: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/video',
   audio: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio',
   media: 'http://schemas.microsoft.com/office/2007/relationships/media',
+  presProps: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps',
+  viewProps: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps',
+  tableStyles: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles',
 } as const
 
 /** Content types for the per-part overrides in [Content_Types].xml. */
@@ -80,6 +83,9 @@ export const CT = {
   chart: 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml',
   coreProps: 'application/vnd.openxmlformats-package.core-properties+xml',
   appProps: 'application/vnd.openxmlformats-officedocument.extended-properties+xml',
+  presProps: 'application/vnd.openxmlformats-officedocument.presentationml.presProps+xml',
+  viewProps: 'application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml',
+  tableStyles: 'application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml',
 } as const
 
 // --- [Content_Types].xml -----------------------------------------------------
@@ -210,7 +216,32 @@ export function presentationRels(slideCount: number, hasNotes = false): string {
   if (hasNotes) {
     rels.push({ id: `rId${2 + slideCount}`, type: REL.notesMaster, target: 'notesMasters/notesMaster1.xml' })
   }
+  // The theme rel plus the three property parts every real producer ships.
+  // All four are schema-OPTIONAL, and their absence is exactly what macOS
+  // PowerPoint's repair dialog objects to: the sample from the first cut of
+  // this writer carried none of them, unzip -t and an OPC validator both
+  // passed, and PowerPoint still offered to "repair" it. python-pptx,
+  // PptxGenJS and PowerPoint itself all emit them; a hand writer that skips
+  // "optional" boilerplate is betting against every reader's expectations.
+  let next = 2 + slideCount + (hasNotes ? 1 : 0)
+  rels.push({ id: `rId${next++}`, type: REL.theme, target: 'theme/theme1.xml' })
+  rels.push({ id: `rId${next++}`, type: REL.presProps, target: 'presProps.xml' })
+  rels.push({ id: `rId${next++}`, type: REL.viewProps, target: 'viewProps.xml' })
+  rels.push({ id: `rId${next++}`, type: REL.tableStyles, target: 'tableStyles.xml' })
   return relsPart(rels)
+}
+
+/** Minimal presentation/view properties and table-style parts — content-free,
+ *  but their PRESENCE is load-bearing (see presentationRels). The tblStyleLst
+ *  def GUID is the well-known "no style" default every producer uses. */
+export function presPropsXml(): string {
+  return serialize(x('p:presentationPr', { 'xmlns:a': NS_A, 'xmlns:r': NS_R, 'xmlns:p': NS_P }))
+}
+export function viewPropsXml(): string {
+  return serialize(x('p:viewPr', { 'xmlns:a': NS_A, 'xmlns:r': NS_R, 'xmlns:p': NS_P }))
+}
+export function tableStylesXml(): string {
+  return serialize(x('a:tblStyleLst', { 'xmlns:a': NS_A, def: '{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}' }))
 }
 
 // --- theme / master / layout chain -------------------------------------------

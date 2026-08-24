@@ -441,6 +441,24 @@ console.log('negative controls')
   ok(miniCodes.has('missing-image') && miniCodes.has('element-unsupported') && miniCodes.size === 2,
     'NEGATIVE: unsupported image mime + unknown element type each report, nothing else fires')
   ok([...miniParts.keys()].every((n) => !n.startsWith('ppt/media/')), 'NEGATIVE: refused bmp writes no media part')
+
+  // --- the boilerplate PowerPoint actually requires ---------------------------
+  // presProps, viewProps, tableStyles and a presentation->theme rel are all
+  // schema-OPTIONAL, and the first cut of this writer shipped without them:
+  // unzip -t passed, a 192-check OPC validation passed, and real macOS
+  // PowerPoint still raised its "found a problem / Repair" dialog on an
+  // otherwise-valid file. Every real producer emits them. Their absence is
+  // invisible to structural checks, so their PRESENCE is pinned here.
+  for (const part of ['ppt/presProps.xml', 'ppt/viewProps.xml', 'ppt/tableStyles.xml']) {
+    ok(miniParts.has(part), `${part} present — its absence is a PowerPoint repair prompt`)
+  }
+  const presRels = new TextDecoder().decode(miniParts.get('ppt/_rels/presentation.xml.rels')!)
+  for (const kind of ['theme', 'presProps', 'viewProps', 'tableStyles']) {
+    ok(presRels.includes(`relationships/${kind}"`), `presentation.xml.rels carries the ${kind} rel`)
+  }
+  const ctypes = new TextDecoder().decode(miniParts.get('[Content_Types].xml')!)
+  ok(['presProps', 'viewProps', 'tableStyles'].every((k) => ctypes.includes(`${k}+xml`)),
+    'the three property parts are declared in [Content_Types].xml')
   ok(descendants(partXml(miniParts, 'ppt/slides/slide1.xml'), NS.p, 'pic').length === 0,
     'NEGATIVE: dropped image leaves no p:pic behind')
 }
