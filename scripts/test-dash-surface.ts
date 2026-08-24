@@ -367,5 +367,38 @@ console.log('\nand none of it is paid for per row')
     'and a hidden note holds no markup, so nothing is serialized for a state nobody sees')
 }
 
+console.log('\nnothing elsewhere cancels the shrink-wrap')
+{
+  // THE HALF THAT WAS SILENTLY CANCELLED. `width: max-content` shrink-wraps the
+  // dataset horizontally, and 700 lines further down `.dg-table { min-height:
+  // 100% }` was still forcing it to the full height of the scroller. So the
+  // object ended where its columns ended and ran to the BOTTOM OF THE WINDOW:
+  // measured at 1440x900 with the starter open, 521px of white paper past the
+  // last row, with the "bottom edge" drawn at the foot of the viewport instead
+  // of under the data. Half a fix, looking from one side like a whole one.
+  //
+  // That rule outlived its reason. It was written so `paintEmptyGrid`'s lattice
+  // could reach the bottom — behaviour the FRONTIER work deliberately removed
+  // from the table kind, because rows that are not there must not be drawn. It
+  // is still right for the canvas kind, whose grid genuinely does not end.
+  //
+  // Checked as text rather than layout: `scripts/lib/dash-dom.ts` is a parser
+  // and a node tree, not a layout engine, so it cannot measure a rendered
+  // height. What it CAN pin is that no unscoped rule sets a minimum height on
+  // the shrink-wrapped element, which is the exact shape of the regression.
+  const sheet = readFileSync(new URL('../dash/src/styles.css', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const rule of sheet.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    const sel = rule[1].trim()
+    if (!/(^|,|\s)\.dg-table\b/.test(sel)) continue
+    if (/\.dg-canvas/.test(sel)) continue
+    ok(!/min-height\s*:\s*100%/.test(rule[2]),
+      `"${sel}" must not force the dataset table to full height — that cancels the ` +
+      'shrink-wrap and the paper bleeds to the bottom of the window')
+  }
+  ok(/\.dg-canvas\s+\.dg-table\s*\{[^}]*min-height:\s*100%/.test(sheet),
+    'and the SPREADSHEET kind still fills the scroller, because its grid really does not end')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

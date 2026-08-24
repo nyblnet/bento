@@ -1564,10 +1564,19 @@ html, body {
 .dg-head-row .dg-corner { padding: 0; }
 .dx-pop-on { color: var(--accent); font-weight: 600; }
 
-/* The ruled empty space past the last row — see grid.ts paintEmptyGrid. The
-   inner table must fill the scroller for the lattice to reach the bottom when
-   there are only a few rows, which is exactly the case it exists for. */
-.dg-table { min-height: 100%; }
+/* THE SPREADSHEET KIND ONLY, and the scoping is the whole point.
+   `paintEmptyGrid` rules the space past the last row, and the inner table has
+   to fill the scroller for that lattice to reach the bottom — which is honest
+   on a CANVAS sheet, whose grid genuinely does not end.
+   It is a lie on a DATASET, and this rule outlived the behaviour it was written
+   for: the frontier work removed that lattice from the table kind precisely
+   because rows that are not there must not be drawn. Left unscoped, it also
+   defeats the shrink-wrap above — MEASURED at 1440x900 with the starter open,
+   `.dg-table` ran 521px past the last row, so the paper still bled to the
+   bottom of the window and the "bottom edge" landed at the foot of the
+   viewport rather than under the data. The horizontal half of the fix worked
+   and the vertical half was silently cancelled by a rule 700 lines away. */
+.dg-canvas .dg-table { min-height: 100%; }
 
 /* A COMMENT is not an app action. `--accent` already means "this application
    did something here" — a filtered header, an fx chip, an override's bar — and
