@@ -348,6 +348,9 @@ export class Editor {
       { icon: 'print', label: t('Print or save as PDF'), hint: '⌘P', run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), hint: t('Version, language, password, exports'),
         run: () => this.openAbout() },
+      // A help screen only reachable by pressing the key it documents is a
+      // help screen for people who did not need it.
+      { icon: 'help', label: t('Keyboard shortcuts'), hint: '?', run: () => this.openHelp() },
     ]
 
     const inlineSecondary = barActions.map((a) => {
@@ -2925,6 +2928,8 @@ export class Editor {
     // takes a keystroke as readily as an input does.
     if (!mod && e.key === '[' && !isTyping()) { e.preventDefault(); this.togglePane(); return }
     if (!mod && e.key === ']' && !isTyping()) { e.preventDefault(); this.toggleInsp(); return }
+    // Same guard as [ and ]: '?' is a character somebody is entitled to type.
+    if (!mod && e.key === '?' && !isTyping()) { e.preventDefault(); this.openHelp(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); this.newIssue(); return }
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault()
@@ -3140,6 +3145,103 @@ export class Editor {
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close() } }
     back.addEventListener('keydown', onEsc)
     card.querySelector<HTMLElement>('input,button,[tabindex]')?.focus()
+  }
+
+  /**
+   * The shortcut list.
+   *
+   * Every shortcut here was read off the keydown handler rather than off the
+   * documentation, because a help screen that lists a key the app does not
+   * bind is worse than no help screen: it makes the reader doubt the keyboard
+   * rather than the page. The starter space describes the same keys in prose,
+   * but the starter is a document — the first thing many people do is delete
+   * it, and the reference should not go with it.
+   *
+   * Built on .sp-overlay/.sp-card, the About dialog's shell, so it inherits
+   * the dialog's scrim, escape handling and focus return rather than growing a
+   * second set.
+   */
+  openHelp(): void {
+    this.closeOverlay()
+    const returnFocus = document.activeElement as HTMLElement | null
+    const back = el('div', 'sp-overlay')
+    const card = el('div', 'sp-card sp-keys')
+    card.setAttribute('role', 'dialog')
+    card.setAttribute('aria-modal', 'true')
+    card.setAttribute('aria-label', t('Keyboard shortcuts'))
+
+    const close = () => {
+      back.remove()
+      document.removeEventListener('keydown', onKey, true)
+      returnFocus?.focus?.()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+
+    const h = el('h2', 'sp-card-h', t('Keyboard shortcuts'))
+    card.append(h)
+
+    const groups: Array<[string, Array<[string, string]>]> = [
+      [t('Writing'), [
+        ['↵', t('A new block')],
+        ['Tab / ⇧Tab', t('Indent, or move back out')],
+        ['/', t('The block menu, on an empty line')],
+        ['[[', t('Link to another page')],
+        ['⌘Z / ⇧⌘Z', t('Undo, redo')],
+      ]],
+      [t('Formatting'), [
+        ['⌘B', t('Bold')],
+        ['⌘I', t('Italic')],
+        ['⌘U', t('Underline')],
+        ['⇧⌘S', t('Strikethrough')],
+        ['⌘E', t('Code')],
+        ['⇧⌘H', t('Highlight')],
+        ['⌘K', t('Link the selected words')],
+      ]],
+      [t('Getting around'), [
+        ['⌘K', t('Search all pages, with nothing selected')],
+        ['⌘F', t('Find and replace')],
+        ['⌘⌥N', t('New page')],
+        ['⌘⇧J', t("Today's journal")],
+        ['⌘⇧I', t('New issue')],
+      ]],
+      [t('The workspace'), [
+        ['[', t('Show or hide the page list')],
+        [']', t('Show or hide properties')],
+        ['⌘S', t('Save')],
+        ['⌘P', t('Print or save as PDF')],
+        ['?', t('This list')],
+        ['Esc', t('Leave the reading view')],
+      ]],
+    ]
+
+    // Two columns where there is room. In one column the four groups run to
+    // 23 rows and the last three fall off the bottom of the card — a help
+    // screen that hides the help, which is the same defect this pass just took
+    // out of the share panel. The grid collapses to one column on a phone,
+    // where scrolling a list is what you expect anyway.
+    const grid = el('div', 'sp-keys-grid')
+    for (const [title, rows] of groups) {
+      const g = el('section', 'sp-keys-g')
+      g.append(el('h3', 'sp-keys-h', title))
+      const list = el('dl', 'sp-keys-list')
+      for (const [key, what] of rows) {
+        const dt = el('dt', '', '')
+        dt.append(el('kbd', 'sp-kbd', key))
+        list.append(dt, el('dd', '', what))
+      }
+      g.append(list)
+      grid.append(g)
+    }
+    card.append(grid)
+
+    back.append(card)
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+    document.addEventListener('keydown', onKey, true)
+    document.body.append(back)
+    card.tabIndex = -1
+    card.focus()
   }
 
   /**

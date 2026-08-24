@@ -16,6 +16,7 @@ import {
 import { putRecovery, getRecovery, clearRecovery, pruneOld, addVersion } from '../../kernel/src/autosave.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
+import { i18nApi } from '../../kernel/src/i18n.ts'
 import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult } from './model'
 import {
   validateDoc, outlineDoc, statsDoc,
@@ -398,6 +399,20 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     undo: () => { store.undo(); editor.repaint() },
     redo: () => { store.redo(); editor.repaint() },
     updates: { version: APP_VERSION },
+    /**
+     * i18n: t/locale/setLocale/choices, as slides exposes it.
+     *
+     * setLocale('x-pseudo') is the SWEEP AUDIT: every string that reached t()
+     * comes back bracketed and accented, so anything still in plain English is
+     * a string the extractor never saw and no catalog will ever carry. That is
+     * not hypothetical here — two aria-labels were sitting untranslated in this
+     * app, and the packer reported 100% the whole time, because a key that is
+     * never swept is a key the percentage cannot know about.
+     *
+     * Chrome only: page titles and block text are the document and must stay
+     * exactly as written.
+     */
+    i18n: i18nApi,
     /** every page, flat — the shape an agent wants before it reads anything */
     pages: () => store.doc.pages.map((p) => ({
       id: p.id, title: p.title, parent: p.parent, archived: !!p.archived, blocks: p.blocks.length,

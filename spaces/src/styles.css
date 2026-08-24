@@ -1343,6 +1343,35 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-ab-vdo { margin-inline-start: auto; color: var(--muted); }
 .sp-ab-version:hover .sp-ab-vdo, .sp-ab-version:focus-visible .sp-ab-vdo { color: var(--blue); }
 
+/* The shortcut list. Two columns, keys right-aligned against their meanings,
+   so the eye runs down one edge instead of hunting across a ragged gap. */
+/* wider than the other cards, because this one is a two-column table and
+   .sp-card's 560px leaves 534px of content — four pixels short of two 260px
+   columns plus the gap, which silently collapsed the grid back to one */
+.sp-keys { width: min(720px, 92vw); max-width: none; }
+.sp-keys-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 30px; align-items: start;
+}
+.sp-keys-g { min-width: 0; }
+.sp-keys-h {
+  margin: 16px 2px 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sp-keys-g:first-child .sp-keys-h, .sp-keys-g:nth-child(2) .sp-keys-h { margin-top: 8px; }
+.sp-keys-list {
+  display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px;
+  margin: 0; align-items: baseline;
+}
+.sp-keys-list dt { justify-self: end; }
+.sp-keys-list dd { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.sp-kbd {
+  display: inline-block; padding: 2px 7px; font: inherit; font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+  background: var(--chrome-2); border: 1px solid var(--line);
+  border-radius: 6px; white-space: nowrap;
+}
+
 /* ————— narrow topbar: hide, never scroll —————
    Measured at 375px: the bar wanted 678px, so seven of eleven controls sat off
    the right edge — Save among them, which made the file unsaveable on a phone.

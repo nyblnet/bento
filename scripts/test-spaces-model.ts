@@ -391,6 +391,42 @@ for (const [label, input, err] of [
     '…and the old one-string-three-plurals stat is gone (it read "1 blocks · 1 words")')
 }
 
+// ---- the shortcut list documents keys that exist --------------------------
+// A help screen listing a key the app does not bind is worse than no help
+// screen: the reader doubts their keyboard rather than the page, and there is
+// no way for them to tell which of the two is wrong. So every ⌘-letter the
+// overlay prints is checked against the keydown handler that would have to
+// implement it. The prose in the starter space says the same things, but the
+// starter is a DOCUMENT — deleting it is the first thing many people do, and
+// the reference should not go with it.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/openHelp\(\): void/.test(ed), 'there is a shortcut list')
+  ok(/e\.key === '\?' && !isTyping\(\)/.test(ed),
+    "…opened by ? , behind the same isTyping guard as [ and ] (it is a character people type)")
+  ok(/label: t\('Keyboard shortcuts'\)/.test(ed),
+    '…and reachable from the menu, not only by the key it documents')
+
+  // Pull the ⌘-letters out of the overlay's own table and demand a binding for
+  // each. Letters only: the modifiers differ per branch and the point is that
+  // the key is handled at all, not how.
+  const from = ed.indexOf('const groups: Array<[string, Array<[string, string]>]>')
+  const table = ed.slice(from, ed.indexOf("const grid = el('div', 'sp-keys-grid')", from))
+  const letters = new Set<string>()
+  for (const m of table.matchAll(/'[⌘⇧⌥]*⌘([A-Z])'/g)) letters.add(m[1].toLowerCase())
+  ok(letters.size >= 8, `the list actually names shortcuts (${letters.size} found)`)
+  for (const c of [...letters].sort()) {
+    // Both spellings the file uses: the long `e.key.toLowerCase() === 'x'` of
+    // the command branches, and the short `k === 'x'` inside markKey(), which
+    // is where ⌘B/I/U/E and ⇧⌘S/H actually live. Matching only the long one
+    // reported ⌘U and ⌘H as unbound when they are bound three lines apart.
+    const bound = new RegExp(`=== '${c}'`).test(ed)
+    ok(bound, `⌘${c.toUpperCase()} in the list is a key something actually binds`)
+  }
+}
+
 // ---- find & replace: the number shown IS the number changed ----------------
 // Replace-all is destructive and lands in one commit, so the count in the
 // readout, the count in the confirmation and the count of things that change
