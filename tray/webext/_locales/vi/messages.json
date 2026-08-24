@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Hai lựa chọn kia cũng dùng được, nhưng Chrome sẽ hỏi lại — lựa chọn đầu thì mỗi lần khởi động lại, lựa chọn cuối thì sau một thời gian chờ."
+  },
+  "viewLayout": {
+    "message": "Cách hiển thị tài liệu"
+  },
+  "viewIcons": {
+    "message": "Biểu tượng"
+  },
+  "viewList": {
+    "message": "Danh sách"
+  },
+  "close": {
+    "message": "Đóng"
+  },
+  "setLangTitle": {
+    "message": "Ngôn ngữ"
+  },
+  "setLangSub": {
+    "message": "Ngôn ngữ mà tiện ích này sử dụng. Thường thì nó theo trình duyệt."
+  },
+  "langAutomatic": {
+    "message": "Tự động — theo trình duyệt"
+  },
+  "setLangNote": {
+    "message": "Tên và mô tả của chính tiện ích đến từ trình duyệt và không thay đổi."
+  },
+  "aboutPromo": {
+    "message": "Mới dùng Bento? Bạn có thể tìm mẫu, thư viện và hướng dẫn chỉnh sửa bằng AI tại $1 — hoặc gắn sao trên $2."
+  },
+  "setThemeTitle": {
+    "message": "Giao diện"
+  },
+  "setThemeSub": {
+    "message": "Thiết lập của trình duyệt là mặc định, không phải bắt buộc."
+  },
+  "themeAuto": {
+    "message": "Theo trình duyệt"
+  },
+  "themeLight": {
+    "message": "Sáng"
+  },
+  "themeDark": {
+    "message": "Tối"
+  },
+  "checking": {
+    "message": "Đang kiểm tra…"
+  },
+  "surveyTitle": {
+    "message": "Tìm xem tài liệu của bạn ở đâu"
+  },
+  "surveySub": {
+    "message": "Trình duyệt biết bạn đã mở những tài liệu Bento nào và có thể cho biết chúng nằm trong thư mục nào."
+  },
+  "surveyDeclined": {
+    "message": "Không sao — bạn có thể thêm thư mục thủ công."
+  },
+  "surveyAllCovered": {
+    "message": "Cả $1 tài liệu trình duyệt này từng thấy đều đã nằm trong thư mục bạn đã thêm."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> tài liệu nằm ngoài mọi thư mục bạn đã thêm. $2 tài liệu đã được bao gồm."
+  },
+  "surveyCovers": {
+    "message": "chứa $1"
+  },
+  "surveyAdd": {
+    "message": "Thêm thư mục này…"
+  },
+  "surveyAdded": {
+    "message": "Đã thêm $1 — tài liệu bên trong đã sẵn sàng"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Đã thêm $1, nhưng tài liệu không nằm trong đó — hãy mở một tài liệu từ Finder một lần."
+  },
+  "surveyOnlySeen": {
+    "message": "Cách này chỉ tìm được tài liệu đã mở trong trình duyệt này."
   }
 }

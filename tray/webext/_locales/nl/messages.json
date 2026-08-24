@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "De andere twee werken ook, maar dan vraagt Chrome het opnieuw — bij de eerste elke herstart, bij de laatste na een wachttijd."
+  },
+  "viewLayout": {
+    "message": "Hoe documenten worden getoond"
+  },
+  "viewIcons": {
+    "message": "Pictogrammen"
+  },
+  "viewList": {
+    "message": "Lijst"
+  },
+  "close": {
+    "message": "Sluiten"
+  },
+  "setLangTitle": {
+    "message": "Taal"
+  },
+  "setLangSub": {
+    "message": "Welke taal deze extensie spreekt. Normaal volgt ze de browser."
+  },
+  "langAutomatic": {
+    "message": "Automatisch — de browser volgen"
+  },
+  "setLangNote": {
+    "message": "De naam en beschrijving van de extensie zelf komen van de browser en veranderen niet."
+  },
+  "aboutPromo": {
+    "message": "Nieuw bij Bento? Sjablonen, de galerie en de AI-bewerkingsgids vind je op $1 — of geef het een ster op $2."
+  },
+  "setThemeTitle": {
+    "message": "Weergave"
+  },
+  "setThemeSub": {
+    "message": "De instelling van de browser is de standaard, geen vereiste."
+  },
+  "themeAuto": {
+    "message": "Zoals de browser"
+  },
+  "themeLight": {
+    "message": "Licht"
+  },
+  "themeDark": {
+    "message": "Donker"
+  },
+  "checking": {
+    "message": "Controleren…"
+  },
+  "surveyTitle": {
+    "message": "Vind waar je documenten staan"
+  },
+  "surveySub": {
+    "message": "De browser weet welke Bento-documenten je hebt geopend. Hij kan zeggen in welke mappen ze staan."
+  },
+  "surveyDeclined": {
+    "message": "Geen probleem — je kunt mappen ook met de hand toevoegen."
+  },
+  "surveyAllCovered": {
+    "message": "Alle $1 documenten die deze browser heeft gezien staan al in een toegevoegde map."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documenten staan buiten elke toegevoegde map. $2 zijn al gedekt."
+  },
+  "surveyCovers": {
+    "message": "dekt $1"
+  },
+  "surveyAdd": {
+    "message": "Deze map toevoegen…"
+  },
+  "surveyAdded": {
+    "message": "$1 toegevoegd — de documenten erin zijn klaar"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 toegevoegd, maar de documenten staan er niet in — open er één keer een vanuit Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "Zo worden alleen documenten gevonden die in deze browser zijn geopend."
   }
 }

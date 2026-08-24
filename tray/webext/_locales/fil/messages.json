@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Gumagana rin ang dalawa pa, pero magtatanong muli ang Chrome — sa bawat restart para sa una, at pagkatapos ng paghihintay para sa huli."
+  },
+  "viewLayout": {
+    "message": "Kung paano ipinapakita ang mga dokumento"
+  },
+  "viewIcons": {
+    "message": "Mga icon"
+  },
+  "viewList": {
+    "message": "Listahan"
+  },
+  "close": {
+    "message": "Isara"
+  },
+  "setLangTitle": {
+    "message": "Wika"
+  },
+  "setLangSub": {
+    "message": "Kung anong wika ang ginagamit ng extension na ito. Karaniwang sumusunod ito sa browser."
+  },
+  "langAutomatic": {
+    "message": "Awtomatiko — sundan ang browser"
+  },
+  "setLangNote": {
+    "message": "Ang pangalan at paglalarawan mismo ng extension ay galing sa browser at hindi nagbabago."
+  },
+  "aboutPromo": {
+    "message": "Bago sa Bento? Makikita ang mga template, ang gallery at ang gabay sa pag-edit gamit ang AI sa $1 — o bigyan ito ng star sa $2."
+  },
+  "setThemeTitle": {
+    "message": "Anyo"
+  },
+  "setThemeSub": {
+    "message": "Ang setting ng browser ang default, hindi kinakailangan."
+  },
+  "themeAuto": {
+    "message": "Sundin ang browser"
+  },
+  "themeLight": {
+    "message": "Maliwanag"
+  },
+  "themeDark": {
+    "message": "Madilim"
+  },
+  "checking": {
+    "message": "Sinusuri…"
+  },
+  "surveyTitle": {
+    "message": "Hanapin kung nasaan ang mga dokumento mo"
+  },
+  "surveySub": {
+    "message": "Alam ng browser kung anong mga dokumentong Bento ang binuksan mo. Masasabi nito kung anong mga folder ang kinalalagyan."
+  },
+  "surveyDeclined": {
+    "message": "Walang problema — puwede mong idagdag nang manu-mano ang mga folder."
+  },
+  "surveyAllCovered": {
+    "message": "Lahat ng $1 dokumentong nakita ng browser na ito ay nasa folder nang naidagdag mo."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumento ang wala sa alinmang folder na idinagdag mo. $2 ang saklaw na."
+  },
+  "surveyCovers": {
+    "message": "saklaw ang $1"
+  },
+  "surveyAdd": {
+    "message": "Idagdag ang folder na ito…"
+  },
+  "surveyAdded": {
+    "message": "Naidagdag ang $1 — handa na ang mga dokumento rito"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Naidagdag ang $1, pero wala roon ang mga dokumento — magbukas ng isa mula sa Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "Ang mga dokumentong binuksan sa browser na ito lang ang makikita sa paraang ito."
   }
 }

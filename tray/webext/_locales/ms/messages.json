@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Dua yang lain juga berfungsi, tetapi Chrome akan bertanya lagi — setiap kali mula semula bagi yang pertama, dan selepas menunggu bagi yang terakhir."
+  },
+  "viewLayout": {
+    "message": "Cara dokumen dipaparkan"
+  },
+  "viewIcons": {
+    "message": "Ikon"
+  },
+  "viewList": {
+    "message": "Senarai"
+  },
+  "close": {
+    "message": "Tutup"
+  },
+  "setLangTitle": {
+    "message": "Bahasa"
+  },
+  "setLangSub": {
+    "message": "Bahasa yang digunakan sambungan ini. Biasanya ia mengikut pelayar."
+  },
+  "langAutomatic": {
+    "message": "Automatik — ikut pelayar"
+  },
+  "setLangNote": {
+    "message": "Nama dan perihal sambungan itu sendiri datang daripada pelayar dan tidak berubah."
+  },
+  "aboutPromo": {
+    "message": "Baharu dengan Bento? Cari templat, galeri dan panduan penyuntingan AI di $1 — atau beri bintang di $2."
+  },
+  "setThemeTitle": {
+    "message": "Penampilan"
+  },
+  "setThemeSub": {
+    "message": "Tetapan pelayar ialah lalai, bukan kewajipan."
+  },
+  "themeAuto": {
+    "message": "Ikut pelayar"
+  },
+  "themeLight": {
+    "message": "Cerah"
+  },
+  "themeDark": {
+    "message": "Gelap"
+  },
+  "checking": {
+    "message": "Memeriksa…"
+  },
+  "surveyTitle": {
+    "message": "Cari di mana dokumen anda berada"
+  },
+  "surveySub": {
+    "message": "Pelayar tahu dokumen Bento yang pernah anda buka. Ia boleh menyebut folder tempatnya."
+  },
+  "surveyDeclined": {
+    "message": "Tidak mengapa — anda boleh menambah folder secara manual."
+  },
+  "surveyAllCovered": {
+    "message": "Kesemua $1 dokumen yang pernah dilihat pelayar ini sudah berada dalam folder yang anda tambah."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumen berada di luar semua folder yang anda tambah. $2 sudah dilindungi."
+  },
+  "surveyCovers": {
+    "message": "merangkumi $1"
+  },
+  "surveyAdd": {
+    "message": "Tambah folder ini…"
+  },
+  "surveyAdded": {
+    "message": "$1 ditambah — dokumen di dalamnya sedia"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 ditambah, tetapi dokumennya tiada di situ — buka satu melalui Finder sekali."
+  },
+  "surveyOnlySeen": {
+    "message": "Cara ini hanya menemui dokumen yang pernah dibuka dalam pelayar ini."
   }
 }

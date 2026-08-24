@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "De to andre virker også, men Chrome spørger igen — ved hver genstart for den første, og efter en ventetid for den sidste."
+  },
+  "viewLayout": {
+    "message": "Hvordan dokumenter vises"
+  },
+  "viewIcons": {
+    "message": "Ikoner"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Luk"
+  },
+  "setLangTitle": {
+    "message": "Sprog"
+  },
+  "setLangSub": {
+    "message": "Hvilket sprog denne udvidelse taler. Normalt følger den browseren."
+  },
+  "langAutomatic": {
+    "message": "Automatisk — følg browseren"
+  },
+  "setLangNote": {
+    "message": "Udvidelsens eget navn og beskrivelse kommer fra browseren og ændrer sig ikke."
+  },
+  "aboutPromo": {
+    "message": "Ny med Bento? Find skabeloner, galleriet og AI-redigeringsguiden på $1 — eller giv den en stjerne på $2."
+  },
+  "setThemeTitle": {
+    "message": "Udseende"
+  },
+  "setThemeSub": {
+    "message": "Browserens indstilling er standarden, ikke et krav."
+  },
+  "themeAuto": {
+    "message": "Følg browseren"
+  },
+  "themeLight": {
+    "message": "Lys"
+  },
+  "themeDark": {
+    "message": "Mørk"
+  },
+  "checking": {
+    "message": "Tjekker…"
+  },
+  "surveyTitle": {
+    "message": "Find hvor dine dokumenter er"
+  },
+  "surveySub": {
+    "message": "Browseren ved, hvilke Bento-dokumenter du har åbnet. Den kan sige, hvilke mapper de ligger i."
+  },
+  "surveyDeclined": {
+    "message": "Helt i orden — du kan tilføje mapper i hånden."
+  },
+  "surveyAllCovered": {
+    "message": "Alle $1 dokumenter, som denne browser har set, ligger allerede i en tilføjet mappe."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumenter ligger uden for alle tilføjede mapper. $2 er allerede dækket."
+  },
+  "surveyCovers": {
+    "message": "dækker $1"
+  },
+  "surveyAdd": {
+    "message": "Tilføj denne mappe…"
+  },
+  "surveyAdded": {
+    "message": "$1 tilføjet — dokumenterne i den er klar"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 tilføjet, men dokumenterne ligger ikke der — åbn ét fra Finder én gang."
+  },
+  "surveyOnlySeen": {
+    "message": "Kun dokumenter, der er åbnet i denne browser, kan findes sådan."
   }
 }

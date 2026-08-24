@@ -442,5 +442,80 @@
   },
   "primeNote": {
     "message": "另外两個也能用，但 Chrome 會再次询問 — 第一個每次重新啟動都問，最後一個會等一段時间再問。"
+  },
+  "viewLayout": {
+    "message": "文件的顯示方式"
+  },
+  "viewIcons": {
+    "message": "圖示"
+  },
+  "viewList": {
+    "message": "清單"
+  },
+  "close": {
+    "message": "關閉"
+  },
+  "setLangTitle": {
+    "message": "語言"
+  },
+  "setLangSub": {
+    "message": "此擴充功能使用的語言。通常跟隨瀏覽器。"
+  },
+  "langAutomatic": {
+    "message": "自動 — 跟隨瀏覽器"
+  },
+  "setLangNote": {
+    "message": "擴充功能本身的名稱和說明來自瀏覽器，不會改變。"
+  },
+  "aboutPromo": {
+    "message": "第一次使用 Bento？範本、藝廊和 AI 編輯指南都在 $1，也歡迎到 $2 給顆星。"
+  },
+  "setThemeTitle": {
+    "message": "外觀"
+  },
+  "setThemeSub": {
+    "message": "瀏覽器的設定只是預設值，並非強制。"
+  },
+  "themeAuto": {
+    "message": "跟隨瀏覽器"
+  },
+  "themeLight": {
+    "message": "淺色"
+  },
+  "themeDark": {
+    "message": "深色"
+  },
+  "checking": {
+    "message": "正在檢查…"
+  },
+  "surveyTitle": {
+    "message": "找出文件所在的位置"
+  },
+  "surveySub": {
+    "message": "瀏覽器知道你開啟過哪些 Bento 文件，可以指出它們在哪些資料夾裡。"
+  },
+  "surveyDeclined": {
+    "message": "沒關係，你也可以手動新增資料夾。"
+  },
+  "surveyAllCovered": {
+    "message": "這個瀏覽器看過的 $1 份文件都已在你新增的資料夾中。"
+  },
+  "surveyUncovered": {
+    "message": "有 <b>$1</b> 份文件不在你新增的任何資料夾裡，$2 份已涵蓋。"
+  },
+  "surveyCovers": {
+    "message": "包含 $1 份"
+  },
+  "surveyAdd": {
+    "message": "新增這個資料夾…"
+  },
+  "surveyAdded": {
+    "message": "已新增 $1 — 其中的文件已就緒"
+  },
+  "surveyAddedElsewhere": {
+    "message": "已新增 $1，但文件並不在其中 — 請先從 Finder 開啟一份。"
+  },
+  "surveyOnlySeen": {
+    "message": "這種方式只能找到在此瀏覽器中開啟過的文件。"
   }
 }

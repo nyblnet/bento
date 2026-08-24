@@ -744,4 +744,12 @@ export const zhHant: Catalog = {
   "Appearance": "外觀",
   "Match my system": "跟隨系統",
   "Dark": "深色",
+  "You saved a deck from here before.": "你之前曾從這裡儲存過一份簡報。",
+  "This page always starts fresh. Open your file to carry on with it:": "此頁面總是從新建開始。開啟你的檔案以繼續編輯：",
+  "Start a new deck anyway": "仍要新建簡報",
+  "This page always starts a new deck — open this file to come back to it.": "此頁面總是新建一份簡報 — 開啟此檔案即可回到它。",
+  "The bento/tray extension can reopen your files here.": "bento/tray 擴充功能可以在這裡重新開啟你的檔案。",
+  "The bento/tray app can keep your files on this device.": "bento/tray 應用程式可以將檔案保存在此裝置上。",
+  "This browser cannot reopen a file in place — Chrome or Edge can.": "此瀏覽器無法就地覆寫檔案 — Chrome 或 Edge 可以。",
+  "Keep the file somewhere you can find it again.": "請將檔案保存在你日後找得到的位置。",
 }

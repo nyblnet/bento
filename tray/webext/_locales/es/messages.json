@@ -442,5 +442,80 @@
   },
   "primeNote": {
     "message": "Las otras dos también funcionan, pero Chrome vuelve a preguntar — la primera en cada reinicio, la última tras una espera."
+  },
+  "viewLayout": {
+    "message": "Cómo se muestran los documentos"
+  },
+  "viewIcons": {
+    "message": "Iconos"
+  },
+  "viewList": {
+    "message": "Lista"
+  },
+  "close": {
+    "message": "Cerrar"
+  },
+  "setLangTitle": {
+    "message": "Idioma"
+  },
+  "setLangSub": {
+    "message": "En qué idioma habla esta extensión. Normalmente sigue al navegador."
+  },
+  "langAutomatic": {
+    "message": "Automático: seguir el navegador"
+  },
+  "setLangNote": {
+    "message": "El nombre y la descripción de la propia extensión vienen del navegador y no cambian."
+  },
+  "aboutPromo": {
+    "message": "¿Nuevo en Bento? Encuentra plantillas, la galería y la guía de edición con IA en $1, o dale una estrella en $2."
+  },
+  "setThemeTitle": {
+    "message": "Apariencia"
+  },
+  "setThemeSub": {
+    "message": "La configuración del navegador es el valor predeterminado, no una obligación."
+  },
+  "themeAuto": {
+    "message": "Igual que el navegador"
+  },
+  "themeLight": {
+    "message": "Claro"
+  },
+  "themeDark": {
+    "message": "Oscuro"
+  },
+  "checking": {
+    "message": "Comprobando…"
+  },
+  "surveyTitle": {
+    "message": "Encuentra dónde están tus documentos"
+  },
+  "surveySub": {
+    "message": "El navegador sabe qué documentos de Bento has abierto. Puede decir en qué carpetas están."
+  },
+  "surveyDeclined": {
+    "message": "Sin problema: puedes añadir carpetas a mano."
+  },
+  "surveyAllCovered": {
+    "message": "Los $1 documentos que este navegador ha visto ya están en una carpeta añadida."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documentos están fuera de todas las carpetas añadidas. $2 ya están cubiertos."
+  },
+  "surveyCovers": {
+    "message": "cubre $1"
+  },
+  "surveyAdd": {
+    "message": "Añadir esta carpeta…"
+  },
+  "surveyAdded": {
+    "message": "$1 añadida: los documentos ya están listos"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 añadida, pero los documentos no están ahí: abre uno desde Finder una vez."
+  },
+  "surveyOnlySeen": {
+    "message": "Así solo se encuentran los documentos abiertos en este navegador."
   }
 }

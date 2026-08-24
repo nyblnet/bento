@@ -15,9 +15,10 @@
 import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
-import { learnPrefix } from './db.js'
+import { learnPrefix, GRANT, get, put } from './db.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
-import { t, localize } from './i18n.js'
+import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
+  from './i18n.js'
 
 /**
  * Find the granted folders on disk, without sending anyone to Finder.
@@ -79,6 +80,104 @@ async function locateFolders() {
   return { learned, declined: false }
 }
 
+/**
+ * Which folders would cover the documents nobody has granted yet.
+ *
+ * `locateFolders` above already asks history where documents are — and then
+ * throws away every path that is not inside a folder already granted. That
+ * discarded set is the interesting one: it is precisely "documents this
+ * browser has seen that the tray cannot manage".
+ *
+ * THE SHAPE OF THE ANSWER. Not a list of documents — a list of FOLDERS, fewest
+ * first, because a grant covers everything inside it. Greedy set cover: take
+ * the directory that accounts for the most uncovered documents, drop what it
+ * covers, repeat. Ties go to the SHALLOWER directory, since one broad grant is
+ * the thing the setup screen already recommends.
+ *
+ * WHY IT WILL NOT PROPOSE YOUR HOME DIRECTORY. `MIN_SEGMENTS` stops the walk
+ * three segments in, so `/Users/you/Documents` is proposable and `/Users/you`,
+ * `/Users` and `/` are not. Covering everything by granting the lot is a real
+ * answer and a bad one to put in front of somebody as a suggestion.
+ */
+const MIN_SEGMENTS = 3
+const MAX_PROPOSALS = 4
+
+export function proposeFolders(paths, minSegments = MIN_SEGMENTS, max = MAX_PROPOSALS) {
+  const dirsOf = (p) => {
+    const parts = p.split('/').filter(Boolean)
+    parts.pop()                       // the file itself
+    const out = []
+    for (let i = minSegments; i <= parts.length; i++) out.push('/' + parts.slice(0, i).join('/'))
+    return out
+  }
+  let left = paths.filter((p) => dirsOf(p).length)
+  const picked = []
+  while (left.length && picked.length < max) {
+    const count = new Map()
+    for (const p of left) for (const d of dirsOf(p)) count.set(d, (count.get(d) ?? 0) + 1)
+    let best = null
+    for (const [dir, n] of count) {
+      const depth = dir.split('/').length
+      if (!best || n > best.n || (n === best.n && depth < best.depth)) best = { dir, n, depth }
+    }
+    if (!best) break
+    // A REAL document path from under this directory travels with the proposal.
+    // Verifying the folder the user actually picked means walking one of its
+    // own documents' routes (`prefixFor`) — a made-up filename would fail that
+    // walk and the folder would be added but never placed.
+    const sample = left.find((p) => dirsOf(p).includes(best.dir))
+    picked.push({
+      dir: best.dir, count: best.n, sample,
+      name: best.dir.split('/').filter(Boolean).pop(),
+    })
+    left = left.filter((p) => !dirsOf(p).includes(best.dir))
+  }
+  return { proposals: picked, uncovered: paths.length, unplaceable: left.length }
+}
+
+/**
+ * Everything the browser knows about where Bento documents live.
+ *
+ * Returns what is already covered, and what a grant would still need to reach.
+ * The history permission is requested and handed straight back, exactly as
+ * `locateFolders` does — this is the same question asked more completely.
+ */
+async function surveyDocuments() {
+  const granted = await chrome.permissions.request({ permissions: ['history'] })
+  if (!granted) return { declined: true }
+
+  const paths = []
+  let covered = 0
+  try {
+    const items = await chrome.history.search({ text: '.bento.html', maxResults: 5000, startTime: 0 })
+    const grants = await getGrants()
+    const seen = new Set()
+    for (const it of items) {
+      if (!it.url?.startsWith('file://')) continue
+      let path
+      try { path = decodeURIComponent(new URL(it.url).pathname) } catch { continue }
+      if (!path.endsWith('.bento.html') || seen.has(path)) continue
+      seen.add(path)
+      let inside = false
+      for (const dir of grants) {
+        if (await dir.queryPermission({ mode: 'readwrite' }) !== 'granted') continue
+        const prefix = await prefixFor(dir, path)
+        if (!prefix) continue
+        // Free of charge: walking the route to test containment also PLACES
+        // the folder, which is the whole job of "Find my folders".
+        await learnPrefix(dir.name, prefix)
+        inside = true
+        break
+      }
+      if (inside) covered++
+      else paths.push(path)
+    }
+  } finally {
+    await chrome.permissions.remove({ permissions: ['history'] }).catch(() => {})
+  }
+  return { declined: false, covered, ...proposeFolders(paths) }
+}
+
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -94,7 +193,10 @@ const ago = (ms) => {
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs' }
+// `view` is which SCREEN is showing (docs/settings/help); `layout` is how the
+// documents are drawn within it. Two different words on purpose — they were
+// briefly the same one, and "view" then meant two things one line apart.
+const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs', layout: 'icons' }
 
 /**
  * Settings is a VIEW here, not a separate page.
@@ -105,12 +207,34 @@ const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs' }
  * design system, one back-and-forth-free navigation, and one place that knows
  * what a folder is.
  */
+/**
+ * Which screen the URL names. Kept in sync BOTH ways.
+ *
+ * It used to be one-way — the hash was read at boot and then left to rot while
+ * the view moved on. Chrome matches an already-open options tab BY URL, so a
+ * page still claiming `#settings` while showing the documents grid got focused
+ * rather than re-routed, and the second "Options" click landed you on the
+ * documents home. Writing the view back means the URL is either honest (Chrome
+ * focuses a tab that really is Settings) or different (Chrome opens one that
+ * is). `replaceState` rather than assignment: this is a correction to the
+ * address, not a place in history, and it fires no `hashchange` to loop on.
+ */
+const VIEW_HASH = { docs: '', settings: '#settings', help: '#help' }
+
 function show(view) {
   state.view = view
+  const want = VIEW_HASH[view] ?? ''
+  if (location.hash !== want) {
+    try { history.replaceState(null, '', want || location.pathname) } catch { /* not fatal */ }
+  }
   const docs = view === 'docs'
   $('searchWrap').hidden = !docs
   $('sort').hidden = !docs
   $('new').hidden = !docs
+  // How documents are DRAWN is meaningless where none are: Settings and Help
+  // replace the scroller entirely, so the toggle would sit over a page it
+  // cannot affect.
+  $('layout').hidden = !docs
   $('settings').setAttribute('aria-current', String(view === 'settings'))
   $('help').setAttribute('aria-current', String(view === 'help'))
   $('navAll').setAttribute('aria-current', String(docs && state.folder === null))
@@ -199,6 +323,95 @@ function visible() {
  * short list that shows which are done, not a paragraph explaining why nothing
  * works.
  */
+/**
+ * The survey, as something you can look at and act on.
+ *
+ * One builder, used by the first-run screen and by Settings, because "where are
+ * my documents" is the same question whether you are new or have been using
+ * this for a month — and two implementations would drift.
+ */
+function surveyPanel(onDone) {
+  const box = document.createElement('div')
+  box.className = 'survey'
+
+  const go = document.createElement('button')
+  go.className = 'btn primary'
+  go.textContent = t('findFolders')
+  box.appendChild(go)
+
+  const out = document.createElement('div')
+  out.className = 'survey-out'
+  box.appendChild(out)
+
+  go.addEventListener('click', async () => {
+    go.disabled = true
+    go.textContent = t('looking')
+    let r
+    try { r = await surveyDocuments() } catch (e) { toast(e.message); r = null }
+    go.disabled = false
+    go.textContent = t('findFolders')
+    if (!r) return
+    if (r.declined) { out.innerHTML = `<p class="sub">${t('surveyDeclined')}</p>`; return }
+
+    out.textContent = ''
+    const line = document.createElement('p')
+    line.className = 'sub'
+    // Three different answers, and they are not the same news.
+    line.innerHTML = r.uncovered === 0
+      ? t('surveyAllCovered', r.covered)
+      : t('surveyUncovered', r.uncovered, r.covered)
+    out.appendChild(line)
+
+    for (const prop of r.proposals) {
+      const row = document.createElement('div')
+      row.className = 'row'
+      row.innerHTML = `<b>${esc(prop.dir)}</b>`
+        + `<span class="note">${esc(t('surveyCovers', prop.count))}</span>`
+      const add = document.createElement('button')
+      add.className = 'btn'
+      add.textContent = t('surveyAdd')
+      add.addEventListener('click', async () => {
+        add.disabled = true
+        try {
+          // The picker is unavoidable: Chrome grants a directory to the USER's
+          // choice, in a real dialog, and an extension cannot pre-select a path
+          // — `startIn` takes a well-known name or an existing handle, never an
+          // arbitrary one. So the proposal is a signpost, not a shortcut.
+          const dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+          await dir.requestPermission({ mode: 'readwrite' })
+          const dirs = await getGrants()
+          for (const existing of dirs) if (await existing.isSameEntry(dir)) { add.disabled = false; return }
+          await putGrants([...dirs, dir])
+          // Did they pick the folder that was proposed? Verified, not assumed:
+          // walking one of its own documents' routes both proves containment
+          // and PLACES the folder, so it is openable immediately instead of
+          // waiting for someone to open a file from Finder.
+          const probe = prop.sample ?? `${prop.dir}/x.bento.html`
+          const prefix = await prefixFor(dir, probe)
+          if (prefix) await learnPrefix(dir.name, prefix)
+          await load()
+          await renderNotice()
+          toast(prefix ? t('surveyAdded', dir.name) : t('surveyAddedElsewhere', dir.name))
+          onDone?.()
+        } catch { /* the picker was dismissed, which is an answer */ }
+        add.disabled = false
+      })
+      row.appendChild(add)
+      out.appendChild(row)
+    }
+
+    // History only knows what this browser has opened. Saying so stops "it
+    // missed some" reading as a fault.
+    const caveat = document.createElement('p')
+    caveat.className = 'sub'
+    caveat.textContent = t('surveyOnlySeen')
+    out.appendChild(caveat)
+    onDone?.()
+  })
+
+  return box
+}
+
 function firstRun() {
   const el = document.createElement('div')
   el.className = 'empty'
@@ -220,6 +433,18 @@ function firstRun() {
   pick.textContent = t('chooseFolder')
   pick.onclick = () => $('addFolder').click()
   step(1, !!state.grants, t('setupStep1'), t('setupStep1Note'), pick)
+  // The survey belongs HERE most of all. On a fresh install the answer to "which
+  // folder?" is knowable — the browser has the paths — and asking somebody to
+  // guess at a directory tree when the extension could just tell them is the
+  // worse half of this screen.
+  if (!state.grants) {
+    const s = document.createElement('div')
+    s.className = 'step'
+    s.innerHTML = `<span class="num">?</span>`
+      + `<span class="txt"><b>${esc(t('surveyTitle'))}</b><small>${t('surveySub')}</small></span>`
+    s.querySelector('.txt').appendChild(surveyPanel(() => { void renderGrid() }))
+    steps.appendChild(s)
+  }
 
   step(2, state.fileAccess === true, t('setupStep2'), t('setupStep2Note'))
 
@@ -258,6 +483,7 @@ function renderGrid() {
   const scroll = document.querySelector('.scroll')
   scroll.innerHTML = '<div class="grid" id="grid"></div>'
   const grid = $('grid')
+  if (state.layout === 'list') grid.classList.add('as-list')
   const docs = visible()
   $('heading').textContent = state.folder ?? t('navAll')
 
@@ -523,6 +749,141 @@ async function renderNotice() {
 $('q').addEventListener('input', (e) => { state.q = e.target.value; renderGrid() })
 $('sort').addEventListener('change', (e) => { state.sort = e.target.value; renderGrid() })
 
+// ------------------------------------------------------------------- about
+//
+// A dialog rather than a view, opened from the wordmark — the idiom bento/slides
+// already uses, so the same question is asked the same way across the suite.
+// <dialog> is used for what it gives free: Esc closes it, focus is trapped and
+// restored, and the backdrop is inert without a click-outside handler of ours.
+async function openAbout() {
+  const dlg = $('aboutDlg')
+  const body = $('aboutBody')
+  const mine = chrome.runtime.getManifest().version
+  const selfManaged = await isSelfManaged()
+  const upd = await pendingUpdate()
+
+  body.textContent = ''
+  const add = (cls, html) => {
+    const el = document.createElement('div')
+    el.className = cls
+    el.innerHTML = html
+    body.appendChild(el)
+    return el
+  }
+
+  // The route back to the project. bento/slides carries the same invitation in
+  // its About dialog; someone who installed the tray may never have seen the
+  // gallery or the agent guide, and this is the one screen where telling them
+  // is not an interruption.
+  add('ab-promo', t('aboutPromo',
+    '<a href="https://bento.page" target="_blank" rel="noopener">bento.page</a>',
+    '<a href="https://github.com/nyblnet/bento" target="_blank" rel="noopener">GitHub</a>'))
+
+  // Version, and what that means for updates — the same three states Settings
+  // shows, derived the same way, because two screens disagreeing about whether
+  // you are up to date is worse than one screen not saying.
+  const row = add('ab-ver row',
+    `<span class="dot ${upd?.version ? 'meh' : 'ok'}"></span><b>${esc(mine)}</b>`
+    + `<span class="note">${upd?.version
+      ? t('versionAvailable', esc(upd.version))
+      : selfManaged ? t('versionUpToDate') : t('versionManaged')}</span>`)
+  if (upd?.version) {
+    const a = document.createElement('a')
+    a.className = 'btn'
+    a.href = upd.url
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.textContent = t('getIt')
+    row.appendChild(a)
+  }
+  if (selfManaged) {
+    const now = document.createElement('button')
+    now.className = 'btn'
+    now.textContent = t('checkNow')
+    // A check that finds nothing repaints to exactly what was already on
+    // screen, so without saying so the button reads as broken — press, nothing,
+    // press again. It says what it is doing, then says what it found.
+    now.onclick = async () => {
+      const note = row.querySelector('.note')
+      const was = note.textContent
+      now.disabled = true
+      note.textContent = t('checking')
+      let found = null
+      try { found = await checkForUpdate({ force: true }) } catch { /* offline */ }
+      now.disabled = false
+      if (found?.version) {
+        await openAbout()          // a real update: repaint, it changes the row
+      } else {
+        note.textContent = was
+        toast(t('versionUpToDate'))
+      }
+    }
+    row.appendChild(now)
+  }
+  add('ab-note', esc(selfManaged ? t('setVersionUnpacked') : t('setVersionStore')))
+
+  // bento.page is deliberately absent: the wordmark above links there, and the
+  // promo sentence says it in words. Offering it a third time as a pill was
+  // what made this row look like leftover chrome.
+  const links = document.createElement('div')
+  links.className = 'ab-links'
+  for (const [label, href] of [
+    [t('linkSource'), 'https://github.com/nyblnet/bento'],
+    [t('linkIssues'), 'https://github.com/nyblnet/bento/issues'],
+    [t('linkReleases'), 'https://github.com/nyblnet/bento/releases'],
+  ]) {
+    const a = document.createElement('a')
+    a.href = href
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.textContent = label
+    links.appendChild(a)
+  }
+  body.appendChild(links)
+
+  add('ab-foot', esc(t('helpAboutSub', mine)))
+
+  // The version belongs beside the wordmark, as it does in bento/slides.
+  $('aboutVer').textContent = `v${mine}`
+  if (!dlg.open) dlg.showModal()
+}
+
+$('brand').addEventListener('click', openAbout)
+$('aboutClose').addEventListener('click', () => $('aboutDlg').close())
+// Clicking the backdrop closes it. The dialog's own box is a child, so a click
+// that lands on the element itself and not on any descendant IS the backdrop.
+$('aboutDlg').addEventListener('click', (e) => { if (e.target === $('aboutDlg')) $('aboutDlg').close() })
+
+// ------------------------------------------------------------- icons / list
+//
+// Stored per DEVICE rather than per folder. Finder remembers per directory,
+// but Finder's folders are a place you furnish; these are a flat list of
+// grants that the user rarely revisits and never arranges, so a per-folder
+// memory would mostly be a setting that appears to forget itself.
+//
+// Kept in the same IndexedDB store as every other preference (update.js does
+// the same with `autoCheck`) so there is one place a preference lives.
+const LAYOUTS = ['icons', 'list']
+
+function paintLayout() {
+  for (const b of $('layout').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.layout === state.layout))
+  }
+}
+
+async function setLayout(next) {
+  if (!LAYOUTS.includes(next) || next === state.layout) return
+  state.layout = next
+  paintLayout()
+  renderGrid()
+  try { await put(GRANT, 'layout', next) } catch { /* the view still changed */ }
+}
+
+$('layout').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-layout]')
+  if (b) void setLayout(b.dataset.layout)
+})
+
 // `/` focuses search, the convention everywhere text is listed. Not while
 // typing in a field, or it eats the character.
 addEventListener('keydown', (e) => {
@@ -586,8 +947,18 @@ $('new').addEventListener('click', async (ev) => {
         // extension: a document made here is the same build everyone else has
         // today, and the extension never needs re-reviewing to keep up.
         const made = await newDocument(target, 'Untitled', { app: app.id })
-        toast(t('createdIn', made.base, `${made.app} ${made.version}`, target.name))
         await load()
+        toast(t('createdIn', made.base, `${made.app} ${made.version}`, target.name))
+        // Creating a document is not the goal — writing in it is. Open it, the
+        // way saving a new file in any editor leaves you inside the file.
+        //
+        // Conditional because it HAS to be: a tab needs an absolute path, and a
+        // folder handle does not carry one (see locateFolders above). If this
+        // folder has never been placed, `path` is null and there is nothing to
+        // navigate to — the card lands in the grid marked unplaced, which
+        // already explains itself, rather than a tab opening on `file://null`.
+        const fresh = state.docs.find((d) => d.folder === target.name && d.base === made.base)
+        if (fresh?.path) openDoc(fresh)
       } catch (e) {
         toast(e.message)
       } finally {
@@ -625,7 +996,6 @@ $('help').addEventListener('click', () => show('help'))
 async function renderHelp() {
   $('heading').textContent = t('navHelp')
   const s = await status()
-  const mine = chrome.runtime.getManifest().version
   const wrap = document.createElement('div')
   wrap.className = 'panel'
 
@@ -679,25 +1049,9 @@ async function renderHelp() {
   // --- what it never does
   section(t('helpNeverTitle'), t('helpNeverSub'))
 
-  // --- where it came from
-  const about = section(t('helpAboutTitle'), t('helpAboutSub', esc(mine)))
-  const links = document.createElement('div')
-  links.className = 'links'
-  for (const [label, href] of [
-    ['bento.page', 'https://bento.page'],
-    [t('linkSource'), 'https://github.com/nyblnet/bento'],
-    [t('linkIssues'), 'https://github.com/nyblnet/bento/issues'],
-    [t('linkReleases'), 'https://github.com/nyblnet/bento/releases'],
-  ]) {
-    const a = document.createElement('a')
-    a.className = 'btn'
-    a.href = href
-    a.target = '_blank'
-    a.rel = 'noopener'
-    a.textContent = label
-    links.appendChild(a)
-  }
-  about.appendChild(links)
+  // Where it came from is NOT repeated here. It lives in the About dialog on
+  // the wordmark (openAbout) — one answer in one place, reachable without
+  // leaving whatever you were doing.
 
   const scroll = document.querySelector('.scroll')
   scroll.innerHTML = ''
@@ -767,6 +1121,75 @@ async function renderSettings() {
   add.textContent = t('addFolder')
   add.onclick = () => $('addFolder').click()
   folders.appendChild(add)
+
+  // --- the language, which Chrome will not let you change on macOS
+  //
+  // `chrome.i18n` follows the browser's UI language and cannot be redirected,
+  // and on macOS that language comes from the SYSTEM — so without this the only
+  // way to read the extension in Japanese was to run the whole computer in it.
+  // bento/slides has had a picker in its About dialog all along; this is the
+  // same control, in the place a tray preference belongs.
+  const lang = section(t('setLangTitle'), t('setLangSub'))
+  const lrow = document.createElement('div')
+  lrow.className = 'row'
+  const sel = document.createElement('select')
+  const auto = document.createElement('option')
+  auto.value = ''
+  auto.textContent = t('langAutomatic')
+  sel.appendChild(auto)
+  // Sorted by what each language calls ITSELF, in that language's own
+  // collation — the order an English speaker would impose is not the order the
+  // reader is scanning in.
+  for (const code of [...LOCALES].sort((a, b) => localeLabel(a).localeCompare(localeLabel(b)))) {
+    const o = document.createElement('option')
+    o.value = code
+    o.textContent = localeLabel(code)
+    sel.appendChild(o)
+  }
+  sel.value = localeOverride() ?? ''
+  sel.addEventListener('change', async () => {
+    await setLocale(sel.value || null)
+    // Everything on screen is now in the wrong language, including the static
+    // markup filled at load, so both are redone rather than just this view.
+    localize()
+    show('settings')
+  })
+  lrow.appendChild(sel)
+  const lnote = document.createElement('span')
+  lnote.className = 'note'
+  lnote.textContent = t('setLangNote')
+  lrow.appendChild(lnote)
+  lang.appendChild(lrow)
+
+  // Where else are documents? The same question the first-run screen asks,
+  // still worth asking later: folders get added over time.
+  const find = section(t('surveyTitle'), t('surveySub'))
+  find.appendChild(surveyPanel(() => { void renderSettings() }))
+
+  // --- light or dark, or whatever the browser is doing
+  //
+  // The same shape as Language directly above, and for the same reason: the
+  // browser's answer is a good DEFAULT and a bad requirement. Semantics come
+  // from theme.js, which mirrors `kernel/src/theme.ts` so bento/slides and
+  // bento/tray mean the same three things by the same three words.
+  const theme = section(t('setThemeTitle'), t('setThemeSub'))
+  const trow = document.createElement('div')
+  trow.className = 'row'
+  const tsel = document.createElement('select')
+  for (const [value, label] of [
+    ['auto', t('themeAuto')],
+    ['light', t('themeLight')],
+    ['dark', t('themeDark')],
+  ]) {
+    const o = document.createElement('option')
+    o.value = value
+    o.textContent = label
+    tsel.appendChild(o)
+  }
+  tsel.value = globalThis.bentoTheme?.choice() ?? 'auto'
+  tsel.addEventListener('change', () => { globalThis.bentoTheme?.set(tsel.value) })
+  trow.appendChild(tsel)
+  theme.appendChild(trow)
 
   // --- the permission nothing can request
   const access = section(t('setAccessTitle'), t('setAccessSub'))
@@ -893,9 +1316,37 @@ document.addEventListener('visibilitychange', () => {
 // A fresh install is sent here by the worker (`#welcome`), because the first
 // question is "what did I just install and what does it want" — and a grid of
 // documents it cannot see yet answers none of it.
+// Before ANY painting: a saved language choice has to be in hand, or the page
+// renders in the browser's language and visibly re-renders a moment later.
+await initI18n()
 localize()
-if (location.hash === '#welcome' || location.hash === '#help') show('help')
+
+// Read BEFORE the first grid render, so someone who chose list mode never
+// watches it boot into icons and reflow a frame later.
+try {
+  const saved = await get(GRANT, 'layout')
+  if (LAYOUTS.includes(saved)) state.layout = saved
+} catch { /* the default is a perfectly good answer */ }
+paintLayout()
+
+// Which screen the window was ASKED for. `#welcome` is the worker's post-install
+// landing; `#settings` is what `options_page` points at, because Chrome's
+// "Options" entry means "configure this extension" and answering it with a grid
+// of documents ignores the question. Applied twice on purpose — once before the
+// documents load so the right screen paints immediately, once after, because
+// `load()` finishes by showing the grid.
+const routeHash = () => {
+  const view = { '#welcome': 'help', '#help': 'help', '#settings': 'settings' }[location.hash]
+  if (view) show(view)
+  return !!view
+}
+
+routeHash()
 
 await load()
 await renderNotice()
-if (location.hash === '#welcome' || location.hash === '#help') show('help')
+routeHash()
+
+// A hash change while the page is already open (Chrome reuses an existing
+// options tab rather than opening a second one) must still move the view.
+addEventListener('hashchange', routeHash)

@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Pozostałe dwie też działają, ale Chrome zapyta znowu — pierwsza przy każdym uruchomieniu, ostatnia po odczekaniu."
+  },
+  "viewLayout": {
+    "message": "Sposób wyświetlania dokumentów"
+  },
+  "viewIcons": {
+    "message": "Ikony"
+  },
+  "viewList": {
+    "message": "Lista"
+  },
+  "close": {
+    "message": "Zamknij"
+  },
+  "setLangTitle": {
+    "message": "Język"
+  },
+  "setLangSub": {
+    "message": "W jakim języku mówi to rozszerzenie. Zwykle podąża za przeglądarką."
+  },
+  "langAutomatic": {
+    "message": "Automatycznie — podążaj za przeglądarką"
+  },
+  "setLangNote": {
+    "message": "Nazwa i opis samego rozszerzenia pochodzą z przeglądarki i się nie zmieniają."
+  },
+  "aboutPromo": {
+    "message": "Pierwszy raz w Bento? Szablony, galerię i przewodnik po edycji z AI znajdziesz na $1 — albo daj gwiazdkę na $2."
+  },
+  "setThemeTitle": {
+    "message": "Wygląd"
+  },
+  "setThemeSub": {
+    "message": "Ustawienie przeglądarki jest domyślne, a nie obowiązkowe."
+  },
+  "themeAuto": {
+    "message": "Tak jak przeglądarka"
+  },
+  "themeLight": {
+    "message": "Jasny"
+  },
+  "themeDark": {
+    "message": "Ciemny"
+  },
+  "checking": {
+    "message": "Sprawdzanie…"
+  },
+  "surveyTitle": {
+    "message": "Znajdź, gdzie są Twoje dokumenty"
+  },
+  "surveySub": {
+    "message": "Przeglądarka wie, które dokumenty Bento otwierałeś. Może powiedzieć, w których folderach są."
+  },
+  "surveyDeclined": {
+    "message": "Nic nie szkodzi — foldery możesz dodać ręcznie."
+  },
+  "surveyAllCovered": {
+    "message": "Wszystkie $1 dokumentów widzianych przez tę przeglądarkę są już w dodanym folderze."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumentów jest poza wszystkimi dodanymi folderami. $2 są już objęte."
+  },
+  "surveyCovers": {
+    "message": "obejmuje $1"
+  },
+  "surveyAdd": {
+    "message": "Dodaj ten folder…"
+  },
+  "surveyAdded": {
+    "message": "Dodano $1 — dokumenty w nim są gotowe"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Dodano $1, ale dokumentów tam nie ma — otwórz jeden z Findera."
+  },
+  "surveyOnlySeen": {
+    "message": "W ten sposób znajdziesz tylko dokumenty otwarte w tej przeglądarce."
   }
 }

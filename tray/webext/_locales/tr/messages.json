@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Diğer ikisi de çalışır, ama Chrome yeniden sorar — ilki için her yeniden başlatmada, sonuncusu için bir bekleme sonrasında."
+  },
+  "viewLayout": {
+    "message": "Belgelerin gösterilme biçimi"
+  },
+  "viewIcons": {
+    "message": "Simgeler"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Kapat"
+  },
+  "setLangTitle": {
+    "message": "Dil"
+  },
+  "setLangSub": {
+    "message": "Bu uzantının konuştuğu dil. Normalde tarayıcıyı izler."
+  },
+  "langAutomatic": {
+    "message": "Otomatik — tarayıcıyı izle"
+  },
+  "setLangNote": {
+    "message": "Uzantının kendi adı ve açıklaması tarayıcıdan gelir ve değişmez."
+  },
+  "aboutPromo": {
+    "message": "Bento'da yeni misiniz? Şablonlar, galeri ve yapay zekâ düzenleme rehberi $1 adresinde — ya da $2 üzerinde yıldız verin."
+  },
+  "setThemeTitle": {
+    "message": "Görünüm"
+  },
+  "setThemeSub": {
+    "message": "Tarayıcının ayarı varsayılandır, zorunluluk değil."
+  },
+  "themeAuto": {
+    "message": "Tarayıcıyla aynı"
+  },
+  "themeLight": {
+    "message": "Açık"
+  },
+  "themeDark": {
+    "message": "Koyu"
+  },
+  "checking": {
+    "message": "Denetleniyor…"
+  },
+  "surveyTitle": {
+    "message": "Belgelerinizin nerede olduğunu bulun"
+  },
+  "surveySub": {
+    "message": "Tarayıcı hangi Bento belgelerini açtığınızı bilir. Hangi klasörlerde olduklarını söyleyebilir."
+  },
+  "surveyDeclined": {
+    "message": "Sorun değil — klasörleri elle de ekleyebilirsiniz."
+  },
+  "surveyAllCovered": {
+    "message": "Bu tarayıcının gördüğü $1 belgenin tamamı zaten eklediğiniz bir klasörde."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> belge eklediğiniz hiçbir klasörde değil. $2 tanesi zaten kapsanıyor."
+  },
+  "surveyCovers": {
+    "message": "$1 belge içeriyor"
+  },
+  "surveyAdd": {
+    "message": "Bu klasörü ekle…"
+  },
+  "surveyAdded": {
+    "message": "$1 eklendi — içindeki belgeler hazır"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 eklendi, ama belgeler orada değil — Finder'dan bir tanesini bir kez açın."
+  },
+  "surveyOnlySeen": {
+    "message": "Bu yolla yalnızca bu tarayıcıda açılmış belgeler bulunabilir."
   }
 }

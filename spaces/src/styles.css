@@ -366,6 +366,21 @@ option { background: var(--field); color: var(--ink); }
   display: flex; gap: 1px; opacity: 0; transition: opacity .12s;
 }
 .sp-b:hover > .sp-gutter, .sp-gutter:focus-within { opacity: 1; }
+
+/* Desktop gutters sit outside the prose. Phone gutters join the block flow,
+   so their sizing and spacing stay with the phone rules below. */
+@media (min-width: 821px) {
+  /* bottom:0, not height:stretch — an abspos box stretches the same way
+     and `stretch` is Chrome-only (Firefox has none, Safari needs
+     -webkit-fill-available), where it would silently drop back to the
+     24px intrinsic height and lose the full-block hover/focus target. */
+  .sp-gutter { top: 0; bottom: 0; padding-top: inherit; }
+  .sp-b-h2 > .sp-gutter { align-items: center; margin-bottom: 2px; }
+  .sp-b-number > .sp-gutter { inset-inline-start: -68px; }
+  .sp-b-bullet > .sp-gutter { inset-inline-start: -64px; }
+  .sp-b-code > .sp-gutter { margin: 6px 0; }
+}
+
 .sp-ghost {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 24px; padding: 0; border: 0; border-radius: 5px;
@@ -1367,8 +1382,12 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 
 /* Belt and braces at every width: a status message can shrink and clip, but it
-   can never be the reason a control leaves the bar. */
-.sp-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+   can never be the reason a control leaves the bar — nor the reason the bar
+   changes tier. Basis 0 keeps the message out of the bar's intrinsic width, so
+   text arriving cannot push fitTopbar into hiding labels and resizing buttons
+   under the pointer; grow lets it use whatever slack is going, and it
+   ellipsises when there is none. */
+.sp-status { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Hit targets: a 30px button is a miss on a touch screen. */
 @media (pointer: coarse) {

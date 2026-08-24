@@ -315,6 +315,8 @@ export class Editor {
       keep?: (b: HTMLButtonElement) => void
     }> = [
       { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
+      { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
+        run: () => this.openImport() },
       { icon: 'book', label: t("Today's journal"), hint: '⌘⇧J', run: () => this.openJournal() },
       { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
       { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
@@ -431,7 +433,14 @@ export class Editor {
     const right = el('div', 'sp-group sp-group-right')
     right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
 
-    bar.append(pagesB, mark, title, this.statusEl, history, right)
+    // The status goes AFTER undo/redo, never before. It is transient text that
+    // grows from nothing to a whole sentence, and anything downstream of it in
+    // the flex flow gets shoved sideways every time it changes — measured at
+    // 36px on a plain edit and 246px entering reading view, which is more than
+    // a button's width, so undo lands where redo just was. Past the history
+    // group it grows into the slack the right group's margin-auto already
+    // holds, and nothing before it can move. Reported against slides as #300.
+    bar.append(pagesB, mark, title, history, this.statusEl, right)
 
     // Drive the fit now, and again whenever the bar's size or its CONTENT
     // changes. The ResizeObserver is the primary width signal — it fires for
@@ -934,10 +943,15 @@ export class Editor {
     this.sidebar.innerHTML = ''
     const head = el('div', 'sp-side-head')
     head.append(el('span', 'sp-side-title', t('Pages')))
-    // import sits beside "new page" because that is where pages come from,
-    // and because the moment someone wants it is the moment they see an empty
-    // sidebar next to a folder of notes they already have
-    head.append(iconBtn('markdown', t('Import Markdown files or a folder…'), () => this.openImport()))
+    // Import used to sit here, beside "new page", on the reasoning that the
+    // moment somebody wants it is the moment they see an empty sidebar next to
+    // a folder of notes. Two things undid that: a fresh space is not empty any
+    // more (the starter fills it), and About now has a "Bring notes in"
+    // section beside the ways out — so this was a second copy of a control, in
+    // the header of the page LIST, reading as a way to add a page. It lives
+    // with the other secondary actions instead, which puts it in the ⋯ menu on
+    // a phone from one list rather than two. Dropping a folder on the window
+    // still works and is how most people will actually find it.
     head.append(iconBtn('plus', t('New page (⌘⌥N)'), () => this.newPage()))
     this.sidebar.append(head)
 

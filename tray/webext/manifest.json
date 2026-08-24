@@ -13,7 +13,7 @@
   "optional_permissions": [
     "history"
   ],
-  "options_page": "src/home.html",
+  "options_page": "src/home.html#settings",
   "background": {
     "service_worker": "src/background.js",
     "type": "module"

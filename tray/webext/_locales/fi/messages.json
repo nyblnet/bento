@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Kaksi muutakin toimivat, mutta Chrome kysyy uudelleen — ensimmäisessä joka käynnistyksellä ja viimeisessä odotusajan jälkeen."
+  },
+  "viewLayout": {
+    "message": "Miten asiakirjat näytetään"
+  },
+  "viewIcons": {
+    "message": "Kuvakkeet"
+  },
+  "viewList": {
+    "message": "Luettelo"
+  },
+  "close": {
+    "message": "Sulje"
+  },
+  "setLangTitle": {
+    "message": "Kieli"
+  },
+  "setLangSub": {
+    "message": "Millä kielellä tämä laajennus puhuu. Yleensä se seuraa selainta."
+  },
+  "langAutomatic": {
+    "message": "Automaattinen — seuraa selainta"
+  },
+  "setLangNote": {
+    "message": "Laajennuksen oma nimi ja kuvaus tulevat selaimesta eivätkä muutu."
+  },
+  "aboutPromo": {
+    "message": "Bento uutta sinulle? Mallit, galleria ja tekoälymuokkausopas löytyvät osoitteesta $1 — tai anna tähti palvelussa $2."
+  },
+  "setThemeTitle": {
+    "message": "Ulkoasu"
+  },
+  "setThemeSub": {
+    "message": "Selaimen asetus on oletus, ei vaatimus."
+  },
+  "themeAuto": {
+    "message": "Seuraa selainta"
+  },
+  "themeLight": {
+    "message": "Vaalea"
+  },
+  "themeDark": {
+    "message": "Tumma"
+  },
+  "checking": {
+    "message": "Tarkistetaan…"
+  },
+  "surveyTitle": {
+    "message": "Etsi missä asiakirjasi ovat"
+  },
+  "surveySub": {
+    "message": "Selain tietää, mitkä Bento-asiakirjat olet avannut. Se voi kertoa, missä kansioissa ne ovat."
+  },
+  "surveyDeclined": {
+    "message": "Ei se mitään — voit lisätä kansiot käsin."
+  },
+  "surveyAllCovered": {
+    "message": "Kaikki $1 asiakirjaa, jotka tämä selain on nähnyt, ovat jo lisätyssä kansiossa."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> asiakirjaa on kaikkien lisättyjen kansioiden ulkopuolella. $2 on jo katettu."
+  },
+  "surveyCovers": {
+    "message": "kattaa $1"
+  },
+  "surveyAdd": {
+    "message": "Lisää tämä kansio…"
+  },
+  "surveyAdded": {
+    "message": "$1 lisätty — sen asiakirjat ovat valmiina"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 lisätty, mutta asiakirjat eivät ole siellä — avaa yksi Finderissa kerran."
+  },
+  "surveyOnlySeen": {
+    "message": "Näin löytyvät vain tässä selaimessa avatut asiakirjat."
   }
 }

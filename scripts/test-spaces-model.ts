@@ -2687,5 +2687,78 @@ function fsTable(f: string): string {
     'the static file-manager preview has no theme of its own — it is the author’s document')
 }
 
+// ---- THE `/` MENU IS NOT ENGLISH-ONLY ---------------------------------------
+// Block specs carry `label`/`hint` in a data table and the editor renders them
+// with `t(item.label)`. The i18n sweep anchors on a LITERAL `t('…')`, so it
+// never saw them: the slash menu, the Insert dropdown and ⌘K's block results
+// were English in all eight languages, for every block type, from the day the
+// table was written.
+//
+// The second half is the part worth pinning. Adding the strings to the
+// catalogs did NOT fix it — the packer builds PACKED from the swept key list,
+// so a catalog entry for a key the sweep misses is dropped on the way into the
+// shell. The catalogs read 504/504 complete while the shell shipped none of
+// them. Only teaching the SWEEP about them works.
+{
+  const fs = await import('node:fs')
+  const sweep = fs.readFileSync(new URL('../scripts/build-spaces-i18n.mjs', import.meta.url), 'utf8')
+  const packed = fs.readFileSync(new URL('../spaces/src/i18n/packed.ts', import.meta.url), 'utf8')
+
+  ok(/blocks\.ts'\)/.test(sweep) && /label\|hint/.test(sweep),
+    'the key sweep reads block spec labels and hints, not only literal t() calls')
+  for (const label of ['Bulleted list', 'Callout', 'Board or list', 'Video or audio']) {
+    ok(packed.includes(JSON.stringify(label)),
+      `"${label}" reaches the packed table, so the menu can be translated`)
+  }
+  // SYNTAX IS NOT LANGUAGE: a markdown trigger is what you literally type.
+  // Demanding eight translations of "-" would be noise in every catalog.
+  for (const syntax of ['"-"', '"1."', '"---"', '"[]"']) {
+    ok(!new RegExp('^\\s*' + syntax.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':', 'm').test(packed),
+      `${syntax} is a markdown trigger and stays out of the catalogs`)
+  }
+}
+
+
+// ---- A LINK IN A TABLE CELL IS A LINK --------------------------------------
+// A table keeps its content in `rows` and mirrors it into `html`; writeTable is
+// the one writer that keeps the two in step. So a table the EDITOR produced
+// back-links from its cells, and a table that arrives any other way — hand
+// written, an agent calling updateBlock, an import — does not: the link works
+// when clicked and appears in no "Linked from". Silent, and exactly the one
+// failure a backlink index can have.
+//
+// `rows` is read ONLY when `html` is absent. Extending this to always scan
+// `rows` was tried during the starter work and reverted, because with both
+// fields present every cell link is counted twice.
+{
+  const cell = '<a href="#p/b">B</a>'
+  const docWith = (blk: Record<string, unknown>) => ({
+    format: FORMAT, version: 1, docId: 'd', title: 't', home: 'a',
+    theme: {}, pages: [
+      { id: 'a', title: 'A', blocks: [blk] },
+      { id: 'b', title: 'B', blocks: [] },
+    ],
+  }) as unknown as SpacesDoc
+  const backlinksToB = (blk: Record<string, unknown>) =>
+    (buildIndex(docWith(blk)).backlinks?.get('b') ?? []).length
+
+  ok(backlinksToB({ id: 'k', type: 'table', rows: [['x', cell]] }) === 1,
+    'a hand-authored table cell back-links, with no html fallback present')
+
+  const written: Record<string, unknown> = { id: 'k', type: 'table' }
+  writeTable(written as never, tableOf({ ...written, rows: [['x', cell]] } as never))
+  ok(backlinksToB(written) === 1, 'a table written by the editor back-links exactly once')
+
+  ok(backlinksToB({ id: 'k', type: 'table', rows: [[cell]], html: cell }) === 1,
+    '…and with BOTH fields present the same link is not counted twice')
+
+  // buildIndex runs on documents nobody has validated yet
+  let threw = false
+  try { backlinksToB({ id: 'k', type: 'table', rows: ['not-a-row', [null, 7, cell]] }) }
+  catch { threw = true }
+  ok(!threw, 'a malformed rows array does not take the index down')
+}
+
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

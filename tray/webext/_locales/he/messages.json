@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "גם השתיים האחרות עובדות, אך Chrome ישאל שוב — בכל הפעלה מחדש עבור הראשונה, ולאחר המתנה עבור האחרונה."
+  },
+  "viewLayout": {
+    "message": "איך המסמכים מוצגים"
+  },
+  "viewIcons": {
+    "message": "סמלים"
+  },
+  "viewList": {
+    "message": "רשימה"
+  },
+  "close": {
+    "message": "סגירה"
+  },
+  "setLangTitle": {
+    "message": "שפה"
+  },
+  "setLangSub": {
+    "message": "באיזו שפה ההרחבה הזאת מדברת. בדרך כלל היא עוקבת אחרי הדפדפן."
+  },
+  "langAutomatic": {
+    "message": "אוטומטי — לעקוב אחרי הדפדפן"
+  },
+  "setLangNote": {
+    "message": "השם והתיאור של ההרחבה עצמה מגיעים מהדפדפן ואינם משתנים."
+  },
+  "aboutPromo": {
+    "message": "חדשים ב־Bento? תבניות, הגלריה ומדריך העריכה עם AI נמצאים ב־$1 — או תנו כוכב ב־$2."
+  },
+  "setThemeTitle": {
+    "message": "מראה"
+  },
+  "setThemeSub": {
+    "message": "ההגדרה של הדפדפן היא ברירת המחדל, לא חובה."
+  },
+  "themeAuto": {
+    "message": "לפי הדפדפן"
+  },
+  "themeLight": {
+    "message": "בהיר"
+  },
+  "themeDark": {
+    "message": "כהה"
+  },
+  "checking": {
+    "message": "בודק…"
+  },
+  "surveyTitle": {
+    "message": "מצאו איפה המסמכים שלכם"
+  },
+  "surveySub": {
+    "message": "הדפדפן יודע אילו מסמכי Bento פתחתם, והוא יכול לומר באילו תיקיות הם נמצאים."
+  },
+  "surveyDeclined": {
+    "message": "אין בעיה — אפשר להוסיף תיקיות ידנית."
+  },
+  "surveyAllCovered": {
+    "message": "כל $1 המסמכים שהדפדפן הזה ראה כבר נמצאים בתיקייה שהוספתם."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> מסמכים נמצאים מחוץ לכל התיקיות שהוספתם. $2 כבר מכוסים."
+  },
+  "surveyCovers": {
+    "message": "מכילה $1"
+  },
+  "surveyAdd": {
+    "message": "הוספת התיקייה הזאת…"
+  },
+  "surveyAdded": {
+    "message": "$1 נוספה — המסמכים בתוכה מוכנים"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 נוספה, אבל המסמכים אינם בה — פתחו אחד מ־Finder פעם אחת."
+  },
+  "surveyOnlySeen": {
+    "message": "כך אפשר למצוא רק מסמכים שנפתחו בדפדפן הזה."
   }
 }

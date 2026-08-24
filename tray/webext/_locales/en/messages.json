@@ -452,5 +452,95 @@
   "primeNote": {
     "message": "The other two work too, but Chrome asks again — every restart for the first, and after a wait for the last.",
     "description": "Explains the two unlabelled pills by consequence rather than by name."
+  },
+  "viewLayout": {
+    "message": "How documents are shown",
+    "description": "Tooltip on the icons/list segmented control as a whole."
+  },
+  "viewIcons": {
+    "message": "Icons",
+    "description": "Tooltip on the icon-grid button. REVIEW: the noun a file browser uses for thumbnail view."
+  },
+  "viewList": {
+    "message": "List",
+    "description": "Tooltip on the list button. REVIEW: the noun a file browser uses for list/detail view."
+  },
+  "close": {
+    "message": "Close",
+    "description": "Tooltip on the About dialog close button."
+  },
+  "setLangTitle": {
+    "message": "Language",
+    "description": "Settings section heading for the language picker."
+  },
+  "setLangSub": {
+    "message": "Which language this extension speaks. It normally follows the browser.",
+    "description": "Sub-line under the Language heading. REVIEW: \"the browser\" means Chrome/Edge itself."
+  },
+  "langAutomatic": {
+    "message": "Automatic — follow the browser",
+    "description": "First entry in the language picker — follow the browser rather than choosing."
+  },
+  "setLangNote": {
+    "message": "The extension's own name and description come from the browser and do not change.",
+    "description": "REVIEW: explains that the extension NAME on the chrome://extensions card is set by the browser and a choice here cannot change it."
+  },
+  "aboutPromo": {
+    "message": "New to Bento? Find templates, the gallery and the AI editing guide at $1 — or star it on $2.",
+    "description": "About dialog: invitation back to the project. $1 is a link to bento.page, $2 a link to GitHub. REVIEW: keep both placeholders — they are rendered as links."
+  },
+  "setThemeTitle": {
+    "message": "Appearance",
+    "description": "Settings section heading for light/dark."
+  },
+  "setThemeSub": {
+    "message": "The browser's setting is the default, not a requirement.",
+    "description": "Settings section blurb under Appearance."
+  },
+  "themeAuto": {
+    "message": "Match the browser",
+    "description": "Theme option: follow the browser/OS setting. REVIEW: the wording browsers use for \"system\" in this language."
+  },
+  "themeLight": {
+    "message": "Light",
+    "description": "Theme option: light."
+  },
+  "themeDark": {
+    "message": "Dark",
+    "description": "Theme option: dark."
+  },
+  "checking": {
+    "message": "Checking…",
+    "description": "Shown in the About version row while a manual update check is running."
+  },
+  "surveyTitle": {
+    "message": "Find where your documents are"
+  },
+  "surveySub": {
+    "message": "The browser knows which Bento documents you have opened. It can say which folders they are in."
+  },
+  "surveyDeclined": {
+    "message": "No problem — you can add folders by hand."
+  },
+  "surveyAllCovered": {
+    "message": "All $1 documents this browser has seen are already in a folder you added."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documents are outside every folder you added. $2 are already covered."
+  },
+  "surveyCovers": {
+    "message": "covers $1"
+  },
+  "surveyAdd": {
+    "message": "Add this folder…"
+  },
+  "surveyAdded": {
+    "message": "Added $1 — the documents in it are ready"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Added $1, but the documents are not in it — open one from Finder once."
+  },
+  "surveyOnlySeen": {
+    "message": "Only documents opened in this browser can be found this way."
   }
 }
