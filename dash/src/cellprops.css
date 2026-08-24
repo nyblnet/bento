@@ -3,7 +3,14 @@
    The Cell section of the properties panel — three controls panels.css has no
    shape for, and nothing else. Everything that CAN be a `.dp-row` is one: two
    stylesheets describing the same row is how a panel starts to look like two
-   panels. */
+   panels.
+
+   THE CORNERS COME FROM panels.css, not from the app's --radius. These three
+   controls sit in a column of `.dp-row` fields, and the panel's control radius
+   is 6px (slides') where dash's app-wide --radius is 7px — so a preview at 7
+   beside a pattern field at 6 was a one-pixel disagreement repeated down the
+   Cell section. --dp-radius is declared on `.dp-panel`, so it is the same
+   number the field above is using, by construction rather than by copying. */
 
 /* ————— the format preview —————
    A value, printed the way the chosen pattern prints it. It FILLS the control
@@ -18,7 +25,7 @@
   min-height: var(--dp-row, 26px);
   padding: 3px 7px;
   border: 1px solid var(--line);
-  border-radius: var(--radius, 7px);
+  border-radius: var(--dp-radius);
   background: var(--wash);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -48,7 +55,7 @@
   height: var(--dp-row, 26px);
   padding: 0 1px;
   border: 1px solid var(--line);
-  border-radius: var(--radius, 7px);
+  border-radius: var(--dp-radius);
   background: var(--surface);
   cursor: pointer;
 }
@@ -69,7 +76,7 @@
   height: var(--dp-row, 26px);
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: var(--radius, 7px);
+  border-radius: var(--dp-radius);
   background: var(--surface);
   color: var(--muted);
   font: 13px/1 inherit;
