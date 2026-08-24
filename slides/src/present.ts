@@ -1490,6 +1490,23 @@ function morphMathSymbols(
   const toAt = symbolOffsets(to, b.w, b.h)
   if (!toAt.size) return false
 
+  // A symbol with no partner on the previous slide has nowhere to travel FROM,
+  // so it simply appeared. For a formula that is right — a new term rides the
+  // element's own transition. For code it is not: a step can introduce a whole
+  // line, and a line that snaps in while its neighbours glide reads as a redraw
+  // rather than an edit. Fading them in, staggered and starting once the travel
+  // is under way, makes the two motions one beat.
+  const fresh = Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))
+    .filter((s) => !fromAt.has(s.dataset.sym!))
+  fresh.forEach((s, i) => {
+    anim.fromTo(s, { opacity: 0 }, {
+      opacity: 1,
+      duration: 0.3,
+      delay: MORPH_DURATION * 0.4 + Math.min(i, 30) * 0.015,
+      ease: 'power2.out',
+    })
+  })
+
   const pairs: Array<{ node: HTMLElement; dx: number; dy: number }> = []
   for (const sym of Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))) {
     const src = fromAt.get(sym.dataset.sym!)

@@ -1061,13 +1061,21 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       pre.className = 'bento-code'
       pre.style.cssText = `margin:0;font-family:ui-monospace,'SF Mono',Menlo,monospace;`
         + `font-size:${code.fontSize ?? 22}px;line-height:${code.lineHeight ?? 1.45};`
-        + `white-space:pre;overflow:hidden;height:100%;color:${code.color ?? '#E7EAF0'}`
+        + `white-space:pre;overflow:hidden;height:100%;color:${code.color ?? '#E7EAF0'};`
+        // Code is ALWAYS left-aligned. The element wrapper centres its content
+        // like a text box does, which centres each LINE independently — so the
+        // indentation lied, and every line slid sideways during a morph as its
+        // own length changed. Seen in a screenshot, not in a measurement.
+        + `text-align:left`
       // The ids come from the whole morph GROUP, not this slide alone: a token
       // keeps its identity for as long as it survives across the sequence.
       const group = tokensForGroup(doc, el.morphId ?? el.id)
       const toks = group.get(el.id) ?? []
       for (const t of toks) {
         const span = document.createElement('span')
+        // data-sym only. Giving tokens a data-flip-id as well put them into
+        // runMorph's model-driven matching, where they have no model entry —
+        // measured: it cut the travelling tokens from 9 to 2.
         span.dataset.sym = t.sym
         span.textContent = t.v
         const c = CODE_COLORS[t.t]
