@@ -44,28 +44,32 @@ const slide = (elements, o = {}) => ({
 const heading = (s) => text(s, 96, 96, 1088, 60, { size: 34, weight: 700 })
 const sub = (s) => text(s, 96, 140, 1088, 40, { size: 19, color: MIST })
 
-// The story is this repo's own offline fix, built up a step at a time.
-const V1 = `export async function netFetch(input) {
-  return fetch(input)
+// Edits chosen to MOVE code rather than add it: a reorder, an indent shift, a
+// rename. Growing the snippet is the case where a morph has least to show —
+// most tokens are new, and new tokens have nowhere to travel from.
+const V1 = `function publish(deck) {
+  const html = render(deck)
+  const signed = sign(html)
+  upload(signed)
 }`
-const V2 = `export async function netFetch(input) {
-  if (offlineEnabled()) throw new OfflineError(input)
-  return fetch(input)
+// reorder: sign before render — the two lines trade places
+const V2 = `function publish(deck) {
+  const signed = sign(html)
+  const html = render(deck)
+  upload(signed)
 }`
-const V3 = `export async function netFetch(input) {
-  if (offlineEnabled()) throw new OfflineError(input)
-  const ac = new AbortController()
-  inFlight.add(ac)
-  return fetch(input, { signal: ac.signal })
+// rename: html -> page, used three times
+const V3 = `function publish(deck) {
+  const signed = sign(page)
+  const page = render(deck)
+  upload(signed)
 }`
-const V4 = `export async function netFetch(input) {
-  if (offlineEnabled()) throw new OfflineError(input)
-  const ac = new AbortController()
-  inFlight.add(ac)
-  try {
-    return await fetch(input, { signal: ac.signal })
-  } finally {
-    inFlight.delete(ac)
+// indent: the whole body shifts right and down inside a guard
+const V4 = `function publish(deck) {
+  if (deck.ready) {
+    const signed = sign(page)
+    const page = render(deck)
+    upload(signed)
   }
 }`
 
@@ -73,13 +77,10 @@ const PY = `def fib(n):
     if n < 2:
         return n
     return fib(n - 1) + fib(n - 2)`
-const PY2 = `def fib(n, memo={}):
-    if n in memo:
-        return memo[n]
+const PY2 = `def fib(n):
     if n < 2:
         return n
-    memo[n] = fib(n - 1) + fib(n - 2)
-    return memo[n]`
+    return fib(n - 2) + fib(n - 1)`
 
 const DIFF = `--- a/kernel/src/net.ts
 +++ b/kernel/src/net.ts
@@ -107,22 +108,22 @@ const doc = {
       text('77 languages · 6.7 KB · no highlighter dependency', 96, 440, 900, 40, { size: 18, color: '#FF9E8A' }),
     ], { transition: 'fade', name: 'Title', notes: 'Press → to walk the code. Each step inserts lines; the tokens that survive glide into place.' }),
 
-    slide([heading('Start with the naive version'), sub('slides/src/... netFetch, before the offline switch'), code(V1)],
-      { name: 'v1', notes: 'Two lines. Watch what stays put as the next steps land.' }),
+    slide([heading('Four statements'), sub('watch these, not the words — every step below only REARRANGES them'), code(V1)],
+      { name: 'v1', notes: 'Nothing is added from here on. Every change moves code that is already on screen.' }),
 
-    slide([heading('Refuse when offline'), sub('a guard goes in at the top — everything below shifts down'), code(V2)],
-      { name: 'v2', notes: 'The signature and the fetch call keep their token ids, so they slide down rather than redraw.' }),
+    slide([heading('Swap two lines'), sub('sign moves up, render moves down — they trade places'), code(V2)],
+      { name: 'v2', notes: 'A pure reorder: no token is new, so every one of them travels.' }),
 
-    slide([heading('Register what is in flight'), sub('two more lines, and fetch grows an argument'), code(V3)],
-      { name: 'v3', notes: 'Note the fetch line: it gains `{ signal: ac.signal }` while the identifier itself stays the same token.' }),
+    slide([heading('Rename a variable'), sub('html becomes page, in both places at once'), code(V3)],
+      { name: 'v3', notes: 'Everything around the rename holds still, which is what makes the rename readable.' }),
 
-    slide([heading('Always clean up'), sub('wrap it, so the registry cannot leak'), code(V4)],
-      { name: 'v4', notes: 'try/finally wraps the body — the return line moves right AND down, and is seen to move.' }),
+    slide([heading('Wrap it in a guard'), sub('the whole body indents — every line moves right and down together'), code(V4)],
+      { name: 'v4', notes: 'The biggest movement in the deck: three lines shift on both axes at once.' }),
 
-    slide([heading('Another language, same machine'), sub('python — one tokenizer, a keyword table per language'), code(PY, 'py')],
+    slide([heading('Another language, same machine'), sub('python — same machine, different keyword table'), code(PY, 'py')],
       { transition: 'fade', name: 'py1', notes: 'The tokenizer is shared; only the table changes.' }),
 
-    slide([heading('Another language, same machine'), sub('memoised — the body grows around what was already there'), code(PY2, 'py')],
+    slide([heading('Another language, same machine'), sub('the two recursive calls swap places'), code(PY2, 'py')],
       { name: 'py2' }),
 
     slide([heading('And a patch reads as a patch'), sub('diff is a line format, so it gets its own eleven lines of handling'), code(DIFF, 'diff')],
