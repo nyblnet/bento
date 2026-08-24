@@ -48,13 +48,13 @@
     "message": "Chrome ابھی پوچھے گا۔ درمیان والا اختیار منتخب کریں:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — ایک فولڈر کو دوبارہ جوڑنا ہے"
+    "message": "bento/home — ایک فولڈر کو دوبارہ جوڑنا ہے"
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray کو دوبارہ جوڑنا ہے"
+    "message": "bento/home کو دوبارہ جوڑنا ہے"
   },
   "notifyLapsedBody": {
     "message": "Chrome نے ایک فولڈر کی اجازت واپس لے لی۔ جب تک بحال نہ ہو، ہر بار محفوظ کرنے پر پوچھا جائے گا کہ فائل کہاں رکھی جائے۔"
@@ -63,7 +63,7 @@
     "message": "دوبارہ جوڑیں"
   },
   "ctxOpenPanel": {
-    "message": "Bento Tray پینل کھولیں"
+    "message": "bento/home پینل کھولیں"
   },
   "panelEmpty": {
     "message": "آپ کے فولڈرز میں ابھی کوئی Bento دستاویز نہیں۔"
@@ -141,7 +141,7 @@
     "message": "<b>+ نئی دستاویز</b> یہاں ایک نئی رکھ دیتی ہے۔"
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray کو ابھی معلوم نہیں کہ $1 ڈسک پر کہاں ہے۔ ”میرے فولڈرز ڈھونڈیں“ استعمال کریں، یا اس کی کوئی دستاویز Finder سے ایک بار کھولیں۔"
+    "message": "bento/home کو ابھی معلوم نہیں کہ $1 ڈسک پر کہاں ہے۔ ”میرے فولڈرز ڈھونڈیں“ استعمال کریں، یا اس کی کوئی دستاویز Finder سے ایک بار کھولیں۔"
   },
   "cardRenamedTip": {
     "message": "$1 دوسرے نام والی ایک Bento دستاویز ہے۔ یہ یہیں سے کھلتی ہے، مگر محفوظ کرتے وقت منزل پوچھی جائے گی — اپنی جگہ محفوظ کرنا صرف اُن فائلوں کو پہچانتا ہے جو ‎.bento.html پر ختم ہوں۔"
@@ -195,7 +195,7 @@
     "message": "مقامی فائل رسائی آن کریں"
   },
   "setupStep2Note": {
-    "message": "<code>chrome://extensions</code> ← Bento Tray ← <b>فائل URLs تک رسائی کی اجازت دیں</b>۔ Chrome کسی ایکسٹینشن کو یہ خود آن کرنے نہیں دیتا۔"
+    "message": "<code>chrome://extensions</code> ← bento/home ← <b>فائل URLs تک رسائی کی اجازت دیں</b>۔ Chrome کسی ایکسٹینشن کو یہ خود آن کرنے نہیں دیتا۔"
   },
   "setupUpgradeNote": {
     "message": "<b>اپ گریڈ کیا اور سوچا کہ آپ کے فولڈرز یہیں ہوں گے؟</b> اَن پیکڈ ایکسٹینشن اپنے فولڈر کے راستے سے پہچانی جاتی ہے، اِس لیے کسی دوسرے فولڈر سے لوڈ کی گئی نئی نقل ایک الگ ایکسٹینشن ہے۔ آپ کے فولڈرز اب بھی پرانی والی سے جڑے ہیں۔ اِس کے بجائے اصل فولڈر کی فائلیں بدلیں اور <code>chrome://extensions</code> میں <b>دوبارہ لوڈ کریں</b> دبائیں۔"
@@ -264,10 +264,10 @@
     "message": "نامعلوم"
   },
   "accessOnNote": {
-    "message": "Bento Tray ڈسک سے کھولے گئے صفحات پڑھ سکتا ہے۔"
+    "message": "bento/home ڈسک سے کھولے گئے صفحات پڑھ سکتا ہے۔"
   },
   "accessOffNote": {
-    "message": "chrome://extensions کھولیں، Bento Tray تلاش کریں، ”فائل URLs تک رسائی کی اجازت دیں“ آن کریں۔"
+    "message": "chrome://extensions کھولیں، bento/home تلاش کریں، ”فائل URLs تک رسائی کی اجازت دیں“ آن کریں۔"
   },
   "accessUnknownNote": {
     "message": "یہ براؤزر اِس کی اطلاع نہیں دیتا۔ اگر محفوظ کرتے وقت اب بھی پوچھا جائے تو chrome://extensions میں دیکھیں۔"
@@ -309,7 +309,7 @@
     "message": "صرف اوپر والے فولڈرز، اور صرف وہی فائل جس سے کوئی صفحہ حقیقتاً کھولا گیا تھا۔ کچھ اپ لوڈ نہیں ہوتا اور کہیں اور کچھ نہیں پڑھا جاتا۔"
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 دستیاب ہے۔</b> یہ نقل اَن پیکڈ لوڈ کی گئی تھی، اِس لیے Chrome اسے کبھی اپ ڈیٹ نہیں کرے گا۔"
+    "message": "<b>bento/home $1 دستیاب ہے۔</b> یہ نقل اَن پیکڈ لوڈ کی گئی تھی، اِس لیے Chrome اسے کبھی اپ ڈیٹ نہیں کرے گا۔"
   },
   "updateStep1": {
     "message": "اسے GitHub سے ڈاؤن لوڈ کریں"
@@ -318,7 +318,7 @@
     "message": "فائلیں <b>اُسی فولڈر میں</b> بدلیں <b>جس سے آپ نے اسے لوڈ کیا تھا</b> — وہی فولڈر، ورنہ Chrome اسے الگ ایکسٹینشن سمجھے گا اور اجازت یافتہ فولڈرز ساتھ نہیں آئیں گے"
   },
   "updateStep3": {
-    "message": "<code>chrome://extensions</code> کھولیں اور Bento Tray پر <b>دوبارہ لوڈ کریں</b> دبائیں"
+    "message": "<code>chrome://extensions</code> کھولیں اور bento/home پر <b>دوبارہ لوڈ کریں</b> دبائیں"
   },
   "fetchingApp": {
     "message": "$1 لایا جا رہا ہے…"
@@ -330,10 +330,10 @@
     "message": "$1 میں"
   },
   "helpWhatTitle": {
-    "message": "Bento Tray کیا کرتا ہے"
+    "message": "bento/home کیا کرتا ہے"
   },
   "helpWhatSub": {
-    "message": "Bento دستاویز ایک ہی HTML فائل ہے جو اپنا مدیر ساتھ لیے چلتی ہے۔ سیدھا ڈسک سے کھولنے پر براؤزر اسے خود میں واپس لکھنے نہیں دیتا — اِس لیے ہر بار محفوظ کرنے پر پوچھا جاتا ہے کہ کہاں رکھیں۔ Bento Tray وہی سوال ختم کر دیتا ہے۔"
+    "message": "Bento دستاویز ایک ہی HTML فائل ہے جو اپنا مدیر ساتھ لیے چلتی ہے۔ سیدھا ڈسک سے کھولنے پر براؤزر اسے خود میں واپس لکھنے نہیں دیتا — اِس لیے ہر بار محفوظ کرنے پر پوچھا جاتا ہے کہ کہاں رکھیں۔ bento/home وہی سوال ختم کر دیتا ہے۔"
   },
   "tourSaveTitle": {
     "message": "اپنی جگہ محفوظ کریں"
@@ -381,7 +381,7 @@
     "message": "یہ براؤزر اِس کی اطلاع نہیں دیتا۔ اگر محفوظ کرتے وقت اب بھی پوچھا جائے تو <code>chrome://extensions</code> میں دیکھیں۔"
   },
   "helpAccessOn": {
-    "message": "آن — Bento Tray ڈسک سے کھولے گئے صفحات پڑھ سکتا ہے۔"
+    "message": "آن — bento/home ڈسک سے کھولے گئے صفحات پڑھ سکتا ہے۔"
   },
   "helpNeverTitle": {
     "message": "یہ کبھی کیا نہیں کرتا"
@@ -393,7 +393,7 @@
     "message": "تعارف"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · Bento منصوبے کا حصہ · MIT لائسنس یافتہ"
+    "message": "bento/home $1 · Bento منصوبے کا حصہ · MIT لائسنس یافتہ"
   },
   "linkSource": {
     "message": "GitHub پر ماخذ"

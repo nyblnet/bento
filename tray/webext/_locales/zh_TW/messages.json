@@ -49,14 +49,14 @@
     "message": "Chrome 接下來會询問。請選擇中间那一項："
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — 有資料夾需要重新連線",
+    "message": "bento/home — 有資料夾需要重新連線",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray 需要重新連線",
+    "message": "bento/home 需要重新連線",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedBody": {
@@ -67,7 +67,7 @@
     "message": "重新連線"
   },
   "ctxOpenPanel": {
-    "message": "打开 Bento Tray 面板"
+    "message": "打开 bento/home 面板"
   },
   "panelEmpty": {
     "message": "你的資料夾中還沒有 Bento 文档。"
@@ -150,7 +150,7 @@
     "message": "<b>+ 新增文档</b>會在這里放一個。"
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray 還不知道 $1 在磁盘上的位置。請使用“查找我的資料夾”，或先從Finder打开该資料夾里的一個文档。",
+    "message": "bento/home 還不知道 $1 在磁盘上的位置。請使用“查找我的資料夾”，或先從Finder打开该資料夾里的一個文档。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "cardRenamedTip": {
@@ -206,7 +206,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupStep2Note": {
-    "message": "在 <code>chrome://extensions</code> → Bento Tray → <b>允许访問檔案網址</b>。Chrome 不允许擴充功能自行開啟。",
+    "message": "在 <code>chrome://extensions</code> → bento/home → <b>允许访問檔案網址</b>。Chrome 不允许擴充功能自行開啟。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupUpgradeNote": {
@@ -285,11 +285,11 @@
     "message": "未知"
   },
   "accessOnNote": {
-    "message": "Bento Tray 可以讀取你從磁盘打开的頁面。",
+    "message": "bento/home 可以讀取你從磁盘打开的頁面。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessOffNote": {
-    "message": "打开 chrome://extensions，找到 Bento Tray，開啟“允许访問檔案網址”。",
+    "message": "打开 chrome://extensions，找到 bento/home，開啟“允许访問檔案網址”。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessUnknownNote": {
@@ -336,7 +336,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 可用。</b>這份副本是以解壓縮方式載入的，Chrome 永远不會更新它。"
+    "message": "<b>bento/home $1 可用。</b>這份副本是以解壓縮方式載入的，Chrome 永远不會更新它。"
   },
   "updateStep1": {
     "message": "從 GitHub 下载"
@@ -346,7 +346,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateStep3": {
-    "message": "打开 <code>chrome://extensions</code>，在 Bento Tray 上點選<b>重新載入</b>"
+    "message": "打开 <code>chrome://extensions</code>，在 bento/home 上點選<b>重新載入</b>"
   },
   "fetchingApp": {
     "message": "正在取得 $1…"
@@ -358,10 +358,10 @@
     "message": "到 $1"
   },
   "helpWhatTitle": {
-    "message": "Bento Tray 的作用"
+    "message": "bento/home 的作用"
   },
   "helpWhatSub": {
-    "message": "Bento 文档是一個自带编辑器的 HTML 檔案。直接從磁盘打开時，瀏覽器不允许它写回自身 — 因此每次儲存都會询問位置。Bento Tray 就是去掉這個問题的東西。"
+    "message": "Bento 文档是一個自带编辑器的 HTML 檔案。直接從磁盘打开時，瀏覽器不允许它写回自身 — 因此每次儲存都會询問位置。bento/home 就是去掉這個問题的東西。"
   },
   "tourSaveTitle": {
     "message": "原位儲存"
@@ -411,7 +411,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpAccessOn": {
-    "message": "已開啟 — Bento Tray 可以讀取你從磁盘打开的頁面。",
+    "message": "已開啟 — bento/home 可以讀取你從磁盘打开的頁面。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpNeverTitle": {
@@ -426,7 +426,7 @@
     "message": "關於"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · Bento 項目的一部分 · MIT 授權"
+    "message": "bento/home $1 · Bento 項目的一部分 · MIT 授權"
   },
   "linkSource": {
     "message": "GitHub 源码"

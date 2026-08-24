@@ -1,6 +1,6 @@
 {
   "appName": {
-    "message": "Bento Tray",
+    "message": "bento/home",
     "description": "Product name. Not translated."
   },
   "appDesc": {
@@ -55,15 +55,15 @@
     "description": "Above a drawing of Chrome’s three-option dialog. Deliberately says POSITION, not Chrome’s button names — the order is the same in every language, the wording is not."
   },
   "actionTitle": {
-    "message": "Bento Tray",
+    "message": "bento/home",
     "description": "Tooltip on the toolbar icon."
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — a folder needs reconnecting",
+    "message": "bento/home — a folder needs reconnecting",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray needs reconnecting",
+    "message": "bento/home needs reconnecting",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedBody": {
@@ -74,7 +74,7 @@
     "message": "Reconnect"
   },
   "ctxOpenPanel": {
-    "message": "Open Bento Tray panel",
+    "message": "Open bento/home panel",
     "description": "Right-click menu item inside a local document."
   },
   "panelEmpty": {
@@ -158,7 +158,7 @@
     "message": "<b>+ New document</b> puts a fresh one here."
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray does not know where $1 is on disk yet. Use “Find my folders”, or open any document in it from Finder once.",
+    "message": "bento/home does not know where $1 is on disk yet. Use “Find my folders”, or open any document in it from Finder once.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "cardRenamedTip": {
@@ -214,7 +214,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupStep2Note": {
-    "message": "In <code>chrome://extensions</code> → Bento Tray → <b>Allow access to file URLs</b>. Chrome does not let an extension turn this on for itself.",
+    "message": "In <code>chrome://extensions</code> → bento/home → <b>Allow access to file URLs</b>. Chrome does not let an extension turn this on for itself.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupUpgradeNote": {
@@ -293,11 +293,11 @@
     "message": "Unknown"
   },
   "accessOnNote": {
-    "message": "Bento Tray can read pages you opened from disk.",
+    "message": "bento/home can read pages you opened from disk.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessOffNote": {
-    "message": "Open chrome://extensions, find Bento Tray, turn on “Allow access to file URLs”.",
+    "message": "Open chrome://extensions, find bento/home, turn on “Allow access to file URLs”.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessUnknownNote": {
@@ -344,7 +344,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 is available.</b> This copy was loaded unpacked, so Chrome will never update it."
+    "message": "<b>bento/home $1 is available.</b> This copy was loaded unpacked, so Chrome will never update it."
   },
   "updateStep1": {
     "message": "Download it from GitHub"
@@ -354,7 +354,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateStep3": {
-    "message": "Open <code>chrome://extensions</code> and press <b>Reload</b> on Bento Tray"
+    "message": "Open <code>chrome://extensions</code> and press <b>Reload</b> on bento/home"
   },
   "fetchingApp": {
     "message": "Fetching $1…"
@@ -366,10 +366,10 @@
     "message": "into $1"
   },
   "helpWhatTitle": {
-    "message": "What Bento Tray does"
+    "message": "What bento/home does"
   },
   "helpWhatSub": {
-    "message": "A Bento document is one HTML file that carries its own editor. Opened straight from disk, a browser will not let it write back to itself — so saving asks you where to put it, every time. Bento Tray is what removes that question."
+    "message": "A Bento document is one HTML file that carries its own editor. Opened straight from disk, a browser will not let it write back to itself — so saving asks you where to put it, every time. bento/home is what removes that question."
   },
   "tourSaveTitle": {
     "message": "Save in place"
@@ -419,7 +419,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpAccessOn": {
-    "message": "On — Bento Tray can read pages you opened from disk.",
+    "message": "On — bento/home can read pages you opened from disk.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpNeverTitle": {
@@ -434,7 +434,7 @@
     "message": "About"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · part of the Bento project · MIT licensed"
+    "message": "bento/home $1 · part of the Bento project · MIT licensed"
   },
   "linkSource": {
     "message": "Source on GitHub"
