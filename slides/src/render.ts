@@ -1078,6 +1078,18 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         // measured: it cut the travelling tokens from 9 to 2.
         span.dataset.sym = t.sym
         span.textContent = t.v
+        // A transform does NOTHING to a non-replaced INLINE element — the
+        // browser accepts the property, reports it back on style.transform,
+        // and moves the box zero pixels. The morph tween was running perfectly
+        // (measured: 199 frames, 20 tokens, correct offsets) and painting
+        // nothing, and every DOM check "confirming" the morph was reading back
+        // a value it had just written. Tokens must be inline-block to move.
+        //
+        // Whitespace tokens are deliberately left inline: they carry newlines,
+        // and `white-space: pre` inside an inline-block box would make the box
+        // itself multi-line and wreck the layout. They are invisible, so their
+        // transform being a no-op costs nothing.
+        if (/\S/.test(t.v)) span.style.display = 'inline-block'
         const c = CODE_COLORS[t.t]
         if (c) span.style.color = c
         if (t.t === 'k' || t.t === 'f') span.style.fontWeight = '600'
