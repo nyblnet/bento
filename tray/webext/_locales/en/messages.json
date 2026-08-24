@@ -1,6 +1,6 @@
 {
   "appName": {
-    "message": "Bento Tray",
+    "message": "bento/home",
     "description": "Product name. Not translated."
   },
   "appDesc": {
@@ -55,15 +55,15 @@
     "description": "Above a drawing of Chrome’s three-option dialog. Deliberately says POSITION, not Chrome’s button names — the order is the same in every language, the wording is not."
   },
   "actionTitle": {
-    "message": "Bento Tray",
+    "message": "bento/home",
     "description": "Tooltip on the toolbar icon."
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — a folder needs reconnecting",
+    "message": "bento/home — a folder needs reconnecting",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray needs reconnecting",
+    "message": "bento/home needs reconnecting",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedBody": {
@@ -74,7 +74,7 @@
     "message": "Reconnect"
   },
   "ctxOpenPanel": {
-    "message": "Open Bento Tray panel",
+    "message": "Open bento/home panel",
     "description": "Right-click menu item inside a local document."
   },
   "panelEmpty": {
@@ -158,7 +158,7 @@
     "message": "<b>+ New document</b> puts a fresh one here."
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray does not know where $1 is on disk yet. Use “Find my folders”, or open any document in it from Finder once.",
+    "message": "bento/home does not know where $1 is on disk yet. Use “Find my folders”, or open any document in it from Finder once.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "cardRenamedTip": {
@@ -214,7 +214,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupStep2Note": {
-    "message": "In <code>chrome://extensions</code> → Bento Tray → <b>Allow access to file URLs</b>. Chrome does not let an extension turn this on for itself.",
+    "message": "In <code>chrome://extensions</code> → bento/home → <b>Allow access to file URLs</b>. Chrome does not let an extension turn this on for itself.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupUpgradeNote": {
@@ -293,11 +293,11 @@
     "message": "Unknown"
   },
   "accessOnNote": {
-    "message": "Bento Tray can read pages you opened from disk.",
+    "message": "bento/home can read pages you opened from disk.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessOffNote": {
-    "message": "Open chrome://extensions, find Bento Tray, turn on “Allow access to file URLs”.",
+    "message": "Open chrome://extensions, find bento/home, turn on “Allow access to file URLs”.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessUnknownNote": {
@@ -344,7 +344,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 is available.</b> This copy was loaded unpacked, so Chrome will never update it."
+    "message": "<b>bento/home $1 is available.</b> This copy was loaded unpacked, so Chrome will never update it."
   },
   "updateStep1": {
     "message": "Download it from GitHub"
@@ -354,7 +354,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateStep3": {
-    "message": "Open <code>chrome://extensions</code> and press <b>Reload</b> on Bento Tray"
+    "message": "Open <code>chrome://extensions</code> and press <b>Reload</b> on bento/home"
   },
   "fetchingApp": {
     "message": "Fetching $1…"
@@ -366,10 +366,10 @@
     "message": "into $1"
   },
   "helpWhatTitle": {
-    "message": "What Bento Tray does"
+    "message": "What bento/home does"
   },
   "helpWhatSub": {
-    "message": "A Bento document is one HTML file that carries its own editor. Opened straight from disk, a browser will not let it write back to itself — so saving asks you where to put it, every time. Bento Tray is what removes that question."
+    "message": "A Bento document is one HTML file that carries its own editor. Opened straight from disk, a browser will not let it write back to itself — so saving asks you where to put it, every time. bento/home is what removes that question."
   },
   "tourSaveTitle": {
     "message": "Save in place"
@@ -419,7 +419,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpAccessOn": {
-    "message": "On — Bento Tray can read pages you opened from disk.",
+    "message": "On — bento/home can read pages you opened from disk.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpNeverTitle": {
@@ -434,7 +434,7 @@
     "message": "About"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · part of the Bento project · MIT licensed"
+    "message": "bento/home $1 · part of the Bento project · MIT licensed"
   },
   "linkSource": {
     "message": "Source on GitHub"
@@ -452,5 +452,95 @@
   "primeNote": {
     "message": "The other two work too, but Chrome asks again — every restart for the first, and after a wait for the last.",
     "description": "Explains the two unlabelled pills by consequence rather than by name."
+  },
+  "viewLayout": {
+    "message": "How documents are shown",
+    "description": "Tooltip on the icons/list segmented control as a whole."
+  },
+  "viewIcons": {
+    "message": "Icons",
+    "description": "Tooltip on the icon-grid button. REVIEW: the noun a file browser uses for thumbnail view."
+  },
+  "viewList": {
+    "message": "List",
+    "description": "Tooltip on the list button. REVIEW: the noun a file browser uses for list/detail view."
+  },
+  "close": {
+    "message": "Close",
+    "description": "Tooltip on the About dialog close button."
+  },
+  "setLangTitle": {
+    "message": "Language",
+    "description": "Settings section heading for the language picker."
+  },
+  "setLangSub": {
+    "message": "Which language this extension speaks. It normally follows the browser.",
+    "description": "Sub-line under the Language heading. REVIEW: \"the browser\" means Chrome/Edge itself."
+  },
+  "langAutomatic": {
+    "message": "Automatic — follow the browser",
+    "description": "First entry in the language picker — follow the browser rather than choosing."
+  },
+  "setLangNote": {
+    "message": "The extension's own name and description come from the browser and do not change.",
+    "description": "REVIEW: explains that the extension NAME on the chrome://extensions card is set by the browser and a choice here cannot change it."
+  },
+  "aboutPromo": {
+    "message": "New to Bento? Find templates, the gallery and the AI editing guide at $1 — or star it on $2.",
+    "description": "About dialog: invitation back to the project. $1 is a link to bento.page, $2 a link to GitHub. REVIEW: keep both placeholders — they are rendered as links."
+  },
+  "setThemeTitle": {
+    "message": "Appearance",
+    "description": "Settings section heading for light/dark."
+  },
+  "setThemeSub": {
+    "message": "The browser's setting is the default, not a requirement.",
+    "description": "Settings section blurb under Appearance."
+  },
+  "themeAuto": {
+    "message": "Match the browser",
+    "description": "Theme option: follow the browser/OS setting. REVIEW: the wording browsers use for \"system\" in this language."
+  },
+  "themeLight": {
+    "message": "Light",
+    "description": "Theme option: light."
+  },
+  "themeDark": {
+    "message": "Dark",
+    "description": "Theme option: dark."
+  },
+  "checking": {
+    "message": "Checking…",
+    "description": "Shown in the About version row while a manual update check is running."
+  },
+  "surveyTitle": {
+    "message": "Find where your documents are"
+  },
+  "surveySub": {
+    "message": "The browser knows which Bento documents you have opened. It can say which folders they are in."
+  },
+  "surveyDeclined": {
+    "message": "No problem — you can add folders by hand."
+  },
+  "surveyAllCovered": {
+    "message": "All $1 documents this browser has seen are already in a folder you added."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documents are outside every folder you added. $2 are already covered."
+  },
+  "surveyCovers": {
+    "message": "covers $1"
+  },
+  "surveyAdd": {
+    "message": "Add this folder…"
+  },
+  "surveyAdded": {
+    "message": "Added $1 — the documents in it are ready"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Added $1, but the documents are not in it — open one from Finder once."
+  },
+  "surveyOnlySeen": {
+    "message": "Only documents opened in this browser can be found this way."
   }
 }

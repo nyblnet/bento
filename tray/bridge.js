@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// The ENTIRE web-side surface of the iOS host: a polyfill of the one File
-// System Access call Bento tests for. Injected at .atDocumentStart, because
-// capability is read during boot — inject it later and the editor has already
-// decided it cannot save.
+// The ENTIRE web-side surface of a bento/tray native host: a polyfill of the
+// one File System Access call Bento tests for. Injected at document start,
+// because capability is read during boot — inject it later and the editor has
+// already decided it cannot save.
 //
 // Bento needs exactly this much of the API (kernel/src/save.ts):
 //   showSaveFilePicker({suggestedName}) -> { name, createWritable() }
@@ -15,15 +15,42 @@
 // any past version: every in-place path (⌘S, autosave write-back, self-update)
 // already routes through this one function. A bespoke `window.__bentoHost`
 // bridge would only have helped decks re-saved after it shipped.
+//
+// ONE FILE, EVERY HOST. This used to live in tray/ios/Resources/ and iOS was
+// the only caller. It is shared now because the interesting part of it is not
+// the transport — it is the FileSystemWritableFileStream semantics below, whose
+// comments record a bug that wrote users' documents out as zero bytes. A second
+// host with its own copy is a second chance to reintroduce exactly that. The
+// per-platform half is the ~15 lines of transport immediately below; everything
+// after it is identical on every host, by construction.
 (function () {
-  const bridge = window.webkit && window.webkit.messageHandlers
+  // ---------------------------------------------------------------- transport
+  //
+  // WebKit hands the page a message handler that takes a structured-cloneable
+  // object and replies by evaluating JS in the frame.
+  //
+  // Android's WebMessageListener hands over a named JS object with
+  // `postMessage(string)` and an `onmessage` event, so the payload is JSON in
+  // both directions and the reply arrives as an event instead of an injected
+  // call. It is used in preference to addJavascriptInterface precisely because
+  // it is ORIGIN-SCOPED: an interface added the old way is injected into every
+  // frame, so a remote iframe inside an untrusted document would have been
+  // handed the user's file.
+  const wk = window.webkit && window.webkit.messageHandlers
     && window.webkit.messageHandlers.bentoFile
-  if (!bridge) return // plain browser: leave the real API (or its absence) alone
+  const droid = window.__bentoTrayNative
+
+  const send = wk ? (m) => wk.postMessage(m)
+    : droid ? (m) => droid.postMessage(JSON.stringify(m))
+      : null
+
+  if (!send) return // plain browser: leave the real API (or its absence) alone
 
   let seq = 0
   const pending = new Map()
 
-  // native calls back into this
+  // native calls back into this — directly on WebKit, via the event below on
+  // Android. Kept as a global on both so there is one reply path to reason about.
   window.__bentoNativeReply = (id, ok, value) => {
     const p = pending.get(id)
     if (!p) return
@@ -31,11 +58,24 @@
     ok ? p.resolve(value) : p.reject(new Error(value || 'cancelled'))
   }
 
+  if (droid) {
+    droid.onmessage = (e) => {
+      let r
+      // A malformed reply must not take the listener down with it, or every
+      // later save on this page hangs waiting for a callback that can no
+      // longer arrive.
+      try { r = JSON.parse(e.data) } catch (_) { return }
+      window.__bentoNativeReply(r.id, r.ok, r.value)
+    }
+  }
+
   const call = (op, payload) => new Promise((resolve, reject) => {
     const id = ++seq
     pending.set(id, { resolve, reject })
-    bridge.postMessage(Object.assign({ id, op }, payload))
+    send(Object.assign({ id, op }, payload))
   })
+
+  // ------------------------------------------------------- the polyfill proper
 
   window.showSaveFilePicker = async (opts) => {
     const want = (opts && opts.suggestedName) || ''

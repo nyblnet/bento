@@ -269,6 +269,101 @@ export const filterCount = (filter: unknown): number => {
   return (f.open ? 1 : 0) + Object.keys(is).filter((k) => (is[k] ?? []).length).length
 }
 
+/**
+ * What ORDERS a view. Stored on the `view` block, so it is permanent.
+ *
+ * ABSENT MEANS MANUAL ORDER — the page order, which is the board's own order
+ * and what every view written before this key carries. That is the
+ * compatibility rule, not a preference: a stored sort must never appear on a
+ * board somebody arranged by hand.
+ *
+ * AN ARRAY, though the editor only ever writes one entry. The shape was
+ * published in the format sketch as a list, and a second key can be added later
+ * without touching a file — where widening a scalar to an array afterwards
+ * could not be done at all. One entry is what a board is actually asked for;
+ * the array is what keeps the other answer available.
+ */
+export interface ViewSort {
+  key: string
+  /** absent = ascending, which is the direction a reader assumes */
+  dir?: 'asc' | 'desc'
+}
+
+/** Sort keys this build can evaluate — a field the schema declares. */
+export const unknownSortKeys = (doc: SpacesDoc, sort: unknown): string[] =>
+  (Array.isArray(sort) ? sort : [])
+    .map((s) => String((s as ViewSort)?.key ?? ''))
+    .filter((k) => k && !fieldByKey(doc, k))
+
+/**
+ * One value's place in its field's order.
+ *
+ * A select sorts by its DECLARED position, never alphabetically: "Backlog,
+ * Todo, In progress, Done" is a direction, and sorting it into "Backlog, Done,
+ * In progress, Todo" throws away the one thing the list was telling you. A
+ * number sorts numerically. Everything else compares as text.
+ */
+interface Rank { empty?: boolean; n?: number; s?: string }
+
+function rank(f: FieldSpec | undefined, v: unknown): Rank {
+  if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) return { empty: true }
+  if (f?.vt === 'select') {
+    const at = f.options?.findIndex((o) => o.id === String(v)) ?? -1
+    // a value from a NEWER build has no declared place. It sorts after
+    // everything this build knows rather than at the top, because guessing it
+    // belongs first is how a status nobody here can read ends up leading the
+    // board.
+    return { n: at < 0 ? Number.MAX_SAFE_INTEGER : at }
+  }
+  if (f?.vt === 'number') {
+    const n = Number(v)
+    return Number.isFinite(n) ? { n } : { s: String(v) }
+  }
+  return { s: Array.isArray(v) ? v.map(String).join(', ') : String(v) }
+}
+
+/**
+ * Order rows by a view's `sort`. Returns the SAME array when there is nothing
+ * to do, so an unsorted view keeps the page order it already had.
+ *
+ * AN UNSET VALUE IS ALWAYS LAST, in both directions. It is not the smallest
+ * value, it is the absence of one — an issue with no estimate is not the
+ * cheapest issue, and reversing the sort must not promote every blank to the
+ * top of the board.
+ */
+export function sortRows(doc: SpacesDoc, rows: IssueRow[], sort: unknown): IssueRow[] {
+  const keys: Array<{ f: FieldSpec; dir?: 'asc' | 'desc' }> = []
+  for (const s of Array.isArray(sort) ? sort : []) {
+    const f = fieldByKey(doc, String((s as ViewSort)?.key ?? ''))
+    // a key this build does not know is skipped, never guessed at — the view
+    // then shows the order it had, which is the honest fallback
+    if (f) keys.push({ f, dir: (s as ViewSort)?.dir })
+  }
+  if (!keys.length) return rows
+
+  // decorate-sort-undecorate: `rank` is called once per row per key rather than
+  // once per comparison, which on a 500-issue board is the difference between
+  // 500 lookups and ~4,500
+  const decorated = rows.map((r, i) => ({ r, i, ranks: keys.map((k) => rank(k.f, r.values.get(k.f.key))) }))
+  decorated.sort((a, bq) => {
+    for (let j = 0; j < keys.length; j++) {
+      const x = a.ranks[j], y = bq.ranks[j]
+      if (x.empty || y.empty) {
+        if (x.empty && y.empty) continue
+        return x.empty ? 1 : -1
+      }
+      const d = x.n !== undefined && y.n !== undefined
+        ? x.n - y.n
+        : String(x.s ?? x.n).localeCompare(String(y.s ?? y.n), undefined, { numeric: true, sensitivity: 'base' })
+      if (d) return keys[j].dir === 'desc' ? -d : d
+    }
+    // STABLE on ties: equal rows keep the page order, so a board sorted by
+    // priority still reads in the order someone arranged it within each band.
+    return a.i - bq.i
+  })
+  return decorated.map((d) => d.r)
+}
+
 export interface IssueRow {
   page: Page
   values: Map<string, unknown>

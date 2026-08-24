@@ -16,8 +16,14 @@
 // the popup opens, is bounded, and its results are cached. Different job,
 // different rules.
 
-import { CACHE, get, put, prefixes } from './db.js'
+import { CACHE, GRANT, get, put, prefixes } from './db.js'
 import { getGrants } from './status.js'
+import { verifyManifest, fetchPinned, ACCEPT_BYTES } from './release.js'
+// Not a third implementation: `update.js` already has the dotted-numeric
+// compare, and it behaves the same as the kernel's — an unparsable component
+// coerces to 0 rather than throwing, because `NaN || 0` is 0. A strange version
+// string should be able to fail to RAISE the floor, never to block a release.
+import { compareVersions } from './update.js'
 
 /** How deep to look, and how many documents to show. A folder of documents is
  *  not a filesystem; someone who granted a home directory should get a useful
@@ -272,6 +278,11 @@ function extractText(html) {
  * instead means a document created here is the same version everyone else has,
  * the same day.
  *
+ * Bundling is settled policy across all three hosts now (2026-08-16), which
+ * makes this the ONLY way any of them creates a document — so the download is
+ * verified, not trusted: signature, then digest, then the file handle. See
+ * `release.js` for the chain and why it is mirrored from the kernel.
+ *
  * Create-only, and the name is derived here rather than taken from anywhere —
  * the same rule as `backup`. Nothing existing is ever replaced.
  */
@@ -287,12 +298,18 @@ function extractText(html) {
  * Adding an app here is the whole integration; nothing else in the extension
  * asks which app it is looking at.
  */
+// `appId` is the name the app calls ITSELF inside its signed manifest
+// (scripts/apps.mjs, and the shell's own `configureApp({appId})`), and it is
+// checked against the payload — the channels are sibling paths on one origin,
+// so without that check a genuine manifest served from the wrong path hands
+// somebody the wrong application. It is spelled out rather than derived from
+// `id` so that adding an app cannot silently opt out of the check.
 export const APPS = [
-  { id: 'slides', name: 'Slides', blurb: 'Presentations',
+  { id: 'slides', name: 'Slides', blurb: 'Presentations', appId: 'bento-slides',
     manifest: 'https://bento.page/releases/slides/manifest.json' },
-  { id: 'spaces', name: 'Spaces', blurb: 'Notes and pages',
+  { id: 'spaces', name: 'Spaces', blurb: 'Notes and pages', appId: 'bento-spaces',
     manifest: 'https://bento.page/releases/spaces/manifest.json' },
-  { id: 'dash', name: 'Dash', blurb: 'Data and sheets',
+  { id: 'dash', name: 'Dash', blurb: 'Data and sheets', appId: 'bento-dash',
     manifest: 'https://bento.page/releases/dash/manifest.json' },
 ]
 
@@ -368,23 +385,92 @@ export async function rename(doc, wantedBase) {
   return { name, base }
 }
 
+/**
+ * The highest release version of an app this browser has ever accepted.
+ *
+ * Per app, in the extension's own store — a document carries no version of its
+ * own to compare against, so unlike the shell's self-update (which has its
+ * running build to measure from) creating a document has nothing to be
+ * monotonic ABOUT unless the host remembers.
+ *
+ * An unreadable store reads as NO floor rather than as a refusal: private mode,
+ * quota, a migration mid-flight. That is a deliberate choice of availability
+ * over protection in a case that is not an attack — being unable to remember
+ * must not mean being unable to create a document.
+ */
+const floorKey = (app) => `release-floor:${app.id}`
+
+async function readFloor(app, deps) {
+  const read = deps.getFloor ?? (() => get(GRANT, floorKey(app)))
+  try { return (await read()) || null } catch { return null }
+}
+
+async function raiseFloor(app, version, floor, deps) {
+  // EQUAL is not a downgrade. Re-fetching the version already seen is the
+  // normal case — the second document somebody creates — and treating it as a
+  // rollback would break the `+` button on its second use rather than at some
+  // exotic edge.
+  if (floor && compareVersions(version, floor) <= 0) return
+  const write = deps.putFloor ?? ((v) => put(GRANT, floorKey(app), v))
+  // Best effort: a floor that cannot be written costs protection next time, not
+  // this document.
+  try { await write(version) } catch { /* quota, private mode */ }
+}
+
 export async function newDocument(dir, wantedBase = 'Untitled', deps = {}) {
   const net = deps.fetch ?? fetch
   const app = APPS.find((a) => a.id === deps.app) ?? APPS[0]
-  const res = await net(app.manifest, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`could not reach the ${app.name} release server (${res.status})`)
-  const manifest = await res.json()
-  const url = manifest?.url
-  if (!url) throw new Error('the release server did not offer a build')
 
-  const shell = await net(url, { cache: 'no-store' })
-  if (!shell.ok) throw new Error(`could not download the app (${shell.status})`)
-  const html = await shell.text()
+  // The manifest is a SIGNED ENVELOPE — `{payload, sig}`, the fields inside the
+  // payload STRING — and it is read as text for that reason: the bytes the
+  // signature covers are the bytes that arrived, so anything that parses and
+  // re-serialises on the way past has verified something else.
+  //
+  // This was the bug, and it is worth naming because it was invisible. The code
+  // here read `manifest.url` off the ENVELOPE, where there is no `url`, so every
+  // attempt threw "the release server did not offer a build" — the `+` button
+  // had never once worked. The rig agreed with it, because the fixture was
+  // hand-written to the shape the code expected rather than to the shape the
+  // server sends. It is checked against a real captured manifest now
+  // (scripts/test-webext-release.ts).
+  // ACCEPT_BYTES on the manifest too. The edge injection measured on the shell
+  // targets things it reads as pages, so a JSON manifest is not today's victim
+  // — but "ask for bytes on the one request we remembered" is a rule that only
+  // holds until somebody adds a third fetch.
+  const res = await net(app.manifest, { cache: 'no-store', headers: ACCEPT_BYTES })
+  // Only Slides has a published channel today, so a 404 here is an EXPECTED
+  // answer rather than a fault, and an HTTP status is the wrong way to say it.
+  // The wording matches tray/ios (and tray/android is following): the app list
+  // is aspirational on all three hosts, so all three phrase this identically.
+  if (res.status === 404) throw new Error(`${app.name} has not been released yet`)
+  if (!res.ok) throw new Error(`could not reach the ${app.name} release server (${res.status})`)
+  const release = await verifyManifest(await res.text(), app.appId, deps.jwk)
+
+  // NO DOWNGRADES. Everything above passes for a replayed OLD release: it is
+  // genuinely signed, it names the right app, and its shell really does hash to
+  // its pin. Every byte is authentic — it is just last month's. That is what
+  // survives an origin or CDN compromise where the attacker can re-serve but
+  // cannot forge, so the only thing that catches it is remembering.
+  const floor = await readFloor(app, deps)
+  if (floor && compareVersions(release.version, floor) < 0)
+    throw new Error(
+      `the ${app.name} channel offered ${release.version}, older than the ${floor} `
+      + 'already seen — refusing it')
+
+  // Signature over the pin, pin over the bytes. Both, or the shell being written
+  // to somebody's disk is whatever the network felt like returning.
+  const bytes = await fetchPinned(net, release.url, release.sha256)
+
+  // Raised only NOW, after the bytes passed their digest. Raising it on a
+  // merely-verified manifest would let one forged-but-unfetchable release lock
+  // this browser out of every real release below it — turning a failed attack
+  // into a permanent one. (tray/ios hit this reasoning first, on PR #315.)
+  await raiseFloor(app, release.version, floor, deps)
 
   const { name, base } = await freeName(dir, wantedBase)
   const handle = await dir.getFileHandle(name, { create: true })
   const w = await handle.createWritable()
-  await w.write(html)
+  await w.write(bytes)
   await w.close()
-  return { name, base, version: manifest.version, app: app.name }
+  return { name, base, version: release.version, app: app.name }
 }

@@ -619,6 +619,12 @@ names provisional.
 
 - **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
+  blocks with ZOPFLI (same deflate format, packed harder — the loader and every
+  saved file are untouched; ~4% off each shell, verified byte-identical through
+  Chrome's native `DecompressionStream('deflate-raw')`). `@gfx/zopfli` is a
+  devDependency of each APP, and the script resolves it from the caller's cwd
+  because scripts/ has no package.json of its own; `ZOPFLI=0` falls back to zlib
+  for a local build, never for a release.
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
   PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).
@@ -644,6 +650,27 @@ names provisional.
 - In-page scripting/testing API: `window.bento` → `{ doc, serialize() }`.
 
 ## Testing gotcha
+
+**Reading back a style property you just wrote is not a measurement.** A CSS
+transform does NOTHING to a non-replaced inline element — the browser accepts
+the declaration, `style.transform` (and `getComputedStyle`) return it verbatim,
+and the box moves zero pixels. So a check like "did the tokens get transforms?"
+passes identically whether the element travelled 400px or none. Verify motion
+with `getBoundingClientRect`, or by stepping `anim.setManual(true)` + `tick()`
+and reading rendered geometry. This cost eight rounds of "it does not animate"
+against measurements insisting it did (fixed by giving code tokens
+`display:inline-block`; `kernel/src/anim.ts` now warns when a transform channel
+targets an inline element, guarded by `scripts/test-anim-inline.ts`).
+
+Two more instruments that lie, both hit in the same session:
+- **`requestAnimationFrame` is throttled to zero in a hidden/occluded tab**, so
+  every tween silently does nothing. Check `document.visibilityState` before
+  concluding an animation is broken — a driven browser tab is often hidden.
+- **A live sampler polling the DOM mid-animation** reported zero while tokens
+  were demonstrably moving, and could never distinguish "no tween" from "a
+  tween I cannot see". Instrument the DECISION (did it pair? did onUpdate run?)
+  rather than sampling the result.
+
 
 Synthetic `PointerEvent`s do NOT trigger Moveable/Selecto (Gesto listens for mouse
 events) — dispatch `MouseEvent`s, or use trusted input. After changing selection, wait a

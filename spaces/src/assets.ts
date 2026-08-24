@@ -14,6 +14,18 @@ import type { SpacesDoc } from './model'
 export const MAX_EDGE = 1600
 /** Above this, ask before embedding rather than silently making a 30MB file. */
 export const IMAGE_EMBED_BUDGET = 4 * 1024 * 1024
+/**
+ * The same question for a video or an audio clip, at twice the threshold.
+ *
+ * Higher than the image budget ON PURPOSE, and the reason is that nothing here
+ * can be made smaller. A photo off a phone is downscaled before it travels
+ * (prepareImage), so 4MB is a number an author almost never meets; a clip is
+ * embedded byte for byte, because re-encoding video in a browser tab means
+ * shipping an encoder and taking minutes over it. So the budget is the point
+ * at which the question is worth asking rather than a size we can rescue, and
+ * it matches slides' MEDIA_EMBED_BUDGET so the two apps ask at the same place.
+ */
+export const MEDIA_EMBED_BUDGET = 8 * 1024 * 1024
 /** Where a space stops being comfortable to mail. Warn, never block. */
 export const SPACE_WEIGHT_WARN = 25 * 1024 * 1024
 

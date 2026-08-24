@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Material 3, so the app can have dynamic colour and adaptive behaviour.
+
+      The Bento palette below is the FALLBACK, not the intent: on Android 12+
+      DynamicColors overwrites these at runtime with the user's wallpaper
+      palette, which is the point. Below 12 there is no wallpaper palette to
+      adopt, so the house colours are what those devices get.
+
+      values-night/ no longer redefines colours — Material3.DayNight handles the
+      dark set, and dynamic colour supplies both. What survives from the
+      hand-rolled version is the mark, the thumbnails and the typographic
+      detail, which are brand rather than chrome.
+    -->
+    <style name="Theme.Tray" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">@color/on_accent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!--
+      The editor hosts one full-screen WebView and nothing else. It stays off
+      Material deliberately: it would inherit AppCompat's inflation
+      requirements and gain nothing, and the document supplies its own chrome.
+    -->
+    <style name="Theme.Tray.Editor" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+
+    <!-- The two header toggles: one character each, so they inherit the theme's
+         colour and scale with the user's font size, which a drawable would not. -->
+    <style name="IconBtn">
+        <item name="android:textSize">19sp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:minWidth">@dimen/touch_min</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+</resources>

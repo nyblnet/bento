@@ -7,7 +7,7 @@ import type { Store } from '../store'
 import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
-  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
+  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
@@ -22,7 +22,8 @@ import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
@@ -272,6 +273,8 @@ export class Editor {
         t('Add a table — edit cells inline; turn it into a live chart from the panel')),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
         t('Add a chart — edit it visually or link it to a table so it updates live')),
+      btn(ICONS.code, t('Code'), () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true),
+        t('Add a code snippet')),
     )
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))
@@ -2598,6 +2601,13 @@ export class Editor {
       // session too so author and recipient meet without another click.
       this.session?.enableSharing()
       this.tryJoin()
+      // A save from the WEB changes what this page is: the deck now lives in a
+      // file, and this URL will hand out a fresh starter next time. Said here,
+      // persistently, so the next visit is not a surprise — and deliberately
+      // NOT as a block, because this tab keeps working and keeps writing.
+      noteSavedFromWeb(currentFileName() ?? suggestedFileName(this.store.doc), {
+        fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
+      })
       this.toast(result === 'downloaded'
         ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
         : t('Saved'))

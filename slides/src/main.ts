@@ -11,8 +11,9 @@ import { startNetGuard } from '../../kernel/src/net.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, downloadFile,
   suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword,
-  registerPreview,
+  registerPreview, canWriteInPlace, hostCan,
 } from './save'
+import { maybeShowReturnGate } from './editor/returngate'
 import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
@@ -74,7 +75,11 @@ const envelope = embedded ? parseEnvelope(embedded) : null
 if (envelope) {
   void passwordGate()
 } else {
-  bootWith((embedded && parseDoc(embedded)) || starterDoc())
+  const parsed = embedded ? parseDoc(embedded) : null
+  // Whether this is OUR starter or someone's document is knowable only here —
+  // downstream the two are indistinguishable, and the difference is what stops
+  // the return gate appearing over real work.
+  bootWith(parsed || starterDoc(), !parsed)
 }
 
 /** Encrypted file: ask for the password (looping on failure), then boot. */
@@ -119,9 +124,9 @@ async function passwordGate() {
   input.focus()
 }
 
-function bootWith(doc: BentoDoc) {
+function bootWith(doc: BentoDoc, docIsFresh = false) {
   if (doc.readonly) playerMode(doc)
-  else editorMode(doc)
+  else editorMode(doc, docIsFresh)
 }
 
 /**
@@ -154,7 +159,7 @@ function playerMode(doc: BentoDoc) {
   start()
 }
 
-function editorMode(doc: BentoDoc) {
+function editorMode(doc: BentoDoc, docIsFresh = false) {
 
 document.title = `${doc.title} — ${appConfig().appName}`
 
@@ -164,6 +169,11 @@ if (doc.fonts?.length) injectFonts(doc)
 
 const store = new Store(doc)
 const editor = new Editor(document.getElementById('app')!, store)
+
+// A returning visitor who saved from this origin before is told so, rather
+// than handed a silent blank starter that reads as lost work. No-ops off the
+// web, for a first-time visitor, and over any real document.
+maybeShowReturnGate({ docIsFresh, fsAccess: canWriteInPlace(), canWrite: hostCan('write') })
 
 // Live collaboration (bento-sync): same-machine tabs sync automatically over
 // BroadcastChannel; the online relay transport joins via the Share UI.

@@ -57,6 +57,13 @@ jobs:
         working-directory: slides
         run: npm ci
 
+      - name: Transforms are not silently ignored
+        # A CSS transform does nothing to a non-replaced inline element: it is
+        # accepted, style.transform reads back verbatim, and the box never
+        # moves. An animation on one reports perfect health and paints nothing,
+        # which is exactly how it survived eight rounds of debugging once.
+        run: node scripts/test-anim-inline.ts
+
       - name: i18n packed table is current
         # The per-locale catalogs are the source of truth; slides/src/i18n/
         # packed.ts is generated from them and is what actually ships. A stale
@@ -118,6 +125,22 @@ jobs:
         # build rather than shipping a half-translated interface.
         run: node scripts/build-spaces-i18n.mjs --check
 
+      - name: Spaces invite rig
+        # "Invite someone…" was `saveAs('copy')`, which serializes store.doc —
+        # so everyone invited to a space received `collab.ownerPriv`, the room's
+        # ROOT key: they could write, and they could revoke the person who
+        # invited them. Nothing about the copy looked wrong. This runs the real
+        # share functions against real WebCrypto keys and asserts on the bytes:
+        # the owner private key appears NOWHERE in an invite, the invite is a
+        # separate keypair that the owner actually signed (verified the way the
+        # relay verifies it), and a view-only copy holds no signing key at all.
+        # (Bundled: the kernel transport uses parameter properties, which node's
+        # strip-only TypeScript loader refuses.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-invite.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-invite.mjs"
+          node "$RUNNER_TEMP/test-spaces-invite.mjs"
+
       - name: Spaces undo rig
         # Every checkpoint used to stringify the WHOLE document: measured on a
         # 200-page, 2.5 MB handbook, fifty edits left an undo depth of NINE,
@@ -144,6 +167,19 @@ jobs:
         # probes run in child processes with timeouts, because a hang cannot be
         # reported by the process it hangs.
         run: node scripts/test-spaces-agent.ts
+
+      - name: Spaces journal rig (several timezones)
+        # Every part of a daily note that can be wrong is wrong QUIETLY and on
+        # someone else's machine: "today" in UTC is the wrong day for hours at
+        # a time outside Greenwich, adding 86,400,000 ms is not adding a day on
+        # the two DST boundaries, and `new Date('2026-08-06')` is UTC midnight
+        # by spec. A date test that only ever runs in one timezone has not been
+        # run — so this runs in five, including a half-hour DST offset.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-journal.ts
+          done
 
       - name: Magic notes evaluator (several timezones)
         # Two failure modes, and the second is what would make the feature worse
@@ -208,12 +244,47 @@ jobs:
         # Tampered pack, tampered index, unsigned index — each must be refused.
         run: node scripts/test-packs.ts
 
+      - name: Tokenizer contract
+        # The kernel's built-in highlighting tier. Renderers rebuild text from
+        # the token stream, so losslessness is corruption-or-not; and multiline
+        # tokens are declared, because a blockified token carrying \n collapses
+        # a code block to one line with no error anywhere.
+        run: node scripts/test-tokenize.ts
+
+      - name: Code-morph identity engine
+        # HeckelDiff decides which token on slide N is the same token as on
+        # slide N-1; every wrong answer is a token that jumps, tears, or steals
+        # another token's journey on screen. Regressions for the three pairing
+        # bugs found in review ride along.
+        run: node scripts/test-codediff.ts
+
       - name: First-page preview rig
         # Every save writes a static render of page one for file-manager
         # thumbnails. Two decisions in that path fail silently: an encrypted
         # deck must never carry one, and author content must never reach the
         # file carrying a script tag.
         run: node scripts/test-preview.ts
+
+      - name: Media autoplay rig
+        # An author set a clip's Autoplay to Off and it played anyway, every
+        # show, since media shipped in v0.9.16. render.ts wrote
+        # data-autoplay="" when off — PRESENT but empty — and Reveal decides
+        # autoplay with hasAttribute(), so it played what our own value-based
+        # selector correctly ignored. The property pinned here is that an
+        # autoplay-off element carries NO such attribute, because its presence
+        # is read by code we do not own. Measured on rendered DOM: the
+        # difference between assigning '' and not assigning is invisible to a
+        # grep. Self-skips without Chrome.
+        run: node scripts/test-media-autoplay.ts
+
+      - name: Return-gate rig
+        # The web demo always starts fresh, so someone who saved from
+        # bento.page and came back saw a blank starter and read it as lost
+        # work. The gate that fixes it can be worse than the silence it
+        # replaces: firing over a real document, or offering a host that has no
+        # release (telling an Android user to install a Chrome extension). This
+        # pins both, and that the mobile rows degrade until those hosts ship.
+        run: node scripts/test-return-gate.ts
 
       - name: Offline-mode rig
         # Offline mode promises "nothing leaves this computer" and was broken
@@ -272,6 +343,40 @@ jobs:
         # Source-shape checks; the Swift half self-skips without a toolchain.
         run: node scripts/test-tray-bridge.ts
 
+      - name: tray mark is one source
+        # tray-icon.svg is the only drawing of the mark. Everything else is
+        # generated from it: the Android launcher vectors (which have no <rect>,
+        # so each rounded corner becomes opaque path data nobody would diff), and
+        # the iOS asset catalog — the mark plus the four brand colours the app's
+        # chrome reads by name. A hex value retyped into Swift is a value that can
+        # disagree with the logo while looking almost right, which is the kind of
+        # wrong nothing notices. This fails if any of it drifts.
+        run: node tray/assets/make-icons.mjs --check
+
+      - name: tray/ios index rig
+        # The iOS text extractor is a PORT of tray/webext's, and the two are held
+        # together by nothing but agreement — so this diffs them, driving the
+        # real library.js against the compiled Swift over generated edge cases
+        # and every document in the tree. A divergence means a deck is findable
+        # by a phrase on one host and not the other, which nothing else notices.
+        # This one really runs HERE: BentoIndex.swift is Foundation-only, and the
+        # runner has Swift, so the diff happens on every push rather than only on
+        # a Mac. That is the payoff for keeping UIKit out of that file.
+        run: node scripts/test-tray-index.mjs
+
+      - name: tray/ios release verifier rig
+        # Starter decks are not bundled; a new document is FETCHED from the
+        # signed release channel and written to disk as an executable page. The
+        # signature and hash checks are what make that acceptable, so this proves
+        # the verifier REFUSES — tampered payload, tampered signature, a real
+        # signature over different bytes, no signature at all. Watching it accept
+        # the live manifest proves nothing: `return true` passes that test.
+        # Unlike the index rig above this CANNOT run here — CryptoKit is
+        # Apple-only — so it probes for that module (not for swiftc, which the
+        # runner has) and skips loudly. A Mac must run it before Releases.swift
+        # changes.
+        run: node scripts/test-tray-releases.mjs
+
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
         # manifest names exists, every icon is the size it claims, no unexpected
@@ -320,6 +425,20 @@ jobs:
         # for the document block's CLOSING tag and so found nothing in any
         # document carrying an image.
         run: node scripts/test-webext-library.ts
+
+      - name: WebExtension release-trust rig
+        # Creating a document downloads an app shell and writes it to the user's
+        # disk, where they later double-click it — executable HTML they go on to
+        # trust. So the manifest's signature is checked against the key compiled
+        # into the extension, and the download against the digest that signature
+        # covers. Signature over the pin, pin over the bytes.
+        #
+        # It also reads a REAL manifest captured from the release origin, which
+        # is the check that could not be faked into passing: the shipped code
+        # read `url` off the top level of a SIGNED ENVELOPE that has no top-level
+        # url, so the + button had never worked in any version — and the rig
+        # agreed, because its fixture was written to the shape the code wanted.
+        run: node scripts/test-webext-release.ts
 
       - name: WebExtension update-notice rig
         # Store installs update themselves; one loaded unpacked never will, and
@@ -519,23 +638,6 @@ jobs:
         # two it did not catch were found by widening it.
         run: node scripts/test-dash-sync.ts
 
-      - name: relay protocol — one wire format, two clients
-        # dash's online.ts is a PORT of the transport slides uses (now in
-        # kernel/). The two files are separate text that nobody diffs, and ONE
-        # DEPLOYED WORKER verifies both: it pins the room id to a key and walks
-        # an owner→invite→member signature chain. If one client's idea of
-        # `inv.${pub}.${role}.${exp}` drifts, the symptom is not a red test — it
-        # is one app's users silently unable to join the other's rooms, on a
-        # relay that cannot be rolled back independently of the shells already
-        # in people's files. This diffs only what goes on the wire.
-        #
-        # Written by the bento/dash work; taken here because the kernel lift is
-        # the change it guards, and it should not land after the move it exists
-        # to check. The rig FOLLOWS the twin (kernel first, then slides) and
-        # FAILS if it finds no transport at all, rather than silently comparing
-        # two empty lists — which is how its own first version passed.
-        run: node scripts/test-relay-protocol.ts
-
       - name: Theme token gate
         # Every failure this catches is INVISIBLE in the light theme, which is
         # the one the author is looking at. A chrome surface pinned to white
@@ -607,6 +709,89 @@ jobs:
         # borrows a document token — that last one shipped a select at 1.92:1
         # against a WCAG AA floor of 4.5.
         run: node scripts/test-type-theme.mjs
+
+      - name: Type blocks rig
+        # Lists and tables are runs of flat blocks assembled at render;
+        # this pins the grouping, including the level clamp that once opened a
+        # billion list elements and killed the process.
+        run: node scripts/test-type-blocks.ts
+
+      - name: Type layout rig
+        # Paragraph spacing, indents and page setup, and that a page break
+        # is honoured by the paginator rather than merely stored.
+        run: node scripts/test-type-layout.ts
+
+      - name: Type image rig
+        # Pictures embed or reference, and an atomic block is measured as one
+        # box so pagination cannot break a page through the middle of it.
+        run: node scripts/test-type-image.ts
+
+      - name: Type link rig
+        # Link marks round-trip, and the href allow-list holds: a document is
+        # untrusted input, and javascript: reached the page from one once.
+        run: node scripts/test-type-link.ts
+
+      - name: Type find rig
+        # Find and replace across blocks, including the offsets that shift
+        # when a replacement changes a block's length.
+        run: node scripts/test-type-find.ts
+
+      - name: Type toc rig
+        # Section numbering is DERIVED, never stored, so inserting a heading
+        # renumbers everything and nothing drifts.
+        run: node scripts/test-type-toc.ts
+
+      - name: Type xref rig
+        # Captions and cross-references are atoms at an offset, so renumbering
+        # is invisible to the redline.
+        run: node scripts/test-type-xref.ts
+
+      - name: Type cite rig
+        # Citations and the bibliography — a citation is an atom, so
+        # restyling one is not an edit to the sentence around it.
+        run: node scripts/test-type-cite.ts
+
+      - name: Type math rig
+        # Formulas: the TeX source is the model and inline math is a mark, so
+        # a formula survives the render→read round trip intact.
+        run: node scripts/test-type-math.ts
+
+      - name: Type comments rig
+        # Threads keep their anchors through edits, splits and merges, and
+        # editing or deleting a message never moves the text it points at.
+        run: node scripts/test-type-comments.ts
+
+      - name: Type track rig
+        # Tracked changes as ins/del marks: accept-all gives the text as
+        # edited, reject-all the text as it was, and display modes never touch
+        # the model.
+        run: node scripts/test-type-track.ts
+
+      - name: Type font rig
+        # Per-selection typeface and size, and the CSS allow-list that keeps a
+        # font stack from opening a second declaration in a style attribute.
+        run: node scripts/test-type-font.ts
+
+      - name: Type styles rig
+        # Named paragraph styles, and the additivity rule: a document with no
+        # doc.styles must render byte-identically to before the feature.
+        run: node scripts/test-type-styles.ts
+
+      - name: Type move rig
+        # Reordering moves whole UNITS, so a drag can never tear a table in
+        # half or drop a paragraph between two bullets.
+        run: node scripts/test-type-move.ts
+
+      - name: Type embed rig
+        # Embedded Bento artifacts, and the render boundary that refuses a
+        # script rather than sanitising one.
+        run: node scripts/test-type-embed.ts
+
+      - name: Type chrome rig
+        # Where controls live: nothing in two menus, no inserts in the
+        # overflow, and every element the chrome reaches for actually exists —
+        # a null lookup there has silently broken the boot twice.
+        run: node scripts/test-type-chrome.ts
 
       - name: Clipboard embedded-font rig
         run: |
@@ -705,3 +890,14 @@ jobs:
         # flat document, text on the parent, a store with one listener and no
         # dirty flag — so a surviving slides assumption shows up there.
         run: node --no-warnings scripts/test-sync-session.ts
+
+      - name: the spaces binding of the sync session
+        # Only what bento/spaces answers DIFFERENTLY, because three of the five
+        # host answers are not slides' answers and each one is invisible until
+        # two people are live: a repair id that must be DERIVED (a spare blank
+        # slide is one click to delete; a spare page is a phantom), a view that
+        # clamps by page identity to the nearest surviving ANCESTOR rather than
+        # to home, and a remote op that must not raise this app's 'doc' event —
+        # which paints "Edited" and would credit a colleague's typing to you.
+        # The last section is two real sessions over a real BroadcastChannel.
+        run: node --no-warnings scripts/test-sync-spaces-session.ts

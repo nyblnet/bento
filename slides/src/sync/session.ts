@@ -18,7 +18,7 @@ import type { Op } from './crdt';
 import { SyncState } from './crdt';
 import { uid } from '../model';
 import type { Slide } from '../model';
-import type { Store } from '../store';
+import type { Store, ViewSnapshot } from '../store';
 
 /** What a deck knows about itself that the session cannot work out. */
 function slidesHost(store: Store): SyncHost {
@@ -48,12 +48,20 @@ function slidesHost(store: Store): SyncHost {
       return true;
     },
 
-    clampView(): boolean {
-      store.currentIndex = Math.min(store.currentIndex, store.doc.slides.length - 1);
-      const sel = store.selection.filter((id) => store.element(id));
-      const changed = sel.length !== store.selection.length;
-      store.selection = sel;
-      return changed;
+    // The store owns this pair; the shape only forwards. Clamping after the
+    // fact used to live here and was wrong in one specific way: when someone
+    // else deleted a DIFFERENT slide, min()-ing the index moved this tab to
+    // whatever slid into the slot. captureView records the slide IDS first, so
+    // reconcileView can keep the same slide when it survives and choose the
+    // nearest surviving neighbour when it does not (#262).
+    captureView(): unknown {
+      return store.captureView();
+    },
+
+    clampView(view?: unknown): boolean {
+      const { currentChanged, selectionChanged } = store.reconcileView(view as ViewSnapshot);
+      if (currentChanged) store.emit('current');
+      return selectionChanged;
     },
 
     presence() {

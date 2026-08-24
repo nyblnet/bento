@@ -13,7 +13,7 @@
   "optional_permissions": [
     "history"
   ],
-  "options_page": "src/home.html",
+  "options_page": "src/home.html#settings",
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
@@ -47,7 +47,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Bento Tray \u2014 your documents",
+    "default_title": "bento/home \u2014 your documents",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -64,7 +64,7 @@
         "default": "Alt+B",
         "mac": "Alt+B"
       },
-      "description": "Open the Bento Tray panel beside this document"
+      "description": "Open the bento/home panel beside this document"
     }
   },
   "default_locale": "en"

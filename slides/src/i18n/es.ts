@@ -744,4 +744,12 @@ export const es: Catalog = {
   "Appearance": "Apariencia",
   "Match my system": "Según el sistema",
   "Dark": "Oscuro",
+  "You saved a deck from here before.": "Ya has guardado una presentación desde aquí.",
+  "This page always starts fresh. Open your file to carry on with it:": "Esta página siempre empieza de cero. Abre tu archivo para continuar con él:",
+  "Start a new deck anyway": "Empezar una presentación nueva de todos modos",
+  "This page always starts a new deck — open this file to come back to it.": "Esta página siempre empieza una presentación nueva — abre este archivo para volver a ella.",
+  "The bento/tray extension can reopen your files here.": "La extensión bento/tray puede volver a abrir tus archivos aquí.",
+  "The bento/tray app can keep your files on this device.": "La app bento/tray puede guardar tus archivos en este dispositivo.",
+  "This browser cannot reopen a file in place — Chrome or Edge can.": "Este navegador no puede reescribir un archivo en su sitio — Chrome o Edge sí.",
+  "Keep the file somewhere you can find it again.": "Guarda el archivo en un lugar donde puedas encontrarlo.",
 }

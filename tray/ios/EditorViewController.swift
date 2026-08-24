@@ -35,7 +35,7 @@ import CryptoKit
 ///    the same release as everyone else on the same day — no App Store
 ///    submission per release, no drift. What the app ships is file access.
 final class EditorViewController: UIViewController, WKScriptMessageHandler, WKURLSchemeHandler,
-                                  WKNavigationDelegate, WKDownloadDelegate {
+                                  WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
     private let document: BentoDocument
     private var webView: WKWebView!
 
@@ -265,6 +265,9 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         // frame is driven by viewDidLayoutSubviews, not autoresizing
         webView.allowsBackForwardNavigationGestures = false
         webView.navigationDelegate = self
+        // Without this, alert() does nothing and confirm() returns false — see
+        // the WKUIDelegate section below.
+        webView.uiDelegate = self
         // Full bleed. WKWebView does NOT hand safe-area insets to CSS here —
         // measured both ways: with `.never` the page filled the screen and
         // env(safe-area-inset-*) read 0px on all four sides; with the default it
@@ -319,7 +322,7 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     // nothing at all, which is the worst possible failure for a save.
     //
     // Downloads land in the app's Documents folder, which is visible in Files
-    // under Bento Tray. A picker per save would be punishing for an app that
+    // under bento/home. A picker per save would be punishing for an app that
     // saves often, and a download cannot overwrite the user's original anyway —
     // that is what the FSA path is for.
 
@@ -377,6 +380,57 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     private func notify(_ message: String) {
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""), style: .default))
+        present(a, animated: true)
+    }
+
+    // MARK: - page dialogs
+    //
+    // WKWebView does not show `alert()`, `confirm()` or `prompt()` on its own.
+    // Without a WKUIDelegate it does not merely skip them — it answers wrongly
+    // and says nothing: alert() is a no-op, and **confirm() returns false**.
+    //
+    // That is not cosmetic. Every one of the runtime's seven uses is shaped
+    // `if (!confirm(…)) return`, so the feature behind each one silently did
+    // nothing when tapped: delete this slide, remove a collaborator, reset
+    // access, replace all slides, embed an oversized file. No error, nothing in
+    // the log, and the same on Android for the same reason — fixed there in the
+    // same change (`TrayChromeClient`).
+    //
+    // The panels are presented from `self` and the completion handler is called
+    // on EVERY path including dismissal, because a WebKit dialog callback that
+    // is never invoked deadlocks the page.
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping () -> Void) {
+        let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""),
+                                  style: .default) { _ in completionHandler() })
+        present(a, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (Bool) -> Void) {
+        let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: ""),
+                                  style: .cancel) { _ in completionHandler(false) })
+        a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""),
+                                  style: .default) { _ in completionHandler(true) })
+        present(a, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+                 defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        let a = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+        a.addTextField { $0.text = defaultText }
+        a.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: ""),
+                                  style: .cancel) { _ in completionHandler(nil) })
+        a.addAction(UIAlertAction(title: NSLocalizedString("OK", comment: ""),
+                                  style: .default) { [weak a] _ in
+            completionHandler(a?.textFields?.first?.text)
+        })
         present(a, animated: true)
     }
 

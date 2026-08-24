@@ -1,3 +1,6 @@
+// Every request in the app goes through the one chokepoint (kernel/src/net.ts)
+// so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
+import { netFetch } from '../net.ts'
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Encrypted asset blobs — the client half of docs/blob-offload.md.
@@ -26,10 +29,6 @@
 const CHUNK = 4 * 1024 * 1024
 /** Must match the relay's MAX_BLOB. NOTE this bounds the ENCODED blob, not the
  *  plaintext — the relay measures what it receives. */
-// Every request in the app goes through the one chokepoint (kernel/src/net.ts)
-// so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
-import { netFetch } from '../net.ts'
-
 export const MAX_BLOB = 8 * 1024 * 1024
 const MAGIC = 0x4242 // 'BB'
 const HEADER = 16

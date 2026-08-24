@@ -141,6 +141,28 @@ export interface TextElement extends ElementBase {
   placeholder?: string
 }
 
+export interface CodeElement extends ElementBase {
+  type: 'code'
+  /** Subset of properties of TextElement. */
+  fontSize: number
+  fontFamily: string
+  align: 'left' | 'center' | 'right'
+  valign: 'top' | 'middle' | 'bottom'
+  lineHeight: number
+  /** Determines the color of the code snippet prior to a themeId getting picked. */
+  color: string
+  /** The raw code snippets. */
+  content: string
+  /** The asset id of the grammar to use. */
+  grammarAssetId?: string
+  /** The name of the grammar */
+  grammarName?: string
+  /** The asset id of the theme to use. */
+  themeAssetId?: string
+  /** The name of the theme. */
+  themeName?: string
+}
+
 export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
 
 /** Linear gradient fill. Colors are any CSS color, including rgba(). */
@@ -300,7 +322,7 @@ export interface MediaElement extends ElementBase {
 }
 
 export type SlideElement =
-  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement
+  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement | CodeElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while
@@ -415,6 +437,14 @@ export interface BentoDoc {
     slideNumber?: boolean
     controls?: boolean
     progress?: boolean
+    /**
+     * Seconds a morph transition takes. Absent = 0.65, which is tuned for the
+     * usual case: a title sliding, a shape growing, distances of hundreds of
+     * pixels. Code token morphs move a single line-height — about 40px — and at
+     * the default that reads as a blink rather than as travel, so a deck built
+     * around them wants a slower beat. Clamped on read.
+     */
+    morphSeconds?: number
   }
   /** shared assets (raw SVG markup or data URIs), referenced by key */
   assets?: Record<string, string>
@@ -520,6 +550,9 @@ export const uid = (prefix = 'el') =>
 
 export const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
+export const MONOSPACE_FONT_STACK =
+  "ui-monospace, 'SFMono-Regular', 'Berkeley Mono', 'Menlo', 'Consolas', monospace"
 
 /**
  * An element's effective morph key: the `morphId` override when set, else its
@@ -684,6 +717,23 @@ export function defaultChart(option: Record<string, unknown>, partial: Partial<C
     rotation: 0, opacity: 1,
     preset: 'bar',
     option,
+    ...partial,
+  }
+}
+
+export function defaultCode(partial: Partial<CodeElement> = {}): CodeElement {
+  return {
+    id: uid('code'),
+    type: 'code',
+    x: 235, y: 95, w: 800, h: 520,
+    rotation: 0, opacity: 1,
+    fontSize: 32,
+    fontFamily: MONOSPACE_FONT_STACK,
+    color: '#1E2A3A',
+    align: 'left',
+    valign: 'middle',
+    lineHeight: 1.25,
+    content: 'Double-click to edit',
     ...partial,
   }
 }

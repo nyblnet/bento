@@ -91,11 +91,24 @@ export interface SyncHost {
    */
   heal(): boolean
   /**
-   * Clamp per-tab view state (current position, selection) to a document that
-   * changed underneath it. Return true if the SELECTION changed, which is the
-   * only part the session has to announce.
+   * Snapshot per-tab view state BEFORE a remote change is applied. Optional:
+   * a shape whose view survives any edit does not need one.
+   *
+   * It exists because clamping after the fact is not enough. Keeping the user
+   * on the same slide when someone else deletes a different one requires
+   * knowing which slide they were on by IDENTITY, and after the apply that
+   * information is gone — the index now points at whatever moved into the gap.
+   * bento/slides fixed exactly this upstream (#262) and the fix is unavailable
+   * to a post-hoc clamp.
    */
-  clampView(): boolean
+  captureView?(): unknown
+  /**
+   * Reconcile per-tab view state (current position, selection) with a document
+   * that changed underneath it, given whatever `captureView` returned. Return
+   * true if the SELECTION changed, which is the only part the session has to
+   * announce.
+   */
+  clampView(view?: unknown): boolean
   /** Where this replica is, for presence. */
   presence(): { at: string; sel: string[] }
   /**
@@ -598,9 +611,11 @@ export class SyncSession {
     this.flush()
     for (const op of ops) if (!this.log.some((o) => o.a === op.a && o.s === op.s)) this.log.push(op)
     this.applying = true
+    // Before the document moves, not after: see captureView on the host shape.
+    const view = this.host.captureView?.()
     try {
       const res = this.state.apply(this.store.doc, ops)
-      if (res.changed) this.afterRemoteChange(res.structure)
+      if (res.changed) this.afterRemoteChange(res.structure, view)
     } finally {
       this.applying = false
     }
@@ -609,7 +624,7 @@ export class SyncSession {
     }
   }
 
-  private afterRemoteChange(structure: boolean) {
+  private afterRemoteChange(structure: boolean, view?: unknown) {
     void this.resolveBlobs()
     const store = this.store
     // A delete-everything race can leave a document with no content at all,
@@ -622,7 +637,7 @@ export class SyncSession {
       this.flush()
       this.applying = true
     }
-    const selChanged = this.host.clampView()
+    const selChanged = this.host.clampView(view)
     this.shadow = JSON.stringify(store.doc)
     store.doc.modified = new Date().toISOString()
     store.setDirty(true)
@@ -766,9 +781,10 @@ export class SyncSession {
     if (!rstate || rstate.v !== SYNC_V) return // pre-v2 room snapshot — unusable
     this.flush()
     this.applying = true
+    const view = this.host.captureView?.()
     try {
       const res = this.state.mergeSnapshot(this.store.doc, rdoc, rstate)
-      if (res.changed) this.afterRemoteChange(true)
+      if (res.changed) this.afterRemoteChange(true, view)
     } finally {
       this.applying = false
     }

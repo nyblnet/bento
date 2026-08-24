@@ -5,7 +5,8 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
+import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
 import { isMacOS } from '../screens'
@@ -435,7 +436,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
+    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —
@@ -446,6 +447,7 @@ export class PropsPanel {
     if (el.type === 'chart') this.buildChartProps(el)
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
+    if (el.type === 'code') this.buildCodeProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -1738,6 +1740,38 @@ export class PropsPanel {
         }, true))
       this.row('Poster', poster)
     }
+  }
+
+  private buildCodeProps(el: CodeElement) {
+    this.section(t('Source Code'))
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    this.host.appendChild(status)
+    // Font Size
+    // Shown in POINTS (the unit office users know); the model stores slide-space
+    // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
+    this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+      this.mutate(el.id, (e) => {
+        (e as CodeElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
+      }, fin)))
+    // Alignment
+    this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).align = v as CodeElement['align'] }, true)))
+    // V-Alignment
+    this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).valign = v as CodeElement['valign'] }, true)))
+    // Line height
+    this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).lineHeight = Math.max(v, 0.5) }, fin)))
+    // Language — selects the built-in tokenizer table. grammarName doubles as
+    // the language id; grammarAssetId/themeAssetId stay in the format as the
+    // seam for a future signed-extension tier carrying real TextMate grammars
+    // as deck assets, at which point pickers for them return here.
+    const langs = Object.keys(LANGS).sort().concat(['diff', 'md'])
+    this.row(t('Language'), this.select(langs, el.grammarName ?? 'js', (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).grammarName = v }, true)))
+    status.textContent = t('{n} languages built in', { n: String(langs.length) })
+    this.host.appendChild(status)
   }
 
   // --- element ops --------------------------------------------------------------

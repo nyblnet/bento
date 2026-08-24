@@ -15,7 +15,9 @@ import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from '
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
 
-const MORPH_DURATION = 0.65
+const MORPH_DURATION_DEFAULT = 0.65
+/** Set per-deck by doc.present.morphSeconds; clamped to something sane. */
+let MORPH_DURATION = MORPH_DURATION_DEFAULT
 const MORPH_EASE = 'power2.inOut'
 
 export interface PresentSession {
@@ -28,6 +30,8 @@ export function startPresentation(
   onExit: (lastIndex: number) => void,
   opts: { fullscreen?: boolean } = {},
 ): PresentSession {
+  MORPH_DURATION = Math.min(6, Math.max(0.1, doc.present?.morphSeconds ?? MORPH_DURATION_DEFAULT))
+
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
   overlay.style.setProperty('--bento-accent', doc.theme.accent)
@@ -42,10 +46,26 @@ export function startPresentation(
   revealEl.appendChild(slidesEl)
   overlay.appendChild(revealEl)
 
-  doc.slides.forEach((slide) => {
+  doc.slides.forEach((slide, i) => {
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
-    section.dataset.transition = slide.transition === 'morph' ? 'none' : slide.transition
+    //
+    // A slide that PRECEDES a morph must not fade OUT either. Reveal takes the
+    // OUTGOING slide's transition on exit, and the morph's moving elements live
+    // on the INCOMING slide — which is already at full opacity from the first
+    // frame. So the outgoing dissolve paints a ghost of the old slide straight
+    // over the animation: measured at 450ms, against a 600ms morph, which reads
+    // as "the change just appeared" rather than as motion.
+    // Reveal has no `none-out`: its stylesheet carries `~="slide-out"` style
+    // rules for slide/zoom/convex/concave (24 of them) but none for `none`, so
+    // a split value like `fade-in none-out` matches nothing and the deck-level
+    // default transition wins — measured, the ghost was still there. Only the
+    // exact value `none` cuts, so a slide handing off to a morph cuts in as
+    // well as out. That is the deliberate trade: an instant cut into the
+    // "before" frame costs less than a dissolve painted over the morph itself.
+    const morphNext = doc.slides[i + 1]?.transition === 'morph'
+    section.dataset.transition =
+      slide.transition === 'morph' || morphNext ? 'none' : slide.transition
     if (!inLinearFlow(slide)) section.dataset.bentoState = '1' // dimmed in overview
     const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
     // reveal slides start with only the default hover set visible
@@ -1489,6 +1509,23 @@ function morphMathSymbols(
   if (!fromAt?.size || !to.querySelector('[data-sym]')) return false
   const toAt = symbolOffsets(to, b.w, b.h)
   if (!toAt.size) return false
+
+  // A symbol with no partner on the previous slide has nowhere to travel FROM,
+  // so it simply appeared. For a formula that is right — a new term rides the
+  // element's own transition. For code it is not: a step can introduce a whole
+  // line, and a line that snaps in while its neighbours glide reads as a redraw
+  // rather than an edit. Fading them in, staggered and starting once the travel
+  // is under way, makes the two motions one beat.
+  const fresh = Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))
+    .filter((s) => !fromAt.has(s.dataset.sym!))
+  fresh.forEach((s, i) => {
+    anim.fromTo(s, { opacity: 0 }, {
+      opacity: 1,
+      duration: 0.3,
+      delay: MORPH_DURATION * 0.4 + Math.min(i, 30) * 0.015,
+      ease: 'power2.out',
+    })
+  })
 
   const pairs: Array<{ node: HTMLElement; dx: number; dy: number }> = []
   for (const sym of Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))) {

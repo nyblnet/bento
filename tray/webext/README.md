@@ -1,4 +1,4 @@
-# bento/tray — WebExtension
+# bento/home — WebExtension
 
 A browser host for Bento documents. Grant your decks folder once; after that a
 deck you opened by **double-clicking** saves back to its own file with no
@@ -75,7 +75,7 @@ The safe procedure, which the notice spells out as numbered steps:
 
 1. Download the zip from the release.
 2. Replace the files **in the folder it was originally loaded from**.
-3. `chrome://extensions` → **Reload** on Bento Tray.
+3. `chrome://extensions` → **Reload** on bento/home.
 
 Same path, same id, so the grants and everything else survive. The first-run
 screen also carries a note for anyone who already got it wrong, because "an
@@ -106,6 +106,50 @@ that was reviewed.
 
 Bump `manifest.json`'s `version` before packing; the store rejects a re-upload of
 an existing version, and unpacked users compare against exactly that number.
+
+## Creating a document, and why it is verified
+
+The `+` button downloads the current release of the chosen app and writes it
+into a granted folder. Nothing is bundled — a shell inside the extension would
+drift from the real release and be re-reviewed on every update — and as of
+2026-08-16 no tray host bundles one, so this is the only way a new document
+comes into existence anywhere.
+
+That makes it a path worth being careful on: the thing being written is
+executable HTML, landing on the user's own disk, which they will then
+double-click and trust. So `src/release.js` earns it rather than assuming it.
+
+1. The manifest is fetched **as text**. It is a signed envelope —
+   `{"payload": "<json string>", "sig": "<base64>"}` — and the fields live
+   inside the payload string. There is no top-level `url`.
+2. The ECDSA P-256 / SHA-256 signature is verified over the payload's exact
+   bytes, against the release public key compiled into the extension.
+3. The payload's `app` must match the channel it came from. The channels are
+   sibling paths on one origin, so a genuine manifest served from the wrong one
+   would otherwise hand somebody a different application.
+4. The downloaded shell must hash to the `sha256` that signature covers.
+5. Only then is a file handle opened. Any refusal writes **nothing** — a
+   half-created document is a document somebody opens.
+
+Signature over the pin, pin over the bytes. A signature with no pin verifies a
+description of a build; a pin with no signature is a digest chosen by whoever
+served the bytes.
+
+`release.js` is a deliberate **mirror** of `kernel/src/update.ts`, not an
+import: the kernel is TypeScript that Vite compiles into an app shell, and this
+extension ships as unbundled ES modules Chrome loads from disk. Adding a bundler
+to share forty lines would cost more trust than it buys, because the uploaded
+package would stop being the reviewed source. The price is a maintenance rule —
+**if the release key or the envelope format changes in the kernel, change it
+here too** — and `scripts/test-webext-release.ts` enforces it: it asserts the
+two keys are byte-identical and verifies a real manifest captured from
+`bento.page`, with no test seam in the path.
+
+That captured fixture is the point. The first version of this feature read
+`manifest.url` off the envelope's top level and threw `the release server did
+not offer a build` on every single invocation — the `+` button had never once
+worked — and the rig passed throughout, because its fixture was written to the
+shape the code expected instead of the shape the server sends.
 
 ## Two surfaces
 

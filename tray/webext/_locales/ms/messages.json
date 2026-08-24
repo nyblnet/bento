@@ -48,13 +48,13 @@
     "message": "Chrome akan bertanya sebentar lagi. Pilih pilihan tengah:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — sebuah folder perlu disambung semula"
+    "message": "bento/home — sebuah folder perlu disambung semula"
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray perlu disambung semula"
+    "message": "bento/home perlu disambung semula"
   },
   "notifyLapsedBody": {
     "message": "Chrome menarik balik kebenaran bagi sebuah folder. Sehingga ia dipulihkan, setiap simpanan akan bertanya di mana hendak diletakkan."
@@ -63,7 +63,7 @@
     "message": "Sambung semula"
   },
   "ctxOpenPanel": {
-    "message": "Buka panel Bento Tray"
+    "message": "Buka panel bento/home"
   },
   "panelEmpty": {
     "message": "Belum ada dokumen Bento dalam folder anda."
@@ -141,7 +141,7 @@
     "message": "<b>+ Dokumen baharu</b> meletakkan satu yang baharu di sini."
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray belum tahu di mana $1 berada pada cakera. Gunakan “Cari folder saya”, atau buka satu dokumen di dalamnya melalui Finder sekali."
+    "message": "bento/home belum tahu di mana $1 berada pada cakera. Gunakan “Cari folder saya”, atau buka satu dokumen di dalamnya melalui Finder sekali."
   },
   "cardRenamedTip": {
     "message": "$1 ialah dokumen Bento dengan nama lain. Ia terbuka dari sini, tetapi penyimpanan akan bertanya destinasi — penyimpanan di tempatnya hanya mengenali fail yang berakhir dengan .bento.html."
@@ -195,7 +195,7 @@
     "message": "Hidupkan akses fail setempat"
   },
   "setupStep2Note": {
-    "message": "Dalam <code>chrome://extensions</code> → Bento Tray → <b>Benarkan akses kepada URL fail</b>. Chrome tidak membenarkan sambungan menghidupkannya sendiri."
+    "message": "Dalam <code>chrome://extensions</code> → bento/home → <b>Benarkan akses kepada URL fail</b>. Chrome tidak membenarkan sambungan menghidupkannya sendiri."
   },
   "setupUpgradeNote": {
     "message": "<b>Baru menaik taraf dan menjangka folder anda ada di sini?</b> Sambungan tanpa pakej dikenali melalui laluan foldernya, jadi salinan baharu yang dimuatkan dari folder lain ialah sambungan yang berbeza. Folder anda masih milik yang lama. Sebaliknya, gantikan fail dalam folder asal dan tekan <b>Muat semula</b> dalam <code>chrome://extensions</code>."
@@ -264,10 +264,10 @@
     "message": "Tidak diketahui"
   },
   "accessOnNote": {
-    "message": "Bento Tray boleh membaca halaman yang anda buka dari cakera."
+    "message": "bento/home boleh membaca halaman yang anda buka dari cakera."
   },
   "accessOffNote": {
-    "message": "Buka chrome://extensions, cari Bento Tray, hidupkan “Benarkan akses kepada URL fail”."
+    "message": "Buka chrome://extensions, cari bento/home, hidupkan “Benarkan akses kepada URL fail”."
   },
   "accessUnknownNote": {
     "message": "Pelayar ini tidak melaporkannya. Jika penyimpanan masih bertanya, periksa dalam chrome://extensions."
@@ -309,7 +309,7 @@
     "message": "Hanya folder di atas, dan hanya fail asal sesebuah halaman benar-benar dibuka. Tiada apa-apa dimuat naik dan tiada apa-apa dibaca di tempat lain."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 tersedia.</b> Salinan ini dimuatkan tanpa pakej, jadi Chrome tidak akan pernah mengemas kininya."
+    "message": "<b>bento/home $1 tersedia.</b> Salinan ini dimuatkan tanpa pakej, jadi Chrome tidak akan pernah mengemas kininya."
   },
   "updateStep1": {
     "message": "Muat turunnya dari GitHub"
@@ -318,7 +318,7 @@
     "message": "Gantikan fail <b>dalam folder tempat anda memuatkannya</b> — folder yang sama, jika tidak Chrome menganggapnya sambungan berbeza dan folder yang telah dibenarkan tidak akan ikut serta"
   },
   "updateStep3": {
-    "message": "Buka <code>chrome://extensions</code> dan tekan <b>Muat semula</b> pada Bento Tray"
+    "message": "Buka <code>chrome://extensions</code> dan tekan <b>Muat semula</b> pada bento/home"
   },
   "fetchingApp": {
     "message": "Mengambil $1…"
@@ -330,10 +330,10 @@
     "message": "ke dalam $1"
   },
   "helpWhatTitle": {
-    "message": "Apa yang Bento Tray lakukan"
+    "message": "Apa yang bento/home lakukan"
   },
   "helpWhatSub": {
-    "message": "Dokumen Bento ialah satu fail HTML yang membawa editornya sendiri. Dibuka terus dari cakera, pelayar tidak membenarkannya menulis semula kepada dirinya sendiri — jadi setiap penyimpanan bertanya di mana hendak diletakkan. Bento Tray menghilangkan soalan itu."
+    "message": "Dokumen Bento ialah satu fail HTML yang membawa editornya sendiri. Dibuka terus dari cakera, pelayar tidak membenarkannya menulis semula kepada dirinya sendiri — jadi setiap penyimpanan bertanya di mana hendak diletakkan. bento/home menghilangkan soalan itu."
   },
   "tourSaveTitle": {
     "message": "Simpan di tempatnya"
@@ -381,7 +381,7 @@
     "message": "Pelayar ini tidak melaporkannya. Jika penyimpanan masih bertanya, periksa dalam <code>chrome://extensions</code>."
   },
   "helpAccessOn": {
-    "message": "Hidup — Bento Tray boleh membaca halaman yang anda buka dari cakera."
+    "message": "Hidup — bento/home boleh membaca halaman yang anda buka dari cakera."
   },
   "helpNeverTitle": {
     "message": "Apa yang ia tidak pernah lakukan"
@@ -393,7 +393,7 @@
     "message": "Perihal"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · sebahagian daripada projek Bento · berlesen MIT"
+    "message": "bento/home $1 · sebahagian daripada projek Bento · berlesen MIT"
   },
   "linkSource": {
     "message": "Sumber di GitHub"
@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Dua yang lain juga berfungsi, tetapi Chrome akan bertanya lagi — setiap kali mula semula bagi yang pertama, dan selepas menunggu bagi yang terakhir."
+  },
+  "viewLayout": {
+    "message": "Cara dokumen dipaparkan"
+  },
+  "viewIcons": {
+    "message": "Ikon"
+  },
+  "viewList": {
+    "message": "Senarai"
+  },
+  "close": {
+    "message": "Tutup"
+  },
+  "setLangTitle": {
+    "message": "Bahasa"
+  },
+  "setLangSub": {
+    "message": "Bahasa yang digunakan sambungan ini. Biasanya ia mengikut pelayar."
+  },
+  "langAutomatic": {
+    "message": "Automatik — ikut pelayar"
+  },
+  "setLangNote": {
+    "message": "Nama dan perihal sambungan itu sendiri datang daripada pelayar dan tidak berubah."
+  },
+  "aboutPromo": {
+    "message": "Baharu dengan Bento? Cari templat, galeri dan panduan penyuntingan AI di $1 — atau beri bintang di $2."
+  },
+  "setThemeTitle": {
+    "message": "Penampilan"
+  },
+  "setThemeSub": {
+    "message": "Tetapan pelayar ialah lalai, bukan kewajipan."
+  },
+  "themeAuto": {
+    "message": "Ikut pelayar"
+  },
+  "themeLight": {
+    "message": "Cerah"
+  },
+  "themeDark": {
+    "message": "Gelap"
+  },
+  "checking": {
+    "message": "Memeriksa…"
+  },
+  "surveyTitle": {
+    "message": "Cari di mana dokumen anda berada"
+  },
+  "surveySub": {
+    "message": "Pelayar tahu dokumen Bento yang pernah anda buka. Ia boleh menyebut folder tempatnya."
+  },
+  "surveyDeclined": {
+    "message": "Tidak mengapa — anda boleh menambah folder secara manual."
+  },
+  "surveyAllCovered": {
+    "message": "Kesemua $1 dokumen yang pernah dilihat pelayar ini sudah berada dalam folder yang anda tambah."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumen berada di luar semua folder yang anda tambah. $2 sudah dilindungi."
+  },
+  "surveyCovers": {
+    "message": "merangkumi $1"
+  },
+  "surveyAdd": {
+    "message": "Tambah folder ini…"
+  },
+  "surveyAdded": {
+    "message": "$1 ditambah — dokumen di dalamnya sedia"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 ditambah, tetapi dokumennya tiada di situ — buka satu melalui Finder sekali."
+  },
+  "surveyOnlySeen": {
+    "message": "Cara ini hanya menemui dokumen yang pernah dibuka dalam pelayar ini."
   }
 }

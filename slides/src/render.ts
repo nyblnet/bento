@@ -8,6 +8,7 @@ import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElem
 import { morphKey, paginates } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
+import { renderCodeInto } from './code'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -428,7 +429,7 @@ function tagSymbols(mathml: string): string {
     if (!txt) continue
     const n = seen.get(txt) ?? 0
     seen.set(txt, n + 1)
-    ;(leaf as HTMLElement).dataset.sym = `${txt}#${n}`
+      ; (leaf as HTMLElement).dataset.sym = `${txt}#${n}`
   }
   return tpl.innerHTML
 }
@@ -1070,7 +1071,12 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         audio.controls = el.controls !== false
         audio.loop = !!el.loop
         audio.preload = 'metadata'
-        audio.dataset.autoplay = el.autoplay ? '1' : ''
+        // OMITTED, not emptied, when autoplay is off. Reveal decides autoplay
+        // with hasAttribute('data-autoplay') — presence, not value — so
+        // data-autoplay="" made it play a clip the author had switched OFF
+        // (reported 2026-08-22). Our own startMediaIn reads [data-autoplay="1"]
+        // and was never the problem; Reveal simply gets there first.
+        if (el.autoplay) audio.dataset.autoplay = '1'
         audio.style.cssText = 'width:100%;display:block' + inert
         const wrap = document.createElement('div')
         wrap.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center'
@@ -1092,7 +1098,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       video.muted = el.muted !== false
       video.playsInline = true
       video.preload = 'metadata'
-      video.dataset.autoplay = el.autoplay ? '1' : ''
+      if (el.autoplay) video.dataset.autoplay = '1' // presence is the flag — see the audio case
       video.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};border-radius:${radius}px;display:block;background:#0b0f14` + inert
       if (!el.src) {
         const ph = document.createElement('div')
@@ -1147,6 +1153,30 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
           svg.prepend(style)
         }
       }
+      break
+    }
+    case 'code': {
+      node.style.display = 'flex'
+      node.style.flexDirection = 'column'
+      node.style.justifyContent = VALIGN[el.valign]
+      const inner = document.createElement('pre')
+      inner.className = 'bento-text-inner'
+      inner.dir = 'auto'
+      inner.style.fontSize = `${el.fontSize}px`
+      inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+      inner.style.textAlign = el.align
+      inner.style.lineHeight = String(el.lineHeight)
+      inner.style.width = '100%'
+      inner.style.color = el.color
+      inner.classList.add('bento-code')
+      inner.style.whiteSpace = 'pre'
+      inner.style.margin = '0'
+      inner.style.overflow = 'hidden'
+      if (!renderCodeInto(inner, el, doc)) {
+        // Fallback to unformatted text
+        inner.innerText = el.content
+      }
+      node.appendChild(inner)
       break
     }
   }
