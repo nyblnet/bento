@@ -557,6 +557,28 @@ new ResizeObserver(() => fitBar()).observe(bar);
 new ResizeObserver(() => fitBar()).observe(document.documentElement);
 window.addEventListener('resize', fitBar);
 
+// And a MutationObserver, which is the third signal slides has always had
+// (CLAUDE.md: "driven by a Resize- + MutationObserver on the bar") and this
+// app was missing.
+//
+// It matters because the bar's own BOX does not change when its CONTENTS do.
+// The document title is painted after this first fitBar() runs, and a longer
+// title makes the bar too tight without resizing it — so no ResizeObserver
+// fires and the bar stays one tier short. Measured: loaded directly at 480px
+// the bar overflowed by 23px with a button hanging past its edge, and a single
+// stray resize event was enough to fix it, which is the signature of a missing
+// re-measure rather than a broken measurement.
+//
+// It DISCONNECTS around its own call: fitBar adds classes and reparents
+// buttons into the ⋯ menu, which are themselves mutations, and an observer
+// that watched its own work would never stop.
+const barWatch = new MutationObserver(() => {
+  barWatch.disconnect();
+  fitBar();
+  barWatch.observe(bar, { childList: true, characterData: true, subtree: true });
+});
+barWatch.observe(bar, { childList: true, characterData: true, subtree: true });
+
 // LEFT — navigation and review: facts about the document as a whole.
 //
 // A panel that names a `host` becomes a SECTION of one of the three tabs
