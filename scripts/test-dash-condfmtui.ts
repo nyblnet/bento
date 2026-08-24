@@ -261,5 +261,36 @@ console.log('\n7 · the callers mount it')
     'and the menu’s two presets go through blankCondFmtRule rather than a second set of literals')
 }
 
+console.log('\na malformed rule loses its rule, not the whole panel')
+{
+  // Found by the panel-rhythm work while auditing sections, and it is a crash
+  // rather than a blemish: `rule.colors[2]` on a colorScale with no `colors`
+  // threw out of `buildCondFmtSection`, so the properties panel went blank for
+  // the SHEET, not just for the rule.
+  //
+  // `blankCondFmtRule` always writes the array, so nothing this app creates can
+  // reach it — which is exactly why it survived. The format is additive and
+  // PLATFORM §7 makes hand-edited and model-generated JSON a first-class way
+  // in, so "we always write it" is not "it is always there". And the panel is
+  // where somebody would go to REPAIR the rule, which makes losing the panel
+  // the worst available answer to a malformed one.
+  const bad = [
+    ['colorScale with no colors at all', { kind: 'colorScale' }],
+    ['colorScale with colors set to null', { kind: 'colorScale', colors: null }],
+    ['colorScale with a one-entry array', { kind: 'colorScale', colors: ['#fff'] }],
+  ] as Array<[string, unknown]>
+  for (const [what, rule] of bad) {
+    let threw: string | null = null
+    try {
+      const host = doc.createElement('div')
+      buildCondFmtSection({
+        host, kit: KIT, rules: [rule], readOnly: false, scope: 'A1:A9',
+        sheetId: 's1', colId: 'c', write: () => {},
+      } as never)
+    } catch (e) { threw = e instanceof Error ? e.message : String(e) }
+    ok(threw === null, `${what} builds a section instead of throwing${threw ? ` (${threw})` : ''}`)
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

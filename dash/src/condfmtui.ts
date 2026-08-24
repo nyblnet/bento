@@ -314,10 +314,21 @@ export function buildCondFmtSection(ctx: CondFmtCtx): void {
     }
     styleRows(host, kit, rule.style, readOnly, putStyle)
   } else if (rule.kind === 'colorScale') {
-    const three = typeof rule.colors[2] === 'string'
+    // A HAND-EDITED OR IMPORTED RULE MAY HAVE NO `colors` AT ALL, and reading
+    // `rule.colors[2]` off `undefined` threw out of the whole section — so the
+    // properties panel went blank for the sheet, not just for the rule. The
+    // panel is where you would go to REPAIR such a rule, which makes losing it
+    // the worst possible response to a malformed one.
+    //
+    // `blankCondFmtRule` always supplies the array, so nothing this app creates
+    // can reach here without it; the format is additive and PLATFORM §7 makes
+    // hand-edited JSON a first-class way in, so "we always write it" is not the
+    // same as "it is always there".
+    const colors: Array<string | undefined> = Array.isArray(rule.colors) ? rule.colors : []
+    const three = typeof colors[2] === 'string'
     const stop = (i: 0 | 1 | 2, fallback: string): HTMLElement =>
-      colourControl(String(rule.colors[i] ?? ''), fallback, readOnly, (v) => {
-        const cols = [...rule.colors] as [string, string, string?]
+      colourControl(String(colors[i] ?? ''), fallback, readOnly, (v) => {
+        const cols = [...colors] as [string, string, string?]
         cols[i] = v ?? fallback
         put({ colors: cols })
       }, t('Use the default colour'))
