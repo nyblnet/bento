@@ -386,6 +386,14 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // box here, and the tag must be absolutely positioned: appearing must not
     // move Save, which is the control that has to survive every width.
     `<span class="dx-wb" hidden></span></button>` +
+    // SETTINGS GETS ITS OWN DOOR. About used to hold everything — identity,
+    // properties, updates, language, appearance, password, history, JSON —
+    // eight sections and 3.2 screens of scroll, so somebody hunting for the
+    // language picker scrolled past their own password. The split follows the
+    // seam the codebase already had: what travels IN THE FILE is About's, what
+    // follows THE READER and lives in this browser is Settings'.
+    // `mountAbout` wires this on sight and the app is unharmed without it.
+    barBtn('settings', SVG('<circle cx="10" cy="10" r="2.6"/><path d="M10 2.6v2M10 15.4v2M17.4 10h-2M4.6 10h-2M15.2 4.8l-1.4 1.4M6.2 13.8l-1.4 1.4M15.2 15.2l-1.4-1.4M6.2 6.2L4.8 4.8"/>'), t('Settings'), t('Settings — language, appearance and updates')) +
     barBtn('about', ICON.info, t('About'), t('About this workbook')) +
     `<span class="dx-ver">v${APP_VERSION}</span>` +
     `</div>` +

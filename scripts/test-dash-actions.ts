@@ -168,7 +168,7 @@ console.log('\nthe matrix')
     // Print is workbook-scoped: the dialog prints EITHER kind, and its default
     // scope is the sheet on screen whatever that sheet is.
     'print',
-    'save', 'about', 'help',
+    'save', 'about', 'settings', 'help',
   ]
   ok(dataset.every((a) => actionApplies(a, 'table')),
     'every dataset action runs on a dataset')

@@ -455,7 +455,7 @@ export type ActionId =
   | 'undo' | 'redo'
   | 'import' | 'export' | 'import-xlsx' | 'export-xlsx'
   | 'print'
-  | 'save' | 'about' | 'help'
+  | 'save' | 'about' | 'settings' | 'help'
 
 /**
  * `on: 'workbook'` means the action is not about the sheet on screen at all —
@@ -530,6 +530,10 @@ export const ACTIONS: Readonly<Record<ActionId, ActionRule>> = {
   print: { on: 'workbook' },
   save: { on: 'workbook' },
   about: { on: 'workbook' },
+  // Language, appearance and the update check follow the READER and are kept in
+  // this browser — none of them is a fact about a sheet, so no sheet kind can
+  // make them inapplicable.
+  settings: { on: 'workbook' },
   help: { on: 'workbook' },
 }
 
