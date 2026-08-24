@@ -48,13 +48,13 @@
     "message": "Magtatanong ang Chrome. Piliin ang nasa gitna:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — may folder na kailangang ikonekta muli"
+    "message": "bento/home — may folder na kailangang ikonekta muli"
   },
   "notifyLapsedTitle": {
-    "message": "Kailangang ikonekta muli ang Bento Tray"
+    "message": "Kailangang ikonekta muli ang bento/home"
   },
   "notifyLapsedBody": {
     "message": "Binawi ng Chrome ang pahintulot sa isang folder. Hangga't hindi naibabalik, tatanungin ka sa bawat pag-save kung saan ilalagay ang file."
@@ -63,7 +63,7 @@
     "message": "Ikonekta muli"
   },
   "ctxOpenPanel": {
-    "message": "Buksan ang panel ng Bento Tray"
+    "message": "Buksan ang panel ng bento/home"
   },
   "panelEmpty": {
     "message": "Wala pang dokumentong Bento sa mga folder mo."
@@ -141,7 +141,7 @@
     "message": "Maglalagay ng bago rito ang <b>+ Bagong dokumento</b>."
   },
   "cardUnplacedTip": {
-    "message": "Hindi pa alam ng Bento Tray kung nasaan sa disk ang $1. Gamitin ang “Hanapin ang mga folder ko”, o buksan minsan mula sa Finder ang kahit anong dokumento roon."
+    "message": "Hindi pa alam ng bento/home kung nasaan sa disk ang $1. Gamitin ang “Hanapin ang mga folder ko”, o buksan minsan mula sa Finder ang kahit anong dokumento roon."
   },
   "cardRenamedTip": {
     "message": "Ang $1 ay dokumentong Bento na may ibang pangalan. Nabubuksan ito rito, pero magtatanong ang pag-save kung saan ilalagay — mga file lang na nagtatapos sa .bento.html ang nakikilala ng pag-save sa mismong file."
@@ -195,7 +195,7 @@
     "message": "I-on ang access sa lokal na file"
   },
   "setupStep2Note": {
-    "message": "Sa <code>chrome://extensions</code> → Bento Tray → <b>Payagan ang access sa mga file URL</b>. Hindi pinapayagan ng Chrome na i-on ito ng extension para sa sarili nito."
+    "message": "Sa <code>chrome://extensions</code> → bento/home → <b>Payagan ang access sa mga file URL</b>. Hindi pinapayagan ng Chrome na i-on ito ng extension para sa sarili nito."
   },
   "setupUpgradeNote": {
     "message": "<b>Nag-upgrade at inaasahang naririto ang mga folder mo?</b> Ang isang unpacked na extension ay kinikilala sa pamamagitan ng path ng folder nito, kaya't ang bagong kopyang na-load mula sa ibang folder ay ibang extension na. Nasa lumang kopya pa rin ang mga folder mo. Sa halip, palitan ang mga file sa orihinal na folder at pindutin ang <b>I-reload</b> sa <code>chrome://extensions</code>."
@@ -264,10 +264,10 @@
     "message": "Hindi alam"
   },
   "accessOnNote": {
-    "message": "Nababasa ng Bento Tray ang mga pahinang binuksan mo mula sa disk."
+    "message": "Nababasa ng bento/home ang mga pahinang binuksan mo mula sa disk."
   },
   "accessOffNote": {
-    "message": "Buksan ang chrome://extensions, hanapin ang Bento Tray, i-on ang “Payagan ang access sa mga file URL”."
+    "message": "Buksan ang chrome://extensions, hanapin ang bento/home, i-on ang “Payagan ang access sa mga file URL”."
   },
   "accessUnknownNote": {
     "message": "Hindi ito iniuulat ng browser na ito. Kung nagtatanong pa rin ang pag-save, tingnan ito sa chrome://extensions."
@@ -309,7 +309,7 @@
     "message": "Ang mga folder lang sa itaas, at ang file lang na talagang pinagbuksan ng isang pahina. Walang ina-upload at walang binabasa saanman."
   },
   "updateAvailable": {
-    "message": "<b>Available na ang Bento Tray $1.</b> Na-load ang kopyang ito nang unpacked, kaya't hindi ito kailanman i-a-update ng Chrome."
+    "message": "<b>Available na ang bento/home $1.</b> Na-load ang kopyang ito nang unpacked, kaya't hindi ito kailanman i-a-update ng Chrome."
   },
   "updateStep1": {
     "message": "I-download ito mula sa GitHub"
@@ -318,7 +318,7 @@
     "message": "Palitan ang mga file <b>sa folder na pinag-load-an mo nito</b> — sa parehong folder, o ituturing ito ng Chrome na ibang extension at hindi kasama ang mga folder na binigyan mo ng pahintulot"
   },
   "updateStep3": {
-    "message": "Buksan ang <code>chrome://extensions</code> at pindutin ang <b>I-reload</b> sa Bento Tray"
+    "message": "Buksan ang <code>chrome://extensions</code> at pindutin ang <b>I-reload</b> sa bento/home"
   },
   "fetchingApp": {
     "message": "Kinukuha ang $1…"
@@ -330,10 +330,10 @@
     "message": "sa $1"
   },
   "helpWhatTitle": {
-    "message": "Ang ginagawa ng Bento Tray"
+    "message": "Ang ginagawa ng bento/home"
   },
   "helpWhatSub": {
-    "message": "Ang dokumentong Bento ay iisang HTML file na dala ang sarili nitong editor. Kapag binuksan mismo mula sa disk, hindi ito pinapayagan ng browser na magsulat pabalik sa sarili nito — kaya't tinatanong ka ng bawat pag-save kung saan ilalagay. Ang Bento Tray ang nag-aalis ng tanong na iyon."
+    "message": "Ang dokumentong Bento ay iisang HTML file na dala ang sarili nitong editor. Kapag binuksan mismo mula sa disk, hindi ito pinapayagan ng browser na magsulat pabalik sa sarili nito — kaya't tinatanong ka ng bawat pag-save kung saan ilalagay. Ang bento/home ang nag-aalis ng tanong na iyon."
   },
   "tourSaveTitle": {
     "message": "I-save sa mismong file"
@@ -381,7 +381,7 @@
     "message": "Hindi ito iniuulat ng browser na ito. Kung nagtatanong pa rin ang pag-save, tingnan ito sa <code>chrome://extensions</code>."
   },
   "helpAccessOn": {
-    "message": "Naka-on — nababasa ng Bento Tray ang mga pahinang binuksan mo mula sa disk."
+    "message": "Naka-on — nababasa ng bento/home ang mga pahinang binuksan mo mula sa disk."
   },
   "helpNeverTitle": {
     "message": "Ang hindi nito kailanman ginagawa"
@@ -393,7 +393,7 @@
     "message": "Tungkol"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · bahagi ng proyektong Bento · lisensyadong MIT"
+    "message": "bento/home $1 · bahagi ng proyektong Bento · lisensyadong MIT"
   },
   "linkSource": {
     "message": "Source sa GitHub"
@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Gumagana rin ang dalawa pa, pero magtatanong muli ang Chrome — sa bawat restart para sa una, at pagkatapos ng paghihintay para sa huli."
+  },
+  "viewLayout": {
+    "message": "Kung paano ipinapakita ang mga dokumento"
+  },
+  "viewIcons": {
+    "message": "Mga icon"
+  },
+  "viewList": {
+    "message": "Listahan"
+  },
+  "close": {
+    "message": "Isara"
+  },
+  "setLangTitle": {
+    "message": "Wika"
+  },
+  "setLangSub": {
+    "message": "Kung anong wika ang ginagamit ng extension na ito. Karaniwang sumusunod ito sa browser."
+  },
+  "langAutomatic": {
+    "message": "Awtomatiko — sundan ang browser"
+  },
+  "setLangNote": {
+    "message": "Ang pangalan at paglalarawan mismo ng extension ay galing sa browser at hindi nagbabago."
+  },
+  "aboutPromo": {
+    "message": "Bago sa Bento? Makikita ang mga template, ang gallery at ang gabay sa pag-edit gamit ang AI sa $1 — o bigyan ito ng star sa $2."
+  },
+  "setThemeTitle": {
+    "message": "Anyo"
+  },
+  "setThemeSub": {
+    "message": "Ang setting ng browser ang default, hindi kinakailangan."
+  },
+  "themeAuto": {
+    "message": "Sundin ang browser"
+  },
+  "themeLight": {
+    "message": "Maliwanag"
+  },
+  "themeDark": {
+    "message": "Madilim"
+  },
+  "checking": {
+    "message": "Sinusuri…"
+  },
+  "surveyTitle": {
+    "message": "Hanapin kung nasaan ang mga dokumento mo"
+  },
+  "surveySub": {
+    "message": "Alam ng browser kung anong mga dokumentong Bento ang binuksan mo. Masasabi nito kung anong mga folder ang kinalalagyan."
+  },
+  "surveyDeclined": {
+    "message": "Walang problema — puwede mong idagdag nang manu-mano ang mga folder."
+  },
+  "surveyAllCovered": {
+    "message": "Lahat ng $1 dokumentong nakita ng browser na ito ay nasa folder nang naidagdag mo."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumento ang wala sa alinmang folder na idinagdag mo. $2 ang saklaw na."
+  },
+  "surveyCovers": {
+    "message": "saklaw ang $1"
+  },
+  "surveyAdd": {
+    "message": "Idagdag ang folder na ito…"
+  },
+  "surveyAdded": {
+    "message": "Naidagdag ang $1 — handa na ang mga dokumento rito"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Naidagdag ang $1, pero wala roon ang mga dokumento — magbukas ng isa mula sa Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "Ang mga dokumentong binuksan sa browser na ito lang ang makikita sa paraang ito."
   }
 }

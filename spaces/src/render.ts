@@ -9,14 +9,15 @@
 // story, native ⌘F, print fidelity and lossless markdown export at once, from
 // one decision.
 
-import { type SpacesDoc, type Page, type Block, isRemote } from './model'
+import { type SpacesDoc, type Page, type Block, isRemote, tableOf, linkCard } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
-import { TAG_OF, LIST_OF, SPEC, TONE } from './blocks'
+import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
-  passesFilter, filterCount, unknownFilterKeys, type FieldSpec,
+  passesFilter, filterCount, unknownFilterKeys,
+  sortRows, unknownSortKeys, type ViewSort, type FieldSpec,
 } from './fields'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
@@ -26,6 +27,14 @@ export interface RenderOpts {
   editable?: boolean
   /** resolve a page id to its title, for link chips and pagelink blocks */
   titleOf?: (pageId: string) => string | undefined
+  /**
+   * This READER's preferred width for a page that does not state one.
+   *
+   * Viewer-scoped, like locale and the pane width — never a document field. It
+   * is a fact about the screen somebody is sitting at, so two people opening
+   * one space each get their own answer, and neither writes it into the file.
+   */
+  readerWidth?: 'wide' | 'full'
   /** collapsed toggles render OPEN — print always passes this */
   forceOpen?: boolean
   /** rendering to paper: no controls, because paper has no buttons */
@@ -192,7 +201,8 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       // those the reader gets a placeholder naming the host and a button. One
       // click, per image, informed — the model every mail client settled on.
       if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
-        fig.appendChild(remoteImagePlaceholder(rawSrc, b, opts))
+        fig.appendChild(remotePlaceholder(rawSrc, b, opts,
+          t('Image from {host}', { host: remoteHost(rawSrc) }), t('Load this image')))
         if (b.caption) {
           const cap = document.createElement('figcaption')
           cap.innerHTML = sanitizeInline(String(b.caption))
@@ -219,6 +229,123 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       return el
     }
 
+    case 'table': {
+      el.appendChild(renderTable(b, opts))
+      return el
+    }
+
+    case 'media': {
+      const fig = document.createElement('figure')
+      const play = mediaPlayback(b)
+      const rawSrc = String(b.src ?? '')
+      el.dataset.kind = play.kind
+      const done = () => {
+        if (b.caption) {
+          const cap = document.createElement('figcaption')
+          cap.innerHTML = sanitizeInline(String(b.caption))
+          fig.appendChild(cap)
+        }
+        el.appendChild(fig)
+        return el
+      }
+
+      // NO SOURCE YET. Inserting the block and choosing the file are two
+      // gestures — a picker can be cancelled, and a link has to be typed
+      // somewhere — so the empty state is part of the block rather than a
+      // failure of it. The editor wires these two buttons; a reader, a
+      // printout and a still see the same box saying what is missing, which is
+      // more honest than a gap.
+      if (!rawSrc) {
+        const box = document.createElement('div')
+        box.className = 'sp-media-empty'
+        const line = document.createElement('div')
+        line.className = 'sp-remote-line'
+        line.textContent = play.kind === 'audio' ? t('Audio') : t('Video')
+        box.appendChild(line)
+        if (opts.editable && !opts.printing) {
+          const pick = document.createElement('button')
+          pick.type = 'button'
+          pick.className = 'sp-btn sp-remote-load'
+          pick.textContent = t('Choose a file…')
+          pick.dataset.pickMedia = b.id
+          const link = document.createElement('button')
+          link.type = 'button'
+          link.className = 'sp-btn sp-remote-load'
+          link.textContent = t('Use a link…')
+          link.dataset.linkMedia = b.id
+          const row = document.createElement('div')
+          row.className = 'sp-media-actions'
+          row.append(pick, link)
+          box.appendChild(row)
+        }
+        fig.appendChild(box)
+        return done()
+      }
+
+      // THE SAME CONSENT GATE AS AN IMAGE, and it matters MORE here. A remote
+      // <video> asks its host for byte ranges the moment the element is
+      // parsed, so an autoplaying tracker is not even needed: opening the
+      // space is the ping. Same rule, same host named, different words.
+      if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
+        const host = remoteHost(rawSrc)
+        fig.appendChild(remotePlaceholder(rawSrc, b, opts,
+          play.kind === 'audio' ? t('Audio from {host}', { host }) : t('Video from {host}', { host }),
+          play.kind === 'audio' ? t('Load this audio') : t('Load this video')))
+        return done()
+      }
+
+      // PAPER AND THUMBNAILS GET A STILL, NEVER A PLAYER.
+      //
+      // `printing` is the flag both of those surfaces already pass (print, and
+      // preview.ts's file-manager render), and it is the honest test: it means
+      // "this output cannot be interacted with". A <video> on paper prints as
+      // a black rectangle; in a file-manager preview it would be an element
+      // that decodes, buffers and — with scripting off, where nothing can stop
+      // it — sits there holding a source open. preview.ts also BANS the tags
+      // outright, which is defence in depth rather than the mechanism: by the
+      // time it runs there is nothing to ban.
+      if (opts.printing) {
+        fig.appendChild(mediaStill(b, doc, opts, play.kind))
+        return done()
+      }
+
+      const m = document.createElement(play.kind === 'audio' ? 'audio' : 'video') as
+        HTMLVideoElement | HTMLAudioElement
+      m.className = 'sp-media'
+      m.src = resolveSrc(rawSrc, doc)
+      // metadata, not auto: enough to draw the first frame and a duration, and
+      // no more. `auto` on a linked clip downloads the whole thing to display a
+      // page nobody has pressed play on.
+      m.preload = 'metadata'
+      // A block with controls off is a rectangle you cannot use, which is fine
+      // for a reader looking at a caption-and-poster figure and useless to the
+      // author who has to click it to change it. So the editor always has them.
+      m.controls = play.controls || opts.editable === true
+      m.loop = play.loop
+      // NOTHING SETS `m.autoplay`. mediaPlayback() cannot return true for it,
+      // and this is the surface that would have obeyed it — see blocks.ts.
+      if (play.kind === 'video') {
+        const v = m as HTMLVideoElement
+        // iOS otherwise takes the clip fullscreen on play, which throws the
+        // reader out of the page they were reading
+        v.playsInline = true
+        // muted is a VIDEO choice: a silent audio block is a block that does
+        // nothing, so the editor does not offer it and neither does this
+        v.muted = play.muted
+        const poster = String(b.poster ?? '')
+        // a remote poster is the same tracking pixel as a remote image, so it
+        // goes through the same consent
+        if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+          const resolved = resolveSrc(poster, doc)
+          if (resolved) v.poster = resolved
+        }
+        if (b.w && b.h) { v.width = Number(b.w); v.height = Number(b.h) }
+        if (b.width) v.style.width = `${Math.max(10, Math.min(100, Number(b.width)))}%`
+      }
+      fig.appendChild(m)
+      return done()
+    }
+
     case 'pagelink': {
       const a = document.createElement('a')
       const target = String(b.page ?? '')
@@ -228,6 +355,95 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       a.textContent = title ?? '(missing page)'
       if (!title) a.classList.add('sp-dead')
       el.appendChild(a)
+      return el
+    }
+
+    case 'link': {
+      // A CARD DRAWN ENTIRELY FROM THE FILE.
+      //
+      // There is no fetch here and there is no deferred one either. Every value
+      // was typed by the author and stored; the only thing derived at render
+      // time is the site name, and that is `new URL(url).host` — parsing, not a
+      // request. PLATFORM §1 and the 2026-08-03 decision both land on this
+      // line, so the negative test in scripts/test-spaces-model.ts pins it.
+      const c = linkCard(b)
+      el.classList.add('sp-link')
+
+      // AN ANCHOR ONLY WHEN THERE IS SOMEWHERE TO GO. A card whose url is
+      // empty, or is a `javascript:`/`data:` string out of a mailed file, is a
+      // <div>: `linkCard` returns '' for all three, and an <a> with no href is
+      // a link a keyboard can focus and a screen reader will announce, leading
+      // nowhere.
+      const card = document.createElement(c.url ? 'a' : 'div')
+      card.className = 'sp-linkcard'
+      if (c.url) {
+        const a = card as HTMLAnchorElement
+        a.href = c.url
+        // the same treatment sanitizeInline gives an external link: this leaves
+        // the document, so it must not be able to reach back through opener
+        a.rel = 'noopener noreferrer'
+        a.target = '_blank'
+      } else {
+        card.classList.add('sp-dead')
+      }
+
+      // THE THUMBNAIL IS LOCAL OR IT IS ABSENT. `linkCard` has already dropped
+      // a remote one — this cannot be re-tested here, because a check that can
+      // be forgotten in one of four surfaces is a check that will be.
+      if (c.image) {
+        const img = document.createElement('img')
+        img.src = resolveSrc(c.image, doc)
+        img.alt = ''
+        img.className = 'sp-linkcard-img'
+        card.appendChild(img)
+      }
+
+      const body = document.createElement('span')
+      body.className = 'sp-linkcard-body'
+
+      const title = document.createElement('span')
+      title.className = 'sp-linkcard-title'
+      // an empty card is not an empty box: it says what it is and, in the
+      // editor, offers the way to fill it in
+      title.textContent = c.title || t('A link with nothing in it yet')
+      body.appendChild(title)
+
+      if (c.desc) {
+        const desc = document.createElement('span')
+        desc.className = 'sp-linkcard-desc'
+        desc.textContent = c.desc
+        body.appendChild(desc)
+      }
+
+      const foot = document.createElement('span')
+      foot.className = 'sp-linkcard-site'
+      if (c.icon) {
+        const mark = document.createElement('span')
+        mark.className = 'sp-linkcard-mark'
+        // textContent, never innerHTML: this is one field out of a mailed file
+        mark.textContent = c.icon
+        foot.appendChild(mark)
+      }
+      const site = document.createElement('span')
+      site.textContent = c.site || c.url
+      foot.appendChild(site)
+      if (c.site || c.url || c.icon) body.appendChild(foot)
+
+      card.appendChild(body)
+      el.appendChild(card)
+
+      // The card itself opens the link, so editing needs its own control — and
+      // only where there is an editor. Reading view, print and a locked space
+      // must not paint a button that does nothing (the callout chip's rule).
+      if (opts.editable) {
+        const edit = document.createElement('button')
+        edit.type = 'button'
+        edit.className = 'sp-linkcard-edit'
+        edit.dataset.editLink = b.id
+        edit.title = t('Edit this link card')
+        edit.textContent = c.url ? t('Edit') : t('Add a link')
+        el.appendChild(edit)
+      }
       return el
     }
 
@@ -324,7 +540,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       twist.className = 'sp-twist'
       twist.type = 'button'
       twist.setAttribute('aria-expanded', String(!!(opts.forceOpen || b.open)))
-      twist.setAttribute('aria-label', 'Toggle section')
+      twist.setAttribute('aria-label', t('Toggle section'))
       twist.textContent = '▸'
       el.appendChild(twist)
       hostAndAnswer(el, b, opts, calc)
@@ -335,6 +551,80 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       hostAndAnswer(el, b, opts, calc)
       return el
   }
+}
+
+/**
+ * A table — the same DOM in the editor, the reading view, print and the still
+ * preview, because there is one renderer.
+ *
+ * REAL `<table>`, `<thead>`, `<th>`, exactly as this renderer emits real
+ * headings and real list items: that is what buys the screen-reader story
+ * (row and column announcement), native ⌘F, print fidelity and a lossless
+ * markdown export, all from one decision. A grid of divs would need four
+ * separate answers.
+ *
+ * The widths are a `<colgroup>` over `table-layout: fixed` — the one layout
+ * mode in which a column's width is what the document SAYS rather than what
+ * this reader's font measured, so a table looks the same to everyone the file
+ * is mailed to. Percentages, never px: `cols` holds fractions (model.ts) and
+ * the text column is a theme concern.
+ *
+ * Cells are editable HOSTS in the editor and inert `<td>`s everywhere else, and
+ * the editable one is the cell itself rather than a span inside it — a cell is
+ * a box you click into, and a nested host makes a 1px strip around its edge
+ * that swallows the click.
+ */
+function renderTable(b: Block, opts: RenderOpts): HTMLElement {
+  const t = tableOf(b)
+  const wrap = document.createElement('div')
+  // A wide table SCROLLS rather than widening the prose column: the measure is
+  // the document's, and a five-column table must not push the paragraph above
+  // it off the screen on a phone.
+  wrap.className = 'sp-tb-wrap'
+  const table = document.createElement('table')
+  table.className = 'sp-tb'
+  const total = t.cols.reduce((s, n) => s + n, 0) || t.w
+  const group = document.createElement('colgroup')
+  for (const w of t.cols) {
+    const col = document.createElement('col')
+    col.style.width = `${((w / total) * 100).toFixed(3)}%`
+    group.appendChild(col)
+  }
+  table.appendChild(group)
+
+  const body = document.createElement('tbody')
+  t.rows.forEach((row, r) => {
+    const head = t.header && r === 0
+    const tr = document.createElement('tr')
+    row.forEach((cell, c) => {
+      const td = document.createElement(head ? 'th' : 'td')
+      td.className = 'sp-tb-cell'
+      td.dataset.r = String(r)
+      td.dataset.c = String(c)
+      if (head) td.setAttribute('scope', 'col')
+      if (t.colAlign[c]) td.style.textAlign = t.colAlign[c]
+      // per cell, for the reason text blocks carry it: a table of Arabic terms
+      // beside English ones must lay each column out by what is IN it
+      td.dir = 'auto'
+      if (opts.editable) {
+        td.contentEditable = 'true'
+        // NOT `data-edit`: that name means "this element's html IS the block's
+        // html", and the editor's generic input handler would write one cell
+        // over the whole table. A cell says which block AND which cell it is.
+        td.dataset.cell = b.id
+      }
+      td.innerHTML = sanitizeInline(cell)
+      tr.appendChild(td)
+    })
+    if (head) {
+      const thead = document.createElement('thead')
+      thead.appendChild(tr)
+      table.appendChild(thead)
+    } else body.appendChild(tr)
+  })
+  table.appendChild(body)
+  wrap.appendChild(table)
+  return wrap
 }
 
 /**
@@ -508,18 +798,26 @@ function remoteHost(src: string): string {
 }
 
 /**
- * What stands in for an unloaded remote image: what it is, WHERE it would come
- * from, and a button. Naming the host is the point — "load images" with no
+ * What stands in for an unloaded remote resource: what it is, WHERE it would
+ * come from, and a button. Naming the host is the point — "load images" with no
  * indication of who is being contacted is not consent.
+ *
+ * `line` and `action` are passed rather than derived from the block, because a
+ * video and an audio clip are the same gate with different words, and the
+ * strings have to be LITERAL t() calls somewhere for the i18n sweep to find
+ * them (scripts/build-spaces-i18n.mjs reads the source). Their call sites say
+ * them; this says the part that is identical.
  */
-function remoteImagePlaceholder(src: string, b: Block, opts: RenderOpts): HTMLElement {
+function remotePlaceholder(
+  src: string, b: Block, opts: RenderOpts, line0: string, action: string,
+): HTMLElement {
   const box = document.createElement('div')
   box.className = 'sp-remote'
   box.dataset.remoteSrc = src
 
   const line = document.createElement('div')
   line.className = 'sp-remote-line'
-  line.textContent = t('Image from {host}', { host: remoteHost(src) })
+  line.textContent = line0
   box.appendChild(line)
 
   const why = document.createElement('div')
@@ -542,10 +840,47 @@ function remoteImagePlaceholder(src: string, b: Block, opts: RenderOpts): HTMLEl
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'sp-btn sp-remote-load'
-    btn.textContent = t('Load this image')
+    btn.textContent = action
     btn.dataset.loadRemote = src
     box.appendChild(btn)
   }
+  return box
+}
+
+/**
+ * What a clip looks like where nothing can play it: paper, and a file-manager
+ * thumbnail.
+ *
+ * The POSTER if there is one — that is the frame the author chose, and it is
+ * the whole reason the field is worth having — and otherwise a quiet box that
+ * says what is there. Not nothing: a printed handbook that silently omits the
+ * paragraph where the demo video was is the same class of bug as a toggle that
+ * prints shut.
+ *
+ * A remote poster is skipped rather than fetched. preview.ts passes no
+ * `allowRemote` at all, so a still built for a file manager can never make a
+ * request — which is the point, because nobody is there to consent.
+ */
+function mediaStill(b: Block, doc: SpacesDoc, opts: RenderOpts, kind: 'video' | 'audio'): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'sp-media-still'
+  const poster = String(b.poster ?? '')
+  if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+    const resolved = resolveSrc(poster, doc)
+    if (resolved) {
+      const img = document.createElement('img')
+      img.src = resolved
+      img.alt = String(b.alt ?? '')
+      box.appendChild(img)
+      box.classList.add('sp-has-poster')
+    }
+  }
+  const badge = document.createElement('span')
+  badge.className = 'sp-media-badge'
+  // the triangle is the universal mark and needs no font; the word beside it
+  // is what makes it readable aloud and in monochrome
+  badge.textContent = `\u25B8 ${kind === 'audio' ? t('Audio') : t('Video')}`
+  box.appendChild(badge)
   return box
 }
 
@@ -567,9 +902,58 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   // squeezing one into 720px shows two and a half columns of a six-column
   // board. A page carrying a view gets the room instead; a page of writing
   // keeps its measure.
-  const wide = page.blocks.some((b) => b.type === 'view')
-  if (doc.theme.measure) inner.style.maxWidth = wide ? '1500px' : `${doc.theme.measure}px`
-  if (wide) inner.classList.add('sp-wide')
+  // The page decides; a board is only the DEFAULT for a page that has not.
+  // `width` absent on a board page keeps the room it always had, and an
+  // unknown value from a newer build falls back to the measure rather than to
+  // no width at all.
+  const auto: 'wide' | undefined = page.blocks.some((b) => b.type === 'view') ? 'wide' : undefined
+  // PRECEDENCE: what the PAGE says, then what this READER prefers, then the
+  // board default, then the measure.
+  //
+  // The reader's preference is the piece this was missing. A per-page control
+  // answers "this page needs the room"; it does not answer "I have a 27-inch
+  // monitor", which is a fact about the person and not about any document —
+  // and making them set it page by page is the wrong shape of work. It lives
+  // in localStorage beside the language and the pane width, never in the file,
+  // for the reason PLATFORM §8 gives about locale: two people opening one
+  // space on different screens should each get their own answer.
+  const width = page.width === 'wide' || page.width === 'full' ? page.width
+    : page.width === undefined ? (opts.readerWidth ?? auto)
+    : undefined
+  if (width === 'full') inner.style.maxWidth = 'none'
+  // WIDE IS A PROPORTION, not a number. It was a flat 1500px, which is wider
+  // than the reading area of any laptop — so it clamped to the container and
+  // came out identical to Full. Measured at a 1440px viewport: column 720,
+  // wide 1130, full 1130. Two of the three choices did the same thing, and the
+  // one screen where they differed was a 27-inch monitor.
+  //
+  // 80% keeps a visible step at every size, and the 1500px cap keeps Wide from
+  // becoming an unreadable line on a very large screen — at which point Full is
+  // the thing to pick, deliberately.
+  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, 80%)'
+  else if (doc.theme.measure) {
+    // AND THE DEFAULT ITSELF GROWS. 720px is ~88 characters at 16px, which is
+    // already at the long end — so this does not widen the line much; what it
+    // does is stop a 2560px screen showing a 720px ribbon using 31% of it.
+    // Capped, because past ~95 characters a line is harder to read, not easier.
+    // THE CAP IS IN CHARACTERS, not pixels — that is the whole point.
+    // A px cap does not hold a line length: capped at measure x 1.25 = 900px,
+    // a 5120px screen rendered 110 characters, past the range anyone reads
+    // comfortably, while the comment above it claimed ~95 was the limit.
+    //
+    // 75ch, not 90ch: `ch` is the width of the digit ZERO, and prose averages
+    // narrower than that — measured here, 9.77px against 8.16px — so 75ch
+    // renders about 90 real characters and 90ch would render 108. The unit
+    // flatters itself by about a fifth.
+    //
+    // And because `ch` scales with --sp-read, the column grows in PIXELS on a
+    // large screen while holding the same character count. That is what the
+    // extra pixels are for: bigger type at a longer viewing distance, not a
+    // longer line.
+    const m = doc.theme.measure
+    inner.style.maxWidth = `min(75ch, max(${m}px, 42vw))`
+  }
+  if (width) inner.classList.add('sp-wide')
 
   const h = document.createElement('h1')
   h.className = 'sp-title'
@@ -606,8 +990,9 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
+  const sort = (b as { sort?: unknown }).sort
   const all = issuesOf(doc)
-  const rows = all.filter((r) => passesFilter(doc, r.values, filter))
+  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
 
   const head = document.createElement('div')
   head.className = 'sp-view-head'
@@ -623,22 +1008,48 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   // chip: a reader, a printout and a locked space get the view, not the buttons
   // that change what it holds.
   if (opts.editable) {
+    const btn = (attr: string, label: string, title: string, on = false): HTMLButtonElement => {
+      const el2 = document.createElement('button')
+      el2.type = 'button'
+      el2.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
+      el2.dataset[attr] = '1'
+      el2.textContent = label
+      el2.title = title
+      el2.setAttribute('aria-label', title)
+      return el2
+    }
+
+    // LAYOUT. Both shapes have always rendered; only the board was reachable,
+    // so a view block could hold `layout:'list'` that nothing in the app could
+    // produce or undo. One button, because there are two of them and a menu to
+    // choose between two things is a menu too many.
+    const asList = layout === 'list'
+    const layoutB = btn('viewLayout', asList ? t('List') : t('Board'),
+      asList ? t('Show as a board') : t('Show as a list'))
+
+    // GROUP BY. Only fields with declared options: a board's columns ARE the
+    // option list, so grouping by a free-text field would make one column per
+    // distinct string and call it a board.
+    const groupB = btn('viewGroup', field ? `${t('Group')} · ${field.label}` : t('Group'),
+      t('Choose the field the columns come from'))
+
+    const sortKey = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+    const sortField = sortKey && fieldByKey(doc, sortKey.key)
+    const sortB = btn('viewSort',
+      sortField ? `${t('Sort')} · ${sortField.label}` : t('Sort'),
+      t('Choose the order'), !!sortField)
+
     const on = !!(filter as { open?: unknown } | undefined)?.open
-    const openB = document.createElement('button')
-    openB.type = 'button'
-    openB.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
-    openB.dataset.viewOpen = '1'
-    openB.textContent = t('Open only')
+    const openB = btn('viewOpen', t('Open only'), t('Open only'), on)
     openB.setAttribute('aria-pressed', String(on))
-    const filterB = document.createElement('button')
-    filterB.type = 'button'
-    filterB.className = 'sp-btn sp-view-btn'
-    filterB.dataset.viewFilter = '1'
     const n = filterCount(filter)
     // the count rather than a list of chips: what matters is that the view is
     // narrowed at all, and the popover says by what
-    filterB.textContent = n ? `${t('Filter')} · ${n}` : t('Filter')
-    head.append(openB, filterB)
+    const filterB = btn('viewFilter', n ? `${t('Filter')} · ${n}` : t('Filter'), t('Filter'), !!n)
+
+    // a LIST has no columns, so the field the columns would come from is not a
+    // question it can be asked
+    head.append(layoutB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -649,6 +1060,16 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     const note = document.createElement('p')
     note.className = 'sp-view-empty'
     note.textContent = t('A filter here is newer than this build and was not applied.')
+    host.appendChild(note)
+  }
+  // Same rule, same honesty: a sort key naming a field this build has no schema
+  // for is skipped, and the order you are looking at is not the one the author
+  // asked for. Silently showing a different order is the failure additivity
+  // trades for.
+  if (unknownSortKeys(doc, sort).length) {
+    const note = document.createElement('p')
+    note.className = 'sp-view-empty'
+    note.textContent = t('A sort here is newer than this build and was not applied.')
     host.appendChild(note)
   }
 

@@ -49,14 +49,14 @@
     "message": "O Chrome vai perguntar. Escolha a opção do meio:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — uma pasta precisa ser reconectada",
+    "message": "bento/home — uma pasta precisa ser reconectada",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedTitle": {
-    "message": "O Bento Tray precisa ser reconectado",
+    "message": "O bento/home precisa ser reconectado",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedBody": {
@@ -67,7 +67,7 @@
     "message": "Reconectar"
   },
   "ctxOpenPanel": {
-    "message": "Abrir o painel do Bento Tray"
+    "message": "Abrir o painel do bento/home"
   },
   "panelEmpty": {
     "message": "Ainda não há documentos Bento nas suas pastas."
@@ -150,7 +150,7 @@
     "message": "<b>+ Novo documento</b> coloca um aqui."
   },
   "cardUnplacedTip": {
-    "message": "O Bento Tray ainda não sabe onde $1 está no disco. Use “Encontrar minhas pastas” ou abra uma vez um documento dela pelo Finder.",
+    "message": "O bento/home ainda não sabe onde $1 está no disco. Use “Encontrar minhas pastas” ou abra uma vez um documento dela pelo Finder.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "cardRenamedTip": {
@@ -206,7 +206,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupStep2Note": {
-    "message": "Em <code>chrome://extensions</code> → Bento Tray → <b>Permitir acesso a URLs de arquivo</b>. O Chrome não deixa uma extensão ligar isso sozinha.",
+    "message": "Em <code>chrome://extensions</code> → bento/home → <b>Permitir acesso a URLs de arquivo</b>. O Chrome não deixa uma extensão ligar isso sozinha.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupUpgradeNote": {
@@ -285,11 +285,11 @@
     "message": "Desconhecido"
   },
   "accessOnNote": {
-    "message": "O Bento Tray pode ler páginas que você abriu do disco.",
+    "message": "O bento/home pode ler páginas que você abriu do disco.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessOffNote": {
-    "message": "Abra chrome://extensions, encontre o Bento Tray e ative “Permitir acesso a URLs de arquivo”.",
+    "message": "Abra chrome://extensions, encontre o bento/home e ative “Permitir acesso a URLs de arquivo”.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessUnknownNote": {
@@ -336,7 +336,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 está disponível.</b> Esta cópia foi carregada descompactada, então o Chrome nunca vai atualizá-la."
+    "message": "<b>bento/home $1 está disponível.</b> Esta cópia foi carregada descompactada, então o Chrome nunca vai atualizá-la."
   },
   "updateStep1": {
     "message": "Baixe do GitHub"
@@ -346,7 +346,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateStep3": {
-    "message": "Abra <code>chrome://extensions</code> e clique em <b>Atualizar</b> no Bento Tray"
+    "message": "Abra <code>chrome://extensions</code> e clique em <b>Atualizar</b> no bento/home"
   },
   "fetchingApp": {
     "message": "Baixando $1…"
@@ -358,10 +358,10 @@
     "message": "em $1"
   },
   "helpWhatTitle": {
-    "message": "O que o Bento Tray faz"
+    "message": "O que o bento/home faz"
   },
   "helpWhatSub": {
-    "message": "Um documento Bento é um arquivo HTML que carrega o próprio editor. Aberto direto do disco, o navegador não deixa ele escrever em si mesmo — então salvar pergunta onde colocar, toda vez. O Bento Tray é o que tira essa pergunta."
+    "message": "Um documento Bento é um arquivo HTML que carrega o próprio editor. Aberto direto do disco, o navegador não deixa ele escrever em si mesmo — então salvar pergunta onde colocar, toda vez. O bento/home é o que tira essa pergunta."
   },
   "tourSaveTitle": {
     "message": "Salvar no lugar"
@@ -411,7 +411,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpAccessOn": {
-    "message": "Ligado — o Bento Tray pode ler páginas que você abriu do disco.",
+    "message": "Ligado — o bento/home pode ler páginas que você abriu do disco.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpNeverTitle": {
@@ -426,7 +426,7 @@
     "message": "Sobre"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · parte do projeto Bento · licença MIT"
+    "message": "bento/home $1 · parte do projeto Bento · licença MIT"
   },
   "linkSource": {
     "message": "Código no GitHub"
@@ -442,5 +442,80 @@
   },
   "primeNote": {
     "message": "As outras duas também funcionam, mas o Chrome pergunta de novo — a primeira a cada reinício, a última depois de uma espera."
+  },
+  "viewLayout": {
+    "message": "Como os documentos são exibidos"
+  },
+  "viewIcons": {
+    "message": "Ícones"
+  },
+  "viewList": {
+    "message": "Lista"
+  },
+  "close": {
+    "message": "Fechar"
+  },
+  "setLangTitle": {
+    "message": "Idioma"
+  },
+  "setLangSub": {
+    "message": "Em qual idioma esta extensão fala. Normalmente segue o navegador."
+  },
+  "langAutomatic": {
+    "message": "Automático — seguir o navegador"
+  },
+  "setLangNote": {
+    "message": "O nome e a descrição da própria extensão vêm do navegador e não mudam."
+  },
+  "aboutPromo": {
+    "message": "Novo no Bento? Encontre modelos, a galeria e o guia de edição com IA em $1 — ou dê uma estrela no $2."
+  },
+  "setThemeTitle": {
+    "message": "Aparência"
+  },
+  "setThemeSub": {
+    "message": "A configuração do navegador é o padrão, não uma exigência."
+  },
+  "themeAuto": {
+    "message": "Igual ao navegador"
+  },
+  "themeLight": {
+    "message": "Claro"
+  },
+  "themeDark": {
+    "message": "Escuro"
+  },
+  "checking": {
+    "message": "Verificando…"
+  },
+  "surveyTitle": {
+    "message": "Descubra onde estão seus documentos"
+  },
+  "surveySub": {
+    "message": "O navegador sabe quais documentos Bento você abriu. Ele pode dizer em quais pastas estão."
+  },
+  "surveyDeclined": {
+    "message": "Sem problema — você pode adicionar pastas manualmente."
+  },
+  "surveyAllCovered": {
+    "message": "Todos os $1 documentos que este navegador viu já estão em uma pasta adicionada."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documentos estão fora de todas as pastas adicionadas. $2 já estão cobertos."
+  },
+  "surveyCovers": {
+    "message": "abrange $1"
+  },
+  "surveyAdd": {
+    "message": "Adicionar esta pasta…"
+  },
+  "surveyAdded": {
+    "message": "$1 adicionada — os documentos nela estão prontos"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 adicionada, mas os documentos não estão lá — abra um pelo Finder uma vez."
+  },
+  "surveyOnlySeen": {
+    "message": "Só é possível encontrar assim os documentos abertos neste navegador."
   }
 }

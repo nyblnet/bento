@@ -10,7 +10,7 @@
 // that stays quiet while things work.
 
 import { getGrants, putGrants, status, setLapsedBadge } from './status.js'
-import { t, localize } from './i18n.js'
+import { t, localize, initI18n } from './i18n.js'
 import { listDocuments, describe, newDocument } from './library.js'
 
 const $ = (id) => document.getElementById(id)
@@ -261,6 +261,9 @@ $('open').addEventListener('click', () => {
   chrome.runtime.openOptionsPage()
 })
 
+// The language is one preference across both surfaces, so the panel loads the
+// same saved catalogue the full page does before it draws anything.
+await initI18n()
 localize()
 await renderStatus()
 await renderDocs()

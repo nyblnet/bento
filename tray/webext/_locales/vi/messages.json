@@ -48,13 +48,13 @@
     "message": "Chrome sắp hỏi. Hãy chọn lựa chọn ở giữa:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — một thư mục cần được kết nối lại"
+    "message": "bento/home — một thư mục cần được kết nối lại"
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray cần được kết nối lại"
+    "message": "bento/home cần được kết nối lại"
   },
   "notifyLapsedBody": {
     "message": "Chrome đã thu hồi quyền với một thư mục. Cho đến khi được khôi phục, mỗi lần lưu sẽ hỏi bạn đặt tệp ở đâu."
@@ -63,7 +63,7 @@
     "message": "Kết nối lại"
   },
   "ctxOpenPanel": {
-    "message": "Mở bảng Bento Tray"
+    "message": "Mở bảng bento/home"
   },
   "panelEmpty": {
     "message": "Chưa có tài liệu Bento nào trong thư mục của bạn."
@@ -141,7 +141,7 @@
     "message": "<b>+ Tài liệu mới</b> sẽ đặt một tài liệu mới vào đây."
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray chưa biết $1 nằm ở đâu trên ổ đĩa. Hãy dùng “Tìm thư mục của tôi”, hoặc mở một tài liệu trong đó từ Finder một lần."
+    "message": "bento/home chưa biết $1 nằm ở đâu trên ổ đĩa. Hãy dùng “Tìm thư mục của tôi”, hoặc mở một tài liệu trong đó từ Finder một lần."
   },
   "cardRenamedTip": {
     "message": "$1 là một tài liệu Bento mang tên khác. Nó mở được từ đây, nhưng khi lưu sẽ hỏi nơi lưu — lưu tại chỗ chỉ nhận các tệp kết thúc bằng .bento.html."
@@ -195,7 +195,7 @@
     "message": "Bật quyền truy cập tệp cục bộ"
   },
   "setupStep2Note": {
-    "message": "Trong <code>chrome://extensions</code> → Bento Tray → <b>Cho phép truy cập URL tệp</b>. Chrome không cho tiện ích tự bật mục này."
+    "message": "Trong <code>chrome://extensions</code> → bento/home → <b>Cho phép truy cập URL tệp</b>. Chrome không cho tiện ích tự bật mục này."
   },
   "setupUpgradeNote": {
     "message": "<b>Vừa nâng cấp và tưởng thư mục của bạn vẫn ở đây?</b> Một tiện ích chưa đóng gói được nhận diện bằng đường dẫn thư mục, nên bản sao mới nạp từ thư mục khác là một tiện ích khác. Các thư mục của bạn vẫn thuộc về bản cũ. Thay vào đó, hãy thay các tệp trong thư mục ban đầu rồi nhấn <b>Tải lại</b> trong <code>chrome://extensions</code>."
@@ -264,10 +264,10 @@
     "message": "Không rõ"
   },
   "accessOnNote": {
-    "message": "Bento Tray có thể đọc các trang bạn mở từ ổ đĩa."
+    "message": "bento/home có thể đọc các trang bạn mở từ ổ đĩa."
   },
   "accessOffNote": {
-    "message": "Mở chrome://extensions, tìm Bento Tray, bật “Cho phép truy cập URL tệp”."
+    "message": "Mở chrome://extensions, tìm bento/home, bật “Cho phép truy cập URL tệp”."
   },
   "accessUnknownNote": {
     "message": "Trình duyệt này không báo trạng thái. Nếu lưu vẫn hỏi, hãy kiểm tra trong chrome://extensions."
@@ -309,7 +309,7 @@
     "message": "Chỉ các thư mục ở trên, và chỉ đúng tệp mà một trang thực sự được mở từ đó. Không gì được tải lên và không gì được đọc ở nơi khác."
   },
   "updateAvailable": {
-    "message": "<b>Đã có Bento Tray $1.</b> Bản sao này được nạp ở dạng chưa đóng gói, nên Chrome sẽ không bao giờ cập nhật nó."
+    "message": "<b>Đã có bento/home $1.</b> Bản sao này được nạp ở dạng chưa đóng gói, nên Chrome sẽ không bao giờ cập nhật nó."
   },
   "updateStep1": {
     "message": "Tải về từ GitHub"
@@ -318,7 +318,7 @@
     "message": "Thay các tệp <b>trong chính thư mục bạn đã nạp nó</b> — đúng thư mục đó, nếu không Chrome coi đây là tiện ích khác và các thư mục đã cấp quyền sẽ không đi theo"
   },
   "updateStep3": {
-    "message": "Mở <code>chrome://extensions</code> và nhấn <b>Tải lại</b> ở Bento Tray"
+    "message": "Mở <code>chrome://extensions</code> và nhấn <b>Tải lại</b> ở bento/home"
   },
   "fetchingApp": {
     "message": "Đang tải $1…"
@@ -330,10 +330,10 @@
     "message": "vào $1"
   },
   "helpWhatTitle": {
-    "message": "Bento Tray làm gì"
+    "message": "bento/home làm gì"
   },
   "helpWhatSub": {
-    "message": "Tài liệu Bento là một tệp HTML duy nhất mang theo trình soạn thảo của chính nó. Mở thẳng từ ổ đĩa, trình duyệt không cho nó ghi ngược lại chính mình — nên mỗi lần lưu lại hỏi bạn đặt tệp ở đâu. Bento Tray xóa bỏ câu hỏi đó."
+    "message": "Tài liệu Bento là một tệp HTML duy nhất mang theo trình soạn thảo của chính nó. Mở thẳng từ ổ đĩa, trình duyệt không cho nó ghi ngược lại chính mình — nên mỗi lần lưu lại hỏi bạn đặt tệp ở đâu. bento/home xóa bỏ câu hỏi đó."
   },
   "tourSaveTitle": {
     "message": "Lưu tại chỗ"
@@ -381,7 +381,7 @@
     "message": "Trình duyệt này không báo trạng thái. Nếu lưu vẫn hỏi, hãy kiểm tra trong <code>chrome://extensions</code>."
   },
   "helpAccessOn": {
-    "message": "Bật — Bento Tray có thể đọc các trang bạn mở từ ổ đĩa."
+    "message": "Bật — bento/home có thể đọc các trang bạn mở từ ổ đĩa."
   },
   "helpNeverTitle": {
     "message": "Những gì nó không bao giờ làm"
@@ -393,7 +393,7 @@
     "message": "Giới thiệu"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · một phần của dự án Bento · giấy phép MIT"
+    "message": "bento/home $1 · một phần của dự án Bento · giấy phép MIT"
   },
   "linkSource": {
     "message": "Mã nguồn trên GitHub"
@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "Hai lựa chọn kia cũng dùng được, nhưng Chrome sẽ hỏi lại — lựa chọn đầu thì mỗi lần khởi động lại, lựa chọn cuối thì sau một thời gian chờ."
+  },
+  "viewLayout": {
+    "message": "Cách hiển thị tài liệu"
+  },
+  "viewIcons": {
+    "message": "Biểu tượng"
+  },
+  "viewList": {
+    "message": "Danh sách"
+  },
+  "close": {
+    "message": "Đóng"
+  },
+  "setLangTitle": {
+    "message": "Ngôn ngữ"
+  },
+  "setLangSub": {
+    "message": "Ngôn ngữ mà tiện ích này sử dụng. Thường thì nó theo trình duyệt."
+  },
+  "langAutomatic": {
+    "message": "Tự động — theo trình duyệt"
+  },
+  "setLangNote": {
+    "message": "Tên và mô tả của chính tiện ích đến từ trình duyệt và không thay đổi."
+  },
+  "aboutPromo": {
+    "message": "Mới dùng Bento? Bạn có thể tìm mẫu, thư viện và hướng dẫn chỉnh sửa bằng AI tại $1 — hoặc gắn sao trên $2."
+  },
+  "setThemeTitle": {
+    "message": "Giao diện"
+  },
+  "setThemeSub": {
+    "message": "Thiết lập của trình duyệt là mặc định, không phải bắt buộc."
+  },
+  "themeAuto": {
+    "message": "Theo trình duyệt"
+  },
+  "themeLight": {
+    "message": "Sáng"
+  },
+  "themeDark": {
+    "message": "Tối"
+  },
+  "checking": {
+    "message": "Đang kiểm tra…"
+  },
+  "surveyTitle": {
+    "message": "Tìm xem tài liệu của bạn ở đâu"
+  },
+  "surveySub": {
+    "message": "Trình duyệt biết bạn đã mở những tài liệu Bento nào và có thể cho biết chúng nằm trong thư mục nào."
+  },
+  "surveyDeclined": {
+    "message": "Không sao — bạn có thể thêm thư mục thủ công."
+  },
+  "surveyAllCovered": {
+    "message": "Cả $1 tài liệu trình duyệt này từng thấy đều đã nằm trong thư mục bạn đã thêm."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> tài liệu nằm ngoài mọi thư mục bạn đã thêm. $2 tài liệu đã được bao gồm."
+  },
+  "surveyCovers": {
+    "message": "chứa $1"
+  },
+  "surveyAdd": {
+    "message": "Thêm thư mục này…"
+  },
+  "surveyAdded": {
+    "message": "Đã thêm $1 — tài liệu bên trong đã sẵn sàng"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Đã thêm $1, nhưng tài liệu không nằm trong đó — hãy mở một tài liệu từ Finder một lần."
+  },
+  "surveyOnlySeen": {
+    "message": "Cách này chỉ tìm được tài liệu đã mở trong trình duyệt này."
   }
 }

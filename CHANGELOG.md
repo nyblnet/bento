@@ -11,6 +11,41 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **The web demo says where your deck went.** bento.page always hands out a new
+  deck — that is what it is for — so anyone who saved from it and came back
+  later got a blank starter and reasonably read it as lost work. Their file was
+  on disk the whole time; nothing on screen said so.
+
+  Saving from the web now leaves a line naming the file it went to, and saying
+  that this page always starts a new deck. Coming back after a save says the
+  same thing before you start typing into a fresh one, with the name of the file
+  to open — and **Start a new deck anyway** is always there, because some
+  visitors do want a fresh one.
+
+  Two things genuinely do not survive that trip and are worth knowing: version
+  history and the recovery snapshot belong to the browser, not the file, so they
+  stay behind on bento.page when the deck moves to your disk.
+
+- **Fix: several buttons were unreadable in dark mode.** White text on a
+  near-white button — the main action in a dialog, the toast that confirms a
+  save, the active chip in a settings row, and the ＋ between slides. The
+  colour of the text was fixed while the colour behind it followed the theme,
+  so what read cleanly in light turned into white-on-white as soon as the
+  interface went dark. The panel chevrons had a milder version of the same
+  thing. Text now always takes the opposite colour to whatever it sits on.
+
+
+- **Fix: audio and video played in a show even with Autoplay switched off.**
+  Set a clip's *Autoplay* to Off and it still started the moment its slide came
+  up — every time, in a saved file, on any browser. The only way to stop it was
+  to remove the clip.
+
+  The flag was written as an empty attribute rather than left off, and the
+  slideshow engine treats an attribute that is *present* as a yes, whatever it
+  says. Bento's own check read the value and was right; it simply never got
+  asked. Present since audio and video arrived.
+
+
 ## [1.0.18] — 2026-08-15
 
 - **Security: offline mode did not block everything it promised.** The switch

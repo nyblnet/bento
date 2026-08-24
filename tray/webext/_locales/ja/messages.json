@@ -49,14 +49,14 @@
     "message": "次に Chrome が尋ねます。真ん中を選んでください:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — フォルダの再接続が必要です",
+    "message": "bento/home — フォルダの再接続が必要です",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray の再接続が必要です",
+    "message": "bento/home の再接続が必要です",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedBody": {
@@ -67,7 +67,7 @@
     "message": "再接続"
   },
   "ctxOpenPanel": {
-    "message": "Bento Tray パネルを開く"
+    "message": "bento/home パネルを開く"
   },
   "panelEmpty": {
     "message": "フォルダ内にまだ Bento ドキュメントがありません。"
@@ -150,7 +150,7 @@
     "message": "<b>+ 新規ドキュメント</b>でここに 1 つ作成できます。"
   },
   "cardUnplacedTip": {
-    "message": "$1 がディスク上のどこにあるか、Bento Tray はまだ知りません。「フォルダを探す」を使うか、Finder からそのフォルダのドキュメントを一度開いてください。",
+    "message": "$1 がディスク上のどこにあるか、bento/home はまだ知りません。「フォルダを探す」を使うか、Finder からそのフォルダのドキュメントを一度開いてください。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "cardRenamedTip": {
@@ -206,7 +206,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupStep2Note": {
-    "message": "<code>chrome://extensions</code> → Bento Tray → <b>ファイルの URL へのアクセスを許可する</b>。Chrome は拡張機能が自分でオンにすることを許しません。",
+    "message": "<code>chrome://extensions</code> → bento/home → <b>ファイルの URL へのアクセスを許可する</b>。Chrome は拡張機能が自分でオンにすることを許しません。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupUpgradeNote": {
@@ -285,11 +285,11 @@
     "message": "不明"
   },
   "accessOnNote": {
-    "message": "ディスクから開いたページを Bento Tray が読み取れます。",
+    "message": "ディスクから開いたページを bento/home が読み取れます。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessOffNote": {
-    "message": "chrome://extensions を開き、Bento Tray を探して「ファイルの URL へのアクセスを許可する」をオンにしてください。",
+    "message": "chrome://extensions を開き、bento/home を探して「ファイルの URL へのアクセスを許可する」をオンにしてください。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessUnknownNote": {
@@ -336,7 +336,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 が利用できます。</b>このコピーは展開して読み込まれたため、Chrome が更新することはありません。"
+    "message": "<b>bento/home $1 が利用できます。</b>このコピーは展開して読み込まれたため、Chrome が更新することはありません。"
   },
   "updateStep1": {
     "message": "GitHub からダウンロード"
@@ -346,7 +346,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateStep3": {
-    "message": "<code>chrome://extensions</code> を開き、Bento Tray の<b>更新</b>を押す"
+    "message": "<code>chrome://extensions</code> を開き、bento/home の<b>更新</b>を押す"
   },
   "fetchingApp": {
     "message": "$1 を取得中…"
@@ -358,10 +358,10 @@
     "message": "$1 へ"
   },
   "helpWhatTitle": {
-    "message": "Bento Tray でできること"
+    "message": "bento/home でできること"
   },
   "helpWhatSub": {
-    "message": "Bento ドキュメントは、エディタごと入った 1 つの HTML ファイルです。ディスクから直接開くと、ブラウザは自分自身への書き戻しを許さないため、保存のたびに保存先を尋ねられます。Bento Tray はその質問をなくします。"
+    "message": "Bento ドキュメントは、エディタごと入った 1 つの HTML ファイルです。ディスクから直接開くと、ブラウザは自分自身への書き戻しを許さないため、保存のたびに保存先を尋ねられます。bento/home はその質問をなくします。"
   },
   "tourSaveTitle": {
     "message": "その場で保存"
@@ -411,7 +411,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpAccessOn": {
-    "message": "オン — ディスクから開いたページを Bento Tray が読み取れます。",
+    "message": "オン — ディスクから開いたページを bento/home が読み取れます。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpNeverTitle": {
@@ -426,7 +426,7 @@
     "message": "このアプリについて"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · Bento プロジェクトの一部 · MIT ライセンス"
+    "message": "bento/home $1 · Bento プロジェクトの一部 · MIT ライセンス"
   },
   "linkSource": {
     "message": "GitHub のソース"
@@ -442,5 +442,80 @@
   },
   "primeNote": {
     "message": "他の 2 つでも動きますが、Chrome は再び尋ねます — 1 つ目は再起動のたびに、最後のものはしばらく待ってから。"
+  },
+  "viewLayout": {
+    "message": "ドキュメントの表示方法"
+  },
+  "viewIcons": {
+    "message": "アイコン"
+  },
+  "viewList": {
+    "message": "リスト"
+  },
+  "close": {
+    "message": "閉じる"
+  },
+  "setLangTitle": {
+    "message": "言語"
+  },
+  "setLangSub": {
+    "message": "この拡張機能が話す言語です。通常はブラウザーに従います。"
+  },
+  "langAutomatic": {
+    "message": "自動 — ブラウザーに従う"
+  },
+  "setLangNote": {
+    "message": "拡張機能自体の名前と説明はブラウザーから来るため、変わりません。"
+  },
+  "aboutPromo": {
+    "message": "Bento は初めてですか？テンプレート、ギャラリー、AI 編集ガイドは $1 にあります。$2 でスターを付けることもできます。"
+  },
+  "setThemeTitle": {
+    "message": "外観"
+  },
+  "setThemeSub": {
+    "message": "ブラウザーの設定は既定値であって、強制ではありません。"
+  },
+  "themeAuto": {
+    "message": "ブラウザーに合わせる"
+  },
+  "themeLight": {
+    "message": "ライト"
+  },
+  "themeDark": {
+    "message": "ダーク"
+  },
+  "checking": {
+    "message": "確認中…"
+  },
+  "surveyTitle": {
+    "message": "ドキュメントの場所を探す"
+  },
+  "surveySub": {
+    "message": "ブラウザーは、あなたが開いた Bento ドキュメントを把握しています。どのフォルダーにあるかを教えられます。"
+  },
+  "surveyDeclined": {
+    "message": "問題ありません。フォルダーは手動でも追加できます。"
+  },
+  "surveyAllCovered": {
+    "message": "このブラウザーが見た $1 件のドキュメントは、すべて追加済みのフォルダーにあります。"
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> 件のドキュメントが、追加したどのフォルダーにもありません。$2 件は対象済みです。"
+  },
+  "surveyCovers": {
+    "message": "$1 件を含む"
+  },
+  "surveyAdd": {
+    "message": "このフォルダーを追加…"
+  },
+  "surveyAdded": {
+    "message": "$1 を追加しました。中のドキュメントは利用できます"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 を追加しましたが、ドキュメントはその中にありません。Finder から一度開いてください。"
+  },
+  "surveyOnlySeen": {
+    "message": "この方法で見つかるのは、このブラウザーで開いたドキュメントだけです。"
   }
 }

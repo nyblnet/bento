@@ -48,13 +48,13 @@
     "message": "سيسألك Chrome بعد قليل. اختر الخيار الأوسط:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — أحد المجلدات يحتاج إلى إعادة ربط"
+    "message": "bento/home — أحد المجلدات يحتاج إلى إعادة ربط"
   },
   "notifyLapsedTitle": {
-    "message": "يحتاج Bento Tray إلى إعادة ربط"
+    "message": "يحتاج bento/home إلى إعادة ربط"
   },
   "notifyLapsedBody": {
     "message": "سحب Chrome الإذن الممنوح لمجلد. وإلى أن يُستعاد، سيسألك كل حفظ عن مكان وضع الملف."
@@ -63,7 +63,7 @@
     "message": "إعادة الربط"
   },
   "ctxOpenPanel": {
-    "message": "فتح لوحة Bento Tray"
+    "message": "فتح لوحة bento/home"
   },
   "panelEmpty": {
     "message": "لا توجد بعد مستندات Bento في مجلداتك."
@@ -141,7 +141,7 @@
     "message": "يضع <b>+ مستند جديد</b> واحدًا جديدًا هنا."
   },
   "cardUnplacedTip": {
-    "message": "لا يعرف Bento Tray بعد أين يقع $1 على القرص. استخدم «ابحث عن مجلداتي»، أو افتح أي مستند فيه من Finder مرة واحدة."
+    "message": "لا يعرف bento/home بعد أين يقع $1 على القرص. استخدم «ابحث عن مجلداتي»، أو افتح أي مستند فيه من Finder مرة واحدة."
   },
   "cardRenamedTip": {
     "message": "$1 مستند Bento باسم آخر. يُفتح من هنا، لكن الحفظ سيسأل عن وجهة — فالحفظ في المكان لا يتعرف إلا على الملفات المنتهية بـ‎.bento.html."
@@ -195,7 +195,7 @@
     "message": "فعّل الوصول إلى الملفات المحلية"
   },
   "setupStep2Note": {
-    "message": "في <code>chrome://extensions</code> ← Bento Tray ← <b>السماح بالوصول إلى عناوين URL للملفات</b>. لا يسمح Chrome لأي امتداد بتفعيل هذا بنفسه."
+    "message": "في <code>chrome://extensions</code> ← bento/home ← <b>السماح بالوصول إلى عناوين URL للملفات</b>. لا يسمح Chrome لأي امتداد بتفعيل هذا بنفسه."
   },
   "setupUpgradeNote": {
     "message": "<b>هل رقّيت وتوقعت أن تجد مجلداتك هنا؟</b> يُعرَّف الامتداد غير المحزوم بمسار مجلده، لذا فإن نسخة جديدة محمَّلة من مجلد آخر تُعد امتدادًا مختلفًا. مجلداتك ما زالت ممنوحة للنسخة القديمة. بدلًا من ذلك، استبدل الملفات في المجلد الأصلي واضغط <b>إعادة التحميل</b> في <code>chrome://extensions</code>."
@@ -264,10 +264,10 @@
     "message": "غير معروف"
   },
   "accessOnNote": {
-    "message": "يستطيع Bento Tray قراءة الصفحات التي فتحتها من القرص."
+    "message": "يستطيع bento/home قراءة الصفحات التي فتحتها من القرص."
   },
   "accessOffNote": {
-    "message": "افتح chrome://extensions، وابحث عن Bento Tray، وفعّل «السماح بالوصول إلى عناوين URL للملفات»."
+    "message": "افتح chrome://extensions، وابحث عن bento/home، وفعّل «السماح بالوصول إلى عناوين URL للملفات»."
   },
   "accessUnknownNote": {
     "message": "لا يبلّغ هذا المتصفح عن الحالة. إذا ظل الحفظ يسأل، فتحقق من ذلك في chrome://extensions."
@@ -309,7 +309,7 @@
     "message": "المجلدات أعلاه فقط، والملف الذي فُتحت منه الصفحة فعليًا فقط. لا يُرفع شيء ولا يُقرأ شيء في أي مكان آخر."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 متاح.</b> حُمِّلت هذه النسخة غير محزومة، لذا لن يحدّثها Chrome أبدًا."
+    "message": "<b>bento/home $1 متاح.</b> حُمِّلت هذه النسخة غير محزومة، لذا لن يحدّثها Chrome أبدًا."
   },
   "updateStep1": {
     "message": "نزّله من GitHub"
@@ -318,7 +318,7 @@
     "message": "استبدل الملفات <b>في المجلد الذي حمّلته منه</b> — المجلد نفسه، وإلا عدّه Chrome امتدادًا مختلفًا ولن تنتقل معه المجلدات الممنوحة"
   },
   "updateStep3": {
-    "message": "افتح <code>chrome://extensions</code> واضغط <b>إعادة التحميل</b> على Bento Tray"
+    "message": "افتح <code>chrome://extensions</code> واضغط <b>إعادة التحميل</b> على bento/home"
   },
   "fetchingApp": {
     "message": "جارٍ جلب $1…"
@@ -330,10 +330,10 @@
     "message": "في $1"
   },
   "helpWhatTitle": {
-    "message": "ما الذي يفعله Bento Tray"
+    "message": "ما الذي يفعله bento/home"
   },
   "helpWhatSub": {
-    "message": "مستند Bento هو ملف HTML واحد يحمل محرّره معه. وعند فتحه مباشرةً من القرص لا يسمح له المتصفح بالكتابة إلى نفسه — فيسألك الحفظ في كل مرة عن مكان وضعه. وBento Tray هو ما يزيل هذا السؤال."
+    "message": "مستند Bento هو ملف HTML واحد يحمل محرّره معه. وعند فتحه مباشرةً من القرص لا يسمح له المتصفح بالكتابة إلى نفسه — فيسألك الحفظ في كل مرة عن مكان وضعه. وbento/home هو ما يزيل هذا السؤال."
   },
   "tourSaveTitle": {
     "message": "الحفظ في المكان"
@@ -381,7 +381,7 @@
     "message": "لا يبلّغ هذا المتصفح عن الحالة. إذا ظل الحفظ يسأل، فتحقق من ذلك في <code>chrome://extensions</code>."
   },
   "helpAccessOn": {
-    "message": "مفعَّل — يستطيع Bento Tray قراءة الصفحات التي فتحتها من القرص."
+    "message": "مفعَّل — يستطيع bento/home قراءة الصفحات التي فتحتها من القرص."
   },
   "helpNeverTitle": {
     "message": "ما لا يفعله أبدًا"
@@ -393,7 +393,7 @@
     "message": "نبذة"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · جزء من مشروع Bento · مرخّص برخصة MIT"
+    "message": "bento/home $1 · جزء من مشروع Bento · مرخّص برخصة MIT"
   },
   "linkSource": {
     "message": "المصدر على GitHub"
@@ -409,5 +409,80 @@
   },
   "primeNote": {
     "message": "الخياران الآخران يعملان أيضًا، لكن Chrome يسأل من جديد — عند كل إعادة تشغيل بالنسبة للأول، وبعد انتظار بالنسبة للأخير."
+  },
+  "viewLayout": {
+    "message": "طريقة عرض المستندات"
+  },
+  "viewIcons": {
+    "message": "أيقونات"
+  },
+  "viewList": {
+    "message": "قائمة"
+  },
+  "close": {
+    "message": "إغلاق"
+  },
+  "setLangTitle": {
+    "message": "اللغة"
+  },
+  "setLangSub": {
+    "message": "اللغة التي يتحدث بها هذا الامتداد. يتبع المتصفح عادةً."
+  },
+  "langAutomatic": {
+    "message": "تلقائي — اتّبع المتصفح"
+  },
+  "setLangNote": {
+    "message": "اسم الامتداد نفسه ووصفه يأتيان من المتصفح ولا يتغيران."
+  },
+  "aboutPromo": {
+    "message": "جديد على Bento؟ ستجد القوالب والمعرض ودليل التحرير بالذكاء الاصطناعي على $1 — أو ضع نجمة على $2."
+  },
+  "setThemeTitle": {
+    "message": "المظهر"
+  },
+  "setThemeSub": {
+    "message": "إعداد المتصفح هو الافتراضي، وليس إلزاميًا."
+  },
+  "themeAuto": {
+    "message": "حسب المتصفح"
+  },
+  "themeLight": {
+    "message": "فاتح"
+  },
+  "themeDark": {
+    "message": "داكن"
+  },
+  "checking": {
+    "message": "جارٍ التحقق…"
+  },
+  "surveyTitle": {
+    "message": "اعثر على موضع مستنداتك"
+  },
+  "surveySub": {
+    "message": "يعرف المتصفح أي مستندات Bento فتحتها، ويمكنه تحديد المجلدات التي تحتويها."
+  },
+  "surveyDeclined": {
+    "message": "لا بأس — يمكنك إضافة المجلدات يدويًا."
+  },
+  "surveyAllCovered": {
+    "message": "كل المستندات الـ$1 التي رآها هذا المتصفح موجودة بالفعل في مجلد أضفته."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> مستندًا خارج كل المجلدات التي أضفتها، و$2 مشمولة بالفعل."
+  },
+  "surveyCovers": {
+    "message": "يشمل $1"
+  },
+  "surveyAdd": {
+    "message": "أضف هذا المجلد…"
+  },
+  "surveyAdded": {
+    "message": "تمت إضافة $1 — المستندات بداخله جاهزة"
+  },
+  "surveyAddedElsewhere": {
+    "message": "تمت إضافة $1، لكن المستندات ليست فيه — افتح واحدًا من Finder مرة واحدة."
+  },
+  "surveyOnlySeen": {
+    "message": "لا يمكن العثور بهذه الطريقة إلا على المستندات التي فُتحت في هذا المتصفح."
   }
 }

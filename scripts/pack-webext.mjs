@@ -219,7 +219,11 @@ if (manifest) {
   if (desc.startsWith('__MSG_')) fail('manifest.description does not resolve — check _locales')
 
   const named = new Set()
-  const claim = (p) => { if (p) named.add(p.replace(/^\//, '')) }
+  // A manifest path may legitimately carry a fragment or query — `options_page`
+  // is `src/home.html#settings`, because Chrome's "Options" entry means
+  // "configure this extension" and the page routes on the hash. Only the file
+  // part is a file, so only the file part is checked for existence.
+  const claim = (p) => { if (p) named.add(p.replace(/^\//, '').replace(/[#?].*$/, '')) }
   claim(manifest.background?.service_worker)
   claim(manifest.options_page)
   claim(manifest.action?.default_popup)

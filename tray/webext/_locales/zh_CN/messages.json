@@ -49,14 +49,14 @@
     "message": "Chrome 接下来会询问。请选择中间那一项："
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — 有文件夹需要重新连接",
+    "message": "bento/home — 有文件夹需要重新连接",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray 需要重新连接",
+    "message": "bento/home 需要重新连接",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedBody": {
@@ -67,7 +67,7 @@
     "message": "重新连接"
   },
   "ctxOpenPanel": {
-    "message": "打开 Bento Tray 面板"
+    "message": "打开 bento/home 面板"
   },
   "panelEmpty": {
     "message": "你的文件夹中还没有 Bento 文档。"
@@ -150,7 +150,7 @@
     "message": "<b>+ 新建文档</b>会在这里放一个。"
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray 还不知道 $1 在磁盘上的位置。请使用“查找我的文件夹”，或先从访达打开该文件夹里的一个文档。",
+    "message": "bento/home 还不知道 $1 在磁盘上的位置。请使用“查找我的文件夹”，或先从访达打开该文件夹里的一个文档。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "cardRenamedTip": {
@@ -206,7 +206,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupStep2Note": {
-    "message": "在 <code>chrome://extensions</code> → Bento Tray → <b>允许访问文件网址</b>。Chrome 不允许扩展程序自行开启。",
+    "message": "在 <code>chrome://extensions</code> → bento/home → <b>允许访问文件网址</b>。Chrome 不允许扩展程序自行开启。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupUpgradeNote": {
@@ -285,11 +285,11 @@
     "message": "未知"
   },
   "accessOnNote": {
-    "message": "Bento Tray 可以读取你从磁盘打开的页面。",
+    "message": "bento/home 可以读取你从磁盘打开的页面。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessOffNote": {
-    "message": "打开 chrome://extensions，找到 Bento Tray，开启“允许访问文件网址”。",
+    "message": "打开 chrome://extensions，找到 bento/home，开启“允许访问文件网址”。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessUnknownNote": {
@@ -336,7 +336,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 可用。</b>这份副本是以解压方式加载的，Chrome 永远不会更新它。"
+    "message": "<b>bento/home $1 可用。</b>这份副本是以解压方式加载的，Chrome 永远不会更新它。"
   },
   "updateStep1": {
     "message": "从 GitHub 下载"
@@ -346,7 +346,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateStep3": {
-    "message": "打开 <code>chrome://extensions</code>，在 Bento Tray 上点击<b>重新加载</b>"
+    "message": "打开 <code>chrome://extensions</code>，在 bento/home 上点击<b>重新加载</b>"
   },
   "fetchingApp": {
     "message": "正在获取 $1…"
@@ -358,10 +358,10 @@
     "message": "到 $1"
   },
   "helpWhatTitle": {
-    "message": "Bento Tray 的作用"
+    "message": "bento/home 的作用"
   },
   "helpWhatSub": {
-    "message": "Bento 文档是一个自带编辑器的 HTML 文件。直接从磁盘打开时，浏览器不允许它写回自身 — 因此每次保存都会询问位置。Bento Tray 就是去掉这个问题的东西。"
+    "message": "Bento 文档是一个自带编辑器的 HTML 文件。直接从磁盘打开时，浏览器不允许它写回自身 — 因此每次保存都会询问位置。bento/home 就是去掉这个问题的东西。"
   },
   "tourSaveTitle": {
     "message": "原位保存"
@@ -411,7 +411,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpAccessOn": {
-    "message": "已开启 — Bento Tray 可以读取你从磁盘打开的页面。",
+    "message": "已开启 — bento/home 可以读取你从磁盘打开的页面。",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpNeverTitle": {
@@ -426,7 +426,7 @@
     "message": "关于"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · Bento 项目的一部分 · MIT 许可"
+    "message": "bento/home $1 · Bento 项目的一部分 · MIT 许可"
   },
   "linkSource": {
     "message": "GitHub 源码"
@@ -442,5 +442,80 @@
   },
   "primeNote": {
     "message": "另外两个也能用，但 Chrome 会再次询问 — 第一个每次重启都问，最后一个会等一段时间再问。"
+  },
+  "viewLayout": {
+    "message": "文档的显示方式"
+  },
+  "viewIcons": {
+    "message": "图标"
+  },
+  "viewList": {
+    "message": "列表"
+  },
+  "close": {
+    "message": "关闭"
+  },
+  "setLangTitle": {
+    "message": "语言"
+  },
+  "setLangSub": {
+    "message": "此扩展程序使用的语言。通常跟随浏览器。"
+  },
+  "langAutomatic": {
+    "message": "自动 — 跟随浏览器"
+  },
+  "setLangNote": {
+    "message": "扩展程序自身的名称和说明来自浏览器，不会改变。"
+  },
+  "aboutPromo": {
+    "message": "第一次使用 Bento？模板、图库和 AI 编辑指南都在 $1，也欢迎在 $2 上点个星。"
+  },
+  "setThemeTitle": {
+    "message": "外观"
+  },
+  "setThemeSub": {
+    "message": "浏览器的设置只是默认值，并非强制。"
+  },
+  "themeAuto": {
+    "message": "跟随浏览器"
+  },
+  "themeLight": {
+    "message": "浅色"
+  },
+  "themeDark": {
+    "message": "深色"
+  },
+  "checking": {
+    "message": "正在检查…"
+  },
+  "surveyTitle": {
+    "message": "找到文档所在的位置"
+  },
+  "surveySub": {
+    "message": "浏览器知道你打开过哪些 Bento 文档，可以指出它们在哪些文件夹里。"
+  },
+  "surveyDeclined": {
+    "message": "没关系，你也可以手动添加文件夹。"
+  },
+  "surveyAllCovered": {
+    "message": "这个浏览器见过的 $1 个文档都已在你添加的文件夹中。"
+  },
+  "surveyUncovered": {
+    "message": "有 <b>$1</b> 个文档不在你添加的任何文件夹里，$2 个已覆盖。"
+  },
+  "surveyCovers": {
+    "message": "包含 $1 个"
+  },
+  "surveyAdd": {
+    "message": "添加此文件夹…"
+  },
+  "surveyAdded": {
+    "message": "已添加 $1 — 其中的文档已就绪"
+  },
+  "surveyAddedElsewhere": {
+    "message": "已添加 $1，但文档并不在其中 — 请先从访达打开一个。"
+  },
+  "surveyOnlySeen": {
+    "message": "这种方式只能找到在此浏览器中打开过的文档。"
   }
 }
