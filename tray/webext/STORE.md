@@ -1,4 +1,4 @@
-# Store listing — Bento Tray
+# Store listing — bento/home
 
 Copy for the Chrome Web Store developer dashboard, and the same text serves Edge
 Add-ons. Kept in the repo so the answers a reviewer gets are the answers the code
@@ -11,7 +11,7 @@ Build the upload with `node scripts/pack-webext.mjs` → `dist/bento-tray-<v>.zi
 ## Name
 
 ```
-Bento Tray
+bento/home
 ```
 
 ## Summary (132 characters max)
@@ -32,7 +32,7 @@ in one. Open one by double-clicking it and the browser will let it read itself,
 but not write itself: the first time you press Cmd-S, you get a "save as" dialog
 asking where to put a file that already has a home.
 
-Bento Tray fixes that. Point it at the folder your documents live in, once. From
+bento/home fixes that. Point it at the folder your documents live in, once. From
 then on, Cmd-S writes straight back to the file you opened. No dialog, no second
 copy appearing beside the original, no wondering which one is current.
 
@@ -60,7 +60,7 @@ Bento is open source: https://github.com/nyblnet/bento
 ## Single purpose
 
 ```
-Bento Tray lets a locally-opened Bento document save back to its own file
+bento/home lets a locally-opened Bento document save back to its own file
 instead of prompting for a destination. That is its only function.
 ```
 
@@ -144,7 +144,7 @@ A small promo tile (440×280) is optional but improves placement.
 
 ### Where the folder permission lives, and how to take it back
 
-Bento Tray never has standing access to your disk. It can only write inside
+bento/home never has standing access to your disk. It can only write inside
 folders you pick, and only to the file a page was actually opened from.
 
 Two things are remembered, and only one of them is the access:

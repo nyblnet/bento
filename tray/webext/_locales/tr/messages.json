@@ -48,13 +48,13 @@
     "message": "Chrome birazdan soracak. Ortadaki seçeneği seçin:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — bir klasörün yeniden bağlanması gerekiyor"
+    "message": "bento/home — bir klasörün yeniden bağlanması gerekiyor"
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray'in yeniden bağlanması gerekiyor"
+    "message": "bento/home'un yeniden bağlanması gerekiyor"
   },
   "notifyLapsedBody": {
     "message": "Chrome bir klasörün iznini geri aldı. İzin geri verilene kadar her kaydetme, dosyanın nereye konacağını soracak."
@@ -63,7 +63,7 @@
     "message": "Yeniden bağla"
   },
   "ctxOpenPanel": {
-    "message": "Bento Tray panelini aç"
+    "message": "bento/home panelini aç"
   },
   "panelEmpty": {
     "message": "Klasörlerinizde henüz Bento belgesi yok."
@@ -141,7 +141,7 @@
     "message": "<b>+ Yeni belge</b> buraya yeni bir tane koyar."
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray, $1 klasörünün diskte nerede olduğunu henüz bilmiyor. “Klasörlerimi bul”u kullanın ya da içindeki bir belgeyi Finder'dan bir kez açın."
+    "message": "bento/home, $1 klasörünün diskte nerede olduğunu henüz bilmiyor. “Klasörlerimi bul”u kullanın ya da içindeki bir belgeyi Finder'dan bir kez açın."
   },
   "cardRenamedTip": {
     "message": "$1, başka bir adla kaydedilmiş bir Bento belgesidir. Buradan açılır, ancak kaydetme bir hedef soracaktır — yerinde kaydetme yalnızca .bento.html ile biten dosyaları tanır."
@@ -195,7 +195,7 @@
     "message": "Yerel dosya erişimini açın"
   },
   "setupStep2Note": {
-    "message": "<code>chrome://extensions</code> → Bento Tray → <b>Dosya URL'lerine erişime izin ver</b>. Chrome, bir uzantının bunu kendi başına açmasına izin vermez."
+    "message": "<code>chrome://extensions</code> → bento/home → <b>Dosya URL'lerine erişime izin ver</b>. Chrome, bir uzantının bunu kendi başına açmasına izin vermez."
   },
   "setupUpgradeNote": {
     "message": "<b>Yükselttiniz ve klasörlerinizi burada mı bekliyordunuz?</b> Paketlenmemiş bir uzantı klasör yoluyla tanınır, dolayısıyla başka bir klasörden yüklenen yeni bir kopya farklı bir uzantıdır. Klasörleriniz hâlâ eskisine bağlı. Bunun yerine özgün klasördeki dosyaları değiştirin ve <code>chrome://extensions</code> içinde <b>Yeniden yükle</b>ye basın."
@@ -264,10 +264,10 @@
     "message": "Bilinmiyor"
   },
   "accessOnNote": {
-    "message": "Bento Tray, diskten açtığınız sayfaları okuyabilir."
+    "message": "bento/home, diskten açtığınız sayfaları okuyabilir."
   },
   "accessOffNote": {
-    "message": "chrome://extensions'ı açın, Bento Tray'i bulun, “Dosya URL'lerine erişime izin ver”i açın."
+    "message": "chrome://extensions'ı açın, bento/home'u bulun, “Dosya URL'lerine erişime izin ver”i açın."
   },
   "accessUnknownNote": {
     "message": "Bu tarayıcı bunu bildirmiyor. Kaydetme hâlâ soruyorsa chrome://extensions'tan kontrol edin."
@@ -309,7 +309,7 @@
     "message": "Yalnızca yukarıdaki klasörler ve yalnızca bir sayfanın gerçekten açıldığı dosya. Hiçbir şey yüklenmez ve başka hiçbir yerde bir şey okunmaz."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 mevcut.</b> Bu kopya paketlenmemiş olarak yüklendi, bu yüzden Chrome onu asla güncellemez."
+    "message": "<b>bento/home $1 mevcut.</b> Bu kopya paketlenmemiş olarak yüklendi, bu yüzden Chrome onu asla güncellemez."
   },
   "updateStep1": {
     "message": "GitHub'dan indirin"
@@ -318,7 +318,7 @@
     "message": "Dosyaları <b>onu yüklediğiniz klasörde</b> değiştirin — aynı klasör olmalı, yoksa Chrome bunu farklı bir uzantı sayar ve izin verdiğiniz klasörler onunla gelmez"
   },
   "updateStep3": {
-    "message": "<code>chrome://extensions</code>'ı açın ve Bento Tray'de <b>Yeniden yükle</b>ye basın"
+    "message": "<code>chrome://extensions</code>'ı açın ve bento/home'da <b>Yeniden yükle</b>ye basın"
   },
   "fetchingApp": {
     "message": "$1 alınıyor…"
@@ -330,10 +330,10 @@
     "message": "$1 içine"
   },
   "helpWhatTitle": {
-    "message": "Bento Tray ne yapar"
+    "message": "bento/home ne yapar"
   },
   "helpWhatSub": {
-    "message": "Bir Bento belgesi, kendi düzenleyicisini taşıyan tek bir HTML dosyasıdır. Doğrudan diskten açıldığında tarayıcı kendine geri yazmasına izin vermez — bu yüzden kaydetme her seferinde nereye konacağını sorar. Bento Tray bu soruyu ortadan kaldırır."
+    "message": "Bir Bento belgesi, kendi düzenleyicisini taşıyan tek bir HTML dosyasıdır. Doğrudan diskten açıldığında tarayıcı kendine geri yazmasına izin vermez — bu yüzden kaydetme her seferinde nereye konacağını sorar. bento/home bu soruyu ortadan kaldırır."
   },
   "tourSaveTitle": {
     "message": "Yerinde kaydet"
@@ -381,7 +381,7 @@
     "message": "Bu tarayıcı bunu bildirmiyor. Kaydetme hâlâ soruyorsa <code>chrome://extensions</code>'tan kontrol edin."
   },
   "helpAccessOn": {
-    "message": "Açık — Bento Tray, diskten açtığınız sayfaları okuyabilir."
+    "message": "Açık — bento/home, diskten açtığınız sayfaları okuyabilir."
   },
   "helpNeverTitle": {
     "message": "Asla yapmadıkları"
@@ -393,7 +393,7 @@
     "message": "Hakkında"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · Bento projesinin parçası · MIT lisanslı"
+    "message": "bento/home $1 · Bento projesinin parçası · MIT lisanslı"
   },
   "linkSource": {
     "message": "GitHub'da kaynak"

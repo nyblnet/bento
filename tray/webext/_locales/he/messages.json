@@ -48,13 +48,13 @@
     "message": "Chrome עומד לשאול. בחרו באפשרות האמצעית:"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — תיקייה זקוקה לחיבור מחדש"
+    "message": "bento/home — תיקייה זקוקה לחיבור מחדש"
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray זקוק לחיבור מחדש"
+    "message": "bento/home זקוק לחיבור מחדש"
   },
   "notifyLapsedBody": {
     "message": "Chrome ביטל את ההרשאה לתיקייה. עד שתשוחזר, כל שמירה תשאל אתכם היכן להניח את הקובץ."
@@ -63,7 +63,7 @@
     "message": "חיבור מחדש"
   },
   "ctxOpenPanel": {
-    "message": "פתיחת החלונית של Bento Tray"
+    "message": "פתיחת החלונית של bento/home"
   },
   "panelEmpty": {
     "message": "אין עדיין מסמכי Bento בתיקיות שלכם."
@@ -141,7 +141,7 @@
     "message": "<b>+ מסמך חדש</b> יניח כאן מסמך חדש."
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray עדיין לא יודע היכן $1 נמצאת בדיסק. השתמשו ב„מצא את התיקיות שלי”, או פתחו פעם אחת דרך Finder מסמך כלשהו שבתוכה."
+    "message": "bento/home עדיין לא יודע היכן $1 נמצאת בדיסק. השתמשו ב„מצא את התיקיות שלי”, או פתחו פעם אחת דרך Finder מסמך כלשהו שבתוכה."
   },
   "cardRenamedTip": {
     "message": "$1 הוא מסמך Bento תחת שם אחר. הוא נפתח מכאן, אך השמירה תשאל על יעד — שמירה במקום מזהה רק קבצים שמסתיימים ב־‎.bento.html."
@@ -195,7 +195,7 @@
     "message": "הפעילו גישה לקבצים מקומיים"
   },
   "setupStep2Note": {
-    "message": "ב־<code>chrome://extensions</code> ← Bento Tray ← <b>אפשר גישה לכתובות של קבצים</b>. Chrome אינו מרשה להרחבה להפעיל זאת בעצמה."
+    "message": "ב־<code>chrome://extensions</code> ← bento/home ← <b>אפשר גישה לכתובות של קבצים</b>. Chrome אינו מרשה להרחבה להפעיל זאת בעצמה."
   },
   "setupUpgradeNote": {
     "message": "<b>שדרגתם וציפיתם שהתיקיות שלכם יהיו כאן?</b> הרחבה לא ארוזה מזוהה לפי נתיב התיקייה שלה, ולכן עותק חדש שנטען מתיקייה אחרת הוא הרחבה אחרת. התיקיות שלכם עדיין מוקצות לישנה. במקום זאת החליפו את הקבצים בתיקייה המקורית ולחצו <b>טען מחדש</b> ב־<code>chrome://extensions</code>."
@@ -264,10 +264,10 @@
     "message": "לא ידוע"
   },
   "accessOnNote": {
-    "message": "Bento Tray יכול לקרוא דפים שפתחתם מהדיסק."
+    "message": "bento/home יכול לקרוא דפים שפתחתם מהדיסק."
   },
   "accessOffNote": {
-    "message": "פתחו את chrome://extensions, מצאו את Bento Tray והפעילו „אפשר גישה לכתובות של קבצים”."
+    "message": "פתחו את chrome://extensions, מצאו את bento/home והפעילו „אפשר גישה לכתובות של קבצים”."
   },
   "accessUnknownNote": {
     "message": "הדפדפן הזה אינו מדווח על כך. אם השמירה עדיין שואלת, בדקו זאת ב־chrome://extensions."
@@ -309,7 +309,7 @@
     "message": "רק התיקיות שלמעלה, ורק הקובץ שממנו דף אכן נפתח. שום דבר אינו מועלה ושום דבר אינו נקרא בשום מקום אחר."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 זמינה.</b> העותק הזה נטען לא ארוז, ולכן Chrome לעולם לא יעדכן אותו."
+    "message": "<b>bento/home $1 זמינה.</b> העותק הזה נטען לא ארוז, ולכן Chrome לעולם לא יעדכן אותו."
   },
   "updateStep1": {
     "message": "הורידו אותה מ־GitHub"
@@ -318,7 +318,7 @@
     "message": "החליפו את הקבצים <b>בתיקייה שממנה טענתם אותה</b> — אותה תיקייה, אחרת Chrome יראה בה הרחבה אחרת והתיקיות שהרשיתם לא יבואו איתה"
   },
   "updateStep3": {
-    "message": "פתחו את <code>chrome://extensions</code> ולחצו <b>טען מחדש</b> על Bento Tray"
+    "message": "פתחו את <code>chrome://extensions</code> ולחצו <b>טען מחדש</b> על bento/home"
   },
   "fetchingApp": {
     "message": "מוריד את $1…"
@@ -330,10 +330,10 @@
     "message": "אל $1"
   },
   "helpWhatTitle": {
-    "message": "מה Bento Tray עושה"
+    "message": "מה bento/home עושה"
   },
   "helpWhatSub": {
-    "message": "מסמך Bento הוא קובץ HTML יחיד שנושא את העורך שלו עמו. כשהוא נפתח היישר מהדיסק, הדפדפן אינו מרשה לו לכתוב בחזרה אל עצמו — ולכן כל שמירה שואלת היכן להניח אותו. Bento Tray הוא מה שמסלק את השאלה הזאת."
+    "message": "מסמך Bento הוא קובץ HTML יחיד שנושא את העורך שלו עמו. כשהוא נפתח היישר מהדיסק, הדפדפן אינו מרשה לו לכתוב בחזרה אל עצמו — ולכן כל שמירה שואלת היכן להניח אותו. bento/home הוא מה שמסלק את השאלה הזאת."
   },
   "tourSaveTitle": {
     "message": "שמירה במקום"
@@ -381,7 +381,7 @@
     "message": "הדפדפן הזה אינו מדווח על כך. אם השמירה עדיין שואלת, בדקו זאת ב־<code>chrome://extensions</code>."
   },
   "helpAccessOn": {
-    "message": "מופעל — Bento Tray יכול לקרוא דפים שפתחתם מהדיסק."
+    "message": "מופעל — bento/home יכול לקרוא דפים שפתחתם מהדיסק."
   },
   "helpNeverTitle": {
     "message": "מה הוא לעולם אינו עושה"
@@ -393,7 +393,7 @@
     "message": "אודות"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · חלק מפרויקט Bento · ברישיון MIT"
+    "message": "bento/home $1 · חלק מפרויקט Bento · ברישיון MIT"
   },
   "linkSource": {
     "message": "קוד המקור ב־GitHub"

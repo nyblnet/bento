@@ -49,14 +49,14 @@
     "message": "Chrome va demander. Choisissez l’option du milieu :"
   },
   "actionTitle": {
-    "message": "Bento Tray"
+    "message": "bento/home"
   },
   "actionTitleLapsed": {
-    "message": "Bento Tray — un dossier doit être reconnecté",
+    "message": "bento/home — un dossier doit être reconnecté",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedTitle": {
-    "message": "Bento Tray doit être reconnecté",
+    "message": "bento/home doit être reconnecté",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "notifyLapsedBody": {
@@ -67,7 +67,7 @@
     "message": "Reconnecter"
   },
   "ctxOpenPanel": {
-    "message": "Ouvrir le panneau Bento Tray"
+    "message": "Ouvrir le panneau bento/home"
   },
   "panelEmpty": {
     "message": "Aucun document Bento dans vos dossiers pour l’instant."
@@ -150,7 +150,7 @@
     "message": "<b>+ Nouveau document</b> en met un ici."
   },
   "cardUnplacedTip": {
-    "message": "Bento Tray ne sait pas encore où se trouve $1 sur le disque. Utilisez « Trouver mes dossiers », ou ouvrez une fois un document depuis le Finder.",
+    "message": "bento/home ne sait pas encore où se trouve $1 sur le disque. Utilisez « Trouver mes dossiers », ou ouvrez une fois un document depuis le Finder.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "cardRenamedTip": {
@@ -206,7 +206,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupStep2Note": {
-    "message": "Dans <code>chrome://extensions</code> → Bento Tray → <b>Autoriser l’accès aux URL de fichier</b>. Chrome ne laisse pas une extension l’activer elle-même.",
+    "message": "Dans <code>chrome://extensions</code> → bento/home → <b>Autoriser l’accès aux URL de fichier</b>. Chrome ne laisse pas une extension l’activer elle-même.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "setupUpgradeNote": {
@@ -285,11 +285,11 @@
     "message": "Inconnu"
   },
   "accessOnNote": {
-    "message": "Bento Tray peut lire les pages que vous avez ouvertes depuis le disque.",
+    "message": "bento/home peut lire les pages que vous avez ouvertes depuis le disque.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessOffNote": {
-    "message": "Ouvrez chrome://extensions, trouvez Bento Tray et activez « Autoriser l’accès aux URL de fichier ».",
+    "message": "Ouvrez chrome://extensions, trouvez bento/home et activez « Autoriser l’accès aux URL de fichier ».",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "accessUnknownNote": {
@@ -336,7 +336,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateAvailable": {
-    "message": "<b>Bento Tray $1 est disponible.</b> Cette copie a été chargée décompressée, Chrome ne la mettra donc jamais à jour."
+    "message": "<b>bento/home $1 est disponible.</b> Cette copie a été chargée décompressée, Chrome ne la mettra donc jamais à jour."
   },
   "updateStep1": {
     "message": "Téléchargez-le depuis GitHub"
@@ -346,7 +346,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "updateStep3": {
-    "message": "Ouvrez <code>chrome://extensions</code> et appuyez sur <b>Actualiser</b> sur Bento Tray"
+    "message": "Ouvrez <code>chrome://extensions</code> et appuyez sur <b>Actualiser</b> sur bento/home"
   },
   "fetchingApp": {
     "message": "Téléchargement de $1…"
@@ -358,10 +358,10 @@
     "message": "dans $1"
   },
   "helpWhatTitle": {
-    "message": "Ce que fait Bento Tray"
+    "message": "Ce que fait bento/home"
   },
   "helpWhatSub": {
-    "message": "Un document Bento est un fichier HTML qui embarque son propre éditeur. Ouvert directement depuis le disque, un navigateur ne le laisse pas se réécrire — l’enregistrement demande donc à chaque fois où le mettre. Bento Tray supprime cette question."
+    "message": "Un document Bento est un fichier HTML qui embarque son propre éditeur. Ouvert directement depuis le disque, un navigateur ne le laisse pas se réécrire — l’enregistrement demande donc à chaque fois où le mettre. bento/home supprime cette question."
   },
   "tourSaveTitle": {
     "message": "Enregistrer sur place"
@@ -411,7 +411,7 @@
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpAccessOn": {
-    "message": "Activé — Bento Tray peut lire les pages que vous avez ouvertes depuis le disque.",
+    "message": "Activé — bento/home peut lire les pages que vous avez ouvertes depuis le disque.",
     "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
   },
   "helpNeverTitle": {
@@ -426,7 +426,7 @@
     "message": "À propos"
   },
   "helpAboutSub": {
-    "message": "Bento Tray $1 · projet Bento · licence MIT"
+    "message": "bento/home $1 · projet Bento · licence MIT"
   },
   "linkSource": {
     "message": "Code sur GitHub"

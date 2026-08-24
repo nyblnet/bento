@@ -1171,7 +1171,7 @@ async function renderSettings() {
   // The same shape as Language directly above, and for the same reason: the
   // browser's answer is a good DEFAULT and a bad requirement. Semantics come
   // from theme.js, which mirrors `kernel/src/theme.ts` so bento/slides and
-  // bento/tray mean the same three things by the same three words.
+  // bento/home mean the same three things by the same three words.
   const theme = section(t('setThemeTitle'), t('setThemeSub'))
   const trow = document.createElement('div')
   trow.className = 'row'

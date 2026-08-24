@@ -1,4 +1,4 @@
-# bento/tray — WebExtension
+# bento/home — WebExtension
 
 A browser host for Bento documents. Grant your decks folder once; after that a
 deck you opened by **double-clicking** saves back to its own file with no
@@ -75,7 +75,7 @@ The safe procedure, which the notice spells out as numbered steps:
 
 1. Download the zip from the release.
 2. Replace the files **in the folder it was originally loaded from**.
-3. `chrome://extensions` → **Reload** on Bento Tray.
+3. `chrome://extensions` → **Reload** on bento/home.
 
 Same path, same id, so the grants and everything else survive. The first-run
 screen also carries a note for anyone who already got it wrong, because "an
