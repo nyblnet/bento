@@ -135,6 +135,12 @@ import { isNoteAtom } from './render.ts';
 import { uid, type Block, type TypeDoc } from './model.ts';
 import { registerTool, registerPanel, registerKey, registerMenuItem, registerReady, type FeatureContext } from './features.ts';
 import { t } from './i18n.ts';
+// NOT `import './comments.css'` here: model.ts imports this module's pure
+// functions (readThreadsRaw, reconcileThreads) for parsing, and model.ts is
+// imported by nearly every test rig under plain Node, which cannot load a
+// bare `.css` specifier the way Vite does. about.ts is always loaded by
+// main.ts (never lazily) and no rig imports it, so it is the safe place that
+// pulls comments.css into the bundle — see about.ts.
 
 // ───────────────────────────────────────────────────────────────── the shape
 
@@ -448,6 +454,34 @@ export function addReply(th: CommentThread, author: string, text: string, at = n
 }
 
 /**
+ * Edit a message's text in place. Pure; touches nothing else on the thread —
+ * `block`/`from`/`to`/`quote` are the ANCHOR and an edit to what somebody
+ * SAID about the text is not an edit to what they said it ABOUT, so the
+ * anchor a caller reads before and after this call is byte-identical.
+ *
+ * An empty result is not an edit (that is what delete is for) and is refused:
+ * this returns the thread unchanged rather than leaving a blank message
+ * behind for a hasty save-of-empty-textarea to commit.
+ */
+export function editMessage(th: CommentThread, msgId: string, text: string): CommentThread {
+  const trimmed = text.trim();
+  if (!trimmed || !th.messages.some(m => m.id === msgId)) return th;
+  return { ...th, messages: th.messages.map(m => m.id === msgId ? { ...m, text: trimmed } : m) };
+}
+
+/**
+ * Remove one message. Returns the thread with it gone, or `null` when it was
+ * the LAST message — a thread with no messages is not a thread (the same
+ * rule `readThreadsRaw` applies on parse), so the caller deletes the whole
+ * thread rather than keep an empty shell with a frozen anchor and no
+ * conversation to show for it.
+ */
+export function deleteMessage(th: CommentThread, msgId: string): CommentThread | null {
+  const messages = th.messages.filter(m => m.id !== msgId);
+  return messages.length ? { ...th, messages } : null;
+}
+
+/**
  * Resolve or unresolve. Both directions, because "resolved" is a reviewer's
  * judgement and reviewers change their minds — a one-way resolve is a delete
  * with extra steps.
@@ -555,6 +589,23 @@ export function knownAuthor(): string {
 /** Ask for a name if there isn't one, without the caller needing a comment. */
 export const ensureAuthor = (): string => authorName();
 
+/**
+ * Set the name directly — the primary path, from the About dialog's "You"
+ * section. `authorName()`'s prompt stays as the FALLBACK for someone who
+ * comments or turns on tracking before ever opening About; both write the
+ * same key, so whichever ran first is what the other reads.
+ *
+ * Trimmed and stored empty-as-cleared: an empty saved name is not a name, and
+ * `authorName()` must still see nothing there so it prompts (or falls back to
+ * 'Anonymous') the next time it is needed, rather than silently attributing
+ * as ''.
+ */
+export function setAuthorName(name: string): void {
+  const who = name.trim();
+  try { who ? localStorage.setItem(AUTHOR_KEY, who) : localStorage.removeItem(AUTHOR_KEY); }
+  catch { /* private mode — the name just won't persist across reloads */ }
+}
+
 /** Who you are, as bento/slides records it — one suite, one answer. */
 function authorName(): string {
   let who = '';
@@ -569,9 +620,6 @@ function authorName(): string {
   return who || 'Anonymous';
 }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-
 const when = (iso: string) => {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : d.toLocaleString(undefined,
@@ -580,6 +628,8 @@ const when = (iso: string) => {
 
 /** The selected thread — VIEW state, never in the document. */
 let selected: string | null = null;
+/** The one message currently being edited in place — VIEW state too. */
+let editingMsg: string | null = null;
 let layer: HTMLElement | null = null;
 let repaint: (() => void) | null = null;
 let refreshPanel: (() => void) | null = null;
@@ -709,6 +759,84 @@ function paintLayer(ctx: FeatureContext): void {
   layer.prepend(frag);
 }
 
+/**
+ * One message, in the shape both the margin card and the panel use.
+ *
+ * Edit/delete are gated by NAME, not identity — this document has no notion
+ * of who is typing beyond the self-asserted `bento-author` value, so "is this
+ * yours" is "does the byline match what's in localStorage right now", the
+ * same honour-system comparison editor.ts already trusts for attributing a
+ * tracked change. Anyone can rename themselves to someone else's name and
+ * edit their comments; that is true of `authorName()` everywhere else in this
+ * file too, and is not something a margin-card button could fix.
+ */
+function buildMessage(ctx: FeatureContext, th: CommentThread, m: CommentMsg, cls: string, suffix = ''): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = cls;
+  const editing = editingMsg === m.id;
+
+  const who = document.createElement('div');
+  who.className = 'who';
+  who.textContent = `${m.author} · ${when(m.at)}${suffix}`;
+
+  const me = knownAuthor();
+  if (me && m.author === me && !editing) {
+    const tools = document.createElement('span');
+    tools.className = 't-cmt-msgtools';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 't-cmt-msgbtn';
+    editBtn.textContent = t('Edit');
+    editBtn.title = t('Edit your comment');
+    editBtn.addEventListener('click', () => { editingMsg = m.id; repaint?.(); refreshPanel?.(); });
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 't-cmt-msgbtn';
+    delBtn.textContent = t('Delete');
+    delBtn.title = th.messages.length > 1 ? t('Delete your comment') : t('Delete this thread');
+    delBtn.addEventListener('click', () => {
+      const question = th.messages.length > 1
+        ? t('Delete this comment?') : t('Delete this whole thread?');
+      if (!confirm(question)) return;
+      mutateThread(ctx, th.id, cur => deleteMessage(cur, m.id));
+    });
+    tools.append(editBtn, delBtn);
+    who.appendChild(tools);
+  }
+  wrap.appendChild(who);
+
+  if (editing) {
+    const ta = document.createElement('textarea');
+    ta.className = 't-cmt-edit';
+    ta.rows = 2;
+    ta.value = m.text;
+    const row = document.createElement('div');
+    row.className = 'btns';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.textContent = t('Save');
+    save.addEventListener('click', () => {
+      const text = ta.value.trim();
+      if (!text) return;
+      editingMsg = null;
+      mutateThread(ctx, th.id, cur => editMessage(cur, m.id, text));
+    });
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = t('Cancel');
+    cancel.addEventListener('click', () => { editingMsg = null; repaint?.(); refreshPanel?.(); });
+    row.append(save, cancel);
+    wrap.append(ta, row);
+    return wrap;
+  }
+
+  const what = document.createElement('div');
+  what.className = 'what';
+  what.textContent = m.text;
+  wrap.appendChild(what);
+  return wrap;
+}
+
 /** One margin card. Expanded — replies, a reply box, resolve — when selected. */
 function buildCard(ctx: FeatureContext, th: CommentThread): HTMLElement {
   const card = document.createElement('div');
@@ -717,15 +845,17 @@ function buildCard(ctx: FeatureContext, th: CommentThread): HTMLElement {
   const open = th.id === selected;
   const msgs = open ? th.messages : th.messages.slice(0, 1);
   const more = th.messages.length - msgs.length;
-  card.innerHTML =
-    msgs.map(m => `<div class="msg"><div class="who">${esc(m.author)} · ${esc(when(m.at))}</div>` +
-                  `<div class="what">${esc(m.text)}</div></div>`).join('') +
-    (more > 0 ? `<div class="who">${esc(t('{n} more', { n: String(more) }))}</div>` : '');
+  for (const m of msgs) card.appendChild(buildMessage(ctx, th, m, 'msg'));
+  if (more > 0) {
+    const rest = document.createElement('div');
+    rest.className = 'who';
+    rest.textContent = t('{n} more', { n: String(more) });
+    card.appendChild(rest);
+  }
   card.addEventListener('mousedown', e => {
     // not `click`: mousedown beats the selection change, so opening a card
     // cannot be mistaken for the author clicking into the paper
-    if ((e.target as HTMLElement).tagName === 'BUTTON'
-        || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+    if ((e.target as HTMLElement).closest('button, textarea')) return;
     e.preventDefault();
     select(ctx, th.id === selected ? null : th.id);
   });
@@ -748,26 +878,41 @@ function threadActions(ctx: FeatureContext, th: CommentThread): HTMLElement {
   send.addEventListener('click', () => {
     const text = input.value.trim();
     if (!text) return;
-    mutate(ctx, th.id, cur => addReply(cur, authorName(), text));
+    mutateThread(ctx, th.id, cur => addReply(cur, authorName(), text));
     input.value = '';
   });
   const res = document.createElement('button');
   res.type = 'button';
   res.textContent = th.resolved ? t('Reopen') : t('Resolve');
-  res.addEventListener('click', () => mutate(ctx, th.id, cur => setResolved(cur, !cur.resolved)));
+  res.addEventListener('click', () => mutateThread(ctx, th.id, cur => setResolved(cur, !cur.resolved)));
   row.append(send, res);
   box.append(input, row);
   return box;
 }
 
-/** Change one thread and commit it. Whole-doc scope: comments are doc-level. */
-function mutate(ctx: FeatureContext, id: string, fn: (th: CommentThread) => CommentThread): void {
+/**
+ * Change one thread and commit it, or DELETE it when `fn` returns null —
+ * deleting the last message in it. Whole-doc scope: comments are doc-level.
+ *
+ * A deleted thread leaves nothing behind to clean up: `paintLayer` and the
+ * panel both rebuild their contents from `readThreads(ctx.store.doc)` on
+ * every commit (via the `store.on` subscription below), so a thread that is
+ * no longer in the map is simply not painted — there is no separate
+ * highlight or marker element to remember to remove.
+ */
+function mutateThread(ctx: FeatureContext, id: string, fn: (th: CommentThread) => CommentThread | null): void {
   ctx.store.commit(d => {
-    // raw: a reply must not silently write back the read-time repair
+    // raw: a reply/edit/delete must not silently write back the read-time repair
     const threads = readThreadsRaw(d);
     const i = threads.findIndex(x => x.id === id);
     if (i < 0) return;
-    threads[i] = fn(threads[i]);
+    const next = fn(threads[i]);
+    if (next === null) {
+      threads.splice(i, 1);
+      if (selected === id) selected = null;
+    } else {
+      threads[i] = next;
+    }
     writeThreads(d, threads);
   });
 }
@@ -855,26 +1000,29 @@ registerPanel({
         card.className = 't-card t-cmt-item' + (th.resolved ? ' done' : '')
                        + (th.id === selected ? ' on' : '');
         const first = th.messages[0];
-        card.innerHTML =
-          `<div class="who">${esc(first.author)} · ${esc(when(first.at))}` +
-          (th.messages.length > 1 ? ` · ${esc(t('{n} replies', { n: String(th.messages.length - 1) }))}` : '') +
-          `</div>` +
-          `<div class="quote${th.orphan ? ' gone' : ''}">${esc(th.quote)}</div>` +
-          `<div class="what">${esc(first.text)}</div>` +
-          (th.orphan
-            ? `<div class="who">${esc(t('the text this was about is gone'))}</div>` : '');
+        const repliesSuffix = th.messages.length > 1
+          ? ` · ${t('{n} replies', { n: String(th.messages.length - 1) })}` : '';
+        const firstEl = buildMessage(ctx, th, first, 'msg', repliesSuffix);
+        // splice the quote between the byline and the body — the reading order
+        // is "who said it, about what, saying what" — by inserting it right
+        // after the who-line buildMessage always puts first.
+        const quote = document.createElement('div');
+        quote.className = 'quote' + (th.orphan ? ' gone' : '');
+        quote.textContent = th.quote;
+        firstEl.insertBefore(quote, firstEl.firstElementChild!.nextSibling);
+        card.appendChild(firstEl);
+        if (th.orphan) {
+          const gone = document.createElement('div');
+          gone.className = 'who';
+          gone.textContent = t('the text this was about is gone');
+          card.appendChild(gone);
+        }
         card.addEventListener('click', e => {
-          if ((e.target as HTMLElement).closest('.acts')) return;
+          if ((e.target as HTMLElement).closest('.acts, button, textarea')) return;
           select(ctx, th.id === selected ? null : th.id);
         });
         if (th.id === selected) {
-          for (const m of th.messages.slice(1)) {
-            const rep = document.createElement('div');
-            rep.className = 'reply';
-            rep.innerHTML = `<div class="who">${esc(m.author)} · ${esc(when(m.at))}</div>` +
-                            `<div class="what">${esc(m.text)}</div>`;
-            card.appendChild(rep);
-          }
+          for (const m of th.messages.slice(1)) card.appendChild(buildMessage(ctx, th, m, 'reply'));
           card.appendChild(threadActions(ctx, th));
         }
         host.appendChild(card);

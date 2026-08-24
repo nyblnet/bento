@@ -20,6 +20,7 @@ import {
   readThreads, writeThreads, newThread, addReply, setResolved, unresolvedCount,
   orderThreads, reconcileThreads, shiftAnchor, textEdit, shiftThreads,
   splitThreads, mergeThreads, commentsOnEdit, commentsOnSplit, commentsOnMerge,
+  editMessage, deleteMessage,
   type CommentThread,
 } from '../type/src/comments.ts';
 import { emptyDoc, parseDoc, spliceText, type Block, type TypeDoc } from '../type/src/model.ts';
@@ -295,6 +296,75 @@ H('a reply thread');
   ok(addReply(back, 'client', '   ').messages.length === 3, 'an empty reply is not a reply');
   ok(back.messages.every(m => m.id) && new Set(back.messages.map(m => m.id)).size === 3,
      'every message has its own id');
+}
+
+H('editing a message');
+{
+  const doc = fixture();
+  commentOn(doc, 'p2', TERM, 'Is thirty days market standard?', 'c1');
+  let th = thread(doc, 'c1');
+  th = addReply(th, 'client', 'Sixty is what we agreed last time.');
+  const before = { block: th.block, from: th.from, to: th.to, quote: th.quote };
+  const firstId = th.messages[0].id, replyId = th.messages[1].id;
+
+  const edited = editMessage(th, firstId, 'Is THIRTY days market standard, or sixty?');
+  ok(edited.messages[0].text === 'Is THIRTY days market standard, or sixty?', 'the text changes');
+  ok(edited.messages[0].id === firstId && edited.messages[0].author === 'counsel',
+     'id and author are untouched by an edit');
+  ok(edited.messages[1].text === 'Sixty is what we agreed last time.',
+     'the OTHER message in the thread is untouched');
+  ok(edited.block === before.block && edited.from === before.from && edited.to === before.to
+     && edited.quote === before.quote,
+     'the thread\'s anchor (block/from/to/quote) is byte-identical after the edit — ' +
+     'an edit changes what was SAID, never what it was said ABOUT');
+
+  writeThreads(doc, readThreads(doc).map(x => x.id === 'c1' ? edited : x));
+  ok(anchored(doc, 'c1') === TERM, 'and the live anchor still resolves to the same words');
+
+  ok(editMessage(th, replyId, '   ') === th, 'an edit to nothing but whitespace is refused, not a blank');
+  ok(editMessage(th, 'no-such-id', 'x') === th, 'editing a message that is not in the thread is a no-op');
+}
+
+H('deleting a message: some remain');
+{
+  const doc = fixture();
+  commentOn(doc, 'p2', TERM, 'Is thirty days market standard?', 'c1');
+  let th = thread(doc, 'c1');
+  th = addReply(th, 'client', 'Sixty is what we agreed last time.');
+  th = addReply(th, 'counsel', 'Then sixty it is.');
+  const replyId = th.messages[1].id;
+
+  const after = deleteMessage(th, replyId);
+  ok(after !== null, 'the thread survives — two messages are still in it');
+  if (after) {
+    ok(after.messages.length === 2, `down to two messages (${after.messages.length})`);
+    ok(after.messages.map(m => m.text).join('|') === 'Is thirty days market standard?|Then sixty it is.',
+       'the deleted message is gone; the other two keep their order');
+    ok(after.block === th.block && after.from === th.from && after.to === th.to,
+       'the anchor is untouched by deleting a reply');
+  }
+}
+
+H('deleting the last message removes the whole thread');
+{
+  const doc = fixture();
+  commentOn(doc, 'p2', TERM, 'Is thirty days market standard?', 'c1');
+  commentOn(doc, 'p3', CLAUSE, 'Governing law should be England.', 'c2');
+  const th1 = thread(doc, 'c1');
+  ok(th1.messages.length === 1, 'c1 starts as a single message, nothing to reply with yet');
+
+  const gone = deleteMessage(th1, th1.messages[0].id);
+  ok(gone === null, 'deleting the only message returns null — no empty-shell thread');
+
+  // the caller (comments.ts mutateThread) is what actually removes it from
+  // the map; exercise that end-to-end via the same doc-level plumbing a UI
+  // action would use.
+  writeThreads(doc, readThreads(doc).filter(x => x.id !== 'c1'));
+  ok(readThreads(doc).find(x => x.id === 'c1') === undefined, 'c1 is gone from the document entirely');
+  ok(readThreads(doc).find(x => x.id === 'c2') !== undefined, 'and c2, a different thread, is untouched');
+  ok(anchored(doc, 'c2') === CLAUSE, 'c2 still resolves to its own words');
+  ok(!JSON.stringify(doc).includes('Is thirty days market standard?'),
+     'the deleted conversation does not linger anywhere in the saved bytes');
 }
 
 H('resolve and unresolve');

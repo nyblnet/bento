@@ -22,6 +22,8 @@ import { setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.
 import type { Store } from './store.ts';
 import { wordCount } from './model.ts';
 import { t } from './i18n.ts';
+import { knownAuthor, setAuthorName } from './comments.ts';
+import './comments.css';
 
 export interface AboutHooks {
   store: Store;
@@ -149,6 +151,36 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
     'The theme is yours, not the document’s — it is remembered in this browser and ' +
     'never saved into the file. The PAGE stays white in both, because paper is white ' +
     'and somebody proofing a contract at midnight still has to see what will print.'),
+    't-note'));
+
+  // ---- you ------------------------------------------------------------
+  //
+  // WHY THIS HAS TO EXIST: comments.ts's authorName() has always had a name to
+  // attribute comments and tracked changes to — it just never gave you a way
+  // to SEE or CORRECT it, only a one-shot prompt() the first time you left a
+  // comment. This is the one place in the app that shows the name and lets it
+  // change; authorName()'s prompt stays as the fallback for someone who never
+  // opened About before commenting or turning on tracking (both read/write the
+  // same 'bento-author' key, so whichever runs first is what the other sees).
+  card.append(h(t('You')));
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 't-input t-about-name-input';
+  nameInput.placeholder = t('Your name');
+  nameInput.value = knownAuthor();
+  nameInput.autocomplete = 'off';
+  // applied on blur/Enter, not on every keystroke: a comment or tracked
+  // change made mid-edit must attribute to the name as it stood at that
+  // moment, not flicker with whatever is half-typed into this field right now
+  const commitName = () => setAuthorName(nameInput.value);
+  nameInput.addEventListener('change', commitName);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') { commitName(); nameInput.blur(); } });
+  card.append(row(t('Name'), nameInput));
+  card.append(p(t(
+    'A self-asserted claim, not an identity — this is the name shown beside ' +
+    'your comments and tracked changes, and anyone can type any name here. ' +
+    'It is remembered in this browser, applies immediately, and is never ' +
+    'itself saved into the file (only the comments and changes it signs are).'),
     't-note'));
 
   // ---- the document, for tools --------------------------------------------
