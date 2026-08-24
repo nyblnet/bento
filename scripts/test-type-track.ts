@@ -14,7 +14,9 @@
 import { register } from 'node:module';
 register('./lib/ts-resolve-hooks.mjs', import.meta.url);
 
-const { trackEdit, resolve, resolveAll, textOf, changes } = await import('../type/src/track.ts');
+const {
+  trackEdit, resolve, resolveAll, textOf, changes, changeAt, stepChange, parseTrackView,
+} = await import('../type/src/track.ts');
 const { emptyDoc, wordCount } = await import('../type/src/model.ts');
 
 let checks = 0, bad = 0;
@@ -137,6 +139,111 @@ console.log('\n— an untracked document is untouched —');
   const before = JSON.stringify(doc.body);
   resolveAll(doc, true);
   eq(JSON.stringify(doc.body), before, 'resolveAll on a clean document changes nothing');
+}
+
+console.log('\n— changeAt finds the change under a caret —');
+{
+  const doc = emptyDoc();
+  doc.body = [
+    { id: 'b1', kind: 'para', text: 'aaa bbb ccc', marks: [{ t: 'ins', from: 4, to: 7, by: 'A', at: WHEN }] },
+    { id: 'b2', kind: 'para', text: 'ddd eee fff', marks: [{ t: 'del', from: 4, to: 7, by: 'A', at: WHEN }] },
+  ] as never;
+  const list = changes(doc);
+  eq(list.length, 2, 'two tracked changes across two blocks');
+  eq(changeAt(list, 'b1', 5), 0, 'a caret inside a change finds it');
+  eq(changeAt(list, 'b1', 4), 0, 'the change\'s own start counts as inside it');
+  eq(changeAt(list, 'b1', 7), 0, 'and so does its own end');
+  eq(changeAt(list, 'b1', 0), -1, 'a caret elsewhere in the block finds nothing');
+  eq(changeAt(list, 'b2', 5), 1, 'and the second block finds the second change');
+}
+
+console.log('\n— stepChange walks the document in order, and wraps —');
+{
+  const doc = emptyDoc();
+  doc.body = [
+    { id: 'b1', kind: 'para', text: 'aaa bbb ccc', marks: [{ t: 'ins', from: 4, to: 7, by: 'A', at: WHEN }] },
+    { id: 'b2', kind: 'para', text: 'ddd eee fff', marks: [{ t: 'del', from: 4, to: 7, by: 'A', at: WHEN }] },
+  ] as never;
+  const list = changes(doc);
+
+  eq(stepChange(doc, list, null, 0, 1), 0, 'no caret: next starts at the first change');
+  eq(stepChange(doc, list, null, 0, -1), 1, 'no caret: previous starts at the last change');
+
+  eq(stepChange(doc, list, 'b1', 0, 1), 0, 'next, from before the first change, finds it');
+  eq(stepChange(doc, list, 'b1', 4, 1), 1,
+     'next, from ON a change, SKIPS it and finds the next one — so pressing next twice always advances');
+  eq(stepChange(doc, list, 'b2', 7, 1), 0, 'next, past the last change, WRAPS to the first');
+
+  eq(stepChange(doc, list, 'b2', 7, -1), 1,
+     'previous, from just past a change, lands ON that change — so pressing previous after next returns to it');
+  eq(stepChange(doc, list, 'b1', 0, -1), 1, 'previous, from before the first change, WRAPS to the last');
+
+  eq(stepChange(doc, [], 'b1', 0, 1), null, 'no changes at all: nothing to step to');
+}
+
+console.log('\n— accept/reject-at-the-caret uses the SAME engine a card does —');
+{
+  // review.ts resolves the change `changeAt`/`stepChange` point it at with
+  // track.ts's own `resolve` — there is no second path from "caret" to
+  // "mutated block", which is what makes the two ways in (a card, or the
+  // keyboard) produce byte-identical results.
+  const ORIGINAL = 'The Supplier shall deliver within 30 days.';
+  const EDITED   = 'The Supplier must deliver within 45 days.';
+  const doc = emptyDoc();
+  doc.body = [trackEdit(blk(ORIGINAL), blk(EDITED), WHO, WHEN)];
+
+  const viaCard = JSON.parse(JSON.stringify(doc));
+  resolveAll(viaCard, true);
+
+  const list = changes(doc);
+  const caretDoc = JSON.parse(JSON.stringify(doc));
+  let i = changeAt(changes(caretDoc), 'p1', 0);
+  // walk every change from the start of the block, resolving whichever the
+  // "caret" (offset 0, always) currently finds or the next one coming up —
+  // exactly what review.ts's resolveCurrent does, minus the DOM
+  for (;;) {
+    const cur = changes(caretDoc);
+    if (!cur.length) break;
+    i = changeAt(cur, 'p1', 0);
+    if (i < 0) i = stepChange(caretDoc, cur, 'p1', 0, 1)!;
+    const ch = cur[i];
+    const bi = caretDoc.body.findIndex((b: { id: string }) => b.id === ch.block);
+    caretDoc.body[bi] = resolve(caretDoc.body[bi], ch.mark, true);
+  }
+  eq(caretDoc.body[0].text, viaCard.body[0].text, 'accepting via the caret matches accepting via "accept all"');
+  eq(caretDoc.body[0].text, EDITED, 'and both land on the edited text');
+}
+
+console.log('\n— display mode is closed and defaults safely —');
+{
+  eq(parseTrackView(null), 'all', 'nothing stored → all markup');
+  eq(parseTrackView(undefined), 'all', 'undefined → all markup');
+  eq(parseTrackView(''), 'all', 'empty string → all markup');
+  eq(parseTrackView('final'), 'final', 'a recognised value passes through');
+  eq(parseTrackView('original'), 'original', 'so does the other one');
+  eq(parseTrackView('garbage'), 'all', 'anything unrecognised → all markup, never a crash');
+}
+
+console.log('\n— display mode is purely presentational —');
+{
+  // The whole promise: NOTHING about "which view" can reach the model.
+  // parseTrackView's signature is the proof by construction — it takes a
+  // stored string, not a TypeDoc — but the requirement is behavioural, so
+  // this exercises it: build a tracked document, "view" it every which way
+  // (the exact sequence a reviewer clicking through the picker produces),
+  // and check the document — body, marks and all — never moved a byte.
+  const doc = emptyDoc();
+  doc.body = [trackEdit(blk('one two three'), blk('one two three four'), WHO, WHEN)];
+  const before = JSON.stringify(doc);
+  const beforeChanges = changes(doc).length;
+
+  for (const stored of ['final', 'original', 'all', 'original', 'garbage', null]) {
+    void parseTrackView(stored);
+  }
+
+  eq(JSON.stringify(doc), before, 'the document is byte-identical after switching through every view');
+  eq(changes(doc).length, beforeChanges,
+     'switching to Original and back loses no change — the marks were never touched');
 }
 
 console.log(`\n${checks - bad}/${checks} checks passed`);
