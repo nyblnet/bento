@@ -951,6 +951,7 @@ export function startPresentation(
       // a tween killed during its delay would otherwise leave the element
       // stuck at its "from" state (invisible) for every future visit.
       anim.killTweensOf(from.querySelectorAll('.bento-el'))
+      sweepSymbolSpans(from)
       const fromSlide = doc.slides[fromIdx]
       for (const el of fromSlide?.elements ?? []) {
         const node = from.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
@@ -963,6 +964,9 @@ export function startPresentation(
         applyRevealSet(from, null, fromSlide.hover.default)
       }
     }
+    // The incoming section may still carry span state from a PREVIOUS visit
+    // (Reveal keeps sections mounted) — start clean before any fx runs.
+    sweepSymbolSpans(to)
     const forward = toIdx > fromIdx
     // Morph forward into a morph slide, and un-morph when backing out of one.
     const morphing =
@@ -1453,6 +1457,27 @@ function modelByMorphKey(doc: BentoDoc, index: number): Map<string, SlideElement
  * source for where a symbol WAS is a measurement taken while it was visible.
  * Captured on slide entry; read on slide exit.
  */
+/**
+ * Clear runtime inline state from a section's morph symbols. Token and formula
+ * spans carry state no model frame can restore — the symbol morph's transform,
+ * the fresh-token fade's opacity — because applyElementFrame knows elements,
+ * not spans, and the settle guarantee filters to elements with model entries.
+ * An interrupted visit (fast advance, hidden tab, starved render loop) leaves
+ * opacity:0 written inline on spans of a section Reveal keeps MOUNTED, and the
+ * next visit shows code with holes: seen as "confetti() disappeared and came
+ * back after the animations", and reproduced exactly by driving a hidden tab.
+ * Swept on every exit and every entry; the entering morph recreates what it
+ * actually needs.
+ */
+function sweepSymbolSpans(section: HTMLElement) {
+  for (const sym of Array.from(section.querySelectorAll<HTMLElement>('[data-sym]'))) {
+    anim.killTweensOf(sym)
+    sym.style.opacity = ''
+    sym.style.transform = ''
+    sym.style.willChange = ''
+  }
+}
+
 const symCache = new Map<string, Map<string, { x: number; y: number }>>()
 const symKey = (idx: number, flipId: string) => `${idx}${flipId}`
 
