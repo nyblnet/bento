@@ -79,9 +79,13 @@ Not every AI-generated deck goes through Bento's own format. Some chat AIs,
 asked directly, will hand back a complete, self-running HTML slide deck —
 its own JS, its own CSS, no `bento/slides` JSON involved. Step 2 of `/`
 auto-detects this (pasted text that isn't JSON but starts with `<!doctype
-html>`/`<html>`) alongside its existing outline/doc detection, and
-`POST /api/decks` accepts `{html}` as an alternative to `{doc}`
-(`migrations/0005_kind.sql`'s `decks.kind` column, `'bento' | 'html'`).
+html>`/`<html>`) alongside its existing outline/doc detection — or use the
+"Upload HTML file…" button next to the paste box, which reads the file
+client-side (`FileReader.readAsText`) and drops its contents into the same
+textarea, so it goes through the identical detect/create path either way,
+not a separate upload flow. `POST /api/decks` accepts `{html}` as an
+alternative to `{doc}` (`migrations/0005_kind.sql`'s `decks.kind` column,
+`'bento' | 'html'`).
 
 An `'html'` deck is stored and served **byte-for-byte** — never parsed,
 never compiled, never editable in place (`PATCH /api/decks/:id` 400s for
