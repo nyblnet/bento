@@ -478,6 +478,18 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .bento-el { position: absolute; contain: layout style; }
 
+/* Formulas ask for the generic `math` family, which is not a font: the browser
+   resolves it to whatever the viewer's OS happens to supply. On a face without
+   proper MATH metrics the browser assembles the radical itself and its hook
+   does not meet its overbar — visible as a step in the square-root sign, and
+   different on every machine. Naming real math fonts first gets a proper one
+   on most systems for zero bytes. It does NOT make rendering identical
+   everywhere; only embedding a math font would, and that is a size decision
+   the deck has not taken. */
+.bento-el math {
+  font-family: 'STIX Two Math', 'Cambria Math', 'Latin Modern Math', math;
+}
+
 .bento-el-text,
 .bento-el-code
  .bento-text-inner {
