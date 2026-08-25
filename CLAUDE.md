@@ -17,6 +17,67 @@ names provisional.
   work; append when you settle something other agents could contradict.
 - `AGENTS.md` — the tool-agnostic contract (Codex/Antigravity read this).
 
+## Bento platform (`platform/`)
+
+A Cloudflare Workers + R2 + D1 hosting service, separate from any editor app —
+it turns a chat-AI outline (or a hand-pasted `bento/slides` doc) into a
+stored, URL-addressable deck: compile → store → view → present → download.
+**Full detail — API table, auth model, deploy walkthrough, known gaps — lives
+in `platform/README.md`; this is only a pointer so a session doesn't have to
+discover the product exists by reading source.** Own ownership zone
+(`docs/PARALLEL-WORK.md` §1): never edits `slides/`/`kernel/`, only
+*consumes* a built `slides/` shell as an artifact (one deliberate exception —
+`platform/worker/src/compile/compile.ts` imports `slides/src/model.ts`
+directly, read-only, see `docs/DECISIONS.md` 2026-08-08). Serving a deck is
+the same splice-contract trick every Bento file uses at save time (`docs/
+PLATFORM.md` §2): `SHELL_HEAD + escape(doc JSON) + SHELL_TAIL`, split once at
+build time (`platform/build/split-shell.mjs`) so no request parses HTML.
+
+Current feature set, all owner-only except where noted:
+- **Single-owner auth** — one account ever, minted via a one-time `/setup`
+  form; PBKDF2-SHA-256 sessions (`platform/worker/src/auth.ts`). Iteration
+  count is capped at 100,000, a hard Workers-runtime ceiling, not a tuning
+  choice — copying `kernel/src/save.ts`'s browser-side 300,000 into this
+  Worker 500s immediately (shipped once; `docs/DECISIONS.md` 2026-08-19).
+- **Outline → doc compiler** (`POST /api/compile`, `platform/worker/src/
+  compile/`) — a small structured schema (title/theme/eight layout kinds)
+  built on `slides/src/model.ts`'s real constructors, not a drifting copy.
+  The `/` page's step 1 is a copy-pasteable prompt for an *existing* AI
+  conversation (not a form to fill in); step 2 pastes the reply back and
+  auto-detects outline-shaped JSON vs. an already-compiled doc.
+- **Deck CRUD** — create/list/get/replace/rename/delete
+  (`platform/worker/src/store.ts`, `index.ts`). Delete is permanent: the D1
+  row, `doc.json`, and every asset blob under the deck's R2 namespace all go
+  (R2 has no delete-by-prefix, so it lists then batch-deletes). Rename
+  rewrites `doc.title` itself — there's no separate cosmetic label.
+- **Per-deck access level**: `'private' | 'view' | 'edit'`
+  (`migrations/0004_access.sql`, default `'edit'`). `'private'` 404s for
+  anyone without the owner's session, identical to an unknown id — existence
+  itself isn't observable, not just content. `'view'` splices `readonly:
+  true` into the served doc, which boots Bento straight into its own
+  present-only PLAYER mode (`slides/src/main.ts`'s existing file-mode logic)
+  instead of a bespoke read-only renderer. The owner's own session always
+  gets the full editable doc/assets regardless of the flag. Two earlier,
+  narrower models (a per-deck capability token, then a same-day boolean
+  `is_editable`) were both superseded — see `docs/DECISIONS.md` 2026-08-21
+  for why a tri-state column replaced the boolean rather than bolting a
+  private case onto it.
+- **Deck history sidebar** (`demo.ts`, served at `/`) — a ChatGPT-style list
+  (`GET /api/decks`, most-recently-touched first), each entry showing a
+  status icon (🔓/👁️/🔒) and a ⚙️ button opening a "Deck settings" dialog
+  (rename field, the three access options, a confirm-gated delete). The
+  dialog is a body-level centered modal, deliberately not a popover anchored
+  inside the scrolling sidebar list — see `CLAUDE.md`'s own hard-won lesson
+  #10 below on why a floating child inside an `overflow-y:auto` container
+  gets silently clipped.
+
+Biggest documented gap: **live-editor edits made at `/d/:id` aren't saved
+back** — the served page is the real, full editor, but nothing currently
+pushes its in-browser changes to R2/D1 (needs a `slides/src/main.ts` event
+hook `window.bento` doesn't expose today; deliberately its own follow-up
+since it's the one piece reaching into a different ownership zone). Full gap
+list: `platform/README.md` "Known gaps".
+
 ## Architecture (slides/)
 
 - `src/model.ts` — the `bento/slides` JSON document model. This is the format.

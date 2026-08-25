@@ -37,6 +37,14 @@ rules exist to keep N parallel workstreams from dissolving into merge hell.
   then continue.
 - **Ops zone** — `server/`, `scripts/`, `site-src/`: maintainer-coordinated;
   relay changes have deploy-order constraints (`docs/PLATFORM.md` §5).
+- **`platform/` zone** — the Cloudflare Workers + R2 + D1 hosting service
+  (compile → store → view → present a deck at a URL). Own zone, separate
+  from the app zones above: never edits `slides/`, `kernel/`, or `server/`,
+  only *consumes* a built `slides/` shell as an artifact — one deliberate,
+  documented exception (`platform/worker/src/compile/compile.ts` reads
+  `slides/src/model.ts` directly, read-only; `docs/DECISIONS.md` 2026-08-08).
+  Full feature set, API, and deploy steps: `platform/README.md`; a
+  short pointer also lives in `CLAUDE.md`.
 
 ## 2. Branch & PR discipline
 

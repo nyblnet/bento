@@ -435,9 +435,13 @@ not covered.
 - **One doc revision.** `PATCH` overwrites in place. No version history
   (`docs/blob-offload.md`-style content-addressing is a natural fit later,
   not built here).
-- **No accounts, no rate limiting.** A deck's capability is its edit token;
-  losing it loses write access. Fine for "assume low usage" per the current
-  brief; revisit before wider exposure.
+- **No rate limiting.** Single owner, so there's no multi-tenant abuse
+  surface on the mutating routes — but `/setup`/`/login` have no throttle
+  either, and a 'private' deck's 404-not-403 (see "Authentication") only
+  hides *existence*, not brute-force cost. Fine for "assume low usage" per
+  the current brief; revisit before wider exposure. (The old "capability is
+  an edit token" model this bullet used to describe is gone — see
+  "Authentication" above.)
 - **No asset inlining into the download variant.** `/d/:id/download` serves
   whatever the doc already carries — if images are R2 URLs (uploaded via
   `/api/decks/:id/assets`) rather than `data:` URIs, the downloaded file
