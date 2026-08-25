@@ -1612,12 +1612,21 @@ function morphMathSymbols(
     // changes shape, because it cannot travel: transforming a container would
     // drag its children off their own paths. A bar that merely resizes would
     // otherwise snap in a single frame while everything inside it glided.
+    // Absent, or so different it is plainly not the same bar. The key is
+    // positional (tag#occurrence), not semantic, so it can claim an identity
+    // that does not exist: across the derivation's last beat mfrac#0 is
+    // `b OVER 2a` on one side and `-b±√(b²-4ac) OVER 2a` on the other. Those
+    // are two different bars, and stretching one into the other would animate
+    // a fiction. Judge by how much changed instead, generously enough that a
+    // bar which genuinely persists and merely shifts a pixel or two is left
+    // alone rather than blinking for no reason.
     const was = fromStruct?.get(box.dataset.msx!)
     const now = toStruct.get(box.dataset.msx!)
-    const moved = !was || !now
-      || Math.abs(was.x - now.x) > 1 || Math.abs(was.y - now.y) > 1
-      || Math.abs(was.w - now.w) > 1 || Math.abs(was.h - now.h) > 1
-    if (!moved) continue
+    const resized = (x: number, y: number) => Math.abs(x - y) > Math.max(x, y, 1) * 0.15
+    const changed = !was || !now
+      || Math.abs(was.x - now.x) > 6 || Math.abs(was.y - now.y) > 6
+      || resized(was.w, now.w) || resized(was.h, now.h)
+    if (!changed) continue
     // Read the ink from the BOX, not the flip host: the host is the element
     // wrapper and computes to its own colour (black here), while the box
     // inherits the formula's. Fading from the wrong one made the bar arrive
