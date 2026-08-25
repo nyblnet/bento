@@ -725,12 +725,18 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 4 · STATS BEAT (fade → staggers + count-ups) ───────────────────────
+    // ── 4 · STATS BEAT (staggers + count-ups, arriving by morph) ───────────
+    // This was a 'fade' because entrance fx and count-ups once needed a
+    // non-morph arrival. Both have worked on morph arrivals since #197 —
+    // runMorph gives every unpartnered element its fx.enter, and
+    // runMorphArrivalCountUps counts up anything not carried from the previous
+    // slide — so the fade only cost the deck its best tile moment: the four
+    // scattered tiles collapsing into the row of chips at the top-left.
     slide({
       background: PEACH,
-      transition: 'fade',
       notes:
-        'A hard cut on purpose — rhythm. The numbers counted up as the slide entered; ' +
+        'The four tiles just collapsed into that row of chips — same four shapes, all deck long. ' +
+        'The numbers counted up as the slide entered; ' +
         'that’s one checkbox on any text element. The little lines show line endings: arrow, dot, bar.',
       elements: [
         shape('rect', { id: T_D, x: 96, y: 54, w: 34, h: 34, radius: 9, fill: INK }),

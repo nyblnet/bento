@@ -22,9 +22,16 @@ names provisional.
 - `src/model.ts` — the `bento/slides` JSON document model. This is the format.
 - `src/starterdeck.ts` — the showcase starter deck (what a fresh build opens
   with): four 'sd-tile-*' elements morph through EVERY slide (the id-continuity
-  demo), one deliberate 'fade' beat exists because entrance staggers/count-ups
-  only run on non-morph entries, charts slide + hidden pie state demo the
-  bar⇄pie data morph, speaker notes double as the feature tour. Gotchas learned
+  demo) — only the title arrives by 'fade', so nothing interrupts that thread.
+  The stats beat used to fade too, on the belief that entrance staggers and
+  count-ups needed a non-morph arrival; that has been FALSE since #197 (runMorph
+  gives every unpartnered element its fx.enter, and runMorphArrivalCountUps
+  counts up anything not carried from the previous slide), and the fade was
+  costing the deck its best tile moment — the four scattered tiles collapsing
+  into the row of chips. Verified by measurement, not belief: on that morph
+  arrival all four tiles travel, 13 elements stagger in, and the count-up runs
+  0→100%. Charts slide + hidden pie state demo the bar⇄pie data morph, speaker
+  notes double as the feature tour. Gotchas learned
   building it: line shapes take their color from `fill` (not `stroke` — the
   stroke attr is what morphs tween), and the renderer draws lines horizontally
   across the element box (vertical lines = rotation), keep 96px side margins
