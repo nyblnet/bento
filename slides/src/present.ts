@@ -1475,7 +1475,14 @@ function sweepSymbolSpans(section: HTMLElement) {
     sym.style.opacity = ''
     sym.style.transform = ''
     sym.style.willChange = ''
-    sym.style.color = '' // pinned while a formula's scaffolding fades in
+    // Colour is cleared ONLY where the scaffolding fade pinned it. Code tokens
+    // carry their syntax colour as an inline style straight from the renderer,
+    // so clearing colour unconditionally here stripped every highlight in the
+    // deck the first time a slide was swept.
+    if (sym.dataset.inkpin !== undefined) {
+      sym.style.color = ''
+      delete sym.dataset.inkpin
+    }
   }
 }
 
@@ -1626,7 +1633,8 @@ function morphMathSymbols(
     const inkClear = ink.startsWith('rgb(')
       ? ink.replace('rgb(', 'rgba(').replace(')', ', 0)')
       : 'rgba(0, 0, 0, 0)'
-    for (const leaf of leaves) leaf.style.color = ink
+    // Marked, so the slide sweep knows which colours are ours to undo.
+    for (const leaf of leaves) { leaf.style.color = ink; leaf.dataset.inkpin = '' }
     anim.fromTo(box, { color: inkClear }, {
       color: ink,
       duration: 0.3,
@@ -1634,7 +1642,7 @@ function morphMathSymbols(
       ease: 'power2.out',
       onComplete() {
         box.style.color = ''
-        for (const leaf of leaves) leaf.style.color = ''
+        for (const leaf of leaves) { leaf.style.color = ''; delete leaf.dataset.inkpin }
       },
     })
   }
