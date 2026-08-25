@@ -11,15 +11,16 @@
 //   GET  /                     compile+create wizard + deck history sidebar (demo.ts) — OWNER ONLY
 //   POST /api/compile           outline JSON -> compiled bento/slides doc JSON (no storage) — OWNER ONLY
 //   GET  /api/decks             list decks, most-recently-touched first (sidebar data) — OWNER ONLY
-//   POST /api/decks             create a deck: { doc } -> { id } — OWNER ONLY
-//   GET  /api/decks/:id         fetch a deck's doc JSON — OWNER ONLY
-//   PATCH /api/decks/:id        replace a deck's doc JSON — OWNER ONLY
+//   POST /api/decks             create a deck: { doc } or { html } -> { id } — OWNER ONLY
+//   GET  /api/decks/:id         fetch a deck's content — OWNER ONLY
+//   PATCH /api/decks/:id        replace a 'bento' deck's doc JSON — OWNER ONLY
 //   PATCH /api/decks/:id/access  change the deck's access level — OWNER ONLY
-//   PATCH /api/decks/:id/title  rename a deck (sets doc.title) — OWNER ONLY
+//   PATCH /api/decks/:id/title  rename a deck — OWNER ONLY
 //   DELETE /api/decks/:id       permanently delete a deck (D1 row + R2 doc/assets) — OWNER ONLY
 //   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
-//   GET  /d/:id                the deck spliced into the shell (a real .bento.html page)
-//   GET  /d/:id/download        same, as a downloadable attachment
+//   GET  /d/:id                the deck: a 'bento' deck spliced into the shell, or an
+//                               'html' deck sandboxed in an iframe wrapper — see handleView
+//   GET  /d/:id/download        same content, as a downloadable attachment (raw bytes for 'html')
 //   GET  /a/:id/:key            an uploaded asset's bytes
 //
 // "OWNER ONLY" = gated by a session cookie (auth.ts) — single account,
@@ -40,6 +41,15 @@
 // regardless of `access` — the column only affects anonymous viewers. See
 // docs/DECISIONS.md.
 //
+// Every deck also has a `kind` (migrations/0005_kind.sql, store.ts's
+// DeckKind): 'bento' (the above) or 'html' — an opaque, self-contained HTML
+// file a chat AI produced directly (not through Bento's own compiler),
+// stored and served byte-for-byte, never parsed or edited. 'html' decks
+// only ever have 'private' or 'view' access — 'edit' means nothing when
+// there's no document to edit in place, so handleCreate coerces it to
+// 'view' rather than rejecting it. See handleView for why an 'html' deck is
+// served through a SANDBOXED IFRAME WRAPPER, not directly at this origin.
+//
 // wrangler.toml (bindings, no secrets) drives the primary Workers Builds
 // deploy path; the "paste dist/worker.js into Quick Edit" fallback documented
 // in platform/README.md doesn't touch this file at all. See platform/README.md.
@@ -48,9 +58,12 @@ import { spliceDoc, SHELL_VERSION } from './splice.ts'
 import { validateIncomingDoc } from './validate.ts'
 import {
   createDeck,
+  createHtmlDeck,
   getDeckDoc,
+  getDeckHtml,
   getDeckMeta,
   replaceDeckDoc,
+  renameHtmlDeck,
   setDeckAccess,
   deleteDeck,
   putAsset,
@@ -99,6 +112,52 @@ function redirect(location: string): Response {
 function notFound(): Response {
   return html('<!DOCTYPE html><title>Not found</title><p>No deck at this address.</p>', { status: 404 })
 }
+
+const HTML_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'" }
+
+/** Pulls a default title out of an uploaded 'html' deck's own `<title>` tag
+ *  — a plain regex, not a parser: this is a display label, not something
+ *  the file's behavior depends on, so a slightly-wrong extraction on
+ *  malformed markup is a cosmetic miss, not a correctness bug. Falls back
+ *  to 'Untitled deck' (same default store.ts's clampTitle uses) when there
+ *  is no `<title>`. */
+function extractHtmlTitle(rawHtml: string): string {
+  const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(rawHtml)
+  if (!match) return 'Untitled deck'
+  const decoded = match[1]!.replace(/&(#39|apos|amp|lt|gt|quot);/g, (_, name: string) => HTML_ENTITIES[name] ?? _)
+  return decoded.trim() || 'Untitled deck'
+}
+
+/** An 'html' deck is served through a SANDBOXED IFRAME, never directly at
+ *  this origin — deliberately, not an oversight. Bento's own doc content
+ *  (text/table `html` fields) is sanitized at render time
+ *  (slides/src/render.ts's sanitizeHtml); an uploaded 'html' deck is the
+ *  opposite of that — arbitrary, unreviewed script the owner asked an AI to
+ *  hand them and never necessarily read line-by-line. Serving it directly
+ *  at ppt.rynnwang.com would let that script run with this origin's
+ *  privileges: same-site cookies attach automatically to same-origin
+ *  fetch(), so embedded script — even accidental, not malicious — could
+ *  silently call the platform's own /api/decks/* endpoints using the
+ *  OWNER's ambient session the moment they open their own deck's link
+ *  while logged in elsewhere. `sandbox="allow-scripts …"` WITHOUT
+ *  `allow-same-origin` gives the iframe's content a unique opaque origin —
+ *  its script still runs (so the deck itself works), but it has no access
+ *  to this origin's cookies, storage, or same-site fetch credentials at
+ *  all, sandboxed or not. This only wraps the LIVE view; `/d/:id/download`
+ *  still serves the raw bytes so the file is fully portable once saved.
+ *  `srcdoc` needs the payload escaped as a double-quoted HTML attribute
+ *  (not the same escaping as element content — `<`/`>` are fine here,
+ *  `"` is not). */
+function htmlDeckWrapper(rawHtml: string, title: string): string {
+  const srcdocEscaped = rawHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  const titleEscaped = title.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${titleEscaped}</title>
+<style>html,body{margin:0;height:100%;background:#0D1B2E}iframe{border:0;width:100vw;height:100vh;display:block}</style>
+</head><body><iframe sandbox="allow-scripts allow-popups allow-forms allow-modals" srcdoc="${srcdocEscaped}"></iframe></body></html>`
+}
+
+const MAX_HTML_DECK_BYTES = 8 * 1024 * 1024 // matches the image-asset cap (MEDIA_EMBED_BUDGET convention)
 
 /** Where the caller stands relative to the single-owner account. */
 type Gate = 'ok' | 'needs-setup' | 'needs-login'
@@ -198,6 +257,7 @@ async function handleListDecks(env: Env): Promise<Response> {
       createdAt: d.created_at,
       updatedAt: d.updated_at,
       access: d.access,
+      kind: d.kind,
     })),
   })
 }
@@ -209,12 +269,27 @@ async function handleCreate(req: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: 'invalid JSON body' }, { status: 400 })
   }
-  const { doc, access } = (body as { doc?: unknown; access?: unknown }) ?? {}
-  const result = validateIncomingDoc(doc)
-  if (!result.ok) return json({ errors: result.errors }, { status: 422 })
+  const { doc, html: rawHtml, access } = (body as { doc?: unknown; html?: unknown; access?: unknown }) ?? {}
   if (access !== undefined && !isDeckAccess(access)) {
     return json({ error: `access must be one of: ${DECK_ACCESS_LEVELS.join(', ')}` }, { status: 422 })
   }
+
+  if (typeof rawHtml === 'string') {
+    if (!rawHtml.trim()) return json({ error: 'html must not be empty' }, { status: 422 })
+    if (rawHtml.length > MAX_HTML_DECK_BYTES) {
+      return json({ error: `html is ${rawHtml.length} bytes, over the ${MAX_HTML_DECK_BYTES} limit` }, { status: 413 })
+    }
+    // 'edit' is meaningless for an 'html' deck (nothing to edit in place) —
+    // coerced to 'view' rather than rejected, since it's not an invalid
+    // choice, just not a real one for this kind. See store.ts's DeckAccess.
+    const htmlAccess: DeckAccess = access === 'edit' || access === undefined ? 'view' : access
+    const title = extractHtmlTitle(rawHtml)
+    const { id } = await createHtmlDeck(env, rawHtml, title, htmlAccess)
+    return json({ id, url: `/d/${id}` }, { status: 201 })
+  }
+
+  const result = validateIncomingDoc(doc)
+  if (!result.ok) return json({ errors: result.errors }, { status: 422 })
   // Defaults to 'edit' unless the caller explicitly picks something else —
   // matches how every deck link has behaved since before this column existed.
   const { id } = await createDeck(env, result.doc!, access ?? 'edit')
@@ -238,8 +313,8 @@ async function handleSetAccess(req: Request, env: Env, id: string): Promise<Resp
 }
 
 async function handleRename(req: Request, env: Env, id: string): Promise<Response> {
-  const doc = await getDeckDoc(env, id)
-  if (!doc) return notFound()
+  const meta = await getDeckMeta(env, id)
+  if (!meta) return notFound()
   let body: unknown
   try {
     body = await req.json()
@@ -250,10 +325,17 @@ async function handleRename(req: Request, env: Env, id: string): Promise<Respons
   if (typeof title !== 'string' || !title.trim()) {
     return json({ error: 'title must be a non-empty string' }, { status: 422 })
   }
+  if (meta.kind === 'html') {
+    // No document to rewrite a title field inside of — just the D1 label.
+    await renameHtmlDeck(env, id, title.trim())
+    return json({ ok: true })
+  }
   // The deck's displayed title IS doc.title — there's no separate cosmetic
   // label — so renaming rewrites the document, same as any other edit.
   // replaceDeckDoc's own titleOf() trims/truncates/defaults it consistently
   // with every other title write path (create, live edits).
+  const doc = await getDeckDoc(env, id)
+  if (!doc) return notFound()
   await replaceDeckDoc(env, id, { ...(doc as Record<string, unknown>), title: title.trim() })
   return json({ ok: true })
 }
@@ -288,12 +370,26 @@ async function handleCompile(req: Request): Promise<Response> {
 }
 
 async function handleGetDoc(env: Env, id: string): Promise<Response> {
+  const meta = await getDeckMeta(env, id)
+  if (!meta) return notFound()
+  if (meta.kind === 'html') {
+    const htmlContent = await getDeckHtml(env, id)
+    if (htmlContent === null) return notFound()
+    return json({ kind: 'html', html: htmlContent })
+  }
   const doc = await getDeckDoc(env, id)
   if (!doc) return notFound()
-  return json({ doc })
+  return json({ kind: 'bento', doc })
 }
 
 async function handleReplace(req: Request, env: Env, id: string): Promise<Response> {
+  const meta = await getDeckMeta(env, id)
+  if (!meta) return notFound()
+  if (meta.kind === 'html') {
+    // No in-place edit path for an 'html' deck (see file header) — re-upload
+    // as a new deck instead of trying to patch opaque, unparsed bytes.
+    return json({ error: "an 'html' deck can't be replaced in place — create a new one instead" }, { status: 400 })
+  }
   let body: unknown
   try {
     body = await req.json()
@@ -322,12 +418,32 @@ async function handleUploadAsset(req: Request, env: Env, id: string): Promise<Re
 }
 
 async function handleView(req: Request, env: Env, id: string, download: boolean): Promise<Response> {
-  const [doc, meta, owner] = await Promise.all([getDeckDoc(env, id), getDeckMeta(env, id), isAuthenticated(req, env)])
-  if (!doc || !meta) return notFound()
+  const [meta, owner] = await Promise.all([getDeckMeta(env, id), isAuthenticated(req, env)])
+  if (!meta) return notFound()
   // A private deck is 404 for anyone but the owner — indistinguishable from
   // no deck at all, so its existence isn't observable either. The owner's
-  // own session always gets the full editable doc regardless of `access`.
+  // own session always gets the full content regardless of `access`.
   if (!owner && meta.access === 'private') return notFound()
+
+  if (meta.kind === 'html') {
+    const rawHtml = await getDeckHtml(env, id)
+    if (rawHtml === null) return notFound()
+    const filename = meta.title.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'deck'
+    if (download) {
+      // The portable, standalone file — no wrapper. Sandboxing only matters
+      // for the LIVE view served at this origin (see htmlDeckWrapper); once
+      // downloaded, it's just a local file the browser opens on its own.
+      return new Response(rawHtml, {
+        headers: { 'content-type': 'text/html; charset=utf-8', 'content-disposition': `attachment; filename="${filename}.html"` },
+      })
+    }
+    // Always the sandboxed wrapper, even for the owner — see htmlDeckWrapper's
+    // header comment for why this protects the owner's OWN session most of all.
+    return html(htmlDeckWrapper(rawHtml, meta.title))
+  }
+
+  const doc = await getDeckDoc(env, id)
+  if (!doc) return notFound()
   // 'view' gets `readonly: true` spliced in instead of the plain doc — Bento's
   // own PLAYER file mode (boots straight into the show, no editor chrome, see
   // CLAUDE.md) rather than a bespoke read-only renderer. Only the served copy

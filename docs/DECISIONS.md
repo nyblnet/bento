@@ -14,7 +14,47 @@ Decision. Why. Pointers.
 
 ---
 
-## 2026-08-21 — Deck access is three states (private/view/edit), not a boolean — `is_editable` lasted one day
+## 2026-08-25 — An uploaded `'html'` deck is served through a sandboxed iframe, never directly at the platform's own origin
+
+**Decision.** `platform/worker/migrations/0005_kind.sql` adds a second deck
+kind — `'html'`, a complete, self-running HTML file some chat AIs will
+generate directly if asked (not a `bento/slides` document at all), stored
+and served byte-for-byte. `index.ts`'s `handleView` never serves that file's
+bytes as the top-level response at `ppt.rynnwang.com`; it wraps it in
+`htmlDeckWrapper`, a tiny host page containing one `<iframe
+sandbox="allow-scripts allow-popups allow-forms allow-modals"
+srcdoc="…">` — the sandbox attribute deliberately omits `allow-same-origin`.
+
+**Why.** This platform's whole security model rests on one HttpOnly session
+cookie, and it's same-site: any same-origin `fetch()` carries it
+automatically, no JS-readable token required. Bento's own doc content
+(text/table `html` fields) is sanitized at render time
+(`slides/src/render.ts`'s `sanitizeHtml`) precisely because it's untrusted;
+an uploaded `'html'` deck is the same category of untrusted content, except
+nothing sanitizes it at all — sanitizing arbitrary third-party HTML/JS
+losslessly isn't really possible, and isn't the point here anyway (the
+whole feature is "run whatever the AI gave you, unmodified"). Serving that
+file's bytes directly as `ppt.rynnwang.com`'s own response would let its
+script run WITH that origin's privileges. The realistic failure mode isn't
+even a malicious upload: the OWNER pastes something an AI wrote, doesn't
+read every line, and opens the deck's own link while logged in on another
+tab — any `fetch('/api/decks/...', {method:'DELETE'})` in that script now
+just... works, silently, riding the ambient cookie. `sandbox="allow-scripts
+…"` without `allow-same-origin` closes this specific to this specific
+mechanism: the iframe's content still executes (the deck functions
+normally) but gets a unique opaque origin, so it has zero access to
+`ppt.rynnwang.com`'s cookies, localStorage, or same-site fetch credentials
+— sandboxed identically whether the viewer is the owner or a stranger.
+
+**Scope.** Only the *live* view (`GET /d/:id`) is wrapped.
+`GET /d/:id/download` still serves the exact original bytes, unwrapped —
+once saved to disk it's just a local file the OS opens directly, where this
+origin's cookies were never reachable in the first place. If a genuine
+"iframe sandbox turned out insufficient" case ever surfaces, the next lever
+is serving `'html'` decks from a dedicated, separate hostname/subdomain
+(true origin isolation) rather than loosening the sandbox — see
+`platform/README.md` "Decks that aren't Bento at all" for the full writeup
+and what a future PR touching this must not silently regress.
 
 **Decision.** `platform/worker/migrations/0003_editable.sql`'s `decks.is_editable`
 boolean is superseded by `migrations/0004_access.sql`'s `decks.access` column

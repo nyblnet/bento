@@ -95,11 +95,18 @@ function makeD1() {
             decks.delete(id)
           } else if (sql.startsWith('INSERT INTO decks')) {
             const [id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access] = boundArgs
-            decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access })
+            const kind = sql.includes("'html')") ? 'html' : 'bento'
+            decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind })
           } else if (sql.startsWith('UPDATE decks SET access')) {
             const [access, id] = boundArgs
             const row = decks.get(id)
             if (row) row.access = access
+          } else if (sql.startsWith('UPDATE decks SET title = ?, updated_at = ? WHERE')) {
+            // renameHtmlDeck — 3 params, no doc_bytes (distinct from replaceDeckDoc's
+            // 4-param UPDATE below; matched by the exact absent-doc_bytes prefix).
+            const [title, updated_at, id] = boundArgs
+            const row = decks.get(id)
+            if (row) Object.assign(row, { title, updated_at })
           } else if (sql.startsWith('UPDATE decks')) {
             const [title, updated_at, doc_bytes, id] = boundArgs
             const row = decks.get(id)
@@ -117,7 +124,7 @@ function makeD1() {
           return null
         },
         async all() {
-          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access FROM decks')) {
+          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind FROM decks')) {
             const results = [...decks.values()].sort((a, b) => b.updated_at - a.updated_at)
             return { results, success: true }
           }
@@ -800,6 +807,178 @@ await check('DELETE /api/decks/:id removes the deck and its assets, and both bec
   )
   const { data: listData } = await readBody(listRes)
   assert(!listData.decks.some((d) => d.id === deleteMeDeckId), 'deleted deck should no longer be listed')
+})
+
+// --- 'html' decks (self-contained HTML uploaded/pasted directly) -----------
+
+const exampleHtml = '<!doctype html><html><head><title>My Cool Deck</title></head><body><h1>Hi</h1><script>alert(1)</script></body></html>'
+
+let htmlDeckId
+await check('POST /api/decks with {html} creates an html-kind deck, title from <title>', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ html: exampleHtml }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 201, `expected 201, got ${res.status}: ${text}`)
+  htmlDeckId = data.id
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === htmlDeckId)
+  assert(listed?.title === 'My Cool Deck', `expected title from <title>, got ${listed?.title}`)
+  assert(listed?.kind === 'html', 'listed deck should report kind:"html"')
+  assert(listed?.access === 'view', 'html deck with no access specified should default to view, not edit')
+})
+
+await check('POST /api/decks coerces access:"edit" to "view" for an html deck', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ html: exampleHtml, access: 'edit' }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 201, `expected 201, got ${res.status}: ${text}`)
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === data.id)
+  assert(listed?.access === 'view', `expected access:"edit" to be coerced to "view", got ${listed?.access}`)
+})
+
+await check('POST /api/decks rejects empty html', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ html: '   ' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+await check('GET /d/:id for an html deck serves a sandboxed iframe wrapper, not the raw script directly', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${htmlDeckId}`), env)
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(text.includes('<iframe'), 'expected an iframe wrapper')
+  assert(text.includes('sandbox='), 'iframe must be sandboxed')
+  assert(!text.includes('allow-same-origin'), 'sandbox must NOT include allow-same-origin (see index.ts htmlDeckWrapper)')
+  assert(text.includes('srcdoc='), 'expected the deck content passed via srcdoc')
+  // The raw <script>alert(1)</script> must be present only INSIDE the escaped
+  // srcdoc attribute, never as live markup outside the iframe (which would
+  // mean it runs at the platform's own origin instead of the sandboxed one).
+  assert(!/<body>[\s\S]*<script>alert\(1\)<\/script>/.test(text.replace(/srcdoc="[^"]*"/, '')), 'script must not appear as live markup outside the sandboxed srcdoc')
+})
+
+await check('GET /d/:id/download for an html deck serves the raw file, not the wrapper', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${htmlDeckId}/download`), env)
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(res.headers.get('content-disposition')?.includes('.html"'), 'expected a .html attachment filename')
+  assert(text === exampleHtml, 'download should be the exact original bytes, unwrapped')
+})
+
+await check('GET /a/:id/:key for an html deck honors the same private/404 rule as a bento deck', async () => {
+  const privRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ html: exampleHtml, access: 'private' }),
+    }),
+    env,
+  )
+  const { data: privDeck } = await readBody(privRes)
+  const anonRes = await worker.fetch(new Request(`https://platform.example/d/${privDeck.id}`), env)
+  assert(anonRes.status === 404, `private html deck expected 404 for anonymous, got ${anonRes.status}`)
+  const ownerRes = await worker.fetch(
+    new Request(`https://platform.example/d/${privDeck.id}`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  assert(ownerRes.status === 200, `owner expected 200 on their own private html deck, got ${ownerRes.status}`)
+})
+
+await check('PATCH /api/decks/:id for an html deck is rejected (no in-place edit)', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${htmlDeckId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: exampleDoc }),
+    }),
+    env,
+  )
+  assert(res.status === 400, `expected 400, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/access rejecting "edit" is NOT required, but "view"/"private" work for an html deck', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${htmlDeckId}/access`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ access: 'private' }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(data.access === 'private', 'access should have changed to private')
+})
+
+await check('PATCH /api/decks/:id/title renames an html deck (D1 label only, bytes untouched)', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${htmlDeckId}/title`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ title: 'Renamed HTML deck' }),
+    }),
+    env,
+  )
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === htmlDeckId)
+  assert(listed?.title === 'Renamed HTML deck', 'title should have changed')
+
+  // access was set to 'private' by the previous check, so use the owner
+  // cookie to confirm the underlying bytes are exactly unchanged.
+  const downloadRes = await worker.fetch(
+    new Request(`https://platform.example/d/${htmlDeckId}/download`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { text: downloadedHtml } = await readBody(downloadRes)
+  assert(downloadedHtml === exampleHtml, "renaming must not touch the deck's stored bytes")
+})
+
+await check('DELETE /api/decks/:id removes an html deck (D1 row + doc.html)', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${htmlDeckId}`, {
+      method: 'DELETE',
+      headers: { cookie: ownerCookie },
+    }),
+    env,
+  )
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  const viewRes = await worker.fetch(
+    new Request(`https://platform.example/d/${htmlDeckId}`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  assert(viewRes.status === 404, `deleted html deck expected 404, got ${viewRes.status}`)
 })
 
 const exampleOutline = {

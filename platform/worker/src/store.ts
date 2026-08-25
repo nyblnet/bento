@@ -30,11 +30,27 @@ import { SHELL_VERSION } from './splice.ts'
  *  - 'private' — nobody; handleView/handleAsset 404 exactly like an unknown
  *    id, so a private deck's existence isn't distinguishable from no deck
  *    at all.
- *  - 'view'    — anyone with the link, but read-only (Bento's PLAYER mode).
+ *  - 'view'    — anyone with the link, but read-only (Bento's PLAYER mode
+ *    for 'bento' decks; the only state 'html' decks ever have — see
+ *    DeckKind).
  *  - 'edit'    — anyone with the link, full live editor — the default,
- *    matching how every deck link behaved before this column existed. */
+ *    matching how every deck link behaved before this column existed.
+ *    Meaningless for 'html' decks (nothing to edit in place); handleCreate
+ *    coerces it to 'view' rather than rejecting it, since "editable" isn't
+ *    a real choice for that kind, not an invalid one. */
 export type DeckAccess = 'private' | 'view' | 'edit'
 export const DECK_ACCESS_LEVELS: readonly DeckAccess[] = ['private', 'view', 'edit']
+
+/** What a deck's stored bytes actually are.
+ *  - 'bento' — a `bento/slides` JSON document (compiled from an outline, or
+ *    pasted directly). Splices into the live editor shell; access controls
+ *    editable-vs-readonly.
+ *  - 'html'  — an opaque, self-contained HTML file (typically a chat AI
+ *    asked directly for "a runnable HTML slide deck", not through Bento at
+ *    all). Stored and served byte-for-byte, never parsed or edited — see
+ *    index.ts's handleView for why it's served through a sandboxed iframe
+ *    wrapper rather than directly at the platform's own origin. */
+export type DeckKind = 'bento' | 'html'
 
 export interface DeckMeta {
   id: string
@@ -44,6 +60,7 @@ export interface DeckMeta {
   shell_version: string
   doc_bytes: number
   access: DeckAccess
+  kind: DeckKind
 }
 
 export interface CreateResult {
@@ -54,14 +71,24 @@ function deckDocKey(id: string): string {
   return `docs/${id}/doc.json`
 }
 
+function deckHtmlKey(id: string): string {
+  return `docs/${id}/doc.html`
+}
+
 function titleOf(doc: Record<string, unknown>): string {
   return typeof doc.title === 'string' && doc.title.trim() ? doc.title.trim().slice(0, 200) : 'Untitled deck'
 }
 
-/** Create a new deck, writes R2 + D1. `doc` must already be validated
- *  (validate.ts) — this function trusts its shape. `access` defaults to
- *  'edit', matching how every deck link has behaved since before this
- *  column existed: reachable and editable by anyone holding the id. */
+function clampTitle(title: string): string {
+  const trimmed = title.trim()
+  return trimmed ? trimmed.slice(0, 200) : 'Untitled deck'
+}
+
+/** Create a new 'bento' deck, writes R2 + D1. `doc` must already be
+ *  validated (validate.ts) — this function trusts its shape. `access`
+ *  defaults to 'edit', matching how every deck link has behaved since
+ *  before this column existed: reachable and editable by anyone holding
+ *  the id. */
 export async function createDeck(
   env: Env,
   doc: Record<string, unknown>,
@@ -78,10 +105,35 @@ export async function createDeck(
 
   await env.DOCS.put(deckDocKey(id), json, { httpMetadata: { contentType: 'application/json' } })
   await env.DB.prepare(
-    `INSERT INTO decks (id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO decks (id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'bento')`,
   )
     .bind(id, titleOf(stored), now, now, '', SHELL_VERSION, json.length, access)
+    .run()
+
+  return { id }
+}
+
+/** Create a new 'html' deck: a raw, self-contained HTML file stored
+ *  byte-for-byte. `title` is typically extracted from the file's own
+ *  `<title>` tag by the caller (index.ts) before this is called. `access`
+ *  should already be 'private' or 'view' — 'edit' is meaningless for this
+ *  kind (see DeckAccess) and the caller is expected to have coerced it. */
+export async function createHtmlDeck(
+  env: Env,
+  html: string,
+  title: string,
+  access: DeckAccess = 'view',
+): Promise<CreateResult> {
+  const id = randomId()
+  const now = Date.now()
+
+  await env.DOCS.put(deckHtmlKey(id), html, { httpMetadata: { contentType: 'text/html; charset=utf-8' } })
+  await env.DB.prepare(
+    `INSERT INTO decks (id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'html')`,
+  )
+    .bind(id, clampTitle(title), now, now, '', SHELL_VERSION, html.length, access)
     .run()
 
   return { id }
@@ -93,9 +145,16 @@ export async function getDeckDoc(env: Env, id: string): Promise<unknown | null> 
   return JSON.parse(await obj.text())
 }
 
+/** Raw bytes of an 'html' deck — never parsed, served as-is. */
+export async function getDeckHtml(env: Env, id: string): Promise<string | null> {
+  const obj = await env.DOCS.get(deckHtmlKey(id))
+  if (!obj) return null
+  return obj.text()
+}
+
 export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null> {
   const row = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access FROM decks WHERE id = ?`,
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind FROM decks WHERE id = ?`,
   )
     .bind(id)
     .first<DeckMeta>()
@@ -109,7 +168,7 @@ const LIST_LIMIT = 200
  *  project's declared scale. */
 export async function listDecks(env: Env): Promise<DeckMeta[]> {
   const result = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access FROM decks ORDER BY updated_at DESC LIMIT ?`,
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind FROM decks ORDER BY updated_at DESC LIMIT ?`,
   )
     .bind(LIST_LIMIT)
     .all<DeckMeta>()
@@ -117,15 +176,15 @@ export async function listDecks(env: Env): Promise<DeckMeta[]> {
 }
 
 /** Change a deck's access level — the owner-only setting behind the
- *  sidebar's ⚙️ dialog. Anonymous viewers get whatever `access` says
+ *  sidebar's context menu. Anonymous viewers get whatever `access` says
  *  (handleView/handleAsset in index.ts); the owner's own session always
  *  keeps full edit access regardless of it. */
 export async function setDeckAccess(env: Env, id: string, access: DeckAccess): Promise<void> {
   await env.DB.prepare(`UPDATE decks SET access = ? WHERE id = ?`).bind(access, id).run()
 }
 
-/** Overwrite a deck's doc in place. Caller must have already verified the
- *  owner session and that `doc` passed validate.ts. */
+/** Overwrite a 'bento' deck's doc in place. Caller must have already
+ *  verified the owner session and that `doc` passed validate.ts. */
 export async function replaceDeckDoc(env: Env, id: string, doc: Record<string, unknown>): Promise<void> {
   const stored = { ...doc, docId: id }
   const json = JSON.stringify(stored)
@@ -135,14 +194,25 @@ export async function replaceDeckDoc(env: Env, id: string, doc: Record<string, u
     .run()
 }
 
-/** Permanently delete a deck: its D1 row, its doc.json, and every asset
- *  blob under its namespace. R2 has no delete-by-prefix — list then batch
- *  delete (list() pages at up to 1000 keys, same as delete()'s own batch
- *  cap, so one delete call per list page is enough). Order matters only in
- *  that the D1 row goes last: if a crash lands between the R2 deletes and
- *  the D1 delete, the deck is an orphaned-but-still-listed row (annoying,
- *  recoverable by retrying delete) rather than a listed-nowhere row whose
- *  blobs leak forever. */
+/** Rename an 'html' deck. Unlike a 'bento' deck, there's no document to
+ *  rewrite a title field inside of — the stored bytes are untouched, just
+ *  the D1 label. */
+export async function renameHtmlDeck(env: Env, id: string, title: string): Promise<void> {
+  await env.DB.prepare(`UPDATE decks SET title = ?, updated_at = ? WHERE id = ?`)
+    .bind(clampTitle(title), Date.now(), id)
+    .run()
+}
+
+/** Permanently delete a deck: its D1 row, its stored bytes (doc.json OR
+ *  doc.html — deleting both unconditionally is simpler and no less correct
+ *  than branching on kind, since only one of them was ever written), and
+ *  every asset blob under its namespace. R2 has no delete-by-prefix — list
+ *  then batch delete (list() pages at up to 1000 keys, same as delete()'s
+ *  own batch cap, so one delete call per list page is enough). Order
+ *  matters only in that the D1 row goes last: if a crash lands between the
+ *  R2 deletes and the D1 delete, the deck is an orphaned-but-still-listed
+ *  row (annoying, recoverable by retrying delete) rather than a
+ *  listed-nowhere row whose blobs leak forever. */
 export async function deleteDeck(env: Env, id: string): Promise<void> {
   let cursor: string | undefined
   do {
@@ -153,6 +223,7 @@ export async function deleteDeck(env: Env, id: string): Promise<void> {
     cursor = listed.truncated ? listed.cursor : undefined
   } while (cursor)
   await env.DOCS.delete(deckDocKey(id))
+  await env.DOCS.delete(deckHtmlKey(id))
   await env.DB.prepare(`DELETE FROM decks WHERE id = ?`).bind(id).run()
 }
 
