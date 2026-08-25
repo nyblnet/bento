@@ -57,6 +57,12 @@ jobs:
         working-directory: slides
         run: npm ci
 
+      - name: Which targets anim treats as elements
+        # The element/plain-object split ran on HTMLElement||SVGElement, which
+        # excludes MathML — formula symbols became plain-object tweens, with
+        # opacity assigned as a JS property and no style ever written.
+        run: node scripts/test-anim-elements.ts
+
       - name: Transforms are not silently ignored
         # A CSS transform does nothing to a non-replaced inline element: it is
         # accepted, style.transform reads back verbatim, and the box never
