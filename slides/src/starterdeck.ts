@@ -479,7 +479,47 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 3 · MORPH MANIFESTO ────────────────────────────────────────────────
+    // ── 3 · NO MOVING PARTS (staggers + count-ups, arriving by morph) ─────
+    // This was a 'fade' because entrance fx and count-ups once needed a
+    // non-morph arrival. Both have worked on morph arrivals since #197 —
+    // runMorph gives every unpartnered element its fx.enter, and
+    // runMorphArrivalCountUps counts up anything not carried from the previous
+    // slide — so the fade only cost the deck its best tile moment: the four
+    // scattered tiles collapsing into the row of chips at the top-left.
+    slide({
+      background: PEACH,
+      notes:
+        'The four tiles just collapsed into that row of chips — same four shapes, all deck long. ' +
+        'The numbers counted up as the slide entered; ' +
+        'that’s one checkbox on any text element. The little lines show line endings: arrow, dot, bar.',
+      elements: [
+        shape('rect', { id: T_D, x: 96, y: 54, w: 34, h: 34, radius: 9, fill: INK }),
+        shape('rect', { id: T_B, x: 140, y: 54, w: 34, h: 34, radius: 9, fill: STEEL }),
+        shape('rect', { id: T_A, x: 184, y: 54, w: 34, h: 34, radius: 9, fill: PEACH_SOFT }),
+        shape('rect', { id: T_C, x: 228, y: 54, w: 34, h: 34, radius: 9, fill: PAPER }),
+        text({
+          x: 1024, y: 54, w: 160, h: 26, html: '{{page:2}}', align: 'right',
+          fontSize: 13, fontWeight: 700, letterSpacing: 2, color: 'rgba(15,23,36,0.45)',
+        }),
+        shape('rect', { x: 96, y: 108, w: 1088, h: 1.5, radius: 0, fill: 'rgba(15,23,36,0.18)' }),
+        kicker('NO MOVING PARTS', { y: 132, color: INK, fx: { enter: 'fade-up', order: 0 } }),
+        title('Software with nothing<br>to install, break, or expire.', {
+          y: 170, w: 1060, h: 150, color: INK, fontSize: 50,
+          fx: { enter: 'fade-up', order: 1 },
+        }),
+        text({ x: 96, y: 356, w: 352, h: 180, html: '1', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 2, countUp: true } }),
+        text({ x: 464, y: 356, w: 352, h: 180, html: '0', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 3, countUp: true } }),
+        text({ x: 832, y: 356, w: 352, h: 180, html: '100%', fontSize: 130, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 4, countUp: true } }),
+        shape('line', { x: 100, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineEnd: 'arrow', fx: { enter: 'fade', order: 5 } }),
+        shape('line', { x: 468, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'dot', lineEnd: 'dot', fx: { enter: 'fade', order: 5 } }),
+        shape('line', { x: 836, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'bar', lineEnd: 'bar', fx: { enter: 'fade', order: 5 } }),
+        text({ x: 96, y: 570, w: 352, h: 30, html: 'FILE TO SEND', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        text({ x: 464, y: 570, w: 352, h: 30, html: 'SERVERS REQUIRED', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        text({ x: 832, y: 570, w: 352, h: 30, html: 'YOURS, FOREVER', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+      ],
+    }),
+
+    // ── 4 · MORPH MANIFESTO ────────────────────────────────────────────────
     slide({
       notes:
         'The tiles scattered and grew — and picked up GRADIENT fills mid-morph (solid⇄gradient tweening). ' +
@@ -519,7 +559,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 3b · SYMBOL MORPH, SIDE BY SIDE (maths and code, one mechanism) ────
+    // ── 5 · SYMBOL MORPH, SIDE BY SIDE (maths and code, one mechanism) ────
     // The deck's sub-element morph, shown on BOTH content types at once: a
     // quadratic derivation on the left, three eras of JavaScript on the right.
     // Same engine underneath (tokens carry identities across slides and travel
@@ -713,47 +753,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 4 · STATS BEAT (staggers + count-ups, arriving by morph) ───────────
-    // This was a 'fade' because entrance fx and count-ups once needed a
-    // non-morph arrival. Both have worked on morph arrivals since #197 —
-    // runMorph gives every unpartnered element its fx.enter, and
-    // runMorphArrivalCountUps counts up anything not carried from the previous
-    // slide — so the fade only cost the deck its best tile moment: the four
-    // scattered tiles collapsing into the row of chips at the top-left.
-    slide({
-      background: PEACH,
-      notes:
-        'The four tiles just collapsed into that row of chips — same four shapes, all deck long. ' +
-        'The numbers counted up as the slide entered; ' +
-        'that’s one checkbox on any text element. The little lines show line endings: arrow, dot, bar.',
-      elements: [
-        shape('rect', { id: T_D, x: 96, y: 54, w: 34, h: 34, radius: 9, fill: INK }),
-        shape('rect', { id: T_B, x: 140, y: 54, w: 34, h: 34, radius: 9, fill: STEEL }),
-        shape('rect', { id: T_A, x: 184, y: 54, w: 34, h: 34, radius: 9, fill: PEACH_SOFT }),
-        shape('rect', { id: T_C, x: 228, y: 54, w: 34, h: 34, radius: 9, fill: PAPER }),
-        text({
-          x: 1024, y: 54, w: 160, h: 26, html: '04', align: 'right',
-          fontSize: 13, fontWeight: 700, letterSpacing: 2, color: 'rgba(15,23,36,0.45)',
-        }),
-        shape('rect', { x: 96, y: 108, w: 1088, h: 1.5, radius: 0, fill: 'rgba(15,23,36,0.18)' }),
-        kicker('NO MOVING PARTS', { y: 132, color: INK, fx: { enter: 'fade-up', order: 0 } }),
-        title('Software with nothing<br>to install, break, or expire.', {
-          y: 170, w: 1060, h: 150, color: INK, fontSize: 50,
-          fx: { enter: 'fade-up', order: 1 },
-        }),
-        text({ x: 96, y: 356, w: 352, h: 180, html: '1', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 2, countUp: true } }),
-        text({ x: 464, y: 356, w: 352, h: 180, html: '0', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 3, countUp: true } }),
-        text({ x: 832, y: 356, w: 352, h: 180, html: '100%', fontSize: 130, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 4, countUp: true } }),
-        shape('line', { x: 100, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineEnd: 'arrow', fx: { enter: 'fade', order: 5 } }),
-        shape('line', { x: 468, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'dot', lineEnd: 'dot', fx: { enter: 'fade', order: 5 } }),
-        shape('line', { x: 836, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'bar', lineEnd: 'bar', fx: { enter: 'fade', order: 5 } }),
-        text({ x: 96, y: 570, w: 352, h: 30, html: 'FILE TO SEND', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
-        text({ x: 464, y: 570, w: 352, h: 30, html: 'SERVERS REQUIRED', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
-        text({ x: 832, y: 570, w: 352, h: 30, html: 'YOURS, FOREVER', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
-      ],
-    }),
-
-    // ── 5 · CHARTS ALIVE (+ hidden pie state) ──────────────────────────────
+    // ── 6 · CHARTS ALIVE (+ hidden pie state) ──────────────────────────────
     slide({
       id: S_CHARTS,
       background: PAPER,
@@ -864,7 +864,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 6 · TABLES (real HTML table) ───────────────────────────────────────
+    // ── 7 · TABLES (real HTML table) ───────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -950,7 +950,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 7 · MOMENTUM (line-chart hero) ─────────────────────────────────────
+    // ── 8 · MOMENTUM (line-chart hero) ─────────────────────────────────────
     slide({
       notes:
         'A chart as scenery: full-width live area chart on ink. Drag horizontally inside it to zoom — ' +
@@ -977,7 +977,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 8 · MOTION & LINES ─────────────────────────────────────────────────
+    // ── 9 · MOTION & LINES ─────────────────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -1022,7 +1022,7 @@ export function starterDoc(): BentoDoc {
     }),
 
 
-    // ── 9 · CHOREOGRAPHY (base + two hidden states) ───────────────────────
+    // ── 10 · CHOREOGRAPHY (base + two hidden states) ──────────────────────
     ...(() => {
       type Scene = {
         id: string; step: string; label: string; chip: string; to: string
@@ -1112,7 +1112,7 @@ export function starterDoc(): BentoDoc {
       )
     })(),
 
-    // ── 10 · HOVER FOCUS ────────────────────────────────────────────────────
+    // ── 11 · HOVER FOCUS ───────────────────────────────────────────────────
     slide({
       hover: { type: 'focus-group', dim: 0.22 },
       notes:
@@ -1162,7 +1162,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 11 · MARKDOWN ───────────────────────────────────────────────────────
+    // ── 12 · MARKDOWN ──────────────────────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -1195,7 +1195,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 12 · CLOSE ─────────────────────────────────────────────────────────
+    // ── 13 · CLOSE ─────────────────────────────────────────────────────────
     slide({
       notes:
         'The cast reassembles into the logo. Press Esc — this deck is already your copy of the app: ' +
