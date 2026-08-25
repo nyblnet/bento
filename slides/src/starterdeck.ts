@@ -580,7 +580,8 @@ export function starterDoc(): BentoDoc {
     // ── 3c · CODE MORPH (one function, three eras of JavaScript) ───────────
     // Same mechanism as the formula: tokens carry identities across slides
     // (Heckel diff on the kernel tokenizer), so an edit reads as an edit.
-    // Three beats every developer has lived: callbacks -> promises -> await.
+    // Three beats every developer has lived: callbacks -> promises (ES2015)
+    // -> async/await (ES2017). Spec milestones, not invented dates.
     // load, deck, render, present and confetti keep ONE identity through all
     // three (probed before authoring); the pyramid collapses, confetti() rises
     // two lines to meet it, and the names return with const/await in the last
@@ -590,7 +591,7 @@ export function starterDoc(): BentoDoc {
       transition: 'morph',
       notes:
         'And the same trick works on code. This function is about to be modernised twice — ' +
-        'press \u2192 and fifteen years of JavaScript happen in front of you. Watch load, render, ' +
+        'press \u2192 and two revisions of the language happen in front of you. Watch load, render, ' +
         'present and confetti: they keep their identity through every rewrite, because tokens ' +
         'pair by a diff of the code itself. Code blocks are first-class elements — 77 languages ' +
         'built in (about 7KB of rules, no highlighter library), picked in the panel.',
@@ -626,7 +627,7 @@ export function starterDoc(): BentoDoc {
         },
         text({
           x: 290, y: 566, w: 700, h: 60,
-          html: 'One function, 2010 style. Press <b>\u2192</b> to modernise it — twice.',
+          html: 'One function, callback style. Press <b>\u2192</b> to modernise it — twice.',
           fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
         }),
       ],
@@ -635,7 +636,7 @@ export function starterDoc(): BentoDoc {
     slide({
       transition: 'morph',
       notes:
-        'Promises, mid-2010s. The pyramid flattened: the callback braces dissolved, .then ' +
+        'Promises — native since ES2015. The pyramid flattened: the callback braces dissolved, .then ' +
         'arrived, and confetti() ROSE two lines to meet the collapse — it did not redraw, it ' +
         'travelled. Point-free style really did drop the parameter names, which is why slides ' +
         'and frame faded out rather than moved: the diff is honest about what the edit did. ' +
@@ -681,7 +682,7 @@ export function starterDoc(): BentoDoc {
     slide({
       transition: 'morph',
       notes:
-        'async/await, 2017 — and it reads like prose. slides and frame came BACK (const and ' +
+        'async/await, ES2017 — and it reads like prose. slides and frame came BACK (const and ' +
         'await faded in around them), while load, deck, render, present and confetti have ' +
         'kept one identity since the first beat. This is what a code walkthrough is in Bento: ' +
         'duplicate the slide, edit the code, and the transition explains the change for you. ' +
@@ -718,7 +719,7 @@ export function starterDoc(): BentoDoc {
         },
         text({
           x: 290, y: 566, w: 700, h: 60,
-          html: 'Same tokens since 2010 — <b>the diff is the animation</b>.',
+          html: 'Same tokens, three rewrites — <b>the diff is the animation</b>.',
           fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
         }),
       ],
