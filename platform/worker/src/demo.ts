@@ -376,7 +376,7 @@ ${PAGE_STYLES}
     flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; opacity: 0.7;
   }
   .deck-gear {
-    flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
     border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px;
     opacity: 0.6;
   }
@@ -437,7 +437,7 @@ ${PAGE_STYLES}
     }
     .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
     .menu-toggle {
-      display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+      display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0;
       border-radius: 8px; border: 1px solid var(--border-strong); background: transparent; color: var(--text);
       cursor: pointer; font-size: 18px; flex-shrink: 0; margin-bottom: 12px;
     }
@@ -492,7 +492,7 @@ ${PAGE_STYLES}
         entirely), or a complete, self-running HTML slide deck some AIs will generate directly if you
         just ask for one — that gets stored and served as-is, not compiled into Bento's own format,
         so it's always view-only for anyone but you.</p>
-        <textarea id="input" spellcheck="false"></textarea>
+        <textarea id="input" spellcheck="false" placeholder="Paste outline JSON, a bento/slides document, or a complete <!doctype html> deck — or use &quot;Upload HTML file…&quot; below"></textarea>
         <div class="access-field">
           <label for="accessSelect">Who can open this deck's link? (changeable anytime from the sidebar's ⚙️)</label>
           <select id="accessSelect">
@@ -504,6 +504,8 @@ ${PAGE_STYLES}
         <div class="actions">
           <button id="loadOutlineExample" type="button">Load pattern's example</button>
           <button id="loadExample" type="button">Load example doc (advanced)</button>
+          <button id="uploadHtmlBtn" type="button">Upload HTML file…</button>
+          <input type="file" id="htmlFileInput" accept=".html,.htm,text/html" style="display:none">
           <button id="create" class="primary" type="button">Create deck →</button>
         </div>
         <div id="status" class="status"></div>
@@ -805,6 +807,25 @@ document.getElementById('loadOutlineExample').onclick = () => {
 }
 document.getElementById('loadExample').onclick = () => {
   document.getElementById('input').value = ${JSON.stringify(exampleJson)}
+}
+document.getElementById('uploadHtmlBtn').onclick = () => {
+  document.getElementById('htmlFileInput').click()
+}
+document.getElementById('htmlFileInput').onchange = (e) => {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    document.getElementById('input').value = reader.result
+    // An uploaded HTML file has no in-place edit mode — 'edit' would just get
+    // coerced to 'view' server-side anyway (see the create handler below), so
+    // reflect that here instead of leaving a misleading selection showing.
+    const accessSelect = document.getElementById('accessSelect')
+    if (accessSelect.value === 'edit') accessSelect.value = 'view'
+  }
+  reader.onerror = () => { alert('Could not read that file. Try again.') }
+  reader.readAsText(file)
+  e.target.value = '' // lets picking the SAME file again re-fire onchange
 }
 function looksLikeHtmlDocument(raw) {
   return /^\\s*<(!doctype\\s+html|html[\\s>])/i.test(raw)
