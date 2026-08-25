@@ -1043,7 +1043,16 @@ export class SlideCanvas {
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()
+        // Selecting a new target and handing the same press to Moveable takes
+        // an async target refresh. A fast click can release during that wait;
+        // starting Moveable afterwards leaves it dragging forever because its
+        // matching mouseup has already happened (#260).
+        let released = false
+        const onMouseUp = () => { released = true }
+        window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
         this.moveable.waitToChangeTarget().then(() => {
+          window.removeEventListener('mouseup', onMouseUp, true)
+          if (released) return
           this.moveable.dragStart(e.inputEvent)
         })
       }
