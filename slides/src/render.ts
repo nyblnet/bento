@@ -1159,6 +1159,13 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       node.style.display = 'flex'
       node.style.flexDirection = 'column'
       node.style.justifyContent = VALIGN[el.valign]
+      // Clip at the ELEMENT box — the size the author chose — and never at the
+      // <pre> (see below). Code sets `white-space: pre`, so a long line does
+      // not wrap and would otherwise run across the slide over whatever sits
+      // beside it; bounding it to its own box keeps the author's layout
+      // contract. The box is normally far larger than the lines inside it,
+      // which is exactly the room a morphing token needs.
+      node.style.overflow = 'hidden'
       const inner = document.createElement('pre')
       inner.className = 'bento-text-inner'
       inner.dir = 'auto'
@@ -1171,16 +1178,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.classList.add('bento-code')
       inner.style.whiteSpace = 'pre'
       inner.style.margin = '0'
-      // NOT overflow:hidden. A <pre> is only as tall as its own lines, and a
-      // morphing token starts at its position on the OTHER slide — which is
-      // outside those bounds whenever the block gets shorter. Clipping made a
-      // travelling token vanish for the first half of its journey and pop into
-      // view mid-flight, and only in the direction where the code got shorter:
-      // the taller side had room to contain the same motion, so the reverse
-      // transition looked perfect. Neither text elements nor .bento-el clip,
-      // so code overflowing its own box now behaves like every other element.
-      // Found in a screenshot; the DOM reported the token visible at opacity 1
-      // the whole time, because it was — just painted outside a clipping box.
+      // NOT overflow:hidden here. A <pre> is only as tall as its own lines,
+      // and a morphing token starts at its position on the OTHER slide —
+      // outside those bounds whenever the block gets shorter. Clipping at this
+      // level painted a travelling token 48px below the box and cut it away:
+      // it vanished for the first half of its journey and popped into view
+      // mid-flight, and only in the direction where the code got shorter,
+      // since the taller side had room for the same motion. That asymmetry is
+      // what made it read as a pairing bug rather than a painting one.
+      // Found in a screenshot — the DOM reported opacity 1, a correct 80px
+      // transform and a sensible rect, all true, all outside a clipping box.
       if (!renderCodeInto(inner, el, doc)) {
         // Fallback to unformatted text
         inner.innerText = el.content
