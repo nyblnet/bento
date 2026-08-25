@@ -431,6 +431,22 @@ function tagSymbols(mathml: string): string {
     seen.set(txt, n + 1)
       ; (leaf as HTMLElement).dataset.sym = `${txt}#${n}`
   }
+  // Scaffolding gets its own key, on a SEPARATE attribute. A fraction bar and
+  // a radical are drawn by the mfrac/msqrt box itself, not by any token, so
+  // they carry no data-sym and used to be the one part of a formula that
+  // neither travelled nor faded — they were simply there from frame one while
+  // everything around them animated. They must never enter the symbol morph:
+  // transforming a container would move its children a second time, on top of
+  // their own travel. Keyed by tag occurrence so scaffolding that SURVIVES a
+  // step (the outer fraction of a rearranged equation) is recognised and left
+  // alone, while genuinely new scaffolding can be faded in.
+  const struct = new Map<string, number>()
+  for (const box of Array.from(tpl.content.querySelectorAll('mfrac, msqrt, mroot, menclose, mover, munder, munderover'))) {
+    const tag = box.tagName.toLowerCase()
+    const n = struct.get(tag) ?? 0
+    struct.set(tag, n + 1)
+      ; (box as HTMLElement).dataset.msx = `${tag}#${n}`
+  }
   return tpl.innerHTML
 }
 

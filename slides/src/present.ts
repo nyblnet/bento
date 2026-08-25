@@ -1470,7 +1470,7 @@ function modelByMorphKey(doc: BentoDoc, index: number): Map<string, SlideElement
  * actually needs.
  */
 function sweepSymbolSpans(section: HTMLElement) {
-  for (const sym of Array.from(section.querySelectorAll<HTMLElement>('[data-sym]'))) {
+  for (const sym of Array.from(section.querySelectorAll<HTMLElement>('[data-sym],[data-msx]'))) {
     anim.killTweensOf(sym)
     sym.style.opacity = ''
     sym.style.transform = ''
@@ -1479,6 +1479,8 @@ function sweepSymbolSpans(section: HTMLElement) {
 }
 
 const symCache = new Map<string, Map<string, { x: number; y: number }>>()
+/** Scaffolding keys (fraction bars, radicals) present on a slide, by host. */
+const structCache = new Map<string, Set<string>>()
 const symKey = (idx: number, flipId: string) => `${idx}${flipId}`
 
 /** Measure and cache every formula on a slide that is currently displayed. */
@@ -1492,6 +1494,8 @@ function cacheSlideSymbols(doc: BentoDoc, section: HTMLElement, idx: number) {
     if (!model) continue
     const offsets = symbolOffsets(host, model.w, model.h)
     if (offsets.size) symCache.set(symKey(idx, host.dataset.flipId!), offsets)
+    structCache.set(symKey(idx, host.dataset.flipId!), new Set(
+      Array.from(host.querySelectorAll<HTMLElement>('[data-msx]')).map((n) => n.dataset.msx!)))
   }
 }
 
@@ -1527,6 +1531,7 @@ function symbolOffsets(host: HTMLElement, modelW: number, modelH: number): Map<s
  */
 function morphMathSymbols(
   fromAt: Map<string, { x: number; y: number }> | undefined,
+  fromStruct: Set<string> | undefined,
   to: HTMLElement,
   a: SlideElement,
   b: SlideElement,
@@ -1551,6 +1556,18 @@ function morphMathSymbols(
       ease: 'power2.out',
     })
   })
+
+  // Scaffolding that is new this step fades in IMMEDIATELY, not on the
+  // staggered delay the tokens use. Opacity groups a subtree, so a fraction
+  // fading late would hide the very terms travelling into it — the terms would
+  // vanish and reappear mid-flight, which is precisely the artefact this
+  // engine exists to avoid. Arriving early instead means the bar draws itself
+  // while the numerator is still on its way, and the brief dip at t=0 is over
+  // before anything has moved far.
+  for (const box of Array.from(to.querySelectorAll<HTMLElement>('[data-msx]'))) {
+    if (fromStruct?.has(box.dataset.msx!)) continue
+    anim.fromTo(box, { opacity: 0 }, { opacity: 1, duration: 0.28, ease: 'power2.out' })
+  }
 
   const pairs: Array<{ node: HTMLElement; dx: number; dy: number }> = []
   for (const sym of Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))) {
@@ -1703,7 +1720,7 @@ function runMorph(
     const a = fromModel.get(id)
     const b = toModel.get(id)
     if (!a || !b) continue
-    morphMathSymbols(symCache.get(symKey(fromIdx, id)), to, a, b)
+    morphMathSymbols(symCache.get(symKey(fromIdx, id)), structCache.get(symKey(fromIdx, id)), to, a, b)
   }
 
   // Styles morph straight from the model — exact values, no DOM sniffing.
