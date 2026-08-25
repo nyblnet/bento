@@ -1475,6 +1475,7 @@ function sweepSymbolSpans(section: HTMLElement) {
     sym.style.opacity = ''
     sym.style.transform = ''
     sym.style.willChange = ''
+    sym.style.color = '' // pinned while a formula's scaffolding fades in
   }
 }
 
@@ -1557,16 +1558,40 @@ function morphMathSymbols(
     })
   })
 
-  // Scaffolding that is new this step fades in IMMEDIATELY, not on the
-  // staggered delay the tokens use. Opacity groups a subtree, so a fraction
-  // fading late would hide the very terms travelling into it — the terms would
-  // vanish and reappear mid-flight, which is precisely the artefact this
-  // engine exists to avoid. Arriving early instead means the bar draws itself
-  // while the numerator is still on its way, and the brief dip at t=0 is over
-  // before anything has moved far.
+  // Scaffolding that is new this step arrives on the SAME beat as the fresh
+  // tokens — but via `color`, never `opacity`.
+  //
+  // A fraction bar and a radical are painted by their box in currentColor, and
+  // opacity groups a whole subtree: fading the box would take the terms
+  // travelling into it along too, hiding them for the first 40% of their
+  // journey and popping them into view mid-flight. Animating colour touches
+  // only what the box itself paints — verified by pinning the leaves and
+  // setting the box transparent, which leaves every symbol legible and in
+  // place with the bars gone. Pinning is what makes it work: leaves inherit
+  // colour, so they must carry their own before the box's is animated.
   for (const box of Array.from(to.querySelectorAll<HTMLElement>('[data-msx]'))) {
     if (fromStruct?.has(box.dataset.msx!)) continue
-    anim.fromTo(box, { opacity: 0 }, { opacity: 1, duration: 0.28, ease: 'power2.out' })
+    // Read the ink from the BOX, not the flip host: the host is the element
+    // wrapper and computes to its own colour (black here), while the box
+    // inherits the formula's. Fading from the wrong one made the bar arrive
+    // as black and snap to white on completion — invisible for the whole fade
+    // on a dark slide, which looks exactly like the pop this replaces.
+    const ink = getComputedStyle(box).color
+    const inkClear = ink.startsWith('rgb(')
+      ? ink.replace('rgb(', 'rgba(').replace(')', ', 0)')
+      : 'rgba(0, 0, 0, 0)'
+    const leaves = Array.from(box.querySelectorAll<HTMLElement>('[data-sym]'))
+    for (const leaf of leaves) leaf.style.color = ink
+    anim.fromTo(box, { color: inkClear }, {
+      color: ink,
+      duration: 0.3,
+      delay: MORPH_DURATION * 0.4,
+      ease: 'power2.out',
+      onComplete() {
+        box.style.color = ''
+        for (const leaf of leaves) leaf.style.color = ''
+      },
+    })
   }
 
   const pairs: Array<{ node: HTMLElement; dx: number; dy: number }> = []
