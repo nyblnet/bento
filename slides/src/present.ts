@@ -1703,8 +1703,9 @@ function runMorph(
   // frames are in the doc), so the outgoing section's Reveal styling is
   // irrelevant. Each matched node animates from the from-slide's frame to its
   // own via translate+scale about the top-left corner (scale mode like
-  // PowerPoint: text scales instead of reflowing mid-morph). Rotating morphs
-  // pivot slightly differently than center-origin — rare and acceptable.
+  // PowerPoint: text scales instead of reflowing mid-morph), while rotation
+  // pivots about the element's centre so the finished frame is identical to
+  // the one applyElementFrame writes at rest.
   for (const node of matchedTo) {
     const id = node.dataset.flipId!
     const a = fromModel.get(id)
@@ -1724,10 +1725,21 @@ function runMorph(
         const w = a.w + (b.w - a.w) * p
         const h = a.h + (b.h - a.h) * p
         const r = (a.rotation ?? 0) + ((b.rotation ?? 0) - (a.rotation ?? 0)) * p
+        // Rotate about the element's own CENTRE, spelled out around an origin
+        // of 0 0 rather than by moving the origin. Position and scale want the
+        // top-left (PowerPoint scale mode), but the resting frame that
+        // applyElementFrame writes — a plain `rotate()` with the default centre
+        // origin — must be exactly what p=1 lands on, or a rotated element
+        // snaps the instant the tween completes and the origin flips back.
+        // Measured on the choreography scene: 7deg jumped 4.1px across and
+        // 5.1px up, -6deg the other way, on the frame the morph finished. The
+        // triplet below collapses to identity at p=1, so the two frames agree.
+        const cx = b.w / 2
+        const cy = b.h / 2
         node.style.transform =
           `translate(${x - b.x}px, ${y - b.y}px)` +
-          (r ? ` rotate(${r}deg)` : '') +
-          ` scale(${w / Math.max(b.w, 0.01)}, ${h / Math.max(b.h, 0.01)})`
+          ` scale(${w / Math.max(b.w, 0.01)}, ${h / Math.max(b.h, 0.01)})` +
+          (r ? ` translate(${cx}px, ${cy}px) rotate(${r}deg) translate(${-cx}px, ${-cy}px)` : '')
       },
       onComplete() {
         node.style.transformOrigin = ''
