@@ -1171,7 +1171,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.classList.add('bento-code')
       inner.style.whiteSpace = 'pre'
       inner.style.margin = '0'
-      inner.style.overflow = 'hidden'
+      // NOT overflow:hidden. A <pre> is only as tall as its own lines, and a
+      // morphing token starts at its position on the OTHER slide — which is
+      // outside those bounds whenever the block gets shorter. Clipping made a
+      // travelling token vanish for the first half of its journey and pop into
+      // view mid-flight, and only in the direction where the code got shorter:
+      // the taller side had room to contain the same motion, so the reverse
+      // transition looked perfect. Neither text elements nor .bento-el clip,
+      // so code overflowing its own box now behaves like every other element.
+      // Found in a screenshot; the DOM reported the token visible at opacity 1
+      // the whole time, because it was — just painted outside a clipping box.
       if (!renderCodeInto(inner, el, doc)) {
         // Fallback to unformatted text
         inner.innerText = el.content
