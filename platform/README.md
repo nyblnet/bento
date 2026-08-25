@@ -45,6 +45,15 @@ reply with outline JSON matching this schema; step 2 pastes that reply back,
 auto-detects that it's outline shaped (as opposed to an already-compiled
 `bento/slides` doc — the "advanced" path), calls `/api/compile`, then
 `/api/decks`. Any direct API caller can call `/api/compile` the same way.
+
+Step 1's prompt is built from one of four **content patterns**
+(`demo.ts`'s `PATTERNS`: General, Business review, Pitch deck, Tutorial) —
+picking a pill swaps the prompt's guidance paragraph and its "Load pattern's
+example" example for one tailored to that content shape, but every pattern
+compiles through the exact same schema/compiler; only the *guidance given to
+the AI* differs, not what the platform can build. Add a pattern by adding an
+entry to that array (`id`, `label`, `blurb`, `guidance`, `example`) — no
+other code changes needed.
 Eight layout kinds cover `docs/agents.md`'s content-mapping table (numbers →
 chart, comparisons → table, a headline figure → count-up stat,
 same-thing-changing → morph): `title`, `section`, `bullets`, `stat`, `chart`, `table`, `quote`,

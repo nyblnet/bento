@@ -8,10 +8,12 @@
 //
 // The two steps match how this is actually meant to be used, NOT a form to
 // fill in by hand:
-//   1. You've already been chatting with an AI about some topic. Copy the
-//      prompt below and paste it as your NEXT message in that SAME
-//      conversation — the AI already has the context, so it turns what you
-//      discussed into outline JSON without you re-explaining anything.
+//   1. You've already been chatting with an AI about some topic. Pick the
+//      pattern closest to what you're making (changes the prompt's
+//      guidance + example, not what you can build), copy the prompt, paste
+//      it as your NEXT message in that SAME conversation — the AI already
+//      has the context, so it turns what you discussed into outline JSON
+//      without you re-explaining anything.
 //   2. Paste whatever JSON the AI replied with. One button creates the
 //      deck — it auto-detects whether you pasted outline JSON (compiles it
 //      via POST /api/compile first) or an already-compiled bento/slides
@@ -26,6 +28,9 @@
 // deploy. Deliberately dark-only (not adaptive to light mode) — matches the
 // navy/accent palette already used below, and this is a small enough
 // surface that committing to one look beats maintaining two palettes.
+// Same reasoning killed a FontAwesome-style icon font when it came up: the
+// sidebar's icons are hand-drawn inline SVG (ICONS below) instead — zero
+// requests, zero license/version to track, same visual language either way.
 // The base stylesheet itself lives in pageStyles.ts, shared with the
 // setup/login pages — this file only adds its own `pre.prompt` rules.
 import { PAGE_STYLES } from './pageStyles.ts'
@@ -81,33 +86,15 @@ const EXAMPLE_DOC = {
   ],
 }
 
-const EXAMPLE_OUTLINE = {
-  title: 'Platform demo',
-  theme: { background: '#0D1B2E', color: '#F5F7FA', accent: '#E8442E' },
-  slides: [
-    { layout: 'title', heading: 'Compiled, not typed', subheading: 'From an outline, via POST /api/compile', morphGroup: 'cover' },
-    { layout: 'title', heading: 'Compiled, not typed', subheading: 'Same headline, new frame — that’s morph', morphGroup: 'cover' },
-    { layout: 'bullets', heading: 'What this exercises', bullets: [
-      'Layout geometry from slides/src/model.ts’s own builtinLayouts()',
-      'Theme colors applied consistently across slide kinds',
-      'A morphGroup pairing two titles via morphId',
-    ] },
-    { layout: 'stat', heading: 'Headline number', value: 2450, label: 'Decks compiled so far (not really)' },
-    { layout: 'chart', heading: 'Bar chart from data', chartType: 'bar', categories: ['Q1', 'Q2', 'Q3', 'Q4'], series: [{ name: 'Revenue', data: [420, 780, 1300, 2450] }] },
-    { layout: 'table', heading: 'A comparison', columns: ['Plan', 'Price'], rows: [['Basic', '$9'], ['Pro', '$29']] },
-    { layout: 'quote', quote: 'The compiler picks the feature; you just write the outline.', attribution: 'This demo' },
-  ],
-}
-
 // Copy-pasteable as a follow-up message in an existing AI chat. Mirrors
 // platform/worker/src/compile/schema.ts field-for-field (names, optionality,
 // constraints) so a compliant reply parses cleanly — and is explicit about
 // "JSON only" because /api/compile has no tolerant/fence-stripping parser
 // yet (platform/README.md "Known gaps"): the prompt has to compensate for
-// that, not the backend.
-const PROMPT_TEMPLATE = `Based on everything we've discussed above, turn it into a slide deck outline as JSON. Output ONLY the JSON — no markdown code fences, no commentary before or after, nothing else in your reply.
-
-Match this shape exactly:
+// that, not the backend. Shared verbatim across every pattern below —
+// varying it per pattern would risk a pattern silently drifting from what
+// the compiler actually accepts.
+const SCHEMA_BLOCK = `Match this shape exactly:
 
 {
   "title": "string",
@@ -131,29 +118,195 @@ Each slide is ONE of these shapes — pick whichever fits the idea best:
 
 Any slide can also carry:
 - "notes": "..."  — speaker notes
-- "morphGroup": "some-id"  — give this SAME string to two ADJACENT slides (next to each other in the array) to make their heading visually morph/animate between them instead of cutting. Good for e.g. a title slide reappearing with a new subtitle, or a chart's heading carrying into its own detail slide.
+- "morphGroup": "some-id"  — give this SAME string to two ADJACENT slides (next to each other in the array) to make their heading visually morph/animate between them instead of cutting. Good for e.g. a title slide reappearing with a new subtitle, or a chart's heading carrying into its own detail slide.`
 
-Pick layouts deliberately: numbers worth comparing → chart, not bullets. A spec/pricing/feature comparison → table, not bullets. One number that matters most → stat, not buried in a sentence. A quotable line → quote, not a bullet. Everything else that's genuinely a list → bullets. Don't force everything into bullets.
-
-Example (for shape reference only — replace with our actual content):
-
-{
-  "title": "Q3 Review",
-  "slides": [
-    {"layout":"title","heading":"Q3 Review","subheading":"Growth & retention"},
-    {"layout":"stat","value":2450,"label":"New customers this quarter"},
-    {"layout":"chart","heading":"Revenue by quarter","chartType":"bar","categories":["Q1","Q2","Q3","Q4"],"series":[{"name":"Revenue","data":[420,780,1300,2450]}]},
-    {"layout":"quote","quote":"This changed everything.","attribution":"A customer"}
-  ]
-}`
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// --- content patterns --------------------------------------------------
+//
+// Bento's slide shapes (title/section/bullets/stat/chart/table/quote/image)
+// suit a handful of recurring content shapes well beyond "generic deck" —
+// picking the closest one gives the AI a tighter, more specific brief
+// (which layouts to reach for and why) plus a genuinely relevant loadable
+// example, instead of one generic prompt trying to cover every genre at
+// once. This only changes the PROMPT's guidance and the example — every
+// pattern still compiles through the exact same schema/compiler.
+interface Pattern {
+  id: string
+  label: string
+  blurb: string
+  guidance: string
+  example: unknown
 }
+
+const PATTERNS: Pattern[] = [
+  {
+    id: 'general',
+    label: 'General',
+    blurb: 'A balanced mix — works for most topics.',
+    guidance: `Pick layouts deliberately: numbers worth comparing → chart, not bullets. A spec/pricing/feature comparison → table, not bullets. One number that matters most → stat, not buried in a sentence. A quotable line → quote, not a bullet. Everything else that's genuinely a list → bullets. Don't force everything into bullets.`,
+    example: {
+      title: 'Q3 Review',
+      slides: [
+        { layout: 'title', heading: 'Q3 Review', subheading: 'Growth & retention' },
+        { layout: 'stat', value: 2450, label: 'New customers this quarter' },
+        {
+          layout: 'chart',
+          heading: 'Revenue by quarter',
+          chartType: 'bar',
+          categories: ['Q1', 'Q2', 'Q3', 'Q4'],
+          series: [{ name: 'Revenue', data: [420, 780, 1300, 2450] }],
+        },
+        { layout: 'quote', quote: 'This changed everything.', attribution: 'A customer' },
+      ],
+    },
+  },
+  {
+    id: 'business',
+    label: 'Business review',
+    blurb: 'Quarterly/monthly reviews — metrics, trends, comparisons.',
+    guidance: `This is a periodic business review — lead with the headline number, then the trend, then the detail. Typical shape: title → one or two "stat" slides for the top-line metrics → a "chart" slide for the trend over time → a "table" slide for a segment/region/product breakdown → a "bullets" slide for risks or next steps → a closing "quote" or "section" slide for the takeaway. Use "section" dividers between major topic shifts (e.g. Revenue → Costs → Headcount) if the review spans several areas.`,
+    example: {
+      title: 'Q3 Business Review',
+      theme: { background: '#0D1B2E', color: '#F5F7FA', accent: '#E8442E' },
+      slides: [
+        { layout: 'title', heading: 'Q3 Business Review', subheading: "Revenue, retention, and what's next" },
+        { layout: 'stat', heading: 'Headline', value: 4200000, label: 'ARR, up 18% quarter over quarter' },
+        {
+          layout: 'chart',
+          heading: 'Revenue by quarter',
+          chartType: 'line',
+          categories: ['Q4', 'Q1', 'Q2', 'Q3'],
+          series: [{ name: 'ARR ($k)', data: [2800, 3200, 3560, 4200] }],
+        },
+        {
+          layout: 'table',
+          heading: 'Revenue by segment',
+          columns: ['Segment', 'Q2', 'Q3'],
+          rows: [
+            ['Enterprise', '$1.8M', '$2.3M'],
+            ['Mid-market', '$1.1M', '$1.4M'],
+            ['SMB', '$0.66M', '$0.5M'],
+          ],
+        },
+        {
+          layout: 'bullets',
+          heading: 'Risks for Q4',
+          bullets: [
+            'SMB churn ticked up 2pts — pricing tier under review',
+            'Two enterprise renewals slipping into Q1',
+            'Hiring plan is 3 roles behind schedule',
+          ],
+        },
+        {
+          layout: 'quote',
+          quote: 'Enterprise is carrying the quarter. SMB needs a plan before Q4 close.',
+          attribution: 'CFO summary',
+        },
+      ],
+    },
+  },
+  {
+    id: 'pitch',
+    label: 'Pitch deck',
+    blurb: 'Product or startup pitch — problem, solution, traction.',
+    guidance: `This is a pitch — open with the problem before the product, and let the SAME headline element morph from the title slide into the problem statement (give both slides the same morphGroup) so the story feels continuous rather than cut. Typical shape: title → "section" or "bullets" for the problem → "bullets" for the solution → a "stat" for market size or a key metric → a "table" for competitive comparison → a "quote" for a customer/investor testimonial → a closing "title" slide (ask/CTA).`,
+    example: {
+      title: 'Lumen — Pitch',
+      theme: { background: '#0D1B2E', color: '#F5F7FA', accent: '#E8442E' },
+      slides: [
+        { layout: 'title', heading: 'Lumen', subheading: 'Expense reports that write themselves', morphGroup: 'hook' },
+        { layout: 'section', kicker: 'THE PROBLEM', heading: 'Lumen', morphGroup: 'hook' },
+        {
+          layout: 'bullets',
+          heading: 'Finance teams lose a week a month to this',
+          bullets: [
+            'Receipts live in email, Slack, and shoeboxes',
+            'Categorization is manual and inconsistent',
+            'Close takes 3 extra days waiting on expense data',
+          ],
+        },
+        {
+          layout: 'bullets',
+          heading: 'How Lumen fixes it',
+          bullets: [
+            "Forward any receipt — email, photo, PDF — it's parsed automatically",
+            'Categorized against your chart of accounts in real time',
+            'Synced straight into your close checklist',
+          ],
+        },
+        { layout: 'stat', heading: 'Market', value: 38, label: 'billion-dollar spend-management market, growing 22% a year' },
+        {
+          layout: 'table',
+          heading: 'Why Lumen',
+          columns: ['', 'Lumen', 'Legacy tools'],
+          rows: [
+            ['Setup time', '1 day', '6-8 weeks'],
+            ['Auto-categorization', 'Yes', 'Manual rules'],
+            ['Price', '$8/seat', '$25+/seat'],
+          ],
+        },
+        { layout: 'quote', quote: 'We closed two days faster the first month we used it.', attribution: 'Head of Finance, pilot customer' },
+        { layout: 'title', heading: "Let's talk", subheading: 'Raising a $4M seed to get from 40 to 400 customers' },
+      ],
+    },
+  },
+  {
+    id: 'tutorial',
+    label: 'Tutorial',
+    blurb: 'Teaching a concept step by step.',
+    guidance: `This is a teaching walkthrough — one concept per slide, and use "section" slides as chapter breaks between topics so the structure is visible at a glance. Typical shape: title → a "section" slide per major topic, each followed by one or two "bullets" slides explaining it → a "table" if concepts are being compared → one "stat" if there's a number worth remembering → a closing "quote" or "bullets" slide summarizing the key takeaway.`,
+    example: {
+      title: 'Understanding CRDTs',
+      theme: { background: '#0D1B2E', color: '#F5F7FA', accent: '#E8442E' },
+      slides: [
+        { layout: 'title', heading: 'Understanding CRDTs', subheading: "How offline-first apps merge changes without a server refereeing" },
+        { layout: 'section', kicker: 'PART 1', heading: 'The problem' },
+        {
+          layout: 'bullets',
+          heading: 'Why merging is hard',
+          bullets: [
+            'Two people edit the same document offline',
+            "Neither has seen the other's changes",
+            "There's no central server to say who's right",
+          ],
+        },
+        { layout: 'section', kicker: 'PART 2', heading: 'The idea' },
+        {
+          layout: 'bullets',
+          heading: 'What makes an operation CRDT-safe',
+          bullets: [
+            "Every operation must be commutative — order doesn't matter",
+            'Every operation must be idempotent — applying it twice is safe',
+            'Conflicts resolve by a fixed rule, not by asking anyone',
+          ],
+        },
+        {
+          layout: 'table',
+          heading: 'Two common strategies',
+          columns: ['Strategy', 'Good for', 'Trade-off'],
+          rows: [
+            ['LWW (last-write-wins)', 'Simple fields', 'Concurrent edits silently lose'],
+            ['RGA (sequence CRDT)', 'Text/lists', 'More bookkeeping per element'],
+          ],
+        },
+        {
+          layout: 'stat',
+          heading: 'In practice',
+          value: 3,
+          label: 'extra fields most CRDT implementations add per value: a timestamp, an actor id, and a tombstone flag',
+        },
+        {
+          layout: 'quote',
+          quote: "A CRDT doesn't prevent conflicts — it guarantees that everyone resolves them the same way.",
+          attribution: 'The one-sentence version',
+        },
+      ],
+    },
+  },
+]
 
 export function renderDemoPage(): string {
   const exampleJson = JSON.stringify(EXAMPLE_DOC, null, 2)
-  const exampleOutlineJson = JSON.stringify(EXAMPLE_OUTLINE, null, 2)
+  const patternsJson = JSON.stringify(PATTERNS)
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -178,6 +331,14 @@ ${PAGE_STYLES}
     border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px;
   }
   .access-field select:focus { outline: none; border-color: var(--accent); }
+  .pattern-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .pattern-pill {
+    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border-strong); background: transparent;
+    color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .pattern-pill:hover { border-color: var(--accent); color: var(--text); }
+  .pattern-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pattern-blurb { color: var(--text-dim); font-size: 12px; margin: 0 0 12px; }
   @media (max-width: 600px) {
     pre.prompt { max-height: 220px; font-size: 12px; }
   }
@@ -212,56 +373,48 @@ ${PAGE_STYLES}
   }
   .deck-item .deck-time { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
   .deck-status {
-    flex: 0 0 auto; width: 20px; text-align: center; font-size: 12px; opacity: 0.85;
+    flex: 0 0 auto; width: 20px; display: flex; align-items: center; justify-content: center; opacity: 0.85;
   }
   .deck-gear {
     flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
-    border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px; font-size: 13px;
+    border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px;
     opacity: 0.6;
   }
   .deck-gear:hover { opacity: 1; background: rgba(245,247,250,0.1); color: var(--text); }
   .deck-list-empty, .deck-list-loading { color: var(--text-dim); font-size: 13px; padding: 8px 10px; }
+  .deck-rename-row { flex: 1; min-width: 0; padding: 4px 0; }
+  .deck-rename-row input {
+    width: 100%; box-sizing: border-box; background: var(--bg-elev); color: var(--text);
+    border: 1px solid var(--accent); border-radius: 6px; padding: 5px 8px; font: 600 13px/1.3 inherit;
+  }
+  .deck-rename-row input:focus { outline: none; }
 
-  /* access dialog — a body-level centered modal, deliberately NOT anchored
-     inside .deck-list: that container is overflow-y:auto, and a floating
-     child positioned inside a scroll container gets clipped the moment its
-     box would extend past it (CLAUDE.md hard-won lesson #10) — the exact
-     trap a sidebar-anchored popover here would fall into. */
-  .access-modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 50;
-    display: flex; align-items: center; justify-content: center; padding: 20px;
+  /* deck context menu — a body-level fixed-position panel, deliberately NOT
+     anchored inside .deck-list: that container is overflow-y:auto, and a
+     floating child positioned inside a scroll container gets clipped the
+     moment its box would extend past it (CLAUDE.md hard-won lesson #10) —
+     the exact trap a sidebar-nested menu here would fall into. */
+  .ctx-menu {
+    position: fixed; z-index: 60; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px; min-width: 200px; box-shadow: 0 10px 30px rgba(0,0,0,0.45);
   }
-  .access-modal {
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-    padding: 20px; width: 360px; max-width: 100%; box-sizing: border-box;
+  .ctx-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px;
+    border-radius: 6px; background: none; border: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
   }
-  .access-modal h3 { margin: 0 0 4px; font-size: 16px; }
-  .access-modal-sub { color: var(--text-dim); font-size: 12px; margin: 0 0 14px; }
-  .access-option {
-    display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
-    background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 12px; margin-bottom: 8px; cursor: pointer; color: var(--text); font: inherit;
+  .ctx-item:hover { background: rgba(245,247,250,0.08); }
+  .ctx-item:disabled { opacity: 0.5; cursor: default; }
+  .ctx-item.danger { color: var(--err-fg); }
+  .ctx-item.danger:hover { background: var(--err-bg); }
+  .ctx-icon { flex-shrink: 0; display: inline-flex; }
+  .ctx-right { margin-left: auto; opacity: 0.75; display: inline-flex; }
+  .ctx-sep { height: 1px; background: var(--border); margin: 5px 4px; }
+  .ctx-header {
+    display: flex; align-items: center; gap: 8px; padding: 4px 6px 8px; font-size: 12px; font-weight: 700;
+    color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;
   }
-  .access-option:hover { border-color: var(--border-strong); }
-  .access-option.current { border-color: var(--accent); background: rgba(232,68,46,0.1); }
-  .access-option:disabled { opacity: 0.6; cursor: default; }
-  .access-option .access-icon { font-size: 17px; flex-shrink: 0; line-height: 1.3; }
-  .access-option .access-label { font-weight: 700; font-size: 13px; display: block; }
-  .access-option .access-desc { display: block; font-weight: 400; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-  .rename-row { display: flex; gap: 8px; margin-bottom: 16px; }
-  .rename-row input {
-    flex: 1; min-width: 0; background: var(--bg-elev); color: var(--text); border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px 10px; font: 13px/1.4 inherit;
-  }
-  .rename-row input:focus { outline: none; border-color: var(--accent); }
-  .rename-row button { flex: 0 0 auto; padding: 8px 14px; font-size: 13px; }
-  .access-modal-close { width: 100%; margin-top: 2px; }
-  .access-danger {
-    width: 100%; margin: 4px 0 8px; padding: 10px 12px; border-radius: 10px; text-align: center;
-    background: transparent; border: 1px solid var(--err-fg); color: var(--err-fg); cursor: pointer; font: inherit;
-  }
-  .access-danger:hover { background: var(--err-bg); }
-  .access-danger:disabled { opacity: 0.6; cursor: default; }
+  .ctx-header button { background: none; border: none; color: var(--text-dim); cursor: pointer; display: inline-flex; padding: 2px; }
+  .ctx-header button:hover { color: var(--text); }
   .sidebar-footer { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
   .logout-link {
     display: block; width: 100%; text-align: left; font-size: 13px; color: var(--text-dim);
@@ -319,11 +472,13 @@ ${PAGE_STYLES}
         <div class="step-label">Step 1</div>
         <h2>Get an outline from your AI chat</h2>
         <p><strong>First, chat with an AI</strong> (ChatGPT, Claude, whatever) about your topic until
-        you're happy with what a page-by-page outline should cover. Then copy the prompt below and
-        paste it as your <strong>next message in that same conversation</strong> — the AI already has
-        the context, so it turns what you discussed into JSON matching our schema without you
-        re-explaining anything.</p>
-        <pre class="prompt" id="promptText">${escapeHtml(PROMPT_TEMPLATE)}</pre>
+        you're happy with what a page-by-page outline should cover. Then pick the pattern closest to
+        what you're making, copy the prompt below, and paste it as your <strong>next message in that
+        same conversation</strong> — the AI already has the context, so it turns what you discussed
+        into JSON matching our schema without you re-explaining anything.</p>
+        <div class="pattern-picker" id="patternPicker"></div>
+        <p class="pattern-blurb" id="patternBlurb"></p>
+        <pre class="prompt" id="promptText"></pre>
         <div class="actions">
           <button id="copyPrompt" class="primary" type="button">Copy prompt</button>
         </div>
@@ -345,7 +500,7 @@ ${PAGE_STYLES}
           </select>
         </div>
         <div class="actions">
-          <button id="loadOutlineExample" type="button">Load example outline</button>
+          <button id="loadOutlineExample" type="button">Load pattern's example</button>
           <button id="loadExample" type="button">Load example doc (advanced)</button>
           <button id="create" class="primary" type="button">Create deck →</button>
         </div>
@@ -366,14 +521,66 @@ function relativeTime(ms) {
   if (day < 30) return day + 'd ago'
   return new Date(ms).toLocaleDateString()
 }
+
+// --- hand-drawn inline icons (no icon font/CDN — see file header) ----------
+const ICONS = {
+  lock: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  chevronRight: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
+  chevronLeft: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+}
+function iconSpan(svg, cls) {
+  return '<span class="ctx-icon' + (cls ? ' ' + cls : '') + '">' + svg + '</span>'
+}
+
 const ACCESS_LEVELS = [
-  { value: 'edit', icon: '🔓', label: 'Editable', desc: 'Anyone with the link can edit it, just like you' },
-  { value: 'view', icon: '👁️', label: 'View only', desc: 'Anyone with the link can view/present it, not edit' },
-  { value: 'private', icon: '🔒', label: 'Private', desc: 'Only you — a 404 for anyone else, even with the link' },
+  { value: 'edit', icon: ICONS.unlock, label: 'Editable', desc: 'Anyone with the link can edit it, just like you' },
+  { value: 'view', icon: ICONS.eye, label: 'View only', desc: 'Anyone with the link can view/present it, not edit' },
+  { value: 'private', icon: ICONS.lock, label: 'Private', desc: 'Only you — a 404 for anyone else, even with the link' },
 ]
 function accessMeta(value) {
   return ACCESS_LEVELS.find(a => a.value === value) || ACCESS_LEVELS[0]
 }
+
+// --- Step 1: pattern picker -------------------------------------------------
+
+const PATTERNS = ${patternsJson}
+const SCHEMA_BLOCK = ${JSON.stringify(SCHEMA_BLOCK)}
+let activePattern = PATTERNS[0]
+
+function buildPrompt(pattern) {
+  return "Based on everything we've discussed above, turn it into a slide deck outline as JSON. Output ONLY the JSON — no markdown code fences, no commentary before or after, nothing else in your reply.\\n\\n" +
+    SCHEMA_BLOCK + '\\n\\n' + pattern.guidance +
+    '\\n\\nExample (for shape reference only — replace with our actual content):\\n\\n' +
+    JSON.stringify(pattern.example, null, 2)
+}
+
+function renderPatternPicker() {
+  document.getElementById('patternPicker').innerHTML = PATTERNS.map(p =>
+    '<button type="button" class="pattern-pill' + (p.id === activePattern.id ? ' active' : '') + '" data-id="' + p.id + '">' + p.label + '</button>'
+  ).join('')
+  document.querySelectorAll('.pattern-pill').forEach(btn => {
+    btn.onclick = () => {
+      activePattern = PATTERNS.find(p => p.id === btn.dataset.id)
+      renderPatternPicker()
+      updatePromptText()
+    }
+  })
+  document.getElementById('patternBlurb').textContent = activePattern.blurb
+}
+function updatePromptText() {
+  document.getElementById('promptText').textContent = buildPrompt(activePattern)
+  document.getElementById('patternBlurb').textContent = activePattern.blurb
+}
+renderPatternPicker()
+updatePromptText()
+
+// --- sidebar deck list -------------------------------------------------
 
 let deckIndex = {}
 
@@ -393,13 +600,13 @@ async function loadDeckList() {
     list.innerHTML = decks.map(d => {
       const a = accessMeta(d.access)
       return (
-        '<div class="deck-item">' +
+        '<div class="deck-item" data-id="' + d.id + '">' +
         '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
         '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
         '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
         '</a>' +
         '<span class="deck-status" title="' + a.label + ' — ' + a.desc + '">' + a.icon + '</span>' +
-        '<button class="deck-gear" type="button" data-id="' + d.id + '" title="Deck settings">⚙️</button>' +
+        '<button class="deck-gear" type="button" data-id="' + d.id + '" title="Deck menu">' + ICONS.gear + '</button>' +
         '</div>'
       )
     }).join('')
@@ -409,111 +616,166 @@ async function loadDeckList() {
 }
 loadDeckList()
 
-function openAccessModal(id) {
-  const info = deckIndex[id] || { title: '', access: 'edit' }
-  const backdrop = document.createElement('div')
-  backdrop.className = 'access-modal-backdrop'
-  backdrop.innerHTML =
-    '<div class="access-modal">' +
-    '<h3>Deck settings</h3>' +
-    '<p class="access-modal-sub">Rename it, choose who can open its link, or delete it.</p>' +
-    '<div class="rename-row">' +
-    '<input type="text" id="renameInput" maxlength="200">' +
-    '<button type="button" id="renameSave">Rename</button>' +
-    '</div>' +
-    ACCESS_LEVELS.map(a =>
-      '<button type="button" class="access-option' + (a.value === info.access ? ' current' : '') + '" data-value="' + a.value + '">' +
-      '<span class="access-icon">' + a.icon + '</span>' +
-      '<span><span class="access-label">' + a.label + '</span>' +
-      '<span class="access-desc">' + a.desc + '</span></span>' +
-      '</button>'
-    ).join('') +
-    '<button type="button" class="access-danger" id="deleteDeck">Delete this deck…</button>' +
-    '<button type="button" class="access-modal-close">Close</button>' +
-    '</div>'
-  document.body.appendChild(backdrop)
-  const renameInput = backdrop.querySelector('#renameInput')
-  renameInput.value = info.title || ''
-  const close = () => backdrop.remove()
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close() })
-  backdrop.querySelector('.access-modal-close').onclick = close
+// --- per-deck context menu (right-click, or the ⚙️ button) -----------------
+// Windows-Explorer-style: right-click (or the gear button) opens a small
+// fixed-position menu at the cursor/button; Rename edits the title in place
+// in the row itself (also Explorer-style) rather than in a dialog.
 
-  const doRename = async () => {
-    const newTitle = renameInput.value.trim()
-    if (!newTitle || newTitle === info.title) return
-    const saveBtn = backdrop.querySelector('#renameSave')
-    saveBtn.disabled = true
-    try {
-      const res = await fetch('/api/decks/' + id + '/title', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: newTitle }),
-      })
+let openMenuEl = null
+function onDocClick(e) { if (openMenuEl && !openMenuEl.contains(e.target)) closeMenu() }
+function onDocKey(e) { if (e.key === 'Escape') closeMenu() }
+function closeMenu() {
+  if (openMenuEl) { openMenuEl.remove(); openMenuEl = null }
+  document.removeEventListener('click', onDocClick, true)
+  document.removeEventListener('keydown', onDocKey, true)
+  document.removeEventListener('contextmenu', onDocClick, true)
+}
+
+function startInlineRename(id, info) {
+  const item = document.querySelector('.deck-item[data-id="' + id + '"]')
+  if (!item) return
+  const link = item.querySelector('.deck-item-link')
+  if (!link) return
+  link.style.display = 'none'
+  const row = document.createElement('div')
+  row.className = 'deck-rename-row'
+  row.innerHTML = '<input type="text" maxlength="200">'
+  item.insertBefore(row, link)
+  const input = row.querySelector('input')
+  input.value = info.title || ''
+  input.focus()
+  input.select()
+  let done = false
+  const finish = (commit) => {
+    if (done) return
+    done = true
+    const newTitle = input.value.trim()
+    if (!commit || !newTitle || newTitle === info.title) { loadDeckList(); return }
+    fetch('/api/decks/' + id + '/title', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    }).then(res => {
       if (!res.ok) throw new Error('failed')
-      close()
       loadDeckList()
-    } catch (err) {
-      saveBtn.disabled = false
+    }).catch(() => {
       alert('Could not rename this deck. Try again.')
-    }
-  }
-  backdrop.querySelector('#renameSave').onclick = doRename
-  renameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRename() })
-
-  backdrop.querySelectorAll('.access-option').forEach(btn => {
-    btn.onclick = async () => {
-      const value = btn.dataset.value
-      if (value === info.access) { close(); return }
-      backdrop.querySelectorAll('.access-option').forEach(b => b.disabled = true)
-      try {
-        const res = await fetch('/api/decks/' + id + '/access', {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ access: value }),
-        })
-        if (!res.ok) throw new Error('failed')
-        close()
-        loadDeckList()
-      } catch (err) {
-        backdrop.querySelectorAll('.access-option').forEach(b => b.disabled = false)
-        alert('Could not change this deck\\'s access. Try again.')
-      }
-    }
-  })
-
-  backdrop.querySelector('#deleteDeck').onclick = async () => {
-    if (!confirm('Permanently delete "' + (info.title || 'this deck') + '"? This cannot be undone.')) return
-    const delBtn = backdrop.querySelector('#deleteDeck')
-    delBtn.disabled = true
-    try {
-      const res = await fetch('/api/decks/' + id, { method: 'DELETE' })
-      if (!res.ok) throw new Error('failed')
-      close()
       loadDeckList()
-    } catch (err) {
-      delBtn.disabled = false
-      alert('Could not delete this deck. Try again.')
-    }
+    })
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true) }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false) }
+  })
+  input.addEventListener('blur', () => finish(true))
+}
+
+async function doDelete(id, info) {
+  if (!confirm('Permanently delete "' + (info.title || 'this deck') + '"? This cannot be undone.')) return
+  try {
+    const res = await fetch('/api/decks/' + id, { method: 'DELETE' })
+    if (!res.ok) throw new Error('failed')
+    loadDeckList()
+  } catch (err) {
+    alert('Could not delete this deck. Try again.')
   }
 }
 
+function positionMenu(el, x, y) {
+  const rect = el.getBoundingClientRect()
+  const vw = window.innerWidth, vh = window.innerHeight
+  let left = x, top = y
+  if (left + rect.width > vw - 8) left = vw - rect.width - 8
+  if (top + rect.height > vh - 8) top = vh - rect.height - 8
+  el.style.left = Math.max(8, left) + 'px'
+  el.style.top = Math.max(8, top) + 'px'
+}
+
+function openDeckMenu(id, x, y) {
+  closeMenu()
+  const info = deckIndex[id] || { title: '', access: 'edit' }
+  const menu = document.createElement('div')
+  menu.className = 'ctx-menu'
+
+  function renderMain() {
+    menu.innerHTML =
+      '<button type="button" class="ctx-item" data-a="rename">' + iconSpan(ICONS.pencil) + '<span>Rename</span></button>' +
+      '<button type="button" class="ctx-item" data-a="access">' + iconSpan(ICONS.eye) + '<span>Access</span>' + iconSpan(ICONS.chevronRight, 'ctx-right') + '</button>' +
+      '<div class="ctx-sep"></div>' +
+      '<button type="button" class="ctx-item danger" data-a="delete">' + iconSpan(ICONS.trash) + '<span>Delete…</span></button>'
+    menu.querySelector('[data-a="rename"]').onclick = () => { closeMenu(); startInlineRename(id, info) }
+    menu.querySelector('[data-a="access"]').onclick = renderAccess
+    menu.querySelector('[data-a="delete"]').onclick = () => { closeMenu(); doDelete(id, info) }
+    positionMenu(menu, x, y)
+  }
+
+  function renderAccess() {
+    menu.innerHTML =
+      '<div class="ctx-header"><button type="button" data-a="back">' + ICONS.chevronLeft + '</button><span>Access</span></div>' +
+      ACCESS_LEVELS.map(a =>
+        '<button type="button" class="ctx-item" data-v="' + a.value + '">' +
+        iconSpan(a.icon) + '<span>' + a.label + '</span>' +
+        (a.value === info.access ? iconSpan(ICONS.check, 'ctx-right') : '') +
+        '</button>'
+      ).join('')
+    menu.querySelector('[data-a="back"]').onclick = renderMain
+    menu.querySelectorAll('[data-v]').forEach(btn => {
+      btn.onclick = async () => {
+        const value = btn.dataset.v
+        if (value === info.access) { closeMenu(); return }
+        menu.querySelectorAll('[data-v]').forEach(b => b.disabled = true)
+        try {
+          const res = await fetch('/api/decks/' + id + '/access', {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ access: value }),
+          })
+          if (!res.ok) throw new Error('failed')
+          closeMenu()
+          loadDeckList()
+        } catch (err) {
+          menu.querySelectorAll('[data-v]').forEach(b => b.disabled = false)
+          alert('Could not change this deck\\'s access. Try again.')
+        }
+      }
+    })
+    positionMenu(menu, x, y)
+  }
+
+  document.body.appendChild(menu)
+  openMenuEl = menu
+  renderMain()
+  setTimeout(() => {
+    document.addEventListener('click', onDocClick, true)
+    document.addEventListener('keydown', onDocKey, true)
+    document.addEventListener('contextmenu', onDocClick, true)
+  }, 0)
+}
+
 document.getElementById('deckList').addEventListener('click', (e) => {
-  const btn = e.target.closest('.deck-gear')
-  if (!btn) return
+  const gear = e.target.closest('.deck-gear')
+  if (!gear) return
   e.preventDefault()
-  openAccessModal(btn.dataset.id)
+  const rect = gear.getBoundingClientRect()
+  openDeckMenu(gear.dataset.id, rect.left, rect.bottom + 4)
+})
+document.getElementById('deckList').addEventListener('contextmenu', (e) => {
+  const item = e.target.closest('.deck-item')
+  if (!item) return
+  e.preventDefault()
+  openDeckMenu(item.dataset.id, e.clientX, e.clientY)
 })
 
 document.getElementById('newDeck').onclick = () => location.reload()
 
 const sidebar = document.getElementById('sidebar')
-const backdrop = document.getElementById('sidebarBackdrop')
-function closeSidebar() { sidebar.classList.remove('open'); backdrop.classList.remove('open') }
+const sidebarBackdrop = document.getElementById('sidebarBackdrop')
+function closeSidebar() { sidebar.classList.remove('open'); sidebarBackdrop.classList.remove('open') }
 document.getElementById('menuToggle').onclick = () => {
   sidebar.classList.toggle('open')
-  backdrop.classList.toggle('open')
+  sidebarBackdrop.classList.toggle('open')
 }
-backdrop.onclick = closeSidebar
+sidebarBackdrop.onclick = closeSidebar
 
 document.getElementById('logout').onclick = async () => {
   await fetch('/api/logout', { method: 'POST' })
@@ -531,7 +793,7 @@ document.getElementById('copyPrompt').onclick = async () => {
   }
 }
 document.getElementById('loadOutlineExample').onclick = () => {
-  document.getElementById('input').value = ${JSON.stringify(exampleOutlineJson)}
+  document.getElementById('input').value = JSON.stringify(activePattern.example, null, 2)
 }
 document.getElementById('loadExample').onclick = () => {
   document.getElementById('input').value = ${JSON.stringify(exampleJson)}
