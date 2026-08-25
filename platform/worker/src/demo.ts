@@ -372,8 +372,8 @@ ${PAGE_STYLES}
     display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .deck-item .deck-time { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-  .deck-status {
-    flex: 0 0 auto; width: 20px; display: flex; align-items: center; justify-content: center; opacity: 0.85;
+  .deck-kind, .deck-status {
+    flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; opacity: 0.7;
   }
   .deck-gear {
     flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
@@ -486,10 +486,12 @@ ${PAGE_STYLES}
 
       <section class="card">
         <div class="step-label">Step 2</div>
-        <h2>Paste the AI's JSON and create your deck</h2>
-        <p>Paste whatever the AI replied with. We'll detect whether it's outline JSON (from step 1) or
-        a full <code>bento/slides</code> document (the "advanced" path — paste one directly to skip the
-        AI entirely) and create the deck either way.</p>
+        <h2>Paste the AI's JSON — or a self-contained HTML deck — and create</h2>
+        <p>Paste whatever the AI replied with. We'll detect whether it's outline JSON (from step 1), a full
+        <code>bento/slides</code> document (the "advanced" path — paste one directly to skip the AI
+        entirely), or a complete, self-running HTML slide deck some AIs will generate directly if you
+        just ask for one — that gets stored and served as-is, not compiled into Bento's own format,
+        so it's always view-only for anyone but you.</p>
         <textarea id="input" spellcheck="false"></textarea>
         <div class="access-field">
           <label for="accessSelect">Who can open this deck's link? (changeable anytime from the sidebar's ⚙️)</label>
@@ -532,6 +534,7 @@ const ICONS = {
   trash: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
   chevronRight: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
   chevronLeft: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  code: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>',
   check: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
 }
 function iconSpan(svg, cls) {
@@ -599,12 +602,14 @@ async function loadDeckList() {
     }
     list.innerHTML = decks.map(d => {
       const a = accessMeta(d.access)
+      const kindBadge = d.kind === 'html' ? '<span class="deck-kind" title="Self-contained HTML file — stored and served as-is">' + ICONS.code + '</span>' : ''
       return (
         '<div class="deck-item" data-id="' + d.id + '">' +
         '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
         '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
         '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
         '</a>' +
+        kindBadge +
         '<span class="deck-status" title="' + a.label + ' — ' + a.desc + '">' + a.icon + '</span>' +
         '<button class="deck-gear" type="button" data-id="' + d.id + '" title="Deck menu">' + ICONS.gear + '</button>' +
         '</div>'
@@ -693,7 +698,7 @@ function positionMenu(el, x, y) {
 
 function openDeckMenu(id, x, y) {
   closeMenu()
-  const info = deckIndex[id] || { title: '', access: 'edit' }
+  const info = deckIndex[id] || { title: '', access: 'edit', kind: 'bento' }
   const menu = document.createElement('div')
   menu.className = 'ctx-menu'
 
@@ -710,9 +715,12 @@ function openDeckMenu(id, x, y) {
   }
 
   function renderAccess() {
+    // 'edit' means nothing for an 'html' deck — there's no document to edit
+    // in place, only bytes to serve as-is (see store.ts's DeckAccess).
+    const levels = info.kind === 'html' ? ACCESS_LEVELS.filter(a => a.value !== 'edit') : ACCESS_LEVELS
     menu.innerHTML =
       '<div class="ctx-header"><button type="button" data-a="back">' + ICONS.chevronLeft + '</button><span>Access</span></div>' +
-      ACCESS_LEVELS.map(a =>
+      levels.map(a =>
         '<button type="button" class="ctx-item" data-v="' + a.value + '">' +
         iconSpan(a.icon) + '<span>' + a.label + '</span>' +
         (a.value === info.access ? iconSpan(ICONS.check, 'ctx-right') : '') +
@@ -798,25 +806,29 @@ document.getElementById('loadOutlineExample').onclick = () => {
 document.getElementById('loadExample').onclick = () => {
   document.getElementById('input').value = ${JSON.stringify(exampleJson)}
 }
+function looksLikeHtmlDocument(raw) {
+  return /^\\s*<(!doctype\\s+html|html[\\s>])/i.test(raw)
+}
+
 document.getElementById('create').onclick = async () => {
   const status = document.getElementById('status')
   status.className = 'status'
   status.textContent = 'Working…'
   status.style.display = 'block'
 
+  const raw = document.getElementById('input').value
   let parsed
   try {
-    parsed = JSON.parse(document.getElementById('input').value)
+    parsed = JSON.parse(raw)
   } catch (e) {
-    status.className = 'status err'
-    status.textContent = 'Not valid JSON: ' + e.message
-    return
+    parsed = undefined
   }
 
-  let doc
-  if (parsed && parsed.format === 'bento/slides') {
-    doc = parsed
-  } else {
+  let requestBody
+  let isHtml = false
+  if (parsed !== undefined && parsed && parsed.format === 'bento/slides') {
+    requestBody = { doc: parsed }
+  } else if (parsed !== undefined) {
     try {
       const compileRes = await fetch('/api/compile', {
         method: 'POST',
@@ -830,25 +842,38 @@ document.getElementById('create').onclick = async () => {
           (compileBody.errors || []).map(e => e.field + ': ' + e.message).join('\\n')
         return
       }
-      doc = compileBody.doc
+      requestBody = { doc: compileBody.doc }
     } catch (e) {
       status.className = 'status err'
       status.textContent = 'Compile request failed: ' + e.message
       return
     }
+  } else if (looksLikeHtmlDocument(raw)) {
+    isHtml = true
+    requestBody = { html: raw }
+  } else {
+    status.className = 'status err'
+    status.textContent = 'Not valid JSON, and not an HTML document either (expected it to start with <!doctype html> or <html>).'
+    return
   }
 
   try {
-    const access = document.getElementById('accessSelect').value
+    let access = document.getElementById('accessSelect').value
+    // 'edit' is meaningless for an uploaded HTML file — nothing to edit in
+    // place — so it's downgraded here too, matching the server's own
+    // coercion (POST /api/decks), so the success note below is accurate
+    // rather than claiming "editable" when the server didn't grant it.
+    if (isHtml && access === 'edit') access = 'view'
+    requestBody.access = access
     const res = await fetch('/api/decks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ doc, access }),
+      body: JSON.stringify(requestBody),
     })
     const body = await res.json()
     if (!res.ok) {
       status.className = 'status err'
-      status.textContent = 'Rejected:\\n' + (body.errors || []).map(e => e.field + ': ' + e.message).join('\\n')
+      status.textContent = 'Rejected:\\n' + (body.errors || [{ field: '', message: body.error || 'unknown error' }]).map(e => (e.field ? e.field + ': ' : '') + e.message).join('\\n')
       return
     }
     status.className = 'status ok'
@@ -856,10 +881,11 @@ document.getElementById('create').onclick = async () => {
     const note = access === 'private' ? ' — private, only you can open it'
       : access === 'view' ? ' — view only for anyone but you'
       : ''
+    const presentLink = isHtml ? '' : '<a href="' + viewUrl + '#present" target="_blank" rel="noopener">Present</a> · '
     status.innerHTML =
       'Created <strong>' + body.id + '</strong>' + note + '<br>' +
       '<a href="' + viewUrl + '" target="_blank" rel="noopener">Open it</a> · ' +
-      '<a href="' + viewUrl + '#present" target="_blank" rel="noopener">Present</a> · ' +
+      presentLink +
       '<a href="' + viewUrl + '/download" target="_blank" rel="noopener">Download</a>'
     loadDeckList()
   } catch (e) {

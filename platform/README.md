@@ -73,6 +73,45 @@ DOM-free module is not the same as *editing* it, and it's the reuse
 silent drift — treat that as the point, not friction. See `docs/DECISIONS.md`
 for the full reasoning and what would reopen it.
 
+## Decks that aren't Bento at all: `kind:'html'`
+
+Not every AI-generated deck goes through Bento's own format. Some chat AIs,
+asked directly, will hand back a complete, self-running HTML slide deck —
+its own JS, its own CSS, no `bento/slides` JSON involved. Step 2 of `/`
+auto-detects this (pasted text that isn't JSON but starts with `<!doctype
+html>`/`<html>`) alongside its existing outline/doc detection, and
+`POST /api/decks` accepts `{html}` as an alternative to `{doc}`
+(`migrations/0005_kind.sql`'s `decks.kind` column, `'bento' | 'html'`).
+
+An `'html'` deck is stored and served **byte-for-byte** — never parsed,
+never compiled, never editable in place (`PATCH /api/decks/:id` 400s for
+one; re-upload as a new deck instead). Its title defaults to whatever its
+own `<title>` tag says (`index.ts`'s `extractHtmlTitle`, a plain regex —
+this is a display label, not something the file's behavior depends on).
+Because there's no document to grant edit access *to*, `'edit'` is
+meaningless for this kind: `POST /api/decks` and the sidebar's Access
+submenu both only ever offer `'private'`/`'view'` for one.
+
+**`GET /d/:id` serves an `'html'` deck through a sandboxed `<iframe>`
+wrapper, never directly at this origin — deliberately, not an oversight.**
+An uploaded HTML file is arbitrary, unreviewed script the owner asked an AI
+to hand them — the opposite of Bento's own doc content, which is sanitized
+at render time (`slides/src/render.ts`'s `sanitizeHtml`). Serving it
+directly at this Worker's own origin would let that script run with the
+origin's privileges: same-site cookies attach automatically to same-origin
+`fetch()`, so embedded script — even accidental, not malicious — could
+silently call the platform's own `/api/decks/*` endpoints using the
+**owner's own ambient session** the moment they open their own deck's link
+while logged in elsewhere. `index.ts`'s `htmlDeckWrapper` sets
+`sandbox="allow-scripts allow-popups allow-forms allow-modals"` —
+deliberately **without** `allow-same-origin` — which gives the iframe's
+content a unique opaque origin: its script still runs (the deck works),
+but it has zero access to this origin's cookies, storage, or same-site
+fetch credentials, sandboxed identically for the owner and for anonymous
+viewers. This only wraps the *live* view — `/d/:id/download` still serves
+the exact original bytes, unwrapped, so the file stays fully portable once
+saved locally. Full reasoning: `docs/DECISIONS.md`.
+
 ## Directory layout
 
 ```
@@ -101,6 +140,7 @@ platform/
       0002_auth.sql           — config (single-owner account) + sessions tables
       0003_editable.sql       — decks.is_editable (superseded same-day by 0004, unused now)
       0004_access.sql         — decks.access ('private'|'view'|'edit', per-deck access level)
+      0005_kind.sql           — decks.kind ('bento'|'html', see "Decks that aren't Bento at all")
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
     ci-build.mjs           — Workers Builds' "Build command": produces generated/shell.ts
     build.mjs              — esbuild bundle → dist/worker.js, used by test:router (below), not by deploy
@@ -210,7 +250,7 @@ with your own**, not fill in blanks.
   — write that down too, you need both the name and the ID. Then open its
   **Console** tab and run each file in `platform/worker/migrations/` **in
   numeric order** — `0001_init.sql`, `0002_auth.sql`, `0003_editable.sql`,
-  `0004_access.sql`. That's the whole migration step — no CLI, no separate
+  `0004_access.sql`, `0005_kind.sql`. That's the whole migration step — no CLI, no separate
   tool. (If you already ran `0001` from an earlier version of this project
   under its old name, `schema.sql` — same file, just moved and renumbered —
   you only need to run whichever numbered files come after the one you last
@@ -360,16 +400,16 @@ problem for whenever that app exists, not solved here.
 | `/api/login` | POST | none | `{username, password}` → starts a session on success |
 | `/api/logout` | POST | none | ends the current session |
 | `/api/compile` | POST | owner session | `{outline}` → `{doc}`. Pure — nothing is stored |
-| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access}]}`, most-recently-touched first — the sidebar's data source |
-| `/api/decks` | POST | owner session | `{doc, access?}` → `{id, url}`. Validates, strips `collab`, mints `docId`. `access` is one of `'private'\|'view'\|'edit'`, defaults to `'edit'` |
-| `/api/decks/:id` | GET | owner session | `{doc}` |
-| `/api/decks/:id` | PATCH | owner session | `{doc}` → replaces the stored doc |
-| `/api/decks/:id` | DELETE | owner session | permanently deletes the deck: D1 row + `doc.json` + every asset blob under its R2 namespace. 404 on an unknown id |
+| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access, kind}]}`, most-recently-touched first — the sidebar's data source |
+| `/api/decks` | POST | owner session | `{doc, access?}` (a `'bento'` deck) or `{html, access?}` (an `'html'` deck) → `{id, url}`. `access` is one of `'private'\|'view'\|'edit'`; defaults to `'edit'` for `doc`, coerced to `'view'` if `'edit'` for `html` (meaningless for that kind, not rejected) |
+| `/api/decks/:id` | GET | owner session | `{kind:'bento', doc}` or `{kind:'html', html}` |
+| `/api/decks/:id` | PATCH | owner session | `{doc}` → replaces a `'bento'` deck's stored doc. 400 for an `'html'` deck — no in-place edit path, re-upload as a new deck instead |
+| `/api/decks/:id` | DELETE | owner session | permanently deletes the deck: D1 row + stored bytes (`doc.json` or `doc.html`) + every asset blob under its R2 namespace. 404 on an unknown id |
 | `/api/decks/:id/access` | PATCH | owner session | `{access}` → `{ok, access}`. Changes what anonymous viewers get. 422 on an invalid value, 404 on an unknown id |
-| `/api/decks/:id/title` | PATCH | owner session | `{title}` → `{ok}`. Renames the deck by rewriting `doc.title` itself (there's no separate cosmetic label) — same effect as editing the title in the live editor. 422 on a blank title, 404 on an unknown id |
+| `/api/decks/:id/title` | PATCH | owner session | `{title}` → `{ok}`. For a `'bento'` deck, rewrites `doc.title` itself (there's no separate cosmetic label) — same effect as editing the title in the live editor. For an `'html'` deck, updates only the D1 label; the stored bytes are untouched. 422 on a blank title, 404 on an unknown id |
 | `/api/decks/:id/assets` | POST | owner session | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
-| `/d/:id` | GET | depends on the deck's `access` | `'private'` → 404 unless it's the owner's session. `'view'` (non-owner) → `readonly: true` spliced in, boots Bento's present-only PLAYER mode. `'edit'`, or any owner session → the real, live editor page |
-| `/d/:id/download` | GET | same as `/d/:id` | same content rules as `/d/:id`, with `Content-Disposition: attachment` |
+| `/d/:id` | GET | depends on the deck's `access` | `'private'` → 404 unless it's the owner's session. For a `'bento'` deck: `'view'` (non-owner) → `readonly: true` spliced in, boots Bento's present-only PLAYER mode; `'edit'`, or any owner session → the real, live editor page. For an `'html'` deck: always the sandboxed iframe wrapper (see "Decks that aren't Bento at all"), owner included |
+| `/d/:id/download` | GET | same as `/d/:id` | `'bento'`: same content rules as `/d/:id`, with `Content-Disposition: attachment`. `'html'`: the exact original bytes, unwrapped (no sandbox — see that section for why the wrapper only applies to the live view) |
 | `/a/:id/:key` | GET | same as `/d/:id` | an uploaded asset's bytes; 404 for a non-owner if the deck is `'private'` |
 
 "Owner session" = the `bento_session` cookie set by `/api/login` (or
@@ -384,11 +424,12 @@ not covered.
 
 ## Known gaps (deliberately out of scope for this PR)
 
-- **The deck history sidebar's ⚙️ dialog (rename, access, delete) is per-deck
-  only, not a general management view.** `/` shows a ChatGPT-style sidebar
-  (`GET /api/decks`, most-recently-touched first) with a "+ New deck" action,
-  a clickable entry per deck, a status icon (🔓/👁️/🔒), and a ⚙️ button opening
-  a small modal — but there's no bulk action (no multi-select delete, no
+- **The deck history sidebar's right-click menu (rename, access, delete) is
+  per-deck only, not a general management view.** `/` shows a ChatGPT-style
+  sidebar (`GET /api/decks`, most-recently-touched first) with a "+ New deck"
+  action, a clickable entry per deck, a kind badge for `'html'` decks, a
+  status icon (unlock/eye/lock — inline SVG, no icon font), and a right-click
+  (or ⚙️ button) menu — but there's no bulk action (no multi-select delete, no
   "show only private decks" filter), and no audit trail of who changed what
   (single-owner project, so "who" is always the one account). No pagination
   either; `listDecks` is capped at 200 rows, which is fine at this project's
@@ -402,6 +443,15 @@ not covered.
   session," not "encrypted" or "hidden from me too." That's the intended
   scope (the threat model is "randoms with the link," per the request that
   added this), not an oversight.
+- **`'html'` decks have no in-place edit, no version history, and no diffing**
+  — re-uploading is the only way to change one, and the old version is simply
+  gone (no soft-delete, same as `DELETE /api/decks/:id`'s own no-undo). Title
+  extraction (`extractHtmlTitle`) is a plain regex on `<title>`, not an HTML
+  parser — a file whose `<title>` tag is unusually malformed just falls back
+  to "Untitled deck," a cosmetic miss, not a correctness bug (nothing else
+  about the deck depends on that extraction succeeding). The 8MB size cap
+  matches the image-asset limit as a convenience, not a principled number for
+  this content type — revisit if a real deck ever needs more.
 - **Edits made in the live-served editor aren't saved back.** Opening `/d/:id`
   while logged in serves the full, editable Bento app, but the in-browser
   editor still only holds its state in the browser (same as opening any

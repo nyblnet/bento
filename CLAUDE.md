@@ -63,13 +63,34 @@ Current feature set, all owner-only except where noted:
   for why a tri-state column replaced the boolean rather than bolting a
   private case onto it.
 - **Deck history sidebar** (`demo.ts`, served at `/`) — a ChatGPT-style list
-  (`GET /api/decks`, most-recently-touched first), each entry showing a
-  status icon (🔓/👁️/🔒) and a ⚙️ button opening a "Deck settings" dialog
-  (rename field, the three access options, a confirm-gated delete). The
-  dialog is a body-level centered modal, deliberately not a popover anchored
-  inside the scrolling sidebar list — see `CLAUDE.md`'s own hard-won lesson
-  #10 below on why a floating child inside an `overflow-y:auto` container
-  gets silently clipped.
+  (`GET /api/decks`, most-recently-touched first), each entry showing a kind
+  badge, a status icon (unlock/eye/lock — hand-drawn inline SVG, never an
+  icon font/CDN, matching the repo's zero-external-dependency ethos), and a
+  right-click (or ⚙️ button) context menu: Rename (edits the title IN THE
+  ROW itself, Explorer-F2-style, not a dialog), Access (a drill-down
+  submenu), Delete. The menu is a body-appended, fixed-position panel,
+  deliberately not nested inside the scrolling sidebar list — see this
+  file's own hard-won lesson #10 below on why a floating child inside an
+  `overflow-y:auto` container gets silently clipped.
+- **Content patterns** (`demo.ts`'s `PATTERNS`) — Step 1's prompt is one of
+  four genre-specific briefs (General/Business review/Pitch deck/Tutorial),
+  each with its own guidance paragraph and loadable example; every pattern
+  compiles through the identical schema, so this only changes what's asked
+  of the AI, never what the platform can build.
+- **`kind:'html'` decks** — a second, deliberately opaque deck kind
+  alongside the compiled `'bento'` kind: a complete, self-running HTML slide
+  deck some AIs will generate directly if asked (no `bento/slides` JSON at
+  all), pasted into the same Step 2 box (auto-detected) and stored/served
+  byte-for-byte, never parsed or edited (`migrations/0005_kind.sql`). Its
+  title defaults to its own `<title>` tag. **Served through a sandboxed
+  `<iframe>` (`sandbox="allow-scripts …"` WITHOUT `allow-same-origin`),
+  never directly at this origin** — arbitrary unreviewed script running
+  same-origin would carry the OWNER's own ambient session cookie into any
+  fetch() it made, so opening one's own deck link while logged in elsewhere
+  could silently authorize a request against `/api/decks/*`. The sandbox
+  gives the deck's script a unique opaque origin instead: it still runs, but
+  has zero access to this origin's cookies/storage. Only wraps the *live*
+  view — download still serves the exact original bytes.
 
 Biggest documented gap: **live-editor edits made at `/d/:id` aren't saved
 back** — the served page is the real, full editor, but nothing currently
