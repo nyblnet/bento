@@ -1480,8 +1480,8 @@ function sweepSymbolSpans(section: HTMLElement) {
 }
 
 const symCache = new Map<string, Map<string, { x: number; y: number }>>()
-/** Scaffolding keys (fraction bars, radicals) present on a slide, by host. */
-const structCache = new Map<string, Set<string>>()
+/** Scaffolding geometry (fraction bars, radicals) per slide, by host. */
+const structCache = new Map<string, Map<string, { x: number; y: number; w: number; h: number }>>()
 const symKey = (idx: number, flipId: string) => `${idx}${flipId}`
 
 /** Measure and cache every formula on a slide that is currently displayed. */
@@ -1495,9 +1495,31 @@ function cacheSlideSymbols(doc: BentoDoc, section: HTMLElement, idx: number) {
     if (!model) continue
     const offsets = symbolOffsets(host, model.w, model.h)
     if (offsets.size) symCache.set(symKey(idx, host.dataset.flipId!), offsets)
-    structCache.set(symKey(idx, host.dataset.flipId!), new Set(
-      Array.from(host.querySelectorAll<HTMLElement>('[data-msx]')).map((n) => n.dataset.msx!)))
+    structCache.set(symKey(idx, host.dataset.flipId!), structGeometry(host, model.w, model.h))
   }
+}
+
+/**
+ * Where a formula's scaffolding sits and how big it is, in model units. Size
+ * matters as much as position: a fraction bar is as wide as its widest side,
+ * so an equation that keeps its outer fraction across a step can still have
+ * that bar change length completely — 14px to 79px across the derivation's
+ * last beat, snapping in one frame while every symbol around it travelled.
+ */
+function structGeometry(host: HTMLElement, modelW: number, modelH: number) {
+  const out = new Map<string, { x: number; y: number; w: number; h: number }>()
+  const box = host.getBoundingClientRect()
+  if (!box.width || !box.height) return out
+  const sx = box.width / Math.max(modelW, 0.01)
+  const sy = box.height / Math.max(modelH, 0.01)
+  for (const node of Array.from(host.querySelectorAll<HTMLElement>('[data-msx]'))) {
+    const r = node.getBoundingClientRect()
+    out.set(node.dataset.msx!, {
+      x: (r.left - box.left) / sx, y: (r.top - box.top) / sy,
+      w: r.width / sx, h: r.height / sy,
+    })
+  }
+  return out
 }
 
 function symbolOffsets(host: HTMLElement, modelW: number, modelH: number): Map<string, { x: number; y: number }> {
@@ -1532,7 +1554,7 @@ function symbolOffsets(host: HTMLElement, modelW: number, modelH: number): Map<s
  */
 function morphMathSymbols(
   fromAt: Map<string, { x: number; y: number }> | undefined,
-  fromStruct: Set<string> | undefined,
+  fromStruct: Map<string, { x: number; y: number; w: number; h: number }> | undefined,
   to: HTMLElement,
   a: SlideElement,
   b: SlideElement,
@@ -1569,18 +1591,41 @@ function morphMathSymbols(
   // setting the box transparent, which leaves every symbol legible and in
   // place with the bars gone. Pinning is what makes it work: leaves inherit
   // colour, so they must carry their own before the box's is animated.
+  const toStruct = structGeometry(to, b.w, b.h)
+  // TWO passes, and the order is load-bearing. Scaffolding nests — a radical
+  // inside a fraction — and anim renders a fromTo's from-state at creation, so
+  // starting the outer box's fade first leaves the inner one inheriting a
+  // transparent colour at the moment its own ink is read. It then animates
+  // towards transparent and only becomes visible when the tween clears, which
+  // is the pop this is meant to remove, one level down. Read every ink first,
+  // against untouched colours, then start the tweens.
+  const fades: Array<{ box: HTMLElement; ink: string; leaves: HTMLElement[] }> = []
   for (const box of Array.from(to.querySelectorAll<HTMLElement>('[data-msx]'))) {
-    if (fromStruct?.has(box.dataset.msx!)) continue
+    // New scaffolding fades in — and so does scaffolding that SURVIVES but
+    // changes shape, because it cannot travel: transforming a container would
+    // drag its children off their own paths. A bar that merely resizes would
+    // otherwise snap in a single frame while everything inside it glided.
+    const was = fromStruct?.get(box.dataset.msx!)
+    const now = toStruct.get(box.dataset.msx!)
+    const moved = !was || !now
+      || Math.abs(was.x - now.x) > 1 || Math.abs(was.y - now.y) > 1
+      || Math.abs(was.w - now.w) > 1 || Math.abs(was.h - now.h) > 1
+    if (!moved) continue
     // Read the ink from the BOX, not the flip host: the host is the element
     // wrapper and computes to its own colour (black here), while the box
     // inherits the formula's. Fading from the wrong one made the bar arrive
     // as black and snap to white on completion — invisible for the whole fade
     // on a dark slide, which looks exactly like the pop this replaces.
-    const ink = getComputedStyle(box).color
+    fades.push({
+      box,
+      ink: getComputedStyle(box).color,
+      leaves: Array.from(box.querySelectorAll<HTMLElement>('[data-sym]')),
+    })
+  }
+  for (const { box, ink, leaves } of fades) {
     const inkClear = ink.startsWith('rgb(')
       ? ink.replace('rgb(', 'rgba(').replace(')', ', 0)')
       : 'rgba(0, 0, 0, 0)'
-    const leaves = Array.from(box.querySelectorAll<HTMLElement>('[data-sym]'))
     for (const leaf of leaves) leaf.style.color = ink
     anim.fromTo(box, { color: inkClear }, {
       color: ink,
