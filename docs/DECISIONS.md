@@ -5493,8 +5493,22 @@ default face steps too. BOTH faces available on a stock Mac show it. The
 revert simply restores the prior behaviour rather than swapping one notching
 font for another and changing the typography as a side effect.
 
-Of the fonts tested, only Noto Sans Math joins cleanly — and it is not
-installed anywhere by default, so using it means embedding it.
+Of the fonts tested, Noto Sans Math *appeared* to join cleanly — but that
+reading is not trustworthy, see the note on method below. It is also installed
+nowhere by default, so using it would mean embedding it.
+
+**Ruled out by measurement, not by eye:**
+
+- **Our layout.** The rule-plus-gap to radical-height ratio is 0.1449 both
+  inside the app and in an isolated render of the identical markup. temml, the
+  data-sym tagging, our CSS, display style and the fraction context all leave
+  the radical's geometry untouched.
+- **The stage scale.** Both the editor canvas and Reveal render the slide and
+  then apply a fractional `transform: scale()`, which was the last plausible
+  app-side cause — a resampled hairline would explain a step exactly. It is not
+  that: the artefact is unchanged at 100% and 200% editor zoom.
+
+What remains is Chromium's own MathML radical painting, which we cannot reach.
 
 So `math` is left alone. Formulas still render in whatever face the reader's
 OS supplies, and still differ between machines — a real gap against "the file
@@ -5511,11 +5525,17 @@ paint the radical at all — post-process temml's `<msqrt>` into a stretchy `√
 plus a bar we draw ourselves, which is what KaTeX does and is the only route
 that is exact for every font.
 
-**A note on how this was investigated, because it went badly.** Four separate
-visual calls on this junction were wrong before one was right: a clone the CSS
-rule never applied to, a four-font comparison where three resolved to the same
-fallback, and twice judging a "clean join" from strips whose differing metrics
-put the junctions in different places. Eyeballing two renders side by side is
-not a measurement when the two things being compared are not positioned
-identically. The reliable check is to render through the app's own pipeline,
-large, and look at the deck's own element.
+**A note on how this was investigated, because it went badly.** Repeated
+visual calls on this junction were wrong: a clone the CSS rule never applied
+to; a four-font comparison where three faces silently resolved to the same
+fallback; and several "that one looks clean" verdicts on strips too small, or
+whose differing metrics put the junctions in different places. The likeliest
+reading of the whole episode is that the step is present in every context and
+most of the "clean" observations were simply unreliable.
+
+Two lessons worth more than the finding. Comparing two renders side by side is
+not a measurement unless the compared things are positioned identically and
+large enough to judge — and `document.fonts.check()` will happily report a
+font that is not installed, so always measure a nonsense font name as a
+control. Where a human can see the artefact and the tooling keeps producing
+plausible-but-wrong verdicts, hand them the artefact and let them look.
