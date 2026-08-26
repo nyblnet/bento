@@ -2488,7 +2488,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-swatches { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
 .ed-swatch {
   width: 14px; height: 14px; padding: 0; border-radius: 3px; cursor: pointer;
-  border: 1px solid rgb(30 42 58 / 0.25);
+  border: 1px solid var(--line);
 }
 .ed-swatch:hover { transform: scale(1.15); }
 .ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }
