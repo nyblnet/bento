@@ -5440,102 +5440,53 @@ asks the release server for a signed manifest and sends nothing about you or
 this document — no ids, no telemetry." Live collaboration is network too, but
 it is network the reader started.
 
-## 2026-08-25 — no embedded math font, and why the square root looks the way it does
+## 2026-08-25 — the square root: it was the font we chose, and we un-chose it
 
-**The symptom.** In a formula, the radical's hook does not quite meet its
-overbar: at large sizes there is a visible step where the two should form one
-stroke. Reported against the starter deck's quadratic formula.
+**The symptom.** In the starter deck's quadratic formula, the radical's hook did
+not meet its overbar: a visible step where the two should form one stroke.
 
-**What it is NOT**, each checked rather than reasoned about:
+**The cause was ours, and it was recent.** A commit earlier the same day added
+`.bento-el math { font-family: 'STIX Two Math', 'Cambria Math', … , math }`,
+meaning to improve formula rendering by preferring a real math font over the
+generic `math` family. On macOS that selects STIX Two Math — and STIX is the
+one face that renders this join badly. Tested across nine variants, STIX was
+the ONLY one showing the break: the browser's default face, three fonts with
+patched MATH constants, and a hand-built radical all join cleanly, in a bare
+root, inside a fraction, and in the deck's exact markup.
 
-- Not the morph. At rest the radical carries no inline colour, transform or
-  animation state.
-- Not temml's missing stylesheet. Temml ships CSS we never import, which sets
-  `math { line-height: normal; font-style: normal; … }` — but those computed
-  values are already correct via the UA stylesheet, and applying temml's resets
-  renders identically.
-- Not reachable from CSS. `border-top` is `0px` on every node in the subtree and
-  there is no `::before`; Chromium paints the radical rule internally as part of
-  MathML layout. There is no handle to move it.
-- Not about stretching. `√x`, `√(b−4)` and `√(b²−4)` all show it, so it is not
-  tall content forcing a stretched glyph.
+The fix is the revert: no `font-family` on `math` at all. Verified by geometry
+rather than by eye — the deck's radical now measures 204.6x55.2, identical to
+the generic default and distinct from STIX's 236.9x63.1.
 
-**What it IS.** The rule's position comes from the font's MATH constants
-(`RadicalRuleThickness`, `RadicalVerticalGap`, `RadicalExtraAscender`) versus
-where the stretched glyph's own top flag lands, and Chromium's arithmetic does
-not reconcile the two. **It therefore varies by font** — magnified side by side,
-STIX Two Math shows a clear notch and Noto Sans Math is very nearly continuous.
+**What this cost, and the lesson.** Roughly six wrong conclusions were reported
+before the right one, every single one from an instrument that lied:
 
-**A trap worth recording.** An early comparison of four families "proved" the
-font made no difference. It proved nothing: this machine has exactly ONE font
-with a MATH table, so three of the four silently resolved to the same fallback.
-`document.fonts.check()` returns true for fonts that are not installed. Measure
-a nonsense font name as a control — every fallback returns the identical width.
+- `document.fonts.check()` returns true for fonts that are NOT installed, so a
+  four-font comparison was three fallbacks wearing different labels. Control:
+  measure a nonsense font name; every fallback returns identical metrics.
+- A "step size" metric compared the bar against the ink just left of it — which
+  is the diagonal, not the flag. It would score a perfect radical as broken,
+  and duly returned an identical 21px for every variant.
+- An SVG foreignObject rasteriser ignores `font-family` entirely. Confirmed by
+  `NoSuchFontXYZ` producing byte-identical output to STIX. Every font
+  conclusion drawn from it was void.
+- Repeated side-by-side visual calls, on strips too small to judge or whose
+  differing metrics put the junctions in different places.
 
-**The decision: do not embed a math font.** Measured costs, all with the MATH
-table intact and OFL-licensed (which matters, since a font would ship inside
-every user's file):
+The chain of wrong answers — "not the font", "not fixable", "embed 22KB", "draw
+it ourselves" — all rested on those. The thing that actually settled it was
+rendering the nine candidates large, in one page, and asking a human which
+looked right. **When an instrument keeps producing plausible answers and the
+human keeps disagreeing, stop refining the instrument and hand over the
+artefact.**
 
-| | practical subset | one deck | full |
-|---|---|---|---|
-| Noto Sans Math | 22KB | 5KB | 264KB |
-| STIX Two Math | 58KB | 8KB | 539KB |
+**Embedding a math font was costed and is NOT needed.** For the record, since
+the numbers took work to obtain: a practical subset with the MATH table intact
+is 22KB for Noto Sans Math or 58KB for STIX Two Math; the full faces are 264KB
+and 539KB. None of it buys anything here.
 
-22KB on every saved deck forever, to close a hairline in one glyph that most
-decks never use, is out of proportion. Embedding was verified NOT to fix it
-anyway on its own — an embedded subset renders identically to the same font
-installed; only *changing* the font helps.
-
-**What we do instead: nothing — the notch is not fixable from here.** Naming
-real math fonts ahead of the generic family was tried and REVERTED, but not
-because reverting fixes anything: rendered through the app at 150px, the
-default face steps too. BOTH faces available on a stock Mac show it. The
-revert simply restores the prior behaviour rather than swapping one notching
-font for another and changing the typography as a side effect.
-
-Of the fonts tested, Noto Sans Math *appeared* to join cleanly — but that
-reading is not trustworthy, see the note on method below. It is also installed
-nowhere by default, so using it would mean embedding it.
-
-**Ruled out by measurement, not by eye:**
-
-- **Our layout.** The rule-plus-gap to radical-height ratio is 0.1449 both
-  inside the app and in an isolated render of the identical markup. temml, the
-  data-sym tagging, our CSS, display style and the fraction context all leave
-  the radical's geometry untouched.
-- **The stage scale.** Both the editor canvas and Reveal render the slide and
-  then apply a fractional `transform: scale()`, which was the last plausible
-  app-side cause — a resampled hairline would explain a step exactly. It is not
-  that: the artefact is unchanged at 100% and 200% editor zoom.
-
-What remains is Chromium's own MathML radical painting, which we cannot reach.
-
-So `math` is left alone. Formulas still render in whatever face the reader's
-OS supplies, and still differ between machines — a real gap against "the file
-is the software", left open deliberately because closing it costs 22KB on
-every saved deck (see the table above) to fix a hairline most decks never
-show.
-
-**If it is ever worth fixing properly**, three routes, in cost order. Keep
-radicals out of the showcase deck, so the one glyph Chromium renders poorly is
-not the flagship's centrepiece (zero bytes, does not fix anything for authors).
-Embed Noto Sans Math (22KB, the only face tested that joins cleanly, but
-sans-serif, so formulas stop looking like TeX). Or stop letting the browser
-paint the radical at all — post-process temml's `<msqrt>` into a stretchy `√`
-plus a bar we draw ourselves, which is what KaTeX does and is the only route
-that is exact for every font.
-
-**A note on how this was investigated, because it went badly.** Repeated
-visual calls on this junction were wrong: a clone the CSS rule never applied
-to; a four-font comparison where three faces silently resolved to the same
-fallback; and several "that one looks clean" verdicts on strips too small, or
-whose differing metrics put the junctions in different places. The likeliest
-reading of the whole episode is that the step is present in every context and
-most of the "clean" observations were simply unreliable.
-
-Two lessons worth more than the finding. Comparing two renders side by side is
-not a measurement unless the compared things are positioned identically and
-large enough to judge — and `document.fonts.check()` will happily report a
-font that is not installed, so always measure a nonsense font name as a
-control. Where a human can see the artefact and the tooling keeps producing
-plausible-but-wrong verdicts, hand them the artefact and let them look.
+**Still true, and left open deliberately:** with no font named, formulas render
+in whatever math face the reader's OS supplies, so a deck with maths does not
+look identical on every machine. That is a real gap against "the file is the
+software" — but closing it means embedding a font, and the one font we know
+renders this glyph badly is the one macOS would have supplied.
