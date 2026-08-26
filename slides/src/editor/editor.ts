@@ -82,6 +82,8 @@ export class Editor {
   private lastAutoCheck: import('../update').UpdateCheck | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
   private panelW = { left: 188, right: 236 }
+  private templateReturnSlideId: string | null = null
+  private templateManagerAbort: AbortController | null = null
 
   constructor(
     private root: HTMLElement,
@@ -105,6 +107,8 @@ export class Editor {
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
+    document.addEventListener('bento:save-template-edit', () => this.finishTemplateEdit(true))
+    document.addEventListener('bento:cancel-template-edit', () => this.finishTemplateEdit(false))
     this.rebuildSidebar()
   }
 
@@ -1607,8 +1611,87 @@ export class Editor {
     add.classList.add('ed-add-slide')
     add.title = t('New slide from a layout')
     this.sidebar.appendChild(add)
+    const templates = btn(ICONS.template, t('Templates'), () => this.openTemplateManager(templates))
+    templates.classList.add('ed-add-slide', 'ed-template-button')
+    templates.title = t('Create, edit, duplicate, and delete template pages')
+    this.sidebar.appendChild(templates)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
+  }
+
+  // --- template pages ---------------------------------------------------------
+
+  private openTemplateManager(anchor: HTMLElement) {
+    // Abort before removing the old node: a removed popover's document-level
+    // outside/Escape listeners must not survive and close a later instance.
+    this.templateManagerAbort?.abort()
+    document.querySelector('.ed-template-manager')?.remove()
+    const abort = new AbortController()
+    this.templateManagerAbort = abort
+    const pop = div('ed-layoutpick ed-template-manager')
+    const head = div('ed-template-manager-head')
+    const title = div('ed-layoutpick-title'); title.textContent = t('Template pages')
+    const close = document.createElement('button'); close.className = 'ed-template-close'; close.type = 'button'; close.textContent = '×'; close.title = t('Close')
+    head.append(title, close); pop.appendChild(head)
+    const cleanup = () => {
+      if (this.templateManagerAbort === abort) this.templateManagerAbort = null
+      abort.abort()
+      pop.remove()
+    }
+    const outside = (ev: PointerEvent) => { if (!pop.contains(ev.target as Node)) cleanup() }
+    const escape = (ev: KeyboardEvent) => { if (ev.key === 'Escape') cleanup() }
+    close.addEventListener('click', cleanup, { signal: abort.signal })
+    const hint = div('ed-hint'); hint.textContent = t('Non-text template objects become protected background furniture; template text boxes stay editable on normal slides.'); pop.appendChild(hint)
+    const actions = div('ed-ops')
+    const blank = btn(ICONS.plus, t('Blank template'), () => {
+      const name = window.prompt(t('Template name'), t('Blank template')); if (!name) return
+      const layout: Slide = { id: uid('layout'), name, background: this.store.slide.background, transition: 'fade', elements: [], notes: '' }
+      this.store.commit(() => { this.store.doc.layouts = [...(this.store.doc.layouts ?? []), layout] }, 'slides'); cleanup(); this.beginTemplateEdit(layout.id)
+    })
+    const fromSlide = btn(ICONS.copy, t('From current slide'), () => {
+      const name = window.prompt(t('Template name'), this.store.slide.name ?? t('My template')); if (!name) return
+      const layout = JSON.parse(JSON.stringify(this.store.slide)) as Slide
+      layout.id = uid('layout'); layout.name = name; layout.notes = ''; delete layout.stateOf; delete layout.hidden; delete layout.templateId; delete layout.templateEditOf
+      for (const el of layout.elements) delete el.templateLocked
+      this.store.commit(() => { this.store.doc.layouts = [...(this.store.doc.layouts ?? []), layout] }, 'slides'); cleanup(); this.beginTemplateEdit(layout.id)
+    })
+    actions.append(blank, fromSlide); pop.appendChild(actions)
+    const grid = div('ed-layoutpick-grid')
+    for (const layout of this.store.doc.layouts ?? []) {
+      const item = div('ed-layoutpick-item'); item.appendChild(renderThumbnail(layout, this.store.doc, 104))
+      const name = div('ed-layoutpick-name'); name.textContent = layout.name ?? t('Untitled'); item.appendChild(name)
+      const tools = div('ed-ops')
+      const edit = btn('', t('Edit'), (ev) => { ev.stopPropagation(); cleanup(); this.beginTemplateEdit(layout.id) })
+      const duplicate = btn('', t('Duplicate'), (ev) => { ev.stopPropagation(); const copy = JSON.parse(JSON.stringify(layout)) as Slide; copy.id = uid('layout'); copy.name = t('{name} copy', { name: layout.name ?? t('Template') }); this.store.commit(() => { this.store.doc.layouts = [...(this.store.doc.layouts ?? []), copy] }, 'slides'); cleanup(); this.openTemplateManager(anchor) })
+      const remove = btn('', t('Delete'), (ev) => { ev.stopPropagation(); if (!window.confirm(t('Delete this template?'))) return; this.store.commit(() => { this.store.doc.layouts = this.store.doc.layouts?.filter((x) => x.id !== layout.id); if (!this.store.doc.layouts?.length) delete this.store.doc.layouts }, 'slides'); cleanup(); this.openTemplateManager(anchor) })
+      tools.append(edit, duplicate, remove); item.appendChild(tools); grid.appendChild(item)
+    }
+    pop.appendChild(grid)
+    const r = anchor.getBoundingClientRect(); pop.style.left = `${Math.max(8, r.left)}px`; pop.style.bottom = `${window.innerHeight - r.top + 8}px`; document.body.appendChild(pop)
+    // Delay outside-click registration so the click that opened the manager
+    // cannot immediately close it. If it was closed in that turn, do nothing.
+    setTimeout(() => {
+      if (!abort.signal.aborted) document.addEventListener('pointerdown', outside, { capture: true, signal: abort.signal })
+    })
+    document.addEventListener('keydown', escape, { signal: abort.signal })
+  }
+
+  private beginTemplateEdit(layoutId: string) {
+    const layout = this.store.doc.layouts?.find((x) => x.id === layoutId); if (!layout) return
+    this.finishTemplateEdit(false); this.templateReturnSlideId = this.store.slide.id
+    const draft = JSON.parse(JSON.stringify(layout)) as Slide; draft.id = uid('slide'); draft.name = t('Template: {name}', { name: layout.name ?? t('Untitled') }); draft.templateEditOf = layoutId; draft.hidden = true; delete draft.templateId
+    for (const el of draft.elements) delete el.templateLocked
+    const at = this.store.currentIndex + 1; this.store.commit(() => this.store.doc.slides.splice(at, 0, draft), 'slides'); this.store.goTo(at)
+  }
+
+  private finishTemplateEdit(save: boolean) {
+    const draft = this.store.slide; if (!draft?.templateEditOf) return
+    const layoutId = draft.templateEditOf, returnId = this.templateReturnSlideId, index = this.store.currentIndex
+    this.store.commit(() => {
+      if (save) { const next = JSON.parse(JSON.stringify(draft)) as Slide; next.id = layoutId; next.notes = ''; next.name = this.store.doc.layouts?.find((x) => x.id === layoutId)?.name ?? next.name?.replace(/^Template: /, ''); delete next.hidden; delete next.stateOf; delete next.templateId; delete next.templateEditOf; for (const el of next.elements) delete el.templateLocked; const at = this.store.doc.layouts?.findIndex((x) => x.id === layoutId) ?? -1; if (at >= 0) this.store.doc.layouts![at] = next; else this.store.doc.layouts = [...(this.store.doc.layouts ?? []), next] }
+      this.store.doc.slides.splice(index, 1)
+    }, 'slides')
+    const returnIndex = Math.max(0, this.store.doc.slides.findIndex((x) => x.id === returnId)); this.store.goTo(returnIndex); this.templateReturnSlideId = null; if (save) this.toast(t('Template saved'))
   }
 
   // --- layouts ---------------------------------------------------------------
@@ -1699,7 +1782,10 @@ export class Editor {
     this.store.commit(() => {
       const s = this.store.slide
       s.elements = applyLayout(s, layout, known)
+      const layoutIds = new Set(layout.elements.map((el) => el.id))
+      for (const el of s.elements) { if (layoutIds.has(el.id) && el.type !== 'text') el.templateLocked = true; else delete el.templateLocked }
       s.background = layout.background
+      s.templateId = layout.id
     })
     this.store.select([])
   }
@@ -2168,7 +2254,7 @@ export class Editor {
 
   private async runAutosave() {
     const doc = this.store.doc
-    if (doc.readonly) return
+    if (doc.readonly || doc.slides.some((slide) => !!slide.templateEditOf)) return
     // Never write an encrypted deck's plaintext to IndexedDB; its file
     // write-back below stays encrypted via serializeAuto.
     let snapshotted = false
@@ -2583,6 +2669,7 @@ export class Editor {
 
   async save(forcePicker: boolean) {
     this.canvas.commitTextEdit()
+    if (this.store.doc.slides.some((slide) => !!slide.templateEditOf)) { this.toast(t('Save or cancel template editing first')); return }
     // shared docs persist their CRDT state so the saved copy can rejoin
     // as a true fork later (offline edits merge both ways)
     this.session?.stampInto(this.store.doc)

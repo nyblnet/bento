@@ -2483,3 +2483,10 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-gate-offer { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .ed-gate-acts { display: flex; justify-content: flex-end; margin-top: 4px; }
+
+.bento-template-locked { pointer-events: none !important; }
+.ed-template-button { margin-top: 4px; }
+.ed-template-manager .ed-hint { margin: 8px 12px; max-width: 390px; }
+.ed-template-manager-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-right:8px; }
+.ed-template-close { border:0; background:transparent; color:inherit; font-size:24px; line-height:1; cursor:pointer; border-radius:6px; padding:2px 7px; }
+.ed-template-close:hover { background:rgba(94,118,153,.14); }

@@ -105,6 +105,8 @@ export interface ElementBase {
    * those four are the conventions the built-in layouts use.
    */
   role?: string
+  /** Protected non-text furniture inherited from a template. */
+  templateLocked?: boolean
 }
 
 export interface ShadowSpec {
@@ -220,6 +222,9 @@ export interface ImageElement extends ElementBase {
   src: string
   fit: 'contain' | 'cover' | 'fill'
   radius: number
+  /** Undefined/true keeps proportions; false applies to this image only.
+   *  Re-enabling locks the image at its CURRENT frame ratio. */
+  keepAspectRatio?: boolean
 }
 
 export interface SvgElement extends ElementBase {
@@ -385,6 +390,10 @@ export interface Slide {
   hover?: { type: 'focus-group' | 'reveal'; dim?: number; default?: string }
   /** review comment threads (editor-only; see Comment) */
   comments?: Comment[]
+  /** Template/layout lineage for an instantiated slide. */
+  templateId?: string
+  /** Temporary editor-only template draft marker. */
+  templateEditOf?: string
 }
 
 export interface BentoDoc {
@@ -1010,7 +1019,12 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
 /** A fresh slide from a layout — new slide id, element ids KEPT (lineage). */
 export function instantiateLayout(layout: Slide): Slide {
   const copy: Slide = JSON.parse(JSON.stringify(layout))
-  return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
+  copy.elements = copy.elements.map((el) => {
+    if (el.type === 'text') { delete el.templateLocked; return el }
+    el.templateLocked = true
+    return el
+  })
+  return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '', templateId: layout.id }
 }
 
 const textHasContent = (e: SlideElement) =>

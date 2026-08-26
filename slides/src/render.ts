@@ -962,6 +962,11 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
 export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
   const node = document.createElement('div')
   node.className = `bento-el bento-el-${el.type}`
+  if (el.templateLocked) {
+    node.classList.add('bento-template-locked')
+    node.style.pointerEvents = 'none'
+    node.setAttribute('aria-hidden', 'true')
+  }
   node.dataset.elId = el.id
   node.dataset.flipId = morphKey(el)
   if (el.link) node.dataset.link = el.link
@@ -1033,6 +1038,10 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (imgSrc) img.src = imgSrc
       else img.dataset.bentoOffline = '1'
       img.draggable = false
+      // Ratio locking controls resize geometry only. It must never switch the
+      // bitmap between contain/cover/fill, because doing so makes the visible
+      // image jump when the lock is toggled. Freeform image distortion is made
+      // persistent by setting fit='fill' when the lock is turned off.
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
       break

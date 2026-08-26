@@ -162,6 +162,11 @@ export class PropsPanel {
       this.stale = true // don't rip the field out from under the user; catch up on focusout
       return
     }
+    // A doc mutation rebuilds the same inspector in place. Preserve its scroll
+    // position so changing a control near the bottom does not jump the panel to
+    // the top. Selection/slide switches pass force=true and intentionally start
+    // the newly relevant inspector at the top.
+    const scrollTop = force ? 0 : this.host.scrollTop
     this.stale = false
     this.burst = false
     this.host.innerHTML = ''
@@ -170,6 +175,7 @@ export class PropsPanel {
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
     this.applyAccordion()
+    this.host.scrollTop = scrollTop
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
@@ -225,6 +231,18 @@ export class PropsPanel {
 
   private buildSlidePanel() {
     const slide = this.store.slide
+    if (slide.templateEditOf) {
+      this.section(t('Template editing'))
+      const hint = document.createElement('p'); hint.className = 'ed-hint'
+      hint.textContent = t('Edit every object here. Save the template when finished, or cancel to discard the draft.')
+      this.host.appendChild(hint)
+      const actions = document.createElement('div'); actions.className = 'ed-ops'
+      const save = document.createElement('button'); save.className = 'ed-btn ed-primary'; save.textContent = t('Save template')
+      save.addEventListener('click', () => document.dispatchEvent(new CustomEvent('bento:save-template-edit')))
+      const cancel = document.createElement('button'); cancel.className = 'ed-btn'; cancel.textContent = t('Cancel')
+      cancel.addEventListener('click', () => document.dispatchEvent(new CustomEvent('bento:cancel-template-edit')))
+      actions.append(save, cancel); this.host.appendChild(actions)
+    }
     this.section(t('Slide'))
     // deck-wide page size: presets + custom. Elements keep their absolute
     // positions — a size change reframes the canvas, it never rescales art.
@@ -462,6 +480,24 @@ export class PropsPanel {
         this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1))),
     )
     this.host.appendChild(geo)
+    if (el.type === 'image') {
+      this.row('Keep aspect ratio', this.toggle(el.keepAspectRatio !== false, (on) =>
+        this.mutate(el.id, (e) => {
+          if (e.type !== 'image') return
+          // Re-enabling means "lock the shape as it is now". The current w/h
+          // already defines the new ratio, so do not move or resize the frame.
+          // Moveable reads that current ratio at the next resize start.
+          if (on) {
+            delete e.keepAspectRatio
+          } else {
+            e.keepAspectRatio = false
+            // From this point the image itself follows independent width and
+            // height changes. Keep fill after re-locking so toggling the lock
+            // never restores contain/cover or changes the visible shape.
+            e.fit = 'fill'
+          }
+        }, true)))
+    }
 
     this.row('Role', this.select(
       ['none', 'title', 'subtitle', 'body', 'kicker'],
@@ -1823,11 +1859,11 @@ export class PropsPanel {
       textBtn('↔', 'Match widths — first selected sets the size (2+)', () => this.matchSize(els, 'w'), els.length >= 2),
       textBtn('↕', 'Match heights — first selected sets the size (2+)', () => this.matchSize(els, 'h'), els.length >= 2),
     ])
-    group('Order', [
-      textBtn('⇈', 'Bring to front', () => this.reorder(els, 'front')),
-      textBtn('↑', 'Bring forward one step', () => this.step(els, +1)),
-      textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
-      textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
+    group(t('Order'), [
+      textBtn('⇈', t('Bring to front'), () => this.reorder(els, 'front')),
+      textBtn('↑', t('Bring forward one step'), () => this.step(els, +1)),
+      textBtn('↓', t('Send backward one step'), () => this.step(els, -1)),
+      textBtn('⇊', t('Send to back'), () => this.reorder(els, 'back')),
     ])
 
     const grouped = els.some((e) => e.groupId)
@@ -1899,7 +1935,7 @@ export class PropsPanel {
 
   /** Move the selection one step up/down the paint order (adjacent swap). */
   private step(els: SlideElement[], dir: 1 | -1) {
-    const ids = new Set(els.map((e) => e.id))
+    const ids = new Set(els.filter((e) => !e.templateLocked).map((e) => e.id))
     this.store.commit(() => {
       const arr = this.store.slide.elements
       const idxs = arr.map((e, i) => (ids.has(e.id) ? i : -1)).filter((i) => i >= 0)
@@ -1953,7 +1989,7 @@ export class PropsPanel {
   }
 
   private reorder(els: SlideElement[], where: 'front' | 'back') {
-    const ids = new Set(els.map((e) => e.id))
+    const ids = new Set(els.filter((e) => !e.templateLocked).map((e) => e.id))
     this.store.commit(() => {
       const slide = this.store.slide
       const picked = slide.elements.filter((e) => ids.has(e.id))

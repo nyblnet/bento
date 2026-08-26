@@ -11,10 +11,11 @@ import { startNetGuard } from '../../kernel/src/net.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, downloadFile,
   suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword,
-  registerPreview, canWriteInPlace, hostCan,
+  registerPreview, registerSerializePrepare, canWriteInPlace, hostCan,
 } from './save'
 import { maybeShowReturnGate } from './editor/returngate'
 import { buildSlidePreview } from './preview'
+import { compactDocumentAssets } from './compact-assets'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
@@ -41,6 +42,7 @@ configureApp({
 // Registered before capturePristine only for tidiness — nothing serializes
 // this early — but it must be registered before the first save.
 registerPreview((doc) => buildSlidePreview(doc as BentoDoc))
+registerSerializePrepare((doc) => compactDocumentAssets(doc as BentoDoc).doc)
 
 capturePristine()
 
