@@ -478,13 +478,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .bento-el { position: absolute; contain: layout style; }
 
-/* Formulas are left on the browser's own `math` family ON PURPOSE — do not
-   "improve" this by naming a math font. That was tried: preferring
-   'STIX Two Math' selects, on macOS, the one face that renders the radical's
-   hook short of its overbar, leaving a visible step. Tested across nine
-   variants, STIX was the only one that breaks; the browser default joins
-   cleanly in a bare root, inside a fraction, and in the deck's own formula.
-   See docs/DECISIONS.md, 2026-08-25. */
+/* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
+   math font here fixes nothing and was reverted twice. Chrome resolves the
+   generic family to STIX Two Math anyway (measured: identical metrics), and
+   the radical's hook falling short of its overbar is a CHROMIUM regression,
+   not a font choice: perfect in 148, broken in 151, across every font and
+   construction tested. See docs/DECISIONS.md, 2026-08-25. */
 
 .bento-el-text,
 .bento-el-code

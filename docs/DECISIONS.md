@@ -5440,53 +5440,62 @@ asks the release server for a signed manifest and sends nothing about you or
 this document — no ids, no telemetry." Live collaboration is network too, but
 it is network the reader started.
 
-## 2026-08-25 — the square root: it was the font we chose, and we un-chose it
+## 2026-08-25 — the square root: a Chromium regression, not ours and not the font
 
-**The symptom.** In the starter deck's quadratic formula, the radical's hook did
-not meet its overbar: a visible step where the two should form one stroke.
+**The symptom.** In a formula, the radical's hook does not meet its overbar —
+a visible step where the two should be one stroke.
 
-**The cause was ours, and it was recent.** A commit earlier the same day added
-`.bento-el math { font-family: 'STIX Two Math', 'Cambria Math', … , math }`,
-meaning to improve formula rendering by preferring a real math font over the
-generic `math` family. On macOS that selects STIX Two Math — and STIX is the
-one face that renders this join badly. Tested across nine variants, STIX was
-the ONLY one showing the break: the browser's default face, three fonts with
-patched MATH constants, and a hand-built radical all join cleanly, in a bare
-root, inside a fraction, and in the deck's exact markup.
+**The answer, after a long and badly-run investigation: it is the browser.**
 
-The fix is the revert: no `font-family` on `math` at all. Verified by geometry
-rather than by eye — the deck's radical now measures 204.6x55.2, identical to
-the generic default and distinct from STIX's 236.9x63.1.
+| engine | radical |
+|---|---|
+| Chromium 148 | perfect |
+| Chromium 151 | broken |
 
-**What this cost, and the lesson.** Roughly six wrong conclusions were reported
-before the right one, every single one from an instrument that lied:
+Same machine, same fonts, same device pixel ratio, same markup. Every font
+tested breaks in 151 and every one is clean in 148: the generic `math` family,
+STIX Two Math explicitly, four STIX variants with patched MATH constants, an
+embedded Noto Sans Math, a non-math serif, and a hand-built radical made from a
+stretchy operator plus a CSS border. Chromium's tracker carries the related
+long-standing note that msqrt "doesn't stretch vertically to enclose all its
+argument".
+
+**Nothing in Bento causes it and nothing in Bento can fix it.** Not the font
+stack, not temml, not our data-sym tagging, not the template round-trip, not
+the stage transform, not `contain: layout style`, not the box-sizing reset, not
+font size, and not the fraction context. All were tested and all are innocent.
+
+**Do not "fix" this by naming a math font.** That was tried and reverted twice.
+On this machine Chrome resolves the generic `math` family to STIX Two Math
+anyway — measured: generic and STIX give byte-identical metrics (711.7x189.7)
+while a nonsense font name gives 614.9x165.8 — so naming STIX changes nothing
+and only costs the deck its typography.
+
+**How this went wrong, which is the part worth keeping.** Six or more confident
+wrong answers were reported before the right one, every one from an instrument
+that lied:
 
 - `document.fonts.check()` returns true for fonts that are NOT installed, so a
-  four-font comparison was three fallbacks wearing different labels. Control:
-  measure a nonsense font name; every fallback returns identical metrics.
-- A "step size" metric compared the bar against the ink just left of it — which
-  is the diagonal, not the flag. It would score a perfect radical as broken,
-  and duly returned an identical 21px for every variant.
-- An SVG foreignObject rasteriser ignores `font-family` entirely. Confirmed by
-  `NoSuchFontXYZ` producing byte-identical output to STIX. Every font
-  conclusion drawn from it was void.
-- Repeated side-by-side visual calls, on strips too small to judge or whose
-  differing metrics put the junctions in different places.
+  four-font comparison was three fallbacks wearing different labels. Control: a
+  nonsense font name — every fallback returns identical metrics.
+- A "step size" metric compared the bar against the ink just left of it, which
+  is the diagonal, not the flag. It scored a perfect radical as broken and
+  returned an identical 21px for every variant.
+- An SVG foreignObject rasteriser ignores `font-family` entirely, proven when
+  `NoSuchFontXYZ` produced byte-identical output to STIX.
+- And the one that cost the most: **every test page was judged in a different
+  browser engine from the one showing the bug.** The reviewer was looking at
+  Chromium 148 in an embedded viewer; the screenshots of the fault came from
+  Chrome 151. Nine test matrices came back "all fine" for that reason alone.
 
-The chain of wrong answers — "not the font", "not fixable", "embed 22KB", "draw
-it ourselves" — all rested on those. The thing that actually settled it was
-rendering the nine candidates large, in one page, and asking a human which
-looked right. **When an instrument keeps producing plausible answers and the
-human keeps disagreeing, stop refining the instrument and hand over the
-artefact.**
+**The lesson: pin the environment before trusting any comparison.** Record the
+engine and version in the test artefact itself. A rendering bug reproduced in
+one engine cannot be investigated in another, and "it looks fine here" is not
+evidence until "here" is named.
 
-**Embedding a math font was costed and is NOT needed.** For the record, since
-the numbers took work to obtain: a practical subset with the MATH table intact
-is 22KB for Noto Sans Math or 58KB for STIX Two Math; the full faces are 264KB
-and 539KB. None of it buys anything here.
-
-**Still true, and left open deliberately:** with no font named, formulas render
-in whatever math face the reader's OS supplies, so a deck with maths does not
-look identical on every machine. That is a real gap against "the file is the
-software" — but closing it means embedding a font, and the one font we know
-renders this glyph badly is the one macOS would have supplied.
+**Status: accepted, unfixed, not ours.** Readers on affected Chromium versions
+see a small step in square roots. If it becomes worth working around, the only
+route that bypasses the engine's radical painting is drawing the hook and bar
+ourselves as one SVG path — but note that even the hand-built approximation
+tested here still showed problems in 151, so that would need verifying in the
+affected engine first.
