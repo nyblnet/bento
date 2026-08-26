@@ -478,23 +478,14 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .bento-el { position: absolute; contain: layout style; }
 
-/* Formulas ask for the generic `math` family, which is not a font: the browser
-   resolves it to whatever the viewer's OS happens to supply. On a face without
-   proper MATH metrics the browser assembles the radical itself and its hook
-   does not meet its overbar — visible as a step in the square-root sign, and
-   different on every machine. Naming real math fonts first gets a proper one
-   on most systems for zero bytes.
-
-   Two things this does NOT do, both measured. It does not make rendering
-   identical everywhere — a deck with maths still uses whatever math font the
-   reader owns. And it does not fix the radical's hook meeting its overbar:
-   that step is Chromium painting the rule from the font's MATH constants and
-   missing the glyph's own flag, it varies BY font (STIX notches, Noto Sans
-   Math nearly does not), and no CSS can reach it. Embedding a font was costed
-   and declined — see docs/DECISIONS.md, 2026-08-25. */
-.bento-el math {
-  font-family: 'STIX Two Math', 'Cambria Math', 'Latin Modern Math', math;
-}
+/* Formulas are left on the browser's own `math` family ON PURPOSE.
+   Naming real math fonts first was tried and reverted: on macOS it selects
+   STIX Two Math, whose radical shows a visible step where the hook should meet
+   the overbar, while the default face joins the two cleanly. Chromium paints
+   that rule from the font's MATH constants and misses the stretched glyph's
+   own flag, so the defect travels WITH the font — picking a "better" math font
+   made the most visible glyph in a formula worse. Measured side by side at
+   300px; see docs/DECISIONS.md, 2026-08-25. */
 
 .bento-el-text,
 .bento-el-code

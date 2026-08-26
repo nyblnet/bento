@@ -5486,12 +5486,19 @@ decks never use, is out of proportion. Embedding was verified NOT to fix it
 anyway on its own — an embedded subset renders identically to the same font
 installed; only *changing* the font helps.
 
-**What we did instead** (`.bento-el math`, styles.css): name real math fonts
-ahead of the generic `math` family. That is zero bytes and gets a proper math
-font where the viewer has one. It does NOT fix the radical and does NOT make
-formulas identical across machines — a deck with maths still renders in
-whatever math font the reader owns, which is a real gap against "the file is
-the software", left open deliberately.
+**What we do instead: nothing — deliberately.** Naming real math fonts ahead
+of the generic family was tried and REVERTED. On macOS it selects STIX Two
+Math, and STIX is the face that notches; the browser's own default joins the
+hook to the overbar cleanly. Measured side by side at 300px, with each
+junction positioned from its own measured box so the comparison is fair.
+Preferring a "proper" math font made the most visible glyph in a formula
+worse, which is the opposite of the intent.
+
+So `math` is left alone. Formulas still render in whatever face the reader's
+OS supplies, and still differ between machines — a real gap against "the file
+is the software", left open deliberately because closing it costs 22KB on
+every saved deck (see the table above) to fix a hairline most decks never
+show.
 
 **If it is ever worth fixing properly**, two routes, in cost order: embed
 Noto Sans Math (22KB, best join of the fonts tested, but sans-serif, so
