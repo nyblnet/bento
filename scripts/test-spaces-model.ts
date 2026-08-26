@@ -1418,7 +1418,7 @@ function fsTable(f: string): string {
 // ---- a saved space shows its content to readers that run no script --------
 // The runtime ships deflated and inflates at boot, so with scripting off
 // nothing boots and the splash is never removed: every saved space appeared as
-// the bento boot animation to macOS QuickLook, iOS Files, Bento Tray and any
+// the bento boot animation to macOS QuickLook, iOS Files, bento/home and any
 // preview pane that renders HTML without executing it. Reported from the field.
 {
   const fsv = await import('node:fs')

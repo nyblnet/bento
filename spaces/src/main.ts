@@ -43,7 +43,7 @@ configureApp({
 })
 
 // Every save writes a still render of the home page into the shell, for the
-// readers that run no script: macOS QuickLook, iOS Files, Bento Tray, and any
+// readers that run no script: macOS QuickLook, iOS Files, bento/home, and any
 // preview pane that renders HTML without executing it. Without this the runtime
 // never inflates, the splash is never removed, and a saved space shows a boot
 // animation where its content should be. See preview.ts.

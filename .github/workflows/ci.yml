@@ -341,7 +341,7 @@ jobs:
         # appendingPathComponent was an arbitrary write inside the container —
         # including over another deck the user would later open and trust.
         # Source-shape checks; the Swift half self-skips without a toolchain.
-        run: node scripts/test-tray-bridge.ts
+        run: node scripts/test-home-bridge.ts
 
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
