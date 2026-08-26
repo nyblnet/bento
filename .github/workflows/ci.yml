@@ -193,17 +193,13 @@ jobs:
             TZ=$tz node scripts/test-spaces-calc.ts
           done
 
-      - name: Spaces shell size
+      - name: Spaces shell size ceiling
         # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
         # the round finished at 108KB, and the same entry claimed the ceiling
         # was "checked per feature from here" while shipping no mechanism — so
         # the breach was found by a reviewer reading the number rather than by
-        # the build that caused it.
-        #
-        # spaces has NO CEILING now (2026-08-24, maintainer's call — it had
-        # started declining worthwhile fixes over a few hundred bytes). This
-        # step still runs, still prints the size and the drift, and no longer
-        # fails on it. Shells that keep enforce:true still fail here.
+        # the build that caused it. Raising the ceiling is fine and expected;
+        # raising it SILENTLY is what this stops.
         run: node scripts/test-spaces-size.mjs
 
       - name: Spaces model rig
@@ -339,7 +335,7 @@ jobs:
         # disk, so one poisoned response persisted.
         run: node scripts/test-blobs.ts
 
-      - name: tray/ios bridge rig
+      - name: home/ios bridge rig
         # The iOS host opens ANY self-contained HTML document and treats those
         # documents as mutually untrusted, so a page-supplied filename reaching
         # appendingPathComponent was an arbitrary write inside the container —
@@ -355,10 +351,10 @@ jobs:
         # chrome reads by name. A hex value retyped into Swift is a value that can
         # disagree with the logo while looking almost right, which is the kind of
         # wrong nothing notices. This fails if any of it drifts.
-        run: node tray/assets/make-icons.mjs --check
+        run: node home/assets/make-icons.mjs --check
 
-      - name: tray/ios index rig
-        # The iOS text extractor is a PORT of tray/webext's, and the two are held
+      - name: home/ios index rig
+        # The iOS text extractor is a PORT of home/webext's, and the two are held
         # together by nothing but agreement — so this diffs them, driving the
         # real library.js against the compiled Swift over generated edge cases
         # and every document in the tree. A divergence means a deck is findable
@@ -368,7 +364,7 @@ jobs:
         # a Mac. That is the payoff for keeping UIKit out of that file.
         run: node scripts/test-tray-index.mjs
 
-      - name: tray/ios release verifier rig
+      - name: home/ios release verifier rig
         # Starter decks are not bundled; a new document is FETCHED from the
         # signed release channel and written to disk as an executable page. The
         # signature and hash checks are what make that acceptable, so this proves
@@ -398,7 +394,7 @@ jobs:
         run: node scripts/test-webext-background.ts
 
       - name: WebExtension bridge rig
-        # tray/webext decides, per save, whether to write in place or hand back
+        # home/webext decides, per save, whether to write in place or hand back
         # to the browser's own picker. Wrong in the permissive direction it
         # overwrites the open document with no dialog — which it did once. The
         # decision is pure logic over an options bag, so it is checkable here
