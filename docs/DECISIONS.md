@@ -5486,13 +5486,15 @@ decks never use, is out of proportion. Embedding was verified NOT to fix it
 anyway on its own — an embedded subset renders identically to the same font
 installed; only *changing* the font helps.
 
-**What we do instead: nothing — deliberately.** Naming real math fonts ahead
-of the generic family was tried and REVERTED. On macOS it selects STIX Two
-Math, and STIX is the face that notches; the browser's own default joins the
-hook to the overbar cleanly. Measured side by side at 300px, with each
-junction positioned from its own measured box so the comparison is fair.
-Preferring a "proper" math font made the most visible glyph in a formula
-worse, which is the opposite of the intent.
+**What we do instead: nothing — the notch is not fixable from here.** Naming
+real math fonts ahead of the generic family was tried and REVERTED, but not
+because reverting fixes anything: rendered through the app at 150px, the
+default face steps too. BOTH faces available on a stock Mac show it. The
+revert simply restores the prior behaviour rather than swapping one notching
+font for another and changing the typography as a side effect.
+
+Of the fonts tested, only Noto Sans Math joins cleanly — and it is not
+installed anywhere by default, so using it means embedding it.
 
 So `math` is left alone. Formulas still render in whatever face the reader's
 OS supplies, and still differ between machines — a real gap against "the file
@@ -5500,8 +5502,20 @@ is the software", left open deliberately because closing it costs 22KB on
 every saved deck (see the table above) to fix a hairline most decks never
 show.
 
-**If it is ever worth fixing properly**, two routes, in cost order: embed
-Noto Sans Math (22KB, best join of the fonts tested, but sans-serif, so
-formulas stop looking like TeX); or stop letting the browser paint the radical
-at all — post-process temml's `<msqrt>` into a stretchy `√` plus a bar we draw
-ourselves, which is what KaTeX does and is the only route that is exact.
+**If it is ever worth fixing properly**, three routes, in cost order. Keep
+radicals out of the showcase deck, so the one glyph Chromium renders poorly is
+not the flagship's centrepiece (zero bytes, does not fix anything for authors).
+Embed Noto Sans Math (22KB, the only face tested that joins cleanly, but
+sans-serif, so formulas stop looking like TeX). Or stop letting the browser
+paint the radical at all — post-process temml's `<msqrt>` into a stretchy `√`
+plus a bar we draw ourselves, which is what KaTeX does and is the only route
+that is exact for every font.
+
+**A note on how this was investigated, because it went badly.** Four separate
+visual calls on this junction were wrong before one was right: a clone the CSS
+rule never applied to, a four-font comparison where three resolved to the same
+fallback, and twice judging a "clean join" from strips whose differing metrics
+put the junctions in different places. Eyeballing two renders side by side is
+not a measurement when the two things being compared are not positioned
+identically. The reliable check is to render through the app's own pipeline,
+large, and look at the deck's own element.

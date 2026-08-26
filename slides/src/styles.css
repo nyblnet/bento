@@ -479,13 +479,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-el { position: absolute; contain: layout style; }
 
 /* Formulas are left on the browser's own `math` family ON PURPOSE.
-   Naming real math fonts first was tried and reverted: on macOS it selects
-   STIX Two Math, whose radical shows a visible step where the hook should meet
-   the overbar, while the default face joins the two cleanly. Chromium paints
-   that rule from the font's MATH constants and misses the stretched glyph's
-   own flag, so the defect travels WITH the font — picking a "better" math font
-   made the most visible glyph in a formula worse. Measured side by side at
-   300px; see docs/DECISIONS.md, 2026-08-25. */
+   Naming real math fonts first was tried and reverted. Not because it fixed
+   the radical — nothing here does. Chromium paints the radical rule from the
+   font's MATH constants and misses where the stretched glyph's own flag lands,
+   and BOTH faces available on a stock Mac show the resulting step. Preferring
+   STIX only swapped one notching font for another while changing the
+   typography, so the default stands. See docs/DECISIONS.md, 2026-08-25. */
 
 .bento-el-text,
 .bento-el-code
