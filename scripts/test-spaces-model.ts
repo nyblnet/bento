@@ -427,6 +427,23 @@ for (const [label, input, err] of [
   }
 }
 
+// ---- the page tree says where you are, to everyone -------------------------
+// `sp-here` renders the current page at weight 600 against 400. A sighted
+// reader gets that for free; a screen reader was told nothing, so the tree read
+// as a flat list of links with no indication which one you were on. Weight is
+// not an announcement. There are TWO places that set the class — the tree and
+// the archived list — and an attribute added to one of them is the kind of
+// half-fix that looks done.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const setsClass = (ed.match(/sp-here/g) ?? []).length
+  const setsAria = (ed.match(/setAttribute\('aria-current', 'page'\)/g) ?? []).length
+  ok(setsAria >= 2, `every row that can be current announces it (${setsAria} call sites)`)
+  ok(setsAria >= setsClass - 1,
+    'no place styles itself as current without saying so — sp-here and aria-current stay paired')
+}
+
 // ---- find & replace: the number shown IS the number changed ----------------
 // Replace-all is destructive and lands in one commit, so the count in the
 // readout, the count in the confirmation and the count of things that change
