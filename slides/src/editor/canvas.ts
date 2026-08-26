@@ -167,7 +167,7 @@ export class SlideCanvas {
     this.selecto = new Selecto({
       container: this.scroller,
       dragContainer: this.scroller,
-      selectableTargets: ['.bento-el'],
+      selectableTargets: ['.bento-el:not(.bento-template-locked)'],
       selectByClick: true,
       selectFromInside: false,
       toggleContinueSelect: 'shift',
@@ -552,6 +552,7 @@ export class SlideCanvas {
   private deepSelect(px: number, py: number) {
     const stack: string[] = []
     for (const el of this.store.slide.elements) {
+      if (el.templateLocked) continue
       if (px < el.x || px > el.x + el.w || py < el.y || py > el.y + el.h) continue
       const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
       if (!node || node.style.display === 'none') continue // hidden hover set
@@ -717,6 +718,7 @@ export class SlideCanvas {
   private selectedNodes(): HTMLElement[] {
     if (!this.surface) return []
     return this.store.selection
+      .filter((id) => !this.store.element(id)?.templateLocked)
       .map((id) => this.surface!.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`))
       .filter((n): n is HTMLElement => !!n)
   }
@@ -900,16 +902,18 @@ export class SlideCanvas {
         target.style.top = `${top}px`
       }
     }
-    const syncKeepRatio = (inputEvent: MouseEvent | undefined) => {
-      const want = !!inputEvent?.shiftKey
+    const syncKeepRatio = (inputEvent: MouseEvent | undefined, target: HTMLElement) => {
+      const el = target.dataset.elId ? this.store.element(target.dataset.elId) : undefined
+      const configured = el?.type === 'image' && el.keepAspectRatio !== false
+      const want = inputEvent?.shiftKey ? !configured : configured
       if (mv.keepRatio !== want) mv.keepRatio = want
     }
     mv.on('resizeStart', (e) => {
-      syncKeepRatio(e.inputEvent as MouseEvent)
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       noteResizeStart(e.target as HTMLElement)
     })
     mv.on('resize', (e) => {
-      syncKeepRatio(e.inputEvent as MouseEvent)
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       applyResize(e.target as HTMLElement, e.width, e.height, e.drag.left, e.drag.top, e.inputEvent as MouseEvent)
     })
     mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))
