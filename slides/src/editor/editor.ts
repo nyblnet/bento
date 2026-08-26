@@ -83,6 +83,7 @@ export class Editor {
   /** side panel widths (px) — user-resizable, persisted per browser */
   private panelW = { left: 188, right: 236 }
   private templateReturnSlideId: string | null = null
+  private templateManagerAbort: AbortController | null = null
 
   constructor(
     private root: HTMLElement,
@@ -1621,16 +1622,25 @@ export class Editor {
   // --- template pages ---------------------------------------------------------
 
   private openTemplateManager(anchor: HTMLElement) {
+    // Abort before removing the old node: a removed popover's document-level
+    // outside/Escape listeners must not survive and close a later instance.
+    this.templateManagerAbort?.abort()
     document.querySelector('.ed-template-manager')?.remove()
+    const abort = new AbortController()
+    this.templateManagerAbort = abort
     const pop = div('ed-layoutpick ed-template-manager')
     const head = div('ed-template-manager-head')
     const title = div('ed-layoutpick-title'); title.textContent = t('Template pages')
     const close = document.createElement('button'); close.className = 'ed-template-close'; close.type = 'button'; close.textContent = '×'; close.title = t('Close')
     head.append(title, close); pop.appendChild(head)
-    const cleanup = () => { pop.remove(); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape) }
+    const cleanup = () => {
+      if (this.templateManagerAbort === abort) this.templateManagerAbort = null
+      abort.abort()
+      pop.remove()
+    }
     const outside = (ev: PointerEvent) => { if (!pop.contains(ev.target as Node)) cleanup() }
     const escape = (ev: KeyboardEvent) => { if (ev.key === 'Escape') cleanup() }
-    close.addEventListener('click', cleanup)
+    close.addEventListener('click', cleanup, { signal: abort.signal })
     const hint = div('ed-hint'); hint.textContent = t('Non-text template objects become protected background furniture; template text boxes stay editable on normal slides.'); pop.appendChild(hint)
     const actions = div('ed-ops')
     const blank = btn(ICONS.plus, t('Blank template'), () => {
@@ -1658,7 +1668,12 @@ export class Editor {
     }
     pop.appendChild(grid)
     const r = anchor.getBoundingClientRect(); pop.style.left = `${Math.max(8, r.left)}px`; pop.style.bottom = `${window.innerHeight - r.top + 8}px`; document.body.appendChild(pop)
-    setTimeout(() => document.addEventListener('pointerdown', outside, true)); document.addEventListener('keydown', escape)
+    // Delay outside-click registration so the click that opened the manager
+    // cannot immediately close it. If it was closed in that turn, do nothing.
+    setTimeout(() => {
+      if (!abort.signal.aborted) document.addEventListener('pointerdown', outside, { capture: true, signal: abort.signal })
+    })
+    document.addEventListener('keydown', escape, { signal: abort.signal })
   }
 
   private beginTemplateEdit(layoutId: string) {
