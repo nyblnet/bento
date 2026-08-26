@@ -483,9 +483,15 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
    proper MATH metrics the browser assembles the radical itself and its hook
    does not meet its overbar — visible as a step in the square-root sign, and
    different on every machine. Naming real math fonts first gets a proper one
-   on most systems for zero bytes. It does NOT make rendering identical
-   everywhere; only embedding a math font would, and that is a size decision
-   the deck has not taken. */
+   on most systems for zero bytes.
+
+   Two things this does NOT do, both measured. It does not make rendering
+   identical everywhere — a deck with maths still uses whatever math font the
+   reader owns. And it does not fix the radical's hook meeting its overbar:
+   that step is Chromium painting the rule from the font's MATH constants and
+   missing the glyph's own flag, it varies BY font (STIX notches, Noto Sans
+   Math nearly does not), and no CSS can reach it. Embedding a font was costed
+   and declined — see docs/DECISIONS.md, 2026-08-25. */
 .bento-el math {
   font-family: 'STIX Two Math', 'Cambria Math', 'Latin Modern Math', math;
 }

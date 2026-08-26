@@ -5439,3 +5439,62 @@ language: "An update check is the only network this app makes on its own. It
 asks the release server for a signed manifest and sends nothing about you or
 this document — no ids, no telemetry." Live collaboration is network too, but
 it is network the reader started.
+
+## 2026-08-25 — no embedded math font, and why the square root looks the way it does
+
+**The symptom.** In a formula, the radical's hook does not quite meet its
+overbar: at large sizes there is a visible step where the two should form one
+stroke. Reported against the starter deck's quadratic formula.
+
+**What it is NOT**, each checked rather than reasoned about:
+
+- Not the morph. At rest the radical carries no inline colour, transform or
+  animation state.
+- Not temml's missing stylesheet. Temml ships CSS we never import, which sets
+  `math { line-height: normal; font-style: normal; … }` — but those computed
+  values are already correct via the UA stylesheet, and applying temml's resets
+  renders identically.
+- Not reachable from CSS. `border-top` is `0px` on every node in the subtree and
+  there is no `::before`; Chromium paints the radical rule internally as part of
+  MathML layout. There is no handle to move it.
+- Not about stretching. `√x`, `√(b−4)` and `√(b²−4)` all show it, so it is not
+  tall content forcing a stretched glyph.
+
+**What it IS.** The rule's position comes from the font's MATH constants
+(`RadicalRuleThickness`, `RadicalVerticalGap`, `RadicalExtraAscender`) versus
+where the stretched glyph's own top flag lands, and Chromium's arithmetic does
+not reconcile the two. **It therefore varies by font** — magnified side by side,
+STIX Two Math shows a clear notch and Noto Sans Math is very nearly continuous.
+
+**A trap worth recording.** An early comparison of four families "proved" the
+font made no difference. It proved nothing: this machine has exactly ONE font
+with a MATH table, so three of the four silently resolved to the same fallback.
+`document.fonts.check()` returns true for fonts that are not installed. Measure
+a nonsense font name as a control — every fallback returns the identical width.
+
+**The decision: do not embed a math font.** Measured costs, all with the MATH
+table intact and OFL-licensed (which matters, since a font would ship inside
+every user's file):
+
+| | practical subset | one deck | full |
+|---|---|---|---|
+| Noto Sans Math | 22KB | 5KB | 264KB |
+| STIX Two Math | 58KB | 8KB | 539KB |
+
+22KB on every saved deck forever, to close a hairline in one glyph that most
+decks never use, is out of proportion. Embedding was verified NOT to fix it
+anyway on its own — an embedded subset renders identically to the same font
+installed; only *changing* the font helps.
+
+**What we did instead** (`.bento-el math`, styles.css): name real math fonts
+ahead of the generic `math` family. That is zero bytes and gets a proper math
+font where the viewer has one. It does NOT fix the radical and does NOT make
+formulas identical across machines — a deck with maths still renders in
+whatever math font the reader owns, which is a real gap against "the file is
+the software", left open deliberately.
+
+**If it is ever worth fixing properly**, two routes, in cost order: embed
+Noto Sans Math (22KB, best join of the fonts tested, but sans-serif, so
+formulas stop looking like TeX); or stop letting the browser paint the radical
+at all — post-process temml's `<msqrt>` into a stretchy `√` plus a bar we draw
+ourselves, which is what KaTeX does and is the only route that is exact.
