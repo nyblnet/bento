@@ -193,13 +193,17 @@ jobs:
             TZ=$tz node scripts/test-spaces-calc.ts
           done
 
-      - name: Spaces shell size ceiling
+      - name: Spaces shell size
         # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
         # the round finished at 108KB, and the same entry claimed the ceiling
         # was "checked per feature from here" while shipping no mechanism — so
         # the breach was found by a reviewer reading the number rather than by
-        # the build that caused it. Raising the ceiling is fine and expected;
-        # raising it SILENTLY is what this stops.
+        # the build that caused it.
+        #
+        # spaces has NO CEILING now (2026-08-24, maintainer's call — it had
+        # started declining worthwhile fixes over a few hundred bytes). This
+        # step still runs, still prints the size and the drift, and no longer
+        # fails on it. Shells that keep enforce:true still fail here.
         run: node scripts/test-spaces-size.mjs
 
       - name: Spaces model rig
