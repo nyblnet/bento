@@ -13,9 +13,11 @@
 //   GET  /api/decks             list decks, most-recently-touched first (sidebar data) — OWNER ONLY
 //   POST /api/decks             create a deck: { doc } or { html } -> { id } — OWNER ONLY
 //   GET  /api/decks/:id         fetch a deck's content — OWNER ONLY
-//   PATCH /api/decks/:id        replace a 'bento' deck's doc JSON — OWNER ONLY
+//   PATCH /api/decks/:id        replace a deck's stored content — { doc } for 'bento',
+//                               { html } for 'html' (re-upload, overwriting in place) — OWNER ONLY
 //   PATCH /api/decks/:id/access  change the deck's access level — OWNER ONLY
 //   PATCH /api/decks/:id/title  rename a deck — OWNER ONLY
+//   PATCH /api/decks/:id/pin    pin/unpin a deck (stays atop the sidebar list) — OWNER ONLY
 //   DELETE /api/decks/:id       permanently delete a deck (D1 row + R2 doc/assets) — OWNER ONLY
 //   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
 //   GET  /d/:id                the deck: a 'bento' deck spliced into the shell, or an
@@ -63,8 +65,10 @@ import {
   getDeckHtml,
   getDeckMeta,
   replaceDeckDoc,
+  replaceHtmlDeck,
   renameHtmlDeck,
   setDeckAccess,
+  setDeckPinned,
   deleteDeck,
   putAsset,
   getAsset,
@@ -258,6 +262,7 @@ async function handleListDecks(env: Env): Promise<Response> {
       updatedAt: d.updated_at,
       access: d.access,
       kind: d.kind,
+      pinned: !!d.pinned,
     })),
   })
 }
@@ -385,22 +390,51 @@ async function handleGetDoc(env: Env, id: string): Promise<Response> {
 async function handleReplace(req: Request, env: Env, id: string): Promise<Response> {
   const meta = await getDeckMeta(env, id)
   if (!meta) return notFound()
-  if (meta.kind === 'html') {
-    // No in-place edit path for an 'html' deck (see file header) — re-upload
-    // as a new deck instead of trying to patch opaque, unparsed bytes.
-    return json({ error: "an 'html' deck can't be replaced in place — create a new one instead" }, { status: 400 })
-  }
   let body: unknown
   try {
     body = await req.json()
   } catch {
     return json({ error: 'invalid JSON body' }, { status: 400 })
   }
-  const doc = (body as { doc?: unknown })?.doc
+  const { doc, html: rawHtml } = (body as { doc?: unknown; html?: unknown }) ?? {}
+
+  if (meta.kind === 'html') {
+    // The one edit path an 'html' deck DOES have: full re-upload, replacing
+    // the stored bytes wholesale (there's no in-place field-level edit for
+    // opaque content — see the file header). A { doc } body against an
+    // 'html' deck is a kind mismatch, not a silent no-op.
+    if (typeof rawHtml !== 'string') {
+      return json({ error: "this deck is kind:'html' — PATCH it with { html }, not { doc }" }, { status: 400 })
+    }
+    if (!rawHtml.trim()) return json({ error: 'html must not be empty' }, { status: 422 })
+    if (rawHtml.length > MAX_HTML_DECK_BYTES) {
+      return json({ error: `html is ${rawHtml.length} bytes, over the ${MAX_HTML_DECK_BYTES} limit` }, { status: 413 })
+    }
+    await replaceHtmlDeck(env, id, rawHtml, extractHtmlTitle(rawHtml))
+    return json({ ok: true })
+  }
+
+  if (typeof rawHtml === 'string') {
+    return json({ error: "this deck is kind:'bento' — PATCH it with { doc }, not { html }" }, { status: 400 })
+  }
   const result = validateIncomingDoc(doc)
   if (!result.ok) return json({ errors: result.errors }, { status: 422 })
   await replaceDeckDoc(env, id, result.doc!)
   return json({ ok: true })
+}
+
+async function handleSetPinned(req: Request, env: Env, id: string): Promise<Response> {
+  if (!(await getDeckMeta(env, id))) return notFound()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const pinned = (body as { pinned?: unknown })?.pinned
+  if (typeof pinned !== 'boolean') return json({ error: 'pinned must be a boolean' }, { status: 422 })
+  await setDeckPinned(env, id, pinned)
+  return json({ ok: true, pinned })
 }
 
 async function handleUploadAsset(req: Request, env: Env, id: string): Promise<Response> {
@@ -568,6 +602,11 @@ export default {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
           return await handleRename(req, env, parts[2]!)
+        }
+        if (parts.length === 4 && parts[3] === 'pin' && req.method === 'PATCH') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleSetPinned(req, env, parts[2]!)
         }
       }
 
