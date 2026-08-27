@@ -478,12 +478,37 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .bento-el { position: absolute; contain: layout style; }
 
-/* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
-   math font here fixes nothing and was reverted twice. Chrome resolves the
-   generic family to STIX Two Math anyway (measured: identical metrics), and
-   the radical's hook falling short of its overbar is a CHROMIUM regression,
-   not a font choice: perfect in 148, broken in 151, across every font and
-   construction tested. See docs/DECISIONS.md, 2026-08-25. */
+/* THE RADICAL FIX — do not delete, and do not "simplify" to `serif`.
+   Chromium draws the square-root sign short of its own overbar when the maths
+   font is STIX Two Math, leaving a visible step where the hook should meet the
+   bar. Verified against every other candidate: the plain serif fallback, Noto
+   Sans Math, four STIX variants with patched MATH constants and a hand-built
+   radical all join cleanly; STIX alone breaks, in Chromium 148 AND 151.
+
+   It bites us because Chrome resolves the GENERIC `math` family to STIX on
+   macOS (measured: generic and STIX give identical metrics, 521.9x139.1, while
+   the serif fallback gives 450.9x121.6). So a deck picks up the one bad face
+   without ever naming it. Other engines resolve `math` elsewhere and look fine,
+   which is why this reproduces in Chrome and not in every browser.
+
+   The stack below names real maths fonts first and falls back to serif, so it
+   changes NOTHING except where STIX would have been chosen: Windows keeps
+   Cambria Math, a TeX install keeps Latin Modern Math, and macOS — which has
+   neither — lands on serif instead of STIX. Windows and Linux are unverified,
+   but they are unchanged by construction rather than by assumption.
+
+   Scoped to msqrt, with the contents put back, because `serif` has no MATH
+   table: applied to a whole formula it stops brackets stretching around a
+   fraction (measured: 315px -> 94px) and shrinks the large operators. Only the
+   radical's own glyph and rule come from the fallback; everything inside it,
+   and everything around it, stays in the maths font. See docs/DECISIONS.md,
+   2026-08-25. */
+.bento-el math msqrt {
+  font-family: 'Cambria Math', 'Latin Modern Math', serif;
+}
+.bento-el math msqrt * {
+  font-family: math;
+}
 
 .bento-el-text,
 .bento-el-code
