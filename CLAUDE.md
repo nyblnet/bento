@@ -47,9 +47,16 @@ Current feature set, all owner-only except where noted:
   auto-detects outline-shaped JSON vs. an already-compiled doc.
 - **Deck CRUD** — create/list/get/replace/rename/delete
   (`platform/worker/src/store.ts`, `index.ts`). Delete is permanent: the D1
-  row, `doc.json`, and every asset blob under the deck's R2 namespace all go
-  (R2 has no delete-by-prefix, so it lists then batch-deletes). Rename
-  rewrites `doc.title` itself — there's no separate cosmetic label.
+  row, stored bytes (`doc.json` or `doc.html`), and every asset blob under
+  the deck's R2 namespace all go (R2 has no delete-by-prefix, so it lists
+  then batch-deletes). Rename rewrites `doc.title` itself for a `'bento'`
+  deck (no separate cosmetic label); for an `'html'` deck it only touches
+  the D1 label, since there's no document field to rewrite. Replace branches
+  by kind too: `{doc}` overwrites a `'bento'` deck's document, `{html}`
+  wholesale-replaces an `'html'` deck's bytes and re-derives its title from
+  the new file — the one edit path an otherwise-opaque `'html'` deck gets.
+  Sending the wrong body shape for a deck's kind is a 400, not a silent
+  no-op.
 - **Per-deck access level**: `'private' | 'view' | 'edit'`
   (`migrations/0004_access.sql`, default `'edit'`). `'private'` 404s for
   anyone without the owner's session, identical to an unknown id — existence
@@ -63,15 +70,28 @@ Current feature set, all owner-only except where noted:
   for why a tri-state column replaced the boolean rather than bolting a
   private case onto it.
 - **Deck history sidebar** (`demo.ts`, served at `/`) — a ChatGPT-style list
-  (`GET /api/decks`, most-recently-touched first), each entry showing a kind
-  badge, a status icon (unlock/eye/lock — hand-drawn inline SVG, never an
-  icon font/CDN, matching the repo's zero-external-dependency ethos), and a
-  right-click (or ⚙️ button) context menu: Rename (edits the title IN THE
-  ROW itself, Explorer-F2-style, not a dialog), Access (a drill-down
-  submenu), Delete. The menu is a body-appended, fixed-position panel,
-  deliberately not nested inside the scrolling sidebar list — see this
-  file's own hard-won lesson #10 below on why a floating child inside an
-  `overflow-y:auto` container gets silently clipped.
+  (`GET /api/decks`, pinned first then most-recently-touched), each entry
+  showing a kind badge, a pin badge, a status icon (unlock/eye/lock —
+  hand-drawn inline SVG, never an icon font/CDN, matching the repo's
+  zero-external-dependency ethos), and a right-click (or ⚙️ button) context
+  menu: Pin/Unpin, Rename (edits the title IN THE ROW itself,
+  Explorer-F2-style, not a dialog), Re-upload… (`'html'` decks only —
+  replaces the deck's stored bytes wholesale via the same PATCH endpoint
+  create uses), Access (a drill-down submenu), Delete. The menu is a
+  body-appended, fixed-position panel, deliberately not nested inside the
+  scrolling sidebar list — see this file's own hard-won lesson #10 below on
+  why a floating child inside an `overflow-y:auto` container gets silently
+  clipped. **Pin** (`migrations/0006_pinned.sql`) sorts a deck to the top
+  regardless of recency — deliberately does NOT bump `updated_at`, since
+  pinning isn't "touching" content and bumping it would fight the ordering
+  pin exists to override. **Sidebar width drag-resizes** (plain mouse
+  events setting `flex-basis` inline, clamped 180–480px) but is
+  session-only by design — no persistence, resets on reload. **A plain
+  click on a deck now shows it in the main panel** (`#previewPanel`, an
+  `<iframe>`) instead of only ever opening a new tab, since every deck link
+  is `target="_blank"` and the main area used to never show anything but
+  the create wizard as a result; a modified click (Ctrl/Cmd/Shift/Alt) is
+  deliberately left alone so native new-tab/window gestures still work.
 - **Content patterns** (`demo.ts`'s `PATTERNS`) — Step 1's prompt is one of
   four genre-specific briefs (General/Business review/Pitch deck/Tutorial),
   each with its own guidance paragraph and loadable example; every pattern
@@ -81,8 +101,10 @@ Current feature set, all owner-only except where noted:
   alongside the compiled `'bento'` kind: a complete, self-running HTML slide
   deck some AIs will generate directly if asked (no `bento/slides` JSON at
   all), pasted into the same Step 2 box (auto-detected) and stored/served
-  byte-for-byte, never parsed or edited (`migrations/0005_kind.sql`). Its
-  title defaults to its own `<title>` tag. **Served through a sandboxed
+  byte-for-byte, never parsed or field-level-edited (`migrations/
+  0005_kind.sql`) — its one edit path is a wholesale re-upload (see "Deck
+  CRUD" above). Its title defaults to its own `<title>` tag. **Served
+  through a sandboxed
   `<iframe>` (`sandbox="allow-scripts …"` WITHOUT `allow-same-origin`),
   never directly at this origin** — arbitrary unreviewed script running
   same-origin would carry the OWNER's own ambient session cookie into any

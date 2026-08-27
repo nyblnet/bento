@@ -61,6 +61,7 @@ export interface DeckMeta {
   doc_bytes: number
   access: DeckAccess
   kind: DeckKind
+  pinned: number // D1 has no boolean type; 0/1
 }
 
 export interface CreateResult {
@@ -154,7 +155,7 @@ export async function getDeckHtml(env: Env, id: string): Promise<string | null> 
 
 export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null> {
   const row = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind FROM decks WHERE id = ?`,
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned FROM decks WHERE id = ?`,
   )
     .bind(id)
     .first<DeckMeta>()
@@ -163,12 +164,14 @@ export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null
 
 const LIST_LIMIT = 200
 
-/** All decks, most-recently-touched first — the sidebar's deck history list.
+/** All decks, pinned first (most-recently-touched among themselves), then
+ *  everything else most-recently-touched — the sidebar's deck history list.
  *  Bounded at LIST_LIMIT; pagination is a later concern, not needed at this
  *  project's declared scale. */
 export async function listDecks(env: Env): Promise<DeckMeta[]> {
   const result = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind FROM decks ORDER BY updated_at DESC LIMIT ?`,
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned FROM decks
+     ORDER BY pinned DESC, updated_at DESC LIMIT ?`,
   )
     .bind(LIST_LIMIT)
     .all<DeckMeta>()
@@ -181,6 +184,15 @@ export async function listDecks(env: Env): Promise<DeckMeta[]> {
  *  keeps full edit access regardless of it. */
 export async function setDeckAccess(env: Env, id: string, access: DeckAccess): Promise<void> {
   await env.DB.prepare(`UPDATE decks SET access = ? WHERE id = ?`).bind(access, id).run()
+}
+
+/** Pin or unpin a deck — keeps it at the top of the sidebar's history list
+ *  regardless of how recently it was touched (see listDecks' ORDER BY).
+ *  Deliberately does NOT bump `updated_at` — pinning isn't "touching" the
+ *  deck's content, and bumping it would fight the very ordering pinning is
+ *  supposed to override. */
+export async function setDeckPinned(env: Env, id: string, pinned: boolean): Promise<void> {
+  await env.DB.prepare(`UPDATE decks SET pinned = ? WHERE id = ?`).bind(pinned ? 1 : 0, id).run()
 }
 
 /** Overwrite a 'bento' deck's doc in place. Caller must have already
@@ -200,6 +212,20 @@ export async function replaceDeckDoc(env: Env, id: string, doc: Record<string, u
 export async function renameHtmlDeck(env: Env, id: string, title: string): Promise<void> {
   await env.DB.prepare(`UPDATE decks SET title = ?, updated_at = ? WHERE id = ?`)
     .bind(clampTitle(title), Date.now(), id)
+    .run()
+}
+
+/** Overwrite an 'html' deck's stored bytes in place — the re-upload path a
+ *  'bento' deck gets for free by being editable, that an opaque HTML file
+ *  otherwise wouldn't have at all. Re-derives the title from the NEW file's
+ *  own `<title>` tag (same rule as createHtmlDeck) rather than preserving
+ *  whatever the deck was called before: the content is now a different
+ *  file, so its default label should reflect that — an owner who wants a
+ *  custom title back can rename again afterward, same as after any create. */
+export async function replaceHtmlDeck(env: Env, id: string, html: string, title: string): Promise<void> {
+  await env.DOCS.put(deckHtmlKey(id), html, { httpMetadata: { contentType: 'text/html; charset=utf-8' } })
+  await env.DB.prepare(`UPDATE decks SET title = ?, updated_at = ?, doc_bytes = ? WHERE id = ?`)
+    .bind(clampTitle(title), Date.now(), html.length, id)
     .run()
 }
 

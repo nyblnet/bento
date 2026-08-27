@@ -350,8 +350,17 @@ ${PAGE_STYLES}
   .sidebar {
     width: 260px; flex: 0 0 260px; background: var(--bg-elev); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; padding: 20px 14px; box-sizing: border-box;
-    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; min-width: 180px; max-width: 480px;
   }
+  /* drag-to-resize handle — a thin invisible strip over the sidebar's right
+     border, widened only on hover/drag so it doesn't visually compete with
+     the border. Width is session-only (no persistence, by design): plain
+     JS state, reset to the CSS default on reload. */
+  .sidebar-resize-handle {
+    position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 20;
+    background: transparent;
+  }
+  .sidebar-resize-handle:hover, .sidebar-resize-handle.dragging { background: var(--accent); opacity: 0.5; }
   .sidebar-brand { font-weight: 800; font-size: 15px; margin: 0 0 16px; padding: 0 2px; }
   .sidebar-brand span { color: var(--accent); }
   .new-deck-btn { width: 100%; justify-content: center; margin-bottom: 16px; }
@@ -360,6 +369,7 @@ ${PAGE_STYLES}
     font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--text-dim); padding: 0 10px; margin: 4px 0 6px;
   }
+  .deck-list-label.gap { margin-top: 14px; }
   .deck-item {
     display: flex; align-items: center; gap: 4px; padding: 2px 2px 2px 10px; border-radius: 8px;
     font-size: 13px;
@@ -372,9 +382,10 @@ ${PAGE_STYLES}
     display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .deck-item .deck-time { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-  .deck-kind, .deck-status {
+  .deck-kind, .deck-status, .deck-pin-badge {
     flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; opacity: 0.7;
   }
+  .deck-pin-badge { color: var(--accent); opacity: 1; }
   .deck-gear {
     flex: 0 0 auto; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
     border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px;
@@ -425,6 +436,26 @@ ${PAGE_STYLES}
   .menu-toggle { display: none; }
   .sidebar-backdrop { display: none; }
 
+  /* main-area deck preview — a plain click on a sidebar deck link shows it
+     HERE instead of only ever opening a new tab, so the main panel isn't
+     stuck showing the create wizard forever once you have any decks.
+     Ctrl/Cmd/Shift/middle-click still bypass this and open a real new tab
+     (native browser behavior, never intercepted — see the click handler). */
+  .preview-panel { display: flex; flex-direction: column; height: 100vh; }
+  .preview-header {
+    display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  .preview-header .preview-title {
+    font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;
+  }
+  .preview-header a, .preview-header button {
+    font-size: 13px; font-weight: 600; color: var(--text-dim); text-decoration: none; white-space: nowrap;
+    background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+  }
+  .preview-header a:hover, .preview-header button:hover { color: var(--text); background: rgba(245,247,250,0.08); }
+  .preview-panel iframe { flex: 1; border: 0; width: 100%; background: var(--bg); }
+
   @media (max-width: 860px) {
     .sidebar {
       position: fixed; inset: 0 auto 0 0; z-index: 30; transform: translateX(-100%);
@@ -441,6 +472,8 @@ ${PAGE_STYLES}
       border-radius: 8px; border: 1px solid var(--border-strong); background: transparent; color: var(--text);
       cursor: pointer; font-size: 18px; flex-shrink: 0; margin-bottom: 12px;
     }
+    /* the overlay drawer's width is fixed by its own CSS, not user-resizable */
+    .sidebar-resize-handle { display: none; }
   }
 </style>
 </head>
@@ -450,16 +483,24 @@ ${PAGE_STYLES}
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">Bento platform <span>·</span> decks</div>
     <button id="newDeck" class="primary new-deck-btn" type="button">+ New deck</button>
-    <div class="deck-list-label">History</div>
     <div class="deck-list" id="deckList">
       <div class="deck-list-loading">Loading…</div>
     </div>
     <div class="sidebar-footer">
       <button id="logout" class="logout-link" type="button">Log out</button>
     </div>
+    <div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
   </aside>
   <main class="main-content">
-    <div class="wrap">
+    <div class="preview-panel" id="previewPanel" hidden>
+      <div class="preview-header">
+        <span class="preview-title" id="previewTitle"></span>
+        <a id="previewOpenTab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+        <button type="button" id="previewClose">✕ Close</button>
+      </div>
+      <iframe id="previewFrame" title="Deck preview"></iframe>
+    </div>
+    <div class="wrap" id="wizardWrap">
       <header class="hero hero-row">
         <div>
           <button class="menu-toggle" id="menuToggle" type="button" aria-label="Toggle deck history">☰</button>
@@ -538,6 +579,8 @@ const ICONS = {
   chevronLeft: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
   code: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>',
   check: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 0-2H8a1 1 0 0 0 0 2 1 1 0 0 1 1 1Z"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>',
 }
 function iconSpan(svg, cls) {
   return '<span class="ctx-icon' + (cls ? ' ' + cls : '') + '">' + svg + '</span>'
@@ -589,6 +632,23 @@ updatePromptText()
 
 let deckIndex = {}
 
+function deckItemHtml(d) {
+  const a = accessMeta(d.access)
+  const kindBadge = d.kind === 'html' ? '<span class="deck-kind" title="Self-contained HTML file — stored and served as-is">' + ICONS.code + '</span>' : ''
+  const pinBadge = d.pinned ? '<span class="deck-pin-badge" title="Pinned">' + ICONS.pin + '</span>' : ''
+  return (
+    '<div class="deck-item" data-id="' + d.id + '">' +
+    '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
+    '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
+    '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
+    '</a>' +
+    pinBadge + kindBadge +
+    '<span class="deck-status" title="' + a.label + ' — ' + a.desc + '">' + a.icon + '</span>' +
+    '<button class="deck-gear" type="button" data-id="' + d.id + '" title="Deck menu">' + ICONS.gear + '</button>' +
+    '</div>'
+  )
+}
+
 async function loadDeckList() {
   const list = document.getElementById('deckList')
   try {
@@ -602,21 +662,18 @@ async function loadDeckList() {
       list.innerHTML = '<div class="deck-list-empty">No decks yet — create your first one →</div>'
       return
     }
-    list.innerHTML = decks.map(d => {
-      const a = accessMeta(d.access)
-      const kindBadge = d.kind === 'html' ? '<span class="deck-kind" title="Self-contained HTML file — stored and served as-is">' + ICONS.code + '</span>' : ''
-      return (
-        '<div class="deck-item" data-id="' + d.id + '">' +
-        '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
-        '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
-        '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
-        '</a>' +
-        kindBadge +
-        '<span class="deck-status" title="' + a.label + ' — ' + a.desc + '">' + a.icon + '</span>' +
-        '<button class="deck-gear" type="button" data-id="' + d.id + '" title="Deck menu">' + ICONS.gear + '</button>' +
-        '</div>'
-      )
-    }).join('')
+    // Server already sorts pinned-first (store.ts's listDecks); the sidebar
+    // just needs to render the two groups under their own labels so a long
+    // history stays scannable — a plain flat list with a pin icon buried in
+    // each row doesn't achieve "easy to find" the way a real section does.
+    const pinned = decks.filter(d => d.pinned)
+    const rest = decks.filter(d => !d.pinned)
+    let out = ''
+    if (pinned.length) {
+      out += '<div class="deck-list-label">Pinned</div>' + pinned.map(deckItemHtml).join('')
+    }
+    out += '<div class="deck-list-label' + (pinned.length ? ' gap' : '') + '">History</div>' + rest.map(deckItemHtml).join('')
+    list.innerHTML = out
   } catch (e) {
     list.innerHTML = '<div class="deck-list-empty">Couldn\\'t load deck history.</div>'
   }
@@ -677,6 +734,53 @@ function startInlineRename(id, info) {
   input.addEventListener('blur', () => finish(true))
 }
 
+async function togglePin(id, info) {
+  try {
+    const res = await fetch('/api/decks/' + id + '/pin', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pinned: !info.pinned }),
+    })
+    if (!res.ok) throw new Error('failed')
+    loadDeckList()
+  } catch (err) {
+    alert('Could not change this deck\\'s pin. Try again.')
+  }
+}
+
+// Re-upload: the one edit path an 'html' deck has (there's no in-place field
+// edit for opaque content) — picks a file, reads it client-side, PATCHes the
+// SAME endpoint POST /api/decks uses to create one, replacing the deck's
+// stored bytes wholesale. A confirm() gates it since, unlike a 'bento'
+// deck's live editor, this has no undo.
+function reuploadHtmlDeck(id, info) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.html,.htm,text/html'
+  input.onchange = () => {
+    const file = input.files && input.files[0]
+    if (!file) return
+    if (!confirm('Replace "' + (info.title || 'this deck') + '"\\'s content with ' + file.name + '? This cannot be undone.')) return
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const res = await fetch('/api/decks/' + id, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ html: reader.result }),
+        })
+        if (!res.ok) throw new Error('failed')
+        loadDeckList()
+      } catch (err) {
+        alert('Could not re-upload this deck. Try again.')
+      }
+    }
+    reader.onerror = () => { alert('Could not read that file. Try again.') }
+    reader.readAsText(file)
+  }
+  input.click()
+}
+
 async function doDelete(id, info) {
   if (!confirm('Permanently delete "' + (info.title || 'this deck') + '"? This cannot be undone.')) return
   try {
@@ -705,12 +809,19 @@ function openDeckMenu(id, x, y) {
   menu.className = 'ctx-menu'
 
   function renderMain() {
+    const reuploadItem = info.kind === 'html'
+      ? '<button type="button" class="ctx-item" data-a="reupload">' + iconSpan(ICONS.upload) + '<span>Re-upload…</span></button>'
+      : ''
     menu.innerHTML =
+      '<button type="button" class="ctx-item" data-a="pin">' + iconSpan(ICONS.pin) + '<span>' + (info.pinned ? 'Unpin' : 'Pin') + '</span></button>' +
       '<button type="button" class="ctx-item" data-a="rename">' + iconSpan(ICONS.pencil) + '<span>Rename</span></button>' +
+      reuploadItem +
       '<button type="button" class="ctx-item" data-a="access">' + iconSpan(ICONS.eye) + '<span>Access</span>' + iconSpan(ICONS.chevronRight, 'ctx-right') + '</button>' +
       '<div class="ctx-sep"></div>' +
       '<button type="button" class="ctx-item danger" data-a="delete">' + iconSpan(ICONS.trash) + '<span>Delete…</span></button>'
+    menu.querySelector('[data-a="pin"]').onclick = () => { closeMenu(); togglePin(id, info) }
     menu.querySelector('[data-a="rename"]').onclick = () => { closeMenu(); startInlineRename(id, info) }
+    if (info.kind === 'html') menu.querySelector('[data-a="reupload"]').onclick = () => { closeMenu(); reuploadHtmlDeck(id, info) }
     menu.querySelector('[data-a="access"]').onclick = renderAccess
     menu.querySelector('[data-a="delete"]').onclick = () => { closeMenu(); doDelete(id, info) }
     positionMenu(menu, x, y)
@@ -786,6 +897,67 @@ document.getElementById('menuToggle').onclick = () => {
   sidebarBackdrop.classList.toggle('open')
 }
 sidebarBackdrop.onclick = closeSidebar
+
+// --- drag-to-resize the sidebar (session-only, no persistence) -------------
+
+const resizeHandle = document.getElementById('sidebarResizeHandle')
+resizeHandle.addEventListener('mousedown', (e) => {
+  e.preventDefault()
+  resizeHandle.classList.add('dragging')
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  const onMove = (moveEvent) => {
+    const min = 180, max = 480
+    const next = Math.max(min, Math.min(max, moveEvent.clientX))
+    sidebar.style.flexBasis = next + 'px'
+    sidebar.style.width = next + 'px'
+  }
+  const onUp = () => {
+    resizeHandle.classList.remove('dragging')
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+})
+
+// --- main-area deck preview --------------------------------------------
+
+const previewPanel = document.getElementById('previewPanel')
+const wizardWrap = document.getElementById('wizardWrap')
+const previewFrame = document.getElementById('previewFrame')
+const previewTitle = document.getElementById('previewTitle')
+const previewOpenTab = document.getElementById('previewOpenTab')
+
+function showPreview(id, title, href) {
+  previewTitle.textContent = title || 'Untitled deck'
+  previewOpenTab.href = href
+  previewFrame.src = href
+  wizardWrap.hidden = true
+  previewPanel.hidden = false
+  closeSidebar() // mobile: picking a deck should show it, not leave the drawer open
+}
+function closePreview() {
+  previewPanel.hidden = true
+  wizardWrap.hidden = false
+  previewFrame.src = 'about:blank' // stop any media/animation still running in the old deck
+}
+document.getElementById('previewClose').onclick = closePreview
+
+document.getElementById('deckList').addEventListener('click', (e) => {
+  const link = e.target.closest('.deck-item-link')
+  if (!link) return
+  // A modified click (new-tab/new-window/download gestures) must reach the
+  // browser's native handling untouched — only a plain left click switches
+  // to the inline preview instead of navigating.
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  e.preventDefault()
+  const item = link.closest('.deck-item')
+  const info = deckIndex[item.dataset.id] || {}
+  showPreview(item.dataset.id, info.title, link.href)
+})
 
 document.getElementById('logout').onclick = async () => {
   await fetch('/api/logout', { method: 'POST' })

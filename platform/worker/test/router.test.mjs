@@ -96,11 +96,15 @@ function makeD1() {
           } else if (sql.startsWith('INSERT INTO decks')) {
             const [id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access] = boundArgs
             const kind = sql.includes("'html')") ? 'html' : 'bento'
-            decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind })
+            decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind, pinned: 0 })
           } else if (sql.startsWith('UPDATE decks SET access')) {
             const [access, id] = boundArgs
             const row = decks.get(id)
             if (row) row.access = access
+          } else if (sql.startsWith('UPDATE decks SET pinned')) {
+            const [pinned, id] = boundArgs
+            const row = decks.get(id)
+            if (row) row.pinned = pinned
           } else if (sql.startsWith('UPDATE decks SET title = ?, updated_at = ? WHERE')) {
             // renameHtmlDeck — 3 params, no doc_bytes (distinct from replaceDeckDoc's
             // 4-param UPDATE below; matched by the exact absent-doc_bytes prefix).
@@ -124,8 +128,8 @@ function makeD1() {
           return null
         },
         async all() {
-          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind FROM decks')) {
-            const results = [...decks.values()].sort((a, b) => b.updated_at - a.updated_at)
+          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned FROM decks')) {
+            const results = [...decks.values()].sort((a, b) => (b.pinned - a.pinned) || (b.updated_at - a.updated_at))
             return { results, success: true }
           }
           return { results: [], success: true }
@@ -151,6 +155,11 @@ const check = async (name, fn) => {
 const assert = (cond, msg) => {
   if (!cond) throw new Error(msg)
 }
+// Date.now()'s 1ms resolution is coarse enough that two decks created
+// back-to-back in this in-memory mock can land in the same millisecond —
+// tests asserting most-recently-touched ORDER need a real gap, not just an
+// await, to avoid flaking on a genuine timestamp tie.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Reads the body exactly once (a Response body can only be consumed once)
 // and hands back both the parsed JSON (if any) and the raw text, so a check
@@ -911,12 +920,24 @@ await check('GET /a/:id/:key for an html deck honors the same private/404 rule a
   assert(ownerRes.status === 200, `owner expected 200 on their own private html deck, got ${ownerRes.status}`)
 })
 
-await check('PATCH /api/decks/:id for an html deck is rejected (no in-place edit)', async () => {
+await check('PATCH /api/decks/:id with {doc} against an html deck is a kind-mismatch 400', async () => {
   const res = await worker.fetch(
     new Request(`https://platform.example/api/decks/${htmlDeckId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', cookie: ownerCookie },
       body: JSON.stringify({ doc: exampleDoc }),
+    }),
+    env,
+  )
+  assert(res.status === 400, `expected 400, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id with {html} against a bento deck is a kind-mismatch 400', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${deckId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ html: exampleHtml }),
     }),
     env,
   )
@@ -965,6 +986,46 @@ await check('PATCH /api/decks/:id/title renames an html deck (D1 label only, byt
   assert(downloadedHtml === exampleHtml, "renaming must not touch the deck's stored bytes")
 })
 
+await check('PATCH /api/decks/:id with {html} re-uploads an html deck, replacing bytes and re-deriving the title', async () => {
+  const newHtml = '<!doctype html><html><head><title>Replaced Content</title></head><body>new</body></html>'
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${htmlDeckId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ html: newHtml }),
+    }),
+    env,
+  )
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === htmlDeckId)
+  assert(listed?.title === 'Replaced Content', `title should be re-derived from the new file, got ${listed?.title}`)
+
+  const downloadRes2 = await worker.fetch(
+    new Request(`https://platform.example/d/${htmlDeckId}/download`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { text: downloadedHtml2 } = await readBody(downloadRes2)
+  assert(downloadedHtml2 === newHtml, 'download should reflect the newly uploaded bytes, not the original')
+})
+
+await check('PATCH /api/decks/:id with {html} rejects empty content on re-upload', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${htmlDeckId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ html: '   ' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
 await check('DELETE /api/decks/:id removes an html deck (D1 row + doc.html)', async () => {
   const res = await worker.fetch(
     new Request(`https://platform.example/api/decks/${htmlDeckId}`, {
@@ -979,6 +1040,134 @@ await check('DELETE /api/decks/:id removes an html deck (D1 row + doc.html)', as
     env,
   )
   assert(viewRes.status === 404, `deleted html deck expected 404, got ${viewRes.status}`)
+})
+
+// --- pinning ---------------------------------------------------------------
+
+let pinDeckOldId, pinDeckNewId
+await check('PATCH /api/decks/:id/pin without a session is rejected', async () => {
+  const olderRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Pin me (older)' } }),
+    }),
+    env,
+  )
+  pinDeckOldId = (await readBody(olderRes)).data.id
+  await sleep(5) // guarantee a distinct updated_at from pinDeckNewId below
+
+  // A second, more-recently-created deck so ordering has something to prove.
+  const newerRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Not pinned (newer)' } }),
+    }),
+    env,
+  )
+  pinDeckNewId = (await readBody(newerRes)).data.id
+
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pinDeckOldId}/pin`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pinned: true }),
+    }),
+    env,
+  )
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/pin for an unknown deck is 404', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks/does-not-exist/pin', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ pinned: true }),
+    }),
+    env,
+  )
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/pin rejects a non-boolean value', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pinDeckOldId}/pin`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ pinned: 'yes' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/pin pins the OLDER deck and it sorts ahead of the newer, unpinned one', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pinDeckOldId}/pin`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ pinned: true }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(data.pinned === true, 'response should echo pinned:true')
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const ids = listData.decks.map((d) => d.id)
+  assert(
+    ids.indexOf(pinDeckOldId) < ids.indexOf(pinDeckNewId),
+    'the pinned-but-older deck should sort ahead of the newer, unpinned one',
+  )
+  const listedOld = listData.decks.find((d) => d.id === pinDeckOldId)
+  assert(listedOld?.pinned === true, 'listed deck should report pinned:true')
+  const listedNew = listData.decks.find((d) => d.id === pinDeckNewId)
+  assert(listedNew?.pinned === false, 'an unpinned deck should report pinned:false, not undefined')
+})
+
+await check('PATCH /api/decks/:id/pin unpins a deck, restoring normal most-recently-touched order', async () => {
+  // Touch the "newer" deck's updated_at explicitly rather than relying on
+  // wall-clock creation order — pinning/unpinning deliberately never bumps
+  // updated_at (see store.ts's setDeckPinned), so pinDeckOldId's timestamp
+  // is still whatever it was at creation; an explicit sleep + rename here
+  // guarantees pinDeckNewId's is strictly later, not just probably later.
+  await sleep(5)
+  await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pinDeckNewId}/title`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ title: 'Not pinned (newer, touched)' }),
+    }),
+    env,
+  )
+
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pinDeckOldId}/pin`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ pinned: false }),
+    }),
+    env,
+  )
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const ids = listData.decks.map((d) => d.id)
+  assert(
+    ids.indexOf(pinDeckNewId) < ids.indexOf(pinDeckOldId),
+    'once unpinned, the more-recently-touched deck should sort first again',
+  )
 })
 
 const exampleOutline = {

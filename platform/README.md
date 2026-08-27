@@ -88,11 +88,18 @@ alternative to `{doc}` (`migrations/0005_kind.sql`'s `decks.kind` column,
 `'bento' | 'html'`).
 
 An `'html'` deck is stored and served **byte-for-byte** — never parsed,
-never compiled, never editable in place (`PATCH /api/decks/:id` 400s for
-one; re-upload as a new deck instead). Its title defaults to whatever its
-own `<title>` tag says (`index.ts`'s `extractHtmlTitle`, a plain regex —
-this is a display label, not something the file's behavior depends on).
-Because there's no document to grant edit access *to*, `'edit'` is
+never compiled, never field-level-editable. It does have ONE edit path: a
+full **re-upload**, replacing the stored bytes wholesale
+(`PATCH /api/decks/:id` with `{html}` — same shape as create, and also
+reachable from the sidebar's context menu as "Re-upload…", which picks a
+file, reads it client-side, and PATCHes it). Re-upload re-derives the title
+from the NEW file's own `<title>` tag, same rule as create — the content is
+now a different file, so its default label follows it; a `{doc}` body
+against an `'html'` deck (or `{html}` against a `'bento'` one) is a
+kind-mismatch 400, not a silent no-op. Its title otherwise defaults to
+whatever its `<title>` tag says (`index.ts`'s `extractHtmlTitle`, a plain
+regex — this is a display label, not something the file's behavior depends
+on). Because there's no document to grant edit access *to*, `'edit'` is
 meaningless for this kind: `POST /api/decks` and the sidebar's Access
 submenu both only ever offer `'private'`/`'view'` for one.
 
@@ -115,6 +122,35 @@ fetch credentials, sandboxed identically for the owner and for anonymous
 viewers. This only wraps the *live* view — `/d/:id/download` still serves
 the exact original bytes, unwrapped, so the file stays fully portable once
 saved locally. Full reasoning: `docs/DECISIONS.md`.
+
+## Sidebar: pinning, resizing, and a real preview panel
+
+- **Pin** (`migrations/0006_pinned.sql`'s `decks.pinned`, `PATCH
+  /api/decks/:id/pin`, toggled from the context menu) keeps a deck at the
+  top of the sidebar regardless of how recently it was touched.
+  `store.ts`'s `listDecks` orders `pinned DESC, updated_at DESC`; pinning
+  deliberately does NOT bump `updated_at` (it isn't "touching" the deck's
+  content, and bumping it would fight the very ordering pinning exists to
+  override). The sidebar renders pinned decks under their own "Pinned"
+  label, everything else under "History" — a flat list with a small icon
+  buried in each row doesn't scan as fast when the point is finding
+  something quickly.
+- **Sidebar width is drag-resizable** (`.sidebar-resize-handle`, plain
+  mousedown/mousemove/mouseup JS setting `flex-basis`/`width` inline,
+  clamped 180–480px) — **deliberately session-only, no persistence**, per
+  the request that added it. Reloading resets it to the CSS default
+  (260px).
+- **A plain click on a sidebar deck now shows it in the main panel**
+  (`#previewPanel`, a header bar + `<iframe src="/d/:id">`) instead of only
+  ever opening a new tab — before this, every deck link was
+  `target="_blank"`, so the main content area never displayed anything but
+  the create wizard, no matter how many decks existed. A modified click
+  (Ctrl/Cmd/Shift/Alt, or anything but a plain left button) is deliberately
+  **not** intercepted — `preventDefault()` is only called for an
+  unmodified click, so the browser's native new-tab/new-window gestures on
+  the real `<a target="_blank">` still work exactly as before. The
+  preview's own "Open in new tab ↗" link is the explicit escape hatch for
+  when the panel isn't enough (e.g. presenting).
 
 ## Directory layout
 
@@ -145,6 +181,7 @@ platform/
       0003_editable.sql       — decks.is_editable (superseded same-day by 0004, unused now)
       0004_access.sql         — decks.access ('private'|'view'|'edit', per-deck access level)
       0005_kind.sql           — decks.kind ('bento'|'html', see "Decks that aren't Bento at all")
+      0006_pinned.sql         — decks.pinned (sidebar pin, see "Sidebar: pinning, resizing, and a real preview panel")
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
     ci-build.mjs           — Workers Builds' "Build command": produces generated/shell.ts
     build.mjs              — esbuild bundle → dist/worker.js, used by test:router (below), not by deploy
@@ -254,7 +291,7 @@ with your own**, not fill in blanks.
   — write that down too, you need both the name and the ID. Then open its
   **Console** tab and run each file in `platform/worker/migrations/` **in
   numeric order** — `0001_init.sql`, `0002_auth.sql`, `0003_editable.sql`,
-  `0004_access.sql`, `0005_kind.sql`. That's the whole migration step — no CLI, no separate
+  `0004_access.sql`, `0005_kind.sql`, `0006_pinned.sql`. That's the whole migration step — no CLI, no separate
   tool. (If you already ran `0001` from an earlier version of this project
   under its old name, `schema.sql` — same file, just moved and renumbered —
   you only need to run whichever numbered files come after the one you last
@@ -404,13 +441,14 @@ problem for whenever that app exists, not solved here.
 | `/api/login` | POST | none | `{username, password}` → starts a session on success |
 | `/api/logout` | POST | none | ends the current session |
 | `/api/compile` | POST | owner session | `{outline}` → `{doc}`. Pure — nothing is stored |
-| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access, kind}]}`, most-recently-touched first — the sidebar's data source |
+| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access, kind, pinned}]}`, pinned first then most-recently-touched — the sidebar's data source |
 | `/api/decks` | POST | owner session | `{doc, access?}` (a `'bento'` deck) or `{html, access?}` (an `'html'` deck) → `{id, url}`. `access` is one of `'private'\|'view'\|'edit'`; defaults to `'edit'` for `doc`, coerced to `'view'` if `'edit'` for `html` (meaningless for that kind, not rejected) |
 | `/api/decks/:id` | GET | owner session | `{kind:'bento', doc}` or `{kind:'html', html}` |
-| `/api/decks/:id` | PATCH | owner session | `{doc}` → replaces a `'bento'` deck's stored doc. 400 for an `'html'` deck — no in-place edit path, re-upload as a new deck instead |
+| `/api/decks/:id` | PATCH | owner session | `{doc}` replaces a `'bento'` deck's stored doc; `{html}` re-uploads an `'html'` deck's stored bytes wholesale, re-deriving the title from the new file's `<title>`. Sending the wrong shape for the deck's kind is a 400, not a silent no-op |
 | `/api/decks/:id` | DELETE | owner session | permanently deletes the deck: D1 row + stored bytes (`doc.json` or `doc.html`) + every asset blob under its R2 namespace. 404 on an unknown id |
 | `/api/decks/:id/access` | PATCH | owner session | `{access}` → `{ok, access}`. Changes what anonymous viewers get. 422 on an invalid value, 404 on an unknown id |
 | `/api/decks/:id/title` | PATCH | owner session | `{title}` → `{ok}`. For a `'bento'` deck, rewrites `doc.title` itself (there's no separate cosmetic label) — same effect as editing the title in the live editor. For an `'html'` deck, updates only the D1 label; the stored bytes are untouched. 422 on a blank title, 404 on an unknown id |
+| `/api/decks/:id/pin` | PATCH | owner session | `{pinned}` → `{ok, pinned}`. Keeps the deck atop the sidebar regardless of `updated_at` (pinning itself never bumps it). 422 on a non-boolean, 404 on an unknown id |
 | `/api/decks/:id/assets` | POST | owner session | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
 | `/d/:id` | GET | depends on the deck's `access` | `'private'` → 404 unless it's the owner's session. For a `'bento'` deck: `'view'` (non-owner) → `readonly: true` spliced in, boots Bento's present-only PLAYER mode; `'edit'`, or any owner session → the real, live editor page. For an `'html'` deck: always the sandboxed iframe wrapper (see "Decks that aren't Bento at all"), owner included |
 | `/d/:id/download` | GET | same as `/d/:id` | `'bento'`: same content rules as `/d/:id`, with `Content-Disposition: attachment`. `'html'`: the exact original bytes, unwrapped (no sandbox — see that section for why the wrapper only applies to the live view) |
@@ -447,14 +485,17 @@ not covered.
   session," not "encrypted" or "hidden from me too." That's the intended
   scope (the threat model is "randoms with the link," per the request that
   added this), not an oversight.
-- **`'html'` decks have no in-place edit, no version history, and no diffing**
-  — re-uploading is the only way to change one, and the old version is simply
-  gone (no soft-delete, same as `DELETE /api/decks/:id`'s own no-undo). Title
-  extraction (`extractHtmlTitle`) is a plain regex on `<title>`, not an HTML
-  parser — a file whose `<title>` tag is unusually malformed just falls back
-  to "Untitled deck," a cosmetic miss, not a correctness bug (nothing else
-  about the deck depends on that extraction succeeding). The 8MB size cap
-  matches the image-asset limit as a convenience, not a principled number for
+- **`'html'` decks have no field-level edit, no version history, and no
+  diffing** — re-upload (`PATCH /api/decks/:id` with `{html}`, or the
+  sidebar's "Re-upload…") is a real, supported action, but it's a wholesale
+  replace: the old bytes are simply gone the moment it succeeds, no
+  soft-delete, no "revert to previous," same no-undo posture as
+  `DELETE /api/decks/:id`. Title extraction (`extractHtmlTitle`) is a plain
+  regex on `<title>`, not an HTML parser — a file whose `<title>` tag is
+  unusually malformed just falls back to "Untitled deck," a cosmetic miss,
+  not a correctness bug (nothing else about the deck depends on that
+  extraction succeeding). The 8MB size cap matches the image-asset limit as
+  a convenience, not a principled number for
   this content type — revisit if a real deck ever needs more.
 - **Edits made in the live-served editor aren't saved back.** Opening `/d/:id`
   while logged in serves the full, editable Bento app, but the in-browser
