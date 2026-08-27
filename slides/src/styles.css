@@ -479,11 +479,19 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-el { position: absolute; contain: layout style; }
 
 /* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
-   math font here fixes nothing and was reverted twice. Chrome resolves the
-   generic family to STIX Two Math anyway (measured: identical metrics), and
-   the radical's hook falling short of its overbar is a CHROMIUM regression,
-   not a font choice: perfect in 148, broken in 151, across every font and
-   construction tested. See docs/DECISIONS.md, 2026-08-25. */
+   maths font here fixes nothing and has been reverted three times. The
+   radical's hook falling short of its overbar is Chromium drawing the overbar
+   as its own rule and missing the arm the font's glyph paints, by a fraction
+   of a pixel. It is not the font: generic `math` picks STIX on macOS and
+   Cambria Math on Windows and BOTH break, and forcing Times New Roman only
+   makes the break smaller. It is not our markup, our tagging, the stage
+   transform, the font size, or the height of the radicand (measured: the
+   deck's `b²−4ac` and a flat `b−4ac` get a byte-identical 113.8px radical).
+
+   There IS a mitigation — `msqrt { font-family: serif }` with the contents put
+   back to `math` — and it is deliberately NOT shipped: it is clean on macOS
+   and still broken on Windows. Read docs/DECISIONS.md, 2026-08-25, before
+   touching this; the rig is dist-single/radical-windows-test.html. */
 
 .bento-el-text,
 .bento-el-code

@@ -5440,36 +5440,91 @@ asks the release server for a signed manifest and sends nothing about you or
 this document — no ids, no telemetry." Live collaboration is network too, but
 it is network the reader started.
 
-## 2026-08-25 — the square root: a Chromium regression, not ours and not the font
+## 2026-08-25 — the square root: Chromium's radical join, accepted unfixed
 
 **The symptom.** In a formula, the radical's hook does not meet its overbar —
 a visible step where the two should be one stroke.
 
-**The answer, after a long and badly-run investigation: it is the browser.**
+**Status: accepted, unfixed.** Formulas keep the generic `math` family. There
+is a mitigation that helps on macOS and it is written down below, deliberately
+not shipped. This waits for an upstream fix.
 
-| engine | radical |
-|---|---|
-| Chromium 148 | perfect |
-| Chromium 151 | broken |
+**Every font tested breaks.** Measured on the affected engine, not inferred:
 
-Same machine, same fonts, same device pixel ratio, same markup. Every font
-tested breaks in 151 and every one is clean in 148: the generic `math` family,
-STIX Two Math explicitly, four STIX variants with patched MATH constants, an
-embedded Noto Sans Math, a non-math serif, and a hand-built radical made from a
-stretchy operator plus a CSS border. Chromium's tracker carries the related
-long-standing note that msqrt "doesn't stretch vertically to enclose all its
-argument".
+| platform | what generic `math` picks | radical join |
+|---|---|---|
+| macOS | STIX Two Math | broken |
+| Windows | Cambria Math | broken, same way |
+| Windows, forced `serif` | Times New Roman | smaller break, still broken |
 
-**Nothing in Bento causes it and nothing in Bento can fix it.** Not the font
-stack, not temml, not our data-sym tagging, not the template round-trip, not
-the stage transform, not `contain: layout style`, not the box-sizing reset, not
-font size, and not the fraction context. All were tested and all are innocent.
+Three fonts, three breaks. That is what rules the font out as the cause: a
+defect belonging to STIX would not follow us to Cambria Math and Times New
+Roman, on another operating system, in another font family.
 
-**Do not "fix" this by naming a math font.** That was tried and reverted twice.
-On this machine Chrome resolves the generic `math` family to STIX Two Math
-anyway — measured: generic and STIX give byte-identical metrics (711.7x189.7)
-while a nonsense font name gives 614.9x165.8 — so naming STIX changes nothing
-and only costs the deck its typography.
+**It is not a version regression.** An earlier version of this entry claimed
+Chromium 148 was clean and 151 broken. That table was wrong and is the reason
+this entry was rewritten. The "clean" engine was an embedded browser that ships
+almost no fonts, so it silently fell back to a plain serif and never rendered
+STIX at all. It was not a newer engine breaking a radical; it was two engines
+drawing two different fonts. STIX breaks in 148 too.
+
+**What the mechanism appears to be.** Chromium paints the arm of the radical
+from the font's glyph and then draws the overbar itself as a rule, and the
+break is those two disagreeing by a fraction of a pixel. Two measurements
+support this. Sweeping the radicand height from 10px to 200px, the glyph's
+advance width never moves off 109.1px, so the radical stretches by a glyph
+assembly rather than by wider size variants — the engine is compositing, not
+picking one drawn glyph. And the size of the break tracks the font's arm
+thickness rather than anything about the formula. It follows that the mismatch
+is resolution-dependent, which is why Windows breaks *differently* rather than
+not at all, and why zoom level can change the verdict on a given row.
+
+**The radicand's height is not the cause, so do not try to fix this by making
+formulas shorter.** Tested directly, because it is the intuitive suspect. In
+the starter deck's own quadratic formula the `b²` raises the radicand from
+64.4px to 84.3px, but the msqrt box stays at 113.8px — the *minimum*,
+single-glyph size — exactly as it is for a flat `b − 4ac` and for four other
+radicands. Same glyph, same size, same position, same bar. Only a fraction
+inside the root (radicand 159.7px, box 220.3px) actually stretches it. The
+radical in `√(b²−4ac)` is pixel-identical to the one in `√(b−4ac)`, so the
+exponent cannot be raising the bar.
+
+**The mitigation, documented and not shipped.** Scoping a non-maths font to the
+radical only, and putting the contents back:
+
+```css
+.bento-el math msqrt { font-family: serif; }
+.bento-el math msqrt * { font-family: math; }
+```
+
+The second rule is what makes it viable: it keeps the whole formula in the
+maths font and swaps only the glyph that is drawn wrong. A blanket `serif` on
+the formula is not an option — it collapses stretchy delimiters (a tall `(`
+measured 315px in the maths font and 94px in serif) and shrinks large
+operators.
+
+Verified clean on macOS/Chrome, where it swaps STIX's radical for the serif
+one. **It is not shipped because it does not hold on Windows**, where `serif`
+is Times New Roman and the break is smaller but still there. It trades one
+rounding mismatch for another, and a fix that only works on the author's own
+machine is worse than a known defect. If a font is ever found that joins
+cleanly on both platforms, this rule is the shape the fix should take — scoped
+to `msqrt`, contents restored to `math`. Note also that the stack matters: on
+Windows `'Cambria Math', serif` selects what generic `math` already selects, so
+that variant is a no-op there.
+
+`slides/dist-single/radical-windows-test.html` is the cross-platform test rig:
+one row per candidate font applying exactly the rule above, each row reporting
+whether the font actually resolved, and a paste-back block carrying platform,
+UA and DPR.
+
+**If it ever becomes worth fixing on our side**, the only route that bypasses
+the engine's radical painting is drawing the hook and bar ourselves — an
+`<mo>√</mo>` plus a CSS rule for the bar, overlapped so the join cannot
+separate at any DPI. That costs the semantic `msqrt` (accessibility, and the
+morph would need the bar tagged as its own symbol), and an earlier hand-built
+approximation still showed problems, so it needs verifying in the affected
+engine before anyone commits to it.
 
 **How this went wrong, which is the part worth keeping.** Six or more confident
 wrong answers were reported before the right one, every one from an instrument
@@ -5483,19 +5538,13 @@ that lied:
   returned an identical 21px for every variant.
 - An SVG foreignObject rasteriser ignores `font-family` entirely, proven when
   `NoSuchFontXYZ` produced byte-identical output to STIX.
-- And the one that cost the most: **every test page was judged in a different
-  browser engine from the one showing the bug.** The reviewer was looking at
-  Chromium 148 in an embedded viewer; the screenshots of the fault came from
-  Chrome 151. Nine test matrices came back "all fine" for that reason alone.
+- And the one that cost the most: **every test page was judged in a browser
+  that resolved the fonts differently from the one showing the bug.** Nine test
+  matrices came back "all fine" for that reason alone, each one clearing a
+  suspect that had never actually been rendered.
 
-**The lesson: pin the environment before trusting any comparison.** Record the
-engine and version in the test artefact itself. A rendering bug reproduced in
-one engine cannot be investigated in another, and "it looks fine here" is not
-evidence until "here" is named.
-
-**Status: accepted, unfixed, not ours.** Readers on affected Chromium versions
-see a small step in square roots. If it becomes worth working around, the only
-route that bypasses the engine's radical painting is drawing the hook and bar
-ourselves as one SVG path — but note that even the hand-built approximation
-tested here still showed problems in 151, so that would need verifying in the
-affected engine first.
+**The lesson: pin the environment before trusting any comparison, and prove the
+thing under test is really on screen.** Record engine, version and *resolved*
+font in the test artefact itself — a named font that silently fell back is not
+a test of that font. "It looks fine here" is not evidence until "here" is
+named.
