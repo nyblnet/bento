@@ -442,6 +442,9 @@ ${PAGE_STYLES}
      Ctrl/Cmd/Shift/middle-click still bypass this and open a real new tab
      (native browser behavior, never intercepted — see the click handler). */
   .preview-panel { display: flex; flex-direction: column; height: 100vh; }
+  .preview-panel[hidden] { display: none; } /* [class] and [hidden] tie on specificity — author CSS beats the
+    UA default either way, so without this the hidden panel still laid out at height:100vh, empty, above the
+    wizard — the "large blank area" this fixes */
   .preview-header {
     display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border);
     flex: 0 0 auto;
