@@ -530,13 +530,15 @@ ${PAGE_STYLES}
 
       <section class="card">
         <div class="step-label">Step 2</div>
-        <h2>Paste the AI's JSON — or a self-contained HTML deck — and create</h2>
-        <p>Paste whatever the AI replied with. We'll detect whether it's outline JSON (from step 1), a full
-        <code>bento/slides</code> document (the "advanced" path — paste one directly to skip the AI
-        entirely), or a complete, self-running HTML slide deck some AIs will generate directly if you
-        just ask for one — that gets stored and served as-is, not compiled into Bento's own format,
-        so it's always view-only for anyone but you.</p>
-        <textarea id="input" spellcheck="false" placeholder="Paste outline JSON, a bento/slides document, or a complete <!doctype html> deck — or use &quot;Upload HTML file…&quot; below"></textarea>
+        <h2>Paste — or upload — the AI's JSON or a self-contained HTML deck</h2>
+        <p>Paste whatever the AI replied with, or upload the file if it gave you one to download instead
+        (most JSON replies come as a downloadable file, not something meant to be copy-pasted). We'll
+        detect whether it's outline JSON (from step 1), a full <code>bento/slides</code> document (the
+        "advanced" path — paste or upload one directly to skip the AI entirely), or a complete,
+        self-running HTML slide deck some AIs will generate directly if you just ask for one — that gets
+        stored and served as-is, not compiled into Bento's own format, so it's always view-only for
+        anyone but you.</p>
+        <textarea id="input" spellcheck="false" placeholder="Paste outline JSON, a bento/slides document, or a complete <!doctype html> deck — or use the Upload buttons below"></textarea>
         <div class="access-field">
           <label for="accessSelect">Who can open this deck's link? (changeable anytime from the sidebar's ⚙️)</label>
           <select id="accessSelect">
@@ -548,6 +550,8 @@ ${PAGE_STYLES}
         <div class="actions">
           <button id="loadOutlineExample" type="button">Load pattern's example</button>
           <button id="loadExample" type="button">Load example doc (advanced)</button>
+          <button id="uploadJsonBtn" type="button">Upload JSON file…</button>
+          <input type="file" id="jsonFileInput" accept=".json,application/json" style="display:none">
           <button id="uploadHtmlBtn" type="button">Upload HTML file…</button>
           <input type="file" id="htmlFileInput" accept=".html,.htm,text/html" style="display:none">
           <button id="create" class="primary" type="button">Create deck →</button>
@@ -982,6 +986,25 @@ document.getElementById('loadOutlineExample').onclick = () => {
 }
 document.getElementById('loadExample').onclick = () => {
   document.getElementById('input').value = ${JSON.stringify(exampleJson)}
+}
+document.getElementById('uploadJsonBtn').onclick = () => {
+  document.getElementById('jsonFileInput').click()
+}
+document.getElementById('jsonFileInput').onchange = (e) => {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    // Just drops the text into the SAME box the paste path uses — the
+    // create handler's own JSON.parse + format detection (outline vs
+    // bento/slides) does the rest, so this isn't a separate upload
+    // endpoint, just a more convenient way to get the AI's downloaded
+    // .json file into the box without opening and copy-pasting it by hand.
+    document.getElementById('input').value = reader.result
+  }
+  reader.onerror = () => { alert('Could not read that file. Try again.') }
+  reader.readAsText(file)
+  e.target.value = ''
 }
 document.getElementById('uploadHtmlBtn').onclick = () => {
   document.getElementById('htmlFileInput').click()

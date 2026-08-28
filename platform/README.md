@@ -41,10 +41,14 @@ payload is shown actually breaking out into live markup).
 into a real `bento/slides` doc — no storage, pure function. The demo page
 (`/`) drives it end to end: step 1 is a copy-pasteable prompt asking a chat
 AI (in an existing conversation, so it already has the topic's context) to
-reply with outline JSON matching this schema; step 2 pastes that reply back,
-auto-detects that it's outline shaped (as opposed to an already-compiled
-`bento/slides` doc — the "advanced" path), calls `/api/compile`, then
-`/api/decks`. Any direct API caller can call `/api/compile` the same way.
+reply with outline JSON matching this schema; step 2 pastes that reply back —
+or uploads it, via the "Upload JSON file…" button (`FileReader.readAsText`
+into the same textarea the paste path uses, not a separate upload endpoint),
+since most chat AIs hand JSON back as a downloadable file rather than
+something meant to be copy-pasted — auto-detects that it's outline shaped
+(as opposed to an already-compiled `bento/slides` doc — the "advanced"
+path), calls `/api/compile`, then `/api/decks`. Any direct API caller can
+call `/api/compile` the same way.
 
 Step 1's prompt is built from one of four **content patterns**
 (`demo.ts`'s `PATTERNS`: General, Business review, Pitch deck, Tutorial) —
