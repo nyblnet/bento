@@ -152,15 +152,25 @@ saved locally. Full reasoning: `docs/DECISIONS.md`.
   that's both pinned and filed under a project shows ONLY in Pinned, never
   duplicated into its folder too. A project folder is collapsible
   (`.project-folder-row`, chevron rotates 90°; expand/collapse state is
-  session-only, same as sidebar width — no persistence). Assigning a deck
-  is via its own context menu's "Project ▸" submenu (mirrors "Access ▸":
-  "No project" / existing projects, checkmarked / "New project…" via
-  `prompt()`), or a project's own ⚙️ gear menu (Rename / Delete). **Deleting
-  a project does NOT delete its decks** — `store.ts`'s `deleteProject`
-  unassigns them first (`project_id → NULL`, no `ON DELETE CASCADE`), so
-  they simply fall back into plain History. API: `GET/POST /api/projects`,
-  `PATCH/DELETE /api/projects/:id`, `PATCH /api/decks/:id/project` (body
-  `{projectId}`, string or `null` to unfile).
+  session-only, same as sidebar width — no persistence). **The Projects
+  section always renders, even with zero projects yet** — it carries its
+  own "+" button (`#addProjectBtn`, `prompt()`-based create) right there,
+  rather than only being reachable from inside a deck's menu; an empty
+  state ("No projects yet — use + to create one.") fills the section
+  until the first one exists. A deck's own context menu has a matching
+  "Project ▸" submenu (mirrors "Access ▸": "No project" / existing
+  projects, checkmarked) — but that submenu is **move-only**, no inline
+  "New project…" — creating one belongs to the sidebar's own "+", so
+  there's exactly one place to make a project, and moving a deck never
+  produces a folder nobody can find afterward. With zero projects, the
+  submenu shows a disabled hint pointing back at that "+" instead. A
+  project's own ⚙️ gear menu (on its folder row) is Rename / Delete.
+  **Deleting a project does NOT delete its decks** — `store.ts`'s
+  `deleteProject` unassigns them first (`project_id → NULL`, no
+  `ON DELETE CASCADE`), so they simply fall back into plain History. API:
+  `GET/POST /api/projects`, `PATCH/DELETE /api/projects/:id`,
+  `PATCH /api/decks/:id/project` (body `{projectId}`, string or `null` to
+  unfile).
 - **Each sidebar section caps its own height and scrolls independently**
   (`.deck-section-items { max-height: 220px; overflow-y: auto }` for
   Pinned/Projects; History is the flexible last section, `flex:1` +

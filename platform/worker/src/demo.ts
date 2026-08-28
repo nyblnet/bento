@@ -756,11 +756,6 @@ async function loadDeckList() {
       projects.forEach(p => { projectIndex[p.id] = p })
     }
 
-    if (decks.length === 0 && projects.length === 0) {
-      list.innerHTML = '<div class="deck-list-empty">No decks yet — create your first one →</div>'
-      return
-    }
-
     // Server already sorts pinned-first (store.ts's listDecks). Pin wins
     // section placement outright: a pinned deck shows ONLY under Pinned,
     // never duplicated into its project folder too. Everything else that's
@@ -783,14 +778,23 @@ async function loadDeckList() {
       out += '<div class="deck-section deck-section-pinned"><div class="deck-list-label">Pinned</div>' +
         '<div class="deck-section-items">' + pinned.map(deckItemHtml).join('') + '</div></div>'
     }
-    if (projects.length) {
-      out += '<div class="deck-section deck-section-projects">' +
-        '<div class="deck-section-label-row"><span class="deck-list-label' + (pinned.length ? ' gap' : '') + '">Projects</span>' +
-        '<button type="button" class="project-add-btn" id="addProjectBtn" title="New project">' + ICONS.plus + '</button></div>' +
-        '<div class="deck-section-items">' + projects.map(p => projectFolderHtml(p, grouped[p.id] || [])).join('') + '</div></div>'
-    }
-    out += '<div class="deck-section deck-section-history"><div class="deck-list-label' + (pinned.length || projects.length ? ' gap' : '') + '">History</div>' +
-      '<div class="deck-section-items">' + (history.length ? history.map(deckItemHtml).join('') : '<div class="deck-list-empty">No unfiled decks.</div>') + '</div></div>'
+    // Projects ALWAYS renders, even with zero projects yet — creating one is
+    // an action that belongs here, next to its own "+" button, not buried
+    // inside a deck's context menu (that menu's Project ▸ submenu is only
+    // for MOVING a deck into an existing project — see renderProject).
+    out += '<div class="deck-section deck-section-projects">' +
+      '<div class="deck-section-label-row"><span class="deck-list-label' + (pinned.length ? ' gap' : '') + '">Projects</span>' +
+      '<button type="button" class="project-add-btn" id="addProjectBtn" title="New project">' + ICONS.plus + '</button></div>' +
+      '<div class="deck-section-items">' +
+      (projects.length
+        ? projects.map(p => projectFolderHtml(p, grouped[p.id] || [])).join('')
+        : '<div class="deck-list-empty">No projects yet — use + to create one.</div>') +
+      '</div></div>'
+    out += '<div class="deck-section deck-section-history"><div class="deck-list-label gap">History</div>' +
+      '<div class="deck-section-items">' +
+      (history.length ? history.map(deckItemHtml).join('') : '<div class="deck-list-empty">' +
+        (decks.length === 0 ? 'No decks yet — create your first one →' : 'No unfiled decks.') + '</div>') +
+      '</div></div>'
     list.innerHTML = out
     wireProjectFolders()
   } catch (e) {
@@ -799,7 +803,7 @@ async function loadDeckList() {
 }
 loadDeckList()
 
-// --- project CRUD (folder gear menu + the deck menu's "New project…") ------
+// --- project CRUD (the Projects section's own "+" button, and a folder's ⚙️ menu) ------
 
 function createProjectPrompt() {
   const name = prompt('New project name:')
@@ -997,19 +1001,30 @@ function openDeckMenu(id, x, y) {
     positionMenu(menu, x, y)
   }
 
+  // Move-only: this submenu files the deck into an EXISTING project (or
+  // clears it). Creating a project is a sidebar-level action (the Projects
+  // section's own "+" button, always visible there) — not duplicated here,
+  // since a project made mid-move has nowhere obvious to land once this
+  // menu closes and isn't discoverable the next time someone's looking for
+  // "where do I make a new project".
   function renderProject() {
     const items = [
       '<button type="button" class="ctx-item" data-p="">' + iconSpan(ICONS.eye) + '<span>No project</span>' +
       (!info.projectId ? iconSpan(ICONS.check, 'ctx-right') : '') + '</button>',
     ]
-    projects.forEach(p => {
+    if (projects.length) {
+      projects.forEach(p => {
+        items.push(
+          '<button type="button" class="ctx-item" data-p="' + p.id + '">' + iconSpan(ICONS.folder) + '<span>' + esc(p.name) + '</span>' +
+          (info.projectId === p.id ? iconSpan(ICONS.check, 'ctx-right') : '') + '</button>',
+        )
+      })
+    } else {
       items.push(
-        '<button type="button" class="ctx-item" data-p="' + p.id + '">' + iconSpan(ICONS.folder) + '<span>' + esc(p.name) + '</span>' +
-        (info.projectId === p.id ? iconSpan(ICONS.check, 'ctx-right') : '') + '</button>',
+        '<button type="button" class="ctx-item" disabled>' + iconSpan(ICONS.folder) +
+        '<span>No projects yet — use the sidebar\\'s +</span></button>',
       )
-    })
-    items.push('<div class="ctx-sep"></div>')
-    items.push('<button type="button" class="ctx-item" data-p="__new">' + iconSpan(ICONS.plus) + '<span>New project…</span></button>')
+    }
     menu.innerHTML =
       '<div class="ctx-header"><button type="button" data-a="back">' + ICONS.chevronLeft + '</button><span>Project</span></div>' +
       items.join('')
@@ -1017,30 +1032,6 @@ function openDeckMenu(id, x, y) {
     menu.querySelectorAll('[data-p]').forEach(btn => {
       btn.onclick = async () => {
         const value = btn.dataset.p
-        if (value === '__new') {
-          closeMenu()
-          const name = prompt('New project name:')
-          if (!name || !name.trim()) return
-          try {
-            const createRes = await fetch('/api/projects', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ name: name.trim() }),
-            })
-            if (!createRes.ok) throw new Error('failed')
-            const created = await createRes.json()
-            const assignRes = await fetch('/api/decks/' + id + '/project', {
-              method: 'PATCH',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ projectId: created.id }),
-            })
-            if (!assignRes.ok) throw new Error('failed')
-            loadDeckList()
-          } catch (err) {
-            alert('Could not create that project. Try again.')
-          }
-          return
-        }
         const projectId = value === '' ? null : value
         if (projectId === (info.projectId || null)) { closeMenu(); return }
         menu.querySelectorAll('[data-p]').forEach(b => b.disabled = true)
