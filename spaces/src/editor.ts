@@ -34,6 +34,7 @@ import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
 import { openAbout } from './about'
+import { openGraphView } from './graph.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
@@ -346,6 +347,8 @@ export class Editor {
         run: () => this.makeIssue() },
       { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
         run: () => this.openImport() },
+      { icon: 'graph', label: t('Graph'), hint: t('Every page, and what links to what'),
+        run: () => this.openGraph() },
       { icon: 'print', label: t('Print or save as PDF'), hint: '⌘P', run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), hint: t('Version, language, password, exports'),
         run: () => this.openAbout() },
@@ -3220,6 +3223,42 @@ export class Editor {
    * the dialog's scrim, escape handling and focus return rather than growing a
    * second set.
    */
+  /**
+   * The space as a picture: pages, and the links between them.
+   *
+   * The DRAWING lives in graph.ts; what is here is only what an overlay is in
+   * this editor — one at a time, and it owns the keyboard while it is open
+   * (`this.overlay`). Teardown rides on `overlayReflow`, which is the hook
+   * `closeOverlay` already calls before it removes the node: the graph has
+   * observers and an animation frame to give back, and there is no second
+   * teardown path to forget about.
+   */
+  openGraph(): void {
+    this.closeOverlay()
+    const returnFocus = document.activeElement as HTMLElement | null
+    const view = openGraphView({
+      doc: this.store.doc,
+      index: this.store.index,
+      currentId: this.store.pageId,
+      open: (id) => { close(); this.store.goToPage(id); this.repaint() },
+      close: () => close(),
+    })
+    const close = () => {
+      this.closeOverlay()
+      document.removeEventListener('keydown', onKey, true)
+      returnFocus?.focus?.()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+    document.addEventListener('keydown', onKey, true)
+    this.overlay = view.el
+    this.overlayReflow = () => view.destroy()
+    document.body.append(view.el)
+    view.el.tabIndex = -1
+    view.el.focus()
+  }
+
   openHelp(): void {
     this.closeOverlay()
     const returnFocus = document.activeElement as HTMLElement | null

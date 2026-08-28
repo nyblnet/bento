@@ -55,6 +55,9 @@ import {
   SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout, mediaPlayback,
 } from '../spaces/src/blocks.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
+import {
+  buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
+} from '../spaces/src/graph.ts'
 
 let failures = 0
 let checks = 0
@@ -2944,6 +2947,150 @@ function fsTable(f: string): string {
   try { backlinksToB({ id: 'k', type: 'table', rows: ['not-a-row', [null, 7, cell]] }) }
   catch { threw = true }
   ok(!threw, 'a malformed rows array does not take the index down')
+}
+
+
+// ---- 8. the graph view -----------------------------------------------------
+// The picture is drawn from `buildIndex().backlinks` and nothing else — there
+// is no second link index (spaces/src/graph.ts). What is asserted here is the
+// part a screenshot cannot show: that two references between the same pair are
+// one edge and not two, that the layout is REPRODUCIBLE (the reveal animation
+// interpolates toward a settled answer, so a layout that moved between runs
+// would make the same space a different picture every time it is opened), and
+// that the springs actually pull linked pages together rather than merely
+// running without error.
+{
+  const link = (to: string) => `<a href="#p/${to}">x</a>`
+  const space = (pages: Array<Partial<Page> & { id: string }>): SpacesDoc => ({
+    format: FORMAT, version: 1, docId: 'g', title: 'g', theme: {},
+    pages: pages.map((p) => ({ title: p.id, blocks: [], ...p })),
+  }) as unknown as SpacesDoc
+  const graphOf = (d: SpacesDoc) => buildGraph(d, buildIndex(d))
+
+  {
+    const d = space([
+      { id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('b') } as Block] },
+      { id: 'b' },
+      { id: 'z', archived: true, blocks: [{ id: 'b2', type: 'p', html: link('b') } as Block] },
+    ])
+    const g = graphOf(d)
+    ok(g.nodes.length === 2 && !g.at.has('z'),
+      'graph: an archived page is not drawn — it is out of the way in the sidebar too')
+    ok(g.edges.length === 1 && g.edges[0].links === 1,
+      'graph: one link between two pages is one edge')
+    ok(g.nodes.every((n) => n.deg === 1),
+      'graph: …and both ends of it count as connected')
+  }
+  {
+    // two references, one relationship — the defect this guards is an edge list
+    // that grows with every mention and a hub that looks twice as busy as it is
+    const d = space([
+      { id: 'a', blocks: [
+        { id: 'b1', type: 'p', html: link('b') } as Block,
+        { id: 'b2', type: 'p', html: link('b') } as Block,
+      ] },
+      { id: 'b', blocks: [{ id: 'b3', type: 'p', html: link('a') } as Block] },
+    ])
+    const g = graphOf(d)
+    ok(g.edges.length === 1, 'graph: three references between one pair are ONE undirected edge')
+    ok(g.edges[0].links === 3, '…carrying the weight of all three')
+    ok(g.nodes[0].deg === 1, '…and counting once toward how connected the page is')
+  }
+  {
+    const d = space([{ id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('a') } as Block] }])
+    ok(graphOf(d).edges.length === 0, 'graph: a page that links to itself draws no edge')
+  }
+  {
+    // the tree is a relationship too: a space where nobody has written a
+    // wikilink yet must not draw as unconnected dust
+    const d = space([{ id: 'a' }, { id: 'b', parent: 'a' }])
+    const g = graphOf(d)
+    ok(g.edges.length === 1 && g.edges[0].tree && g.edges[0].links === 0,
+      'graph: a child page is joined to its parent')
+    const d2 = space([
+      { id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('b') } as Block] },
+      { id: 'b', parent: 'a' },
+    ])
+    const g2 = graphOf(d2)
+    ok(g2.edges.length === 1 && g2.edges[0].tree && g2.edges[0].links === 1,
+      'graph: a child that is ALSO linked is still one edge, not two on top of each other')
+  }
+  ok(nodeRadius(0) < nodeRadius(3) && nodeRadius(3) < nodeRadius(30) && nodeRadius(1e6) <= 20,
+    'graph: a better-connected page draws bigger, and no page draws unboundedly big')
+
+  {
+    // REPRODUCIBILITY. Seeds are a golden-angle spiral, not Math.random, and
+    // every force is a pure function of the positions.
+    const pages: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 40; i++) {
+      pages.push({ id: `p${i}`, blocks: [
+        { id: `x${i}`, type: 'p', html: link(`p${(i * 7 + 3) % 40}`) } as Block,
+      ] })
+    }
+    const d = space(pages)
+    const one = layoutGraph(graphOf(d))
+    const two = layoutGraph(graphOf(d))
+    const same = one.nodes.every((n, i) => n.x === two.nodes[i].x && n.y === two.nodes[i].y)
+    ok(same, 'graph: the same space lays out identically twice — the picture is stable')
+
+    const bounds = graphBounds(one)
+    ok(one.nodes.every((n) => n.x >= bounds.x0 && n.x <= bounds.x1
+      && n.y >= bounds.y0 && n.y <= bounds.y1),
+      'graph: the frame the camera is fitted to contains every node')
+
+    const cx = one.nodes.reduce((s, n) => s + n.x, 0) / one.nodes.length
+    ok(Math.abs(cx) < 1e-6, 'graph: the settled layout is centred, so the camera can frame it')
+
+    // THE SPRINGS DO SOMETHING. Without this the layout could be a pure
+    // repulsion cloud — evenly spread, reproducible, centred, and telling you
+    // nothing about which pages are related.
+    const dist = (i: number, j: number) =>
+      Math.hypot(one.nodes[i].x - one.nodes[j].x, one.nodes[i].y - one.nodes[j].y)
+    let linked = 0
+    for (const e of one.edges) linked += dist(e.a, e.b)
+    linked /= one.edges.length
+    let all = 0
+    let pairs = 0
+    for (let i = 0; i < one.nodes.length; i++) {
+      for (let j = i + 1; j < one.nodes.length; j++) { all += dist(i, j); pairs++ }
+    }
+    all /= pairs
+    ok(linked < all * 0.6,
+      'graph: linked pages end up markedly closer than unlinked ones')
+
+    // and the cloud has to GROW with the space, or a big space is a dot: see
+    // gravityFor. 400 pages must not settle into the same disc as 40.
+    const big: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 400; i++) {
+      big.push({ id: `q${i}`, blocks: [
+        { id: `y${i}`, type: 'p', html: link(`q${(i * 7 + 3) % 400}`) } as Block,
+      ] })
+    }
+    const bg = layoutGraph(graphOf(space(big)))
+    const radius = (g: ReturnType<typeof graphOf>) => {
+      const b = graphBounds(g)
+      return Math.max(b.x1 - b.x0, b.y1 - b.y0) / 2
+    }
+    ok(radius(bg) > radius(one) * 2.2,
+      'graph: ten times the pages is a bigger picture, not a denser one')
+  }
+  {
+    // stepLayout must SETTLE, not oscillate: a layout that is still moving when
+    // it is handed over is a layout the camera was fitted to by accident
+    const pages: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 30; i++) {
+      pages.push({ id: `s${i}`, blocks: [
+        { id: `z${i}`, type: 'p', html: link(`s${(i + 1) % 30}`) } as Block,
+      ] })
+    }
+    const g = graphOf(space(pages))
+    layoutGraph(g)
+    const before = g.nodes.map((n) => ({ x: n.x, y: n.y }))
+    stepLayout(g, 0.01)
+    const moved = Math.max(...g.nodes.map((n, i) =>
+      Math.hypot(n.x - before[i].x, n.y - before[i].y)))
+    ok(moved < 0.5, 'graph: one more tick on a settled layout barely moves anything')
+  }
 }
 
 

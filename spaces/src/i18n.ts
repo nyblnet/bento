@@ -12,7 +12,7 @@
 
 import { registerI18n, locale } from '../../kernel/src/i18n.ts'
 import type { LocaleChoice } from '../../kernel/src/i18n.ts'
-import { PACKED, PACKED_LOCALES } from './i18n/packed'
+import { PACKED, PACKED_LOCALES } from './i18n/packed.ts'
 
 /** Offered in the About picker, each labelled in its own language. */
 const CHOICES: LocaleChoice[] = [
