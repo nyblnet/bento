@@ -40,7 +40,7 @@ import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
-  sortRows, unknownSortKeys, type IssueRow,
+  sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
@@ -1860,6 +1860,119 @@ function fsTable(f: string): string {
   const newer = [row('m', { status: 'todo' }), row('n', { status: 'blocked' })]
   ok(ids(sortRows(doc, newer, [{ key: 'status' }])) === 'mn',
     'a status from a newer build sorts after every one this build knows')
+}
+
+// ---- SORTING BY A TABLE COLUMN HEADER --------------------------------------
+// A header is the second control that writes `sort`, and the one a reader will
+// actually reach for. Two properties, both of which fail silently:
+//
+//   · THE THIRD STATE IS "NONE". A header that only flips between ascending and
+//     descending can never give a hand-arranged board its order back, and
+//     "manual order" is not a sort called manual — it is the ABSENCE of the key.
+//     Storing `sort: []` would satisfy every screen and would still leave a
+//     view somebody sorted and unsorted permanently different from one nobody
+//     touched, in a file on somebody else's disk.
+//
+//   · THE ARROW AND THE ORDER READ THE SAME FACT. A header that computed its
+//     own direction beside the one sortRows applies is a display that can
+//     disagree with the rows underneath it.
+{
+  const doc = { fields: DEFAULT_FIELDS } as unknown as SpacesDoc
+  const j = (v: unknown) => JSON.stringify(v)
+
+  ok(j(cycleSort(undefined, 'status')) === j([{ key: 'status' }]),
+    'the first click on a column sorts by it, ascending')
+  ok(!Object.prototype.hasOwnProperty.call((cycleSort(undefined, 'status') ?? [])[0] ?? {}, 'dir'),
+    "…and writes NO `dir`, because absent is what ascending has always meant")
+  ok(j(cycleSort([{ key: 'status' }], 'status')) === j([{ key: 'status', dir: 'desc' }]),
+    'the second click reverses it')
+  ok(cycleSort([{ key: 'status', dir: 'desc' }], 'status') === undefined,
+    'the third click returns to NO SORT — and says so with undefined, never an empty array')
+  ok(j(cycleSort([{ key: 'status', dir: 'desc' }], 'priority')) === j([{ key: 'priority' }]),
+    'clicking a DIFFERENT column starts that column fresh, ascending')
+
+  // the byte-identity rule the whole format follows, proved on the block itself
+  const block: Record<string, unknown> = { id: 'v', type: 'view', html: 'Issues' }
+  const pristine = j(block)
+  const write = (k: string) => {
+    const next = cycleSort(block.sort, k)
+    if (next === undefined) delete block.sort
+    else block.sort = next
+  }
+  write('status'); write('status'); write('status')
+  ok(j(block) === pristine,
+    'a view sorted and unsorted from its header is BYTE-IDENTICAL to one nobody ever touched')
+
+  // the arrow is the order, not a second opinion about it
+  ok(sortDirOf(undefined, 'status') === undefined && sortDirOf('nonsense', 'status') === undefined,
+    'a malformed sort points no arrow rather than throwing — it came out of a file someone sent you')
+  ok(sortDirOf([{ key: 'status' }], 'status') === 'asc',
+    'an entry with no direction reads as ascending, the way sortRows applies it')
+  ok(sortDirOf([{ key: 'status' }], 'priority') === undefined,
+    'and a column that is not the sort key carries no arrow')
+  const rows2: IssueRow[] = [
+    { page: { id: 'a', title: 'a', blocks: [] } as Page, values: new Map([['status', 'done']]) },
+    { page: { id: 'b', title: 'b', blocks: [] } as Page, values: new Map([['status', 'backlog']]) },
+  ]
+  const desc = cycleSort(cycleSort(undefined, 'status'), 'status')
+  ok(sortDirOf(desc, 'status') === 'desc'
+    && sortRows(doc, rows2, desc).map((r) => r.page.id).join('') === 'ab',
+    'the arrow the header shows and the order sortRows produces come from the one key')
+}
+
+// ---- the table's HEADERS and CELLS are controls, and only where there is an
+// ---- editor ----------------------------------------------------------------
+// Both are emitted by the ONE renderer, which also paints the reading view, a
+// printout and a locked space. A control that escapes the editable guard is a
+// button a reader can press and a shape on paper that means nothing.
+{
+  const fs = nodeFs
+  const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const tbl = ren.slice(ren.indexOf("if (layout === 'table') {"), ren.indexOf("if (layout === 'list') {"))
+
+  ok(/if \(opts\.editable\) \{[\s\S]{0,900}?sortB\.dataset\.sortCol/.test(tbl),
+    'the sortable header is a control ONLY where there is an editor')
+  ok(/if \(opts\.editable && f\) \{[\s\S]{0,600}?cell\.dataset\.cellPage/.test(tbl),
+    '…and so is the editable cell')
+  ok((tbl.match(/sortCol/g) ?? []).length === 1 && (tbl.match(/cellPage/g) ?? []).length === 1,
+    'neither is created anywhere else in the table, where no guard would cover it')
+  ok(/th\.setAttribute\('aria-sort'/.test(tbl),
+    'the sort state reaches a screen reader as aria-sort, not only as an arrow glyph')
+
+  // the page column: no sort control, because a view's sort names a FIELD and
+  // sortRows cannot express a title. Pinned so nobody quietly invents a second
+  // ordering mechanism to fill the gap.
+  const first = tbl.slice(tbl.indexOf('const th0'), tbl.indexOf('hr.appendChild(th0)'))
+    .replace(/^\s*\/\/[^\n]*$/gm, '')
+  ok(!first.includes('sortCol') && !first.includes('button'),
+    'the page-title column carries no sort control — a sort key is a field, and a title is not one')
+
+  // a header click writes through the SAME editView every other view control
+  // uses, so "no sort" deletes the key rather than storing an empty array
+  ok(/data-sort-col[\s\S]{0,700}?cycleSort\([\s\S]{0,80}?\.sort, h\.dataset\.sortCol!\)/.test(ed)
+    && /data-sort-col[\s\S]{0,700}?this\.editView\(/.test(ed),
+    'a header click writes the view’s own sort through editView, which deletes rather than stores empty')
+
+  // a cell writes through the one writer, so `value` and the readable `html`
+  // can never fall out of step — and a page that lacks the field GAINS it, the
+  // way a board drop already does
+  ok(/private putField\(page: Page, f: FieldSpec, value: unknown\): void \{\s*const own = propBlockOf\(page, f\.key\)\s*if \(own\) this\.applyField\(own, f, value\)\s*else page\.blocks\.splice\(headerLength\(page\), 0, propBlock\(/.test(ed),
+    'a cell edit on a page WITHOUT that field adds the prop block, with its readable html written by propBlock')
+  ok(/private setCell\([\s\S]{0,900}?s\.commit\(\(\) => this\.putField\(page, f, value\)/.test(ed),
+    'and every cell write goes through it, inside one commit')
+  ok(/private setCell\([\s\S]{0,900}?if \(own && \(own as \{ value\?: unknown \}\)\.value === value\) return/.test(ed),
+    'choosing the value a cell already holds commits NOTHING — not a step you press ⌘Z past')
+  ok(/private setCell\([\s\S]{0,900}?const scope = pageId === s\.pageId \? 'page' : 'doc'/.test(ed),
+    'a cell on ANOTHER page takes a document undo entry, or undo would restore the view and leave the value')
+
+  // ONE picker. A cell that opened a picker of its own would be a second place
+  // for the choosing to drift from the header strip's.
+  ok((ed.match(/private fieldPicker\(/g) ?? []).length === 1
+    && /this\.fieldPicker\(f, \(b as \{ value\?: unknown \}\)\.value, anchor, \(v\) => this\.setField\(blockId, v\)\)/.test(ed),
+    'the header strip’s picker and the cell’s are the same picker over different writers')
+  ok(/private openCellPicker\([\s\S]{0,800}?this\.fieldPicker\(f, own \? \(own as \{ value\?: unknown \}\)\.value : undefined, anchor/.test(ed),
+    '…and a cell standing for a value that does not exist yet opens it with nothing selected')
 }
 
 // ---- what a board and a field EXPORT ---------------------------------------

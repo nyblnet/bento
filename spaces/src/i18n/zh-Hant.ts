@@ -390,6 +390,7 @@ export const zh_Hant: Catalog = {
   "Shown next to your cursor and in the People list — stored only in this browser.": "顯示在你的游標旁和成員列表中 — 僅儲存在此瀏覽器。",
   "Site name": "網站名稱",
   "Sort": "排序",
+  "Sort by {field}": "依{field}排序",
   "Space name": "空間名稱",
   "Start live session": "開始即時工作階段",
   "Start silent": "開始時靜音",

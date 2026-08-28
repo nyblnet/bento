@@ -390,6 +390,7 @@ export const pt: Catalog = {
   "Shown next to your cursor and in the People list — stored only in this browser.": "Exibido ao lado do seu cursor e na lista de Pessoas — guardado apenas neste navegador.",
   "Site name": "Nome do site",
   "Sort": "Ordenar",
+  "Sort by {field}": "Ordenar por {field}",
   "Space name": "Nome do espaço",
   "Start live session": "Iniciar sessão ao vivo",
   "Start silent": "Começar sem som",

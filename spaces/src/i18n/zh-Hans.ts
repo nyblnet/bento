@@ -390,6 +390,7 @@ export const zh_Hans: Catalog = {
   "Shown next to your cursor and in the People list — stored only in this browser.": "显示在你的光标旁和成员列表中 — 仅保存在此浏览器。",
   "Site name": "网站名称",
   "Sort": "排序",
+  "Sort by {field}": "按{field}排序",
   "Space name": "空间名称",
   "Start live session": "开始实时会话",
   "Start silent": "开始时静音",

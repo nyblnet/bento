@@ -17,7 +17,7 @@ import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys,
-  sortRows, unknownSortKeys, type ViewSort, type FieldSpec,
+  sortRows, unknownSortKeys, sortDirOf, type ViewSort, type FieldSpec,
 } from './fields'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
@@ -1183,15 +1183,73 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     const thead = document.createElement('thead')
     const hr = document.createElement('tr')
     const th0 = document.createElement('th')
+    // THE PAGE COLUMN DOES NOT SORT, and it says so by being a plain heading
+    // rather than a dead button. A view's `sort` names a FIELD: sortRows looks
+    // each key up in the schema and skips what it cannot find, so ordering by
+    // title would need a second ordering mechanism living beside the first —
+    // and one order stored in two shapes is the thing that later disagrees with
+    // itself. A pseudo-key like `title` is worse still: every build that ships
+    // today would report it through unknownSortKeys as "newer than this build"
+    // and then not apply it. Better a column that plainly does not sort.
     th0.textContent = t('Page')
     hr.appendChild(th0)
     for (const k of keys) {
       const th = document.createElement('th')
-      th.textContent = fieldByKey(doc, k)?.label ?? k
+      const label = fieldByKey(doc, k)?.label ?? k
+      const dir = sortDirOf(sort, k)
+      // The state lives on the TH as aria-sort, the attribute a screen reader
+      // already announces; the arrow is what a sighted reader reads. Two
+      // renderings of ONE fact — the view's own `sort` — so there is no second
+      // place the arrow could come from and no way for it to disagree with the
+      // order the rows are actually in.
+      th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none')
+      // A READER GETS THE HEADING, not the control — the rule the card chip and
+      // every view button already follow: a printout and a locked space show
+      // the view, never the things that change it.
+      if (opts.editable) {
+        const sortB = document.createElement('button')
+        sortB.type = 'button'
+        sortB.className = 'sp-view-sort' + (dir ? ' sp-on' : '')
+        sortB.dataset.sortCol = k
+        sortB.title = t('Sort by {field}', { field: label })
+        sortB.setAttribute('aria-label', t('Sort by {field}', { field: label }))
+        const arrow = document.createElement('span')
+        arrow.className = 'sp-sortdir'
+        arrow.setAttribute('aria-hidden', 'true')
+        arrow.textContent = dir === 'asc' ? '\u2191' : dir === 'desc' ? '\u2193' : ''
+        sortB.append(document.createTextNode(label), arrow)
+        th.appendChild(sortB)
+      } else {
+        th.textContent = label
+      }
       hr.appendChild(th)
     }
     thead.appendChild(hr)
     table.appendChild(thead)
+
+    // What a cell SHOWS. THROUGH THE OPTION, so a select shows its label and
+    // its colour rather than the id the model stores — the same thing propHtml
+    // does for the header strip, and for the same reason: the id is not for
+    // reading. An unset value is an em dash, so an empty cell is still a place
+    // you can aim at.
+    const fill = (into: HTMLElement, f: FieldSpec | undefined, v: unknown): void => {
+      const opt = optionOf(f, v)
+      if (opt) {
+        const chip = document.createElement('span')
+        chip.className = 'sp-prop-chip'
+        const dot = document.createElement('span')
+        dot.className = 'sp-prop-dot'
+        if (opt.color) dot.style.background = opt.color
+        chip.append(dot, document.createTextNode(opt.label))
+        into.appendChild(chip)
+      } else if (v !== undefined && v !== null && String(v) !== '') {
+        into.appendChild(document.createTextNode(shownValue(f, v)))
+      } else {
+        into.classList.add('sp-view-empty')
+        into.appendChild(document.createTextNode('\u2014'))
+      }
+    }
+
     const tb = document.createElement('tbody')
     for (const r of rows) {
       const tr = document.createElement('tr')
@@ -1208,23 +1266,23 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
         const td = document.createElement('td')
         const f = fieldByKey(doc, k)
         const v = r.values.get(k)
-        // THROUGH THE OPTION, so a select shows its label and its colour rather
-        // than the id the model stores — the same thing propHtml does for the
-        // header strip, and for the same reason: the id is not for reading.
-        const opt = optionOf(f, v)
-        if (opt) {
-          const chip = document.createElement('span')
-          chip.className = 'sp-prop-chip'
-          const dot = document.createElement('span')
-          dot.className = 'sp-prop-dot'
-          if (opt.color) dot.style.background = opt.color
-          chip.append(dot, document.createTextNode(opt.label))
-          td.appendChild(chip)
-        } else if (v !== undefined && v !== null && String(v) !== '') {
-          td.textContent = String(v)
+        // A CELL IS A CONTROL where there is an editor — a real <button>, so it
+        // is in the tab order and answers Enter and Space without a key handler
+        // of its own. It is emitted even for a page carrying no such prop block:
+        // an empty cell is how the field gets ONTO that page, exactly as
+        // dropping a card into a column is.
+        if (opts.editable && f) {
+          const cell = document.createElement('button')
+          cell.type = 'button'
+          cell.className = 'sp-view-cell'
+          cell.dataset.cellPage = r.page.id
+          cell.dataset.cellField = k
+          cell.title = t('Change {field}', { field: f.label })
+          cell.setAttribute('aria-label', t('Change {field}', { field: f.label }))
+          fill(cell, f, v)
+          td.appendChild(cell)
         } else {
-          td.className = 'sp-view-empty'
-          td.textContent = '—'
+          fill(td, f, v)
         }
         tr.appendChild(td)
       }

@@ -390,6 +390,7 @@ export const ja: Catalog = {
   "Shown next to your cursor and in the People list — stored only in this browser.": "カーソルの横とメンバーリストに表示されます — このブラウザにのみ保存されます。",
   "Site name": "サイト名",
   "Sort": "並べ替え",
+  "Sort by {field}": "{field}で並べ替え",
   "Space name": "スペース名",
   "Start live session": "ライブセッションを開始",
   "Start silent": "音を出さずに開始する",

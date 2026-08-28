@@ -5665,3 +5665,40 @@ Options, none chosen:
 raised from the bento/type branch during #384 and deliberately NOT decided
 there, which was the right call — a single app's feature branch is the wrong
 place to set a cross-app default.
+
+## 2026-08-28 — bento/spaces: a table column sorts, a title column does not
+
+The Bases table became editable and sortable in place: a column header cycles
+ascending → descending → none, and a cell opens the same picker the page's own
+header strip opens.
+
+Two things settled that another agent could otherwise contradict.
+
+**Unsorted DELETES the key.** The header writes the view's existing `sort`
+through the existing `editView`, and the third click passes `undefined` so the
+key is removed rather than stored as `[]`. A view sorted and unsorted from its
+header is byte-identical to one nobody ever touched. `cycleSort` in fields.ts is
+where that third state lives, so it is one function rather than a rule the two
+sort controls each have to remember.
+
+**The page-title column is NOT sortable, deliberately.** A view's `sort` names a
+FIELD: `sortRows` looks each key up in `doc.fields` and skips what it cannot
+find, and `unknownSortKeys` reports the miss as "newer than this build". A
+pseudo-key like `{key:'title'}` would therefore be a key EVERY shipped build
+reports as unreadable and does not apply — and teaching `sortRows` about a
+non-field key means a second ordering mechanism living beside the first, in a
+format where both are permanent. One order stored in two shapes is the thing
+that later disagrees with itself. The column is a plain `<th>` and does not
+pretend otherwise. If title order is wanted later, the honest shape is a real
+field, not a special case in the sorter.
+
+**A cell edit can CREATE the prop block**, the way a board drop already could:
+`editor.putField` is the one place a page gains a field, and it goes through
+`propBlock`, so the readable `html` is written with the value. A table column
+exists because SOME row carries that field; the rows that do not get an empty
+cell, and editing it is how the field arrives on that page.
+
+The picker was split from `openFieldPicker` into `fieldPicker(f, cur, anchor,
+write)` — a picker over a WRITER rather than a block id, because a cell can
+stand for a value that has no block yet. The header strip, the board's card chip
+and a cell are now one control with three writers, not three controls.
