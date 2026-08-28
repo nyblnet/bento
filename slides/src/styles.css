@@ -478,6 +478,21 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 .bento-el { position: absolute; contain: layout style; }
 
+/* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
+   maths font here fixes nothing and has been reverted three times. The
+   radical's hook falling short of its overbar is Chromium drawing the overbar
+   as its own rule and missing the arm the font's glyph paints, by a fraction
+   of a pixel. It is not the font: generic `math` picks STIX on macOS and
+   Cambria Math on Windows and BOTH break, and forcing Times New Roman only
+   makes the break smaller. It is not our markup, our tagging, the stage
+   transform, the font size, or the height of the radicand (measured: the
+   deck's `b²−4ac` and a flat `b−4ac` get a byte-identical 113.8px radical).
+
+   There IS a mitigation — `msqrt { font-family: serif }` with the contents put
+   back to `math` — and it is deliberately NOT shipped: it is clean on macOS
+   and still broken on Windows. Read docs/DECISIONS.md, 2026-08-25, before
+   touching this; the rig is slides/probe/radical-join.html. */
+
 .bento-el-text,
 .bento-el-code
  .bento-text-inner {
@@ -2483,3 +2498,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-gate-offer { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .ed-gate-acts { display: flex; justify-content: flex-end; margin-top: 4px; }
+/* ————— brand palette swatches beside a colour control ————— */
+.ed-colorref { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.ed-swatches { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
+.ed-swatch {
+  width: 14px; height: 14px; padding: 0; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--line);
+}
+.ed-swatch:hover { transform: scale(1.15); }
+.ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }

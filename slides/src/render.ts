@@ -431,6 +431,22 @@ function tagSymbols(mathml: string): string {
     seen.set(txt, n + 1)
       ; (leaf as HTMLElement).dataset.sym = `${txt}#${n}`
   }
+  // Scaffolding gets its own key, on a SEPARATE attribute. A fraction bar and
+  // a radical are drawn by the mfrac/msqrt box itself, not by any token, so
+  // they carry no data-sym and used to be the one part of a formula that
+  // neither travelled nor faded — they were simply there from frame one while
+  // everything around them animated. They must never enter the symbol morph:
+  // transforming a container would move its children a second time, on top of
+  // their own travel. Keyed by tag occurrence so scaffolding that SURVIVES a
+  // step (the outer fraction of a rearranged equation) is recognised and left
+  // alone, while genuinely new scaffolding can be faded in.
+  const struct = new Map<string, number>()
+  for (const box of Array.from(tpl.content.querySelectorAll('mfrac, msqrt, mroot, menclose, mover, munder, munderover'))) {
+    const tag = box.tagName.toLowerCase()
+    const n = struct.get(tag) ?? 0
+    struct.set(tag, n + 1)
+      ; (box as HTMLElement).dataset.msx = `${tag}#${n}`
+  }
   return tpl.innerHTML
 }
 
@@ -1159,6 +1175,13 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       node.style.display = 'flex'
       node.style.flexDirection = 'column'
       node.style.justifyContent = VALIGN[el.valign]
+      // Clip at the ELEMENT box — the size the author chose — and never at the
+      // <pre> (see below). Code sets `white-space: pre`, so a long line does
+      // not wrap and would otherwise run across the slide over whatever sits
+      // beside it; bounding it to its own box keeps the author's layout
+      // contract. The box is normally far larger than the lines inside it,
+      // which is exactly the room a morphing token needs.
+      node.style.overflow = 'hidden'
       const inner = document.createElement('pre')
       inner.className = 'bento-text-inner'
       inner.dir = 'auto'
@@ -1171,7 +1194,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.classList.add('bento-code')
       inner.style.whiteSpace = 'pre'
       inner.style.margin = '0'
-      inner.style.overflow = 'hidden'
+      // NOT overflow:hidden here. A <pre> is only as tall as its own lines,
+      // and a morphing token starts at its position on the OTHER slide —
+      // outside those bounds whenever the block gets shorter. Clipping at this
+      // level painted a travelling token 48px below the box and cut it away:
+      // it vanished for the first half of its journey and popped into view
+      // mid-flight, and only in the direction where the code got shorter,
+      // since the taller side had room for the same motion. That asymmetry is
+      // what made it read as a pairing bug rather than a painting one.
+      // Found in a screenshot — the DOM reported opacity 1, a correct 80px
+      // transform and a sensible rect, all true, all outside a clipping box.
       if (!renderCodeInto(inner, el, doc)) {
         // Fallback to unformatted text
         inner.innerText = el.content

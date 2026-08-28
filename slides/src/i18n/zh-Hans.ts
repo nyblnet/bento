@@ -551,7 +551,7 @@ export const zhHans: Catalog = {
   "Drag to draw a curve — then drag its points; double-click to add or remove one": "拖动绘制曲线 — 拖动控制点调整；双击添加或删除点",
   "Draw by hand — the stroke smooths into an editable curve": "手绘 — 笔迹会平滑为可编辑的曲线",
   "Editor": "编辑者",
-  "Editor copy saved — recipients join live with edit access": "编辑者",
+  "Editor copy saved — recipients join live with edit access": "编辑者副本已保存 — 收到的人可带编辑权限加入实时会话",
   "Event": "活动",
   "Fills this tab instead of going fullscreen — handy for testing or sharing a window": "以填满标签页代替全屏 — 便于测试或共享窗口",
   "First slide": "第一张幻灯片",
@@ -752,4 +752,7 @@ export const zhHans: Catalog = {
   "The bento/tray app can keep your files on this device.": "bento/tray 应用可以把文件保存在此设备上。",
   "This browser cannot reopen a file in place — Chrome or Edge can.": "此浏览器无法就地重写文件 — Chrome 或 Edge 可以。",
   "Keep the file somewhere you can find it again.": "把文件保存在你以后能找到的位置。",
+  "Theme": "主题",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "整份文稿的品牌配色。使用主题颜色的元素会随此处的更改而更新。",
+  "Accent {n}": "强调色 {n}",
 }

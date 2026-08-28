@@ -951,6 +951,7 @@ export function startPresentation(
       // a tween killed during its delay would otherwise leave the element
       // stuck at its "from" state (invisible) for every future visit.
       anim.killTweensOf(from.querySelectorAll('.bento-el'))
+      sweepSymbolSpans(from)
       const fromSlide = doc.slides[fromIdx]
       for (const el of fromSlide?.elements ?? []) {
         const node = from.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
@@ -963,6 +964,9 @@ export function startPresentation(
         applyRevealSet(from, null, fromSlide.hover.default)
       }
     }
+    // The incoming section may still carry span state from a PREVIOUS visit
+    // (Reveal keeps sections mounted) — start clean before any fx runs.
+    sweepSymbolSpans(to)
     const forward = toIdx > fromIdx
     // Morph forward into a morph slide, and un-morph when backing out of one.
     const morphing =
@@ -1453,7 +1457,38 @@ function modelByMorphKey(doc: BentoDoc, index: number): Map<string, SlideElement
  * source for where a symbol WAS is a measurement taken while it was visible.
  * Captured on slide entry; read on slide exit.
  */
+/**
+ * Clear runtime inline state from a section's morph symbols. Token and formula
+ * spans carry state no model frame can restore — the symbol morph's transform,
+ * the fresh-token fade's opacity — because applyElementFrame knows elements,
+ * not spans, and the settle guarantee filters to elements with model entries.
+ * An interrupted visit (fast advance, hidden tab, starved render loop) leaves
+ * opacity:0 written inline on spans of a section Reveal keeps MOUNTED, and the
+ * next visit shows code with holes: seen as "confetti() disappeared and came
+ * back after the animations", and reproduced exactly by driving a hidden tab.
+ * Swept on every exit and every entry; the entering morph recreates what it
+ * actually needs.
+ */
+function sweepSymbolSpans(section: HTMLElement) {
+  for (const sym of Array.from(section.querySelectorAll<HTMLElement>('[data-sym],[data-msx]'))) {
+    anim.killTweensOf(sym)
+    sym.style.opacity = ''
+    sym.style.transform = ''
+    sym.style.willChange = ''
+    // Colour is cleared ONLY where the scaffolding fade pinned it. Code tokens
+    // carry their syntax colour as an inline style straight from the renderer,
+    // so clearing colour unconditionally here stripped every highlight in the
+    // deck the first time a slide was swept.
+    if (sym.dataset.inkpin !== undefined) {
+      sym.style.color = ''
+      delete sym.dataset.inkpin
+    }
+  }
+}
+
 const symCache = new Map<string, Map<string, { x: number; y: number }>>()
+/** Scaffolding geometry (fraction bars, radicals) per slide, by host. */
+const structCache = new Map<string, Map<string, { x: number; y: number; w: number; h: number }>>()
 const symKey = (idx: number, flipId: string) => `${idx}${flipId}`
 
 /** Measure and cache every formula on a slide that is currently displayed. */
@@ -1467,7 +1502,31 @@ function cacheSlideSymbols(doc: BentoDoc, section: HTMLElement, idx: number) {
     if (!model) continue
     const offsets = symbolOffsets(host, model.w, model.h)
     if (offsets.size) symCache.set(symKey(idx, host.dataset.flipId!), offsets)
+    structCache.set(symKey(idx, host.dataset.flipId!), structGeometry(host, model.w, model.h))
   }
+}
+
+/**
+ * Where a formula's scaffolding sits and how big it is, in model units. Size
+ * matters as much as position: a fraction bar is as wide as its widest side,
+ * so an equation that keeps its outer fraction across a step can still have
+ * that bar change length completely — 14px to 79px across the derivation's
+ * last beat, snapping in one frame while every symbol around it travelled.
+ */
+function structGeometry(host: HTMLElement, modelW: number, modelH: number) {
+  const out = new Map<string, { x: number; y: number; w: number; h: number }>()
+  const box = host.getBoundingClientRect()
+  if (!box.width || !box.height) return out
+  const sx = box.width / Math.max(modelW, 0.01)
+  const sy = box.height / Math.max(modelH, 0.01)
+  for (const node of Array.from(host.querySelectorAll<HTMLElement>('[data-msx]'))) {
+    const r = node.getBoundingClientRect()
+    out.set(node.dataset.msx!, {
+      x: (r.left - box.left) / sx, y: (r.top - box.top) / sy,
+      w: r.width / sx, h: r.height / sy,
+    })
+  }
+  return out
 }
 
 function symbolOffsets(host: HTMLElement, modelW: number, modelH: number): Map<string, { x: number; y: number }> {
@@ -1502,6 +1561,7 @@ function symbolOffsets(host: HTMLElement, modelW: number, modelH: number): Map<s
  */
 function morphMathSymbols(
   fromAt: Map<string, { x: number; y: number }> | undefined,
+  fromStruct: Map<string, { x: number; y: number; w: number; h: number }> | undefined,
   to: HTMLElement,
   a: SlideElement,
   b: SlideElement,
@@ -1526,6 +1586,75 @@ function morphMathSymbols(
       ease: 'power2.out',
     })
   })
+
+  // Scaffolding that is new this step arrives on the SAME beat as the fresh
+  // tokens — but via `color`, never `opacity`.
+  //
+  // A fraction bar and a radical are painted by their box in currentColor, and
+  // opacity groups a whole subtree: fading the box would take the terms
+  // travelling into it along too, hiding them for the first 40% of their
+  // journey and popping them into view mid-flight. Animating colour touches
+  // only what the box itself paints — verified by pinning the leaves and
+  // setting the box transparent, which leaves every symbol legible and in
+  // place with the bars gone. Pinning is what makes it work: leaves inherit
+  // colour, so they must carry their own before the box's is animated.
+  const toStruct = structGeometry(to, b.w, b.h)
+  // TWO passes, and the order is load-bearing. Scaffolding nests — a radical
+  // inside a fraction — and anim renders a fromTo's from-state at creation, so
+  // starting the outer box's fade first leaves the inner one inheriting a
+  // transparent colour at the moment its own ink is read. It then animates
+  // towards transparent and only becomes visible when the tween clears, which
+  // is the pop this is meant to remove, one level down. Read every ink first,
+  // against untouched colours, then start the tweens.
+  const fades: Array<{ box: HTMLElement; ink: string; leaves: HTMLElement[] }> = []
+  for (const box of Array.from(to.querySelectorAll<HTMLElement>('[data-msx]'))) {
+    // New scaffolding fades in — and so does scaffolding that SURVIVES but
+    // changes shape, because it cannot travel: transforming a container would
+    // drag its children off their own paths. A bar that merely resizes would
+    // otherwise snap in a single frame while everything inside it glided.
+    // Absent, or so different it is plainly not the same bar. The key is
+    // positional (tag#occurrence), not semantic, so it can claim an identity
+    // that does not exist: across the derivation's last beat mfrac#0 is
+    // `b OVER 2a` on one side and `-b±√(b²-4ac) OVER 2a` on the other. Those
+    // are two different bars, and stretching one into the other would animate
+    // a fiction. Judge by how much changed instead, generously enough that a
+    // bar which genuinely persists and merely shifts a pixel or two is left
+    // alone rather than blinking for no reason.
+    const was = fromStruct?.get(box.dataset.msx!)
+    const now = toStruct.get(box.dataset.msx!)
+    const resized = (x: number, y: number) => Math.abs(x - y) > Math.max(x, y, 1) * 0.15
+    const changed = !was || !now
+      || Math.abs(was.x - now.x) > 6 || Math.abs(was.y - now.y) > 6
+      || resized(was.w, now.w) || resized(was.h, now.h)
+    if (!changed) continue
+    // Read the ink from the BOX, not the flip host: the host is the element
+    // wrapper and computes to its own colour (black here), while the box
+    // inherits the formula's. Fading from the wrong one made the bar arrive
+    // as black and snap to white on completion — invisible for the whole fade
+    // on a dark slide, which looks exactly like the pop this replaces.
+    fades.push({
+      box,
+      ink: getComputedStyle(box).color,
+      leaves: Array.from(box.querySelectorAll<HTMLElement>('[data-sym]')),
+    })
+  }
+  for (const { box, ink, leaves } of fades) {
+    const inkClear = ink.startsWith('rgb(')
+      ? ink.replace('rgb(', 'rgba(').replace(')', ', 0)')
+      : 'rgba(0, 0, 0, 0)'
+    // Marked, so the slide sweep knows which colours are ours to undo.
+    for (const leaf of leaves) { leaf.style.color = ink; leaf.dataset.inkpin = '' }
+    anim.fromTo(box, { color: inkClear }, {
+      color: ink,
+      duration: 0.3,
+      delay: MORPH_DURATION * 0.4,
+      ease: 'power2.out',
+      onComplete() {
+        box.style.color = ''
+        for (const leaf of leaves) { leaf.style.color = ''; delete leaf.dataset.inkpin }
+      },
+    })
+  }
 
   const pairs: Array<{ node: HTMLElement; dx: number; dy: number }> = []
   for (const sym of Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))) {
@@ -1636,8 +1765,9 @@ function runMorph(
   // frames are in the doc), so the outgoing section's Reveal styling is
   // irrelevant. Each matched node animates from the from-slide's frame to its
   // own via translate+scale about the top-left corner (scale mode like
-  // PowerPoint: text scales instead of reflowing mid-morph). Rotating morphs
-  // pivot slightly differently than center-origin — rare and acceptable.
+  // PowerPoint: text scales instead of reflowing mid-morph), while rotation
+  // pivots about the element's centre so the finished frame is identical to
+  // the one applyElementFrame writes at rest.
   for (const node of matchedTo) {
     const id = node.dataset.flipId!
     const a = fromModel.get(id)
@@ -1657,10 +1787,21 @@ function runMorph(
         const w = a.w + (b.w - a.w) * p
         const h = a.h + (b.h - a.h) * p
         const r = (a.rotation ?? 0) + ((b.rotation ?? 0) - (a.rotation ?? 0)) * p
+        // Rotate about the element's own CENTRE, spelled out around an origin
+        // of 0 0 rather than by moving the origin. Position and scale want the
+        // top-left (PowerPoint scale mode), but the resting frame that
+        // applyElementFrame writes — a plain `rotate()` with the default centre
+        // origin — must be exactly what p=1 lands on, or a rotated element
+        // snaps the instant the tween completes and the origin flips back.
+        // Measured on the choreography scene: 7deg jumped 4.1px across and
+        // 5.1px up, -6deg the other way, on the frame the morph finished. The
+        // triplet below collapses to identity at p=1, so the two frames agree.
+        const cx = b.w / 2
+        const cy = b.h / 2
         node.style.transform =
           `translate(${x - b.x}px, ${y - b.y}px)` +
-          (r ? ` rotate(${r}deg)` : '') +
-          ` scale(${w / Math.max(b.w, 0.01)}, ${h / Math.max(b.h, 0.01)})`
+          ` scale(${w / Math.max(b.w, 0.01)}, ${h / Math.max(b.h, 0.01)})` +
+          (r ? ` translate(${cx}px, ${cy}px) rotate(${r}deg) translate(${-cx}px, ${-cy}px)` : '')
       },
       onComplete() {
         node.style.transformOrigin = ''
@@ -1678,7 +1819,7 @@ function runMorph(
     const a = fromModel.get(id)
     const b = toModel.get(id)
     if (!a || !b) continue
-    morphMathSymbols(symCache.get(symKey(fromIdx, id)), to, a, b)
+    morphMathSymbols(symCache.get(symKey(fromIdx, id)), structCache.get(symKey(fromIdx, id)), to, a, b)
   }
 
   // Styles morph straight from the model — exact values, no DOM sniffing.

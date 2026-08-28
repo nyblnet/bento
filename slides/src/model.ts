@@ -105,6 +105,17 @@ export interface ElementBase {
    * those four are the conventions the built-in layouts use.
    */
   role?: string
+  /**
+   * Where this element's colours came from, keyed by property path within the
+   * element — `fill`, `shadow.color`, `fillGradient.stops.0.color`.
+   *
+   * The literal ALWAYS stays in place; this records the palette slot it was
+   * derived from, so editing the palette can rewrite it. A reader that knows
+   * nothing about this field sees an ordinary deck of ordinary colours, which
+   * is exactly the point: it is additive, and property absence gains no new
+   * meaning. See `palette.ts`.
+   */
+  themeRefs?: Record<string, string>
 }
 
 export interface ShadowSpec {
@@ -350,6 +361,9 @@ export interface Slide {
   transition: TransitionKind
   elements: SlideElement[]
   notes: string
+  /** palette references for the slide's own colours — `background`. See palette.ts. */
+  themeRefs?: Record<string, string>
+
   /** optional friendly name (link pickers, state badges) */
   name?: string
   /**
@@ -417,6 +431,27 @@ export interface BentoDoc {
     color: string
     accent: string
     fontFamily: string
+    /**
+     * Heading face. Body text stays on `fontFamily`; this is the display face,
+     * mirroring OOXML's major/minor pair. Absent = headings use `fontFamily`.
+     */
+    headingFamily?: string
+    /**
+     * The document's named brand slots, mirroring OOXML's colour scheme so an
+     * importer maps 1:1. Elements point at these through `themeRefs`, and
+     * editing a slot re-derives every literal that references it.
+     *
+     * `background`, `color` and `accent` above REMAIN the canonical values for
+     * `bg1`, `tx1` and `accent1` — they are not superseded, so every existing
+     * reader keeps working and a document with no palette still resolves those
+     * three. `paletteOf()` is the only thing that should assemble this.
+     */
+    palette?: {
+      bg2?: string; tx2?: string
+      accent2?: string; accent3?: string; accent4?: string
+      accent5?: string; accent6?: string
+      hlink?: string; folHlink?: string
+    }
     /** ordered series colours for new charts; derived from accent when absent */
     chartPalette?: string[]
     /** defaults for newly inserted tables; omitted decks keep the standard look */

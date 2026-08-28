@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext update-notice rig.
+// home/webext update-notice rig.
 //
 //   node scripts/test-webext-update.ts
 //
@@ -19,7 +19,7 @@
 // wrong way, a fetch that throws, an install type that cannot be read. None of
 // it breaks anything visible, which is exactly why it needs a rig.
 
-import { compareVersions, isSelfManaged, checkForUpdate, autoCheckEnabled } from '../tray/webext/src/update.js'
+import { compareVersions, isSelfManaged, checkForUpdate, autoCheckEnabled } from '../home/webext/src/update.js'
 
 let failures = 0
 let checks = 0

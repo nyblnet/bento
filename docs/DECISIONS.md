@@ -55,6 +55,41 @@ kernel lift is a move, not a redesign.
 
 ---
 
+## 2026-08-24 — The tree moved to `home/`, and the identifiers moved with it
+
+**Decision.** `tray/` is now `home/`, `applicationId` and
+`PRODUCT_BUNDLE_IDENTIFIER` are `page.bento.home`, and the update channel is
+`https://bento.page/releases/home/manifest.json`. This supersedes the scope
+paragraph and the bundle-identifier bullet in the rename entry above.
+
+**Why the earlier decision was right when it was made, and wrong to keep.** It
+was written while `tray/ios` (#315) and the Android work were both open in
+`tray/`; moving the tree under them would have turned two mergeable branches
+into conflict resolution. That was a real cost and a correct call at the time.
+Both landed, and the reason expired.
+
+The bundle-identifier bullet expired differently. Its argument was explicitly
+conditional — changing the id "creates a different one that cannot update the
+installed copy". There was no installed copy, no App Store Connect record and no
+Play listing. Those three facts are what made it free, and all three stop being
+true at first publish. **This was the last moment the identifiers could move.**
+
+**What did NOT move, and why the line is there.** Rename what the outside world
+sees or what becomes permanent on publish; leave what is internal and guarded:
+
+- **The IndexedDB name stays `bento-tray`** (`home/webext/src/db.js`).
+  `scripts/test-webext-background.ts` asserts it — a deliberate guard against
+  silently orphaning every stored grant. Nobody outside the extension ever sees
+  it, so renaming it would have meant editing a gate to let a cosmetic change
+  through.
+- **`bento-tray://` (iOS) and `.bento-tray.invalid` (Android)** stay. They are
+  per-document origins, settled in their own entries, and invisible.
+
+**The cost, stated.** Every path reference moved: 18 files outside the tree, 35
+inside it, plus the Kotlin package `page.bento.tray` → `page.bento.home` and the
+`tray-icon`/`tray-logo`/`ic_tray_mark` assets. That churn is what the original
+entry warned about, and it was the price of not carrying a dead name forever.
+
 ## 2026-08-25 — The tray hosts are called `bento/home`
 
 **Decision.** All three hosts are named **`bento/home`** — lowercase, with the
@@ -74,16 +109,19 @@ is four independent attempts failing the same way, which is the signal that the
 premise was wrong rather than the words: the front door does not need a
 qualifier, because it is not one thing among several.
 
-**Scope: the PRODUCT is renamed, not the tree.** Directories stay `tray/ios`,
-`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name. Renaming
-paths would churn every import, every doc link and every open branch for no
-reader's benefit — the name people see is not the name the repo files it under.
+**Scope: the PRODUCT is renamed, not the tree.** ~~Directories stay `tray/ios`,
+`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name.~~
+**SUPERSEDED 2026-08-24 — see the entry below.** The reasoning held while
+branches were open in `tray/`; once they had all landed and nothing was
+published, the tree moved to `home/` and the identifiers went with it.
 
 **What must NOT change, on any host:**
 
-- **The bundle identifier.** `page.bento.tray` on iOS, and its Android
-  counterpart. To the OS and the store it IS the app: changing it does not rename
-  the app, it creates a different one that cannot update the installed copy.
+- ~~**The bundle identifier.** `page.bento.tray` on iOS, and its Android
+  counterpart.~~ **SUPERSEDED 2026-08-24.** The argument was conditional on an
+  installed copy existing — "creates a different one that cannot update the
+  installed copy". There were none, and no store record, so it was still free.
+  It is `page.bento.home` now, and this is the last moment that was possible.
 - **`PRODUCT_NAME` / `CFBundleName`** (iOS). They name the executable and the
   bundle, not the label. `CFBundleDisplayName` is the label, and it is the only
   key the rename touches.
@@ -5442,3 +5480,112 @@ language: "An update check is the only network this app makes on its own. It
 asks the release server for a signed manifest and sends nothing about you or
 this document — no ids, no telemetry." Live collaboration is network too, but
 it is network the reader started.
+
+## 2026-08-25 — the square root: Chromium's radical join, accepted unfixed
+
+**The symptom.** In a formula, the radical's hook does not meet its overbar —
+a visible step where the two should be one stroke.
+
+**Status: accepted, unfixed.** Formulas keep the generic `math` family. There
+is a mitigation that helps on macOS and it is written down below, deliberately
+not shipped. This waits for an upstream fix.
+
+**Every font tested breaks.** Measured on the affected engine, not inferred:
+
+| platform | what generic `math` picks | radical join |
+|---|---|---|
+| macOS | STIX Two Math | broken |
+| Windows | Cambria Math | broken, same way |
+| Windows, forced `serif` | Times New Roman | smaller break, still broken |
+
+Three fonts, three breaks. That is what rules the font out as the cause: a
+defect belonging to STIX would not follow us to Cambria Math and Times New
+Roman, on another operating system, in another font family.
+
+**It is not a version regression.** An earlier version of this entry claimed
+Chromium 148 was clean and 151 broken. That table was wrong and is the reason
+this entry was rewritten. The "clean" engine was an embedded browser that ships
+almost no fonts, so it silently fell back to a plain serif and never rendered
+STIX at all. It was not a newer engine breaking a radical; it was two engines
+drawing two different fonts. STIX breaks in 148 too.
+
+**What the mechanism appears to be.** Chromium paints the arm of the radical
+from the font's glyph and then draws the overbar itself as a rule, and the
+break is those two disagreeing by a fraction of a pixel. Two measurements
+support this. Sweeping the radicand height from 10px to 200px, the glyph's
+advance width never moves off 109.1px, so the radical stretches by a glyph
+assembly rather than by wider size variants — the engine is compositing, not
+picking one drawn glyph. And the size of the break tracks the font's arm
+thickness rather than anything about the formula. It follows that the mismatch
+is resolution-dependent, which is why Windows breaks *differently* rather than
+not at all, and why zoom level can change the verdict on a given row.
+
+**The radicand's height is not the cause, so do not try to fix this by making
+formulas shorter.** Tested directly, because it is the intuitive suspect. In
+the starter deck's own quadratic formula the `b²` raises the radicand from
+64.4px to 84.3px, but the msqrt box stays at 113.8px — the *minimum*,
+single-glyph size — exactly as it is for a flat `b − 4ac` and for four other
+radicands. Same glyph, same size, same position, same bar. Only a fraction
+inside the root (radicand 159.7px, box 220.3px) actually stretches it. The
+radical in `√(b²−4ac)` is pixel-identical to the one in `√(b−4ac)`, so the
+exponent cannot be raising the bar.
+
+**The mitigation, documented and not shipped.** Scoping a non-maths font to the
+radical only, and putting the contents back:
+
+```css
+.bento-el math msqrt { font-family: serif; }
+.bento-el math msqrt * { font-family: math; }
+```
+
+The second rule is what makes it viable: it keeps the whole formula in the
+maths font and swaps only the glyph that is drawn wrong. A blanket `serif` on
+the formula is not an option — it collapses stretchy delimiters (a tall `(`
+measured 315px in the maths font and 94px in serif) and shrinks large
+operators.
+
+Verified clean on macOS/Chrome, where it swaps STIX's radical for the serif
+one. **It is not shipped because it does not hold on Windows**, where `serif`
+is Times New Roman and the break is smaller but still there. It trades one
+rounding mismatch for another, and a fix that only works on the author's own
+machine is worse than a known defect. If a font is ever found that joins
+cleanly on both platforms, this rule is the shape the fix should take — scoped
+to `msqrt`, contents restored to `math`. Note also that the stack matters: on
+Windows `'Cambria Math', serif` selects what generic `math` already selects, so
+that variant is a no-op there.
+
+`slides/probe/radical-join.html` is the cross-platform test rig:
+one row per candidate font applying exactly the rule above, each row reporting
+whether the font actually resolved, and a paste-back block carrying platform,
+UA and DPR.
+
+**If it ever becomes worth fixing on our side**, the only route that bypasses
+the engine's radical painting is drawing the hook and bar ourselves — an
+`<mo>√</mo>` plus a CSS rule for the bar, overlapped so the join cannot
+separate at any DPI. That costs the semantic `msqrt` (accessibility, and the
+morph would need the bar tagged as its own symbol), and an earlier hand-built
+approximation still showed problems, so it needs verifying in the affected
+engine before anyone commits to it.
+
+**How this went wrong, which is the part worth keeping.** Six or more confident
+wrong answers were reported before the right one, every one from an instrument
+that lied:
+
+- `document.fonts.check()` returns true for fonts that are NOT installed, so a
+  four-font comparison was three fallbacks wearing different labels. Control: a
+  nonsense font name — every fallback returns identical metrics.
+- A "step size" metric compared the bar against the ink just left of it, which
+  is the diagonal, not the flag. It scored a perfect radical as broken and
+  returned an identical 21px for every variant.
+- An SVG foreignObject rasteriser ignores `font-family` entirely, proven when
+  `NoSuchFontXYZ` produced byte-identical output to STIX.
+- And the one that cost the most: **every test page was judged in a browser
+  that resolved the fonts differently from the one showing the bug.** Nine test
+  matrices came back "all fine" for that reason alone, each one clearing a
+  suspect that had never actually been rendered.
+
+**The lesson: pin the environment before trusting any comparison, and prove the
+thing under test is really on screen.** Record engine, version and *resolved*
+font in the test artefact itself — a named font that silently fell back is not
+a test of that font. "It looks fine here" is not evidence until "here" is
+named.

@@ -5,7 +5,7 @@
 /**
  * Does the iOS release verifier REFUSE what it should?
  *
- * `tray/ios/Releases.swift` fetches the shell for a new document from the signed
+ * `home/ios/Releases.swift` fetches the shell for a new document from the signed
  * release channel, because starter decks are not bundled. Those bytes become an
  * executable HTML document on the reader's own disk that they will afterwards
  * trust — so an unverified download lets a network attacker choose what they
@@ -95,7 +95,7 @@ const dir = mkdtempSync(join(tmpdir(), 'bento-releases-'))
 writeFileSync(join(dir, 'main.swift'), MAIN)
 const bin = join(dir, 'verifier')
 try {
-  execFileSync('swiftc', ['-O', '-o', bin, join(ROOT, 'tray/ios/Releases.swift'), join(dir, 'main.swift')],
+  execFileSync('swiftc', ['-O', '-o', bin, join(ROOT, 'home/ios/Releases.swift'), join(dir, 'main.swift')],
     { stdio: 'pipe' })
 } catch (e) {
   console.error('swiftc failed:\n' + (e.stderr?.toString() ?? e.message))
@@ -167,7 +167,7 @@ const cases = [
     envelope: '<html><body>Sign in to continue</body></html>',
   },
   {
-    // Found by reading tray/webext's own verification tests (PR #318), which
+    // Found by reading home/webext's own verification tests (PR #318), which
     // had this case when neither native host did. Both manifests are GENUINELY
     // signed by the maintainer, so the signature passes and the hash passes —
     // every byte is authentic, just not the thing that was asked for. Only

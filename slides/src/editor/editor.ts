@@ -16,6 +16,7 @@ import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
+import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
@@ -102,6 +103,7 @@ export class Editor {
     this.wirePaste()
     store.on('doc', () => this.syncLinkedCharts())
     store.on('doc', () => this.syncConnectors())
+    store.on('doc', () => this.syncThemeRefs())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -2089,6 +2091,29 @@ export class Editor {
       img.src = src
     }
     reader.readAsDataURL(file)
+  }
+
+  // --- brand palette → referenced literals ---------------------------------
+
+  private paletteSig = ''
+  /**
+   * Re-derive every colour that points at a palette slot, whenever the palette
+   * moves. Same shape as the table→chart binding below: guarded by a signature
+   * so it cannot loop, and DERIVE-NOT-COMMIT — the literals are a pure function
+   * of `doc.theme`, so each collaborating replica computes the same values
+   * without an operation crossing the wire.
+   *
+   * Runs across the whole document, not just the current slide: a palette edit
+   * changes slide 40 as much as slide 1, and nothing else will visit it.
+   */
+  private syncThemeRefs() {
+    const sig = paletteSignature(this.store.doc)
+    if (sig === this.paletteSig) return
+    this.paletteSig = sig
+    if (resolveThemeRefs(this.store.doc)) {
+      this.canvas.render()
+      this.scheduleThumbs()
+    }
   }
 
   // --- live table→chart binding -------------------------------------------------

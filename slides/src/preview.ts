@@ -52,7 +52,7 @@ const BANNED = 'script,style,noscript,iframe,object,embed,link,video,audio,canva
 const DROP_ATTRS = [
   'data-el-id', 'data-flip-id', 'data-slide-id', 'data-link', 'data-group',
   'data-show-on-hover', 'data-chart', 'data-table', 'data-autoplay',
-  'data-r', 'data-c', 'data-sym', 'data-tok', 'contenteditable', 'draggable', 'tabindex',
+  'data-r', 'data-c', 'data-sym', 'data-msx', 'data-tok', 'data-inkpin', 'contenteditable', 'draggable', 'tabindex',
 ]
 
 /**

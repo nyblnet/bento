@@ -298,7 +298,15 @@ export class Tween {
     this.started = true
     const t = this.target
     const from = this.from ?? {}
-    const isEl = t instanceof HTMLElement || t instanceof SVGElement
+    // MathML counts. <mi>/<mn>/<mo> are MathMLElement — neither HTMLElement
+    // nor SVGElement — so naming only those two silently routed every formula
+    // symbol into the plain-object branch below, where `opacity` became a JS
+    // property on the node and no style was ever written. The symbols still
+    // MOVED, because morphMathSymbols writes style.transform itself rather
+    // than going through a channel, so only the fade was missing: new terms in
+    // a formula appeared instantly while new code tokens faded in beside them.
+    // Any Element carrying a style object is animatable.
+    const isEl = t instanceof Element && 'style' in t
     for (const [key, toVal] of Object.entries(this.vars)) {
       if (CONTROL.has(key) || toVal === undefined) continue
       this.channels.add(key)

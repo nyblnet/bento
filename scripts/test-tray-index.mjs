@@ -9,7 +9,7 @@
  * own copy of the indexer and are held together by a shared fixture corpus
  * rather than by shared code. The guarantee that buys is not "cannot diverge"
  * but "cannot diverge SILENTLY" — which is only true if something actually
- * looks. This is the thing that looks, for `tray/ios`.
+ * looks. This is the thing that looks, for `home/ios`.
  *
  * It drives the REAL `library.js`: `describe()` is exported and takes its cache
  * through injectable deps, so a fake file handle is enough to run the shipping
@@ -20,7 +20,7 @@
  * `library.js` changed, both would be wrong together and the rig would stay
  * green. Importing it means the reference cannot move without this failing.
  *
- * The Swift side is compiled straight from `tray/ios/BentoIndex.swift` with
+ * The Swift side is compiled straight from `home/ios/BentoIndex.swift` with
  * `swiftc`, which is why that file is Foundation-only and has no UIKit in it.
  *
  * Corpus: real documents found in the repo, plus generated edge cases covering
@@ -200,7 +200,7 @@ function buildCorpus() {
 /* ── the reference, run as the extension runs it ──────────────────────────── */
 
 async function referenceFor(files) {
-  const lib = await import(pathToFileURL(join(ROOT, 'tray/webext/src/library.js')).href)
+  const lib = await import(pathToFileURL(join(ROOT, 'home/webext/src/library.js')).href)
   const deps = { get: async () => null, put: async () => {} }
   const out = new Map()
   for (const path of files) {
@@ -288,7 +288,7 @@ function buildSwift(dir) {
   const mainPath = join(dir, 'main.swift')
   writeFileSync(mainPath, MAIN_SWIFT, 'utf8')
   const bin = join(dir, 'indexer')
-  const src = join(ROOT, 'tray/ios/BentoIndex.swift')
+  const src = join(ROOT, 'home/ios/BentoIndex.swift')
   try {
     execFileSync('swiftc', ['-O', '-o', bin, src, mainPath], { stdio: 'pipe' })
   } catch (e) {
@@ -380,8 +380,8 @@ function compare(path, js, sw, failures, known) {
 
 if (!haveSwift()) {
   console.log('tray index: SKIPPED — no swiftc on this machine.')
-  console.log('            This rig is the only thing holding tray/ios/BentoIndex.swift to')
-  console.log('            tray/webext/src/library.js. Run it on a Mac before changing either.')
+  console.log('            This rig is the only thing holding home/ios/BentoIndex.swift to')
+  console.log('            home/webext/src/library.js. Run it on a Mac before changing either.')
   process.exit(0)
 }
 
@@ -473,7 +473,7 @@ if (shared) {
   console.log(`            shared corpus (tray/fixtures): ${shared.count} cases` +
     (shared.bad.length ? ` — ${shared.bad.length} DISAGREE` : ' — all agree'))
 } else {
-  console.log('            shared corpus (tray/fixtures): absent, skipped — arrives with tray/android')
+  console.log('            shared corpus (tray/fixtures): absent, skipped — arrives with home/android')
 }
 
 if (failures.length || shared?.bad.length) {

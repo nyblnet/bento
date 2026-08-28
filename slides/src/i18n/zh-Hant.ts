@@ -551,7 +551,7 @@ export const zhHant: Catalog = {
   "Drag to draw a curve — then drag its points; double-click to add or remove one": "拖曳繪製曲線 — 拖曳控制點調整；連按兩下新增或刪除點",
   "Draw by hand — the stroke smooths into an editable curve": "手繪 — 筆跡會平滑為可編輯的曲線",
   "Editor": "編輯者",
-  "Editor copy saved — recipients join live with edit access": "編輯者",
+  "Editor copy saved — recipients join live with edit access": "編輯者副本已儲存 — 收到的人可帶編輯權限加入即時會話",
   "Event": "活動",
   "Fills this tab instead of going fullscreen — handy for testing or sharing a window": "以填滿分頁代替全螢幕 — 便於測試或分享視窗",
   "First slide": "第一張投影片",
@@ -752,4 +752,7 @@ export const zhHant: Catalog = {
   "The bento/tray app can keep your files on this device.": "bento/tray 應用程式可以將檔案保存在此裝置上。",
   "This browser cannot reopen a file in place — Chrome or Edge can.": "此瀏覽器無法就地覆寫檔案 — Chrome 或 Edge 可以。",
   "Keep the file somewhere you can find it again.": "請將檔案保存在你日後找得到的位置。",
+  "Theme": "主題",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "整份簡報的品牌配色。使用主題顏色的元素會隨此處的變更而更新。",
+  "Accent {n}": "強調色 {n}",
 }

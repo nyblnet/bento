@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext background rig.
+// home/webext background rig.
 //
 //   node scripts/test-webext-background.ts
 //
@@ -25,7 +25,7 @@
 // claim at all, which is exactly what a service worker restart looks like.
 
 import { readFileSync } from 'node:fs'
-import { pathFromSender, findByName, claim, write, resolve, backup, backupNameFor } from '../tray/webext/src/background.js'
+import { pathFromSender, findByName, claim, write, resolve, backup, backupNameFor } from '../home/webext/src/background.js'
 
 let failures = 0
 let checks = 0
@@ -420,7 +420,7 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
 // Source-level, because the two halves cannot be loaded into one realm to be
 // compared at runtime. A weak check on the real constants beats none.
 {
-  const read = (f: string) => readFileSync(new URL(`../tray/webext/src/${f}`, import.meta.url), 'utf8')
+  const read = (f: string) => readFileSync(new URL(`../home/webext/src/${f}`, import.meta.url), 'utf8')
   /** Source with comments removed, for gates that must not match documentation
    *  about the very thing they forbid. */
   const codeOf = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
@@ -456,7 +456,7 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
 // silence: saves start prompting again with no indication why. Source-level,
 // because chrome.action does not exist here.
 {
-  const read = (f: string) => readFileSync(new URL(`../tray/webext/src/${f}`, import.meta.url), 'utf8')
+  const read = (f: string) => readFileSync(new URL(`../home/webext/src/${f}`, import.meta.url), 'utf8')
   /** Source with comments stripped, for gates that must not match documentation
    *  about the very thing they forbid. */
   const codeOf = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
@@ -510,7 +510,7 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
   ok(!/\.openPopup\s*\(/.test(codeOf(st)), 'nothing still calls chrome.action.openPopup')
   ok(/home\.html/.test(st), 'the notification leads to the library, which carries the same repair')
 
-  const manifest = JSON.parse(readFileSync(new URL('../tray/webext/manifest.json', import.meta.url), 'utf8'))
+  const manifest = JSON.parse(readFileSync(new URL('../home/webext/manifest.json', import.meta.url), 'utf8'))
   ok(manifest.permissions?.includes('notifications'),
     'the manifest asks for the notifications permission the code depends on')
   // default_popup and onClicked are mutually exclusive: declaring a popup means

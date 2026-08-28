@@ -987,7 +987,14 @@ export class Editor {
       li.style.paddingInlineStart = `${depth * 14}px`
       const a = document.createElement('a')
       a.href = `#p/${page.id}`
-      a.className = 'sp-treelink' + (page.id === s.pageId ? ' sp-here' : '')
+      const here = page.id === s.pageId
+      a.className = 'sp-treelink' + (here ? ' sp-here' : '')
+      // WEIGHT IS NOT AN ANNOUNCEMENT. sp-here says "you are here" in 600
+      // against 400, which a sighted reader gets for free and a screen reader
+      // is told nothing about — the tree reads as a flat list of links with no
+      // indication of which one you are on. aria-current is the one attribute
+      // that carries it.
+      if (here) a.setAttribute('aria-current', 'page')
       const ico = el('span', 'sp-tree-ico')
       ico.innerHTML = pageIcon(page.icon)
       const label = document.createElement('span')
@@ -1047,7 +1054,9 @@ export class Editor {
         const li = document.createElement('li')
         const a = document.createElement('a')
         a.href = `#p/${page.id}`
-        a.className = 'sp-treelink sp-arch-row' + (page.id === s.pageId ? ' sp-here' : '')
+        const hereA = page.id === s.pageId
+        a.className = 'sp-treelink sp-arch-row' + (hereA ? ' sp-here' : '')
+        if (hereA) a.setAttribute('aria-current', 'page')
         const ico = el('span', 'sp-tree-ico')
         ico.innerHTML = pageIcon(page.icon)
         const label = document.createElement('span')

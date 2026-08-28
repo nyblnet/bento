@@ -1,0 +1,21 @@
+<!--
+  bento/home mark for the extension: the same art as home/assets/home-icon.svg
+  with a corner radius. That file is deliberately square and full bleed because
+  iOS applies its own squircle mask, and a radius drawn inside one seams along
+  every edge. Chrome applies no mask, so a square reads as a mistake.
+
+  THIS FILE IS THE SOURCE OF THE PNGs beside it. Chrome takes raster sizes for
+  the toolbar action icon, so those are exports of this and must be regenerated
+  rather than edited. The export command lives in home/webext/README.md, not
+  here: it is full of command line flags, and an XML comment may not contain a
+  double hyphen. Putting it here made this file malformed, and every place the
+  mark appears rendered as a broken image.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
+     role="img" aria-label="bento/home">
+  <rect width="32" height="32" rx="7" fill="#16273E"/>
+  <rect x="4.2" y="4.2" width="23.6" height="23.6" rx="4.8" fill="#F0EBE0"/>
+  <rect x="6.800" y="6.800" width="5.855" height="18.400" rx="2.091" fill="#5E7699"/>
+  <rect x="14.327" y="6.800" width="10.873" height="8.364" rx="2.091" fill="#FF9E8A"/>
+  <rect x="14.327" y="16.836" width="10.873" height="8.364" rx="2.091" fill="#16273E"/>
+</svg>

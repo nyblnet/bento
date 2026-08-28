@@ -551,7 +551,7 @@ export const ja: Catalog = {
   "Drag to draw a curve — then drag its points; double-click to add or remove one": "ドラッグして曲線を描画 — 点をドラッグして調整、ダブルクリックで点を追加/削除",
   "Draw by hand — the stroke smooths into an editable curve": "手描きで描画 — ストロークは編集可能な滑らかな曲線になります",
   "Editor": "編集者",
-  "Editor copy saved — recipients join live with edit access": "編集者",
+  "Editor copy saved — recipients join live with edit access": "編集者コピーを保存しました — 受け取った人は編集権限つきでライブに参加します",
   "Event": "イベント",
   "Fills this tab instead of going fullscreen — handy for testing or sharing a window": "フルスクリーンではなくこのタブいっぱいに表示します — テストやウィンドウ共有に便利です",
   "First slide": "最初のスライド",
@@ -752,4 +752,7 @@ export const ja: Catalog = {
   "The bento/tray app can keep your files on this device.": "bento/tray アプリはこの端末にファイルを保存できます。",
   "This browser cannot reopen a file in place — Chrome or Edge can.": "このブラウザーはファイルを直接上書きできません — Chrome または Edge なら可能です。",
   "Keep the file somewhere you can find it again.": "ファイルは後で見つけられる場所に保存しておいてください。",
+  "Theme": "テーマ",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "デッキ全体のブランドカラー。テーマカラーを使用している要素は、ここでの変更に追従します。",
+  "Accent {n}": "アクセント {n}",
 }

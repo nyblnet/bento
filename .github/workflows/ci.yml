@@ -57,6 +57,12 @@ jobs:
         working-directory: slides
         run: npm ci
 
+      - name: Which targets anim treats as elements
+        # The element/plain-object split ran on HTMLElement||SVGElement, which
+        # excludes MathML — formula symbols became plain-object tweens, with
+        # opacity assigned as a JS property and no style ever written.
+        run: node scripts/test-anim-elements.ts
+
       - name: Transforms are not silently ignored
         # A CSS transform does nothing to a non-replaced inline element: it is
         # accepted, style.transform reads back verbatim, and the box never
@@ -335,7 +341,7 @@ jobs:
         # disk, so one poisoned response persisted.
         run: node scripts/test-blobs.ts
 
-      - name: tray/ios bridge rig
+      - name: home/ios bridge rig
         # The iOS host opens ANY self-contained HTML document and treats those
         # documents as mutually untrusted, so a page-supplied filename reaching
         # appendingPathComponent was an arbitrary write inside the container —
@@ -351,10 +357,10 @@ jobs:
         # chrome reads by name. A hex value retyped into Swift is a value that can
         # disagree with the logo while looking almost right, which is the kind of
         # wrong nothing notices. This fails if any of it drifts.
-        run: node tray/assets/make-icons.mjs --check
+        run: node home/assets/make-icons.mjs --check
 
-      - name: tray/ios index rig
-        # The iOS text extractor is a PORT of tray/webext's, and the two are held
+      - name: home/ios index rig
+        # The iOS text extractor is a PORT of home/webext's, and the two are held
         # together by nothing but agreement — so this diffs them, driving the
         # real library.js against the compiled Swift over generated edge cases
         # and every document in the tree. A divergence means a deck is findable
@@ -364,7 +370,7 @@ jobs:
         # a Mac. That is the payoff for keeping UIKit out of that file.
         run: node scripts/test-tray-index.mjs
 
-      - name: tray/ios release verifier rig
+      - name: home/ios release verifier rig
         # Starter decks are not bundled; a new document is FETCHED from the
         # signed release channel and written to disk as an executable page. The
         # signature and hash checks are what make that acceptable, so this proves
@@ -394,7 +400,7 @@ jobs:
         run: node scripts/test-webext-background.ts
 
       - name: WebExtension bridge rig
-        # tray/webext decides, per save, whether to write in place or hand back
+        # home/webext decides, per save, whether to write in place or hand back
         # to the browser's own picker. Wrong in the permissive direction it
         # overwrites the open document with no dialog — which it did once. The
         # decision is pure logic over an options bag, so it is checkable here
@@ -646,6 +652,16 @@ jobs:
         # existed. It also stops a document token being themed (which would
         # invert the deck) and the light palette forking from spaces and type.
         run: node scripts/test-slides-theme.mjs
+
+      - name: Brand palette rig
+        # themeRefs record where a colour came from so a deck can be re-branded.
+        # Three properties must hold or the feature is a liability: the
+        # derivation must be IDEMPOTENT (it runs on the doc event — one that
+        # never settles is a hang, not a wrong colour), stripping the new fields
+        # must leave every rendered value identical (every shipped shell reads
+        # the literals and always will), and an unresolvable reference must
+        # change nothing rather than writing undefined.
+        run: node scripts/test-theme.ts
 
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is

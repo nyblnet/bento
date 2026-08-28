@@ -5,8 +5,8 @@
 //
 //   node scripts/test-savepurpose.ts
 //
-// WHAT THIS PROVES. A HOST that polyfills `showSaveFilePicker` — tray/ios over
-// UIDocument, tray/webext over a directory grant — sees only the options bag.
+// WHAT THIS PROVES. A HOST that polyfills `showSaveFilePicker` — home/ios over
+// UIDocument, home/webext over a directory grant — sees only the options bag.
 // It has to answer "am I being asked to overwrite the open document, or to make
 // a second file?" from that alone, and the two failure directions are not
 // symmetric: guessing "copy" costs a prompt, guessing "in-place" overwrites
@@ -78,8 +78,8 @@ ok(!/writeUpdatedFileAs\(html, doc, \{ keepHandle: true, suggestedName: [^}]*\}\
   'the update no longer falls through to the default share purpose')
 
 // ------------------------------------------------- the convention is the id
-// `.bento.html` is not decoration. tray/webext injects its save bridge on
-// `file:///*.bento.html` and tray/ios matches the same way, so a document named
+// `.bento.html` is not decoration. home/webext injects its save bridge on
+// `file:///*.bento.html` and home/ios matches the same way, so a document named
 // `Q3.html` opens fine and then asks where to save — it is a second-class
 // citizen everywhere the name is what identifies us.
 //

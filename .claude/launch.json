@@ -169,6 +169,21 @@
       "port": 5191
     },
     {
+      "name": "serve-lift-test",
+      "comment": "LOOPBACK ONLY, see serve-spaces-built. Serves BOTH built shells from the sync-kernel-lift worktree, by absolute path, for hands-on testing of the session/transport lift.",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5190",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/andy/devel/bento/.worktrees/type/.testserve"
+      ],
+      "port": 5190
+    },
+    {
       "name": "serve-type-built",
       "comment": "LOOPBACK ONLY, see serve-built. Serves the shippable single-file build for collab/dormancy verification.",
       "runtimeExecutable": "python3",
