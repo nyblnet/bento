@@ -361,6 +361,27 @@ export interface TypeDoc {
   [extra: string]: unknown;
 }
 
+/**
+ * The document as it should leave this app — WITHOUT its collaboration
+ * credentials.
+ *
+ * `doc.collab` carries `ownerPriv`, `writerPriv` and the room key: private
+ * keys and a read capability. Anything that leaves the app as text — the
+ * clipboard, an agent hand-off — must not carry them, or pasting "the
+ * document JSON" into a chat hands over write access to a live room, which is
+ * not revocable by deleting the message.
+ *
+ * It strips by REMOVING the field rather than by listing the fields to keep,
+ * deliberately: a private field added to CollabCreds later is then covered
+ * without anyone remembering to update this. scripts/test-export-secrets.ts
+ * asserts that shape across every app that has a clipboard export.
+ */
+export function docForExport(doc: TypeDoc): TypeDoc {
+  const { collab, ...rest } = doc as TypeDoc & { collab?: unknown };
+  void collab;
+  return rest as TypeDoc;
+}
+
 export const uid = (p = 'b'): string => {
   const r = globalThis.crypto?.randomUUID?.();
   return r ? `${p}-${r.slice(0, 8)}` : `${p}-${Math.random().toString(36).slice(2, 10)}`;

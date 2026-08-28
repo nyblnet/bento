@@ -20,7 +20,7 @@ import { checkForUpdates, applyUpdate, APP_VERSION, type ReleaseInfo } from '../
 import { canWriteInPlace, openedFileName } from '../../kernel/src/save.ts';
 import { setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
 import type { Store } from './store.ts';
-import { wordCount } from './model.ts';
+import { wordCount, docForExport } from './model.ts';
 import { t } from './i18n.ts';
 import { knownAuthor, setAuthorName } from './comments.ts';
 import './comments.css';
@@ -190,7 +190,9 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
   jsonRow.className = 't-row';
   jsonRow.append(
     button(t('Copy document JSON'), async () => {
-      try { await navigator.clipboard.writeText(JSON.stringify(store.doc, null, 2)); }
+      // docForExport, never store.doc — see model.ts. This text can be pasted
+      // anywhere, and the raw document carries the room's private keys.
+      try { await navigator.clipboard.writeText(JSON.stringify(docForExport(store.doc), null, 2)); }
       catch { /* clipboard blocked — the agent surface below still works */ }
     }),
     button(t('Replace from JSON…'), () => {
