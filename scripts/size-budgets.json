@@ -10,12 +10,14 @@
     "slides": {
       "path": "slides/dist-single/Bento_Slides.bento.html",
       "enforce": false,
-      "//": "TRACKED, no ceiling. Registered 2026-08-28: until then only bento/spaces was listed, so slides had no persistent size record at all and years of 300-byte commits would have been invisible to CI. enforce:false was chosen over a ceiling for the reason spaces gave up its own — a tight limit starts declining worthwhile fixes — and because a ceiling picked without history behind it is a guess that fails somebody else's PR. `reference` is set from a CI run, never a local one: most of the shell is one deflated block and zlib's output differs by ~1KB between node versions. Move it when a change buys real bytes and say what bought them."
+      "reference": 685328,
+      "//": "TRACKED, no ceiling. Registered 2026-08-28: until then only bento/spaces was listed, so slides had no persistent size record at all and years of 300-byte commits would have been invisible to CI. enforce:false was chosen over a ceiling for the reason spaces gave up its own — a tight limit starts declining worthwhile fixes — and because a ceiling picked without history behind it is a guess that fails somebody else's PR. `reference` is set from a CI run, never a local one: most of the shell is one deflated block and zlib's output differs by ~1KB between node versions. Move it when a change buys real bytes and say what bought them. Reference 685328 B measured on CI (node 24) in the run that registered this shell, not locally."
     },
     "dash": {
       "path": "dash/dist-single/Bento_Dash.bento.html",
       "enforce": false,
-      "//": "TRACKED, no ceiling. Registered 2026-08-28, same reasoning as slides. Note dash was unmeasurable before this: the CI step sat in the spaces section, ahead of the dash build, and the rig SKIPS a shell that is not built — so it printed nothing for dash and said so quietly. The step now runs after all three builds."
+      "reference": 165201,
+      "//": "TRACKED, no ceiling. Registered 2026-08-28, same reasoning as slides. Note dash was unmeasurable before this: the CI step sat in the spaces section, ahead of the dash build, and the rig SKIPS a shell that is not built — so it printed nothing for dash and said so quietly. The step now runs after all three builds. Reference 165201 B measured on CI (node 24) in the run that registered this shell, not locally."
     }
   }
 }
