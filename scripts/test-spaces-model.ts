@@ -27,7 +27,7 @@
 //      docId on every open.
 
 import {
-  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
+  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote, loadsRemotely, assetValue,
   effectiveParents, descendantsOf,
   tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
   linkCard, linkCardHtml,
@@ -40,7 +40,7 @@ import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
-  sortRows, unknownSortKeys, type IssueRow,
+  sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
@@ -59,6 +59,9 @@ import {
   CANVAS_RATIO, RATIO_MIN, RATIO_MAX,
 } from '../spaces/src/canvas.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
+import {
+  buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
+} from '../spaces/src/graph.ts'
 
 let failures = 0
 let checks = 0
@@ -311,13 +314,69 @@ for (const [label, input, err] of [
   }
   ok(!isRemote(''), 'an empty src is not a remote fetch')
 
+  // ---- and the same question, asked one indirection deeper -----------------
+  // isRemote answers about the string an author WROTE. `asset:k` is local by
+  // inspection and `doc.assets.k` is whatever the file says it is, so the gate
+  // that decides whether to show the consent placeholder was answering the
+  // wrong question. Measured on a shipped build before this: a document with
+  // `assets: { k: "http://…" }` and an image `src: "asset:k"` issued a real GET
+  // on open, with no placeholder — the tracking pixel the paragraph above says
+  // is prevented.
+  //
+  // BEHAVIOUR, not a source grep. Two assertions in this file were shown to
+  // pass through live regressions because they matched text rather than
+  // running anything, so this one runs the predicate against real documents.
+  {
+    // assetValue reads doc.assets and nothing else, so the fixture is that.
+    const withAssets = (assets: Record<string, string>) => ({ assets }) as never
+
+    const hostile = withAssets({ k: 'http://tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', hostile),
+      'an asset: key whose VALUE is a URL is a remote load, however local the key looks')
+    ok(isRemote(assetValue('asset:k', hostile)),
+      '…because the asset table is resolved before the question is asked')
+
+    const protoRel = withAssets({ k: '//tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', protoRel), 'protocol-relative in the asset table is remote too')
+
+    const embedded = withAssets({ k: 'data:image/png;base64,AAAA' })
+    ok(!loadsRemotely('asset:k', embedded), 'an asset holding embedded bytes is still local')
+
+    const missing = withAssets({})
+    ok(!loadsRemotely('asset:nope', missing), 'an asset key that resolves to nothing loads nothing')
+
+    // the prototype-chain reach the resolver already guards, kept honest here
+    const proto = withAssets({})
+    ok(!loadsRemotely('asset:toString', proto), 'asset:toString does not reach Object.prototype')
+    ok(assetValue('asset:toString', proto) === '', '…and resolves to the empty string, not a function')
+
+    // a plainly written URL is unchanged by any of this
+    ok(loadsRemotely('http://tracker.example/p.png', missing), 'a written URL is still remote')
+    ok(!loadsRemotely('data:image/png;base64,AAAA', missing), 'a written data: URI is still local')
+  }
+
   // and the renderer must actually consult it
   const fs = await import('node:fs')
   const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
-  ok(/isRemote\(rawSrc\)\s*&&\s*!opts\.allowRemote/.test(ren),
+  // EVERY gate asks the resolved question. Counting them is the point: the
+  // hole was one call site out of five asking `isRemote` about the written
+  // string, and a regex that merely finds "a gate exists" would have passed
+  // throughout. If a sixth surface starts loading something, this count is
+  // what fails.
+  const gates = (ren.match(/loadsRemotely\(/g) ?? []).length
+  ok(gates >= 5, `every surface that loads asks the resolved question (${gates} gates)`)
+  ok(!/isRemote\(rawSrc\)/.test(ren),
+    'no gate asks about the WRITTEN src — that is the hole an asset: key hid in')
+  ok(/loadsRemotely\(rawSrc, doc\)\s*&&\s*!opts\.allowRemote/.test(ren),
     'render.ts gates remote images on the reader\'s consent')
   ok(!/allowRemote/.test(fs.readFileSync(new URL('../spaces/src/model.ts', import.meta.url), 'utf8')),
     'consent is NOT a document field — it belongs to the reader, not the file')
+
+  // The link card's thumbnail is the surface with no gate at all: linkCard()
+  // takes a BLOCK, so it cannot know what an asset: key resolves to, and it was
+  // trusted to have already dropped anything remote.
+  ok(/c\.image && !loadsRemotely\(c\.image, doc\)/.test(ren),
+    'a link card thumbnail is checked where the document is in scope, not where it is built')
 }
 
 // ---- an encrypted space is never written to disk in the clear ---------------
@@ -892,7 +951,7 @@ for (const [label, input, err] of [
 }
 
 // ---- the table block -------------------------------------------------------
-// A table is CONTENT (working/spaces-design.md §2.6) — no formulas, nothing
+// A table is CONTENT (working/design/spaces-design.md §2.6) — no formulas, nothing
 // that recalculates, and not the database case, which already shipped as the
 // tracker. What is pinned here is the part that is PERMANENT: the shape of the
 // model, the `html` fallback that is the whole of format additivity for a new
@@ -1866,6 +1925,119 @@ function fsTable(f: string): string {
     'a status from a newer build sorts after every one this build knows')
 }
 
+// ---- SORTING BY A TABLE COLUMN HEADER --------------------------------------
+// A header is the second control that writes `sort`, and the one a reader will
+// actually reach for. Two properties, both of which fail silently:
+//
+//   · THE THIRD STATE IS "NONE". A header that only flips between ascending and
+//     descending can never give a hand-arranged board its order back, and
+//     "manual order" is not a sort called manual — it is the ABSENCE of the key.
+//     Storing `sort: []` would satisfy every screen and would still leave a
+//     view somebody sorted and unsorted permanently different from one nobody
+//     touched, in a file on somebody else's disk.
+//
+//   · THE ARROW AND THE ORDER READ THE SAME FACT. A header that computed its
+//     own direction beside the one sortRows applies is a display that can
+//     disagree with the rows underneath it.
+{
+  const doc = { fields: DEFAULT_FIELDS } as unknown as SpacesDoc
+  const j = (v: unknown) => JSON.stringify(v)
+
+  ok(j(cycleSort(undefined, 'status')) === j([{ key: 'status' }]),
+    'the first click on a column sorts by it, ascending')
+  ok(!Object.prototype.hasOwnProperty.call((cycleSort(undefined, 'status') ?? [])[0] ?? {}, 'dir'),
+    "…and writes NO `dir`, because absent is what ascending has always meant")
+  ok(j(cycleSort([{ key: 'status' }], 'status')) === j([{ key: 'status', dir: 'desc' }]),
+    'the second click reverses it')
+  ok(cycleSort([{ key: 'status', dir: 'desc' }], 'status') === undefined,
+    'the third click returns to NO SORT — and says so with undefined, never an empty array')
+  ok(j(cycleSort([{ key: 'status', dir: 'desc' }], 'priority')) === j([{ key: 'priority' }]),
+    'clicking a DIFFERENT column starts that column fresh, ascending')
+
+  // the byte-identity rule the whole format follows, proved on the block itself
+  const block: Record<string, unknown> = { id: 'v', type: 'view', html: 'Issues' }
+  const pristine = j(block)
+  const write = (k: string) => {
+    const next = cycleSort(block.sort, k)
+    if (next === undefined) delete block.sort
+    else block.sort = next
+  }
+  write('status'); write('status'); write('status')
+  ok(j(block) === pristine,
+    'a view sorted and unsorted from its header is BYTE-IDENTICAL to one nobody ever touched')
+
+  // the arrow is the order, not a second opinion about it
+  ok(sortDirOf(undefined, 'status') === undefined && sortDirOf('nonsense', 'status') === undefined,
+    'a malformed sort points no arrow rather than throwing — it came out of a file someone sent you')
+  ok(sortDirOf([{ key: 'status' }], 'status') === 'asc',
+    'an entry with no direction reads as ascending, the way sortRows applies it')
+  ok(sortDirOf([{ key: 'status' }], 'priority') === undefined,
+    'and a column that is not the sort key carries no arrow')
+  const rows2: IssueRow[] = [
+    { page: { id: 'a', title: 'a', blocks: [] } as Page, values: new Map([['status', 'done']]) },
+    { page: { id: 'b', title: 'b', blocks: [] } as Page, values: new Map([['status', 'backlog']]) },
+  ]
+  const desc = cycleSort(cycleSort(undefined, 'status'), 'status')
+  ok(sortDirOf(desc, 'status') === 'desc'
+    && sortRows(doc, rows2, desc).map((r) => r.page.id).join('') === 'ab',
+    'the arrow the header shows and the order sortRows produces come from the one key')
+}
+
+// ---- the table's HEADERS and CELLS are controls, and only where there is an
+// ---- editor ----------------------------------------------------------------
+// Both are emitted by the ONE renderer, which also paints the reading view, a
+// printout and a locked space. A control that escapes the editable guard is a
+// button a reader can press and a shape on paper that means nothing.
+{
+  const fs = nodeFs
+  const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const tbl = ren.slice(ren.indexOf("if (layout === 'table') {"), ren.indexOf("if (layout === 'list') {"))
+
+  ok(/if \(opts\.editable\) \{[\s\S]{0,900}?sortB\.dataset\.sortCol/.test(tbl),
+    'the sortable header is a control ONLY where there is an editor')
+  ok(/if \(opts\.editable && f\) \{[\s\S]{0,600}?cell\.dataset\.cellPage/.test(tbl),
+    '…and so is the editable cell')
+  ok((tbl.match(/sortCol/g) ?? []).length === 1 && (tbl.match(/cellPage/g) ?? []).length === 1,
+    'neither is created anywhere else in the table, where no guard would cover it')
+  ok(/th\.setAttribute\('aria-sort'/.test(tbl),
+    'the sort state reaches a screen reader as aria-sort, not only as an arrow glyph')
+
+  // the page column: no sort control, because a view's sort names a FIELD and
+  // sortRows cannot express a title. Pinned so nobody quietly invents a second
+  // ordering mechanism to fill the gap.
+  const first = tbl.slice(tbl.indexOf('const th0'), tbl.indexOf('hr.appendChild(th0)'))
+    .replace(/^\s*\/\/[^\n]*$/gm, '')
+  ok(!first.includes('sortCol') && !first.includes('button'),
+    'the page-title column carries no sort control — a sort key is a field, and a title is not one')
+
+  // a header click writes through the SAME editView every other view control
+  // uses, so "no sort" deletes the key rather than storing an empty array
+  ok(/data-sort-col[\s\S]{0,700}?cycleSort\([\s\S]{0,80}?\.sort, h\.dataset\.sortCol!\)/.test(ed)
+    && /data-sort-col[\s\S]{0,700}?this\.editView\(/.test(ed),
+    'a header click writes the view’s own sort through editView, which deletes rather than stores empty')
+
+  // a cell writes through the one writer, so `value` and the readable `html`
+  // can never fall out of step — and a page that lacks the field GAINS it, the
+  // way a board drop already does
+  ok(/private putField\(page: Page, f: FieldSpec, value: unknown\): void \{\s*const own = propBlockOf\(page, f\.key\)\s*if \(own\) this\.applyField\(own, f, value\)\s*else page\.blocks\.splice\(headerLength\(page\), 0, propBlock\(/.test(ed),
+    'a cell edit on a page WITHOUT that field adds the prop block, with its readable html written by propBlock')
+  ok(/private setCell\([\s\S]{0,900}?s\.commit\(\(\) => this\.putField\(page, f, value\)/.test(ed),
+    'and every cell write goes through it, inside one commit')
+  ok(/private setCell\([\s\S]{0,900}?if \(own && \(own as \{ value\?: unknown \}\)\.value === value\) return/.test(ed),
+    'choosing the value a cell already holds commits NOTHING — not a step you press ⌘Z past')
+  ok(/private setCell\([\s\S]{0,900}?const scope = pageId === s\.pageId \? 'page' : 'doc'/.test(ed),
+    'a cell on ANOTHER page takes a document undo entry, or undo would restore the view and leave the value')
+
+  // ONE picker. A cell that opened a picker of its own would be a second place
+  // for the choosing to drift from the header strip's.
+  ok((ed.match(/private fieldPicker\(/g) ?? []).length === 1
+    && /this\.fieldPicker\(f, \(b as \{ value\?: unknown \}\)\.value, anchor, \(v\) => this\.setField\(blockId, v\)\)/.test(ed),
+    'the header strip’s picker and the cell’s are the same picker over different writers')
+  ok(/private openCellPicker\([\s\S]{0,800}?this\.fieldPicker\(f, own \? \(own as \{ value\?: unknown \}\)\.value : undefined, anchor/.test(ed),
+    '…and a cell standing for a value that does not exist yet opens it with nothing selected')
+}
+
 // ---- what a board and a field EXPORT ---------------------------------------
 // The readable `html` on a prop block is the whole reason the format degrades
 // instead of vanishing. The exporter is its most important consumer and was the
@@ -2068,7 +2240,7 @@ function fsTable(f: string): string {
     'a clip fetches metadata, never the whole file, for a page nobody pressed play on')
   // the remote gate is the image gate, and a clip needs it MORE: a <video> asks
   // its host for byte ranges the moment it is parsed
-  ok(/isRemote\(rawSrc\)[\s\S]{0,200}remotePlaceholder/.test(render),
+  ok(/loadsRemotely\(rawSrc, doc\)[\s\S]{0,200}remotePlaceholder/.test(render),
     'a linked clip is not loaded until the reader agrees, naming the host')
 
   const preview = src('preview.ts')
@@ -3074,6 +3246,160 @@ function fsTable(f: string): string {
   const cvLay = mdLayout(cvPage.blocks)
   ok(cvLay[1].quote === '', 'a card is not swept into its canvas as a blockquote')
   ok(cvLay[1].indent === '  ', "…and mdLayout reads it as its container's child")
+}
+
+
+// ---- 8. the graph view -----------------------------------------------------
+// The picture is drawn from `buildIndex().backlinks` and nothing else — there
+// is no second link index (spaces/src/graph.ts). What is asserted here is the
+// part a screenshot cannot show: that two references between the same pair are
+// one edge and not two, that the layout is REPRODUCIBLE (the reveal animation
+// interpolates toward a settled answer, so a layout that moved between runs
+// would make the same space a different picture every time it is opened), and
+// that the springs actually pull linked pages together rather than merely
+// running without error.
+{
+  const link = (to: string) => `<a href="#p/${to}">x</a>`
+  const space = (pages: Array<Partial<Page> & { id: string }>): SpacesDoc => ({
+    format: FORMAT, version: 1, docId: 'g', title: 'g', theme: {},
+    pages: pages.map((p) => ({ title: p.id, blocks: [], ...p })),
+  }) as unknown as SpacesDoc
+  const graphOf = (d: SpacesDoc) => buildGraph(d, buildIndex(d))
+
+  {
+    const d = space([
+      { id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('b') } as Block] },
+      { id: 'b' },
+      { id: 'z', archived: true, blocks: [{ id: 'b2', type: 'p', html: link('b') } as Block] },
+    ])
+    const g = graphOf(d)
+    ok(g.nodes.length === 2 && !g.at.has('z'),
+      'graph: an archived page is not drawn — it is out of the way in the sidebar too')
+    ok(g.edges.length === 1 && g.edges[0].links === 1,
+      'graph: one link between two pages is one edge')
+    ok(g.nodes.every((n) => n.deg === 1),
+      'graph: …and both ends of it count as connected')
+  }
+  {
+    // two references, one relationship — the defect this guards is an edge list
+    // that grows with every mention and a hub that looks twice as busy as it is
+    const d = space([
+      { id: 'a', blocks: [
+        { id: 'b1', type: 'p', html: link('b') } as Block,
+        { id: 'b2', type: 'p', html: link('b') } as Block,
+      ] },
+      { id: 'b', blocks: [{ id: 'b3', type: 'p', html: link('a') } as Block] },
+    ])
+    const g = graphOf(d)
+    ok(g.edges.length === 1, 'graph: three references between one pair are ONE undirected edge')
+    ok(g.edges[0].links === 3, '…carrying the weight of all three')
+    ok(g.nodes[0].deg === 1, '…and counting once toward how connected the page is')
+  }
+  {
+    const d = space([{ id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('a') } as Block] }])
+    ok(graphOf(d).edges.length === 0, 'graph: a page that links to itself draws no edge')
+  }
+  {
+    // the tree is a relationship too: a space where nobody has written a
+    // wikilink yet must not draw as unconnected dust
+    const d = space([{ id: 'a' }, { id: 'b', parent: 'a' }])
+    const g = graphOf(d)
+    ok(g.edges.length === 1 && g.edges[0].tree && g.edges[0].links === 0,
+      'graph: a child page is joined to its parent')
+    const d2 = space([
+      { id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('b') } as Block] },
+      { id: 'b', parent: 'a' },
+    ])
+    const g2 = graphOf(d2)
+    ok(g2.edges.length === 1 && g2.edges[0].tree && g2.edges[0].links === 1,
+      'graph: a child that is ALSO linked is still one edge, not two on top of each other')
+  }
+  ok(nodeRadius(0) < nodeRadius(3) && nodeRadius(3) < nodeRadius(30) && nodeRadius(1e6) <= 20,
+    'graph: a better-connected page draws bigger, and no page draws unboundedly big')
+
+  {
+    // REPRODUCIBILITY. Seeds are a golden-angle spiral, not Math.random, and
+    // every force is a pure function of the positions.
+    const pages: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 40; i++) {
+      pages.push({ id: `p${i}`, blocks: [
+        { id: `x${i}`, type: 'p', html: link(`p${(i * 7 + 3) % 40}`) } as Block,
+      ] })
+    }
+    const d = space(pages)
+    const one = layoutGraph(graphOf(d))
+    const two = layoutGraph(graphOf(d))
+    const same = one.nodes.every((n, i) => n.x === two.nodes[i].x && n.y === two.nodes[i].y)
+    ok(same, 'graph: the same space lays out identically twice — the picture is stable')
+
+    // the RADIUS, not just the centre: the camera frames this box, so a box
+    // that only contains the centres crops half of every node on the rim.
+    // Checked with `x0 + 5` in the mutation pass and the centres-only version
+    // of this assertion did not notice.
+    const bounds = graphBounds(one)
+    ok(one.nodes.every((n) => n.x - n.r >= bounds.x0 && n.x + n.r <= bounds.x1
+      && n.y - n.r >= bounds.y0 && n.y + n.r <= bounds.y1),
+      'graph: the frame the camera is fitted to contains every node, edge to edge')
+    ok(one.nodes.some((n) => Math.abs((n.x - n.r) - bounds.x0) < 1e-9),
+      '…and is no larger than it has to be')
+
+    const cx = one.nodes.reduce((s, n) => s + n.x, 0) / one.nodes.length
+    ok(Math.abs(cx) < 1e-6, 'graph: the settled layout is centred, so the camera can frame it')
+
+    // THE SPRINGS DO SOMETHING. Without this the layout could be a pure
+    // repulsion cloud — evenly spread, reproducible, centred, and telling you
+    // nothing about which pages are related.
+    const dist = (i: number, j: number) =>
+      Math.hypot(one.nodes[i].x - one.nodes[j].x, one.nodes[i].y - one.nodes[j].y)
+    let linked = 0
+    for (const e of one.edges) linked += dist(e.a, e.b)
+    linked /= one.edges.length
+    let all = 0
+    let pairs = 0
+    for (let i = 0; i < one.nodes.length; i++) {
+      for (let j = i + 1; j < one.nodes.length; j++) { all += dist(i, j); pairs++ }
+    }
+    all /= pairs
+    ok(linked < all * 0.6,
+      'graph: linked pages end up markedly closer than unlinked ones')
+
+    // and the cloud has to GROW with the space, or a big space is a dot: see
+    // gravityFor. 400 pages must not settle into the same disc as 40.
+    const big: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 400; i++) {
+      big.push({ id: `q${i}`, blocks: [
+        { id: `y${i}`, type: 'p', html: link(`q${(i * 7 + 3) % 400}`) } as Block,
+      ] })
+    }
+    const bg = layoutGraph(graphOf(space(big)))
+    const radius = (g: ReturnType<typeof graphOf>) => {
+      const b = graphBounds(g)
+      return Math.max(b.x1 - b.x0, b.y1 - b.y0) / 2
+    }
+    // MEASURED, not guessed: ten times the pages settles 3.01x wider with
+    // gravityFor and only 2.29x wider with a constant gravity (the radius goes
+    // as n^(1/3) instead of sqrt(n)). 2.6 sits between the two — a threshold of
+    // 2.2, tried first, passed on BOTH and proved nothing.
+    ok(radius(bg) > radius(one) * 2.6,
+      'graph: ten times the pages is a bigger picture, not a denser one')
+  }
+  {
+    // stepLayout must SETTLE, not oscillate: a layout that is still moving when
+    // it is handed over is a layout the camera was fitted to by accident
+    const pages: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 30; i++) {
+      pages.push({ id: `s${i}`, blocks: [
+        { id: `z${i}`, type: 'p', html: link(`s${(i + 1) % 30}`) } as Block,
+      ] })
+    }
+    const g = graphOf(space(pages))
+    layoutGraph(g)
+    const before = g.nodes.map((n) => ({ x: n.x, y: n.y }))
+    stepLayout(g, 0.01)
+    const moved = Math.max(...g.nodes.map((n, i) =>
+      Math.hypot(n.x - before[i].x, n.y - before[i].y)))
+    ok(moved < 0.5, 'graph: one more tick on a settled layout barely moves anything')
+  }
 }
 
 

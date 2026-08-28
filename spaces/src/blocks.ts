@@ -217,7 +217,7 @@ export const SPECS: BlockSpec[] = [
   },
   {
     // A CONTENT table: rows and columns of inline html, no formulas and nothing
-    // that recalculates (working/spaces-design.md §2.6). Custom, because a
+    // that recalculates (working/design/spaces-design.md §2.6). Custom, because a
     // <table> is structure the default tag-plus-inline-host renderer cannot
     // express, and `text: false` because its editable text lives in the CELLS —
     // a block-level inline host beside them would be a second place to type

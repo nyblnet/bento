@@ -187,7 +187,7 @@ you sent it to that you had once saved something.
 In `kernel/`, not `slides/`: Spaces, Dash and Type have the identical problem
 and would each grow their own copy. The kernel owns the remembering and the
 policy; the words and the markup are the app's. Spec (gitignored):
-`working/handover-web-demo-return-gate.md`, from the `tray-views` session.
+`working/team/handoffs/handover-web-demo-return-gate.md`, from the `tray-views` session.
 
 NOT done here, and worth weighing first: making **Download** the primary action
 on the landing page (it is currently `btn primary` on "Try it in your browser")
@@ -371,7 +371,7 @@ been silently dropping four marks) into marks.ts, over the same run list.
 **Decision.** A `table` block: `rows` (row-major, each cell INLINE HTML), `cols`
 (fractional column weights), `colAlign` (per COLUMN), `header` (absent = TRUE).
 No formulas, no recalculation, no cross-document references — the line from
-`working/spaces-design.md` §2.6. The database case is unaffected: it already
+`working/design/spaces-design.md` §2.6. The database case is unaffected: it already
 shipped as the tracker (`doc.fields` + `prop` + `view`), and this is not a
 second one.
 
@@ -1214,7 +1214,7 @@ failing to re-merge after a render split them (423/2,000).
 **Pointers.** `type/src/inline.ts` (the argument is in the file header),
 `type/src/model.ts` (tagged `parseDoc`, following the spaces load contract:
 an unreadable file must never become an empty one), `scripts/test-type-model.ts`.
-Design + the measured spike behind it: `working/type-design.md` and
+Design + the measured spike behind it: `working/design/type-design.md` and
 `working/type-spike/RESULTS.md` (gitignored) — Path A, continuous pagination,
 Knuth–Plass viable live.
 
@@ -2421,13 +2421,13 @@ deletion set included `slides/index.html`, the gallery, `agents.md`,
 
 Rig: `scripts/test-publish-gate.mjs`; shared logic `scripts/site-inventory.mjs`.
 This is the first half of the multi-app release work
-(`working/spaces-design.md` §6.1); per-app assembly — build one app, restore
+(`working/design/spaces-design.md` §6.1); per-app assembly — build one app, restore
 the others byte-identically from the published tree — is the second, and
 spaces cannot be released until both exist.
 
 ## 2026-08-02 — bento/home runs documents in a per-document origin, or not at all
 
-`bento/home` is a launcher (`home/`, `working/home-design.md`): it holds no
+`bento/home` is a launcher (`home/`, `working/design/home-design.md`): it holds no
 document content, only `FileSystemFileHandle`s in IndexedDB, so a deck you were
 working on reopens with write access after one permission click. That part is
 measured and built. **How a document is actually OPENED is the hard part, and
@@ -2484,7 +2484,7 @@ cadence and the deploy-order care that implies (`docs/PLATFORM.md` §5).
 
 **To confirm before building** (none of it testable in an automated browser —
 permission-gated APIs report `denied` there without prompting,
-`working/home-design.md` §3.2, a trap that already produced two wrong
+`working/design/home-design.md` §3.2, a trap that already produced two wrong
 conclusions):
 
 1. Does a `FileSystemFileHandle` survive a cross-origin `postMessage` and stay
@@ -2736,7 +2736,7 @@ old shared-name code (7/8), which is the property that makes it a gate.
 
 ## 2026-08-02 — A release seeds from what is published, and builds one app
 
-Second half of the multi-app release work (`working/spaces-design.md` §6.1).
+Second half of the multi-app release work (`working/design/spaces-design.md` §6.1).
 The first half made a destructive publish impossible; this one makes a
 non-destructive one possible.
 
@@ -5763,3 +5763,84 @@ document lays out spatially again on the next screen up.
   `canvas`, and the container stack already supports it.
 
 None of the three is built. All three are additive.
+
+---
+
+## 2026-08-28 — a graph view is a DRAWING, and derived state is never stored
+
+Settled while building `spaces/src/graph.ts` (bento/spaces graph view). Written
+down because the next app to want a picture of its own data will face the same
+three forks, and because two of these are platform-shaped rather than
+spaces-shaped.
+
+**1. Derive at open; store nothing.** The graph is built from
+`buildIndex().backlinks` and `Page.parent` when the overlay opens, and dropped
+when it closes. There is deliberately no `doc.graph`, no saved node positions
+and no second link scanner. A stored layout is meaningless to the next reader's
+window size, and a second scanner is a second answer to "what links to this
+page" — the one question the backlink index exists to answer. The precedent
+cuts the same way as `SpaceIndex` itself: *derived, NEVER stored*.
+
+**2. A viewer preference is read the same way in every app.** Reduced motion
+here reads localStorage `bento-reduce-motion` first and the OS
+`prefers-reduced-motion` second — character for character the rule
+`slides/src/present.ts` set, and the rule the theme and the locale already
+follow (PLATFORM §8). An app that invents its own motion preference makes the
+suite two products.
+
+**3. An animation needs a wall-clock settle guarantee, not just a rAF loop.**
+`requestAnimationFrame` is throttled to ZERO in a hidden or occluded tab. The
+graph's reveal interpolates from a spiral toward a settled layout while the
+camera is framed against the FINAL positions, so a starved rAF does not merely
+fail to animate — it leaves the picture frozen halfway and off-centre, which
+reads as a broken feature. Measured in exactly that state, then fixed with a
+`setTimeout` that lands the final frame regardless. slides carries the same
+guarantee for entrance tweens, for the same reason, and any future app that
+animates on open needs one too.
+
+**A note on measuring this class of feature.** Nothing above was found by
+looking at the screen. The overlay carries a small debug object (`__graph`:
+node/edge counts, layout ms, `reduced`, `reveal`, `frames`) and the frozen-
+reveal bug was identified by reading `frames: 0` beside a mid-flight `reveal` —
+an instrument on the DECISION, not a sample of the result. The rig's graph
+assertions were each made to fail on purpose before being trusted (twelve
+deliberate mutations; two assertions were too weak and were tightened, one of
+them a threshold that passed both with and without the behaviour it claimed to
+test).
+
+## 2026-08-28 — bento/spaces: a table column sorts, a title column does not
+
+The Bases table became editable and sortable in place: a column header cycles
+ascending → descending → none, and a cell opens the same picker the page's own
+header strip opens.
+
+Two things settled that another agent could otherwise contradict.
+
+**Unsorted DELETES the key.** The header writes the view's existing `sort`
+through the existing `editView`, and the third click passes `undefined` so the
+key is removed rather than stored as `[]`. A view sorted and unsorted from its
+header is byte-identical to one nobody ever touched. `cycleSort` in fields.ts is
+where that third state lives, so it is one function rather than a rule the two
+sort controls each have to remember.
+
+**The page-title column is NOT sortable, deliberately.** A view's `sort` names a
+FIELD: `sortRows` looks each key up in `doc.fields` and skips what it cannot
+find, and `unknownSortKeys` reports the miss as "newer than this build". A
+pseudo-key like `{key:'title'}` would therefore be a key EVERY shipped build
+reports as unreadable and does not apply — and teaching `sortRows` about a
+non-field key means a second ordering mechanism living beside the first, in a
+format where both are permanent. One order stored in two shapes is the thing
+that later disagrees with itself. The column is a plain `<th>` and does not
+pretend otherwise. If title order is wanted later, the honest shape is a real
+field, not a special case in the sorter.
+
+**A cell edit can CREATE the prop block**, the way a board drop already could:
+`editor.putField` is the one place a page gains a field, and it goes through
+`propBlock`, so the readable `html` is written with the value. A table column
+exists because SOME row carries that field; the rows that do not get an empty
+cell, and editing it is how the field arrives on that page.
+
+The picker was split from `openFieldPicker` into `fieldPicker(f, cur, anchor,
+write)` — a picker over a WRITER rather than a block id, because a cell can
+stand for a value that has no block yet. The header strip, the board's card chip
+and a cell are now one control with three writers, not three controls.

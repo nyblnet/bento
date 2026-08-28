@@ -571,3 +571,34 @@ export function columnMoves(cards: string[], moved: string, aim: DropAim): boole
   const next = [...rest.slice(0, target), moved, ...rest.slice(target)]
   return next.join('\u001f') !== cards.join('\u001f')
 }
+
+/**
+ * Which direction a view is sorted in BY THIS FIELD, if it is.
+ *
+ * Reads the same `sort` the format already carries — there is no second place
+ * a table header's arrow could come from, and inventing one would let the arrow
+ * and the order disagree. `undefined` means this column is not the sort key;
+ * an entry with no `dir` is ascending, which is what absence has always meant.
+ */
+export const sortDirOf = (sort: unknown, key: string): 'asc' | 'desc' | undefined => {
+  const cur = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+  if (!cur || String(cur.key ?? '') !== key) return undefined
+  return cur.dir === 'desc' ? 'desc' : 'asc'
+}
+
+/**
+ * The sort a CLICK ON A COLUMN HEADER produces: ascending → descending → none.
+ *
+ * The third state is the one that matters. A header that only flips between two
+ * directions can never give a hand-arranged board its order back, and "manual
+ * order" is not a sort called manual — it is the ABSENCE of the key. So this
+ * returns `undefined` there, and the caller deletes the key rather than storing
+ * an empty array: a view sorted and unsorted is byte-identical to one nobody
+ * ever touched.
+ */
+export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
+  const dir = sortDirOf(sort, key)
+  if (dir === undefined) return [{ key }]
+  if (dir === 'asc') return [{ key, dir: 'desc' }]
+  return undefined
+}
