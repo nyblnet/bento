@@ -89,7 +89,6 @@ sees or what becomes permanent on publish; leave what is internal and guarded:
 inside it, plus the Kotlin package `page.bento.tray` → `page.bento.home` and the
 `tray-icon`/`tray-logo`/`ic_tray_mark` assets. That churn is what the original
 entry warned about, and it was the price of not carrying a dead name forever.
-
 ## 2026-08-25 — The tray hosts are called `bento/home`
 
 **Decision.** All three hosts are named **`bento/home`** — lowercase, with the
@@ -109,19 +108,16 @@ is four independent attempts failing the same way, which is the signal that the
 premise was wrong rather than the words: the front door does not need a
 qualifier, because it is not one thing among several.
 
-**Scope: the PRODUCT is renamed, not the tree.** ~~Directories stay `tray/ios`,
-`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name.~~
-**SUPERSEDED 2026-08-24 — see the entry below.** The reasoning held while
-branches were open in `tray/`; once they had all landed and nothing was
-published, the tree moved to `home/` and the identifiers went with it.
+**Scope: the PRODUCT is renamed, not the tree.** Directories stay `tray/ios`,
+`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name. Renaming
+paths would churn every import, every doc link and every open branch for no
+reader's benefit — the name people see is not the name the repo files it under.
 
 **What must NOT change, on any host:**
 
-- ~~**The bundle identifier.** `page.bento.tray` on iOS, and its Android
-  counterpart.~~ **SUPERSEDED 2026-08-24.** The argument was conditional on an
-  installed copy existing — "creates a different one that cannot update the
-  installed copy". There were none, and no store record, so it was still free.
-  It is `page.bento.home` now, and this is the last moment that was possible.
+- **The bundle identifier.** `page.bento.tray` on iOS, and its Android
+  counterpart. To the OS and the store it IS the app: changing it does not rename
+  the app, it creates a different one that cannot update the installed copy.
 - **`PRODUCT_NAME` / `CFBundleName`** (iOS). They name the executable and the
   bundle, not the label. `CFBundleDisplayName` is the label, and it is the only
   key the rename touches.
@@ -3076,6 +3072,26 @@ build failing. It is real now: `scripts/size-budgets.json` holds the ceiling,
 is expected; raising it SILENTLY is what the check stops — the budget moves in
 the commit that spends the bytes, where a reviewer can see it. Recording an
 intention and calling it a rule is how the 100KB ceiling got missed at all.
+
+*Superseded 2026-08-24 — bento/spaces has no hard ceiling.* The maintainer's
+call, and the number that prompted it: 258,454 B against a 256 KiB ceiling,
+98.6%, with the polish round declining worthwhile fixes over a few hundred
+bytes. A find-highlight refinement was dropped for size; an `aria-current` fix
+landed only because it cost 32. When a ceiling starts choosing which
+accessibility fixes ship, it is costing more than it saves.
+
+**What went, and what did not.** Only the failure. `spaces` is now
+`enforce: false` with a `reference` watermark, and every run still prints its
+size and the drift since that number — `track spaces 258454 B (+312 B since
+reference, no ceiling)`. The original entry's point was never the block; it was
+that a budget nobody measures is a wish, and that the breach must not be found
+by a reviewer weeks later. Measuring survives. Move `reference` when a change
+buys real bytes and say what bought them, exactly as before.
+
+**Do not quietly put it back.** `enforce: true` restores the ceiling for any
+shell, and the other apps keep theirs — this decision is about spaces only. If
+a future round wants the discipline back, that is a conversation, not a
+one-line edit to a config file.
 
 ## 2026-08-03 — An encrypted space is never written to disk in the clear
 
