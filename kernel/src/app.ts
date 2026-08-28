@@ -39,7 +39,7 @@ declare const __APP_VERSION__: string
 /**
  * Tell a HOST which Bento runtime this document carries.
  *
- * A host that polyfills `showSaveFilePicker` (tray/webext) must know whether
+ * A host that polyfills `showSaveFilePicker` (home/webext) must know whether
  * this document is old enough to predate `pickerIdFor` (#213). Before that,
  * every save — including "Save a copy…" — sent `bento-doc`, so acting on the id
  * there overwrites the open document. The host therefore refuses to write in

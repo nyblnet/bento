@@ -551,7 +551,7 @@ export const fr: Catalog = {
   "Drag to draw a curve — then drag its points; double-click to add or remove one": "Glissez pour tracer une courbe — déplacez ses points ; double-clic pour en ajouter ou retirer",
   "Draw by hand — the stroke smooths into an editable curve": "Dessinez à main levée — le trait se lisse en courbe éditable",
   "Editor": "Éditeur",
-  "Editor copy saved — recipients join live with edit access": "Éditeur",
+  "Editor copy saved — recipients join live with edit access": "Copie éditeur enregistrée — les destinataires rejoignent la session en direct avec accès en écriture",
   "Event": "Événement",
   "Fills this tab instead of going fullscreen — handy for testing or sharing a window": "Remplit cet onglet au lieu du plein écran — pratique pour tester ou partager une fenêtre",
   "First slide": "Première diapositive",
@@ -752,4 +752,7 @@ export const fr: Catalog = {
   "The bento/tray app can keep your files on this device.": "L'application bento/tray peut conserver vos fichiers sur cet appareil.",
   "This browser cannot reopen a file in place — Chrome or Edge can.": "Ce navigateur ne peut pas réécrire un fichier sur place — Chrome ou Edge le peuvent.",
   "Keep the file somewhere you can find it again.": "Conservez le fichier à un endroit où vous le retrouverez.",
+  "Theme": "Thème",
+  "Deck-wide brand colours. Anything using a theme colour follows when you change it here.": "Couleurs de marque pour tout le diaporama. Tout élément utilisant une couleur du thème suit vos modifications ici.",
+  "Accent {n}": "Accent {n}",
 }

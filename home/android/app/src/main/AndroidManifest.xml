@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Almost entirely for the DOCUMENT. The document carries its own runtime,
+         which syncs with the collab relay and checks Bento's signed update
+         channel exactly as it would in a browser tab; withholding this would
+         silently break live collaboration and self-update inside every deck.
+
+         The host itself makes exactly ONE request, and only when you create a
+         new document: it fetches that app's current signed shell rather than
+         bundling a starter deck (see Releases.kt — starter decks change often
+         and there are three Bento apps with more coming). No update check of its
+         own, no telemetry, nothing on launch. docs/PLATFORM.md §1 requires no
+         network to OPEN, EDIT, PRESENT or SAVE, and none of those touch it. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.Tray"
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true"
+        android:supportsRtl="true"
+        android:allowBackup="false">
+
+        <!-- allowBackup is off deliberately. The only thing worth backing up is
+             the recents list, and it is a list of URI permission grants — which
+             are held by the system per install and cannot be restored to a new
+             one. A restored list would be entirely dead entries. -->
+
+        <activity
+            android:name=".DocumentsActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".EditorActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Tray.Editor"
+            android:parentActivityName=".DocumentsActivity"
+            android:documentLaunchMode="intoExisting"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode|density|smallestScreenSize|navigation">
+
+            <!-- configChanges is not an optimisation here. Without it a rotation
+                 destroys and recreates the WebView, which reloads the document
+                 from scratch and throws away everything the page held in
+                 memory: undo history, selection, an in-progress text edit, and
+                 the live collab session's actor state. -->
+
+            <!-- Opening a document from a file manager, Drive, Gmail, a share
+                 sheet. LSHandlerRank has no Android equivalent — the chooser
+                 ranks by user habit — so this simply adds bento/home to the
+                 list of apps offered for an HTML file rather than claiming it.
+
+                 An ACTION_VIEW grant is usually READ-ONLY, which is why this is
+                 the second-best route in and the app says so: see
+                 EditorActivity.canWriteInPlace. -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:mimeType="text/html" />
+                <data android:scheme="file" android:mimeType="text/html" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Serves the tray/webext capability probes on TWO origins.
+// Serves the home/webext capability probes on TWO origins.
 //
 //   node scripts/probe-origins.mjs
 //   → open http://localhost:5301/probe/parent.html in YOUR OWN browser

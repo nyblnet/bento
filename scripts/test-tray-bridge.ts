@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url'
 
 // Walk up to the repo root rather than assuming a fixed depth, so the rig runs
 // from wherever it is invoked.
-const REL = 'tray/ios/EditorViewController.swift'
+const REL = 'home/ios/EditorViewController.swift'
 let SRC = ''
 for (const from of [dirname(fileURLToPath(import.meta.url)), process.cwd()]) {
   for (let d = from; d !== resolve(d, '..'); d = resolve(d, '..')) {

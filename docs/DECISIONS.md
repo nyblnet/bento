@@ -8,47 +8,68 @@ Reversing a decision = a new entry that supersedes the old one, not an edit.
 Format:
 
 ```
-## 2026-08-19 — Page width has TWO settings, because it answers two questions
-
-The per-page control shipped in #325 answered "this page needs the room". It
-did not answer "I have a wide screen", and it made somebody say so on every
-page in a space one page at a time. Reported as still-narrow after it shipped,
-and MEASURED at a 2560px viewport: a 720px column using 31% of the area with
-1,591px empty beside it.
-
-Two settings now, and the split is the whole point:
-
-  · `Page.width`  — DOCUMENT data. What this page needs; travels with the file.
-  · `bento-sp-width` — VIEWER data, in localStorage. What this reader's SCREEN
-    is; never written to the file.
-
-Precedence: the page, then the reader, then the board default, then the
-measure. A reader who sets it once gets it on every page that has not asked for
-something specific, and the document is byte-unchanged — verified: four pages
-at 1500px with no `width` key stored on any of them and no `"width"` anywhere
-in the serialized doc.
-
-That split is the rule locale and reduced motion already follow (PLATFORM §8):
-two people opening one space on a laptop and a 27-inch monitor should each get
-their own answer, and neither should write theirs into the file the other
-opens.
-
-THE BUILT-IN DEFAULT ALSO GROWS, `min(max(measure, 42vw), measure × 1.25)` —
-720px on a laptop, 900px at 2560px. Capped deliberately: 720px is already ~88
-characters at 16px, and past ~95 a line gets harder to read rather than easier,
-so the cap is a typographic limit and not a shortage of nerve. Filling a 2560px
-screen with one column of prose is not the goal; not showing a ribbon in the
-middle of it is.
-
-PRINT DOES NOT INHERIT THE READER WIDTH. Paper has a fixed width, and the size
-of the monitor somebody happens to be sitting at is not a fact about the page
-they are printing. Pinned in the rig.
-
----
-
 ## YYYY-MM-DD — Title
 Decision. Why. Pointers.
 ```
+
+---
+
+## 2026-08-25 — The tray hosts are called `bento/home`
+
+**Decision.** All three hosts are named **`bento/home`** — lowercase, with the
+slash, set like `bento/slides`. **Never "Bento Home"**, in any casing, in any
+surface a user reads. This supersedes the naming half of the 2026-07-26 entry
+below, which called the iOS app `bento/tray`.
+
+**Why `home`.** It is not a component that needs distinguishing from the brand —
+it is where documents live and where new ones start, on every host. The suite
+convention is `bento/<what you get>`, and what you get is your documents.
+
+**Why the qualifier route was abandoned, so it is not tried again.** The
+alternative was a distinguishing second word, and every candidate died to a live
+collision: **box** → BentoBox (and "bento box" is the literal object), **desk** →
+Addit's furniture line, **works** → Apple's iWork, **keep** → Google Keep. That
+is four independent attempts failing the same way, which is the signal that the
+premise was wrong rather than the words: the front door does not need a
+qualifier, because it is not one thing among several.
+
+**Scope: the PRODUCT is renamed, not the tree.** Directories stay `tray/ios`,
+`tray/android`, `tray/webext`, and `tray/bridge.js` keeps its name. Renaming
+paths would churn every import, every doc link and every open branch for no
+reader's benefit — the name people see is not the name the repo files it under.
+
+**What must NOT change, on any host:**
+
+- **The bundle identifier.** `page.bento.tray` on iOS, and its Android
+  counterpart. To the OS and the store it IS the app: changing it does not rename
+  the app, it creates a different one that cannot update the installed copy.
+- **`PRODUCT_NAME` / `CFBundleName`** (iOS). They name the executable and the
+  bundle, not the label. `CFBundleDisplayName` is the label, and it is the only
+  key the rename touches.
+- **The App Store listing name.** Per 2026-07-24, `/` is a mark and never a
+  stored name, and store names are stored. The listing keeps a slashless form;
+  the on-device label does not. Those are separate fields — see the note on the
+  2026-07-26 entry for why that pair is not a contradiction.
+
+`bento/home` is 10 characters, which fits the iOS home-screen label without
+truncation. (`bento/tray` was 10 too, so this was not at risk, but it is the
+constraint any future rename has to clear.)
+
+**Where it landed.** `tray/webext` first, in PR #360 / `50d1c40` — read that as
+the precedent for which strings change. `tray/ios` in PR #315: the display name,
+the search screen's lockup, and the mark's `aria-label`. `tray/android` follows.
+
+Screen readers get the spoken form, not the mark: `aria-label` and
+`accessibilityLabel` say "bento home", because a slash is read out as
+punctuation. Visible text keeps the slash, and only the search screen can colour
+it — the home-screen label, the browser title and the Browse folder are system
+chrome drawn as plain text.
+
+**One practical note for the listing, since it is cheap to record and expensive
+to rediscover:** App Store screenshots need documents that have been **saved at
+least once**. A preview is only written on save, so an unsaved document
+photographs as a "Not saved yet" placeholder — a whole screenshot set can be shot
+and only later found to be showing empty cards.
 
 ---
 
@@ -453,6 +474,44 @@ being zero-`<` by construction against hostile payloads.
 
 ---
 
+## 2026-08-19 — Page width has TWO settings, because it answers two questions
+
+The per-page control shipped in #325 answered "this page needs the room". It
+did not answer "I have a wide screen", and it made somebody say so on every
+page in a space one page at a time. Reported as still-narrow after it shipped,
+and MEASURED at a 2560px viewport: a 720px column using 31% of the area with
+1,591px empty beside it.
+
+Two settings now, and the split is the whole point:
+
+  · `Page.width`  — DOCUMENT data. What this page needs; travels with the file.
+  · `bento-sp-width` — VIEWER data, in localStorage. What this reader's SCREEN
+    is; never written to the file.
+
+Precedence: the page, then the reader, then the board default, then the
+measure. A reader who sets it once gets it on every page that has not asked for
+something specific, and the document is byte-unchanged — verified: four pages
+at 1500px with no `width` key stored on any of them and no `"width"` anywhere
+in the serialized doc.
+
+That split is the rule locale and reduced motion already follow (PLATFORM §8):
+two people opening one space on a laptop and a 27-inch monitor should each get
+their own answer, and neither should write theirs into the file the other
+opens.
+
+THE BUILT-IN DEFAULT ALSO GROWS, `min(max(measure, 42vw), measure × 1.25)` —
+720px on a laptop, 900px at 2560px. Capped deliberately: 720px is already ~88
+characters at 16px, and past ~95 a line gets harder to read rather than easier,
+so the cap is a typographic limit and not a shortage of nerve. Filling a 2560px
+screen with one column of prose is not the goal; not showing a ribbon in the
+middle of it is.
+
+PRINT DOES NOT INHERIT THE READER WIDTH. Paper has a fixed width, and the size
+of the monitor somebody happens to be sitting at is not a fact about the page
+they are printing. Pinned in the rig.
+
+---
+
 ## 2026-08-19 — How wide a page is belongs to the PAGE, not the theme
 
 `theme.measure` is one number for the whole document — "text column width in px
@@ -750,6 +809,27 @@ consistent.
 today; the app list is aspirational on every host. All three say
 "<App> has not been released yet" rather than surfacing an HTTP status.
 
+**Proving the verifier REFUSES is a separate obligation from writing it.** A
+verifier only ever watched saying yes is indistinguishable from `return true`,
+so each host's rig runs the real captured manifest plus deliberately bad ones.
+Three cases are worth naming because each catches something the others cannot:
+
+- **A valid signature under the WRONG key** is not the same test as a bent one.
+  Bending bytes proves a non-validating signature is rejected, which almost any
+  bug-free crypto call manages; a signature that validates PERFECTLY under an
+  untrusted key is what catches a verifier that imported the wrong key, or that
+  would trust a key travelling inside the manifest. No test seam is needed —
+  sign the real payload with a throwaway key and hand it to the shipped
+  verifier. (The NEGATIVE cases must never go through an injected key, or a
+  verifier that trusts one passes its own tampering tests.)
+- **An unsigned manifest is refused as a CATEGORY**, not as a parse error. A
+  flat `{url: …}` is exactly the shape the old broken reader wanted, so
+  "malformed" invites someone to add a lenient fallback for it later as a
+  compatibility gap. It is not a gap.
+- **An absent `app` field must not read as a match** — `undefined !== 'bento-x'`
+  passes by construction, and a plausible tidy-up to `info.app && info.app !== x`
+  silently turns a missing field into a pass.
+
 **Status.** `tray/webext` done (`src/release.js`, used by `library.js
 newDocument`); `tray/ios` done (`Releases.swift`, PR #315); `tray/android` in
 progress.
@@ -771,6 +851,64 @@ rig passed, because the fixture was written to the shape the CODE expected
 rather than the shape the SERVER sends. A fixture that is not the real shape
 proves only that the code agrees with itself — hence the captured manifest, and
 hence the same warning for android and ios.
+
+## 2026-08-16 — iOS document search: CoreSpotlight is the surface, and the port is pinned to the LIVE reference
+
+**Decision.** `tray/ios` implements the search settled below. Three things that
+the Android port and any future host should follow or knowingly diverge from:
+
+**1. On iOS the "native list" is a screen BESIDE the document browser, and the
+system index is a first-class output.** `UIDocumentBrowserViewController` stays
+the root; search is one toolbar button away from it. The extracted prose is also
+donated to **CoreSpotlight**, which is what the original gap statement ("the app
+contributes nothing to search — no CoreSpotlight, no `NSUserActivity`") actually
+asked for, and Spotlight results are resolved back through the index rather than
+by re-deriving a path. Android has no equivalent obligation; its recents list IS
+its root, so it has one surface where iOS has two.
+
+**2. TWO checks, because they catch different things.**
+`scripts/test-tray-index.mjs` runs both:
+
+- **against the shared corpus** (`tray/fixtures/`, with `tray/doc-index.mjs` as
+  the reference and `expected.json` as the answer key). This proves all three
+  hosts give the same frozen answers — including Kotlin, which nothing on a Mac
+  running the Swift rig can execute. Budgets are checked too: a port that agreed
+  on every case while carrying a different `TEXT_BUDGET` agrees by luck.
+- **against the RUNNING `library.js`**, imported live — `describe()` is exported
+  and takes injectable deps, so a fake file handle runs the real code path.
+
+The second is not redundant. A frozen answer key pins each port to a SNAPSHOT:
+when `library.js` moves, static expectations go stale silently and every host
+stays green while drifting from the thing they are copies of. Importing the
+reference means it cannot move without a rig failing. Verified 2026-08-16: the
+Swift port agrees with both, on all 11 corpus cases and on 59 documents against
+the live reference.
+
+**The corpus contract is the one to conform to where they differ.** It folds
+`isDocument` into the same call and returns nulls throughout for a file that is
+not ours; `library.js`'s `describe()` always returns a title, falling back to the
+file name, because its caller sniffs first and it never faces a non-document.
+`BentoIndex.describe` follows the corpus and the LISTING supplies the file-name
+fallback — which is the better seam anyway: inventing a title during extraction
+reports one for a file that is not a Bento document at all.
+
+**3. Ports must count UTF-16 code units.** The reference is JavaScript, where
+every index, length and budget is UTF-16; the natural Swift/Kotlin spelling uses
+graphemes or code points and disagrees on any document containing an emoji or a
+CJK character — that is real documents, not pathological ones. One deviation is
+allowed and is written down in `BentoIndex.swift`: the final `slice(0, 40KB)` can
+land inside a surrogate pair, and where JavaScript keeps the lone half a Swift
+`String` cannot hold one, so it is dropped. The rig accepts exactly that shape
+and nothing looser.
+
+**Also:** enumeration needs a folder grant the app did not previously take
+(folder-mode `UIDocumentPickerViewController`, persisted as a security-scoped
+bookmark). Each indexed document gets its OWN bookmark, minted inside the
+folder's open scope, because a file in a granted folder is readable only while
+the FOLDER is scoped and an editing session outlives the walk. Encrypted
+documents are never read for text or preview, and revoking a folder deletes its
+documents from CoreSpotlight — both enforced in `LibraryIndex`, not just
+described. Parity table: `tray/README.md`.
 
 ## 2026-08-16 — Document search: the list stays native, the indexer is shared by FIXTURE
 
@@ -841,10 +979,34 @@ trade at this level of consequence, and it is already this repo's idiom for
 exactly this problem — the splice contract has a conformance gate in
 `release.mjs`, the save-purpose ids have `scripts/test-savepurpose.ts`.
 
-**Status: not built.** Nothing here has been implemented. The cheap intermediate
-step, if it is wanted before the full library, is a name filter over the existing
-Android recents list — that brings Android level with iOS and touches no
-extraction. Parity table and the standing gap: `tray/README.md` § Android.
+**Status (2026-08-16, later): BUILT ON ANDROID; iOS still to do.** The shape
+above survived contact. `tray/doc-index.mjs` is the reference, `tray/fixtures/`
+is the corpus (11 cases), `scripts/test-doc-index.mjs` and a JVM unit test hold
+the JS and Kotlin implementations to it, and `tray/android` indexes granted
+folders and searches their prose. The iOS session has been handed the same brief.
+
+Two things the corpus caught that reasoning had not:
+
+- **A single string value over 400 characters is not indexed at all.** The value
+  regex is capped at `{1,400}`, so a long speaker note or a wordy text element is
+  invisible to search — in all three hosts, today. Pinned by `longvalue.html` so
+  no port can quietly "fix" it into divergence; changing it has to be a
+  deliberate change everywhere.
+- **JavaScript's `\s` is Unicode-aware and Java's is not** (and Java's
+  `UNICODE_CHARACTER_CLASS` still excludes U+FEFF), so a port spelling it `\s`
+  leaves non-breaking and ideographic spaces in the indexed text and a phrase
+  search across one silently fails. The class is written out in full;
+  `whitespace.html` catches it, verified by mutation.
+
+**Thumbnails are in, and the reasoning that nearly excluded them was wrong.**
+"the preview is HTML, so a native list needs a WebView per row" conflated two
+different things: a WebView per scrolling row (the design this entry rejects) and
+ONE offscreen WebView at index time producing cached bitmaps (which costs nothing
+at launch and leaves the list plain `ImageView`s). The second is the obvious
+design and it was talked past. Details and the three ways an offscreen render
+silently produces the wrong picture: `tray/README.md` § Document search.
+
+Parity table: `tray/README.md` § Android.
 
 ## 2026-08-16 — bento/tray gets an Android host (PR #87, rearchitected)
 
@@ -2065,6 +2227,18 @@ Naming notes, so this is not relitigated:
   it, so confirm there before submitting.
 - The App Store name carries no slash. Per the 2026-07-24 naming entry, `/` is
   a mark, never a stored name.
+- **But the ON-DEVICE name does carry it: `CFBundleDisplayName` is `bento/tray`**
+  (2026-08-18). These are different fields and only one of them is a stored name.
+  The App Store listing name lives in App Store Connect and stays "Bento Tray";
+  the bundle display name is a LABEL — it drives the home-screen caption, the
+  document browser's title ("bento/tray Recents") and the app's folder in Browse,
+  and iOS never turns it into a path, because the container on disk is addressed
+  by uuid. Verified on iOS 26: all three render it verbatim, nothing escaped or
+  substituted. The 2026-07-24 rule scopes the ban to "filenames, URLs, package
+  names and social handles… anywhere a name must be stored or typed", and a
+  display label is none of those — it is exactly where the mark belongs. Recorded
+  because "the App Store name carries no slash" reads at a glance as "the app is
+  never called bento/tray", and someone will otherwise "fix" the plist.
 
 **One app, not two.** A separate "generic HTML runner" listing would risk
 guideline 4.3 (duplicate apps from one developer) and doubles the listing
@@ -2823,6 +2997,26 @@ build failing. It is real now: `scripts/size-budgets.json` holds the ceiling,
 is expected; raising it SILENTLY is what the check stops — the budget moves in
 the commit that spends the bytes, where a reviewer can see it. Recording an
 intention and calling it a rule is how the 100KB ceiling got missed at all.
+
+*Superseded 2026-08-24 — bento/spaces has no hard ceiling.* The maintainer's
+call, and the number that prompted it: 258,454 B against a 256 KiB ceiling,
+98.6%, with the polish round declining worthwhile fixes over a few hundred
+bytes. A find-highlight refinement was dropped for size; an `aria-current` fix
+landed only because it cost 32. When a ceiling starts choosing which
+accessibility fixes ship, it is costing more than it saves.
+
+**What went, and what did not.** Only the failure. `spaces` is now
+`enforce: false` with a `reference` watermark, and every run still prints its
+size and the drift since that number — `track spaces 258454 B (+312 B since
+reference, no ceiling)`. The original entry's point was never the block; it was
+that a budget nobody measures is a wish, and that the breach must not be found
+by a reviewer weeks later. Measuring survives. Move `reference` when a change
+buys real bytes and say what bought them, exactly as before.
+
+**Do not quietly put it back.** `enforce: true` restores the ceiling for any
+shell, and the other apps keep theirs — this decision is about spaces only. If
+a future round wants the discipline back, that is a conversation, not a
+one-line edit to a config file.
 
 ## 2026-08-03 — An encrypted space is never written to disk in the clear
 
@@ -5376,3 +5570,112 @@ language: "An update check is the only network this app makes on its own. It
 asks the release server for a signed manifest and sends nothing about you or
 this document — no ids, no telemetry." Live collaboration is network too, but
 it is network the reader started.
+
+## 2026-08-25 — the square root: Chromium's radical join, accepted unfixed
+
+**The symptom.** In a formula, the radical's hook does not meet its overbar —
+a visible step where the two should be one stroke.
+
+**Status: accepted, unfixed.** Formulas keep the generic `math` family. There
+is a mitigation that helps on macOS and it is written down below, deliberately
+not shipped. This waits for an upstream fix.
+
+**Every font tested breaks.** Measured on the affected engine, not inferred:
+
+| platform | what generic `math` picks | radical join |
+|---|---|---|
+| macOS | STIX Two Math | broken |
+| Windows | Cambria Math | broken, same way |
+| Windows, forced `serif` | Times New Roman | smaller break, still broken |
+
+Three fonts, three breaks. That is what rules the font out as the cause: a
+defect belonging to STIX would not follow us to Cambria Math and Times New
+Roman, on another operating system, in another font family.
+
+**It is not a version regression.** An earlier version of this entry claimed
+Chromium 148 was clean and 151 broken. That table was wrong and is the reason
+this entry was rewritten. The "clean" engine was an embedded browser that ships
+almost no fonts, so it silently fell back to a plain serif and never rendered
+STIX at all. It was not a newer engine breaking a radical; it was two engines
+drawing two different fonts. STIX breaks in 148 too.
+
+**What the mechanism appears to be.** Chromium paints the arm of the radical
+from the font's glyph and then draws the overbar itself as a rule, and the
+break is those two disagreeing by a fraction of a pixel. Two measurements
+support this. Sweeping the radicand height from 10px to 200px, the glyph's
+advance width never moves off 109.1px, so the radical stretches by a glyph
+assembly rather than by wider size variants — the engine is compositing, not
+picking one drawn glyph. And the size of the break tracks the font's arm
+thickness rather than anything about the formula. It follows that the mismatch
+is resolution-dependent, which is why Windows breaks *differently* rather than
+not at all, and why zoom level can change the verdict on a given row.
+
+**The radicand's height is not the cause, so do not try to fix this by making
+formulas shorter.** Tested directly, because it is the intuitive suspect. In
+the starter deck's own quadratic formula the `b²` raises the radicand from
+64.4px to 84.3px, but the msqrt box stays at 113.8px — the *minimum*,
+single-glyph size — exactly as it is for a flat `b − 4ac` and for four other
+radicands. Same glyph, same size, same position, same bar. Only a fraction
+inside the root (radicand 159.7px, box 220.3px) actually stretches it. The
+radical in `√(b²−4ac)` is pixel-identical to the one in `√(b−4ac)`, so the
+exponent cannot be raising the bar.
+
+**The mitigation, documented and not shipped.** Scoping a non-maths font to the
+radical only, and putting the contents back:
+
+```css
+.bento-el math msqrt { font-family: serif; }
+.bento-el math msqrt * { font-family: math; }
+```
+
+The second rule is what makes it viable: it keeps the whole formula in the
+maths font and swaps only the glyph that is drawn wrong. A blanket `serif` on
+the formula is not an option — it collapses stretchy delimiters (a tall `(`
+measured 315px in the maths font and 94px in serif) and shrinks large
+operators.
+
+Verified clean on macOS/Chrome, where it swaps STIX's radical for the serif
+one. **It is not shipped because it does not hold on Windows**, where `serif`
+is Times New Roman and the break is smaller but still there. It trades one
+rounding mismatch for another, and a fix that only works on the author's own
+machine is worse than a known defect. If a font is ever found that joins
+cleanly on both platforms, this rule is the shape the fix should take — scoped
+to `msqrt`, contents restored to `math`. Note also that the stack matters: on
+Windows `'Cambria Math', serif` selects what generic `math` already selects, so
+that variant is a no-op there.
+
+`slides/probe/radical-join.html` is the cross-platform test rig:
+one row per candidate font applying exactly the rule above, each row reporting
+whether the font actually resolved, and a paste-back block carrying platform,
+UA and DPR.
+
+**If it ever becomes worth fixing on our side**, the only route that bypasses
+the engine's radical painting is drawing the hook and bar ourselves — an
+`<mo>√</mo>` plus a CSS rule for the bar, overlapped so the join cannot
+separate at any DPI. That costs the semantic `msqrt` (accessibility, and the
+morph would need the bar tagged as its own symbol), and an earlier hand-built
+approximation still showed problems, so it needs verifying in the affected
+engine before anyone commits to it.
+
+**How this went wrong, which is the part worth keeping.** Six or more confident
+wrong answers were reported before the right one, every one from an instrument
+that lied:
+
+- `document.fonts.check()` returns true for fonts that are NOT installed, so a
+  four-font comparison was three fallbacks wearing different labels. Control: a
+  nonsense font name — every fallback returns identical metrics.
+- A "step size" metric compared the bar against the ink just left of it, which
+  is the diagonal, not the flag. It scored a perfect radical as broken and
+  returned an identical 21px for every variant.
+- An SVG foreignObject rasteriser ignores `font-family` entirely, proven when
+  `NoSuchFontXYZ` produced byte-identical output to STIX.
+- And the one that cost the most: **every test page was judged in a browser
+  that resolved the fonts differently from the one showing the bug.** Nine test
+  matrices came back "all fine" for that reason alone, each one clearing a
+  suspect that had never actually been rendered.
+
+**The lesson: pin the environment before trusting any comparison, and prove the
+thing under test is really on screen.** Record engine, version and *resolved*
+font in the test artefact itself — a named font that silently fell back is not
+a test of that font. "It looks fine here" is not evidence until "here" is
+named.

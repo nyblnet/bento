@@ -105,6 +105,8 @@ export class Editor {
   private sidebar!: HTMLElement
   private statusEl!: HTMLElement
   private overlay: HTMLElement | null = null
+  /** undo whatever the open popover attached to the window */
+  private overlayReflow: (() => void) | null = null
   /** set while the editor is writing the DOM, so input handlers stand down */
   private painting = false
   /** reading view: the document without the machinery for changing it */
@@ -248,7 +250,7 @@ export class Editor {
       '<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>' +
       '<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>' +
       '</svg><b class="sp-mark-word">bento<span>/</span>spaces</b>'
-    mark.title = t('About bento/spaces — version, updates, language, password')
+    mark.title = t('About this space')
     mark.addEventListener('click', () => this.openAbout())
 
     // Pages panel toggle — on every width, like slides' Slides/Format toggles.
@@ -298,38 +300,60 @@ export class Editor {
     this.redoB = iconBtn('redo', t('Redo (⇧⌘Z)'), () => { this.store.redo(); this.repaint() })
     const search = iconBtn('search', t('Search all pages (⌘K)'), () => this.openSearch())
 
-    // SECONDARY ACTIONS, declared ONCE.
+    // WHERE A COMMAND LIVES. One rule, because the bar used to have none and it
+    // showed: eight secondary buttons sat in the bar AND were repeated verbatim
+    // in the ⋯ menu at the same time, so half of ⋯ pointed at things already on
+    // screen. Print and Password each had two homes. About had three entry
+    // points under two different names — all calling one dialog.
     //
-    // Measured at 375px before this existed: the bar wanted 678px, so seven of
-    // eleven controls sat off the right edge — including Save. On a phone the
-    // file could not be saved at all.
+    //   · The bar carries what you reach for WHILE WRITING.
+    //   · ⋯ carries the rest, plus whatever the bar has had to drop.
+    //   · Save ▾ is only about writing THIS file somewhere.
+    //   · Nothing is listed in two places at the same width.
     //
-    // Below the breakpoint these collapse into the ⋯ menu and the inline copies
-    // are hidden. One list feeds both, because a phone menu maintained by hand
-    // as a copy of the desktop row drifts the first time either one changes.
-    const secondary: Array<{
+    // The measurement that produced the fold still holds: at 375px the old bar
+    // wanted 678px, so seven of eleven controls — Save included — sat off the
+    // right edge. Below the breakpoint the inline copies hide and ⋯ picks them
+    // up, one list feeding both, because a phone menu maintained by hand as a
+    // copy of the desktop row drifts the first time either one changes.
+    type BarAction = {
       icon: IconName
       label: string
       hint: string
       run: () => void
       keep?: (b: HTMLButtonElement) => void
-    }> = [
+    }
+
+    // Reached while writing, so it stays in the bar until the bar runs out of
+    // room. Reading view is a MODE — you leave and re-enter it while working,
+    // and a mode you cannot see the state of is a mode you lose track of.
+    const barActions: BarAction[] = [
+      { icon: 'eye', label: t('Reading view'), hint: t('The pages without the editing tools'),
+        run: () => this.toggleReading(),
+        keep: (b) => { this.readB = b } },
+    ]
+
+    // Reached once a session or less. A button in the bar for something you do
+    // once is a button in the way of everything you do constantly, so these
+    // live in ⋯ at every width — findable, out of the road, and each with the
+    // keyboard shortcut printed beside it.
+    const menuActions: BarAction[] = [
       { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
-      { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
-        run: () => this.openImport() },
       { icon: 'book', label: t("Today's journal"), hint: '⌘⇧J', run: () => this.openJournal() },
       { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
       { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
         run: () => this.makeIssue() },
-      { icon: 'eye', label: t('Reading view'), hint: t('The pages without the editing tools'),
-        run: () => this.toggleReading(),
-        keep: (b) => { this.readB = b } },
+      { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
+        run: () => this.openImport() },
       { icon: 'print', label: t('Print or save as PDF'), hint: '⌘P', run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), hint: t('Version, language, password, exports'),
         run: () => this.openAbout() },
+      // A help screen only reachable by pressing the key it documents is a
+      // help screen for people who did not need it.
+      { icon: 'help', label: t('Keyboard shortcuts'), hint: '?', run: () => this.openHelp() },
     ]
 
-    const inlineSecondary = secondary.map((a) => {
+    const inlineSecondary = barActions.map((a) => {
       const b = iconBtn(a.icon, a.hint && a.hint.length < 12 ? `${a.label} (${a.hint})` : a.label, a.run)
       b.classList.add('sp-sec')
       a.keep?.(b)
@@ -363,8 +387,15 @@ export class Editor {
           close(); this.store.redo(); this.repaint()
         }, { off: !this.store.canRedo }))
       }
-      for (const a of secondary) {
+      for (const a of menuActions) {
         menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+      }
+      // …and only THEN what the bar itself has had to give up. Listing these
+      // unconditionally is what made ⋯ a duplicate of the visible row.
+      if (this.isFolded()) {
+        for (const a of barActions) {
+          menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+        }
       }
       if (this.isFolded()) {
         menu.append(this.menuItem('copy', t('Save a copy…'), t('A second file — the original is left alone'), () => {
@@ -409,12 +440,6 @@ export class Editor {
       }))
       menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
         close(); this.openExportSpace()
-      }))
-      menu.append(this.menuItem('print', t('Print / PDF…'), t('The whole space, or just this page'), () => {
-        close(); this.openPrint()
-      }))
-      menu.append(this.menuItem('lock', t('Password…'), t('Encrypt the document inside this file'), () => {
-        close(); this.openAbout()
       }))
     })
     saveMore.classList.add('sp-caret', 'sp-dd-end')
@@ -962,7 +987,14 @@ export class Editor {
       li.style.paddingInlineStart = `${depth * 14}px`
       const a = document.createElement('a')
       a.href = `#p/${page.id}`
-      a.className = 'sp-treelink' + (page.id === s.pageId ? ' sp-here' : '')
+      const here = page.id === s.pageId
+      a.className = 'sp-treelink' + (here ? ' sp-here' : '')
+      // WEIGHT IS NOT AN ANNOUNCEMENT. sp-here says "you are here" in 600
+      // against 400, which a sighted reader gets for free and a screen reader
+      // is told nothing about — the tree reads as a flat list of links with no
+      // indication of which one you are on. aria-current is the one attribute
+      // that carries it.
+      if (here) a.setAttribute('aria-current', 'page')
       const ico = el('span', 'sp-tree-ico')
       ico.innerHTML = pageIcon(page.icon)
       const label = document.createElement('span')
@@ -1022,7 +1054,9 @@ export class Editor {
         const li = document.createElement('li')
         const a = document.createElement('a')
         a.href = `#p/${page.id}`
-        a.className = 'sp-treelink sp-arch-row' + (page.id === s.pageId ? ' sp-here' : '')
+        const hereA = page.id === s.pageId
+        a.className = 'sp-treelink sp-arch-row' + (hereA ? ' sp-here' : '')
+        if (hereA) a.setAttribute('aria-current', 'page')
         const ico = el('span', 'sp-tree-ico')
         ico.innerHTML = pageIcon(page.icon)
         const label = document.createElement('span')
@@ -1438,7 +1472,7 @@ export class Editor {
     this.overlay = pop
     document.body.append(pop)
     if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
+    else this.placed(pop, anchor)
     const away = (ev: MouseEvent) => {
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
@@ -1641,7 +1675,7 @@ export class Editor {
     this.overlay = pop
     document.body.append(pop)
     if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
+    else this.placed(pop, anchor)
     const away = (ev: MouseEvent) => {
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
@@ -2903,6 +2937,8 @@ export class Editor {
     // takes a keystroke as readily as an input does.
     if (!mod && e.key === '[' && !isTyping()) { e.preventDefault(); this.togglePane(); return }
     if (!mod && e.key === ']' && !isTyping()) { e.preventDefault(); this.toggleInsp(); return }
+    // Same guard as [ and ]: '?' is a character somebody is entitled to type.
+    if (!mod && e.key === '?' && !isTyping()) { e.preventDefault(); this.openHelp(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); this.newIssue(); return }
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault()
@@ -3120,7 +3156,123 @@ export class Editor {
     card.querySelector<HTMLElement>('input,button,[tabindex]')?.focus()
   }
 
+  /**
+   * The shortcut list.
+   *
+   * Every shortcut here was read off the keydown handler rather than off the
+   * documentation, because a help screen that lists a key the app does not
+   * bind is worse than no help screen: it makes the reader doubt the keyboard
+   * rather than the page. The starter space describes the same keys in prose,
+   * but the starter is a document — the first thing many people do is delete
+   * it, and the reference should not go with it.
+   *
+   * Built on .sp-overlay/.sp-card, the About dialog's shell, so it inherits
+   * the dialog's scrim, escape handling and focus return rather than growing a
+   * second set.
+   */
+  openHelp(): void {
+    this.closeOverlay()
+    const returnFocus = document.activeElement as HTMLElement | null
+    const back = el('div', 'sp-overlay')
+    const card = el('div', 'sp-card sp-keys')
+    card.setAttribute('role', 'dialog')
+    card.setAttribute('aria-modal', 'true')
+    card.setAttribute('aria-label', t('Keyboard shortcuts'))
+
+    const close = () => {
+      back.remove()
+      document.removeEventListener('keydown', onKey, true)
+      returnFocus?.focus?.()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+
+    const h = el('h2', 'sp-card-h', t('Keyboard shortcuts'))
+    card.append(h)
+
+    const groups: Array<[string, Array<[string, string]>]> = [
+      [t('Writing'), [
+        ['↵', t('A new block')],
+        ['Tab / ⇧Tab', t('Indent, or move back out')],
+        ['/', t('The block menu, on an empty line')],
+        ['[[', t('Link to another page')],
+        ['⌘Z / ⇧⌘Z', t('Undo, redo')],
+      ]],
+      [t('Formatting'), [
+        ['⌘B', t('Bold')],
+        ['⌘I', t('Italic')],
+        ['⌘U', t('Underline')],
+        ['⇧⌘S', t('Strikethrough')],
+        ['⌘E', t('Code')],
+        ['⇧⌘H', t('Highlight')],
+        ['⌘K', t('Link the selected words')],
+      ]],
+      [t('Getting around'), [
+        ['⌘K', t('Search all pages, with nothing selected')],
+        ['⌘F', t('Find and replace')],
+        ['⌘⌥N', t('New page')],
+        ['⌘⇧J', t("Today's journal")],
+        ['⌘⇧I', t('New issue')],
+      ]],
+      [t('The workspace'), [
+        ['[', t('Show or hide the page list')],
+        [']', t('Show or hide properties')],
+        ['⌘S', t('Save')],
+        ['⌘P', t('Print or save as PDF')],
+        ['?', t('This list')],
+        ['Esc', t('Leave the reading view')],
+      ]],
+    ]
+
+    // Two columns where there is room. In one column the four groups run to
+    // 23 rows and the last three fall off the bottom of the card — a help
+    // screen that hides the help, which is the same defect this pass just took
+    // out of the share panel. The grid collapses to one column on a phone,
+    // where scrolling a list is what you expect anyway.
+    const grid = el('div', 'sp-keys-grid')
+    for (const [title, rows] of groups) {
+      const g = el('section', 'sp-keys-g')
+      g.append(el('h3', 'sp-keys-h', title))
+      const list = el('dl', 'sp-keys-list')
+      for (const [key, what] of rows) {
+        const dt = el('dt', '', '')
+        dt.append(el('kbd', 'sp-kbd', key))
+        list.append(dt, el('dd', '', what))
+      }
+      g.append(list)
+      grid.append(g)
+    }
+    card.append(grid)
+
+    back.append(card)
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+    document.addEventListener('keydown', onKey, true)
+    document.body.append(back)
+    card.tabIndex = -1
+    card.focus()
+  }
+
+  /**
+   * Place a popover AND keep it placed.
+   *
+   * place() sizes a popover to the room the window has right now, so its answer
+   * stops being true the moment the window changes. Stale in the small-to-large
+   * direction merely misplaces a box; stale the other way CLIPS it, which is
+   * the bug this change exists to remove — the 44vh it replaces at least
+   * tracked the viewport. Both popover call sites go through here so neither
+   * can forget.
+   */
+  private placed(pop: HTMLElement, anchor: HTMLElement): void {
+    place(pop, anchor)
+    const reflow = () => place(pop, anchor)
+    addEventListener('resize', reflow)
+    this.overlayReflow = () => removeEventListener('resize', reflow)
+  }
+
   private closeOverlay(): void {
+    this.overlayReflow?.()
+    this.overlayReflow = null
     this.overlay?.remove()
     this.overlay = null
   }
@@ -5000,17 +5152,36 @@ function caretRect(): DOMRect {
   return new DOMRect(80, 120, 0, 0)
 }
 
-/** Place a popover near an anchor without letting it leave the viewport. */
+/**
+ * Place a popover near an anchor without letting it leave the viewport.
+ *
+ * THE HEIGHT IS THE ROOM IT ACTUALLY HAS, not a fraction of the window. The
+ * CSS capped every popover at 44vh, which on a 900px-tall window is 396px —
+ * and the share panel wants 543. Measured before this: 149px clipped, with
+ * "Start live session" and "Reset access…" both below the fold. The primary
+ * action of the sharing panel was reachable only by noticing that a box with
+ * no visible scrollbar scrolls. A laptop at 800px fares worse.
+ *
+ * So the cap is computed per placement: pick the side with more room, give the
+ * popover that room, and only then measure to position it. The floor is 160px
+ * because a popover squeezed under a control near the bottom edge should flip
+ * rather than become a slot.
+ */
 function place(pop: HTMLElement, anchor: HTMLElement | DOMRect): void {
   const r = anchor instanceof HTMLElement ? anchor.getBoundingClientRect() : anchor
+  const GAP = 6, EDGE = 8
+  const below = innerHeight - r.bottom - GAP - EDGE
+  const above = r.top - GAP - EDGE
+  const useBelow = below >= above || below >= 320
+  pop.style.maxHeight = `${Math.max(160, useBelow ? below : above)}px`
+  // measured AFTER the cap, so a flip decides on the height the popover will
+  // actually have rather than the one CSS would have forced on it
   const w = pop.offsetWidth || 260
   const h = pop.offsetHeight || 260
   let left = r.left
-  let top = r.bottom + 6
-  if (left + w > innerWidth - 8) left = Math.max(8, innerWidth - w - 8)
-  if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 6)
-  pop.style.left = `${Math.max(8, left)}px`
-  pop.style.top = `${top}px`
+  if (left + w > innerWidth - EDGE) left = Math.max(EDGE, innerWidth - w - EDGE)
+  pop.style.left = `${Math.max(EDGE, left)}px`
+  pop.style.top = `${useBelow ? r.bottom + GAP : Math.max(EDGE, r.top - h - GAP)}px`
 }
 
 /**

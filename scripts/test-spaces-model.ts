@@ -337,6 +337,111 @@ for (const [label, input, err] of [
   // and turning encryption ON must remove what was written before it
   ok(/clearVersions\(/.test(about) && /clearRecovery\(/.test(about),
     'setting a password clears BOTH the version timeline and the recovery snapshot')
+
+  // THE TIMELINE HAS THE SAME OBLIGATION, and it is easier to get wrong: the
+  // recovery guard is an early `return` at the top of the debounce, so anything
+  // written further down inherits it — but the SAVE path is a second call site
+  // with no such shelter, and that one runs at the exact moment an author who
+  // has set a password is writing the file. Both guarded, or the timeline is a
+  // plaintext copy of what the encryption was for.
+  ok(/addVersion\(/.test(main), 'main.ts writes a version timeline at all')
+  const throttled = /Date\.now\(\) - lastVersionAt > VERSION_EVERY_MS[\s\S]{0,120}?addVersion/.test(main)
+  ok(throttled, '…on a throttle while editing, so one session cannot spend the cap')
+  const saveGuarded = /if \(!isEncryptionActive\(\)\) \{ void addVersion/.test(main)
+  ok(saveGuarded, '…and the SAVE path checks encryption itself, having no early return above it')
+
+  // The restore has to go through replaceDoc: it is the one path that
+  // checkpoints undo first, which is what makes the note "Restoring is
+  // undoable" true rather than reassuring.
+  ok(/listVersions\(/.test(about), 'About reads the timeline')
+  ok(/store\.replaceDoc\(restored\)/.test(about), '…and restores through replaceDoc, so ⌘Z walks it back')
+}
+
+// ---- a popover is as tall as the room it has ------------------------------
+// .sp-pop carried `max-height: 44vh`. On a 900px window that is 396px, and the
+// share panel wants 543 — measured: 149px clipped, with "Start live session"
+// and "Reset access…" both below the fold. The primary action of the sharing
+// panel was reachable only by noticing that a box showing no scrollbar scrolls.
+// A 13" laptop is worse.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const css = fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
+  const props = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
+
+  ok(!/\.sp-pop \{[^}]*max-height: 44vh/.test(css), 'the popover is not capped at a fraction of the window')
+  ok(/pop\.style\.maxHeight = /.test(ed), '…place() gives it the room the anchor actually leaves')
+  // Both popover builders must route through the helper, or the one that does
+  // not will size itself once and stay that size while the window moves.
+  const viaHelper = (ed.match(/else this\.placed\(pop, anchor\)/g) ?? []).length
+  ok(viaHelper === 2, 'both popover call sites place through the same helper')
+  ok(/addEventListener\('resize', reflow\)/.test(ed), '…which re-places on resize')
+  ok(/removeEventListener\('resize', reflow\)/.test(ed), '…and takes the listener back off when it closes')
+
+  // THE EXTRACTOR SWEEPS LITERALS. A helper that picks a key —
+  // `t(n === 1 ? one : many)` — compiles, runs, and is never translated by
+  // anyone, because no catalog ever learns the strings exist. This cost a round
+  // trip while the plural was being written, and the model rig is where that
+  // lesson is cheap to keep.
+  for (const key of ['{n} block', '{n} blocks', '{n} word', '{n} words',
+                     '{n} link to this page', '{n} links to this page']) {
+    ok(props.includes(`t('${key}'`), `the panel's "${key}" is a literal at its own call site, so it is swept`)
+  }
+  ok(!/\{blocks\} blocks · \{words\} words/.test(props),
+    '…and the old one-string-three-plurals stat is gone (it read "1 blocks · 1 words")')
+}
+
+// ---- the shortcut list documents keys that exist --------------------------
+// A help screen listing a key the app does not bind is worse than no help
+// screen: the reader doubts their keyboard rather than the page, and there is
+// no way for them to tell which of the two is wrong. So every ⌘-letter the
+// overlay prints is checked against the keydown handler that would have to
+// implement it. The prose in the starter space says the same things, but the
+// starter is a DOCUMENT — deleting it is the first thing many people do, and
+// the reference should not go with it.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/openHelp\(\): void/.test(ed), 'there is a shortcut list')
+  ok(/e\.key === '\?' && !isTyping\(\)/.test(ed),
+    "…opened by ? , behind the same isTyping guard as [ and ] (it is a character people type)")
+  ok(/label: t\('Keyboard shortcuts'\)/.test(ed),
+    '…and reachable from the menu, not only by the key it documents')
+
+  // Pull the ⌘-letters out of the overlay's own table and demand a binding for
+  // each. Letters only: the modifiers differ per branch and the point is that
+  // the key is handled at all, not how.
+  const from = ed.indexOf('const groups: Array<[string, Array<[string, string]>]>')
+  const table = ed.slice(from, ed.indexOf("const grid = el('div', 'sp-keys-grid')", from))
+  const letters = new Set<string>()
+  for (const m of table.matchAll(/'[⌘⇧⌥]*⌘([A-Z])'/g)) letters.add(m[1].toLowerCase())
+  ok(letters.size >= 8, `the list actually names shortcuts (${letters.size} found)`)
+  for (const c of [...letters].sort()) {
+    // Both spellings the file uses: the long `e.key.toLowerCase() === 'x'` of
+    // the command branches, and the short `k === 'x'` inside markKey(), which
+    // is where ⌘B/I/U/E and ⇧⌘S/H actually live. Matching only the long one
+    // reported ⌘U and ⌘H as unbound when they are bound three lines apart.
+    const bound = new RegExp(`=== '${c}'`).test(ed)
+    ok(bound, `⌘${c.toUpperCase()} in the list is a key something actually binds`)
+  }
+}
+
+// ---- the page tree says where you are, to everyone -------------------------
+// `sp-here` renders the current page at weight 600 against 400. A sighted
+// reader gets that for free; a screen reader was told nothing, so the tree read
+// as a flat list of links with no indication which one you were on. Weight is
+// not an announcement. There are TWO places that set the class — the tree and
+// the archived list — and an attribute added to one of them is the kind of
+// half-fix that looks done.
+{
+  const fs = await import('node:fs')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const setsClass = (ed.match(/sp-here/g) ?? []).length
+  const setsAria = (ed.match(/setAttribute\('aria-current', 'page'\)/g) ?? []).length
+  ok(setsAria >= 2, `every row that can be current announces it (${setsAria} call sites)`)
+  ok(setsAria >= setsClass - 1,
+    'no place styles itself as current without saying so — sp-here and aria-current stay paired')
 }
 
 // ---- find & replace: the number shown IS the number changed ----------------
@@ -440,9 +545,17 @@ for (const [label, input, err] of [
   const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const css = fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
 
-  ok(/const secondary: Array<\{/.test(ed), 'the secondary topbar actions are declared as ONE list')
-  ok(/secondary\.map\(/.test(ed), '…the inline row is built from that list')
-  ok(/for \(const a of secondary\)/.test(ed), '…and the ⋯ menu is built from the SAME list')
+  // TWO lists now, and the split is the point. Everything used to be one list
+  // rendered BOTH inline and into ⋯ unconditionally, so on a desktop half of ⋯
+  // pointed at buttons already on screen. What still must not happen is a ⋯
+  // menu maintained BY HAND as a copy of the row — so each list is declared
+  // once and ⋯ takes the inline one only when the bar has actually dropped it.
+  ok(/const barActions: BarAction\[\]/.test(ed), 'the bar actions are declared as one typed list')
+  ok(/const menuActions: BarAction\[\]/.test(ed), '…the ⋯-only actions as another')
+  ok(/barActions\.map\(/.test(ed), '…the inline row is built from the bar list')
+  ok(/for \(const a of menuActions\)/.test(ed), '…⋯ always carries the menu-only actions')
+  ok(/isFolded\(\)\) \{\s*\n\s*for \(const a of barActions\)/.test(ed),
+    '…and picks up the bar list ONLY once folded, or ⋯ duplicates the visible row')
 
   // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
   // no longer px media queries. They were (820 and 600), and the numbers moved
@@ -464,7 +577,12 @@ for (const [label, input, err] of [
   ok(inTier('compact', /\.sp-primary span\.sp-savelabel \{ display: none/), "…including Save's")
   ok(inTier('tight', /\.sp-mark-word \{ display: none/), 'tight drops the wordmark, keeping the mark')
   ok(inTier('fold', /\.sp-sec \{ display: none/), 'fold moves the secondary row into ⋯')
-  ok(inTier('fold', /\.sp-more \{ display: inline-flex/), '…which is where ⋯ appears')
+  // ⋯ is no longer fold-only: it is the home of the once-a-session commands, so
+  // gating it on the fold would put New page, the journal, import, print and
+  // About out of a desktop user's reach entirely.
+  ok(/^\.sp-more \{ display: inline-flex/m.test(css),
+    '⋯ is in the bar at EVERY width, being a home and not only an overflow')
+  ok(!/\.sp-bar-fold \.sp-more \{ display/.test(css), '…so it is not gated on the fold any more')
   ok(inTier('fold', /\.sp-mark \{ display: none/), '…and the mark goes (About is in ⋯)')
   ok(inTier('fold', /\.sp-group-history \{ display: none/), '…and the history pair')
   ok(inTier('fold', /\.sp-split \.sp-caret \{ display: none/), '…and the save caret')

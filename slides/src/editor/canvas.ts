@@ -253,7 +253,16 @@ export class SlideCanvas {
     }, true)
 
     this.stage.addEventListener('dblclick', (ev) => {
-      const textEl = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-text')
+      // Look for TextElement, and then CodeElement
+      const selectors = [
+        '.bento-el-text',
+        '.bento-el-code'
+      ]
+      var textEl: HTMLElement | null = null
+      for (const selector of selectors) {
+        textEl = (ev.target as HTMLElement).closest<HTMLElement>(selector)
+        if (textEl) break
+      }
       if (textEl) { this.startTextEdit(textEl); return }
       const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
       if (td) this.editCellFromTd(td)
@@ -1066,6 +1075,10 @@ export class SlideCanvas {
       // survive verbatim, which is the entire purpose of showing the raw html.
       inner.innerHTML = sanitizeHtml(model.html)
       this.editingShowedRaw = true
+    } else if (model?.type === 'code' && typeof model.content === 'string') {
+      // When editing code, we always treat the content as raw text to preserve formatting.
+      inner.innerText = model.content
+      this.editingShowedRaw = true
     }
     this.editing = node
     this.editingSlideId = this.store.slide.id
@@ -1130,6 +1143,8 @@ export class SlideCanvas {
     node.classList.remove('bento-editing')
     if (!inner || !id) return
     inner.contentEditable = 'false'
+    // For code, we care about the raw innerText
+    const text = inner.innerText
     // drop the zero-width caret spacers autoformat leaves behind
     const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
@@ -1139,6 +1154,11 @@ export class SlideCanvas {
     if (el && el.type === 'text' && (el.html !== html || grownH > el.h)) {
       this.store.commit(() => {
         el.html = html
+        if (grownH > el.h) el.h = Math.ceil(grownH)
+      })
+    } else if (el && el.type === 'code' && (el.content !== text || grownH > el.h)) {
+      this.store.commit(() => {
+        el.content = text
         if (grownH > el.h) el.h = Math.ceil(grownH)
       })
     } else if (this.editingShowedRaw) {

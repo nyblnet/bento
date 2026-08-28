@@ -22,9 +22,16 @@ names provisional.
 - `src/model.ts` — the `bento/slides` JSON document model. This is the format.
 - `src/starterdeck.ts` — the showcase starter deck (what a fresh build opens
   with): four 'sd-tile-*' elements morph through EVERY slide (the id-continuity
-  demo), one deliberate 'fade' beat exists because entrance staggers/count-ups
-  only run on non-morph entries, charts slide + hidden pie state demo the
-  bar⇄pie data morph, speaker notes double as the feature tour. Gotchas learned
+  demo) — only the title arrives by 'fade', so nothing interrupts that thread.
+  The stats beat used to fade too, on the belief that entrance staggers and
+  count-ups needed a non-morph arrival; that has been FALSE since #197 (runMorph
+  gives every unpartnered element its fx.enter, and runMorphArrivalCountUps
+  counts up anything not carried from the previous slide), and the fade was
+  costing the deck its best tile moment — the four scattered tiles collapsing
+  into the row of chips. Verified by measurement, not belief: on that morph
+  arrival all four tiles travel, 13 elements stagger in, and the count-up runs
+  0→100%. Charts slide + hidden pie state demo the bar⇄pie data morph, speaker
+  notes double as the feature tour. Gotchas learned
   building it: line shapes take their color from `fill` (not `stroke` — the
   stroke attr is what morphs tween), and the renderer draws lines horizontally
   across the element box (vertical lines = rotation), keep 96px side margins
@@ -650,6 +657,27 @@ names provisional.
 - In-page scripting/testing API: `window.bento` → `{ doc, serialize() }`.
 
 ## Testing gotcha
+
+**Reading back a style property you just wrote is not a measurement.** A CSS
+transform does NOTHING to a non-replaced inline element — the browser accepts
+the declaration, `style.transform` (and `getComputedStyle`) return it verbatim,
+and the box moves zero pixels. So a check like "did the tokens get transforms?"
+passes identically whether the element travelled 400px or none. Verify motion
+with `getBoundingClientRect`, or by stepping `anim.setManual(true)` + `tick()`
+and reading rendered geometry. This cost eight rounds of "it does not animate"
+against measurements insisting it did (fixed by giving code tokens
+`display:inline-block`; `kernel/src/anim.ts` now warns when a transform channel
+targets an inline element, guarded by `scripts/test-anim-inline.ts`).
+
+Two more instruments that lie, both hit in the same session:
+- **`requestAnimationFrame` is throttled to zero in a hidden/occluded tab**, so
+  every tween silently does nothing. Check `document.visibilityState` before
+  concluding an animation is broken — a driven browser tab is often hidden.
+- **A live sampler polling the DOM mid-animation** reported zero while tokens
+  were demonstrably moving, and could never distinguish "no tween" from "a
+  tween I cannot see". Instrument the DECISION (did it pair? did onUpdate run?)
+  rather than sampling the result.
+
 
 Synthetic `PointerEvent`s do NOT trigger Moveable/Selecto (Gesto listens for mouse
 events) — dispatch `MouseEvent`s, or use trusted input. After changing selection, wait a

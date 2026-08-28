@@ -327,6 +327,32 @@ console.log('\ncolours are judged by the same rule in both layers')
     'but not a remote url() that fetches on paste')
 }
 
+console.log('\npalette references')
+{
+  // themeRefs paths are WALKED to write a resolved colour, so a pasted one is a
+  // path-traversal surface as much as a data one. The writer refuses to create
+  // anything that is not already a string, which blocks it downstream — but a
+  // paste boundary must not be relying on a guard three files away.
+  const el = (themeRefs: unknown) => sanitizeElement({
+    id: 'e', type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10,
+    rotation: 0, opacity: 1, fill: '#fff', stroke: 'none', strokeWidth: 0, radius: 0,
+    themeRefs,
+  }) as any
+  ok(el({ fill: 'accent1' })?.themeRefs?.fill === 'accent1', 'a valid reference survives a paste')
+  ok(el({ 'fillGradient.stops.0.color': 'accent2' })?.themeRefs !== undefined,
+    'an array-index path survives')
+  ok(el({ '__proto__.polluted': 'accent1' })?.themeRefs === undefined,
+    'a __proto__ path is refused')
+  ok(el({ 'constructor.prototype.x': 'accent1' })?.themeRefs === undefined,
+    'a constructor/prototype path is refused')
+  ok(el({ fill: 'not a token' })?.themeRefs === undefined,
+    'a token that does not parse is dropped rather than carried')
+  ok(el({ 'a b': 'accent1' })?.themeRefs === undefined,
+    'a path segment that is not an identifier is refused')
+  ok(el('nope')?.themeRefs === undefined, 'a non-object themeRefs is dropped')
+  ok(({} as any).polluted === undefined, 'nothing above polluted Object.prototype')
+}
+
 console.log('\nkey coverage')
 {
   // A field added to model.ts without a check here would be dropped from every

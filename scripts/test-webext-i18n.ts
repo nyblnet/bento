@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext localisation rig.
+// home/webext localisation rig.
 //
 //   node scripts/test-webext-i18n.ts
 //
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { join, dirname } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SRC = join(root, 'tray/webext')
+const SRC = join(root, 'home/webext')
 
 let failures = 0
 let checks = 0

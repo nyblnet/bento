@@ -540,7 +540,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       twist.className = 'sp-twist'
       twist.type = 'button'
       twist.setAttribute('aria-expanded', String(!!(opts.forceOpen || b.open)))
-      twist.setAttribute('aria-label', 'Toggle section')
+      twist.setAttribute('aria-label', t('Toggle section'))
       twist.textContent = '▸'
       el.appendChild(twist)
       hostAndAnswer(el, b, opts, calc)

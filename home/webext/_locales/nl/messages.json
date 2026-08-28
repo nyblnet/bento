@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "Sla een Bento-document terug op in het bestand dat je hebt geopend, zonder te vragen waar."
+  },
+  "navAll": {
+    "message": "Alle documenten"
+  },
+  "navFolders": {
+    "message": "Mappen"
+  },
+  "navHelp": {
+    "message": "Help en info"
+  },
+  "navSettings": {
+    "message": "Instellingen"
+  },
+  "addFolder": {
+    "message": "+ Map toevoegen…"
+  },
+  "searchDocs": {
+    "message": "Documenten zoeken"
+  },
+  "searchDocsSlash": {
+    "message": "Documenten zoeken   /"
+  },
+  "sortTitle": {
+    "message": "Sorteren"
+  },
+  "sortRecent": {
+    "message": "Onlangs gewijzigd"
+  },
+  "sortName": {
+    "message": "Naam"
+  },
+  "sortFolder": {
+    "message": "Map"
+  },
+  "newDocument": {
+    "message": "+ Nieuw document"
+  },
+  "browseAll": {
+    "message": "Alles bekijken"
+  },
+  "reconnectFolders": {
+    "message": "Mappen opnieuw verbinden"
+  },
+  "primeIntro": {
+    "message": "Chrome vraagt het zo. Kies de middelste optie:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — een map moet opnieuw worden verbonden"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home moet opnieuw worden verbonden"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome heeft de toestemming voor een map ingetrokken. Tot die hersteld is, vraagt elk opslaan waar het bestand heen moet."
+  },
+  "reconnect": {
+    "message": "Opnieuw verbinden"
+  },
+  "ctxOpenPanel": {
+    "message": "bento/home-paneel openen"
+  },
+  "panelEmpty": {
+    "message": "Nog geen Bento-documenten in je mappen."
+  },
+  "noMatches": {
+    "message": "Niets komt overeen met “$1”"
+  },
+  "rowUnplacedTip": {
+    "message": "Open één document in $1 één keer vanuit Finder, en alles in die map is hiervandaan te openen."
+  },
+  "encrypted": {
+    "message": "Beveiligd met wachtwoord"
+  },
+  "notSavedYet": {
+    "message": "Nog niet opgeslagen"
+  },
+  "fileAccessOffShort": {
+    "message": "Toegang tot lokale bestanden staat uit"
+  },
+  "noFoldersYet": {
+    "message": "Nog geen mappen"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 map moet opnieuw worden verbonden"
+  },
+  "statusOneFolder": {
+    "message": "$1 map · slaat ter plekke op"
+  },
+  "statusFolders": {
+    "message": "$1 mappen · slaan ter plekke op"
+  },
+  "renewNotOffered": {
+    "message": "Chrome bood niet aan om die te herstellen"
+  },
+  "renewTryAfterRestart": {
+    "message": "Probeer het opnieuw nadat je Chrome hebt herstart"
+  },
+  "fetchingLatest": {
+    "message": "De nieuwste Bento ophalen…"
+  },
+  "created": {
+    "message": "$1 aangemaakt"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 kan wel worden gelezen, maar nog niet geopend — Chrome vertelt een extensie niet waar een map op de schijf staat. <b>Alles bekijken</b> vindt ze met één klik."
+  },
+  "andMore": {
+    "message": " en nog $1"
+  },
+  "agoJustNow": {
+    "message": "zojuist"
+  },
+  "agoMinutes": {
+    "message": "$1 min geleden"
+  },
+  "agoHour": {
+    "message": "$1 uur geleden"
+  },
+  "agoHours": {
+    "message": "$1 uur geleden"
+  },
+  "agoDay": {
+    "message": "$1 dag geleden"
+  },
+  "agoDays": {
+    "message": "$1 dagen geleden"
+  },
+  "searchScope": {
+    "message": "Zoeken kijkt naar titels, bestandsnamen, mappen en de woorden in documenten."
+  },
+  "folderEmpty": {
+    "message": "Nog niets in deze map"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Nieuw document</b> zet er een verse neer."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home weet nog niet waar $1 op de schijf staat. Gebruik “Mijn mappen zoeken”, of open er één keer een document uit vanuit Finder."
+  },
+  "cardRenamedTip": {
+    "message": "$1 is een Bento-document onder een andere naam. Het opent hiervandaan, maar bij opslaan wordt om een bestemming gevraagd — ter plekke opslaan herkent alleen bestanden die op .bento.html eindigen."
+  },
+  "badgeRenamed": {
+    "message": "Heet .html in plaats van .bento.html — het opent hiervandaan, maar bij opslaan wordt om een bestemming gevraagd."
+  },
+  "menuOpen": {
+    "message": "Openen"
+  },
+  "menuDuplicate": {
+    "message": "Dupliceren"
+  },
+  "menuRename": {
+    "message": "Naam wijzigen…"
+  },
+  "menuCopyPath": {
+    "message": "Pad kopiëren"
+  },
+  "duplicatedAs": {
+    "message": "Gedupliceerd als $1"
+  },
+  "renamePrompt": {
+    "message": "Documentnaam wijzigen"
+  },
+  "renamedTo": {
+    "message": "Hernoemd naar $1"
+  },
+  "pathCopied": {
+    "message": "Pad gekopieerd"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — nog niet geopend"
+  },
+  "setupTitle": {
+    "message": "Twee dingen en je bent klaar"
+  },
+  "setupLead": {
+    "message": "Daarna schrijft ⌘S in een document dat je met dubbelklikken hebt geopend meteen terug naar het bestand — nooit meer de vraag waar het heen moet."
+  },
+  "chooseFolder": {
+    "message": "Map kiezen…"
+  },
+  "setupStep1": {
+    "message": "Kies de map waar je documenten staan"
+  },
+  "setupStep1Note": {
+    "message": "Eén ruime map is meestal genoeg — die dekt alles wat erin zit."
+  },
+  "setupStep2": {
+    "message": "Zet toegang tot lokale bestanden aan"
+  },
+  "setupStep2Note": {
+    "message": "In <code>chrome://extensions</code> → bento/home → <b>Toegang tot bestands-URL's toestaan</b>. Chrome laat een extensie dit niet zelf aanzetten."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Bijgewerkt en verwachtte je je mappen hier terug?</b> Een uitgepakte extensie wordt herkend aan haar mappad, dus een nieuwe kopie uit een andere map is voor Chrome een andere extensie. Je mappen horen nog bij de oude. Vervang in plaats daarvan de bestanden in de oorspronkelijke map en druk op <b>Opnieuw laden</b> in <code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Toegang tot lokale bestanden staat uit</b> — er wordt niets ter plekke opgeslagen zolang dat zo is. Zet <b>Toegang tot bestands-URL's toestaan</b> aan in <code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 map moet opnieuw worden verbonden.</b> Verbind die opnieuw bij <b>Instellingen</b> en kies <b>Toestaan bij elk bezoek</b> — de enige optie die blijft gelden."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> kan wel worden getoond, maar nog niet geopend — Chrome vertelt een extensie nooit waar een map op de schijf staat."
+  },
+  "findFolders": {
+    "message": "Mijn mappen zoeken"
+  },
+  "looking": {
+    "message": "Zoeken…"
+  },
+  "findDeclined": {
+    "message": "<b>Geen probleem.</b> Open dan één keer een document in $1 vanuit Finder — deze pagina merkt het."
+  },
+  "foundFolder": {
+    "message": "$1 map gevonden"
+  },
+  "foundFolders": {
+    "message": "$1 mappen gevonden"
+  },
+  "foundNothing": {
+    "message": "Nog niets in de geschiedenis — open één document vanuit Finder"
+  },
+  "setFoldersSub": {
+    "message": "Documenten hierin worden meteen terug naar het bestand opgeslagen, zonder te vragen waar. Een map dekt alles wat erin zit."
+  },
+  "noneYet": {
+    "message": "Nog geen."
+  },
+  "savesInPlace": {
+    "message": "slaat ter plekke op"
+  },
+  "needsReconnecting": {
+    "message": "moet opnieuw worden verbonden"
+  },
+  "reconnectTip": {
+    "message": "Chrome vraagt of deze map hersteld mag worden. “Niet toestaan” laat hem vallen, en daarna wacht Chrome minstens een herstart voordat het opnieuw vraagt."
+  },
+  "remove": {
+    "message": "Verwijderen"
+  },
+  "removeTip": {
+    "message": "Neemt de toegang weg. Chrome kan de toestemming onthouden, dus bij opnieuw toevoegen wordt misschien niets gevraagd."
+  },
+  "setAccessTitle": {
+    "message": "Toegang tot lokale bestanden"
+  },
+  "setAccessSub": {
+    "message": "Chrome laat een extensie dit niet zelf aanzetten, en zonder dit werkt er niets."
+  },
+  "stateOn": {
+    "message": "Aan"
+  },
+  "stateOff": {
+    "message": "Uit"
+  },
+  "stateUnknown": {
+    "message": "Onbekend"
+  },
+  "accessOnNote": {
+    "message": "bento/home kan pagina's lezen die je vanaf schijf hebt geopend."
+  },
+  "accessOffNote": {
+    "message": "Open chrome://extensions, zoek bento/home en zet “Toegang tot bestands-URL's toestaan” aan."
+  },
+  "accessUnknownNote": {
+    "message": "Deze browser meldt het niet. Als opslaan nog steeds vraagt, controleer het in chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "Versie"
+  },
+  "setVersionUnpacked": {
+    "message": "Deze kopie is uitgepakt geladen, dus Chrome werkt hem nooit bij."
+  },
+  "setVersionStore": {
+    "message": "Geïnstalleerd uit de store, dus hij werkt zichzelf bij."
+  },
+  "versionAvailable": {
+    "message": "$1 is beschikbaar"
+  },
+  "versionUpToDate": {
+    "message": "actueel sinds de laatste controle"
+  },
+  "versionManaged": {
+    "message": "wordt door de browser actueel gehouden"
+  },
+  "getIt": {
+    "message": "Ophalen"
+  },
+  "checkNow": {
+    "message": "Nu controleren"
+  },
+  "autoCheckPref": {
+    "message": "<b>Controleer op een nieuwe versie bij het starten van de browser.</b><br>Eén verzoek aan bento.page voor een statisch bestand. Het stuurt geen identificatiegegevens, geen versienummer en niets over je documenten — de vergelijking gebeurt hier. Zet het uit en er wordt nooit iets opgevraagd; <b>Nu controleren</b> blijft werken."
+  },
+  "expectedSha": {
+    "message": "Verwachte SHA-256 van de zip: $1"
+  },
+  "setReachTitle": {
+    "message": "Waar dit bij kan"
+  },
+  "setReachSub": {
+    "message": "Alleen de mappen hierboven, en alleen het bestand waaruit een pagina daadwerkelijk is geopend. Er wordt niets geüpload en nergens anders iets gelezen."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 is beschikbaar.</b> Deze kopie is uitgepakt geladen, dus Chrome werkt hem nooit bij."
+  },
+  "updateStep1": {
+    "message": "Download hem van GitHub"
+  },
+  "updateStep2": {
+    "message": "Vervang de bestanden <b>in de map waaruit je hem hebt geladen</b> — dezelfde map, anders ziet Chrome het als een andere extensie en gaan je toegestane mappen niet mee"
+  },
+  "updateStep3": {
+    "message": "Open <code>chrome://extensions</code> en druk op <b>Opnieuw laden</b> bij bento/home"
+  },
+  "fetchingApp": {
+    "message": "$1 ophalen…"
+  },
+  "createdIn": {
+    "message": "$1 ($2) aangemaakt in $3"
+  },
+  "intoFolder": {
+    "message": "in $1"
+  },
+  "helpWhatTitle": {
+    "message": "Wat bento/home doet"
+  },
+  "helpWhatSub": {
+    "message": "Een Bento-document is één HTML-bestand dat zijn eigen editor meedraagt. Rechtstreeks vanaf schijf geopend laat een browser het niet naar zichzelf terugschrijven — dus vraagt elk opslaan waar het heen moet. bento/home haalt die vraag weg."
+  },
+  "tourSaveTitle": {
+    "message": "Ter plekke opslaan"
+  },
+  "tourSaveBody": {
+    "message": "⌘S schrijft meteen terug naar het bestand dat je hebt geopend, zonder venster. Automatisch opslaan en updates ter plekke gaan dezelfde weg."
+  },
+  "tourFindTitle": {
+    "message": "Je documenten vinden"
+  },
+  "tourFindBody": {
+    "message": "Elk Bento-document in je mappen, met zijn echte titel en een plaatje van de eerste pagina. Zoeken kijkt ook naar wat erin geschreven staat."
+  },
+  "tourSwitchTitle": {
+    "message": "Wisselen tijdens het werken"
+  },
+  "tourSwitchBody": {
+    "message": "Druk op <kbd>Alt</kbd>+<kbd>B</kbd>, of klik met rechts in een document, voor een paneel ernaast."
+  },
+  "tourNewTitle": {
+    "message": "Een nieuwe maken"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Nieuw document</b> haalt de huidige release van Slides, Spaces of Dash op en zet een vers document in je map."
+  },
+  "helpNeedsTitle": {
+    "message": "Wat het van je nodig heeft"
+  },
+  "helpNeedsSub": {
+    "message": "Twee dingen, allebei buiten de macht van deze extensie om te regelen."
+  },
+  "helpFolder": {
+    "message": "Een map"
+  },
+  "helpFolderGranted": {
+    "message": "$1 toegestaan — documenten daarin worden ter plekke opgeslagen"
+  },
+  "helpFolderNone": {
+    "message": "Nog niet gekozen. Eén ruime map dekt alles wat erin zit."
+  },
+  "helpAccessOff": {
+    "message": "Uit. Zet <b>Toegang tot bestands-URL's toestaan</b> aan in <code>chrome://extensions</code> — geen enkele extensie kan dit zelf aanzetten."
+  },
+  "helpAccessUnknown": {
+    "message": "Deze browser meldt het niet. Als opslaan nog steeds vraagt, controleer het in <code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "Aan — bento/home kan pagina's lezen die je vanaf schijf hebt geopend."
+  },
+  "helpNeverTitle": {
+    "message": "Wat het nooit doet"
+  },
+  "helpNeverSub": {
+    "message": "Het leest en schrijft alleen binnen de mappen hierboven, en alleen het bestand waaruit een pagina daadwerkelijk is geopend — de browser zegt welk, dus een document kan niet iemand anders' bestand aanwijzen. Er wordt niets over je documenten geüpload, en de extensie heeft geen server om ze naartoe te sturen."
+  },
+  "helpAboutTitle": {
+    "message": "Over"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · onderdeel van het Bento-project · MIT-licentie"
+  },
+  "linkSource": {
+    "message": "Broncode op GitHub"
+  },
+  "linkIssues": {
+    "message": "Een probleem melden"
+  },
+  "linkReleases": {
+    "message": "Releases"
+  },
+  "primeMiddle": {
+    "message": "degene die blijft gelden"
+  },
+  "primeNote": {
+    "message": "De andere twee werken ook, maar dan vraagt Chrome het opnieuw — bij de eerste elke herstart, bij de laatste na een wachttijd."
+  },
+  "viewLayout": {
+    "message": "Hoe documenten worden getoond"
+  },
+  "viewIcons": {
+    "message": "Pictogrammen"
+  },
+  "viewList": {
+    "message": "Lijst"
+  },
+  "close": {
+    "message": "Sluiten"
+  },
+  "setLangTitle": {
+    "message": "Taal"
+  },
+  "setLangSub": {
+    "message": "Welke taal deze extensie spreekt. Normaal volgt ze de browser."
+  },
+  "langAutomatic": {
+    "message": "Automatisch — de browser volgen"
+  },
+  "setLangNote": {
+    "message": "De naam en beschrijving van de extensie zelf komen van de browser en veranderen niet."
+  },
+  "aboutPromo": {
+    "message": "Nieuw bij Bento? Sjablonen, de galerie en de AI-bewerkingsgids vind je op $1 — of geef het een ster op $2."
+  },
+  "setThemeTitle": {
+    "message": "Weergave"
+  },
+  "setThemeSub": {
+    "message": "De instelling van de browser is de standaard, geen vereiste."
+  },
+  "themeAuto": {
+    "message": "Zoals de browser"
+  },
+  "themeLight": {
+    "message": "Licht"
+  },
+  "themeDark": {
+    "message": "Donker"
+  },
+  "checking": {
+    "message": "Controleren…"
+  },
+  "surveyTitle": {
+    "message": "Vind waar je documenten staan"
+  },
+  "surveySub": {
+    "message": "De browser weet welke Bento-documenten je hebt geopend. Hij kan zeggen in welke mappen ze staan."
+  },
+  "surveyDeclined": {
+    "message": "Geen probleem — je kunt mappen ook met de hand toevoegen."
+  },
+  "surveyAllCovered": {
+    "message": "Alle $1 documenten die deze browser heeft gezien staan al in een toegevoegde map."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documenten staan buiten elke toegevoegde map. $2 zijn al gedekt."
+  },
+  "surveyCovers": {
+    "message": "dekt $1"
+  },
+  "surveyAdd": {
+    "message": "Deze map toevoegen…"
+  },
+  "surveyAdded": {
+    "message": "$1 toegevoegd — de documenten erin zijn klaar"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 toegevoegd, maar de documenten staan er niet in — open er één keer een vanuit Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "Zo worden alleen documenten gevonden die in deze browser zijn geopend."
+  }
+}

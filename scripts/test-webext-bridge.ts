@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext page-bridge rig.
+// home/webext page-bridge rig.
 //
 //   node scripts/test-webext-bridge.ts
 //
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { createContext, runInContext } from 'node:vm'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SRC = readFileSync(join(root, 'tray/webext/src/page-bridge.js'), 'utf8')
+const SRC = readFileSync(join(root, 'home/webext/src/page-bridge.js'), 'utf8')
 
 let failures = 0
 let checks = 0

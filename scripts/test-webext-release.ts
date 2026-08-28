@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext release-trust rig.
+// home/webext release-trust rig.
 //
 //   node scripts/test-webext-release.ts
 //
@@ -32,13 +32,13 @@
 // This matters more than it did. Starter shells are bundled in NO host as of
 // 2026-08-16 (they change too often, and there are three apps with more
 // coming), so fetch-and-verify is the ONLY way a new document gets created —
-// here, in tray/android, and in tray/ios.
+// here, in home/android, and in home/ios.
 
 import { readFileSync } from 'node:fs'
 import {
   RELEASE_KEY, verifySigned, verifyManifest, fetchPinned,
-} from '../tray/webext/src/release.js'
-import { newDocument, APPS } from '../tray/webext/src/library.js'
+} from '../home/webext/src/release.js'
+import { newDocument, APPS } from '../home/webext/src/library.js'
 import { releaseSigner, sha256Hex, realManifest } from './lib/release-sign.ts'
 
 let failures = 0
@@ -87,7 +87,7 @@ const threw = async (fn: () => Promise<unknown>): Promise<string> => {
   // This one validates perfectly; it is simply not ours. It is what catches a
   // verifier that imported the wrong key, or one that would trust a key
   // travelling in the envelope alongside the signature — a verifier like that
-  // passes every tampering test ever written. (tray/ios's construction, from
+  // passes every tampering test ever written. (home/ios's construction, from
   // PR #315; it is better than the seam-based version I had.)
   const real = JSON.parse(realManifest())
   const impostor = await releaseSigner()
@@ -169,7 +169,7 @@ const payloadFor = (over: Record<string, unknown> = {}) => ({
   // this right, but only by construction — a later refactor to something like
   // `info.app && info.app !== appId` would turn a missing field into a pass,
   // and no other check would notice: signature and digest are both happy.
-  // (tray/ios raised this on PR #315; the same case, from the other direction.)
+  // (home/ios raised this on PR #315; the same case, from the other direction.)
   const raw = await signer.envelope({
     version: '1.0.18', sha256: shellHash, url: 'https://bento.page/x.bento.html',
   })
@@ -325,7 +325,7 @@ const channel = (manifestRaw: string, shell = SHELL, shellStatus = 200) => async
 // authentic, just last month's — which is exactly what survives an origin or
 // CDN compromise where the attacker can re-serve but cannot forge. A document
 // carries no version to be monotonic against, unlike the shell's own update, so
-// the host has to remember. Semantics mirrored from tray/ios (PR #315).
+// the host has to remember. Semantics mirrored from home/ios (PR #315).
 const floorStore = (initial: string | null = null) => {
   const box = { value: initial, writes: 0 }
   return {
@@ -392,7 +392,7 @@ const floorStore = (initial: string | null = null) => {
   // A strange version string must be able to fail to RAISE the floor, never to
   // block a release. `Number('x')` is NaN and `NaN || 0` is 0, so it sorts as
   // zero rather than throwing — the same behaviour as kernel/src/update.ts and
-  // tray/ios, verified rather than assumed.
+  // home/ios, verified rather than assumed.
   written.clear()
   const store = floorStore('1.0.x')
   const chan = channel(await signer.envelope(payloadFor({ version: '1.0.18' })))

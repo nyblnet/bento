@@ -477,11 +477,46 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-slide { position: relative; overflow: hidden; }
 
 .bento-el { position: absolute; contain: layout style; }
-.bento-el-text .bento-text-inner {
+
+/* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
+   maths font here fixes nothing and has been reverted three times. The
+   radical's hook falling short of its overbar is Chromium drawing the overbar
+   as its own rule and missing the arm the font's glyph paints, by a fraction
+   of a pixel. It is not the font: generic `math` picks STIX on macOS and
+   Cambria Math on Windows and BOTH break, and forcing Times New Roman only
+   makes the break smaller. It is not our markup, our tagging, the stage
+   transform, the font size, or the height of the radicand (measured: the
+   deck's `b²−4ac` and a flat `b−4ac` get a byte-identical 113.8px radical).
+
+   There IS a mitigation — `msqrt { font-family: serif }` with the contents put
+   back to `math` — and it is deliberately NOT shipped: it is clean on macOS
+   and still broken on Windows. Read docs/DECISIONS.md, 2026-08-25, before
+   touching this; the rig is slides/probe/radical-join.html. */
+
+.bento-el-text,
+.bento-el-code
+ .bento-text-inner {
   overflow-wrap: break-word;
   outline: none;
   cursor: default;
 }
+
+/* Code tokens the morph may MOVE. A CSS transform does nothing to a
+   non-replaced inline element — accepted, readable back on style.transform,
+   and zero pixels of movement — so a token has to be an atomic inline-level
+   box before it can travel. LOAD-BEARING: delete this and code morphs stop
+   animating silently, with no error anywhere.
+
+   Scoped to [data-tok] rather than every span on purpose: the renderer sets
+   the attribute only on tokens with ink. Whitespace and newline tokens must
+   stay inline — a newline inside an atomic box no longer breaks the line
+   under `white-space: pre`, and the block collapses to one rendered line
+   (identically under inline-block and inline-flex; the display value was
+   never the variable that mattered). */
+.bento-el-code [data-tok] {
+  display: inline-block;
+}
+
 /* A hidden slide is still an ordinary, editable slide — it is just out of the
    show. Dimmed rather than greyed out, and the number struck through, so the
    sidebar reads as "this one will be skipped" without looking broken. */
@@ -1087,7 +1122,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 /* inline code spans inside text elements — editor, present and print alike */
 .bento-el-text code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Berkeley Mono, Menlo, Consolas, monospace;
   font-size: 0.9em;
   background: rgb(127 127 127 / 0.16);
   padding: 0 0.28em;
@@ -2463,3 +2498,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-gate-offer { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .ed-gate-acts { display: flex; justify-content: flex-end; margin-top: 4px; }
+/* ————— brand palette swatches beside a colour control ————— */
+.ed-colorref { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.ed-swatches { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
+.ed-swatch {
+  width: 14px; height: 14px; padding: 0; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--line);
+}
+.ed-swatch:hover { transform: scale(1.15); }
+.ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }

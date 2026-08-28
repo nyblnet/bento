@@ -334,9 +334,28 @@ export class PropsPanel {
     const words = page.blocks.reduce(
       (n, b) => n + (String(b.html ?? '').replace(/<[^>]*>/g, ' ').match(/\S+/g)?.length ?? 0), 0)
     const back = s.index.backlinks.get(page.id)?.length ?? 0
-    this.host.append(mk('p', 'sp-insp-hint',
-      t('{blocks} blocks · {words} words · {links} links in',
-        { blocks: page.blocks.length, words, links: back })))
+    // ONE STRING WITH THREE HARDCODED PLURALS read "1 blocks · 1 words · 1
+    // links in" on every new page — the first thing anyone sees in this panel.
+    // The rest of the app dodges this with the "(s)" convention (52 uses), but
+    // that is for one-off dialogs; this line is permanent chrome, and "1
+    // block(s)" is a shrug in the corner of the screen. So each count picks its
+    // own form. English, German, Spanish, French, Italian and Portuguese all
+    // split at one; the CJK catalogs have one form and use it for both.
+    // "links in" also said nothing useful — they are links TO this page.
+    //
+    // Written out rather than routed through a pick-a-key helper: the extractor
+    // sweeps t() call sites for LITERALS, so `t(v === 1 ? one : many)` compiles
+    // and runs and is never translated by anybody. Every form below has to be
+    // visible at its own call site to reach the catalogs.
+    const blocks = page.blocks.length
+    const stats = [
+      blocks === 1 ? t('{n} block', { n: blocks }) : t('{n} blocks', { n: blocks }),
+      words === 1 ? t('{n} word', { n: words }) : t('{n} words', { n: words }),
+      back === 1 ? t('{n} link to this page', { n: back }) : t('{n} links to this page', { n: back }),
+    ].join(' · ')
+    // its own class: a statistic that looks exactly like the instruction above
+    // it is a statistic nobody reads as data
+    this.host.append(mk('p', 'sp-insp-stat', stats))
   }
 
   // ---- rows -----------------------------------------------------------------

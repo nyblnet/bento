@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The Bento palette, from tray/assets/tray-logo.svg. -->
-<resources>
-    <color name="tray_navy">#16273E</color>
-    <color name="tray_cream">#F0EBE0</color>
-    <color name="tray_steel">#5E7699</color>
-    <color name="tray_peach">#FF9E8A</color>
-</resources>
