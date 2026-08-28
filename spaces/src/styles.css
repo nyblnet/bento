@@ -346,7 +346,12 @@ option { background: var(--field); color: var(--ink); }
 /* ————— the reading column ————— */
 .sp-main {
   flex: 1 1 auto; overflow: auto; background: var(--bg);
-  padding: 44px 28px 40vh;
+  /* AS VARIABLES, because a full-bleed page cover has to escape exactly this
+     padding with a negative margin, and this padding is four different numbers
+     (here, on a phone, in reading view, on paper). A hard-coded -44px would be
+     wrong in three of them, silently. */
+  --sp-pad-x: 28px; --sp-pad-y: 44px;
+  padding: var(--sp-pad-y) var(--sp-pad-x) 40vh;
 }
 .sp-page-inner { margin: 0 auto; font-size: var(--sp-read); }
 .sp-title {
@@ -1032,7 +1037,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   }
   [dir='rtl'] .sp-side.sp-open { inset: 0 0 0 auto; }
   .sp-scrim { position: fixed; inset: 0; background: rgb(var(--shade) / .3); z-index: 45; }
-  .sp-main { padding: 26px 18px 45vh; }
+  .sp-main { --sp-pad-x: 18px; --sp-pad-y: 26px; padding: var(--sp-pad-y) var(--sp-pad-x) 45vh; }
   /* THE MARGIN THE GUTTER LIVES IN — see below — and it hangs off the PAGE, not
      off `.sp-main`. `.sp-main` is chrome and follows the interface direction;
      the gutter is anchored to a block, and blocks follow the DOCUMENT's
@@ -1086,7 +1091,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   }
   .sp-bar, .sp-side, .sp-insp, .sp-insp-rz, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
   .sp-tb-tools, .sp-tb-grip { display: none !important; }
-  .sp-main { overflow: visible; padding: 0; background: #fff; }
+  .sp-main { overflow: visible; --sp-pad-x: 0px; --sp-pad-y: 0px; padding: 0; background: #fff; }
   .sp-toggle-body[hidden] { display: block !important; }  /* toggles print OPEN */
   .sp-b-h1, .sp-b-h2, .sp-b-h3, .sp-title { break-after: avoid; }
   .sp-b-code, .sp-b-image figure, .sp-b-quote { break-inside: avoid; }
@@ -1290,7 +1295,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-b.sp-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; transition: background .5s; }
 
 /* ————— reading view ————— */
-.sp-app.sp-reading .sp-main { padding-top: 56px; }
+.sp-app.sp-reading .sp-main { --sp-pad-y: 56px; padding-top: var(--sp-pad-y); }
 .sp-app.sp-reading .sp-doctitle { pointer-events: none; }
 .sp-btn.sp-on { background: var(--chrome-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .sp-app.sp-reading .sp-page-inner { font-size: 17px; }
@@ -2078,3 +2083,79 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   .sp-cm-mark { inset-inline-end: 0; }
 }
 @media print { .sp-cm-mark, .sp-cm-row { display: none !important; } }
+
+/* ————— page covers ————— */
+/* A COVER IS FULL-BLEED. It belongs to the page rather than to the prose, so
+   it ignores the measure and escapes the reading column's padding — which is
+   why that padding is `--sp-pad-x/y` rather than four literals scattered
+   through this file. The height is viewport-relative with a floor and a
+   ceiling: a fixed 200px is a stripe on a large screen and half the window on
+   a short one. */
+.sp-cover {
+  margin: calc(-1 * var(--sp-pad-y, 0px)) calc(-1 * var(--sp-pad-x, 0px)) 26px;
+  height: clamp(150px, 30vh, 320px);
+  overflow: hidden; position: relative; background: var(--chrome-2);
+}
+.sp-cover-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* The lift is what makes it read as a cover rather than as a banner sitting on
+   top of a document: the title rises INTO the picture's lower edge, which is
+   the arrangement everyone recognises. A scrim under the title would fight the
+   page background in one theme or the other, so the page's own background does
+   the work — the column is opaque and the picture ends behind it. */
+/* WHAT MAKES IT A COVER RATHER THAN A BANNER: the page's own icon rides up
+   over the picture's lower edge, on the column's own left margin. That is the
+   arrangement everybody recognises, and the icon is the thing to lift — the
+   title is a line of text and putting THAT over a photograph means a scrim,
+   contrast rules and a colour that works over every possible image. A 54px
+   disc in the page background does not. */
+.sp-page.sp-has-cover .sp-page-inner { position: relative; margin-top: -30px; }
+.sp-page.sp-has-cover .sp-pageicon {
+  width: 58px; height: 58px; margin-inline-start: -6px; margin-bottom: 2px;
+  background: var(--bg); border-radius: 14px; color: var(--ink-2, var(--ink));
+  box-shadow: 0 1px 4px rgb(var(--shade) / .16);
+}
+.sp-page.sp-has-cover .sp-pageicon:hover { background: var(--chrome-2); }
+.sp-page.sp-has-cover .sp-pageicon svg { width: 32px; height: 32px; }
+/* an emoji icon is TEXT in that box, and 34px is the size that fills it */
+.sp-page.sp-has-cover .sp-pageicon { font-size: 32px; line-height: 1; }
+@media print {
+  /* on paper the picture is the picture; the lift is a screen affordance, and
+     the icon is hidden in print anyway */
+  .sp-cover { height: 5cm; margin-bottom: 10mm; break-inside: avoid; }
+  .sp-page.sp-has-cover .sp-page-inner { margin-top: 0; }
+}
+
+/* ————— the gallery ————— */
+/* THE SHAPE THAT MAKES A READING LIST LOOK LIKE ONE. Cards are as wide as they
+   need to be and the grid decides how many fit — `auto-fill` with a minimum,
+   never a column count, so the same view is three across in the panel-open
+   editor and five across on a wide screen without anybody configuring it. */
+.sp-gallery {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  margin-bottom: 4px;
+}
+.sp-gcard {
+  position: relative; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden;
+}
+.sp-gcard:hover { border-color: var(--edge); box-shadow: 0 4px 14px rgb(var(--shade) / .10); }
+.sp-gcard-shot {
+  aspect-ratio: 3 / 2; background: var(--chrome-2);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.sp-gcard-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* A CARD WITH NO COVER IS NOT A HOLE. Its own hue, derived from the page id, so
+   a gallery nobody has given pictures to still reads as a set of distinct
+   things. `hsl` with an alpha keeps it a tint in both themes rather than a
+   colour that glows on the dark one. */
+.sp-gcard-bare {
+  background:
+    linear-gradient(150deg, hsl(var(--h, 210) 62% 62% / .30), hsl(calc(var(--h, 210) * 1deg + 40deg) 62% 58% / .16));
+}
+.sp-gcard-mark { font-size: 34px; line-height: 1; color: var(--muted); font-weight: 600; }
+.sp-gcard-ico svg { width: 30px; height: 30px; }
+.sp-gcard-body { padding: 10px 11px 11px; }
+.sp-page a.sp-gcard .sp-issue-title, .sp-gcard .sp-issue-title { font-size: 13.5px; font-weight: 600; }
+.sp-gcard .sp-issue-meta { margin-top: 6px; }

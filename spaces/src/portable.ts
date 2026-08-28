@@ -17,7 +17,7 @@
 // place that already has the tests for it.
 
 // `.ts` extensions ON PURPOSE: node resolves this module directly for the rig.
-import { type SpacesDoc, type Page, type Block, repairId } from './model.ts'
+import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
 import { esc } from './sanitize.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
@@ -198,7 +198,10 @@ export function extractSpace(
 
   // ---- assets: only what travelled references ------------------------------
   const used = new Set<string>()
-  for (const p of pages) for (const b of p.blocks) for (const k of assetKeysOf(b)) used.add(k)
+  for (const p of pages) {
+    for (const k of pageAssetKeys(p)) used.add(k)
+    for (const b of p.blocks) for (const k of assetKeysOf(b)) used.add(k)
+  }
   // Fonts are the exception, and they are not an exception to the rule: a
   // `@font-face` the theme names is referenced by every page in the document.
   // Dropping it changes how the extract LOOKS, which an export must not do.
@@ -387,7 +390,10 @@ export function planGraft(
     assets[k] = bytes
     keyMap.set(key, k)
   }
-  for (const p of pages) for (const b of p.blocks) for (const k of assetKeysOf(b)) intern(k)
+  for (const p of pages) {
+    for (const k of pageAssetKeys(p)) intern(k)
+    for (const b of p.blocks) for (const k of assetKeysOf(b)) intern(k)
+  }
 
   const haveFont = new Set((host.fonts ?? []).map((f) => `${f.family}|${f.weight ?? ''}|${f.style ?? ''}`))
   const fonts: NonNullable<SpacesDoc['fonts']> = []
@@ -398,7 +404,17 @@ export function planGraft(
     if (mapped) fonts.push({ ...f, asset: mapped })
   }
 
-  for (const p of pages) for (const b of p.blocks) rewriteAssetRefs(b, keyMap)
+  for (const p of pages) {
+    // a grafted page's cover follows its bytes to their new key, like any other
+    // reference — otherwise a page pasted into another space keeps a cover that
+    // points at nothing
+    const c = (p as { cover?: unknown }).cover
+    if (typeof c === 'string' && c.startsWith('asset:')) {
+      const next = keyMap.get(c.slice(6))
+      if (next) p.cover = `asset:${next}`
+    }
+    for (const b of p.blocks) rewriteAssetRefs(b, keyMap)
+  }
 
   return {
     pages,

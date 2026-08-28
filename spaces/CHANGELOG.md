@@ -14,6 +14,23 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **Page covers, and a gallery to show them off.** A page can carry a picture
+  across the top of it — chosen in the properties panel beside the icon, and
+  the page's own icon rides up over its lower edge. A view has a fourth shape
+  in the layout cycle: **Gallery**, a grid of cards showing each page's cover,
+  its title and the values it carries. That is the shape that makes a reading
+  list or a film log look like one rather than like a backlog.
+
+  **A cover is never a URL.** `asset:` or `data:` only, for the same reason a
+  page icon is one emoji and never an address: opening a document must not
+  touch the network. A file that arrives carrying a remote cover keeps the
+  field and shows no picture, and the validator says so. Covers go through the
+  same pipeline an image block does — downscaled before they travel, stored
+  once however many pages use them, the same question asked above 4MB.
+
+  Additive: absent on every page written before this, and a card with no cover
+  gets a tinted panel of its own carrying the page's icon.
+
 - **A dark interface.** About → Appearance offers *Match my system*, *Light* or
   *Dark*, follows the OS by default, and tracks it live if the OS flips while
   the file is open.

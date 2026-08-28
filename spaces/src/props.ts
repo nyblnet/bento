@@ -46,6 +46,9 @@ export interface PropsHost {
   locked(): boolean
   repaint(): void
   pickPoster(id: string): void
+  /** a page's cover picture — the editor owns the file picker and the budget */
+  pickCover(pageId: string): void
+  removeCover(pageId: string): void
   pickMedia(id: string): void
   openIconPicker(pageId: string, anchor: HTMLElement): void
   /** the editor owns popovers; the panel only says which page wants one */
@@ -297,6 +300,27 @@ export class PropsPanel {
     icon.title = t("Change this page's icon")
     icon.addEventListener('click', () => this.app.openIconPicker(page.id, icon))
     this.row(t('Icon'), icon)
+
+    // THE COVER, beside the icon, because they are the same question asked of
+    // two sizes: what does this page look like before you have read it.
+    //
+    // Two LITERAL calls rather than t(has ? a : b): the extractor sweeps
+    // literals, so an interpolated key compiles, runs, and is never translated
+    // in any of the eight catalogs.
+    const has = !!String((page as { cover?: unknown }).cover ?? '')
+    const covers = mk('div', 'sp-insp-btns')
+    const pick = mk('button', 'sp-btn' + (has ? ' sp-on' : ''), has ? t('Replace…') : t('Choose…'))
+    pick.type = 'button'
+    pick.title = t('A picture across the top of this page')
+    pick.addEventListener('click', () => this.app.pickCover(page.id))
+    covers.appendChild(pick)
+    if (has) {
+      const drop = mk('button', 'sp-btn', t('Remove'))
+      drop.type = 'button'
+      drop.addEventListener('click', () => { this.app.removeCover(page.id); this.rebuild(true) })
+      covers.appendChild(drop)
+    }
+    this.row(t('Cover'), covers)
 
     // HOW WIDE THIS PAGE IS — the page menu's own control, in the place the
     // question is now asked. The default is an ABSENT key, never a stored
