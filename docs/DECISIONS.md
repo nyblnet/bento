@@ -5605,3 +5605,63 @@ thing under test is really on screen.** Record engine, version and *resolved*
 font in the test artefact itself — a named font that silently fell back is not
 a test of that font. "It looks fine here" is not evidence until "here" is
 named.
+
+## 2026-08-28 — OPEN QUESTION: the agent-facing copy of a document is not stripped
+
+**Not a decision. A question recorded so it is not rediscovered a fourth time.**
+
+**Where it came from.** Three apps have now shipped the same clipboard bug.
+Slides put the owner private key on the clipboard; bento/spaces reintroduced it
+verbatim when it grew its own "Copy document JSON"; bento/type did it again in
+#384, where CI caught it (`scripts/test-export-secrets.ts`, the rig widened
+from slides-only to all four apps for exactly this reason). Every UI copy path
+is fixed and goes through a stripper now.
+
+**What is still unstripped is the path we ask AI agents to use.** CLAUDE.md
+tells tooling that the document is the interchange unit and points it at
+`#bento-doc` and the `window.bento` API. An agent doing precisely what we
+invited it to do — read the document, paste it into a chat model — hands over
+`collab.ownerPriv` and the room read key. Same exposure as the button, reached
+through the path we wrote the instructions for.
+
+**The facts, measured across the four apps:**
+
+| app | `window.bento.serialize()` | `window.bento.doc` |
+|---|---|---|
+| slides | `stampInto` + `serializeFile(doc)` — the whole .bento.html | raw `store.doc` |
+| spaces | `serializeFile(store.doc)` | raw `store.doc` |
+| dash | `serializeFile(store.doc)` | raw `store.doc` |
+| type | `JSON.stringify(store.doc)` | raw `store.doc` |
+
+**Two things that are NOT the bug, so nobody spends a day on them:**
+
+1. **`serializeFile` carrying credentials is correct.** It produces the saved
+   working file, and the file IS the capability — opening a copy auto-joins the
+   room. Stripping it would break saving. The rig already records `serialize()`
+   as its one legitimate caller.
+2. **`window.bento.doc` is not an escalation.** Any script running in the page
+   already has the document. The API grants nothing new.
+
+**And one reason a narrow fix will not close it:** stripping `serialize()`
+alone changes nothing, because the `#bento-doc` block inside the file carries
+the whole document anyway. An agent reading the file gets the credentials
+without touching the API.
+
+**So the question is about defaults and documentation, not a code defect.**
+Options, none chosen:
+
+- Leave it. The file is the capability; anyone handling the file handles the
+  keys, and that is already true of emailing a deck.
+- Say so in the agent-facing guidance: paste a stripped document, never the raw
+  one, and name the function.
+- Give the platform a stripped accessor — `window.bento.docForExport()` — and
+  point the tooling note at THAT, so the convenient path is the safe one. This
+  is the shape that has worked everywhere else: the leak keeps recurring
+  because the obvious call is the unsafe one.
+- Widen the rig again. It currently inspects `about.ts`, `main.ts` and
+  `editor.ts` only, so a leak in any other file of an app is invisible to it.
+
+**Whoever settles this: it is a platform decision across four apps.** It was
+raised from the bento/type branch during #384 and deliberately NOT decided
+there, which was the right call — a single app's feature branch is the wrong
+place to set a cross-app default.
