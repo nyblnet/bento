@@ -78,7 +78,7 @@ export function renderCodeInto(pre: HTMLElement, el: CodeElement, doc: BentoDoc)
   // first slide's tokens — same text, zero travel. The element handed to the
   // renderer is the model object itself, so identity is exact. (The original
   // implementation got this right; a rewrite briefly did not.)
-  const slideIdx = doc.slides.findIndex((s) => (s.elements as unknown[]).includes(el))
+  const slideIdx = doc.slides.findIndex((s) => s.elements.some((e) => e === el))
   if (slideIdx < 0) return false
   const states = diffFor(doc, morphKey)
   const slideStates = states.get(slideIdx)
