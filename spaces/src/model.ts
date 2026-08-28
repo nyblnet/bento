@@ -749,7 +749,7 @@ export function isRemote(src: string): boolean {
 }
 
 // ---- tables ----------------------------------------------------------------
-// A table is CONTENT (working/spaces-design.md §2.6): no formulas, no
+// A table is CONTENT (working/design/spaces-design.md §2.6): no formulas, no
 // recalculation, no cross-document references. The line the suite draws is
 // "would you print it → folio; does it recalculate → dash; does it link to
 // pages → spaces", and a table whose cells are inline html — so a cell can

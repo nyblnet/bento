@@ -819,7 +819,7 @@ for (const [label, input, err] of [
 }
 
 // ---- the table block -------------------------------------------------------
-// A table is CONTENT (working/spaces-design.md §2.6) — no formulas, nothing
+// A table is CONTENT (working/design/spaces-design.md §2.6) — no formulas, nothing
 // that recalculates, and not the database case, which already shipped as the
 // tracker. What is pinned here is the part that is PERMANENT: the shape of the
 // model, the `html` fallback that is the whole of format additivity for a new

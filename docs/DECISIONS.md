@@ -187,7 +187,7 @@ you sent it to that you had once saved something.
 In `kernel/`, not `slides/`: Spaces, Dash and Type have the identical problem
 and would each grow their own copy. The kernel owns the remembering and the
 policy; the words and the markup are the app's. Spec (gitignored):
-`working/handover-web-demo-return-gate.md`, from the `tray-views` session.
+`working/team/handoffs/handover-web-demo-return-gate.md`, from the `tray-views` session.
 
 NOT done here, and worth weighing first: making **Download** the primary action
 on the landing page (it is currently `btn primary` on "Try it in your browser")
@@ -371,7 +371,7 @@ been silently dropping four marks) into marks.ts, over the same run list.
 **Decision.** A `table` block: `rows` (row-major, each cell INLINE HTML), `cols`
 (fractional column weights), `colAlign` (per COLUMN), `header` (absent = TRUE).
 No formulas, no recalculation, no cross-document references — the line from
-`working/spaces-design.md` §2.6. The database case is unaffected: it already
+`working/design/spaces-design.md` §2.6. The database case is unaffected: it already
 shipped as the tracker (`doc.fields` + `prop` + `view`), and this is not a
 second one.
 
@@ -1214,7 +1214,7 @@ failing to re-merge after a render split them (423/2,000).
 **Pointers.** `type/src/inline.ts` (the argument is in the file header),
 `type/src/model.ts` (tagged `parseDoc`, following the spaces load contract:
 an unreadable file must never become an empty one), `scripts/test-type-model.ts`.
-Design + the measured spike behind it: `working/type-design.md` and
+Design + the measured spike behind it: `working/design/type-design.md` and
 `working/type-spike/RESULTS.md` (gitignored) — Path A, continuous pagination,
 Knuth–Plass viable live.
 
@@ -2421,13 +2421,13 @@ deletion set included `slides/index.html`, the gallery, `agents.md`,
 
 Rig: `scripts/test-publish-gate.mjs`; shared logic `scripts/site-inventory.mjs`.
 This is the first half of the multi-app release work
-(`working/spaces-design.md` §6.1); per-app assembly — build one app, restore
+(`working/design/spaces-design.md` §6.1); per-app assembly — build one app, restore
 the others byte-identically from the published tree — is the second, and
 spaces cannot be released until both exist.
 
 ## 2026-08-02 — bento/home runs documents in a per-document origin, or not at all
 
-`bento/home` is a launcher (`home/`, `working/home-design.md`): it holds no
+`bento/home` is a launcher (`home/`, `working/design/home-design.md`): it holds no
 document content, only `FileSystemFileHandle`s in IndexedDB, so a deck you were
 working on reopens with write access after one permission click. That part is
 measured and built. **How a document is actually OPENED is the hard part, and
@@ -2484,7 +2484,7 @@ cadence and the deploy-order care that implies (`docs/PLATFORM.md` §5).
 
 **To confirm before building** (none of it testable in an automated browser —
 permission-gated APIs report `denied` there without prompting,
-`working/home-design.md` §3.2, a trap that already produced two wrong
+`working/design/home-design.md` §3.2, a trap that already produced two wrong
 conclusions):
 
 1. Does a `FileSystemFileHandle` survive a cross-origin `postMessage` and stay
@@ -2736,7 +2736,7 @@ old shared-name code (7/8), which is the property that makes it a gate.
 
 ## 2026-08-02 — A release seeds from what is published, and builds one app
 
-Second half of the multi-app release work (`working/spaces-design.md` §6.1).
+Second half of the multi-app release work (`working/design/spaces-design.md` §6.1).
 The first half made a destructive publish impossible; this one makes a
 non-destructive one possible.
 
