@@ -98,10 +98,15 @@ Current feature set, all owner-only except where noted:
   History (`.project-folder-row`, session-only expand state, same
   no-persistence rule as sidebar width). Pin wins section placement
   outright — a pinned+filed deck shows ONLY under Pinned, never duplicated
-  into its folder. Assign via the deck menu's "Project ▸" submenu (mirrors
-  "Access ▸") or a folder's own ⚙️ (Rename/Delete); deleting a project
-  unassigns its decks (`project_id → NULL`, no cascade) rather than
-  deleting them. **Each section caps its own height and scrolls
+  into its folder. **The Projects section always renders, even with zero
+  projects**, carrying its own "+" (`#addProjectBtn`) — creation lives
+  there, not inside a deck's menu. A deck's own "Project ▸" submenu
+  (mirrors "Access ▸") is **move-only** — "No project" / existing
+  projects, no inline create — so there's exactly one place to make a
+  project and a deck menu never spawns an orphaned folder; a folder's own
+  ⚙️ is Rename/Delete. Deleting a project unassigns its decks
+  (`project_id → NULL`, no cascade) rather than deleting them. **Each
+  section caps its own height and scrolls
   independently** (`max-height:220px` + `overflow-y:auto` on
   Pinned/Projects; History is the flexible last section, `flex:1` +
   `min-height:0`) so a large Pinned or Projects section no longer pushes
