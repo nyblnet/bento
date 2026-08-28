@@ -3033,10 +3033,16 @@ function fsTable(f: string): string {
     const same = one.nodes.every((n, i) => n.x === two.nodes[i].x && n.y === two.nodes[i].y)
     ok(same, 'graph: the same space lays out identically twice — the picture is stable')
 
+    // the RADIUS, not just the centre: the camera frames this box, so a box
+    // that only contains the centres crops half of every node on the rim.
+    // Checked with `x0 + 5` in the mutation pass and the centres-only version
+    // of this assertion did not notice.
     const bounds = graphBounds(one)
-    ok(one.nodes.every((n) => n.x >= bounds.x0 && n.x <= bounds.x1
-      && n.y >= bounds.y0 && n.y <= bounds.y1),
-      'graph: the frame the camera is fitted to contains every node')
+    ok(one.nodes.every((n) => n.x - n.r >= bounds.x0 && n.x + n.r <= bounds.x1
+      && n.y - n.r >= bounds.y0 && n.y + n.r <= bounds.y1),
+      'graph: the frame the camera is fitted to contains every node, edge to edge')
+    ok(one.nodes.some((n) => Math.abs((n.x - n.r) - bounds.x0) < 1e-9),
+      '…and is no larger than it has to be')
 
     const cx = one.nodes.reduce((s, n) => s + n.x, 0) / one.nodes.length
     ok(Math.abs(cx) < 1e-6, 'graph: the settled layout is centred, so the camera can frame it')
@@ -3071,7 +3077,11 @@ function fsTable(f: string): string {
       const b = graphBounds(g)
       return Math.max(b.x1 - b.x0, b.y1 - b.y0) / 2
     }
-    ok(radius(bg) > radius(one) * 2.2,
+    // MEASURED, not guessed: ten times the pages settles 3.01x wider with
+    // gravityFor and only 2.29x wider with a constant gravity (the radius goes
+    // as n^(1/3) instead of sqrt(n)). 2.6 sits between the two — a threshold of
+    // 2.2, tried first, passed on BOTH and proved nothing.
+    ok(radius(bg) > radius(one) * 2.6,
       'graph: ten times the pages is a bigger picture, not a denser one')
   }
   {

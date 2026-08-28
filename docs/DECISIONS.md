@@ -5665,3 +5665,47 @@ Options, none chosen:
 raised from the bento/type branch during #384 and deliberately NOT decided
 there, which was the right call — a single app's feature branch is the wrong
 place to set a cross-app default.
+
+---
+
+## 2026-08-28 — a graph view is a DRAWING, and derived state is never stored
+
+Settled while building `spaces/src/graph.ts` (bento/spaces graph view). Written
+down because the next app to want a picture of its own data will face the same
+three forks, and because two of these are platform-shaped rather than
+spaces-shaped.
+
+**1. Derive at open; store nothing.** The graph is built from
+`buildIndex().backlinks` and `Page.parent` when the overlay opens, and dropped
+when it closes. There is deliberately no `doc.graph`, no saved node positions
+and no second link scanner. A stored layout is meaningless to the next reader's
+window size, and a second scanner is a second answer to "what links to this
+page" — the one question the backlink index exists to answer. The precedent
+cuts the same way as `SpaceIndex` itself: *derived, NEVER stored*.
+
+**2. A viewer preference is read the same way in every app.** Reduced motion
+here reads localStorage `bento-reduce-motion` first and the OS
+`prefers-reduced-motion` second — character for character the rule
+`slides/src/present.ts` set, and the rule the theme and the locale already
+follow (PLATFORM §8). An app that invents its own motion preference makes the
+suite two products.
+
+**3. An animation needs a wall-clock settle guarantee, not just a rAF loop.**
+`requestAnimationFrame` is throttled to ZERO in a hidden or occluded tab. The
+graph's reveal interpolates from a spiral toward a settled layout while the
+camera is framed against the FINAL positions, so a starved rAF does not merely
+fail to animate — it leaves the picture frozen halfway and off-centre, which
+reads as a broken feature. Measured in exactly that state, then fixed with a
+`setTimeout` that lands the final frame regardless. slides carries the same
+guarantee for entrance tweens, for the same reason, and any future app that
+animates on open needs one too.
+
+**A note on measuring this class of feature.** Nothing above was found by
+looking at the screen. The overlay carries a small debug object (`__graph`:
+node/edge counts, layout ms, `reduced`, `reveal`, `frames`) and the frozen-
+reveal bug was identified by reading `frames: 0` beside a mid-flight `reveal` —
+an instrument on the DECISION, not a sample of the result. The rig's graph
+assertions were each made to fail on purpose before being trusted (twelve
+deliberate mutations; two assertions were too weak and were tightened, one of
+them a threshold that passed both with and without the behaviour it claimed to
+test).
