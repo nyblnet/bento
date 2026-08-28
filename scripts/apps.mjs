@@ -41,11 +41,19 @@ export const APPS = {
     ownsSiteContent: false,
     // No pack catalog yet: build-i18n/sign-packs are slides-hardcoded and the
     // channel does not exist. Deferring packs is fine; deferring the CHANNEL
-    // would not be (working/spaces-design.md §6.5).
+    // would not be (working/design/spaces-design.md §6.5).
     packs: false,
     changelog: 'spaces/CHANGELOG.md',
     agents: 'docs/spaces-agents.md',
   },
+  /** REGISTERED BEFORE IT SHIPS, deliberately — dash has no release and nothing
+   *  published at /releases/dash/. Being here is not a claim that it shipped:
+   *  `release.mjs` defaults to `--app slides`, so cutting a dash release takes
+   *  an explicit `--app dash`. What the entry buys is that
+   *  `test-release-apps.mjs` proves the wiring — manifest URL, changelog shape,
+   *  unique appId — on every CI run instead of at release time, which is this
+   *  registry's entire reason for existing. Its status for readers is in
+   *  `dash/README.md`. */
   dash: {
     appId: 'bento-dash',
     dir: 'dash',

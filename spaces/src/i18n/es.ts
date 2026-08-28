@@ -395,6 +395,7 @@ export const es: Catalog = {
   "Shown next to your cursor and in the People list — stored only in this browser.": "Aparece junto a tu cursor y en la lista de Personas — se guarda solo en este navegador.",
   "Site name": "Nombre del sitio",
   "Sort": "Ordenar",
+  "Sort by {field}": "Ordenar por {field}",
   "Space name": "Nombre del espacio",
   "Start live session": "Iniciar sesión en vivo",
   "Start silent": "Empezar en silencio",

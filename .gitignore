@@ -73,3 +73,8 @@ home/android/*/build/
 # purpose: ~/.zshrc picks the personal gh account by directory, and /tmp gets
 # reaped — seven worktrees were lost from it in one day.
 .worktrees/
+
+# Local agent/harness config. Populated by tooling outside this repo; the repo
+# itself ships none, so anything here is a working copy, not a shared contract.
+.claude/agents
+.claude/commands/team

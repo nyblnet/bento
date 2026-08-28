@@ -403,6 +403,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Shown next to your cursor and in the People list — stored only in this browser.": ["カーソルの横とメンバーリストに表示されます — このブラウザにのみ保存されます。","显示在你的光标旁和成员列表中 — 仅保存在此浏览器。","顯示在你的游標旁和成員列表中 — 僅儲存在此瀏覽器。","Aparece junto a tu cursor y en la lista de Personas — se guarda solo en este navegador.","Affiché près de votre curseur et dans la liste Personnes — stocké uniquement dans ce navigateur.","Erscheint neben deinem Cursor und in der Personenliste — nur in diesem Browser gespeichert.","Appare accanto al tuo cursore e nell’elenco Persone — salvato solo in questo browser.","Exibido ao lado do seu cursor e na lista de Pessoas — guardado apenas neste navegador."],
   "Site name": ["サイト名","网站名称","網站名稱","Nombre del sitio","Nom du site","Name der Website","Nome del sito","Nome do site"],
   "Sort": ["並べ替え","排序","排序","Ordenar","Trier","Sortieren","Ordina","Ordenar"],
+  "Sort by {field}": ["{field}で並べ替え","按{field}排序","依{field}排序","Ordenar por {field}","Trier par {field}","Nach {field} sortieren","Ordina per {field}","Ordenar por {field}"],
   "Space name": ["スペース名","空间名称","空間名稱","Nombre del espacio","Nom de l’espace","Space-Name","Nome dello spazio","Nome do espaço"],
   "Start live session": ["ライブセッションを開始","开始实时会话","開始即時工作階段","Iniciar sesión en vivo","Démarrer la session en direct","Live-Sitzung starten","Avvia sessione dal vivo","Iniciar sessão ao vivo"],
   "Start silent": ["音を出さずに開始する","开始时静音","開始時靜音","Empezar en silencio","Démarrer sans le son","Ohne Ton starten","Parti senza audio","Começar sem som"],

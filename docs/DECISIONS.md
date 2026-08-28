@@ -187,7 +187,7 @@ you sent it to that you had once saved something.
 In `kernel/`, not `slides/`: Spaces, Dash and Type have the identical problem
 and would each grow their own copy. The kernel owns the remembering and the
 policy; the words and the markup are the app's. Spec (gitignored):
-`working/handover-web-demo-return-gate.md`, from the `tray-views` session.
+`working/team/handoffs/handover-web-demo-return-gate.md`, from the `tray-views` session.
 
 NOT done here, and worth weighing first: making **Download** the primary action
 on the landing page (it is currently `btn primary` on "Try it in your browser")
@@ -371,7 +371,7 @@ been silently dropping four marks) into marks.ts, over the same run list.
 **Decision.** A `table` block: `rows` (row-major, each cell INLINE HTML), `cols`
 (fractional column weights), `colAlign` (per COLUMN), `header` (absent = TRUE).
 No formulas, no recalculation, no cross-document references — the line from
-`working/spaces-design.md` §2.6. The database case is unaffected: it already
+`working/design/spaces-design.md` §2.6. The database case is unaffected: it already
 shipped as the tracker (`doc.fields` + `prop` + `view`), and this is not a
 second one.
 
@@ -1214,7 +1214,7 @@ failing to re-merge after a render split them (423/2,000).
 **Pointers.** `type/src/inline.ts` (the argument is in the file header),
 `type/src/model.ts` (tagged `parseDoc`, following the spaces load contract:
 an unreadable file must never become an empty one), `scripts/test-type-model.ts`.
-Design + the measured spike behind it: `working/type-design.md` and
+Design + the measured spike behind it: `working/design/type-design.md` and
 `working/type-spike/RESULTS.md` (gitignored) — Path A, continuous pagination,
 Knuth–Plass viable live.
 
@@ -2421,13 +2421,13 @@ deletion set included `slides/index.html`, the gallery, `agents.md`,
 
 Rig: `scripts/test-publish-gate.mjs`; shared logic `scripts/site-inventory.mjs`.
 This is the first half of the multi-app release work
-(`working/spaces-design.md` §6.1); per-app assembly — build one app, restore
+(`working/design/spaces-design.md` §6.1); per-app assembly — build one app, restore
 the others byte-identically from the published tree — is the second, and
 spaces cannot be released until both exist.
 
 ## 2026-08-02 — bento/home runs documents in a per-document origin, or not at all
 
-`bento/home` is a launcher (`home/`, `working/home-design.md`): it holds no
+`bento/home` is a launcher (`home/`, `working/design/home-design.md`): it holds no
 document content, only `FileSystemFileHandle`s in IndexedDB, so a deck you were
 working on reopens with write access after one permission click. That part is
 measured and built. **How a document is actually OPENED is the hard part, and
@@ -2484,7 +2484,7 @@ cadence and the deploy-order care that implies (`docs/PLATFORM.md` §5).
 
 **To confirm before building** (none of it testable in an automated browser —
 permission-gated APIs report `denied` there without prompting,
-`working/home-design.md` §3.2, a trap that already produced two wrong
+`working/design/home-design.md` §3.2, a trap that already produced two wrong
 conclusions):
 
 1. Does a `FileSystemFileHandle` survive a cross-origin `postMessage` and stay
@@ -2736,7 +2736,7 @@ old shared-name code (7/8), which is the property that makes it a gate.
 
 ## 2026-08-02 — A release seeds from what is published, and builds one app
 
-Second half of the multi-app release work (`working/spaces-design.md` §6.1).
+Second half of the multi-app release work (`working/design/spaces-design.md` §6.1).
 The first half made a destructive publish impossible; this one makes a
 non-destructive one possible.
 
@@ -5709,3 +5709,40 @@ assertions were each made to fail on purpose before being trusted (twelve
 deliberate mutations; two assertions were too weak and were tightened, one of
 them a threshold that passed both with and without the behaviour it claimed to
 test).
+
+## 2026-08-28 — bento/spaces: a table column sorts, a title column does not
+
+The Bases table became editable and sortable in place: a column header cycles
+ascending → descending → none, and a cell opens the same picker the page's own
+header strip opens.
+
+Two things settled that another agent could otherwise contradict.
+
+**Unsorted DELETES the key.** The header writes the view's existing `sort`
+through the existing `editView`, and the third click passes `undefined` so the
+key is removed rather than stored as `[]`. A view sorted and unsorted from its
+header is byte-identical to one nobody ever touched. `cycleSort` in fields.ts is
+where that third state lives, so it is one function rather than a rule the two
+sort controls each have to remember.
+
+**The page-title column is NOT sortable, deliberately.** A view's `sort` names a
+FIELD: `sortRows` looks each key up in `doc.fields` and skips what it cannot
+find, and `unknownSortKeys` reports the miss as "newer than this build". A
+pseudo-key like `{key:'title'}` would therefore be a key EVERY shipped build
+reports as unreadable and does not apply — and teaching `sortRows` about a
+non-field key means a second ordering mechanism living beside the first, in a
+format where both are permanent. One order stored in two shapes is the thing
+that later disagrees with itself. The column is a plain `<th>` and does not
+pretend otherwise. If title order is wanted later, the honest shape is a real
+field, not a special case in the sorter.
+
+**A cell edit can CREATE the prop block**, the way a board drop already could:
+`editor.putField` is the one place a page gains a field, and it goes through
+`propBlock`, so the readable `html` is written with the value. A table column
+exists because SOME row carries that field; the rows that do not get an empty
+cell, and editing it is how the field arrives on that page.
+
+The picker was split from `openFieldPicker` into `fieldPicker(f, cur, anchor,
+write)` — a picker over a WRITER rather than a block id, because a cell can
+stand for a value that has no block yet. The header strip, the board's card chip
+and a cell are now one control with three writers, not three controls.

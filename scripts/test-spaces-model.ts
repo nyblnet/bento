@@ -27,7 +27,7 @@
 //      docId on every open.
 
 import {
-  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
+  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote, loadsRemotely, assetValue,
   effectiveParents, descendantsOf,
   tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
   linkCard, linkCardHtml,
@@ -40,7 +40,7 @@ import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
-  sortRows, unknownSortKeys, type IssueRow,
+  sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
@@ -310,13 +310,69 @@ for (const [label, input, err] of [
   }
   ok(!isRemote(''), 'an empty src is not a remote fetch')
 
+  // ---- and the same question, asked one indirection deeper -----------------
+  // isRemote answers about the string an author WROTE. `asset:k` is local by
+  // inspection and `doc.assets.k` is whatever the file says it is, so the gate
+  // that decides whether to show the consent placeholder was answering the
+  // wrong question. Measured on a shipped build before this: a document with
+  // `assets: { k: "http://…" }` and an image `src: "asset:k"` issued a real GET
+  // on open, with no placeholder — the tracking pixel the paragraph above says
+  // is prevented.
+  //
+  // BEHAVIOUR, not a source grep. Two assertions in this file were shown to
+  // pass through live regressions because they matched text rather than
+  // running anything, so this one runs the predicate against real documents.
+  {
+    // assetValue reads doc.assets and nothing else, so the fixture is that.
+    const withAssets = (assets: Record<string, string>) => ({ assets }) as never
+
+    const hostile = withAssets({ k: 'http://tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', hostile),
+      'an asset: key whose VALUE is a URL is a remote load, however local the key looks')
+    ok(isRemote(assetValue('asset:k', hostile)),
+      '…because the asset table is resolved before the question is asked')
+
+    const protoRel = withAssets({ k: '//tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', protoRel), 'protocol-relative in the asset table is remote too')
+
+    const embedded = withAssets({ k: 'data:image/png;base64,AAAA' })
+    ok(!loadsRemotely('asset:k', embedded), 'an asset holding embedded bytes is still local')
+
+    const missing = withAssets({})
+    ok(!loadsRemotely('asset:nope', missing), 'an asset key that resolves to nothing loads nothing')
+
+    // the prototype-chain reach the resolver already guards, kept honest here
+    const proto = withAssets({})
+    ok(!loadsRemotely('asset:toString', proto), 'asset:toString does not reach Object.prototype')
+    ok(assetValue('asset:toString', proto) === '', '…and resolves to the empty string, not a function')
+
+    // a plainly written URL is unchanged by any of this
+    ok(loadsRemotely('http://tracker.example/p.png', missing), 'a written URL is still remote')
+    ok(!loadsRemotely('data:image/png;base64,AAAA', missing), 'a written data: URI is still local')
+  }
+
   // and the renderer must actually consult it
   const fs = await import('node:fs')
   const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
-  ok(/isRemote\(rawSrc\)\s*&&\s*!opts\.allowRemote/.test(ren),
+  // EVERY gate asks the resolved question. Counting them is the point: the
+  // hole was one call site out of five asking `isRemote` about the written
+  // string, and a regex that merely finds "a gate exists" would have passed
+  // throughout. If a sixth surface starts loading something, this count is
+  // what fails.
+  const gates = (ren.match(/loadsRemotely\(/g) ?? []).length
+  ok(gates >= 5, `every surface that loads asks the resolved question (${gates} gates)`)
+  ok(!/isRemote\(rawSrc\)/.test(ren),
+    'no gate asks about the WRITTEN src — that is the hole an asset: key hid in')
+  ok(/loadsRemotely\(rawSrc, doc\)\s*&&\s*!opts\.allowRemote/.test(ren),
     'render.ts gates remote images on the reader\'s consent')
   ok(!/allowRemote/.test(fs.readFileSync(new URL('../spaces/src/model.ts', import.meta.url), 'utf8')),
     'consent is NOT a document field — it belongs to the reader, not the file')
+
+  // The link card's thumbnail is the surface with no gate at all: linkCard()
+  // takes a BLOCK, so it cannot know what an asset: key resolves to, and it was
+  // trusted to have already dropped anything remote.
+  ok(/c\.image && !loadsRemotely\(c\.image, doc\)/.test(ren),
+    'a link card thumbnail is checked where the document is in scope, not where it is built')
 }
 
 // ---- an encrypted space is never written to disk in the clear ---------------
@@ -891,7 +947,7 @@ for (const [label, input, err] of [
 }
 
 // ---- the table block -------------------------------------------------------
-// A table is CONTENT (working/spaces-design.md §2.6) — no formulas, nothing
+// A table is CONTENT (working/design/spaces-design.md §2.6) — no formulas, nothing
 // that recalculates, and not the database case, which already shipped as the
 // tracker. What is pinned here is the part that is PERMANENT: the shape of the
 // model, the `html` fallback that is the whole of format additivity for a new
@@ -1865,6 +1921,119 @@ function fsTable(f: string): string {
     'a status from a newer build sorts after every one this build knows')
 }
 
+// ---- SORTING BY A TABLE COLUMN HEADER --------------------------------------
+// A header is the second control that writes `sort`, and the one a reader will
+// actually reach for. Two properties, both of which fail silently:
+//
+//   · THE THIRD STATE IS "NONE". A header that only flips between ascending and
+//     descending can never give a hand-arranged board its order back, and
+//     "manual order" is not a sort called manual — it is the ABSENCE of the key.
+//     Storing `sort: []` would satisfy every screen and would still leave a
+//     view somebody sorted and unsorted permanently different from one nobody
+//     touched, in a file on somebody else's disk.
+//
+//   · THE ARROW AND THE ORDER READ THE SAME FACT. A header that computed its
+//     own direction beside the one sortRows applies is a display that can
+//     disagree with the rows underneath it.
+{
+  const doc = { fields: DEFAULT_FIELDS } as unknown as SpacesDoc
+  const j = (v: unknown) => JSON.stringify(v)
+
+  ok(j(cycleSort(undefined, 'status')) === j([{ key: 'status' }]),
+    'the first click on a column sorts by it, ascending')
+  ok(!Object.prototype.hasOwnProperty.call((cycleSort(undefined, 'status') ?? [])[0] ?? {}, 'dir'),
+    "…and writes NO `dir`, because absent is what ascending has always meant")
+  ok(j(cycleSort([{ key: 'status' }], 'status')) === j([{ key: 'status', dir: 'desc' }]),
+    'the second click reverses it')
+  ok(cycleSort([{ key: 'status', dir: 'desc' }], 'status') === undefined,
+    'the third click returns to NO SORT — and says so with undefined, never an empty array')
+  ok(j(cycleSort([{ key: 'status', dir: 'desc' }], 'priority')) === j([{ key: 'priority' }]),
+    'clicking a DIFFERENT column starts that column fresh, ascending')
+
+  // the byte-identity rule the whole format follows, proved on the block itself
+  const block: Record<string, unknown> = { id: 'v', type: 'view', html: 'Issues' }
+  const pristine = j(block)
+  const write = (k: string) => {
+    const next = cycleSort(block.sort, k)
+    if (next === undefined) delete block.sort
+    else block.sort = next
+  }
+  write('status'); write('status'); write('status')
+  ok(j(block) === pristine,
+    'a view sorted and unsorted from its header is BYTE-IDENTICAL to one nobody ever touched')
+
+  // the arrow is the order, not a second opinion about it
+  ok(sortDirOf(undefined, 'status') === undefined && sortDirOf('nonsense', 'status') === undefined,
+    'a malformed sort points no arrow rather than throwing — it came out of a file someone sent you')
+  ok(sortDirOf([{ key: 'status' }], 'status') === 'asc',
+    'an entry with no direction reads as ascending, the way sortRows applies it')
+  ok(sortDirOf([{ key: 'status' }], 'priority') === undefined,
+    'and a column that is not the sort key carries no arrow')
+  const rows2: IssueRow[] = [
+    { page: { id: 'a', title: 'a', blocks: [] } as Page, values: new Map([['status', 'done']]) },
+    { page: { id: 'b', title: 'b', blocks: [] } as Page, values: new Map([['status', 'backlog']]) },
+  ]
+  const desc = cycleSort(cycleSort(undefined, 'status'), 'status')
+  ok(sortDirOf(desc, 'status') === 'desc'
+    && sortRows(doc, rows2, desc).map((r) => r.page.id).join('') === 'ab',
+    'the arrow the header shows and the order sortRows produces come from the one key')
+}
+
+// ---- the table's HEADERS and CELLS are controls, and only where there is an
+// ---- editor ----------------------------------------------------------------
+// Both are emitted by the ONE renderer, which also paints the reading view, a
+// printout and a locked space. A control that escapes the editable guard is a
+// button a reader can press and a shape on paper that means nothing.
+{
+  const fs = nodeFs
+  const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const tbl = ren.slice(ren.indexOf("if (layout === 'table') {"), ren.indexOf("if (layout === 'list') {"))
+
+  ok(/if \(opts\.editable\) \{[\s\S]{0,900}?sortB\.dataset\.sortCol/.test(tbl),
+    'the sortable header is a control ONLY where there is an editor')
+  ok(/if \(opts\.editable && f\) \{[\s\S]{0,600}?cell\.dataset\.cellPage/.test(tbl),
+    '…and so is the editable cell')
+  ok((tbl.match(/sortCol/g) ?? []).length === 1 && (tbl.match(/cellPage/g) ?? []).length === 1,
+    'neither is created anywhere else in the table, where no guard would cover it')
+  ok(/th\.setAttribute\('aria-sort'/.test(tbl),
+    'the sort state reaches a screen reader as aria-sort, not only as an arrow glyph')
+
+  // the page column: no sort control, because a view's sort names a FIELD and
+  // sortRows cannot express a title. Pinned so nobody quietly invents a second
+  // ordering mechanism to fill the gap.
+  const first = tbl.slice(tbl.indexOf('const th0'), tbl.indexOf('hr.appendChild(th0)'))
+    .replace(/^\s*\/\/[^\n]*$/gm, '')
+  ok(!first.includes('sortCol') && !first.includes('button'),
+    'the page-title column carries no sort control — a sort key is a field, and a title is not one')
+
+  // a header click writes through the SAME editView every other view control
+  // uses, so "no sort" deletes the key rather than storing an empty array
+  ok(/data-sort-col[\s\S]{0,700}?cycleSort\([\s\S]{0,80}?\.sort, h\.dataset\.sortCol!\)/.test(ed)
+    && /data-sort-col[\s\S]{0,700}?this\.editView\(/.test(ed),
+    'a header click writes the view’s own sort through editView, which deletes rather than stores empty')
+
+  // a cell writes through the one writer, so `value` and the readable `html`
+  // can never fall out of step — and a page that lacks the field GAINS it, the
+  // way a board drop already does
+  ok(/private putField\(page: Page, f: FieldSpec, value: unknown\): void \{\s*const own = propBlockOf\(page, f\.key\)\s*if \(own\) this\.applyField\(own, f, value\)\s*else page\.blocks\.splice\(headerLength\(page\), 0, propBlock\(/.test(ed),
+    'a cell edit on a page WITHOUT that field adds the prop block, with its readable html written by propBlock')
+  ok(/private setCell\([\s\S]{0,900}?s\.commit\(\(\) => this\.putField\(page, f, value\)/.test(ed),
+    'and every cell write goes through it, inside one commit')
+  ok(/private setCell\([\s\S]{0,900}?if \(own && \(own as \{ value\?: unknown \}\)\.value === value\) return/.test(ed),
+    'choosing the value a cell already holds commits NOTHING — not a step you press ⌘Z past')
+  ok(/private setCell\([\s\S]{0,900}?const scope = pageId === s\.pageId \? 'page' : 'doc'/.test(ed),
+    'a cell on ANOTHER page takes a document undo entry, or undo would restore the view and leave the value')
+
+  // ONE picker. A cell that opened a picker of its own would be a second place
+  // for the choosing to drift from the header strip's.
+  ok((ed.match(/private fieldPicker\(/g) ?? []).length === 1
+    && /this\.fieldPicker\(f, \(b as \{ value\?: unknown \}\)\.value, anchor, \(v\) => this\.setField\(blockId, v\)\)/.test(ed),
+    'the header strip’s picker and the cell’s are the same picker over different writers')
+  ok(/private openCellPicker\([\s\S]{0,800}?this\.fieldPicker\(f, own \? \(own as \{ value\?: unknown \}\)\.value : undefined, anchor/.test(ed),
+    '…and a cell standing for a value that does not exist yet opens it with nothing selected')
+}
+
 // ---- what a board and a field EXPORT ---------------------------------------
 // The readable `html` on a prop block is the whole reason the format degrades
 // instead of vanishing. The exporter is its most important consumer and was the
@@ -2067,7 +2236,7 @@ function fsTable(f: string): string {
     'a clip fetches metadata, never the whole file, for a page nobody pressed play on')
   // the remote gate is the image gate, and a clip needs it MORE: a <video> asks
   // its host for byte ranges the moment it is parsed
-  ok(/isRemote\(rawSrc\)[\s\S]{0,200}remotePlaceholder/.test(render),
+  ok(/loadsRemotely\(rawSrc, doc\)[\s\S]{0,200}remotePlaceholder/.test(render),
     'a linked clip is not loaded until the reader agrees, naming the host')
 
   const preview = src('preview.ts')

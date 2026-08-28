@@ -9,7 +9,7 @@
 // backlinks and (later) collaboration key on.
 
 import {
-  type Block, type TableShape, type SpacesDoc, newBlock, newPage, effectiveParents, isRemote,
+  type Block, type Page, type TableShape, type SpacesDoc, newBlock, newPage, effectiveParents, isRemote,
   tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS, linkCard, linkCardHtml, unresolvedOn,
   parseDoc, uid,
 } from './model'
@@ -26,6 +26,7 @@ import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
   reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, FIELD_TYPE_LABEL,
+  cycleSort,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
@@ -1428,12 +1429,91 @@ export class Editor {
     b.html = propHtml(f, value)
   }
 
+  /**
+   * Set a field ON A PAGE, adding the prop block when the page does not carry
+   * one — the case a board drop already had and a table cell now has too.
+   *
+   * A page can be in a view without carrying every field the view shows: a
+   * board grouped by something an issue never had, or a table column that
+   * exists because SOME other row has it. The value arrives in the header strip
+   * where the others are, through propBlock, so the readable `html` is written
+   * with it. A value written without its readable form is a value an older
+   * build, a thumbnailer, a grep and the markdown export all see as nothing.
+   *
+   * Not a commit of its own: the caller decides what one user action was.
+   */
+  private putField(page: Page, f: FieldSpec, value: unknown): void {
+    const own = propBlockOf(page, f.key)
+    if (own) this.applyField(own, f, value)
+    else page.blocks.splice(headerLength(page), 0, propBlock(f, value, newBlock('prop').id))
+  }
+
+  /**
+   * A TABLE CELL, opened for editing. The same picker the page's own header
+   * strip opens, over the same writer a board drop uses.
+   *
+   * Addressed by PAGE AND KEY rather than by block id, because the interesting
+   * cell is the empty one: the page has no prop block for that column, and the
+   * edit is what creates it. Looking the block up here — after the value is
+   * chosen, in setCell — also means an opened-and-dismissed picker writes
+   * nothing at all.
+   */
+  private openCellPicker(pageId: string, key: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    const page = s.index.page.get(pageId)
+    const f = fieldByKey(s.doc, key)
+    if (!page || !f) return
+    const own = propBlockOf(page, key)
+    this.fieldPicker(f, own ? (own as { value?: unknown }).value : undefined, anchor,
+      (v) => this.setCell(pageId, key, v))
+  }
+
+  /**
+   * Write one cell. Nothing happens when the value did not change: a picker
+   * opened and closed on the value already there must not be a step you press
+   * ⌘Z past.
+   *
+   * PAGE SCOPE ONLY WHEN THE ROW IS THE PAGE IN VIEW, for the reason setField
+   * carries: a page-scoped checkpoint snapshots `store.pageId`, and a cell in a
+   * table almost always belongs to ANOTHER page — undo would restore the page
+   * holding the view and leave the changed value exactly where it was.
+   */
+  private setCell(pageId: string, key: string, value: unknown): void {
+    const s = this.store
+    const page = s.index.page.get(pageId)
+    const f = fieldByKey(s.doc, key)
+    if (!page || !f || s.readOnly || this.reading) return
+    const own = propBlockOf(page, key)
+    if (own && (own as { value?: unknown }).value === value) return
+    const scope = pageId === s.pageId ? 'page' : 'doc'
+    s.commit(() => this.putField(page, f, value), { scope })
+    this.paintPage()
+  }
+
   private openFieldPicker(blockId: string, anchor: HTMLElement): void {
     const s = this.store
     if (s.readOnly || this.reading) return
     const b = s.block(blockId)
     const f = b && fieldByKey(s.doc, String((b as { key?: unknown }).key ?? ''))
     if (!b || !f) return
+    this.fieldPicker(f, (b as { value?: unknown }).value, anchor, (v) => this.setField(blockId, v))
+  }
+
+  /**
+   * THE ONE PICKER for a field value: a list of options for a select, one input
+   * for anything else.
+   *
+   * Takes a WRITER rather than a block id, and that is the whole reason it was
+   * split out of openFieldPicker. A table cell can stand for a value that does
+   * not exist yet — the page carries no such prop block — so there is no id to
+   * hand it. Everything else about choosing a value has to stay identical
+   * across the header strip, the board's card chip and a cell, or the same
+   * gesture reads as three different controls.
+   */
+  private fieldPicker(
+    f: FieldSpec, cur: unknown, anchor: HTMLElement, write: (v: unknown) => void,
+  ): void {
     this.closeOverlay()
 
     const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
@@ -1441,17 +1521,17 @@ export class Editor {
     this.trapAndClose(pop)
 
     if (f.vt === 'select' && f.options?.length) {
-      const cur = String((b as { value?: unknown }).value ?? '')
+      const now = String(cur ?? '')
       for (const o of f.options) {
         const item = document.createElement('button')
-        item.className = 'sp-dditem' + (o.id === cur ? ' sp-sel' : '')
+        item.className = 'sp-dditem' + (o.id === now ? ' sp-sel' : '')
         item.type = 'button'
         const dot = el('span', 'sp-prop-dot')
         if (o.color) dot.style.background = o.color
         const name = document.createElement('span')
         name.textContent = o.label
         item.append(dot, name)
-        item.addEventListener('click', () => { this.closeOverlay(); this.setField(blockId, o.id) })
+        item.addEventListener('click', () => { this.closeOverlay(); write(o.id) })
         pop.append(item)
       }
     } else {
@@ -1459,14 +1539,14 @@ export class Editor {
       const input = document.createElement('input')
       input.className = 'sp-find'
       input.type = f.vt === 'number' ? 'number' : f.vt === 'date' ? 'date' : 'text'
-      input.value = String((b as { value?: unknown }).value ?? '')
+      input.value = String(cur ?? '')
       input.placeholder = f.label
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault()
           const raw = input.value.trim()
           this.closeOverlay()
-          this.setField(blockId, f.vt === 'number' ? (raw === '' ? '' : Number(raw)) : raw)
+          write(f.vt === 'number' ? (raw === '' ? '' : Number(raw)) : raw)
         }
       })
       pop.append(input)
@@ -1533,6 +1613,28 @@ export class Editor {
         btn.addEventListener('click', (e) => {
           e.preventDefault()
           this.openFieldPicker(btn.dataset.setField!, btn)
+        })
+      }
+
+      // THE TABLE, made to work. A header is a control and a cell is a control,
+      // both real <button>s from the renderer, so the keyboard reaches them and
+      // Enter fires this same click — there is no second key path to keep in
+      // step with the pointer one.
+      for (const h of v.querySelectorAll<HTMLElement>('[data-sort-col]')) {
+        h.addEventListener('click', () => {
+          // ascending -> descending -> none, written into the view's OWN sort.
+          // The third state deletes the key rather than storing an empty array,
+          // so a table sorted and unsorted is byte-identical to one nobody
+          // touched — the rule filter, source and layout all follow.
+          const now = this.store.block(v.dataset.blockId ?? '')
+          this.editView(v.dataset.blockId!, 'sort',
+            cycleSort((now as { sort?: unknown } | undefined)?.sort, h.dataset.sortCol!))
+        })
+      }
+      for (const c of v.querySelectorAll<HTMLElement>('[data-cell-field]')) {
+        c.addEventListener('click', (e) => {
+          e.preventDefault()
+          this.openCellPicker(c.dataset.cellPage!, c.dataset.cellField!, c)
         })
       }
 
@@ -1629,14 +1731,7 @@ export class Editor {
     if (!setting && !order) return
 
     s.commit(() => {
-      if (setting) {
-        if (own) this.applyField(own, f, optId)
-        // A page can reach a column without carrying that field at all (a board
-        // grouped by something an issue never had). It gains the value, in the
-        // header strip where the others are — through propBlock, so the
-        // readable form is written with it.
-        else page.blocks.splice(headerLength(page), 0, propBlock(f, optId, newBlock('prop').id))
-      }
+      if (setting) this.putField(page, f, optId)
       if (order) s.doc.pages = order
     })
     this.repaint()
