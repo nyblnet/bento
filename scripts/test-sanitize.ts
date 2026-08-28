@@ -478,8 +478,23 @@ if (location.pathname === '/meta.html') {
       !!art.querySelector('feColorMatrix')!.getAttribute('values'))
     check('viewBox and preserveAspectRatio survive the parser round-trip',
       art.querySelector('svg')!.getAttribute('viewBox') === '0 0 1280 720')
-    check('the svg <style> is kept — scopeCss is what stops it leaking',
+    // The <style> INSIDE the markup is kept because removing it breaks real
+    // decks, and its content is filtered by sanitizeSvgCss. It is NOT scoped:
+    // scopeCss has exactly one call site in render.ts and that call site is
+    // el.css, not the markup. So this check says what is true of the markup
+    // sheet, and the two below exercise scopeCss on the field it actually
+    // guards. Claiming here, as this check used to, that scopeCss is what stops
+    // the markup sheet leaking described a scoping that never runs.
+    check('the svg <style> inside the markup is kept, with its rules intact',
       (art.querySelector('style')?.textContent ?? '').includes('.dot{fill:url(#bp-ga-am)}'))
+
+    const scoped = draw('<svg viewBox="0 0 20 20"><rect id="sc" width="10" height="10"/></svg>',
+      '.z{fill:red}@keyframes k{to{opacity:0}}')
+    const elSheet = scoped.querySelector('svg > style')?.textContent ?? ''
+    check('el.css IS scoped to the element — this is what keeps one diagram out of another',
+      elSheet.includes('[data-el-id="sv1"] .z') && elSheet.trim().indexOf('.z') !== 0)
+    check('and @keyframes stays top-level — a prefixed keyframes name resolves to nothing',
+      elSheet.includes('@keyframes k') && !elSheet.includes('[data-el-id="sv1"] @keyframes'))
 
     const sloppy = draw('<svg viewBox="0 0 20 20"><rect width="10" height="10"><circle cx="5" cy="5" r="2"/></svg>')
     check('an unclosed tag still draws — text/html, not the fatal xml parser',

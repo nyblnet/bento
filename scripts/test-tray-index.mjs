@@ -312,7 +312,7 @@ function runSwift(bin, files) {
         // `library.js`'s describe() ALWAYS returns a title, falling back to the
         // file's base name, because its caller has already sniffed and it never
         // faces a non-document. The Swift port answers all the questions in one
-        // call (the shared contract in tray/fixtures) so it returns nil, and the
+        // call (the shared contract in home/fixtures) so it returns nil, and the
         // listing supplies the file name. Same behaviour, different seam — the
         // fallback is applied here so the two are compared like for like.
         title: row.title ?? basename(row.path)
@@ -407,18 +407,22 @@ const real = files.length - generated - (EXTRA_CORPUS ? 0 : 0)
 /* ── the shared corpus ────────────────────────────────────────────────────── */
 
 /**
- * `tray/fixtures/` is the corpus all three hosts answer, with `expected.json`
- * as the answer key and `tray/doc-index.mjs` as the reference. It is a DIFFERENT
+ * `home/fixtures/` is the corpus all three hosts answer, with `expected.json`
+ * as the answer key and `home/doc-index.mjs` as the reference. It is a DIFFERENT
  * guarantee from the diff above and worth having both: that one proves this port
  * tracks the extension as it moves, this one proves all three hosts agree on one
  * frozen set of answers — including Kotlin, which nothing on this machine can run.
  *
- * Skipped, not failed, when the directory is absent: it arrives with the Android
- * work, and a rig that fails until an unrelated branch lands is a rig people
- * learn to ignore.
+ * It used to SKIP when the directory was absent, because it arrived with the
+ * Android work and a rig that fails until an unrelated branch lands is a rig
+ * people learn to ignore. It has landed, so the skip now protects nothing and
+ * costs the whole check: the tray→home rename moved the corpus, this kept
+ * reading `tray/fixtures`, and for weeks the rig printed "absent, skipped" in
+ * green while eleven cases went untested. A path that is supposed to exist is
+ * a FAILURE when it does not.
  */
 function sharedCorpus() {
-  const dir = join(ROOT, 'tray/fixtures')
+  const dir = join(ROOT, 'home/fixtures')
   let expected
   try { expected = JSON.parse(readFileSync(join(dir, 'expected.json'), 'utf8')) } catch { return null }
 
@@ -470,10 +474,12 @@ if (known.length) {
 }
 
 if (shared) {
-  console.log(`            shared corpus (tray/fixtures): ${shared.count} cases` +
+  console.log(`            shared corpus (home/fixtures): ${shared.count} cases` +
     (shared.bad.length ? ` — ${shared.bad.length} DISAGREE` : ' — all agree'))
 } else {
-  console.log('            shared corpus (tray/fixtures): absent, skipped — arrives with home/android')
+  console.error('            shared corpus (home/fixtures): MISSING — expected.json did not load.')
+  console.error('            This corpus has landed; absent means a moved or broken path, not "not yet".')
+  process.exitCode = 1
 }
 
 if (failures.length || shared?.bad.length) {
@@ -482,7 +488,7 @@ if (failures.length || shared?.bad.length) {
     console.error(failures.join('\n\n'))
   }
   if (shared?.bad.length) {
-    console.error('\nDisagreements with the shared corpus (tray/fixtures/expected.json):\n')
+    console.error('\nDisagreements with the shared corpus (home/fixtures/expected.json):\n')
     console.error(shared.bad.join('\n'))
   }
   process.exit(1)

@@ -18,8 +18,9 @@
 // The functions are EXTRACTED FROM THE REAL SOURCE rather than copied here, so
 // this cannot pass against a stale duplicate of code that has since regressed.
 // It fails against the pre-fix EditorViewController.swift: safeFileName did not
-// exist, the encoder escaped only '"', and an export whose suggested name
-// reduced onto the open file's name routed to the in-place overwrite.
+// exist, the encoder escaped only '"', an export whose suggested name reduced
+// onto the open file's name routed to the in-place overwrite, and exportCopy
+// appended the page's name straight onto the temp directory.
 //
 // Two halves. The SHAPE checks read the source and always run, so a Linux CI
 // runner still catches the call sites drifting back. The BEHAVIOUR checks
@@ -89,6 +90,26 @@ ok(!/return\s+"\\""\\""/.test(swift) && /else\s*{\s*return\s+"null"\s*}/.test(sw
 // one nothing stops a later edit from consulting after it has gone stale.
 ok(!/private var pendingExportName/.test(swift),
   'no stored property shadows the export name the page was handed')
+
+// exportCopy is the WRITE — the step that cannot be taken back, and the one the
+// arbitrary-write finding was actually about: a page-chosen `../Documents/…`
+// landed on another deck inside the container BEFORE the export picker appeared.
+// It cannot be compiled into the harness below (it presents a
+// UIDocumentPickerViewController), so it is pinned by shape instead. It was
+// pinned by nothing at all until now: this rig passed 52/52 against a tree with
+// both of exportCopy's guards deleted, which is the defect these four checks
+// close. The harness's `name` mode evaluates the containment property on the
+// real URL machinery — that only proves anything while exportCopy still ASKS it.
+const exportCopy = slice(swift, 'private func exportCopy(')
+ok(!/appendingPathComponent\(name\)/.test(exportCopy),
+  'exportCopy never appends the page-supplied name raw')
+ok(/safeFileName\(name\)/.test(exportCopy) && /appendingPathComponent\(safe\)/.test(exportCopy),
+  'exportCopy appends the FILTERED name, not the one it was handed')
+ok(/hasPrefix\(dir\.standardizedFileURL\.path \+ "\/"\)/.test(exportCopy),
+  'exportCopy re-proves the resolved path is inside the temp directory')
+ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)')
+  && exportCopy.indexOf('write(to: tmp)') > exportCopy.indexOf('hasPrefix('),
+  'both guards come before the write — the ordering is the property, not their presence')
 
 if (spawnSync('swiftc', ['--version']).status !== 0) {
   console.log('  skip  no Swift toolchain on this machine — behaviour checks not run')

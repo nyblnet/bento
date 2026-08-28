@@ -4,6 +4,7 @@
 // Run every bento/spaces rig the way CI runs it.
 //
 //   node scripts/test-spaces.mjs [name…]      # all, or just the ones named
+//   node scripts/test-spaces.mjs --manifest   # only check the list is complete
 //
 // WHY THIS EXISTS. Two of the spaces rigs cannot be handed to node directly:
 // store.ts imports './model' without an extension and the kernel transport uses
@@ -17,8 +18,17 @@
 // So the fix is not to bend the app's imports around node. It is to give the
 // suite one local entry point that does what CI does, and to make the failure
 // legible when it is real.
+//
+// WHY CI RUNS `--manifest` AND NOT THE WHOLE RUNNER. Every rig below already has
+// its own CI step, with its own timezone matrix; running the runner there would
+// execute all of them a second time and prove nothing new. What CI cannot get
+// anywhere else is the BOOKKEEPING this file does — that a spaces rig on disk is
+// listed here, and that it is registered in the workflow. Both failures are
+// silent: an unlisted rig never runs locally, an unregistered one never runs in
+// CI, and neither shows up as anything but green. `test-spaces.mjs` itself was
+// unregistered for weeks, which is the case in point.
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -56,7 +66,31 @@ if (missing.length) {
   process.exit(2)
 }
 
-const only = process.argv.slice(2)
+// --- the manifest check ------------------------------------------------------
+// A rig listed here but absent from the workflow runs locally and never in CI —
+// the same silence from the other side. The workflow is read as TEXT on purpose:
+// the rigs are invoked several different ways (plain, under a TZ loop, bundled
+// through esbuild first), and every one of them names the file.
+const WORKFLOW = '.github/workflows/ci.yml'
+if (existsSync(join(root, WORKFLOW))) {
+  const ci = readFileSync(join(root, WORKFLOW), 'utf8')
+  const unregistered = RIGS.filter((r) => !ci.includes(r.file.replace(/^scripts\//, '')))
+  if (unregistered.length) {
+    console.error(`these spaces rigs are not registered in ${WORKFLOW}: ${unregistered.map((r) => r.name).join(', ')}`)
+    console.error('A rig nobody runs is not a rig. Add a step for each, or remove it from RIGS.')
+    process.exit(2)
+  }
+} else {
+  console.error(`warning: ${WORKFLOW} not found — the registration half of the manifest check did not run`)
+}
+
+const argv = process.argv.slice(2)
+if (argv.includes('--manifest')) {
+  console.log(`manifest ok — ${RIGS.length} spaces rigs, all listed here and all registered in ${WORKFLOW}`)
+  process.exit(0)
+}
+
+const only = argv
 const picked = only.length ? RIGS.filter((r) => only.includes(r.name)) : RIGS
 const unknown = only.filter((n) => !RIGS.some((r) => r.name === n))
 if (unknown.length) {
