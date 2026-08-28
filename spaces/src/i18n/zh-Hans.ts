@@ -588,4 +588,10 @@ export const zh_Hans: Catalog = {
   "This list": "本列表",
   "Undo, redo": "撤销、重做",
   "Writing": "写作",
+  "Add": "添加",
+  "Add a property": "添加属性",
+  "Add property…": "添加属性…",
+  "Added {name}": "已添加{name}",
+  "Name": "名称",
+  "New property": "新建属性",
 }

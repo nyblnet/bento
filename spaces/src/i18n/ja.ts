@@ -588,4 +588,10 @@ export const ja: Catalog = {
   "This list": "この一覧",
   "Undo, redo": "取り消し・やり直し",
   "Writing": "書く",
+  "Add": "追加",
+  "Add a property": "プロパティを追加",
+  "Add property…": "プロパティを追加…",
+  "Added {name}": "{name} を追加しました",
+  "Name": "名前",
+  "New property": "新しいプロパティ",
 }

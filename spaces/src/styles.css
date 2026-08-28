@@ -1343,6 +1343,13 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-ab-vdo { margin-inline-start: auto; color: var(--muted); }
 .sp-ab-version:hover .sp-ab-vdo, .sp-ab-version:focus-visible .sp-ab-vdo { color: var(--blue); }
 
+/* The new-property form inside the add-property popover: a name, a type and a
+   button, on one line until the popover is too narrow for it. */
+.sp-newprop { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 6px 6px; }
+.sp-newprop .sp-input { flex: 1 1 120px; min-width: 0; }
+.sp-newprop .sp-select { flex: 0 1 auto; }
+.sp-newprop .sp-btn { flex: 0 0 auto; }
+
 /* The shortcut list. Two columns, keys right-aligned against their meanings,
    so the eye runs down one edge instead of hunting across a ragged gap. */
 /* wider than the other cards, because this one is a two-column table and

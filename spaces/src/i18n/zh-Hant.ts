@@ -588,4 +588,10 @@ export const zh_Hant: Catalog = {
   "This list": "本清單",
   "Undo, redo": "復原、重做",
   "Writing": "書寫",
+  "Add": "新增",
+  "Add a property": "新增屬性",
+  "Add property…": "新增屬性…",
+  "Added {name}": "已新增{name}",
+  "Name": "名稱",
+  "New property": "新增屬性",
 }

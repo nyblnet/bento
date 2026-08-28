@@ -444,6 +444,40 @@ for (const [label, input, err] of [
     'no place styles itself as current without saying so — sp-here and aria-current stay paired')
 }
 
+// ---- a page can be a record, and the schema grows by being used ------------
+// `doc.fields` has been a per-document vocabulary since the tracker shipped and
+// NOTHING EVER WROTE IT: the only way to give a page a property was "Make this
+// page an issue", which adds four fields or none. So the schema was
+// configurable in the format and fixed in the app, and a space could hold a
+// backlog but never a reading list.
+//
+// The trap this pins is `fieldsOf`'s fallback. It returns DEFAULT_FIELDS only
+// while `doc.fields` is absent or empty — so a document that has never declared
+// a schema and then gains ONE field would, if that field were pushed into an
+// empty array, lose Status, Priority, Assignee and Estimate in the same stroke.
+// Every issue would keep its `prop` blocks, and the board grouping them by
+// status would have no status field to group by.
+{
+  const fs = await import('node:fs')
+  const fields = fs.readFileSync(new URL('../spaces/src/fields.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const props = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
+
+  ok(/export function withField\(/.test(fields), 'there is one way to add a field to the vocabulary')
+  // The seeding is the whole point: it must start from fieldsOf(doc), never
+  // from doc.fields directly.
+  ok(/const current = fieldsOf\(doc\)/.test(fields),
+    '…and it seeds from the DEFAULTS, so the first custom field does not erase them')
+  ok(/export function freeFieldKey\(/.test(fields),
+    'a new field gets a key that is free — keys outlive labels and views group by them')
+
+  ok(/openAddProperty\(pageId: string, anchor: HTMLElement\)/.test(ed), 'a page can be given a property')
+  ok(/withField\(s\.doc, spec\)/.test(ed), '…and naming a new one writes it into the document vocabulary')
+  ok(/splice\(headerLength\(p\), 0, propBlock\(/.test(ed),
+    '…as a prop block in the header strip, where the readable form is written with it')
+  ok(/openAddProperty\(page\.id, addProp\)/.test(props), 'the properties panel offers it')
+}
+
 // ---- find & replace: the number shown IS the number changed ----------------
 // Replace-all is destructive and lands in one commit, so the count in the
 // readout, the count in the confirmation and the count of things that change

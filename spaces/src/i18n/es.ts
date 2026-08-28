@@ -588,4 +588,10 @@ export const es: Catalog = {
   "This list": "Esta lista",
   "Undo, redo": "Deshacer, rehacer",
   "Writing": "Escribir",
+  "Add": "Añadir",
+  "Add a property": "Añadir una propiedad",
+  "Add property…": "Añadir propiedad…",
+  "Added {name}": "Se añadió {name}",
+  "Name": "Nombre",
+  "New property": "Nueva propiedad",
 }

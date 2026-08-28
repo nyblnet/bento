@@ -25,7 +25,7 @@ import type { MarkTag } from './marks'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
-  reorderPages, columnMoves, ISSUE_FIELDS,
+  reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, FIELD_TYPE_LABEL,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
@@ -214,6 +214,7 @@ export class Editor {
       pickPoster: (id) => void this.pickPoster(id),
       pickMedia: (id) => void this.pickMedia(id),
       openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
+      openAddProperty: (pageId, anchor) => this.openAddProperty(pageId, anchor),
       pageIcon: (icon) => pageIcon(icon),
       openLinkCard: (id) => this.openLinkCard(id),
       addTableRow: (id, at) => this.addTableRow(id, at),
@@ -3268,6 +3269,84 @@ export class Editor {
     const reflow = () => place(pop, anchor)
     addEventListener('resize', reflow)
     this.overlayReflow = () => removeEventListener('resize', reflow)
+  }
+
+  /**
+   * Put a property on this page — and define it, if it does not exist yet.
+   *
+   * THE SCHEMA IS EDITED WHERE IT IS USED. `doc.fields` has been a per-document
+   * vocabulary since the tracker shipped, and nothing has ever written it: the
+   * only way to give a page a property was "Make this page an issue", which
+   * adds Status, Priority, Assignee and Estimate together or not at all. So the
+   * schema was configurable in the format and fixed in the app.
+   *
+   * A separate schema editor would have been the obvious fix and the wrong one.
+   * DEFAULT_FIELDS says it in its own comment — "a tracker you have to design
+   * before you can use it is the thing everybody hates about the alternatives"
+   * — so a property is created in passing, at the moment somebody wants one,
+   * and the vocabulary grows as a side effect of use. That is what lets one
+   * space hold a reading list, a film log and a backlog at once: the fields are
+   * a flat vocabulary and each page carries only the ones it uses.
+   */
+  openAddProperty(pageId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (s.readOnly) return
+    const page = s.index.page.get(pageId)
+    if (!page) return
+
+    this.popover(anchor, (pop) => {
+      const has = new Set(page.blocks
+        .filter((b) => b.type === 'prop')
+        .map((b) => String((b as { key?: unknown }).key ?? '')))
+
+      const put = (f: FieldSpec, fields?: FieldSpec[]) => {
+        s.commit(() => {
+          if (fields) (s.doc as { fields?: FieldSpec[] }).fields = fields
+          const p = s.index.page.get(pageId)
+          if (!p) return
+          p.blocks.splice(headerLength(p), 0, propBlock(f, f.def ?? '', newBlock('prop').id))
+        })
+        this.closeOverlay()
+        this.repaint()
+        this.status(t('Added {name}', { name: f.label }))
+      }
+
+      const spare = fieldsOf(s.doc).filter((f) => !has.has(f.key))
+      if (spare.length) {
+        pop.append(el('div', 'sp-pop-title', t('Add a property')))
+        for (const f of spare) {
+          pop.append(this.menuItem('tag', f.label, t(FIELD_TYPE_LABEL[f.vt] ?? 'Text'), () => put(f)))
+        }
+      }
+
+      pop.append(el('div', 'sp-pop-title', t('New property')))
+      const form = el('div', 'sp-newprop')
+      const name = document.createElement('input')
+      name.type = 'text'
+      name.className = 'sp-input'
+      name.placeholder = t('Name')
+      const type = document.createElement('select')
+      type.className = 'sp-select'
+      for (const [vt, label] of Object.entries(FIELD_TYPE_LABEL)) {
+        const o = document.createElement('option')
+        o.value = vt
+        o.textContent = t(label)
+        type.append(o)
+      }
+      type.value = 'text'
+      const add = el('button', 'sp-btn sp-primary', t('Add'))
+      const submit = () => {
+        const label = name.value.trim()
+        if (!label) { name.focus(); return }
+        const spec: FieldSpec = { key: freeFieldKey(s.doc, label), label, vt: type.value as FieldSpec['vt'] }
+        put(spec, withField(s.doc, spec))
+      }
+      add.addEventListener('click', submit)
+      name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } })
+      form.append(name, type, add)
+      pop.append(form)
+      afterPaint(() => name.focus())
+    })
   }
 
   private closeOverlay(): void {

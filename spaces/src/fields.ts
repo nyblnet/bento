@@ -31,6 +31,20 @@ import type { SpacesDoc, Page, Block } from './model'
  *  permanent commitment, and a tracker needs exactly these. */
 export type FieldType = 'select' | 'person' | 'number' | 'date' | 'text' | 'labels'
 
+/**
+ * What each type is called to somebody choosing one. Keys are the model's
+ * words and never translated; the labels are English source strings that t()
+ * looks up at render time — never here, where they would freeze at import.
+ */
+export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
+  text: 'Text',
+  select: 'Select',
+  number: 'Number',
+  date: 'Date',
+  person: 'Person',
+  labels: 'Labels',
+}
+
 export interface FieldOption {
   id: string
   label: string
@@ -418,6 +432,44 @@ export const propBlockOf = (page: Page, key: string): Block | undefined =>
   page.blocks.find((b) => b.type === 'prop' && (b as { key?: unknown }).key === key)
 
 /** Build a prop block, with its readable form already in step. */
+/**
+ * The document's field vocabulary with one more field in it.
+ *
+ * SEEDS FROM THE DEFAULTS ON FIRST WRITE, and that is the whole reason this is
+ * a function rather than a push. `fieldsOf` falls back to DEFAULT_FIELDS only
+ * while `doc.fields` is absent or empty — so a document that has never declared
+ * a schema and then gains ONE field would, if the field were simply pushed into
+ * an empty array, lose Status, Priority, Assignee and Estimate in the same
+ * stroke. Every issue in the space would keep its `prop` blocks (they carry
+ * their own readable html) but the board grouping them by status would have no
+ * status field to group by.
+ *
+ * So the first custom field writes the defaults down beside itself, which is
+ * also the honest thing: once you have edited the schema it stops being
+ * implicit.
+ */
+export function withField(doc: SpacesDoc, spec: FieldSpec): FieldSpec[] {
+  const current = fieldsOf(doc)
+  if (current.some((f) => f.key === spec.key)) {
+    return current.map((f) => (f.key === spec.key ? spec : f))
+  }
+  return [...current, spec]
+}
+
+/**
+ * A key for a field somebody just named.
+ *
+ * Keys are what `prop` blocks store and what views group by, so they outlive
+ * every rename of the label and must never collide. Derived from the label,
+ * then suffixed until it is free.
+ */
+export function freeFieldKey(doc: SpacesDoc, label: string): string {
+  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'field'
+  const taken = new Set(fieldsOf(doc).map((f) => f.key))
+  if (!taken.has(base)) return base
+  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`
+}
+
 export function propBlock(f: FieldSpec, value: unknown, id: string): Block {
   return { id, type: 'prop', key: f.key, value, html: propHtml(f, value) } as Block
 }
