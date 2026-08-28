@@ -5513,7 +5513,7 @@ to `msqrt`, contents restored to `math`. Note also that the stack matters: on
 Windows `'Cambria Math', serif` selects what generic `math` already selects, so
 that variant is a no-op there.
 
-`slides/dist-single/radical-windows-test.html` is the cross-platform test rig:
+`slides/probe/radical-join.html` is the cross-platform test rig:
 one row per candidate font applying exactly the rule above, each row reporting
 whether the font actually resolved, and a paste-back block carrying platform,
 UA and DPR.

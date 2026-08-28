@@ -1,0 +1,133 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>Bento — radical join test (run me on Windows)</title>
+<style>
+ body{background:#fff;color:#111;margin:0;padding:24px 28px 60px;
+      font-family:system-ui,'Segoe UI',sans-serif}
+ h1{font-size:16px;margin:0 0 6px}
+ .intro{font-size:13px;color:#444;max-width:80ch;line-height:1.55;margin:0 0 4px}
+ .intro b{color:#000}
+ #env{font-size:12px;font-family:ui-monospace,Consolas,monospace;color:#555;
+      background:#F4F6F8;border:1px solid #DDE3EA;border-radius:6px;
+      padding:8px 10px;margin:14px 0 20px;white-space:pre-wrap}
+ .row{border-top:1px solid #E4E9EF;padding:14px 0;display:flex;align-items:center;gap:18px}
+ .meta{width:250px;flex:none;text-align:right;line-height:1.4}
+ .name{font-size:12px;font-weight:700;font-family:ui-monospace,Consolas,monospace}
+ .got{font-size:11px;margin-top:3px}
+ .yes{color:#1B7F4B}.no{color:#B3261E}.gen{color:#8A6D00}
+ .art{flex:1;min-width:0}
+ math{font-size:74px;line-height:1.5}
+ textarea{width:100%;box-sizing:border-box;height:150px;margin-top:10px;
+   font-family:ui-monospace,Consolas,monospace;font-size:12px;padding:10px;
+   border:1px solid #C9D2DC;border-radius:6px}
+ .foot{border-top:2px solid #111;margin-top:26px;padding-top:16px}
+ kbd{background:#EEF1F5;border:1px solid #CCD4DE;border-radius:4px;padding:1px 5px;font-size:11px}
+</style></head><body>
+
+<h1>Radical join test — which font joins the bar cleanly?</h1>
+<p class="intro">Each row applies one font to <code>msqrt</code> only (contents stay in the
+maths font), which is the exact shape of the fix. <b>Look at the point where the diagonal of the
+√ meets the horizontal bar.</b> A good row has one unbroken stroke; a bad row has a step, a gap,
+or a doubled edge there. Row 1 is the control — it's what Bento ships today.</p>
+<p class="intro">Please also try it at <kbd>Ctrl</kbd>+<kbd>+</kbd> zoom 150% and 200%: this
+defect is a sub-pixel rounding mismatch, so zoom can change the verdict, and that matters.</p>
+<p class="intro"><b>Ignore any row marked “font missing”</b> — it silently fell back and tells
+us nothing.</p>
+
+<div id="env"></div>
+<div id="rows"></div>
+
+<div class="foot">
+  <b style="font-size:13px">Paste this back:</b>
+  <p class="intro">Type the row numbers that join cleanly, then copy the whole box.</p>
+  <textarea id="report"></textarea>
+</div>
+
+<script>
+const CANDIDATES = [
+  ['math',                        'CONTROL — what ships today'],
+  ['serif',                       'generic serif'],
+  ['"Times New Roman", serif',    'Windows default serif'],
+  ['Georgia, serif',              ''],
+  ['"Palatino Linotype", serif',  'Windows'],
+  ['Cambria, serif',              'the TEXT face, not Cambria Math'],
+  ['"Cambria Math"',              'Windows maths font'],
+  ['"STIX Two Math"',             'what macOS picks for generic math'],
+  ['"Latin Modern Math"',         'usually absent unless TeX installed'],
+  ['"DejaVu Serif"',              'usually Linux'],
+  ['"Segoe UI Symbol"',           'Windows'],
+  ['sans-serif',                  'generic sans'],
+  ['Arial',                       ''],
+  ['Consolas, monospace',         '']
+];
+
+// Does the font actually supply a radical glyph? Compare the width of U+221A
+// against a font name that cannot exist. Identical width == it fell back.
+// (document.fonts.check() reports true for fonts that are not installed.)
+function radicalResolves(stack){
+  const mk = (ff) => {
+    const s = document.createElement('span');
+    s.textContent = '√';
+    s.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:200px;'
+                    + 'white-space:pre;font-family:' + ff;
+    document.body.appendChild(s);
+    const w = s.getBoundingClientRect().width; s.remove(); return w;
+  };
+  const bogus = mk('NoSuchFontXYZ123');
+  return Math.abs(mk(stack) - bogus) > 0.5;
+}
+const isGeneric = (s) => /^(serif|sans-serif|monospace|math|system-ui)$/.test(s.trim());
+
+const FORMULA = `<math display="block"><mrow>
+  <mi>x</mi><mo>=</mo>
+  <mfrac>
+    <mrow><mo>−</mo><mi>b</mi><mo>±</mo>
+      <msqrt><mrow><msup><mi>b</mi><mn>2</mn></msup>
+        <mo>−</mo><mn>4</mn><mi>a</mi><mi>c</mi></mrow></msqrt>
+    </mrow>
+    <mrow><mn>2</mn><mi>a</mi></mrow>
+  </mfrac>
+</mrow></math>`;
+
+const host = document.getElementById('rows');
+const css  = document.createElement('style');
+let sheet = '', lines = [];
+
+CANDIDATES.forEach(([stack, note], i) => {
+  const n = i + 1, cls = 'rad' + n;
+  // the fix, exactly as it would ship: font on msqrt, contents back to math
+  sheet += `.${cls} msqrt{font-family:${stack}}
+            .${cls} msqrt *{font-family:math}\n`;
+
+  let state, cl;
+  if (isGeneric(stack))            { state = 'generic family';  cl = 'gen'; }
+  else if (radicalResolves(stack)) { state = 'font present ✓'; cl = 'yes'; }
+  else                             { state = 'font missing ✗ (ignore row)'; cl = 'no'; }
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `<div class="meta">
+      <div class="name">${n}. ${stack.replace(/"/g,'')}</div>
+      <div class="got ${cl}">${state}${note ? ' · ' + note : ''}</div>
+    </div><div class="art ${cls}">${FORMULA}</div>`;
+  host.appendChild(row);
+  lines.push(`${String(n).padStart(2)}. ${state.padEnd(26)} ${stack}`);
+});
+css.textContent = sheet;
+document.head.appendChild(css);
+
+function env(){
+  return 'platform : ' + navigator.platform
+    + '\nUA       : ' + navigator.userAgent
+    + '\nDPR      : ' + window.devicePixelRatio
+    + '\nviewport : ' + window.innerWidth + 'x' + window.innerHeight;
+}
+document.getElementById('env').textContent = env();
+document.getElementById('report').value =
+  'RADICAL JOIN TEST\n' + env()
+  + '\n\nrows that JOIN CLEANLY (100% zoom): \nrows that JOIN CLEANLY (200% zoom): \nnotes: \n\n'
+  + lines.join('\n');
+addEventListener('resize', () => {
+  document.getElementById('env').textContent = env();
+});
+</script>
+</body></html>
