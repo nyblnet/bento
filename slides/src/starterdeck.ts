@@ -502,10 +502,13 @@ export function starterDoc(): BentoDoc {
           fontSize: 13, fontWeight: 700, letterSpacing: 2, color: 'rgba(15,23,36,0.45)',
         }),
         shape('rect', { x: 96, y: 108, w: 1088, h: 1.5, radius: 0, fill: 'rgba(15,23,36,0.18)' }),
-        kicker('NO MOVING PARTS', { y: 132, color: INK, fx: { enter: 'fade-up', order: 0 } }),
+        // No fx on these two: the kicker and title carry the SAME ids as the
+        // slide before, so they morph across and are already in motion. An
+        // fx.enter here would be silently skipped — the entrance only runs for
+        // elements with no partner on the previous slide.
+        kicker('NO MOVING PARTS', { y: 132, color: INK }),
         title('Software with nothing<br>to install, break, or expire.', {
           y: 170, w: 1060, h: 150, color: INK, fontSize: 50,
-          fx: { enter: 'fade-up', order: 1 },
         }),
         text({ x: 96, y: 356, w: 352, h: 180, html: '1', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 2, countUp: true } }),
         text({ x: 464, y: 356, w: 352, h: 180, html: '0', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 3, countUp: true } }),
