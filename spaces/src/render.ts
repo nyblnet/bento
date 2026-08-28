@@ -9,7 +9,7 @@
 // story, native ⌘F, print fidelity and lossless markdown export at once, from
 // one decision.
 
-import { type SpacesDoc, type Page, type Block, isRemote, tableOf, linkCard } from './model'
+import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
@@ -200,9 +200,9 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       // as `asset:`. Only hand- or agent-authored documents carry URLs, and for
       // those the reader gets a placeholder naming the host and a button. One
       // click, per image, informed — the model every mail client settled on.
-      if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
+      if (loadsRemotely(rawSrc, doc) && !opts.allowRemote?.(rawSrc)) {
         fig.appendChild(remotePlaceholder(rawSrc, b, opts,
-          t('Image from {host}', { host: remoteHost(rawSrc) }), t('Load this image')))
+          t('Image from {host}', { host: remoteHost(resolveSrc(rawSrc, doc)) }), t('Load this image')))
         if (b.caption) {
           const cap = document.createElement('figcaption')
           cap.innerHTML = sanitizeInline(String(b.caption))
@@ -286,7 +286,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       // <video> asks its host for byte ranges the moment the element is
       // parsed, so an autoplaying tracker is not even needed: opening the
       // space is the ping. Same rule, same host named, different words.
-      if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
+      if (loadsRemotely(rawSrc, doc) && !opts.allowRemote?.(rawSrc)) {
         const host = remoteHost(rawSrc)
         fig.appendChild(remotePlaceholder(rawSrc, b, opts,
           play.kind === 'audio' ? t('Audio from {host}', { host }) : t('Video from {host}', { host }),
@@ -335,7 +335,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
         const poster = String(b.poster ?? '')
         // a remote poster is the same tracking pixel as a remote image, so it
         // goes through the same consent
-        if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+        if (poster && !(loadsRemotely(poster, doc) && !opts.allowRemote?.(poster))) {
           const resolved = resolveSrc(poster, doc)
           if (resolved) v.poster = resolved
         }
@@ -387,10 +387,13 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
         card.classList.add('sp-dead')
       }
 
-      // THE THUMBNAIL IS LOCAL OR IT IS ABSENT. `linkCard` has already dropped
-      // a remote one — this cannot be re-tested here, because a check that can
-      // be forgotten in one of four surfaces is a check that will be.
-      if (c.image) {
+      // THE THUMBNAIL IS LOCAL OR IT IS ABSENT. `linkCard` drops one that was
+      // WRITTEN remote, and that is as far as it can see: it takes a block, not
+      // a document, so it cannot know what an `asset:` key resolves to. The
+      // asset table is exactly where a remote URL hid, so the resolved check has
+      // to happen at the one place that holds both the src and the document —
+      // here, which is also the only place that loads anything.
+      if (c.image && !loadsRemotely(c.image, doc)) {
         const img = document.createElement('img')
         img.src = resolveSrc(c.image, doc)
         img.alt = ''
@@ -778,17 +781,10 @@ export function paintCode(code: HTMLElement, text: string, lang?: unknown): bool
   return changed
 }
 
+/** What this src loads. One implementation, in model.ts, beside the predicate
+ *  that decides whether loading it leaves the machine. */
 export function resolveSrc(src: string, doc: SpacesDoc): string {
-  // hasOwn, not a bare index: `assets['toString']` returns a FUNCTION, which is
-  // truthy, so the `?? ''` never fired and the stringified function was assigned
-  // to img.src. Same class as the icon lookup — an author-supplied key reaching
-  // a lookup table through the prototype chain.
-  if (src.startsWith('asset:')) {
-    const key = src.slice(6)
-    const table = doc.assets
-    return table && Object.hasOwn(table, key) ? table[key] : ''
-  }
-  return src
+  return assetValue(src, doc)
 }
 
 
@@ -865,7 +861,7 @@ function mediaStill(b: Block, doc: SpacesDoc, opts: RenderOpts, kind: 'video' | 
   const box = document.createElement('div')
   box.className = 'sp-media-still'
   const poster = String(b.poster ?? '')
-  if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+  if (poster && !(loadsRemotely(poster, doc) && !opts.allowRemote?.(poster))) {
     const resolved = resolveSrc(poster, doc)
     if (resolved) {
       const img = document.createElement('img')

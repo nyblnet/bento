@@ -27,7 +27,7 @@
 //      docId on every open.
 
 import {
-  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
+  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote, loadsRemotely, assetValue,
   effectiveParents, descendantsOf,
   tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
   linkCard, linkCardHtml,
@@ -307,13 +307,69 @@ for (const [label, input, err] of [
   }
   ok(!isRemote(''), 'an empty src is not a remote fetch')
 
+  // ---- and the same question, asked one indirection deeper -----------------
+  // isRemote answers about the string an author WROTE. `asset:k` is local by
+  // inspection and `doc.assets.k` is whatever the file says it is, so the gate
+  // that decides whether to show the consent placeholder was answering the
+  // wrong question. Measured on a shipped build before this: a document with
+  // `assets: { k: "http://…" }` and an image `src: "asset:k"` issued a real GET
+  // on open, with no placeholder — the tracking pixel the paragraph above says
+  // is prevented.
+  //
+  // BEHAVIOUR, not a source grep. Two assertions in this file were shown to
+  // pass through live regressions because they matched text rather than
+  // running anything, so this one runs the predicate against real documents.
+  {
+    // assetValue reads doc.assets and nothing else, so the fixture is that.
+    const withAssets = (assets: Record<string, string>) => ({ assets }) as never
+
+    const hostile = withAssets({ k: 'http://tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', hostile),
+      'an asset: key whose VALUE is a URL is a remote load, however local the key looks')
+    ok(isRemote(assetValue('asset:k', hostile)),
+      '…because the asset table is resolved before the question is asked')
+
+    const protoRel = withAssets({ k: '//tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', protoRel), 'protocol-relative in the asset table is remote too')
+
+    const embedded = withAssets({ k: 'data:image/png;base64,AAAA' })
+    ok(!loadsRemotely('asset:k', embedded), 'an asset holding embedded bytes is still local')
+
+    const missing = withAssets({})
+    ok(!loadsRemotely('asset:nope', missing), 'an asset key that resolves to nothing loads nothing')
+
+    // the prototype-chain reach the resolver already guards, kept honest here
+    const proto = withAssets({})
+    ok(!loadsRemotely('asset:toString', proto), 'asset:toString does not reach Object.prototype')
+    ok(assetValue('asset:toString', proto) === '', '…and resolves to the empty string, not a function')
+
+    // a plainly written URL is unchanged by any of this
+    ok(loadsRemotely('http://tracker.example/p.png', missing), 'a written URL is still remote')
+    ok(!loadsRemotely('data:image/png;base64,AAAA', missing), 'a written data: URI is still local')
+  }
+
   // and the renderer must actually consult it
   const fs = await import('node:fs')
   const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
-  ok(/isRemote\(rawSrc\)\s*&&\s*!opts\.allowRemote/.test(ren),
+  // EVERY gate asks the resolved question. Counting them is the point: the
+  // hole was one call site out of five asking `isRemote` about the written
+  // string, and a regex that merely finds "a gate exists" would have passed
+  // throughout. If a sixth surface starts loading something, this count is
+  // what fails.
+  const gates = (ren.match(/loadsRemotely\(/g) ?? []).length
+  ok(gates >= 5, `every surface that loads asks the resolved question (${gates} gates)`)
+  ok(!/isRemote\(rawSrc\)/.test(ren),
+    'no gate asks about the WRITTEN src — that is the hole an asset: key hid in')
+  ok(/loadsRemotely\(rawSrc, doc\)\s*&&\s*!opts\.allowRemote/.test(ren),
     'render.ts gates remote images on the reader\'s consent')
   ok(!/allowRemote/.test(fs.readFileSync(new URL('../spaces/src/model.ts', import.meta.url), 'utf8')),
     'consent is NOT a document field — it belongs to the reader, not the file')
+
+  // The link card's thumbnail is the surface with no gate at all: linkCard()
+  // takes a BLOCK, so it cannot know what an asset: key resolves to, and it was
+  // trusted to have already dropped anything remote.
+  ok(/c\.image && !loadsRemotely\(c\.image, doc\)/.test(ren),
+    'a link card thumbnail is checked where the document is in scope, not where it is built')
 }
 
 // ---- an encrypted space is never written to disk in the clear ---------------
@@ -2177,7 +2233,7 @@ function fsTable(f: string): string {
     'a clip fetches metadata, never the whole file, for a page nobody pressed play on')
   // the remote gate is the image gate, and a clip needs it MORE: a <video> asks
   // its host for byte ranges the moment it is parsed
-  ok(/isRemote\(rawSrc\)[\s\S]{0,200}remotePlaceholder/.test(render),
+  ok(/loadsRemotely\(rawSrc, doc\)[\s\S]{0,200}remotePlaceholder/.test(render),
     'a linked clip is not loaded until the reader agrees, naming the host')
 
   const preview = src('preview.ts')
