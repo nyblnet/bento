@@ -62,10 +62,22 @@ export interface DeckMeta {
   access: DeckAccess
   kind: DeckKind
   pinned: number // D1 has no boolean type; 0/1
+  project_id: string | null
 }
 
 export interface CreateResult {
   id: string
+}
+
+/** A project is just an id + name — a sidebar folder to group decks under,
+ *  nothing else. It has no access level, no kind, no content of its own;
+ *  it isn't a permission boundary, only an organizational one. Deleting a
+ *  project does NOT delete the decks inside it — see deleteProject. */
+export interface Project {
+  id: string
+  name: string
+  created_at: number
+  updated_at: number
 }
 
 function deckDocKey(id: string): string {
@@ -155,7 +167,7 @@ export async function getDeckHtml(env: Env, id: string): Promise<string | null> 
 
 export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null> {
   const row = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned FROM decks WHERE id = ?`,
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned, project_id FROM decks WHERE id = ?`,
   )
     .bind(id)
     .first<DeckMeta>()
@@ -170,12 +182,59 @@ const LIST_LIMIT = 200
  *  project's declared scale. */
 export async function listDecks(env: Env): Promise<DeckMeta[]> {
   const result = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned FROM decks
+    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned, project_id FROM decks
      ORDER BY pinned DESC, updated_at DESC LIMIT ?`,
   )
     .bind(LIST_LIMIT)
     .all<DeckMeta>()
   return result.results
+}
+
+/** Move a deck into a project, or clear its project (projectId = null) —
+ *  the deck context menu's "Project ▸" submenu. No ownership check on the
+ *  project id itself: an id that doesn't exist in `projects` just means the
+ *  deck renders unfiled until a real one is set (same graceful-degrade as
+ *  any other dangling foreign key in this schema — see deleteProject). */
+export async function setDeckProject(env: Env, id: string, projectId: string | null): Promise<void> {
+  await env.DB.prepare(`UPDATE decks SET project_id = ? WHERE id = ?`).bind(projectId, id).run()
+}
+
+/** Create a project — just a name; the sidebar's "+ New project…" action. */
+export async function createProject(env: Env, name: string): Promise<{ id: string }> {
+  const id = randomId()
+  const now = Date.now()
+  await env.DB.prepare(`INSERT INTO projects (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`)
+    .bind(id, clampTitle(name), now, now)
+    .run()
+  return { id }
+}
+
+/** All projects, alphabetical — there's no recency/pin concept for folders
+ *  themselves, only for the decks inside them. */
+export async function listProjects(env: Env): Promise<Project[]> {
+  const result = await env.DB.prepare(`SELECT id, name, created_at, updated_at FROM projects ORDER BY name COLLATE NOCASE ASC`).all<Project>()
+  return result.results
+}
+
+export async function getProject(env: Env, id: string): Promise<Project | null> {
+  const row = await env.DB.prepare(`SELECT id, name, created_at, updated_at FROM projects WHERE id = ?`).bind(id).first<Project>()
+  return row ?? null
+}
+
+export async function renameProject(env: Env, id: string, name: string): Promise<void> {
+  await env.DB.prepare(`UPDATE projects SET name = ?, updated_at = ? WHERE id = ?`)
+    .bind(clampTitle(name), Date.now(), id)
+    .run()
+}
+
+/** Delete a project. Its decks are NOT deleted — they're unassigned first
+ *  (project_id → NULL) so they fall back to the plain History section,
+ *  exactly as if they'd never been filed. There is deliberately no
+ *  ON DELETE CASCADE on decks.project_id: a folder is an organizational
+ *  convenience, never a reason to destroy content. */
+export async function deleteProject(env: Env, id: string): Promise<void> {
+  await env.DB.prepare(`UPDATE decks SET project_id = NULL WHERE project_id = ?`).bind(id).run()
+  await env.DB.prepare(`DELETE FROM projects WHERE id = ?`).bind(id).run()
 }
 
 /** Change a deck's access level — the owner-only setting behind the

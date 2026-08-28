@@ -18,8 +18,13 @@
 //   PATCH /api/decks/:id/access  change the deck's access level — OWNER ONLY
 //   PATCH /api/decks/:id/title  rename a deck — OWNER ONLY
 //   PATCH /api/decks/:id/pin    pin/unpin a deck (stays atop the sidebar list) — OWNER ONLY
+//   PATCH /api/decks/:id/project  file a deck under a project, or null to unfile — OWNER ONLY
 //   DELETE /api/decks/:id       permanently delete a deck (D1 row + R2 doc/assets) — OWNER ONLY
 //   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
+//   GET  /api/projects          list projects (sidebar folders), alphabetical — OWNER ONLY
+//   POST /api/projects          create a project: { name } -> { id } — OWNER ONLY
+//   PATCH /api/projects/:id     rename a project: { name } — OWNER ONLY
+//   DELETE /api/projects/:id    delete a project (unassigns its decks, does NOT delete them) — OWNER ONLY
 //   GET  /d/:id                the deck: a 'bento' deck spliced into the shell, or an
 //                               'html' deck sandboxed in an iframe wrapper — see handleView
 //   GET  /d/:id/download        same content, as a downloadable attachment (raw bytes for 'html')
@@ -69,10 +74,16 @@ import {
   renameHtmlDeck,
   setDeckAccess,
   setDeckPinned,
+  setDeckProject,
   deleteDeck,
   putAsset,
   getAsset,
   listDecks,
+  createProject,
+  listProjects,
+  getProject,
+  renameProject,
+  deleteProject,
   DECK_ACCESS_LEVELS,
   type DeckAccess,
 } from './store.ts'
@@ -263,6 +274,7 @@ async function handleListDecks(env: Env): Promise<Response> {
       access: d.access,
       kind: d.kind,
       pinned: !!d.pinned,
+      projectId: d.project_id,
     })),
   })
 }
@@ -437,6 +449,66 @@ async function handleSetPinned(req: Request, env: Env, id: string): Promise<Resp
   return json({ ok: true, pinned })
 }
 
+async function handleSetDeckProject(req: Request, env: Env, id: string): Promise<Response> {
+  if (!(await getDeckMeta(env, id))) return notFound()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const projectId = (body as { projectId?: unknown })?.projectId
+  if (projectId !== null && typeof projectId !== 'string') {
+    return json({ error: 'projectId must be a string or null' }, { status: 422 })
+  }
+  await setDeckProject(env, id, projectId)
+  return json({ ok: true, projectId })
+}
+
+async function handleListProjects(env: Env): Promise<Response> {
+  const projects = await listProjects(env)
+  return json({
+    projects: projects.map((p) => ({ id: p.id, name: p.name, createdAt: p.created_at, updatedAt: p.updated_at })),
+  })
+}
+
+async function handleCreateProject(req: Request, env: Env): Promise<Response> {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const name = (body as { name?: unknown })?.name
+  if (typeof name !== 'string' || !name.trim()) {
+    return json({ error: 'name must be a non-empty string' }, { status: 422 })
+  }
+  const { id } = await createProject(env, name)
+  return json({ id }, { status: 201 })
+}
+
+async function handleRenameProject(req: Request, env: Env, id: string): Promise<Response> {
+  if (!(await getProject(env, id))) return notFound()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const name = (body as { name?: unknown })?.name
+  if (typeof name !== 'string' || !name.trim()) {
+    return json({ error: 'name must be a non-empty string' }, { status: 422 })
+  }
+  await renameProject(env, id, name)
+  return json({ ok: true })
+}
+
+async function handleDeleteProject(env: Env, id: string): Promise<Response> {
+  if (!(await getProject(env, id))) return notFound()
+  await deleteProject(env, id)
+  return json({ ok: true })
+}
+
 async function handleUploadAsset(req: Request, env: Env, id: string): Promise<Response> {
   const contentType = req.headers.get('content-type') ?? ''
   if (!contentType.startsWith('image/')) {
@@ -607,6 +679,34 @@ export default {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
           return await handleSetPinned(req, env, parts[2]!)
+        }
+        if (parts.length === 4 && parts[3] === 'project' && req.method === 'PATCH') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleSetDeckProject(req, env, parts[2]!)
+        }
+      }
+
+      if (parts[0] === 'api' && parts[1] === 'projects') {
+        if (parts.length === 2 && req.method === 'GET') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleListProjects(env)
+        }
+        if (parts.length === 2 && req.method === 'POST') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleCreateProject(req, env)
+        }
+        if (parts.length === 3 && req.method === 'PATCH') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleRenameProject(req, env, parts[2]!)
+        }
+        if (parts.length === 3 && req.method === 'DELETE') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleDeleteProject(env, parts[2]!)
         }
       }
 

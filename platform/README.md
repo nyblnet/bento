@@ -143,7 +143,32 @@ saved locally. Full reasoning: `docs/DECISIONS.md`.
   mousedown/mousemove/mouseup JS setting `flex-basis`/`width` inline,
   clamped 180–480px) — **deliberately session-only, no persistence**, per
   the request that added it. Reloading resets it to the CSS default
-  (260px).
+  (300px).
+- **Projects** (`migrations/0007_projects.sql`'s `projects` table +
+  `decks.project_id`) are a lightweight, purely organizational grouping —
+  no access level, no kind, no content of its own, just an id + name to
+  render the sidebar as folders. The sidebar renders (top to bottom) Pinned
+  → Projects → History; **pin wins section placement outright** — a deck
+  that's both pinned and filed under a project shows ONLY in Pinned, never
+  duplicated into its folder too. A project folder is collapsible
+  (`.project-folder-row`, chevron rotates 90°; expand/collapse state is
+  session-only, same as sidebar width — no persistence). Assigning a deck
+  is via its own context menu's "Project ▸" submenu (mirrors "Access ▸":
+  "No project" / existing projects, checkmarked / "New project…" via
+  `prompt()`), or a project's own ⚙️ gear menu (Rename / Delete). **Deleting
+  a project does NOT delete its decks** — `store.ts`'s `deleteProject`
+  unassigns them first (`project_id → NULL`, no `ON DELETE CASCADE`), so
+  they simply fall back into plain History. API: `GET/POST /api/projects`,
+  `PATCH/DELETE /api/projects/:id`, `PATCH /api/decks/:id/project` (body
+  `{projectId}`, string or `null` to unfile).
+- **Each sidebar section caps its own height and scrolls independently**
+  (`.deck-section-items { max-height: 220px; overflow-y: auto }` for
+  Pinned/Projects; History is the flexible last section, `flex:1` +
+  `min-height:0` inside the deck-list's own flex column, so it fills
+  whatever room is left and scrolls on its own too) — a sidebar full of
+  pinned decks used to push Projects and History further and further down
+  the page; now growth in one section never shoves the others out of
+  reach, it just gets its own inner scrollbar.
 - **A plain click on a sidebar deck now shows it in the main panel**
   (`#previewPanel`, a header bar + `<iframe src="/d/:id">`) instead of only
   ever opening a new tab — before this, every deck link was
@@ -186,6 +211,7 @@ platform/
       0004_access.sql         — decks.access ('private'|'view'|'edit', per-deck access level)
       0005_kind.sql           — decks.kind ('bento'|'html', see "Decks that aren't Bento at all")
       0006_pinned.sql         — decks.pinned (sidebar pin, see "Sidebar: pinning, resizing, and a real preview panel")
+      0007_projects.sql       — projects table + decks.project_id (sidebar folders, same section)
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
     ci-build.mjs           — Workers Builds' "Build command": produces generated/shell.ts
     build.mjs              — esbuild bundle → dist/worker.js, used by test:router (below), not by deploy
@@ -295,7 +321,7 @@ with your own**, not fill in blanks.
   — write that down too, you need both the name and the ID. Then open its
   **Console** tab and run each file in `platform/worker/migrations/` **in
   numeric order** — `0001_init.sql`, `0002_auth.sql`, `0003_editable.sql`,
-  `0004_access.sql`, `0005_kind.sql`, `0006_pinned.sql`. That's the whole migration step — no CLI, no separate
+  `0004_access.sql`, `0005_kind.sql`, `0006_pinned.sql`, `0007_projects.sql`. That's the whole migration step — no CLI, no separate
   tool. (If you already ran `0001` from an earlier version of this project
   under its old name, `schema.sql` — same file, just moved and renumbered —
   you only need to run whichever numbered files come after the one you last
@@ -445,7 +471,7 @@ problem for whenever that app exists, not solved here.
 | `/api/login` | POST | none | `{username, password}` → starts a session on success |
 | `/api/logout` | POST | none | ends the current session |
 | `/api/compile` | POST | owner session | `{outline}` → `{doc}`. Pure — nothing is stored |
-| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access, kind, pinned}]}`, pinned first then most-recently-touched — the sidebar's data source |
+| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access, kind, pinned, projectId}]}`, pinned first then most-recently-touched — the sidebar's data source |
 | `/api/decks` | POST | owner session | `{doc, access?}` (a `'bento'` deck) or `{html, access?}` (an `'html'` deck) → `{id, url}`. `access` is one of `'private'\|'view'\|'edit'`; defaults to `'edit'` for `doc`, coerced to `'view'` if `'edit'` for `html` (meaningless for that kind, not rejected) |
 | `/api/decks/:id` | GET | owner session | `{kind:'bento', doc}` or `{kind:'html', html}` |
 | `/api/decks/:id` | PATCH | owner session | `{doc}` replaces a `'bento'` deck's stored doc; `{html}` re-uploads an `'html'` deck's stored bytes wholesale, re-deriving the title from the new file's `<title>`. Sending the wrong shape for the deck's kind is a 400, not a silent no-op |
@@ -453,7 +479,12 @@ problem for whenever that app exists, not solved here.
 | `/api/decks/:id/access` | PATCH | owner session | `{access}` → `{ok, access}`. Changes what anonymous viewers get. 422 on an invalid value, 404 on an unknown id |
 | `/api/decks/:id/title` | PATCH | owner session | `{title}` → `{ok}`. For a `'bento'` deck, rewrites `doc.title` itself (there's no separate cosmetic label) — same effect as editing the title in the live editor. For an `'html'` deck, updates only the D1 label; the stored bytes are untouched. 422 on a blank title, 404 on an unknown id |
 | `/api/decks/:id/pin` | PATCH | owner session | `{pinned}` → `{ok, pinned}`. Keeps the deck atop the sidebar regardless of `updated_at` (pinning itself never bumps it). 422 on a non-boolean, 404 on an unknown id |
+| `/api/decks/:id/project` | PATCH | owner session | `{projectId}` (a project id, or `null` to unfile) → `{ok, projectId}`. 422 on a value that's neither a string nor `null`, 404 on an unknown deck id (the project id itself is NOT validated against `projects` — an id that doesn't exist just renders unfiled, same graceful-degrade as any other dangling foreign key here) |
 | `/api/decks/:id/assets` | POST | owner session | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
+| `/api/projects` | GET | owner session | `{projects: [{id, name, createdAt, updatedAt}]}`, alphabetical |
+| `/api/projects` | POST | owner session | `{name}` → `{id}`, 201. 422 on a blank name |
+| `/api/projects/:id` | PATCH | owner session | `{name}` → `{ok}`. 422 on a blank name, 404 on an unknown id |
+| `/api/projects/:id` | DELETE | owner session | deletes the project row only — its decks are unassigned first (`project_id → NULL`), never deleted. 404 on an unknown id |
 | `/d/:id` | GET | depends on the deck's `access` | `'private'` → 404 unless it's the owner's session. For a `'bento'` deck: `'view'` (non-owner) → `readonly: true` spliced in, boots Bento's present-only PLAYER mode; `'edit'`, or any owner session → the real, live editor page. For an `'html'` deck: always the sandboxed iframe wrapper (see "Decks that aren't Bento at all"), owner included |
 | `/d/:id/download` | GET | same as `/d/:id` | `'bento'`: same content rules as `/d/:id`, with `Content-Disposition: attachment`. `'html'`: the exact original bytes, unwrapped (no sandbox — see that section for why the wrapper only applies to the live view) |
 | `/a/:id/:key` | GET | same as `/d/:id` | an uploaded asset's bytes; 404 for a non-owner if the deck is `'private'` |

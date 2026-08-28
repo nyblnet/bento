@@ -92,6 +92,22 @@ Current feature set, all owner-only except where noted:
   is `target="_blank"` and the main area used to never show anything but
   the create wizard as a result; a modified click (Ctrl/Cmd/Shift/Alt) is
   deliberately left alone so native new-tab/window gestures still work.
+  **Projects** (`migrations/0007_projects.sql` — a `projects` table +
+  `decks.project_id`, no access level/kind/content of its own, purely a
+  sidebar grouping) render as collapsible folders between Pinned and
+  History (`.project-folder-row`, session-only expand state, same
+  no-persistence rule as sidebar width). Pin wins section placement
+  outright — a pinned+filed deck shows ONLY under Pinned, never duplicated
+  into its folder. Assign via the deck menu's "Project ▸" submenu (mirrors
+  "Access ▸") or a folder's own ⚙️ (Rename/Delete); deleting a project
+  unassigns its decks (`project_id → NULL`, no cascade) rather than
+  deleting them. **Each section caps its own height and scrolls
+  independently** (`max-height:220px` + `overflow-y:auto` on
+  Pinned/Projects; History is the flexible last section, `flex:1` +
+  `min-height:0`) so a large Pinned or Projects section no longer pushes
+  the others further down the page — see this file's hard-won lessons
+  above on `min-width:auto`/`overflow-y` sizing traps for why this needed
+  the explicit `min-height:0` rather than just `flex:1`.
 - **Content patterns** (`demo.ts`'s `PATTERNS`) — Step 1's prompt is one of
   four genre-specific briefs (General/Business review/Pitch deck/Tutorial),
   each with its own guidance paragraph and loadable example; every pattern

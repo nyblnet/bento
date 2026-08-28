@@ -348,9 +348,9 @@ ${PAGE_STYLES}
      the flex sibling of .sidebar, .wrap inside it is unchanged. */
   .app-shell { display: flex; align-items: stretch; min-height: 100vh; }
   .sidebar {
-    width: 260px; flex: 0 0 260px; background: var(--bg-elev); border-right: 1px solid var(--border);
+    width: 300px; flex: 0 0 300px; background: var(--bg-elev); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; padding: 20px 14px; box-sizing: border-box;
-    position: sticky; top: 0; height: 100vh; overflow-y: auto; min-width: 180px; max-width: 480px;
+    position: sticky; top: 0; height: 100vh; overflow-y: hidden; min-width: 180px; max-width: 480px;
   }
   /* drag-to-resize handle — a thin invisible strip over the sidebar's right
      border, widened only on hover/drag so it doesn't visually compete with
@@ -364,12 +364,51 @@ ${PAGE_STYLES}
   .sidebar-brand { font-weight: 800; font-size: 15px; margin: 0 0 16px; padding: 0 2px; }
   .sidebar-brand span { color: var(--accent); }
   .new-deck-btn { width: 100%; justify-content: center; margin-bottom: 16px; }
-  .deck-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  /* Three independent sections (Pinned / Projects / History) instead of one
+     flat scrolling list: a sidebar full of pinned decks used to shove
+     Projects and History further and further down, so finding either meant
+     scrolling past all of Pinned first. Now Pinned and Projects each cap at
+     their own max-height with their OWN scrollbar; only History (last,
+     usually the biggest) stretches to fill whatever room is left
+     (flex:1 + min-height:0 — the standard "scrollable flex child" pair; a
+     flex item's default min-height:auto would otherwise refuse to shrink
+     below its content and defeat the inner overflow entirely). */
+  .deck-list { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .deck-section { display: flex; flex-direction: column; min-height: 0; flex: 0 0 auto; }
+  .deck-section-items { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+  .deck-section-pinned .deck-section-items, .deck-section-projects .deck-section-items { max-height: 220px; }
+  .deck-section-history { flex: 1 1 auto; min-height: 60px; }
+  .deck-section-history .deck-section-items { flex: 1; min-height: 0; }
   .deck-list-label {
     font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--text-dim); padding: 0 10px; margin: 4px 0 6px;
   }
   .deck-list-label.gap { margin-top: 14px; }
+  .deck-section-label-row { display: flex; align-items: center; justify-content: space-between; padding-right: 4px; }
+  .deck-section-label-row .deck-list-label { flex: 1; min-width: 0; }
+  .project-add-btn {
+    flex: 0 0 auto; background: none; border: none; color: var(--text-dim); cursor: pointer;
+    display: inline-flex; padding: 3px; border-radius: 5px; opacity: 0.8;
+  }
+  .project-add-btn:hover { color: var(--text); background: rgba(245,247,250,0.1); opacity: 1; }
+
+  /* project folders — a lightweight grouping concept, sidebar-only: a
+     project has no access level, no kind, no content of its own, it's
+     purely an organizational folder (see store.ts's Project). */
+  .project-folder-row {
+    display: flex; align-items: center; gap: 6px; padding: 6px 2px 6px 8px; border-radius: 8px;
+    font-size: 13px; cursor: pointer;
+  }
+  .project-folder-row:hover { background: rgba(245,247,250,0.07); }
+  .project-folder-chevron {
+    flex: 0 0 auto; width: 12px; display: flex; align-items: center; justify-content: center;
+    opacity: 0.65; transition: transform 0.15s ease;
+  }
+  .project-folder-chevron.open { transform: rotate(90deg); }
+  .project-folder-icon { flex: 0 0 auto; width: 15px; display: flex; align-items: center; justify-content: center; color: var(--accent); opacity: 0.9; }
+  .project-folder-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .project-folder-count { flex: 0 0 auto; color: var(--text-dim); font-size: 11px; }
+  .project-folder-children { padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
   .deck-item {
     display: flex; align-items: center; gap: 4px; padding: 2px 2px 2px 10px; border-radius: 8px;
     font-size: 13px;
@@ -386,12 +425,12 @@ ${PAGE_STYLES}
     flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; opacity: 0.7;
   }
   .deck-pin-badge { color: var(--accent); opacity: 1; }
-  .deck-gear {
+  .deck-gear, .project-gear {
     flex: 0 0 auto; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
     border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px;
     opacity: 0.6;
   }
-  .deck-gear:hover { opacity: 1; background: rgba(245,247,250,0.1); color: var(--text); }
+  .deck-gear:hover, .project-gear:hover { opacity: 1; background: rgba(245,247,250,0.1); color: var(--text); }
   .deck-list-empty, .deck-list-loading { color: var(--text-dim); font-size: 13px; padding: 8px 10px; }
   .deck-rename-row { flex: 1; min-width: 0; padding: 4px 0; }
   .deck-rename-row input {
@@ -588,6 +627,11 @@ const ICONS = {
   check: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
   pin: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 0-2H8a1 1 0 0 0 0 2 1 1 0 0 1 1 1Z"/></svg>',
   upload: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+}
+function esc(s) {
+  return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 }
 function iconSpan(svg, cls) {
   return '<span class="ctx-icon' + (cls ? ' ' + cls : '') + '">' + svg + '</span>'
@@ -638,6 +682,11 @@ updatePromptText()
 // --- sidebar deck list -------------------------------------------------
 
 let deckIndex = {}
+let projects = []
+let projectIndex = {}
+// Which project folders are collapsed — session-only, like the sidebar
+// width: plain in-memory state, resets on reload, never persisted.
+const collapsedProjects = new Set()
 
 function deckItemHtml(d) {
   const a = accessMeta(d.access)
@@ -646,7 +695,7 @@ function deckItemHtml(d) {
   return (
     '<div class="deck-item" data-id="' + d.id + '">' +
     '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
-    '<span class="deck-title">' + (d.title || 'Untitled deck').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>' +
+    '<span class="deck-title">' + esc(d.title || 'Untitled deck') + '</span>' +
     '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
     '</a>' +
     pinBadge + kindBadge +
@@ -656,36 +705,147 @@ function deckItemHtml(d) {
   )
 }
 
+function projectFolderHtml(p, decks) {
+  const open = !collapsedProjects.has(p.id)
+  const children = open
+    ? '<div class="project-folder-children">' +
+      (decks.length ? decks.map(deckItemHtml).join('') : '<div class="deck-list-empty">Empty — file a deck here from its ⚙️ menu.</div>') +
+      '</div>'
+    : ''
+  return (
+    '<div class="project-folder" data-id="' + p.id + '">' +
+    '<div class="project-folder-row" data-id="' + p.id + '">' +
+    '<span class="project-folder-chevron' + (open ? ' open' : '') + '">' + ICONS.chevronRight + '</span>' +
+    '<span class="project-folder-icon">' + ICONS.folder + '</span>' +
+    '<span class="project-folder-name">' + esc(p.name || 'Untitled project') + '</span>' +
+    '<span class="project-folder-count">' + decks.length + '</span>' +
+    '<button class="project-gear" type="button" data-project-id="' + p.id + '" title="Project menu">' + ICONS.gear + '</button>' +
+    '</div>' + children +
+    '</div>'
+  )
+}
+
+function wireProjectFolders() {
+  document.querySelectorAll('.project-folder-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.project-gear')) return
+      const id = row.dataset.id
+      if (collapsedProjects.has(id)) collapsedProjects.delete(id); else collapsedProjects.add(id)
+      loadDeckList()
+    })
+  })
+  const addBtn = document.getElementById('addProjectBtn')
+  if (addBtn) addBtn.onclick = createProjectPrompt
+}
+
 async function loadDeckList() {
   const list = document.getElementById('deckList')
   try {
-    const res = await fetch('/api/decks')
-    if (!res.ok) throw new Error('failed to load')
-    const body = await res.json()
-    const decks = body.decks || []
+    const [decksRes, projectsRes] = await Promise.all([fetch('/api/decks'), fetch('/api/projects')])
+    if (!decksRes.ok) throw new Error('failed to load')
+    const decksBody = await decksRes.json()
+    const decks = decksBody.decks || []
     deckIndex = {}
     decks.forEach(d => { deckIndex[d.id] = d })
-    if (decks.length === 0) {
+
+    projects = []
+    projectIndex = {}
+    if (projectsRes.ok) {
+      const projectsBody = await projectsRes.json()
+      projects = projectsBody.projects || []
+      projects.forEach(p => { projectIndex[p.id] = p })
+    }
+
+    if (decks.length === 0 && projects.length === 0) {
       list.innerHTML = '<div class="deck-list-empty">No decks yet — create your first one →</div>'
       return
     }
-    // Server already sorts pinned-first (store.ts's listDecks); the sidebar
-    // just needs to render the two groups under their own labels so a long
-    // history stays scannable — a plain flat list with a pin icon buried in
-    // each row doesn't achieve "easy to find" the way a real section does.
+
+    // Server already sorts pinned-first (store.ts's listDecks). Pin wins
+    // section placement outright: a pinned deck shows ONLY under Pinned,
+    // never duplicated into its project folder too. Everything else that's
+    // filed under a (still-existing) project groups into that folder;
+    // anything left over — unpinned and unfiled — is plain History.
     const pinned = decks.filter(d => d.pinned)
-    const rest = decks.filter(d => !d.pinned)
+    const unpinned = decks.filter(d => !d.pinned)
+    const grouped = {}
+    const history = []
+    unpinned.forEach(d => {
+      if (d.projectId && projectIndex[d.projectId]) {
+        (grouped[d.projectId] = grouped[d.projectId] || []).push(d)
+      } else {
+        history.push(d)
+      }
+    })
+
     let out = ''
     if (pinned.length) {
-      out += '<div class="deck-list-label">Pinned</div>' + pinned.map(deckItemHtml).join('')
+      out += '<div class="deck-section deck-section-pinned"><div class="deck-list-label">Pinned</div>' +
+        '<div class="deck-section-items">' + pinned.map(deckItemHtml).join('') + '</div></div>'
     }
-    out += '<div class="deck-list-label' + (pinned.length ? ' gap' : '') + '">History</div>' + rest.map(deckItemHtml).join('')
+    if (projects.length) {
+      out += '<div class="deck-section deck-section-projects">' +
+        '<div class="deck-section-label-row"><span class="deck-list-label' + (pinned.length ? ' gap' : '') + '">Projects</span>' +
+        '<button type="button" class="project-add-btn" id="addProjectBtn" title="New project">' + ICONS.plus + '</button></div>' +
+        '<div class="deck-section-items">' + projects.map(p => projectFolderHtml(p, grouped[p.id] || [])).join('') + '</div></div>'
+    }
+    out += '<div class="deck-section deck-section-history"><div class="deck-list-label' + (pinned.length || projects.length ? ' gap' : '') + '">History</div>' +
+      '<div class="deck-section-items">' + (history.length ? history.map(deckItemHtml).join('') : '<div class="deck-list-empty">No unfiled decks.</div>') + '</div></div>'
     list.innerHTML = out
+    wireProjectFolders()
   } catch (e) {
     list.innerHTML = '<div class="deck-list-empty">Couldn\\'t load deck history.</div>'
   }
 }
 loadDeckList()
+
+// --- project CRUD (folder gear menu + the deck menu's "New project…") ------
+
+function createProjectPrompt() {
+  const name = prompt('New project name:')
+  if (!name || !name.trim()) return
+  fetch('/api/projects', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: name.trim() }),
+  }).then(res => { if (!res.ok) throw new Error('failed'); loadDeckList() })
+    .catch(() => alert('Could not create that project. Try again.'))
+}
+
+function renameProjectPrompt(id, info) {
+  const name = prompt('Rename project:', info.name || '')
+  if (!name || !name.trim() || name.trim() === info.name) return
+  fetch('/api/projects/' + id, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: name.trim() }),
+  }).then(res => { if (!res.ok) throw new Error('failed'); loadDeckList() })
+    .catch(() => alert('Could not rename that project. Try again.'))
+}
+
+function deleteProjectConfirm(id, info) {
+  if (!confirm('Delete project "' + (info.name || 'this project') + '"? Its decks will stay — they\\'ll just move back to History.')) return
+  fetch('/api/projects/' + id, { method: 'DELETE' })
+    .then(res => { if (!res.ok) throw new Error('failed'); loadDeckList() })
+    .catch(() => alert('Could not delete that project. Try again.'))
+}
+
+function openProjectMenu(id, x, y) {
+  closeMenu()
+  const info = projectIndex[id] || { name: '' }
+  const menu = document.createElement('div')
+  menu.className = 'ctx-menu'
+  menu.innerHTML =
+    '<button type="button" class="ctx-item" data-a="rename">' + iconSpan(ICONS.pencil) + '<span>Rename</span></button>' +
+    '<div class="ctx-sep"></div>' +
+    '<button type="button" class="ctx-item danger" data-a="delete">' + iconSpan(ICONS.trash) + '<span>Delete project…</span></button>'
+  menu.querySelector('[data-a="rename"]').onclick = () => { closeMenu(); renameProjectPrompt(id, info) }
+  menu.querySelector('[data-a="delete"]').onclick = () => { closeMenu(); deleteProjectConfirm(id, info) }
+  document.body.appendChild(menu)
+  openMenuEl = menu
+  positionMenu(menu, x, y)
+  setTimeout(() => {
+    document.addEventListener('click', onDocClick, true)
+    document.addEventListener('keydown', onDocKey, true)
+    document.addEventListener('contextmenu', onDocClick, true)
+  }, 0)
+}
 
 // --- per-deck context menu (right-click, or the ⚙️ button) -----------------
 // Windows-Explorer-style: right-click (or the gear button) opens a small
@@ -819,18 +979,86 @@ function openDeckMenu(id, x, y) {
     const reuploadItem = info.kind === 'html'
       ? '<button type="button" class="ctx-item" data-a="reupload">' + iconSpan(ICONS.upload) + '<span>Re-upload…</span></button>'
       : ''
+    const currentProject = info.projectId && projectIndex[info.projectId] ? projectIndex[info.projectId] : null
     menu.innerHTML =
       '<button type="button" class="ctx-item" data-a="pin">' + iconSpan(ICONS.pin) + '<span>' + (info.pinned ? 'Unpin' : 'Pin') + '</span></button>' +
       '<button type="button" class="ctx-item" data-a="rename">' + iconSpan(ICONS.pencil) + '<span>Rename</span></button>' +
       reuploadItem +
       '<button type="button" class="ctx-item" data-a="access">' + iconSpan(ICONS.eye) + '<span>Access</span>' + iconSpan(ICONS.chevronRight, 'ctx-right') + '</button>' +
+      '<button type="button" class="ctx-item" data-a="project">' + iconSpan(ICONS.folder) + '<span>' + (currentProject ? esc(currentProject.name) : 'Project') + '</span>' + iconSpan(ICONS.chevronRight, 'ctx-right') + '</button>' +
       '<div class="ctx-sep"></div>' +
       '<button type="button" class="ctx-item danger" data-a="delete">' + iconSpan(ICONS.trash) + '<span>Delete…</span></button>'
     menu.querySelector('[data-a="pin"]').onclick = () => { closeMenu(); togglePin(id, info) }
     menu.querySelector('[data-a="rename"]').onclick = () => { closeMenu(); startInlineRename(id, info) }
     if (info.kind === 'html') menu.querySelector('[data-a="reupload"]').onclick = () => { closeMenu(); reuploadHtmlDeck(id, info) }
     menu.querySelector('[data-a="access"]').onclick = renderAccess
+    menu.querySelector('[data-a="project"]').onclick = renderProject
     menu.querySelector('[data-a="delete"]').onclick = () => { closeMenu(); doDelete(id, info) }
+    positionMenu(menu, x, y)
+  }
+
+  function renderProject() {
+    const items = [
+      '<button type="button" class="ctx-item" data-p="">' + iconSpan(ICONS.eye) + '<span>No project</span>' +
+      (!info.projectId ? iconSpan(ICONS.check, 'ctx-right') : '') + '</button>',
+    ]
+    projects.forEach(p => {
+      items.push(
+        '<button type="button" class="ctx-item" data-p="' + p.id + '">' + iconSpan(ICONS.folder) + '<span>' + esc(p.name) + '</span>' +
+        (info.projectId === p.id ? iconSpan(ICONS.check, 'ctx-right') : '') + '</button>',
+      )
+    })
+    items.push('<div class="ctx-sep"></div>')
+    items.push('<button type="button" class="ctx-item" data-p="__new">' + iconSpan(ICONS.plus) + '<span>New project…</span></button>')
+    menu.innerHTML =
+      '<div class="ctx-header"><button type="button" data-a="back">' + ICONS.chevronLeft + '</button><span>Project</span></div>' +
+      items.join('')
+    menu.querySelector('[data-a="back"]').onclick = renderMain
+    menu.querySelectorAll('[data-p]').forEach(btn => {
+      btn.onclick = async () => {
+        const value = btn.dataset.p
+        if (value === '__new') {
+          closeMenu()
+          const name = prompt('New project name:')
+          if (!name || !name.trim()) return
+          try {
+            const createRes = await fetch('/api/projects', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ name: name.trim() }),
+            })
+            if (!createRes.ok) throw new Error('failed')
+            const created = await createRes.json()
+            const assignRes = await fetch('/api/decks/' + id + '/project', {
+              method: 'PATCH',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ projectId: created.id }),
+            })
+            if (!assignRes.ok) throw new Error('failed')
+            loadDeckList()
+          } catch (err) {
+            alert('Could not create that project. Try again.')
+          }
+          return
+        }
+        const projectId = value === '' ? null : value
+        if (projectId === (info.projectId || null)) { closeMenu(); return }
+        menu.querySelectorAll('[data-p]').forEach(b => b.disabled = true)
+        try {
+          const res = await fetch('/api/decks/' + id + '/project', {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ projectId }),
+          })
+          if (!res.ok) throw new Error('failed')
+          closeMenu()
+          loadDeckList()
+        } catch (err) {
+          menu.querySelectorAll('[data-p]').forEach(b => b.disabled = false)
+          alert('Could not change this deck\\'s project. Try again.')
+        }
+      }
+    })
     positionMenu(menu, x, y)
   }
 
@@ -882,16 +1110,31 @@ function openDeckMenu(id, x, y) {
 
 document.getElementById('deckList').addEventListener('click', (e) => {
   const gear = e.target.closest('.deck-gear')
-  if (!gear) return
-  e.preventDefault()
-  const rect = gear.getBoundingClientRect()
-  openDeckMenu(gear.dataset.id, rect.left, rect.bottom + 4)
+  if (gear) {
+    e.preventDefault()
+    const rect = gear.getBoundingClientRect()
+    openDeckMenu(gear.dataset.id, rect.left, rect.bottom + 4)
+    return
+  }
+  const pgear = e.target.closest('.project-gear')
+  if (pgear) {
+    e.preventDefault()
+    const rect = pgear.getBoundingClientRect()
+    openProjectMenu(pgear.dataset.projectId, rect.left, rect.bottom + 4)
+  }
 })
 document.getElementById('deckList').addEventListener('contextmenu', (e) => {
   const item = e.target.closest('.deck-item')
-  if (!item) return
-  e.preventDefault()
-  openDeckMenu(item.dataset.id, e.clientX, e.clientY)
+  if (item) {
+    e.preventDefault()
+    openDeckMenu(item.dataset.id, e.clientX, e.clientY)
+    return
+  }
+  const folderRow = e.target.closest('.project-folder-row')
+  if (folderRow) {
+    e.preventDefault()
+    openProjectMenu(folderRow.dataset.id, e.clientX, e.clientY)
+  }
 })
 
 document.getElementById('newDeck').onclick = () => location.reload()

@@ -67,6 +67,7 @@ function makeD1() {
   let configRow = null
   const sessions = new Map()
   const decks = new Map()
+  const projects = new Map()
 
   return {
     prepare(sql) {
@@ -96,7 +97,10 @@ function makeD1() {
           } else if (sql.startsWith('INSERT INTO decks')) {
             const [id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access] = boundArgs
             const kind = sql.includes("'html')") ? 'html' : 'bento'
-            decks.set(id, { id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind, pinned: 0 })
+            decks.set(id, {
+              id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind,
+              pinned: 0, project_id: null,
+            })
           } else if (sql.startsWith('UPDATE decks SET access')) {
             const [access, id] = boundArgs
             const row = decks.get(id)
@@ -105,6 +109,18 @@ function makeD1() {
             const [pinned, id] = boundArgs
             const row = decks.get(id)
             if (row) row.pinned = pinned
+          } else if (sql.startsWith('UPDATE decks SET project_id = NULL WHERE project_id')) {
+            // deleteProject's unassign step — must be matched BEFORE the
+            // single-deck 'UPDATE decks SET project_id = ? WHERE id' branch
+            // below (that one binds a deck id, not a project id).
+            const [projectId] = boundArgs
+            for (const row of decks.values()) {
+              if (row.project_id === projectId) row.project_id = null
+            }
+          } else if (sql.startsWith('UPDATE decks SET project_id')) {
+            const [projectId, id] = boundArgs
+            const row = decks.get(id)
+            if (row) row.project_id = projectId
           } else if (sql.startsWith('UPDATE decks SET title = ?, updated_at = ? WHERE')) {
             // renameHtmlDeck — 3 params, no doc_bytes (distinct from replaceDeckDoc's
             // 4-param UPDATE below; matched by the exact absent-doc_bytes prefix).
@@ -115,6 +131,16 @@ function makeD1() {
             const [title, updated_at, doc_bytes, id] = boundArgs
             const row = decks.get(id)
             if (row) Object.assign(row, { title, updated_at, doc_bytes })
+          } else if (sql.startsWith('INSERT INTO projects')) {
+            const [id, name, created_at, updated_at] = boundArgs
+            projects.set(id, { id, name, created_at, updated_at })
+          } else if (sql.startsWith('UPDATE projects')) {
+            const [name, updated_at, id] = boundArgs
+            const row = projects.get(id)
+            if (row) Object.assign(row, { name, updated_at })
+          } else if (sql.startsWith('DELETE FROM projects')) {
+            const [id] = boundArgs
+            projects.delete(id)
           }
           return { success: true }
         },
@@ -124,12 +150,17 @@ function makeD1() {
             const row = sessions.get(boundArgs[0])
             return row ? { expires_at: row.expires_at } : null
           }
+          if (sql.includes('FROM projects')) return projects.get(boundArgs[0]) ?? null
           if (sql.includes('FROM decks')) return decks.get(boundArgs[0]) ?? null
           return null
         },
         async all() {
-          if (sql.startsWith('SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned FROM decks')) {
+          if (sql.includes('FROM decks')) {
             const results = [...decks.values()].sort((a, b) => (b.pinned - a.pinned) || (b.updated_at - a.updated_at))
+            return { results, success: true }
+          }
+          if (sql.includes('FROM projects')) {
+            const results = [...projects.values()].sort((a, b) => a.name.localeCompare(b.name))
             return { results, success: true }
           }
           return { results: [], success: true }
@@ -1168,6 +1199,221 @@ await check('PATCH /api/decks/:id/pin unpins a deck, restoring normal most-recen
     ids.indexOf(pinDeckNewId) < ids.indexOf(pinDeckOldId),
     'once unpinned, the more-recently-touched deck should sort first again',
   )
+})
+
+// --- projects (sidebar folders) ---------------------------------------------
+
+await check('GET /api/projects without a session is rejected', async () => {
+  const res = await worker.fetch(new Request('https://platform.example/api/projects'), env)
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('POST /api/projects without a session is rejected', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Nope' }),
+    }),
+    env,
+  )
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('POST /api/projects rejects an empty name', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ name: '  ' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+let projectId
+await check('POST /api/projects creates a project', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ name: 'Q3 launch' }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 201, `expected 201, got ${res.status}: ${text}`)
+  assert(typeof data.id === 'string' && data.id, 'response should include an id')
+  projectId = data.id
+})
+
+await check('GET /api/projects lists the created project', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/projects', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  const found = data.projects.find((p) => p.id === projectId)
+  assert(found?.name === 'Q3 launch', 'created project should be listed with its name')
+})
+
+await check('PATCH /api/projects/:id renames a project', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ name: 'Q3 launch (renamed)' }),
+    }),
+    env,
+  )
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/projects', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data } = await readBody(listRes)
+  const found = data.projects.find((p) => p.id === projectId)
+  assert(found?.name === 'Q3 launch (renamed)', 'project name should be updated')
+})
+
+await check('PATCH /api/projects/:id for an unknown project is 404', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/projects/does-not-exist', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ name: 'Whatever' }),
+    }),
+    env,
+  )
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+let projectDeckId
+await check('PATCH /api/decks/:id/project files a deck under a project', async () => {
+  const createRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Filed under a project' } }),
+    }),
+    env,
+  )
+  projectDeckId = (await readBody(createRes)).data.id
+
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${projectDeckId}/project`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ projectId }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(data.projectId === projectId, 'response should echo the assigned projectId')
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === projectDeckId)
+  assert(listed?.projectId === projectId, 'listed deck should report its projectId')
+})
+
+await check('PATCH /api/decks/:id/project rejects a non-string, non-null value', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${projectDeckId}/project`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ projectId: 42 }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/project for an unknown deck is 404', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks/does-not-exist/project', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ projectId }),
+    }),
+    env,
+  )
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/project with projectId:null unfiles a deck', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${projectDeckId}/project`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ projectId: null }),
+    }),
+    env,
+  )
+  const { data } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(data.projectId === null, 'response should echo projectId:null')
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === projectDeckId)
+  assert(listed?.projectId === null, 'unfiled deck should report projectId:null')
+
+  // Re-file it for the deleteProject test below.
+  await worker.fetch(
+    new Request(`https://platform.example/api/decks/${projectDeckId}/project`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ projectId }),
+    }),
+    env,
+  )
+})
+
+await check('DELETE /api/projects/:id deletes the project WITHOUT deleting its decks', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/projects/${projectId}`, { method: 'DELETE', headers: { cookie: ownerCookie } }),
+    env,
+  )
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+
+  const projectsRes = await worker.fetch(
+    new Request('https://platform.example/api/projects', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: projectsData } = await readBody(projectsRes)
+  assert(!projectsData.projects.some((p) => p.id === projectId), 'deleted project should no longer be listed')
+
+  const deckRes = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${projectDeckId}`, { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  assert(deckRes.status === 200, 'the deck itself must survive deleting its project')
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === projectDeckId)
+  assert(listed?.projectId === null, 'the deck should be unassigned (projectId:null), not deleted, once its project is gone')
+})
+
+await check('DELETE /api/projects/:id for an unknown project is 404', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/projects/does-not-exist', { method: 'DELETE', headers: { cookie: ownerCookie } }),
+    env,
+  )
+  assert(res.status === 404, `expected 404, got ${res.status}`)
 })
 
 const exampleOutline = {
