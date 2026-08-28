@@ -199,6 +199,20 @@ jobs:
             TZ=$tz node scripts/test-spaces-calc.ts
           done
 
+      - name: Spaces Markdown round-trip rig
+        # The About dialog promises, in eight languages, that "a space is never
+        # a dead end … every page exports as Markdown". This is that sentence,
+        # checked: the starter space is exported and read back, and no page may
+        # come back with materially less text than it went in with, nor may a
+        # single block vanish entirely. Block TYPES are deliberately not
+        # asserted — Markdown has no callout, toggle, media embed or board, so a
+        # callout leaving as a blockquote is the format being honest, not a bug.
+        # (Bundled: the app's imports are extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-roundtrip.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+          node "$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+
       - name: Spaces shell size
         # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
         # the round finished at 108KB, and the same entry claimed the ceiling
