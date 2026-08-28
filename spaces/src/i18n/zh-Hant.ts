@@ -594,4 +594,10 @@ export const zh_Hant: Catalog = {
   "Added {name}": "已新增{name}",
   "Name": "名稱",
   "New property": "新增屬性",
+  "Choose which pages this view holds": "選擇此檢視包含哪些頁面",
+  "Every page with a status": "所有帶狀態的頁面",
+  "Nested under": "巢狀於",
+  "Pages nested under this one": "巢狀在此頁面下的頁面",
+  "Pages that have this property": "具有此屬性的頁面",
+  "Which pages": "哪些頁面",
 }

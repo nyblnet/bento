@@ -594,4 +594,10 @@ export const de: Catalog = {
   "Added {name}": "{name} hinzugefügt",
   "Name": "Name",
   "New property": "Neue Eigenschaft",
+  "Choose which pages this view holds": "Wählen, welche Seiten diese Ansicht enthält",
+  "Every page with a status": "Jede Seite mit einem Status",
+  "Nested under": "Verschachtelt unter",
+  "Pages nested under this one": "Seiten unterhalb dieser Seite",
+  "Pages that have this property": "Seiten mit dieser Eigenschaft",
+  "Which pages": "Welche Seiten",
 }

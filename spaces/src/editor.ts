@@ -1515,6 +1515,8 @@ export class Editor {
       gb?.addEventListener('click', () => this.openViewGroup(v.dataset.blockId!, gb))
       const sb = v.querySelector<HTMLElement>('[data-view-sort]')
       sb?.addEventListener('click', () => this.openViewSort(v.dataset.blockId!, sb))
+      const srcB = v.querySelector<HTMLElement>('[data-view-source]')
+      srcB?.addEventListener('click', () => this.openViewSource(v.dataset.blockId!, srcB))
 
       // A SORTED BOARD HAS NO HAND ORDER TO DROP INTO. The sort decides where a
       // card sits, so offering a drop position would write an order into
@@ -1691,7 +1693,7 @@ export class Editor {
    * list and back is byte-identical to one that was never touched, and a file
    * written before this control existed stays that way.
    */
-  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort', value: unknown): void {
+  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort' | 'source', value: unknown): void {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
@@ -1704,10 +1706,57 @@ export class Editor {
   }
 
   /** Board ⇄ list. `board` is the default, so it is stored as an ABSENT key. */
+  /**
+   * WHICH PAGES A VIEW HOLDS.
+   *
+   * The answer used to be one thing — every page carrying a `status` — which
+   * is why a space could hold a backlog and nothing else. Two selectors now,
+   * and only two: the pages carrying a given property, or the pages under a
+   * given page. With a flat vocabulary where each page carries only the fields
+   * it uses, "has an Author" IS "is a book".
+   *
+   * Issues stays the ABSENT key, so every view written before this keeps
+   * showing the backlog and a view set back to Issues is byte-identical to one
+   * that never moved.
+   */
+  private openViewSource(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b) return
+    this.popover(anchor, (pop) => {
+      const set = (src: { has?: string; under?: string } | undefined) => {
+        this.editView(blockId, 'source', src)
+        this.closeOverlay()
+      }
+      pop.append(el('div', 'sp-pop-title', t('Which pages')))
+      pop.append(this.menuItem('board', t('Issues'), t('Every page with a status'), () => set(undefined)))
+
+      // A property somebody invented is the interesting case, so it comes
+      // first among the fields and lists every one the vocabulary has.
+      for (const f of fieldsOf(s.doc)) {
+        pop.append(this.menuItem('tag', f.label, t('Pages that have this property'),
+          () => set({ has: f.key })))
+      }
+
+      // Nesting is how a space is already organised, so the current page and
+      // its ancestors are the ones worth offering rather than every page.
+      const here = s.page
+      if (here) {
+        pop.append(el('div', 'sp-pop-title', t('Nested under')))
+        pop.append(this.menuItem('page', here.title || t('Untitled'),
+          t('Pages nested under this one'), () => set({ under: here.id })))
+      }
+    })
+  }
+
   private toggleViewLayout(blockId: string): void {
     const b = this.store.block(blockId)
     const now = String((b as { layout?: unknown } | undefined)?.layout ?? 'board')
-    this.editView(blockId, 'layout', now === 'list' ? undefined : 'list')
+    // Board -> list -> table -> board. `board` is the ABSENT key, never a
+    // stored 'board': a view cycled all the way round is byte-identical to one
+    // nobody ever touched, which is the same rule filter and source follow.
+    const next: Record<string, string | undefined> = { board: 'list', list: 'table', table: undefined }
+    this.editView(blockId, 'layout', next[now] ?? (now === 'table' ? undefined : 'list'))
   }
 
   /**

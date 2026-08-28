@@ -594,4 +594,10 @@ export const zh_Hans: Catalog = {
   "Added {name}": "已添加{name}",
   "Name": "名称",
   "New property": "新建属性",
+  "Choose which pages this view holds": "选择此视图包含哪些页面",
+  "Every page with a status": "所有带状态的页面",
+  "Nested under": "嵌套于",
+  "Pages nested under this one": "嵌套在此页面下的页面",
+  "Pages that have this property": "具有此属性的页面",
+  "Which pages": "哪些页面",
 }

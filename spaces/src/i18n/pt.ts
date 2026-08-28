@@ -594,4 +594,10 @@ export const pt: Catalog = {
   "Added {name}": "{name} adicionada",
   "Name": "Nome",
   "New property": "Nova propriedade",
+  "Choose which pages this view holds": "Escolhe que páginas esta vista contém",
+  "Every page with a status": "Todas as páginas com estado",
+  "Nested under": "Aninhadas em",
+  "Pages nested under this one": "Páginas aninhadas sob esta",
+  "Pages that have this property": "Páginas que têm esta propriedade",
+  "Which pages": "Que páginas",
 }

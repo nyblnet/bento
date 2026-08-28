@@ -478,6 +478,41 @@ for (const [label, input, err] of [
   ok(/openAddProperty\(page\.id, addProp\)/.test(props), 'the properties panel offers it')
 }
 
+// ---- a view is about a set of pages, and can be looked at as a table -------
+// A view meant ONE thing: every page carrying a `status`. That made the tracker
+// work and everything else impossible — no "the pages with an Author", no "the
+// pages under Books", so a space could hold a backlog and never a reading list.
+//
+// ABSENT MEANS ISSUES. That is the compatibility rule, not a default: every
+// view block written before `source` existed carries none and must keep showing
+// the backlog forever, and a view set back to Issues must be byte-identical to
+// one that never moved — the same rule `filter` already follows.
+{
+  const fs = await import('node:fs')
+  const fields = fs.readFileSync(new URL('../spaces/src/fields.ts', import.meta.url), 'utf8')
+  const render = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/export function viewRows\(/.test(fields), 'a view selects its rows through one function')
+  ok(/if \(!has && !under\) return issuesOf\(doc\)/.test(fields),
+    '…and with no source it is still the backlog, so old view blocks are unchanged')
+  ok(/viewRows\(doc, \(b as \{ source\?: unknown \}\)\.source\)/.test(render),
+    'the renderer asks for the block\'s own source rather than the issues')
+
+  // The table is the shape a base is usually looked at in. Its columns must
+  // come from the ROWS, not the vocabulary: a table of books carrying no
+  // Estimate should not grow an Estimate column because the schema has one.
+  ok(/layout === 'table'/.test(render), 'a view can be a table')
+  ok(/rows\.some\(\(r\) => r\.values\.has\(k\)\)/.test(render),
+    '…whose columns are the fields the rows actually carry')
+  ok(/overflow-x/.test(fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
+    .split('.sp-view-tablewrap')[1]?.slice(0, 120) ?? ''),
+    '…and scrolls inside itself, so a wide table never scrolls the page sideways')
+
+  // Cycling all the way round must leave the block as it started.
+  ok(/table: undefined/.test(ed), 'cycling past table clears the key rather than storing "board"')
+}
+
 // ---- find & replace: the number shown IS the number changed ----------------
 // Replace-all is destructive and lands in one commit, so the count in the
 // readout, the count in the confirmation and the count of things that change

@@ -15,7 +15,7 @@ import { tokenize } from './highlight'
 import { t, locale } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
-  fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
+  fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys,
   sortRows, unknownSortKeys, type ViewSort, type FieldSpec,
 } from './fields'
@@ -991,7 +991,7 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
   const sort = (b as { sort?: unknown }).sort
-  const all = issuesOf(doc)
+  const all = viewRows(doc, (b as { source?: unknown }).source)
   const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
 
   const head = document.createElement('div')
@@ -1023,9 +1023,23 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // so a view block could hold `layout:'list'` that nothing in the app could
     // produce or undo. One button, because there are two of them and a menu to
     // choose between two things is a menu too many.
-    const asList = layout === 'list'
-    const layoutB = btn('viewLayout', asList ? t('List') : t('Board'),
-      asList ? t('Show as a board') : t('Show as a list'))
+    // THREE shapes now, so the button says what you are looking at and the
+    // click moves to the next one. A menu to choose between three is still a
+    // menu too many; a cycle is one control and one word.
+    const LAYOUT_WORD: Record<string, string> = { board: 'Board', list: 'List', table: 'Table' }
+    const here = LAYOUT_WORD[layout] ? layout : 'board'
+    const asList = here !== 'board'
+    // Three WHOLE sentences rather than one with the shape interpolated into
+    // it. "Show as a {what}" reads fine in English and breaks in half the
+    // catalogs, where the article and the adjective agree with the noun's
+    // gender — der Tafel / die Liste, un tableau / une liste. Two of these
+    // three keys already existed for the same reason.
+    const NEXT_TIP: Record<string, string> = {
+      board: 'Show as a list', list: 'Show as a table', table: 'Show as a board',
+    }
+    const NEXT: Record<string, string> = { board: 'list', list: 'table', table: 'board' }
+    const layoutB = btn('viewLayout', t(LAYOUT_WORD[here]), t(NEXT_TIP[here]))
+    layoutB.dataset.next = NEXT[here]
 
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per
@@ -1049,7 +1063,19 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
 
     // a LIST has no columns, so the field the columns would come from is not a
     // question it can be asked
-    head.append(layoutB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
+    // WHICH PAGES. Named after what it answers rather than "Source", because
+    // the question in the reader's head is "what is in this?" — and it says the
+    // answer, not the word, when there is one.
+    const src = (b as { source?: { has?: unknown; under?: unknown } }).source
+    const hasKey = typeof src?.has === 'string' ? src.has : ''
+    const underId = typeof src?.under === 'string' ? src.under : ''
+    const srcLabel = hasKey ? (fieldByKey(doc, hasKey)?.label ?? hasKey)
+      : underId ? (doc.pages.find((p) => p.id === underId)?.title || t('Untitled'))
+        : t('Issues')
+    const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
+      t('Choose which pages this view holds'), !!(hasKey || underId))
+
+    head.append(layoutB, sourceB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -1140,6 +1166,74 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     }
     if (meta.childElementCount) a.appendChild(meta)
     return a
+  }
+
+  // TABLE — the shape a base is usually looked at in, and the one this app did
+  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
+  // declared order: a table of books should not carry an Estimate column
+  // because the vocabulary happens to contain one, and a page that has a field
+  // the others lack should not be the reason everyone gets an empty column.
+  if (layout === 'table') {
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    const wrap = document.createElement('div')
+    // its own scroller: a wide table must not make the PAGE scroll sideways
+    wrap.className = 'sp-view-tablewrap'
+    const table = document.createElement('table')
+    table.className = 'sp-view-table'
+    const thead = document.createElement('thead')
+    const hr = document.createElement('tr')
+    const th0 = document.createElement('th')
+    th0.textContent = t('Page')
+    hr.appendChild(th0)
+    for (const k of keys) {
+      const th = document.createElement('th')
+      th.textContent = fieldByKey(doc, k)?.label ?? k
+      hr.appendChild(th)
+    }
+    thead.appendChild(hr)
+    table.appendChild(thead)
+    const tb = document.createElement('tbody')
+    for (const r of rows) {
+      const tr = document.createElement('tr')
+      const td0 = document.createElement('td')
+      // the page itself, reached the same way a card reaches it
+      const a = document.createElement('a')
+      a.className = 'sp-view-cellink'
+      a.href = `#p/${r.page.id}`
+      a.dataset.page = r.page.id
+      a.textContent = r.page.title || t('Untitled')
+      td0.appendChild(a)
+      tr.appendChild(td0)
+      for (const k of keys) {
+        const td = document.createElement('td')
+        const f = fieldByKey(doc, k)
+        const v = r.values.get(k)
+        // THROUGH THE OPTION, so a select shows its label and its colour rather
+        // than the id the model stores — the same thing propHtml does for the
+        // header strip, and for the same reason: the id is not for reading.
+        const opt = optionOf(f, v)
+        if (opt) {
+          const chip = document.createElement('span')
+          chip.className = 'sp-prop-chip'
+          const dot = document.createElement('span')
+          dot.className = 'sp-prop-dot'
+          if (opt.color) dot.style.background = opt.color
+          chip.append(dot, document.createTextNode(opt.label))
+          td.appendChild(chip)
+        } else if (v !== undefined && v !== null && String(v) !== '') {
+          td.textContent = String(v)
+        } else {
+          td.className = 'sp-view-empty'
+          td.textContent = '—'
+        }
+        tr.appendChild(td)
+      }
+      tb.appendChild(tr)
+    }
+    table.appendChild(tb)
+    wrap.appendChild(table)
+    host.appendChild(wrap)
+    return
   }
 
   if (layout === 'list') {

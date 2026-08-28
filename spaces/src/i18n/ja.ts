@@ -594,4 +594,10 @@ export const ja: Catalog = {
   "Added {name}": "{name} を追加しました",
   "Name": "名前",
   "New property": "新しいプロパティ",
+  "Choose which pages this view holds": "このビューに入れるページを選ぶ",
+  "Every page with a status": "ステータスを持つすべてのページ",
+  "Nested under": "この下のページ",
+  "Pages nested under this one": "このページの下にあるページ",
+  "Pages that have this property": "このプロパティを持つページ",
+  "Which pages": "どのページ",
 }

@@ -393,6 +393,74 @@ export function issuesOf(doc: SpacesDoc): IssueRow[] {
   return out
 }
 
+/**
+ * WHICH PAGES A VIEW IS ABOUT.
+ *
+ * A view used to mean one thing: every page carrying a `status`. That made the
+ * tracker work and made everything else impossible — a space could hold a
+ * backlog and never a reading list, because there was no way to say "the pages
+ * with an Author" or "the pages under Books".
+ *
+ * ABSENT MEANS ISSUES, and that is the compatibility rule rather than a
+ * default: every `view` block written before this existed carries no `source`
+ * and must keep showing the backlog forever. The editor DELETES the key rather
+ * than storing an empty object, so a view whose source was set and cleared is
+ * byte-identical to one that never had it.
+ *
+ * Two selectors, and deliberately only two. `has` is the one that pairs with a
+ * property somebody just invented — the vocabulary is flat and a page carries
+ * only the fields it uses, so "has an Author" IS "is a book". `under` is the
+ * one people reach for anyway, because nesting is how a space is already
+ * organised. A selector language grows without limit and can never shrink:
+ * every operator ships permanently into files on other people's disks.
+ */
+export interface ViewSource {
+  /** pages carrying this field */
+  has?: string
+  /** pages nested anywhere under this page */
+  under?: string
+}
+
+export const unknownSourceKeys = (src: unknown): string[] =>
+  !src || typeof src !== 'object' ? []
+    : Object.keys(src as Record<string, unknown>).filter((k) => k !== 'has' && k !== 'under')
+
+/** Is this page anywhere below `root`? Cycle-safe, like the tree walk. */
+function isUnder(doc: SpacesDoc, page: Page, root: string): boolean {
+  const seen = new Set<string>()
+  let cur: string | undefined = page.parent
+  while (cur && !seen.has(cur)) {
+    if (cur === root) return true
+    seen.add(cur)
+    cur = doc.pages.find((p) => p.id === cur)?.parent
+  }
+  return false
+}
+
+/**
+ * The rows a view holds.
+ *
+ * Derived every render from the pages themselves — never stored — for the same
+ * reason the board's order is `doc.pages`: a database that keeps its own copy
+ * of the rows is a database that disagrees with the document.
+ */
+export function viewRows(doc: SpacesDoc, source?: unknown): IssueRow[] {
+  const src = (source && typeof source === 'object' ? source : {}) as ViewSource
+  const has = typeof src.has === 'string' ? src.has : ''
+  const under = typeof src.under === 'string' ? src.under : ''
+  if (!has && !under) return issuesOf(doc)
+
+  const out: IssueRow[] = []
+  for (const page of doc.pages) {
+    if (page.archived) continue
+    if (under && !isUnder(doc, page, under)) continue
+    const values = valuesOf(page)
+    if (has && !values.has(has)) continue
+    out.push({ page, values })
+  }
+  return out
+}
+
 /** Where a dropped card lands: before a card, or after the last one. */
 export interface DropAim { before?: string; after?: string }
 

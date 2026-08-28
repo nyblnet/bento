@@ -594,4 +594,10 @@ export const fr: Catalog = {
   "Added {name}": "{name} ajoutée",
   "Name": "Nom",
   "New property": "Nouvelle propriété",
+  "Choose which pages this view holds": "Choisir les pages que contient cette vue",
+  "Every page with a status": "Toutes les pages ayant un statut",
+  "Nested under": "Imbriquées sous",
+  "Pages nested under this one": "Pages imbriquées sous celle-ci",
+  "Pages that have this property": "Pages qui ont cette propriété",
+  "Which pages": "Quelles pages",
 }
