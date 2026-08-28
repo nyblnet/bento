@@ -18,6 +18,7 @@ import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
+import { wireCanvas, placeNewCard } from './canvas.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
@@ -1333,6 +1334,8 @@ export class Editor {
     const fresh = newBlock('p')
     const owner = s.block(blockId)
     if (owner?.parent) fresh.parent = owner.parent
+    // a block born inside a canvas is born somewhere ON it
+    placeNewCard(page, fresh)
     s.commit(() => {
       page.blocks.splice(page.blocks.findIndex((b) => b.id === blockId) + 1, 0, fresh)
     })
@@ -2247,6 +2250,15 @@ export class Editor {
       }
       this.wireBoard(view)
       this.wireTables(view)
+      // The canvas keeps its own wiring in its own file: the drag, the cards
+      // and the shape button are one feature and touch nothing else here.
+      wireCanvas(view, {
+        block: (id) => this.store.block(id),
+        page: () => this.store.page,
+        commit: (fn, opts) => this.store.commit(fn, opts),
+        repaint: () => this.paintPage(),
+        pickPage: (then) => this.openPagePicker('', null, then),
+      })
     }
 
     // "Load this image" — the reader's consent to contact one remote host.
@@ -3108,6 +3120,7 @@ export class Editor {
     SPEC.get(fresh.type)?.init?.(fresh)
     if (into) fresh.parent = b.id
     else if (b.parent) fresh.parent = b.parent
+    if (s.page) placeNewCard(s.page, fresh)
     s.commit(() => {
       b.html = before
       const page = s.page!

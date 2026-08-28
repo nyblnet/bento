@@ -54,6 +54,10 @@ import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
   SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout, mediaPlayback,
 } from '../spaces/src/blocks.ts'
+import {
+  canvasRatio, cardPos, cardsOf, freeSlot, slotFor, nextRatio, ratioName, clampPct, round1,
+  CANVAS_RATIO, RATIO_MIN, RATIO_MAX,
+} from '../spaces/src/canvas.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
 
 let failures = 0
@@ -2944,6 +2948,132 @@ function fsTable(f: string): string {
   try { backlinksToB({ id: 'k', type: 'table', rows: ['not-a-row', [null, 7, cell]] }) }
   catch { threw = true }
   ok(!threw, 'a malformed rows array does not take the index down')
+}
+
+
+// ————— THE CANVAS BLOCK ——————————————————————————————————————————————————
+//
+// A spatial surface is the one block type whose layout has NOWHERE ELSE to
+// live: a board's order is `doc.pages`, a list's order is the block array, and
+// a canvas's coordinates are only on the canvas. So they ship into files on
+// other people's disks the moment the type exists, and every property below is
+// one that cannot be corrected afterwards.
+{
+  const cv = (over: Record<string, unknown> = {}): Block =>
+    ({ id: 'cv', type: 'canvas', ...over }) as Block
+
+  // THE SHAPE IS READ, NEVER REPAIRED. Same rule as tableOf: two readers of one
+  // file agree without exchanging an op, and opening a space rewrites nothing.
+  ok(canvasRatio(cv()) === CANVAS_RATIO, 'a canvas with no ratio is the default shape')
+  ok(canvasRatio(cv({ ratio: 1 })) === 1, 'a stated ratio is honoured')
+  ok(canvasRatio(cv({ ratio: 0 })) === RATIO_MIN, 'a ratio of 0 is clamped, not a surface with no height')
+  ok(canvasRatio(cv({ ratio: -3 })) === RATIO_MIN, 'a negative ratio is clamped')
+  ok(canvasRatio(cv({ ratio: 900 })) === RATIO_MAX, 'an absurd ratio is clamped')
+  ok(canvasRatio(cv({ ratio: 'wide' })) === CANVAS_RATIO, 'a ratio that is not a number is the default')
+  ok(canvasRatio(cv({ ratio: NaN })) === CANVAS_RATIO, 'NaN is the default, not NaN')
+
+  // THE SHAPE BUTTON CYCLES AND COMES HOME. Three shapes, and the third click
+  // returns the exact default — which is what lets the editor store it as an
+  // ABSENT key, so a canvas somebody cycled and cycled back is byte-identical
+  // to one nobody touched.
+  ok(nextRatio(nextRatio(nextRatio(CANVAS_RATIO))) === CANVAS_RATIO,
+    'three clicks of the shape button return the default ratio exactly')
+  ok(ratioName(1.6) === 'Wide' && ratioName(1) === 'Square' && ratioName(0.7) === 'Tall',
+    'each of the three shapes knows its own name')
+  ok(ratioName(1.55) === 'Wide',
+    'a hand-written ratio near a named shape says that name rather than nothing')
+
+  // AN UNPLACED CARD IS NOT AN ERROR, and two readers must place it the same.
+  // `{type:'canvas'}` with three bare paragraphs under it is a hand-writable
+  // canvas, and every card added with Enter arrives without coordinates.
+  const bare: Block = { id: 'c', type: 'p', parent: 'cv' }
+  ok(JSON.stringify(cardPos(bare, 0)) === JSON.stringify(cardPos(bare, 0)),
+    'an unplaced card lands in the same slot on every read')
+  ok(cardPos(bare, 0).x !== cardPos(bare, 1).x || cardPos(bare, 0).y !== cardPos(bare, 1).y,
+    'two unplaced cards do not land on top of each other')
+  ok([...Array(12)].every((_, i) => {
+    const p = slotFor(i)
+    return p.x >= 0 && p.x <= 100 - 22 && p.y >= 0 && p.y <= 100
+  }), 'every slot in the first lap leaves the whole card on the surface')
+  const seen = new Set([...Array(12)].map((_, i) => JSON.stringify(slotFor(i))))
+  ok(seen.size === 12, 'the twelve slots of one lap are twelve different places')
+
+  // A STATED POSITION WINS over the slot, which is the whole point of dragging.
+  ok(cardPos({ id: 'c', type: 'p', x: 40, y: 70 } as Block, 0).x === 40,
+    'a card that has been placed sits where it says')
+  ok(cardPos({ id: 'c', type: 'p', x: 40, y: 70 } as Block, 5).y === 70,
+    '…whatever its index among its siblings')
+
+  // COORDINATES OUT OF A FILE. A generator, a hand edit or a build with a
+  // different surface can write anything; none of it may put a card where no
+  // reader can reach it, and none of it may take a page of prose down.
+  ok(cardPos({ id: 'c', type: 'p', x: -50, y: 400 } as Block, 0).x === 0,
+    'a negative coordinate is brought back onto the surface')
+  ok(cardPos({ id: 'c', type: 'p', x: -50, y: 400 } as Block, 0).y === 100,
+    '…and one past the far edge is too')
+  ok(cardPos({ id: 'c', type: 'p', x: 'left', y: {} } as unknown as Block, 3).x === slotFor(3).x,
+    'a coordinate that is not a number falls back to the slot')
+
+  // ONE DECIMAL PLACE. Positions are rewritten on every drag and read in every
+  // diff; float noise makes a card that slid 4% look like a rewritten block.
+  ok(round1(59.34567) === 59.3, 'a position is stored to one decimal place')
+  ok(String(clampPct((1 / 3) * 100)) === '33.3', '…and is short enough to read in a diff')
+
+  // A NEW CARD NEVER LANDS ON AN OLD ONE. Not "the next index": cards get
+  // deleted, so index 3 can be free while index 5 is taken.
+  const occupied: Block[] = [
+    { id: 'a', type: 'p', ...slotFor(0) } as Block,
+    { id: 'b', type: 'p', ...slotFor(1) } as Block,
+  ]
+  const next = freeSlot(occupied)
+  ok(occupied.every((c) => c.x !== next.x || c.y !== next.y),
+    'a new card takes a slot no card is already sitting on')
+  const holed: Block[] = [{ id: 'a', type: 'p', ...slotFor(3) } as Block]
+  ok(JSON.stringify(freeSlot(holed)) === JSON.stringify(slotFor(0)),
+    '…and it fills the first hole rather than counting cards')
+
+  // THE CARDS OF A CANVAS ARE ITS CHILDREN, which is the whole format decision:
+  // no second list to keep in step with the block array.
+  const cvPage = {
+    id: 'p', title: 'T', blocks: [
+      { id: 'cv', type: 'canvas', html: 'Board' },
+      { id: 'c1', type: 'p', parent: 'cv', html: 'one' },
+      { id: 'other', type: 'p', html: 'not a card' },
+      { id: 'c2', type: 'pagelink', parent: 'cv', page: 'p2' },
+    ],
+  } as unknown as Page
+  ok(cardsOf(cvPage, 'cv').map((b) => b.id).join(',') === 'c1,c2',
+    'a canvas holds the blocks that name it as parent, and nothing else')
+
+  // DEGRADATION, and it is the reason cards are blocks. renderBlocks resolves a
+  // child against the OPEN CONTAINER STACK and an unknown type opens no
+  // container — so on a build with no `canvas`, every card falls out to the top
+  // level and renders as the paragraph or page card it already is. Nothing is
+  // hidden, and the canvas's own html must therefore NOT repeat the cards.
+  const cvSpec = SPEC.get('canvas')
+  ok(cvSpec?.container === 'always', 'a canvas owns the blocks whose parent is its id')
+  ok(cvSpec?.text === true, "a canvas's own html is its name, so it degrades to a readable line")
+  ok(cvSpec?.custom === true, 'a canvas draws itself')
+  ok(TAG_OF.canvas === 'div', 'a canvas is a div, like every other surface block')
+  ok(!LIST_OF.canvas, 'a canvas is not a list item')
+
+  // ITS MARKDOWN IS ITS NAME. The cards follow as their own indented lines,
+  // because they are their own blocks — so `toMd` must NOT print them again.
+  const cvMd = cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, 'Launch plan', '', {} as never)
+  ok(cvMd.join('\n') === '**Launch plan**', 'a canvas exports as its name')
+  ok(cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, '', '', {} as never)[0] === '**Canvas**',
+    'an unnamed canvas still says what it is rather than exporting a blank line')
+
+  // A CARD'S OWN WORDS TRAVEL, AS THEIR OWN LINE. mdLayout decides the two
+  // decorations a block cannot decide for itself, and the one that matters here
+  // is `quote`: a container marked `mdQuoteChildren` sweeps its whole subtree
+  // into a blockquote, and a canvas marked that way by accident would turn a
+  // storyboard into one grey box of run-on prose. (`indent` is set for any
+  // container's child; the exporter spends it on the types whose toMd takes it,
+  // which a plain text card's does not — so the assertion is on the quote.)
+  const cvLay = mdLayout(cvPage.blocks)
+  ok(cvLay[1].quote === '', 'a card is not swept into its canvas as a blockquote')
+  ok(cvLay[1].indent === '  ', "…and mdLayout reads it as its container's child")
 }
 
 

@@ -331,6 +331,28 @@ export const SPECS: BlockSpec[] = [
     },
   },
   {
+    // A SPATIAL SURFACE — a storyboard, a roadmap, a mind map. Its cards are
+    // the blocks whose `parent` is its id, exactly like a callout's body, and
+    // each one carries where it sits as two flat numbers. The whole argument
+    // for that shape (rather than an array of cards on this block) is at the
+    // top of canvas.ts; the short version is that a card is a block, so it is
+    // already searchable, exportable, backlinked and individually mergeable.
+    //
+    // `text: true`: the canvas's own `html` is its NAME. That is also what a
+    // build with no `canvas` type renders — and because the cards fall out to
+    // the top level on such a build (renderBlocks opens no container for an
+    // unknown type), the name must NOT duplicate them. A table's fallback has
+    // to hold its cells' text and pays for it in bytes; a canvas's does not.
+    type: 'canvas', label: 'Canvas', hint: 'Cards you place by hand', icon: 'canvas',
+    tag: 'div', text: true, custom: true, container: 'always',
+    // THE NAME, then the cards — which arrive on their own, as the indented
+    // lines of the blocks they are. A canvas is a picture and Markdown has no
+    // pictures, so the honest export is the list of what is on it, in document
+    // order. Positions are what does not survive, and saying so in the export
+    // would be a comment in someone else's document.
+    toMd: (_b, text) => [`**${text || 'Canvas'}**`],
+  },
+  {
     type: 'image', label: 'Image', hint: 'Embedded in the file', icon: 'image',
     tag: 'div', custom: true,
     toMd: (b) => [`![${String(b.alt ?? '')}](${String(b.src ?? '')})`],

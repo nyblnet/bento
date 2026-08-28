@@ -21,6 +21,7 @@ import {
 } from './fields'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
+import { renderCanvasHead, placeCard } from './canvas.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -68,8 +69,14 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   // line and usable by the lines BELOW it — the same direction a person reads
   // in, and the reason this needs no second pass and cannot cycle.
   const calc: CalcCtx = freshContext()
-  // stack of open containers, innermost last: [blockId, element]
-  const stack: Array<[string, HTMLElement]> = []
+  // stack of open containers, innermost last: [blockId, element, type]
+  //
+  // The TYPE is on the stack because a canvas's children are POSITIONED and
+  // nothing else's are. A block cannot know that on its own — `x` and `y` mean
+  // "where on the surface" only inside a surface — so the placement decision
+  // belongs here, where the open container is known, rather than to a test on
+  // the child that would also fire on a stray `x` anywhere else in a document.
+  const stack: Array<[string, HTMLElement, string]> = []
   let list: { el: HTMLElement; kind: 'ul' | 'ol'; under: string } | null = null
 
   const hostFor = (parent: string | undefined): HTMLElement | DocumentFragment => {
@@ -123,7 +130,14 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
 
     const node = renderBlock(b, doc, opts, calc)
     takeIn()
-    ;(kind && list ? list.el : host).appendChild(node)
+    const into = kind && list ? list.el : host
+    into.appendChild(node)
+    // A CARD IS PLACED AFTER IT IS APPENDED: its index among its siblings is
+    // the fallback position for a card that has never been dragged, and the
+    // index is a fact about the parent, not about the block.
+    if (stack.length && stack[stack.length - 1][0] === b.parent && stack[stack.length - 1][2] === 'canvas') {
+      placeCard(node, b)
+    }
 
     // A CONTAINER owns the blocks whose parent is its id. Which types those are
     // is registry data (blocks.ts `container`), not a name test here — the
@@ -135,7 +149,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       body.className = `sp-${b.type}-body`
       if (container === 'fold' && !(opts.forceOpen || b.open)) body.hidden = true
       node.appendChild(body)
-      stack.push([b.id, body])
+      stack.push([b.id, body, b.type])
       list = null
     } else if (kind) {
       // A LIST ITEM OWNS ITS INDENTED CHILDREN.
@@ -150,7 +164,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       // Not `container: true` in the registry: a list item does not take a body
       // div, it takes children directly, and the gutter/inline-host rules that
       // `container` implies are wrong for it.
-      stack.push([b.id, node])
+      stack.push([b.id, node, b.type])
     }
   })
   return frag
@@ -494,6 +508,19 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       text.textContent = shownValue(f, value)
       val.appendChild(text)
       el.appendChild(val)
+      return el
+    }
+
+    case 'canvas': {
+      // The BODY is opened by renderBlocks (registry `container`), which is
+      // also what puts the cards in it — so this draws the chrome and nothing
+      // else. `cards` is only needed for the empty-state line, and counting
+      // here rather than after the fact keeps renderBlock a pure function of
+      // one block.
+      const cards = doc.pages
+        .find((p) => p.blocks.some((x) => x.id === b.id))?.blocks
+        .filter((x) => x.parent === b.id).length ?? 0
+      renderCanvasHead(el, b, opts.editable === true, cards)
       return el
     }
 

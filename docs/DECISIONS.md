@@ -5665,3 +5665,101 @@ Options, none chosen:
 raised from the bento/type branch during #384 and deliberately NOT decided
 there, which was the right call — a single app's feature branch is the wrong
 place to set a cross-app default.
+
+## 2026-08-28 — bento/spaces: the `canvas` block, and where a card's position lives
+
+**The type.** `canvas` is a bounded surface holding cards you place by hand —
+a storyboard, a roadmap, a mind map. The format shape below is permanent from
+the moment the type ships, because there is no server to migrate a file
+somebody already has (PLATFORM §3).
+
+### The shape
+
+```jsonc
+{ "id": "b1", "type": "canvas",
+  "html": "Launch storyboard",   // the surface's NAME, and its fallback
+  "ratio": 1.6                    // width ÷ height; ABSENT = 1.6
+}
+```
+
+**A card is a BLOCK, not an entry in an array on the canvas.** The canvas is
+`container: 'always'` in the registry, so it owns the blocks whose `parent` is
+its id — exactly as a callout and a toggle do. A card adds two flat fields and
+nothing else:
+
+```jsonc
+{ "id": "b2", "type": "p", "parent": "b1", "x": 29, "y": 8, "html": "Review with the team" }
+```
+
+`x` and `y` are PERCENTAGES of the surface, one decimal place, clamped to
+0–100 at read time. A card with no coordinates is not an error: it takes a
+deterministic slot from its index among its siblings, so two readers of one
+file lay it out identically and `{"type":"canvas"}` with three bare paragraphs
+under it is a hand-writable canvas.
+
+A card's TYPE is any block type. `p` is a text card; `pagelink` is a card that
+opens a page in the space, which is what lets a canvas be a map OF the space
+rather than only a sketchpad. Nothing new was needed for either.
+
+### Why cards are blocks and not an array
+
+Three reasons, in ascending order of how permanent the mistake would have been.
+
+1. **An array is a second place text lives.** Every word in a space is some
+   block's `html` — canonicalised by one sanitizer, found by ⌘F, back-linked by
+   `buildIndex` because it reads `html`, exported by one markdown pass. Text
+   inside `canvas.cards[]` is none of those things, and each one would have to
+   be taught about the array separately.
+2. **An array degrades badly.** `renderBlocks` resolves a child against the
+   OPEN CONTAINER STACK, and an unknown type opens no container — so on a build
+   that has never heard of `canvas`, every card falls out to the top level and
+   renders as the paragraph or page card it already is, under the canvas's own
+   name. Measured against the pre-change shell: the page reads "Launch
+   storyboard" followed by each card as an ordinary paragraph, and the `x`/`y`
+   it cannot use round-trip untouched. Cards in an array would show as the
+   canvas's `html` and nothing more — unless the html duplicated all of it,
+   which is the price `table` pays and did not need to be paid again.
+3. **An array loses edits under collaboration.** model.ts already states the
+   rule: properties are flat because each (node, key) pair is one LWW register.
+   `cards` as one array is ONE register, so two people dragging two different
+   cards keep one of the two moves, silently. As blocks, each card is its own
+   CRDT node and `x`/`y` are its own registers, and both drags land.
+   `table.rows` has exactly this limitation and documents it; there was no
+   reason to take it on again where the alternative is strictly simpler.
+
+Because the cards are separate blocks that an old build renders on its own, the
+canvas's `html` is its NAME and must never repeat them — the opposite of
+`tableFallbackHtml`, which has to hold the cells' text because a table's cells
+are not blocks. The markdown export follows: a canvas exports as `**name**`
+and its cards arrive as their own lines.
+
+### Why percentages, and why `ratio` is document data
+
+Percentages, not pixels: the same file is read at 320px and at 2560px and
+printed on A4, and a layout in px is a layout that is right at exactly one
+width. Not an abstract 1000-unit grid either — that is a percentage with a
+scale factor bolted on, and the renderer would have to know the factor forever.
+A percentage needs nothing: `left: calc(var(--sp-x) * 1%)`.
+
+`ratio` has to be in the document rather than a reader-side default, because
+the cards' `y` is relative to it: a canvas laid out on a 1.6 surface and read on
+a 1.0 one is a different picture. It is stored as an ABSENT key when it is the
+default (the `editView` discipline), so a canvas cycled Wide→Square→Tall→Wide
+is byte-identical to one nobody touched.
+
+Below 560px the surface renders as a stacked list of its cards, positions
+ignored. That is a RENDERING choice made in the stylesheet, not a change to the
+file — four cards on a 360px board are four unreadable stamps, and the same
+document lays out spatially again on the next screen up.
+
+### Names reserved, so a follow-up does not have to guess
+
+- Card SIZE is `cw`/`ch`, in the same percentage units. **Not `w`/`h`** — an
+  image block already carries its intrinsic pixels in those, and an image is a
+  perfectly good card.
+- CONNECTORS belong on the canvas block as `links: [{ from, to }]` of card ids.
+  A relation is not a property of either end.
+- NESTING needs nothing: a canvas inside a canvas is a card whose type is
+  `canvas`, and the container stack already supports it.
+
+None of the three is built. All three are additive.

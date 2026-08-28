@@ -45,6 +45,7 @@ export const ICONS = {
   chevronDown: svg('<polyline points="6 9 12 15 18 9"/>'),
   eye: svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>'),
   edit: svg('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/>'),
+  canvas: svg('<rect x="2.5" y="4" width="19" height="16" rx="2"/><rect x="5.5" y="7" width="6" height="4.5" rx="1"/><rect x="14" y="12.5" width="5" height="4.5" rx="1"/>'),
   board: svg('<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/>'),
   up: svg('<path d="m18 15-6-6-6 6"/>'),
   down: svg('<path d="m6 9 6 6 6-6"/>'),
