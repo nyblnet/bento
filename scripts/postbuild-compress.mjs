@@ -138,9 +138,20 @@ const linkedRe = /<style[^>]*\brel="stylesheet"[^>]*>([\s\S]*?)<\/style>/
 // — shipping every document 147KB larger with the app still working, so
 // nothing looked wrong. A real tag is `<style>` or `<style …>`; a string
 // constant is not.
-const styleM = headPart.match(linkedRe)
+// Searched across the WHOLE document, not just <head>. The linked stylesheet
+// carries rel="stylesheet", which is unambiguous wherever it sits — and it
+// does not always sit in the head: for bento/type, vite emits it in the BODY
+// at offset 384674 while </head> is at 309927, so a head-scoped search never
+// saw it. What it found in the head instead was `<style>${…}</style>` from
+// print.ts's page template, minified into the module script: an 8-character
+// match that packed an empty payload and left the real 34KB sheet shipping as
+// plaintext in every saved file.
+//
+// The head-scoped fallback stays for a build that carries no rel attribute,
+// which is the only case it was ever reached for.
+const styleM = html.match(linkedRe)
   ?? headPart.match(/<style(?=[\s>])[^>]*>([\s\S]*?)<\/style>/)
-if (!styleM) throw new Error('app stylesheet not found in head')
+if (!styleM) throw new Error('app stylesheet not found')
 
 const js = mod[1]
 const css = styleM[1]
@@ -158,8 +169,20 @@ const title = html.match(/<title>[\s\S]*?<\/title>/)?.[0] ?? `<title>${titleFall
 const splashDiv = html.match(/<div id="bento-splash"[\s\S]*?<\/div>\s*<\/div>/)?.[0] ?? ''
 const splashCss = (() => {
   const bodyPart = html.slice(html.indexOf('<body'))
-  const m = bodyPart.match(/<style[^>]*>([\s\S]*?)<\/style>/)
-  return m ? m[1] : ''
+  // The first <style> in the body is USUALLY the splash's own few rules — but
+  // it is not always. Vite emits the app stylesheet wherever it likes, and for
+  // bento/type it lands in the BODY, so "first style in body" picked up the
+  // whole 34KB sheet and inlined it here as plaintext. Combined with the
+  // payload extracted above, the app's CSS then shipped TWICE in every saved
+  // file.
+  //
+  // rel="stylesheet" is what marks the app sheet, so skip anything wearing it
+  // and take the next block instead.
+  for (const m of bodyPart.matchAll(/<style([^>]*)>([\s\S]*?)<\/style>/g)) {
+    if (/\brel="stylesheet"/.test(m[1])) continue
+    return m[2]
+  }
+  return ''
 })()
 
 const SLIDES_TOOLING = `<!--
