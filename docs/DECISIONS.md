@@ -5746,3 +5746,54 @@ The picker was split from `openFieldPicker` into `fieldPicker(f, cur, anchor,
 write)` — a picker over a WRITER rather than a block id, because a cell can
 stand for a value that has no block yet. The header strip, the board's card chip
 and a cell are now one control with three writers, not three controls.
+
+## 2026-08-28 — two size mechanisms, and why deleting either loses a regression
+
+**Both stay.** #279 added an advisory PR build-size comment while
+`scripts/test-spaces-size.mjs` already measured shell size in CI. That looks
+like duplicated measurement and it is not, so this entry exists to stop the
+next person tidying one away.
+
+**They answer different questions.**
+
+| | the CI rig (size-budgets.json) | the PR comment (#279) |
+|---|---|---|
+| measured against | a committed `reference`, or a `max` ceiling | the PR's own base commit |
+| horizon | absolute, persistent, across all history | relative, one PR |
+| can fail a build | yes, when `enforce:true` | never, advisory only |
+| catches | SLOW drift — forty merges at 300 B each | a single change's jump |
+| blind to | which change caused it | accumulated drift; every PR looks fine |
+
+The second row is the whole point. Forty merged commits costing 300 bytes each
+is 12KB nobody chose, and **every one of those PRs shows a harmless +300 in its
+comment**. Only a number compared against a fixed point sees it. Equally, the
+rig can say a shell grew 12KB since the reference but not which PR to blame;
+the comment can. Neither is redundant.
+
+**Two real defects were found while reconciling them, both silent.**
+
+1. **Only bento/spaces was ever registered.** `size-budgets.json` listed one
+   shell, so slides and dash had NO persistent size record at all. The rig has
+   always been generic — it walks every entry — it just had nothing to walk.
+   Both are now registered as `enforce:false` watermarks.
+2. **dash was structurally unmeasurable.** The CI step sat in the spaces
+   section, *ahead of the dash build*, and the rig SKIPS a shell that is not
+   built — so it printed `skip dash — not built` and moved on. A guard that
+   reports "nothing to do" in a passing build is invisible. The step now runs
+   after all three builds.
+
+**Why watermarks and not ceilings for the two new entries.** Same reason spaces
+gave up its own: at 98.6% of its limit it had started declining worthwhile
+fixes, which is the ceiling costing more than it saves. And a ceiling picked
+with no history behind it is a guess that fails somebody else's PR. Growth
+still has to pass a human, because the number is printed every run.
+
+**References come from CI, never a local build.** Most of a shell is one
+deflated block and zlib's output differs across node versions — one commit
+measured 130,095 B on node 26 locally against 131,246 B on CI's node 24. When
+the two disagree, believe CI.
+
+**Naming, left alone deliberately.** `test-spaces-size.mjs` now covers three
+shells and the name undersells it, but it is invoked by name from
+`scripts/test-spaces.mjs` and referenced in this log, and renaming it was more
+churn than the overlap warranted. The file's own header says it is generic.

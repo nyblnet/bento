@@ -213,21 +213,6 @@ jobs:
             --outfile="$RUNNER_TEMP/test-spaces-roundtrip.mjs"
           node "$RUNNER_TEMP/test-spaces-roundtrip.mjs"
 
-      - name: Spaces shell size
-        # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
-        # the round finished at 108KB, and the same entry claimed the ceiling
-        # was "checked per feature from here" while shipping no mechanism — so
-        # the breach was found by a reviewer reading the number rather than by
-        # the build that caused it.
-        #
-        # bento/spaces has NO CEILING as of 2026-08-24 (the maintainer's call;
-        # at 98.6% it had started deciding which fixes were affordable). This
-        # step still runs and still prints the size and the drift from the
-        # recorded reference — it just no longer fails on it. Shells that keep
-        # enforce:true in scripts/size-budgets.json DO still fail here, which is
-        # why the step is not simply deleted. Rationale in docs/DECISIONS.md.
-        run: node scripts/test-spaces-size.mjs
-
       - name: Spaces model rig
         # Properties that fail SILENTLY, and that a shipped file cannot be
         # talked out of once it exists:
@@ -263,6 +248,32 @@ jobs:
 
       - name: Splice conformance gate (dash)
         run: node scripts/shell-gate.mjs dash/dist-single/Bento_Dash.bento.html
+
+      - name: Shell sizes
+        # TWO MECHANISMS, DELIBERATELY. This one and the advisory PR build-size
+        # comment (.github/workflows/pr-build-size*.yml) answer different
+        # questions, and deleting either as "duplicate measurement" loses a
+        # class of regression:
+        #
+        #   this step  — ABSOLUTE and PERSISTENT. A shell with enforce:true has
+        #     a ceiling and FAILS here; a shell with enforce:false prints its
+        #     drift from a committed `reference` and never fails. It is the only
+        #     thing that sees SLOW drift — forty merged commits at 300 B each,
+        #     where every single PR looked fine on its own.
+        #   the PR comment — RELATIVE and PER-PR. It reports this PR against its
+        #     own base and never fails. It is the only thing that attributes a
+        #     jump to the change that caused it, and it is blind to accumulated
+        #     drift.
+        #
+        # Neither subsumes the other. Rationale in docs/DECISIONS.md.
+        #
+        # Placed after ALL THREE builds on purpose: the rig skips a shell that
+        # is not built, so while this sat in the spaces section it silently
+        # measured nothing for dash. bento/spaces has NO CEILING as of
+        # 2026-08-24 (the maintainer's call; at 98.6% it had started deciding
+        # which fixes were affordable) — the step still prints its size and
+        # drift, it just no longer fails on it.
+        run: node scripts/test-spaces-size.mjs
 
       - name: Language pack verification rig
         # Packs come off the network, so the signature + hash-pin chain is the
