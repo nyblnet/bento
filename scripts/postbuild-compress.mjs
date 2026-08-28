@@ -127,9 +127,19 @@ if (!mod) throw new Error('module script not found')
 // back to a literal, so this cannot be worked around in the app source.
 const headPart = html.slice(0, html.indexOf('</head>'))
 const linkedRe = /<style[^>]*\brel="stylesheet"[^>]*>([\s\S]*?)<\/style>/
+// The fallback requires `>` or whitespace after the tag name, and that detail
+// is load-bearing. `<style[^>]*>` also matches `<style"`, and the kernel's
+// preview machinery contains exactly that as a STRING CONSTANT — tree-shaken
+// away until an app calls registerPreview, which is why this only surfaced
+// when bento/type grew a preview. The module script is inlined into <head>
+// ABOVE the real stylesheet, so the fallback matched a JS literal at offset
+// 2923 instead of the stylesheet at 296275, packed 293KB of JavaScript into
+// the #bento-rt-css payload, and left the real CSS uncompressed inside the JS
+// — shipping every document 147KB larger with the app still working, so
+// nothing looked wrong. A real tag is `<style>` or `<style …>`; a string
+// constant is not.
 const styleM = headPart.match(linkedRe)
-  // Fallback for a build that does not carry the attribute; unchanged behaviour.
-  ?? headPart.match(/<style[^>]*>([\s\S]*?)<\/style>/)
+  ?? headPart.match(/<style(?=[\s>])[^>]*>([\s\S]*?)<\/style>/)
 if (!styleM) throw new Error('app stylesheet not found in head')
 
 const js = mod[1]

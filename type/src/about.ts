@@ -24,6 +24,7 @@ import { wordCount, docForExport } from './model.ts';
 import { t } from './i18n.ts';
 import { knownAuthor, setAuthorName } from './comments.ts';
 import './comments.css';
+import { listVersions, type Snapshot } from './autosave.ts';
 
 export interface AboutHooks {
   store: Store;
@@ -205,6 +206,21 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
     'The document is the interchange unit: hand this JSON to an AI, get one back, ' +
     'and paste it in. `window.bento` exposes the same thing to scripts.'), 't-note'));
 
+  // ---- version history -----------------------------------------------------
+  //
+  // Browses the auto-save timeline autosave.ts keeps in IndexedDB (never in
+  // the file, never online). Restoring reuses `onReplaceDoc` exactly as
+  // "Replace from JSON…" does above — `Snapshot.json` already IS a bento/type
+  // document JSON string — so this needed no new hook into main.ts: parseDoc
+  // validates it, store.replace makes it undoable, editor.render() repaints.
+  const historyRow = document.createElement('div');
+  historyRow.className = 't-row';
+  historyRow.append(button(t('Version history…'), () => openVersionHistory({ store, onReplaceDoc, close })));
+  card.append(historyRow);
+  card.append(p(t(
+    'Versions are saved automatically as you edit, kept only in this browser, ' +
+    'and never uploaded. Restoring is undoable with ⌘Z.'), 't-note'));
+
   // ---- credits ------------------------------------------------------------
   card.append(h(t('Credits')));
   card.append(p(t(
@@ -221,6 +237,82 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
   back.addEventListener('click', e => { if (e.target === back) close(); });
   document.addEventListener('keydown', function esc2(e) {
     if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc2); }
+  });
+  document.body.append(back);
+}
+
+/**
+ * Version history — a second small dialog over the About card, listing the
+ * auto-save timeline newest-first. Kept separate from `openAbout` rather than
+ * inlined: the row list is fetched async (IndexedDB), and About itself must
+ * render synchronously the moment the wordmark is clicked.
+ */
+async function openVersionHistory(
+  { store, onReplaceDoc, close: closeAbout }: { store: Store; onReplaceDoc(json: string): void; close(): void },
+): Promise<void> {
+  const versions = await listVersions(store.doc.docId);
+
+  const back = document.createElement('div');
+  back.className = 't-overlay';
+  const card = document.createElement('div');
+  card.className = 't-dlg';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', t('Version history'));
+  const close = () => back.remove();
+
+  const h = document.createElement('h2');
+  h.className = 't-dlg-h';
+  h.textContent = t('Version history');
+  card.append(h);
+
+  if (!versions.length) {
+    const empty = document.createElement('p');
+    empty.className = 't-note';
+    empty.textContent = t('No saved versions yet — they accumulate as you edit.');
+    card.append(empty);
+  } else {
+    const list = document.createElement('div');
+    versions.forEach((v: Snapshot, i: number) => {
+      const rowEl = document.createElement('button');
+      rowEl.type = 'button';
+      rowEl.className = 't-btn';
+      rowEl.style.cssText = 'display:flex;width:100%;justify-content:space-between;gap:10px;margin:4px 0;';
+      const when = new Date(v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const label = document.createElement('span');
+      label.textContent = i === 0 ? t('{when} (most recent)', { when }) : when;
+      const doIt = document.createElement('span');
+      doIt.className = 't-note';
+      doIt.textContent = t('Restore');
+      rowEl.append(label, doIt);
+      rowEl.addEventListener('click', () => {
+        onReplaceDoc(v.json);
+        close();
+        closeAbout();
+      });
+      list.append(rowEl);
+    });
+    card.append(list);
+  }
+
+  const fine = document.createElement('p');
+  fine.className = 't-note';
+  fine.textContent = t('Stored only in this browser, never in the file or online.');
+  card.append(fine);
+
+  const foot = document.createElement('div');
+  foot.className = 't-dlg-foot';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 't-btn t-primary';
+  closeBtn.type = 'button';
+  closeBtn.textContent = t('Close');
+  closeBtn.addEventListener('click', close);
+  foot.append(closeBtn);
+  card.append(foot);
+
+  back.append(card);
+  back.addEventListener('click', e => { if (e.target === back) close(); });
+  document.addEventListener('keydown', function esc2(e) {
+    if (e.key === 'Escape') { e.stopPropagation(); close(); document.removeEventListener('keydown', esc2); }
   });
   document.body.append(back);
 }
