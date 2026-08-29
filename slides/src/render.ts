@@ -560,8 +560,13 @@ function stripAllTags(html: string): string {
  * `importNode(n, true)` copied them wholesale.
  */
 export const SVG_TAGS = new Set([
-  // structure. `style` stays: it cannot execute, and scopeCss (hard-won detail
-  // #7) is what keeps its rules from leaking into every other svg on the page.
+  // structure. `style` stays: it cannot execute, its text is run through
+  // sanitizeSvgCss, and sanitizeSvg SCOPES it to the element instance (hard-won
+  // detail #7) so its rules cannot leak into every other svg on the page.
+  // That scoping is passed IN — the sanitizer has no element to name on its
+  // own. An earlier version of this comment credited scopeCss directly, which
+  // was false: scopeCss's only caller took `el.css`, the model field, and the
+  // markup path below was never scoped at all.
   'svg', 'g', 'defs', 'symbol', 'use', 'switch', 'desc', 'title', 'metadata', 'style', 'view', 'a',
   // shapes and text
   'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
@@ -797,7 +802,7 @@ export function sanitizeSvgCss(css: string): string {
  * `id` is deliberately never stripped: svg gradients and markers resolve
  * through document-global `url(#…)`, so an id sweep blanks the artwork.
  */
-export function sanitizeSvg(markup: string): DocumentFragment {
+export function sanitizeSvg(markup: string, scope?: string): DocumentFragment {
   const out = document.createDocumentFragment()
   if (!markup) return out
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
@@ -845,7 +850,11 @@ export function sanitizeSvg(markup: string): DocumentFragment {
         // html parser really does build here: inside foreign content the
         // tokenizer stays in the data state, so `<svg><style><img src=x
         // onerror=…></style>` parses that img as an ELEMENT, not as css text.
-        el.textContent = sanitizeSvgCss(el.textContent ?? '')
+        // Scoped as well as sanitized. An svg <style> applies DOCUMENT-WIDE, so
+        // one diagram's rules reach every other svg on the page — the exact
+        // hazard scopeCss exists for, which until now only `el.css` got.
+        const clean = sanitizeSvgCss(el.textContent ?? '')
+        el.textContent = scope ? scopeCss(clean, scope) : clean
         continue
       }
       walk(el)
@@ -1154,7 +1163,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // whatever the deck carried in a <script> or an onload — see sanitizeSvg.
       // The <img> branch above is inert already (an image is script-disabled),
       // which is why only this path changes.
-      node.appendChild(sanitizeSvg(markup))
+      node.appendChild(sanitizeSvg(markup, `[data-el-id="${CSS.escape(el.id)}"]`))
       const svg = node.querySelector('svg')
       if (svg) {
         svg.style.width = '100%'
