@@ -5977,3 +5977,96 @@ the session, which is not.
 check belongs in the file people read BEFORE writing a rig; this log is what
 they read after wondering why a standard exists. That text is queued for the
 maintainer.
+## 2026-08-29 — the locale list leaves the prose; docs point at LOCALES
+
+**The rule that named the languages was wrong for a month and cost a shipped
+app a language.** `AGENTS.md` rule 6 listed seven catalogues (ja, zh-Hans,
+zh-Hant, es, fr, de, it) and `CLAUDE.md` said "7 locales"; Portuguese was added
+2026-07-25 and the docs did not follow. PR #394 added `type/src/i18n/` with
+seven catalogues and no `pt.ts`, and hard-coded the seven-locale list into its
+new build script. That session followed the written rule exactly. The rule was
+the defect.
+
+**So no document states the list any more.** Rule 6 and the `CLAUDE.md` i18n
+entry now name where the list lives — `LOCALES` in the app's
+`scripts/build-*-i18n.mjs`, with `ls <app>/src/i18n/` as the check — and carry
+the failure story, because a rule without one gets deleted by whoever finds it
+inconvenient. A count in prose is verified by nothing and is the only copy that
+can rot unnoticed; every other copy is load-bearing and fails visibly.
+
+**Three copies, not one, and the number is growing.** Adding a locale touches
+the catalogue file, the app's `LOCALES`, and any rig holding its own list.
+Saying "point at the build script" is true and incomplete: it leaves a rig's
+copy stale, which is what goes red. Measured on 2026-08-29:
+
+| | slides | spaces | type (#394) |
+|---|---|---|---|
+| `LOCALES` in build script | 8 | 8 | 7 |
+| catalogue files | 8 | 8 | 7 |
+| extra-file guard | **yes** | no | no |
+| rig with its own list | no | no | **yes** |
+
+**Only `build-i18n.mjs` errors on a catalogue missing from `LOCALES`.** On
+spaces and type, adding a catalogue without touching `LOCALES` exits 0, prints
+its locale count, and silently never packs the file — a translation that ships
+to nobody, announced by nothing. That is worse than a red build. Porting the
+guard to the sibling scripts is queued with ops and is not done here.
+
+**A rig must derive the list, never restate it.**
+`scripts/test-i18n-coverage.mjs` already does the right thing: it parses
+`PACKED_LOCALES` out of the generated `packed.ts`, so it cannot disagree with
+the build. #394's `test-type-i18n.ts` hard-codes a second list instead. The
+existing rig is the pattern to copy; a derived list is a copy that cannot rot.
+
+**Not fixed, deliberately:** this log's 2026-07-24 entry says "App UI i18n
+(7 locales)". It was true when written — one day before the entry that added
+Portuguese — and this log is append-only. It stays. Anyone grepping for stale
+counts will hit it; that is the cost of an honest record, not a defect.
+
+## 2026-08-29 — OPEN QUESTION: `pt` is two different languages in the suite
+
+**Not a decision. A question recorded because no rig can ask it.**
+
+**The facts, counted on 2026-08-29.** Both files are named `pt.ts` and both are
+correctly named, so every mechanical check passes:
+
+| | `arquivo` | `ficheiro` | `tela` | `guardar` | header declares |
+|---|---|---|---|---|---|
+| `slides/src/i18n/pt.ts` | 47 | 10 | 33 | 4 | Portuguese (**Brazilian**), explicit pt-BR terminology policy |
+| `spaces/src/i18n/pt.ts` | 9 | 58 | 3 | 7 | "Portuguese", no policy |
+
+So slides is Brazilian by declaration and spaces drifted European, under one
+locale code. A user running the suite in Portuguese meets two vocabularies.
+`type` followed slides while adding its catalogue and normalised the strings it
+reused.
+
+**The intent was Brazilian, but it was never written as a rule.** The
+2026-07-25 bundling entry adds Portuguese "because Brazil has a real
+English-proficiency gap"; `slides/src/i18n/pt.ts` states a pt-BR policy in its
+header and notes that European Portuguese "deserves its own catalog later".
+Neither is a suite-wide policy, and `spaces/` shows what happens without one.
+
+**Why this cannot be a rig.** The drift is vocabulary under an identical locale
+code. There is no signal to assert on short of a term blocklist per variant,
+and even that is not sufficient: bento/type reports that one reused string
+passed a `ficheiro`/`guardar`/`ecrã` sweep while remaining European in
+construction ("cada vez que guarda", "num computador") and had to be rewritten
+by hand. **A term-level sweep is not a conversion.**
+
+**Not clean anywhere, which is why this is a question and not a cleanup.**
+Slides violates its own stated policy 10 times (`ficheiro`) plus `guardar` and
+`ecrã`. Settling the question means retranslating a catalogue, which is
+translation work and a maintainer's call, not a documentation change.
+
+**What is actually being asked**, so it is not rediscovered:
+
+1. Is bundled `pt` pt-BR for the whole suite? The recorded reasoning says
+   Brazil, and two of three catalogues follow it.
+2. If yes, `spaces/src/i18n/pt.ts` needs converting by hand and every catalogue
+   should declare its variant in its header the way slides does.
+3. Does European Portuguese become a downloadable pack (`pt-PT`), which is what
+   the slides header anticipates and what the pack tier exists for?
+
+Until it is answered, **a new catalogue for a language with regional variants
+should state its variant in its header** and follow the sibling app that
+already declares one.
