@@ -63,6 +63,9 @@ are in `docs/DECISIONS.md` — don't reopen them.
    - **A rig must derive the list, never restate it.**
      `scripts/test-i18n-coverage.mjs` reads `PACKED_LOCALES` out of the
      generated `packed.ts` — copy that, and a fourth copy can never go stale.
+     **It covers slides ONLY** (`coreDir` is hardcoded to `slides/src/i18n`),
+     so spaces and type have no coverage rig at all. Do not assume your app's
+     catalogues are checked by anything.
    - **A locale code is not always a language.** `pt` is Brazilian in
      `slides/` and drifted European in `spaces/`; no check can see this,
      because both files are correctly named `pt.ts`. See docs/DECISIONS.md,
