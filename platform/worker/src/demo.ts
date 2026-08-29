@@ -362,7 +362,7 @@ ${PAGE_STYLES}
   }
   .sidebar-resize-handle:hover, .sidebar-resize-handle.dragging { background: var(--accent); opacity: 0.5; }
   .sidebar-brand { font-weight: 800; font-size: 15px; margin: 0 0 16px; padding: 0 2px; }
-  .sidebar-brand span { color: var(--accent); }
+  .sidebar-brand span { color: var(--accent-ink); }
   .new-deck-btn { width: 100%; justify-content: center; margin-bottom: 16px; }
   /* Three independent sections (Pinned / Projects / History) instead of one
      flat scrolling list: a sidebar full of pinned decks used to shove
@@ -390,7 +390,7 @@ ${PAGE_STYLES}
     flex: 0 0 auto; background: none; border: none; color: var(--text-dim); cursor: pointer;
     display: inline-flex; padding: 3px; border-radius: 5px; opacity: 0.8;
   }
-  .project-add-btn:hover { color: var(--text); background: rgba(245,247,250,0.1); opacity: 1; }
+  .project-add-btn:hover { color: var(--text); background: rgba(28,43,61,0.08); opacity: 1; }
 
   /* project folders — a lightweight grouping concept, sidebar-only: a
      project has no access level, no kind, no content of its own, it's
@@ -399,13 +399,13 @@ ${PAGE_STYLES}
     display: flex; align-items: center; gap: 6px; padding: 6px 2px 6px 8px; border-radius: 8px;
     font-size: 13px; cursor: pointer;
   }
-  .project-folder-row:hover { background: rgba(245,247,250,0.07); }
+  .project-folder-row:hover { background: rgba(28,43,61,0.06); }
   .project-folder-chevron {
     flex: 0 0 auto; width: 12px; display: flex; align-items: center; justify-content: center;
     opacity: 0.65; transition: transform 0.15s ease;
   }
   .project-folder-chevron.open { transform: rotate(90deg); }
-  .project-folder-icon { flex: 0 0 auto; width: 15px; display: flex; align-items: center; justify-content: center; color: var(--accent); opacity: 0.9; }
+  .project-folder-icon { flex: 0 0 auto; width: 15px; display: flex; align-items: center; justify-content: center; color: var(--accent-ink); opacity: 0.9; }
   .project-folder-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .project-folder-count { flex: 0 0 auto; color: var(--text-dim); font-size: 11px; }
   .project-folder-children { padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
@@ -413,7 +413,7 @@ ${PAGE_STYLES}
     display: flex; align-items: center; gap: 4px; padding: 2px 2px 2px 10px; border-radius: 8px;
     font-size: 13px;
   }
-  .deck-item:hover { background: rgba(245,247,250,0.07); }
+  .deck-item:hover { background: rgba(28,43,61,0.06); }
   .deck-item-link {
     flex: 1; min-width: 0; padding: 6px 0; color: var(--text); text-decoration: none; overflow: hidden;
   }
@@ -424,13 +424,13 @@ ${PAGE_STYLES}
   .deck-kind, .deck-status, .deck-pin-badge {
     flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; opacity: 0.7;
   }
-  .deck-pin-badge { color: var(--accent); opacity: 1; }
+  .deck-pin-badge { color: var(--accent-ink); opacity: 1; }
   .deck-gear, .project-gear {
     flex: 0 0 auto; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
     border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px;
     opacity: 0.6;
   }
-  .deck-gear:hover, .project-gear:hover { opacity: 1; background: rgba(245,247,250,0.1); color: var(--text); }
+  .deck-gear:hover, .project-gear:hover { opacity: 1; background: rgba(28,43,61,0.08); color: var(--text); }
   .deck-list-empty, .deck-list-loading { color: var(--text-dim); font-size: 13px; padding: 8px 10px; }
   .deck-rename-row { flex: 1; min-width: 0; padding: 4px 0; }
   .deck-rename-row input {
@@ -446,13 +446,13 @@ ${PAGE_STYLES}
      the exact trap a sidebar-nested menu here would fall into. */
   .ctx-menu {
     position: fixed; z-index: 60; background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 6px; min-width: 200px; box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    border-radius: 10px; padding: 6px; min-width: 200px; box-shadow: 0 10px 30px rgba(28,43,61,0.16);
   }
   .ctx-item {
     display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px;
     border-radius: 6px; background: none; border: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
   }
-  .ctx-item:hover { background: rgba(245,247,250,0.08); }
+  .ctx-item:hover { background: rgba(28,43,61,0.07); }
   .ctx-item:disabled { opacity: 0.5; cursor: default; }
   .ctx-item.danger { color: var(--err-fg); }
   .ctx-item.danger:hover { background: var(--err-bg); }
@@ -495,13 +495,13 @@ ${PAGE_STYLES}
     font-size: 13px; font-weight: 600; color: var(--text-dim); text-decoration: none; white-space: nowrap;
     background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px;
   }
-  .preview-header a:hover, .preview-header button:hover { color: var(--text); background: rgba(245,247,250,0.08); }
+  .preview-header a:hover, .preview-header button:hover { color: var(--text); background: rgba(28,43,61,0.07); }
   .preview-panel iframe { flex: 1; border: 0; width: 100%; background: var(--bg); }
 
   @media (max-width: 860px) {
     .sidebar {
       position: fixed; inset: 0 auto 0 0; z-index: 30; transform: translateX(-100%);
-      transition: transform 0.2s ease; box-shadow: 2px 0 16px rgba(0,0,0,0.5);
+      transition: transform 0.2s ease; box-shadow: 2px 0 16px rgba(28,43,61,0.18);
     }
     .sidebar.open { transform: translateX(0); }
     .sidebar-backdrop {
