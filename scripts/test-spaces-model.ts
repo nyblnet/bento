@@ -27,7 +27,7 @@
 //      docId on every open.
 
 import {
-  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote,
+  parseDoc, buildIndex, docContentKey, homePage, FORMAT, isRemote, loadsRemotely, assetValue,
   effectiveParents, descendantsOf,
   tableOf, writeTable, tableFallbackHtml, TABLE_MAX_COLS, TABLE_MAX_ROWS,
   linkCard, linkCardHtml,
@@ -40,7 +40,7 @@ import {
   DEFAULT_FIELDS, fieldsOf, fieldByKey, optionOf, propHtml, propBlock,
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
-  sortRows, unknownSortKeys, type IssueRow,
+  sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
@@ -54,7 +54,14 @@ import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
   SPECS, SPEC, MENU_SPECS, MD_SPECS, TAG_OF, LIST_OF, CALLOUT_TONES, mdLayout, mediaPlayback,
 } from '../spaces/src/blocks.ts'
+import {
+  canvasRatio, cardPos, cardsOf, freeSlot, slotFor, nextRatio, ratioName, clampPct, round1,
+  CANVAS_RATIO, RATIO_MIN, RATIO_MAX,
+} from '../spaces/src/canvas.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
+import {
+  buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
+} from '../spaces/src/graph.ts'
 
 let failures = 0
 let checks = 0
@@ -307,13 +314,69 @@ for (const [label, input, err] of [
   }
   ok(!isRemote(''), 'an empty src is not a remote fetch')
 
+  // ---- and the same question, asked one indirection deeper -----------------
+  // isRemote answers about the string an author WROTE. `asset:k` is local by
+  // inspection and `doc.assets.k` is whatever the file says it is, so the gate
+  // that decides whether to show the consent placeholder was answering the
+  // wrong question. Measured on a shipped build before this: a document with
+  // `assets: { k: "http://…" }` and an image `src: "asset:k"` issued a real GET
+  // on open, with no placeholder — the tracking pixel the paragraph above says
+  // is prevented.
+  //
+  // BEHAVIOUR, not a source grep. Two assertions in this file were shown to
+  // pass through live regressions because they matched text rather than
+  // running anything, so this one runs the predicate against real documents.
+  {
+    // assetValue reads doc.assets and nothing else, so the fixture is that.
+    const withAssets = (assets: Record<string, string>) => ({ assets }) as never
+
+    const hostile = withAssets({ k: 'http://tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', hostile),
+      'an asset: key whose VALUE is a URL is a remote load, however local the key looks')
+    ok(isRemote(assetValue('asset:k', hostile)),
+      '…because the asset table is resolved before the question is asked')
+
+    const protoRel = withAssets({ k: '//tracker.example/p.png' })
+    ok(loadsRemotely('asset:k', protoRel), 'protocol-relative in the asset table is remote too')
+
+    const embedded = withAssets({ k: 'data:image/png;base64,AAAA' })
+    ok(!loadsRemotely('asset:k', embedded), 'an asset holding embedded bytes is still local')
+
+    const missing = withAssets({})
+    ok(!loadsRemotely('asset:nope', missing), 'an asset key that resolves to nothing loads nothing')
+
+    // the prototype-chain reach the resolver already guards, kept honest here
+    const proto = withAssets({})
+    ok(!loadsRemotely('asset:toString', proto), 'asset:toString does not reach Object.prototype')
+    ok(assetValue('asset:toString', proto) === '', '…and resolves to the empty string, not a function')
+
+    // a plainly written URL is unchanged by any of this
+    ok(loadsRemotely('http://tracker.example/p.png', missing), 'a written URL is still remote')
+    ok(!loadsRemotely('data:image/png;base64,AAAA', missing), 'a written data: URI is still local')
+  }
+
   // and the renderer must actually consult it
   const fs = await import('node:fs')
   const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
-  ok(/isRemote\(rawSrc\)\s*&&\s*!opts\.allowRemote/.test(ren),
+  // EVERY gate asks the resolved question. Counting them is the point: the
+  // hole was one call site out of five asking `isRemote` about the written
+  // string, and a regex that merely finds "a gate exists" would have passed
+  // throughout. If a sixth surface starts loading something, this count is
+  // what fails.
+  const gates = (ren.match(/loadsRemotely\(/g) ?? []).length
+  ok(gates >= 5, `every surface that loads asks the resolved question (${gates} gates)`)
+  ok(!/isRemote\(rawSrc\)/.test(ren),
+    'no gate asks about the WRITTEN src — that is the hole an asset: key hid in')
+  ok(/loadsRemotely\(rawSrc, doc\)\s*&&\s*!opts\.allowRemote/.test(ren),
     'render.ts gates remote images on the reader\'s consent')
   ok(!/allowRemote/.test(fs.readFileSync(new URL('../spaces/src/model.ts', import.meta.url), 'utf8')),
     'consent is NOT a document field — it belongs to the reader, not the file')
+
+  // The link card's thumbnail is the surface with no gate at all: linkCard()
+  // takes a BLOCK, so it cannot know what an asset: key resolves to, and it was
+  // trusted to have already dropped anything remote.
+  ok(/c\.image && !loadsRemotely\(c\.image, doc\)/.test(ren),
+    'a link card thumbnail is checked where the document is in scope, not where it is built')
 }
 
 // ---- an encrypted space is never written to disk in the clear ---------------
@@ -442,6 +505,75 @@ for (const [label, input, err] of [
   ok(setsAria >= 2, `every row that can be current announces it (${setsAria} call sites)`)
   ok(setsAria >= setsClass - 1,
     'no place styles itself as current without saying so — sp-here and aria-current stay paired')
+}
+
+// ---- a page can be a record, and the schema grows by being used ------------
+// `doc.fields` has been a per-document vocabulary since the tracker shipped and
+// NOTHING EVER WROTE IT: the only way to give a page a property was "Make this
+// page an issue", which adds four fields or none. So the schema was
+// configurable in the format and fixed in the app, and a space could hold a
+// backlog but never a reading list.
+//
+// The trap this pins is `fieldsOf`'s fallback. It returns DEFAULT_FIELDS only
+// while `doc.fields` is absent or empty — so a document that has never declared
+// a schema and then gains ONE field would, if that field were pushed into an
+// empty array, lose Status, Priority, Assignee and Estimate in the same stroke.
+// Every issue would keep its `prop` blocks, and the board grouping them by
+// status would have no status field to group by.
+{
+  const fs = await import('node:fs')
+  const fields = fs.readFileSync(new URL('../spaces/src/fields.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const props = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
+
+  ok(/export function withField\(/.test(fields), 'there is one way to add a field to the vocabulary')
+  // The seeding is the whole point: it must start from fieldsOf(doc), never
+  // from doc.fields directly.
+  ok(/const current = fieldsOf\(doc\)/.test(fields),
+    '…and it seeds from the DEFAULTS, so the first custom field does not erase them')
+  ok(/export function freeFieldKey\(/.test(fields),
+    'a new field gets a key that is free — keys outlive labels and views group by them')
+
+  ok(/openAddProperty\(pageId: string, anchor: HTMLElement\)/.test(ed), 'a page can be given a property')
+  ok(/withField\(s\.doc, spec\)/.test(ed), '…and naming a new one writes it into the document vocabulary')
+  ok(/splice\(headerLength\(p\), 0, propBlock\(/.test(ed),
+    '…as a prop block in the header strip, where the readable form is written with it')
+  ok(/openAddProperty\(page\.id, addProp\)/.test(props), 'the properties panel offers it')
+}
+
+// ---- a view is about a set of pages, and can be looked at as a table -------
+// A view meant ONE thing: every page carrying a `status`. That made the tracker
+// work and everything else impossible — no "the pages with an Author", no "the
+// pages under Books", so a space could hold a backlog and never a reading list.
+//
+// ABSENT MEANS ISSUES. That is the compatibility rule, not a default: every
+// view block written before `source` existed carries none and must keep showing
+// the backlog forever, and a view set back to Issues must be byte-identical to
+// one that never moved — the same rule `filter` already follows.
+{
+  const fs = await import('node:fs')
+  const fields = fs.readFileSync(new URL('../spaces/src/fields.ts', import.meta.url), 'utf8')
+  const render = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+
+  ok(/export function viewRows\(/.test(fields), 'a view selects its rows through one function')
+  ok(/if \(!has && !under\) return issuesOf\(doc\)/.test(fields),
+    '…and with no source it is still the backlog, so old view blocks are unchanged')
+  ok(/viewRows\(doc, \(b as \{ source\?: unknown \}\)\.source\)/.test(render),
+    'the renderer asks for the block\'s own source rather than the issues')
+
+  // The table is the shape a base is usually looked at in. Its columns must
+  // come from the ROWS, not the vocabulary: a table of books carrying no
+  // Estimate should not grow an Estimate column because the schema has one.
+  ok(/layout === 'table'/.test(render), 'a view can be a table')
+  ok(/rows\.some\(\(r\) => r\.values\.has\(k\)\)/.test(render),
+    '…whose columns are the fields the rows actually carry')
+  ok(/overflow-x/.test(fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
+    .split('.sp-view-tablewrap')[1]?.slice(0, 120) ?? ''),
+    '…and scrolls inside itself, so a wide table never scrolls the page sideways')
+
+  // Cycling all the way round must leave the block as it started.
+  ok(/table: undefined/.test(ed), 'cycling past table clears the key rather than storing "board"')
 }
 
 // ---- find & replace: the number shown IS the number changed ----------------
@@ -819,7 +951,7 @@ for (const [label, input, err] of [
 }
 
 // ---- the table block -------------------------------------------------------
-// A table is CONTENT (working/spaces-design.md §2.6) — no formulas, nothing
+// A table is CONTENT (working/design/spaces-design.md §2.6) — no formulas, nothing
 // that recalculates, and not the database case, which already shipped as the
 // tracker. What is pinned here is the part that is PERMANENT: the shape of the
 // model, the `html` fallback that is the whole of format additivity for a new
@@ -1793,6 +1925,119 @@ function fsTable(f: string): string {
     'a status from a newer build sorts after every one this build knows')
 }
 
+// ---- SORTING BY A TABLE COLUMN HEADER --------------------------------------
+// A header is the second control that writes `sort`, and the one a reader will
+// actually reach for. Two properties, both of which fail silently:
+//
+//   · THE THIRD STATE IS "NONE". A header that only flips between ascending and
+//     descending can never give a hand-arranged board its order back, and
+//     "manual order" is not a sort called manual — it is the ABSENCE of the key.
+//     Storing `sort: []` would satisfy every screen and would still leave a
+//     view somebody sorted and unsorted permanently different from one nobody
+//     touched, in a file on somebody else's disk.
+//
+//   · THE ARROW AND THE ORDER READ THE SAME FACT. A header that computed its
+//     own direction beside the one sortRows applies is a display that can
+//     disagree with the rows underneath it.
+{
+  const doc = { fields: DEFAULT_FIELDS } as unknown as SpacesDoc
+  const j = (v: unknown) => JSON.stringify(v)
+
+  ok(j(cycleSort(undefined, 'status')) === j([{ key: 'status' }]),
+    'the first click on a column sorts by it, ascending')
+  ok(!Object.prototype.hasOwnProperty.call((cycleSort(undefined, 'status') ?? [])[0] ?? {}, 'dir'),
+    "…and writes NO `dir`, because absent is what ascending has always meant")
+  ok(j(cycleSort([{ key: 'status' }], 'status')) === j([{ key: 'status', dir: 'desc' }]),
+    'the second click reverses it')
+  ok(cycleSort([{ key: 'status', dir: 'desc' }], 'status') === undefined,
+    'the third click returns to NO SORT — and says so with undefined, never an empty array')
+  ok(j(cycleSort([{ key: 'status', dir: 'desc' }], 'priority')) === j([{ key: 'priority' }]),
+    'clicking a DIFFERENT column starts that column fresh, ascending')
+
+  // the byte-identity rule the whole format follows, proved on the block itself
+  const block: Record<string, unknown> = { id: 'v', type: 'view', html: 'Issues' }
+  const pristine = j(block)
+  const write = (k: string) => {
+    const next = cycleSort(block.sort, k)
+    if (next === undefined) delete block.sort
+    else block.sort = next
+  }
+  write('status'); write('status'); write('status')
+  ok(j(block) === pristine,
+    'a view sorted and unsorted from its header is BYTE-IDENTICAL to one nobody ever touched')
+
+  // the arrow is the order, not a second opinion about it
+  ok(sortDirOf(undefined, 'status') === undefined && sortDirOf('nonsense', 'status') === undefined,
+    'a malformed sort points no arrow rather than throwing — it came out of a file someone sent you')
+  ok(sortDirOf([{ key: 'status' }], 'status') === 'asc',
+    'an entry with no direction reads as ascending, the way sortRows applies it')
+  ok(sortDirOf([{ key: 'status' }], 'priority') === undefined,
+    'and a column that is not the sort key carries no arrow')
+  const rows2: IssueRow[] = [
+    { page: { id: 'a', title: 'a', blocks: [] } as Page, values: new Map([['status', 'done']]) },
+    { page: { id: 'b', title: 'b', blocks: [] } as Page, values: new Map([['status', 'backlog']]) },
+  ]
+  const desc = cycleSort(cycleSort(undefined, 'status'), 'status')
+  ok(sortDirOf(desc, 'status') === 'desc'
+    && sortRows(doc, rows2, desc).map((r) => r.page.id).join('') === 'ab',
+    'the arrow the header shows and the order sortRows produces come from the one key')
+}
+
+// ---- the table's HEADERS and CELLS are controls, and only where there is an
+// ---- editor ----------------------------------------------------------------
+// Both are emitted by the ONE renderer, which also paints the reading view, a
+// printout and a locked space. A control that escapes the editable guard is a
+// button a reader can press and a shape on paper that means nothing.
+{
+  const fs = nodeFs
+  const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const tbl = ren.slice(ren.indexOf("if (layout === 'table') {"), ren.indexOf("if (layout === 'list') {"))
+
+  ok(/if \(opts\.editable\) \{[\s\S]{0,900}?sortB\.dataset\.sortCol/.test(tbl),
+    'the sortable header is a control ONLY where there is an editor')
+  ok(/if \(opts\.editable && f\) \{[\s\S]{0,600}?cell\.dataset\.cellPage/.test(tbl),
+    '…and so is the editable cell')
+  ok((tbl.match(/sortCol/g) ?? []).length === 1 && (tbl.match(/cellPage/g) ?? []).length === 1,
+    'neither is created anywhere else in the table, where no guard would cover it')
+  ok(/th\.setAttribute\('aria-sort'/.test(tbl),
+    'the sort state reaches a screen reader as aria-sort, not only as an arrow glyph')
+
+  // the page column: no sort control, because a view's sort names a FIELD and
+  // sortRows cannot express a title. Pinned so nobody quietly invents a second
+  // ordering mechanism to fill the gap.
+  const first = tbl.slice(tbl.indexOf('const th0'), tbl.indexOf('hr.appendChild(th0)'))
+    .replace(/^\s*\/\/[^\n]*$/gm, '')
+  ok(!first.includes('sortCol') && !first.includes('button'),
+    'the page-title column carries no sort control — a sort key is a field, and a title is not one')
+
+  // a header click writes through the SAME editView every other view control
+  // uses, so "no sort" deletes the key rather than storing an empty array
+  ok(/data-sort-col[\s\S]{0,700}?cycleSort\([\s\S]{0,80}?\.sort, h\.dataset\.sortCol!\)/.test(ed)
+    && /data-sort-col[\s\S]{0,700}?this\.editView\(/.test(ed),
+    'a header click writes the view’s own sort through editView, which deletes rather than stores empty')
+
+  // a cell writes through the one writer, so `value` and the readable `html`
+  // can never fall out of step — and a page that lacks the field GAINS it, the
+  // way a board drop already does
+  ok(/private putField\(page: Page, f: FieldSpec, value: unknown\): void \{\s*const own = propBlockOf\(page, f\.key\)\s*if \(own\) this\.applyField\(own, f, value\)\s*else page\.blocks\.splice\(headerLength\(page\), 0, propBlock\(/.test(ed),
+    'a cell edit on a page WITHOUT that field adds the prop block, with its readable html written by propBlock')
+  ok(/private setCell\([\s\S]{0,900}?s\.commit\(\(\) => this\.putField\(page, f, value\)/.test(ed),
+    'and every cell write goes through it, inside one commit')
+  ok(/private setCell\([\s\S]{0,900}?if \(own && \(own as \{ value\?: unknown \}\)\.value === value\) return/.test(ed),
+    'choosing the value a cell already holds commits NOTHING — not a step you press ⌘Z past')
+  ok(/private setCell\([\s\S]{0,900}?const scope = pageId === s\.pageId \? 'page' : 'doc'/.test(ed),
+    'a cell on ANOTHER page takes a document undo entry, or undo would restore the view and leave the value')
+
+  // ONE picker. A cell that opened a picker of its own would be a second place
+  // for the choosing to drift from the header strip's.
+  ok((ed.match(/private fieldPicker\(/g) ?? []).length === 1
+    && /this\.fieldPicker\(f, \(b as \{ value\?: unknown \}\)\.value, anchor, \(v\) => this\.setField\(blockId, v\)\)/.test(ed),
+    'the header strip’s picker and the cell’s are the same picker over different writers')
+  ok(/private openCellPicker\([\s\S]{0,800}?this\.fieldPicker\(f, own \? \(own as \{ value\?: unknown \}\)\.value : undefined, anchor/.test(ed),
+    '…and a cell standing for a value that does not exist yet opens it with nothing selected')
+}
+
 // ---- what a board and a field EXPORT ---------------------------------------
 // The readable `html` on a prop block is the whole reason the format degrades
 // instead of vanishing. The exporter is its most important consumer and was the
@@ -1995,7 +2240,7 @@ function fsTable(f: string): string {
     'a clip fetches metadata, never the whole file, for a page nobody pressed play on')
   // the remote gate is the image gate, and a clip needs it MORE: a <video> asks
   // its host for byte ranges the moment it is parsed
-  ok(/isRemote\(rawSrc\)[\s\S]{0,200}remotePlaceholder/.test(render),
+  ok(/loadsRemotely\(rawSrc, doc\)[\s\S]{0,200}remotePlaceholder/.test(render),
     'a linked clip is not loaded until the reader agrees, naming the host')
 
   const preview = src('preview.ts')
@@ -2875,6 +3120,286 @@ function fsTable(f: string): string {
   try { backlinksToB({ id: 'k', type: 'table', rows: ['not-a-row', [null, 7, cell]] }) }
   catch { threw = true }
   ok(!threw, 'a malformed rows array does not take the index down')
+}
+
+
+// ————— THE CANVAS BLOCK ——————————————————————————————————————————————————
+//
+// A spatial surface is the one block type whose layout has NOWHERE ELSE to
+// live: a board's order is `doc.pages`, a list's order is the block array, and
+// a canvas's coordinates are only on the canvas. So they ship into files on
+// other people's disks the moment the type exists, and every property below is
+// one that cannot be corrected afterwards.
+{
+  const cv = (over: Record<string, unknown> = {}): Block =>
+    ({ id: 'cv', type: 'canvas', ...over }) as Block
+
+  // THE SHAPE IS READ, NEVER REPAIRED. Same rule as tableOf: two readers of one
+  // file agree without exchanging an op, and opening a space rewrites nothing.
+  ok(canvasRatio(cv()) === CANVAS_RATIO, 'a canvas with no ratio is the default shape')
+  ok(canvasRatio(cv({ ratio: 1 })) === 1, 'a stated ratio is honoured')
+  ok(canvasRatio(cv({ ratio: 0 })) === RATIO_MIN, 'a ratio of 0 is clamped, not a surface with no height')
+  ok(canvasRatio(cv({ ratio: -3 })) === RATIO_MIN, 'a negative ratio is clamped')
+  ok(canvasRatio(cv({ ratio: 900 })) === RATIO_MAX, 'an absurd ratio is clamped')
+  ok(canvasRatio(cv({ ratio: 'wide' })) === CANVAS_RATIO, 'a ratio that is not a number is the default')
+  ok(canvasRatio(cv({ ratio: NaN })) === CANVAS_RATIO, 'NaN is the default, not NaN')
+
+  // THE SHAPE BUTTON CYCLES AND COMES HOME. Three shapes, and the third click
+  // returns the exact default — which is what lets the editor store it as an
+  // ABSENT key, so a canvas somebody cycled and cycled back is byte-identical
+  // to one nobody touched.
+  ok(nextRatio(nextRatio(nextRatio(CANVAS_RATIO))) === CANVAS_RATIO,
+    'three clicks of the shape button return the default ratio exactly')
+  ok(ratioName(1.6) === 'Wide' && ratioName(1) === 'Square' && ratioName(0.7) === 'Tall',
+    'each of the three shapes knows its own name')
+  ok(ratioName(1.55) === 'Wide',
+    'a hand-written ratio near a named shape says that name rather than nothing')
+
+  // AN UNPLACED CARD IS NOT AN ERROR, and two readers must place it the same.
+  // `{type:'canvas'}` with three bare paragraphs under it is a hand-writable
+  // canvas, and every card added with Enter arrives without coordinates.
+  const bare: Block = { id: 'c', type: 'p', parent: 'cv' }
+  ok(JSON.stringify(cardPos(bare, 0)) === JSON.stringify(cardPos(bare, 0)),
+    'an unplaced card lands in the same slot on every read')
+  ok(cardPos(bare, 0).x !== cardPos(bare, 1).x || cardPos(bare, 0).y !== cardPos(bare, 1).y,
+    'two unplaced cards do not land on top of each other')
+  ok([...Array(12)].every((_, i) => {
+    const p = slotFor(i)
+    return p.x >= 0 && p.x <= 100 - 22 && p.y >= 0 && p.y <= 100
+  }), 'every slot in the first lap leaves the whole card on the surface')
+  const seen = new Set([...Array(12)].map((_, i) => JSON.stringify(slotFor(i))))
+  ok(seen.size === 12, 'the twelve slots of one lap are twelve different places')
+
+  // A STATED POSITION WINS over the slot, which is the whole point of dragging.
+  ok(cardPos({ id: 'c', type: 'p', x: 40, y: 70 } as Block, 0).x === 40,
+    'a card that has been placed sits where it says')
+  ok(cardPos({ id: 'c', type: 'p', x: 40, y: 70 } as Block, 5).y === 70,
+    '…whatever its index among its siblings')
+
+  // COORDINATES OUT OF A FILE. A generator, a hand edit or a build with a
+  // different surface can write anything; none of it may put a card where no
+  // reader can reach it, and none of it may take a page of prose down.
+  ok(cardPos({ id: 'c', type: 'p', x: -50, y: 400 } as Block, 0).x === 0,
+    'a negative coordinate is brought back onto the surface')
+  ok(cardPos({ id: 'c', type: 'p', x: -50, y: 400 } as Block, 0).y === 100,
+    '…and one past the far edge is too')
+  ok(cardPos({ id: 'c', type: 'p', x: 'left', y: {} } as unknown as Block, 3).x === slotFor(3).x,
+    'a coordinate that is not a number falls back to the slot')
+
+  // ONE DECIMAL PLACE. Positions are rewritten on every drag and read in every
+  // diff; float noise makes a card that slid 4% look like a rewritten block.
+  ok(round1(59.34567) === 59.3, 'a position is stored to one decimal place')
+  ok(String(clampPct((1 / 3) * 100)) === '33.3', '…and is short enough to read in a diff')
+
+  // A NEW CARD NEVER LANDS ON AN OLD ONE. Not "the next index": cards get
+  // deleted, so index 3 can be free while index 5 is taken.
+  const occupied: Block[] = [
+    { id: 'a', type: 'p', ...slotFor(0) } as Block,
+    { id: 'b', type: 'p', ...slotFor(1) } as Block,
+  ]
+  const next = freeSlot(occupied)
+  ok(occupied.every((c) => c.x !== next.x || c.y !== next.y),
+    'a new card takes a slot no card is already sitting on')
+  const holed: Block[] = [{ id: 'a', type: 'p', ...slotFor(3) } as Block]
+  ok(JSON.stringify(freeSlot(holed)) === JSON.stringify(slotFor(0)),
+    '…and it fills the first hole rather than counting cards')
+
+  // THE CARDS OF A CANVAS ARE ITS CHILDREN, which is the whole format decision:
+  // no second list to keep in step with the block array.
+  const cvPage = {
+    id: 'p', title: 'T', blocks: [
+      { id: 'cv', type: 'canvas', html: 'Board' },
+      { id: 'c1', type: 'p', parent: 'cv', html: 'one' },
+      { id: 'other', type: 'p', html: 'not a card' },
+      { id: 'c2', type: 'pagelink', parent: 'cv', page: 'p2' },
+    ],
+  } as unknown as Page
+  ok(cardsOf(cvPage, 'cv').map((b) => b.id).join(',') === 'c1,c2',
+    'a canvas holds the blocks that name it as parent, and nothing else')
+
+  // DEGRADATION, and it is the reason cards are blocks. renderBlocks resolves a
+  // child against the OPEN CONTAINER STACK and an unknown type opens no
+  // container — so on a build with no `canvas`, every card falls out to the top
+  // level and renders as the paragraph or page card it already is. Nothing is
+  // hidden, and the canvas's own html must therefore NOT repeat the cards.
+  const cvSpec = SPEC.get('canvas')
+  ok(cvSpec?.container === 'always', 'a canvas owns the blocks whose parent is its id')
+  ok(cvSpec?.text === true, "a canvas's own html is its name, so it degrades to a readable line")
+  ok(cvSpec?.custom === true, 'a canvas draws itself')
+  ok(TAG_OF.canvas === 'div', 'a canvas is a div, like every other surface block')
+  ok(!LIST_OF.canvas, 'a canvas is not a list item')
+
+  // ITS MARKDOWN IS ITS NAME. The cards follow as their own indented lines,
+  // because they are their own blocks — so `toMd` must NOT print them again.
+  const cvMd = cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, 'Launch plan', '', {} as never)
+  ok(cvMd.join('\n') === '**Launch plan**', 'a canvas exports as its name')
+  ok(cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, '', '', {} as never)[0] === '**Canvas**',
+    'an unnamed canvas still says what it is rather than exporting a blank line')
+
+  // A CARD'S OWN WORDS TRAVEL, AS THEIR OWN LINE. mdLayout decides the two
+  // decorations a block cannot decide for itself, and the one that matters here
+  // is `quote`: a container marked `mdQuoteChildren` sweeps its whole subtree
+  // into a blockquote, and a canvas marked that way by accident would turn a
+  // storyboard into one grey box of run-on prose. (`indent` is set for any
+  // container's child; the exporter spends it on the types whose toMd takes it,
+  // which a plain text card's does not — so the assertion is on the quote.)
+  const cvLay = mdLayout(cvPage.blocks)
+  ok(cvLay[1].quote === '', 'a card is not swept into its canvas as a blockquote')
+  ok(cvLay[1].indent === '  ', "…and mdLayout reads it as its container's child")
+}
+
+
+// ---- 8. the graph view -----------------------------------------------------
+// The picture is drawn from `buildIndex().backlinks` and nothing else — there
+// is no second link index (spaces/src/graph.ts). What is asserted here is the
+// part a screenshot cannot show: that two references between the same pair are
+// one edge and not two, that the layout is REPRODUCIBLE (the reveal animation
+// interpolates toward a settled answer, so a layout that moved between runs
+// would make the same space a different picture every time it is opened), and
+// that the springs actually pull linked pages together rather than merely
+// running without error.
+{
+  const link = (to: string) => `<a href="#p/${to}">x</a>`
+  const space = (pages: Array<Partial<Page> & { id: string }>): SpacesDoc => ({
+    format: FORMAT, version: 1, docId: 'g', title: 'g', theme: {},
+    pages: pages.map((p) => ({ title: p.id, blocks: [], ...p })),
+  }) as unknown as SpacesDoc
+  const graphOf = (d: SpacesDoc) => buildGraph(d, buildIndex(d))
+
+  {
+    const d = space([
+      { id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('b') } as Block] },
+      { id: 'b' },
+      { id: 'z', archived: true, blocks: [{ id: 'b2', type: 'p', html: link('b') } as Block] },
+    ])
+    const g = graphOf(d)
+    ok(g.nodes.length === 2 && !g.at.has('z'),
+      'graph: an archived page is not drawn — it is out of the way in the sidebar too')
+    ok(g.edges.length === 1 && g.edges[0].links === 1,
+      'graph: one link between two pages is one edge')
+    ok(g.nodes.every((n) => n.deg === 1),
+      'graph: …and both ends of it count as connected')
+  }
+  {
+    // two references, one relationship — the defect this guards is an edge list
+    // that grows with every mention and a hub that looks twice as busy as it is
+    const d = space([
+      { id: 'a', blocks: [
+        { id: 'b1', type: 'p', html: link('b') } as Block,
+        { id: 'b2', type: 'p', html: link('b') } as Block,
+      ] },
+      { id: 'b', blocks: [{ id: 'b3', type: 'p', html: link('a') } as Block] },
+    ])
+    const g = graphOf(d)
+    ok(g.edges.length === 1, 'graph: three references between one pair are ONE undirected edge')
+    ok(g.edges[0].links === 3, '…carrying the weight of all three')
+    ok(g.nodes[0].deg === 1, '…and counting once toward how connected the page is')
+  }
+  {
+    const d = space([{ id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('a') } as Block] }])
+    ok(graphOf(d).edges.length === 0, 'graph: a page that links to itself draws no edge')
+  }
+  {
+    // the tree is a relationship too: a space where nobody has written a
+    // wikilink yet must not draw as unconnected dust
+    const d = space([{ id: 'a' }, { id: 'b', parent: 'a' }])
+    const g = graphOf(d)
+    ok(g.edges.length === 1 && g.edges[0].tree && g.edges[0].links === 0,
+      'graph: a child page is joined to its parent')
+    const d2 = space([
+      { id: 'a', blocks: [{ id: 'b1', type: 'p', html: link('b') } as Block] },
+      { id: 'b', parent: 'a' },
+    ])
+    const g2 = graphOf(d2)
+    ok(g2.edges.length === 1 && g2.edges[0].tree && g2.edges[0].links === 1,
+      'graph: a child that is ALSO linked is still one edge, not two on top of each other')
+  }
+  ok(nodeRadius(0) < nodeRadius(3) && nodeRadius(3) < nodeRadius(30) && nodeRadius(1e6) <= 20,
+    'graph: a better-connected page draws bigger, and no page draws unboundedly big')
+
+  {
+    // REPRODUCIBILITY. Seeds are a golden-angle spiral, not Math.random, and
+    // every force is a pure function of the positions.
+    const pages: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 40; i++) {
+      pages.push({ id: `p${i}`, blocks: [
+        { id: `x${i}`, type: 'p', html: link(`p${(i * 7 + 3) % 40}`) } as Block,
+      ] })
+    }
+    const d = space(pages)
+    const one = layoutGraph(graphOf(d))
+    const two = layoutGraph(graphOf(d))
+    const same = one.nodes.every((n, i) => n.x === two.nodes[i].x && n.y === two.nodes[i].y)
+    ok(same, 'graph: the same space lays out identically twice — the picture is stable')
+
+    // the RADIUS, not just the centre: the camera frames this box, so a box
+    // that only contains the centres crops half of every node on the rim.
+    // Checked with `x0 + 5` in the mutation pass and the centres-only version
+    // of this assertion did not notice.
+    const bounds = graphBounds(one)
+    ok(one.nodes.every((n) => n.x - n.r >= bounds.x0 && n.x + n.r <= bounds.x1
+      && n.y - n.r >= bounds.y0 && n.y + n.r <= bounds.y1),
+      'graph: the frame the camera is fitted to contains every node, edge to edge')
+    ok(one.nodes.some((n) => Math.abs((n.x - n.r) - bounds.x0) < 1e-9),
+      '…and is no larger than it has to be')
+
+    const cx = one.nodes.reduce((s, n) => s + n.x, 0) / one.nodes.length
+    ok(Math.abs(cx) < 1e-6, 'graph: the settled layout is centred, so the camera can frame it')
+
+    // THE SPRINGS DO SOMETHING. Without this the layout could be a pure
+    // repulsion cloud — evenly spread, reproducible, centred, and telling you
+    // nothing about which pages are related.
+    const dist = (i: number, j: number) =>
+      Math.hypot(one.nodes[i].x - one.nodes[j].x, one.nodes[i].y - one.nodes[j].y)
+    let linked = 0
+    for (const e of one.edges) linked += dist(e.a, e.b)
+    linked /= one.edges.length
+    let all = 0
+    let pairs = 0
+    for (let i = 0; i < one.nodes.length; i++) {
+      for (let j = i + 1; j < one.nodes.length; j++) { all += dist(i, j); pairs++ }
+    }
+    all /= pairs
+    ok(linked < all * 0.6,
+      'graph: linked pages end up markedly closer than unlinked ones')
+
+    // and the cloud has to GROW with the space, or a big space is a dot: see
+    // gravityFor. 400 pages must not settle into the same disc as 40.
+    const big: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 400; i++) {
+      big.push({ id: `q${i}`, blocks: [
+        { id: `y${i}`, type: 'p', html: link(`q${(i * 7 + 3) % 400}`) } as Block,
+      ] })
+    }
+    const bg = layoutGraph(graphOf(space(big)))
+    const radius = (g: ReturnType<typeof graphOf>) => {
+      const b = graphBounds(g)
+      return Math.max(b.x1 - b.x0, b.y1 - b.y0) / 2
+    }
+    // MEASURED, not guessed: ten times the pages settles 3.01x wider with
+    // gravityFor and only 2.29x wider with a constant gravity (the radius goes
+    // as n^(1/3) instead of sqrt(n)). 2.6 sits between the two — a threshold of
+    // 2.2, tried first, passed on BOTH and proved nothing.
+    ok(radius(bg) > radius(one) * 2.6,
+      'graph: ten times the pages is a bigger picture, not a denser one')
+  }
+  {
+    // stepLayout must SETTLE, not oscillate: a layout that is still moving when
+    // it is handed over is a layout the camera was fitted to by accident
+    const pages: Array<Partial<Page> & { id: string }> = []
+    for (let i = 0; i < 30; i++) {
+      pages.push({ id: `s${i}`, blocks: [
+        { id: `z${i}`, type: 'p', html: link(`s${(i + 1) % 30}`) } as Block,
+      ] })
+    }
+    const g = graphOf(space(pages))
+    layoutGraph(g)
+    const before = g.nodes.map((n) => ({ x: n.x, y: n.y }))
+    stepLayout(g, 0.01)
+    const moved = Math.max(...g.nodes.map((n, i) =>
+      Math.hypot(n.x - before[i].x, n.y - before[i].y)))
+    ok(moved < 0.5, 'graph: one more tick on a settled layout barely moves anything')
+  }
 }
 
 

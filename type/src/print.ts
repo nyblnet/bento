@@ -23,8 +23,12 @@
 // pagination is the same computation the editor already ran.
 
 import type { Block, TypeDoc } from './model.ts';
-import { blockHtml, TAG } from './render.ts';
+import { blockHtml, groupBlocks, TAG } from './render.ts';
 import type { Metrics } from './paginate.ts';
+import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
+import { blockStyle } from './layout.ts';
+import { docStyleCss } from './docstyles.ts';
+import { embedHtml } from './embed.ts';
 
 export interface PrintOptions {
   /** running head text; omitted = the document title */
@@ -50,13 +54,18 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c =>
  * unreachable from content.
  */
 function printCss(doc: TypeDoc): string {
-  const p = doc.page;
+  // the document's typeface, so paper matches screen — same fallback as
+  // styles.css, so a file that says nothing prints exactly as it always did
+  const p = { ...doc.page,
+    __fontSize: `${doc.type?.size ?? 17}px`,
+    __fontFamily: doc.type?.family ?? '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif',
+  };
   return `
 @page { size: ${p.width}px ${p.height}px; margin: 0; }
 * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 html, body { margin: 0; padding: 0; background: #fff; }
 body {
-  font: 17px/1.62 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font: ${p.__fontSize}/1.62 ${p.__fontFamily};
   color: #1a1a1a; hyphens: auto; -webkit-hyphens: auto;
 }
 .t-page {
@@ -79,6 +88,20 @@ h2 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; hyphens: none; }
 h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: #3a3d44; hyphens: none; }
 p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+.t-figure { margin: 12px 0; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+.t-figure img { max-width: 100%; height: auto; }
+.t-figure[data-align="left"] { text-align: left; }
+.t-figure[data-align="right"] { text-align: right; }
+.t-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0 0 12px; font-size: .95em; }
+.t-table th, .t-table td { border-bottom: 1px solid #c3cad4; padding: 6px 10px 6px 0;
+                           vertical-align: top; text-align: start; text-indent: 0; hyphens: none; }
+.t-table th { font-weight: 600; border-bottom-width: 1.5px; }
+.t-table tr:last-child td { border-bottom: 0; }
+ul, ol { margin: 0 0 10px; padding-inline-start: 1.6em; }
+li { margin: 0 0 3px; text-align: justify; text-indent: 0; orphans: 2; widows: 2; }
+li > ul, li > ol { margin: 3px 0 0; }
+ul { list-style: disc; } ul ul { list-style: circle; } ul ul ul { list-style: square; }
+ol { list-style: decimal; } ol ol { list-style: lower-alpha; } ol ol ol { list-style: lower-roman; }
 blockquote { margin: 12px 0 12px 24px; padding-left: 14px; border-left: 2px solid #d8dce2;
              color: #3a3d44; font-style: italic; }
 strong { font-weight: 600; }
@@ -102,9 +125,68 @@ sup.t-note { font: 600 9px/1 -apple-system, system-ui, sans-serif; color: #7a520
 `;
 }
 
-/** The body, rendered once — every page shows a window onto this same flow. */
-function bodyHtml(body: Block[]): string {
-  return body.map(b => `<${TAG[b.kind]} data-id="${esc(b.id)}">${blockHtml(b)}</${TAG[b.kind]}>`).join('\n');
+/**
+ * A table, as HTML — the string twin of render.ts renderTable, and it must stay
+ * one: a table that gains a header row on screen and loses it on paper is the
+ * drift this module exists to prevent. Both are driven by the same token from
+ * the same grouping function, so only the emission differs.
+ */
+function tableHtml(rows: Block[][], head: boolean): string {
+  const cols = rows[0]?.length ?? 1;
+  const cell = (b: Block | undefined, tag: 'th' | 'td') =>
+    b ? `<${tag} data-id="${esc(b.id)}">${blockHtml(b)}</${tag}>`
+      : `<${tag}></${tag}>`;
+  const row = (r: Block[], tag: 'th' | 'td') =>
+    `<tr>${Array.from({ length: cols }, (_, c) => cell(r[c], tag)).join('')}</tr>`;
+  const parts: string[] = ['<table class="t-table">'];
+  if (head && rows.length) parts.push(`<thead>${row(rows[0], 'th')}</thead>`);
+  parts.push('<tbody>');
+  for (const r of rows.slice(head ? 1 : 0)) parts.push(row(r, 'td'));
+  parts.push('</tbody></table>');
+  return parts.join('');
+}
+
+/**
+ * The body, rendered once — every page shows a window onto this same flow.
+ *
+ * Uses the SAME grouping as the editor (render.ts groupBlocks), so a list that
+ * nests on screen nests identically on paper. Rebuilding the list structure
+ * here with a second implementation is exactly how print drifts from the
+ * editor, which is the failure this whole module exists to avoid.
+ */
+function bodyHtml(doc: TypeDoc, lang: string): string {
+  const body = doc.body;
+  const out: string[] = [];
+  for (const tok of groupBlocks(body)) {
+    if (tok.t === 'open') out.push(`<${tok.kind}>`);
+    else if (tok.t === 'close') out.push(`</${tok.kind}>`);
+    else if (tok.t === 'table') out.push(tableHtml(tok.rows, tok.head));
+    // An embed prints as its STATIC RENDER — which is the tier that exists for
+    // exactly this, and why the render is mandatory rather than a cache.
+    else if (tok.block.kind === 'embed') out.push(embedHtml(tok.block));
+    else if (tok.block.kind === 'image') {
+      const b = tok.block, im = b.image;
+      const w = im?.w ? ` style="width:${Math.round(im.w * 100)}%"` : '';
+      const al = im?.align ? ` data-align="${esc(im.align)}"` : '';
+      out.push(`<figure class="t-figure" data-id="${esc(b.id)}"${al}>` +
+               (im ? `<img src="${esc(im.src)}" alt="${esc(im.alt ?? '')}"${w}>` : '') +
+               `</figure>`);
+    }
+    else {
+      const b = tok.block;
+      // Same composition as render.ts renderBlock, same order — the named
+      // style first, the block's own direct properties second, so print
+      // shows exactly what the screen does: a block's own align/sb/sa/lh/ind
+      // beats its style, both beat the document's plain CSS defaults.
+      const st = [docStyleCss(doc, b), blockStyle(b)].filter(Boolean).join(';');
+      out.push(`<${TAG[b.kind]} data-id="${esc(b.id)}"${st ? ` style="${esc(st)}"` : ''}>` +
+               `${blockHtml(b)}</${TAG[b.kind]}>`);
+    }
+  }
+  // The DOM pass (numberXrefs) and this string pass fill the SAME atoms from
+  // the SAME index, which is what stops the printed numbering drifting from the
+  // screen's — the drift this module exists to prevent.
+  return fillXrefsHtml(out.join('\n'), captionIndex(body, lang));
 }
 
 /**
@@ -120,7 +202,9 @@ function bodyHtml(body: Block[]): string {
 export function buildPrintDocument(doc: TypeDoc, metrics: Metrics, opts: PrintOptions = {}): string {
   const p = doc.page;
   const head = opts.header ?? doc.title;
-  const flow = bodyHtml(doc.body);
+  // the DOCUMENT's language, not the reader's: a caption label is printed and
+  // signed with the author's sentences, so it must not change per reader
+  const flow = bodyHtml(doc, docLang(doc));
   const contentH = p.height - p.marginTop - p.marginBottom;
 
   // footnote numbering is derived, in document order, exactly as on screen

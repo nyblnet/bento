@@ -31,6 +31,20 @@ import type { SpacesDoc, Page, Block } from './model'
  *  permanent commitment, and a tracker needs exactly these. */
 export type FieldType = 'select' | 'person' | 'number' | 'date' | 'text' | 'labels'
 
+/**
+ * What each type is called to somebody choosing one. Keys are the model's
+ * words and never translated; the labels are English source strings that t()
+ * looks up at render time — never here, where they would freeze at import.
+ */
+export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
+  text: 'Text',
+  select: 'Select',
+  number: 'Number',
+  date: 'Date',
+  person: 'Person',
+  labels: 'Labels',
+}
+
 export interface FieldOption {
   id: string
   label: string
@@ -379,6 +393,74 @@ export function issuesOf(doc: SpacesDoc): IssueRow[] {
   return out
 }
 
+/**
+ * WHICH PAGES A VIEW IS ABOUT.
+ *
+ * A view used to mean one thing: every page carrying a `status`. That made the
+ * tracker work and made everything else impossible — a space could hold a
+ * backlog and never a reading list, because there was no way to say "the pages
+ * with an Author" or "the pages under Books".
+ *
+ * ABSENT MEANS ISSUES, and that is the compatibility rule rather than a
+ * default: every `view` block written before this existed carries no `source`
+ * and must keep showing the backlog forever. The editor DELETES the key rather
+ * than storing an empty object, so a view whose source was set and cleared is
+ * byte-identical to one that never had it.
+ *
+ * Two selectors, and deliberately only two. `has` is the one that pairs with a
+ * property somebody just invented — the vocabulary is flat and a page carries
+ * only the fields it uses, so "has an Author" IS "is a book". `under` is the
+ * one people reach for anyway, because nesting is how a space is already
+ * organised. A selector language grows without limit and can never shrink:
+ * every operator ships permanently into files on other people's disks.
+ */
+export interface ViewSource {
+  /** pages carrying this field */
+  has?: string
+  /** pages nested anywhere under this page */
+  under?: string
+}
+
+export const unknownSourceKeys = (src: unknown): string[] =>
+  !src || typeof src !== 'object' ? []
+    : Object.keys(src as Record<string, unknown>).filter((k) => k !== 'has' && k !== 'under')
+
+/** Is this page anywhere below `root`? Cycle-safe, like the tree walk. */
+function isUnder(doc: SpacesDoc, page: Page, root: string): boolean {
+  const seen = new Set<string>()
+  let cur: string | undefined = page.parent
+  while (cur && !seen.has(cur)) {
+    if (cur === root) return true
+    seen.add(cur)
+    cur = doc.pages.find((p) => p.id === cur)?.parent
+  }
+  return false
+}
+
+/**
+ * The rows a view holds.
+ *
+ * Derived every render from the pages themselves — never stored — for the same
+ * reason the board's order is `doc.pages`: a database that keeps its own copy
+ * of the rows is a database that disagrees with the document.
+ */
+export function viewRows(doc: SpacesDoc, source?: unknown): IssueRow[] {
+  const src = (source && typeof source === 'object' ? source : {}) as ViewSource
+  const has = typeof src.has === 'string' ? src.has : ''
+  const under = typeof src.under === 'string' ? src.under : ''
+  if (!has && !under) return issuesOf(doc)
+
+  const out: IssueRow[] = []
+  for (const page of doc.pages) {
+    if (page.archived) continue
+    if (under && !isUnder(doc, page, under)) continue
+    const values = valuesOf(page)
+    if (has && !values.has(has)) continue
+    out.push({ page, values })
+  }
+  return out
+}
+
 /** Where a dropped card lands: before a card, or after the last one. */
 export interface DropAim { before?: string; after?: string }
 
@@ -418,6 +500,44 @@ export const propBlockOf = (page: Page, key: string): Block | undefined =>
   page.blocks.find((b) => b.type === 'prop' && (b as { key?: unknown }).key === key)
 
 /** Build a prop block, with its readable form already in step. */
+/**
+ * The document's field vocabulary with one more field in it.
+ *
+ * SEEDS FROM THE DEFAULTS ON FIRST WRITE, and that is the whole reason this is
+ * a function rather than a push. `fieldsOf` falls back to DEFAULT_FIELDS only
+ * while `doc.fields` is absent or empty — so a document that has never declared
+ * a schema and then gains ONE field would, if the field were simply pushed into
+ * an empty array, lose Status, Priority, Assignee and Estimate in the same
+ * stroke. Every issue in the space would keep its `prop` blocks (they carry
+ * their own readable html) but the board grouping them by status would have no
+ * status field to group by.
+ *
+ * So the first custom field writes the defaults down beside itself, which is
+ * also the honest thing: once you have edited the schema it stops being
+ * implicit.
+ */
+export function withField(doc: SpacesDoc, spec: FieldSpec): FieldSpec[] {
+  const current = fieldsOf(doc)
+  if (current.some((f) => f.key === spec.key)) {
+    return current.map((f) => (f.key === spec.key ? spec : f))
+  }
+  return [...current, spec]
+}
+
+/**
+ * A key for a field somebody just named.
+ *
+ * Keys are what `prop` blocks store and what views group by, so they outlive
+ * every rename of the label and must never collide. Derived from the label,
+ * then suffixed until it is free.
+ */
+export function freeFieldKey(doc: SpacesDoc, label: string): string {
+  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'field'
+  const taken = new Set(fieldsOf(doc).map((f) => f.key))
+  if (!taken.has(base)) return base
+  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`
+}
+
 export function propBlock(f: FieldSpec, value: unknown, id: string): Block {
   return { id, type: 'prop', key: f.key, value, html: propHtml(f, value) } as Block
 }
@@ -450,4 +570,35 @@ export function columnMoves(cards: string[], moved: string, aim: DropAim): boole
   if (target < 0) return true
   const next = [...rest.slice(0, target), moved, ...rest.slice(target)]
   return next.join('\u001f') !== cards.join('\u001f')
+}
+
+/**
+ * Which direction a view is sorted in BY THIS FIELD, if it is.
+ *
+ * Reads the same `sort` the format already carries — there is no second place
+ * a table header's arrow could come from, and inventing one would let the arrow
+ * and the order disagree. `undefined` means this column is not the sort key;
+ * an entry with no `dir` is ascending, which is what absence has always meant.
+ */
+export const sortDirOf = (sort: unknown, key: string): 'asc' | 'desc' | undefined => {
+  const cur = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+  if (!cur || String(cur.key ?? '') !== key) return undefined
+  return cur.dir === 'desc' ? 'desc' : 'asc'
+}
+
+/**
+ * The sort a CLICK ON A COLUMN HEADER produces: ascending → descending → none.
+ *
+ * The third state is the one that matters. A header that only flips between two
+ * directions can never give a hand-arranged board its order back, and "manual
+ * order" is not a sort called manual — it is the ABSENCE of the key. So this
+ * returns `undefined` there, and the caller deletes the key rather than storing
+ * an empty array: a view sorted and unsorted is byte-identical to one nobody
+ * ever touched.
+ */
+export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
+  const dir = sortDirOf(sort, key)
+  if (dir === undefined) return [{ key }]
+  if (dir === 'asc') return [{ key, dir: 'desc' }]
+  return undefined
 }

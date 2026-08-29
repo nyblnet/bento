@@ -45,6 +45,7 @@ export const ICONS = {
   chevronDown: svg('<polyline points="6 9 12 15 18 9"/>'),
   eye: svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>'),
   edit: svg('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/>'),
+  canvas: svg('<rect x="2.5" y="4" width="19" height="16" rx="2"/><rect x="5.5" y="7" width="6" height="4.5" rx="1"/><rect x="14" y="12.5" width="5" height="4.5" rx="1"/>'),
   board: svg('<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/>'),
   up: svg('<path d="m18 15-6-6-6 6"/>'),
   down: svg('<path d="m6 9 6 6 6-6"/>'),
@@ -73,6 +74,7 @@ export const ICONS = {
   tag: svg('<path d="M20.59 13.41 12 22l-9-9V3h10l7.59 7.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>'),
   scale: svg('<path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7 2 14h6z"/><path d="M19 7l-3 7h6z"/><path d="M8 21h8"/>'),
   pen: svg('<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><line x1="2" y1="2" x2="9.5" y2="9.5"/>'),
+  graph: svg('<circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="5.5" r="2.5"/><circle cx="19" cy="16" r="2.5"/><line x1="6.6" y1="16.1" x2="10.4" y2="7.4"/><line x1="14.2" y1="7.3" x2="17.6" y2="13.6"/><line x1="7.5" y1="17.6" x2="16.5" y2="16.3"/>'),
   compass: svg('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88"/>'),
   hash: svg('<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>'),
 

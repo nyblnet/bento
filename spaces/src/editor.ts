@@ -9,7 +9,7 @@
 // backlinks and (later) collaboration key on.
 
 import {
-  type Block, type TableShape, type SpacesDoc, newBlock, newPage, effectiveParents, isRemote,
+  type Block, type Page, type TableShape, type SpacesDoc, newBlock, newPage, effectiveParents, isRemote,
   tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS, linkCard, linkCardHtml, unresolvedOn,
   parseDoc, uid,
 } from './model'
@@ -18,6 +18,7 @@ import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
+import { wireCanvas, placeNewCard } from './canvas.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
@@ -25,7 +26,8 @@ import type { MarkTag } from './marks'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
-  reorderPages, columnMoves, ISSUE_FIELDS,
+  reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, FIELD_TYPE_LABEL,
+  cycleSort,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
@@ -34,6 +36,7 @@ import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
 import { openAbout } from './about'
+import { openGraphView } from './graph.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
@@ -214,6 +217,7 @@ export class Editor {
       pickPoster: (id) => void this.pickPoster(id),
       pickMedia: (id) => void this.pickMedia(id),
       openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
+      openAddProperty: (pageId, anchor) => this.openAddProperty(pageId, anchor),
       pageIcon: (icon) => pageIcon(icon),
       openLinkCard: (id) => this.openLinkCard(id),
       addTableRow: (id, at) => this.addTableRow(id, at),
@@ -345,6 +349,8 @@ export class Editor {
         run: () => this.makeIssue() },
       { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
         run: () => this.openImport() },
+      { icon: 'graph', label: t('Graph'), hint: t('Every page, and what links to what'),
+        run: () => this.openGraph() },
       { icon: 'print', label: t('Print or save as PDF'), hint: '⌘P', run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), hint: t('Version, language, password, exports'),
         run: () => this.openAbout() },
@@ -1332,6 +1338,8 @@ export class Editor {
     const fresh = newBlock('p')
     const owner = s.block(blockId)
     if (owner?.parent) fresh.parent = owner.parent
+    // a block born inside a canvas is born somewhere ON it
+    placeNewCard(page, fresh)
     s.commit(() => {
       page.blocks.splice(page.blocks.findIndex((b) => b.id === blockId) + 1, 0, fresh)
     })
@@ -1424,12 +1432,91 @@ export class Editor {
     b.html = propHtml(f, value)
   }
 
+  /**
+   * Set a field ON A PAGE, adding the prop block when the page does not carry
+   * one — the case a board drop already had and a table cell now has too.
+   *
+   * A page can be in a view without carrying every field the view shows: a
+   * board grouped by something an issue never had, or a table column that
+   * exists because SOME other row has it. The value arrives in the header strip
+   * where the others are, through propBlock, so the readable `html` is written
+   * with it. A value written without its readable form is a value an older
+   * build, a thumbnailer, a grep and the markdown export all see as nothing.
+   *
+   * Not a commit of its own: the caller decides what one user action was.
+   */
+  private putField(page: Page, f: FieldSpec, value: unknown): void {
+    const own = propBlockOf(page, f.key)
+    if (own) this.applyField(own, f, value)
+    else page.blocks.splice(headerLength(page), 0, propBlock(f, value, newBlock('prop').id))
+  }
+
+  /**
+   * A TABLE CELL, opened for editing. The same picker the page's own header
+   * strip opens, over the same writer a board drop uses.
+   *
+   * Addressed by PAGE AND KEY rather than by block id, because the interesting
+   * cell is the empty one: the page has no prop block for that column, and the
+   * edit is what creates it. Looking the block up here — after the value is
+   * chosen, in setCell — also means an opened-and-dismissed picker writes
+   * nothing at all.
+   */
+  private openCellPicker(pageId: string, key: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    const page = s.index.page.get(pageId)
+    const f = fieldByKey(s.doc, key)
+    if (!page || !f) return
+    const own = propBlockOf(page, key)
+    this.fieldPicker(f, own ? (own as { value?: unknown }).value : undefined, anchor,
+      (v) => this.setCell(pageId, key, v))
+  }
+
+  /**
+   * Write one cell. Nothing happens when the value did not change: a picker
+   * opened and closed on the value already there must not be a step you press
+   * ⌘Z past.
+   *
+   * PAGE SCOPE ONLY WHEN THE ROW IS THE PAGE IN VIEW, for the reason setField
+   * carries: a page-scoped checkpoint snapshots `store.pageId`, and a cell in a
+   * table almost always belongs to ANOTHER page — undo would restore the page
+   * holding the view and leave the changed value exactly where it was.
+   */
+  private setCell(pageId: string, key: string, value: unknown): void {
+    const s = this.store
+    const page = s.index.page.get(pageId)
+    const f = fieldByKey(s.doc, key)
+    if (!page || !f || s.readOnly || this.reading) return
+    const own = propBlockOf(page, key)
+    if (own && (own as { value?: unknown }).value === value) return
+    const scope = pageId === s.pageId ? 'page' : 'doc'
+    s.commit(() => this.putField(page, f, value), { scope })
+    this.paintPage()
+  }
+
   private openFieldPicker(blockId: string, anchor: HTMLElement): void {
     const s = this.store
     if (s.readOnly || this.reading) return
     const b = s.block(blockId)
     const f = b && fieldByKey(s.doc, String((b as { key?: unknown }).key ?? ''))
     if (!b || !f) return
+    this.fieldPicker(f, (b as { value?: unknown }).value, anchor, (v) => this.setField(blockId, v))
+  }
+
+  /**
+   * THE ONE PICKER for a field value: a list of options for a select, one input
+   * for anything else.
+   *
+   * Takes a WRITER rather than a block id, and that is the whole reason it was
+   * split out of openFieldPicker. A table cell can stand for a value that does
+   * not exist yet — the page carries no such prop block — so there is no id to
+   * hand it. Everything else about choosing a value has to stay identical
+   * across the header strip, the board's card chip and a cell, or the same
+   * gesture reads as three different controls.
+   */
+  private fieldPicker(
+    f: FieldSpec, cur: unknown, anchor: HTMLElement, write: (v: unknown) => void,
+  ): void {
     this.closeOverlay()
 
     const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
@@ -1437,17 +1524,17 @@ export class Editor {
     this.trapAndClose(pop)
 
     if (f.vt === 'select' && f.options?.length) {
-      const cur = String((b as { value?: unknown }).value ?? '')
+      const now = String(cur ?? '')
       for (const o of f.options) {
         const item = document.createElement('button')
-        item.className = 'sp-dditem' + (o.id === cur ? ' sp-sel' : '')
+        item.className = 'sp-dditem' + (o.id === now ? ' sp-sel' : '')
         item.type = 'button'
         const dot = el('span', 'sp-prop-dot')
         if (o.color) dot.style.background = o.color
         const name = document.createElement('span')
         name.textContent = o.label
         item.append(dot, name)
-        item.addEventListener('click', () => { this.closeOverlay(); this.setField(blockId, o.id) })
+        item.addEventListener('click', () => { this.closeOverlay(); write(o.id) })
         pop.append(item)
       }
     } else {
@@ -1455,14 +1542,14 @@ export class Editor {
       const input = document.createElement('input')
       input.className = 'sp-find'
       input.type = f.vt === 'number' ? 'number' : f.vt === 'date' ? 'date' : 'text'
-      input.value = String((b as { value?: unknown }).value ?? '')
+      input.value = String(cur ?? '')
       input.placeholder = f.label
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault()
           const raw = input.value.trim()
           this.closeOverlay()
-          this.setField(blockId, f.vt === 'number' ? (raw === '' ? '' : Number(raw)) : raw)
+          write(f.vt === 'number' ? (raw === '' ? '' : Number(raw)) : raw)
         }
       })
       pop.append(input)
@@ -1514,6 +1601,8 @@ export class Editor {
       gb?.addEventListener('click', () => this.openViewGroup(v.dataset.blockId!, gb))
       const sb = v.querySelector<HTMLElement>('[data-view-sort]')
       sb?.addEventListener('click', () => this.openViewSort(v.dataset.blockId!, sb))
+      const srcB = v.querySelector<HTMLElement>('[data-view-source]')
+      srcB?.addEventListener('click', () => this.openViewSource(v.dataset.blockId!, srcB))
 
       // A SORTED BOARD HAS NO HAND ORDER TO DROP INTO. The sort decides where a
       // card sits, so offering a drop position would write an order into
@@ -1527,6 +1616,28 @@ export class Editor {
         btn.addEventListener('click', (e) => {
           e.preventDefault()
           this.openFieldPicker(btn.dataset.setField!, btn)
+        })
+      }
+
+      // THE TABLE, made to work. A header is a control and a cell is a control,
+      // both real <button>s from the renderer, so the keyboard reaches them and
+      // Enter fires this same click — there is no second key path to keep in
+      // step with the pointer one.
+      for (const h of v.querySelectorAll<HTMLElement>('[data-sort-col]')) {
+        h.addEventListener('click', () => {
+          // ascending -> descending -> none, written into the view's OWN sort.
+          // The third state deletes the key rather than storing an empty array,
+          // so a table sorted and unsorted is byte-identical to one nobody
+          // touched — the rule filter, source and layout all follow.
+          const now = this.store.block(v.dataset.blockId ?? '')
+          this.editView(v.dataset.blockId!, 'sort',
+            cycleSort((now as { sort?: unknown } | undefined)?.sort, h.dataset.sortCol!))
+        })
+      }
+      for (const c of v.querySelectorAll<HTMLElement>('[data-cell-field]')) {
+        c.addEventListener('click', (e) => {
+          e.preventDefault()
+          this.openCellPicker(c.dataset.cellPage!, c.dataset.cellField!, c)
         })
       }
 
@@ -1623,14 +1734,7 @@ export class Editor {
     if (!setting && !order) return
 
     s.commit(() => {
-      if (setting) {
-        if (own) this.applyField(own, f, optId)
-        // A page can reach a column without carrying that field at all (a board
-        // grouped by something an issue never had). It gains the value, in the
-        // header strip where the others are — through propBlock, so the
-        // readable form is written with it.
-        else page.blocks.splice(headerLength(page), 0, propBlock(f, optId, newBlock('prop').id))
-      }
+      if (setting) this.putField(page, f, optId)
       if (order) s.doc.pages = order
     })
     this.repaint()
@@ -1690,7 +1794,7 @@ export class Editor {
    * list and back is byte-identical to one that was never touched, and a file
    * written before this control existed stays that way.
    */
-  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort', value: unknown): void {
+  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort' | 'source', value: unknown): void {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
@@ -1703,10 +1807,57 @@ export class Editor {
   }
 
   /** Board ⇄ list. `board` is the default, so it is stored as an ABSENT key. */
+  /**
+   * WHICH PAGES A VIEW HOLDS.
+   *
+   * The answer used to be one thing — every page carrying a `status` — which
+   * is why a space could hold a backlog and nothing else. Two selectors now,
+   * and only two: the pages carrying a given property, or the pages under a
+   * given page. With a flat vocabulary where each page carries only the fields
+   * it uses, "has an Author" IS "is a book".
+   *
+   * Issues stays the ABSENT key, so every view written before this keeps
+   * showing the backlog and a view set back to Issues is byte-identical to one
+   * that never moved.
+   */
+  private openViewSource(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b) return
+    this.popover(anchor, (pop) => {
+      const set = (src: { has?: string; under?: string } | undefined) => {
+        this.editView(blockId, 'source', src)
+        this.closeOverlay()
+      }
+      pop.append(el('div', 'sp-pop-title', t('Which pages')))
+      pop.append(this.menuItem('board', t('Issues'), t('Every page with a status'), () => set(undefined)))
+
+      // A property somebody invented is the interesting case, so it comes
+      // first among the fields and lists every one the vocabulary has.
+      for (const f of fieldsOf(s.doc)) {
+        pop.append(this.menuItem('tag', f.label, t('Pages that have this property'),
+          () => set({ has: f.key })))
+      }
+
+      // Nesting is how a space is already organised, so the current page and
+      // its ancestors are the ones worth offering rather than every page.
+      const here = s.page
+      if (here) {
+        pop.append(el('div', 'sp-pop-title', t('Nested under')))
+        pop.append(this.menuItem('page', here.title || t('Untitled'),
+          t('Pages nested under this one'), () => set({ under: here.id })))
+      }
+    })
+  }
+
   private toggleViewLayout(blockId: string): void {
     const b = this.store.block(blockId)
     const now = String((b as { layout?: unknown } | undefined)?.layout ?? 'board')
-    this.editView(blockId, 'layout', now === 'list' ? undefined : 'list')
+    // Board -> list -> table -> board. `board` is the ABSENT key, never a
+    // stored 'board': a view cycled all the way round is byte-identical to one
+    // nobody ever touched, which is the same rule filter and source follow.
+    const next: Record<string, string | undefined> = { board: 'list', list: 'table', table: undefined }
+    this.editView(blockId, 'layout', next[now] ?? (now === 'table' ? undefined : 'list'))
   }
 
   /**
@@ -2197,6 +2348,15 @@ export class Editor {
       }
       this.wireBoard(view)
       this.wireTables(view)
+      // The canvas keeps its own wiring in its own file: the drag, the cards
+      // and the shape button are one feature and touch nothing else here.
+      wireCanvas(view, {
+        block: (id) => this.store.block(id),
+        page: () => this.store.page,
+        commit: (fn, opts) => this.store.commit(fn, opts),
+        repaint: () => this.paintPage(),
+        pickPage: (then) => this.openPagePicker('', null, then),
+      })
     }
 
     // "Load this image" — the reader's consent to contact one remote host.
@@ -3058,6 +3218,7 @@ export class Editor {
     SPEC.get(fresh.type)?.init?.(fresh)
     if (into) fresh.parent = b.id
     else if (b.parent) fresh.parent = b.parent
+    if (s.page) placeNewCard(s.page, fresh)
     s.commit(() => {
       b.html = before
       const page = s.page!
@@ -3170,6 +3331,42 @@ export class Editor {
    * the dialog's scrim, escape handling and focus return rather than growing a
    * second set.
    */
+  /**
+   * The space as a picture: pages, and the links between them.
+   *
+   * The DRAWING lives in graph.ts; what is here is only what an overlay is in
+   * this editor — one at a time, and it owns the keyboard while it is open
+   * (`this.overlay`). Teardown rides on `overlayReflow`, which is the hook
+   * `closeOverlay` already calls before it removes the node: the graph has
+   * observers and an animation frame to give back, and there is no second
+   * teardown path to forget about.
+   */
+  openGraph(): void {
+    this.closeOverlay()
+    const returnFocus = document.activeElement as HTMLElement | null
+    const view = openGraphView({
+      doc: this.store.doc,
+      index: this.store.index,
+      currentId: this.store.pageId,
+      open: (id) => { close(); this.store.goToPage(id); this.repaint() },
+      close: () => close(),
+    })
+    const close = () => {
+      this.closeOverlay()
+      document.removeEventListener('keydown', onKey, true)
+      returnFocus?.focus?.()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+    document.addEventListener('keydown', onKey, true)
+    this.overlay = view.el
+    this.overlayReflow = () => view.destroy()
+    document.body.append(view.el)
+    view.el.tabIndex = -1
+    view.el.focus()
+  }
+
   openHelp(): void {
     this.closeOverlay()
     const returnFocus = document.activeElement as HTMLElement | null
@@ -3268,6 +3465,84 @@ export class Editor {
     const reflow = () => place(pop, anchor)
     addEventListener('resize', reflow)
     this.overlayReflow = () => removeEventListener('resize', reflow)
+  }
+
+  /**
+   * Put a property on this page — and define it, if it does not exist yet.
+   *
+   * THE SCHEMA IS EDITED WHERE IT IS USED. `doc.fields` has been a per-document
+   * vocabulary since the tracker shipped, and nothing has ever written it: the
+   * only way to give a page a property was "Make this page an issue", which
+   * adds Status, Priority, Assignee and Estimate together or not at all. So the
+   * schema was configurable in the format and fixed in the app.
+   *
+   * A separate schema editor would have been the obvious fix and the wrong one.
+   * DEFAULT_FIELDS says it in its own comment — "a tracker you have to design
+   * before you can use it is the thing everybody hates about the alternatives"
+   * — so a property is created in passing, at the moment somebody wants one,
+   * and the vocabulary grows as a side effect of use. That is what lets one
+   * space hold a reading list, a film log and a backlog at once: the fields are
+   * a flat vocabulary and each page carries only the ones it uses.
+   */
+  openAddProperty(pageId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (s.readOnly) return
+    const page = s.index.page.get(pageId)
+    if (!page) return
+
+    this.popover(anchor, (pop) => {
+      const has = new Set(page.blocks
+        .filter((b) => b.type === 'prop')
+        .map((b) => String((b as { key?: unknown }).key ?? '')))
+
+      const put = (f: FieldSpec, fields?: FieldSpec[]) => {
+        s.commit(() => {
+          if (fields) (s.doc as { fields?: FieldSpec[] }).fields = fields
+          const p = s.index.page.get(pageId)
+          if (!p) return
+          p.blocks.splice(headerLength(p), 0, propBlock(f, f.def ?? '', newBlock('prop').id))
+        })
+        this.closeOverlay()
+        this.repaint()
+        this.status(t('Added {name}', { name: f.label }))
+      }
+
+      const spare = fieldsOf(s.doc).filter((f) => !has.has(f.key))
+      if (spare.length) {
+        pop.append(el('div', 'sp-pop-title', t('Add a property')))
+        for (const f of spare) {
+          pop.append(this.menuItem('tag', f.label, t(FIELD_TYPE_LABEL[f.vt] ?? 'Text'), () => put(f)))
+        }
+      }
+
+      pop.append(el('div', 'sp-pop-title', t('New property')))
+      const form = el('div', 'sp-newprop')
+      const name = document.createElement('input')
+      name.type = 'text'
+      name.className = 'sp-input'
+      name.placeholder = t('Name')
+      const type = document.createElement('select')
+      type.className = 'sp-select'
+      for (const [vt, label] of Object.entries(FIELD_TYPE_LABEL)) {
+        const o = document.createElement('option')
+        o.value = vt
+        o.textContent = t(label)
+        type.append(o)
+      }
+      type.value = 'text'
+      const add = el('button', 'sp-btn sp-primary', t('Add'))
+      const submit = () => {
+        const label = name.value.trim()
+        if (!label) { name.focus(); return }
+        const spec: FieldSpec = { key: freeFieldKey(s.doc, label), label, vt: type.value as FieldSpec['vt'] }
+        put(spec, withField(s.doc, spec))
+      }
+      add.addEventListener('click', submit)
+      name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } })
+      form.append(name, type, add)
+      pop.append(form)
+      afterPaint(() => name.focus())
+    })
   }
 
   private closeOverlay(): void {

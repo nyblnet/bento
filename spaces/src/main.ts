@@ -413,6 +413,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
      * exactly as written.
      */
     i18n: i18nApi,
+    /** open the graph view — the same thing the ⋯ menu opens */
+    graph: () => { editor.openGraph() },
     /** every page, flat — the shape an agent wants before it reads anything */
     pages: () => store.doc.pages.map((p) => ({
       id: p.id, title: p.title, parent: p.parent, archived: !!p.archived, blocks: p.blocks.length,

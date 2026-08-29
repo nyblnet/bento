@@ -32,6 +32,7 @@
 //     alternatives, less wasted note area, and what a typesetter does.
 
 import type { PageSpec, TypeDoc } from './model.ts';
+import { atomize, breakY } from './layout.ts';
 
 export interface Page {
   n: number;
@@ -52,7 +53,7 @@ export interface Metrics {
 }
 
 /** A line box, in paper space. */
-interface LineBox { top: number; bottom: number }
+interface LineBox { top: number; bottom: number; id?: string }
 
 const bodyHeight = (p: PageSpec) => p.height - p.marginTop - p.marginBottom;
 
@@ -70,12 +71,34 @@ function lineBoxes(host: HTMLElement, page: PageSpec): LineBox[] {
     acceptNode: n => n.nodeValue?.trim().length ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
   });
   const r = document.createRange();
+  // Which BLOCK a line belongs to, so page-breaking hints (keep-together,
+  // keep-with-next) can group lines into units that must not be split.
+  const owner = (n: Node): string | undefined => {
+    let p: HTMLElement | null = n.parentElement;
+    while (p && p !== host && !p.dataset.id) p = p.parentElement;
+    return p?.dataset.id;
+  };
   let n: Node | null;
   while ((n = walker.nextNode())) {
     r.selectNodeContents(n);
+    const id = owner(n);
     for (const rect of Array.from(r.getClientRects())) {
-      if (rect.height) out.push({ top: rect.top - top0, bottom: rect.bottom - top0 });
+      if (rect.height) out.push({ top: rect.top - top0, bottom: rect.bottom - top0, id });
     }
+  }
+  // ATOMIC BLOCKS — an image, and later a display formula — contain no text
+  // nodes, so the walker above never sees them. Left out, they contributed
+  // height to the flow that pagination did not know about, and every page after
+  // the first image overflowed by exactly the image's height.
+  //
+  // One box for the whole element is not an approximation, it is the truth: an
+  // image cannot be broken across a page, so "does it fit in what is left" is
+  // the only question, and a box that does not fit pushes the break to its top
+  // — which moves the whole image to the next page. That falls out of the
+  // existing algorithm with no special case.
+  for (const el of Array.from(host.querySelectorAll<HTMLElement>('[data-atomic]'))) {
+    const rect = el.getBoundingClientRect();
+    if (rect.height) out.push({ top: rect.top - top0, bottom: rect.bottom - top0, id: el.dataset.id });
   }
   return out.sort((a, b) => a.top - b.top);
 }
@@ -128,6 +151,7 @@ export function paginate(doc: TypeDoc, host: HTMLElement): Metrics {
   const page = doc.page;
   const H = bodyHeight(page);
   const boxes = lineBoxes(host, page);
+  const units = atomize(doc.body, boxes);
   const pages: Page[] = [];
 
   let start = 0;
@@ -145,11 +169,11 @@ export function paginate(doc: TypeDoc, host: HTMLElement): Metrics {
 
     for (let iter = 0; iter < 16; iter++) {
       const avail = H - reserved;
-      let e = Infinity;
-      for (const b of boxes) {
-        if (b.top < start - 0.5) continue;
-        if (b.bottom - start > avail) { e = b.top; break; }
-      }
+      // With no keeps and no explicit breaks in the document, atomize returns
+      // one atom per line and breakY reproduces the line-by-line loop this
+      // replaced, exactly — asserted in scripts/test-type-layout.ts for every
+      // start and height tried, which is what made the swap safe.
+      const e = breakY(units, start, avail);
       const ids = carried.concat(notesIn(host, page, start, e));
       const need = measureNotes(doc, page, ids);
       if (Math.abs(need - reserved) < 0.5) { end = e; notes = ids; reserved = need; break; }
@@ -172,6 +196,18 @@ export function paginate(doc: TypeDoc, host: HTMLElement): Metrics {
       }
       seen.add(key);
       reserved = need; end = e; notes = ids;
+    }
+
+    // NO PROGRESS. One box is taller than the page can ever be — an image
+    // larger than the paper, which a file can perfectly well contain. The break
+    // would be placed at the box's own top, the next page would start where
+    // this one did, and the loop would spin until the guard, producing hundreds
+    // of empty pages. Give the oversized box its own page and move past it: it
+    // will overflow the margin, which is visible and fixable, rather than
+    // hanging the document, which is neither.
+    if (isFinite(end) && end <= start + 0.5) {
+      const next = boxes.find(b => b.top > start + 0.5);
+      end = next ? next.top : Infinity;
     }
 
     pages.push({ n: pages.length + 1, start, end, notes, reserved });

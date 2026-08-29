@@ -48,6 +48,8 @@ export interface PropsHost {
   pickPoster(id: string): void
   pickMedia(id: string): void
   openIconPicker(pageId: string, anchor: HTMLElement): void
+  /** the editor owns popovers; the panel only says which page wants one */
+  openAddProperty(pageId: string, anchor: HTMLElement): void
   /** the editor owns the icon set and the emoji fallback */
   pageIcon(icon: string | undefined): string
   openLinkCard(id: string): void
@@ -327,6 +329,17 @@ export class PropsPanel {
 
     if (typeof page.journal === 'string') {
       this.row(t('Journal date'), mk('span', 'sp-mono', page.journal))
+    }
+
+    // A PAGE IS A RECORD when it wants to be. The properties themselves live in
+    // the page's header strip, where they are read and edited; this is the way
+    // to give the page one it does not have yet — the only route before was
+    // "Make this page an issue", which is four fields or nothing.
+    if (!this.app.locked()) {
+      const addProp = mk('button', 'sp-btn', t('Add property…'))
+      addProp.type = 'button'
+      addProp.addEventListener('click', () => this.app.openAddProperty(page.id, addProp))
+      this.row(t('Properties'), addProp)
     }
 
     // WHAT IS ACTUALLY IN THIS PAGE. Derived at render, never stored: a count

@@ -40,8 +40,18 @@ import type { Store } from '../store.ts';
  * type's editor re-renders from one signal rather than five. Only 'doc' has a
  * meaning here; the rest are accepted and dropped, which is the honest mapping
  * — an app is not obliged to have a 'slides' event.
+ *
+ * `onRemoteApplied` is separate from `store.on('doc', …)` on purpose: type's
+ * Editor owns its contentEditable DOM directly (model.ts's caret-is-a-model-
+ * position design) and never re-renders from a generic store listener — doing
+ * so on every keystroke would fight the browser's own caret. `emit('doc')` is
+ * called ONLY by the kernel session's `afterRemoteChange`, for a change that
+ * did NOT originate from a local commit, so this is the one safe place to
+ * tell the editor "the model moved under you, redraw". Exported so collab.ts
+ * — the only other caller — can build the same wrapper for `startSharing` and
+ * friends without duplicating it, though those never call `.emit()`.
  */
-function hostStore(store: Store): HostStore {
+export function hostStore(store: Store, onRemoteApplied?: () => void): HostStore {
   return {
     get doc() { return store.doc; },
     on(event: string, fn: () => void) {
@@ -49,7 +59,11 @@ function hostStore(store: Store): HostStore {
     },
     // A remote edit repaints but must NEVER push an undo entry — see
     // Store.touch. 'doc' is the only event type has.
-    emit(event: string) { if (event === 'doc') store.touch(); },
+    emit(event: string) {
+      if (event !== 'doc') return;
+      store.touch();
+      onRemoteApplied?.();
+    },
     commit(fn: () => void) { store.commit(() => fn()); },
     // type has no dirty flag: the document is saved from the editor's own
     // state, and a remote edit does not change whether THIS person has
@@ -59,9 +73,9 @@ function hostStore(store: Store): HostStore {
 }
 
 /** What a word-processing document knows that the session cannot work out. */
-function typeHost(store: Store, caret: () => { block: string }): SyncHost {
+function typeHost(store: Store, caret: () => { block: string }, onRemoteApplied?: () => void): SyncHost {
   return {
-    store: hostStore(store),
+    store: hostStore(store, onRemoteApplied),
     engine: SyncState,
 
     heal(): boolean {
@@ -111,9 +125,17 @@ function typeHost(store: Store, caret: () => { block: string }): SyncHost {
  * `caret` is a callback rather than a value because presence is pushed
  * whenever the session likes; the editor owns where the caret is and should
  * not have to mirror it into the session on every keystroke.
+ *
+ * `onRemoteApplied`, likewise, is a callback rather than an event because
+ * type's editor has no event to subscribe to for "the model changed
+ * remotely" — see `hostStore` above. collab.ts passes `() => editor.render()`.
  */
 export class SyncSession extends KernelSession {
-  constructor(store: Store, caret: () => { block: string } = () => ({ block: '' })) {
-    super(typeHost(store, caret));
+  constructor(
+    store: Store,
+    caret: () => { block: string } = () => ({ block: '' }),
+    onRemoteApplied?: () => void,
+  ) {
+    super(typeHost(store, caret, onRemoteApplied));
   }
 }

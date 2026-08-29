@@ -199,14 +199,19 @@ jobs:
             TZ=$tz node scripts/test-spaces-calc.ts
           done
 
-      - name: Spaces shell size ceiling
-        # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
-        # the round finished at 108KB, and the same entry claimed the ceiling
-        # was "checked per feature from here" while shipping no mechanism — so
-        # the breach was found by a reviewer reading the number rather than by
-        # the build that caused it. Raising the ceiling is fine and expected;
-        # raising it SILENTLY is what this stops.
-        run: node scripts/test-spaces-size.mjs
+      - name: Spaces Markdown round-trip rig
+        # The About dialog promises, in eight languages, that "a space is never
+        # a dead end … every page exports as Markdown". This is that sentence,
+        # checked: the starter space is exported and read back, and no page may
+        # come back with materially less text than it went in with, nor may a
+        # single block vanish entirely. Block TYPES are deliberately not
+        # asserted — Markdown has no callout, toggle, media embed or board, so a
+        # callout leaving as a blockquote is the format being honest, not a bug.
+        # (Bundled: the app's imports are extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-roundtrip.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+          node "$RUNNER_TEMP/test-spaces-roundtrip.mjs"
 
       - name: Spaces model rig
         # Properties that fail SILENTLY, and that a shipped file cannot be
@@ -255,6 +260,31 @@ jobs:
         # block closes its own script. A signing pipeline cannot be tested by
         # signing (the key never reaches CI), but this is everything except.
         run: node scripts/test-release-channel.mjs --app dash
+      - name: Shell sizes
+        # TWO MECHANISMS, DELIBERATELY. This one and the advisory PR build-size
+        # comment (.github/workflows/pr-build-size*.yml) answer different
+        # questions, and deleting either as "duplicate measurement" loses a
+        # class of regression:
+        #
+        #   this step  — ABSOLUTE and PERSISTENT. A shell with enforce:true has
+        #     a ceiling and FAILS here; a shell with enforce:false prints its
+        #     drift from a committed `reference` and never fails. It is the only
+        #     thing that sees SLOW drift — forty merged commits at 300 B each,
+        #     where every single PR looked fine on its own.
+        #   the PR comment — RELATIVE and PER-PR. It reports this PR against its
+        #     own base and never fails. It is the only thing that attributes a
+        #     jump to the change that caused it, and it is blind to accumulated
+        #     drift.
+        #
+        # Neither subsumes the other. Rationale in docs/DECISIONS.md.
+        #
+        # Placed after ALL THREE builds on purpose: the rig skips a shell that
+        # is not built, so while this sat in the spaces section it silently
+        # measured nothing for dash. bento/spaces has NO CEILING as of
+        # 2026-08-24 (the maintainer's call; at 98.6% it had started deciding
+        # which fixes were affordable) — the step still prints its size and
+        # drift, it just no longer fails on it.
+        run: node scripts/test-spaces-size.mjs
 
       - name: Language pack verification rig
         # Packs come off the network, so the signature + hash-pin chain is the
@@ -1177,6 +1207,112 @@ jobs:
         # borrows a document token — that last one shipped a select at 1.92:1
         # against a WCAG AA floor of 4.5.
         run: node scripts/test-type-theme.mjs
+
+      - name: bento/dash CRDT convergence
+        # The big one: randomised concurrent edits across N replicas, asserted
+        # to converge. It has caught every ordering bug in the engine, and the
+        # two it did not catch were found by widening it.
+        run: node scripts/test-dash-sync.ts
+
+      - name: relay protocol — one wire format, two clients
+        # dash's online.ts is a PORT of the transport slides uses (now in
+        # kernel/). The two files are separate text that nobody diffs, and ONE
+        # DEPLOYED WORKER verifies both: it pins the room id to a key and walks
+        # an owner→invite→member signature chain. If one client's idea of
+        # `inv.${pub}.${role}.${exp}` drifts, the symptom is not a red test — it
+        # is one app's users silently unable to join the other's rooms, on a
+        # relay that cannot be rolled back independently of the shells already
+        # in people's files. This diffs only what goes on the wire.
+        #
+        # Written by the bento/dash work; taken here because the kernel lift is
+        # the change it guards, and it should not land after the move it exists
+        # to check. The rig FOLLOWS the twin (kernel first, then slides) and
+        # FAILS if it finds no transport at all, rather than silently comparing
+        # two empty lists — which is how its own first version passed.
+        run: node scripts/test-relay-protocol.ts
+
+      - name: Type blocks rig
+        # Lists and tables are runs of flat blocks assembled at render;
+        # this pins the grouping, including the level clamp that once opened a
+        # billion list elements and killed the process.
+        run: node scripts/test-type-blocks.ts
+
+      - name: Type layout rig
+        # Paragraph spacing, indents and page setup, and that a page break
+        # is honoured by the paginator rather than merely stored.
+        run: node scripts/test-type-layout.ts
+
+      - name: Type image rig
+        # Pictures embed or reference, and an atomic block is measured as one
+        # box so pagination cannot break a page through the middle of it.
+        run: node scripts/test-type-image.ts
+
+      - name: Type link rig
+        # Link marks round-trip, and the href allow-list holds: a document is
+        # untrusted input, and javascript: reached the page from one once.
+        run: node scripts/test-type-link.ts
+
+      - name: Type find rig
+        # Find and replace across blocks, including the offsets that shift
+        # when a replacement changes a block's length.
+        run: node scripts/test-type-find.ts
+
+      - name: Type toc rig
+        # Section numbering is DERIVED, never stored, so inserting a heading
+        # renumbers everything and nothing drifts.
+        run: node scripts/test-type-toc.ts
+
+      - name: Type xref rig
+        # Captions and cross-references are atoms at an offset, so renumbering
+        # is invisible to the redline.
+        run: node scripts/test-type-xref.ts
+
+      - name: Type cite rig
+        # Citations and the bibliography — a citation is an atom, so
+        # restyling one is not an edit to the sentence around it.
+        run: node scripts/test-type-cite.ts
+
+      - name: Type math rig
+        # Formulas: the TeX source is the model and inline math is a mark, so
+        # a formula survives the render→read round trip intact.
+        run: node scripts/test-type-math.ts
+
+      - name: Type comments rig
+        # Threads keep their anchors through edits, splits and merges, and
+        # editing or deleting a message never moves the text it points at.
+        run: node scripts/test-type-comments.ts
+
+      - name: Type track rig
+        # Tracked changes as ins/del marks: accept-all gives the text as
+        # edited, reject-all the text as it was, and display modes never touch
+        # the model.
+        run: node scripts/test-type-track.ts
+
+      - name: Type font rig
+        # Per-selection typeface and size, and the CSS allow-list that keeps a
+        # font stack from opening a second declaration in a style attribute.
+        run: node scripts/test-type-font.ts
+
+      - name: Type styles rig
+        # Named paragraph styles, and the additivity rule: a document with no
+        # doc.styles must render byte-identically to before the feature.
+        run: node scripts/test-type-styles.ts
+
+      - name: Type move rig
+        # Reordering moves whole UNITS, so a drag can never tear a table in
+        # half or drop a paragraph between two bullets.
+        run: node scripts/test-type-move.ts
+
+      - name: Type embed rig
+        # Embedded Bento artifacts, and the render boundary that refuses a
+        # script rather than sanitising one.
+        run: node scripts/test-type-embed.ts
+
+      - name: Type chrome rig
+        # Where controls live: nothing in two menus, no inserts in the
+        # overflow, and every element the chrome reaches for actually exists —
+        # a null lookup there has silently broken the boot twice.
+        run: node scripts/test-type-chrome.ts
 
       - name: Clipboard embedded-font rig
         run: |
