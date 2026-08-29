@@ -802,7 +802,13 @@ export function sanitizeSvgCss(css: string): string {
  * `id` is deliberately never stripped: svg gradients and markers resolve
  * through document-global `url(#…)`, so an id sweep blanks the artwork.
  */
-export function sanitizeSvg(markup: string, scope?: string): DocumentFragment {
+/**
+ * `scope` is REQUIRED, not optional. The bug this signature exists to prevent
+ * was precisely a markup path that never got scoped, so an optional parameter
+ * would leave the leak one omission away and make the unsafe call the shorter
+ * one. There is one caller; costing it a selector is free.
+ */
+export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
   const out = document.createDocumentFragment()
   if (!markup) return out
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
@@ -853,8 +859,7 @@ export function sanitizeSvg(markup: string, scope?: string): DocumentFragment {
         // Scoped as well as sanitized. An svg <style> applies DOCUMENT-WIDE, so
         // one diagram's rules reach every other svg on the page — the exact
         // hazard scopeCss exists for, which until now only `el.css` got.
-        const clean = sanitizeSvgCss(el.textContent ?? '')
-        el.textContent = scope ? scopeCss(clean, scope) : clean
+        el.textContent = scopeCss(sanitizeSvgCss(el.textContent ?? ''), scope)
         continue
       }
       walk(el)
