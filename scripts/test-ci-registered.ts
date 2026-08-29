@@ -90,6 +90,13 @@ const NOT_RUN: Record<string, string> = {
   // who owns that code — a dash branch is the wrong place to first turn it on.
   // Remove this entry and add the step.
   'test-slide-store.ts': 'not wired up — needs an esbuild step in ci.yml like test-clipboard (#262)',
+  // These two belong to the OPS zone and are registered by PR #399, which this
+  // branch is queued behind. This branch had registered them itself, along with
+  // a repair to test-doc-index.mjs — work that turned out to be ops' and that
+  // collided with #399 on ci.yml, which is what made #323 CONFLICTING. Both are
+  // withdrawn; #399 owns them. These entries go when it lands.
+  'test-doc-index.mjs': 'owned by PR #399 (ops) — registered and repaired there, not here',
+  'test-spaces.mjs': 'owned by PR #399 (ops) — registered there, not here',
 }
 
 console.log('\nevery rig is registered')
@@ -108,6 +115,13 @@ if (Object.keys(NOT_RUN).length) {
     // An exemption for a rig that no longer exists is stale bookkeeping
     // pretending to be a decision.
     ok(existsSync(join(root, 'scripts', rig)), `${rig} still exists, so its exemption is still about something`)
+    // AND AN EXEMPTION FOR A RIG THAT IS NOW REGISTERED IS WORSE: it is a hole
+    // nobody needs, sitting in the list quietly not being noticed. The whole
+    // hazard of this mechanism is that entries outlive their reason, so the
+    // reason is checked rather than trusted — the moment CI does run the rig,
+    // this fails and the entry has to come out.
+    ok(!ci.includes(rig),
+      `${rig} IS run by CI now — delete its exemption, the reason it was added has expired`)
   }
 }
 

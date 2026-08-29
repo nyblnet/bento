@@ -131,21 +131,6 @@ jobs:
         # build rather than shipping a half-translated interface.
         run: node scripts/build-spaces-i18n.mjs --check
 
-      - name: Spaces model rig
-        # Was in the tree and run by nothing — found by test-ci-registered.ts
-        # after a merge, which is what that guard is for. Placed here because it
-        # needs slides/node_modules to bundle its second half, and the spaces
-        # job is where those are already installed.
-        run: node scripts/test-spaces.mjs
-
-      - name: Document index — one corpus, every host
-        # Also unregistered, and BROKEN besides: it imported `../tray/doc-index.mjs`
-        # and read `tray/fixtures`, both of which moved to `home/` in the rename.
-        # It is the shared contract the Kotlin and Swift ports run the same
-        # corpus against, so a silent break here is three hosts drifting apart
-        # with nothing to say so.
-        run: node scripts/test-doc-index.mjs
-
       - name: Spaces invite rig
         # "Invite someone…" was `saveAs('copy')`, which serializes store.doc —
         # so everyone invited to a space received `collab.ownerPriv`, the room's
