@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const srcDir = join(root, 'type/src')
 const i18nDir = join(srcDir, 'i18n')
-const LOCALES = ['ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'it']
+const LOCALES = ['ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'it', 'pt']
 
 let failures = 0
 let checks = 0

@@ -28,7 +28,7 @@ const i18nDir = join(srcDir, 'i18n')
 const OUT = join(i18nDir, 'packed.ts')
 
 /** Locale columns, in order. English is the key, so it is not a column. */
-export const LOCALES = ['ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'it']
+export const LOCALES = ['ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'it', 'pt']
 
 /**
  * Every `t('…')` call in the app source, including ones built from adjacent
