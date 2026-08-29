@@ -6031,9 +6031,17 @@ three went stale in silence, and one of them cost a shipped app a language.
 the output has a half-life. That extends to this log — an append-only entry
 cannot be corrected, so a number belongs in one only when it is FROZEN. The test
 before writing one down: *could this change without the entry becoming wrong?*
-If yes, leave it out. "Eleven cases went untested" is safe, being a fact about
-something that already happened; "eight catalogues" is not, because the next
-locale makes it a lie nobody can edit.
+
+**A number is frozen by its framing, not by its value.** "Eleven cases went
+untested" is safe: it reports something that already happened and stays true
+forever. The same figure asserted as a standing fact — "there are eight
+catalogues" — is not, because the next locale makes it a lie nobody can edit.
+The table above says 8 twice and is safe for exactly this reason: it is stamped
+`Measured on 2026-08-29` and says the number is growing, so it reads as a
+reading taken at a moment rather than a claim about the present. Date a
+measurement and it becomes evidence; leave it undated and it becomes a fact with
+an expiry nobody sees. **The rule is not "avoid numbers" — that is unusable
+advice — it is "never write one that is still claiming to be current."**
 
 This is the same failure recorded elsewhere today from the rig side — a
 statement that was true when written, went stale without a sound, and had
