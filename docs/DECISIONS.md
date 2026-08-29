@@ -6023,6 +6023,24 @@ existing rig is the pattern to copy; a derived list is a copy that cannot rot.
 Portuguese — and this log is append-only. It stays. Anyone grepping for stale
 counts will hit it; that is the cost of an honest record, not a defect.
 
+**The general rule, because this is not really about locales.** A count in
+prose is verified by nothing. Three files stated one today — `AGENTS.md`,
+`CLAUDE.md`, `docs/PARALLEL-WORK.md` — all three were true when written, all
+three went stale in silence, and one of them cost a shipped app a language.
+**Name the mechanism, never its current output:** the mechanism survives edits,
+the output has a half-life. That extends to this log — an append-only entry
+cannot be corrected, so a number belongs in one only when it is FROZEN. The test
+before writing one down: *could this change without the entry becoming wrong?*
+If yes, leave it out. "Eleven cases went untested" is safe, being a fact about
+something that already happened; "eight catalogues" is not, because the next
+locale makes it a lie nobody can edit.
+
+This is the same failure recorded elsewhere today from the rig side — a
+statement that was true when written, went stale without a sound, and had
+nothing checking it. Documentation and a green test suite fail identically here,
+and for the same reason: both are instruments, and an instrument nobody
+calibrates is believed longest.
+
 ## 2026-08-29 — OPEN QUESTION: `pt` is two different languages in the suite
 
 **Not a decision. A question recorded because no rig can ask it.**
