@@ -5895,3 +5895,61 @@ the two disagree, believe CI.
 shells and the name undersells it, but it is invoked by name from
 `scripts/test-spaces.mjs` and referenced in this log, and renaming it was more
 churn than the overlap warranted. The file's own header says it is generic.
+
+## 2026-08-29 — five rigs reported passes for work they were not doing
+
+**A green rig is an instrument, and these lied.** The same family as the
+"instruments that lie" list in `CLAUDE.md` — a transform read back from an
+inline element, rAF in a hidden tab, a DOM sampler polling mid-animation — with
+one difference that makes it worse: those instruments were consulted
+deliberately by someone who suspected a problem. A rig is consulted by CI, on
+every push, by people who have stopped suspecting anything.
+
+**The findings, verified against the tree and PR #399's diff on 2026-08-29.**
+Five rigs across four zones, found within one day of each other:
+
+| rig | what it reported | what was true |
+|---|---|---|
+| `test-tray-bridge.ts` | **52/52 pass** | the #277 arbitrary-write fix was DELETED; its shape checks pinned the `<a download>` call site, the NEIGHBOUR of the fix, while `exportCopy`'s `safeFileName` gate and path-containment guard were read by nothing |
+| `test-tray-index.mjs` | "absent, skipped", in green, **for weeks** | the tray→home rename moved the corpus and the path did not; **eleven cases** went untested |
+| `test-doc-index.mjs` | never ran | unregistered in CI, and the same rename left it importing `../tray/doc-index.mjs` |
+| `test-spaces.mjs` | never ran | unregistered **from the day it was written** |
+| `test-slide-store.ts` | never ran | never registered |
+
+**Two distinct failure modes, and the second is quieter.** A rig can assert the
+wrong thing — pinning code adjacent to the fix rather than the fix. Or it can
+assert nothing at all while still printing a pass, because its input moved or it
+was never wired to CI. The second is harder to notice precisely because there is
+no wrong assertion left to be wrong. #399's own comment on `test-doc-index.mjs`
+puts it best: **a rig nobody runs cannot report its own import failure.**
+
+**Presence is not the property; ordering is.** The load-bearing check added to
+`exportCopy` is not that `safeFileName` and the containment guard exist — both
+can exist and still run AFTER the write. It asserts
+`indexOf('write(to: tmp)') > indexOf('hasPrefix(')`. This is the part that
+transfers to any rig: a guard's presence is cheap to assert and frequently
+means nothing.
+
+**The check adopted, which costs two minutes:** delete the guard the rig exists
+to protect, run the rig, and watch. If it still passes, the rig is reading
+something adjacent to the fix. **Do it when you write the rig, not after someone
+reverts it.** Measured, not assumed: `exportCopy` gained FOUR checks and THREE
+of them fire on the revert that was actually run (53/56). That gap is the point
+rather than an embarrassment — four independent assertions, not one assertion
+spelled four ways, and the one that stayed silent did so because of how those
+particular guards were stripped.
+
+**A skip that protects nothing costs the whole check.** `test-tray-index.mjs`
+skipped a missing corpus for a good reason — it arrived with the Android work,
+and a rig that fails until an unrelated branch lands is a rig people learn to
+ignore. The reason expired when the corpus landed and the skip did not. A path
+that is SUPPOSED to exist is a failure when it does not, and a rig must
+distinguish ABSENT from MOVED.
+
+**Status.** PR #399 is in flight as this is written; it registers the unrun rigs
+and closes the two mis-asserting ones. The findings above are properties of the
+tree at `220f7e7` and stay true whatever shape that PR lands in. Found by
+bento-team-home-ios, with bento-team-home-android hitting it from the other
+side; the `CLAUDE.md` counterpart — the two-minute check, in the file people
+read BEFORE writing a rig — is queued for the maintainer and is not discharged
+by this entry.
