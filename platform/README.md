@@ -148,9 +148,15 @@ saved locally. Full reasoning: `docs/DECISIONS.md`.
   `decks.project_id`) are a lightweight, purely organizational grouping —
   no access level, no kind, no content of its own, just an id + name to
   render the sidebar as folders. The sidebar renders (top to bottom) Pinned
-  → Projects → History; **pin wins section placement outright** — a deck
-  that's both pinned and filed under a project shows ONLY in Pinned, never
-  duplicated into its folder too. A project folder is collapsible
+  → Projects → History; **project wins section placement outright** — a
+  deck filed under a project shows ONLY inside that project's folder,
+  pinned or not (its pin badge still renders there — see `deckItemHtml` —
+  pin just no longer moves it out of its folder). The Pinned section is
+  reserved for pinned decks that aren't filed under any project. (An
+  earlier version of this had it backwards — pin won, so a pinned+filed
+  deck showed only under Pinned while its folder claimed to be empty,
+  which read as "the assignment silently failed" rather than what it
+  actually was; flipped per user feedback.) A project folder is collapsible
   (`.project-folder-row`, chevron rotates 90°; expand/collapse state is
   session-only, same as sidebar width — no persistence). **The Projects
   section always renders, even with zero projects yet** — it carries its
