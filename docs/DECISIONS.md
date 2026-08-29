@@ -4605,3 +4605,56 @@ document carrying `theme.dir: 'rtl'` the padding therefore went left while the
 gutter went right — measured at 390px, the gutter landed at x = 378…412 and the
 column scrolled to 412. It is reserved on `.sp-page-inner` now, so the two flip
 together; the ltr metrics are byte-identical.
+
+## 2026-08-29 — In the platform sidebar, a filed deck's project wins over its pin for section placement
+
+`platform/worker/src/demo.ts`'s sidebar renders three sections — Pinned,
+Projects (folders), History — and every deck needs exactly one placement
+rule when it qualifies for more than one section. The first cut (same PR
+that added Projects, `docs/PARALLEL-WORK.md` §1's `platform/` zone) had
+pin win outright: a deck that was both pinned AND filed under a project
+rendered only under Pinned, never duplicated into its folder, on the
+theory that de-duplication mattered more than which section "won." That
+reasoning was never put to the person actually using the sidebar.
+
+It read as broken the first time it mattered. A real screenshot: a
+pinned deck was moved into a project via the deck menu's Project ▸
+submenu, the checkmark against that project persisted correctly across a
+reload (the assignment DID work), and the project's own folder still
+showed count 0 and "Empty — file a deck here from its ⚙️ menu." — because
+the deck it contained was pinned and therefore rendered exclusively in
+Pinned instead. Nothing in the UI said "this folder has 1 pinned member
+you won't see here"; it just looked empty while a checkmark elsewhere
+insisted otherwise. Filed under "整个添加到project的部分充满了bug" (the
+whole add-to-project flow is full of bugs) even though the backend had
+done exactly what was asked.
+
+Flipped: **project now wins section placement outright.** A deck filed
+under a still-existing project renders ONLY inside that project's
+folder, pinned or not; the Pinned section is reserved for pinned decks
+that are NOT filed under any project. Pin doesn't disappear for a filed
+deck — `deckItemHtml`'s pin badge already rides on every deck object
+regardless of which section renders it, so a pinned member inside a
+folder still shows its pin badge, it just no longer changes WHICH
+section that render happens in. Implementation is a one-pass regroup in
+`loadDeckList`: partition ALL decks (not just the unpinned ones) into
+`grouped[projectId]` vs `unfiled` first, then split `unfiled` into
+`pinned`/`history` — project membership is decided before pin status is
+even consulted.
+
+The general lesson, not specific to this feature: **when two independent
+boolean-ish properties both want to claim "top billing" for the same
+list item, resolve the tie by asking which property is more informative
+about WHERE something is**, not which property existed first, or which
+implementation was less code to de-duplicate. "Pinned" answers "should I
+see this without hunting" — a property of the deck's importance, orthogonal
+to structure. "Filed under a project" answers "where does this belong" —
+a property of the deck's ORGANIZATION, which is what a folder-based UI is
+for in the first place. A convenience property (pin) overriding a
+structural one (folder membership) is what produced the "folder lies
+about being empty" bug; a structural property overriding a convenience
+one, with the convenience property still rendered as a badge wherever it
+ends up, doesn't have that failure mode. Reach for this ordering by
+default the next time two placement rules collide in this sidebar (or
+any list with more than one classification axis) rather than
+re-deriving it from scratch under a bug report.

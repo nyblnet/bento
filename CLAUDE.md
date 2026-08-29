@@ -96,9 +96,13 @@ Current feature set, all owner-only except where noted:
   `decks.project_id`, no access level/kind/content of its own, purely a
   sidebar grouping) render as collapsible folders between Pinned and
   History (`.project-folder-row`, session-only expand state, same
-  no-persistence rule as sidebar width). Pin wins section placement
-  outright — a pinned+filed deck shows ONLY under Pinned, never duplicated
-  into its folder. **The Projects section always renders, even with zero
+  no-persistence rule as sidebar width). **Project wins section placement
+  outright** — a filed deck shows ONLY inside its project's folder, pinned
+  or not (the pin badge still renders there); Pinned holds only pinned
+  decks that aren't filed under any project. (Reversed from an earlier
+  version where pin won and a pinned+filed deck's folder read as empty —
+  looked like the assignment had silently failed.) **The Projects section
+  always renders, even with zero
   projects**, carrying its own "+" (`#addProjectBtn`) — creation lives
   there, not inside a deck's menu. A deck's own "Project ▸" submenu
   (mirrors "Access ▸") is **move-only** — "No project" / existing

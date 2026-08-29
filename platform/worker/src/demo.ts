@@ -756,22 +756,27 @@ async function loadDeckList() {
       projects.forEach(p => { projectIndex[p.id] = p })
     }
 
-    // Server already sorts pinned-first (store.ts's listDecks). Pin wins
-    // section placement outright: a pinned deck shows ONLY under Pinned,
-    // never duplicated into its project folder too. Everything else that's
-    // filed under a (still-existing) project groups into that folder;
-    // anything left over — unpinned and unfiled — is plain History.
-    const pinned = decks.filter(d => d.pinned)
-    const unpinned = decks.filter(d => !d.pinned)
+    // Project wins section placement outright: a deck filed under a
+    // (still-existing) project shows ONLY inside that project's folder,
+    // pinned or not — a pinned-but-filed deck was previously stuck showing
+    // only under Pinned while its folder claimed to be empty, which read as
+    // "the assignment silently failed" rather than what it actually was.
+    // Pin still means something inside a folder (deckItemHtml's own pin
+    // badge, since the pinned flag rides along on every deck object) — it
+    // just no longer changes WHICH section a filed deck renders in. The
+    // Pinned section itself is now reserved for pinned decks that AREN'T
+    // filed under any project.
     const grouped = {}
-    const history = []
-    unpinned.forEach(d => {
+    const unfiled = []
+    decks.forEach(d => {
       if (d.projectId && projectIndex[d.projectId]) {
         (grouped[d.projectId] = grouped[d.projectId] || []).push(d)
       } else {
-        history.push(d)
+        unfiled.push(d)
       }
     })
+    const pinned = unfiled.filter(d => d.pinned)
+    const history = unfiled.filter(d => !d.pinned)
 
     let out = ''
     if (pinned.length) {
