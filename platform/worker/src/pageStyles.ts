@@ -4,28 +4,39 @@
 // Shared CSS for every plain HTML page this Worker serves (demo.ts, and the
 // setup/login pages) — one copy instead of drifting duplicates. Hand-written,
 // no framework/CDN: see demo.ts's file header for why (this repo's
-// zero-external-dependency convention). Deliberately dark-only, matching
-// Bento's own example palette (#0D1B2E/#F5F7FA/#E8442E).
-//
-// Page-specific rules (demo.ts's `pre.prompt`, say) are appended by the page
-// itself after this block, not folded in here — this file is only the parts
-// every page actually shares.
+// zero-external-dependency convention). An elegant, warm LIGHT palette —
+// ivory paper + deep ink navy + the same brand terracotta accent used
+// throughout (Bento's example decks default to #E8442E too, so the platform
+// chrome and a freshly-compiled deck's own default theme still rhyme).
+// Previously dark-only navy/#F5F7FA; switched per explicit request. Two
+// accent tokens instead of one: `--accent` (#E8442E) is for BACKGROUNDS —
+// button fills, active pills, borders — where a bold saturated red-orange
+// reads fine even at small sizes. `--accent-ink` is a deepened version of
+// the same hue for TEXT/icon foreground use — #E8442E as running text sits
+// at ~3.7:1 against this bg (fails WCAG AA body-text contrast; it only
+// passed against the old dark navy bg because dark bg + a mid-saturation
+// red is a much easier contrast pair than near-white + the same red).
+// `--accent-ink` sits at ~5.8:1, comfortably AA. Hover overlays elsewhere in
+// this file and demo.ts use `rgba(28,43,61, α)` — the same RGB triplet as
+// `--text` below, tinting darker on hover instead of the old dark theme's
+// lighter-tint-on-hover (the correct direction flips with the theme).
 export const PAGE_STYLES = `
   :root {
-    --bg: #0D1B2E;
-    --bg-elev: #0A1524;
-    --card: #142338;
-    --border: rgba(245,247,250,0.12);
-    --border-strong: rgba(245,247,250,0.22);
-    --text: #F5F7FA;
-    --text-dim: #93A2BA;
+    --bg: #FAF7F2;
+    --bg-elev: #F1ECE3;
+    --card: #FFFFFF;
+    --border: rgba(28,43,61,0.10);
+    --border-strong: rgba(28,43,61,0.20);
+    --text: #1C2B3D;
+    --text-dim: #6B7686;
     --accent: #E8442E;
-    --accent-hover: #FF5B3F;
-    --ok-bg: rgba(45,164,78,0.16);
-    --ok-fg: #5BD584;
-    --err-bg: rgba(232,68,46,0.14);
-    --err-fg: #FF8A76;
-    color-scheme: dark;
+    --accent-ink: #B23223;
+    --accent-hover: #C93A26;
+    --ok-bg: rgba(31,122,68,0.10);
+    --ok-fg: #1F7A44;
+    --err-bg: rgba(163,49,31,0.09);
+    --err-fg: #A3311F;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   body {
@@ -38,12 +49,12 @@ export const PAGE_STYLES = `
   .wrap.narrow { max-width: 420px; }
   header.hero { margin-bottom: 36px; }
   h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 8px; }
-  h1 span { color: var(--accent); }
+  h1 span { color: var(--accent-ink); }
   .subtitle { color: var(--text-dim); font-size: 15px; margin: 0; max-width: 60ch; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin-bottom: 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(28,43,61,0.04); }
   .step-label {
     display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+    text-transform: uppercase; color: var(--accent-ink); margin-bottom: 10px;
   }
   h2 { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
   .card > p { color: var(--text-dim); margin: 0 0 16px; font-size: 14px; }
@@ -63,7 +74,7 @@ export const PAGE_STYLES = `
     border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease;
   }
-  button:hover { background: rgba(245,247,250,0.07); }
+  button:hover { background: rgba(28,43,61,0.06); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
   button.primary:disabled { opacity: 0.6; cursor: default; }
@@ -72,7 +83,7 @@ export const PAGE_STYLES = `
   .status.ok { display: block; background: var(--ok-bg); color: var(--ok-fg); }
   .status a { color: inherit; text-decoration: underline; font-weight: 600; }
   .status a:hover { opacity: 0.8; }
-  code { background: rgba(245,247,250,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  code { background: rgba(28,43,61,0.07); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
   @media (max-width: 600px) {
     .wrap { padding: 32px 16px 60px; }
     h1 { font-size: 23px; }
