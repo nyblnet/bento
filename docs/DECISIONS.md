@@ -5946,10 +5946,34 @@ ignore. The reason expired when the corpus landed and the skip did not. A path
 that is SUPPOSED to exist is a failure when it does not, and a rig must
 distinguish ABSENT from MOVED.
 
-**Status.** PR #399 is in flight as this is written; it registers the unrun rigs
-and closes the two mis-asserting ones. The findings above are properties of the
-tree at `220f7e7` and stay true whatever shape that PR lands in. Found by
-bento-team-home-ios, with bento-team-home-android hitting it from the other
-side; the `CLAUDE.md` counterpart — the two-minute check, in the file people
-read BEFORE writing a rig — is queued for the maintainer and is not discharged
-by this entry.
+**And the practice is now enforced, not just recommended.** A two-minute habit
+decays; the same PR adds the mechanical half. `scripts/test-spaces.mjs
+--manifest` runs in CI and asserts the list both ways — every `test-spaces-*`
+file on disk is listed in `RIGS`, and every rig in `RIGS` has a step in the
+workflow — failing with **"A rig nobody runs is not a rig. Add a step for each,
+or remove it from RIGS."** Read that beside the diagnosis above and the pair is
+the whole entry: one line names the failure, the other refuses to let it recur.
+Both halves are the point. A rig that catches this class of defect is worth more
+than a paragraph asking people to remember it, and any app growing a rig suite
+should copy the manifest check rather than the habit.
+
+**Status.** PR #399 (branch `ops-rig-repairs`) is in flight as this is written;
+it registers the unrun rigs, closes the two mis-asserting ones, and adds the
+manifest check. The findings above are properties of the tree at `220f7e7` and
+stay true whatever shape that PR lands in.
+
+**Attribution, corrected once in the writing of this entry.** The two
+`test-tray-*` findings are bento-team-home-ios's, with bento-team-home-android
+hitting the same class from the other side. The three unrun rigs and both quoted
+lines came through #399 and are **bento-team-ops'** — an earlier draft of this
+paragraph credited the whole finding to home-ios, which was wrong. Worth
+recording how it was settled, because it will come up again: `git log` cannot
+answer it. Every session on this repo commits as the maintainer, so authorship
+metadata resolves to one person for all of us; the zone and the branch are the
+only evidence that distinguishes anybody. Cite the PR, which is checkable, over
+the session, which is not.
+
+**The `CLAUDE.md` counterpart is not discharged by this entry.** The two-minute
+check belongs in the file people read BEFORE writing a rig; this log is what
+they read after wondering why a standard exists. That text is queued for the
+maintainer.
