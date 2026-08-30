@@ -363,8 +363,16 @@ ${PAGE_STYLES}
     background: transparent;
   }
   .sidebar-resize-handle:hover, .sidebar-resize-handle.dragging { background: var(--accent); opacity: 0.5; }
-  .sidebar-brand { font-weight: 800; font-size: 15px; margin: 0 0 16px; padding: 0 2px; }
-  .sidebar-brand span { color: var(--accent-ink); }
+  /* The sidebar's own site mark, reusing /favicon.png (already cached by
+     the <link rel="icon"> in <head> — same URL, so this costs no extra
+     request). Sized as a rounded "app icon" badge rather than a full-width
+     banner: the source image is a solid square block, and centering a
+     modest icon above the full-width "+ New deck" button reads as a
+     deliberate lockup instead of a stretched, oversized logo dominating a
+     300px-wide sidebar. The shadow lifts it off the ivory sidebar bg the
+     same way .card/.ctx-menu already float above the page elsewhere. */
+  .sidebar-brand { display: flex; justify-content: center; margin: 4px 0 18px; }
+  .sidebar-logo { width: 72px; height: 72px; border-radius: 16px; box-shadow: 0 6px 16px rgba(28,43,61,0.18); display: block; }
   .new-deck-btn { width: 100%; justify-content: center; margin-bottom: 16px; }
   /* Three independent sections (Pinned / Projects / History) instead of one
      flat scrolling list: a sidebar full of pinned decks used to shove
@@ -548,7 +556,9 @@ ${PAGE_STYLES}
 <div class="app-shell">
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">Bento platform <span>·</span> decks</div>
+    <div class="sidebar-brand">
+      <img class="sidebar-logo" src="/favicon.png" alt="Rynn Wang" width="72" height="72">
+    </div>
     <button id="newDeck" class="primary new-deck-btn" type="button">+ New deck</button>
     <div class="deck-list" id="deckList">
       <div class="deck-list-loading">Loading…</div>
