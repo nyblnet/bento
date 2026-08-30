@@ -19,6 +19,9 @@
 //   PATCH /api/decks/:id/title  rename a deck — OWNER ONLY
 //   PATCH /api/decks/:id/pin    pin/unpin a deck (stays atop the sidebar list) — OWNER ONLY
 //   PATCH /api/decks/:id/project  file a deck under a project, or null to unfile — OWNER ONLY
+//   PATCH /api/decks/:id/password  set or clear the deck's share password — OWNER ONLY
+//   POST /api/decks/:id/unlock  submit a share password, sets an unlock cookie on success —
+//                               PUBLIC (this is the one mutating-ish route a non-owner calls)
 //   DELETE /api/decks/:id       permanently delete a deck (D1 row + R2 doc/assets) — OWNER ONLY
 //   POST /api/decks/:id/assets  upload an image blob — OWNER ONLY
 //   GET  /api/projects          list projects (sidebar folders), alphabetical — OWNER ONLY
@@ -26,7 +29,9 @@
 //   PATCH /api/projects/:id     rename a project: { name } — OWNER ONLY
 //   DELETE /api/projects/:id    delete a project (unassigns its decks, does NOT delete them) — OWNER ONLY
 //   GET  /d/:id                the deck: a 'bento' deck spliced into the shell, or an
-//                               'html' deck sandboxed in an iframe wrapper — see handleView
+//                               'html' deck sandboxed in an iframe wrapper — see handleView.
+//                               A share-password-protected deck shows a password gate instead
+//                               (sharePage.ts) until the request carries a valid unlock cookie.
 //   GET  /d/:id/download        same content, as a downloadable attachment (raw bytes for 'html')
 //   GET  /a/:id/:key            an uploaded asset's bytes
 //
@@ -48,6 +53,28 @@
 // regardless of `access` — the column only affects anonymous viewers. See
 // docs/DECISIONS.md.
 //
+// A 'view'/'edit' deck can ALSO carry an optional share password
+// (migrations/0008_share_password.sql, store.ts's setDeckSharePassword) — an
+// extra gate layered in FRONT of whatever `access` already allows: knowing
+// the link is no longer enough, a non-owner must submit the password too.
+// handleView/handleAsset check this after the `access`/private check above
+// (a 'private' deck already 404s regardless, password or not) — if the deck
+// has a password set and the request carries no valid unlock cookie yet,
+// handleView returns sharePage.ts's small password-gate page INSTEAD OF the
+// real content (handleAsset just 401s; it's meant to be loaded by an already
+// -unlocked page, not browsed to directly). Submitting the right password to
+// POST /api/decks/:id/unlock sets a per-deck cookie
+// (`bento_unlock_<id>`) whose value is `sha256(deckId + ':' + passwordHash)`
+// — deliberately STATELESS (no session-style D1 row for every unlock): the
+// hash half of that digest is known only server-side, so the cookie is
+// unforgeable without first supplying the correct password once, AND it's
+// automatically invalidated the moment the password changes (a fresh hash
+// makes every previously issued cookie's digest wrong) — "rotate to revoke,"
+// the same idea the collab feature's key rotation already uses elsewhere in
+// this codebase. See auth.ts's file header for the full reasoning, including
+// why sessions themselves do NOT use this trick (a session must stay
+// revocable independent of any password change).
+//
 // Every deck also has a `kind` (migrations/0005_kind.sql, store.ts's
 // DeckKind): 'bento' (the above) or 'html' — an opaque, self-contained HTML
 // file a chat AI produced directly (not through Bento's own compiler),
@@ -63,6 +90,7 @@
 import type { Env } from './env.ts'
 import { spliceDoc, SHELL_VERSION } from './splice.ts'
 import { validateIncomingDoc } from './validate.ts'
+import { sha256Hex } from './ids.ts'
 import {
   createDeck,
   createHtmlDeck,
@@ -75,6 +103,7 @@ import {
   setDeckAccess,
   setDeckPinned,
   setDeckProject,
+  setDeckSharePassword,
   deleteDeck,
   putAsset,
   getAsset,
@@ -86,9 +115,11 @@ import {
   deleteProject,
   DECK_ACCESS_LEVELS,
   type DeckAccess,
+  type DeckMeta,
 } from './store.ts'
 import { renderDemoPage } from './demo.ts'
 import { renderSetupPage, renderLoginPage } from './authPages.ts'
+import { renderDeckPasswordGate } from './sharePage.ts'
 import { parseOutline } from './compile/schema.ts'
 import { compileOutline } from './compile/compile.ts'
 import {
@@ -97,10 +128,12 @@ import {
   verifyPassword,
   createSession,
   deleteSession,
+  readCookie,
   readSessionCookie,
   setSessionCookieHeader,
   clearSessionCookieHeader,
   isAuthenticated,
+  verifySharePassword,
 } from './auth.ts'
 
 const CORS_HEADERS = {
@@ -275,6 +308,7 @@ async function handleListDecks(env: Env): Promise<Response> {
       kind: d.kind,
       pinned: !!d.pinned,
       projectId: d.project_id,
+      hasPassword: !!d.share_password_hash,
     })),
   })
 }
@@ -465,6 +499,84 @@ async function handleSetDeckProject(req: Request, env: Env, id: string): Promise
   return json({ ok: true, projectId })
 }
 
+/** The unlock cookie's name is per-deck (not one shared cookie), so a
+ *  viewer unlocking deck A never implies anything about deck B — no Path
+ *  scoping needed either, since it's the cookie's NAME, not its Path, that
+ *  ties it to one deck. */
+function deckUnlockCookieName(id: string): string {
+  return `bento_unlock_${id}`
+}
+
+/** The deterministic, stateless unlock token — see index.ts's file header
+ *  for the full "why no D1 row per unlock" reasoning. Only ever computed
+ *  from a hash that lives server-side, so it's unforgeable without first
+ *  supplying the correct password once, and it changes (invalidating every
+ *  previously issued cookie) the moment the password itself changes. */
+async function deckUnlockToken(deckId: string, passwordHash: string): Promise<string> {
+  return sha256Hex(`${deckId}:${passwordHash}`)
+}
+
+function setDeckUnlockCookieHeader(deckId: string, token: string): string {
+  const maxAge = 180 * 24 * 60 * 60 // 180 days — generous; re-unlocking is one password entry, not a hardship
+  return `${deckUnlockCookieName(deckId)}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`
+}
+
+/** True if the deck has NO password set, or the request already carries a
+ *  valid unlock cookie for it. False means the caller must be shown (or
+ *  told to hit) the password gate. */
+async function isDeckUnlocked(req: Request, meta: DeckMeta): Promise<boolean> {
+  if (!meta.share_password_hash) return true
+  const cookieVal = readCookie(req, deckUnlockCookieName(meta.id))
+  if (!cookieVal) return false
+  return cookieVal === (await deckUnlockToken(meta.id, meta.share_password_hash))
+}
+
+async function handleSetSharePassword(req: Request, env: Env, id: string): Promise<Response> {
+  if (!(await getDeckMeta(env, id))) return notFound()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const password = (body as { password?: unknown })?.password
+  if (password !== null && (typeof password !== 'string' || !password.trim())) {
+    return json({ error: 'password must be a non-empty string, or null to remove it' }, { status: 422 })
+  }
+  const clamped = password === null ? null : (password as string).trim()
+  await setDeckSharePassword(env, id, clamped)
+  return json({ ok: true, hasPassword: clamped !== null })
+}
+
+/** PUBLIC — the one route in this file a non-owner is expected to POST to.
+ *  A wrong password gets the same 401 shape whether the deck doesn't exist,
+ *  isn't password-protected, or the guess was simply wrong — no reason to
+ *  hand an attacker a free "deck exists" or "not password-protected" oracle
+ *  on top of the deck id itself already being a guessable-length token. */
+async function handleUnlockDeck(req: Request, env: Env, id: string): Promise<Response> {
+  const meta = await getDeckMeta(env, id)
+  const WRONG = json({ error: 'incorrect password' }, { status: 401 })
+  if (!meta || !meta.share_password_hash || !meta.share_password_salt || meta.share_password_iterations == null) {
+    return WRONG
+  }
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json({ error: 'invalid JSON body' }, { status: 400 })
+  }
+  const password = (body as { password?: unknown })?.password
+  if (typeof password !== 'string' || !password) return WRONG
+  const ok = await verifySharePassword(password, {
+    hash: meta.share_password_hash,
+    salt: meta.share_password_salt,
+    iterations: meta.share_password_iterations,
+  })
+  if (!ok) return WRONG
+  const token = await deckUnlockToken(id, meta.share_password_hash)
+  return json({ ok: true }, { headers: { 'set-cookie': setDeckUnlockCookieHeader(id, token) } })
+}
+
 async function handleListProjects(env: Env): Promise<Response> {
   const projects = await listProjects(env)
   return json({
@@ -530,6 +642,10 @@ async function handleView(req: Request, env: Env, id: string, download: boolean)
   // no deck at all, so its existence isn't observable either. The owner's
   // own session always gets the full content regardless of `access`.
   if (!owner && meta.access === 'private') return notFound()
+  // A share-password-protected deck shows the gate page INSTEAD OF content
+  // for anyone but the owner, until they've unlocked it — see this file's
+  // header and sharePage.ts. The real doc/html bytes are never sent here.
+  if (!owner && !(await isDeckUnlocked(req, meta))) return html(renderDeckPasswordGate(id, download))
 
   if (meta.kind === 'html') {
     const rawHtml = await getDeckHtml(env, id)
@@ -572,15 +688,23 @@ async function handleAsset(req: Request, env: Env, id: string, key: string): Pro
   // Same 404-not-403 rule as handleView: a private deck's assets are just as
   // unreachable, and just as invisible, to anyone without the owner's session.
   if (!owner && meta.access === 'private') return notFound()
+  // A password-protected deck's assets aren't meant to be browsed to
+  // directly (they're loaded BY an already-unlocked page) — a plain 401
+  // rather than the full HTML password gate handleView shows.
+  if (!owner && !(await isDeckUnlocked(req, meta))) return json({ error: 'password required' }, { status: 401 })
   const obj = await getAsset(env, id, key)
   if (!obj) return notFound()
-  // Content-addressed keys make `public, immutable` caching safe for
-  // 'view'/'edit' decks. A 'private' deck must never be handed a
+  // Content-addressed keys make `public, immutable` caching safe for a plain
+  // 'view'/'edit' deck. A 'private' deck must never be handed a
   // shared-cacheable response, even to its owner — a CDN edge caching it
   // once would let a later anonymous request for the same URL skip the
-  // access check above entirely by being served straight from cache.
+  // access check above entirely by being served straight from cache. Same
+  // logic applies to a password-protected deck's assets: a shared cache
+  // can't tell "this visitor unlocked it" from "this visitor didn't," so a
+  // cached response would leak past the password gate to the next visitor
+  // who requests the same URL, unlocked or not.
   const cacheControl =
-    meta.access === 'private' ? 'private, no-store' : 'public, max-age=31536000, immutable'
+    meta.access === 'private' || meta.share_password_hash ? 'private, no-store' : 'public, max-age=31536000, immutable'
   return new Response(obj.body, {
     headers: {
       'content-type': obj.httpMetadata?.contentType ?? 'application/octet-stream',
@@ -684,6 +808,16 @@ export default {
           const denied = await requireOwnerApi(req, env)
           if (denied) return denied
           return await handleSetDeckProject(req, env, parts[2]!)
+        }
+        if (parts.length === 4 && parts[3] === 'password' && req.method === 'PATCH') {
+          const denied = await requireOwnerApi(req, env)
+          if (denied) return denied
+          return await handleSetSharePassword(req, env, parts[2]!)
+        }
+        if (parts.length === 4 && parts[3] === 'unlock' && req.method === 'POST') {
+          // PUBLIC — no requireOwnerApi. This is the one route a non-owner
+          // viewer is expected to call; see this file's header.
+          return await handleUnlockDeck(req, env, parts[2]!)
         }
       }
 
