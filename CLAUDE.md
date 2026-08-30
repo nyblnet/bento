@@ -69,6 +69,26 @@ Current feature set, all owner-only except where noted:
   `is_editable`) were both superseded — see `docs/DECISIONS.md` 2026-08-21
   for why a tri-state column replaced the boolean rather than bolting a
   private case onto it.
+- **Share passwords** (`migrations/0008_share_password.sql`'s
+  `decks.share_password_*`, `PATCH /api/decks/:id/password`) — an OPTIONAL
+  second gate layered in FRONT of a `'view'`/`'edit'` deck's `access`: even
+  with the link, a non-owner must submit this password too. Same PBKDF2-
+  SHA-256 as the owner's own account password (`auth.ts`'s
+  `hashSharePassword`/`verifySharePassword`, one `derivePasswordHash`
+  shared by both), stored per-deck instead of in `config`. `handleView`
+  shows `sharePage.ts`'s small gate page to a non-owner instead of the real
+  content until unlocked — the doc/HTML bytes are never sent to the browser
+  first; `handleAsset` just 401s. Unlocking is deliberately STATELESS (no
+  D1 row per unlock, unlike sessions): `POST /api/decks/:id/unlock` sets a
+  `bento_unlock_<id>` cookie whose value is `sha256(deckId + ':' +
+  passwordHash)` — the hash half is server-only, so the cookie is
+  unforgeable without the correct password once, AND changing the password
+  automatically invalidates every previously issued cookie (a fresh hash
+  makes old digests wrong) — "rotate to revoke," same idea as the collab
+  feature's key rotation. Password-protected assets are `private, no-store`
+  regardless of `access` (same reasoning as private decks' asset caching —
+  a shared cache can't tell "unlocked" from "not," so caching would leak
+  past the gate). Owner session always bypasses, like `access`.
 - **Deck history sidebar** (`demo.ts`, served at `/`) — a ChatGPT-style list
   (`GET /api/decks`, pinned first then most-recently-touched), each entry
   showing a kind badge, a pin badge, a status icon (unlock/eye/lock —

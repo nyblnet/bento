@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Single-owner authentication (migrations/0002_auth.sql). Two concerns:
+// Single-owner authentication (migrations/0002_auth.sql), plus the PBKDF2
+// primitives store.ts/index.ts reuse for a SECOND, unrelated secret — a
+// deck's own per-deck share password (migrations/0008_share_password.sql).
+// Three concerns:
 //
 //   - Password hashing (config table, set once via POST /api/setup).
 //     PBKDF2-SHA-256, same family kernel/src/save.ts uses for bento/enc
@@ -22,6 +25,19 @@
 //     logout is just deleting it, and there's no signing-key story to get
 //     wrong. The cookie value IS the row's `id` — an opaque random token,
 //     looked up (and its expiry slid forward) on every owner-gated request.
+//   - Deck share passwords (`hashSharePassword`/`verifySharePassword` below)
+//     — an OPTIONAL extra gate an owner can put in front of a 'view'/'edit'
+//     deck: even with the link, an anonymous viewer must submit this
+//     password before index.ts's handleView/handleAsset serve anything.
+//     Same PBKDF2-SHA-256 machinery as the owner's own account password
+//     (there's exactly one derivePasswordHash implementation in this file;
+//     both callers share it), stored per-deck in `decks.share_password_*`
+//     rather than in `config`. Unlike sessions, unlocking a deck does NOT
+//     mint a D1 row — see index.ts's deckUnlockToken for why a stateless,
+//     deterministic cookie value works here and sessions still don't use
+//     that trick (a session needs to be revocable independent of any
+//     password change; a deck unlock is fine being tied to — and
+//     automatically invalidated by — the deck's current password hash).
 import type { Env } from './env.ts'
 import { randomToken } from './ids.ts'
 
@@ -157,15 +173,21 @@ export async function deleteSession(env: Env, sessionId: string): Promise<void> 
 
 // --- cookies -----------------------------------------------------------
 
-export function readSessionCookie(req: Request): string {
+/** Generic single-cookie reader — session and per-deck unlock cookies both
+ *  go through this rather than each parsing the `cookie` header themselves. */
+export function readCookie(req: Request, name: string): string {
   const header = req.headers.get('cookie') ?? ''
   for (const part of header.split(';')) {
     const eq = part.indexOf('=')
     if (eq < 0) continue
     const key = part.slice(0, eq).trim()
-    if (key === SESSION_COOKIE_NAME) return decodeURIComponent(part.slice(eq + 1).trim())
+    if (key === name) return decodeURIComponent(part.slice(eq + 1).trim())
   }
   return ''
+}
+
+export function readSessionCookie(req: Request): string {
+  return readCookie(req, SESSION_COOKIE_NAME)
 }
 
 export function setSessionCookieHeader(sessionId: string): string {
@@ -180,4 +202,28 @@ export function clearSessionCookieHeader(): string {
 /** True if the request carries a valid, non-expired owner session. */
 export async function isAuthenticated(req: Request, env: Env): Promise<boolean> {
   return touchSession(env, readSessionCookie(req))
+}
+
+// --- deck share passwords -------------------------------------------------
+//
+// See the file header. This is the SAME derivePasswordHash/PBKDF2 machinery
+// as the owner's own account password, applied to a different secret.
+
+export interface SharePasswordRecord {
+  hash: string
+  salt: string
+  iterations: number
+}
+
+/** Hash a NEW share password for a deck. Salt is always minted here, never
+ *  caller-supplied — same rule as createConfig. */
+export async function hashSharePassword(password: string): Promise<SharePasswordRecord> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES))
+  const hash = await derivePasswordHash(password, salt, PASSWORD_ITERATIONS)
+  return { hash: toB64(hash), salt: toB64(salt), iterations: PASSWORD_ITERATIONS }
+}
+
+export async function verifySharePassword(password: string, record: SharePasswordRecord): Promise<boolean> {
+  const candidate = await derivePasswordHash(password, fromB64(record.salt), record.iterations)
+  return timingSafeEqual(candidate, fromB64(record.hash))
 }

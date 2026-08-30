@@ -421,10 +421,11 @@ ${PAGE_STYLES}
     display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .deck-item .deck-time { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
-  .deck-kind, .deck-status, .deck-pin-badge {
+  .deck-kind, .deck-status, .deck-pin-badge, .deck-password-badge {
     flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; opacity: 0.7;
   }
   .deck-pin-badge { color: var(--accent-ink); opacity: 1; }
+  .deck-password-badge { color: var(--text-dim); }
   .deck-gear, .project-gear {
     flex: 0 0 auto; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
     border: none; background: none; color: var(--text-dim); cursor: pointer; border-radius: 6px;
@@ -465,6 +466,28 @@ ${PAGE_STYLES}
   }
   .ctx-header button { background: none; border: none; color: var(--text-dim); cursor: pointer; display: inline-flex; padding: 2px; }
   .ctx-header button:hover { color: var(--text); }
+
+  /* password modal — a real text-entry form, unlike Access/Project's fixed-
+     choice submenus, so it's a centered dialog with a backdrop rather than a
+     corner-anchored ctx-menu (masked input needs deliberate focus, not a
+     glance-and-click list). */
+  .pw-backdrop {
+    position: fixed; inset: 0; z-index: 70; background: rgba(28,43,61,0.35);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .pw-modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px; width: 100%; max-width: 360px; box-shadow: 0 20px 50px rgba(28,43,61,0.22);
+  }
+  .pw-modal h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+  .pw-modal p { margin: 0 0 16px; color: var(--text-dim); font-size: 13px; }
+  .pw-modal input[type=password] {
+    display: block; width: 100%; box-sizing: border-box; background: var(--bg-elev); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font: 14px/1.4 inherit; margin-bottom: 12px;
+  }
+  .pw-modal input[type=password]:focus { outline: none; border-color: var(--accent); }
+  .pw-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .pw-modal-actions .pw-remove { margin-right: auto; }
   .sidebar-footer { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
   .logout-link {
     display: block; width: 100%; text-align: left; font-size: 13px; color: var(--text-dim);
@@ -629,6 +652,7 @@ const ICONS = {
   upload: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>',
   folder: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
   plus: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  key: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>',
 }
 function esc(s) {
   return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -692,13 +716,14 @@ function deckItemHtml(d) {
   const a = accessMeta(d.access)
   const kindBadge = d.kind === 'html' ? '<span class="deck-kind" title="Self-contained HTML file — stored and served as-is">' + ICONS.code + '</span>' : ''
   const pinBadge = d.pinned ? '<span class="deck-pin-badge" title="Pinned">' + ICONS.pin + '</span>' : ''
+  const pwBadge = d.hasPassword ? '<span class="deck-password-badge" title="Password protected — the link alone isn\\'t enough">' + ICONS.key + '</span>' : ''
   return (
     '<div class="deck-item" data-id="' + d.id + '">' +
     '<a class="deck-item-link" href="/d/' + d.id + '" target="_blank" rel="noopener">' +
     '<span class="deck-title">' + esc(d.title || 'Untitled deck') + '</span>' +
     '<span class="deck-time">' + relativeTime(d.updatedAt) + '</span>' +
     '</a>' +
-    pinBadge + kindBadge +
+    pinBadge + pwBadge + kindBadge +
     '<span class="deck-status" title="' + a.label + ' — ' + a.desc + '">' + a.icon + '</span>' +
     '<button class="deck-gear" type="button" data-id="' + d.id + '" title="Deck menu">' + ICONS.gear + '</button>' +
     '</div>'
@@ -968,6 +993,81 @@ async function doDelete(id, info) {
   }
 }
 
+// Password modal — a real masked text input, unlike Access/Project's
+// fixed-choice ctx-menu submenus, so it's its own small centered dialog
+// (see .pw-backdrop/.pw-modal CSS) rather than another ctx-menu screen.
+// Setting a password is an EXTRA gate in front of whatever access already
+// allows (view/edit) — the link alone stops being enough; a 'private' deck
+// is unaffected either way since it's already unreachable without the
+// owner's session. We never know or show the current password (only its
+// hash is ever stored) — the field always starts blank, and "Save" always
+// means "set it to whatever's typed," never "keep the old one."
+function openPasswordModal(id, info) {
+  const backdrop = document.createElement('div')
+  backdrop.className = 'pw-backdrop'
+  const removeBtn = info.hasPassword
+    ? '<button type="button" class="pw-remove" data-a="remove">Remove password</button>'
+    : ''
+  backdrop.innerHTML =
+    '<div class="pw-modal">' +
+    '<h3>Share password</h3>' +
+    '<p>' + (info.hasPassword
+      ? 'This deck currently requires a password. Enter a new one to replace it, or remove protection entirely.'
+      : 'Anyone with the link will need this password too — even for a deck that\\'s otherwise viewable or editable.') + '</p>' +
+    '<input type="password" id="pwInput" autocomplete="new-password" placeholder="' + (info.hasPassword ? 'New password' : 'Password') + '">' +
+    '<div id="pwStatus" class="status"></div>' +
+    '<div class="pw-modal-actions">' +
+    removeBtn +
+    '<button type="button" data-a="cancel">Cancel</button>' +
+    '<button type="button" class="primary" data-a="save">Save</button>' +
+    '</div>' +
+    '</div>'
+  document.body.appendChild(backdrop)
+  const input = backdrop.querySelector('#pwInput')
+  const status = backdrop.querySelector('#pwStatus')
+  input.focus()
+
+  function close() { backdrop.remove() }
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close() })
+  backdrop.querySelector('[data-a="cancel"]').onclick = close
+  document.addEventListener('keydown', function onKey(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey) }
+  })
+
+  async function submit(password) {
+    status.className = 'status'
+    status.textContent = 'Saving…'
+    status.style.display = 'block'
+    try {
+      const res = await fetch('/api/decks/' + id + '/password', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || 'failed')
+      close()
+      loadDeckList()
+    } catch (err) {
+      status.className = 'status err'
+      status.textContent = err.message || 'Could not save. Try again.'
+    }
+  }
+
+  backdrop.querySelector('[data-a="save"]').onclick = () => {
+    const value = input.value.trim()
+    if (!value) { status.className = 'status err'; status.textContent = 'Password must not be empty.'; status.style.display = 'block'; return }
+    submit(value)
+  }
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') backdrop.querySelector('[data-a="save"]').click() })
+  if (info.hasPassword) {
+    backdrop.querySelector('[data-a="remove"]').onclick = () => {
+      if (!confirm('Remove the password from "' + (info.title || 'this deck') + '"? Anyone with the link will be able to open it again.')) return
+      submit(null)
+    }
+  }
+}
+
 function positionMenu(el, x, y) {
   const rect = el.getBoundingClientRect()
   const vw = window.innerWidth, vh = window.innerHeight
@@ -994,6 +1094,7 @@ function openDeckMenu(id, x, y) {
       '<button type="button" class="ctx-item" data-a="rename">' + iconSpan(ICONS.pencil) + '<span>Rename</span></button>' +
       reuploadItem +
       '<button type="button" class="ctx-item" data-a="access">' + iconSpan(ICONS.eye) + '<span>Access</span>' + iconSpan(ICONS.chevronRight, 'ctx-right') + '</button>' +
+      '<button type="button" class="ctx-item" data-a="password">' + iconSpan(ICONS.key) + '<span>' + (info.hasPassword ? 'Password…' : 'Set password…') + '</span></button>' +
       '<button type="button" class="ctx-item" data-a="project">' + iconSpan(ICONS.folder) + '<span>' + (currentProject ? esc(currentProject.name) : 'Project') + '</span>' + iconSpan(ICONS.chevronRight, 'ctx-right') + '</button>' +
       '<div class="ctx-sep"></div>' +
       '<button type="button" class="ctx-item danger" data-a="delete">' + iconSpan(ICONS.trash) + '<span>Delete…</span></button>'
@@ -1001,6 +1102,7 @@ function openDeckMenu(id, x, y) {
     menu.querySelector('[data-a="rename"]').onclick = () => { closeMenu(); startInlineRename(id, info) }
     if (info.kind === 'html') menu.querySelector('[data-a="reupload"]').onclick = () => { closeMenu(); reuploadHtmlDeck(id, info) }
     menu.querySelector('[data-a="access"]').onclick = renderAccess
+    menu.querySelector('[data-a="password"]').onclick = () => { closeMenu(); openPasswordModal(id, info) }
     menu.querySelector('[data-a="project"]').onclick = renderProject
     menu.querySelector('[data-a="delete"]').onclick = () => { closeMenu(); doDelete(id, info) }
     positionMenu(menu, x, y)

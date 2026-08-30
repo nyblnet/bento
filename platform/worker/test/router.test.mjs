@@ -100,6 +100,7 @@ function makeD1() {
             decks.set(id, {
               id, title, created_at, updated_at, edit_token_hash, shell_version, doc_bytes, access, kind,
               pinned: 0, project_id: null,
+              share_password_hash: null, share_password_salt: null, share_password_iterations: null,
             })
           } else if (sql.startsWith('UPDATE decks SET access')) {
             const [access, id] = boundArgs
@@ -109,6 +110,17 @@ function makeD1() {
             const [pinned, id] = boundArgs
             const row = decks.get(id)
             if (row) row.pinned = pinned
+          } else if (sql.startsWith('UPDATE decks SET share_password_hash = NULL')) {
+            // setDeckSharePassword's clear branch — must be matched BEFORE
+            // the set branch below (same "NULL-literal vs. bound-params"
+            // prefix trick as deleteProject's unassign step).
+            const [id] = boundArgs
+            const row = decks.get(id)
+            if (row) Object.assign(row, { share_password_hash: null, share_password_salt: null, share_password_iterations: null })
+          } else if (sql.startsWith('UPDATE decks SET share_password_hash')) {
+            const [share_password_hash, share_password_salt, share_password_iterations, id] = boundArgs
+            const row = decks.get(id)
+            if (row) Object.assign(row, { share_password_hash, share_password_salt, share_password_iterations })
           } else if (sql.startsWith('UPDATE decks SET project_id = NULL WHERE project_id')) {
             // deleteProject's unassign step — must be matched BEFORE the
             // single-deck 'UPDATE decks SET project_id = ? WHERE id' branch
@@ -211,6 +223,15 @@ async function readBody(res) {
 function sessionCookie(res) {
   const setCookie = res.headers.get('set-cookie') ?? ''
   return setCookie.split(';')[0] // "bento_session=<id>"
+}
+
+// Same shape as sessionCookie but for any Set-Cookie header (e.g. a deck's
+// bento_unlock_<id> cookie from POST /api/decks/:id/unlock) — the fetch()
+// Headers implementation folds a single response's headers together, so
+// this only handles the "one Set-Cookie in this response" case, same as
+// every route in this app ever emits.
+function cookieHeader(res) {
+  return res.headers.get('set-cookie') ?? ''
 }
 
 console.log('platform worker router smoke test')
@@ -1199,6 +1220,200 @@ await check('PATCH /api/decks/:id/pin unpins a deck, restoring normal most-recen
     ids.indexOf(pinDeckNewId) < ids.indexOf(pinDeckOldId),
     'once unpinned, the more-recently-touched deck should sort first again',
   )
+})
+
+// --- share passwords ---------------------------------------------------------
+
+let pwDeckId
+await check('PATCH /api/decks/:id/password without a session is rejected', async () => {
+  const createRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ doc: { ...exampleDoc, title: 'Password-protected deck' } }),
+    }),
+    env,
+  )
+  pwDeckId = (await readBody(createRes)).data.id
+
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pwDeckId}/password`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'hunter2trombone' }),
+    }),
+    env,
+  )
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('GET /d/:id serves the deck normally BEFORE a password is set', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${pwDeckId}`), env)
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(!text.includes('Password required'), 'an unprotected deck should not show the password gate')
+})
+
+await check('PATCH /api/decks/:id/password for an unknown deck is 404', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks/does-not-exist/password', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ password: 'whatever12345' }),
+    }),
+    env,
+  )
+  assert(res.status === 404, `expected 404, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/password rejects an empty-string password', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pwDeckId}/password`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ password: '   ' }),
+    }),
+    env,
+  )
+  assert(res.status === 422, `expected 422, got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/password sets a password, listed decks report hasPassword:true', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pwDeckId}/password`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ password: 'hunter2trombone' }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(data.hasPassword === true, 'response should echo hasPassword:true')
+
+  const listRes = await worker.fetch(
+    new Request('https://platform.example/api/decks', { headers: { cookie: ownerCookie } }),
+    env,
+  )
+  const { data: listData } = await readBody(listRes)
+  const listed = listData.decks.find((d) => d.id === pwDeckId)
+  assert(listed?.hasPassword === true, 'listed deck should report hasPassword:true')
+})
+
+await check('GET /d/:id shows the password gate to an anonymous viewer once a password is set', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${pwDeckId}`), env)
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(text.includes('Password required'), 'expected the password gate page')
+  assert(!text.includes('Password-protected deck'), 'the gate must never leak the deck title/content')
+})
+
+await check('GET /d/:id still serves the OWNER the real deck regardless of the password', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${pwDeckId}`, { headers: { cookie: ownerCookie } }), env)
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(!text.includes('Password required'), "the owner's own session must bypass the password gate")
+})
+
+await check('GET /a/:id/:key 401s for an anonymous viewer of a password-protected deck', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/a/${pwDeckId}/deadbeef.png`), env)
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('POST /api/decks/:id/unlock rejects a wrong password', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pwDeckId}/unlock`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'wrong-guess' }),
+    }),
+    env,
+  )
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+await check('POST /api/decks/:id/unlock for an unknown deck also 401s (no existence oracle)', async () => {
+  const res = await worker.fetch(
+    new Request('https://platform.example/api/decks/does-not-exist/unlock', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'whatever' }),
+    }),
+    env,
+  )
+  assert(res.status === 401, `expected 401, got ${res.status}`)
+})
+
+let unlockCookie
+await check('POST /api/decks/:id/unlock accepts the right password and sets an unlock cookie', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pwDeckId}/unlock`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'hunter2trombone' }),
+    }),
+    env,
+  )
+  const { data, text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}: ${text}`)
+  assert(data.ok === true, 'expected {ok:true}')
+  const setCookie = cookieHeader(res)
+  assert(setCookie.includes(`bento_unlock_${pwDeckId}=`), `expected a bento_unlock_${pwDeckId} cookie, got ${setCookie}`)
+  unlockCookie = setCookie.split(';')[0]
+})
+
+await check('GET /d/:id serves the real deck once the unlock cookie is presented', async () => {
+  const res = await worker.fetch(new Request(`https://platform.example/d/${pwDeckId}`, { headers: { cookie: unlockCookie } }), env)
+  const { text } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(!text.includes('Password required'), 'a valid unlock cookie should bypass the gate')
+})
+
+await check('GET /a/:id/:key no longer 401s once the unlock cookie is presented', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/a/${pwDeckId}/deadbeef.png`, { headers: { cookie: unlockCookie } }),
+    env,
+  )
+  // The asset itself doesn't exist in this test (never uploaded) — a 404 is
+  // the expected "past the password gate, but no such asset" outcome; 401
+  // would mean the unlock cookie was rejected.
+  assert(res.status === 404, `expected 404 (unlocked, asset missing), got ${res.status}`)
+})
+
+await check('PATCH /api/decks/:id/password with password:null removes protection, and invalidates the old unlock cookie', async () => {
+  const res = await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pwDeckId}/password`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ password: null }),
+    }),
+    env,
+  )
+  const { data } = await readBody(res)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(data.hasPassword === false, 'response should echo hasPassword:false')
+
+  const viewRes = await worker.fetch(new Request(`https://platform.example/d/${pwDeckId}`), env)
+  const { text } = await readBody(viewRes)
+  assert(!text.includes('Password required'), 'with the password removed, anyone should see the real deck again')
+})
+
+await check('a re-set password invalidates a stale unlock cookie earned under the OLD password', async () => {
+  // Re-protect the deck with a different password than before.
+  await worker.fetch(
+    new Request(`https://platform.example/api/decks/${pwDeckId}/password`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: ownerCookie },
+      body: JSON.stringify({ password: 'a-completely-different-password' }),
+    }),
+    env,
+  )
+  // The cookie earned earlier (under 'hunter2trombone', now stale) must NOT
+  // still work — its digest was derived from a password hash that no
+  // longer matches what's stored.
+  const res = await worker.fetch(new Request(`https://platform.example/d/${pwDeckId}`, { headers: { cookie: unlockCookie } }), env)
+  const { text } = await readBody(res)
+  assert(text.includes('Password required'), 'a cookie earned under a since-changed password must be rejected')
 })
 
 // --- projects (sidebar folders) ---------------------------------------------

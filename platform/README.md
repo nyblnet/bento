@@ -210,9 +210,12 @@ platform/
       splice.ts            — HEAD + escape(json) + TAIL
       validate.ts          — ingest validation (POST/PATCH /api/decks, compiled docs too)
       store.ts             — R2 + D1 access for decks/assets
-      auth.ts               — single-owner auth: password hashing, sessions, cookies
+      auth.ts               — single-owner auth (password hashing, sessions, cookies) +
+                               deck share-password hashing/verification (same PBKDF2 machinery)
       authPages.ts           — /setup and /login page markup
-      pageStyles.ts           — shared CSS (demo.ts + the auth pages)
+      sharePage.ts            — the password gate a non-owner hits at /d/:id when a deck
+                                 has a share password and no valid unlock cookie yet
+      pageStyles.ts           — shared CSS (demo.ts + the auth/share pages)
       ids.ts                — random ids/tokens, sha256
       demo.ts               — prompt→paste→create wizard + deck history sidebar, served at `/` (owner-only)
       env.ts                — Env (binding) interface
@@ -228,6 +231,7 @@ platform/
       0005_kind.sql           — decks.kind ('bento'|'html', see "Decks that aren't Bento at all")
       0006_pinned.sql         — decks.pinned (sidebar pin, see "Sidebar: pinning, resizing, and a real preview panel")
       0007_projects.sql       — projects table + decks.project_id (sidebar folders, same section)
+      0008_share_password.sql — decks.share_password_* (see "Share passwords" section)
     wrangler.toml          — entry point + binding POINTERS for Workers Builds (see below)
     ci-build.mjs           — Workers Builds' "Build command": produces generated/shell.ts
     build.mjs              — esbuild bundle → dist/worker.js, used by test:router (below), not by deploy
@@ -285,6 +289,50 @@ dropdown — three states, one per option:
 The owner's own session always gets the full editable doc/assets regardless
 of `access` — the column only affects anonymous viewers.
 
+## Share passwords: a second, optional gate for content-sensitive decks
+
+`access` controls what the LINK grants. A **share password**
+(`migrations/0008_share_password.sql`'s `decks.share_password_*` columns,
+`PATCH /api/decks/:id/password`, set from the deck's context menu's
+"Password…" item) is a second, independent gate layered in FRONT of that —
+for a `'view'`/`'edit'` deck whose content is sensitive enough that knowing
+the link shouldn't be sufficient by itself. A `'private'` deck is unaffected
+either way (already unreachable by anyone but the owner); setting a password
+on one isn't rejected, just moot, matching this codebase's existing "not
+applicable, not invalid" treatment of e.g. `'edit'` access on an `'html'`
+deck.
+
+Same PBKDF2-SHA-256 machinery as the owner's own account password
+(`auth.ts`'s `hashSharePassword`/`verifySharePassword` — one
+`derivePasswordHash` implementation, two callers), stored per-deck rather
+than in the single-row `config` table. When a deck has a password set,
+`handleView` shows `sharePage.ts`'s small gate page to any non-owner
+instead of the real content — the doc/HTML bytes are never sent to the
+browser until the password is verified — and `handleAsset` 401s outright
+(it's meant to be loaded by an already-unlocked page, not browsed to). The
+owner's own session always bypasses the gate, same as `access`.
+
+Unlocking is **stateless — no D1 row per unlock**, unlike sessions:
+`POST /api/decks/:id/unlock` verifies the submitted password, then sets a
+cookie named `bento_unlock_<deckId>` whose value is
+`sha256(deckId + ':' + passwordHash)`. The hash half of that digest is
+known only server-side, so the cookie is unforgeable without first
+supplying the correct password once — and it's automatically invalidated
+the instant the password changes, since a fresh hash makes every
+previously issued cookie's digest wrong. "Rotate to revoke," the same idea
+the collab feature's key rotation already uses elsewhere in this codebase;
+no separate "sign everyone out" action needed. Removing a deck's password
+entirely (`{password: null}`) clears all three columns and has the same
+effect — any cookie earned under the old password stops matching.
+
+Asset caching gets the same treatment private decks already get:
+content-addressed asset URLs are normally `public, max-age=31536000,
+immutable` (safe because the URL itself changes if the bytes do), but a
+password-protected deck's assets are `private, no-store` regardless of
+`access` — a shared/CDN cache can't tell "this visitor unlocked it" from
+"this visitor didn't," so caching the response would leak content past the
+gate to the next visitor requesting the same URL.
+
 ## Deploy
 
 Everything below happens **in the Cloudflare dashboard** (dash.cloudflare.com).
@@ -337,7 +385,8 @@ with your own**, not fill in blanks.
   — write that down too, you need both the name and the ID. Then open its
   **Console** tab and run each file in `platform/worker/migrations/` **in
   numeric order** — `0001_init.sql`, `0002_auth.sql`, `0003_editable.sql`,
-  `0004_access.sql`, `0005_kind.sql`, `0006_pinned.sql`, `0007_projects.sql`. That's the whole migration step — no CLI, no separate
+  `0004_access.sql`, `0005_kind.sql`, `0006_pinned.sql`, `0007_projects.sql`,
+  `0008_share_password.sql`. That's the whole migration step — no CLI, no separate
   tool. (If you already ran `0001` from an earlier version of this project
   under its old name, `schema.sql` — same file, just moved and renumbered —
   you only need to run whichever numbered files come after the one you last
@@ -487,7 +536,7 @@ problem for whenever that app exists, not solved here.
 | `/api/login` | POST | none | `{username, password}` → starts a session on success |
 | `/api/logout` | POST | none | ends the current session |
 | `/api/compile` | POST | owner session | `{outline}` → `{doc}`. Pure — nothing is stored |
-| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access, kind, pinned, projectId}]}`, pinned first then most-recently-touched — the sidebar's data source |
+| `/api/decks` | GET | owner session | `{decks: [{id, title, createdAt, updatedAt, access, kind, pinned, projectId, hasPassword}]}`, pinned first then most-recently-touched — the sidebar's data source. `hasPassword` is a plain boolean; the hash/salt are never sent to any client, owner included |
 | `/api/decks` | POST | owner session | `{doc, access?}` (a `'bento'` deck) or `{html, access?}` (an `'html'` deck) → `{id, url}`. `access` is one of `'private'\|'view'\|'edit'`; defaults to `'edit'` for `doc`, coerced to `'view'` if `'edit'` for `html` (meaningless for that kind, not rejected) |
 | `/api/decks/:id` | GET | owner session | `{kind:'bento', doc}` or `{kind:'html', html}` |
 | `/api/decks/:id` | PATCH | owner session | `{doc}` replaces a `'bento'` deck's stored doc; `{html}` re-uploads an `'html'` deck's stored bytes wholesale, re-deriving the title from the new file's `<title>`. Sending the wrong shape for the deck's kind is a 400, not a silent no-op |
@@ -496,6 +545,8 @@ problem for whenever that app exists, not solved here.
 | `/api/decks/:id/title` | PATCH | owner session | `{title}` → `{ok}`. For a `'bento'` deck, rewrites `doc.title` itself (there's no separate cosmetic label) — same effect as editing the title in the live editor. For an `'html'` deck, updates only the D1 label; the stored bytes are untouched. 422 on a blank title, 404 on an unknown id |
 | `/api/decks/:id/pin` | PATCH | owner session | `{pinned}` → `{ok, pinned}`. Keeps the deck atop the sidebar regardless of `updated_at` (pinning itself never bumps it). 422 on a non-boolean, 404 on an unknown id |
 | `/api/decks/:id/project` | PATCH | owner session | `{projectId}` (a project id, or `null` to unfile) → `{ok, projectId}`. 422 on a value that's neither a string nor `null`, 404 on an unknown deck id (the project id itself is NOT validated against `projects` — an id that doesn't exist just renders unfiled, same graceful-degrade as any other dangling foreign key here) |
+| `/api/decks/:id/password` | PATCH | owner session | `{password}` (a non-empty string, or `null` to remove protection) → `{ok, hasPassword}`. 422 on an empty/blank string, 404 on an unknown id |
+| `/api/decks/:id/unlock` | POST | **none — public** | `{password}` → `{ok}` + sets a `bento_unlock_<id>` cookie on success. Always 401 `{error:'incorrect password'}` on a wrong password, an unknown deck, or a deck with no password set — never distinguishes which, so this route can't be used to probe whether a deck exists or is protected |
 | `/api/decks/:id/assets` | POST | owner session | body = image bytes, header = `Content-Type: image/*` → `{key, path}` |
 | `/api/projects` | GET | owner session | `{projects: [{id, name, createdAt, updatedAt}]}`, alphabetical |
 | `/api/projects` | POST | owner session | `{name}` → `{id}`, 201. 422 on a blank name |

@@ -25,6 +25,7 @@
 import type { Env } from './env.ts'
 import { randomId, sha256Hex } from './ids.ts'
 import { SHELL_VERSION } from './splice.ts'
+import { hashSharePassword, type SharePasswordRecord } from './auth.ts'
 
 /** Who can reach a deck without the owner's own session.
  *  - 'private' — nobody; handleView/handleAsset 404 exactly like an unknown
@@ -63,6 +64,12 @@ export interface DeckMeta {
   kind: DeckKind
   pinned: number // D1 has no boolean type; 0/1
   project_id: string | null
+  // All three NULL together = no share password set (the common case); all
+  // three populated together = one is. See migrations/0008_share_password.sql
+  // and auth.ts's hashSharePassword/verifySharePassword.
+  share_password_hash: string | null
+  share_password_salt: string | null
+  share_password_iterations: number | null
 }
 
 export interface CreateResult {
@@ -165,12 +172,12 @@ export async function getDeckHtml(env: Env, id: string): Promise<string | null> 
   return obj.text()
 }
 
+const DECK_META_COLUMNS =
+  'id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned, project_id, ' +
+  'share_password_hash, share_password_salt, share_password_iterations'
+
 export async function getDeckMeta(env: Env, id: string): Promise<DeckMeta | null> {
-  const row = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned, project_id FROM decks WHERE id = ?`,
-  )
-    .bind(id)
-    .first<DeckMeta>()
+  const row = await env.DB.prepare(`SELECT ${DECK_META_COLUMNS} FROM decks WHERE id = ?`).bind(id).first<DeckMeta>()
   return row ?? null
 }
 
@@ -182,8 +189,7 @@ const LIST_LIMIT = 200
  *  project's declared scale. */
 export async function listDecks(env: Env): Promise<DeckMeta[]> {
   const result = await env.DB.prepare(
-    `SELECT id, title, created_at, updated_at, shell_version, doc_bytes, access, kind, pinned, project_id FROM decks
-     ORDER BY pinned DESC, updated_at DESC LIMIT ?`,
+    `SELECT ${DECK_META_COLUMNS} FROM decks ORDER BY pinned DESC, updated_at DESC LIMIT ?`,
   )
     .bind(LIST_LIMIT)
     .all<DeckMeta>()
@@ -252,6 +258,34 @@ export async function setDeckAccess(env: Env, id: string, access: DeckAccess): P
  *  supposed to override. */
 export async function setDeckPinned(env: Env, id: string, pinned: boolean): Promise<void> {
   await env.DB.prepare(`UPDATE decks SET pinned = ? WHERE id = ?`).bind(pinned ? 1 : 0, id).run()
+}
+
+/** Set or clear a deck's share password (see DeckMeta's fields and
+ *  migrations/0008_share_password.sql). `password: null` clears all three
+ *  columns back to NULL — index.ts/demo.ts's "Remove password" action.
+ *  Meaningful only for 'view'/'edit' decks (a 'private' deck already blocks
+ *  every non-owner outright), but not rejected for 'private' either — same
+ *  "not applicable, not invalid" treatment 'edit' access gets on an 'html'
+ *  deck elsewhere in this file. A fresh salt is minted on every call
+ *  (hashSharePassword), so re-setting the same password still invalidates
+ *  every previously issued unlock cookie (see index.ts's deckUnlockToken —
+ *  it's derived from the current hash, so any hash change is itself a
+ *  revocation, deliberately, no separate "sign everyone out" action needed). */
+export async function setDeckSharePassword(env: Env, id: string, password: string | null): Promise<void> {
+  if (password === null) {
+    await env.DB.prepare(
+      `UPDATE decks SET share_password_hash = NULL, share_password_salt = NULL, share_password_iterations = NULL WHERE id = ?`,
+    )
+      .bind(id)
+      .run()
+    return
+  }
+  const record: SharePasswordRecord = await hashSharePassword(password)
+  await env.DB.prepare(
+    `UPDATE decks SET share_password_hash = ?, share_password_salt = ?, share_password_iterations = ? WHERE id = ?`,
+  )
+    .bind(record.hash, record.salt, record.iterations, id)
+    .run()
 }
 
 /** Overwrite a 'bento' deck's doc in place. Caller must have already
