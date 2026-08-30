@@ -42,6 +42,7 @@ import { SyncSession, hostStore, type Peer, type SyncNotice } from './sync/sessi
 import type { Store } from './store.ts';
 import type { Editor } from './editor.ts';
 import type { TypeDoc } from './model.ts';
+import { t } from './i18n.ts';
 
 // ─────────────────────────────────────────────────────────────── small DOM
 
@@ -145,8 +146,8 @@ export function initCollab(store: Store, editor: Editor): void {
   const presenceBox = el('div', 'tc-presence');
   const wrap = el('div', 'tc-wrap');
   const shareB = el('button', 'tc-share-btn');
-  shareB.textContent = 'Share';
-  shareB.title = 'Share — invite people to edit live, or send a view-only copy';
+  shareB.textContent = t('Share');
+  shareB.title = t('Share — invite people to edit live, or send a view-only copy');
   const popover = el('div', 'tc-pop');
   wrap.append(shareB, popover);
   const host = spacer?.parentElement ?? bar;
@@ -172,15 +173,15 @@ export function initCollab(store: Store, editor: Editor): void {
     const tr = onlineTransport();
     if (!tr) {
       shareB.classList.remove('live', 'connecting');
-      shareB.title = 'Not sharing yet — click to start a live session';
+      shareB.title = t('Not sharing yet — click to start a live session');
       return;
     }
     tr.onStatus = () => wireOnlineStatus();
     shareB.classList.toggle('live', tr.status === 'open');
     shareB.classList.toggle('connecting', tr.status !== 'open');
     shareB.title = tr.status === 'open'
-      ? 'Live — this document is being shared'
-      : 'Connecting to the live session…';
+      ? t('Live — this document is being shared')
+      : t('Connecting to the live session…');
     if (wrap.classList.contains('open')) renderPanel();
   }
 
@@ -254,7 +255,7 @@ export function initCollab(store: Store, editor: Editor): void {
     await goLive();
     const c = store.doc.collab;
     if (!(c?.room && c.key && c.v === 2 && c.ownerPriv)) {
-      toast('Only the document owner can mint editor invites');
+      toast(t('Only the document owner can mint editor invites'));
       return;
     }
     session.stampInto(store.doc);
@@ -264,24 +265,24 @@ export function initCollab(store: Store, editor: Editor): void {
     clone.collab!.on = true;
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' });
-      if (ok) toast('Editor copy saved — recipients join live with edit access');
+      if (ok) toast(t('Editor copy saved — recipients join live with edit access'));
     } catch {
-      toast('Saving failed');
+      toast(t('Saving failed'));
     }
   }
 
   async function saveViewOnlyCopy() {
     await goLive();
     const c = store.doc.collab;
-    if (!c?.room || !c.key) { toast('This document has no live session to follow'); return; }
+    if (!c?.room || !c.key) { toast(t('This document has no live session to follow')); return; }
     const clone: TypeDoc = JSON.parse(JSON.stringify(store.doc));
     clone.collab = { ...c, role: 'reader', on: true, sync: undefined };
     stripCollabSecrets(clone, { keepRoom: true });
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' });
-      if (ok) toast('View-only copy saved — it follows the live session');
+      if (ok) toast(t('View-only copy saved — it follows the live session'));
     } catch {
-      toast('Saving failed');
+      toast(t('Saving failed'));
     }
   }
 
@@ -289,12 +290,12 @@ export function initCollab(store: Store, editor: Editor): void {
     popover.replaceChildren();
 
     const nameRow = el('div', 'tc-name-row');
-    nameRow.title = 'Shown next to your cursor and in the People list — stored only in this browser.';
+    nameRow.title = t('Shown next to your cursor and in the People list — stored only in this browser.');
     const nameLabel = el('label');
-    nameLabel.textContent = 'Your name';
+    nameLabel.textContent = t('Your name');
     const nameInput = el('input');
     nameInput.type = 'text';
-    nameInput.placeholder = 'Guest';
+    nameInput.placeholder = t('Guest');
     nameInput.value = lsGet('bento-author') ?? '';
     nameInput.addEventListener('change', () => {
       lsSet('bento-author', nameInput.value.trim());
@@ -304,7 +305,7 @@ export function initCollab(store: Store, editor: Editor): void {
     popover.appendChild(nameRow);
 
     const cme = store.doc.collab;
-    const roleLabel = (r?: string) => r === 'owner' ? 'Owner' : r === 'viewer' ? 'Viewer' : r === 'editor' ? 'Editor' : '';
+    const roleLabel = (r?: string) => r === 'owner' ? t('Owner') : r === 'viewer' ? t('Viewer') : r === 'editor' ? t('Editor') : '';
 
     if (cme) {
       let myRole: 'owner' | 'editor' | 'viewer' | undefined;
@@ -313,11 +314,11 @@ export function initCollab(store: Store, editor: Editor): void {
       else if (cme.v === 2 && cme.invite) myRole = 'editor';
       if (myRole) {
         const label = el('div', 'tc-label');
-        label.textContent = 'People';
+        label.textContent = t('People');
         popover.appendChild(label);
         const me = el('div', 'tc-peer tc-me');
         const who = el('span', 'who');
-        who.textContent = `${lsGet('bento-author') || 'Guest'} (you)`;
+        who.textContent = t('{name} (you)', { name: lsGet('bento-author') || t('Guest') });
         const where = el('span', 'where');
         where.textContent = roleLabel(myRole);
         me.append(who, where);
@@ -337,7 +338,7 @@ export function initCollab(store: Store, editor: Editor): void {
         const where = el('span', 'where');
         where.textContent = [roleLabel(peer.role), blockLabel(store.doc, peer.slide)].filter(Boolean).join(' · ');
         row.append(dot, who, where);
-        row.title = `${peer.name} — click to follow`;
+        row.title = t('{name} — click to follow', { name: peer.name });
         row.addEventListener('click', () => {
           const node = paper?.querySelector<HTMLElement>(`[data-id="${CSS.escape(peer.slide)}"]`);
           node?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -348,8 +349,8 @@ export function initCollab(store: Store, editor: Editor): void {
     }
 
     if (offlineEnabled()) {
-      note('Offline mode is on — nothing leaves this computer.');
-      note('Tabs on this machine still sync; turn offline mode off to collaborate online.');
+      note(t('Offline mode is on — nothing leaves this computer.'));
+      note(t('Tabs on this machine still sync; turn offline mode off to collaborate online.'));
       return;
     }
 
@@ -359,43 +360,43 @@ export function initCollab(store: Store, editor: Editor): void {
     status.classList.add('tc-status');
     if (on) {
       const n = session.peers().length + 1;
-      status.textContent = tr!.status === 'open' ? `● Live — ${n} connected` : '● Connecting…';
+      status.textContent = tr!.status === 'open' ? t('● Live — {n} connected', { n: String(n) }) : t('● Connecting…');
       status.classList.toggle('ok', tr!.status === 'open');
     } else {
-      status.textContent = '○ Not live — turns on when you share';
+      status.textContent = t('○ Not live — turns on when you share');
     }
 
     const canWrite = !!cme && cme.role !== 'reader';
     if (canWrite) {
       const label = el('div', 'tc-label');
-      label.textContent = 'Share a copy';
+      label.textContent = t('Share a copy');
       popover.appendChild(label);
-      action('Invite to edit…', true, () => void inviteToEdit(),
-        'Saves a copy to send. Whoever opens it edits this document live with you; you stay the owner and can remove them from the People list.');
-      action('View-only copy…', false, () => void saveViewOnlyCopy(),
-        'A live viewer: follows every edit as it happens but can never change the document.');
+      action(t('Invite to edit…'), true, () => void inviteToEdit(),
+        t('Saves a copy to send. Whoever opens it edits this document live with you; you stay the owner and can remove them from the People list.'));
+      action(t('View-only copy…'), false, () => void saveViewOnlyCopy(),
+        t('A live viewer: follows every edit as it happens but can never change the document.'));
     } else {
-      note('This is a view-only copy — it follows the live session but can’t change the document.');
+      note(t('This is a view-only copy — it follows the live session but can’t change the document.'));
     }
 
     if (canWrite) {
       popover.appendChild(el('div', 'tc-sep'));
       if (on) {
-        action('Stop sharing', false, () => {
+        action(t('Stop sharing'), false, () => {
           stopSharing(session, hostStore(store));
           wireOnlineStatus();
           renderPanel();
-        }, 'Disconnect this document from the live session. Copies keep their last state and can rejoin if you go live again.');
+        }, t('Disconnect this document from the live session. Copies keep their last state and can rejoin if you go live again.'));
       } else {
-        action('Go live', false, () => void goLive().then(renderPanel),
-          'Connect to the live session without saving a new copy — copies you sent earlier will meet you there.');
+        action(t('Go live'), false, () => void goLive().then(renderPanel),
+          t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'));
       }
-      action('Reset access…', false, async () => {
-        if (!confirm('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.')) return;
+      action(t('Reset access…'), false, async () => {
+        if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return;
         await rotateKeys(session, hostStore(store));
-        toast('Access reset — only copies saved from now on can join');
+        toast(t('Access reset — only copies saved from now on can join'));
         renderPanel();
-      }, 'Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.');
+      }, t('Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.'));
     }
   }
 

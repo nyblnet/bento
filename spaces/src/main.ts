@@ -43,7 +43,7 @@ configureApp({
 })
 
 // Every save writes a still render of the home page into the shell, for the
-// readers that run no script: macOS QuickLook, iOS Files, Bento Tray, and any
+// readers that run no script: macOS QuickLook, iOS Files, bento/home, and any
 // preview pane that renders HTML without executing it. Without this the runtime
 // never inflates, the splash is never removed, and a saved space shows a boot
 // animation where its content should be. See preview.ts.
@@ -413,6 +413,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
      * exactly as written.
      */
     i18n: i18nApi,
+    /** open the graph view — the same thing the ⋯ menu opens */
+    graph: () => { editor.openGraph() },
     /** every page, flat — the shape an agent wants before it reads anything */
     pages: () => store.doc.pages.map((p) => ({
       id: p.id, title: p.title, parent: p.parent, archived: !!p.archived, blocks: p.blocks.length,

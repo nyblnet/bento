@@ -36,3 +36,11 @@ import './comments.ts';
 // All markup/No markup/Original display modes. track.ts is the engine; this
 // is what makes an eighty-change document usable.
 import './review.ts';
+import './redlineview.ts';  // snapshot redlining — own panel host, see its header
+// auto-save + crash recovery: a debounced IndexedDB snapshot, a restore
+// banner on boot when it disagrees with the loaded file, and version
+// history (About dialog). See autosave.ts's header for the full design.
+import './autosave.ts';
+// the static first-page render written into every saved file, for readers
+// (thumbnailers) that run no script — see preview.ts's header.
+import './preview.ts';

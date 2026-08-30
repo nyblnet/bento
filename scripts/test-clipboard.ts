@@ -311,7 +311,7 @@ console.log('\ncolours are judged by the same rule in both layers')
   // the two layers must AGREE: anything untrusted.ts keeps as a colour,
   // render.ts must also accept, or the document holds a value that renders as
   // a fallback and the stricter layer is the one nobody can see.
-  const FB = ' fallback'
+  const FB = '\u0000fallback'
   const disagreements = [
     '#fff', 'rgba(0,0,0,0.5)', 'color(srgb 0.98 0.68 0.25 / 0.55)', 'transparent', 'none', 'burlywood',
   ].filter((v) => {

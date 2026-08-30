@@ -21,10 +21,9 @@ import { parseDoc, emptyDoc, uid, wordCount, type TypeDoc } from './model.ts';
 import { Store } from './store.ts';
 import { Editor } from './editor.ts';
 import { paginate, drawPages, type Metrics } from './paginate.ts';
-import { redline, apply as applyRedline, describe, type ChangeSet } from './redline.ts';
+import { takeSnapshot, startReview } from './redlineview.ts';
 import { printDocument, buildPrintDocument } from './print.ts';
 import { sign as signDoc, verifyChain, newKey } from './canon.ts';
-import { uid as newId } from './model.ts';
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest).
@@ -158,6 +157,8 @@ app.innerHTML = `
         <div id="commentsHost"></div>
         <div class="t-sub" data-sub="changes"></div>
         <div id="reviewPanel"></div>
+        <div class="t-sub" data-sub="redline"></div>
+        <div id="redlinePanel"></div>
         <div class="t-sub" data-sub="sigs"></div>
         <div id="sigsPanel"></div>
       </div>
@@ -243,7 +244,7 @@ byId('mark').addEventListener('click', showAbout);
 byId('about').addEventListener('click', showAbout);
 
 for (const [sub, text] of [['comments', t('Comments')], ['changes', t('Tracked changes')],
-                           ['sigs', t('Signatures')]] as const) {
+                           ['redline', t('Snapshot redline')], ['sigs', t('Signatures')]] as const) {
   const n = document.querySelector<HTMLElement>(`.t-sub[data-sub="${sub}"]`);
   if (n) n.textContent = text;
 }
@@ -251,9 +252,12 @@ for (const [sub, text] of [['comments', t('Comments')], ['changes', t('Tracked c
 // until someone has taken a snapshot — which is exactly the step a person does
 // not know about yet. So the empty state IS the instruction.
 //
-// The live tracked-changes list itself is review.ts's `trackedChanges` panel,
-// mounted into `reviewPanel` through the feature registry — nothing to build
-// here.
+// The live tracked-changes list is review.ts's `trackedChanges` panel, mounted
+// into `reviewPanel`; the on-demand snapshot comparison is redlineview.ts's
+// `redline` panel, mounted into its OWN `redlinePanel` — two different hosts
+// on purpose, so accepting a redline change can never erase the tracked-
+// changes list sitting above it (or vice versa). Both through the feature
+// registry — nothing to build here.
 for (const [tab, text] of [['navigate', t('Navigate')], ['review', t('Review')], ['sources', t('Sources')]] as const) {
   const b = document.querySelector<HTMLElement>(`.t-tabs [data-tab="${tab}"]`);
   if (b) b.textContent = text;
@@ -762,96 +766,15 @@ function buildOutline() {
 }
 
 // ───────────────────────────────────────────── revisions and redlining
-
-let currentSet: ChangeSet | null = null;
-const decided = new Map<string, boolean>();
-
-document.getElementById('snap')!.addEventListener('click', () => {
-  const label = `Revision ${store.doc.revisions.length + 1}`;
-  store.commit(d => {
-    d.revisions.push({ id: newId('rev'), at: new Date().toISOString(), label,
-                       body: JSON.parse(JSON.stringify(d.body)) });
-  });
-  markDirty(); paint();
-  toast(`${label} recorded — edit, then Review`);
-});
-
-document.getElementById('review')!.addEventListener('click', () => {
-  if (!store.doc.revisions.length) { toast('Take a Snapshot first, then edit, then Review'); return; }
-  const base = store.doc.revisions[store.doc.revisions.length - 1];
-  currentSet = redline({ docId: store.doc.docId, body: base.body },
-                       { docId: store.doc.docId, body: store.doc.body },
-                       { author: store.doc.meta?.author || 'you' });
-  decided.clear();
-  showTab('review');
-  buildReview(base.label, base.body);
-});
-
-function buildReview(label: string, baseBody: typeof store.doc.body) {
-  const box = document.getElementById('reviewPanel')!;
-  box.replaceChildren();
-  const head = el('div', 't-hint');
-  head.textContent = currentSet!.changes.length
-    ? `${currentSet!.changes.length} change${currentSet!.changes.length > 1 ? 's' : ''} since ${label}`
-    : `No changes since ${label}. Edit the document, then press Review again.`;
-  head.style.marginBottom = '9px';
-  box.appendChild(head);
-  if (!currentSet!.changes.length) return;
-
-  const bar = el('div'); bar.style.cssText = 'display:flex;gap:6px;margin-bottom:9px';
-  for (const [text, val] of [['Accept all', true], ['Reject all', false]] as const) {
-    const b = el('button') as HTMLButtonElement;
-    b.textContent = text; b.style.flex = '1';
-    b.addEventListener('click', () => {
-      for (const c of currentSet!.changes) decided.set(c.id, val);
-      applyDecisions(label, baseBody);
-    });
-    bar.appendChild(b);
-  }
-  box.appendChild(bar);
-
-  for (const c of currentSet!.changes) {
-    const card = el('div', 't-card');
-    const what = c.kind === 'text'
-      ? `${c.removed ? `<del>${esc(c.removed)}</del>` : ''}${c.added ? `<ins>${esc(c.added)}</ins>` : ''}`
-      : esc(describe(c));
-    card.innerHTML = `<div class="who">${esc(c.author)} · ${c.kind}</div><div class="what">${what}</div>`;
-    const btns = el('div', 'btns');
-    for (const [text, val] of [['Accept', true], ['Reject', false]] as const) {
-      const b = el('button') as HTMLButtonElement;
-      b.textContent = text;
-      b.addEventListener('click', () => {
-        decided.set(c.id, val);
-        card.classList.add('done');
-        card.querySelectorAll('button').forEach(x => (x as HTMLButtonElement).disabled = true);
-        applyDecisions(label, baseBody);
-      });
-      btns.appendChild(b);
-    }
-    card.appendChild(btns);
-    box.appendChild(card);
-  }
-}
-
-/**
- * Rebuild from the BASE plus the accepted changes.
- *
- * Rebuilding from the base rather than patching the live document is what makes
- * "reject" mean anything — the rejected text has to come back. Undecided
- * changes stay as the author left them, so nothing vanishes while you think.
- */
-function applyDecisions(_label: string, baseBody: typeof store.doc.body) {
-  const accepted = new Set([...decided].filter(([, v]) => v).map(([k]) => k));
-  const undecided = currentSet!.changes.filter(c => !decided.has(c.id)).map(c => c.id);
-  const take = new Set([...accepted, ...undecided]);
-  try {
-    const next = applyRedline({ docId: store.doc.docId, body: baseBody }, currentSet!, take);
-    store.commit(d => { d.body = next.body; });
-    editor.render(); markDirty(); repaginate();
-    toast(decided.size === currentSet!.changes.length
-      ? 'All changes resolved' : `${decided.size}/${currentSet!.changes.length} resolved`);
-  } catch (e) { toast(`Could not apply: ${(e as Error).message}`); }
-}
+//
+// The actual snapshot-taking, diffing and card-painting live in
+// redlineview.ts, registered through the feature registry with its own panel
+// host (`redlinePanel`) — see that file's header for why this used to be a
+// `buildReview` here that painted into review.ts's `reviewPanel` and erased
+// review.ts's live tracked-changes list every time a redline change was
+// resolved. This wiring is just the two static ⋯-menu buttons calling in.
+document.getElementById('snap')!.addEventListener('click', () => takeSnapshot(featureCtx));
+document.getElementById('review')!.addEventListener('click', () => startReview(featureCtx));
 
 // ─────────────────────────────────────────────────────────── signatures
 
@@ -1045,15 +968,19 @@ const THEME_ICON: Record<ThemeChoice, string> = {
   light: themeSvg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M2 12h2M20 12h2M4.9 19.1l1.5-1.5M17.6 6.4l1.5-1.5"/>'),
   dark: themeSvg('<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/>'),
 };
-const THEME_TEXT: Record<ThemeChoice, string> = { auto: t('Auto'), light: t('Light'), dark: t('Dark') };
+// A FUNCTION, not a const object. Built at import time these three froze in
+// whatever locale was current before the viewer's own was resolved — the rule
+// i18n.ts states and the reason every registered label here is lazy.
+const themeText = (c: ThemeChoice): string =>
+  ({ auto: t('Auto'), light: t('Light'), dark: t('Dark') })[c];
 // This is control (1) of the label rule above: the face has to say what the
 // NEXT click leaves the app in, not just "theme", so it keeps its text label
 // like Save/Saved does.
 const paintTheme = () => {
   const choice = themeChoice();
   label('theme', THEME_ICON[choice],
-    t('Theme: {mode} — click to cycle auto/light/dark', { mode: THEME_TEXT[choice] }),
-    THEME_TEXT[choice]);
+    t('Theme: {mode} — click to cycle auto/light/dark', { mode: themeText(choice) }),
+    themeText(choice));
 };
 byId('theme').addEventListener('click', () => {
   const order: ThemeChoice[] = ['auto', 'light', 'dark'];

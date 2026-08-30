@@ -26,6 +26,10 @@
 //    is. Keeping it in step with `value` is this file's job.
 
 import type { SpacesDoc, Page, Block } from './model'
+// .ts extension: the model rig loads this file under node, whose resolver will
+// not follow an extensionless import. Vite is unaffected — the same fix main
+// already carries for i18n/packed.
+import { t } from './i18n.ts'
 
 /** What a field holds. Deliberately few: every one costs an editor and a
  *  permanent commitment, and a tracker needs exactly these. */
@@ -36,14 +40,29 @@ export type FieldType = 'select' | 'person' | 'number' | 'date' | 'text' | 'labe
  * words and never translated; the labels are English source strings that t()
  * looks up at render time — never here, where they would freeze at import.
  */
-export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
-  text: 'Text',
-  select: 'Select',
-  number: 'Number',
-  date: 'Date',
-  person: 'Person',
-  labels: 'Labels',
+/**
+ * What each type is called to somebody choosing one.
+ *
+ * A FUNCTION with literal t() calls, not a map of English read back through
+ * `t(MAP[key])`. The extractor sweeps LITERALS, so the map version compiled,
+ * ran, and put five of these six words in no catalog at all — measured: Select,
+ * Number, Date, Person and Labels were absent from packed.ts while eight locales
+ * reported 100%, because the packer counts what it swept. `t()` at call time,
+ * never in a module-level const, which would freeze at import.
+ */
+export function fieldTypeLabel(vt: FieldType): string {
+  switch (vt) {
+    case 'select': return t('Select')
+    case 'number': return t('Number')
+    case 'date': return t('Date')
+    case 'person': return t('Person')
+    case 'labels': return t('Labels')
+    default: return t('Text')
+  }
 }
+
+/** The types a new field can be, in the order the picker offers them. */
+export const FIELD_TYPES: FieldType[] = ['text', 'select', 'number', 'date', 'person', 'labels']
 
 export interface FieldOption {
   id: string
@@ -570,4 +589,35 @@ export function columnMoves(cards: string[], moved: string, aim: DropAim): boole
   if (target < 0) return true
   const next = [...rest.slice(0, target), moved, ...rest.slice(target)]
   return next.join('\u001f') !== cards.join('\u001f')
+}
+
+/**
+ * Which direction a view is sorted in BY THIS FIELD, if it is.
+ *
+ * Reads the same `sort` the format already carries — there is no second place
+ * a table header's arrow could come from, and inventing one would let the arrow
+ * and the order disagree. `undefined` means this column is not the sort key;
+ * an entry with no `dir` is ascending, which is what absence has always meant.
+ */
+export const sortDirOf = (sort: unknown, key: string): 'asc' | 'desc' | undefined => {
+  const cur = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+  if (!cur || String(cur.key ?? '') !== key) return undefined
+  return cur.dir === 'desc' ? 'desc' : 'asc'
+}
+
+/**
+ * The sort a CLICK ON A COLUMN HEADER produces: ascending → descending → none.
+ *
+ * The third state is the one that matters. A header that only flips between two
+ * directions can never give a hand-arranged board its order back, and "manual
+ * order" is not a sort called manual — it is the ABSENCE of the key. So this
+ * returns `undefined` there, and the caller deletes the key rather than storing
+ * an empty array: a view sorted and unsorted is byte-identical to one nobody
+ * ever touched.
+ */
+export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
+  const dir = sortDirOf(sort, key)
+  if (dir === undefined) return [{ key }]
+  if (dir === 'asc') return [{ key, dir: 'desc' }]
+  return undefined
 }

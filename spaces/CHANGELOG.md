@@ -14,6 +14,16 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **Every displayed word reaches the catalogs.** The view layout button read
+  English in all eight languages: it was written `t(LAYOUT_WORD[here])`, and the
+  extractor sweeps LITERALS, so no catalog ever learned the strings existed —
+  while the coverage figure said 100%, because it counts what it swept.
+  "Board", "List" and "Show as a list" were sitting translated in the catalogs
+  and being dropped. The same shape hid five of the six property-type names
+  (Select, Number, Date, Person, Labels), which were in no catalog at all. Both
+  now choose their words at the call site, and a rig check fails on any `t()`
+  that reads a map the extractor cannot see.
+
 - **Page covers, and a gallery to show them off.** A page can carry a picture
   across the top of it — chosen in the properties panel beside the icon, and
   the page's own icon rides up over its lower edge. A view has a fourth shape
@@ -30,6 +40,44 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
   Additive: absent on every page written before this, and a card with no cover
   gets a tinted panel of its own carrying the page's icon.
+
+- **A graph view.** ⋯ → *Graph* draws the space as its pages and the links
+  between them: every non-archived page is a node, sized by how connected it
+  is, joined by an edge for every `[[wikilink]]` and for every parent/child
+  pair in the page tree. Hovering a page lights it and its neighbours and dims
+  the rest; clicking one opens it. Scroll to zoom, drag to pan, drag a page to
+  move it, *Fit* to reframe.
+
+  **It is a drawing, not a new index.** `buildIndex` has always computed
+  `backlinks` — target page → the blocks pointing at it — and the page tree has
+  always known its parents. Nothing here is stored in the document: no layout,
+  no positions, no second answer to "what links to this page". The picture is
+  derived when you open it and thrown away when you close it, so it can never
+  go stale and never costs a saved byte.
+
+  **No library.** The force simulation is about eighty lines, written out
+  rather than imported: this app ships as one HTML file and every byte is paid
+  on every open. The whole feature costs **7.2 KB** of compressed shell.
+
+  **The layout is computed once and is reproducible.** Starting positions come
+  from a golden-angle spiral rather than `Math.random`, so the same space draws
+  the same picture every time you open it. The animation is an interpolation
+  from that spiral toward the settled answer, which is why the camera never
+  jitters — it is framed once, against final positions. Once the reveal has
+  played there is no timer and no animation frame: a graph on screen costs
+  nothing until you touch it.
+
+  **Reduced motion is honoured**, by the rule bento/slides already set: the
+  localStorage preference over the OS `prefers-reduced-motion`, never the
+  document. With it on there is no reveal — the settled picture is simply
+  drawn.
+
+  **Measured, on a synthetic space of 213 pages and 328 links:** 28 ms to open
+  (27 ms of it layout), and 0.35 ms to repaint a frame. At 513 pages and 739
+  links: 182 ms to open, still under half a millisecond a frame. Labels are
+  offered most-connected-first and placed only where they do not collide, so a
+  small space labels every page and a large one labels its hubs, and zooming in
+  reveals more.
 
 - **A dark interface.** About → Appearance offers *Match my system*, *Light* or
   *Dark*, follows the OS by default, and tracks it live if the OS flips while

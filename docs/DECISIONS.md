@@ -187,7 +187,7 @@ you sent it to that you had once saved something.
 In `kernel/`, not `slides/`: Spaces, Dash and Type have the identical problem
 and would each grow their own copy. The kernel owns the remembering and the
 policy; the words and the markup are the app's. Spec (gitignored):
-`working/handover-web-demo-return-gate.md`, from the `tray-views` session.
+`working/team/handoffs/handover-web-demo-return-gate.md`, from the `tray-views` session.
 
 NOT done here, and worth weighing first: making **Download** the primary action
 on the landing page (it is currently `btn primary` on "Try it in your browser")
@@ -371,7 +371,7 @@ been silently dropping four marks) into marks.ts, over the same run list.
 **Decision.** A `table` block: `rows` (row-major, each cell INLINE HTML), `cols`
 (fractional column weights), `colAlign` (per COLUMN), `header` (absent = TRUE).
 No formulas, no recalculation, no cross-document references — the line from
-`working/spaces-design.md` §2.6. The database case is unaffected: it already
+`working/design/spaces-design.md` §2.6. The database case is unaffected: it already
 shipped as the tracker (`doc.fields` + `prop` + `view`), and this is not a
 second one.
 
@@ -1214,7 +1214,7 @@ failing to re-merge after a render split them (423/2,000).
 **Pointers.** `type/src/inline.ts` (the argument is in the file header),
 `type/src/model.ts` (tagged `parseDoc`, following the spaces load contract:
 an unreadable file must never become an empty one), `scripts/test-type-model.ts`.
-Design + the measured spike behind it: `working/type-design.md` and
+Design + the measured spike behind it: `working/design/type-design.md` and
 `working/type-spike/RESULTS.md` (gitignored) — Path A, continuous pagination,
 Knuth–Plass viable live.
 
@@ -2421,13 +2421,13 @@ deletion set included `slides/index.html`, the gallery, `agents.md`,
 
 Rig: `scripts/test-publish-gate.mjs`; shared logic `scripts/site-inventory.mjs`.
 This is the first half of the multi-app release work
-(`working/spaces-design.md` §6.1); per-app assembly — build one app, restore
+(`working/design/spaces-design.md` §6.1); per-app assembly — build one app, restore
 the others byte-identically from the published tree — is the second, and
 spaces cannot be released until both exist.
 
 ## 2026-08-02 — bento/home runs documents in a per-document origin, or not at all
 
-`bento/home` is a launcher (`home/`, `working/home-design.md`): it holds no
+`bento/home` is a launcher (`home/`, `working/design/home-design.md`): it holds no
 document content, only `FileSystemFileHandle`s in IndexedDB, so a deck you were
 working on reopens with write access after one permission click. That part is
 measured and built. **How a document is actually OPENED is the hard part, and
@@ -2484,7 +2484,7 @@ cadence and the deploy-order care that implies (`docs/PLATFORM.md` §5).
 
 **To confirm before building** (none of it testable in an automated browser —
 permission-gated APIs report `denied` there without prompting,
-`working/home-design.md` §3.2, a trap that already produced two wrong
+`working/design/home-design.md` §3.2, a trap that already produced two wrong
 conclusions):
 
 1. Does a `FileSystemFileHandle` survive a cross-origin `postMessage` and stay
@@ -2736,7 +2736,7 @@ old shared-name code (7/8), which is the property that makes it a gate.
 
 ## 2026-08-02 — A release seeds from what is published, and builds one app
 
-Second half of the multi-app release work (`working/spaces-design.md` §6.1).
+Second half of the multi-app release work (`working/design/spaces-design.md` §6.1).
 The first half made a destructive publish impossible; this one makes a
 non-destructive one possible.
 
@@ -5665,3 +5665,315 @@ Options, none chosen:
 raised from the bento/type branch during #384 and deliberately NOT decided
 there, which was the right call — a single app's feature branch is the wrong
 place to set a cross-app default.
+
+## 2026-08-28 — bento/spaces: the `canvas` block, and where a card's position lives
+
+**The type.** `canvas` is a bounded surface holding cards you place by hand —
+a storyboard, a roadmap, a mind map. The format shape below is permanent from
+the moment the type ships, because there is no server to migrate a file
+somebody already has (PLATFORM §3).
+
+### The shape
+
+```jsonc
+{ "id": "b1", "type": "canvas",
+  "html": "Launch storyboard",   // the surface's NAME, and its fallback
+  "ratio": 1.6                    // width ÷ height; ABSENT = 1.6
+}
+```
+
+**A card is a BLOCK, not an entry in an array on the canvas.** The canvas is
+`container: 'always'` in the registry, so it owns the blocks whose `parent` is
+its id — exactly as a callout and a toggle do. A card adds two flat fields and
+nothing else:
+
+```jsonc
+{ "id": "b2", "type": "p", "parent": "b1", "x": 29, "y": 8, "html": "Review with the team" }
+```
+
+`x` and `y` are PERCENTAGES of the surface, one decimal place, clamped to
+0–100 at read time. A card with no coordinates is not an error: it takes a
+deterministic slot from its index among its siblings, so two readers of one
+file lay it out identically and `{"type":"canvas"}` with three bare paragraphs
+under it is a hand-writable canvas.
+
+A card's TYPE is any block type. `p` is a text card; `pagelink` is a card that
+opens a page in the space, which is what lets a canvas be a map OF the space
+rather than only a sketchpad. Nothing new was needed for either.
+
+### Why cards are blocks and not an array
+
+Three reasons, in ascending order of how permanent the mistake would have been.
+
+1. **An array is a second place text lives.** Every word in a space is some
+   block's `html` — canonicalised by one sanitizer, found by ⌘F, back-linked by
+   `buildIndex` because it reads `html`, exported by one markdown pass. Text
+   inside `canvas.cards[]` is none of those things, and each one would have to
+   be taught about the array separately.
+2. **An array degrades badly.** `renderBlocks` resolves a child against the
+   OPEN CONTAINER STACK, and an unknown type opens no container — so on a build
+   that has never heard of `canvas`, every card falls out to the top level and
+   renders as the paragraph or page card it already is, under the canvas's own
+   name. Measured against the pre-change shell: the page reads "Launch
+   storyboard" followed by each card as an ordinary paragraph, and the `x`/`y`
+   it cannot use round-trip untouched. Cards in an array would show as the
+   canvas's `html` and nothing more — unless the html duplicated all of it,
+   which is the price `table` pays and did not need to be paid again.
+3. **An array loses edits under collaboration.** model.ts already states the
+   rule: properties are flat because each (node, key) pair is one LWW register.
+   `cards` as one array is ONE register, so two people dragging two different
+   cards keep one of the two moves, silently. As blocks, each card is its own
+   CRDT node and `x`/`y` are its own registers, and both drags land.
+   `table.rows` has exactly this limitation and documents it; there was no
+   reason to take it on again where the alternative is strictly simpler.
+
+Because the cards are separate blocks that an old build renders on its own, the
+canvas's `html` is its NAME and must never repeat them — the opposite of
+`tableFallbackHtml`, which has to hold the cells' text because a table's cells
+are not blocks. The markdown export follows: a canvas exports as `**name**`
+and its cards arrive as their own lines.
+
+### Why percentages, and why `ratio` is document data
+
+Percentages, not pixels: the same file is read at 320px and at 2560px and
+printed on A4, and a layout in px is a layout that is right at exactly one
+width. Not an abstract 1000-unit grid either — that is a percentage with a
+scale factor bolted on, and the renderer would have to know the factor forever.
+A percentage needs nothing: `left: calc(var(--sp-x) * 1%)`.
+
+`ratio` has to be in the document rather than a reader-side default, because
+the cards' `y` is relative to it: a canvas laid out on a 1.6 surface and read on
+a 1.0 one is a different picture. It is stored as an ABSENT key when it is the
+default (the `editView` discipline), so a canvas cycled Wide→Square→Tall→Wide
+is byte-identical to one nobody touched.
+
+Below 560px the surface renders as a stacked list of its cards, positions
+ignored. That is a RENDERING choice made in the stylesheet, not a change to the
+file — four cards on a 360px board are four unreadable stamps, and the same
+document lays out spatially again on the next screen up.
+
+### Names reserved, so a follow-up does not have to guess
+
+- Card SIZE is `cw`/`ch`, in the same percentage units. **Not `w`/`h`** — an
+  image block already carries its intrinsic pixels in those, and an image is a
+  perfectly good card.
+- CONNECTORS belong on the canvas block as `links: [{ from, to }]` of card ids.
+  A relation is not a property of either end.
+- NESTING needs nothing: a canvas inside a canvas is a card whose type is
+  `canvas`, and the container stack already supports it.
+
+None of the three is built. All three are additive.
+
+---
+
+## 2026-08-28 — a graph view is a DRAWING, and derived state is never stored
+
+Settled while building `spaces/src/graph.ts` (bento/spaces graph view). Written
+down because the next app to want a picture of its own data will face the same
+three forks, and because two of these are platform-shaped rather than
+spaces-shaped.
+
+**1. Derive at open; store nothing.** The graph is built from
+`buildIndex().backlinks` and `Page.parent` when the overlay opens, and dropped
+when it closes. There is deliberately no `doc.graph`, no saved node positions
+and no second link scanner. A stored layout is meaningless to the next reader's
+window size, and a second scanner is a second answer to "what links to this
+page" — the one question the backlink index exists to answer. The precedent
+cuts the same way as `SpaceIndex` itself: *derived, NEVER stored*.
+
+**2. A viewer preference is read the same way in every app.** Reduced motion
+here reads localStorage `bento-reduce-motion` first and the OS
+`prefers-reduced-motion` second — character for character the rule
+`slides/src/present.ts` set, and the rule the theme and the locale already
+follow (PLATFORM §8). An app that invents its own motion preference makes the
+suite two products.
+
+**3. An animation needs a wall-clock settle guarantee, not just a rAF loop.**
+`requestAnimationFrame` is throttled to ZERO in a hidden or occluded tab. The
+graph's reveal interpolates from a spiral toward a settled layout while the
+camera is framed against the FINAL positions, so a starved rAF does not merely
+fail to animate — it leaves the picture frozen halfway and off-centre, which
+reads as a broken feature. Measured in exactly that state, then fixed with a
+`setTimeout` that lands the final frame regardless. slides carries the same
+guarantee for entrance tweens, for the same reason, and any future app that
+animates on open needs one too.
+
+**A note on measuring this class of feature.** Nothing above was found by
+looking at the screen. The overlay carries a small debug object (`__graph`:
+node/edge counts, layout ms, `reduced`, `reveal`, `frames`) and the frozen-
+reveal bug was identified by reading `frames: 0` beside a mid-flight `reveal` —
+an instrument on the DECISION, not a sample of the result. The rig's graph
+assertions were each made to fail on purpose before being trusted (twelve
+deliberate mutations; two assertions were too weak and were tightened, one of
+them a threshold that passed both with and without the behaviour it claimed to
+test).
+
+## 2026-08-28 — bento/spaces: a table column sorts, a title column does not
+
+The Bases table became editable and sortable in place: a column header cycles
+ascending → descending → none, and a cell opens the same picker the page's own
+header strip opens.
+
+Two things settled that another agent could otherwise contradict.
+
+**Unsorted DELETES the key.** The header writes the view's existing `sort`
+through the existing `editView`, and the third click passes `undefined` so the
+key is removed rather than stored as `[]`. A view sorted and unsorted from its
+header is byte-identical to one nobody ever touched. `cycleSort` in fields.ts is
+where that third state lives, so it is one function rather than a rule the two
+sort controls each have to remember.
+
+**The page-title column is NOT sortable, deliberately.** A view's `sort` names a
+FIELD: `sortRows` looks each key up in `doc.fields` and skips what it cannot
+find, and `unknownSortKeys` reports the miss as "newer than this build". A
+pseudo-key like `{key:'title'}` would therefore be a key EVERY shipped build
+reports as unreadable and does not apply — and teaching `sortRows` about a
+non-field key means a second ordering mechanism living beside the first, in a
+format where both are permanent. One order stored in two shapes is the thing
+that later disagrees with itself. The column is a plain `<th>` and does not
+pretend otherwise. If title order is wanted later, the honest shape is a real
+field, not a special case in the sorter.
+
+**A cell edit can CREATE the prop block**, the way a board drop already could:
+`editor.putField` is the one place a page gains a field, and it goes through
+`propBlock`, so the readable `html` is written with the value. A table column
+exists because SOME row carries that field; the rows that do not get an empty
+cell, and editing it is how the field arrives on that page.
+
+The picker was split from `openFieldPicker` into `fieldPicker(f, cur, anchor,
+write)` — a picker over a WRITER rather than a block id, because a cell can
+stand for a value that has no block yet. The header strip, the board's card chip
+and a cell are now one control with three writers, not three controls.
+
+## 2026-08-28 — two size mechanisms, and why deleting either loses a regression
+
+**Both stay.** #279 added an advisory PR build-size comment while
+`scripts/test-spaces-size.mjs` already measured shell size in CI. That looks
+like duplicated measurement and it is not, so this entry exists to stop the
+next person tidying one away.
+
+**They answer different questions.**
+
+| | the CI rig (size-budgets.json) | the PR comment (#279) |
+|---|---|---|
+| measured against | a committed `reference`, or a `max` ceiling | the PR's own base commit |
+| horizon | absolute, persistent, across all history | relative, one PR |
+| can fail a build | yes, when `enforce:true` | never, advisory only |
+| catches | SLOW drift — forty merges at 300 B each | a single change's jump |
+| blind to | which change caused it | accumulated drift; every PR looks fine |
+
+The second row is the whole point. Forty merged commits costing 300 bytes each
+is 12KB nobody chose, and **every one of those PRs shows a harmless +300 in its
+comment**. Only a number compared against a fixed point sees it. Equally, the
+rig can say a shell grew 12KB since the reference but not which PR to blame;
+the comment can. Neither is redundant.
+
+**Two real defects were found while reconciling them, both silent.**
+
+1. **Only bento/spaces was ever registered.** `size-budgets.json` listed one
+   shell, so slides and dash had NO persistent size record at all. The rig has
+   always been generic — it walks every entry — it just had nothing to walk.
+   Both are now registered as `enforce:false` watermarks.
+2. **dash was structurally unmeasurable.** The CI step sat in the spaces
+   section, *ahead of the dash build*, and the rig SKIPS a shell that is not
+   built — so it printed `skip dash — not built` and moved on. A guard that
+   reports "nothing to do" in a passing build is invisible. The step now runs
+   after all three builds.
+
+**Why watermarks and not ceilings for the two new entries.** Same reason spaces
+gave up its own: at 98.6% of its limit it had started declining worthwhile
+fixes, which is the ceiling costing more than it saves. And a ceiling picked
+with no history behind it is a guess that fails somebody else's PR. Growth
+still has to pass a human, because the number is printed every run.
+
+**References come from CI, never a local build.** Most of a shell is one
+deflated block and zlib's output differs across node versions — one commit
+measured 130,095 B on node 26 locally against 131,246 B on CI's node 24. When
+the two disagree, believe CI.
+
+**Naming, left alone deliberately.** `test-spaces-size.mjs` now covers three
+shells and the name undersells it, but it is invoked by name from
+`scripts/test-spaces.mjs` and referenced in this log, and renaming it was more
+churn than the overlap warranted. The file's own header says it is generic.
+
+## 2026-08-29 — five rigs reported passes for work they were not doing
+
+**A green rig is an instrument, and these lied.** The same family as the
+"instruments that lie" list in `CLAUDE.md` — a transform read back from an
+inline element, rAF in a hidden tab, a DOM sampler polling mid-animation — with
+one difference that makes it worse: those instruments were consulted
+deliberately by someone who suspected a problem. A rig is consulted by CI, on
+every push, by people who have stopped suspecting anything.
+
+**The findings, verified against the tree and PR #399's diff on 2026-08-29.**
+Five rigs across four zones, found within one day of each other:
+
+| rig | what it reported | what was true |
+|---|---|---|
+| `test-tray-bridge.ts` | **52/52 pass** | the #277 arbitrary-write fix was DELETED; its shape checks pinned the `<a download>` call site, the NEIGHBOUR of the fix, while `exportCopy`'s `safeFileName` gate and path-containment guard were read by nothing |
+| `test-tray-index.mjs` | "absent, skipped", in green, **for weeks** | the tray→home rename moved the corpus and the path did not; **eleven cases** went untested |
+| `test-doc-index.mjs` | never ran | unregistered in CI, and the same rename left it importing `../tray/doc-index.mjs` |
+| `test-spaces.mjs` | never ran | unregistered **from the day it was written** |
+| `test-slide-store.ts` | never ran | never registered |
+
+**Two distinct failure modes, and the second is quieter.** A rig can assert the
+wrong thing — pinning code adjacent to the fix rather than the fix. Or it can
+assert nothing at all while still printing a pass, because its input moved or it
+was never wired to CI. The second is harder to notice precisely because there is
+no wrong assertion left to be wrong. #399's own comment on `test-doc-index.mjs`
+puts it best: **a rig nobody runs cannot report its own import failure.**
+
+**Presence is not the property; ordering is.** The load-bearing check added to
+`exportCopy` is not that `safeFileName` and the containment guard exist — both
+can exist and still run AFTER the write. It asserts
+`indexOf('write(to: tmp)') > indexOf('hasPrefix(')`. This is the part that
+transfers to any rig: a guard's presence is cheap to assert and frequently
+means nothing.
+
+**The check adopted, which costs two minutes:** delete the guard the rig exists
+to protect, run the rig, and watch. If it still passes, the rig is reading
+something adjacent to the fix. **Do it when you write the rig, not after someone
+reverts it.** Measured, not assumed: `exportCopy` gained FOUR checks and THREE
+of them fire on the revert that was actually run (53/56). That gap is the point
+rather than an embarrassment — four independent assertions, not one assertion
+spelled four ways, and the one that stayed silent did so because of how those
+particular guards were stripped.
+
+**A skip that protects nothing costs the whole check.** `test-tray-index.mjs`
+skipped a missing corpus for a good reason — it arrived with the Android work,
+and a rig that fails until an unrelated branch lands is a rig people learn to
+ignore. The reason expired when the corpus landed and the skip did not. A path
+that is SUPPOSED to exist is a failure when it does not, and a rig must
+distinguish ABSENT from MOVED.
+
+**And the practice is now enforced, not just recommended.** A two-minute habit
+decays; the same PR adds the mechanical half. `scripts/test-spaces.mjs
+--manifest` runs in CI and asserts the list both ways — every `test-spaces-*`
+file on disk is listed in `RIGS`, and every rig in `RIGS` has a step in the
+workflow — failing with **"A rig nobody runs is not a rig. Add a step for each,
+or remove it from RIGS."** Read that beside the diagnosis above and the pair is
+the whole entry: one line names the failure, the other refuses to let it recur.
+Both halves are the point. A rig that catches this class of defect is worth more
+than a paragraph asking people to remember it, and any app growing a rig suite
+should copy the manifest check rather than the habit.
+
+**Status.** PR #399 (branch `ops-rig-repairs`) is in flight as this is written;
+it registers the unrun rigs, closes the two mis-asserting ones, and adds the
+manifest check. The findings above are properties of the tree at `220f7e7` and
+stay true whatever shape that PR lands in.
+
+**Attribution, corrected once in the writing of this entry.** The two
+`test-tray-*` findings are bento-team-home-ios's, with bento-team-home-android
+hitting the same class from the other side. The three unrun rigs and both quoted
+lines came through #399 and are **bento-team-ops'** — an earlier draft of this
+paragraph credited the whole finding to home-ios, which was wrong. Worth
+recording how it was settled, because it will come up again: `git log` cannot
+answer it. Every session on this repo commits as the maintainer, so authorship
+metadata resolves to one person for all of us; the zone and the branch are the
+only evidence that distinguishes anybody. Cite the PR, which is checkable, over
+the session, which is not.
+
+**The `CLAUDE.md` counterpart is not discharged by this entry.** The two-minute
+check belongs in the file people read BEFORE writing a rig; this log is what
+they read after wondering why a standard exists. That text is queued for the
+maintainer.
