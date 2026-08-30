@@ -75,28 +75,16 @@ ok(rigs.length > 20, 'the rig glob still finds rigs (this check is what stops a 
  * Adding to it should feel worse than fixing the rig.
  */
 const NOT_RUN: Record<string, string> = {
-  // Found by this guard on its first run. CORRECTED after checking how its
-  // siblings run: the first version of this note said the rig "cannot execute"
-  // because `slides/src/store.ts` imports `'./model'` with no extension, which
-  // Node's ESM resolver refuses. True of `node scripts/test-slide-store.ts`,
-  // and misleading — because test-autosave, test-clipboard, test-sanitize,
-  // test-validate and test-spaces-undo have exactly the same imports and DO
-  // run in CI, bundled through esbuild first, which resolves them.
+  // EMPTY, AND THAT IS THE POINT. It held three entries until 2026-08-29:
+  // test-slide-store.ts (unwired since #262), and test-doc-index.mjs and
+  // test-spaces.mjs, which this branch had registered itself before learning
+  // that scripts/ and .github/ are the ops zone's. PR #399 registered all
+  // three properly, so every reason expired at once and all three came out in
+  // the same push as the rebase — which is what the check below is for.
   //
-  // So this is not a broken rig. It is an unwired one, and the fix is not a
-  // slides-zone change at all: it is an esbuild step in ci.yml copied from any
-  // of those five. It sits here rather than being done in this branch only
-  // because the rig covers slides' store and should go red in front of someone
-  // who owns that code — a dash branch is the wrong place to first turn it on.
-  // Remove this entry and add the step.
-  'test-slide-store.ts': 'not wired up — needs an esbuild step in ci.yml like test-clipboard (#262)',
-  // These two belong to the OPS zone and are registered by PR #399, which this
-  // branch is queued behind. This branch had registered them itself, along with
-  // a repair to test-doc-index.mjs — work that turned out to be ops' and that
-  // collided with #399 on ci.yml, which is what made #323 CONFLICTING. Both are
-  // withdrawn; #399 owns them. These entries go when it lands.
-  'test-doc-index.mjs': 'owned by PR #399 (ops) — registered and repaired there, not here',
-  'test-spaces.mjs': 'owned by PR #399 (ops) — registered there, not here',
+  // Leave it empty. An exemption is a hole in the only guarantee this file
+  // makes, and the two checks on each entry — the rig still exists, and CI
+  // still does not run it — exist so a hole cannot outlive its reason quietly.
 }
 
 console.log('\nevery rig is registered')
