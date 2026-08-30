@@ -41,7 +41,7 @@ names provisional.
   never contain `</script>`. File System Access API first, download fallback.
 - `src/preview.ts` + kernel `registerPreview` — **static first-page preview for
   file-manager thumbnails**. Thumbnailers (iOS Files, macOS QuickLook/Finder,
-  Bento Tray) render HTML with JS OFF, so every deck used to thumbnail as the
+  bento/home) render HTML with JS OFF, so every deck used to thumbnail as the
   same boot splash. Every save now writes a still render of page one into the
   shell as a plain `[data-bento-preview]` element, followed IMMEDIATELY by a
   parser-blocking `<script data-bento-preview>` that deletes both. The

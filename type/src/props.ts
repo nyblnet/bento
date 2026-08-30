@@ -140,7 +140,7 @@ function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
   row(body, t('Style'), select(
     STYLE_OPTIONS.map(([v, l]) => [v, t(l)] as [string, string]),
     b.kind,
-    v => { ctx.editor.setKind(v as BlockKind); ctx.refresh(); },
+    v => onSelection(ctx, () => ctx.editor.setKind(v as BlockKind)),
   ));
 
   // ONE list, in marks.ts, rendered here and in the selection toolbar. It was
@@ -181,8 +181,7 @@ function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
     sel.family === 'mixed' ? MIXED : (sel.family ?? DEFAULT),
     v => {
       if (v === MIXED) return;
-      ctx.editor.setFontOn({ family: v === DEFAULT ? null : v });
-      ctx.refresh();
+      onSelection(ctx, () => ctx.editor.setFontOn({ family: v === DEFAULT ? null : v }));
     });
   (faceSel as HTMLSelectElement).disabled = !hasRange;
   row(body, t('Typeface'), faceSel);
@@ -190,7 +189,7 @@ function textSection(host: HTMLElement, ctx: FeatureContext, b: Block): void {
   const sizeField = numberField(
     typeof sel.size === 'number' ? sel.size : undefined,
     sel.size === 'mixed' ? t('mixed') : t('default'),
-    v => { ctx.editor.setFontOn({ size: v === undefined ? null : v }); ctx.refresh(); });
+    v => onSelection(ctx, () => ctx.editor.setFontOn({ size: v === undefined ? null : v })));
   (sizeField as HTMLInputElement).disabled = !hasRange;
   row(body, t('Size (px)'), sizeField);
 
@@ -489,6 +488,104 @@ function build(host: HTMLElement, ctx: FeatureContext): void {
   documentSection(host, ctx);
 }
 
+/**
+ * The last selection the user made IN THE DOCUMENT, and the way panel controls
+ * act on it.
+ *
+ * The formatting buttons in this panel preventDefault on mousedown, so focus
+ * never leaves the paper and the selection survives being clicked. A native
+ * <select> cannot do that — it has to take focus to open its list, and the
+ * document selection goes with it. The result was that choosing a typeface
+ * worked once and then left you with nothing selected, so a second property
+ * could not be applied to the same words without re-selecting them.
+ *
+ * So the panel remembers the range while the caret is still in the document,
+ * restores it around the action, and restores it again afterwards — the user
+ * keeps the words they selected and can keep working on them.
+ */
+type Remembered = { id: string; at: number; to?: number };
+let lastRange: Remembered | null = null;
+
+function rememberSelection(host: HTMLElement, ctx: FeatureContext): void {
+  // While the panel holds focus the live selection is gone, and reading it
+  // would overwrite the very thing being preserved.
+  if (host.contains(document.activeElement)) return;
+  const c = ctx.editor.caret();
+  if (c) lastRange = { id: c.id, at: c.at, to: c.to };
+}
+
+function onSelection(ctx: FeatureContext, run: () => void): void {
+  if (lastRange) ctx.editor.setCaret(lastRange);
+  run();
+  // The REFRESH happens here, inside, and that ordering is the whole point:
+  // ctx.refresh() re-renders the body, which wipes any selection set before
+  // it. Restoring first and refreshing afterwards — which is what the call
+  // sites used to do — put the range back and then threw it away a
+  // millisecond later, so the action worked and the words still looked
+  // unselected.
+  ctx.refresh();
+  if (!lastRange) return;
+  // A DOM selection set while a form control holds focus does not stick: the
+  // action worked, but the words stopped LOOKING selected, which reads as the
+  // selection having been lost even though the next property still applies to
+  // it. So a <select> that has just committed hands focus back to the
+  // document, where the highlight is visible again.
+  //
+  // Only a <select>: picking an option IS the end of that interaction. A text
+  // field fires `change` on blur too, and yanking focus there would eject
+  // someone who is still typing.
+  const active = document.activeElement as HTMLElement | null;
+  if (active?.tagName === 'SELECT') {
+    // FOCUS FIRST, then set the range. setCaret only calls addRange, and a
+    // selection placed inside a contenteditable that does not have focus is
+    // not kept by the browser — the range went in and getSelection() came back
+    // empty, so the words still did not look selected.
+    active.blur();
+    ctx.editor.host.focus();
+  }
+  ctx.editor.setCaret(lastRange);
+}
+
+/**
+ * What the panel actually depends on: the block under the caret, the range,
+ * and the marks over it. Anything else changing is not a reason to rebuild.
+ */
+function signature(ctx: FeatureContext): string {
+  const c = ctx.editor.caret();
+  if (!c) return 'none';
+  const b = ctx.store.block(c.id);
+  const marks = [...(ctx.editor.activeMarks() as Set<string>)].sort().join(',');
+  return `${c.id}:${c.at}:${c.to ?? ''}:${b?.kind ?? ''}:${b?.styleId ?? ''}:${marks}`;
+}
+let last = '';
+
+/**
+ * Rebuild only when it would show something different — and never while the
+ * pointer or keyboard is inside the panel.
+ *
+ * REBUILDING FED ITSELF. `build()` calls host.replaceChildren(), which destroys
+ * and recreates this panel's inputs and selects; destroying a form control
+ * fires `selectionchange` on the document, which is the very signal that
+ * triggered the rebuild. With a text selection present the loop ran at ~179
+ * selection events and ~4,900 panel mutations PER SECOND, forever, burning CPU
+ * the whole time.
+ *
+ * The visible symptom was that no dropdown in this panel could be opened while
+ * text was selected: the <select> the user clicked was destroyed and replaced
+ * within milliseconds, so the native popup closed instantly. Reported exactly
+ * that way, and the loop is why.
+ *
+ * The activeElement guard is the second half and matters on its own: even one
+ * legitimate rebuild, arriving while a dropdown is open, would close it.
+ */
+function rebuild(host: HTMLElement, ctx: FeatureContext): void {
+  if (host.contains(document.activeElement)) return;
+  const sig = signature(ctx);
+  if (sig === last) return;
+  last = sig;
+  build(host, ctx);
+}
+
 registerPanel({
   id: 'props',
   label: () => t('Properties'),
@@ -496,7 +593,7 @@ registerPanel({
   order: 10,
   mount(host, ctx) {
     build(host, ctx);
-    registerSelection(() => build(host, ctx));
+    registerSelection(() => { rememberSelection(host, ctx); rebuild(host, ctx); });
   },
-  update(host, ctx) { build(host, ctx); },
+  update(host, ctx) { last = ''; rebuild(host, ctx); },
 });

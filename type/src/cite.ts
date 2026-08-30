@@ -592,7 +592,7 @@ function mountPanel(host: HTMLElement, ctx: FeatureContext): void {
 
 registerPanel({
   id: 'cite',
-  label: t('Sources'),
+  get label() { return t('Sources'); },
   host: 'citeHost',
   order: 40,
   mount: mountPanel,
@@ -602,7 +602,7 @@ registerPanel({
 registerTool({
   id: 'cite',
   icon: ICON,
-  title: t('Insert citation'),
+  get title() { return t('Insert citation'); },
   group: 'insert',
   label: () => t('Citation'),
   order: 40,
@@ -611,7 +611,7 @@ registerTool({
 
 registerMenuItem({
   id: 'cite-import',
-  label: t('Import BibTeX…'),
+  get label() { return t('Import BibTeX…'); },
   order: 40,
   run: ctx => openImport(ctx, () => {}),
 });
