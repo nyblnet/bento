@@ -143,7 +143,7 @@ function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
 // --- static first-page preview (file-manager thumbnails) ---------------------
 //
 // THE PROBLEM. A Bento file is one HTML document, and thumbnailers — iOS
-// Files, macOS QuickLook/Finder, the Bento Tray app — render HTML with
+// Files, macOS QuickLook/Finder, the bento/home app — render HTML with
 // JavaScript DISABLED (verified: `qlmanage -t` renders <noscript> content).
 // Until our runtime boots, every deck genuinely IS the same bytes plus the
 // boot splash, so every deck thumbnailed as the same dark box.

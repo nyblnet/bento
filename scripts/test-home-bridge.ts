@@ -4,7 +4,7 @@
 // iOS tray bridge rig — the untrusted-name filter, the handle routing, and the
 // JS reply encoder.
 //
-//   node scripts/test-tray-bridge.ts
+//   node scripts/test-home-bridge.ts
 //
 // WHAT THIS PROVES. These functions guard the boundary where a DOCUMENT — which
 // this host treats as untrusted, since it opens any self-contained HTML file —
@@ -174,7 +174,7 @@ while let line = readLine(strippingNewline: true) {
 }
 `
 
-const work = mkdtempSync(join(tmpdir(), 'bento-tray-rig-'))
+const work = mkdtempSync(join(tmpdir(), 'bento-home-rig-'))
 writeFileSync(join(work, 'harness.swift'), harness)
 execFileSync('swiftc', ['-swift-version', '5', '-o', join(work, 'harness'), join(work, 'harness.swift')],
   { stdio: 'inherit' })

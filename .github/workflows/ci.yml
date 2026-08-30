@@ -391,7 +391,7 @@ jobs:
         # appendingPathComponent was an arbitrary write inside the container —
         # including over another deck the user would later open and trust.
         # Source-shape checks; the Swift half self-skips without a toolchain.
-        run: node scripts/test-tray-bridge.ts
+        run: node scripts/test-home-bridge.ts
 
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
@@ -676,6 +676,16 @@ jobs:
         # the ciphertext is the leak the password exists to prevent.
         run: node scripts/test-dash-preview.ts
 
+      - name: convert engine rigs
+        # The pptx importer's resolver is where real decks' fidelity lives --
+        # 91% of colour and 71% of run properties are indirect, and every hop
+        # fails silently (a backwards clrMap still renders, just dark-on-dark).
+        # Seven rigs, 378 checks, negative controls proven against mutated
+        # implementations; load.ts is the gate that matters: every emitted
+        # document must pass the REAL slides parseDoc with zero validateDoc
+        # errors.
+        run: node scripts/test-convert.ts
+
       - name: bento/dash zip
         # Verified against real unzip implementations, not only our own reader:
         # a reader and a writer that share a bug agree with each other perfectly.
@@ -876,6 +886,27 @@ jobs:
         # Per-selection typeface and size, and the CSS allow-list that keeps a
         # font stack from opening a second declaration in a style attribute.
         run: node scripts/test-type-font.ts
+
+      - name: Type autosave rig
+        # A crash must not cost the work since the last ⌘S. Pins the content
+        # key that decides whether a snapshot disagrees with the loaded file,
+        # and that an encrypted document is NEVER snapshotted — plaintext in
+        # IndexedDB beside a file whose whole point is that it is encrypted.
+        run: node scripts/test-type-autosave.ts
+
+      - name: Type preview rig
+        # Thumbnailers run no JavaScript, so a saved file carries a still of
+        # page one plus a parser-blocking remover. Pins the ordering (nothing
+        # paintable between host and remover), that a second save REPLACES
+        # rather than appends, and that an encrypted document gets none.
+        run: node scripts/test-type-preview.ts
+
+      - name: Type i18n rig
+        # Eight languages in one file: every catalogue holds the same keys,
+        # every {placeholder} survives translation, no key outlives the string
+        # it came from, and the packed table matches the catalogues it was
+        # built from.
+        run: node scripts/test-type-i18n.ts
 
       - name: Type styles rig
         # Named paragraph styles, and the additivity rule: a document with no
