@@ -131,6 +131,22 @@ pre-1.0.
   toast reading `Bearbeiter` and nothing else. All eight now say what actually
   happened. Downloadable language packs were never affected.
 
+- **Fix: a diagram could restyle other diagrams on the same slide.** An SVG
+  element can carry its own `<style>` block, and those rules were applied to the
+  whole page rather than to the drawing they belong to. So a diagram that styled
+  `.dot` or `.label` silently restyled every other SVG beside it — colours,
+  strokes and dimming rules leaking between unrelated drawings, and the more
+  diagrams a slide carried the stranger it looked.
+
+  Nothing could escape further than that: a drawing's stylesheet has never been
+  able to load or run anything, and still cannot. This was one diagram reaching
+  another's appearance, not reaching out of the document.
+
+  Bento already scoped the stylesheet you write in the element panel; the one
+  that arrives inside pasted or imported SVG markup was never scoped at all.
+  Both go through the same scoping now, and a drawing's own rules still apply to
+  it in full.
+
 ## [1.0.18] — 2026-08-15
 
 - **Security: offline mode did not block everything it promised.** The switch
