@@ -71,8 +71,38 @@ if (missing.length) {
 // the same silence from the other side. The workflow is read as TEXT on purpose:
 // the rigs are invoked several different ways (plain, under a TZ loop, bundled
 // through esbuild first), and every one of them names the file.
+//
+// REGISTRATION IS `--manifest`'s ENTIRE JOB AND NO PART OF THE FULL RUNNER'S,
+// so it is asked only in that mode. Both halves of that sentence were wrong here
+// once, and each wrong half had its own symptom:
+//
+//   * With no workflow to read, this printed a warning on stderr and then a
+//     success line on stdout claiming all eight rigs were "registered in
+//     .github/workflows/ci.yml" — naming the file it had just failed to find.
+//     A mode that cannot see the workflow has not done half its job; it has done
+//     none of it, so it fails.
+//   * The check used to run BEFORE the argv parse, so an unregistered rig exited
+//     2 in full-runner mode too — before a single rig ran. A bookkeeping gap
+//     withheld all eight rigs from someone who asked for the rigs and never
+//     mentioned CI, and told them about CI registration instead. Measured: zero
+//     rig-output lines. Found by bento-team-home-ios.
 const WORKFLOW = '.github/workflows/ci.yml'
-if (existsSync(join(root, WORKFLOW))) {
+const argv = process.argv.slice(2)
+
+if (argv.includes('--manifest')) {
+  // The list must be live. If RIGS ever emptied, `unregistered` would be [] and
+  // this mode would report a pass over nothing. The on-disk check above already
+  // catches that from the other side (every file becomes unlisted), but only
+  // while files exist — this makes the floor explicit rather than emergent.
+  if (!RIGS.length) {
+    console.error('RIGS is empty — this check would pass vacuously. That is the bug, not a pass.')
+    process.exit(2)
+  }
+  if (!existsSync(join(root, WORKFLOW))) {
+    console.error(`${WORKFLOW} not found, so registration cannot be checked — and checking it is`)
+    console.error('the whole of what --manifest does. Run it from a full checkout.')
+    process.exit(2)
+  }
   const ci = readFileSync(join(root, WORKFLOW), 'utf8')
   const unregistered = RIGS.filter((r) => !ci.includes(r.file.replace(/^scripts\//, '')))
   if (unregistered.length) {
@@ -80,12 +110,6 @@ if (existsSync(join(root, WORKFLOW))) {
     console.error('A rig nobody runs is not a rig. Add a step for each, or remove it from RIGS.')
     process.exit(2)
   }
-} else {
-  console.error(`warning: ${WORKFLOW} not found — the registration half of the manifest check did not run`)
-}
-
-const argv = process.argv.slice(2)
-if (argv.includes('--manifest')) {
   console.log(`manifest ok — ${RIGS.length} spaces rigs, all listed here and all registered in ${WORKFLOW}`)
   process.exit(0)
 }

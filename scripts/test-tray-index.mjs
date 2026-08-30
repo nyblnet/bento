@@ -421,6 +421,39 @@ const real = files.length - generated - (EXTRA_CORPUS ? 0 : 0)
  * green while eleven cases went untested. A path that is supposed to exist is
  * a FAILURE when it does not.
  */
+/**
+ * Any `expected.json` sitting in a fixtures directory elsewhere in the tree, so a
+ * MOVED corpus is told apart from a genuinely absent one. Cheap: two shallow
+ * levels, no full walk. (Written without the glob it describes: a literal
+ * star-slash in this comment would close it early.)
+ *
+ * This DECIDES nothing. The policy above is absolute — absent is a failure
+ * either way — and this only enriches the message, because "MISSING" sends a
+ * reader looking for a deleted corpus while "MISSING, and one is sitting at X"
+ * sends them to fix a path. Its ancestor in PR #405 threw instead, which aborted
+ * the run before the Swift-diff summary printed and left a raw stack trace as
+ * the last thing on screen — the rig read as crashed rather than stale-pathed.
+ * Diagnosis belongs in the message, not in the control flow.
+ *
+ * From bento-team-home-ios (PR #405); `tray` dropped from the probe roots, the
+ * rename having landed.
+ */
+function strayCorpus() {
+  for (const top of ['home', 'scripts', '.']) {
+    const base = join(ROOT, top)
+    let entries
+    try { entries = readdirSync(base, { withFileTypes: true }) } catch { continue }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue
+      for (const probe of [join(base, e.name, 'expected.json'),
+                           join(base, e.name, 'fixtures', 'expected.json')]) {
+        try { readFileSync(probe); return probe.replace(ROOT + '/', '') } catch { /* keep looking */ }
+      }
+    }
+  }
+  return null
+}
+
 function sharedCorpus() {
   const dir = join(ROOT, 'home/fixtures')
   let expected
@@ -479,6 +512,14 @@ if (shared) {
 } else {
   console.error('            shared corpus (home/fixtures): MISSING — expected.json did not load.')
   console.error('            This corpus has landed; absent means a moved or broken path, not "not yet".')
+  const stray = strayCorpus()
+  if (stray) {
+    console.error(`            It IS at ${stray} — this rig's path is stale. Update the path;`)
+    console.error('            do not restore the skip that hid this for weeks.')
+  }
+  // exitCode, not exit(): the Swift-diff summary above has already printed and
+  // the disagreement report below still needs to. A stale path must not withhold
+  // the other half of the rig from the reader.
   process.exitCode = 1
 }
 
