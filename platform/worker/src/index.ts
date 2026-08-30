@@ -34,6 +34,7 @@
 //                               (sharePage.ts) until the request carries a valid unlock cookie.
 //   GET  /d/:id/download        same content, as a downloadable attachment (raw bytes for 'html')
 //   GET  /a/:id/:key            an uploaded asset's bytes
+//   GET  /favicon.png           the platform's own site icon (favicon.ts) — public, immutable-cached
 //
 // "OWNER ONLY" = gated by a session cookie (auth.ts) — single account,
 // created once via /setup, no signup. What a non-owner (no valid session)
@@ -120,6 +121,7 @@ import {
 import { renderDemoPage } from './demo.ts'
 import { renderSetupPage, renderLoginPage } from './authPages.ts'
 import { renderDeckPasswordGate } from './sharePage.ts'
+import { faviconResponse } from './favicon.ts'
 import { parseOutline } from './compile/schema.ts'
 import { compileOutline } from './compile/compile.ts'
 import {
@@ -856,6 +858,10 @@ export default {
       }
 
       if (parts[0] === 'healthz') return json({ ok: true, shellVersion: SHELL_VERSION })
+
+      if (parts[0] === 'favicon.png' && parts.length === 1 && req.method === 'GET') {
+        return faviconResponse()
+      }
 
       return notFound()
     } catch (e) {

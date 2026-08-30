@@ -313,6 +313,8 @@ export function renderDemoPage(): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bento platform — compile &amp; create a deck</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
 <style>
 ${PAGE_STYLES}
   pre.prompt {

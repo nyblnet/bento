@@ -1724,5 +1724,30 @@ await check('POST /api/logout ends the session, further owner requests are rejec
   assert(res.headers.get('location') === '/login', `expected redirect to /login, got ${res.headers.get('location')}`)
 })
 
+// --- favicon -----------------------------------------------------------
+
+await check('GET /favicon.png serves the site icon, publicly, immutably cached', async () => {
+  const res = await worker.fetch(new Request('https://platform.example/favicon.png'), env)
+  assert(res.status === 200, `expected 200, got ${res.status}`)
+  assert(res.headers.get('content-type') === 'image/png', `expected image/png, got ${res.headers.get('content-type')}`)
+  assert(
+    (res.headers.get('cache-control') ?? '').includes('immutable'),
+    `expected an immutable cache-control, got ${res.headers.get('cache-control')}`,
+  )
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  // PNG magic number — cheap sanity check that this is real image bytes,
+  // not e.g. an accidentally-base64-encoded-twice string.
+  assert(
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47,
+    'expected a valid PNG signature',
+  )
+})
+
+await check('GET /login references /favicon.png', async () => {
+  const res = await worker.fetch(new Request('https://platform.example/login'), env)
+  const { text } = await readBody(res)
+  assert(text.includes('href="/favicon.png"'), 'expected the login page to link the favicon')
+})
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed')
 process.exit(failures ? 1 : 0)
