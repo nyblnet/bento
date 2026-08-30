@@ -216,6 +216,8 @@ platform/
       sharePage.ts            — the password gate a non-owner hits at /d/:id when a deck
                                  has a share password and no valid unlock cookie yet
       pageStyles.ts           — shared CSS (demo.ts + the auth/share pages)
+      favicon.ts              — the platform's own site icon, served from GET /favicon.png
+                                 (repo-root logo.png, embedded as base64 at build time)
       ids.ts                — random ids/tokens, sha256
       demo.ts               — prompt→paste→create wizard + deck history sidebar, served at `/` (owner-only)
       env.ts                — Env (binding) interface
@@ -555,6 +557,7 @@ problem for whenever that app exists, not solved here.
 | `/d/:id` | GET | depends on the deck's `access` | `'private'` → 404 unless it's the owner's session. For a `'bento'` deck: `'view'` (non-owner) → `readonly: true` spliced in, boots Bento's present-only PLAYER mode; `'edit'`, or any owner session → the real, live editor page. For an `'html'` deck: always the sandboxed iframe wrapper (see "Decks that aren't Bento at all"), owner included |
 | `/d/:id/download` | GET | same as `/d/:id` | `'bento'`: same content rules as `/d/:id`, with `Content-Disposition: attachment`. `'html'`: the exact original bytes, unwrapped (no sandbox — see that section for why the wrapper only applies to the live view) |
 | `/a/:id/:key` | GET | same as `/d/:id` | an uploaded asset's bytes; 404 for a non-owner if the deck is `'private'` |
+| `/favicon.png` | GET | none — public | the platform's own site icon (`favicon.ts`), `Cache-Control: public, max-age=31536000, immutable` |
 
 "Owner session" = the `bento_session` cookie set by `/api/login` (or
 `/api/setup`, which logs you in immediately) — see "Authentication" above.
