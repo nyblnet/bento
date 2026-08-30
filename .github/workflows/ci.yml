@@ -233,6 +233,19 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: spaces rig manifest
+        # Bookkeeping, not a ninth run of the eight steps above. scripts/
+        # test-spaces.mjs is the local entry point for the spaces suite (two of
+        # those rigs cannot be handed to node directly, and running one by hand
+        # produces a stack trace that reads like a broken product); this asserts
+        # its list is still complete in both directions — every test-spaces-*
+        # file on disk is listed there, and every rig it lists has a step in
+        # this workflow. Both omissions are invisible: an unlisted rig never
+        # runs locally, an unregistered one never runs here, and neither looks
+        # like anything but green. test-spaces.mjs itself was unregistered from
+        # the day it was written, which is how this check came to exist.
+        run: node scripts/test-spaces.mjs --manifest
+
       # dash: the data app — same pipeline, same gate.
       - name: Install (dash)
         working-directory: dash
@@ -389,7 +402,7 @@ jobs:
         # appendingPathComponent was an arbitrary write inside the container —
         # including over another deck the user would later open and trust.
         # Source-shape checks; the Swift half self-skips without a toolchain.
-        run: node scripts/test-tray-bridge.ts
+        run: node scripts/test-home-bridge.ts
 
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
@@ -411,6 +424,16 @@ jobs:
         # runner has Swift, so the diff happens on every push rather than only on
         # a Mac. That is the payoff for keeping UIKit out of that file.
         run: node scripts/test-tray-index.mjs
+
+      - name: document index conformance corpus
+        # home/fixtures/ is the corpus all three hosts answer — the JS reference
+        # here, the Kotlin port under Gradle, the Swift port in the rig above.
+        # This is the JS side of it, and it is the reference the other two are
+        # diffed against, so a break here is a break in the thing they agree
+        # with. It went unregistered and then unnoticed: the tray→home rename
+        # left it importing ../tray/doc-index.mjs, and a rig nobody runs cannot
+        # report its own import failure.
+        run: node scripts/test-doc-index.mjs
 
       - name: home/ios release verifier rig
         # Starter decks are not bundled; a new document is FETCHED from the
@@ -762,6 +785,16 @@ jobs:
         # An encrypted workbook NEVER gets a preview — a plaintext title beside
         # the ciphertext is the leak the password exists to prevent.
         run: node scripts/test-dash-preview.ts
+
+      - name: convert engine rigs
+        # The pptx importer's resolver is where real decks' fidelity lives --
+        # 91% of colour and 71% of run properties are indirect, and every hop
+        # fails silently (a backwards clrMap still renders, just dark-on-dark).
+        # Seven rigs, 378 checks, negative controls proven against mutated
+        # implementations; load.ts is the gate that matters: every emitted
+        # document must pass the REAL slides parseDoc with zero validateDoc
+        # errors.
+        run: node scripts/test-convert.ts
 
       - name: bento/dash zip
         # Verified against real unzip implementations, not only our own reader:
@@ -1152,6 +1185,18 @@ jobs:
         # is the regression.
         run: node scripts/test-layouts.ts
 
+      - name: slides store rig
+        # The editor's undo/redo, selection and whole-deck replacement, at the
+        # store level rather than through the DOM. Bundled first for the same
+        # reason the spaces rigs are: store.ts imports './model' without an
+        # extension, which node's strip-only TypeScript loader will not follow,
+        # so run by hand it fails with ERR_MODULE_NOT_FOUND and looks like a
+        # broken product. It had never been registered here.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slide-store.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-slide-store.mjs"
+          node "$RUNNER_TEMP/test-slide-store.mjs"
+
       # bento/type: the word processor. Same pipeline, same gate.
       - name: Install (type)
         working-directory: type
@@ -1292,6 +1337,27 @@ jobs:
         # Per-selection typeface and size, and the CSS allow-list that keeps a
         # font stack from opening a second declaration in a style attribute.
         run: node scripts/test-type-font.ts
+
+      - name: Type autosave rig
+        # A crash must not cost the work since the last ⌘S. Pins the content
+        # key that decides whether a snapshot disagrees with the loaded file,
+        # and that an encrypted document is NEVER snapshotted — plaintext in
+        # IndexedDB beside a file whose whole point is that it is encrypted.
+        run: node scripts/test-type-autosave.ts
+
+      - name: Type preview rig
+        # Thumbnailers run no JavaScript, so a saved file carries a still of
+        # page one plus a parser-blocking remover. Pins the ordering (nothing
+        # paintable between host and remover), that a second save REPLACES
+        # rather than appends, and that an encrypted document gets none.
+        run: node scripts/test-type-preview.ts
+
+      - name: Type i18n rig
+        # Eight languages in one file: every catalogue holds the same keys,
+        # every {placeholder} survives translation, no key outlives the string
+        # it came from, and the packed table matches the catalogues it was
+        # built from.
+        run: node scripts/test-type-i18n.ts
 
       - name: Type styles rig
         # Named paragraph styles, and the additivity rule: a document with no

@@ -312,7 +312,7 @@ function runSwift(bin, files) {
         // `library.js`'s describe() ALWAYS returns a title, falling back to the
         // file's base name, because its caller has already sniffed and it never
         // faces a non-document. The Swift port answers all the questions in one
-        // call (the shared contract in tray/fixtures) so it returns nil, and the
+        // call (the shared contract in home/fixtures) so it returns nil, and the
         // listing supplies the file name. Same behaviour, different seam — the
         // fallback is applied here so the two are compared like for like.
         title: row.title ?? basename(row.path)
@@ -407,18 +407,55 @@ const real = files.length - generated - (EXTRA_CORPUS ? 0 : 0)
 /* ── the shared corpus ────────────────────────────────────────────────────── */
 
 /**
- * `tray/fixtures/` is the corpus all three hosts answer, with `expected.json`
- * as the answer key and `tray/doc-index.mjs` as the reference. It is a DIFFERENT
+ * `home/fixtures/` is the corpus all three hosts answer, with `expected.json`
+ * as the answer key and `home/doc-index.mjs` as the reference. It is a DIFFERENT
  * guarantee from the diff above and worth having both: that one proves this port
  * tracks the extension as it moves, this one proves all three hosts agree on one
  * frozen set of answers — including Kotlin, which nothing on this machine can run.
  *
- * Skipped, not failed, when the directory is absent: it arrives with the Android
- * work, and a rig that fails until an unrelated branch lands is a rig people
- * learn to ignore.
+ * It used to SKIP when the directory was absent, because it arrived with the
+ * Android work and a rig that fails until an unrelated branch lands is a rig
+ * people learn to ignore. It has landed, so the skip now protects nothing and
+ * costs the whole check: the tray→home rename moved the corpus, this kept
+ * reading `tray/fixtures`, and for weeks the rig printed "absent, skipped" in
+ * green while eleven cases went untested. A path that is supposed to exist is
+ * a FAILURE when it does not.
  */
+/**
+ * Any `expected.json` sitting in a fixtures directory elsewhere in the tree, so a
+ * MOVED corpus is told apart from a genuinely absent one. Cheap: two shallow
+ * levels, no full walk. (Written without the glob it describes: a literal
+ * star-slash in this comment would close it early.)
+ *
+ * This DECIDES nothing. The policy above is absolute — absent is a failure
+ * either way — and this only enriches the message, because "MISSING" sends a
+ * reader looking for a deleted corpus while "MISSING, and one is sitting at X"
+ * sends them to fix a path. Its ancestor in PR #405 threw instead, which aborted
+ * the run before the Swift-diff summary printed and left a raw stack trace as
+ * the last thing on screen — the rig read as crashed rather than stale-pathed.
+ * Diagnosis belongs in the message, not in the control flow.
+ *
+ * From bento-team-home-ios (PR #405); `tray` dropped from the probe roots, the
+ * rename having landed.
+ */
+function strayCorpus() {
+  for (const top of ['home', 'scripts', '.']) {
+    const base = join(ROOT, top)
+    let entries
+    try { entries = readdirSync(base, { withFileTypes: true }) } catch { continue }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue
+      for (const probe of [join(base, e.name, 'expected.json'),
+                           join(base, e.name, 'fixtures', 'expected.json')]) {
+        try { readFileSync(probe); return probe.replace(ROOT + '/', '') } catch { /* keep looking */ }
+      }
+    }
+  }
+  return null
+}
+
 function sharedCorpus() {
-  const dir = join(ROOT, 'tray/fixtures')
+  const dir = join(ROOT, 'home/fixtures')
   let expected
   try { expected = JSON.parse(readFileSync(join(dir, 'expected.json'), 'utf8')) } catch { return null }
 
@@ -470,10 +507,20 @@ if (known.length) {
 }
 
 if (shared) {
-  console.log(`            shared corpus (tray/fixtures): ${shared.count} cases` +
+  console.log(`            shared corpus (home/fixtures): ${shared.count} cases` +
     (shared.bad.length ? ` — ${shared.bad.length} DISAGREE` : ' — all agree'))
 } else {
-  console.log('            shared corpus (tray/fixtures): absent, skipped — arrives with home/android')
+  console.error('            shared corpus (home/fixtures): MISSING — expected.json did not load.')
+  console.error('            This corpus has landed; absent means a moved or broken path, not "not yet".')
+  const stray = strayCorpus()
+  if (stray) {
+    console.error(`            It IS at ${stray} — this rig's path is stale. Update the path;`)
+    console.error('            do not restore the skip that hid this for weeks.')
+  }
+  // exitCode, not exit(): the Swift-diff summary above has already printed and
+  // the disagreement report below still needs to. A stale path must not withhold
+  // the other half of the rig from the reader.
+  process.exitCode = 1
 }
 
 if (failures.length || shared?.bad.length) {
@@ -482,7 +529,7 @@ if (failures.length || shared?.bad.length) {
     console.error(failures.join('\n\n'))
   }
   if (shared?.bad.length) {
-    console.error('\nDisagreements with the shared corpus (tray/fixtures/expected.json):\n')
+    console.error('\nDisagreements with the shared corpus (home/fixtures/expected.json):\n')
     console.error(shared.bad.join('\n'))
   }
   process.exit(1)

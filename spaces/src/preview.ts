@@ -5,7 +5,7 @@
 // WHAT THIS IS FOR. The shell's runtime ships DEFLATED and is inflated by a
 // loader at boot. With scripting off nothing inflates, nothing boots, and the
 // splash is never removed — so a saved space appeared as the bento boot screen
-// to macOS QuickLook, iOS Files, Bento Tray, and any preview pane that renders
+// to macOS QuickLook, iOS Files, bento/home, and any preview pane that renders
 // HTML without running it. A file whose whole promise is "this is the document"
 // showed a loading animation instead of the document.
 //

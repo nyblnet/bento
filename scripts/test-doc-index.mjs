@@ -3,7 +3,7 @@
 // Copyright (c) 2026 The Bento authors
 //
 // Conformance rig for the document indexer — the JS side of the contract in
-// tray/fixtures/. The Kotlin port runs the same corpus from
+// home/fixtures/. The Kotlin port runs the same corpus from
 // `./gradlew :app:testDebugUnitTest`, and a Swift port will do the same.
 //
 //   node scripts/test-doc-index.mjs
@@ -13,10 +13,10 @@ import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, TEXT_BUDGET, SNIFF_BYTES, HEAD_BYTES } from '../tray/doc-index.mjs'
+import { describe, TEXT_BUDGET, SNIFF_BYTES, HEAD_BYTES } from '../home/doc-index.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const dir = join(root, 'tray/fixtures')
+const dir = join(root, 'home/fixtures')
 const expected = JSON.parse(readFileSync(join(dir, 'expected.json'), 'utf8'))
 const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex').slice(0, 16)
 

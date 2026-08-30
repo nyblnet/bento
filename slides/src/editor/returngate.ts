@@ -44,9 +44,9 @@ export function offerLine(offer: Offer): string {
     case 'silent':
       return ''
     case 'extension':
-      return t('The bento/tray extension can reopen your files here.')
+      return t('The bento/home extension can reopen your files here.')
     case 'app':
-      return t('The bento/tray app can keep your files on this device.')
+      return t('The bento/home app can keep your files on this device.')
     case 'use-chromium':
       return t('This browser cannot reopen a file in place — Chrome or Edge can.')
     case 'keep-file':
