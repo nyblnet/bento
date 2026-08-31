@@ -194,7 +194,8 @@ saved locally. Full reasoning: `docs/DECISIONS.md`.
   **not** intercepted — `preventDefault()` is only called for an
   unmodified click, so the browser's native new-tab/new-window gestures on
   the real `<a target="_blank">` still work exactly as before. The
-  preview's own "Open in new tab ↗" link is the explicit escape hatch for
+  preview's own "Open in new tab" link (with the inline `openExternal`
+  Lucide icon) is the explicit escape hatch for
   when the panel isn't enough (e.g. presenting).
 
 ## Directory layout

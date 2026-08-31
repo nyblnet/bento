@@ -528,6 +528,8 @@ ${PAGE_STYLES}
     font-size: 13px; font-weight: 600; color: var(--text-dim); text-decoration: none; white-space: nowrap;
     background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px;
   }
+  .preview-header #previewOpenTab { display: inline-flex; align-items: center; gap: 5px; }
+  .preview-header #previewOpenTab svg { display: block; }
   .preview-header a:hover, .preview-header button:hover { color: var(--text); background: rgba(28,43,61,0.07); }
   .preview-panel iframe { flex: 1; border: 0; width: 100%; background: var(--bg); }
 
@@ -572,7 +574,7 @@ ${PAGE_STYLES}
     <div class="preview-panel" id="previewPanel" hidden>
       <div class="preview-header">
         <span class="preview-title" id="previewTitle"></span>
-        <a id="previewOpenTab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+        <a id="previewOpenTab" href="#" target="_blank" rel="noopener">Open in new tab ${ICONS.openExternal}</a>
         <button type="button" id="previewClose">✕ Close</button>
       </div>
       <iframe id="previewFrame" title="Deck preview"></iframe>
@@ -665,6 +667,7 @@ const ICONS = {
   folder: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
   plus: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
   key: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>',
+  openExternal: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/></svg>',
 }
 function esc(s) {
   return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;')
