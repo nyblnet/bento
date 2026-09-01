@@ -621,3 +621,43 @@ export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
   if (dir === 'asc') return [{ key, dir: 'desc' }]
   return undefined
 }
+
+/**
+ * THE SHAPES A VIEW CAN TAKE, and the order the one button cycles them in.
+ *
+ * Written down ONCE. It used to live twice — a `NEXT` map in render.ts for the
+ * button's label and a `next` map in editor.ts for what the click stores — and
+ * the two drifted the way two copies of one fact always do. When the
+ * prototype-lookup bug below was found, the fix was applied to the editor's
+ * copy and not the renderer's, and the editor's comment then asserted the whole
+ * thing was safe while the label it named was still being rendered from the
+ * unguarded copy.
+ *
+ * `board` is the ABSENT key, never a stored 'board': a view cycled all the way
+ * round is byte-identical to one nobody ever touched, which is the rule filter
+ * and source already follow. `nextLayout` returns the word; the caller that
+ * WRITES is the one that turns 'board' back into a deletion.
+ */
+export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery'] as const
+export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
+
+/**
+ * The layout a view is ACTUALLY in, whatever its block claims.
+ *
+ * `Object.hasOwn`, never a truthiness test or a bare `in`: a view block is
+ * plain JSON in a file someone sent you, and `LAYOUT['toString']` on an object
+ * literal is a native function — truthy, and stringifying to
+ * `function toString() { [native code] }`, which is what the layout button
+ * rendered as its own label. A key from a NEWER build lands on `board` rather
+ * than nowhere, so the control is never a button that does nothing.
+ */
+export function layoutOf(raw: unknown): ViewLayout {
+  const s = String(raw ?? 'board')
+  return (VIEW_LAYOUTS as readonly string[]).includes(s) ? (s as ViewLayout) : 'board'
+}
+
+/** The next shape in the cycle: board → list → table → gallery → board. */
+export function nextLayout(raw: unknown): ViewLayout {
+  const here = layoutOf(raw)
+  return VIEW_LAYOUTS[(VIEW_LAYOUTS.indexOf(here) + 1) % VIEW_LAYOUTS.length]
+}

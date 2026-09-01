@@ -17,7 +17,8 @@ import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys,
-  sortRows, unknownSortKeys, sortDirOf, type ViewSort, type FieldSpec,
+  sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
+  type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
@@ -1120,36 +1121,38 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // THREE shapes now, so the button says what you are looking at and the
     // click moves to the next one. A menu to choose between three is still a
     // menu too many; a cycle is one control and one word.
-    const LAYOUT_WORD: Record<string, string> = {
-      board: 'Board', list: 'List', table: 'Table', gallery: 'Gallery',
-    }
-    const here = LAYOUT_WORD[layout] ? layout : 'board'
+    // `layoutOf`, not a lookup in a local map: the cycle is ONE fact and it now
+    // lives in fields.ts, because it used to live here AND in editor.ts and the
+    // two drifted. A view block hand-authored with layout:"toString" — plain
+    // JSON, in a file someone sent you — made the truthiness test here pass on
+    // a native function, and the button's label rendered as
+    // `function toString() { [native code] }`. The editor's copy had been
+    // hardened and its comment said the label was safe; the label is rendered
+    // here, and this half had not been.
+    const here = layoutOf(layout)
     const asList = here !== 'board'
     // Three WHOLE sentences rather than one with the shape interpolated into
     // it. "Show as a {what}" reads fine in English and breaks in half the
     // catalogs, where the article and the adjective agree with the noun's
     // gender — der Tafel / die Liste, un tableau / une liste. Two of these
     // three keys already existed for the same reason.
-    const NEXT: Record<string, string> = {
-      board: 'list', list: 'table', table: 'gallery', gallery: 'board',
-    }
-    // THE EXTRACTOR SWEEPS LITERALS. `t(LAYOUT_WORD[here])` compiles, runs, and
-    // is never translated by anybody: no catalog ever learns the string exists,
+    // THE EXTRACTOR SWEEPS LITERALS. `t(WORD[here])` compiles, runs, and is
+    // never translated by anybody: no catalog ever learns the string exists,
     // and the packer still reports 100% because it builds coverage from the
     // keys it swept. Measured on main: "Board", "List" and "Show as a list"
     // were present in de.ts and ABSENT from packed.ts — translations already
     // written, dropped on the floor, while the button read English in all eight
-    // locales. The maps stay (they answer "what is next"); the words are chosen
-    // at the call site, where the sweep can see them.
-    const LAYOUT_LABEL: Record<string, string> = {
+    // locales. So the words are chosen HERE, as literals the sweep can see;
+    // fields.ts answers "which shape is this" and "what comes next".
+    const LAYOUT_LABEL: Record<ViewLayout, string> = {
       board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
     }
-    const NEXT_LABEL: Record<string, string> = {
+    const NEXT_LABEL: Record<ViewLayout, string> = {
       board: t('Show as a list'), list: t('Show as a table'),
       table: t('Show as a gallery'), gallery: t('Show as a board'),
     }
     const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
-    layoutB.dataset.next = NEXT[here]
+    layoutB.dataset.next = nextLayout(here)
 
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per

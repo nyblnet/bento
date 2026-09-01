@@ -2206,12 +2206,37 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
    columns, six cards carrying ~60px of nothing. Two lines is the difference
    between a grid and a pile. (`a.sp-gcard` is dead — the card is a div — so the
    selector loses it.) */
-.sp-gcard .sp-issue-title {
+/* SPECIFICITY, not source order. `.sp-gcard .sp-issue-title` is (0,2,0) and
+   loses to `.sp-page a.sp-issue-title` (0,2,1) further up, which sets
+   `display: block` — so `display: -webkit-box` never applied and the clamp sat
+   there inert. Measured before this line: computed display `block`,
+   -webkit-line-clamp `2`, and a long title rendering FOUR lines with
+   scrollHeight == clientHeight, i.e. nothing clipped. The comment above was
+   describing a fix that was not in effect.
+   Going through `.sp-gcard-body` makes it (0,3,0), which beats a
+   two-classes-plus-an-element selector outright rather than by winning a tie on
+   order — the card's title is inside that wrapper in both shapes it renders as. */
+.sp-gcard .sp-gcard-body .sp-issue-title {
   font-size: 13.5px; font-weight: 600;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .sp-gcard .sp-issue-meta { margin-top: 6px; }
+
+/* THE WHOLE CARD IS THE TARGET, not the two words of its title. In a gallery
+   the picture IS the thing you point at — a shelf of book covers where only the
+   caption responds is a shelf that feels broken, and the cover is the largest
+   and most obvious target on the card by a wide margin.
+
+   Done by stretching the title's OWN link over the card rather than by wrapping
+   the card in a second anchor: one link, one accessible name, and no anchor
+   nested inside another. `.sp-gcard` is already `position: relative`, and
+   nothing between it and the title is positioned, so `inset: 0` resolves to the
+   card. Only the editable card has an anchor to stretch — in reading view the
+   title is a span, there is no link, and correctly nothing to click. */
+.sp-gcard .sp-issue-title::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+}
 
 /* ————— CANVAS ————————————————————————————————————————————————————————————
    A bounded surface with cards placed on it (canvas.ts). The block is

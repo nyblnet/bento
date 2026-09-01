@@ -41,6 +41,7 @@ import {
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
   sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
+  VIEW_LAYOUTS, layoutOf, nextLayout,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
@@ -574,7 +575,19 @@ for (const [label, input, err] of [
 
   // Cycling all the way round must leave the block as it started. The cycle
   // ends at GALLERY now, so it is the last shape that clears the key.
-  ok(/gallery: undefined/.test(ed), 'cycling past the last layout clears the key rather than storing "board"')
+  //
+  // Asked of the CYCLE, not of the source. This assertion used to read
+  // /gallery: undefined/ against editor.ts, which is a test of how the line is
+  // spelled: moving the cycle into fields.ts kept every behaviour and turned it
+  // red, and hardening the same lookup against Object.prototype would have left
+  // it green. So the shape question goes to nextLayout, and the writer question
+  // goes to the writer's own body — not to the whole file, on the `coverFn`
+  // precedent below, because `undefined` appears hundreds of times in editor.ts.
+  ok(nextLayout('gallery') === 'board', 'the shape after the last one is the board again')
+  const toggleFn = ed.slice(ed.indexOf('private toggleViewLayout'),
+    ed.indexOf('private openViewGroup'))
+  ok(toggleFn.length > 0 && /'layout',\s*to === 'board' \? undefined :/.test(toggleFn),
+    '…and the click WRITES that as a deleted key rather than a stored "board"')
 }
 
 // ---- a page has a cover, and a view can be a gallery -----------------------
@@ -645,7 +658,7 @@ for (const [label, input, err] of [
   const ed2 = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const props2 = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
   ok(/layout === 'gallery'/.test(render), 'a view can be a gallery')
-  ok(/gallery: 'board'/.test(render) && /table: 'gallery'/.test(render),
+  ok(nextLayout('table') === 'gallery' && nextLayout('gallery') === 'board',
     '…reachable from the one layout control, which cycles through it')
   ok(/resolveSrc\(coverSrc\(r\.page\), doc\)/.test(render),
     '…and a card asks coverSrc for the picture, so a remote cover is refused there too')
@@ -664,40 +677,6 @@ for (const [label, input, err] of [
   ok(/pickCover\(page\.id\)/.test(props2), 'the properties panel offers it, beside the icon')
 }
 
-// ---- a view is about a set of pages, and can be looked at as a table -------
-// A view meant ONE thing: every page carrying a `status`. That made the tracker
-// work and everything else impossible — no "the pages with an Author", no "the
-// pages under Books", so a space could hold a backlog and never a reading list.
-//
-// ABSENT MEANS ISSUES. That is the compatibility rule, not a default: every
-// view block written before `source` existed carries none and must keep showing
-// the backlog forever, and a view set back to Issues must be byte-identical to
-// one that never moved — the same rule `filter` already follows.
-{
-  const fs = await import('node:fs')
-  const fields = fs.readFileSync(new URL('../spaces/src/fields.ts', import.meta.url), 'utf8')
-  const render = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
-  const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
-
-  ok(/export function viewRows\(/.test(fields), 'a view selects its rows through one function')
-  ok(/if \(!has && !under\) return issuesOf\(doc\)/.test(fields),
-    '…and with no source it is still the backlog, so old view blocks are unchanged')
-  ok(/viewRows\(doc, \(b as \{ source\?: unknown \}\)\.source\)/.test(render),
-    'the renderer asks for the block\'s own source rather than the issues')
-
-  // The table is the shape a base is usually looked at in. Its columns must
-  // come from the ROWS, not the vocabulary: a table of books carrying no
-  // Estimate should not grow an Estimate column because the schema has one.
-  ok(/layout === 'table'/.test(render), 'a view can be a table')
-  ok(/rows\.some\(\(r\) => r\.values\.has\(k\)\)/.test(render),
-    '…whose columns are the fields the rows actually carry')
-  ok(/overflow-x/.test(fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
-    .split('.sp-view-tablewrap')[1]?.slice(0, 120) ?? ''),
-    '…and scrolls inside itself, so a wide table never scrolls the page sideways')
-
-  // Cycling all the way round must leave the block as it started.
-  ok(/gallery: undefined/.test(ed), 'cycling past the LAST layout clears the key rather than storing "board"')
-}
 
 // ---- a t() the extractor cannot SEE ----------------------------------------
 // scripts/build-spaces-i18n.mjs sweeps t() call sites for LITERAL strings, plus
@@ -3570,6 +3549,48 @@ function fsTable(f: string): string {
       Math.hypot(n.x - before[i].x, n.y - before[i].y)))
     ok(moved < 0.5, 'graph: one more tick on a settled layout barely moves anything')
   }
+}
+
+
+// ---- A LAYOUT KEY OUT OF A FILE IS NOT A PROPERTY NAME ----------------------
+// A view block is plain JSON in a document someone mailed you, and `layout` is
+// a free string in it. The renderer picked the button's word out of an object
+// literal by that string, guarded by TRUTHINESS — and `WORD['toString']` is a
+// native function, which is truthy. So `layout:"toString"` rendered the layout
+// button's label as `function toString() { [native code] }` and wrote the same
+// text into data-next.
+//
+// The reason it survived a review: the cycle was written TWICE, once in
+// editor.ts for what a click STORES and once in render.ts for what the button
+// SAYS. The hardening went into the editor's copy, and the editor's comment
+// then asserted the label was safe — while the label was still coming from the
+// other, unguarded copy. One function now, called by both, and checked here by
+// CALLING it rather than by grepping the source for the guard.
+{
+  for (const evil of ['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__']) {
+    const shapes = VIEW_LAYOUTS as readonly string[]
+    ok(shapes.includes(layoutOf(evil)),
+      `layout:${JSON.stringify(evil)} resolves to a real shape (${layoutOf(evil)}), never a native function`)
+    ok(shapes.includes(nextLayout(evil)),
+      `…and what follows it is a shape too (${nextLayout(evil)}), so data-next is never a function body`)
+  }
+
+  // The honest shapes still work, or the guard above would be a way to break
+  // the feature and call it secure.
+  ok(VIEW_LAYOUTS.every((l) => layoutOf(l) === l), 'every real layout resolves to itself')
+  ok(layoutOf(undefined) === 'board' && layoutOf('') === 'board' && layoutOf('mosaic') === 'board',
+    'absent, empty, and a key from a NEWER build all land on the board')
+
+  // THE CYCLE CLOSES. As many steps as there are shapes returns where it
+  // started — which is what makes "cycled all the way round is byte-identical
+  // to untouched" true rather than aspirational.
+  for (const start of VIEW_LAYOUTS) {
+    let at: string = start
+    for (let i = 0; i < VIEW_LAYOUTS.length; i++) at = nextLayout(at)
+    ok(at === start, `${VIEW_LAYOUTS.length} steps from ${start} comes back to ${start}`)
+  }
+  ok(new Set(VIEW_LAYOUTS.map((l) => nextLayout(l))).size === VIEW_LAYOUTS.length,
+    'the cycle reaches every shape — none is stranded off it')
 }
 
 
