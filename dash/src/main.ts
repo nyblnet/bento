@@ -100,7 +100,7 @@ import {
 import { planTableSplit, planCanvasSplit, type SplitSpec } from './tocolumns.ts'
 import { importDelimited } from './import.ts'
 import { TYPE_LABEL } from './format.ts'
-import { defaultBinding, renderChart, chartHeading, type ChartBinding } from './chart.ts'
+import { defaultBinding, renderChart, chartHeading, missingColumns, type ChartBinding } from './chart.ts'
 import { readCell } from './store.ts'
 import { hiddenSet } from './rowcol.ts'
 import { FUNCTIONS, dependencies, recalc } from './formula.ts'
@@ -776,7 +776,18 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     if (sheet) void editFormula(store, sheet, col)
   }
 
-  // --- chart: bound to columns, derived at render, never stored
+  // --- chart: the NUMBERS are derived at render and never stored; the CHOICE
+  // of what to chart is document state (`doc.chart`, model.ts `OpenChart`).
+  //
+  // Both used to live in the two `let`s below and nowhere else, under a comment
+  // saying "never stored". Deriving the numbers is right — a chart must never
+  // be a stale copy of the sheet. But "these columns, on that sheet, as a pie"
+  // is a choice somebody made, and it was lost on reload, on closing the tab,
+  // and on saving the file and sending it: the reader opened a workbook with no
+  // chart and nothing to say one had ever been drawn.
+  //
+  // The `let`s stay as the live copy — every redraw path already reads them —
+  // and `rememberChart` mirrors each change into the document.
   const chartEl = app.querySelector<HTMLElement>('.dx-chart')!
   const chartBody = app.querySelector<HTMLElement>('.dx-chart-body')!
   const chartTitle = app.querySelector<HTMLElement>('.dx-chart-title')!
@@ -797,6 +808,30 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     return s && s.kind === 'table' ? s : null
   }
 
+  /**
+   * Mirror the live chart choice into `doc.chart`, so it survives the file.
+   *
+   * THROUGH `setDocProps`, which is the existing doc-level patch and gives an
+   * inverse for free — so ⌘Z takes back "I switched it to a pie", which is a
+   * change to the document like any other now that it is IN the document.
+   *
+   * GUARDED AGAINST A NO-OP COMMIT. `drawChart` runs on every `doc` event, so
+   * writing unconditionally from there would commit on its own commit forever.
+   * Comparing the serialized shape is enough: the binding is four plain fields
+   * and an id, and this is the one place the comparison is made.
+   */
+  const rememberChart = (): void => {
+    if (store.readOnly) return
+    const want = binding && chartSheetId && !chartEl.hidden
+      ? { sheet: chartSheetId, binding }
+      : null
+    const have = store.doc.chart ?? null
+    if (JSON.stringify(want) === JSON.stringify(have)) return
+    store.commit(want
+      ? { op: 'setDocProps', props: { chart: structuredClone(want) } }
+      : { op: 'setDocProps', props: {}, drop: ['chart'] })
+  }
+
   const drawChart = () => {
     if (!binding || chartEl.hidden) return
     teardown?.()
@@ -804,7 +839,16 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // The sheet it was about has been deleted. There is nothing left to be
     // truthful about, so the panel closes rather than keeping the last numbers
     // it happens to be holding on screen.
-    if (!sheet) { teardown = null; binding = null; chartSheetId = null; chartEl.hidden = true; return }
+    if (!sheet) {
+      teardown = null; binding = null; chartSheetId = null; chartEl.hidden = true
+      // `drawChart` runs INSIDE the `doc` emit, and `rememberChart` commits —
+      // re-entering the store from its own event. Deferred by a microtask so
+      // the drop is an ordinary commit after this one finishes, which is also
+      // what makes it a separate, undoable step rather than a rider on the
+      // delete.
+      queueMicrotask(rememberChart)
+      return
+    }
     // THE SHEET ON SCREEN, READ WITHOUT NARROWING. This was `grid.sheet`, and
     // `drawChart` runs on `doc`, on `view` and on every sheet change — so with a
     // chart open, switching to a SPREADSHEET tab threw out of the redraw, and
@@ -843,11 +887,35 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
           }
           binding = next
           chartSheetId = to.id
+          rememberChart()
           drawChart()
         },
       })
   }
-  store.on('doc', drawChart)
+  /**
+   * THE PANEL FOLLOWS THE DOCUMENT, not only the gestures in this file.
+   *
+   * `doc.chart` can change without anybody touching the chart controls: ⌘Z, a
+   * redo, "Replace from JSON…", a restored version, or a collaborator's op.
+   * Measured after the field first landed: closing the chart dropped it
+   * correctly and ONE undo put `doc.chart` back — with the panel still shut. The
+   * file said there was a chart and the screen said there was not, which is the
+   * same two-readouts-disagreeing failure as the footer that ignored the filter,
+   * one layer up.
+   *
+   * `viz` owns the panel when 3D is up, so this stands aside for it rather than
+   * fighting it for the same element.
+   */
+  const syncChartPanel = (): void => {
+    if (viz) return
+    const want = store.doc.chart
+    if (want && !binding) reopenStoredChart()
+    else if (!want && binding) {
+      teardown?.(); teardown = null
+      binding = null; chartSheetId = null; chartEl.hidden = true
+    } else drawChart()
+  }
+  store.on('doc', syncChartPanel)
   // FILTERING AND SORTING ARE VIEW STATE: `store.view()` emits `view` and never
   // `doc` (that is the point — they must not dirty the file). Listening only for
   // `doc` is why the chart ignored a filter completely: nothing redrew it.
@@ -860,10 +928,15 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     }
     if (!binding) return
     binding.kind = KINDS[(KINDS.indexOf(binding.kind) + 1) % KINDS.length]
+    rememberChart()
     drawChart()
   })
   app.querySelector('.dx-chart-close')!.addEventListener('click', () => {
     chartEl.hidden = true
+    // Closing the panel is closing the chart — the document should not keep a
+    // chart the reader has just dismissed and would not see on reopening.
+    binding = null; chartSheetId = null
+    rememberChart()
     clearPivot()
     teardown?.(); teardown = null
     vizDown?.(); vizDown = null; viz = null; vizSheetId = null
@@ -877,8 +950,38 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     chartSheetId = sheet.id
     if (!binding) { showFindings(findingsEl, [{ message: t('This sheet has no numeric column to chart yet.') }]); return }
     chartEl.hidden = false
+    rememberChart()
     drawChart()
   })
+  /**
+   * REOPEN THE CHART THE FILE WAS SAVED WITH.
+   *
+   * Everything it needs is validated here rather than trusted, because the
+   * field is additive and the workbook may have been round-tripped through a
+   * build that has never heard of it: the sheet can have been deleted, or
+   * turned into a spreadsheet, and the columns can have been removed or
+   * renamed. Any of those and the panel simply does not open — an empty axis
+   * against columns that no longer exist is the failure `chartHeading` and
+   * `drawChart` were already written to avoid, arriving one step earlier.
+   *
+   * It does NOT call `rememberChart`: reopening is not a change, and committing
+   * one would dirty a file the reader has only looked at.
+   */
+  const reopenStoredChart = (): void => {
+    const stored = store.doc.chart
+    if (!stored || typeof stored.sheet !== 'string' || !stored.binding) return
+    const sheet = store.doc.sheets.find((x) => x.id === stored.sheet)
+    if (!sheet || sheet.kind !== 'table') return
+    const b = stored.binding
+    if (!KINDS.includes(b.kind) || typeof b.x !== 'string' || !Array.isArray(b.series)) return
+    if (missingColumns(sheet, b).length) return
+    binding = { ...b, series: [...b.series] }
+    chartSheetId = sheet.id
+    chartEl.hidden = false
+    drawChart()
+  }
+  reopenStoredChart()
+
   app.querySelector('[data-act="formula"]')!.addEventListener('click', () => {
     // THE SHEET IS CAPTURED HERE, not read again when the dialog closes. The
     // form is modal but the document is not frozen behind it: a remote op or a

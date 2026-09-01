@@ -315,6 +315,7 @@ export function validateDoc(doc: DashDoc): ValidateResult {
   checkMeasures(doc, sheetIds, tables, add)
   checkViews(doc, tables, kinds, add)
   checkStory(doc, tables, kinds, add)
+  checkOpenChart(doc, tables, kinds, add)
 
   return result(findings)
 }
@@ -918,6 +919,46 @@ function checkViews(
       arr(bind.cols).forEach((c, i) => named(`cols[${i}]`, c))
     })
   })
+}
+
+// --- the open chart panel -----------------------------------------------------
+//
+// `doc.chart` (model.ts `OpenChart`) is additive, so a workbook can reach this
+// build having been through one that never heard of it: the sheet it names can
+// have been deleted or turned into a spreadsheet, and its columns can have been
+// removed. main.ts already declines to reopen the panel in each of those cases,
+// which is the safe behaviour and also a SILENT one — the chart the file was
+// saved with simply is not there. Saying so is this function's whole job.
+
+function checkOpenChart(
+  doc: DashDoc, tables: Map<string, TableSheet>, kinds: Map<string, string>,
+  add: (f: Finding) => void,
+): void {
+  const chart = (doc as unknown as Record<string, unknown>).chart
+  if (!isObj(chart)) return
+  const sid = typeof chart.sheet === 'string' ? chart.sheet : ''
+  const src = tables.get(sid)
+  if (!src) {
+    add({ code: 'chart-missing-sheet', severity: 'suspicious', path: 'chart',
+      message: kinds.has(sid)
+        ? `The saved chart is about sheet ${q(sid)}, which is a ${kinds.get(sid)} sheet and has no columns to chart — the panel does not open.`
+        : `The saved chart is about sheet ${q(sid)}, which is not in this workbook — the panel does not open, so a reader sees no chart and nothing saying one was saved.` })
+    return
+  }
+  const bind = isObj(chart.binding) ? chart.binding : null
+  if (!bind) {
+    add({ code: 'bad-chart', severity: 'suspicious', path: 'chart.binding',
+      message: 'The saved chart has no binding, so there is nothing to draw and the panel does not open.' })
+    return
+  }
+  const cols = new Set((arr(src.columns) as Column[]).filter(isObj).map((c) => c.id as string))
+  const named = (field: string, id: unknown): void => {
+    if (typeof id !== 'string' || cols.has(id)) return
+    add({ code: 'chart-missing-column', severity: 'suspicious', path: `chart.binding.${field}`, column: id, sheet: sid,
+      message: `The saved chart binds column ${q(id)}, which sheet ${q(sid)} does not have — the panel does not open at all rather than drawing an axis against a column that is gone.` })
+  }
+  named('x', bind.x)
+  arr(bind.series).forEach((c, i) => named(`series[${i}]`, c))
 }
 
 // --- the data story ----------------------------------------------------------

@@ -291,5 +291,86 @@ const cats = (o: Record<string, unknown>) => (o.xAxis as { data: string[] }).dat
   ok(defaultBinding(s) === null, 'a sheet with no numeric column has no default chart')
 }
 
+// ------------------------------------------------- the chart the FILE remembers
+//
+// `doc.chart` (model.ts `OpenChart`). The binding and the sheet it is pinned to
+// lived in two module-local `let`s in main.ts and nowhere else, so the choice
+// of what to chart was lost on reload, on closing the tab, and on saving the
+// file and sending it — the reader opened a workbook with no chart in it and
+// nothing to say one had ever been drawn.
+//
+// main.ts BOOTS ON EVALUATION and can never be imported, so what is provable
+// here is the mechanism: the field round-trips, the commit that writes it has a
+// working inverse, it is stored by VALUE, and a stale one is reported rather
+// than drawn. The wiring itself is exercised in a browser against the built
+// shell, which is the only place it can be.
+{
+  const { registerHooks } = await import('node:module')
+  registerHooks({
+    load(url: string, context: unknown, next: (u: string, c: unknown) => unknown) {
+      if (url.endsWith('.css')) return { format: 'module', source: 'export {}', shortCircuit: true }
+      return next(url, context)
+    },
+  } as never)
+  const { parseDoc } = await import('../dash/src/model.ts')
+  const { Store } = await import('../dash/src/store.ts')
+  const { validateDoc } = await import('../dash/src/validate.ts')
+
+  const bind: ChartBinding = { x: 'region', series: ['value'], kind: 'bar', aggregate: 'sum' }
+  const base = () => ({
+    format: 'bento/dash', version: 1, policy: 'bento-dash-1', docId: 'd', title: 't',
+    sheets: [sheet()],
+  })
+
+  // ADDITIVITY (PLATFORM §3): a build that has never heard of the field keeps
+  // it. `parseDoc` is that build for this purpose — it must not drop it.
+  const withChart = { ...base(), chart: { sheet: 'sh', binding: bind } }
+  const parsed = parseDoc(JSON.stringify(withChart)).doc
+  ok(JSON.stringify(parsed.chart) === JSON.stringify(withChart.chart),
+    'a saved chart survives parseDoc unchanged — the field is additive, not a field parseDoc knows')
+
+  // THE COMMIT, AND ITS INVERSE. Writing it through `setDocProps` is what makes
+  // switching the chart to a pie an undoable change to the document rather than
+  // a thing that happens to the screen.
+  const st = new Store(parseDoc(JSON.stringify(base())).doc)
+  ok(st.doc.chart === undefined, 'a workbook with no chart has no field — absent, not an empty object')
+  st.commit({ op: 'setDocProps', props: { chart: { sheet: 'sh', binding: { ...bind } } } })
+  ok(st.doc.chart?.sheet === 'sh' && st.doc.chart?.binding.kind === 'bar', 'opening a chart records it')
+  st.commit({ op: 'setDocProps', props: { chart: { sheet: 'sh', binding: { ...bind, kind: 'pie' } } } })
+  ok(st.doc.chart?.binding.kind === 'pie', 'switching kind records the new kind')
+  st.undo()
+  ok(st.doc.chart?.binding.kind === 'bar', 'and ONE undo puts the bar chart back')
+  st.undo()
+  ok(st.doc.chart === undefined,
+    'a second undo removes the field entirely rather than leaving an empty chart behind')
+
+  // BY VALUE, NOT BY REFERENCE — the quiet one. main.ts keeps a live `binding`
+  // object and cycles `binding.kind` in place. Store the reference and that
+  // mutation edits the DOCUMENT with no commit: no op, no undo entry, nothing
+  // for a collaborator to receive, and a file that is dirty without being
+  // marked dirty. `rememberChart` clones for exactly this reason.
+  const live: ChartBinding = { ...bind }
+  const st2 = new Store(parseDoc(JSON.stringify(base())).doc)
+  st2.commit({ op: 'setDocProps', props: { chart: structuredClone({ sheet: 'sh', binding: live }) } })
+  live.kind = 'line'
+  ok(st2.doc.chart?.binding.kind === 'bar',
+    'mutating the live binding does NOT reach into the document — a change with no op behind it is a file dirty in secret')
+
+  // A STALE ONE IS REPORTED. main.ts declines to reopen the panel when the
+  // sheet or a column is gone, which is right and also silent; validate is
+  // where the silence gets a sentence.
+  const gone = parseDoc(JSON.stringify({ ...base(), chart: { sheet: 'nope', binding: bind } })).doc
+  ok(validateDoc(gone).findings.some((f) => f.code === 'chart-missing-sheet'),
+    'a chart naming a sheet that is not in the workbook is reported')
+  const noCol = parseDoc(JSON.stringify({
+    ...base(), chart: { sheet: 'sh', binding: { ...bind, series: ['value', 'ghost'] } },
+  })).doc
+  ok(validateDoc(noCol).findings.some((f) => f.code === 'chart-missing-column'),
+    'and so is one binding a column the sheet no longer has')
+  const fine = parseDoc(JSON.stringify(withChart)).doc
+  ok(!validateDoc(fine).findings.some((f) => f.code.startsWith('chart-')),
+    'while a chart that still resolves is reported as nothing at all')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

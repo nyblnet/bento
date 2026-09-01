@@ -611,6 +611,14 @@ export interface DashDoc {
   measures?: Record<string, Measure>
   /** the data story — see the Story block at the foot of this file */
   story?: Story
+  /**
+   * The chart panel, if one is open. See `OpenChart`.
+   *
+   * ADDITIVE, like `story`: a build that has never heard of it keeps it on a
+   * round trip and opens with no chart, which is exactly what every build did
+   * before this field existed.
+   */
+  chart?: OpenChart
   /** Defined names — see the DEFINED NAMES block just above `DashDoc`. */
   names?: Record<string, DefinedName>
   views?: View[]
@@ -915,6 +923,35 @@ export const rowCount = (doc: DashDoc): number =>
 // chart.ts/viz3d.ts, which import model.ts back.
 import type { ChartBinding } from './chart.ts'
 import type { Viz3dBinding } from './viz3d.ts'
+
+/**
+ * THE CHART PANEL IS DOCUMENT STATE, and it was not.
+ *
+ * `binding` and the id of the sheet it is pinned to lived in two module-local
+ * `let`s in main.ts, under a comment reading "derived at render, never stored".
+ * Deriving it at render is right — the numbers must never be a stale copy of
+ * the sheet — but "which columns am I charting, on which sheet" is not derived
+ * from anything. It is a choice somebody made, and it was thrown away by a
+ * reload, by closing the tab, and by saving the file and sending it: the
+ * recipient opened a workbook with no chart in it and no way to know one had
+ * ever been drawn.
+ *
+ * ONE, NOT A LIST, because the panel is one. A second stored chart would have
+ * no way to be shown, and a field the UI cannot express is a field that goes
+ * wrong quietly. `views` is the place a workbook keeps many charts.
+ *
+ * `sheet` is an id and may DANGLE — the sheet it named can be deleted by a
+ * build that does not know this field exists, which is the whole point of an
+ * additive field. Nothing may throw on that: `main.ts` drops the panel and
+ * `validate.ts` reports it, exactly as they already do when the sheet is
+ * deleted in front of you.
+ */
+export interface OpenChart {
+  /** the id of the TABLE sheet the chart is an argument about */
+  sheet: string
+  /** the same binding shape chart.ts and StoryStep use — columns, not numbers */
+  binding: ChartBinding
+}
 
 // --- data story --------------------------------------------------------------
 //
