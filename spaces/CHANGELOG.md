@@ -14,6 +14,26 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **The whole gallery card is the target, and a long title stops inflating its
+  row.** In a shelf of covers the picture is what you point at, so the title's
+  link now stretches over the card rather than the card holding a second one —
+  one link, one accessible name. And the two-line clamp on card titles was
+  written but never in effect: `.sp-gcard .sp-issue-title` loses on specificity
+  to `.sp-page a.sp-issue-title`, so `display: -webkit-box` never applied and
+  `-webkit-line-clamp` sat inert. Measured in the built shell: computed display
+  `block` and a long title rendering four lines with nothing clipped. It clamps
+  to two now.
+
+- **A layout out of a file cannot reach `Object.prototype`.** `layout` is a free
+  string in a view block, and the renderer picked the button's word out of an
+  object literal by it, guarded by truthiness — but `WORD['toString']` is a
+  native function, and truthy. A page hand-authored with `layout:"toString"`
+  rendered its layout button as `function toString() { [native code] }`. The
+  cycle was written twice, once for what a click stores and once for what the
+  button says; the guard had been added to the first copy only, and its comment
+  asserted the label was safe while the label came from the second. One
+  `nextLayout` in `fields.ts` now, called by both.
+
 - **Every displayed word reaches the catalogs.** The view layout button read
   English in all eight languages: it was written `t(LAYOUT_WORD[here])`, and the
   extractor sweeps LITERALS, so no catalog ever learned the strings existed —

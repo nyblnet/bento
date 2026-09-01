@@ -27,7 +27,7 @@ import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
   reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, fieldTypeLabel, FIELD_TYPES,
-  cycleSort,
+  cycleSort, nextLayout,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
@@ -1854,22 +1854,18 @@ export class Editor {
 
   private toggleViewLayout(blockId: string): void {
     const b = this.store.block(blockId)
-    const now = String((b as { layout?: unknown } | undefined)?.layout ?? 'board')
-    // Board -> list -> table -> gallery -> board. `board` is the ABSENT key,
-    // never a stored 'board': a view cycled all the way round is byte-identical
-    // to one nobody ever touched, which is the same rule filter and source
-    // follow.
-    const next: Record<string, string | undefined> = {
-      board: 'list', list: 'table', table: 'gallery', gallery: undefined,
-    }
-    // A layout key from a NEWER build lands on the start of the cycle rather
-    // than nowhere, so the control is never a button that does nothing.
-    // Object.hasOwn, not a bare `in`: `'toString' in next` is TRUE and
-    // next['toString'] is a native function, so a hand-authored
-    // layout:"toString" rendered `function toString() { [native code] }` as the
-    // button's label and stored a FUNCTION into the model. The same class this
-    // file guards against in resolveSrc and pageMark.
-    this.editView(blockId, 'layout', Object.hasOwn(next, now) ? next[now] : 'list')
+    // Board -> list -> table -> gallery -> board, from fields.ts — the ONE
+    // place the cycle is written. It used to be written here and again in
+    // render.ts, and when the prototype-lookup bug was found only this copy was
+    // hardened, so the button went on rendering
+    // `function toString() { [native code] }` as its label from the other one.
+    //
+    // `board` is the ABSENT key, never a stored 'board': a view cycled all the
+    // way round is byte-identical to one nobody ever touched, which is the same
+    // rule filter and source follow. nextLayout returns the WORD; turning
+    // 'board' back into a deletion is the writer's job, and this is the writer.
+    const to = nextLayout((b as { layout?: unknown } | undefined)?.layout)
+    this.editView(blockId, 'layout', to === 'board' ? undefined : to)
   }
 
   /**
