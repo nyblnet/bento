@@ -581,6 +581,7 @@ export const fr: Catalog = {
   "Top {n}": "{n} premiers",
   "Total": "Total",
   "Totals": "Totaux",
+  "No rows to total — the filter leaves none showing.": "Aucune ligne à totaliser — le filtre n’en laisse aucune visible.",
   "Totals cover the {n} row(s) the filter leaves showing, not all {all}.": "Les totaux portent sur les {n} ligne(s) laissées par le filtre, pas sur les {all}.",
   "Transpose": "Transposer",
   "Try again": "Réessayer",

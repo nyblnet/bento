@@ -305,12 +305,31 @@ export const ariaColCount = (visCols: number): number => 1 + visCols
  */
 export const ARIA_UNKNOWN = -1
 
+/**
+ * `null` MEANS THERE IS NO ANSWER, and that is the whole point of the type.
+ *
+ * This returned a plain number, so a total over nothing returned 0 — and 0 is a
+ * value, drawn in the column's own format, indistinguishable from a real
+ * result. Filter the starter sheet to a stage that matches no deal and the
+ * footer said `sum £0` and `avg 0%` under an empty grid: a confident answer to
+ * a question with no answer, which is the same failure as the footer that
+ * ignored the filter (see `totalsRow`) wearing different clothes. Someone
+ * filters to a rep with no closed deals and reads off a £0 pipeline.
+ *
+ * COUNT IS THE EXCEPTION and keeps returning a number: "how many did I see" has
+ * the answer 0, truthfully, and an empty view honestly counts zero rows.
+ *
+ * NOT A CHANGE TO `SUM()`. Excel's SUM over an empty range is 0 and dash's
+ * formula function agrees — that lives in `formula.ts` and is untouched. This
+ * is the footer READOUT, where the reader cannot see the range and 0 is
+ * therefore unreadable as "nothing to add up".
+ */
 export function aggregate(
   spec: TotalSpec,
   read: (i: number) => unknown,
   n: number,
   rows: number[] | null,
-): number {
+): number | null {
   let acc = 0
   let seen = 0
   for (let j = 0; j < n; j++) {
@@ -321,8 +340,13 @@ export function aggregate(
     else if (spec === 'max') acc = seen === 1 ? v : Math.max(acc, v)
     else acc += v
   }
-  return spec === 'avg' ? (seen ? acc / seen : 0) : spec === 'count' ? seen : acc
+  if (spec === 'count') return seen
+  if (!seen) return null
+  return spec === 'avg' ? acc / seen : acc
 }
+
+/** What a total with nothing to total looks like. One spelling, two readouts. */
+export const NO_TOTAL = '—'
 
 // --- the spreadsheet kind (`kind: 'canvas'`) ---------------------------------
 //
@@ -1020,14 +1044,19 @@ export class Grid {
       // footer reading "[object Object] £97,050" is not a statement about
       // anything.
       const label = typeof spec === 'string' ? spec : 'fx'
-      const hint = typeof spec === 'string' ? t('Click to change or remove this total') : `= ${spec.f}`
+      const hint = out === null
+        // The dash is not an error and must not read as one. It says the
+        // population is empty, which is a fact about the VIEW — so the hint
+        // names the filter, the only thing that can have emptied it.
+        ? t('No rows to total — the filter leaves none showing.')
+        : typeof spec === 'string' ? t('Click to change or remove this total') : `= ${spec.f}`
       // A COUNT IS NOT MONEY. `formatValue` dresses the answer in the column's
       // own format, which is right for sum/avg/min/max — they are quantities of
       // the same thing — and wrong for a count, which is a number of ROWS:
       // eight deals in a £ column rendered as "count £8.00". Nobody hit this
       // while the only way to choose `count` was a dropdown in a side panel;
       // it is one click from the number now.
-      const shown = spec === 'count' ? fmtNum(out) : formatValue(out, c)
+      const shown = out === null ? NO_TOTAL : spec === 'count' ? fmtNum(out) : formatValue(out, c)
       return `<div class="dg-cell${fz.cls}${filtered ? ' dg-part' : ''}${this.store.readOnly ? '' : ' dg-tot'}"${aria} ` +
         `${this.store.readOnly ? '' : `data-tcol="${c.id}" title="${esc(hint)}" `}` +
         `style="${w};text-align:${alignFor(c.type)}">` +

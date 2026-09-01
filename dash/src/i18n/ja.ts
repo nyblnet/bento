@@ -581,6 +581,7 @@ export const ja: Catalog = {
   "Top {n}": "上位 {n} 件",
   "Total": "計",
   "Totals": "合計",
+  "No rows to total — the filter leaves none showing.": "合計する行がありません — フィルターで 1 行も表示されていません。",
   "Totals cover the {n} row(s) the filter leaves showing, not all {all}.": "合計はフィルターで表示されている {n} 行が対象です（全 {all} 行ではありません）。",
   "Transpose": "行列を入れ替え",
   "Try again": "もう一度試す",

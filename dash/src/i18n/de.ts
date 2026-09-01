@@ -581,6 +581,7 @@ export const de: Catalog = {
   "Top {n}": "Obere {n}",
   "Total": "Gesamt",
   "Totals": "Summen",
+  "No rows to total — the filter leaves none showing.": "Keine Zeilen zum Summieren – der Filter lässt keine sichtbar.",
   "Totals cover the {n} row(s) the filter leaves showing, not all {all}.": "Die Summen umfassen die {n} vom Filter angezeigte(n) Zeile(n), nicht alle {all}.",
   "Transpose": "Transponieren",
   "Try again": "Erneut versuchen",

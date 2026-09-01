@@ -67,14 +67,20 @@ const mk = (v: unknown[], type = 'text'): any => parseDoc(JSON.stringify({
   }],
 })).doc
 
-const sumOf = (st: any, n: number): number =>
+const sumOf = (st: any, n: number): number | null =>
   aggregate('sum', (i: number) => readCell((st.doc.sheets[0] as any).data.amt, i), n, null)
 
 console.log('1 · the reported bug: the total after a type change')
 {
   const rows = ['1200.50', '3000', '6108.35', '0']
   const st = new Store(mk(rows))
-  ok(sumOf(st, 4) === 0, 'a TEXT column of numeric strings totals 0 — correct, they are text')
+  // `null`, NOT 0 — and this rig is the reason the difference matters. The
+  // point here has always been that four numeric-looking STRINGS have no total,
+  // because nothing in the column is a number. `0` said that badly: it is a
+  // quantity, drawn in the column's format, and a reader sees "SUM £0" under
+  // rows plainly containing £1200.50. `—` says the true thing, that there is
+  // nothing here to add up.
+  ok(sumOf(st, 4) === null, 'a TEXT column of numeric strings has NO total — they are text, and none of them is a number')
   st.commit({ op: 'setColumn', sheet: 's1', col: 'amt', patch: { type: 'number' } })
   ok(sumOf(st, 4) === 10308.85,
     'and after setting the type to number the footer total is RIGHT (10308.85, was 0)')
@@ -102,7 +108,7 @@ console.log('\n2 · undo restores the bytes, not only the declaration')
   ok(sh.data.amt.v.join('|') === '1200.50|3000',
     'AND the original strings BYTE FOR BYTE — text→number→text loses "1200.50" to "1200.5", ' +
     'which a typeof check cannot see')
-  ok(sumOf(st, 2) === 0, 'so the total reads 0 again, which is what a text column should total')
+  ok(sumOf(st, 2) === null, 'so the total is blank again, which is what a text column should total — nothing')
   ok(validateDoc(st.doc).findings.every((f: any) => f.code !== 'type-storage-mismatch'),
     'and undo does not leave the document disagreeing with itself either')
 }

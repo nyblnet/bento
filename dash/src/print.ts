@@ -107,7 +107,7 @@ import { colToLetters } from './a1.ts'
 import { recalc, isErr, type Vec } from './formula.ts'
 import { evaluateRules, type CellStyle } from './condfmt.ts'
 import {
-  aggregate, canvasAlign, canvasKey, canvasShown, canvasUsed, viewStatusText,
+  aggregate, NO_TOTAL, canvasAlign, canvasKey, canvasShown, canvasUsed, viewStatusText,
   type TotalSpec,
 } from './grid.ts'
 import { cellKey, recalcWorkbook, workbookSources } from './cellformula.ts'
@@ -661,7 +661,11 @@ function tableMarkup(
         const comp = view.computed?.get(c.id)
         const value = aggregate(spec, (idx) => (comp ? comp[idx] : readCell(sheet.data[c.id], idx)), n, order)
         const label = typeof spec === 'string' ? (AGG_LABEL[spec] ?? spec.toUpperCase()) : 'ƒ'
-        const shown = spec === 'count' ? nf(value) : formatValue(value, c)
+        // `null` = nothing in view to total. Paper has no tooltip to explain the
+        // dash, but printing a fabricated 0 that the screen no longer shows
+        // would break this row's one promise: the paper cannot say a number the
+        // screen does not.
+        const shown = value === null ? NO_TOTAL : spec === 'count' ? nf(value) : formatValue(value, c)
         return `<td style="text-align:${alignFor(c.type)}">` +
           `<span class="dxpr-agg">${esc(label)}</span> ${esc(shown)}</td>`
       })

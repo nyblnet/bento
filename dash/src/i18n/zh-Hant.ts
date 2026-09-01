@@ -581,6 +581,7 @@ export const zhHant: Catalog = {
   "Top {n}": "最高 {n} 項",
   "Total": "合計",
   "Totals": "合計",
+  "No rows to total — the filter leaves none showing.": "沒有可合計的列——篩選後沒有任何列顯示。",
   "Totals cover the {n} row(s) the filter leaves showing, not all {all}.": "合計僅包含篩選後顯示的 {n} 列，而非全部 {all} 列。",
   "Transpose": "轉置",
   "Try again": "重試",

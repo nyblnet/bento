@@ -290,6 +290,35 @@
 /* 0.35 — one figure for a dead control across the app; see .dx-btn[disabled] */
 .dx-tab-menu button:disabled { color: var(--muted); opacity: 0.35; cursor: default; }
 .dx-tab-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+
+/* ————— a row that TEACHES, rather than naming a command —————
+   The two kinds of sheet are this product's central distinction, and this menu
+   is the only place it is ever explained. The rows were built as a title plus a
+   subtitle span (tabs.ts, the ＋ handler) and then given NO rules of their own,
+   so they inherited the one-line ellipsis above — which is right for "Rename"
+   and cut "Typed columns — for volume, joins and charts" mid-phrase inside a
+   220px menu. A truncated explanation of the central concept explains nothing
+   and reads as a bug.
+
+   So: the row wraps, and the menu holding these rows is wide enough to wrap
+   into. `nowrap` and the ellipsis are undone explicitly rather than by
+   specificity accident — a later menu row will inherit whichever it asks for. */
+.dx-tab-menu-kinds { max-width: 296px; min-width: 248px; }
+.dx-tab-menu button.dx-tab-menu-row {
+  display: grid;
+  gap: 1px;
+  padding: 7px 9px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.dx-tab-menu-title { font-weight: 600; }
+.dx-tab-menu-why {
+  font-size: var(--fs-small);
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .dx-tab-note {
   margin: 2px 4px 6px;
   font-size: var(--fs-small);

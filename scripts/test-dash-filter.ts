@@ -405,10 +405,28 @@ ok(eq(order([{ col: 'amount', pred: { op: 'topN', n: 0 } }], []), []),
     'avg divides by the numbers it actually saw (6), not by the row count (8) — an average over blanks is not an average')
   ok(aggregate('count', read, all, null) === 6, 'and count agrees with it')
 
-  // an empty filter result must not invent a number
-  ok(aggregate('sum', read, 0, []) === 0 && aggregate('avg', read, 0, []) === 0,
-    'a filter matching nothing totals 0 rather than NaN')
-  ok(aggregate('min', read, 0, []) === 0, 'and min over nothing is 0, not Infinity')
+  // AN EMPTY POPULATION HAS NO ANSWER, and these three lines used to assert the
+  // bug. The old text read "a filter matching nothing totals 0 rather than
+  // NaN": it was written to rule out NaN and Infinity, which it did, and then
+  // settled on 0 — a VALUE, drawn in the column's format, indistinguishable
+  // from a real result. Filter to a stage no deal is in and the footer said
+  // `sum £0` and `avg 0%` under an empty grid. That is failure 6 in this file's
+  // own header wearing different clothes: a real number answering a question
+  // nobody could have asked. Guarding NaN was right and stopping there was not.
+  ok(aggregate('sum', read, 0, []) === null && aggregate('avg', read, 0, []) === null,
+    'a filter matching nothing has NO total — null, not a confident 0')
+  ok(aggregate('min', read, 0, []) === null && aggregate('max', read, 0, []) === null,
+    'and min/max over nothing are null, not 0 and not Infinity')
+  ok(aggregate('count', read, 0, []) === 0,
+    'COUNT is the exception: "how many did I see" is answerable, and the answer is 0')
+
+  // The same hole without a filter: a numeric column that is entirely blank.
+  // `n` rows exist, none is a number, so `seen` is 0 by a different route.
+  const blanks = [null, null, 'n/a']
+  ok(aggregate('sum', (i) => blanks[i], 3, null) === null,
+    'a column of blanks has no sum either — the emptiness is the population, not the row count')
+  ok(aggregate('count', (i) => blanks[i], 3, null) === 0,
+    'and count says plainly that it saw none of them')
 }
 
 

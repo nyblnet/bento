@@ -513,19 +513,25 @@ const grid = (v: Vec, cols: number): Vec => {
   ok(aggregate('sum', read, sorted.length, sorted) === whole,
     'and a sorted view totals the same, because sorting hides nothing')
 
-  // THE ONE PLACE THEY DO NOT AGREE, measured rather than papered over. A view
-  // that hides EVERY row leaves the footer's `avg` at 0 (grid.ts `aggregate`
-  // divides by `seen` and returns 0 when it saw nothing) while SUBTOTAL(101)
-  // says `#DIV/0!`, which is this file's long-standing rule: an average of
-  // nothing is not zero. The formula is the one that is right, the footer is
-  // not this agent's file, and a rig that quietly asserted whichever it found
-  // would hide the difference — so it is asserted as a DIFFERENCE.
+  // THEY AGREE NOW, AND THIS BLOCK IS THE RECORD OF THEM NOT HAVING. It used to
+  // read "the one place they do not agree": a view that hid EVERY row left the
+  // footer's `avg` at 0 while SUBTOTAL(101) said `#DIV/0!`, and the comment
+  // said the formula was the one that was right and the footer was not this
+  // agent's file to change. It is now — `aggregate` returns `null` for a
+  // population it never saw a number in, and the footer draws `—`.
+  //
+  // Kept as two assertions rather than folded into one, because the two
+  // surfaces reach the same answer by different routes and a rig that checked
+  // only one would not notice them parting again. They are ALLOWED to spell it
+  // differently: a formula lives in a cell and can carry an error value, a
+  // footer has one line and no error state, so `#DIV/0!` and `—` are the same
+  // claim in the vocabulary each surface has.
   const none = buildOrder(6, get, [{ col: 'region', pred: { op: 'isOneOf', set: new Set(['Nowhere']) } }], [])
   ok(none.length === 0, 'a filter can hide every row')
-  ok(aggregate('avg', read, none.length, none) === 0,
-    'the footer prints 0 for the average of no rows')
+  ok(aggregate('avg', read, none.length, none) === null,
+    'the footer has no average for no rows — null, drawn as an em dash, not a confident 0')
   ok(code(ev('SUBTOTAL(101, v)', { v: markHidden([...amount], amount.map(() => true)) })) === '#DIV/0!',
-    'while SUBTOTAL(101) says #DIV/0! — an average of nothing is not zero (reported, not reconciled)')
+    'and SUBTOTAL(101) says #DIV/0! — the same claim in the vocabulary a cell has')
 
   ok(code(ev('SUBTOTAL(50, v)', { v: [1, 2] as Vec })) === '#VALUE!',
     'a function number SUBTOTAL does not have is refused rather than defaulted to SUM')

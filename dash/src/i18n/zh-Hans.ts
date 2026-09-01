@@ -581,6 +581,7 @@ export const zhHans: Catalog = {
   "Top {n}": "最高 {n} 项",
   "Total": "合计",
   "Totals": "合计",
+  "No rows to total — the filter leaves none showing.": "没有可合计的行——筛选后没有任何行显示。",
   "Totals cover the {n} row(s) the filter leaves showing, not all {all}.": "合计仅包含筛选后显示的 {n} 行，而非全部 {all} 行。",
   "Transpose": "转置",
   "Try again": "重试",

@@ -1048,6 +1048,9 @@ export function mountTabs(host: TabsHost): Tabs {
   addBtn.addEventListener('click', () => {
     if (ro()) return
     const menu = popover(addBtn)
+    // Widens the menu and lets its rows wrap — the explanation is the point of
+    // this menu, and at the shared 220px it was ellipsed mid-phrase.
+    menu.classList.add('dx-tab-menu-kinds')
     const row = (label: string, why: string, kind: 'table' | 'canvas'): void => {
       const b = document.createElement('button')
       b.className = 'dx-tab-menu-row'
