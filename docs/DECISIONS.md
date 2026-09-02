@@ -6248,6 +6248,13 @@ already declares one.
 
 ## 2026-08-29 — a green local rig run can mean half the rig never ran
 
+*Neighbour to "five rigs reported passes for work they were not doing" above,
+and a DIFFERENT failure. Those rigs were broken everywhere, CI included —
+unregistered, or reading a path their corpus had moved off. This one is wired up
+and runs correctly in CI; it is only on a developer's machine that it quietly
+runs half of itself. If you are here because a rig lied, that entry is the one
+about rigs that never ran at all.*
+
 **`scripts/test-sanitize.ts` has two halves.** The node half imports the pure
 functions — `sanitizeSvgCss`, `svgAttrAllowed`, `SVG_TAGS` — and runs anywhere.
 The browser half drives real Chrome, because the parts it tests need a DOM.
