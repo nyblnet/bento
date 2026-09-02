@@ -21,7 +21,7 @@
 // So every operation is checked round-trip: apply, undo, and assert the
 // document is byte-identical to where it started.
 
-import { parseDoc, type DashDoc } from '../dash/src/model.ts'
+import { parseDoc, type DashDoc, type TableSheet } from '../dash/src/model.ts'
 import { Store, applyPatch, readCell, type Patch, _internals } from '../dash/src/store.ts'
 
 let failures = 0
@@ -406,14 +406,170 @@ roundTrip('a multi-patch commit', [
 // ----------------------------------------------------------------- refusals
 {
   const s = new Store(fresh())
+  // `applySteps` used to be the example of a reserved op refusing loudly. It is
+  // implemented now (steps.ts), so the example moved to one that is still
+  // reserved — the point being tested is the DEFAULT ARM, not the op: a patch
+  // this build does not know must throw, because a silent no-op is an edit the
+  // user believes landed.
   let threw = ''
-  try { s.commit({ op: 'applySteps', sheet: 'sh1', steps: [] }) } catch (e) { threw = String(e) }
+  try {
+    s.commit({ op: 'refreshBinding', sheet: 'sh1', cols: {} } as never)
+  } catch (e) { threw = String(e) }
   ok(threw.includes('not implemented'),
     'a reserved op REFUSES loudly rather than silently doing nothing')
+  const before0 = content(s.doc)
+  try { s.commit({ op: 'notAnOpAnyBuildHas' } as never) } catch { /* expected */ }
+  ok(content(s.doc) === before0,
+    'and a refused patch leaves the document exactly as it was — a half-applied refusal is worse than either outcome')
   s.readOnly = true
   const before = content(s.doc)
   s.commit({ op: 'setTitle', title: 'nope' })
   ok(content(s.doc) === before, 'a read-only store accepts no commits')
+}
+
+// --- THE UNDO BARRIER: ⌘Z after a sort ---------------------------------------
+//
+// WHY THIS EXISTS. Sorting and filtering are VIEW state — they write
+// `store.order` and nothing else, take no checkpoint, mint no op and never
+// dirty the file (see `view()`). That is right and is not what was wrong.
+// What was wrong was measured: sort a column, press ⌘Z, and the sort stayed
+// while the NUMBER FORMAT set two actions earlier came off. The reader keeps
+// the thing they asked to reverse and loses a thing they were not thinking
+// about, and nothing on screen says either happened.
+//
+// So undo now REFUSES once, and says why. This block pins the exact measured
+// sequence — document edit, view change, undo — and asserts what the document
+// holds afterwards, because "undo did nothing" and "undo undid the wrong
+// thing" look identical from anywhere except the document.
+{
+  const s = new Store(fresh())
+  const said: string[] = []
+  s.say = (m) => { said.push(m) }
+
+  // 1. A DOCUMENT EDIT the reader is not thinking about any more.
+  s.commit({ op: 'setColumn', sheet: 'sh1', col: 'amount', patch: { format: '£#,##0' } })
+  const fmtSet = (): unknown =>
+    (s.doc.sheets[0] as TableSheet).columns.find((c) => c.id === 'amount')?.format
+  ok(fmtSet() === '£#,##0', 'a number format is applied — the edit the measured bug reversed')
+
+  // 2. A VIEW CHANGE. This is what a sort IS, all the way down: one write to
+  //    the order vector, through the one verb that takes no checkpoint.
+  const beforeModified = s.doc.modified
+  s.view(() => { s.order.sh1 = [3, 2, 1, 0] })
+  ok(s.doc.modified === beforeModified,
+    'THE INVARIANT HOLDS: a sort does not stamp `modified`, so it cannot dirty the file')
+  ok(s.canUndo, '…and it adds no undo entry of its own — the stack still holds only the edit')
+
+  // 3. ⌘Z. The press is spent on being told, and the document does not move.
+  ok(s.undo() === false, 'undo after a sort REFUSES rather than reaching past it')
+  ok(fmtSet() === '£#,##0',
+    'THE BUG ITSELF: the number format is still there — undo did not silently reverse it')
+  ok(String(s.order.sh1) === '3,2,1,0',
+    'and the sort is still there too — a refusal reverses nothing, in either direction')
+  ok(said.length === 1 && said[0].includes('Sorting'),
+    'and the reader is TOLD, rather than left with a keypress that appeared to do nothing')
+
+  // 4. A second press does what the first one described.
+  ok(s.undo() === true, 'the second press undoes the last document change, as the message said')
+  ok(fmtSet() === undefined, '…and it is the number format that comes off')
+  ok(said.length === 1, 'the barrier is spent, not sticky — one press, one explanation')
+}
+
+// A DERIVED view change must NOT arm the barrier. `grid.applyView()` runs from
+// inside the `doc` listener, because a structural edit renumbers the rows the
+// order vector holds — so every insert and delete rewrites the vector. If that
+// counted as "the reader just sorted", undo would refuse after every row
+// insert, which is a far more common keystroke than a sort.
+{
+  const s = new Store(fresh())
+  const said: string[] = []
+  s.say = (m) => { said.push(m) }
+  s.order.sh1 = [0, 1, 2, 3]
+  // Exactly grid.ts's shape: re-derive the vector on any structural change.
+  s.on('doc', () => {
+    if (s.lastTouched.structural || s.lastTouched.all) {
+      s.view(() => { s.order.sh1 = [0, 1, 2] })
+    }
+  })
+  s.commit({ op: 'deleteRows', sheet: 'sh1', rids: [4] })
+  ok(String(s.order.sh1) === '0,1,2', 'the listener really did rewrite the vector (control)')
+  ok(s.undo() === true, 'undo works immediately after an edit that re-derived the view')
+  ok(said.length === 0, '…and says nothing, because the reader did not change the view')
+  ok((s.doc.sheets[0] as TableSheet).rids.reduce((n, [, c]) => n + c, 0) === 4,
+    'and the deleted row is back — the undo landed, it was not merely allowed')
+}
+
+// A view change that does not move the ROWS is not a view change worth
+// blocking on. dashboard.ts routes its tile SELECTION through `store.view()`
+// (viewer state, no checkpoint, no op), and a click on a chart legend must not
+// cost the reader their next undo.
+{
+  const s = new Store(fresh())
+  const said: string[] = []
+  s.say = (m) => { said.push(m) }
+  s.commit({ op: 'setTitle', title: 'Q3' })
+  let selection = ''
+  s.view(() => { selection = 'North' })
+  ok(selection === 'North', 'the selection really changed (control)')
+  ok(s.undo() === true, 'a view change that leaves the order vector alone does not block undo')
+  ok(said.length === 0, '…and says nothing')
+  ok(s.doc.title === 'test', 'and the title edit is the thing that came back')
+}
+
+// REDO is guarded on the same footing: after a sort, ⇧⌘Z reaching past it for a
+// document edit is the same surprise pointing the other way.
+{
+  const s = new Store(fresh())
+  const said: string[] = []
+  s.say = (m) => { said.push(m) }
+  s.commit({ op: 'setTitle', title: 'Q3' })
+  s.undo()
+  s.view(() => { s.order.sh1 = [1, 0, 2, 3] })
+  ok(s.redo() === false, 'redo after a sort refuses once, exactly as undo does')
+  ok(s.doc.title === 'test', '…and the document has not moved')
+  ok(said.length === 1, '…and says so')
+  ok(s.redo() === true && s.doc.title === 'Q3', 'the second press redoes it')
+}
+
+// WITH NOTHING TO UNDO the barrier says nothing at all. "Press undo again to
+// undo the last change to the data" would be a lie on an empty stack, and this
+// file's whole subject is undo not claiming things that are not so.
+{
+  const s = new Store(fresh())
+  const said: string[] = []
+  s.say = (m) => { said.push(m) }
+  s.view(() => { s.order.sh1 = [3, 2, 1, 0] })
+  ok(s.undo() === false, 'undo with an empty stack still does nothing')
+  ok(said.length === 0, '…and does not offer a second press that would also do nothing')
+}
+
+// CLEARING a sort arms it too — the reader changed which rows are on screen,
+// which is the whole test, and `undefined` is a value of the vector like any
+// other.
+{
+  const s = new Store(fresh())
+  const said: string[] = []
+  s.say = (m) => { said.push(m) }
+  s.commit({ op: 'setTitle', title: 'Q3' })
+  s.view(() => { s.order.sh1 = [3, 2, 1, 0] })
+  s.undo()                                   // spends the barrier
+  s.undo()                                   // undoes the title
+  s.commit({ op: 'setTitle', title: 'Q4' })
+  s.view(() => { s.order.sh1 = undefined })  // Clear sort
+  ok(s.undo() === false, 'clearing a sort arms the barrier as setting one does')
+  ok(s.doc.title === 'Q4', '…and the document stands still while it is explained')
+}
+
+// A STORE THAT WAS NEVER LENT A VOICE still refuses. The default `say` swallows
+// (this module runs here, in node, and must not reach the DOM), and a build
+// that forgot to lend it one must be quieter than it should be rather than
+// wrong — silence is half the sentence; undoing the wrong thing is not.
+{
+  const s = new Store(fresh())
+  s.commit({ op: 'setTitle', title: 'Q3' })
+  s.view(() => { s.order.sh1 = [3, 2, 1, 0] })
+  ok(s.undo() === false, 'the refusal does not depend on anyone listening to it')
+  ok(s.doc.title === 'Q3', '…and the document is untouched')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

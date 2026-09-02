@@ -15,8 +15,18 @@
 // coerces with `num(v, 0)`, so a gap becomes a plunge to the axis: "we sold
 // nothing in March" instead of "we do not know about March". One is a fact and
 // the other is an absence, and a chart must not turn the second into the first.
+//
+// AND THE VIEW VECTOR. A filter changes which rows exist for this reading and a
+// sort does not, and the derivation has to tell them apart: same code path,
+// opposite obligations. Measured before the fix, on the starter workbook
+// filtered to Value > 10000 — grid 4 rows, footer £69,050, chart £97,050 with an
+// East bar for rows the filter had removed. Everything from `--- the view
+// vector` down exists so that cannot come back without a red line here.
 
-import { optionFor, defaultBinding, type ChartBinding } from '../dash/src/chart.ts'
+import {
+  optionFor, defaultBinding, missingColumns, chartPlan, chartHeading,
+  type ChartBinding,
+} from '../dash/src/chart.ts'
 import type { TableSheet } from '../dash/src/model.ts'
 
 let failures = 0
@@ -102,6 +112,160 @@ const S = (o: Record<string, unknown>) => o.series as Array<{ name: string; data
   const o = optionFor(sheet(), { x: 'region', series: ['value'], kind: 'pie', aggregate: 'sum' })
   const d = S(o)[0].data as Array<{ name: string; value: number }>
   ok(d.length === 2 && d[0].name === 'North' && d[0].value === 40, 'pie takes {name,value} slices')
+}
+
+// --- the view vector ---------------------------------------------------------
+//
+// The starter workbook, exactly: eight deals, three regions. This is the sheet
+// the failure was measured on, so the numbers below are the numbers on screen.
+const REGION = ['North', 'South', 'North', 'East', 'South', 'North', 'East', 'South']
+const VALUE = [12400, 8200, 15600, 4300, 9100, 22750, 6400, 18300]
+const pipeline = (): TableSheet => ({
+  id: 'sheet-pipeline', name: 'Pipeline', kind: 'table',
+  rids: [[1, 8]],
+  columns: [
+    { id: 'region', name: 'Region', type: 'text' },
+    { id: 'value', name: 'Value', type: 'money' },
+  ],
+  data: {
+    region: { enc: 'dict', dict: ['North', 'South', 'East'], idx: REGION.map((r) => ['North', 'South', 'East'].indexOf(r)) },
+    value: { enc: 'raw', v: [...VALUE] },
+  },
+  steps: [],
+})
+const BIND: ChartBinding = { x: 'region', series: ['value'], kind: 'bar', aggregate: 'sum' }
+const total = (o: Record<string, unknown>) =>
+  (S(o)[0].data as Array<number | null>).reduce<number>((a, b) => a + (b ?? 0), 0)
+const cats = (o: Record<string, unknown>) => (o.xAxis as { data: string[] }).data
+
+{
+  const o = optionFor(pipeline(), BIND)
+  ok(JSON.stringify(cats(o)) === JSON.stringify(['North', 'South', 'East']),
+    'unfiltered, the chart draws all three regions')
+  ok(total(o) === 97050, 'and totals £97,050 — the same number the footer shows')
+}
+{
+  // THE MEASURED FAILURE. Value > 10000 leaves rows 0, 2, 5, 7.
+  const o = optionFor(pipeline(), BIND, undefined, { rows: [0, 2, 5, 7] })
+  ok(total(o) === 69050,
+    'filtered to Value > 10000 the chart totals £69,050 — what the four visible rows are worth')
+  ok(total(o) !== 97050,
+    'and NOT £97,050, which is the total including the rows the filter just removed')
+  ok(!cats(o).includes('East'),
+    'East has no surviving row, so it is not a category — a bar for rows the reader cannot see is the bug')
+  ok(JSON.stringify(S(o)[0].data) === JSON.stringify([50750, 18300]),
+    'North keeps its three big deals; South keeps one')
+}
+{
+  // A SORT IS A PERMUTATION and must not change a single number. This is the
+  // half chart.ts already had right, and the half that is easy to break while
+  // fixing the other one.
+  const asc = [3, 6, 1, 5, 0, 2, 7, 4]                    // Value ascending
+  const o = optionFor(pipeline(), BIND, undefined, { rows: asc })
+  ok(total(o) === 97050, 'a SORT leaves the total at £97,050 — every row is still there')
+  const byCat = new Map(cats(o).map((c, i) => [c, S(o)[0].data[i]]))
+  ok(byCat.get('North') === 50750 && byCat.get('South') === 35600 && byCat.get('East') === 10700,
+    'and every category keeps its own total, whatever order the rows arrive in')
+  ok(cats(o)[0] === 'East',
+    'only the READING ORDER moves: categories still appear in first-seen order, which is now the sorted one')
+}
+{
+  // The projection must reach the x column and the series TOGETHER. Zipping a
+  // filtered series against an unfiltered x is the plausible-looking disaster.
+  const o = optionFor(pipeline(), BIND, undefined, { rows: [3] })
+  ok(cats(o)[0] === 'East' && S(o)[0].data[0] === 4300,
+    'one surviving row is labelled with ITS OWN category, not the first row\'s')
+}
+{
+  const o = optionFor(pipeline(), { ...BIND, aggregate: 'avg' }, undefined, { rows: [0, 2, 5, 7] })
+  const byCat = new Map(cats(o).map((c, i) => [c, S(o)[0].data[i]]))
+  ok(byCat.get('North') === 50750 / 3,
+    'avg divides by the rows the filter left, not by the rows the sheet holds')
+}
+{
+  const o = optionFor(pipeline(), { ...BIND, aggregate: 'none' }, undefined, { rows: [0, 2, 5, 7] })
+  ok(S(o)[0].data.length === 4, 'aggregate:none draws one point per VISIBLE row')
+}
+{
+  const o = optionFor(pipeline(), { ...BIND, kind: 'pie' }, undefined, { rows: [0, 2, 5, 7] })
+  const d = S(o)[0].data as Array<{ name: string; value: number }>
+  ok(d.length === 2 && d.every((s) => s.name !== 'East'),
+    'a pie is filtered too — a slice for hidden rows is a share of a total nobody can see')
+}
+{
+  // A computed column is handed in whole and canonical; the vector must project
+  // it exactly as it projects a stored one, or one series ends up filtered and
+  // the other does not.
+  const s = pipeline()
+  s.columns.push({ id: 'half', name: 'Half', type: 'money', formula: 'value / 2' })
+  const computed = new Map<string, unknown[]>([['half', VALUE.map((v) => v / 2)]])
+  const o = optionFor(s, { ...BIND, series: ['value', 'half'] }, computed, { rows: [0, 2, 5, 7] })
+  ok(total(o) === 69050, 'the stored column is filtered')
+  ok((S(o)[1].data as Array<number | null>).reduce<number>((a, b) => a + (b ?? 0), 0) === 69050 / 2,
+    'and the COMPUTED column is filtered by the same vector, on the same rows')
+}
+{
+  const o = optionFor(pipeline(), BIND, undefined, { rows: null })
+  ok(total(o) === 97050, 'a null vector means no filter, not no rows')
+}
+{
+  // THE OTHER PROJECTION, and this rig earned it: story.ts and dashboard.ts do
+  // the slicing themselves and hand in a SHORT map against a full-length sheet.
+  // A first cut of the vector work re-expanded every column to the sheet's row
+  // count and padded theirs with `undefined` — 8 red lines in test-dash-story.
+  const s = pipeline()
+  const sliced = new Map<string, unknown[]>([
+    ['region', ['North', 'South']],
+    ['value', [1, 2]],
+  ])
+  const o = optionFor(s, BIND, sliced)
+  ok(JSON.stringify(cats(o)) === JSON.stringify(['North', 'South']) && total(o) === 3,
+    'a caller that pre-sliced the columns is left alone: no vector, no re-expansion')
+}
+
+// --- a binding whose columns are gone ----------------------------------------
+//
+// Switch sheets and every bound column is missing; delete a column and one is.
+// Both used to paint an axis with no bars, which claims "nothing here" when the
+// truth is "I cannot find what I was drawing".
+{
+  const other: TableSheet = {
+    id: 'sheet-new', name: 'Sheet', kind: 'table', rids: [[1, 3]],
+    columns: [{ id: 'c1', name: 'Column A', type: 'text' }],
+    data: { c1: { enc: 'raw', v: [null, null, null] } }, steps: [],
+  }
+  ok(JSON.stringify(missingColumns(other, BIND)) === JSON.stringify(['region', 'value']),
+    'a chart pointed at another sheet knows exactly which columns it lost')
+  ok(!chartPlan(other, BIND).drawable,
+    'and refuses to draw — an empty axis is a claim about the data, not an absence of one')
+}
+{
+  // one of two series deleted: draw what survives, name what did not
+  const s = pipeline()
+  const bind: ChartBinding = { ...BIND, series: ['value', 'cost'] }
+  const plan = chartPlan(s, bind)
+  ok(plan.drawable && JSON.stringify(plan.bind.series) === JSON.stringify(['value']),
+    'one deleted series does not cost the reader the series that is still there')
+  ok(JSON.stringify(plan.missing) === JSON.stringify(['cost']), 'and the missing one is named')
+}
+{
+  const s = pipeline()
+  s.columns = s.columns.filter((c) => c.id !== 'region')
+  ok(!chartPlan(s, BIND).drawable,
+    'losing the CATEGORY column stops the chart: bars with no labels are unreadable, not partial')
+}
+
+// --- which sheet is this about -----------------------------------------------
+//
+// The chart is PINNED to the sheet it was built from (StoryStep carries `sheet`
+// beside `chart` for the same reason). Pinning is only honest if it is legible.
+{
+  const s = pipeline()
+  ok(chartHeading(s, BIND, 'sheet-pipeline') === 'Region · Value',
+    'looking at the chart\'s own sheet, the heading is just the columns')
+  ok(chartHeading(s, BIND, 'sheet-new') === 'Pipeline · Region · Value',
+    'looking at a DIFFERENT sheet, the heading names the sheet the chart is about')
+  ok(chartHeading(s, BIND) === 'Region · Value', 'and no shown sheet means no claim either way')
 }
 
 // -------------------------------------------------------- default binding

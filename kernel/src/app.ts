@@ -31,6 +31,40 @@ let config: AppConfig | null = null
 /** Called once at boot, before kernel modules are used. */
 export function configureApp(cfg: AppConfig): void {
   config = cfg
+  announceRuntime()
+}
+
+declare const __APP_VERSION__: string
+
+/**
+ * Tell a HOST which Bento runtime this document carries.
+ *
+ * A host that polyfills `showSaveFilePicker` (home/webext) must know whether
+ * this document is old enough to predate `pickerIdFor` (#213). Before that,
+ * every save — including "Save a copy…" — sent `bento-doc`, so acting on the id
+ * there overwrites the open document. The host therefore refuses to write in
+ * place unless the runtime says it is at least 1.0.15.
+ *
+ * It used to read that from `window.bento.updates.version`, which each app
+ * assembles by hand — and **bento/dash does not include `updates` at all**, so
+ * every ⌘S in Dash fell back to a destination prompt even with a folder
+ * granted. The bug is not that Dash forgot; it is that the signal lived in a
+ * per-app object at all. Every app calls `configureApp`, so the version is
+ * announced here, once, and the next app gets it without knowing this exists.
+ *
+ * Deliberately a plain string on `window`, not a getter or an object: a host
+ * reads it from the page's world through a content script, and the simplest
+ * possible value is the one least likely to be mangled crossing that boundary.
+ */
+function announceRuntime(): void {
+  try {
+    const v = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+    Object.defineProperty(window, '__bentoRuntime', {
+      value: v, writable: false, configurable: true, enumerable: false,
+    })
+  } catch {
+    /* already defined (a second configureApp in tests), or no window at all */
+  }
 }
 
 /** The active app config. Throws if the app forgot to configure itself —

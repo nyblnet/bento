@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GENERATED from home/assets/home-logo.svg by home/assets/make-icons.mjs.
+  Do not edit: run `node home/assets/make-icons.mjs` instead.
+
+  The bento/home mark, for use inside the app. Same source as the launcher
+  icon, so the two cannot drift apart.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <path
+        android:fillColor="#16273E"
+        android:pathData="M7,0 H25 A7,7 0 0 1 32,7 V25 A7,7 0 0 1 25,32 H7 A7,7 0 0 1 0,25 V7 A7,7 0 0 1 7,0 Z" />
+    <path
+        android:fillColor="#F0EBE0"
+        android:pathData="M8.6,3.6 H23.4 A5,5 0 0 1 28.4,8.6 V23.4 A5,5 0 0 1 23.4,28.4 H8.6 A5,5 0 0 1 3.6,23.4 V8.6 A5,5 0 0 1 8.6,3.6 Z" />
+    <path
+        android:fillColor="#5E7699"
+        android:pathData="M8.58,6.4 H10.33 A2.18,2.18 0 0 1 12.51,8.58 V23.42 A2.18,2.18 0 0 1 10.33,25.6 H8.58 A2.18,2.18 0 0 1 6.4,23.42 V8.58 A2.18,2.18 0 0 1 8.58,6.4 Z" />
+    <path
+        android:fillColor="#FF9E8A"
+        android:pathData="M16.44,6.4 H23.42 A2.18,2.18 0 0 1 25.6,8.58 V12.95 A2.18,2.18 0 0 1 23.42,15.13 H16.44 A2.18,2.18 0 0 1 14.26,12.95 V8.58 A2.18,2.18 0 0 1 16.44,6.4 Z" />
+    <path
+        android:fillColor="#16273E"
+        android:pathData="M16.44,16.87 H23.42 A2.18,2.18 0 0 1 25.6,19.05 V23.42 A2.18,2.18 0 0 1 23.42,25.6 H16.44 A2.18,2.18 0 0 1 14.26,23.42 V19.05 A2.18,2.18 0 0 1 16.44,16.87 Z" />
+</vector>

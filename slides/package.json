@@ -1,7 +1,7 @@
 {
   "name": "bento-slides",
   "private": true,
-  "version": "1.0.17",
+  "version": "1.0.18",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "temml": "^0.13.3"
   },
   "devDependencies": {
+    "@gfx/zopfli": "^1.0.15",
     "@types/node": "^24.13.2",
     "@types/reveal.js": "^5.2.1",
     "fake-indexeddb": "^6.2.5",

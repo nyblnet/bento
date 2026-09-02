@@ -51,10 +51,24 @@ jobs:
             slides/package-lock.json
             spaces/package-lock.json
             dash/package-lock.json
+            type/package-lock.json
 
       - name: Install
         working-directory: slides
         run: npm ci
+
+      - name: Which targets anim treats as elements
+        # The element/plain-object split ran on HTMLElement||SVGElement, which
+        # excludes MathML — formula symbols became plain-object tweens, with
+        # opacity assigned as a JS property and no style ever written.
+        run: node scripts/test-anim-elements.ts
+
+      - name: Transforms are not silently ignored
+        # A CSS transform does nothing to a non-replaced inline element: it is
+        # accepted, style.transform reads back verbatim, and the box never
+        # moves. An animation on one reports perfect health and paints nothing,
+        # which is exactly how it survived eight rounds of debugging once.
+        run: node scripts/test-anim-inline.ts
 
       - name: i18n packed table is current
         # The per-locale catalogs are the source of truth; slides/src/i18n/
@@ -117,6 +131,22 @@ jobs:
         # build rather than shipping a half-translated interface.
         run: node scripts/build-spaces-i18n.mjs --check
 
+      - name: Spaces invite rig
+        # "Invite someone…" was `saveAs('copy')`, which serializes store.doc —
+        # so everyone invited to a space received `collab.ownerPriv`, the room's
+        # ROOT key: they could write, and they could revoke the person who
+        # invited them. Nothing about the copy looked wrong. This runs the real
+        # share functions against real WebCrypto keys and asserts on the bytes:
+        # the owner private key appears NOWHERE in an invite, the invite is a
+        # separate keypair that the owner actually signed (verified the way the
+        # relay verifies it), and a view-only copy holds no signing key at all.
+        # (Bundled: the kernel transport uses parameter properties, which node's
+        # strip-only TypeScript loader refuses.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-invite.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-invite.mjs"
+          node "$RUNNER_TEMP/test-spaces-invite.mjs"
+
       - name: Spaces undo rig
         # Every checkpoint used to stringify the WHOLE document: measured on a
         # 200-page, 2.5 MB handbook, fifty edits left an undo depth of NINE,
@@ -144,14 +174,44 @@ jobs:
         # reported by the process it hangs.
         run: node scripts/test-spaces-agent.ts
 
-      - name: Spaces shell size ceiling
-        # A budget nobody measures is a wish. DECISIONS.md set a 100KB ceiling,
-        # the round finished at 108KB, and the same entry claimed the ceiling
-        # was "checked per feature from here" while shipping no mechanism — so
-        # the breach was found by a reviewer reading the number rather than by
-        # the build that caused it. Raising the ceiling is fine and expected;
-        # raising it SILENTLY is what this stops.
-        run: node scripts/test-spaces-size.mjs
+      - name: Spaces journal rig (several timezones)
+        # Every part of a daily note that can be wrong is wrong QUIETLY and on
+        # someone else's machine: "today" in UTC is the wrong day for hours at
+        # a time outside Greenwich, adding 86,400,000 ms is not adding a day on
+        # the two DST boundaries, and `new Date('2026-08-06')` is UTC midnight
+        # by spec. A date test that only ever runs in one timezone has not been
+        # run — so this runs in five, including a half-hour DST offset.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-journal.ts
+          done
+
+      - name: Magic notes evaluator (several timezones)
+        # Two failure modes, and the second is what would make the feature worse
+        # than not having it: a WRONG answer (silent, confident, in somebody's
+        # notes), and an answer where there should be none — "Meet Ana at 3" is
+        # a sentence. The parser must consume the whole line or return nothing.
+        # Dates run in several timezones for the reasons journal.ts records.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-calc.ts
+          done
+
+      - name: Spaces Markdown round-trip rig
+        # The About dialog promises, in eight languages, that "a space is never
+        # a dead end … every page exports as Markdown". This is that sentence,
+        # checked: the starter space is exported and read back, and no page may
+        # come back with materially less text than it went in with, nor may a
+        # single block vanish entirely. Block TYPES are deliberately not
+        # asserted — Markdown has no callout, toggle, media embed or board, so a
+        # callout leaving as a blockquote is the format being honest, not a bug.
+        # (Bundled: the app's imports are extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-roundtrip.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+          node "$RUNNER_TEMP/test-spaces-roundtrip.mjs"
 
       - name: Spaces model rig
         # Properties that fail SILENTLY, and that a shipped file cannot be
@@ -173,6 +233,19 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: spaces rig manifest
+        # Bookkeeping, not a ninth run of the eight steps above. scripts/
+        # test-spaces.mjs is the local entry point for the spaces suite (two of
+        # those rigs cannot be handed to node directly, and running one by hand
+        # produces a stack trace that reads like a broken product); this asserts
+        # its list is still complete in both directions — every test-spaces-*
+        # file on disk is listed there, and every rig it lists has a step in
+        # this workflow. Both omissions are invisible: an unlisted rig never
+        # runs locally, an unregistered one never runs here, and neither looks
+        # like anything but green. test-spaces.mjs itself was unregistered from
+        # the day it was written, which is how this check came to exist.
+        run: node scripts/test-spaces.mjs --manifest
+
       # dash: the data app — same pipeline, same gate.
       - name: Install (dash)
         working-directory: dash
@@ -189,11 +262,62 @@ jobs:
       - name: Splice conformance gate (dash)
         run: node scripts/shell-gate.mjs dash/dist-single/Bento_Dash.bento.html
 
+      - name: Release channel rehearsal (dash)
+        # Cuts a COMPLETE release — the real release.mjs, staged into a temp
+        # directory — with a throwaway key this step generates and discards, and
+        # then verifies the artifacts with kernel/src/update.ts itself, the code
+        # every shipped file runs, with only the embedded public key swapped.
+        # The point is the REFUSALS: a tampered manifest, a manifest signed for
+        # another app, a downgrade replay and a one-bit-flipped shell must each
+        # be rejected, and the conformance gate must refuse a shell whose doc
+        # block closes its own script. A signing pipeline cannot be tested by
+        # signing (the key never reaches CI), but this is everything except.
+        run: node scripts/test-release-channel.mjs --app dash
+      - name: Shell sizes
+        # TWO MECHANISMS, DELIBERATELY. This one and the advisory PR build-size
+        # comment (.github/workflows/pr-build-size*.yml) answer different
+        # questions, and deleting either as "duplicate measurement" loses a
+        # class of regression:
+        #
+        #   this step  — ABSOLUTE and PERSISTENT. A shell with enforce:true has
+        #     a ceiling and FAILS here; a shell with enforce:false prints its
+        #     drift from a committed `reference` and never fails. It is the only
+        #     thing that sees SLOW drift — forty merged commits at 300 B each,
+        #     where every single PR looked fine on its own.
+        #   the PR comment — RELATIVE and PER-PR. It reports this PR against its
+        #     own base and never fails. It is the only thing that attributes a
+        #     jump to the change that caused it, and it is blind to accumulated
+        #     drift.
+        #
+        # Neither subsumes the other. Rationale in docs/DECISIONS.md.
+        #
+        # Placed after ALL THREE builds on purpose: the rig skips a shell that
+        # is not built, so while this sat in the spaces section it silently
+        # measured nothing for dash. bento/spaces has NO CEILING as of
+        # 2026-08-24 (the maintainer's call; at 98.6% it had started deciding
+        # which fixes were affordable) — the step still prints its size and
+        # drift, it just no longer fails on it.
+        run: node scripts/test-spaces-size.mjs
+
       - name: Language pack verification rig
         # Packs come off the network, so the signature + hash-pin chain is the
         # only thing between a hostile channel and the strings in the UI.
         # Tampered pack, tampered index, unsigned index — each must be refused.
         run: node scripts/test-packs.ts
+
+      - name: Tokenizer contract
+        # The kernel's built-in highlighting tier. Renderers rebuild text from
+        # the token stream, so losslessness is corruption-or-not; and multiline
+        # tokens are declared, because a blockified token carrying \n collapses
+        # a code block to one line with no error anywhere.
+        run: node scripts/test-tokenize.ts
+
+      - name: Code-morph identity engine
+        # HeckelDiff decides which token on slide N is the same token as on
+        # slide N-1; every wrong answer is a token that jumps, tears, or steals
+        # another token's journey on screen. Regressions for the three pairing
+        # bugs found in review ride along.
+        run: node scripts/test-codediff.ts
 
       - name: First-page preview rig
         # Every save writes a static render of page one for file-manager
@@ -201,6 +325,41 @@ jobs:
         # deck must never carry one, and author content must never reach the
         # file carrying a script tag.
         run: node scripts/test-preview.ts
+
+      - name: Media autoplay rig
+        # An author set a clip's Autoplay to Off and it played anyway, every
+        # show, since media shipped in v0.9.16. render.ts wrote
+        # data-autoplay="" when off — PRESENT but empty — and Reveal decides
+        # autoplay with hasAttribute(), so it played what our own value-based
+        # selector correctly ignored. The property pinned here is that an
+        # autoplay-off element carries NO such attribute, because its presence
+        # is read by code we do not own. Measured on rendered DOM: the
+        # difference between assigning '' and not assigning is invisible to a
+        # grep. Self-skips without Chrome.
+        run: node scripts/test-media-autoplay.ts
+
+      - name: Return-gate rig
+        # The web demo always starts fresh, so someone who saved from
+        # bento.page and came back saw a blank starter and read it as lost
+        # work. The gate that fixes it can be worse than the silence it
+        # replaces: firing over a real document, or offering a host that has no
+        # release (telling an Android user to install a Chrome extension). This
+        # pins both, and that the mobile rows degrade until those hosts ship.
+        run: node scripts/test-return-gate.ts
+
+      - name: Offline-mode rig
+        # Offline mode promises "nothing leaves this computer" and was broken
+        # five ways at once (GHSA-5c3x-xqp6-g94r): a manual update check, a
+        # language-pack download, a deck's remote <video>, in-flight requests
+        # that kept running, and a second tab's socket that kept syncing.
+        #
+        # It stayed hidden because it reads as correct: an agent asked to audit
+        # it said "secure" from the docs AND from the code. So the rig does not
+        # check the call sites — it enforces the POLICY that no file outside
+        # kernel/src/net.ts may touch a network primitive at all, which is what
+        # stops the NEXT call site being wrong, plus the chokepoint's own
+        # behaviour (refusal, aborting what is already in flight, cross-tab).
+        run: node scripts/test-offline.ts
 
       - name: Untrusted-markup sanitizer rig
         # Every deck is untrusted input somebody may open, paste or receive over
@@ -237,13 +396,57 @@ jobs:
         # disk, so one poisoned response persisted.
         run: node scripts/test-blobs.ts
 
-      - name: tray/ios bridge rig
+      - name: home/ios bridge rig
         # The iOS host opens ANY self-contained HTML document and treats those
         # documents as mutually untrusted, so a page-supplied filename reaching
         # appendingPathComponent was an arbitrary write inside the container —
         # including over another deck the user would later open and trust.
         # Source-shape checks; the Swift half self-skips without a toolchain.
-        run: node scripts/test-tray-bridge.ts
+        run: node scripts/test-home-bridge.ts
+
+      - name: tray mark is one source
+        # tray-icon.svg is the only drawing of the mark. Everything else is
+        # generated from it: the Android launcher vectors (which have no <rect>,
+        # so each rounded corner becomes opaque path data nobody would diff), and
+        # the iOS asset catalog — the mark plus the four brand colours the app's
+        # chrome reads by name. A hex value retyped into Swift is a value that can
+        # disagree with the logo while looking almost right, which is the kind of
+        # wrong nothing notices. This fails if any of it drifts.
+        run: node home/assets/make-icons.mjs --check
+
+      - name: home/ios index rig
+        # The iOS text extractor is a PORT of home/webext's, and the two are held
+        # together by nothing but agreement — so this diffs them, driving the
+        # real library.js against the compiled Swift over generated edge cases
+        # and every document in the tree. A divergence means a deck is findable
+        # by a phrase on one host and not the other, which nothing else notices.
+        # This one really runs HERE: BentoIndex.swift is Foundation-only, and the
+        # runner has Swift, so the diff happens on every push rather than only on
+        # a Mac. That is the payoff for keeping UIKit out of that file.
+        run: node scripts/test-tray-index.mjs
+
+      - name: document index conformance corpus
+        # home/fixtures/ is the corpus all three hosts answer — the JS reference
+        # here, the Kotlin port under Gradle, the Swift port in the rig above.
+        # This is the JS side of it, and it is the reference the other two are
+        # diffed against, so a break here is a break in the thing they agree
+        # with. It went unregistered and then unnoticed: the tray→home rename
+        # left it importing ../tray/doc-index.mjs, and a rig nobody runs cannot
+        # report its own import failure.
+        run: node scripts/test-doc-index.mjs
+
+      - name: home/ios release verifier rig
+        # Starter decks are not bundled; a new document is FETCHED from the
+        # signed release channel and written to disk as an executable page. The
+        # signature and hash checks are what make that acceptable, so this proves
+        # the verifier REFUSES — tampered payload, tampered signature, a real
+        # signature over different bytes, no signature at all. Watching it accept
+        # the live manifest proves nothing: `return true` passes that test.
+        # Unlike the index rig above this CANNOT run here — CryptoKit is
+        # Apple-only — so it probes for that module (not for swiftc, which the
+        # runner has) and skips loudly. A Mac must run it before Releases.swift
+        # changes.
+        run: node scripts/test-tray-releases.mjs
 
       - name: WebExtension package rig
         # Validates the store package without writing it: every file the
@@ -262,12 +465,67 @@ jobs:
         run: node scripts/test-webext-background.ts
 
       - name: WebExtension bridge rig
-        # tray/webext decides, per save, whether to write in place or hand back
+        # home/webext decides, per save, whether to write in place or hand back
         # to the browser's own picker. Wrong in the permissive direction it
         # overwrites the open document with no dialog — which it did once. The
         # decision is pure logic over an options bag, so it is checkable here
         # rather than by reloading an extension and pressing Cmd-S.
         run: node scripts/test-webext-bridge.ts
+
+      - name: WebExtension route rig
+        # Turning an absolute path into "where this granted folder lives", from
+        # paths the extension did not choose — browser history, for files that
+        # may have moved or never been in a grant at all. Getting it wrong does
+        # not produce a broken link; it records a folder at the wrong place and
+        # every document in it silently opens something else. So it must prove,
+        # never guess: the route resolves inside the grant AND dir.resolve()
+        # agrees with the path's own tail.
+        run: node scripts/test-webext-route.ts
+
+      - name: WebExtension document-library rig
+        # The popup is a document browser, and everything in it is DERIVED from
+        # files on disk: the title out of the document block, the thumbnail out
+        # of the preview block, the openable path out of a learned prefix. Each
+        # is a parse against a format that moves, and each fails quietly — a row
+        # showing a filename instead of a title, or a blank square. Nothing
+        # throws, so nothing reports it.
+        #
+        # Runs AFTER the slides build on purpose: it reads the real shell, and
+        # with a document spliced in at the real offset. Hand-written fixtures
+        # would have passed the bug this replaces, where a metadata reader hunted
+        # for the document block's CLOSING tag and so found nothing in any
+        # document carrying an image.
+        run: node scripts/test-webext-library.ts
+
+      - name: WebExtension release-trust rig
+        # Creating a document downloads an app shell and writes it to the user's
+        # disk, where they later double-click it — executable HTML they go on to
+        # trust. So the manifest's signature is checked against the key compiled
+        # into the extension, and the download against the digest that signature
+        # covers. Signature over the pin, pin over the bytes.
+        #
+        # It also reads a REAL manifest captured from the release origin, which
+        # is the check that could not be faked into passing: the shipped code
+        # read `url` off the top level of a SIGNED ENVELOPE that has no top-level
+        # url, so the + button had never worked in any version — and the rig
+        # agreed, because its fixture was written to the shape the code wanted.
+        run: node scripts/test-webext-release.ts
+
+      - name: WebExtension update-notice rig
+        # Store installs update themselves; one loaded unpacked never will, and
+        # Chrome ignores update_url for a development install. So the GitHub
+        # route has to be told — and told in exactly one direction: a store user
+        # must never see a notice they cannot act on, and must not even cost a
+        # request. Every failure mode here is silent by nature.
+        run: node scripts/test-webext-update.ts
+
+      - name: WebExtension localisation rig
+        # Every failure mode of a message catalogue is silent: a key the code
+        # uses but English lacks renders as the key name, a locale missing a key
+        # falls back so a German page carries English sentences, and a dropped
+        # $1 leaves a hole in a translated sentence. All of them are visible
+        # only to someone who reads that language.
+        run: node scripts/test-webext-i18n.ts
 
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
@@ -389,6 +647,39 @@ jobs:
         # into a deleted row is #REF! rather than whatever slid up into it.
         run: node scripts/test-dash-a1.ts
 
+      - name: bento/dash defined names
+        # A name is a redirection, and every way it can go wrong reports a
+        # NUMBER: substituted inside quoted text or after a sheet's `!`,
+        # outranking a column of the same name, spelled like a cell address and
+        # therefore never consulted, or DROPPED when its rows are deleted
+        # instead of becoming #REF!. Ends by mounting the real grid, because an
+        # engine the app never passes the name table to is invisible.
+        run: node scripts/test-dash-names.ts
+
+      - name: bento/dash array formulas and spill
+        # A spilled cell is COMPUTED, not stored: it must never reach the file,
+        # a collision must BLOCK with #SPILL! rather than overwrite, two spills
+        # wanting one cell must pick the same winner on every machine, and the
+        # shape must survive the operators (2×3, not 6×1 — the wrong answer is
+        # right in the only cell anybody checks). Datasets deliberately do not
+        # spill; a column formula is the columnar answer to the same need.
+        run: node scripts/test-dash-spill.ts
+
+      - name: bento/dash cross-sheet references and what row 1 means
+        # Both halves of one boundary. A per-CELL formula reaches another sheet
+        # from EITHER kind of sheet — it used to work on a spreadsheet and
+        # answer #REF! on a dataset in the same workbook, which was two call
+        # sites rather than a decision. A COLUMN formula still may not, and now
+        # names the boundary instead of calling a sheet in the tab strip an
+        # unknown name: reaching across is either a position that moves or a
+        # join with no key, and dash has `join`. Then the trap underneath: an A1
+        # row is the row the addressed sheet paints in its own gutter, so a
+        # dataset's row 1 is its first DATA row and a spreadsheet copy of it is
+        # one lower — safe only because the conversion shifts LOCAL references
+        # and leaves QUALIFIED ones alone. That last one is measured against
+        # both sheets, because it is the part that would rot in silence.
+        run: node scripts/test-dash-xsheet.ts
+
       - name: bento/dash pivot
         # Subtotals are COMPUTED, not summed: an average of averages is a
         # different number, and a distinct count does not add up.
@@ -407,6 +698,17 @@ jobs:
       - name: bento/dash filter and sort
         run: node scripts/test-dash-filter.ts
 
+      - name: bento/dash filtering is REACHABLE
+        # The engine rig above proves sixteen predicates over an order vector;
+        # the app used to offer ONE of them per column — a free-text "Contains"
+        # box you had to already know the answer to spell into. This one drives
+        # the column menu over a real DOM: it opens the value checklist on a
+        # mounted grid, CLICKS a checkbox, and asserts the row indices
+        # `store.order` ends up holding — plus that a truncated list never
+        # pre-ticks itself, that a column's list honours the other columns'
+        # filters and not its own, and that none of it dirties the document.
+        run: node scripts/test-dash-filterui.ts
+
       - name: bento/dash rows and columns
         # Structure, and the rid watermark — a rid must never be minted twice,
         # which is collaboration's correctness precondition.
@@ -418,16 +720,81 @@ jobs:
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
+      - name: bento/dash conditional formatting is REACHABLE
+        # The engine rig above passes on six rule kinds; the app used to build
+        # two of them, so "highlight cells greater than N" was missing from a
+        # product that had already shipped it. This one drives the panel section
+        # with panels.ts's own KIT over a real DOM and asserts the rule OBJECT
+        # that would reach the document — plus that the menu and the panel
+        # actually mount it, which is what makes the rest of it visible.
+        run: node scripts/test-dash-condfmtui.ts
+
+      - name: bento/dash a formula column is typed by what it returns
+        # It used to be born `number`, hardcoded: a formula splitting surnames
+        # out of "Lastname, Firstname" produced a NUMBER column of text that
+        # filtered, sorted, exported and totalled wrongly. Inference is by the
+        # JS type of the computed values, never their appearance — a numeric
+        # STRING typed number is the SUM 0 bug (test-dash-coltype.ts) arriving
+        # by a new door, and that is asserted by name.
+        run: node scripts/test-dash-computedtype.ts
+
+      - name: bento/dash paste special
+        # Values only must land the COMPUTED value and NEVER an error object —
+        # the same class of damage scripts/test-dash-fill.ts records, reached
+        # from the other side. Also: formats-only cannot move a number (the
+        # column is summed before and after), a copied formula's relative refs
+        # translate while $A$1 does not and a CUT one does not translate at
+        # all, and transpose is REFUSED on a dataset because its columns are
+        # typed. Last section reads main.ts: the chord must reach the command,
+        # and the clip must be snapshotted BEFORE ⌘X clears the selection.
+        run: node scripts/test-dash-pastespecial.ts
+
+      - name: bento/dash text to columns
+        # The split reuses import.ts's delimiter parser and its type inference,
+        # so "Smith, John" quoted stays one field and an undecidable date
+        # column lands as TEXT rather than eleven months out. The overwrite is
+        # named before it happens. And the outcome is checked in the DOCUMENT:
+        # patches are committed to a real Store, the source column survives,
+        # and re-running the recorded step reproduces the same bytes.
+        run: node scripts/test-dash-tocolumns.ts
+
       - name: bento/dash side panels
         run: node scripts/test-dash-panels.ts
 
+      - name: bento/dash panel rhythm
+        # The panel's spacing has been reported broken three times. This pins
+        # the numbers — one row height, one pitch, one gutter, one radius — and
+        # refuses a second spelling of any of them, so the next drift is a build
+        # failure rather than a fourth screenshot.
+        run: node scripts/test-dash-panelrhythm.ts
+
       - name: bento/dash About dialog
         run: node scripts/test-dash-about.ts
+
+      - name: bento/dash dialog surfaces
+        # The About dialog held eight sections and measured 1361px in a 429px
+        # viewport — 3.2 screens. It is two surfaces now (About = what travels
+        # in the file; Settings = what this reader's browser remembers) plus the
+        # password, which moved to the Save menu with the other instructions
+        # about how the file gets written. This holds the seam AND the size:
+        # each surface fits a laptop screen without scrolling, measured through
+        # a box model of about.css calibrated against that 1361px.
+        run: node scripts/test-dash-surfaces.ts
 
       - name: bento/dash thumbnail preview
         # An encrypted workbook NEVER gets a preview — a plaintext title beside
         # the ciphertext is the leak the password exists to prevent.
         run: node scripts/test-dash-preview.ts
+
+      - name: convert engine rigs
+        # The pptx importer's resolver is where real decks' fidelity lives --
+        # 91% of colour and 71% of run properties are indirect, and every hop
+        # fails silently (a backwards clrMap still renders, just dark-on-dark).
+        # Seven rigs, 378 checks, negative controls proven against mutated
+        # implementations; load.ts is the gate that matters: every emitted
+        # document must pass the REAL slides parseDoc with zero validateDoc
+        # errors.
+        run: node scripts/test-convert.ts
 
       - name: bento/dash zip
         # Verified against real unzip implementations, not only our own reader:
@@ -438,6 +805,15 @@ jobs:
         # Both 1900 date epochs, including the leap-year bug — getting it wrong
         # shifts every date by four years, silently.
         run: node scripts/test-dash-xlsx.ts
+
+      - name: bento/dash xlsx — what an import carries and what it says it dropped
+        # The gate that lost a number: `=SUM(RentCells)/B5` has no `!`, no `[`
+        # and no unknown function, so a bare defined name sailed through and
+        # the cell painted #NAME? over the 0.61 Excel had computed. Also pins
+        # the header-under-a-merged-title repair, and the freeze, per-cell
+        # format and Excel-table totals row that used to be dropped in silence.
+        # Builds real .xlsx bytes — the gate only ever sees real formula text.
+        run: node scripts/test-dash-xlsx-carry.ts
 
       - name: bento/dash WebGL
         run: node scripts/test-dash-gl.ts
@@ -451,6 +827,338 @@ jobs:
         # two it did not catch were found by widening it.
         run: node scripts/test-dash-sync.ts
 
+      - name: dash spreadsheet convergence rig
+        # The SPREADSHEET kind's own rig, separate from the dataset one because
+        # it is a different convergence problem: a dataset row has a rid, and a
+        # spreadsheet cell has only its address. It also pins the snapshot
+        # FALLBACK — a patch that would move cells must mint zero ops and arm
+        # the whole-state path, because two replicas shifting addresses
+        # concurrently renumber each other's writes and no ordering repairs it.
+        run: node scripts/test-dash-canvassync.ts
+
+      - name: relay protocol — one wire format, two clients
+        # dash's online.ts is a PORT of the transport slides uses (now moving
+        # into kernel/). The two files are separate text that nobody diffs, and
+        # ONE DEPLOYED WORKER verifies both: it pins the room id to a key and
+        # walks an owner→invite→member signature chain. If one client's idea of
+        # `inv.${pub}.${role}.${exp}` drifts, the symptom is not a red test — it
+        # is one app's users silently unable to join the other's rooms, on a
+        # relay that cannot be rolled back independently of the shells already
+        # in people's files. This diffs only what goes on the wire.
+        run: node scripts/test-relay-protocol.ts
+
+      - name: dash validator rig
+        # 109 checks over the shapes that read as DATA rather than as damage —
+        # a column shorter than the sheet has rows, a dictionary index past the
+        # end of its dict. Nothing here refuses to load a workbook; the point is
+        # that the user is told, because neither of those looks wrong on screen.
+        run: node scripts/test-dash-validate.ts
+
+      - name: dash comments rig
+        # A thread anchors to colId + rid, never a position, so it survives a
+        # sort. The checks that matter are the ORPHAN ones: a deleted row must
+        # leave the thread dead and saying so, not silently re-pointed at
+        # whoever inherited the row number.
+        run: node scripts/test-dash-comments.ts
+
+      - name: dash recovery rig
+        # Every branch of the offer/no-offer decision, with no DOM and no
+        # IndexedDB in it. A snapshot that cannot be parsed is not offered — a
+        # Restore button that hands the app a document it will then refuse is a
+        # dead end wearing a live button.
+        run: node scripts/test-dash-recovery.ts
+
+      - name: dash i18n rig
+        # A core catalog ships inside every saved workbook and cannot be patched
+        # without a release, so drift has to fail here rather than in the field:
+        # a catalog key the source no longer contains is a dead translation, and
+        # a {placeholder} a translation dropped is a sentence with a hole in it.
+        run: node scripts/test-dash-i18n.ts
+
+      - name: dash sheet-tabs rig
+        # Sheet order is the tab order and it lives in the DOCUMENT, so a
+        # reorder is an undoable patch whose inverse carries the ORIGINAL index
+        # — one undo puts a dragged tab back where it was, not at the end. Also
+        # guards that deleting the shown sheet steps to another TABLE sheet.
+        run: node scripts/test-dash-tabs.ts
+
+      - name: dash find rig
+        # The grid is windowed — about 40 rows of a 5,000-row sheet exist in the
+        # DOM — so the browser's own find reports "not there" for values that
+        # are. These checks cover the matcher, the view vector (a hit must never
+        # be a row the filter is hiding) and the replace refusals.
+        run: node scripts/test-dash-find.ts
+
+      - name: dash spreadsheet-cells rig
+        # The setCanvasCells patch, which writes the SPREADSHEET kind's sparse
+        # A1 map. Sparseness is not a size optimisation: a cleared cell has to
+        # be GONE, or an undone sheet is unequal to a fresh one and two
+        # replicas disagree about whether a cell exists. Also pins the
+        # collaboration fallback — the CRDT has never heard of this op, and
+        # localOne's default arm ships a whole-state snapshot rather than
+        # dropping it.
+        run: node scripts/test-dash-canvascells.ts
+
+      - name: dash step engine
+        # The relational pipeline the FORMAT has described since commit one and
+        # nothing executed. Includes a performance floor at 100k rows and a
+        # HELD-HEAP comparison against a row-shaped pipeline — wall clock does
+        # not discriminate between the two designs at this size, memory does
+        # (2.5 MB against 16.8 MB), and memory is what decides whether a
+        # workbook fits at all.
+        run: node scripts/test-dash-steps.ts
+
+      - name: dash SQL surface
+        # SQL compiles to Step[] and does not evaluate anything itself — the
+        # answer is a frame over the same columns, so it stays live rather than
+        # becoming a copy that is wrong the moment somebody edits a cell. The
+        # checks that matter are the refusals: a plain JOIN declares card:'one'
+        # so a non-unique key STOPS the pipeline instead of doubling every
+        # total, and an edit statement is refused because a query is a question.
+        run: node scripts/test-dash-sql.ts
+
+      - name: dash spreadsheet rig
+        # Rendering and editing the SPREADSHEET kind — unbounded, sparse, typed
+        # per cell. The check that matters is that a formula BELOW the data
+        # lands in a cell that did not exist, without allocating the rows it
+        # skipped: that gesture is why the kind exists.
+        run: node scripts/test-dash-canvas.ts
+
+      - name: dash promote/flatten rig
+        # The bridge between the two sheet kinds. The checks that matter are
+        # the ones about NOT destroying the source: promotion leaves the range
+        # alone, because a formula under the block and a cross-sheet reference
+        # into it both point by POSITION and emptying the cells would blank
+        # them silently. Also that a lifted column formula actually EVALUATES —
+        # Column.formula is a bare expression, and an "=" in front of it ships
+        # a column of #VALUE!.
+        run: node scripts/test-dash-promote.ts
+
+      - name: dash fill rig
+        # ⌘D and the fill handle. This guards a DATA LOSS bug that shipped:
+        # seeding from the computed value wrote error OBJECTS into stored
+        # columns and flattened formulas to constants, and ⌘D sharing an
+        # implementation with the handle made it alternate two seed rows. The
+        # two gestures are separate here, and a formula fills with its
+        # references translated.
+        run: node scripts/test-dash-fill.ts
+
+      - name: dash spreadsheet formula rig
+        # Formulas on the SPREADSHEET kind, including cross-sheet references.
+        # Sheet1!A1 used to bind to the LOCAL A1 — this sheet's number reported
+        # under another sheet's name — and ranges over a sparse sheet must cost
+        # the cells that exist, not the rectangle they span.
+        run: node scripts/test-dash-canvasformula.ts
+
+      - name: dash action-applicability rig
+        # One table saying which actions run on which sheet kind, and a reason
+        # for every one that does not. Six toolbar buttons used to throw
+        # "grid needs a table sheet" on a spreadsheet with nothing shown; the
+        # rig fails if an action is kind-scoped without a reason string.
+        run: node scripts/test-dash-actions.ts
+
+      - name: dash cell format and type rig
+        # Per-cell number format, coercion and appearance on a SPREADSHEET
+        # sheet. The checks that matter are the data-eating ones: 01234 must not
+        # silently become 1234, 1/2 must never become a date, an ambiguous
+        # d/m/yyyy is refused rather than guessed, and formatting twenty cells
+        # is ONE patch and ONE undo.
+        run: node scripts/test-dash-cellprops.ts
+
+      - name: dash theme rig
+        # A stylesheet has no type system: an undeclared token is a dead rule
+        # and a light-dark() fed a length is an invalid declaration — both
+        # silent, and both had SHIPPED. --accent-ink drew nothing and every
+        # shadow in the app computed to "none". The light palette is also
+        # diffed against slides' :root so the two cannot drift one grey at a
+        # time again.
+        run: node scripts/test-dash-theme.ts
+
+      - name: dash file write-back
+        # The single biggest data-loss risk dash shipped with: an IndexedDB
+        # snapshot was the only thing catching an hour of typing, and it is
+        # invisible, uncopyable and cleared by browsers on their own schedule.
+        # The checks that matter are the bookkeeping ones. A FAILED write must
+        # not be recorded as a baseline — record the intent and the next cycle
+        # reads "unchanged", so a permanent failure is reported once and then
+        # silently skipped forever. Also: two cycles never open concurrent
+        # writables on one handle, nothing is rethrown out of a setTimeout
+        # nobody awaits, and the refusals (read-only, template, no-handle) are
+        # ORDERED, so a read-only workbook reports the permanent reason rather
+        # than the incidental one.
+        run: node scripts/test-dash-autosave.ts
+
+      - name: dash print
+        # Every failure mode here is silent: the page that comes out has a
+        # header, a body and a total, and looks finished whatever is missing
+        # from it. The grid is windowed at ~46 rows, so the first check builds
+        # a 5,000-row sheet and counts what reaches the paper — measured in a
+        # browser too: 3,001 printed rows from a grid holding 46. The rest pin
+        # that the printout is of the VIEW VECTOR, that the totals row is the
+        # FILTERED total from the very grid.aggregate the footer calls, that no
+        # column is ever clipped off the right edge at any wide-sheet setting,
+        # and that author data reaching markup is escaped — a workbook is
+        # untrusted input, and this path builds HTML by concatenation.
+        run: node scripts/test-dash-print.ts
+
+      - name: dash grid frontier
+        # What exists below a dataset's last row: exactly one appender, with
+        # the ruled lattice stopping at the data. The grid used to LOOK like an
+        # infinite canvas and behave like a table — pressing "=" below the
+        # numbers opened the editor on the last DATA cell, so the universal
+        # spreadsheet gesture silently targeted real data. Typing on the
+        # frontier must append, and append ONCE: zero times restores the
+        # original bug, per-keystroke is a different one. Clicking must NOT
+        # append, since a control that grows the file when you look at it is
+        # worse than one that does nothing.
+        run: node scripts/test-dash-frontier.ts
+
+      - name: dash grid context menus
+        # The three menus a right-click produces — cell, row-number gutter,
+        # column header — asserted from real `contextmenu` events on a mounted
+        # grid, never from the builders. Two features have shipped complete and
+        # UNREACHABLE (the conditional-format rules, and the two gutters, which
+        # did nothing at all on a right-click), and in both cases a rig that
+        # called the builder would have been green over an app with the feature
+        # invisible on screen. So the negative control here is a grid with
+        # `installGridMenus` NOT called: the same right-clicks must produce
+        # nothing. Also pinned: the labels count the selection and the ops do
+        # that many; Escape closes a menu and its listener does not outlive it;
+        # the `+` column appender exists, is absent read-only, and costs
+        # nothing until its dialog is answered; and finding 11 — a per-cell
+        # formula is carried into a new row only when the column proves it
+        # repeats, and the reader is told either way.
+        run: node scripts/test-dash-menu.ts
+
+      - name: dash accessibility
+        # All of these fail silently to a sighted developer. The load-bearing
+        # check is aria-rowindex under virtualisation: about forty rows of a
+        # 5,000-row view exist in the DOM, so a row's position among its
+        # siblings is meaningless and the index must state its place in the
+        # FULL view. Get it wrong and a screen reader confidently announces
+        # "row 3 of 40" in a five-thousand-row sheet, which is worse than
+        # silence because it is trusted. Also guarded: activeElement after a
+        # click and after a repaint (every paint replaces innerHTML, so without
+        # restoration focus drops to BODY), one roving tab stop, and that
+        # nothing here is a live region.
+        run: node scripts/test-dash-a11y.ts
+
+      - name: dash per-cell appearance
+        # Appearance on BOTH sheet kinds, which had drifted: the format always
+        # carried bold/colour on a spreadsheet cell and a dataset cell could
+        # carry none of it. The check worth naming mounts the REAL grid and
+        # reads the emitted markup, because the pure-function checks did not
+        # need the grid to call appearanceCss at all — measured, deleting both
+        # paint calls left 69 and 123 checks green with the feature invisible
+        # on screen. This repo shipped that shape once already (--accent-ink
+        # was a token the stylesheet never declared). Also pins that appearance
+        # cannot smuggle a value or a type onto a dataset, where the COLUMN
+        # type is authoritative, and that the CRDT splits content from
+        # presentation so bolding a cell beside a concurrent retype keeps both.
+        run: node scripts/test-dash-cellfmt.ts
+
+      - name: dash column type vs storage
+        # Guards a shipped bug that produced a WRONG NUMBER at the end of a path
+        # dash itself recommends — the worst shape a defect can take: not a
+        # crash, not an error cell, a confident total that is wrong. Import
+        # lands a mixed column as text and advises setting the type; doing that
+        # used to move only `col.type`, so the grid right-aligned and
+        # number-formatted the values while `aggregate` skipped every one of
+        # them. Measured on a real .xlsx: footer SUM 0 against a true total of
+        # 10,308.85, a number dash returns correctly from =SUM() on a
+        # spreadsheet copy of the same rows. Three properties: converting works;
+        # undo restores the BYTES and not just the declaration (text→number→text
+        # is lossy, "1200.50" returns as "1200.5", which a typeof check cannot
+        # see); and what will not convert is refused rather than zeroed. The
+        # validator half is checked too, because store.ts can only stop this
+        # state being created — it still arrives from files saved by the buggy
+        # build and from hand-edited JSON, which PLATFORM §7 makes a way in.
+        run: node scripts/test-dash-coltype.ts
+
+      - name: dash starter workbook
+        # The starter ships INSIDE the shell, so it is what bento.page shows and
+        # what every downloaded copy opens with — the one document in this repo
+        # a stranger is guaranteed to see — and nothing guarded it. Two families:
+        # that it is a valid, self-consistent workbook (a starter that trips
+        # validateDoc ships the app's own warning banner to every new reader on
+        # first open), and that the NUMBERS are right. The second is the one that
+        # will catch something: the Scratch sheet reads across into the dataset
+        # by ADDRESS, so reordering, inserting or hiding a column silently
+        # re-points two totals on another sheet, and nothing about that is
+        # visible in a diff. The addresses are pinned by column NAME and the
+        # totals computed through the shipping code.
+        run: node scripts/test-dash-starter.ts
+
+      - name: dash — the off switch for a live session
+        # A polish sweep drove the app at 880px with a session running:
+        # collab.on true, the room live on the relay, and the string "Stop
+        # sharing" NOWHERE in the document — sync.css hid the toggle outright
+        # below 900px to buy width in the top bar, and that toggle is the only
+        # control that stops sharing. The nearest thing left was About's
+        # "Offline mode", which also kills the signed update check: to stop one
+        # workbook being shared you had to switch off the app's networking.
+        # The rule is narrow: a control that REPORTS nothing may stand down at a
+        # narrow width (the 390px measurement behind those rules is real and
+        # still honoured), a control that STOPS something already happening may
+        # not. Checked as CSS text because dash-dom.ts is a parser, not a layout
+        # engine, and cannot say what a viewport width does to a declaration.
+        run: node scripts/test-dash-stopsharing.ts
+
+      - name: Grid surface rig
+        # The sheet as an OBJECT ON A SURFACE. An eight-row dataset used to
+        # fill the top 180px of a 1440x900 window and leave the rest blank in
+        # the same white as the sheet, so "the table ended here" and "the app
+        # stopped drawing" looked identical — the strongest unfinished signal
+        # the app had. The fix is not more rows (test-dash-frontier.ts owns
+        # that decision and is unchanged): it is a bounded table on a --desk
+        # ground the spreadsheet kind deliberately does not get, plus the three
+        # empty states.
+        #
+        # Half of it is CSS, which has no type system and no runtime errors, so
+        # those checks read the stylesheet as text and MEASURE the palette
+        # rather than merely requiring tokens to be present — a desk 1.02:1
+        # from the paper satisfies every structural check and renders as the
+        # defect. The other half mounts a real Grid and asserts the note is one
+        # node that survives 5,000 rows.
+        run: node scripts/test-dash-surface.ts
+
+      - name: Data validation rig
+        # In-cell dropdowns and typed entry rules — Excel's Data Validation,
+        # which is NOT dash's validate.ts (that one asks whether a workbook
+        # agrees with itself). Two features, one English word, and a rig that
+        # confuses them tests neither.
+        #
+        # The checks that matter are the three a green suite would otherwise
+        # hide. (1) The dropdown and the invalid mark are asserted on the
+        # MARKUP A REAL GRID EMITS, through BOTH paint loops — the pure
+        # functions were all green with the feature invisible on screen, which
+        # is precisely the failure this repo shipped once already. (2) `reject`
+        # refuses AT THE KEYBOARD and nowhere else: a paste, an import, an undo
+        # and a remote CRDT op all LAND and are marked, because refusing an op
+        # that has already been committed elsewhere either diverges the
+        # replicas or silently discards a collaborator's work. Both arms are
+        # pinned, and a sabotage that leaks the refusal into the paste path
+        # turns the second one red. (3) A rule never changes existing data —
+        # what breaks it is marked, never deleted — and the mark is derived at
+        # paint rather than stored, so it cannot go stale. Also pins the .xlsx
+        # round trip in both directions, including Excel's INVERTED
+        # `showDropDown` attribute (1 hides it), which reads correctly in code
+        # that has it exactly backwards.
+        run: node scripts/test-dash-datavalid.ts
+
+      - name: every rig is actually run
+        # A rig nobody runs is worse than no rig, and it fails flatteringly: the
+        # file is there, the checks in it are good, git log shows it being
+        # maintained, and anyone counting coverage counts it. It just never
+        # executes, so nothing goes red and nothing says so. Five rigs landed in
+        # one afternoon — write-back, print, frontier, a11y, appearance — each
+        # written by a different agent told to write one, none of them knowing
+        # where this list lives; all five passed on disk and none were here.
+        # Also checks the reverse, since a step pointing at a deleted script
+        # fails every push for a reason unrelated to the change that triggered
+        # it, and prints the deliberate-exemption list on every run so it stays
+        # something people look at rather than somewhere failures go to hide.
+        run: node scripts/test-ci-registered.ts
       - name: Theme token gate
         # Every failure this catches is INVISIBLE in the light theme, which is
         # the one the author is looking at. A chrome surface pinned to white
@@ -460,12 +1168,217 @@ jobs:
         # invert the deck) and the light palette forking from spaces and type.
         run: node scripts/test-slides-theme.mjs
 
+      - name: Brand palette rig
+        # themeRefs record where a colour came from so a deck can be re-branded.
+        # Three properties must hold or the feature is a liability: the
+        # derivation must be IDEMPOTENT (it runs on the doc event — one that
+        # never settles is a hang, not a wrong colour), stripping the new fields
+        # must leave every rendered value identical (every shipped shell reads
+        # the literals and always will), and an unresolvable reference must
+        # change nothing rather than writing undefined.
+        run: node scripts/test-theme.ts
+
       - name: Built-in layout geometry rig
         # The built-ins are drawn against 1600x900 while the model default is
         # 1280x720, so they used to hang 200px off the right edge of a default
         # deck. Nothing structural could see it — the fix is arithmetic, and so
         # is the regression.
         run: node scripts/test-layouts.ts
+
+      - name: slides store rig
+        # The editor's undo/redo, selection and whole-deck replacement, at the
+        # store level rather than through the DOM. Bundled first for the same
+        # reason the spaces rigs are: store.ts imports './model' without an
+        # extension, which node's strip-only TypeScript loader will not follow,
+        # so run by hand it fails with ERR_MODULE_NOT_FOUND and looks like a
+        # broken product. It had never been registered here.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slide-store.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-slide-store.mjs"
+          node "$RUNNER_TEMP/test-slide-store.mjs"
+
+      # bento/type: the word processor. Same pipeline, same gate.
+      - name: Install (type)
+        working-directory: type
+        run: npm ci
+
+      - name: Typecheck (type)
+        working-directory: type
+        run: node_modules/.bin/tsc -b
+
+      - name: Build single-file shell (type)
+        working-directory: type
+        run: npm run build:single
+
+      - name: Splice conformance gate (type)
+        run: node scripts/shell-gate.mjs type/dist-single/Bento_Type.bento.html
+
+      - name: Type inline-formatting rig
+        # A block stores plain text + marks over character ranges, and the
+        # round trip render→read must be exact: if it is not, formatting
+        # silently mutates on every re-render, which surfaces as a signed
+        # document that stops verifying. Includes a 2,000-case fuzz — it found
+        # two bugs no hand-written case did.
+        run: node scripts/test-type-inline.ts
+
+      - name: Type model rig
+        # The load contract (an unreadable file must never become an empty one
+        # over live data), deterministic id repair, and the rule that marks and
+        # footnote anchors move together — separating them is what put a
+        # footnote marker in the middle of a word.
+        run: node scripts/test-type-model.ts
+
+      - name: Type store rig
+        # A typed word is ONE undo press, and a scoped snapshot really is
+        # scoped: 200 edits cost ~94KB rather than ~21.7MB.
+        run: node scripts/test-type-store.ts
+
+      - name: Type redline rig
+        # accept(all) == what they sent back, reject(all) == what you sent.
+        # Without both, "review these changes" is a lie.
+        run: node scripts/test-type-redline.ts
+
+      - name: Type paginated-output rig
+        # The printed page count must be the one the editor computed — if print
+        # re-paginates, "page 14 paragraph 3" stops meaning anything, which is
+        # the whole reason documents like this are exchanged as PDF. Also pins
+        # that footnotes reach the page their reference lands on, and that a
+        # document's own page size is what prints.
+        run: node scripts/test-type-print.ts
+
+      - name: Type theme rig
+        # Static checks so a theme cannot rot: both themes define the same
+        # roles, the document surface is never themed, and no chrome rule
+        # borrows a document token — that last one shipped a select at 1.92:1
+        # against a WCAG AA floor of 4.5.
+        run: node scripts/test-type-theme.mjs
+
+      - name: bento/dash CRDT convergence
+        # The big one: randomised concurrent edits across N replicas, asserted
+        # to converge. It has caught every ordering bug in the engine, and the
+        # two it did not catch were found by widening it.
+        run: node scripts/test-dash-sync.ts
+
+      - name: relay protocol — one wire format, two clients
+        # dash's online.ts is a PORT of the transport slides uses (now in
+        # kernel/). The two files are separate text that nobody diffs, and ONE
+        # DEPLOYED WORKER verifies both: it pins the room id to a key and walks
+        # an owner→invite→member signature chain. If one client's idea of
+        # `inv.${pub}.${role}.${exp}` drifts, the symptom is not a red test — it
+        # is one app's users silently unable to join the other's rooms, on a
+        # relay that cannot be rolled back independently of the shells already
+        # in people's files. This diffs only what goes on the wire.
+        #
+        # Written by the bento/dash work; taken here because the kernel lift is
+        # the change it guards, and it should not land after the move it exists
+        # to check. The rig FOLLOWS the twin (kernel first, then slides) and
+        # FAILS if it finds no transport at all, rather than silently comparing
+        # two empty lists — which is how its own first version passed.
+        run: node scripts/test-relay-protocol.ts
+
+      - name: Type blocks rig
+        # Lists and tables are runs of flat blocks assembled at render;
+        # this pins the grouping, including the level clamp that once opened a
+        # billion list elements and killed the process.
+        run: node scripts/test-type-blocks.ts
+
+      - name: Type layout rig
+        # Paragraph spacing, indents and page setup, and that a page break
+        # is honoured by the paginator rather than merely stored.
+        run: node scripts/test-type-layout.ts
+
+      - name: Type image rig
+        # Pictures embed or reference, and an atomic block is measured as one
+        # box so pagination cannot break a page through the middle of it.
+        run: node scripts/test-type-image.ts
+
+      - name: Type link rig
+        # Link marks round-trip, and the href allow-list holds: a document is
+        # untrusted input, and javascript: reached the page from one once.
+        run: node scripts/test-type-link.ts
+
+      - name: Type find rig
+        # Find and replace across blocks, including the offsets that shift
+        # when a replacement changes a block's length.
+        run: node scripts/test-type-find.ts
+
+      - name: Type toc rig
+        # Section numbering is DERIVED, never stored, so inserting a heading
+        # renumbers everything and nothing drifts.
+        run: node scripts/test-type-toc.ts
+
+      - name: Type xref rig
+        # Captions and cross-references are atoms at an offset, so renumbering
+        # is invisible to the redline.
+        run: node scripts/test-type-xref.ts
+
+      - name: Type cite rig
+        # Citations and the bibliography — a citation is an atom, so
+        # restyling one is not an edit to the sentence around it.
+        run: node scripts/test-type-cite.ts
+
+      - name: Type math rig
+        # Formulas: the TeX source is the model and inline math is a mark, so
+        # a formula survives the render→read round trip intact.
+        run: node scripts/test-type-math.ts
+
+      - name: Type comments rig
+        # Threads keep their anchors through edits, splits and merges, and
+        # editing or deleting a message never moves the text it points at.
+        run: node scripts/test-type-comments.ts
+
+      - name: Type track rig
+        # Tracked changes as ins/del marks: accept-all gives the text as
+        # edited, reject-all the text as it was, and display modes never touch
+        # the model.
+        run: node scripts/test-type-track.ts
+
+      - name: Type font rig
+        # Per-selection typeface and size, and the CSS allow-list that keeps a
+        # font stack from opening a second declaration in a style attribute.
+        run: node scripts/test-type-font.ts
+
+      - name: Type autosave rig
+        # A crash must not cost the work since the last ⌘S. Pins the content
+        # key that decides whether a snapshot disagrees with the loaded file,
+        # and that an encrypted document is NEVER snapshotted — plaintext in
+        # IndexedDB beside a file whose whole point is that it is encrypted.
+        run: node scripts/test-type-autosave.ts
+
+      - name: Type preview rig
+        # Thumbnailers run no JavaScript, so a saved file carries a still of
+        # page one plus a parser-blocking remover. Pins the ordering (nothing
+        # paintable between host and remover), that a second save REPLACES
+        # rather than appends, and that an encrypted document gets none.
+        run: node scripts/test-type-preview.ts
+
+      - name: Type i18n rig
+        # Eight languages in one file: every catalogue holds the same keys,
+        # every {placeholder} survives translation, no key outlives the string
+        # it came from, and the packed table matches the catalogues it was
+        # built from.
+        run: node scripts/test-type-i18n.ts
+
+      - name: Type styles rig
+        # Named paragraph styles, and the additivity rule: a document with no
+        # doc.styles must render byte-identically to before the feature.
+        run: node scripts/test-type-styles.ts
+
+      - name: Type move rig
+        # Reordering moves whole UNITS, so a drag can never tear a table in
+        # half or drop a paragraph between two bullets.
+        run: node scripts/test-type-move.ts
+
+      - name: Type embed rig
+        # Embedded Bento artifacts, and the render boundary that refuses a
+        # script rather than sanitising one.
+        run: node scripts/test-type-embed.ts
+
+      - name: Type chrome rig
+        # Where controls live: nothing in two menus, no inserts in the
+        # overflow, and every element the chrome reaches for actually exists —
+        # a null lookup there has silently broken the boot twice.
+        run: node scripts/test-type-chrome.ts
 
       - name: Clipboard embedded-font rig
         run: |
@@ -519,3 +1432,59 @@ jobs:
         # format half is REPORTED, not asserted, because the fix is a decision
         # nobody has taken yet; STRICT=1 turns it into a gate the day it is.
         run: SEEDS=250 STEPS=80 ACTORS=4 node scripts/test-sync-spaces.ts
+
+      - name: collaborative text on a parent node
+        # The token RGA — what lets two people type in one paragraph without
+        # destroying each other's work — was reachable only on CHILD nodes,
+        # because both shipped apps put their text there. bento/type does not:
+        # a block IS the paragraph. Bound naively it would get a
+        # last-writer-wins register for prose and lose an edit SILENTLY, with a
+        # document that stays valid and converges. Every other sync rig stayed
+        # green through that bug, so this one carries a negative control: the
+        # same scenario with the RGA off MUST lose an edit.
+        run: node scripts/test-sync-parent-text.ts
+
+      - name: a flat document shape
+        # bento/type is one level deep — `body` holds blocks and nothing sits
+        # beneath them — so `children` is null and there is no element layer.
+        # Binds type's real shape and checks both halves: text still merges
+        # token-by-token, and the document keeps its shape. The second matters
+        # because an engine that quietly wrote `elements: []` onto every block
+        # would converge perfectly while corrupting the format.
+        run: node scripts/test-sync-flat.ts
+
+      - name: bento/type under the shared engine
+        # Convergence for the flat ('body', null, 'text') binding, AND a report
+        # on whether what the replicas converge on is a legal bento/type
+        # document. Those are different questions: `text` merges token by token
+        # through the RGA while `marks` and `notes` — character offsets INTO
+        # that text — merge as ordinary registers, so two legal concurrent
+        # edits can converge on offsets that no longer describe the text they
+        # index. Reported, not asserted, exactly as the spaces tree question
+        # is: it is a format decision nobody has taken. STRICT=1 makes it a
+        # gate the day one is.
+        run: SEEDS=250 STEPS=80 ACTORS=4 node scripts/test-sync-type.ts
+
+      - name: the sync session layer
+        # The session — differ hook, shadow, presence, catch-up, the empty
+        # document repair — had NO tests before it was moved into the kernel
+        # and parameterized for three apps. This was written against the
+        # implementation as it shipped and run unchanged after the move, which
+        # is the only thing that makes "behaviour is identical" a claim rather
+        # than a hope. It drives the REAL session over the REAL store through a
+        # REAL BroadcastChannel; two sessions in one process are two tabs.
+        # The last four sections bind bento/type to the same kernel session —
+        # flat document, text on the parent, a store with one listener and no
+        # dirty flag — so a surviving slides assumption shows up there.
+        run: node --no-warnings scripts/test-sync-session.ts
+
+      - name: the spaces binding of the sync session
+        # Only what bento/spaces answers DIFFERENTLY, because three of the five
+        # host answers are not slides' answers and each one is invisible until
+        # two people are live: a repair id that must be DERIVED (a spare blank
+        # slide is one click to delete; a spare page is a phantom), a view that
+        # clamps by page identity to the nearest surviving ANCESTOR rather than
+        # to home, and a remote op that must not raise this app's 'doc' event —
+        # which paints "Edited" and would credit a colleague's typing to you.
+        # The last section is two real sessions over a real BroadcastChannel.
+        run: node --no-warnings scripts/test-sync-spaces-session.ts

@@ -3,10 +3,12 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
+import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
+import { renderCodeInto } from './code'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -77,6 +79,58 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
 /** Resolve "asset:<key>" references against the document's asset table. */
 export function resolveAsset(doc: BentoDoc, ref: string): string {
   return ref.startsWith('asset:') ? (doc.assets?.[ref.slice(6)] ?? '') : ref
+}
+
+/**
+ * The src to actually put on an element, or '' when offline mode must not let
+ * it out. Media and images are loaded by the BROWSER from a src attribute,
+ * not by us from a fetch — so no wrapper around fetch() can see them, and a
+ * deck's remote <video> sailed straight through the offline switch
+ * (GHSA-5c3x-xqp6-g94r: measured, 4 requests). A remote src in a document is
+ * also a tracking beacon, and offline mode is exactly what a careful reader
+ * turns on before opening a deck they do not trust.
+ *
+ * Callers must OMIT the attribute rather than set it to '', because
+ * `video.src = ''` resolves against the page and makes browsers request the
+ * document's own URL — a blank src is a request, not the absence of one.
+ */
+export function assetSrc(doc: BentoDoc, ref: string): string {
+  const url = resolveAsset(doc, ref)
+  return remoteSrcBlocked(url) ? '' : url
+}
+
+/** Attributes a browser will go to the network for, all element types. */
+const URL_ATTRS = ['src', 'href', 'xlink:href', 'poster', 'srcset', 'data'] as const
+
+/**
+ * Last line of defence for offline mode: strip every remote reference from a
+ * rendered subtree.
+ *
+ * assetSrc covers the srcs the RENDERER emits, but author content is markup —
+ * an svg's `<image href="https://…">` (which the sanitizer allows on purpose,
+ * because it is a legitimate picture), an `<img>` inside a text box or a table
+ * cell — and that markup is injected as HTML without passing through any of
+ * our src helpers. A browser fetches those the moment they are in the
+ * document. No wrapper around fetch() can see it and no allowlist can, since
+ * the markup is perfectly legitimate; the only question offline mode asks is
+ * where it POINTS.
+ *
+ * A remote reference in a document you were sent is also the cheapest tracking
+ * beacon there is, and offline mode is precisely what a careful reader turns
+ * on before opening one.
+ */
+export function stripRemoteRefs(node: HTMLElement): void {
+  if (!offlineEnabled()) return
+  const all = [node, ...node.querySelectorAll<HTMLElement>('*')]
+  for (const e of all) {
+    for (const a of URL_ATTRS) {
+      const v = e.getAttribute?.(a)
+      if (v && isRemoteUrl(v)) {
+        e.removeAttribute(a)
+        e.dataset.bentoOffline = '1'
+      }
+    }
+  }
 }
 
 function svgMarkup(el: SvgElement, doc: BentoDoc): string {
@@ -375,7 +429,23 @@ function tagSymbols(mathml: string): string {
     if (!txt) continue
     const n = seen.get(txt) ?? 0
     seen.set(txt, n + 1)
-    ;(leaf as HTMLElement).dataset.sym = `${txt}#${n}`
+      ; (leaf as HTMLElement).dataset.sym = `${txt}#${n}`
+  }
+  // Scaffolding gets its own key, on a SEPARATE attribute. A fraction bar and
+  // a radical are drawn by the mfrac/msqrt box itself, not by any token, so
+  // they carry no data-sym and used to be the one part of a formula that
+  // neither travelled nor faded — they were simply there from frame one while
+  // everything around them animated. They must never enter the symbol morph:
+  // transforming a container would move its children a second time, on top of
+  // their own travel. Keyed by tag occurrence so scaffolding that SURVIVES a
+  // step (the outer fraction of a rearranged equation) is recognised and left
+  // alone, while genuinely new scaffolding can be faded in.
+  const struct = new Map<string, number>()
+  for (const box of Array.from(tpl.content.querySelectorAll('mfrac, msqrt, mroot, menclose, mover, munder, munderover'))) {
+    const tag = box.tagName.toLowerCase()
+    const n = struct.get(tag) ?? 0
+    struct.set(tag, n + 1)
+      ; (box as HTMLElement).dataset.msx = `${tag}#${n}`
   }
   return tpl.innerHTML
 }
@@ -490,8 +560,13 @@ function stripAllTags(html: string): string {
  * `importNode(n, true)` copied them wholesale.
  */
 export const SVG_TAGS = new Set([
-  // structure. `style` stays: it cannot execute, and scopeCss (hard-won detail
-  // #7) is what keeps its rules from leaking into every other svg on the page.
+  // structure. `style` stays: it cannot execute, its text is run through
+  // sanitizeSvgCss, and sanitizeSvg SCOPES it to the element instance (hard-won
+  // detail #7) so its rules cannot leak into every other svg on the page.
+  // That scoping is passed IN — the sanitizer has no element to name on its
+  // own. An earlier version of this comment credited scopeCss directly, which
+  // was false: scopeCss's only caller took `el.css`, the model field, and the
+  // markup path below was never scoped at all.
   'svg', 'g', 'defs', 'symbol', 'use', 'switch', 'desc', 'title', 'metadata', 'style', 'view', 'a',
   // shapes and text
   'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
@@ -727,7 +802,13 @@ export function sanitizeSvgCss(css: string): string {
  * `id` is deliberately never stripped: svg gradients and markers resolve
  * through document-global `url(#…)`, so an id sweep blanks the artwork.
  */
-export function sanitizeSvg(markup: string): DocumentFragment {
+/**
+ * `scope` is REQUIRED, not optional. The bug this signature exists to prevent
+ * was precisely a markup path that never got scoped, so an optional parameter
+ * would leave the leak one omission away and make the unsafe call the shorter
+ * one. There is one caller; costing it a selector is free.
+ */
+export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
   const out = document.createDocumentFragment()
   if (!markup) return out
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
@@ -775,7 +856,10 @@ export function sanitizeSvg(markup: string): DocumentFragment {
         // html parser really does build here: inside foreign content the
         // tokenizer stays in the data state, so `<svg><style><img src=x
         // onerror=…></style>` parses that img as an ELEMENT, not as css text.
-        el.textContent = sanitizeSvgCss(el.textContent ?? '')
+        // Scoped as well as sanitized. An svg <style> applies DOCUMENT-WIDE, so
+        // one diagram's rules reach every other svg on the page — the exact
+        // hazard scopeCss exists for, which until now only `el.css` got.
+        el.textContent = scopeCss(sanitizeSvgCss(el.textContent ?? ''), scope)
         continue
       }
       walk(el)
@@ -975,7 +1059,9 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       break
     case 'image': {
       const img = document.createElement('img')
-      img.src = resolveAsset(doc, el.src)
+      const imgSrc = assetSrc(doc, el.src)
+      if (imgSrc) img.src = imgSrc
+      else img.dataset.bentoOffline = '1'
       img.draggable = false
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
@@ -990,7 +1076,8 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         still.style.cssText = `width:100%;height:100%;border-radius:${radius}px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:${el.kind === 'video' ? '#0b0f14' : '#e7edf4'}`
         if (el.kind === 'video' && el.poster) {
           const img = document.createElement('img')
-          img.src = resolveAsset(doc, el.poster)
+          const posterSrc = assetSrc(doc, el.poster)
+          if (posterSrc) img.src = posterSrc
           img.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};display:block`
           still.appendChild(img)
         } else {
@@ -1009,11 +1096,17 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         // and looked odd) — only centre it in the element box. Size the box to
         // the control's ~54px intrinsic height (defaultMedia audio uses 56).
         const audio = document.createElement('audio')
-        if (el.src) audio.src = resolveAsset(doc, el.src)
+        const audioSrc = assetSrc(doc, el.src)
+        if (audioSrc) audio.src = audioSrc
         audio.controls = el.controls !== false
         audio.loop = !!el.loop
         audio.preload = 'metadata'
-        audio.dataset.autoplay = el.autoplay ? '1' : ''
+        // OMITTED, not emptied, when autoplay is off. Reveal decides autoplay
+        // with hasAttribute('data-autoplay') — presence, not value — so
+        // data-autoplay="" made it play a clip the author had switched OFF
+        // (reported 2026-08-22). Our own startMediaIn reads [data-autoplay="1"]
+        // and was never the problem; Reveal simply gets there first.
+        if (el.autoplay) audio.dataset.autoplay = '1'
         audio.style.cssText = 'width:100%;display:block' + inert
         const wrap = document.createElement('div')
         wrap.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center'
@@ -1025,14 +1118,17 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         break
       }
       const video = document.createElement('video')
-      if (el.src) video.src = resolveAsset(doc, el.src)
-      if (el.poster) video.poster = resolveAsset(doc, el.poster)
+      const videoSrc = assetSrc(doc, el.src)
+      if (videoSrc) video.src = videoSrc
+      else if (el.src) video.dataset.bentoOffline = '1'
+      const posterUrl = assetSrc(doc, el.poster ?? '')
+      if (posterUrl) video.poster = posterUrl
       video.controls = el.controls !== false
       video.loop = !!el.loop
       video.muted = el.muted !== false
       video.playsInline = true
       video.preload = 'metadata'
-      video.dataset.autoplay = el.autoplay ? '1' : ''
+      if (el.autoplay) video.dataset.autoplay = '1' // presence is the flag — see the audio case
       video.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};border-radius:${radius}px;display:block;background:#0b0f14` + inert
       if (!el.src) {
         const ph = document.createElement('div')
@@ -1072,7 +1168,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // whatever the deck carried in a <script> or an onload — see sanitizeSvg.
       // The <img> branch above is inert already (an image is script-disabled),
       // which is why only this path changes.
-      node.appendChild(sanitizeSvg(markup))
+      node.appendChild(sanitizeSvg(markup, `[data-el-id="${CSS.escape(el.id)}"]`))
       const svg = node.querySelector('svg')
       if (svg) {
         svg.style.width = '100%'
@@ -1089,7 +1185,50 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       }
       break
     }
+    case 'code': {
+      node.style.display = 'flex'
+      node.style.flexDirection = 'column'
+      node.style.justifyContent = VALIGN[el.valign]
+      // Clip at the ELEMENT box — the size the author chose — and never at the
+      // <pre> (see below). Code sets `white-space: pre`, so a long line does
+      // not wrap and would otherwise run across the slide over whatever sits
+      // beside it; bounding it to its own box keeps the author's layout
+      // contract. The box is normally far larger than the lines inside it,
+      // which is exactly the room a morphing token needs.
+      node.style.overflow = 'hidden'
+      const inner = document.createElement('pre')
+      inner.className = 'bento-text-inner'
+      inner.dir = 'auto'
+      inner.style.fontSize = `${el.fontSize}px`
+      inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+      inner.style.textAlign = el.align
+      inner.style.lineHeight = String(el.lineHeight)
+      inner.style.width = '100%'
+      inner.style.color = el.color
+      inner.classList.add('bento-code')
+      inner.style.whiteSpace = 'pre'
+      inner.style.margin = '0'
+      // NOT overflow:hidden here. A <pre> is only as tall as its own lines,
+      // and a morphing token starts at its position on the OTHER slide —
+      // outside those bounds whenever the block gets shorter. Clipping at this
+      // level painted a travelling token 48px below the box and cut it away:
+      // it vanished for the first half of its journey and popped into view
+      // mid-flight, and only in the direction where the code got shorter,
+      // since the taller side had room for the same motion. That asymmetry is
+      // what made it read as a pairing bug rather than a painting one.
+      // Found in a screenshot — the DOM reported opacity 1, a correct 80px
+      // transform and a sensible rect, all true, all outside a clipping box.
+      if (!renderCodeInto(inner, el, doc)) {
+        // Fallback to unformatted text
+        inner.innerText = el.content
+      }
+      node.appendChild(inner)
+      break
+    }
   }
+  // Every element type funnels through here, so this is the one place that
+  // sees author markup after it has been built into DOM.
+  stripRemoteRefs(node)
   return node
 }
 

@@ -8,6 +8,79 @@ The format (`bento/dash`, version `1`) is additive and stable — every version
 below opens files from every earlier version, and unknown fields are preserved.
 There is no server, so a break here would be permanent.
 
+## [0.3.0] — unreleased
+
+The release that came out of watching somebody use 0.2.0.
+
+- **Sheet tabs along the bottom**, where every spreadsheet has kept them since
+  Excel 5. They were a list inside the left panel; that panel is gone, and the
+  grid is about 200px wider at every window size. Drag to reorder — and because
+  sheet order is part of the document, one undo puts a dragged tab back where it
+  was rather than at the end.
+
+- **The totals row is a control.** It used to display `SUM` and `AVG` while the
+  only way to set one was a dropdown in the properties panel, one column at a
+  time — a readout with no way in. Click the cell and choose. Making it
+  reachable immediately surfaced two things nobody could see before: `count`
+  was borrowing the column's money format and reading `count £8.00`, and a
+  custom-formula total rendered as `[object Object]`.
+
+- **Totals, the chart and the status bar now agree with the grid.** Filter a
+  column and every one of them follows. Before this they disagreed: four rows
+  worth £69,050 sat under a footer reading £97,050, beside a chart still drawing
+  a bar for two of the rows the filter had removed. This is the same rule
+  Excel's own tables use — a table's totals row is `SUBTOTAL`, which ignores
+  hidden rows.
+
+- **The chart stays with the sheet it was made from.** Switching sheets used to
+  leave it painting the sheet you had left, and the next edit blanked it to an
+  empty axis with no explanation. It now names its sheet and offers to follow.
+
+- **Find** — ⌘F. The grid only ever holds about forty rows in the page at once,
+  so the browser's own find reports values that are plainly in your file as not
+  there. This one searches the file, scrolls to the match and selects it. It
+  searches what the filter leaves showing, so it will never jump to a row you
+  have hidden. Replace refuses computed columns and formulas, and counts every
+  refusal out loud.
+
+- **Saving tells you what happened.** Every outcome now says so — including the
+  one that matters: on a browser without in-place file writing (Firefox,
+  Safari, iOS) a save is a *download*, and the file you have open is left
+  untouched. Same keystroke, completely different outcome, and previously
+  nothing distinguished them. The first save of a new workbook also used to
+  leave the unsaved dot lit after writing the file.
+
+- **Formulas are written in a dialog**, not a browser prompt. Native prompts do
+  not exist in embedded webviews, sandboxed frames, or a tab where you have
+  blocked extra dialogs — the Formula button was simply dead in all of them. The
+  replacement lists the columns you can name and checks the expression as you
+  type.
+
+- **Redo has a button.** The shortcut always worked; a mouse user who over-undid
+  had no way back.
+
+- **Eight interface languages** — English, 日本語, 简体中文, 繁體中文, Español,
+  Français, Italiano, Deutsch. Numbers follow the language you pick, so a
+  workbook formatted `#,##0.00` reads 1,234.50 in London and 1.234,50 in Berlin
+  from the same bytes. The language never enters the file.
+
+- **Opens in about a tenth of the time** — measured 952ms to 93ms on the starter
+  workbook. And a file that did not finish downloading now says so, in a message
+  that needs no JavaScript, because a truncated file cannot run any.
+
+- **A crash no longer loses the work.** Recovery snapshots were being written
+  and never read back. If this browser cannot keep a local backup at all — some
+  private-browsing modes — it now says so rather than implying a safety net.
+
+- **Read-only workbooks refuse writes.** An `.xlsx` import could previously add
+  sheets to a workbook the format version had declared unwritable.
+
+- Comment threads on cells that survive sorting and say so when their row is
+  deleted; a validator that reports damage rather than refusing to open;
+  drag-and-drop to open a file, which used to navigate away from your workbook
+  and take unsaved edits with it; a `?` shortcut card generated from the key map
+  itself; and ⇧Space selects the row, which had never worked.
+
 ## [0.2.0] — 2026-08-03
 
 First release. A workbook is one self-contained HTML file: the data, the grid,

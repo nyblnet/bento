@@ -9,22 +9,34 @@
 // story, native ⌘F, print fidelity and lossless markdown export at once, from
 // one decision.
 
-import { type SpacesDoc, type Page, type Block, isRemote } from './model'
+import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
-import { t } from './i18n'
-import { TAG_OF, LIST_OF, SPEC, TONE } from './blocks'
+import { t, locale } from './i18n'
+import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
-  fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
-  passesFilter, filterCount, unknownFilterKeys, type FieldSpec,
+  fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
+  passesFilter, filterCount, unknownFilterKeys,
+  sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
+  type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
+import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
+import { renderCanvasHead, placeCard } from './canvas.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
   editable?: boolean
   /** resolve a page id to its title, for link chips and pagelink blocks */
   titleOf?: (pageId: string) => string | undefined
+  /**
+   * This READER's preferred width for a page that does not state one.
+   *
+   * Viewer-scoped, like locale and the pane width — never a document field. It
+   * is a fact about the screen somebody is sitting at, so two people opening
+   * one space each get their own answer, and neither writes it into the file.
+   */
+  readerWidth?: 'wide' | 'full'
   /** collapsed toggles render OPEN — print always passes this */
   forceOpen?: boolean
   /** rendering to paper: no controls, because paper has no buttons */
@@ -54,8 +66,18 @@ export interface RenderOpts {
  */
 export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): DocumentFragment {
   const frag = document.createDocumentFragment()
-  // stack of open containers, innermost last: [blockId, element]
-  const stack: Array<[string, HTMLElement]> = []
+  // MAGIC NOTES' CONTEXT, accumulated as the pass goes. A name is defined by a
+  // line and usable by the lines BELOW it — the same direction a person reads
+  // in, and the reason this needs no second pass and cannot cycle.
+  const calc: CalcCtx = freshContext()
+  // stack of open containers, innermost last: [blockId, element, type]
+  //
+  // The TYPE is on the stack because a canvas's children are POSITIONED and
+  // nothing else's are. A block cannot know that on its own — `x` and `y` mean
+  // "where on the surface" only inside a surface — so the placement decision
+  // belongs here, where the open container is known, rather than to a test on
+  // the child that would also fire on a stray `x` anywhere else in a document.
+  const stack: Array<[string, HTMLElement, string]> = []
   let list: { el: HTMLElement; kind: 'ul' | 'ol'; under: string } | null = null
 
   const hostFor = (parent: string | undefined): HTMLElement | DocumentFragment => {
@@ -80,8 +102,16 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   }
 
   page.blocks.forEach((b, i) => {
+    // MAGIC NOTES' CONTEXT IS FED AFTER THE BLOCK IS DRAWN, not before, and the
+    // order is the whole difference between `sum above` working and reading 0:
+    // an answering line ENDS the run of figures it summarises, so feeding it
+    // first cleared the very run its own answer needed. After means a line sees
+    // exactly what is above it and nothing of itself — which is also what makes
+    // a name usable by the lines below and by none above.
+    const takeIn = () => feed(calc, textFromHtml(b.html))
     if (strip && i < head) {
-      strip.appendChild(renderBlock(b, doc, opts))
+      strip.appendChild(renderBlock(b, doc, opts, calc))
+      takeIn()
       return
     }
     const host = hostFor(b.parent)
@@ -99,8 +129,16 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       list = null
     }
 
-    const node = renderBlock(b, doc, opts)
-    ;(kind && list ? list.el : host).appendChild(node)
+    const node = renderBlock(b, doc, opts, calc)
+    takeIn()
+    const into = kind && list ? list.el : host
+    into.appendChild(node)
+    // A CARD IS PLACED AFTER IT IS APPENDED: its index among its siblings is
+    // the fallback position for a card that has never been dragged, and the
+    // index is a fact about the parent, not about the block.
+    if (stack.length && stack[stack.length - 1][0] === b.parent && stack[stack.length - 1][2] === 'canvas') {
+      placeCard(node, b)
+    }
 
     // A CONTAINER owns the blocks whose parent is its id. Which types those are
     // is registry data (blocks.ts `container`), not a name test here — the
@@ -112,7 +150,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       body.className = `sp-${b.type}-body`
       if (container === 'fold' && !(opts.forceOpen || b.open)) body.hidden = true
       node.appendChild(body)
-      stack.push([b.id, body])
+      stack.push([b.id, body, b.type])
       list = null
     } else if (kind) {
       // A LIST ITEM OWNS ITS INDENTED CHILDREN.
@@ -127,13 +165,13 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       // Not `container: true` in the registry: a list item does not take a body
       // div, it takes children directly, and the gutter/inline-host rules that
       // `container` implies are wrong for it.
-      stack.push([b.id, node])
+      stack.push([b.id, node, b.type])
     }
   })
   return frag
 }
 
-export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HTMLElement {
+export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, calc: CalcCtx = {}): HTMLElement {
   const type = b.type
   const el = document.createElement(TAG_OF[type] ?? 'div')
   el.dataset.blockId = b.id
@@ -177,8 +215,9 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       // as `asset:`. Only hand- or agent-authored documents carry URLs, and for
       // those the reader gets a placeholder naming the host and a button. One
       // click, per image, informed — the model every mail client settled on.
-      if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
-        fig.appendChild(remoteImagePlaceholder(rawSrc, b, opts))
+      if (loadsRemotely(rawSrc, doc) && !opts.allowRemote?.(rawSrc)) {
+        fig.appendChild(remotePlaceholder(rawSrc, b, opts,
+          t('Image from {host}', { host: remoteHost(resolveSrc(rawSrc, doc)) }), t('Load this image')))
         if (b.caption) {
           const cap = document.createElement('figcaption')
           cap.innerHTML = sanitizeInline(String(b.caption))
@@ -205,6 +244,123 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       return el
     }
 
+    case 'table': {
+      el.appendChild(renderTable(b, opts))
+      return el
+    }
+
+    case 'media': {
+      const fig = document.createElement('figure')
+      const play = mediaPlayback(b)
+      const rawSrc = String(b.src ?? '')
+      el.dataset.kind = play.kind
+      const done = () => {
+        if (b.caption) {
+          const cap = document.createElement('figcaption')
+          cap.innerHTML = sanitizeInline(String(b.caption))
+          fig.appendChild(cap)
+        }
+        el.appendChild(fig)
+        return el
+      }
+
+      // NO SOURCE YET. Inserting the block and choosing the file are two
+      // gestures — a picker can be cancelled, and a link has to be typed
+      // somewhere — so the empty state is part of the block rather than a
+      // failure of it. The editor wires these two buttons; a reader, a
+      // printout and a still see the same box saying what is missing, which is
+      // more honest than a gap.
+      if (!rawSrc) {
+        const box = document.createElement('div')
+        box.className = 'sp-media-empty'
+        const line = document.createElement('div')
+        line.className = 'sp-remote-line'
+        line.textContent = play.kind === 'audio' ? t('Audio') : t('Video')
+        box.appendChild(line)
+        if (opts.editable && !opts.printing) {
+          const pick = document.createElement('button')
+          pick.type = 'button'
+          pick.className = 'sp-btn sp-remote-load'
+          pick.textContent = t('Choose a file…')
+          pick.dataset.pickMedia = b.id
+          const link = document.createElement('button')
+          link.type = 'button'
+          link.className = 'sp-btn sp-remote-load'
+          link.textContent = t('Use a link…')
+          link.dataset.linkMedia = b.id
+          const row = document.createElement('div')
+          row.className = 'sp-media-actions'
+          row.append(pick, link)
+          box.appendChild(row)
+        }
+        fig.appendChild(box)
+        return done()
+      }
+
+      // THE SAME CONSENT GATE AS AN IMAGE, and it matters MORE here. A remote
+      // <video> asks its host for byte ranges the moment the element is
+      // parsed, so an autoplaying tracker is not even needed: opening the
+      // space is the ping. Same rule, same host named, different words.
+      if (loadsRemotely(rawSrc, doc) && !opts.allowRemote?.(rawSrc)) {
+        const host = remoteHost(rawSrc)
+        fig.appendChild(remotePlaceholder(rawSrc, b, opts,
+          play.kind === 'audio' ? t('Audio from {host}', { host }) : t('Video from {host}', { host }),
+          play.kind === 'audio' ? t('Load this audio') : t('Load this video')))
+        return done()
+      }
+
+      // PAPER AND THUMBNAILS GET A STILL, NEVER A PLAYER.
+      //
+      // `printing` is the flag both of those surfaces already pass (print, and
+      // preview.ts's file-manager render), and it is the honest test: it means
+      // "this output cannot be interacted with". A <video> on paper prints as
+      // a black rectangle; in a file-manager preview it would be an element
+      // that decodes, buffers and — with scripting off, where nothing can stop
+      // it — sits there holding a source open. preview.ts also BANS the tags
+      // outright, which is defence in depth rather than the mechanism: by the
+      // time it runs there is nothing to ban.
+      if (opts.printing) {
+        fig.appendChild(mediaStill(b, doc, opts, play.kind))
+        return done()
+      }
+
+      const m = document.createElement(play.kind === 'audio' ? 'audio' : 'video') as
+        HTMLVideoElement | HTMLAudioElement
+      m.className = 'sp-media'
+      m.src = resolveSrc(rawSrc, doc)
+      // metadata, not auto: enough to draw the first frame and a duration, and
+      // no more. `auto` on a linked clip downloads the whole thing to display a
+      // page nobody has pressed play on.
+      m.preload = 'metadata'
+      // A block with controls off is a rectangle you cannot use, which is fine
+      // for a reader looking at a caption-and-poster figure and useless to the
+      // author who has to click it to change it. So the editor always has them.
+      m.controls = play.controls || opts.editable === true
+      m.loop = play.loop
+      // NOTHING SETS `m.autoplay`. mediaPlayback() cannot return true for it,
+      // and this is the surface that would have obeyed it — see blocks.ts.
+      if (play.kind === 'video') {
+        const v = m as HTMLVideoElement
+        // iOS otherwise takes the clip fullscreen on play, which throws the
+        // reader out of the page they were reading
+        v.playsInline = true
+        // muted is a VIDEO choice: a silent audio block is a block that does
+        // nothing, so the editor does not offer it and neither does this
+        v.muted = play.muted
+        const poster = String(b.poster ?? '')
+        // a remote poster is the same tracking pixel as a remote image, so it
+        // goes through the same consent
+        if (poster && !(loadsRemotely(poster, doc) && !opts.allowRemote?.(poster))) {
+          const resolved = resolveSrc(poster, doc)
+          if (resolved) v.poster = resolved
+        }
+        if (b.w && b.h) { v.width = Number(b.w); v.height = Number(b.h) }
+        if (b.width) v.style.width = `${Math.max(10, Math.min(100, Number(b.width)))}%`
+      }
+      fig.appendChild(m)
+      return done()
+    }
+
     case 'pagelink': {
       const a = document.createElement('a')
       const target = String(b.page ?? '')
@@ -217,6 +373,98 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       return el
     }
 
+    case 'link': {
+      // A CARD DRAWN ENTIRELY FROM THE FILE.
+      //
+      // There is no fetch here and there is no deferred one either. Every value
+      // was typed by the author and stored; the only thing derived at render
+      // time is the site name, and that is `new URL(url).host` — parsing, not a
+      // request. PLATFORM §1 and the 2026-08-03 decision both land on this
+      // line, so the negative test in scripts/test-spaces-model.ts pins it.
+      const c = linkCard(b)
+      el.classList.add('sp-link')
+
+      // AN ANCHOR ONLY WHEN THERE IS SOMEWHERE TO GO. A card whose url is
+      // empty, or is a `javascript:`/`data:` string out of a mailed file, is a
+      // <div>: `linkCard` returns '' for all three, and an <a> with no href is
+      // a link a keyboard can focus and a screen reader will announce, leading
+      // nowhere.
+      const card = document.createElement(c.url ? 'a' : 'div')
+      card.className = 'sp-linkcard'
+      if (c.url) {
+        const a = card as HTMLAnchorElement
+        a.href = c.url
+        // the same treatment sanitizeInline gives an external link: this leaves
+        // the document, so it must not be able to reach back through opener
+        a.rel = 'noopener noreferrer'
+        a.target = '_blank'
+      } else {
+        card.classList.add('sp-dead')
+      }
+
+      // THE THUMBNAIL IS LOCAL OR IT IS ABSENT. `linkCard` drops one that was
+      // WRITTEN remote, and that is as far as it can see: it takes a block, not
+      // a document, so it cannot know what an `asset:` key resolves to. The
+      // asset table is exactly where a remote URL hid, so the resolved check has
+      // to happen at the one place that holds both the src and the document —
+      // here, which is also the only place that loads anything.
+      if (c.image && !loadsRemotely(c.image, doc)) {
+        const img = document.createElement('img')
+        img.src = resolveSrc(c.image, doc)
+        img.alt = ''
+        img.className = 'sp-linkcard-img'
+        card.appendChild(img)
+      }
+
+      const body = document.createElement('span')
+      body.className = 'sp-linkcard-body'
+
+      const title = document.createElement('span')
+      title.className = 'sp-linkcard-title'
+      // an empty card is not an empty box: it says what it is and, in the
+      // editor, offers the way to fill it in
+      title.textContent = c.title || t('A link with nothing in it yet')
+      body.appendChild(title)
+
+      if (c.desc) {
+        const desc = document.createElement('span')
+        desc.className = 'sp-linkcard-desc'
+        desc.textContent = c.desc
+        body.appendChild(desc)
+      }
+
+      const foot = document.createElement('span')
+      foot.className = 'sp-linkcard-site'
+      if (c.icon) {
+        const mark = document.createElement('span')
+        mark.className = 'sp-linkcard-mark'
+        // textContent, never innerHTML: this is one field out of a mailed file
+        mark.textContent = c.icon
+        foot.appendChild(mark)
+      }
+      const site = document.createElement('span')
+      site.textContent = c.site || c.url
+      foot.appendChild(site)
+      if (c.site || c.url || c.icon) body.appendChild(foot)
+
+      card.appendChild(body)
+      el.appendChild(card)
+
+      // The card itself opens the link, so editing needs its own control — and
+      // only where there is an editor. Reading view, print and a locked space
+      // must not paint a button that does nothing (the callout chip's rule).
+      if (opts.editable) {
+        const edit = document.createElement('button')
+        edit.type = 'button'
+        edit.className = 'sp-linkcard-edit'
+        edit.dataset.editLink = b.id
+        edit.title = t('Edit this link card')
+        edit.textContent = c.url ? t('Edit') : t('Add a link')
+        el.appendChild(edit)
+      }
+      return el
+    }
+
     case 'todo': {
       const box = document.createElement('input')
       box.type = 'checkbox'
@@ -225,7 +473,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       // the checkbox is a control, not text: it must not be inside the
       // editable host or typing would land in it
       el.appendChild(box)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       if (b.done) el.classList.add('sp-done')
       return el
     }
@@ -267,6 +515,19 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       return el
     }
 
+    case 'canvas': {
+      // The BODY is opened by renderBlocks (registry `container`), which is
+      // also what puts the cards in it — so this draws the chrome and nothing
+      // else. `cards` is only needed for the empty-state line, and counting
+      // here rather than after the fact keeps renderBlock a pure function of
+      // one block.
+      const cards = doc.pages
+        .find((p) => p.blocks.some((x) => x.id === b.id))?.blocks
+        .filter((x) => x.parent === b.id).length ?? 0
+      renderCanvasHead(el, b, opts.editable === true, cards)
+      return el
+    }
+
     case 'view': {
       el.classList.add('sp-view')
       renderView(el, b, doc, opts)
@@ -301,7 +562,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       label.textContent = toneLabel(raw)
       chip.append(mark, label)
       el.appendChild(chip)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
     }
 
@@ -310,17 +571,91 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}): HT
       twist.className = 'sp-twist'
       twist.type = 'button'
       twist.setAttribute('aria-expanded', String(!!(opts.forceOpen || b.open)))
-      twist.setAttribute('aria-label', 'Toggle section')
+      twist.setAttribute('aria-label', t('Toggle section'))
       twist.textContent = '▸'
       el.appendChild(twist)
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
     }
 
     default:
-      el.appendChild(inlineHost(b, opts))
+      hostAndAnswer(el, b, opts, calc)
       return el
   }
+}
+
+/**
+ * A table — the same DOM in the editor, the reading view, print and the still
+ * preview, because there is one renderer.
+ *
+ * REAL `<table>`, `<thead>`, `<th>`, exactly as this renderer emits real
+ * headings and real list items: that is what buys the screen-reader story
+ * (row and column announcement), native ⌘F, print fidelity and a lossless
+ * markdown export, all from one decision. A grid of divs would need four
+ * separate answers.
+ *
+ * The widths are a `<colgroup>` over `table-layout: fixed` — the one layout
+ * mode in which a column's width is what the document SAYS rather than what
+ * this reader's font measured, so a table looks the same to everyone the file
+ * is mailed to. Percentages, never px: `cols` holds fractions (model.ts) and
+ * the text column is a theme concern.
+ *
+ * Cells are editable HOSTS in the editor and inert `<td>`s everywhere else, and
+ * the editable one is the cell itself rather than a span inside it — a cell is
+ * a box you click into, and a nested host makes a 1px strip around its edge
+ * that swallows the click.
+ */
+function renderTable(b: Block, opts: RenderOpts): HTMLElement {
+  const t = tableOf(b)
+  const wrap = document.createElement('div')
+  // A wide table SCROLLS rather than widening the prose column: the measure is
+  // the document's, and a five-column table must not push the paragraph above
+  // it off the screen on a phone.
+  wrap.className = 'sp-tb-wrap'
+  const table = document.createElement('table')
+  table.className = 'sp-tb'
+  const total = t.cols.reduce((s, n) => s + n, 0) || t.w
+  const group = document.createElement('colgroup')
+  for (const w of t.cols) {
+    const col = document.createElement('col')
+    col.style.width = `${((w / total) * 100).toFixed(3)}%`
+    group.appendChild(col)
+  }
+  table.appendChild(group)
+
+  const body = document.createElement('tbody')
+  t.rows.forEach((row, r) => {
+    const head = t.header && r === 0
+    const tr = document.createElement('tr')
+    row.forEach((cell, c) => {
+      const td = document.createElement(head ? 'th' : 'td')
+      td.className = 'sp-tb-cell'
+      td.dataset.r = String(r)
+      td.dataset.c = String(c)
+      if (head) td.setAttribute('scope', 'col')
+      if (t.colAlign[c]) td.style.textAlign = t.colAlign[c]
+      // per cell, for the reason text blocks carry it: a table of Arabic terms
+      // beside English ones must lay each column out by what is IN it
+      td.dir = 'auto'
+      if (opts.editable) {
+        td.contentEditable = 'true'
+        // NOT `data-edit`: that name means "this element's html IS the block's
+        // html", and the editor's generic input handler would write one cell
+        // over the whole table. A cell says which block AND which cell it is.
+        td.dataset.cell = b.id
+      }
+      td.innerHTML = sanitizeInline(cell)
+      tr.appendChild(td)
+    })
+    if (head) {
+      const thead = document.createElement('thead')
+      thead.appendChild(tr)
+      table.appendChild(thead)
+    } else body.appendChild(tr)
+  })
+  table.appendChild(body)
+  wrap.appendChild(table)
+  return wrap
 }
 
 /**
@@ -369,6 +704,28 @@ function calloutMark(host: HTMLElement, b: Block, known: string): void {
     return
   }
   host.innerHTML = ICONS[(TONE.get(known) ?? TONE.get('note')!).icon]
+}
+
+/**
+ * The editable host, plus the ANSWER when the line asks for one.
+ *
+ * The answer is a SIBLING of the editable span, never inside it. Inside, it
+ * would be part of what contentEditable hands back on the next keystroke, and
+ * the derived answer would be committed into `html` — which is exactly the
+ * frozen-result design this feature exists to avoid. It is also
+ * contenteditable=false and aria-hidden: it is output, not text, and a screen
+ * reader should hear the line once.
+ */
+function hostAndAnswer(el: HTMLElement, b: Block, opts: RenderOpts, ctx: CalcCtx): void {
+  el.appendChild(inlineHost(b, opts))
+  const ans = answer(textFromHtml(b.html), ctx, locale())
+  if (ans === null) return
+  const out = document.createElement('span')
+  out.className = 'sp-ans'
+  out.contentEditable = 'false'
+  out.setAttribute('aria-hidden', 'true')
+  out.textContent = ans
+  el.appendChild(out)
 }
 
 /** The editable text host. Per-block, never one big editable container — that
@@ -452,17 +809,10 @@ export function paintCode(code: HTMLElement, text: string, lang?: unknown): bool
   return changed
 }
 
+/** What this src loads. One implementation, in model.ts, beside the predicate
+ *  that decides whether loading it leaves the machine. */
 export function resolveSrc(src: string, doc: SpacesDoc): string {
-  // hasOwn, not a bare index: `assets['toString']` returns a FUNCTION, which is
-  // truthy, so the `?? ''` never fired and the stringified function was assigned
-  // to img.src. Same class as the icon lookup — an author-supplied key reaching
-  // a lookup table through the prototype chain.
-  if (src.startsWith('asset:')) {
-    const key = src.slice(6)
-    const table = doc.assets
-    return table && Object.hasOwn(table, key) ? table[key] : ''
-  }
-  return src
+  return assetValue(src, doc)
 }
 
 
@@ -472,18 +822,26 @@ function remoteHost(src: string): string {
 }
 
 /**
- * What stands in for an unloaded remote image: what it is, WHERE it would come
- * from, and a button. Naming the host is the point — "load images" with no
+ * What stands in for an unloaded remote resource: what it is, WHERE it would
+ * come from, and a button. Naming the host is the point — "load images" with no
  * indication of who is being contacted is not consent.
+ *
+ * `line` and `action` are passed rather than derived from the block, because a
+ * video and an audio clip are the same gate with different words, and the
+ * strings have to be LITERAL t() calls somewhere for the i18n sweep to find
+ * them (scripts/build-spaces-i18n.mjs reads the source). Their call sites say
+ * them; this says the part that is identical.
  */
-function remoteImagePlaceholder(src: string, b: Block, opts: RenderOpts): HTMLElement {
+function remotePlaceholder(
+  src: string, b: Block, opts: RenderOpts, line0: string, action: string,
+): HTMLElement {
   const box = document.createElement('div')
   box.className = 'sp-remote'
   box.dataset.remoteSrc = src
 
   const line = document.createElement('div')
   line.className = 'sp-remote-line'
-  line.textContent = t('Image from {host}', { host: remoteHost(src) })
+  line.textContent = line0
   box.appendChild(line)
 
   const why = document.createElement('div')
@@ -506,10 +864,47 @@ function remoteImagePlaceholder(src: string, b: Block, opts: RenderOpts): HTMLEl
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'sp-btn sp-remote-load'
-    btn.textContent = t('Load this image')
+    btn.textContent = action
     btn.dataset.loadRemote = src
     box.appendChild(btn)
   }
+  return box
+}
+
+/**
+ * What a clip looks like where nothing can play it: paper, and a file-manager
+ * thumbnail.
+ *
+ * The POSTER if there is one — that is the frame the author chose, and it is
+ * the whole reason the field is worth having — and otherwise a quiet box that
+ * says what is there. Not nothing: a printed handbook that silently omits the
+ * paragraph where the demo video was is the same class of bug as a toggle that
+ * prints shut.
+ *
+ * A remote poster is skipped rather than fetched. preview.ts passes no
+ * `allowRemote` at all, so a still built for a file manager can never make a
+ * request — which is the point, because nobody is there to consent.
+ */
+function mediaStill(b: Block, doc: SpacesDoc, opts: RenderOpts, kind: 'video' | 'audio'): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'sp-media-still'
+  const poster = String(b.poster ?? '')
+  if (poster && !(loadsRemotely(poster, doc) && !opts.allowRemote?.(poster))) {
+    const resolved = resolveSrc(poster, doc)
+    if (resolved) {
+      const img = document.createElement('img')
+      img.src = resolved
+      img.alt = String(b.alt ?? '')
+      box.appendChild(img)
+      box.classList.add('sp-has-poster')
+    }
+  }
+  const badge = document.createElement('span')
+  badge.className = 'sp-media-badge'
+  // the triangle is the universal mark and needs no font; the word beside it
+  // is what makes it readable aloud and in monochrome
+  badge.textContent = `\u25B8 ${kind === 'audio' ? t('Audio') : t('Video')}`
+  box.appendChild(badge)
   return box
 }
 
@@ -531,9 +926,86 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   // squeezing one into 720px shows two and a half columns of a six-column
   // board. A page carrying a view gets the room instead; a page of writing
   // keeps its measure.
-  const wide = page.blocks.some((b) => b.type === 'view')
-  if (doc.theme.measure) inner.style.maxWidth = wide ? '1500px' : `${doc.theme.measure}px`
-  if (wide) inner.classList.add('sp-wide')
+  // The page decides; a board is only the DEFAULT for a page that has not.
+  // `width` absent on a board page keeps the room it always had, and an
+  // unknown value from a newer build falls back to the measure rather than to
+  // no width at all.
+  const auto: 'wide' | undefined = page.blocks.some((b) => b.type === 'view') ? 'wide' : undefined
+  // PRECEDENCE: what the PAGE says, then what this READER prefers, then the
+  // board default, then the measure.
+  //
+  // The reader's preference is the piece this was missing. A per-page control
+  // answers "this page needs the room"; it does not answer "I have a 27-inch
+  // monitor", which is a fact about the person and not about any document —
+  // and making them set it page by page is the wrong shape of work. It lives
+  // in localStorage beside the language and the pane width, never in the file,
+  // for the reason PLATFORM §8 gives about locale: two people opening one
+  // space on different screens should each get their own answer.
+  const width = page.width === 'wide' || page.width === 'full' ? page.width
+    : page.width === undefined ? (opts.readerWidth ?? auto)
+    : undefined
+  if (width === 'full') inner.style.maxWidth = 'none'
+  // WIDE IS A PROPORTION, not a number. It was a flat 1500px, which is wider
+  // than the reading area of any laptop — so it clamped to the container and
+  // came out identical to Full. Measured at a 1440px viewport: column 720,
+  // wide 1130, full 1130. Two of the three choices did the same thing, and the
+  // one screen where they differed was a 27-inch monitor.
+  //
+  // 80% keeps a visible step at every size, and the 1500px cap keeps Wide from
+  // becoming an unreadable line on a very large screen — at which point Full is
+  // the thing to pick, deliberately.
+  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, 80%)'
+  else if (doc.theme.measure) {
+    // AND THE DEFAULT ITSELF GROWS. 720px is ~88 characters at 16px, which is
+    // already at the long end — so this does not widen the line much; what it
+    // does is stop a 2560px screen showing a 720px ribbon using 31% of it.
+    // Capped, because past ~95 characters a line is harder to read, not easier.
+    // THE CAP IS IN CHARACTERS, not pixels — that is the whole point.
+    // A px cap does not hold a line length: capped at measure x 1.25 = 900px,
+    // a 5120px screen rendered 110 characters, past the range anyone reads
+    // comfortably, while the comment above it claimed ~95 was the limit.
+    //
+    // 75ch, not 90ch: `ch` is the width of the digit ZERO, and prose averages
+    // narrower than that — measured here, 9.77px against 8.16px — so 75ch
+    // renders about 90 real characters and 90ch would render 108. The unit
+    // flatters itself by about a fifth.
+    //
+    // And because `ch` scales with --sp-read, the column grows in PIXELS on a
+    // large screen while holding the same character count. That is what the
+    // extra pixels are for: bigger type at a longer viewing distance, not a
+    // longer line.
+    const m = doc.theme.measure
+    inner.style.maxWidth = `min(75ch, max(${m}px, 42vw))`
+  }
+  if (width) inner.classList.add('sp-wide')
+
+  // THE COVER, above everything, and FULL-BLEED rather than inside the column.
+  // That is what makes it read as a cover instead of as the first image in the
+  // page: it belongs to the page, not to the prose, so it ignores the measure
+  // the way a book's jacket ignores the type area. It escapes the reading
+  // column's padding with negative margins off `--sp-pad-x/y`, which is why
+  // that padding is written as variables — a hard-coded -44px would be wrong on
+  // a phone, wrong in reading mode and wrong in print, all silently.
+  //
+  // `resolveSrc` is the same lookup an image block goes through, and `coverSrc`
+  // is what refuses a remote one — so a cover can never make opening a document
+  // a network request (PLATFORM §1).
+  const cover = resolveSrc(coverSrc(page), doc)
+  if (cover) {
+    art.classList.add('sp-has-cover')
+    const wrap = document.createElement('div')
+    wrap.className = 'sp-cover'
+    const img = document.createElement('img')
+    img.className = 'sp-cover-img'
+    img.src = cover
+    // DECORATIVE, deliberately. The page's own title is right underneath it and
+    // says the same thing; a screen reader announcing "cover image" before every
+    // title is noise, and there is nowhere to write alt text for it anyway.
+    img.alt = ''
+    img.setAttribute('aria-hidden', 'true')
+    wrap.appendChild(img)
+    art.appendChild(wrap)
+  }
 
   const h = document.createElement('h1')
   h.className = 'sp-title'
@@ -558,6 +1030,49 @@ function shownValue(f: FieldSpec | undefined, value: unknown): string {
 }
 
 /**
+ * A stable hue for a page with no cover.
+ *
+ * FNV-1a over the id, which is the same cheap hash assets.ts falls back to:
+ * every reader of one file computes the same colour, and a page keeps its
+ * colour when it is renamed.
+ *
+ * A CURATED SET, not 360 free hues. Free hue was measured drawing 61 and 54 in
+ * the same grid — the same dirty chartreuse twice — and five cards as
+ * peach/pink/pink/lavender/lavender: two near-duplicate pairs out of five. It
+ * also lands on olive and mustard, which no amount of alpha rescues, and goes
+ * muddy in the dark theme. Eight stops spaced around the wheel and chosen to
+ * be distinguishable at 30% alpha on both grounds; neighbours in a grid differ
+ * because the stops differ, not because the hash happened to spread.
+ */
+const CARD_HUES = [210, 265, 320, 8, 32, 48, 152, 186]
+
+function hueOf(id: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+  return CARD_HUES[h % CARD_HUES.length]
+}
+
+/**
+ * What a coverless card shows: the page's icon, else the first character of
+ * its title.
+ *
+ * The same rule `calloutMark` follows and for the same reasons — a name from
+ * the icon set is markup we wrote, anything else is TEXT out of a file someone
+ * sent you, and `Object.hasOwn` keeps `toString` from resolving to a function.
+ */
+function pageMark(host: HTMLElement, page: Page): void {
+  const icon = typeof page.icon === 'string' ? page.icon : ''
+  if (icon) {
+    if (Object.hasOwn(ICONS, icon)) { host.innerHTML = ICONS[icon as IconName]; host.classList.add('sp-gcard-ico') }
+    else host.textContent = icon
+    return
+  }
+  // [...str][0], not str[0]: an emoji or a CJK title is not one UTF-16 unit,
+  // and slicing one in half renders a replacement character.
+  host.textContent = [...(page.title || '?').trim()][0] ?? '?'
+}
+
+/**
  * A BOARD or a LIST of the issues in this space.
  *
  * Derived, never stored: the view holds a query, and the issues are wherever
@@ -570,8 +1085,9 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
-  const all = issuesOf(doc)
-  const rows = all.filter((r) => passesFilter(doc, r.values, filter))
+  const sort = (b as { sort?: unknown }).sort
+  const all = viewRows(doc, (b as { source?: unknown }).source)
+  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
 
   const head = document.createElement('div')
   head.className = 'sp-view-head'
@@ -587,22 +1103,92 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   // chip: a reader, a printout and a locked space get the view, not the buttons
   // that change what it holds.
   if (opts.editable) {
+    const btn = (attr: string, label: string, title: string, on = false): HTMLButtonElement => {
+      const el2 = document.createElement('button')
+      el2.type = 'button'
+      el2.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
+      el2.dataset[attr] = '1'
+      el2.textContent = label
+      el2.title = title
+      el2.setAttribute('aria-label', title)
+      return el2
+    }
+
+    // LAYOUT. Both shapes have always rendered; only the board was reachable,
+    // so a view block could hold `layout:'list'` that nothing in the app could
+    // produce or undo. One button, because there are two of them and a menu to
+    // choose between two things is a menu too many.
+    // THREE shapes now, so the button says what you are looking at and the
+    // click moves to the next one. A menu to choose between three is still a
+    // menu too many; a cycle is one control and one word.
+    // `layoutOf`, not a lookup in a local map: the cycle is ONE fact and it now
+    // lives in fields.ts, because it used to live here AND in editor.ts and the
+    // two drifted. A view block hand-authored with layout:"toString" — plain
+    // JSON, in a file someone sent you — made the truthiness test here pass on
+    // a native function, and the button's label rendered as
+    // `function toString() { [native code] }`. The editor's copy had been
+    // hardened and its comment said the label was safe; the label is rendered
+    // here, and this half had not been.
+    const here = layoutOf(layout)
+    const asList = here !== 'board'
+    // Three WHOLE sentences rather than one with the shape interpolated into
+    // it. "Show as a {what}" reads fine in English and breaks in half the
+    // catalogs, where the article and the adjective agree with the noun's
+    // gender — der Tafel / die Liste, un tableau / une liste. Two of these
+    // three keys already existed for the same reason.
+    // THE EXTRACTOR SWEEPS LITERALS. `t(WORD[here])` compiles, runs, and is
+    // never translated by anybody: no catalog ever learns the string exists,
+    // and the packer still reports 100% because it builds coverage from the
+    // keys it swept. Measured on main: "Board", "List" and "Show as a list"
+    // were present in de.ts and ABSENT from packed.ts — translations already
+    // written, dropped on the floor, while the button read English in all eight
+    // locales. So the words are chosen HERE, as literals the sweep can see;
+    // fields.ts answers "which shape is this" and "what comes next".
+    const LAYOUT_LABEL: Record<ViewLayout, string> = {
+      board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
+    }
+    const NEXT_LABEL: Record<ViewLayout, string> = {
+      board: t('Show as a list'), list: t('Show as a table'),
+      table: t('Show as a gallery'), gallery: t('Show as a board'),
+    }
+    const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
+    layoutB.dataset.next = nextLayout(here)
+
+    // GROUP BY. Only fields with declared options: a board's columns ARE the
+    // option list, so grouping by a free-text field would make one column per
+    // distinct string and call it a board.
+    const groupB = btn('viewGroup', field ? `${t('Group')} · ${field.label}` : t('Group'),
+      t('Choose the field the columns come from'))
+
+    const sortKey = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+    const sortField = sortKey && fieldByKey(doc, sortKey.key)
+    const sortB = btn('viewSort',
+      sortField ? `${t('Sort')} · ${sortField.label}` : t('Sort'),
+      t('Choose the order'), !!sortField)
+
     const on = !!(filter as { open?: unknown } | undefined)?.open
-    const openB = document.createElement('button')
-    openB.type = 'button'
-    openB.className = 'sp-btn sp-view-btn' + (on ? ' sp-on' : '')
-    openB.dataset.viewOpen = '1'
-    openB.textContent = t('Open only')
+    const openB = btn('viewOpen', t('Open only'), t('Open only'), on)
     openB.setAttribute('aria-pressed', String(on))
-    const filterB = document.createElement('button')
-    filterB.type = 'button'
-    filterB.className = 'sp-btn sp-view-btn'
-    filterB.dataset.viewFilter = '1'
     const n = filterCount(filter)
     // the count rather than a list of chips: what matters is that the view is
     // narrowed at all, and the popover says by what
-    filterB.textContent = n ? `${t('Filter')} · ${n}` : t('Filter')
-    head.append(openB, filterB)
+    const filterB = btn('viewFilter', n ? `${t('Filter')} · ${n}` : t('Filter'), t('Filter'), !!n)
+
+    // a LIST has no columns, so the field the columns would come from is not a
+    // question it can be asked
+    // WHICH PAGES. Named after what it answers rather than "Source", because
+    // the question in the reader's head is "what is in this?" — and it says the
+    // answer, not the word, when there is one.
+    const src = (b as { source?: { has?: unknown; under?: unknown } }).source
+    const hasKey = typeof src?.has === 'string' ? src.has : ''
+    const underId = typeof src?.under === 'string' ? src.under : ''
+    const srcLabel = hasKey ? (fieldByKey(doc, hasKey)?.label ?? hasKey)
+      : underId ? (doc.pages.find((p) => p.id === underId)?.title || t('Untitled'))
+        : t('Issues')
+    const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
+      t('Choose which pages this view holds'), !!(hasKey || underId))
+
+    head.append(layoutB, sourceB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -613,6 +1199,16 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     const note = document.createElement('p')
     note.className = 'sp-view-empty'
     note.textContent = t('A filter here is newer than this build and was not applied.')
+    host.appendChild(note)
+  }
+  // Same rule, same honesty: a sort key naming a field this build has no schema
+  // for is skipped, and the order you are looking at is not the one the author
+  // asked for. Silently showing a different order is the failure additivity
+  // trades for.
+  if (unknownSortKeys(doc, sort).length) {
+    const note = document.createElement('p')
+    note.className = 'sp-view-empty'
+    note.textContent = t('A sort here is newer than this build and was not applied.')
     host.appendChild(note)
   }
 
@@ -683,6 +1279,281 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     }
     if (meta.childElementCount) a.appendChild(meta)
     return a
+  }
+
+  // TABLE — the shape a base is usually looked at in, and the one this app did
+  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
+  // declared order: a table of books should not carry an Estimate column
+  // because the vocabulary happens to contain one, and a page that has a field
+  // the others lack should not be the reason everyone gets an empty column.
+  if (layout === 'table') {
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    const wrap = document.createElement('div')
+    // its own scroller: a wide table must not make the PAGE scroll sideways
+    wrap.className = 'sp-view-tablewrap'
+    const table = document.createElement('table')
+    table.className = 'sp-view-table'
+    const thead = document.createElement('thead')
+    const hr = document.createElement('tr')
+    const th0 = document.createElement('th')
+    th0.textContent = t('Page')
+    hr.appendChild(th0)
+    for (const k of keys) {
+      const th = document.createElement('th')
+      th.textContent = fieldByKey(doc, k)?.label ?? k
+      hr.appendChild(th)
+    }
+    thead.appendChild(hr)
+    table.appendChild(thead)
+    const tb = document.createElement('tbody')
+    for (const r of rows) {
+      const tr = document.createElement('tr')
+      const td0 = document.createElement('td')
+      // the page itself, reached the same way a card reaches it
+      const a = document.createElement('a')
+      a.className = 'sp-view-cellink'
+      a.href = `#p/${r.page.id}`
+      a.dataset.page = r.page.id
+      a.textContent = r.page.title || t('Untitled')
+      td0.appendChild(a)
+      tr.appendChild(td0)
+      for (const k of keys) {
+        const td = document.createElement('td')
+        const f = fieldByKey(doc, k)
+        const v = r.values.get(k)
+        // THROUGH THE OPTION, so a select shows its label and its colour rather
+        // than the id the model stores — the same thing propHtml does for the
+        // header strip, and for the same reason: the id is not for reading.
+        const opt = optionOf(f, v)
+        if (opt) {
+          const chip = document.createElement('span')
+          chip.className = 'sp-prop-chip'
+          const dot = document.createElement('span')
+          dot.className = 'sp-prop-dot'
+          if (opt.color) dot.style.background = opt.color
+          chip.append(dot, document.createTextNode(opt.label))
+          td.appendChild(chip)
+        } else if (v !== undefined && v !== null && String(v) !== '') {
+          td.textContent = String(v)
+        } else {
+          td.className = 'sp-view-empty'
+          td.textContent = '—'
+        }
+        tr.appendChild(td)
+      }
+      tb.appendChild(tr)
+    }
+    table.appendChild(tb)
+    wrap.appendChild(table)
+    host.appendChild(wrap)
+    return
+  }
+
+  // GALLERY — the shape that makes a reading list look like a reading list. A
+  // board answers "what state is this in" and a table answers "what does it
+  // say"; a gallery answers "which one is it", which for books, films, recipes
+  // and people is the question actually being asked, and is why the covers
+  // exist at all.
+  //
+  // A card without a cover is not a hole. It gets a tinted panel carrying the
+  // page's own icon (or its first letter), on a hue derived from the page id —
+  // so a gallery of pages nobody has given a picture to still reads as a set of
+  // distinct things rather than as a grid of grey rectangles.
+  if (layout === 'gallery') {
+    const grid = document.createElement('div')
+    grid.className = 'sp-gallery'
+    for (const r of rows) {
+      const cardEl = document.createElement('div')
+      cardEl.className = 'sp-gcard'
+      cardEl.dataset.issue = r.page.id
+
+      const shot = document.createElement('div')
+      shot.className = 'sp-gcard-shot'
+      const src = resolveSrc(coverSrc(r.page), doc)
+      if (src) {
+        const img = document.createElement('img')
+        img.src = src
+        img.alt = ''
+        img.setAttribute('aria-hidden', 'true')
+        // A gallery is many pictures at once — the one place in this app where
+        // decoding them all up front is a real cost, and the one place the
+        // browser can be told not to.
+        img.loading = 'lazy'
+        img.decoding = 'async'
+        shot.appendChild(img)
+      } else {
+        shot.classList.add('sp-gcard-bare')
+        // deterministic, so a page keeps its colour across reloads, readers and
+        // machines — the same reason ids are repaired from the id and never
+        // from Math.random
+        shot.style.setProperty('--h', String(hueOf(r.page.id)))
+        const mark = document.createElement('span')
+        mark.className = 'sp-gcard-mark'
+        pageMark(mark, r.page)
+        shot.appendChild(mark)
+      }
+      cardEl.appendChild(shot)
+
+      const body = document.createElement('div')
+      body.className = 'sp-gcard-body'
+      const t1 = document.createElement(opts.editable === false ? 'span' : 'a')
+      t1.className = 'sp-issue-title'
+      if (t1 instanceof HTMLAnchorElement) t1.href = `#p/${r.page.id}`
+      t1.textContent = r.page.title || t('Untitled')
+      body.appendChild(t1)
+
+      // EVERY field the page carries, not the tracker's four. A gallery of
+      // books whose cards showed Priority and Estimate and not the Author would
+      // be the board wearing a different shape.
+      const meta = document.createElement('span')
+      meta.className = 'sp-issue-meta'
+      for (const f of fieldsOf(doc)) {
+        const v = r.values.get(f.key)
+        if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue
+        const chip = document.createElement('span')
+        chip.className = 'sp-issue-chip'
+        const o = optionOf(f, v)
+        if (o?.color) {
+          const d = document.createElement('span')
+          d.className = 'sp-prop-dot'
+          d.style.background = o.color
+          chip.appendChild(d)
+        }
+        chip.append(document.createTextNode(shownValue(f, v)))
+        meta.appendChild(chip)
+      }
+      if (meta.childElementCount) body.appendChild(meta)
+      cardEl.appendChild(body)
+      grid.appendChild(cardEl)
+    }
+    host.appendChild(grid)
+    return
+  }
+
+  // TABLE — the shape a base is usually looked at in, and the one this app did
+  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
+  // declared order: a table of books should not carry an Estimate column
+  // because the vocabulary happens to contain one, and a page that has a field
+  // the others lack should not be the reason everyone gets an empty column.
+  if (layout === 'table') {
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    const wrap = document.createElement('div')
+    // its own scroller: a wide table must not make the PAGE scroll sideways
+    wrap.className = 'sp-view-tablewrap'
+    const table = document.createElement('table')
+    table.className = 'sp-view-table'
+    const thead = document.createElement('thead')
+    const hr = document.createElement('tr')
+    const th0 = document.createElement('th')
+    // THE PAGE COLUMN DOES NOT SORT, and it says so by being a plain heading
+    // rather than a dead button. A view's `sort` names a FIELD: sortRows looks
+    // each key up in the schema and skips what it cannot find, so ordering by
+    // title would need a second ordering mechanism living beside the first —
+    // and one order stored in two shapes is the thing that later disagrees with
+    // itself. A pseudo-key like `title` is worse still: every build that ships
+    // today would report it through unknownSortKeys as "newer than this build"
+    // and then not apply it. Better a column that plainly does not sort.
+    th0.textContent = t('Page')
+    hr.appendChild(th0)
+    for (const k of keys) {
+      const th = document.createElement('th')
+      const label = fieldByKey(doc, k)?.label ?? k
+      const dir = sortDirOf(sort, k)
+      // The state lives on the TH as aria-sort, the attribute a screen reader
+      // already announces; the arrow is what a sighted reader reads. Two
+      // renderings of ONE fact — the view's own `sort` — so there is no second
+      // place the arrow could come from and no way for it to disagree with the
+      // order the rows are actually in.
+      th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none')
+      // A READER GETS THE HEADING, not the control — the rule the card chip and
+      // every view button already follow: a printout and a locked space show
+      // the view, never the things that change it.
+      if (opts.editable) {
+        const sortB = document.createElement('button')
+        sortB.type = 'button'
+        sortB.className = 'sp-view-sort' + (dir ? ' sp-on' : '')
+        sortB.dataset.sortCol = k
+        sortB.title = t('Sort by {field}', { field: label })
+        sortB.setAttribute('aria-label', t('Sort by {field}', { field: label }))
+        const arrow = document.createElement('span')
+        arrow.className = 'sp-sortdir'
+        arrow.setAttribute('aria-hidden', 'true')
+        arrow.textContent = dir === 'asc' ? '\u2191' : dir === 'desc' ? '\u2193' : ''
+        sortB.append(document.createTextNode(label), arrow)
+        th.appendChild(sortB)
+      } else {
+        th.textContent = label
+      }
+      hr.appendChild(th)
+    }
+    thead.appendChild(hr)
+    table.appendChild(thead)
+
+    // What a cell SHOWS. THROUGH THE OPTION, so a select shows its label and
+    // its colour rather than the id the model stores — the same thing propHtml
+    // does for the header strip, and for the same reason: the id is not for
+    // reading. An unset value is an em dash, so an empty cell is still a place
+    // you can aim at.
+    const fill = (into: HTMLElement, f: FieldSpec | undefined, v: unknown): void => {
+      const opt = optionOf(f, v)
+      if (opt) {
+        const chip = document.createElement('span')
+        chip.className = 'sp-prop-chip'
+        const dot = document.createElement('span')
+        dot.className = 'sp-prop-dot'
+        if (opt.color) dot.style.background = opt.color
+        chip.append(dot, document.createTextNode(opt.label))
+        into.appendChild(chip)
+      } else if (v !== undefined && v !== null && String(v) !== '') {
+        into.appendChild(document.createTextNode(shownValue(f, v)))
+      } else {
+        into.classList.add('sp-view-empty')
+        into.appendChild(document.createTextNode('\u2014'))
+      }
+    }
+
+    const tb = document.createElement('tbody')
+    for (const r of rows) {
+      const tr = document.createElement('tr')
+      const td0 = document.createElement('td')
+      // the page itself, reached the same way a card reaches it
+      const a = document.createElement('a')
+      a.className = 'sp-view-cellink'
+      a.href = `#p/${r.page.id}`
+      a.dataset.page = r.page.id
+      a.textContent = r.page.title || t('Untitled')
+      td0.appendChild(a)
+      tr.appendChild(td0)
+      for (const k of keys) {
+        const td = document.createElement('td')
+        const f = fieldByKey(doc, k)
+        const v = r.values.get(k)
+        // A CELL IS A CONTROL where there is an editor — a real <button>, so it
+        // is in the tab order and answers Enter and Space without a key handler
+        // of its own. It is emitted even for a page carrying no such prop block:
+        // an empty cell is how the field gets ONTO that page, exactly as
+        // dropping a card into a column is.
+        if (opts.editable && f) {
+          const cell = document.createElement('button')
+          cell.type = 'button'
+          cell.className = 'sp-view-cell'
+          cell.dataset.cellPage = r.page.id
+          cell.dataset.cellField = k
+          cell.title = t('Change {field}', { field: f.label })
+          cell.setAttribute('aria-label', t('Change {field}', { field: f.label }))
+          fill(cell, f, v)
+          td.appendChild(cell)
+        } else {
+          fill(td, f, v)
+        }
+        tr.appendChild(td)
+      }
+      tb.appendChild(tr)
+    }
+    table.appendChild(tb)
+    wrap.appendChild(table)
+    host.appendChild(wrap)
+    return
   }
 
   if (layout === 'list') {

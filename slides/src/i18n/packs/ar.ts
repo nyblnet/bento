@@ -224,6 +224,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "هذا المتصفح لا يستطيع إعادة كتابة الملفات في مكانها — نُزّلت نسخة جديدة إلى مجلد التنزيلات",
   "This document": "هذا المستند",
   "This file carries its own app — it works offline, forever, as is.": "هذا الملف يحمل تطبيقه بداخله — يعمل دون اتصال، إلى الأبد، كما هو.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "لا تزال هذه النافذة تعمل بالإصدار {v} — أعِد التحميل لإتمام العملية. وقد حُفظت نسخة احتياطية من الإصدار {v} بجوار هذا الملف.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "لا تزال هذه النافذة تعمل بالإصدار {v} — أعِد التحميل لإتمام العملية. وقد نُزّلت نسخة احتياطية من الإصدار {v}.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "لا تزال هذه النافذة تعمل بالإصدار {v}. إذا كنت قد استبدلت الملف المفتوح هنا فأعِد التحميل، وإلا فافتح الملف الذي حفظته.",
   "This window keeps running v{v} until you open the downloaded file.": "تظل هذه النافذة تعمل بالإصدار {v} حتى تفتح الملف الذي نزّلته.",

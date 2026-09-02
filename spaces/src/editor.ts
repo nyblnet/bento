@@ -8,23 +8,47 @@
 // and merging blocks can never re-mint an id, and ids are what links,
 // backlinks and (later) collaboration key on.
 
-import { type Block, newBlock, newPage, effectiveParents } from './model'
+import {
+  type Block, type Page, type TableShape, type SpacesDoc, newBlock, newPage, effectiveParents, isRemote,
+  tableOf, writeTable, TABLE_MAX_COLS, TABLE_MAX_ROWS, linkCard, linkCardHtml, unresolvedOn,
+  parseDoc, uid,
+} from './model'
+import { CommentsUi, commentBadge } from './comments.ts'
+import * as collabUi from './collabui.ts'
+import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
+import { wireCanvas, placeNewCard } from './canvas.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
+import { FormatBar } from './formatbar'
+import type { MarkTag } from './marks'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
-  reorderPages, columnMoves, ISSUE_FIELDS, type DropAim, type FieldSpec, type ViewFilter,
+  reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, fieldTypeLabel, FIELD_TYPES,
+  cycleSort, nextLayout,
+  type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
+import { extractSpace, planGraft } from './portable'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
-import { t } from './i18n'
+import { asksForAnswer, evaluate, format, pageContext } from './calc'
+import { t, locale } from './i18n'
 import { openAbout } from './about'
-import { canWriteInPlace } from '../../kernel/src/save.ts'
+import { openGraphView } from './graph.ts'
+import {
+  todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
+} from './journal'
+import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
+import { offlineEnabled } from '../../kernel/src/net.ts'
+import { startSharing } from '../../kernel/src/sync/online.ts'
+import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
-import { internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, blobToDataUri } from './assets'
+import { PropsPanel } from './props'
+import {
+  internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
+} from './assets'
 
 const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctrlKey'
 
@@ -36,6 +60,9 @@ const AUTOFORMAT = MD_SPECS
 const SLASH_ITEMS = MENU_SPECS
 /** What counts as a note when a folder is dropped on the app. */
 const NOTE_EXT = /\.(md|markdown|mdown|mkd)$/i
+/** …and what counts as another SPACE: a saved shell, or the bare document JSON
+ *  the AI round-trip hands around. Both carry the same `#bento-doc` payload. */
+const SPACE_EXT = /\.(html|htm|json)$/i
 
 /**
  * When an import stops embedding images by itself and ASKS.
@@ -51,6 +78,29 @@ const IMPORT_IMAGE_BUDGET = 12 * 1024 * 1024
 interface PickedFile { path: string; file: File }
 
 
+/**
+ * This reader's preferred page width, or undefined for the built-in default.
+ *
+ * VIEWER-SCOPED, in localStorage beside the language and the pane width, and
+ * never in the document: it describes the screen somebody is sitting at, not
+ * anything about the space. Two people opening one file on a laptop and a
+ * 27-inch monitor should each get their own answer, and neither should write
+ * theirs into a file the other opens.
+ */
+export function readerWidth(): 'wide' | 'full' | undefined {
+  try {
+    const v = localStorage.getItem('bento-sp-width')
+    return v === 'wide' || v === 'full' ? v : undefined
+  } catch { return undefined }
+}
+
+export function setReaderWidth(v: 'wide' | 'full' | undefined): void {
+  try {
+    if (v) localStorage.setItem('bento-sp-width', v)
+    else localStorage.removeItem('bento-sp-width')
+  } catch { /* a locked-down origin just gets the default */ }
+}
+
 export class Editor {
   readonly store: Store
   private root: HTMLElement
@@ -58,6 +108,8 @@ export class Editor {
   private sidebar!: HTMLElement
   private statusEl!: HTMLElement
   private overlay: HTMLElement | null = null
+  /** undo whatever the open popover attached to the window */
+  private overlayReflow: (() => void) | null = null
   /** set while the editor is writing the DOM, so input handlers stand down */
   private painting = false
   /** reading view: the document without the machinery for changing it */
@@ -81,8 +133,47 @@ export class Editor {
   private static readonly PANE_DEFAULT = 244
   private paneW = Editor.PANE_DEFAULT
   private paneClosed = false
+
+  // The properties panel — the reader's, like the page list, and CLOSED unless
+  // this reader has opened it. See props.ts on why the default is that way
+  // round.
+  private inspector!: HTMLElement
+  private inspTab: HTMLButtonElement | null = null
+  private inspRz: HTMLElement | null = null
+  private props: PropsPanel | null = null
+  private static readonly INSP_MIN = 200
+  private static readonly INSP_MAX = 420
+  private static readonly INSP_DEFAULT = 280
+  private inspW = Editor.INSP_DEFAULT
+  private inspClosed = true
+  /** the block the panel is describing: the last one the caret or a click was in */
+  private inspOn: string | null = null
+  /** review threads — markers in the end margin, badges in the tree */
+  private comments: CommentsUi
+  private format!: FormatBar
   onSave: (() => void) | null = null
   onSaveAs: ((suffix: string) => void) | null = null
+  /**
+   * Write a DIFFERENT document out as its own file — the page extract.
+   *
+   * Supplied by main.ts, because serializing a shell is a boot-time concern
+   * (the pristine capture) and the editor has no business holding it. It is
+   * separate from `onSaveAs` on purpose: every suffix there writes THIS
+   * document, and an export that went through it would have to smuggle the
+   * extract in through a global.
+   */
+  onExportSpace: ((doc: SpacesDoc) => Promise<boolean>) | null = null
+  /**
+   * Write a SHARE copy — a different document, under this space's name plus a
+   * suffix that says which kind of copy it is.
+   *
+   * Separate from `onExportSpace` (which names the file after the extracted
+   * page) and from `onSaveAs` (every suffix there serializes THIS document,
+   * credentials and all — which is precisely how "Invite someone…" came to
+   * hand out the owner key). A share copy is always a derived document, so it
+   * needs a writer that takes one.
+   */
+  onShareCopy: ((doc: SpacesDoc, suffix: string) => Promise<boolean>) | null = null
   onPrint: (() => void) | null = null
 
   constructor(root: HTMLElement, store: Store) {
@@ -93,12 +184,55 @@ export class Editor {
       const w = Number(localStorage.getItem('bento-sp-pane'))
       if (Number.isFinite(w) && w > 0) this.paneW = Math.min(Editor.PANE_MAX, Math.max(Editor.PANE_MIN, w))
       this.paneClosed = localStorage.getItem('bento-sp-pane-closed') === '1'
+      const iw = Number(localStorage.getItem('bento-sp-insp'))
+      if (Number.isFinite(iw) && iw > 0) this.inspW = Math.min(Editor.INSP_MAX, Math.max(Editor.INSP_MIN, iw))
+      // ABSENT MEANS CLOSED. Only an explicit '0' — this reader opened it once —
+      // gives the panel any width, so a fresh file opens as the page and nothing
+      // else.
+      this.inspClosed = localStorage.getItem('bento-sp-insp-closed') !== '0'
     } catch { /* storage throws on a locked-down origin; the defaults are fine */ }
     this.build()
+    // AFTER build(): `main` exists by then, and the marker layer is painted
+    // into whatever the page paint just produced.
+    this.comments = new CommentsUi({
+      store: this.store,
+      main: () => this.main,
+      popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
+      paintTree: () => this.paintTree(),
+    })
+    // Also after build(). `editable()` is asked on every selectionchange, and
+    // it is the ONE place the bar is kept out of the reading view, out of a
+    // readonly/reader-role file, and out from under an open modal.
+    this.format = new FormatBar({
+      store: this.store,
+      main: () => this.main,
+      editable: () => !this.store.readOnly && !this.reading && !this.overlay,
+    })
     if (this.paneClosed) this.sidebar.classList.add('sp-pane-closed')
+    this.props = new PropsPanel(this.inspector, {
+      store: this.store,
+      target: () => this.inspOn,
+      locked: () => this.store.readOnly || this.reading,
+      repaint: () => this.paintPage(),
+      pickPoster: (id) => void this.pickPoster(id),
+      pickCover: (pageId) => void this.pickCover(pageId),
+      removeCover: (pageId) => this.removeCover(pageId),
+      pickMedia: (id) => void this.pickMedia(id),
+      openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
+      openAddProperty: (pageId, anchor) => this.openAddProperty(pageId, anchor),
+      pageIcon: (icon) => pageIcon(icon),
+      openLinkCard: (id) => this.openLinkCard(id),
+      addTableRow: (id, at) => this.addTableRow(id, at),
+      removeTableRow: (id, at) => this.removeTableRow(id, at),
+      addTableCol: (id, at) => this.addTableCol(id, at),
+      removeTableCol: (id, at) => this.removeTableCol(id, at),
+    })
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
     this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty() })
+    // A REMOTE change moves the unsaved dot without claiming you made it —
+    // 'doc' paints "Edited", 'dirty' paints only the dot. See store.setDirty.
+    this.store.on('dirty', () => this.syncDirty())
     window.addEventListener('popstate', () => this.fromHash())
     this.fromHash()
   }
@@ -122,7 +256,7 @@ export class Editor {
       '<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>' +
       '<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>' +
       '</svg><b class="sp-mark-word">bento<span>/</span>spaces</b>'
-    mark.title = t('About bento/spaces — version, updates, language, password')
+    mark.title = t('About this space')
     mark.addEventListener('click', () => this.openAbout())
 
     // Pages panel toggle — on every width, like slides' Slides/Format toggles.
@@ -152,7 +286,17 @@ export class Editor {
           this.store.commit(() => { page.blocks.push(fresh) })
           this.paintPage()
           if (item.type === 'pagelink') this.insertPageCard(fresh.id)
+          // the block is already a `link` — dismissing the dialog leaves an
+          // empty card with its own way back in, never a half-made block
+          else if (item.type === 'link') this.openLinkCard(fresh.id)
           else if (item.type === 'image') void this.pickImage(fresh.id)
+          // a table has no block-level host to focus — the caret belongs in the
+          // first cell, which is also where a person starts typing
+          else if (item.type === 'table') this.focusCell(fresh.id, 0, 0)
+          // straight to the picker, exactly like Image. Cancelling is not a
+          // dead end: the block renders its own chooser (render.ts 'media'),
+          // which is also the only route the / menu needs.
+          else if (item.type === 'media') void this.pickMedia(fresh.id)
           else this.focusBlock(fresh.id)
         }))
       }
@@ -162,35 +306,62 @@ export class Editor {
     this.redoB = iconBtn('redo', t('Redo (⇧⌘Z)'), () => { this.store.redo(); this.repaint() })
     const search = iconBtn('search', t('Search all pages (⌘K)'), () => this.openSearch())
 
-    // SECONDARY ACTIONS, declared ONCE.
+    // WHERE A COMMAND LIVES. One rule, because the bar used to have none and it
+    // showed: eight secondary buttons sat in the bar AND were repeated verbatim
+    // in the ⋯ menu at the same time, so half of ⋯ pointed at things already on
+    // screen. Print and Password each had two homes. About had three entry
+    // points under two different names — all calling one dialog.
     //
-    // Measured at 375px before this existed: the bar wanted 678px, so seven of
-    // eleven controls sat off the right edge — including Save. On a phone the
-    // file could not be saved at all.
+    //   · The bar carries what you reach for WHILE WRITING.
+    //   · ⋯ carries the rest, plus whatever the bar has had to drop.
+    //   · Save ▾ is only about writing THIS file somewhere.
+    //   · Nothing is listed in two places at the same width.
     //
-    // Below the breakpoint these collapse into the ⋯ menu and the inline copies
-    // are hidden. One list feeds both, because a phone menu maintained by hand
-    // as a copy of the desktop row drifts the first time either one changes.
-    const secondary: Array<{
+    // The measurement that produced the fold still holds: at 375px the old bar
+    // wanted 678px, so seven of eleven controls — Save included — sat off the
+    // right edge. Below the breakpoint the inline copies hide and ⋯ picks them
+    // up, one list feeding both, because a phone menu maintained by hand as a
+    // copy of the desktop row drifts the first time either one changes.
+    type BarAction = {
       icon: IconName
       label: string
       hint: string
       run: () => void
       keep?: (b: HTMLButtonElement) => void
-    }> = [
-      { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
-      { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
-      { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
-        run: () => this.makeIssue() },
+    }
+
+    // Reached while writing, so it stays in the bar until the bar runs out of
+    // room. Reading view is a MODE — you leave and re-enter it while working,
+    // and a mode you cannot see the state of is a mode you lose track of.
+    const barActions: BarAction[] = [
       { icon: 'eye', label: t('Reading view'), hint: t('The pages without the editing tools'),
         run: () => this.toggleReading(),
         keep: (b) => { this.readB = b } },
+    ]
+
+    // Reached once a session or less. A button in the bar for something you do
+    // once is a button in the way of everything you do constantly, so these
+    // live in ⋯ at every width — findable, out of the road, and each with the
+    // keyboard shortcut printed beside it.
+    const menuActions: BarAction[] = [
+      { icon: 'page', label: t('New page'), hint: '⌘⌥N', run: () => this.newPage() },
+      { icon: 'book', label: t("Today's journal"), hint: '⌘⇧J', run: () => this.openJournal() },
+      { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
+      { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
+        run: () => this.makeIssue() },
+      { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
+        run: () => this.openImport() },
+      { icon: 'graph', label: t('Graph'), hint: t('Every page, and what links to what'),
+        run: () => this.openGraph() },
       { icon: 'print', label: t('Print or save as PDF'), hint: '⌘P', run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), hint: t('Version, language, password, exports'),
         run: () => this.openAbout() },
+      // A help screen only reachable by pressing the key it documents is a
+      // help screen for people who did not need it.
+      { icon: 'help', label: t('Keyboard shortcuts'), hint: '?', run: () => this.openHelp() },
     ]
 
-    const inlineSecondary = secondary.map((a) => {
+    const inlineSecondary = barActions.map((a) => {
       const b = iconBtn(a.icon, a.hint && a.hint.length < 12 ? `${a.label} (${a.hint})` : a.label, a.run)
       b.classList.add('sp-sec')
       a.keep?.(b)
@@ -198,11 +369,60 @@ export class Editor {
     })
 
     const more = this.dropdown('more', '', t('More'), (menu, close) => {
-      for (const a of secondary) {
+      // On a PHONE the ⋯ menu also carries the history pair and the other ways
+      // to save. Measured at 390px with a coarse pointer: eleven bar controls
+      // wanted 467px of a 390px viewport, and Save — the one action that must
+      // never be off-screen — ended at x = 426. Undo/redo (84px), the wordmark
+      // (35px) and the save caret (48px) are what a phone gives up so that the
+      // document title beside them is still wide enough to read. Nothing is
+      // lost: they are all one tap away, here.
+      // THE PROPERTIES PANEL, ONCE THE BAR HAS FOLDED. Its inline button is a
+      // 40px control, and measured at 375px it took the document title from
+      // 70px to 26px — a title nobody can read, to reach a panel that is one
+      // more row in a menu that is already open. So below the fold it comes
+      // here, the way undo/redo and the other ways to save already do.
+      if (this.isFolded()) {
+        menu.append(this.menuItem('panelRight', t('Properties'),
+          t('This block’s settings, and the page’s'), () => {
+            close(); this.toggleInsp()
+          }))
+      }
+      if (this.isFolded()) {
+        menu.append(this.menuItem('undo', t('Undo (⌘Z)'), '', () => {
+          close(); this.store.undo(); this.repaint()
+        }, { off: !this.store.canUndo }))
+        menu.append(this.menuItem('redo', t('Redo (⇧⌘Z)'), '', () => {
+          close(); this.store.redo(); this.repaint()
+        }, { off: !this.store.canRedo }))
+      }
+      for (const a of menuActions) {
         menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+      }
+      // …and only THEN what the bar itself has had to give up. Listing these
+      // unconditionally is what made ⋯ a duplicate of the visible row.
+      if (this.isFolded()) {
+        for (const a of barActions) {
+          menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+        }
+      }
+      if (this.isFolded()) {
+        menu.append(this.menuItem('copy', t('Save a copy…'), t('A second file — the original is left alone'), () => {
+          close(); void this.saveAs('copy')
+        }))
+        menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
+          close(); this.exportMarkdown()
+        }))
+        menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
+          close(); this.openExportSpace()
+        }))
       }
     })
     more.classList.add('sp-more', 'sp-dd-end')
+
+    // The live control sits BEFORE ⋯ and is replaced in place once the session
+    // exists (connectSync). A placeholder rather than a conditional build, so
+    // the bar's widths do not shift when a document turns out to be shared.
+    this.liveSlot = el('span', 'sp-live-slot')
 
     // save is a split control, as in slides: the common action, and the
     // less-common ways of writing this document somewhere else
@@ -226,11 +446,8 @@ export class Editor {
       menu.append(this.menuItem('markdown', t('Export as Markdown…'), t('Every page, as one .md file'), () => {
         close(); this.exportMarkdown()
       }))
-      menu.append(this.menuItem('print', t('Print / PDF…'), t('The whole space, or just this page'), () => {
-        close(); this.openPrint()
-      }))
-      menu.append(this.menuItem('lock', t('Password…'), t('Encrypt the document inside this file'), () => {
-        close(); this.openAbout()
+      menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
+        close(); this.openExportSpace()
       }))
     })
     saveMore.classList.add('sp-caret', 'sp-dd-end')
@@ -242,20 +459,81 @@ export class Editor {
     history.append(this.undoB, this.redoB)
     const saveGroup = el('div', 'sp-split')
     saveGroup.append(saveB, saveMore)
-    const right = el('div', 'sp-group sp-group-right')
-    right.append(insert, search, ...inlineSecondary, more, saveGroup)
+    const inspB = iconBtn('panelRight', t('Properties — show or hide this block’s settings'),
+      () => this.toggleInsp())
+    inspB.classList.add('sp-insp-toggle')
 
-    bar.append(pagesB, mark, title, this.statusEl, history, right)
+    const right = el('div', 'sp-group sp-group-right')
+    right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
+
+    // The status goes AFTER undo/redo, never before. It is transient text that
+    // grows from nothing to a whole sentence, and anything downstream of it in
+    // the flex flow gets shoved sideways every time it changes — measured at
+    // 36px on a plain edit and 246px entering reading view, which is more than
+    // a button's width, so undo lands where redo just was. Past the history
+    // group it grows into the slack the right group's margin-auto already
+    // holds, and nothing before it can move. Reported against slides as #300.
+    bar.append(pagesB, mark, title, history, this.statusEl, right)
+
+    // Drive the fit now, and again whenever the bar's size or its CONTENT
+    // changes. The ResizeObserver is the primary width signal — it fires for
+    // every viewport change, including a phone rotating, where matchMedia
+    // change events are unreliable under a driven viewport. The MutationObserver
+    // catches the constant-width case: the people count appearing when someone
+    // joins, the "Saved" tag flashing, the update chip arriving. Each of those
+    // clipped the end of the bar under the old breakpoints.
+    this.topbar = bar
+    this.barRO?.disconnect()
+    this.barRO = new ResizeObserver(() => this.fitTopbar())
+    this.barRO.observe(bar)
+    this.barMO?.disconnect()
+    this.barMO = new MutationObserver(() => this.fitTopbar())
+    this.barMO.observe(bar, {
+      childList: true, subtree: true, characterData: true,
+      // NOT 'class': fitTopbar's own tier flips are class changes on this very
+      // element, and observing them makes the fix for the loop (takeRecords)
+      // the only thing standing between here and a spin. Slides omits it for
+      // the same reason.
+      attributes: true, attributeFilter: ['style', 'hidden'],
+    })
+    // …and once the bar is actually in the document and has a width to measure
+    queueMicrotask(() => this.fitTopbar())
 
     this.sidebar = el('nav', 'sp-side')
     this.sidebar.setAttribute('aria-label', t('Pages'))
     this.main = el('main', 'sp-main')
 
+    this.inspector = el('aside', 'sp-insp')
+    this.inspector.setAttribute('aria-label', t('Properties'))
+    if (this.inspClosed) this.inspector.classList.add('sp-pane-closed')
+
     const body = el('div', 'sp-body')
-    body.append(this.sidebar, this.makeResizer(), this.main)
+    body.append(this.sidebar, this.makeResizer(), this.main, this.makeInspResizer(), this.inspector)
     this.root.append(bar, body)
     this.applyPaneWidth()
     this.syncPaneChevron()
+    this.applyInspWidth()
+    this.syncInspChevron()
+
+    // WHICH BLOCK THE PANEL MEANS. Capture-phase on the page, because the
+    // interesting blocks are the ones with no editable host to focus — a table,
+    // an image, a clip, a card. `focusin` alone would answer for text and stay
+    // silent for exactly the types that have settings worth a panel.
+    //
+    // `mousedown` rather than `pointerdown`: a real click fires both, so the
+    // two are the same to a user, but only the mouse event is reliably what a
+    // driven click produces — CLAUDE.md's testing note records the same wall in
+    // slides, where synthetic pointer events never reach Gesto. Choosing the
+    // one both a hand and a rig emit costs nothing.
+    for (const ev of ['focusin', 'mousedown'] as const) {
+      this.main.addEventListener(ev, (e: Event) => {
+        const n = e.target as Node | null
+        const host = (n instanceof HTMLElement ? n : n?.parentElement)
+          ?.closest<HTMLElement>('[data-block-id]')
+        this.inspOn = host?.dataset.blockId ?? null
+        this.props?.retarget()
+      }, true)
+    }
 
     this.paintTree()
     this.paintPage()
@@ -296,6 +574,7 @@ export class Editor {
     this.readB?.setAttribute('aria-pressed', String(this.reading))
     document.querySelector('.sp-findbar')?.remove()
     this.paintPage()
+    this.props?.refresh()
     this.status(this.reading ? t('Reading view — press Esc or the eye to edit') : t('Editing'))
   }
 
@@ -320,7 +599,10 @@ export class Editor {
     b.className = 'sp-btn'
     b.type = 'button'
     b.innerHTML = ICONS[icon]
-    if (label) b.append(document.createTextNode(label))
+    // The word is a SPAN, not a bare text node, so a narrow bar can drop it and
+    // keep the icon — slides' rule, and the only way to collapse a labelled
+    // control without also losing it.
+    if (label) b.append(el('span', 'sp-btnlabel', label))
     b.title = tip
     b.setAttribute('aria-label', tip)
     b.setAttribute('aria-haspopup', 'menu')
@@ -341,10 +623,29 @@ export class Editor {
     return wrap
   }
 
-  private menuItem(icon: IconName, label: string, hint: string, onClick: () => void): HTMLElement {
+  /**
+   * One row in a dropdown menu.
+   *
+   * `state` carries BOTH meanings the menus need, because they arrived from
+   * two directions and mean different things: `off` is a command that exists
+   * but cannot run right now (folded undo/redo on a phone — disabled, not
+   * hidden, so the menu does not change shape as you edit), and `selected` is
+   * the choice a view is currently on (layout, group-by, sort). A row can be
+   * neither; nothing yet is both. They were separate 5th parameters on two
+   * branches, which is exactly the collision an options object avoids.
+   */
+  private menuItem(
+    icon: IconName,
+    label: string,
+    hint: string,
+    onClick: () => void,
+    state: { off?: boolean; selected?: boolean } = {},
+  ): HTMLElement {
     const b = document.createElement('button')
-    b.className = 'sp-dditem'
+    b.className = 'sp-dditem' + (state.off ? ' sp-off' : '') + (state.selected ? ' sp-sel' : '')
     b.type = 'button'
+    if (state.off) b.setAttribute('aria-disabled', 'true')
+    if (state.selected) b.setAttribute('aria-current', 'true')
     b.setAttribute('role', 'menuitem')
     b.innerHTML = `<span class="sp-result-ico">${ICONS[icon]}</span>` +
       `<span class="sp-result-txt"><strong>${escapeHtml(label)}</strong>` +
@@ -412,6 +713,102 @@ export class Editor {
     this.sidebar.style.setProperty('--sp-panew', `${this.paneW}px`)
   }
 
+  /**
+   * The properties panel's edge — the page list's strip, mirrored.
+   *
+   * Deliberately a second small method rather than a parameterised one: the two
+   * differ in which direction widens (the panel is docked to the END edge, so a
+   * drag toward the start makes it bigger) and in which way the chevron points,
+   * and a `side` flag threaded through both would be harder to read than this.
+   */
+  private makeInspResizer(): HTMLElement {
+    const handle = el('div', 'sp-resizer sp-insp-rz')
+    handle.title = t('Drag to resize · double-click to reset')
+    if (this.inspClosed) handle.classList.add('sp-shut')
+    this.inspRz = handle
+
+    const tab = document.createElement('button')
+    tab.className = 'sp-pane-tab'
+    tab.type = 'button'
+    tab.addEventListener('click', (e) => { e.stopPropagation(); this.toggleInsp() })
+    this.inspTab = tab
+    handle.append(tab)
+
+    handle.addEventListener('mousedown', (down) => {
+      if (down.target === tab) return
+      if (this.inspClosed) return
+      down.preventDefault()
+      const startX = down.clientX
+      const startW = this.inspW
+      this.inspector.classList.add('sp-noanim')
+      document.body.classList.add('sp-col-resizing')
+      const move = (ev: MouseEvent) => {
+        // the panel is on the END edge, so dragging toward the START widens it
+        const dx = startX - ev.clientX
+        const widens = document.dir === 'rtl' ? -dx : dx
+        this.inspW = Math.min(Editor.INSP_MAX, Math.max(Editor.INSP_MIN, startW + widens))
+        this.applyInspWidth()
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', move)
+        window.removeEventListener('mouseup', up)
+        this.inspector.classList.remove('sp-noanim')
+        document.body.classList.remove('sp-col-resizing')
+        try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
+      }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+    })
+
+    handle.addEventListener('dblclick', () => {
+      this.inspW = Editor.INSP_DEFAULT
+      this.applyInspWidth()
+      try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
+    })
+    return handle
+  }
+
+  private applyInspWidth(): void {
+    this.inspector.style.setProperty('--sp-inspw', `${this.inspW}px`)
+  }
+
+  private syncInspChevron(): void {
+    if (!this.inspTab) return
+    const rtl = document.dir === 'rtl'
+    // points the way it will MOVE the panel
+    const closing = this.inspClosed === rtl
+    this.inspTab.innerHTML = closing ? ICONS.chevronRight : ICONS.chevronLeft
+    this.inspTab.title = this.inspClosed ? t('Show properties (])') : t('Hide properties (])')
+    this.inspTab.setAttribute('aria-label', this.inspTab.title)
+    this.inspTab.setAttribute('aria-expanded', String(!this.inspClosed))
+  }
+
+  /** Collapse or restore the properties panel. On a phone it is an overlay. */
+  toggleInsp(force?: boolean): void {
+    if (this.isDrawer()) {
+      const open = force !== undefined ? force : !this.inspector.classList.contains('sp-open')
+      this.inspector.classList.toggle('sp-open', open)
+      // The same scrim the page list gets, for the same reason: an overlay you
+      // can only close from the menu you opened it from is one people leave
+      // open over the page they wanted to read.
+      document.querySelector('.sp-scrim')?.remove()
+      if (open) {
+        const scrim = el('div', 'sp-scrim')
+        scrim.addEventListener('click', () => this.toggleInsp(false))
+        document.body.append(scrim)
+      }
+      return
+    }
+    this.inspector.classList.remove('sp-open')
+    this.inspClosed = force !== undefined ? !force : !this.inspClosed
+    this.inspector.classList.toggle('sp-pane-closed', this.inspClosed)
+    this.inspRz?.classList.toggle('sp-shut', this.inspClosed)
+    this.syncInspChevron()
+    // '0' means OPEN. Absent is closed, which is what a reader who has never
+    // touched this gets — see the constructor.
+    try { localStorage.setItem('bento-sp-insp-closed', this.inspClosed ? '1' : '0') } catch { /* storage can throw */ }
+  }
+
   private syncPaneChevron(): void {
     if (!this.paneTab) return
     // points the way it will MOVE the panel, which is the only thing a chevron
@@ -435,6 +832,62 @@ export class Editor {
 
   private isDrawer(): boolean {
     return window.matchMedia('(max-width: 820px)').matches
+  }
+
+  /**
+   * Has the bar FOLDED — are undo/redo and the save caret currently inside ⋯
+   * rather than in the bar?
+   *
+   * This used to be `matchMedia('(max-width: 600px)')`, with a comment saying
+   * the number was duplicated from the stylesheet on purpose. It is not needed
+   * at all now: fitTopbar puts the tier on the bar as a class, so the menu can
+   * ASK what is on screen instead of re-deriving it from a width and hoping
+   * the two agree. When they disagreed the symptom was a menu offering Undo
+   * while Undo sat in the bar two centimetres away.
+   */
+  private isFolded(): boolean {
+    return !!this.topbar?.classList.contains('sp-bar-fold')
+  }
+
+  /**
+   * Size the topbar by MEASURING it, not by width breakpoints.
+   *
+   * A px guess cannot answer the question being asked. The same buttons need
+   * different room at the same viewport width depending on browser zoom, OS
+   * text scaling, and how long the labels are in the reader's language — eight
+   * catalogs ship inside every file, and "Insert" is 76px in English and
+   * nothing like that in German. The bar's own CONTENT changes width too, at a
+   * fixed viewport: the people count appears when somebody joins a session.
+   * Each of those cases clipped the end of the bar under the old 820/600
+   * breakpoints. Slides settled this first (#239); this is its pattern.
+   *
+   * Start from the widest layout, step down a tier while the bar still
+   * overflows its own box.
+   */
+  private fitTopbar(): void {
+    const bar = this.topbar
+    if (!bar || !bar.isConnected) return
+    const tiers = ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold']
+    // Re-fitting starts by UNFOLDING, which would slam shut a menu somebody is
+    // reading — and the ⋯ menu's contents depend on the tier, so rebuilding it
+    // mid-read would change it under them. The next resize runs this again.
+    if (this.overlay) return
+    // scrollWidth counts content sticking out of the padding box even with
+    // overflow visible, so this IS the clipped-controls condition. 1px of
+    // slack absorbs subpixel rounding at fractional zoom.
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // The title is the only shrinkable thing in the bar, so flexbox crushes it
+    // toward its floor before anything overflows. Waiting for hard overflow
+    // would mean full labels beside an unreadable document title.
+    const title = bar.querySelector<HTMLElement>('.sp-doctitle')
+    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 110)
+    bar.classList.remove(...tiers)
+    if (cramped()) bar.classList.add('sp-bar-compact')
+    if (cramped()) bar.classList.add('sp-bar-tight')
+    if (cramped()) bar.classList.add('sp-bar-fold')
+    // the class flips above queued mutation records of their own; drop them,
+    // or the observer re-runs this forever
+    this.barMO?.takeRecords()
   }
 
   /**
@@ -469,11 +922,52 @@ export class Editor {
     }
   }
 
+  /**
+   * Bind the live session to the UI.
+   *
+   * Called once from main.ts with the session that already exists — the
+   * session is constructed whether or not anyone shares, because two tabs of
+   * one file sync locally regardless; what this adds is the ability to SEE it.
+   */
+  connectSync(session: import('./sync/session.ts').SyncSession): void {
+    const { CollabUi } = collabUi
+    this.session = session
+    this.collab = new CollabUi({
+      store: this.store,
+      session,
+      status: (m) => this.status(m),
+      paintTree: () => this.paintTree(),
+      popover: (anchor, build) => this.popover(anchor, (pop) => build(pop, () => this.closeOverlay())),
+      goToPage: (id) => { this.store.goToPage(id); this.closeDrawer() },
+      shareCopy: (kind) => { void this.shareCopy(kind) },
+      goLive: () => this.goLive(),
+    })
+    session.onPeers(() => this.collab?.onPeersChanged())
+    // The relay refuses things the user can act on — too large, room full. For
+    // the permanent codes their change stays in this copy and reaches nobody,
+    // which they must be told rather than left to discover.
+    session.onNotice((n) => this.status(syncNoticeText(n)))
+    this.collab.tryJoin()
+    // a document REPLACED under us (Replace-from-JSON, a restored version) may
+    // be a different document with different credentials
+    this.store.on('doc', () => this.collab?.tryJoin())
+    if (this.liveSlot) this.liveSlot.replaceWith(this.collab.button())
+  }
+
   status(msg: string): void {
     this.statusEl.textContent = msg
     this.statusEl.classList.add('sp-on')
     clearTimeout((this.statusEl as any)._t)
-    ;(this.statusEl as any)._t = setTimeout(() => this.statusEl.classList.remove('sp-on'), 1800)
+    ;(this.statusEl as any)._t = setTimeout(() => {
+      this.statusEl.classList.remove('sp-on')
+      // The word must LEAVE the bar, not just fade out of it. This span is
+      // nowrap, so once "Edited" had been written once it held ~40px of the
+      // topbar for the rest of the session — and on a phone that width came
+      // out of the controls beside it. Cleared after the fade, never during.
+      setTimeout(() => {
+        if (!this.statusEl.classList.contains('sp-on')) this.statusEl.textContent = ''
+      }, 260)
+    }, 1800)
   }
 
   // ---- the page tree ------------------------------------------------------
@@ -482,10 +976,15 @@ export class Editor {
     this.sidebar.innerHTML = ''
     const head = el('div', 'sp-side-head')
     head.append(el('span', 'sp-side-title', t('Pages')))
-    // import sits beside "new page" because that is where pages come from,
-    // and because the moment someone wants it is the moment they see an empty
-    // sidebar next to a folder of notes they already have
-    head.append(iconBtn('markdown', t('Import Markdown files or a folder…'), () => this.openImport()))
+    // Import used to sit here, beside "new page", on the reasoning that the
+    // moment somebody wants it is the moment they see an empty sidebar next to
+    // a folder of notes. Two things undid that: a fresh space is not empty any
+    // more (the starter fills it), and About now has a "Bring notes in"
+    // section beside the ways out — so this was a second copy of a control, in
+    // the header of the page LIST, reading as a way to add a page. It lives
+    // with the other secondary actions instead, which puts it in the ⋯ menu on
+    // a phone from one list rather than two. Dropping a folder on the window
+    // still works and is how most people will actually find it.
     head.append(iconBtn('plus', t('New page (⌘⌥N)'), () => this.newPage()))
     this.sidebar.append(head)
 
@@ -496,12 +995,28 @@ export class Editor {
       li.style.paddingInlineStart = `${depth * 14}px`
       const a = document.createElement('a')
       a.href = `#p/${page.id}`
-      a.className = 'sp-treelink' + (page.id === s.pageId ? ' sp-here' : '')
+      const here = page.id === s.pageId
+      a.className = 'sp-treelink' + (here ? ' sp-here' : '')
+      // WEIGHT IS NOT AN ANNOUNCEMENT. sp-here says "you are here" in 600
+      // against 400, which a sighted reader gets for free and a screen reader
+      // is told nothing about — the tree reads as a flat list of links with no
+      // indication of which one you are on. aria-current is the one attribute
+      // that carries it.
+      if (here) a.setAttribute('aria-current', 'page')
       const ico = el('span', 'sp-tree-ico')
       ico.innerHTML = pageIcon(page.icon)
       const label = document.createElement('span')
-      label.textContent = page.title || t('Untitled')
+      label.textContent = this.pageLabel(page)
       a.append(ico, label)
+      // who else is reading this page. A space is a TREE, so "where is
+      // everyone" is a question about pages, not about carets — this is the
+      // spaces answer to the cursors slides paints on its canvas.
+      const dots = this.collab?.dotsFor(page.id)
+      if (dots) a.append(dots)
+      // Unresolved threads badge the page they are on: the tree is the only
+      // place you can see that another page is waiting on you.
+      const badge = commentBadge(unresolvedOn(page))
+      if (badge) a.append(badge)
       a.draggable = true
       a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
       a.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text/bento-page', page.id))
@@ -547,11 +1062,13 @@ export class Editor {
         const li = document.createElement('li')
         const a = document.createElement('a')
         a.href = `#p/${page.id}`
-        a.className = 'sp-treelink sp-arch-row' + (page.id === s.pageId ? ' sp-here' : '')
+        const hereA = page.id === s.pageId
+        a.className = 'sp-treelink sp-arch-row' + (hereA ? ' sp-here' : '')
+        if (hereA) a.setAttribute('aria-current', 'page')
         const ico = el('span', 'sp-tree-ico')
         ico.innerHTML = pageIcon(page.icon)
         const label = document.createElement('span')
-        label.textContent = page.title || t('Untitled')
+        label.textContent = this.pageLabel(page)
         a.append(ico, label)
         a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(page.id); this.closeDrawer() })
         const un = document.createElement('button')
@@ -596,6 +1113,53 @@ export class Editor {
     })
   }
 
+  /**
+   * The reader's own name for a page.
+   *
+   * An entry stores its title as the ISO date — locale-neutral in the file, the
+   * same for every reader, and what search and the Markdown export see. The
+   * SIDEBAR shows it in the reader's own format, because "2026-08-06" is a key
+   * and "Thu 6 Aug" is a date. An entry the author has RENAMED keeps its name:
+   * the rename was the point.
+   */
+  pageLabel(page: { title: string; journal?: unknown }): string {
+    if (isJournal(page as never) && page.title === page.journal) {
+      return journalShort(String(page.journal), locale())
+    }
+    return page.title || t('Untitled')
+  }
+
+  /**
+   * Open a day's entry, creating it if this is the first note of the day.
+   *
+   * ONE COMMIT for the whole plan (the Journal page and the entry, when both
+   * are new), so ⌘Z takes back "I opened today's journal" in a single step
+   * rather than leaving a stray empty parent behind.
+   */
+  openJournal(iso = todayISO()): void {
+    const s = this.store
+    if (s.readOnly) return
+    const plan = planJournal(s.doc, iso)
+    if (plan.add.length) {
+      s.commit(() => {
+        for (const { page, after } of plan.add) {
+          const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
+          if (at >= 0) s.doc.pages.splice(at + 1, 0, page)
+          else s.doc.pages.push(page)
+        }
+      })
+    }
+    s.goToPage(plan.page.id)
+    this.status(journalLabel(iso, locale()))
+  }
+
+  /** The day before or after the entry in view. */
+  stepJournal(n: number): void {
+    const cur = this.store.page
+    if (!cur || !isJournal(cur)) return
+    this.openJournal(stepDay(String(cur.journal), n))
+  }
+
   newPage(parent?: string): void {
     const page = newPage(t('Untitled'))
     if (parent) page.parent = parent
@@ -612,6 +1176,9 @@ export class Editor {
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    // The bar holds a reference to the block host it is floating over, and this
+    // is about to replace every one of them.
+    this.format?.close()
     this.main.innerHTML = ''
     if (!page) { this.main.append(el('p', 'sp-empty', t('This space has no pages.'))); return }
 
@@ -627,6 +1194,7 @@ export class Editor {
       editable: !s.readOnly && !this.reading,
       titleOf: (id) => s.index.page.get(id)?.title,
       allowRemote: (src) => this.allowedRemote.has(src),
+      readerWidth: readerWidth(),
     })
     // the icon lives beside the title, where changing it is discoverable
     const inner = view.querySelector('.sp-page-inner')
@@ -639,6 +1207,50 @@ export class Editor {
       pick.setAttribute('aria-label', t('Change this page\'s icon'))
       pick.addEventListener('click', () => this.openIconPicker(page.id, pick))
       inner.prepend(pick)
+    }
+
+    // A DAY HAS A DAY EITHER SIDE OF IT. Without this, reaching yesterday means
+    // finding it in the sidebar, which is the one navigation a journal should
+    // never need. The strip carries the reader's own long-form date because the
+    // title above it is the ISO key, and a date nobody can read at a glance is
+    // not much of a journal.
+    if (inner && isJournal(page)) {
+      const iso = String(page.journal)
+      const nav = el('div', 'sp-jnav')
+      const step = (n: number, glyph: string, title: string) => {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.className = 'sp-jstep'
+        b.textContent = glyph
+        b.title = title
+        b.setAttribute('aria-label', title)
+        b.addEventListener('click', () => this.stepJournal(n))
+        return b
+      }
+      nav.append(step(-1, '‹', t('The day before')), step(1, '›', t('The day after')))
+      if (iso !== todayISO()) {
+        const today = document.createElement('button')
+        today.type = 'button'
+        today.className = 'sp-jstep sp-jtoday'
+        today.textContent = t('Today')
+        today.addEventListener('click', () => this.openJournal())
+        nav.append(today)
+      }
+      inner.prepend(nav)
+
+      // THE HEADING READS AS A DATE, not as a key. The title is stored as the
+      // ISO string so the file is locale-neutral and sorts — but "2026-08-01"
+      // as a page's own H1 is a filename, not a day.
+      //
+      // Slides solves the same shape for dynamic fields by swapping the RAW
+      // token back while editing, and that is deliberately NOT copied here: a
+      // `{{page}}` token is something the author means to keep, whereas an ISO
+      // date is a key nobody wants to type. Someone renaming an entry starts
+      // from the date they can read and appends to it — which is the rename
+      // they were going to make anyway. The date itself lives in `journal` and
+      // is untouched by any of it, so a renamed entry is still that day's.
+      const h = inner.querySelector<HTMLElement>('[data-page-title]')
+      if (h && page.title === iso) h.textContent = journalLabel(iso, locale())
     }
 
     if (trail.length) {
@@ -657,6 +1269,11 @@ export class Editor {
     this.main.append(view)
     this.wire(view)
     view.querySelector('.sp-page-inner')?.append(this.backlinks(page.id))
+    // Comments are EDITOR-ONLY. The gate is here rather than in comments.ts
+    // because this is the object that knows which view it is in — and the
+    // renderer, which print and the reading view share, has never heard of
+    // them at all.
+    if (!this.reading) this.comments?.refresh()
     this.painting = false
   }
 
@@ -671,7 +1288,9 @@ export class Editor {
   private addGutter(node: HTMLElement, blockId: string): void {
     const g = el('div', 'sp-gutter')
     const add = document.createElement('button')
-    add.className = 'sp-ghost'
+    // Named, because a phone drops it: there is only room for ONE control in a
+    // 44px margin, and "Add below" is the second item of the grip's own menu.
+    add.className = 'sp-ghost sp-ghost-add'
     add.type = 'button'
     add.innerHTML = ICONS.plus
     add.title = t('Add a block below')
@@ -721,6 +1340,8 @@ export class Editor {
     const fresh = newBlock('p')
     const owner = s.block(blockId)
     if (owner?.parent) fresh.parent = owner.parent
+    // a block born inside a canvas is born somewhere ON it
+    placeNewCard(page, fresh)
     s.commit(() => {
       page.blocks.splice(page.blocks.findIndex((b) => b.id === blockId) + 1, 0, fresh)
     })
@@ -752,6 +1373,14 @@ export class Editor {
     const si = sibs.findIndex((b) => b.id === id)
 
     return [
+      // FIRST, and only for a link card. The card's own edit button appears on
+      // hover, which is a gesture a touch screen does not have — this menu is
+      // the touch sheet too, so without an entry here a card could be made on a
+      // phone and never changed.
+      ...(blocks[at]?.type === 'link'
+        ? [{ icon: 'globe' as const, label: t('Edit this link card'), hint: '',
+          run: () => this.openLinkCard(id) }]
+        : []),
       { icon: 'text', label: t('Turn into…'), hint: t('Change this block’s type'),
         run: () => this.openSlash(id) },
       { icon: 'plus', label: t('Add below'), hint: '⏎', run: () => this.insertAfter(id) },
@@ -760,6 +1389,9 @@ export class Editor {
       { icon: 'down', label: t('Move down'), hint: '', off: si < 0 || si >= sibs.length - 1,
         run: () => { if (si >= 0 && si < sibs.length - 1) this.moveBlock(id, sibs[si + 1].id) } },
       { icon: 'copy', label: t('Duplicate'), hint: '', run: () => this.duplicateBlock(id) },
+      // The gutter holds two controls and a phone fits one, so commenting
+      // lives in the menu BOTH of them open — which is also the touch sheet.
+      { icon: 'comment', label: t('Comment'), hint: '', run: () => this.comments.openNew(id) },
       { icon: 'trash', label: t('Delete'), hint: '⌫', run: () => this.deleteBlock(id) },
     ]
   }
@@ -802,12 +1434,91 @@ export class Editor {
     b.html = propHtml(f, value)
   }
 
+  /**
+   * Set a field ON A PAGE, adding the prop block when the page does not carry
+   * one — the case a board drop already had and a table cell now has too.
+   *
+   * A page can be in a view without carrying every field the view shows: a
+   * board grouped by something an issue never had, or a table column that
+   * exists because SOME other row has it. The value arrives in the header strip
+   * where the others are, through propBlock, so the readable `html` is written
+   * with it. A value written without its readable form is a value an older
+   * build, a thumbnailer, a grep and the markdown export all see as nothing.
+   *
+   * Not a commit of its own: the caller decides what one user action was.
+   */
+  private putField(page: Page, f: FieldSpec, value: unknown): void {
+    const own = propBlockOf(page, f.key)
+    if (own) this.applyField(own, f, value)
+    else page.blocks.splice(headerLength(page), 0, propBlock(f, value, newBlock('prop').id))
+  }
+
+  /**
+   * A TABLE CELL, opened for editing. The same picker the page's own header
+   * strip opens, over the same writer a board drop uses.
+   *
+   * Addressed by PAGE AND KEY rather than by block id, because the interesting
+   * cell is the empty one: the page has no prop block for that column, and the
+   * edit is what creates it. Looking the block up here — after the value is
+   * chosen, in setCell — also means an opened-and-dismissed picker writes
+   * nothing at all.
+   */
+  private openCellPicker(pageId: string, key: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    const page = s.index.page.get(pageId)
+    const f = fieldByKey(s.doc, key)
+    if (!page || !f) return
+    const own = propBlockOf(page, key)
+    this.fieldPicker(f, own ? (own as { value?: unknown }).value : undefined, anchor,
+      (v) => this.setCell(pageId, key, v))
+  }
+
+  /**
+   * Write one cell. Nothing happens when the value did not change: a picker
+   * opened and closed on the value already there must not be a step you press
+   * ⌘Z past.
+   *
+   * PAGE SCOPE ONLY WHEN THE ROW IS THE PAGE IN VIEW, for the reason setField
+   * carries: a page-scoped checkpoint snapshots `store.pageId`, and a cell in a
+   * table almost always belongs to ANOTHER page — undo would restore the page
+   * holding the view and leave the changed value exactly where it was.
+   */
+  private setCell(pageId: string, key: string, value: unknown): void {
+    const s = this.store
+    const page = s.index.page.get(pageId)
+    const f = fieldByKey(s.doc, key)
+    if (!page || !f || s.readOnly || this.reading) return
+    const own = propBlockOf(page, key)
+    if (own && (own as { value?: unknown }).value === value) return
+    const scope = pageId === s.pageId ? 'page' : 'doc'
+    s.commit(() => this.putField(page, f, value), { scope })
+    this.paintPage()
+  }
+
   private openFieldPicker(blockId: string, anchor: HTMLElement): void {
     const s = this.store
     if (s.readOnly || this.reading) return
     const b = s.block(blockId)
     const f = b && fieldByKey(s.doc, String((b as { key?: unknown }).key ?? ''))
     if (!b || !f) return
+    this.fieldPicker(f, (b as { value?: unknown }).value, anchor, (v) => this.setField(blockId, v))
+  }
+
+  /**
+   * THE ONE PICKER for a field value: a list of options for a select, one input
+   * for anything else.
+   *
+   * Takes a WRITER rather than a block id, and that is the whole reason it was
+   * split out of openFieldPicker. A table cell can stand for a value that does
+   * not exist yet — the page carries no such prop block — so there is no id to
+   * hand it. Everything else about choosing a value has to stay identical
+   * across the header strip, the board's card chip and a cell, or the same
+   * gesture reads as three different controls.
+   */
+  private fieldPicker(
+    f: FieldSpec, cur: unknown, anchor: HTMLElement, write: (v: unknown) => void,
+  ): void {
     this.closeOverlay()
 
     const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
@@ -815,17 +1526,17 @@ export class Editor {
     this.trapAndClose(pop)
 
     if (f.vt === 'select' && f.options?.length) {
-      const cur = String((b as { value?: unknown }).value ?? '')
+      const now = String(cur ?? '')
       for (const o of f.options) {
         const item = document.createElement('button')
-        item.className = 'sp-dditem' + (o.id === cur ? ' sp-sel' : '')
+        item.className = 'sp-dditem' + (o.id === now ? ' sp-sel' : '')
         item.type = 'button'
         const dot = el('span', 'sp-prop-dot')
         if (o.color) dot.style.background = o.color
         const name = document.createElement('span')
         name.textContent = o.label
         item.append(dot, name)
-        item.addEventListener('click', () => { this.closeOverlay(); this.setField(blockId, o.id) })
+        item.addEventListener('click', () => { this.closeOverlay(); write(o.id) })
         pop.append(item)
       }
     } else {
@@ -833,14 +1544,14 @@ export class Editor {
       const input = document.createElement('input')
       input.className = 'sp-find'
       input.type = f.vt === 'number' ? 'number' : f.vt === 'date' ? 'date' : 'text'
-      input.value = String((b as { value?: unknown }).value ?? '')
+      input.value = String(cur ?? '')
       input.placeholder = f.label
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault()
           const raw = input.value.trim()
           this.closeOverlay()
-          this.setField(blockId, f.vt === 'number' ? (raw === '' ? '' : Number(raw)) : raw)
+          write(f.vt === 'number' ? (raw === '' ? '' : Number(raw)) : raw)
         }
       })
       pop.append(input)
@@ -850,7 +1561,7 @@ export class Editor {
     this.overlay = pop
     document.body.append(pop)
     if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
+    else this.placed(pop, anchor)
     const away = (ev: MouseEvent) => {
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
@@ -886,11 +1597,49 @@ export class Editor {
       })
       const fb = v.querySelector<HTMLElement>('[data-view-filter]')
       fb?.addEventListener('click', () => this.openViewFilter(v.dataset.blockId!, fb))
+      const lb = v.querySelector<HTMLElement>('[data-view-layout]')
+      lb?.addEventListener('click', () => this.toggleViewLayout(v.dataset.blockId!))
+      const gb = v.querySelector<HTMLElement>('[data-view-group]')
+      gb?.addEventListener('click', () => this.openViewGroup(v.dataset.blockId!, gb))
+      const sb = v.querySelector<HTMLElement>('[data-view-sort]')
+      sb?.addEventListener('click', () => this.openViewSort(v.dataset.blockId!, sb))
+      const srcB = v.querySelector<HTMLElement>('[data-view-source]')
+      srcB?.addEventListener('click', () => this.openViewSource(v.dataset.blockId!, srcB))
+
+      // A SORTED BOARD HAS NO HAND ORDER TO DROP INTO. The sort decides where a
+      // card sits, so offering a drop position would write an order into
+      // doc.pages that the very next paint discards — a gesture that appears to
+      // do nothing, and a stray undo step. The column still accepts the card;
+      // only the position within it stops being a question.
+      const sorted = Array.isArray((vb as { sort?: unknown } | undefined)?.sort)
+        && ((vb as { sort?: unknown[] }).sort!).length > 0
 
       for (const btn of v.querySelectorAll<HTMLElement>('[data-set-field]')) {
         btn.addEventListener('click', (e) => {
           e.preventDefault()
           this.openFieldPicker(btn.dataset.setField!, btn)
+        })
+      }
+
+      // THE TABLE, made to work. A header is a control and a cell is a control,
+      // both real <button>s from the renderer, so the keyboard reaches them and
+      // Enter fires this same click — there is no second key path to keep in
+      // step with the pointer one.
+      for (const h of v.querySelectorAll<HTMLElement>('[data-sort-col]')) {
+        h.addEventListener('click', () => {
+          // ascending -> descending -> none, written into the view's OWN sort.
+          // The third state deletes the key rather than storing an empty array,
+          // so a table sorted and unsorted is byte-identical to one nobody
+          // touched — the rule filter, source and layout all follow.
+          const now = this.store.block(v.dataset.blockId ?? '')
+          this.editView(v.dataset.blockId!, 'sort',
+            cycleSort((now as { sort?: unknown } | undefined)?.sort, h.dataset.sortCol!))
+        })
+      }
+      for (const c of v.querySelectorAll<HTMLElement>('[data-cell-field]')) {
+        c.addEventListener('click', (e) => {
+          e.preventDefault()
+          this.openCellPicker(c.dataset.cellPage!, c.dataset.cellField!, c)
         })
       }
 
@@ -932,8 +1681,9 @@ export class Editor {
         col.addEventListener('dragover', (e) => {
           if (!e.dataTransfer?.types.includes('text/bento-issue')) return
           e.preventDefault()
-          const aim = this.aimAt(col, e.clientY)
           col.classList.add('sp-drop')
+          if (sorted) return
+          const aim = this.aimAt(col, e.clientY)
           if (aim.before) col.querySelector(`[data-issue="${CSS.escape(aim.before)}"]`)?.classList.add('sp-dropbefore')
           else col.classList.add('sp-dropend')
         })
@@ -941,7 +1691,7 @@ export class Editor {
           const moved = e.dataTransfer?.getData('text/bento-issue')
           if (!moved) return
           e.preventDefault()
-          const aim = this.aimAt(col, e.clientY)
+          const aim = sorted ? null : this.aimAt(col, e.clientY)
           marks()
           this.dropIssue(moved, groupKey, col.dataset.group!, aim)
         })
@@ -966,7 +1716,7 @@ export class Editor {
    *
    * Both halves are ONE commit, because one drag is one user action.
    */
-  private dropIssue(pageId: string, key: string, optId: string, aim: DropAim): void {
+  private dropIssue(pageId: string, key: string, optId: string, aim: DropAim | null): void {
     const s = this.store
     const page = s.index.page.get(pageId)
     const f = fieldByKey(s.doc, key)
@@ -976,21 +1726,17 @@ export class Editor {
     // The no-op test is about the COLUMN, not the page array — those are
     // different orders the moment a board has two columns, and judging by page
     // adjacency let a drop that visibly did nothing rewrite doc.pages.
+    //
+    // A null aim is a SORTED board: there is no position to land in, so the
+    // drop is only ever the value change.
     const cards = [...document.querySelectorAll<HTMLElement>(`.sp-col[data-group="${CSS.escape(optId)}"] .sp-issue[data-issue]`)]
       .map((c) => c.dataset.issue!)
-    const moves = columnMoves(cards, pageId, aim)
-    const order = moves ? reorderPages(s.doc.pages, pageId, aim) : null
+    const moves = !!aim && columnMoves(cards, pageId, aim)
+    const order = moves && aim ? reorderPages(s.doc.pages, pageId, aim) : null
     if (!setting && !order) return
 
     s.commit(() => {
-      if (setting) {
-        if (own) this.applyField(own, f, optId)
-        // A page can reach a column without carrying that field at all (a board
-        // grouped by something an issue never had). It gains the value, in the
-        // header strip where the others are — through propBlock, so the
-        // readable form is written with it.
-        else page.blocks.splice(headerLength(page), 0, propBlock(f, optId, newBlock('prop').id))
-      }
+      if (setting) this.putField(page, f, optId)
       if (order) s.doc.pages = order
     })
     this.repaint()
@@ -1016,6 +1762,172 @@ export class Editor {
       else delete (b as { filter?: ViewFilter }).filter
     }, { scope: 'page' })
     this.paintPage()
+  }
+
+  /**
+   * A small menu anchored to a button — a bottom sheet on a phone.
+   *
+   * Four of these had grown the same twelve lines of boilerplate (build, trap,
+   * sheet-or-place, dismiss on a click away), which is three copies too many
+   * for something whose dismissal behaviour has to be identical everywhere:
+   * a menu that closes differently from the one beside it reads as a bug.
+   */
+  private popover(anchor: HTMLElement, build: (pop: HTMLElement) => void): void {
+    this.closeOverlay()
+    const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
+    pop.setAttribute('role', 'menu')
+    this.trapAndClose(pop)
+    build(pop)
+    this.overlay = pop
+    document.body.append(pop)
+    if (this.isDrawer()) pop.classList.add('sp-sheet-in')
+    else this.placed(pop, anchor)
+    const away = (ev: MouseEvent) => {
+      if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
+    }
+    setTimeout(() => document.addEventListener('mousedown', away), 0)
+  }
+
+  /**
+   * Edit a key on a `view` block — layout, groupBy, sort.
+   *
+   * The same discipline as editViewFilter: an edit that says "the default"
+   * DELETES the key rather than storing it, so a view somebody switched to a
+   * list and back is byte-identical to one that was never touched, and a file
+   * written before this control existed stays that way.
+   */
+  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort' | 'source', value: unknown): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    s.commit(() => {
+      const rec = b as unknown as Record<string, unknown>
+      if (value === undefined || value === null) delete rec[key]
+      else rec[key] = value
+    }, { scope: 'page' })
+    this.paintPage()
+  }
+
+  /** Board ⇄ list. `board` is the default, so it is stored as an ABSENT key. */
+  /**
+   * WHICH PAGES A VIEW HOLDS.
+   *
+   * The answer used to be one thing — every page carrying a `status` — which
+   * is why a space could hold a backlog and nothing else. Two selectors now,
+   * and only two: the pages carrying a given property, or the pages under a
+   * given page. With a flat vocabulary where each page carries only the fields
+   * it uses, "has an Author" IS "is a book".
+   *
+   * Issues stays the ABSENT key, so every view written before this keeps
+   * showing the backlog and a view set back to Issues is byte-identical to one
+   * that never moved.
+   */
+  private openViewSource(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b) return
+    this.popover(anchor, (pop) => {
+      const set = (src: { has?: string; under?: string } | undefined) => {
+        this.editView(blockId, 'source', src)
+        this.closeOverlay()
+      }
+      pop.append(el('div', 'sp-pop-title', t('Which pages')))
+      pop.append(this.menuItem('board', t('Issues'), t('Every page with a status'), () => set(undefined)))
+
+      // A property somebody invented is the interesting case, so it comes
+      // first among the fields and lists every one the vocabulary has.
+      for (const f of fieldsOf(s.doc)) {
+        pop.append(this.menuItem('tag', f.label, t('Pages that have this property'),
+          () => set({ has: f.key })))
+      }
+
+      // Nesting is how a space is already organised, so the current page and
+      // its ancestors are the ones worth offering rather than every page.
+      const here = s.page
+      if (here) {
+        pop.append(el('div', 'sp-pop-title', t('Nested under')))
+        pop.append(this.menuItem('page', here.title || t('Untitled'),
+          t('Pages nested under this one'), () => set({ under: here.id })))
+      }
+    })
+  }
+
+  private toggleViewLayout(blockId: string): void {
+    const b = this.store.block(blockId)
+    // Board -> list -> table -> gallery -> board, from fields.ts — the ONE
+    // place the cycle is written. It used to be written here and again in
+    // render.ts, and when the prototype-lookup bug was found only this copy was
+    // hardened, so the button went on rendering
+    // `function toString() { [native code] }` as its label from the other one.
+    //
+    // `board` is the ABSENT key, never a stored 'board': a view cycled all the
+    // way round is byte-identical to one nobody ever touched, which is the same
+    // rule filter and source follow. nextLayout returns the WORD; turning
+    // 'board' back into a deletion is the writer's job, and this is the writer.
+    const to = nextLayout((b as { layout?: unknown } | undefined)?.layout)
+    this.editView(blockId, 'layout', to === 'board' ? undefined : to)
+  }
+
+  /**
+   * Which field the columns come from.
+   *
+   * Only fields with declared options are offered. A board's columns ARE the
+   * option list — grouping by a free-text field would make one column per
+   * distinct string, which is a pivot table wearing a board's clothes.
+   */
+  private openViewGroup(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    const now = String((b as { groupBy?: unknown }).groupBy ?? 'status')
+    const groupable = fieldsOf(s.doc).filter((f) => f.options?.length)
+    this.popover(anchor, (pop) => {
+      for (const f of groupable) {
+        pop.append(this.menuItem('board', f.label, '', () => {
+          this.closeOverlay()
+          // `status` is the default the renderer assumes, so choosing it clears
+          // the key instead of writing what absence already means
+          this.editView(blockId, 'groupBy', f.key === 'status' ? undefined : f.key)
+        }, { selected: f.key === now }))
+      }
+      if (!groupable.length) pop.append(el('div', 'sp-fgroup', t('No field here has options to group by')))
+    })
+  }
+
+  /**
+   * The order. One key, though the format holds a list — see fields.ts.
+   *
+   * "Manual order" is the ABSENCE of a sort, not a sort called manual: it is
+   * the page order, which is the order somebody arranged by dragging, and it
+   * has to be reachable from here or a board is one click away from being
+   * un-arrangeable forever.
+   */
+  private openViewSort(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    const b = s.block(blockId)
+    if (!b || s.readOnly || this.reading) return
+    const cur = (Array.isArray((b as { sort?: unknown }).sort)
+      ? ((b as { sort?: ViewSort[] }).sort ?? [])[0] : undefined) as ViewSort | undefined
+    this.popover(anchor, (pop) => {
+      pop.append(this.menuItem('grip', t('Manual order'), '', () => {
+        this.closeOverlay()
+        this.editView(blockId, 'sort', undefined)
+      }, { selected: !cur }))
+      pop.append(el('div', 'sp-fgroup', t('Sort')))
+      for (const f of fieldsOf(s.doc)) {
+        const mine = cur?.key === f.key
+        // clicking the field you are already sorted by REVERSES it — the second
+        // thing you want after "sort by priority" is "…the other way", and a
+        // separate direction control for a one-key sort is a control nobody
+        // finds
+        const dir: 'asc' | 'desc' = mine && cur?.dir !== 'desc' ? 'desc' : 'asc'
+        const hint = mine ? (cur?.dir === 'desc' ? t('Ascending') : t('Descending')) : ''
+        pop.append(this.menuItem('arrowDown', f.label, hint, () => {
+          this.closeOverlay()
+          this.editView(blockId, 'sort', [dir === 'asc' ? { key: f.key } : { key: f.key, dir }])
+        }, { selected: mine }))
+      }
+    })
   }
 
   /** Toggle one value of one field in a view's filter. */
@@ -1044,12 +1956,8 @@ export class Editor {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
-    this.closeOverlay()
-    const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
-    pop.setAttribute('role', 'menu')
-    this.trapAndClose(pop)
     const cur = ((b as { filter?: ViewFilter }).filter ?? {}) as ViewFilter
-
+    this.popover(anchor, (pop) => {
     for (const f of fieldsOf(s.doc)) {
       if (!f.options?.length) continue
       pop.append(el('div', 'sp-fgroup', f.label))
@@ -1076,21 +1984,12 @@ export class Editor {
         pop.append(item)
       }
     }
-    const clear = this.menuItem('trash', t('Clear filter'), '', () => {
+    pop.append(this.menuItem('trash', t('Clear filter'), '', () => {
       this.closeOverlay()
       // unknown keys survive: this clears what this build put there
       this.editViewFilter(blockId, (f) => { delete f.is; delete f.open })
+    }))
     })
-    pop.append(clear)
-
-    this.overlay = pop
-    document.body.append(pop)
-    if (this.isDrawer()) pop.classList.add('sp-sheet-in')
-    else place(pop, anchor)
-    const away = (ev: MouseEvent) => {
-      if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
-    }
-    setTimeout(() => document.addEventListener('mousedown', away), 0)
   }
 
   /**
@@ -1275,6 +2174,91 @@ export class Editor {
     this.paintPage()
   }
 
+  /** the block whose ghost answer is currently showing, if any */
+  private ghostFor: string | null = null
+
+  private clearGhost(): void {
+    this.main.querySelectorAll('.sp-preview').forEach((n) => n.remove())
+    this.ghostFor = null
+  }
+
+  /**
+   * While you type, show what the answer WOULD be.
+   *
+   * The answer is not in the document yet and must not look as though it is:
+   * it renders muted, beside the line, and says how to keep it. Pressing Tab
+   * appends the `=` — so committing is one keystroke, and ignoring it is none,
+   * which is the right balance for something that appears while you are
+   * writing prose.
+   *
+   * Nothing is shown for a line that already asks (the real answer is there),
+   * for a line that does not fully parse, or for a bare number — `42` on its
+   * own is not a calculation anybody needs confirming.
+   */
+  private ghost(id: string, host: HTMLElement): void {
+    const s = this.store
+    if (this.ghostFor && this.ghostFor !== id) this.clearGhost()
+    const block = s.block(id)
+    const page = s.page
+    if (!block || !page) return
+    const line = textOf(host.innerHTML)
+    const holder = host.parentElement
+    if (!holder) return
+    holder.querySelectorAll('.sp-preview').forEach((n) => n.remove())
+    this.ghostFor = null
+    if (asksForAnswer(line) || !/[-+*/^%=]|\bin\b|\bof\b/.test(line)) return
+
+    const ctx = pageContext(page.blocks.map((x) => ({ id: x.id, text: textOf(x.html ?? '') })), id)
+    const v = evaluate(line, ctx)
+    // a bare number is not a calculation; neither is a line that only names a
+    // value already defined
+    if (!v || /^\s*[\d.,_]+\s*$/.test(line)) return
+
+    const g = document.createElement('span')
+    g.className = 'sp-preview'
+    g.contentEditable = 'false'
+    g.setAttribute('aria-hidden', 'true')
+    g.textContent = `= ${format(v, locale())}`
+    const kbd = document.createElement('kbd')
+    kbd.textContent = 'Tab'
+    g.appendChild(kbd)
+    holder.appendChild(g)
+    this.ghostFor = id
+  }
+
+  /**
+   * Keep the ghost answer: append the `=` that asks for it.
+   *
+   * The ANSWER is not written — only the question. That is the whole design:
+   * the document holds `budget * 0.3 =` and the number is derived every time
+   * the page is drawn, so changing `budget` above updates this line too.
+   * Writing the number here would freeze it, and a frozen number that no
+   * longer matches its own expression is worse than no number at all.
+   */
+  private commitAnswer(id: string): boolean {
+    const s = this.store
+    const b = s.block(id)
+    if (!b || s.readOnly) return false
+    const html = `${(b.html ?? '').replace(/\s+$/, '')} =`
+    s.commit(() => { b.html = html })
+    this.clearGhost()
+    this.paintPage()
+    afterPaint(() => {
+      const h = this.main.querySelector<HTMLElement>(`[data-edit="${CSS.escape(id)}"]`)
+      // caret at the END, not selecting the line: you asked for the answer,
+      // you did not ask to replace what you wrote
+      if (!h) return
+      h.focus()
+      const r = document.createRange()
+      r.selectNodeContents(h)
+      r.collapse(false)
+      const sel = getSelection()
+      sel?.removeAllRanges()
+      sel?.addRange(r)
+    })
+    return true
+  }
+
   /** Attach behaviour to a freshly painted page. */
   private wire(view: HTMLElement): void {
     const s = this.store
@@ -1313,9 +2297,11 @@ export class Editor {
           if (b) b.html = host.innerHTML
         })
         this.autoformat(id, host)
+        this.ghost(id, host)
       })
       host.addEventListener('blur', () => {
         if (this.painting) return
+        this.clearGhost()
         s.endRun()
         const b = s.block(id)
         if (b && b.html !== undefined) {
@@ -1369,6 +2355,16 @@ export class Editor {
         })
       }
       this.wireBoard(view)
+      this.wireTables(view)
+      // The canvas keeps its own wiring in its own file: the drag, the cards
+      // and the shape button are one feature and touch nothing else here.
+      wireCanvas(view, {
+        block: (id) => this.store.block(id),
+        page: () => this.store.page,
+        commit: (fn, opts) => this.store.commit(fn, opts),
+        repaint: () => this.paintPage(),
+        pickPage: (then) => this.openPagePicker('', null, then),
+      })
     }
 
     // "Load this image" — the reader's consent to contact one remote host.
@@ -1388,7 +2384,7 @@ export class Editor {
       const cur = this.blockAt(document.activeElement)
       if (e.clipboardData?.files?.length) {
         e.preventDefault()
-        void this.imageFromTransfer(e.clipboardData, cur?.id)
+        void this.fileFromTransfer(e.clipboardData, cur?.id)
       }
     })
     view.addEventListener('dragover', (e) => {
@@ -1403,7 +2399,7 @@ export class Editor {
       if (isImportDrop(e.dataTransfer)) return
       e.preventDefault()
       const near = (e.target as HTMLElement)?.closest?.('[data-block-id]') as HTMLElement | null
-      void this.imageFromTransfer(e.dataTransfer, near?.dataset.blockId)
+      void this.fileFromTransfer(e.dataTransfer, near?.dataset.blockId)
     })
 
     // The language chip. It belongs to the EDITOR, not the renderer: a reader
@@ -1453,6 +2449,100 @@ export class Editor {
       }
       fig.append(tools)
     }
+
+    // VIDEO AND AUDIO. The chooser on an empty block, and the playback
+    // switches on a full one. All of it is editor chrome, deliberately: the
+    // renderer draws the clip, and a reader, a printout and a locked space get
+    // the clip without the switches that change it — the same rule the callout
+    // chip and the language chip follow.
+    for (const node of view.querySelectorAll<HTMLElement>('.sp-b-media')) {
+      const id = node.dataset.blockId!
+      for (const btn of node.querySelectorAll<HTMLElement>('[data-pick-media]')) {
+        btn.addEventListener('click', () => void this.pickMedia(id))
+      }
+      for (const btn of node.querySelectorAll<HTMLElement>('[data-link-media]')) {
+        btn.addEventListener('click', () => this.linkMedia(id))
+      }
+      const b = s.block(id)
+      if (s.readOnly || this.reading || !b || !b.src) continue
+      const kind = String(b.kind ?? 'video') === 'audio' ? 'audio' : 'video'
+      const tools = el('div', 'sp-mediatools')
+      const flip = (label: string, title: string, on: boolean, set: (v: boolean) => void) => {
+        const btn = document.createElement('button')
+        btn.className = 'sp-btn' + (on ? ' sp-on' : '')
+        btn.type = 'button'
+        btn.textContent = label
+        btn.title = title
+        btn.setAttribute('aria-pressed', String(on))
+        btn.addEventListener('click', () => {
+          s.commit(() => { const bb = s.block(id); if (bb) set(!on) })
+          this.paintPage()
+        })
+        tools.append(btn)
+      }
+
+      // WIDTH IS A VIDEO QUESTION. An <audio> is a control bar of the
+      // browser's own height; a percentage of the measure would only make it
+      // a shorter control bar.
+      if (kind === 'video') {
+        const sizeBtn = document.createElement('button')
+        sizeBtn.className = 'sp-btn'
+        sizeBtn.type = 'button'
+        sizeBtn.textContent = `${b.width ?? 100}%`
+        sizeBtn.title = t('Width in the text column')
+        sizeBtn.addEventListener('click', () => {
+          const steps = [100, 75, 50, 33]
+          const cur = Number(b.width ?? 100)
+          const next = steps[(steps.indexOf(cur) + 1) % steps.length]
+          s.commit(() => { const bb = s.block(id); if (bb) bb.width = next })
+          this.paintPage()
+        })
+        tools.append(sizeBtn)
+
+        const poster = document.createElement('button')
+        poster.className = 'sp-btn' + (b.poster ? ' sp-on' : '')
+        poster.type = 'button'
+        poster.textContent = t('Poster…')
+        poster.title = t('A still frame, shown before play — and what a printout or a file preview shows')
+        poster.addEventListener('click', () => void this.pickPoster(id))
+        tools.append(poster)
+
+        flip(t('Muted'), t('Start silent'), b.muted === true,
+          (v) => { const bb = s.block(id); if (bb) bb.muted = v })
+      }
+      flip(t('Loop'), t('Repeat when it reaches the end'), b.loop === true,
+        (v) => { const bb = s.block(id); if (bb) bb.loop = v })
+      // absent means shown, so the OFF state is the one that is written down
+      flip(t('Controls'), t('Show playback controls to the reader'), b.controls !== false,
+        (v) => { const bb = s.block(id); if (bb) { if (v) delete bb.controls; else bb.controls = false } })
+
+      const replace = document.createElement('button')
+      replace.className = 'sp-btn'
+      replace.type = 'button'
+      replace.textContent = t('Replace…')
+      replace.title = t('Choose a different file')
+      replace.addEventListener('click', () => void this.pickMedia(id))
+      tools.append(replace)
+
+      // a linked clip says so, because it is the one that stops working on a
+      // train — and the badge is the only place that fact is visible
+      if (typeof b.src === 'string' && isRemote(b.src)) {
+        const badge = document.createElement('span')
+        badge.className = 'sp-btn sp-badge'
+        badge.textContent = t('Linked')
+        badge.title = t('Not in this file: it needs the network, and the site is told when someone opens the page')
+        tools.append(badge)
+      }
+      node.append(tools)
+    }
+    // A link card OPENS its link, so its editing control is a separate button —
+    // rendered only where there is an editor (render.ts), wired here.
+    view.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-edit-link]')
+      if (!btn) return
+      e.preventDefault()
+      this.openLinkCard(btn.dataset.editLink!)
+    })
 
     // intra-space links navigate without leaving the document
     view.addEventListener('click', (e) => {
@@ -1509,6 +2599,323 @@ export class Editor {
     host.addEventListener('blur', () => { if (!this.painting) s.endRun() })
   }
 
+  // ---- tables -------------------------------------------------------------
+  //
+  // A block editor edits a table differently from a canvas: there is no
+  // properties panel to put row and column controls in, and the block IS the
+  // table, so the controls ride on the block the way the image tools do. What
+  // is copied from slides is the MODEL (fractional weights, rows of cells, a
+  // header flag, whole-value LWW under collab); what is not is any of this.
+
+  /** The cell the caret is in — `data-cell` is the block, `data-r`/`data-c` the
+   *  seat. Deliberately NOT `data-edit`: that name means "this element's html
+   *  IS the block's html", and the generic input handler would then write one
+   *  cell over the whole table. */
+  private cellAt(node: Node | null): { id: string; r: number; c: number; td: HTMLElement } | null {
+    const td = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>('[data-cell]')
+    if (!td) return null
+    return { id: td.dataset.cell!, r: Number(td.dataset.r), c: Number(td.dataset.c), td }
+  }
+
+  private focusCell(id: string, r: number, c: number): void {
+    afterPaint(() => {
+      const td = this.main.querySelector<HTMLElement>(
+        `[data-cell="${CSS.escape(id)}"][data-r="${r}"][data-c="${c}"]`)
+      if (!td) return
+      td.focus()
+      caretToEnd(td)
+    })
+  }
+
+  /**
+   * Change a table's shape, then put the caret back where the change means it
+   * should be.
+   *
+   * Every table write goes through here and through model.writeTable, so the
+   * derived `html` fallback — the thing a build that predates tables shows —
+   * can never drift from the cells. It is a `commit`, so it is one undo step.
+   */
+  private editTable(id: string, fn: (t: TableShape) => { r: number; c: number } | void): void {
+    const s = this.store
+    const b = s.block(id)
+    if (!b || s.readOnly || this.reading) return
+    let seat: { r: number; c: number } | undefined
+    const shape = tableOf(b)
+    s.commit(() => { seat = fn(shape) || undefined; writeTable(b, shape) })
+    this.paintPage()
+    // where the change means the caret should be, or where it already was —
+    // clamped, because the row it was in may be the row that just went
+    const here = this.cell?.id === id ? this.cell : null
+    const to = seat ?? here
+    if (!to) return
+    const t = tableOf(b)
+    this.focusCell(id, Math.min(to.r, t.h - 1), Math.min(to.c, t.w - 1))
+  }
+
+  /** The last cell the caret was in, so a toolbar button knows which row and
+   *  column it means. A toolbar click blurs the cell, so this cannot be read
+   *  from the Selection at the moment the button fires. */
+  private cell: { id: string; r: number; c: number } | null = null
+
+  /** A fresh row or column of the right width. */
+  private static blank(n: number): string[] { return Array<string>(n).fill('') }
+
+  addTableRow(id: string, at?: number): void {
+    this.editTable(id, (t) => {
+      if (t.h >= TABLE_MAX_ROWS) return
+      const r = at === undefined ? t.h : at + 1
+      t.rows.splice(r, 0, Editor.blank(t.w))
+      return { r, c: 0 }
+    })
+  }
+
+  addTableCol(id: string, at?: number): void {
+    this.editTable(id, (t) => {
+      if (t.w >= TABLE_MAX_COLS) return
+      const c = at === undefined ? t.w : at + 1
+      for (const row of t.rows) row.splice(c, 0, '')
+      t.cols.splice(c, 0, t.cols[Math.min(c, t.cols.length - 1)] ?? 1)
+      t.colAlign.splice(c, 0, '')
+      return { r: 0, c }
+    })
+  }
+
+  /** A table always keeps one row and one column: a table with none is not an
+   *  empty table, it is a block with nothing to click on and no way back. */
+  removeTableRow(id: string, at: number): void {
+    this.editTable(id, (t) => {
+      if (t.h <= 1) return
+      t.rows.splice(Math.min(at, t.h - 1), 1)
+      return { r: Math.max(0, Math.min(at, t.rows.length - 1)), c: 0 }
+    })
+  }
+
+  removeTableCol(id: string, at: number): void {
+    this.editTable(id, (t) => {
+      if (t.w <= 1) return
+      const c = Math.min(at, t.w - 1)
+      for (const row of t.rows) row.splice(c, 1)
+      t.cols.splice(c, 1)
+      t.colAlign.splice(c, 1)
+      return { r: 0, c: Math.max(0, c - 1) }
+    })
+  }
+
+  /**
+   * Attach a table's editing behaviour: the cells, the tools, the grips.
+   *
+   * Called only when the document is editable — the renderer already emits
+   * inert `<td>`s in the reading view and in print, so wiring them anyway would
+   * contradict it, which is the exact mistake the callout chip made once.
+   */
+  private wireTables(view: HTMLElement): void {
+    const s = this.store
+
+    for (const td of view.querySelectorAll<HTMLElement>('[data-cell]')) {
+      const id = td.dataset.cell!
+      const r = Number(td.dataset.r), c = Number(td.dataset.c)
+      td.addEventListener('focus', () => { this.cell = { id, r, c } })
+      td.addEventListener('input', () => {
+        if (this.painting) return
+        // ONE RUN PER CELL, not per block: the run key carries the seat, so
+        // moving to the next cell closes the run and Tab-typing across a row is
+        // five undo steps rather than one that swallows the whole row.
+        s.runEdit(`${id}:${r}:${c}`, () => {
+          const b = s.block(id)
+          if (!b) return
+          const t = tableOf(b)
+          if (!t.rows[r]) return
+          t.rows[r][c] = td.innerHTML
+          writeTable(b, t)
+        })
+      })
+      td.addEventListener('blur', () => {
+        if (this.painting) return
+        s.endRun()
+        const b = s.block(id)
+        if (!b) return
+        const t = tableOf(b)
+        const clean = canonicalize(t.rows[r]?.[c] ?? '')
+        if (clean === t.rows[r]?.[c]) return
+        t.rows[r][c] = clean
+        writeTable(b, t)
+        td.innerHTML = clean
+      })
+    }
+
+    for (const node of view.querySelectorAll<HTMLElement>('.sp-b-table')) {
+      const id = node.dataset.blockId!
+      const b = s.block(id)
+      if (!b) continue
+      const shape = tableOf(b)
+      const tools = el('div', 'sp-tb-tools')
+      const btn = (label: string, title: string, run: () => void, on = false) => {
+        const x = document.createElement('button')
+        x.type = 'button'
+        x.className = 'sp-btn' + (on ? ' sp-on' : '')
+        x.textContent = label
+        x.title = title
+        x.setAttribute('aria-label', title)
+        // mousedown, not click: a click would first blur the cell, and `this.cell`
+        // is read to decide WHICH row the button means. Blur still runs (the
+        // cell's own handler closes its typing run) — it just runs after the
+        // seat has been used.
+        x.addEventListener('mousedown', (e) => { e.preventDefault(); run() })
+        return x
+      }
+      const seat = () => (this.cell?.id === id ? this.cell : null)
+      tools.append(
+        btn('＋', t('Add a row below'), () => this.addTableRow(id, seat()?.r)),
+        btn('＋|', t('Add a column after'), () => this.addTableCol(id, seat()?.c)),
+        btn('－', t('Remove this row'), () => this.removeTableRow(id, seat()?.r ?? shape.h - 1)),
+        btn('－|', t('Remove this column'), () => this.removeTableCol(id, seat()?.c ?? shape.w - 1)),
+        btn('H', t('Header row'), () => this.editTable(id, (x) => { x.header = !x.header }), shape.header),
+      )
+      node.append(tools)
+
+      // COLUMN GRIPS on the first row's cells, all but the last: a boundary
+      // moves two columns, and there is no boundary after the last one.
+      // COLUMN GRIPS. They live in the WRAPPER, absolutely positioned over each
+      // boundary — NOT inside the first row's cells, which is where they went
+      // first and which was wrong in two ways at once, both measured in the
+      // browser: the cell's `innerHTML` is the model, so every grip was written
+      // into the document as the cell's content; and `caretToEnd` put the caret
+      // INSIDE the trailing <button>, so the first word typed into a column
+      // landed in the button and was then eaten by the sanitizer on blur (a
+      // <button> is not on the inline allowlist, so it goes with its text).
+      // Editor chrome never belongs inside an editable host. The image tools and
+      // the language chip sit outside theirs for the same reason.
+      const wrap = node.querySelector<HTMLElement>('.sp-tb-wrap')
+      const table = node.querySelector<HTMLElement>('.sp-tb')
+      if (!wrap || !table || shape.w < 2) continue
+      const grips: HTMLElement[] = []
+      // `offsetLeft` is measured against the WRAP (the nearest positioned
+      // ancestor), which is also what the grips are positioned in — so the two
+      // agree inside the horizontal scroller as well, and scroll together.
+      const place = () => {
+        const row = [...node.querySelectorAll<HTMLElement>('[data-cell][data-r="0"]')]
+        grips.forEach((g, c) => {
+          const td = row[c]
+          if (!td) return
+          // physical `left`, to match the physical `offsetLeft` it comes from
+          g.style.left = `${td.offsetLeft + td.offsetWidth - 3}px`
+          g.style.height = `${table.offsetHeight}px`
+        })
+      }
+      for (let c = 0; c < shape.w - 1; c++) {
+        const grip = document.createElement('button')
+        grip.type = 'button'
+        grip.className = 'sp-tb-grip'
+        grip.tabIndex = -1
+        grip.setAttribute('aria-label', t('Drag to resize this column'))
+        grip.addEventListener('mousedown', (down) => this.startColResize(down, id, c, node, place))
+        grips.push(grip)
+        wrap.append(grip)
+      }
+      place()
+      // the column boundaries move when the window does, and a grip that is no
+      // longer over its boundary is worse than no grip
+      new ResizeObserver(place).observe(table)
+    }
+  }
+
+  /**
+   * Drag a column boundary.
+   *
+   * The DOM is updated live and the model ONLY on release — a commit per
+   * mousemove would be sixty undo steps for one drag, and repainting the page
+   * under the cursor would drop the pointer capture on the first frame.
+   *
+   * Two adjacent weights are traded so the total is unchanged: `cols` are
+   * fractions of the table's own width (model.ts), so a drag can never make a
+   * table that does not add up.
+   */
+  private startColResize(down: MouseEvent, id: string, c: number, node: HTMLElement, place: () => void): void {
+    down.preventDefault()
+    const table = node.querySelector<HTMLElement>('.sp-tb')
+    const b = this.store.block(id)
+    if (!table || !b) return
+    const shape = tableOf(b)
+    const cols = [...table.querySelectorAll<HTMLElement>('col')]
+    const width = table.getBoundingClientRect().width || 1
+    const total = shape.cols.reduce((s, n) => s + n, 0) || shape.w
+    const startX = down.clientX
+    const a0 = shape.cols[c], b0 = shape.cols[c + 1]
+    // a column never shrinks past a width you could still grab
+    const min = (total * 40) / width
+    document.body.classList.add('sp-col-resizing')
+
+    const move = (m: MouseEvent) => {
+      const d = ((m.clientX - startX) / width) * total
+      const a = Math.max(min, Math.min(a0 + b0 - min, a0 + d))
+      shape.cols[c] = a
+      shape.cols[c + 1] = a0 + b0 - a
+      for (let i = 0; i < cols.length; i++) {
+        cols[i].style.width = `${((shape.cols[i] / total) * 100).toFixed(3)}%`
+      }
+      // the grips follow the boundaries they ARE; the table's own size does not
+      // change during a column drag, so the ResizeObserver never fires for this
+      place()
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      document.body.classList.remove('sp-col-resizing')
+      this.store.commit(() => { writeTable(b, shape) }, { structure: false })
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
+  /**
+   * The keymap INSIDE a cell. Returns true when it handled the key.
+   *
+   * Tab and Enter walk the grid, and Tab off the last cell appends a row —
+   * exactly what slides' canvas table does, because it is what every table in
+   * every application does and muscle memory is not a thing to be clever with.
+   * Shift+Enter is the line break, since plain Enter is spent on navigation.
+   */
+  private tableKey(e: KeyboardEvent, at: { id: string; r: number; c: number }): boolean {
+    const b = this.store.block(at.id)
+    if (!b) return false
+    const t = tableOf(b)
+    const go = (r: number, c: number) => { e.preventDefault(); this.focusCell(at.id, r, c) }
+
+    if (e.key === 'Tab') {
+      const next = at.c + (e.shiftKey ? -1 : 1)
+      if (next >= 0 && next < t.w) { go(at.r, next); return true }
+      if (e.shiftKey) {
+        if (at.r === 0) { e.preventDefault(); return true }
+        go(at.r - 1, t.w - 1)
+        return true
+      }
+      if (at.r + 1 < t.h) { go(at.r + 1, 0); return true }
+      // off the end: a new row, which is how a table is filled in
+      e.preventDefault()
+      this.addTableRow(at.id)
+      return true
+    }
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // the browser inserts a <div> or a <p> into a td left to itself, and
+        // block structure is never markup here — insertLineBreak is a <br>
+        e.preventDefault()
+        document.execCommand('insertLineBreak')
+        return true
+      }
+      if (at.r + 1 < t.h) { go(at.r + 1, at.c); return true }
+      e.preventDefault()
+      this.addTableRow(at.id)
+      return true
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      return true
+    }
+    return false
+  }
+
   /** Choose what a code block is highlighted as. */
   private openLangPicker(blockId: string, anchor: HTMLElement): void {
     const s = this.store
@@ -1554,6 +2961,13 @@ export class Editor {
     }, 0)
   }
 
+  private collab: import('./collabui.ts').CollabUi | null = null
+  /** the live session, once main.ts has handed it over (connectSync) */
+  private session: import('./sync/session.ts').SyncSession | null = null
+  private liveSlot!: HTMLElement
+  private topbar: HTMLElement | null = null
+  private barRO: ResizeObserver | null = null
+  private barMO: MutationObserver | null = null
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private paintTreeSoon(): void {
     clearTimeout(this.treeTimer)
@@ -1656,15 +3070,43 @@ export class Editor {
     const s = this.store
     const mod = (e as any)[CTRL] as boolean
 
-    if (mod && e.key.toLowerCase() === 'k' && !e.shiftKey) { e.preventDefault(); this.openSearch(); return }
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); this.onSave?.(); return }
+    // ⌘K IS TWO COMMANDS, decided by whether anything is selected — the same
+    // split Notion and Confluence make, and the reason it is not a second
+    // shortcut: on a selection it is "link these words", and with nothing
+    // selected there is nothing to link, so it stays the quick-open it has
+    // always been. `link()` answers false when the selection is not markable,
+    // and the search opens as before.
+    if (mod && e.key.toLowerCase() === 'k' && !e.shiftKey) {
+      e.preventDefault()
+      if (!this.format?.link()) this.openSearch()
+      return
+    }
+    // `!e.shiftKey`: ⇧⌘S is strikethrough, and this branch had no shift test,
+    // so without it the save dialog opened every time someone struck text out.
+    if (mod && e.key.toLowerCase() === 's' && !e.shiftKey) { e.preventDefault(); this.onSave?.(); return }
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
-    // `[` collapses the page list, as in slides. Bare, not modified: it only
-    // reaches here when nothing is being edited (the text path returns above,
-    // where `[` is the page-link trigger).
-    if (!mod && e.key === '[') { e.preventDefault(); this.togglePane(); return }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
+    // `[` collapses the page list, `]` opens the properties panel — the pair
+    // slides uses. BOTH ask the same question first.
+    //
+    // `[` did not, and the comment beside it claimed it did not need to
+    // because "the text path returns above". The text path is ~90 lines BELOW
+    // it, so every bare `[` was caught here, preventDefault()ed, and turned
+    // into a sidebar toggle: `[[`, the way this app makes links and the thing
+    // the starter space tells you to type, could not be typed at all. Shipped
+    // since #237.
+    //
+    // ONE guard for both, not two. The panel work arrived with its own
+    // `isTyping()` while this was being fixed with an `editingText()` — same
+    // question, two names, and a second copy is how the two answers start to
+    // differ. `isTyping` is the survivor because it also covers SELECT, which
+    // takes a keystroke as readily as an input does.
+    if (!mod && e.key === '[' && !isTyping()) { e.preventDefault(); this.togglePane(); return }
+    if (!mod && e.key === ']' && !isTyping()) { e.preventDefault(); this.toggleInsp(); return }
+    // Same guard as [ and ]: '?' is a character somebody is entitled to type.
+    if (!mod && e.key === '?' && !isTyping()) { e.preventDefault(); this.openHelp(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); this.newIssue(); return }
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault()
@@ -1674,6 +3116,18 @@ export class Editor {
     }
     if (e.key === 'Escape' && this.reading && !this.overlay) { e.preventDefault(); this.toggleReading(false); return }
     if (this.overlay) return // the overlay owns the keyboard while it is open
+
+    // A TABLE CELL IS NOT A BLOCK HOST, so the block keymap below does not
+    // apply to it — the same ruling a code block gets, one level earlier.
+    // ⏎ walks the grid rather than splitting a block, ⇥ walks it rather than
+    // re-parenting, and neither has any meaning for a cell. This must come
+    // before `focused()`, which looks for `[data-edit]` and finds nothing in a
+    // cell — so without it every key here fell through to the browser, and ⏎
+    // inserted a `<div>` into the cell's html.
+    const inCell = this.cellAt(document.activeElement)
+    if (inCell && !s.readOnly && !this.reading) {
+      if (this.tableKey(e, inCell)) return
+    }
 
     const cur = this.focused()
     if (!cur) return
@@ -1699,7 +3153,7 @@ export class Editor {
       if (e.key === 'Enter') { e.preventDefault(); insertText('\n'); return }
       if (e.key === 'Tab') { e.preventDefault(); if (!e.shiftKey) insertText('  '); return }
       if (e.key === '/' || e.key === '[') return
-      if (mod && ['b', 'i', 'u'].includes(e.key.toLowerCase())) { e.preventDefault(); return }
+      if (markKey(e, mod)) { e.preventDefault(); return }
     }
 
     if (e.key === 'Enter' && !e.shiftKey && b.type !== 'code') {
@@ -1725,6 +3179,11 @@ export class Editor {
     }
     if (e.key === 'Tab') {
       e.preventDefault()
+      // A GHOST ANSWER CLAIMS TAB, and only while it is showing. Committing is
+      // then the keystroke your hand is already on, and ignoring it costs
+      // nothing — you carry on typing and it goes away. Shift+Tab still
+      // outdents, so the one gesture people use constantly is never stolen.
+      if (!e.shiftKey && this.ghostFor === cur.id && this.commitAnswer(cur.id)) return
       this.indent(cur.id, !e.shiftKey)
       return
     }
@@ -1737,10 +3196,14 @@ export class Editor {
       setTimeout(() => this.openPagePicker(cur.id, cur.host), 0)
       return
     }
-    if (mod && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+    const mark = markKey(e, mod)
+    if (mark) {
+      // ALWAYS preventDefault, even with nothing selected. ⌘B is a browser
+      // command too, and letting it through would put contentEditable's own
+      // `<b>` into the block — the exact non-canonical markup, from the exact
+      // engine, that §2.4(b) forbids and that this replaced.
       e.preventDefault()
-      document.execCommand(({ b: 'bold', i: 'italic', u: 'underline' } as any)[e.key.toLowerCase()])
-      s.runEdit(cur.id, () => { const bb = s.block(cur.id); if (bb) bb.html = cur.host.innerHTML })
+      this.format?.toggle(mark)
       return
     }
   }
@@ -1763,6 +3226,7 @@ export class Editor {
     SPEC.get(fresh.type)?.init?.(fresh)
     if (into) fresh.parent = b.id
     else if (b.parent) fresh.parent = b.parent
+    if (s.page) placeNewCard(s.page, fresh)
     s.commit(() => {
       b.html = before
       const page = s.page!
@@ -1837,7 +3301,10 @@ export class Editor {
       SPEC.get(type)?.init?.(b)
     })
     this.paintPage()
-    this.focusBlock(id)
+    // a table's text is in its cells, so there is no block host to put the
+    // caret in — the first cell is the equivalent place
+    if (type === 'table') this.focusCell(id, 0, 0)
+    else this.focusBlock(id)
   }
 
   // ---- overlays -----------------------------------------------------------
@@ -1858,7 +3325,237 @@ export class Editor {
     card.querySelector<HTMLElement>('input,button,[tabindex]')?.focus()
   }
 
+  /**
+   * The shortcut list.
+   *
+   * Every shortcut here was read off the keydown handler rather than off the
+   * documentation, because a help screen that lists a key the app does not
+   * bind is worse than no help screen: it makes the reader doubt the keyboard
+   * rather than the page. The starter space describes the same keys in prose,
+   * but the starter is a document — the first thing many people do is delete
+   * it, and the reference should not go with it.
+   *
+   * Built on .sp-overlay/.sp-card, the About dialog's shell, so it inherits
+   * the dialog's scrim, escape handling and focus return rather than growing a
+   * second set.
+   */
+  /**
+   * The space as a picture: pages, and the links between them.
+   *
+   * The DRAWING lives in graph.ts; what is here is only what an overlay is in
+   * this editor — one at a time, and it owns the keyboard while it is open
+   * (`this.overlay`). Teardown rides on `overlayReflow`, which is the hook
+   * `closeOverlay` already calls before it removes the node: the graph has
+   * observers and an animation frame to give back, and there is no second
+   * teardown path to forget about.
+   */
+  openGraph(): void {
+    this.closeOverlay()
+    const returnFocus = document.activeElement as HTMLElement | null
+    const view = openGraphView({
+      doc: this.store.doc,
+      index: this.store.index,
+      currentId: this.store.pageId,
+      open: (id) => { close(); this.store.goToPage(id); this.repaint() },
+      close: () => close(),
+    })
+    const close = () => {
+      this.closeOverlay()
+      document.removeEventListener('keydown', onKey, true)
+      returnFocus?.focus?.()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+    document.addEventListener('keydown', onKey, true)
+    this.overlay = view.el
+    this.overlayReflow = () => view.destroy()
+    document.body.append(view.el)
+    view.el.tabIndex = -1
+    view.el.focus()
+  }
+
+  openHelp(): void {
+    this.closeOverlay()
+    const returnFocus = document.activeElement as HTMLElement | null
+    const back = el('div', 'sp-overlay')
+    const card = el('div', 'sp-card sp-keys')
+    card.setAttribute('role', 'dialog')
+    card.setAttribute('aria-modal', 'true')
+    card.setAttribute('aria-label', t('Keyboard shortcuts'))
+
+    const close = () => {
+      back.remove()
+      document.removeEventListener('keydown', onKey, true)
+      returnFocus?.focus?.()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+
+    const h = el('h2', 'sp-card-h', t('Keyboard shortcuts'))
+    card.append(h)
+
+    const groups: Array<[string, Array<[string, string]>]> = [
+      [t('Writing'), [
+        ['↵', t('A new block')],
+        ['Tab / ⇧Tab', t('Indent, or move back out')],
+        ['/', t('The block menu, on an empty line')],
+        ['[[', t('Link to another page')],
+        ['⌘Z / ⇧⌘Z', t('Undo, redo')],
+      ]],
+      [t('Formatting'), [
+        ['⌘B', t('Bold')],
+        ['⌘I', t('Italic')],
+        ['⌘U', t('Underline')],
+        ['⇧⌘S', t('Strikethrough')],
+        ['⌘E', t('Code')],
+        ['⇧⌘H', t('Highlight')],
+        ['⌘K', t('Link the selected words')],
+      ]],
+      [t('Getting around'), [
+        ['⌘K', t('Search all pages, with nothing selected')],
+        ['⌘F', t('Find and replace')],
+        ['⌘⌥N', t('New page')],
+        ['⌘⇧J', t("Today's journal")],
+        ['⌘⇧I', t('New issue')],
+      ]],
+      [t('The workspace'), [
+        ['[', t('Show or hide the page list')],
+        [']', t('Show or hide properties')],
+        ['⌘S', t('Save')],
+        ['⌘P', t('Print or save as PDF')],
+        ['?', t('This list')],
+        ['Esc', t('Leave the reading view')],
+      ]],
+    ]
+
+    // Two columns where there is room. In one column the four groups run to
+    // 23 rows and the last three fall off the bottom of the card — a help
+    // screen that hides the help, which is the same defect this pass just took
+    // out of the share panel. The grid collapses to one column on a phone,
+    // where scrolling a list is what you expect anyway.
+    const grid = el('div', 'sp-keys-grid')
+    for (const [title, rows] of groups) {
+      const g = el('section', 'sp-keys-g')
+      g.append(el('h3', 'sp-keys-h', title))
+      const list = el('dl', 'sp-keys-list')
+      for (const [key, what] of rows) {
+        const dt = el('dt', '', '')
+        dt.append(el('kbd', 'sp-kbd', key))
+        list.append(dt, el('dd', '', what))
+      }
+      g.append(list)
+      grid.append(g)
+    }
+    card.append(grid)
+
+    back.append(card)
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+    document.addEventListener('keydown', onKey, true)
+    document.body.append(back)
+    card.tabIndex = -1
+    card.focus()
+  }
+
+  /**
+   * Place a popover AND keep it placed.
+   *
+   * place() sizes a popover to the room the window has right now, so its answer
+   * stops being true the moment the window changes. Stale in the small-to-large
+   * direction merely misplaces a box; stale the other way CLIPS it, which is
+   * the bug this change exists to remove — the 44vh it replaces at least
+   * tracked the viewport. Both popover call sites go through here so neither
+   * can forget.
+   */
+  private placed(pop: HTMLElement, anchor: HTMLElement): void {
+    place(pop, anchor)
+    const reflow = () => place(pop, anchor)
+    addEventListener('resize', reflow)
+    this.overlayReflow = () => removeEventListener('resize', reflow)
+  }
+
+  /**
+   * Put a property on this page — and define it, if it does not exist yet.
+   *
+   * THE SCHEMA IS EDITED WHERE IT IS USED. `doc.fields` has been a per-document
+   * vocabulary since the tracker shipped, and nothing has ever written it: the
+   * only way to give a page a property was "Make this page an issue", which
+   * adds Status, Priority, Assignee and Estimate together or not at all. So the
+   * schema was configurable in the format and fixed in the app.
+   *
+   * A separate schema editor would have been the obvious fix and the wrong one.
+   * DEFAULT_FIELDS says it in its own comment — "a tracker you have to design
+   * before you can use it is the thing everybody hates about the alternatives"
+   * — so a property is created in passing, at the moment somebody wants one,
+   * and the vocabulary grows as a side effect of use. That is what lets one
+   * space hold a reading list, a film log and a backlog at once: the fields are
+   * a flat vocabulary and each page carries only the ones it uses.
+   */
+  openAddProperty(pageId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (s.readOnly) return
+    const page = s.index.page.get(pageId)
+    if (!page) return
+
+    this.popover(anchor, (pop) => {
+      const has = new Set(page.blocks
+        .filter((b) => b.type === 'prop')
+        .map((b) => String((b as { key?: unknown }).key ?? '')))
+
+      const put = (f: FieldSpec, fields?: FieldSpec[]) => {
+        s.commit(() => {
+          if (fields) (s.doc as { fields?: FieldSpec[] }).fields = fields
+          const p = s.index.page.get(pageId)
+          if (!p) return
+          p.blocks.splice(headerLength(p), 0, propBlock(f, f.def ?? '', newBlock('prop').id))
+        })
+        this.closeOverlay()
+        this.repaint()
+        this.status(t('Added {name}', { name: f.label }))
+      }
+
+      const spare = fieldsOf(s.doc).filter((f) => !has.has(f.key))
+      if (spare.length) {
+        pop.append(el('div', 'sp-pop-title', t('Add a property')))
+        for (const f of spare) {
+          pop.append(this.menuItem('tag', f.label, fieldTypeLabel(f.vt), () => put(f)))
+        }
+      }
+
+      pop.append(el('div', 'sp-pop-title', t('New property')))
+      const form = el('div', 'sp-newprop')
+      const name = document.createElement('input')
+      name.type = 'text'
+      name.className = 'sp-input'
+      name.placeholder = t('Name')
+      const type = document.createElement('select')
+      type.className = 'sp-select'
+      for (const vt of FIELD_TYPES) {
+        const o = document.createElement('option')
+        o.value = vt
+        o.textContent = fieldTypeLabel(vt)
+        type.append(o)
+      }
+      type.value = 'text'
+      const add = el('button', 'sp-btn sp-primary', t('Add'))
+      const submit = () => {
+        const label = name.value.trim()
+        if (!label) { name.focus(); return }
+        const spec: FieldSpec = { key: freeFieldKey(s.doc, label), label, vt: type.value as FieldSpec['vt'] }
+        put(spec, withField(s.doc, spec))
+      }
+      add.addEventListener('click', submit)
+      name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } })
+      form.append(name, type, add)
+      pop.append(form)
+      afterPaint(() => name.focus())
+    })
+  }
+
   private closeOverlay(): void {
+    this.overlayReflow?.()
+    this.overlayReflow = null
     this.overlay?.remove()
     this.overlay = null
   }
@@ -1960,6 +3657,7 @@ export class Editor {
       // the "/" that opened the menu is a command, not content
       if (blk && (blk.html ?? '').trim() === '/') blk.html = ''
       if (item.type === 'pagelink') this.insertPageCard(blockId)
+      else if (item.type === 'link') { this.setType(blockId, 'link'); this.openLinkCard(blockId) }
       else this.setType(blockId, item.type)
     }
     const paint = () => {
@@ -2015,6 +3713,132 @@ export class Editor {
         if (b) { b.type = 'pagelink'; b.page = pageId; b.html = '' }
       })
       this.paintPage()
+    })
+  }
+
+  /**
+   * THE ONE WRITER for a link card's fields.
+   *
+   * Fields and `html` move together, always — the same rule as a field value
+   * (applyField above), for the same reason: `html` is what a build that has
+   * never heard of `link` renders, and format additivity is a promise about
+   * what OLD builds do. A card whose fields were written without it is a card
+   * that vanishes when the file is opened in last year's shell.
+   */
+  private applyLinkCard(b: Block, next: Partial<Block>): void {
+    b.type = 'link'
+    for (const k of ['url', 'title', 'desc', 'site', 'icon', 'image'] as const) {
+      const v = next[k]
+      // an EMPTY field is an absent field: a card carrying `"desc": ""` is
+      // bytes in every copy of the file that say nothing
+      if (typeof v === 'string' && v.trim()) (b as Record<string, unknown>)[k] = v.trim()
+      else delete (b as Record<string, unknown>)[k]
+    }
+    b.html = linkCardHtml(linkCard(b))
+  }
+
+  /**
+   * The link card's editor — and the whole of this feature's honesty.
+   *
+   * A link card in Notion or Slack is a SERVER fetching the url and reading its
+   * OpenGraph tags. There is no server here, and a fetch on this path would
+   * break the one promise the format is built on. So the author fills the card
+   * in, the dialog says so plainly, and nothing about opening a space ever
+   * contacts the site it links to.
+   */
+  private openLinkCard(blockId: string): void {
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    const at = s.block(blockId)
+    if (!at) return
+    // a draft, so Escape leaves the block exactly as it was
+    const draft: Record<string, string> = {
+      url: String(at.url ?? ''), title: String(at.title ?? ''),
+      desc: String(at.desc ?? ''), site: String(at.site ?? ''),
+      icon: String(at.icon ?? ''), image: String(at.image ?? ''),
+    }
+
+    this.openOverlay(t('Link card'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Link card')))
+
+      const why = document.createElement('p')
+      why.className = 'sp-note'
+      why.textContent = t('Nothing is fetched. A card shows what you type here — opening this space never contacts the site.')
+      card.append(why)
+
+      const field = (key: string, label: string, hint?: string): HTMLInputElement => {
+        const wrap = el('div', 'sp-field')
+        wrap.append(el('label', 'sp-field-lbl', label))
+        const input = document.createElement('input')
+        input.className = 'sp-input'
+        input.value = draft[key]
+        if (hint) input.placeholder = hint
+        input.addEventListener('input', () => { draft[key] = input.value })
+        wrap.append(input)
+        card.append(wrap)
+        return input
+      }
+
+      const url = field('url', t('Web address'), 'https://example.com')
+      url.type = 'url'
+      field('title', t('Title'), t('What this is'))
+      field('desc', t('Description'), t('One line about what is there'))
+      // the host is what shows when this is blank, so the placeholder is the
+      // answer rather than an example
+      field('site', t('Site name'), t('Taken from the address if blank'))
+      field('icon', t('Icon'), t('One emoji'))
+
+      // THE THUMBNAIL IS EMBEDDED, never linked. `prepareImage` downscales and
+      // `internAsset` stores the bytes in the file, exactly as an image block
+      // does — which is why a card can carry a picture at all without becoming
+      // a request on open.
+      const row = el('div', 'sp-actions')
+      const pick = document.createElement('button')
+      pick.className = 'sp-btn'
+      pick.type = 'button'
+      const paintPick = () => {
+        pick.textContent = draft.image ? t('Replace picture') : t('Add a picture')
+        drop.hidden = !draft.image
+      }
+      pick.addEventListener('click', () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.addEventListener('change', () => {
+          const file = input.files?.[0]
+          if (!file) return
+          void (async () => {
+            try {
+              const prepared = await prepareImage(file)
+              draft.image = await internAsset(s.doc, prepared.dataUri)
+            } catch { this.status(t('That file could not be read as an image')); return }
+            paintPick()
+          })()
+        })
+        input.click()
+      })
+      const drop = document.createElement('button')
+      drop.className = 'sp-btn'
+      drop.type = 'button'
+      drop.textContent = t('Remove the picture')
+      drop.addEventListener('click', () => { draft.image = ''; paintPick() })
+      paintPick()
+      row.append(pick, drop)
+      card.append(row)
+
+      const done = el('div', 'sp-actions')
+      const save = document.createElement('button')
+      save.className = 'sp-btn sp-primary'
+      save.type = 'button'
+      save.textContent = t('Save')
+      save.addEventListener('click', () => {
+        close()
+        s.commit(() => { const b = s.block(blockId); if (b) this.applyLinkCard(b, draft) })
+        this.paintPage()
+      })
+      done.append(save)
+      card.append(done)
+      url.focus()
     })
   }
 
@@ -2203,6 +4027,16 @@ export class Editor {
       this.newPage(pageId)
     }))
 
+    // A thread about the PAGE — the second and last anchor. It is offered
+    // where the page's own actions are, and only for the page in view,
+    // because a thread is written into the page you are looking at.
+    if (pageId === s.pageId && !s.readOnly) {
+      pop.append(this.menuItem('comment', t('Comment on this page'), '', () => {
+        this.closeOverlay()
+        this.comments.openNew()
+      }))
+    }
+
     pop.append(this.menuItem(page.archived ? 'unarchive' : 'archive',
       page.archived ? t('Restore to the page list') : t('Archive'),
       page.archived ? '' : t('Out of the sidebar, still searchable and linkable'), () => {
@@ -2214,6 +4048,54 @@ export class Editor {
           else p.archived = true
         })
       }))
+
+    // HOW WIDE THIS PAGE IS. The renderer already varied it — a page carrying a
+    // board jumped to 1500px — but it decided for you silently. Measured at a
+    // 1600px viewport: the default column is 720px with 631px of the page left
+    // empty beside it, and nothing on the starter pages even reaches the limit
+    // (0 of 15 blocks wrap). The line length was never the problem; having no
+    // say was.
+    pop.append(el('div', 'sp-menu-label', t('Width')))
+    const current: 'normal' | 'wide' | 'full' =
+      page.width === 'wide' ? 'wide' : page.width === 'full' ? 'full' : 'normal'
+    const setWidth = (v: 'normal' | 'wide' | 'full') => {
+      this.closeOverlay()
+      s.commit(() => {
+        const pg = s.index.page.get(pageId)
+        if (!pg) return
+        // THE DEFAULT IS AN ABSENT KEY, never a stored 'normal'. A page somebody
+        // set to wide and back is then byte-identical to one never touched, and
+        // a file written before this control existed stays that way.
+        if (v === 'normal') delete pg.width
+        else pg.width = v
+      }, { scope: 'doc' })
+      this.paintPage()
+    }
+    pop.append(this.menuItem('widthNarrow', t('Column'), t('Comfortable for reading'),
+      () => setWidth('normal'), { selected: current === 'normal' }))
+    pop.append(this.menuItem('widthWide', t('Wide'), t('Room for a board or a table'),
+      () => setWidth('wide'), { selected: current === 'wide' }))
+    pop.append(this.menuItem('widthFull', t('Full width'), t('Fills the window'),
+      () => setWidth('full'), { selected: current === 'full' }))
+
+    // AND THE SAME CHOICE, FOR EVERY PAGE. Setting a width page by page answers
+    // "this page needs the room"; it does not answer "I have a wide screen",
+    // which is one fact about one person and was costing a visit to every page
+    // in the space. This one is a VIEWER preference — localStorage, never the
+    // file — so it follows the reader rather than the document, and somebody
+    // opening the same space on a laptop is unaffected.
+    const pref = readerWidth()
+    const applyAll = (v: 'wide' | 'full' | undefined) => {
+      this.closeOverlay()
+      setReaderWidth(v)
+      this.paintPage()
+      this.status(v ? t('Every page opens wide on this screen from now on')
+                    : t('Pages open at their normal width again'))
+    }
+    pop.append(this.menuItem(pref ? 'widthNarrow' : 'widthWide',
+      pref ? t('Stop widening every page') : t('Use this width for every page'),
+      pref ? t('Only pages that ask for it') : t('On this screen only — it is not saved in the file'),
+      () => applyAll(pref ? undefined : (current === 'full' ? 'full' : 'wide'))))
 
     pop.append(this.menuItem('trash', t('Delete…'), t('Links to it become dead'), () => {
       this.closeOverlay()
@@ -2336,14 +4218,224 @@ export class Editor {
       }))
   }
 
-  /** Drop or paste an image straight onto the page. */
-  private async imageFromTransfer(dt: DataTransfer | null, afterId?: string): Promise<boolean> {
-    const file = [...(dt?.files ?? [])].find((f) => f.type.startsWith('image/'))
-      ?? [...(dt?.items ?? [])].filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile())[0]
-    if (!file) return false
+  /**
+   * Drop or paste an image — or a clip — straight onto the page.
+   *
+   * Images win a tie. A drag that carries both (a screenshot alongside a
+   * screen recording, which is what a Finder multi-select of a bug report
+   * looks like) takes the image, because that is the one an author is far more
+   * often reaching for and the one that costs nothing to be wrong about.
+   */
+  private async fileFromTransfer(dt: DataTransfer | null, afterId?: string): Promise<boolean> {
+    const pick = (kind: string): File | undefined =>
+      [...(dt?.files ?? [])].find((f) => f.type.startsWith(kind))
+      ?? [...(dt?.items ?? [])].filter((i) => i.type.startsWith(kind)).map((i) => i.getAsFile())[0]
+      ?? undefined
     if (!this.store.page) return false
-    await this.placeImage(null, file, { insertAfter: afterId ?? null })
+    const img = pick('image/')
+    if (img) { await this.placeImage(null, img, { insertAfter: afterId ?? null }); return true }
+    const clip = pick('video/') ?? pick('audio/')
+    if (!clip) return false
+    await this.placeMedia(null, clip, { insertAfter: afterId ?? null })
     return true
+  }
+
+  // ---- video and audio -------------------------------------------------------
+  /**
+   * Choose a clip and put it in the document.
+   *
+   * `accept` names both kinds and the KIND IS READ BACK OFF THE FILE, never
+   * asked for. A picker that made you say "video" first would be a question
+   * the file already answers, and answers correctly for the odd cases — an
+   * .m4a that a phone wrote as video/mp4 plays either way.
+   */
+  async pickMedia(blockId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/*,audio/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (file) void this.placeMedia(blockId, file)
+    })
+    input.click()
+  }
+
+  /**
+   * Embed one clip.
+   *
+   * Shaped like placeImage and for the same reason: everything asynchronous —
+   * reading the bytes, hashing them — happens BEFORE the commit, so the asset
+   * and the reference land in one synchronous mutation and one undo step.
+   *
+   * NOTHING IS RE-ENCODED. prepareImage exists because a phone photo is 4000px
+   * wide in a 720px column and the detail is invisible; there is no equivalent
+   * cheap win for video, and transcoding in a browser tab means shipping an
+   * encoder and taking minutes over it. So a clip is either small enough to
+   * embed or a link — which is what MEDIA_EMBED_BUDGET asks about.
+   */
+  async placeMedia(
+    blockId: string | null,
+    file: File | Blob,
+    opts: { insertAfter?: string | null } = {},
+  ): Promise<void> {
+    const s = this.store
+    this.status(t('Reading file…'))
+    let dataUri: string
+    try {
+      dataUri = await blobToDataUri(file)
+    } catch {
+      this.status(t('That file could not be read'))
+      return
+    }
+    const kind = (file as File).type?.startsWith('audio/') ? 'audio' : 'video'
+
+    if (dataUri.length > MEDIA_EMBED_BUDGET) {
+      // A browser file picker hands over BYTES, never a path, so "keep it on
+      // disk and point at it" is not a thing this can offer. The honest
+      // alternatives are: embed it anyway, or paste a URL — which is what the
+      // block's own chooser offers, and where a no lands you.
+      const go = confirm(t(
+        'This clip is {size} and travels inside the file, making it that much bigger for everyone you send it to. Embed it anyway?',
+        { size: humanBytes(dataUri.length) },
+      ))
+      if (!go) { this.status(''); return }
+    }
+
+    const ref = await internAsset(s.doc, dataUri)
+    this.writeMedia(blockId, opts.insertAfter ?? null, (b) => { b.src = ref; b.kind = kind })
+    this.status(t('Clip added ({size})', { size: humanBytes(dataUri.length) }))
+  }
+
+  /**
+   * The escape hatch: a clip that lives somewhere else.
+   *
+   * The only way to have a small file with a big video in it, and the reason
+   * `src` is hybrid at all. It is a real trade and it is stated at the point of
+   * the decision — a linked clip needs the network to play, and asking for it
+   * tells that host somebody opened the space, which is why the READER is
+   * asked before it loads (render.ts).
+   */
+  linkMedia(blockId: string | null, insertAfter: string | null = null): void {
+    const url = prompt(t('Address of a video or audio file'))?.trim()
+    if (!url) return
+    // http(s) only, and checked HERE as well as in the sanitizer: `src` is not
+    // inline html, so it never passes through sanitize.ts at all — a
+    // `javascript:` typed into this box would be written straight onto the
+    // element. The allowlist is the test, never a `javascript:` blocklist.
+    if (!/^https?:\/\//i.test(url)) { this.status(t('That needs to be an http or https address')); return }
+    const kind = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba)(\?|#|$)/i.test(url) ? 'audio' : 'video'
+    this.writeMedia(blockId, insertAfter, (b) => { b.src = url; b.kind = kind })
+    this.status('')
+  }
+
+  /** ONE commit, whether the block exists already or is being created here —
+   *  the placeImage rule: an inserted clip must not cost two undos. */
+  private writeMedia(blockId: string | null, insertAfter: string | null, fill: (b: Block) => void): void {
+    const s = this.store
+    const apply = (b: Block) => {
+      b.type = 'media'
+      b.html = ''
+      fill(b)
+    }
+    s.commit(() => {
+      if (blockId) { const b = s.block(blockId); if (b) apply(b); return }
+      const page = s.page
+      if (!page) return
+      const fresh = newBlock('media')
+      apply(fresh)
+      const at = insertAfter ? page.blocks.findIndex((b) => b.id === insertAfter) + 1 : page.blocks.length
+      page.blocks.splice(at < 1 ? page.blocks.length : at, 0, fresh)
+    })
+    this.paintPage()
+  }
+
+  /** A still frame for a video — the same pipeline an image goes through, so
+   *  it is downscaled and content-addressed like any other picture. */
+  private async pickPoster(blockId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      void (async () => {
+        this.status(t('Reading image…'))
+        let prepared
+        try { prepared = await prepareImage(file) } catch {
+          this.status(t('That file could not be read as an image')); return
+        }
+        const ref = await internAsset(this.store.doc, prepared.dataUri)
+        this.store.commit(() => { const b = this.store.block(blockId); if (b) b.poster = ref })
+        this.paintPage()
+        this.status('')
+      })()
+    })
+    input.click()
+  }
+
+  /**
+   * The picture across the top of a page.
+   *
+   * The IMAGE pipeline, not a second one: prepareImage downscales a phone photo
+   * before it travels, internAsset content-addresses the bytes so two pages
+   * with the same cover store it once, and the same budget asks the same
+   * question at the same size. A cover is the field most likely to be given a
+   * 6MB photograph — inventing a separate policy for it is how one app ends up
+   * with two answers to "how big is too big".
+   */
+  private async pickCover(pageId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      void (async () => {
+        const s = this.store
+        if (s.readOnly) return
+        this.status(t('Reading image…'))
+        let prepared
+        try { prepared = await prepareImage(file) } catch {
+          this.status(t('That file could not be read as an image')); return
+        }
+        if (prepared.dataUri.length > IMAGE_EMBED_BUDGET) {
+          const okay = confirm(t(
+            'This image is {size} and travels inside the file, making it that much bigger for everyone you send it to. Embed it anyway?',
+            { size: humanBytes(prepared.dataUri.length) },
+          ))
+          if (!okay) { this.status(''); return }
+        }
+        // hashed and interned BEFORE the commit, so the bytes and the reference
+        // land in one synchronous mutation — one undo step, exactly as an image
+        // block does it
+        const ref = await internAsset(s.doc, prepared.dataUri)
+        s.commit(() => {
+          const p = s.index.page.get(pageId)
+          if (p) p.cover = ref
+        }, { scope: 'doc' })
+        this.repaint()
+        this.status(prepared.original
+          ? t('Image added ({size})', { size: humanBytes(prepared.dataUri.length) })
+          : t('Image added, resized to fit ({from} → {to})', {
+            from: humanBytes(prepared.wasBytes), to: humanBytes(prepared.dataUri.length),
+          }))
+      })()
+    })
+    input.click()
+  }
+
+  /** No cover DELETES the key. A page whose cover was set and removed is
+   *  byte-identical to one that never had one. The bytes stay in the asset
+   *  table until nothing points at them — orphanAssets is what reports that,
+   *  and it counts covers. */
+  private removeCover(pageId: string): void {
+    const s = this.store
+    if (s.readOnly) return
+    s.commit(() => {
+      const p = s.index.page.get(pageId)
+      if (p) delete p.cover
+    }, { scope: 'doc' })
+    this.repaint()
   }
 
   // ---- importing existing notes ---------------------------------------------
@@ -2357,13 +4449,35 @@ export class Editor {
    * rather than left to be discovered.
    */
   openImport(): void {
-    this.openOverlay(t('Import Markdown'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Import Markdown')))
+    this.openOverlay(t('Bring notes in'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Bring notes in')))
 
       const what = document.createElement('p')
       what.className = 'sp-note'
       what.textContent = t('Each .md file becomes a page, folders become the page tree, and [[wikilinks]] become real links. Pages are added — nothing here is replaced.')
       card.append(what)
+
+      // WHERE the arriving pages land, and it governs BOTH ways in. An import
+      // that can only append at the root is an import into a pile: the point of
+      // a space is the tree, and "under the page I am reading" is what somebody
+      // taking a second set of notes into a working space actually means.
+      const under = document.createElement('select')
+      under.className = 'sp-select'
+      const top = document.createElement('option')
+      top.value = ''
+      top.textContent = t('Top level')
+      under.append(top)
+      for (const { page, depth } of this.store.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === this.store.pageId) o.selected = true
+        under.append(o)
+      }
+      const whereRow = el('div', 'sp-row')
+      whereRow.append(el('span', '', t('Add pages under')), under)
+      card.append(whereRow)
+      const where = () => under.value || undefined
 
       const zone = el('div', 'sp-dropzone', t('Drop .md files or a folder here'))
       zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('sp-drop') })
@@ -2373,8 +4487,9 @@ export class Editor {
         e.stopPropagation()
         zone.classList.remove('sp-drop')
         const picked = collectDrop(e.dataTransfer)
+        const at = where()
         close()
-        void picked.then((files) => this.importFiles(files))
+        void picked.then((files) => this.importFiles(files, { under: at }))
       })
       card.append(zone)
 
@@ -2384,12 +4499,26 @@ export class Editor {
         input.multiple = true
         if (folder) input.webkitdirectory = true
         else input.accept = '.md,.markdown,.mdown,.mkd,image/*'
+        const at = where()
         input.addEventListener('change', () => {
           close()
           // webkitRelativePath is the folder tree; a plain multi-select has
           // none, and those files import as a flat set of pages
           void this.importFiles([...(input.files ?? [])]
-            .map((file) => ({ path: file.webkitRelativePath || file.name, file })))
+            .map((file) => ({ path: file.webkitRelativePath || file.name, file })), { under: at })
+        })
+        input.click()
+      }
+
+      const pickSpace = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.html,text/html,application/json'
+        const at = where()
+        input.addEventListener('change', () => {
+          close()
+          const file = input.files?.[0]
+          if (file) void this.importSpace(file, at)
         })
         input.click()
       }
@@ -2398,8 +4527,14 @@ export class Editor {
       acts.append(
         plainBtn(t('Choose .md files…'), () => pick(false), true),
         plainBtn(t('Choose a folder…'), () => pick(true)),
+        plainBtn(t('Choose a space…'), pickSpace),
       )
       card.append(acts)
+
+      const spaces = document.createElement('p')
+      spaces.className = 'sp-note'
+      spaces.textContent = t('Another bento/spaces file arrives as pages under the one you choose — its images come too, and the links inside it keep working.')
+      card.append(spaces)
 
       const imgs = document.createElement('p')
       imgs.className = 'sp-note'
@@ -2407,6 +4542,153 @@ export class Editor {
       // do for them: it has no way to open `../attachments/x.png` itself
       imgs.textContent = t('Include the image files and they are embedded too. An image this browser cannot open is kept as its path rather than as a broken picture.')
       card.append(imgs)
+    })
+  }
+
+  /**
+   * Another space, grafted into this one — the way IN that answers the page
+   * extract's way out.
+   *
+   * The file is UNTRUSTED and takes the ordinary load path, with no friendlier
+   * door beside it: the document block is read out of an INERT parse (DOMParser
+   * builds no browsing context, so no script runs and no resource loads),
+   * `parseDoc` decides whether it is a space at all — refusing rather than
+   * degrading, the same load contract main.ts boots under — and
+   * `sanitizeInline` runs over every arriving block before any of it reaches
+   * the document.
+   */
+  async importSpace(file: File, under?: string): Promise<void> {
+    const s = this.store
+    if (s.readOnly) { this.status(t('This file is open read-only')); return }
+    let text: string
+    try { text = await file.text() } catch { this.status(t('That file could not be read')); return }
+
+    const body = spaceBlockOf(text)
+    if (body === 'encrypted') {
+      // The password is not ours to ask for, and the honest instruction is the
+      // one that works: open the file where the password already is.
+      this.status(t('That space is password-protected. Open it, then export the pages you want.'))
+      return
+    }
+    const res = parseDoc(body ?? '')
+    if (!res.ok) {
+      this.status(res.err === 'format'
+        ? t('That file is not a bento/spaces document')
+        : t('That file could not be read'))
+      return
+    }
+
+    const plan = planGraft(s.doc, res.doc, { under })
+    // THE security gate, in the same place the Markdown import puts it.
+    for (const page of plan.pages) {
+      for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
+    }
+
+    // ONE step: pages, images and fonts land together or not at all.
+    s.commit(() => {
+      s.doc.pages.push(...plan.pages)
+      if (Object.keys(plan.assets).length) Object.assign((s.doc.assets ??= {}), plan.assets)
+      if (plan.fonts.length) (s.doc.fonts ??= []).push(...plan.fonts)
+    })
+    if (plan.pages[0]) s.goToPage(plan.pages[0].id)
+    this.repaint()
+
+    this.openOverlay(t('Imported a space'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Imported a space')))
+      const lines = [
+        t('{pages} page(s) and {blocks} block(s) added from that space.',
+          { pages: plan.stats.pages, blocks: plan.stats.blocks }),
+      ]
+      // Renaming is the outcome a reader cannot see for themselves, and the one
+      // that would break every link if it were done carelessly — so it is
+      // reported together with the repair that keeps the links pointing right.
+      if (plan.stats.renamed) {
+        lines.push(t('{n} id(s) were renamed because this space already used them, and the links inside the import follow them.',
+          { n: plan.stats.renamed }))
+      }
+      if (plan.stats.dropped) {
+        lines.push(t('{n} link(s) named pages that were not in that file, and are kept as text.', { n: plan.stats.dropped }))
+      }
+      if (plan.stats.assets) lines.push(t('{n} image(s) came too.', { n: plan.stats.assets }))
+      lines.push(t('⌘Z removes the imported pages again.'))
+      for (const line of lines) {
+        const p = document.createElement('p')
+        p.className = 'sp-note'
+        p.textContent = line
+        card.append(p)
+      }
+      card.append(plainBtn(t('Close'), close, true))
+    })
+  }
+
+  /**
+   * A page — and, by choice, what is under it — leaves as its own space.
+   *
+   * The counts come from the REAL extract and move as the choices do, rather
+   * than being described in the abstract: how much travels, and how many links
+   * point out of the selection and will become text. Those two facts are what
+   * decide whether this is the extract somebody meant.
+   */
+  openExportSpace(): void {
+    const s = this.store
+    this.openOverlay(t('Export a page as a space'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Export a page as a space')))
+
+      const what = document.createElement('p')
+      what.className = 'sp-note'
+      what.textContent = t('The page becomes a new file of its own: a whole space, with a new document id and none of this one’s sharing keys.')
+      card.append(what)
+
+      const pick = document.createElement('select')
+      pick.className = 'sp-select'
+      for (const { page, depth } of s.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === s.pageId) o.selected = true
+        pick.append(o)
+      }
+      const pageRow = el('div', 'sp-row')
+      pageRow.append(el('span', '', t('Page')), pick)
+      card.append(pageRow)
+
+      const kids = document.createElement('input')
+      kids.type = 'checkbox'
+      kids.checked = true
+      const kidsRow = el('div', 'sp-row')
+      kidsRow.append(el('span', '', t('Include the pages nested under it')), kids)
+      card.append(kidsRow)
+
+      const summary = document.createElement('p')
+      summary.className = 'sp-note'
+      const recount = () => {
+        const r = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: 'preview', now: '' })
+        const parts = [t('{pages} page(s) and {blocks} block(s) will travel.',
+          { pages: r.stats.pages, blocks: r.stats.blocks })]
+        if (r.stats.unlinked) {
+          parts.push(t('{n} link(s) point outside them and are kept as text naming the page they meant.',
+            { n: r.stats.unlinked }))
+        }
+        if (r.stats.assets) parts.push(t('{n} image(s) go with them; the rest stay here.', { n: r.stats.assets }))
+        summary.textContent = parts.join(' ')
+      }
+      pick.addEventListener('change', recount)
+      kids.addEventListener('change', recount)
+      recount()
+      card.append(summary)
+
+      const acts = el('div', 'sp-actions')
+      acts.append(
+        plainBtn(t('Export'), () => {
+          const out = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: uid('doc') })
+          close()
+          void this.onExportSpace?.(out.doc).then((ok) => {
+            if (ok) this.status(t('Exported {n} page(s) as a new space', { n: out.stats.pages }))
+          })
+        }, true),
+        plainBtn(t('Close'), close),
+      )
+      card.append(acts)
     })
   }
 
@@ -2419,11 +4701,18 @@ export class Editor {
    * `placeImage` is shaped this way: a half-applied import is not something a
    * single ⌘Z could put back.
    */
-  async importFiles(picked: PickedFile[]): Promise<void> {
+  async importFiles(picked: PickedFile[], opts: { under?: string } = {}): Promise<void> {
     const s = this.store
     if (s.readOnly) { this.status(t('This file is open read-only')); return }
     const notes = picked.filter((p) => NOTE_EXT.test(p.path))
-    if (!notes.length) { this.status(t('No Markdown files in that selection')); return }
+    if (!notes.length) {
+      // A space is a legitimate thing to drop on the import, and it arrives by
+      // the same gesture: one route in, whatever kind of notes they are.
+      const space = picked.find((p) => SPACE_EXT.test(p.path))
+      if (space) { await this.importSpace(space.file, opts.under); return }
+      this.status(t('No Markdown files in that selection'))
+      return
+    }
     if (notes.length > 500 &&
       !confirm(t('That is {n} files — importing them all may take a moment. Continue?', { n: notes.length }))) return
 
@@ -2507,6 +4796,15 @@ export class Editor {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
 
+    // The import already lands under exactly one root (planImport wraps a mixed
+    // selection); re-homing that root is the whole of "add these under this
+    // page", and it keeps the one-root, one-⌘Z shape intact.
+    const under = opts.under && s.index.page.has(opts.under) ? opts.under : undefined
+    if (under) {
+      const arrived = new Set(plan.pages.map((p) => p.id))
+      for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
+    }
+
     s.commit(() => { s.doc.pages.push(...plan.pages) })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
@@ -2535,7 +4833,7 @@ export class Editor {
         lines.push(t('{n} page(s) had frontmatter, kept verbatim in a folded block.', { n: plan.stats.frontmatter }))
       }
       if (plan.stats.tables) {
-        lines.push(t('{n} table(s) kept as text: there is no table block in this format yet.', { n: plan.stats.tables }))
+        lines.push(t('{n} table(s) imported, with their column alignment.', { n: plan.stats.tables }))
       }
       if (embedded) lines.push(t('{n} image(s) embedded ({size}).', { n: embedded, size: humanBytes(embeddedBytes) }))
       if (unresolved) {
@@ -2850,6 +5148,55 @@ export class Editor {
     this.onSaveAs?.(suffix)
   }
 
+  /**
+   * Save a copy that carries a SCOPED capability — the two ways to let someone
+   * into this space.
+   *
+   * Both go live first, because a copy that follows a session needs there to
+   * be one, and because "share" should be one action rather than a session to
+   * start and then a file to send.
+   *
+   * Both also write a DERIVED document (share.ts), never `store.doc`. That is
+   * the whole of the fix: `saveAs('copy')` serializes the open document, so
+   * inviting somebody used to hand them `collab.ownerPriv` — the root key of
+   * the room, which writes AND revokes, the inviter included.
+   */
+  private async shareCopy(kind: import('./share.ts').ShareKind): Promise<void> {
+    await this.goLive()
+    // Committed first for the same reason slides commits its text edit: a
+    // half-typed block that only exists in the DOM is not in the copy.
+    this.store.endRun()
+    // Copies rejoin as true FORKS: the stamped CRDT state is what lets an
+    // offline edit on either side merge two-way rather than clobber.
+    this.session?.stampInto(this.store.doc)
+    const out = kind === 'invite'
+      ? await shareModule.inviteCopy(this.store.doc)
+      : shareModule.readerCopy(this.store.doc)
+    if (!out) {
+      this.status(kind === 'invite'
+        ? t('Only the owner of this space can invite people')
+        : t('This space has no live session to follow'))
+      return
+    }
+    const ok = await this.onShareCopy?.(out, kind)
+    if (ok) {
+      this.status(kind === 'invite'
+        ? t('Editor copy saved — recipients join live with edit access')
+        : t('Read-only copy saved — it follows the live session, view only'))
+    }
+  }
+
+  /** Turn the live session on (idempotent). Sharing a copy calls this first. */
+  async goLive(): Promise<void> {
+    if (!this.session || offlineEnabled()) return
+    this.session.enableSharing()
+    await startSharing(this.session, this.store)
+    // A transport made just now is a NEW object with its own callback slot —
+    // the one the boot-time watch was attached to no longer exists.
+    this.collab?.watchStatus()
+    this.collab?.sync()
+  }
+
   /** One About, one copy path — both entry points route through saveAs('copy'). */
   private openAbout(): void {
     openAbout({
@@ -2857,6 +5204,12 @@ export class Editor {
       onRepaint: () => this.build(),
       onSaveCopy: () => { void this.saveAs('copy') },
       onImport: () => this.openImport(),
+      onExportSpace: () => this.openExportSpace(),
+      // "Duplicate as a new space…" writes a DIFFERENT document, so it takes
+      // the extract's writer rather than the copy path: that one keeps no file
+      // handle, which is what leaves you editing this space afterwards.
+      onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
+      onStatus: (msg) => this.status(msg),
     })
   }
 
@@ -2901,12 +5254,42 @@ export class Editor {
   repaint(): void { this.paintTree(); this.paintPage() }
 }
 
+/**
+ * The mark a keystroke means, or null.
+ *
+ * ⌘B/⌘I/⌘U/⇧⌘S/⌘E/⇧⌘H, which is Notion's set — the only set most people who
+ * will ever type them already have in their fingers. ⌘K is not here because it
+ * is two commands (see onKey).
+ *
+ * `e.key` and not `e.code`: on a non-QWERTY layout the letter the person is
+ * looking at is the one they mean, and ⌘B has to be the key marked B.
+ */
+function markKey(e: KeyboardEvent, mod: boolean): MarkTag | null {
+  if (!mod || e.altKey) return null
+  const k = e.key.toLowerCase()
+  if (e.shiftKey) return k === 's' ? 's' : k === 'h' ? 'mark' : null
+  return k === 'b' ? 'strong' : k === 'i' ? 'em' : k === 'u' ? 'u' : k === 'e' ? 'code' : null
+}
+
 // ---- small dom helpers ------------------------------------------------------
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
   const n = document.createElement(tag)
   n.className = cls
   if (text) n.textContent = text
   return n
+}
+
+/**
+ * Is a bare keystroke going to land in something the reader is writing in?
+ *
+ * The block hosts are contenteditable, the topbar title and the panel's own
+ * fields are inputs, and every one of them takes `]` as a character. A
+ * bare-key panel shortcut has to ask this first.
+ */
+function isTyping(): boolean {
+  const a = document.activeElement as HTMLElement | null
+  if (!a) return false
+  return a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'
 }
 
 function iconBtn(name: IconName, label: string, onClick: () => void): HTMLButtonElement {
@@ -2966,6 +5349,28 @@ function joinPath(dir: string, ref: string): string {
   return out.join('/').toLowerCase()
 }
 
+/**
+ * The `#bento-doc` payload inside another Bento file.
+ *
+ * INERT: `DOMParser` builds a document with no browsing context, so nothing in
+ * that html runs and nothing it references is fetched — the same reasoning
+ * sanitize.ts records for `inertBody`, and the reason the file can be read
+ * before anyone has decided to trust it. A bare `{` is the document JSON
+ * itself (the AI round-trip's interchange unit), which needs no parse at all.
+ *
+ * An ENCRYPTED space is reported rather than guessed at: the bytes are there,
+ * the password is not, and asking for one here would be asking for a password
+ * to a file this space has no business holding.
+ */
+function spaceBlockOf(text: string): string | null | 'encrypted' {
+  const body = /^\s*\{/.test(text)
+    ? text
+    : new DOMParser().parseFromString(text, 'text/html')
+      .getElementById('bento-doc')?.textContent ?? null
+  if (!body) return null
+  return parseEnvelope(body) ? 'encrypted' : body
+}
+
 /** `my%20photo.png` is one file name, not two — editors percent-encode spaces. */
 function decodePath(ref: string): string {
   try { return decodeURI(ref) } catch { return ref }
@@ -3016,7 +5421,7 @@ async function walkEntry(entry: FileSystemEntry, base: string, out: PickedFile[]
 /** Is this drop an IMPORT (markdown, or any folder) rather than an image? */
 function isImportDrop(dt: DataTransfer | null): boolean {
   if (!dt) return false
-  if ([...dt.files].some((f) => NOTE_EXT.test(f.name))) return true
+  if ([...dt.files].some((f) => NOTE_EXT.test(f.name) || SPACE_EXT.test(f.name))) return true
   return [...dt.items].some((i) => i.webkitGetAsEntry?.()?.isDirectory)
 }
 
@@ -3095,17 +5500,36 @@ function caretRect(): DOMRect {
   return new DOMRect(80, 120, 0, 0)
 }
 
-/** Place a popover near an anchor without letting it leave the viewport. */
+/**
+ * Place a popover near an anchor without letting it leave the viewport.
+ *
+ * THE HEIGHT IS THE ROOM IT ACTUALLY HAS, not a fraction of the window. The
+ * CSS capped every popover at 44vh, which on a 900px-tall window is 396px —
+ * and the share panel wants 543. Measured before this: 149px clipped, with
+ * "Start live session" and "Reset access…" both below the fold. The primary
+ * action of the sharing panel was reachable only by noticing that a box with
+ * no visible scrollbar scrolls. A laptop at 800px fares worse.
+ *
+ * So the cap is computed per placement: pick the side with more room, give the
+ * popover that room, and only then measure to position it. The floor is 160px
+ * because a popover squeezed under a control near the bottom edge should flip
+ * rather than become a slot.
+ */
 function place(pop: HTMLElement, anchor: HTMLElement | DOMRect): void {
   const r = anchor instanceof HTMLElement ? anchor.getBoundingClientRect() : anchor
+  const GAP = 6, EDGE = 8
+  const below = innerHeight - r.bottom - GAP - EDGE
+  const above = r.top - GAP - EDGE
+  const useBelow = below >= above || below >= 320
+  pop.style.maxHeight = `${Math.max(160, useBelow ? below : above)}px`
+  // measured AFTER the cap, so a flip decides on the height the popover will
+  // actually have rather than the one CSS would have forced on it
   const w = pop.offsetWidth || 260
   const h = pop.offsetHeight || 260
   let left = r.left
-  let top = r.bottom + 6
-  if (left + w > innerWidth - 8) left = Math.max(8, innerWidth - w - 8)
-  if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 6)
-  pop.style.left = `${Math.max(8, left)}px`
-  pop.style.top = `${top}px`
+  if (left + w > innerWidth - EDGE) left = Math.max(EDGE, innerWidth - w - EDGE)
+  pop.style.left = `${Math.max(EDGE, left)}px`
+  pop.style.top = `${useBelow ? r.bottom + GAP : Math.max(EDGE, r.top - h - GAP)}px`
 }
 
 /**

@@ -7,21 +7,24 @@ import type { Store } from '../store'
 import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
-  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
+  applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
+import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
+import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
@@ -100,6 +103,7 @@ export class Editor {
     this.wirePaste()
     store.on('doc', () => this.syncLinkedCharts())
     store.on('doc', () => this.syncConnectors())
+    store.on('doc', () => this.syncThemeRefs())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -271,6 +275,8 @@ export class Editor {
         t('Add a table — edit cells inline; turn it into a live chart from the panel')),
       btn(ICONS.chart, t('Chart'), () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))),
         t('Add a chart — edit it visually or link it to a table so it updates live')),
+      btn(ICONS.code, t('Code'), () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true),
+        t('Add a code snippet')),
     )
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))
@@ -2089,6 +2095,29 @@ export class Editor {
     reader.readAsDataURL(file)
   }
 
+  // --- brand palette → referenced literals ---------------------------------
+
+  private paletteSig = ''
+  /**
+   * Re-derive every colour that points at a palette slot, whenever the palette
+   * moves. Same shape as the table→chart binding below: guarded by a signature
+   * so it cannot loop, and DERIVE-NOT-COMMIT — the literals are a pure function
+   * of `doc.theme`, so each collaborating replica computes the same values
+   * without an operation crossing the wire.
+   *
+   * Runs across the whole document, not just the current slide: a palette edit
+   * changes slide 40 as much as slide 1, and nothing else will visit it.
+   */
+  private syncThemeRefs() {
+    const sig = paletteSignature(this.store.doc)
+    if (sig === this.paletteSig) return
+    this.paletteSig = sig
+    if (resolveThemeRefs(this.store.doc)) {
+      this.canvas.render()
+      this.scheduleThumbs()
+    }
+  }
+
   // --- live table→chart binding -------------------------------------------------
 
   private tableSig = ''
@@ -2599,6 +2628,13 @@ export class Editor {
       // session too so author and recipient meet without another click.
       this.session?.enableSharing()
       this.tryJoin()
+      // A save from the WEB changes what this page is: the deck now lives in a
+      // file, and this URL will hand out a fresh starter next time. Said here,
+      // persistently, so the next visit is not a surprise — and deliberately
+      // NOT as a block, because this tab keeps working and keeps writing.
+      noteSavedFromWeb(currentFileName() ?? suggestedFileName(this.store.doc), {
+        fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
+      })
       this.toast(result === 'downloaded'
         ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
         : t('Saved'))
@@ -2844,7 +2880,7 @@ export class Editor {
         }
         const actions = div('ed-about-actions')
         const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
-        const done = () => {
+        const done = (outcome: InPlaceOutcome) => {
           status.textContent = ''
           const after = div('ed-about-update')
           status.appendChild(after)
@@ -2852,9 +2888,14 @@ export class Editor {
           ok.textContent = t('Updated to v{v} on disk.', { v: release.version })
           after.appendChild(ok)
           const note = div('ed-about-notes')
-          note.textContent = canUpdateInPlace()
-            ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
-            : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
+          // Say where the rollback actually went. It lands beside the document
+          // with a host installed and in the downloads folder without one, and
+          // a backup nobody can find is not much of a backup.
+          note.textContent = outcome.backup === 'beside'
+            ? t('This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.', { v: APP_VERSION })
+            : outcome.backup === 'downloaded'
+              ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
+              : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
           after.appendChild(note)
           const reloadB = document.createElement('button')
           reloadB.className = 'ed-btn ed-btn-primary'
@@ -2898,7 +2939,7 @@ export class Editor {
           try {
             this.session?.stampInto(this.store.doc)
             const written = await applyUpdateInPlace(release, this.store.doc)
-            if (written) done()
+            if (written) done(written)
             else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
           } catch (err: any) { fail(err) }
         })
@@ -2963,7 +3004,11 @@ export class Editor {
     offCb.type = 'checkbox'
     offCb.checked = offlineEnabled()
     offCb.addEventListener('change', () => {
-      setOffline(offCb.checked)
+      // setOffline reports whether the preference PERSISTED. It holds for this
+      // session either way (net.ts keeps it in memory), but a switch that
+      // silently forgets itself on reload has to say so — it used to show
+      // "on" over a setting that had never been stored.
+      const stuck = setOffline(offCb.checked)
       if (offCb.checked) {
         if (this.session) disconnectOnline(this.session)
       } else {
@@ -2971,9 +3016,11 @@ export class Editor {
       }
       this.wireOnlineStatus()
       this.toast(
-        offCb.checked
-          ? t('Offline mode on — nothing leaves this computer')
-          : t('Offline mode off — online features re-enabled'),
+        !stuck
+          ? t('Offline mode is on for this tab, but could not be saved — this browser is blocking site data, so it will not survive a reload')
+          : offCb.checked
+            ? t('Offline mode on — nothing leaves this computer')
+            : t('Offline mode off — online features re-enabled'),
       )
     })
     offRow.append(offCb, document.createTextNode(' ' + t('Offline mode — block all network features (updates, online collaboration)')))

@@ -7,35 +7,253 @@
    differently read as two products. What differs is only what the app IS: a
    reading column instead of a canvas. */
 
-:root {
+/* ————— THEME TOKENS —————————————————————————————————————————————————————
+   A THEME IS A VIEWER PREFERENCE, NEVER DOCUMENT DATA (PLATFORM §8, and
+   kernel/src/theme.ts). It lives in localStorage exactly as the interface
+   language does, and for the same reason: two people opening one space are two
+   readers in two rooms, and a theme written into the file would travel to
+   whoever received it — and make the bytes depend on who last looked.
+
+   WHAT DARK COVERS, AND WHY IT IS NOT SLIDES' ANSWER. slides themes only the
+   chrome AROUND the deck: a slide is a bounded page on a canvas, its
+   background is data the author chose, and someone proofing at midnight still
+   needs to see what will be projected. A space has no such page. `--bg` is
+   THE ONE GROUND — the toolbar, both panels and the reading column all sit on
+   it, with hairlines and nothing else between them (see `html, body` below),
+   which is the whole point of the chrome-reads-as-one-document work. A dark
+   interface with a white reading column would be a white rectangle filling
+   most of the window: not a dark interface, and a re-introduction of the
+   floating-card look that was deliberately removed.
+
+   So in spaces the reading surface IS chrome, and it follows the reader.
+   `doc.theme.background/color/accent` still exist in the format and are still
+   the DOCUMENT's own colours — but the only thing that paints them is the
+   static file-manager preview (preview.ts), which renders with scripting off,
+   has no reader and no localStorage to ask, and is a thumbnail of the author's
+   document. That surface stays the author's, unconditionally and in both
+   themes; nothing here reaches it.
+
+   What DOES follow the reader, deliberately, is the document's own colour
+   vocabulary: `--c-*` (the nine `sp-fg-*`/`sp-bg-*` marks) and the callout
+   tone hues. The author picked "red", not `#c0392b` — the closed vocabulary
+   exists precisely so the value under each name can be tuned for the surface,
+   which is what the palette comment two hundred lines down already says. An
+   ink measured against white is not the same ink on a near-black ground.
+
+   THREE STATES, and the dark values appear TWICE because of it. A reader has
+   chosen light, chosen dark, or chosen nothing. An explicit choice stamps
+   `data-theme` on <html>; the default follows the OS. So dark must be defined
+   under `@media (prefers-color-scheme: dark)` — guarded `:not([data-theme="light"])`
+   so an explicit light choice still wins — AND under `[data-theme="dark"]`, or
+   the toggle only works in one direction. The two blocks are byte-identical and
+   the model rig asserts they stay that way.
+
+   BOTH ARE @media screen, WHICH IS HOW PAPER STAYS LIGHT. Print matches
+   neither, so on paper the light block below is the only one that applies and
+   the print sheet needs no third copy of the palette. Dark is a screen theme;
+   toner is not a screen. */
+
+/* LIGHT — the suite's shared palette, character for character with
+   slides/src/styles.css and type/src/styles.css. Do not let these drift. */
+:root, :root[data-theme="light"] {
   --ink: #1e2a3a;
   --ink-2: #31445c;
+  /* THE ONE GROUND. Named rather than spelled `#fff` at each site, because the
+     dark interface redefines exactly these tokens and nothing else — a literal
+     at a use site is a thing that stays white when the theme flips. */
+  --bg: #ffffff;
+  /* raised above the ground: the bar, menus, popovers, dialogs, the row you
+     are on. In light it is the same white — the hairlines carry the separation
+     — and in dark it has to lift, which is why it is a token and not `--bg`. */
+  --surface: #ffffff;
+  /* recessed below it: form controls, which read as holes, not cards */
+  --field: #ffffff;
   --chrome: #f5f7fa;
   --chrome-2: #eceff4;
   --line: #e3e8ef;
+  /* a border that has to be SEEN — hover and selected states, one step past
+     the resting hairline */
+  --edge: #b9c3d2;
   --muted: #5b6472;
   --accent: #f7a600;
+  /* the accent as INK ON THE GROUND: the magic-note answer, the live chip, the
+     banner. It flips with the ground, so in dark it lifts to a light amber. */
   --accent-ink: #7a5200;
+  /* the accent as ink ON THE ACCENT FILL — the comment badge. The fill does
+     not flip (it is brand), so neither does this. */
+  --accent-on: #7a5200;
   --blue: #5b8def;
+  /* the wordmark's coral, and the splash's. BRAND, so it is the same value in
+     both themes — it is a name, not a foreground, and it reads on either
+     ground. Named only so a literal cannot be mistaken for chrome later. */
+  --brand: #ff9e8a;
+  /* the prompt inside an empty block, and the gutter's affordances: both are
+     "not yet content", so both are quieter than --muted */
+  --ph: #b9c2ce;
+  --ghost: #aab4c2;
+  /* SHADOWS ARE ONE TOKEN, as CHANNELS rather than a colour, so every
+     `rgb(var(--shade) / …)` in this file keeps its own alpha. Eleven shadows
+     needed eleven tokens otherwise. Dark goes to pure black: a navy shadow is
+     invisible on a navy ground. */
+  --shade: 20 30 45;
+
+  /* READING SIZE, and it grows with the screen.
+     A 5120px display showed a 900px column of 16px text: 110 characters, 18%
+     of the screen, and lines past the range anyone reads comfortably. The fix
+     is NOT a wider column — it is bigger type holding the SAME character
+     count, because at that width you are also sitting further away.
+     16px to about 1600px wide, then up to 19px by 2560, capped there.
+     THE FLOOR IS A PX VALUE ON PURPOSE: `vw` shrinks when a reader zooms in
+     (zoom reduces the CSS-pixel viewport), so a purely viewport-driven size
+     would fight the browser's own accessibility control. The floor means zoom
+     can only ever land on today's size or larger. */
+  --sp-read: clamp(16px, 11px + 0.3125vw, 19px);
   --radius: 10px;
+
+  /* ————— the document's colour vocabulary —————
+     NINE COLOURS IN TWO ROLES: `sp-fg-*` is the ink on a SPAN, `sp-bg-*` is
+     the band behind it on a MARK. The band is a color-mix into `transparent`,
+     so it needs no second set — alpha lands correctly on any ground. The INKS
+     do: these are measured to clear 4.5:1 on white, and their dark twins are
+     measured on `--bg` dark. */
+  --c-gray: #5b6472;   --c-brown: #8a5a3c;  --c-orange: #b35c00;
+  --c-yellow: #8a6a00; --c-green: #1f7a4d;  --c-blue: #1f5fbf;
+  --c-purple: #6b3fbf; --c-pink: #b3327a;   --c-red: #c0392b;
+
+  /* ————— syntax colours —————
+     Six roles, chosen to survive the places code is read: an editor in either
+     theme, and a printed page. The light four clear 4.5:1 against the code
+     well AND against white, because a browser drops the block's background
+     when printing and keeps the ink — a palette tuned only against the tinted
+     well goes pale on paper. Hue does the work, not lightness, so the block
+     still reads as prose at 13px and stays legible in greyscale.
+     Comments reuse --muted and numbers reuse --accent-ink: the suite's palette
+     already had the right two, and a syntax theme that invents a ninth grey is
+     a syntax theme nobody can restyle. */
+  --code-str: #1c6b4b;
+  --code-key: #6b3fa0;
+  --code-lit: #0d6382;
+  --code-prop: #1c4fb5;
+
+  /* ————— callout tone hues —————
+     ONE HUE PER TONE, and the fill and the label DERIVE from it against the
+     current ground (see .sp-b-callout). That is why there is no second set:
+     `color-mix(hue, --bg)` is a pale tint on white and a deep one on near
+     black, and `color-mix(hue, --ink)` darkens the label in light and lifts it
+     in dark, from the same five numbers. Fifteen hand-tuned values would have
+     needed thirty. */
+  --tone-note: #7d9cbd;
+  --tone-tip: #4f9e79;
+  --tone-important: #8a72cc;
+  --tone-warning: #d9a326;
+  --tone-caution: #cd6a63;
+
+  /* The BROWSER's own furniture — scrollbars, form controls, the canvas behind
+     a rubber-band scroll — follows this, and CSS cannot reach any of it.
+     `only` keeps a force-dark engine from inverting what we have already
+     decided. kernel/src/theme.ts restates the resolved value inline on <html>,
+     which is what makes the choice win over the media query below. */
+  color-scheme: only light;
 }
 
-/* The editor chrome is LIGHT-ONLY, the same ruling slides made: on a dark-mode
-   phone the engine renders NATIVE controls dark while our ink stays dark, so
-   dropdowns read as blank. Pair with the color-scheme meta in index.html. */
-:root { color-scheme: only light; }
+/* DARK — the same roles, not the same values. `--ink` is the chrome's
+   FOREGROUND, so it inverts; `--accent` does not, because it is brand.
+   THE NEXT TWO BLOCKS ARE IDENTICAL BY CONTRACT. See the three-state note
+   above; scripts/test-spaces-model.ts compares them character for character. */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e7eaf0;
+    --ink-2: #b3bcca;
+    --bg: #14181e;
+    --surface: #1b2027;
+    --field: #10141a;
+    --chrome: #1e232b;
+    --chrome-2: #272d36;
+    --line: #2e353f;
+    --edge: #454e5c;
+    --muted: #8b95a4;
+    --accent: #f7a600;
+    --accent-ink: #f0b74e;
+    --accent-on: #7a5200;
+    --blue: #7aa5f5;
+    --brand: #ff9e8a;
+    --ph: #4a5464;
+    --ghost: #5c6675;
+    --shade: 0 0 0;
+    --c-gray: #9aa3b2;   --c-brown: #d09a72;  --c-orange: #ef9a3d;
+    --c-yellow: #d8b64a; --c-green: #4fbe86;  --c-blue: #7aa8f5;
+    --c-purple: #b294f0; --c-pink: #ee7ab4;   --c-red: #f0796a;
+    --code-str: #6fd39b;
+    --code-key: #c4a2f5;
+    --code-lit: #62c1e0;
+    --code-prop: #82abf5;
+    --tone-note: #7d9cbd;
+    --tone-tip: #4f9e79;
+    --tone-important: #8a72cc;
+    --tone-warning: #d9a326;
+    --tone-caution: #cd6a63;
+    color-scheme: only dark;
+  }
+}
+@media screen {
+  :root[data-theme="dark"] {
+    --ink: #e7eaf0;
+    --ink-2: #b3bcca;
+    --bg: #14181e;
+    --surface: #1b2027;
+    --field: #10141a;
+    --chrome: #1e232b;
+    --chrome-2: #272d36;
+    --line: #2e353f;
+    --edge: #454e5c;
+    --muted: #8b95a4;
+    --accent: #f7a600;
+    --accent-ink: #f0b74e;
+    --accent-on: #7a5200;
+    --blue: #7aa5f5;
+    --brand: #ff9e8a;
+    --ph: #4a5464;
+    --ghost: #5c6675;
+    --shade: 0 0 0;
+    --c-gray: #9aa3b2;   --c-brown: #d09a72;  --c-orange: #ef9a3d;
+    --c-yellow: #d8b64a; --c-green: #4fbe86;  --c-blue: #7aa8f5;
+    --c-purple: #b294f0; --c-pink: #ee7ab4;   --c-red: #f0796a;
+    --code-str: #6fd39b;
+    --code-key: #c4a2f5;
+    --code-lit: #62c1e0;
+    --code-prop: #82abf5;
+    --tone-note: #7d9cbd;
+    --tone-tip: #4f9e79;
+    --tone-important: #8a72cc;
+    --tone-warning: #d9a326;
+    --tone-caution: #cd6a63;
+    color-scheme: only dark;
+  }
+}
 
 * { box-sizing: border-box; }
 html, body {
   margin: 0; height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: var(--ink);
-  background: var(--chrome);
+  /* ONE GROUND for the whole app. The panels used to sit on a --chrome tint
+     with the page white on top of it, so the page read as a card floating on
+     a slightly different grey — three surfaces where there is one document.
+     The hairline borders carry the separation; a second background does not
+     need to. --chrome is still what CHIPS and inset controls sit on, which is
+     what it was for. */
+  background: var(--bg);
   overscroll-behavior: none;
 }
 #app { height: 100%; }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
 select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; user-select: auto; }
+/* Native controls follow the theme through `color-scheme` on :root, so a
+   <select> is dark when the chrome is. Its ink and ground are still stated
+   here: a force-dark engine that ignores color-scheme would otherwise paint a
+   dark popup and leave our dark ink on it. */
+select, input, textarea { background: var(--field); color: var(--ink); }
+option { background: var(--field); color: var(--ink); }
 
 /* ————— shell ————— */
 .sp-app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
@@ -43,7 +261,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 .sp-bar {
   display: flex; align-items: center; gap: 6px;
   padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
-  background: #fff; border-bottom: 1px solid var(--line);
+  background: var(--surface); border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
 .sp-mark {
@@ -55,7 +273,9 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 }
 .sp-mark:hover { background: var(--chrome-2); }
 .sp-mark-svg { display: block; flex: 0 0 auto; }
-.sp-mark-word span { color: #FF9E8A; }
+/* the coral is BRAND: the splash's `.bs-word b`, and the mark in every app
+   of the suite. It reads on both grounds, so it is one value, not two. */
+.sp-mark-word span { color: var(--brand); }
 .sp-doctitle {
   /* Sized, not greedy: a title input that eats the slack pushed undo/redo away
      from the document they belong to and left them floating mid-bar. The
@@ -66,7 +286,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   border-radius: 8px; padding: 5px 8px;
 }
 .sp-doctitle:hover { background: var(--chrome); }
-.sp-doctitle:focus { background: #fff; border-color: var(--blue); outline: none; }
+.sp-doctitle:focus { background: var(--field); border-color: var(--blue); outline: none; }
 .sp-status {
   font-size: 12px; color: var(--muted); white-space: nowrap;
   opacity: 0; transition: opacity .18s;
@@ -84,7 +304,9 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
 .sp-btn:active { background: var(--line); }
 .sp-btn svg { display: block; }
 .sp-btn[disabled] { opacity: .45; cursor: default; }
-.sp-primary { background: var(--ink); color: #fff; padding: 6px 14px; }
+/* filled with the foreground, so its ink is the ground: `#fff` here would
+   have been white on near-white the moment the theme flipped. */
+.sp-primary { background: var(--ink); color: var(--bg); padding: 6px 14px; }
 .sp-primary:hover { background: var(--ink-2); }
 
 .sp-body { display: flex; flex: 1 1 auto; min-height: 0; }
@@ -94,7 +316,7 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   /* the reader's width, restored from localStorage — never the document's */
   flex: 0 0 var(--sp-panew, 244px); min-width: 0;
   transition: flex-basis .18s ease, padding .18s ease;
-  border-inline-end: 1px solid var(--line); background: var(--chrome);
+  border-inline-end: 1px solid var(--line); background: var(--bg);
   overflow: auto; padding: 10px 8px max(16px, env(safe-area-inset-bottom));
 }
 .sp-side-head {
@@ -116,23 +338,28 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sp-treelink:hover { background: var(--chrome-2); }
-.sp-treelink.sp-here { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(20 30 45 / .07); }
+.sp-treelink.sp-here { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(var(--shade) / .07); }
 .sp-treelink.sp-drop { box-shadow: inset 0 0 0 2px var(--accent); }
 .sp-tree-ico { flex: 0 0 auto; width: 16px; text-align: center; font-size: 13px; }
 .sp-side-empty { color: var(--muted); font-size: 13px; padding: 10px; }
 
 /* ————— the reading column ————— */
 .sp-main {
-  flex: 1 1 auto; overflow: auto; background: #fff;
-  padding: 44px 28px 40vh;
+  flex: 1 1 auto; overflow: auto; background: var(--bg);
+  /* AS VARIABLES, because a full-bleed page cover has to escape exactly this
+     padding with a negative margin, and this padding is four different numbers
+     (here, on a phone, in reading view, on paper). A hard-coded -44px would be
+     wrong in three of them, silently. */
+  --sp-pad-x: 28px; --sp-pad-y: 44px;
+  padding: var(--sp-pad-y) var(--sp-pad-x) 40vh;
 }
-.sp-page-inner { margin: 0 auto; }
+.sp-page-inner { margin: 0 auto; font-size: var(--sp-read); }
 .sp-title {
-  font-size: 33px; line-height: 1.18; font-weight: 700;
+  font-size: 2.06em; line-height: 1.18; font-weight: 700;
   margin: 0 0 6px; letter-spacing: -0.02em;
 }
 .sp-title:focus { outline: none; }
-.sp-title[data-empty]::before { content: attr(data-ph); color: #b9c2ce; }
+.sp-title[data-empty]::before { content: attr(data-ph); color: var(--ph); }
 .sp-crumb { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; display: flex; gap: 6px; align-items: center; }
 .sp-crumb a { color: var(--muted); text-decoration: none; }
 .sp-crumb a:hover { color: var(--ink); text-decoration: underline; }
@@ -144,10 +371,25 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   display: flex; gap: 1px; opacity: 0; transition: opacity .12s;
 }
 .sp-b:hover > .sp-gutter, .sp-gutter:focus-within { opacity: 1; }
+
+/* Desktop gutters sit outside the prose. Phone gutters join the block flow,
+   so their sizing and spacing stay with the phone rules below. */
+@media (min-width: 821px) {
+  /* bottom:0, not height:stretch — an abspos box stretches the same way
+     and `stretch` is Chrome-only (Firefox has none, Safari needs
+     -webkit-fill-available), where it would silently drop back to the
+     24px intrinsic height and lose the full-block hover/focus target. */
+  .sp-gutter { top: 0; bottom: 0; padding-top: inherit; }
+  .sp-b-h2 > .sp-gutter { align-items: center; margin-bottom: 2px; }
+  .sp-b-number > .sp-gutter { inset-inline-start: -68px; }
+  .sp-b-bullet > .sp-gutter { inset-inline-start: -64px; }
+  .sp-b-code > .sp-gutter { margin: 6px 0; }
+}
+
 .sp-ghost {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 24px; padding: 0; border: 0; border-radius: 5px;
-  color: #aab4c2; background: transparent; cursor: pointer;
+  color: var(--ghost); background: transparent; cursor: pointer;
 }
 .sp-ghost:hover { background: var(--chrome-2); color: var(--ink-2); }
 .sp-ghost[draggable='true'] { cursor: grab; }
@@ -157,13 +399,162 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
   background: var(--blue); border-radius: 2px;
 }
 
-.sp-b-h1 { font-size: 25px; font-weight: 700; margin: 24px 0 2px; letter-spacing: -0.01em; }
-.sp-b-h2 { font-size: 20px; font-weight: 700; margin: 20px 0 2px; }
-.sp-b-h3 { font-size: 16.5px; font-weight: 700; margin: 16px 0 2px; }
+.sp-b-h1 { font-size: 1.56em; font-weight: 700; margin: 24px 0 2px; letter-spacing: -0.01em; }
+.sp-b-h2 { font-size: 1.25em; font-weight: 700; margin: 20px 0 2px; }
+.sp-b-h3 { font-size: 1.03em; font-weight: 700; margin: 16px 0 2px; }
 .sp-b-quote {
   margin: 8px 0; padding: 2px 0 2px 15px;
   border-inline-start: 3px solid var(--line); color: var(--ink-2);
 }
+/* ————— inline marks —————
+   The six marks the floating toolbar applies. `b/strong`, `i/em` and `u` need
+   nothing — the browser's defaults are right — but `code` and `mark` inside
+   prose had NO styling at all, so "inline code" and "highlight" were controls
+   that appeared to do nothing. Scoped under .sp-body so the block-level code
+   block (.sp-b-code code, its own rule) is untouched. */
+.sp-body :is(p, li, h1, h2, h3, blockquote, td, th, figcaption) code {
+  font: 0.92em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 5px;
+  padding: 0.1em 0.32em; word-break: break-word;
+}
+/* the accent at a tint a paragraph can be read through, and an explicit ink:
+   `mark`'s UA default is black on yellow, which is not this document's ink */
+.sp-body mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 .08em; }
+/* No blanket link colour here. There was one — `.sp-body a { color: var(--blue) }`
+   — and it never painted a single prose link: `.sp-page a` sets the ink at the
+   same specificity and later in the sheet, so it won every time. What the rule
+   DID reach was the page list, which `.sp-body` also wraps, where it beat
+   `.sp-treelink`'s 0-1-0 and turned every page in the tree the blue of a
+   hyperlink to somewhere else. A rule with no intended effect and one
+   unintended one is not worth scoping; it is worth deleting. */
+
+/* ————— the colour palette —————
+   NINE COLOURS IN TWO ROLES: `sp-fg-*` is the ink on a SPAN, `sp-bg-*` is the
+   band behind it on a MARK. Notion's shape, and its shape is what makes it
+   safe — a closed vocabulary means the sanitizer matches a NAME instead of
+   parsing CSS, and it means these values live here, in the app's stylesheet,
+   where they can be tuned for the surface. A `style="color:#…"` in the
+   document could be none of that.
+
+   TOKENS, so the two roles cannot drift: one hue per colour, the ink at full
+   strength and the band as a tint of the same hue. Chosen by measuring, not by
+   eye — and measured TWICE, because the ground moved. The `--c-*` values live
+   in the theme blocks at the top of this file: an ink that clears 4.5:1 on
+   white is a smudge on a near-black ground, so each name carries a light value
+   and a dark one. The BAND needs only one set, because it mixes into
+   `transparent` and lands correctly on either. */
+.sp-body .sp-fg-gray { color: var(--c-gray); }
+.sp-body .sp-fg-brown { color: var(--c-brown); }
+.sp-body .sp-fg-orange { color: var(--c-orange); }
+.sp-body .sp-fg-yellow { color: var(--c-yellow); }
+.sp-body .sp-fg-green { color: var(--c-green); }
+.sp-body .sp-fg-blue { color: var(--c-blue); }
+.sp-body .sp-fg-purple { color: var(--c-purple); }
+.sp-body .sp-fg-pink { color: var(--c-pink); }
+.sp-body .sp-fg-red { color: var(--c-red); }
+.sp-body mark.sp-bg-gray { background: color-mix(in srgb, var(--c-gray) 22%, transparent); }
+.sp-body mark.sp-bg-brown { background: color-mix(in srgb, var(--c-brown) 22%, transparent); }
+.sp-body mark.sp-bg-orange { background: color-mix(in srgb, var(--c-orange) 22%, transparent); }
+.sp-body mark.sp-bg-yellow { background: color-mix(in srgb, var(--c-yellow) 26%, transparent); }
+.sp-body mark.sp-bg-green { background: color-mix(in srgb, var(--c-green) 22%, transparent); }
+.sp-body mark.sp-bg-blue { background: color-mix(in srgb, var(--c-blue) 20%, transparent); }
+.sp-body mark.sp-bg-purple { background: color-mix(in srgb, var(--c-purple) 20%, transparent); }
+.sp-body mark.sp-bg-pink { background: color-mix(in srgb, var(--c-pink) 20%, transparent); }
+.sp-body mark.sp-bg-red { background: color-mix(in srgb, var(--c-red) 20%, transparent); }
+
+/* ON PAPER, COLOUR SURVIVES — and this is deliberately the OPPOSITE of the
+   callout ruling forty lines below, which drops its tint. The difference is
+   what else carries the meaning. A callout keeps its box, its heavier start
+   rule, its tone's SHAPE and the tone's NAME spelled out, so the fill is
+   decoration and dropping it costs nothing. An inline colour has no second
+   cue at all: drop it and the sentence prints as ordinary prose, with the
+   distinction the author drew silently gone — data loss, not decluttering.
+   The area is also a few words rather than a paragraph-sized block of ink.
+   `print-color-adjust: exact` because browsers drop backgrounds on paper by
+   default, so without it the band would go while the ink stayed. */
+@media print {
+  .sp-body [class*='sp-fg-'], .sp-body mark {
+    print-color-adjust: exact; -webkit-print-color-adjust: exact;
+  }
+}
+
+/* ————— the floating selection toolbar —————
+   Body-mounted (see formatbar.ts (1)), so it is positioned in VIEWPORT
+   coordinates and owes nothing to the page's layout. Below .sp-pop's 60: a
+   menu or dialog that opens over a selection is the thing being used. */
+.sp-fmt {
+  position: fixed; z-index: 58; display: flex; align-items: center; gap: 2px;
+  padding: 3px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 9px; box-shadow: 0 6px 22px rgb(var(--shade) / .17);
+  max-width: calc(100vw - 16px);
+}
+.sp-fmt-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; height: 30px; padding: 0 7px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2); cursor: pointer;
+  font: inherit; font-size: 13px;
+}
+.sp-fmt-btn:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-fmt-btn.sp-fmt-on { background: var(--chrome-2); color: var(--blue); }
+.sp-fmt-gap { margin-inline-start: 4px; border-inline-start: 1px solid var(--line); border-radius: 0 6px 6px 0; }
+.sp-fmt-url {
+  font: inherit; font-size: 13px; width: 240px; max-width: 46vw;
+  padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
+}
+.sp-fmt-url.sp-fmt-bad { border-color: var(--c-red); }
+.sp-fmt-go { color: var(--blue); font-weight: 600; }
+/* the palette takes the bar over while it is open — two rows, so the bar
+   becomes a column for as long as it is showing */
+.sp-fmt-pal { flex-direction: column; align-items: stretch; gap: 3px; padding: 7px; }
+.sp-fmt-pal-h { font-size: 11px; font-weight: 600; color: var(--muted); padding: 2px 2px 0; }
+.sp-fmt-sw-row { display: flex; gap: 3px; }
+.sp-fmt-sw {
+  width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); color: var(--ink); cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 700; line-height: 1;
+}
+.sp-fmt-sw:hover { border-color: var(--ink-2); }
+/* the swatch SHOWS what it does: an A in the ink for the text row, an A on the
+   band for the background row. A grid of anonymous squares makes you click one
+   to find out what it was. */
+.sp-fmt-sw.sp-fg-gray { color: var(--c-gray); } .sp-fmt-sw.sp-fg-brown { color: var(--c-brown); }
+.sp-fmt-sw.sp-fg-orange { color: var(--c-orange); } .sp-fmt-sw.sp-fg-yellow { color: var(--c-yellow); }
+.sp-fmt-sw.sp-fg-green { color: var(--c-green); } .sp-fmt-sw.sp-fg-blue { color: var(--c-blue); }
+.sp-fmt-sw.sp-fg-purple { color: var(--c-purple); } .sp-fmt-sw.sp-fg-pink { color: var(--c-pink); }
+.sp-fmt-sw.sp-fg-red { color: var(--c-red); }
+.sp-fmt-sw.sp-bg-gray { background: color-mix(in srgb, var(--c-gray) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-brown { background: color-mix(in srgb, var(--c-brown) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-orange { background: color-mix(in srgb, var(--c-orange) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-yellow { background: color-mix(in srgb, var(--c-yellow) 26%, var(--surface)); }
+.sp-fmt-sw.sp-bg-green { background: color-mix(in srgb, var(--c-green) 22%, var(--surface)); }
+.sp-fmt-sw.sp-bg-blue { background: color-mix(in srgb, var(--c-blue) 20%, var(--surface)); }
+.sp-fmt-sw.sp-bg-purple { background: color-mix(in srgb, var(--c-purple) 20%, var(--surface)); }
+.sp-fmt-sw.sp-bg-pink { background: color-mix(in srgb, var(--c-pink) 20%, var(--surface)); }
+.sp-fmt-sw.sp-bg-red { background: color-mix(in srgb, var(--c-red) 20%, var(--surface)); }
+.sp-fmt-back { align-self: flex-start; margin-top: 2px; color: var(--muted); }
+/* A COARSE POINTER GETS THE BOTTOM EDGE, not the selection. The OS callout and
+   the selection handles own the pixels around a touch selection; sharing them
+   is how a toolbar becomes a thing you dismiss rather than a thing you use. */
+.sp-fmt-dock {
+  inset-inline: 0; bottom: 0; top: auto !important; left: 0 !important;
+  max-width: none; border-radius: 0; border-inline: 0; border-bottom: 0;
+  justify-content: center; flex-wrap: wrap;
+  padding: 6px max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  box-shadow: 0 -6px 22px rgb(var(--shade) / .14);
+}
+/* All nine on ONE row at 375px — measured: at 40px wide they wrapped, and
+   "Clear formatting" sat alone on a second row looking like a separate
+   control. 36px is still comfortably over the 34px touch target this app's
+   other phone chrome uses. */
+.sp-fmt-dock { gap: 1px; }
+.sp-fmt-dock .sp-fmt-btn { min-width: 36px; height: 38px; padding: 0 2px; }
+.sp-fmt-dock .sp-fmt-gap { margin-inline-start: 2px; }
+.sp-fmt-dock .sp-fmt-url { width: auto; flex: 1 1 160px; max-width: none; }
+/* It is chrome, and chrome is never on paper. Belt as well as braces: the bar
+   is also removed the moment the selection collapses, and print does not run
+   in the reading view's way. */
+@media print { .sp-fmt { display: none !important; } }
+
 /* ————— callouts —————
    The tone is carried by the MARK'S SHAPE (circle, bulb, square, triangle,
    octagon) and by its name spelled out beside it. The tint is decoration: it
@@ -174,9 +565,17 @@ select, input, textarea, [contenteditable='true'] { -webkit-user-select: auto; u
    The BODY TEXT stays --ink, never the tone colour. Coloured prose is a
    readability tax on the sentence that mattered enough to put in a box. */
 .sp-b-callout {
-  /* the neutral fallback: a tone class always lands on top of it, but a
-     stylesheet that only works with one is a stylesheet with a hole in it */
-  --tone-bg: var(--chrome); --tone-line: var(--line); --tone-ink: var(--ink-2);
+  /* THE TONE IS ONE HUE, AND THE BOX IS DERIVED FROM IT AGAINST THE GROUND.
+     The fill is that hue mixed into --bg and the label is it mixed into --ink,
+     so the same five numbers give a pale tint with a dark label on white and a
+     deep tint with a lifted label on near-black. Fifteen hand-tuned values
+     would have needed thirty, and thirty values drift.
+     --tone-h is the neutral fallback: a tone class always lands on top of it,
+     but a stylesheet that only works with one is a stylesheet with a hole. */
+  --tone-h: var(--muted);
+  --tone-bg: color-mix(in srgb, var(--tone-h) 13%, var(--bg));
+  --tone-line: var(--tone-h);
+  --tone-ink: color-mix(in srgb, var(--tone-h) 50%, var(--ink));
   display: block; margin: 10px 0; padding: 9px 14px 10px;
   border: 1px solid var(--tone-line); border-inline-start-width: 4px;
   border-radius: var(--radius); background: var(--tone-bg);
@@ -202,13 +601,17 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-callout-body > .sp-b:first-child { margin-top: 4px; }
 .sp-b-callout .sp-list { padding-inline-start: 20px; }
 
-.sp-tone-note { --tone-bg: #eef3f9; --tone-line: #7d9cbd; --tone-ink: #2b4a68; }
-.sp-tone-tip { --tone-bg: #e9f6ef; --tone-line: #4f9e79; --tone-ink: #1c5a41; }
-.sp-tone-important { --tone-bg: #f2eefb; --tone-line: #8a72cc; --tone-ink: #493081; }
-.sp-tone-warning { --tone-bg: #fdf4e3; --tone-line: #d9a326; --tone-ink: var(--accent-ink); }
-.sp-tone-caution { --tone-bg: #fdeeed; --tone-line: #cd6a63; --tone-ink: #8a2f28; }
+.sp-tone-note { --tone-h: var(--tone-note); }
+.sp-tone-tip { --tone-h: var(--tone-tip); }
+.sp-tone-important { --tone-h: var(--tone-important); }
+.sp-tone-warning { --tone-h: var(--tone-warning); }
+.sp-tone-caution { --tone-h: var(--tone-caution); }
+/* the same tone, outside a callout: the search result's icon has no
+   .sp-b-callout above it to derive --tone-ink, so it derives its own */
 .sp-result-ico.sp-tone-note, .sp-result-ico.sp-tone-tip, .sp-result-ico.sp-tone-important,
-.sp-result-ico.sp-tone-warning, .sp-result-ico.sp-tone-caution { color: var(--tone-ink); }
+.sp-result-ico.sp-tone-warning, .sp-result-ico.sp-tone-caution {
+  color: color-mix(in srgb, var(--tone-h) 50%, var(--ink));
+}
 
 .sp-tonepop { width: 244px; }
 .sp-dditem.sp-sel { background: var(--chrome-2); }
@@ -233,7 +636,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-text:focus { outline: none; }
 /* the prompt shows on the block you are IN, not on every empty one — a page of
    "Type / for blocks" reads as clutter, not as help */
-.sp-text[data-empty]:focus::before { content: attr(data-ph); color: #b9c2ce; pointer-events: none; }
+.sp-text[data-empty]:focus::before { content: attr(data-ph); color: var(--ph); pointer-events: none; }
 
 .sp-b-code { position: relative; }
 .sp-b-code pre {
@@ -244,23 +647,10 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-b-code code:focus { outline: none; }
 
 /* ————— syntax colours —————
-   Six roles, chosen to survive the two places code is read: a light editor and
-   a printed page. Every one clears 4.5:1 against the code well (#f5f7fa) AND
-   against white, because a browser drops the block's background when printing
-   and keeps the ink — a palette tuned only against the tinted well goes pale on
-   paper. Hue does the work, not lightness, so the block still reads as prose at
-   13px and stays legible in greyscale.
-
-   Comments reuse --muted and numbers reuse --accent-ink: the suite's palette
-   already had the right two, and a syntax theme that invents a ninth grey is a
-   syntax theme nobody can restyle. The remaining four are new because nothing
-   in the chrome palette means "string". */
-:root {
-  --code-str: #1c6b4b;
-  --code-key: #6b3fa0;
-  --code-lit: #0d6382;
-  --code-prop: #1c4fb5;
-}
+   Six roles. `--code-*` are defined per theme at the top of this file; the
+   other two reuse the suite's palette — comments are --muted and numbers are
+   --accent-ink, because a syntax theme that invents a ninth grey is a syntax
+   theme nobody can restyle. Both of those flip with the ground already. */
 .sp-t-c { color: var(--muted); font-style: italic; }
 .sp-t-s { color: var(--code-str); }
 .sp-t-n { color: var(--accent-ink); }
@@ -277,8 +667,8 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-langchip {
   position: absolute; top: 10px; inset-inline-end: 10px;
   font-size: 11px; padding: 3px 8px; color: var(--muted);
-  background: rgb(255 255 255 / .94); border-color: var(--line);
-  box-shadow: 0 2px 8px rgb(20 30 45 / .12);
+  background: color-mix(in srgb, var(--surface) 94%, transparent); border-color: var(--line);
+  box-shadow: 0 2px 8px rgb(var(--shade) / .12);
   opacity: 0; transition: opacity .12s;
 }
 .sp-b-code:hover .sp-langchip, .sp-langchip:focus { opacity: 1; }
@@ -294,20 +684,120 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-toggle-body { flex: 1 0 100%; padding-inline-start: 22px; }
 
 .sp-b-image figure { margin: 12px 0; }
-.sp-b-image img { max-width: 100%; height: auto; border-radius: var(--radius); display: block; }
+/* AN IMAGE ON A DARK GROUND. A photograph is fine; a screenshot, a diagram
+   or a logo exported with a transparent background is a shape floating in
+   nothing, and a white-on-transparent diagram disappears entirely. So a
+   picture in the reading column always has a ground of its OWN to sit on —
+   white in both themes, because that is the ground the author exported
+   against — and a hairline so its edge is where the author put it. The
+   picture is document content: it is not inverted, dimmed or filtered. */
+.sp-b-image img {
+  max-width: 100%; height: auto; border-radius: var(--radius); display: block;
+  background: #fff; box-shadow: 0 0 0 1px rgb(var(--shade) / .12);
+}
 .sp-b-image figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+/* ————— tables —————
+   The block is `sp-b-table`; everything inside it is `sp-tb-*`. NOT `sp-col-*`
+   or `sp-cell-*`: `.sp-col` is already the board's column and `sp-col-resizing`
+   is already a body class, so a table column reusing either name would style
+   the tracker's board from four hundred lines away. */
+.sp-b-table { margin: 14px 0; position: relative; }
+/* A WIDE TABLE SCROLLS. The measure belongs to the document, so a six-column
+   table must not widen the prose column on a phone — it gets its own scroller
+   and the paragraph above it keeps its line length. */
+.sp-tb-wrap { overflow-x: auto; position: relative; }
+.sp-tb {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+  font-size: 15px; line-height: 1.5;
+}
+.sp-tb-cell {
+  border: 1px solid var(--line); padding: 7px 10px;
+  text-align: start; vertical-align: top; word-break: break-word;
+}
+.sp-tb thead .sp-tb-cell { background: var(--chrome); font-weight: 600; }
+/* Every cell gets a line box even when it is empty, or a table of blanks
+   collapses into a stack of hairlines with nowhere to click. A pseudo-element,
+   so it is not in the cell's innerHTML and can never reach the model. */
+.sp-tb-cell::after { content: ''; display: inline-block; width: 0; height: 1.5em; vertical-align: text-bottom; }
+.sp-tb-cell:focus { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+/* the tools ride over the block like .sp-imgtools, and appear on hover/focus */
+.sp-tb-tools {
+  position: absolute; inset-block-start: -13px; inset-inline-end: 0;
+  display: flex; gap: 4px; opacity: 0; transition: opacity .12s;
+  background: var(--surface); padding: 2px; border-radius: 8px; z-index: 2;
+}
+.sp-b-table:hover .sp-tb-tools, .sp-tb-tools:focus-within, .sp-b-table:focus-within .sp-tb-tools { opacity: 1; }
+.sp-tb-tools .sp-btn { font-size: 12px; padding: 2px 7px; }
+.sp-tb-tools .sp-on { background: var(--chrome-2); }
+
+/* The column-boundary grip: a hit target wider than the line it moves. It sits
+   in the WRAPPER, over the boundary, never inside a cell — a cell's innerHTML
+   is the model, so chrome parked in one gets written into the document (and
+   the caret lands in it). Editor chrome, added in wire(): the renderer is the
+   same for the reading view, print and the still preview. */
+.sp-tb-grip {
+  position: absolute; top: 0; width: 7px;
+  cursor: col-resize; z-index: 1; background: transparent; border: 0; padding: 0;
+}
+.sp-tb-grip:hover, body.sp-col-resizing .sp-tb-grip { background: color-mix(in srgb, var(--blue) 45%, transparent); }
 
 .sp-pagecard {
   display: flex; align-items: center; gap: 9px;
   padding: 10px 12px; margin: 6px 0;
   border: 1px solid var(--line); border-radius: var(--radius);
   color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px;
-  background: #fff;
+  background: var(--surface);
 }
 .sp-pagecard:hover { background: var(--chrome); }
 .sp-pagecard.sp-dead { color: var(--muted); font-style: italic; font-weight: 400; }
 
-.sp-page a { color: var(--ink); text-decoration: underline; text-decoration-color: rgb(247 166 0 / .55); text-underline-offset: 2px; }
+/* ————— link cards (outward) —————
+   Deliberately the page card's sibling: same border, radius and hover, so the
+   two read as one family and the difference a reader sees is the one that
+   matters — a host name at the foot means this one leaves the space. */
+.sp-b-link { position: relative; }
+.sp-linkcard {
+  display: flex; align-items: stretch; gap: 12px;
+  padding: 12px 14px; margin: 6px 0;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--ink); text-decoration: none; background: var(--surface);
+}
+.sp-linkcard:hover { background: var(--chrome); }
+.sp-page a.sp-linkcard { text-decoration: none; }
+.sp-linkcard.sp-dead { color: var(--muted); }
+.sp-linkcard-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.sp-linkcard-title { font-weight: 600; font-size: 14px; }
+.sp-linkcard.sp-dead .sp-linkcard-title { font-style: italic; font-weight: 400; }
+.sp-linkcard-desc {
+  font-size: 13px; color: var(--muted);
+  /* two lines, then an ellipsis: a card is a summary, and a pasted paragraph
+     must not turn one into a page of its own */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.sp-linkcard-site {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--muted);
+  /* a long url has no spaces to wrap at and would push the card wide */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-linkcard-mark { font-size: 13px; line-height: 1; }
+.sp-linkcard-img {
+  width: 88px; height: 66px; object-fit: cover; flex: none;
+  border-radius: calc(var(--radius) - 3px); background: var(--chrome);
+}
+.sp-linkcard-edit {
+  position: absolute; inset-block-start: 4px; inset-inline-end: 6px;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
+  font: inherit; font-size: 11px; color: var(--muted);
+  padding: 2px 7px; cursor: pointer; opacity: 0;
+}
+.sp-b-link:hover .sp-linkcard-edit, .sp-linkcard-edit:focus-visible { opacity: 1; }
+/* an EMPTY card's button is the only way in, so it never hides */
+.sp-linkcard.sp-dead + .sp-linkcard-edit { opacity: 1; }
+
+.sp-page a { color: var(--ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); text-underline-offset: 2px; }
 .sp-page a:hover { text-decoration-color: var(--accent); }
 
 /* ————— backlinks ————— */
@@ -325,14 +815,14 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 
 /* ————— menus + overlays ————— */
 .sp-overlay {
-  position: fixed; inset: 0; background: rgb(20 30 45 / .34);
+  position: fixed; inset: 0; background: rgb(var(--shade) / .34);
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: 11vh; z-index: 60;
 }
 .sp-card {
   width: min(560px, 92vw); max-height: 72vh; overflow: auto;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 18px 48px rgb(20 30 45 / .22); padding: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgb(var(--shade) / .22); padding: 12px;
 }
 .sp-card-h {
   font-size: 11px; font-weight: 600; text-transform: uppercase;
@@ -340,7 +830,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-find {
   width: 100%; font: inherit; font-size: 14px; padding: 9px 11px; color: var(--ink);
-  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--field); border: 1px solid var(--line); border-radius: 8px;
 }
 .sp-find:focus { border-color: var(--blue); outline: none; }
 .sp-results { list-style: none; margin: 8px 0 0; padding: 0; }
@@ -363,23 +853,29 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 
 /* the block menu is anchored to the caret, not centred on the screen */
 .sp-pop {
-  position: fixed; z-index: 60; width: 260px; max-height: 44vh; overflow: auto;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(20 30 45 / .2); padding: 6px;
+  /* max-height is set per placement by editor.ts place(), from the room the
+     anchor actually leaves. The 44vh that used to live here clipped the share
+     panel's primary action off the bottom on an ordinary laptop. This value is
+     only the fallback for a popover placed some other way. */
+  position: fixed; z-index: 60; width: 260px; max-height: 80vh; overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 6px;
 }
 
 /* ————— banners + gates ————— */
 .sp-banner {
   display: flex; align-items: center; gap: 10px; padding: 8px 14px;
-  background: #fff6dd; color: var(--accent-ink);
-  border-bottom: 1px solid rgb(247 166 0 / .35); font-size: 13.5px;
+  /* an accent WASH on whatever the ground is: `#fff6dd` was cream on white
+     and a bright card on a dark chrome. */
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg)); color: var(--accent-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); font-size: 13.5px;
 }
-.sp-banner .sp-btn { color: var(--accent-ink); border-color: rgb(122 82 0 / .25); }
+.sp-banner .sp-btn { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 30%, transparent); }
 .sp-gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--chrome); }
 .sp-gate-card {
-  max-width: 620px; background: #fff; padding: 26px;
+  max-width: 620px; background: var(--surface); padding: 26px;
   border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 14px 40px rgb(20 30 45 / .12);
+  box-shadow: 0 14px 40px rgb(var(--shade) / .12);
 }
 .sp-gate-card h1 { font-size: 21px; margin: 0 0 8px; letter-spacing: -0.01em; }
 .sp-gate-card p { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
@@ -392,13 +888,135 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-empty { color: var(--muted); }
 
-/* ————— about ————— */
-.sp-about .sp-card-h { margin-top: 20px; }
-.sp-about .sp-card-h:first-child { margin-top: 2px; }
-.sp-about-blurb { margin: 0 4px 10px; font-size: 14px; }
+/* ————— about —————
+   Slides' dialog, in this app's tokens: one scrolling card, sections with real
+   headings, and the weightier things last and marked. Everything that opens
+   inside it opens IN FLOW — the card scrolls, and a scroll container clips
+   BOTH axes (hard-won #10), so a floating child of it would be cut on the left
+   and the bottom with nothing to show for it. */
 .sp-note { color: var(--muted); font-size: 12.5px; margin: 6px 4px 10px; line-height: 1.55; }
+/* The card is a column with its own scroll, sized off the VIEWPORT rather than
+   a breakpoint: 375px wide with a 12px gutter and 1600px wide are the same
+   rule. `.sp-card`'s 72vh is for a find palette that wants to sit high; a
+   dialog this long wants the height, so it takes 88vh and centres. */
+.sp-overlay-about { align-items: center; padding: 12px; padding-top: 12px; }
+.sp-about {
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(88vh, calc(100vh - 24px));
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 2px;
+  /* Sections are flex items, and a flex item SHRINKS by default — which is how
+     slides' update block collapsed to its min-height and spilled its children
+     over the controls beneath it. Let the card scroll instead; that is what
+     its overflow is for. */
+  overscroll-behavior: contain;
+}
+.sp-about > * { flex-shrink: 0; }
+.sp-ab-sec {
+  padding-top: 14px; margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sp-about .sp-card-h { margin: 0 2px 8px; }
+/* the head and the promo line are the title of the dialog, not a section */
+.sp-ab-promo { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 6px 4px 2px; }
+.sp-ab-promo a { color: var(--blue); text-decoration: none; }
+.sp-ab-promo a:hover { text-decoration: underline; }
+
+/* What is in this file. Four numbers, and then the sentence that explains
+   them — a space is big because of its images, always. */
+.sp-ab-stats {
+  /* 112px, not 96: at 96 a 351px card fitted THREE and left the fourth alone
+     on its own row. 112 makes it 2×2 on a phone and one row of four on a
+     desktop card, which is the same readout either way rather than a ragged
+     one. Measured inner widths: 315px at 375, 524px at 1600. */
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px; margin: 0 2px 4px;
+}
+.sp-ab-stat {
+  background: var(--chrome); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; min-width: 0;
+}
+.sp-ab-stat b {
+  display: block; font-size: 17px; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.sp-ab-stat span { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+/* a labelled field, the shape slides' document properties use */
+.sp-ab-field { display: flex; align-items: center; gap: 10px; padding: 2px 4px 8px; }
+.sp-ab-field label { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
+.sp-ab-field .sp-input { flex: 1 1 auto; min-width: 0; }
+
+/* `.sp-btn` is transparent by design — the topbar is icon-only and a row of
+   outlined boxes there would be noise. In THIS card the same class has to read
+   as a control against a white panel with no hover to help it, so the dialog
+   gives every non-primary button its border back. Slides' about does exactly
+   this, for exactly this reason. */
+.sp-about .sp-btn { border-color: var(--line); background: var(--chrome); }
+.sp-about .sp-btn:hover { background: var(--chrome-2); }
+.sp-about .sp-primary { border-color: var(--ink); background: var(--ink); color: #fff; }
+.sp-about .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
+
+.sp-ab-check {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; color: var(--muted); cursor: pointer;
+  user-select: none; padding: 2px 4px 4px;
+}
+.sp-ab-status { display: flex; flex-direction: column; gap: 8px; }
+
+/* the one moment in the dialog with a decision in it, given its own room */
+.sp-ab-update {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 11px 13px; margin: 2px 4px;
+  border: 1px solid var(--line); border-radius: 10px;
+}
+.sp-ab-update .sp-note { margin: 0; }
+.sp-ab-new { font-weight: 650; font-size: 13.5px; }
+.sp-ab-release {
+  color: var(--ink-2); background: var(--chrome); border-radius: 8px;
+  padding: 9px 12px; line-height: 1.5; font-size: 12.5px;
+  /* Its OWN scroll region, sized off the viewport: release.mjs caps the notes
+     at five bullets plus an "…and N more" line, which fits whole at any normal
+     height, and anything longer scrolls HERE rather than the whole dialog. */
+  max-height: min(300px, 42vh); overflow-y: auto; overflow-wrap: anywhere;
+}
+.sp-ab-release > div + div { margin-top: 5px; }
+/* hanging indent: a wrapped bullet lines up under its own text, not the marker */
+.sp-ab-note { padding-inline-start: 14px; text-indent: -14px; }
+.sp-ab-note::before { content: '•\00a0'; }
+.sp-ab-more { color: var(--muted); font-style: italic; }
+.sp-ab-link { border-color: var(--line); }
+
+/* Weightier by construction: a marked button, and a confirmation that says
+   what will happen before the verb is offered. */
+.sp-about .sp-ab-danger { color: #a3231a; border-color: rgb(163 35 26 / .3); }
+.sp-about .sp-ab-danger:hover { background: #fdeceb; }
+.sp-ab-confirm {
+  margin: 8px 4px 2px; padding: 11px 13px;
+  background: #fdf4f3; border: 1px solid rgb(163 35 26 / .28); border-radius: 10px;
+}
+.sp-ab-confirm strong { display: block; font-size: 13.5px; }
+.sp-ab-confirm .sp-note { margin: 5px 0 8px; }
+.sp-ab-confirm .sp-actions { padding: 0; }
+.sp-about .sp-ab-go { background: #a3231a; color: #fff; border-color: #a3231a; }
+.sp-about .sp-ab-go:hover { background: #8a1d15; }
+.sp-ab-json {
+  width: 100%; margin-bottom: 8px;
+  font: 11.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink); background: #fff;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px; resize: vertical;
+}
+.sp-ab-json.sp-ab-bad { border-color: #a3231a; }
+
+.sp-ab-fine {
+  font-size: 10.5px; line-height: 1.5; color: var(--muted);
+  border-top: 1px solid var(--line); margin: 14px 4px 0; padding-top: 10px;
+}
+/* Close stays reachable at the end of the list rather than pinned over it: a
+   sticky footer inside a scroll container is one more thing to clip. */
+.sp-ab-foot { display: flex; justify-content: flex-end; padding: 10px 4px 2px; }
 .sp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px; font-size: 14px; }
-.sp-select { font: inherit; font-size: 13px; padding: 6px 8px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.sp-select { font: inherit; font-size: 13px; padding: 6px 8px; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
 .sp-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px; }
 .sp-mono { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 
@@ -414,29 +1032,82 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   .sp-side { display: none; }
   .sp-side.sp-open {
     display: block; position: fixed; inset: 0 auto 0 0; width: 268px;
-    z-index: 50; box-shadow: 0 0 50px rgb(20 30 45 / .3);
+    z-index: 50; box-shadow: 0 0 50px rgb(var(--shade) / .3);
     padding-top: max(14px, env(safe-area-inset-top));
   }
   [dir='rtl'] .sp-side.sp-open { inset: 0 0 0 auto; }
-  .sp-scrim { position: fixed; inset: 0; background: rgb(20 30 45 / .3); z-index: 45; }
-  .sp-main { padding: 26px 18px 45vh; }
-  /* THE GUTTER STAYS ON TOUCH. It used to be display:none here, on the
-     reasoning that there is no hover — but hover was how you reached the only
-     controls a block has, so hiding it meant a block could not be reordered or
-     deleted on a phone AT ALL. It is shown rather than hovered, and sized for
-     a thumb. */
-  .sp-gutter { opacity: 1; position: static; display: flex; justify-content: flex-end; margin-bottom: 2px; }
-  .sp-gutter .sp-ghost { width: 40px; height: 34px; }
+  .sp-scrim { position: fixed; inset: 0; background: rgb(var(--shade) / .3); z-index: 45; }
+  .sp-main { --sp-pad-x: 18px; --sp-pad-y: 26px; padding: var(--sp-pad-y) var(--sp-pad-x) 45vh; }
+  /* THE MARGIN THE GUTTER LIVES IN — see below — and it hangs off the PAGE, not
+     off `.sp-main`. `.sp-main` is chrome and follows the interface direction;
+     the gutter is anchored to a block, and blocks follow the DOCUMENT's
+     direction (`renderPage` puts `theme.dir` on `.sp-page-inner`). Reserving it
+     on the scroller sent the padding left while an rtl document sent the gutter
+     right: measured at 390px on a doc with `theme.dir: 'rtl'`, the gutter
+     landed at x = 378…412 and the column scrolled to 412. On the inner element
+     the two flip together. The end side is untouched: the page is not centred
+     at this width, so widening both would cost twice. */
+  .sp-page-inner { padding-inline-start: 26px; }
+  /* THE GUTTER STAYS ON TOUCH, AND STOPS TAKING A ROW.
+     It used to be display:none here, on the reasoning that there is no hover —
+     but hover was how you reached the only controls a block has, so hiding it
+     meant a block could not be reordered or deleted on a phone AT ALL. The fix
+     for that made it `position: static`, which put it IN the flow: measured at
+     390px, a one-line paragraph was 68px tall and 36px of that was the two
+     affordances. Half the page was chrome.
+     So it goes back to being absolutely positioned, the way it is on a desktop,
+     in a 44px start margin reserved for it — visible at rest (no hover to
+     discover it with), out of the flow, and costing 0px of height. It keeps ONE
+     control: the grip, whose menu already offers "Add below", so the ＋ is a
+     second button for something a thumb can already reach.
+     Measured: one-line paragraph 68.4px → 32.4px; the column loses 26px of
+     width (354 → 328) to buy it back. */
+  .sp-gutter { opacity: 1; top: 0; inset-inline-start: -40px; }
+  .sp-gutter .sp-ghost-add { display: none; }
+  /* 34×32 rather than a full 44: it must fit beside a 26px line of text without
+     overlapping the block above or below it, and the margin it sits in is
+     coming out of the prose. */
+  .sp-gutter .sp-ghost { width: 34px; height: 32px; }
+  .sp-gutter .sp-ghost svg { width: 17px; height: 17px; }
   .sp-title { font-size: 27px; }
 }
 
 /* ————— print: the only export-to-PDF path, so it is a contract ————— */
 @media print {
-  .sp-bar, .sp-side, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
-  .sp-main { overflow: visible; padding: 0; background: #fff; }
+  /* PAPER IS NOT A SCREEN. --sp-read grows with the viewport, and the viewport
+     while printing is whatever window happened to be open — so without this the
+     same document would set larger printed from a 27-inch monitor than from a
+     laptop. Pinned. */
+  :root {
+    --sp-read: 16px;
+    /* PAPER IS LIGHT, AND IT COSTS NOTHING TO SAY SO. Both dark blocks at the
+       top of this file are `@media screen`, so none of their tokens reach
+       here and the light palette is simply what applies — no third copy.
+       What DOES reach here is kernel/src/theme.ts's `color-scheme` on the
+       <html> element, which is an inline style and beats a media query; an
+       author !important is the one thing that beats an inline style. Without
+       it a dark reader's UA furniture prints dark over our white. */
+    color-scheme: only light !important;
+  }
+  .sp-bar, .sp-side, .sp-insp, .sp-insp-rz, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
+  .sp-tb-tools, .sp-tb-grip { display: none !important; }
+  .sp-main { overflow: visible; --sp-pad-x: 0px; --sp-pad-y: 0px; padding: 0; background: #fff; }
   .sp-toggle-body[hidden] { display: block !important; }  /* toggles print OPEN */
   .sp-b-h1, .sp-b-h2, .sp-b-h3, .sp-title { break-after: avoid; }
   .sp-b-code, .sp-b-image figure, .sp-b-quote { break-inside: avoid; }
+  /* A TABLE ON PAPER. The scroller is a screen affordance and would CLIP on
+     paper (an overflow box prints what fits and drops the rest), so it is
+     unwound; the header tint goes the way the callout's does, because browsers
+     do not print backgrounds by default and a table whose only header cue was
+     a fill would print with no header at all. The rules are what survive, and
+     they are black on white. A header row repeats across a page break, which
+     is the whole reason <thead> is a real element here. */
+  .sp-tb-wrap { overflow: visible; }
+  .sp-tb-cell { border-color: #999; }
+  .sp-tb thead .sp-tb-cell { background: none; border-bottom-width: 2px; }
+  .sp-tb thead { display: table-header-group; }
+  .sp-tb tr { break-inside: avoid; }
+  .sp-b-code, .sp-b-image figure, .sp-b-media figure, .sp-b-quote { break-inside: avoid; }
   /* A CALLOUT ON PAPER, IN BLACK AND WHITE.
      The tint is dropped rather than trusted: browsers do not print backgrounds
      by default, so a callout whose only cue was its fill would print as bare
@@ -457,8 +1128,8 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-ddmenu {
   display: none; position: absolute; top: calc(100% + 5px); inset-inline-start: 0;
   min-width: 250px; flex-direction: column; z-index: 60;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(20 30 45 / .2); padding: 5px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 5px;
 }
 .sp-dd.sp-open .sp-ddmenu { display: flex; }
 .sp-dd:last-child .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
@@ -498,7 +1169,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-choices { display: flex; gap: 8px; margin: 4px 0 12px; }
 .sp-choice {
   flex: 1 1 0; text-align: start; font: inherit; color: var(--ink);
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 10px 12px; cursor: pointer;
 }
 .sp-choice:hover { background: var(--chrome); }
@@ -534,13 +1205,50 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-b-image:hover .sp-imgtools, .sp-imgtools:focus-within { opacity: 1; }
 .sp-imgtools .sp-btn {
-  background: rgb(255 255 255 / .94); border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 94%, transparent); border-color: var(--line);
   font-size: 12px; padding: 4px 8px;
-  box-shadow: 0 2px 8px rgb(20 30 45 / .12);
+  box-shadow: 0 2px 8px rgb(var(--shade) / .12);
 }
 .sp-imgtools .sp-badge { color: var(--accent-ink); }
 .sp-b-image figure { position: relative; }
 .sp-page.sp-filedrop { outline: 2px dashed var(--blue); outline-offset: 8px; border-radius: var(--radius); }
+
+/* ————— video and audio —————
+   Same shape as an image: a <figure> in the column, tools that appear on
+   hover. A video is sized as a percentage of the measure like an image; an
+   audio element is a control bar, so it takes the full width and ignores the
+   width stepper (the editor does not offer one). */
+.sp-b-media { position: relative; }
+.sp-b-media figure { margin: 12px 0; position: relative; }
+.sp-b-media video { max-width: 100%; height: auto; border-radius: var(--radius); display: block; background: #000; }
+.sp-b-media audio { width: 100%; display: block; }
+.sp-b-media figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.sp-mediatools {
+  position: absolute; top: 8px; inset-inline-end: 8px;
+  display: flex; gap: 4px; opacity: 0; transition: opacity .12s;
+  flex-wrap: wrap; justify-content: flex-end;
+}
+.sp-b-media:hover .sp-mediatools, .sp-mediatools:focus-within { opacity: 1; }
+.sp-mediatools .sp-btn {
+  background: color-mix(in srgb, var(--surface) 94%, transparent); border-color: var(--line);
+  font-size: 12px; padding: 4px 8px;
+  box-shadow: 0 2px 8px rgb(var(--shade) / .12);
+}
+/* The still that paper and a file-manager thumbnail get instead of a player. */
+.sp-media-still {
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  background: var(--chrome-2); text-align: center;
+}
+.sp-media-still img { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 0 auto 8px; }
+.sp-media-badge { font-size: 13px; color: var(--muted); }
+/* A block whose source has not been chosen yet. */
+.sp-media-empty {
+  border: 1px dashed var(--line); border-radius: 10px; padding: 18px 20px;
+  background: var(--chrome-2);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+}
+.sp-media-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media print { .sp-media-empty { border-color: #999; background: none; } }
 
 /* ————— import ————— */
 .sp-dropzone {
@@ -559,7 +1267,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   color: var(--muted); background: transparent; cursor: pointer; opacity: 0;
 }
 .sp-treelink:hover .sp-rowmore, .sp-rowmore:focus { opacity: 1; }
-.sp-rowmore:hover { background: rgb(20 30 45 / .1); color: var(--ink); }
+.sp-rowmore:hover { background: var(--chrome-2); color: var(--ink); }
 .sp-rowmore svg { width: 14px; height: 14px; }
 
 /* ————— archived ————— */
@@ -579,15 +1287,15 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-findbar {
   position: absolute; top: 54px; inset-inline-end: 18px; z-index: 55;
   display: flex; align-items: center; gap: 6px; padding: 7px;
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(20 30 45 / .2);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2);
 }
 .sp-findbar .sp-find { width: 190px; padding: 6px 9px; font-size: 13.5px; }
 .sp-findcount { font-size: 12px; color: var(--muted); min-width: 68px; text-align: center; }
-.sp-b.sp-hit { background: rgb(247 166 0 / .22); border-radius: 4px; transition: background .5s; }
+.sp-b.sp-hit { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; transition: background .5s; }
 
 /* ————— reading view ————— */
-.sp-app.sp-reading .sp-main { padding-top: 56px; }
+.sp-app.sp-reading .sp-main { --sp-pad-y: 56px; padding-top: var(--sp-pad-y); }
 .sp-app.sp-reading .sp-doctitle { pointer-events: none; }
 .sp-btn.sp-on { background: var(--chrome-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .sp-app.sp-reading .sp-page-inner { font-size: 17px; }
@@ -612,7 +1320,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   /* .sp-btn is transparent by design (the topbar is icon-only), so this one
      states itself: it asks the reader to make a decision. */
   margin-top: 6px;
-  background: #fff;
+  background: var(--surface);
   border-color: var(--line);
   color: var(--ink);
   font-weight: 550;
@@ -622,22 +1330,132 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* Print shows the placeholder text, never a blank gap the reader can't explain. */
 @media print { .sp-remote { border-color: #999; background: none; } .sp-remote-load { display: none !important; } }
 
+/* The version timeline. A row is one button so the whole strip is the target —
+   a "Restore" word alone is a 44px miss on a touch screen. */
+.sp-ab-versions { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px; }
+.sp-ab-version {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 9px; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--ink); font: inherit; font-size: 13px;
+  text-align: start; cursor: pointer;
+}
+.sp-ab-version:hover { background: var(--chrome-2); border-color: var(--line); }
+.sp-ab-version:focus-visible { border-color: var(--blue); outline: none; }
+.sp-ab-when { font-variant-numeric: tabular-nums; }
+.sp-ab-vtag { color: var(--muted); font-size: 12px; }
+/* the verb sits at the end and only colours up on approach, so a list of ten
+   rows does not read as ten buttons all shouting at once */
+.sp-ab-vdo { margin-inline-start: auto; color: var(--muted); }
+.sp-ab-version:hover .sp-ab-vdo, .sp-ab-version:focus-visible .sp-ab-vdo { color: var(--blue); }
+
+/* The new-property form inside the add-property popover: a name, a type and a
+   button, on one line until the popover is too narrow for it. */
+.sp-newprop { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 6px 6px; }
+.sp-newprop .sp-input { flex: 1 1 120px; min-width: 0; }
+.sp-newprop .sp-select { flex: 0 1 auto; }
+.sp-newprop .sp-btn { flex: 0 0 auto; }
+
+/* The shortcut list. Two columns, keys right-aligned against their meanings,
+   so the eye runs down one edge instead of hunting across a ragged gap. */
+/* wider than the other cards, because this one is a two-column table and
+   .sp-card's 560px leaves 534px of content — four pixels short of two 260px
+   columns plus the gap, which silently collapsed the grid back to one */
+.sp-keys { width: min(720px, 92vw); max-width: none; }
+.sp-keys-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 30px; align-items: start;
+}
+.sp-keys-g { min-width: 0; }
+.sp-keys-h {
+  margin: 16px 2px 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sp-keys-g:first-child .sp-keys-h, .sp-keys-g:nth-child(2) .sp-keys-h { margin-top: 8px; }
+.sp-keys-list {
+  display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px;
+  margin: 0; align-items: baseline;
+}
+.sp-keys-list dt { justify-self: end; }
+.sp-keys-list dd { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.sp-kbd {
+  display: inline-block; padding: 2px 7px; font: inherit; font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+  background: var(--chrome-2); border: 1px solid var(--line);
+  border-radius: 6px; white-space: nowrap;
+}
+
 /* ————— narrow topbar: hide, never scroll —————
    Measured at 375px: the bar wanted 678px, so seven of eleven controls sat off
    the right edge — Save among them, which made the file unsaveable on a phone.
    The rule is slides' rule: drop text and fold the less-used controls into ⋯,
    so every action stays reachable at every width. A horizontally scrolling
    toolbar hides the same controls, just less honestly. */
-.sp-more { display: none; }
+/* ⋯ IS A HOME, NOT JUST AN OVERFLOW. It used to be display:none until the bar
+   folded, which was right while every command it held also had a button in the
+   bar. It no longer does: the commands you reach for once a session live here
+   at every width, so hiding it on a desktop would make New page, the journal,
+   import, print and About unreachable with a mouse. It still ALSO collects
+   whatever the bar drops as the window narrows. */
+.sp-more { display: inline-flex; }
 
-@media (max-width: 720px) {
-  .sp-sec { display: none; }
-  .sp-more { display: inline-flex; }
-  /* Save keeps its icon; the word costs 44px and says nothing the icon doesn't */
-  .sp-bar .sp-primary span.sp-savelabel { display: none; }
-  .sp-bar { gap: 2px; }
-  .sp-doctitle { font-size: 13px; }
+/* The tier starts at the DRAWER breakpoint (820px), not at 720. It was 720, and
+   measured at 768 — an iPad in portrait — the bar still laid out 795px wide: the
+   save caret ended at x = 795, 27px off the screen. 721–820 is the band where
+   the page list is already an overlay rather than a column, which is exactly the
+   band where the bar is competing with the document for width. One breakpoint,
+   one meaning. */
+/* ————— the topbar fits itself by MEASURING —————
+   These three tiers are applied by editor.ts fitTopbar(), which steps down
+   while the bar still overflows its own box. They were px media queries (820
+   and 600) until it became clear a px guess cannot answer the question being
+   asked: the same buttons need different room at the same viewport width
+   depending on browser zoom, OS text scaling, how long the labels are in the
+   reader's language — eight catalogs ship in every file — and live content
+   like the people count appearing when somebody joins. Slides settled this
+   first (#239); this is its pattern, with this app's controls. */
+
+/* compact: the words beside the icons go. Measured: Insert 76.6px labelled
+   against 40px as an icon; Save's word costs 44px and says nothing the icon
+   does not. */
+.sp-bar-compact .sp-primary span.sp-savelabel { display: none; }
+.sp-bar-compact .sp-btnlabel { display: none; }
+.sp-bar-compact { gap: 2px; }
+.sp-bar-compact .sp-doctitle { font-size: 13px; }
+
+/* tight: the wordmark loses its word, keeping the mark — which is the route
+   to About, and the corner every app in the suite puts it in. */
+.sp-bar-tight .sp-mark-word { display: none; }
+
+/* fold: whole controls move into ⋯. Nothing is lost, everything is one tap
+   away, and the editor asks the DOM which tier is live rather than re-deriving
+   it from a width — see fitTopbar. */
+.sp-bar-fold .sp-sec { display: none; }
+.sp-bar-fold .sp-mark { display: none; }
+.sp-bar-fold .sp-group-history { display: none; }
+.sp-bar-fold .sp-split .sp-caret { display: none; }
+/* with the caret gone Save is one button again, not the left half of two */
+.sp-bar-fold .sp-split > .sp-btn:first-child {
+  border-start-end-radius: 8px; border-end-end-radius: 8px;
+  padding-inline-end: 14px;
 }
+/* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
+   ("Reading view — press Esc or the eye to edit" is ~250px) would shove the
+   bar into overflow for the 1.8s it is up and put Save off-screen again.
+   Overlaid on the title strip it says its piece and costs no width. */
+.sp-bar-fold { position: relative; }
+.sp-bar-fold .sp-status {
+  position: absolute; z-index: 2; pointer-events: none;
+  inset-inline: 46px 96px; bottom: 2px; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; background: var(--bg);
+}
+
+/* Belt and braces at every width: a status message can shrink and clip, but it
+   can never be the reason a control leaves the bar — nor the reason the bar
+   changes tier. Basis 0 keeps the message out of the bar's intrinsic width, so
+   text arriving cannot push fitTopbar into hiding labels and resizing buttons
+   under the pointer; grow lets it use whatever slack is going, and it
+   ellipsises when there is none. */
+.sp-status { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Hit targets: a 30px button is a miss on a touch screen. */
 @media (pointer: coarse) {
@@ -688,7 +1506,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   height: 100%; padding: 6px 6px;
   border-start-start-radius: 0; border-end-start-radius: 0;
   margin-inline-start: 1px;
-  background: var(--ink); color: #fff;
+  background: var(--ink); color: var(--bg);
 }
 .sp-split .sp-caret > .sp-btn:hover { background: var(--ink-2); }
 
@@ -701,12 +1519,24 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-dirty.sp-on { opacity: 1; }
 
-@media (max-width: 720px) {
-  /* the mark stays — it is the route to About — but loses its word */
-  .sp-mark { display: inline-flex; }
-  .sp-mark-word { display: none; }
-}
+/* ————— phone topbar: the second tier —————
+   The first tier folds the six secondary actions into ⋯. That was not enough:
+   measured on a 390×844 viewport with a coarse pointer, the bar still laid out
+   467px wide inside 390px and Save's right edge landed at x = 426 — the primary
+   action, 36px off the screen. What is left after ⋯ is still eleven controls'
+   worth of 40px touch targets, and eleven of those do not fit in 390.
 
+   So a phone gives up, in this order and for these reasons:
+     · the wordmark — About is the first thing in ⋯, and the mark is only a
+       route to it (35px)
+     · undo/redo — added to ⋯ instead, where they carry their shortcut and
+       their disabled state (84px)
+     · the save caret — every one of its four items is in ⋯ or in About: Print
+       and About directly, Save-a-copy and Export-as-Markdown appended there on
+       a phone, Password inside About (48px)
+   Save itself never moves. Measured after, coarse pointer, scrollWidth ==
+   clientWidth at every one: 320 (Save's right edge 308), 375 (363), 390 (378),
+   768 (725, and the rightmost control at 756). */
 /* About opens with the suite's mark, as slides does — a dialog that starts on a
    section heading does not say what you are looking at. */
 .sp-about-head { margin-bottom: 4px; }
@@ -714,8 +1544,14 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   display: inline-flex; align-items: center; gap: 10px;
   text-decoration: none; color: inherit;
 }
-.sp-about-logo b { display: block; font-size: 15px; letter-spacing: -0.01em; }
-.sp-about-logo span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.sp-about-logo b { display: block; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; }
+/* `b + span`, NOT a bare `span`. The wordmark's peach slash is a `<span>`
+   INSIDE the `<b>`, so a rule for "the version line" was making it
+   display:block — and a block in the middle of a line breaks the line on both
+   sides. The mark rendered as three stacked lines ("bento" / "/" / "spaces")
+   from the day it shipped; measured with a Range over the b's text: rects at
+   y=79 (w 42), y=98 (w 4) and y=112 (w 51). The selector is the whole fix. */
+.sp-about-logo b + span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
 .sp-about-logo:hover b { text-decoration: underline; }
 
 /* ————— the panel edge: resize here, collapse here —————
@@ -728,7 +1564,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   transition: background .12s ease .08s;
 }
 .sp-resizer:hover,
-body.sp-col-resizing .sp-resizer { background: rgb(91 141 239 / .45); }
+body.sp-col-resizing .sp-resizer { background: color-mix(in srgb, var(--blue) 45%, transparent); }
 body.sp-col-resizing { cursor: col-resize; user-select: none; }
 .sp-noanim { transition: none !important; }
 
@@ -741,12 +1577,12 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   transform: translate(-50%, -50%);
   width: 16px; height: 44px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: #fff; color: #5d6b80;
+  background: var(--surface); color: var(--muted);
   border: 1px solid var(--line); border-radius: 8px;
   cursor: pointer; z-index: 15;
-  box-shadow: 0 1px 4px rgb(20 30 45 / .12);
+  box-shadow: 0 1px 4px rgb(var(--shade) / .12);
 }
-.sp-pane-tab:hover { color: var(--ink); border-color: #b9c3d2; }
+.sp-pane-tab:hover { color: var(--ink); border-color: var(--edge); }
 .sp-pane-tab svg { width: 13px; height: 13px; display: block; }
 
 /* Collapsed: the panel takes no width and the strip carries only the chevron,
@@ -777,6 +1613,119 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   .sp-panel-toggle { display: inline-flex; }
 }
 
+/* ————— the properties panel —————
+   The sibling of the page list, on the other edge, with the SAME resizer strip
+   and the SAME chevron. Two collapse idioms in one window would be two things
+   to learn for one behaviour.
+
+   IT COSTS NOTHING WHILE CLOSED, and that is the whole point of the rule
+   rather than a nicety: the wide-page work that shipped one commit before this
+   gives the column the window's slack, and a panel holding 280px of it open by
+   default would take that back on every screen. Closed is `flex-basis: 0`, no
+   padding and no border — `.sp-main` is `flex: 1 1 auto`, so the column is the
+   width it would be if this file did not exist. */
+.sp-insp {
+  flex: 0 0 var(--sp-inspw, 280px); min-width: 0;
+  transition: flex-basis .18s ease, padding .18s ease;
+  border-inline-start: 1px solid var(--line); background: var(--bg);
+  overflow: auto; padding: 10px 10px max(16px, env(safe-area-inset-bottom));
+}
+.sp-insp.sp-pane-closed {
+  flex-basis: 0; padding-inline: 0; border-inline-start-width: 0; overflow: hidden;
+}
+/* Mirror of the page list's strip. The chevron docks to the END edge when the
+   panel is shut, so there is always a way back in. */
+.sp-insp-rz.sp-shut { cursor: default; }
+.sp-insp-rz.sp-shut:hover { background: transparent; }
+.sp-insp-rz.sp-shut .sp-pane-tab {
+  inset-inline-end: 0; left: auto; transform: translateY(-50%);
+}
+
+.sp-insp-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted);
+  margin: 2px 6px 8px;
+}
+/* The accordion header. Clicking anywhere on it opens or shuts the group — the
+   same retrofit slides applies to `.ed-section`, so a section added below is
+   collapsible without anyone remembering to make it so. */
+.sp-insp-sec {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 4px; padding: 5px 6px;
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  border-radius: 7px; cursor: pointer; user-select: none;
+}
+.sp-insp-sec:hover { background: var(--chrome-2); }
+.sp-insp-sec::before {
+  content: '▾'; font-size: 9px; color: var(--muted); width: 9px;
+}
+.sp-insp-sec.sp-shut::before { content: '▸'; }
+.sp-insp-sub {
+  margin-inline-start: auto; font-weight: 400; font-size: 11.5px;
+  color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-insp-body { display: block; }
+.sp-insp-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 4px 6px; font-size: 13px;
+}
+.sp-insp-lbl { color: var(--ink-2); flex: 0 1 auto; min-width: 0; }
+.sp-insp-row > :not(.sp-insp-lbl) { flex: 0 0 auto; max-width: 60%; }
+.sp-insp-txt, .sp-insp-num {
+  font: inherit; font-size: 12.5px; color: var(--ink);
+  background: var(--field); border: 1px solid var(--line); border-radius: 7px;
+  padding: 4px 7px; width: 148px; min-width: 0;
+}
+.sp-insp-num { width: 64px; }
+.sp-insp-txt:focus, .sp-insp-num:focus { outline: none; border-color: var(--blue); }
+.sp-insp-tog { width: 15px; height: 15px; accent-color: var(--blue); }
+.sp-insp-step { display: inline-flex; align-items: center; gap: 2px; }
+.sp-insp-step .sp-btn { padding: 2px 8px; line-height: 1.2; }
+.sp-insp-n { min-width: 26px; text-align: center; font-variant-numeric: tabular-nums; }
+.sp-insp-icon { padding: 4px 8px; }
+.sp-insp-icon svg { width: 15px; height: 15px; }
+.sp-insp-hint {
+  margin: 4px 6px 8px; font-size: 12px; line-height: 1.45; color: var(--muted);
+}
+/* Measurements of the page, not advice about it. Set apart from the hint above
+   by a rule and tabular figures, so the numbers line up and read as data. */
+.sp-insp-stat {
+  margin: 10px 6px 8px; padding-top: 8px; border-top: 1px solid var(--line);
+  font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.sp-insp .sp-select { max-width: 100%; }
+
+/* THE SAME BARGAIN THE PAGE LIST MAKES BELOW THE BREAKPOINT: an overlay, not a
+   third column. 820px of window does not hold two panels and a page. */
+@media (max-width: 820px) {
+  .sp-insp-rz { display: none; }
+  .sp-insp { display: none; }
+  .sp-insp.sp-open {
+    display: block; position: fixed; inset: 0 0 0 auto; width: 288px;
+    z-index: 50; box-shadow: 0 0 50px rgb(var(--shade) / .3);
+    padding-top: max(14px, env(safe-area-inset-top));
+  }
+  [dir='rtl'] .sp-insp.sp-open { inset: 0 auto 0 0; }
+}
+
+/* THE BUTTON IS SHOWN AT EVERY WIDTH, and this is a correction.
+   It was hidden above the breakpoint on the reasoning that the chevron on the
+   resizer strip is already the control, and that a second one would be the
+   duplication `.sp-panel-toggle` avoids. That argument holds for the PAGE LIST,
+   which is open by default: its chevron sits on the visible edge of a visible
+   panel. This panel is closed by default — deliberately, so it costs the
+   reading column nothing — which leaves a 5px strip as the only affordance.
+   Measured at 2560px: a 5×1353 target at x=2555, hard against the screen edge,
+   for a panel that is 0px wide. Reported as "how can I show the right panel?",
+   which is the question a control nobody can find produces. */
+.sp-insp-toggle { display: inline-flex; }
+/* …AND NOT EVEN THERE ONCE THE BAR HAS FOLDED. Measured at 375px: the 40px
+   button took the document title from 70px to 26px. fitTopbar hands out the
+   tier as a class precisely so a control can ask "is there room for me" rather
+   than re-derive a breakpoint; below the fold this one lives in the ⋯ menu, the
+   same place undo/redo and the other ways to save go. */
+.sp-bar-fold .sp-insp-toggle { display: none; }
+
 /* A disabled action is shown, not hidden: "move up" missing from the top block
    is a menu that changes shape, and a menu that changes shape is one you have
    to re-read every time. */
@@ -788,7 +1737,7 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 .sp-pop.sp-sheet {
   position: fixed; inset-inline: 8px; bottom: max(8px, env(safe-area-inset-bottom));
   top: auto; width: auto; max-height: 62vh; border-radius: 14px;
-  padding: 8px; box-shadow: 0 -8px 40px rgb(20 30 45 / .28);
+  padding: 8px; box-shadow: 0 -8px 40px rgb(var(--shade) / .28);
   transform: translateY(8px); opacity: 0;
   transition: transform .16s ease, opacity .16s ease;
 }
@@ -813,7 +1762,7 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--line); border-radius: 7px;
   padding: 3px 9px; cursor: pointer;
 }
-button.sp-prop-val:hover { background: #fff; border-color: #b9c3d2; }
+button.sp-prop-val:hover { background: var(--surface); border-color: var(--edge); }
 .sp-prop-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--line); flex: 0 0 auto;
@@ -823,7 +1772,7 @@ button.sp-prop-val:hover { background: #fff; border-color: #b9c3d2; }
 .sp-view-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .sp-view-btn { font-size: 12.5px; padding: 4px 9px; }
 .sp-view-btn:first-of-type { margin-inline-start: auto; }
-.sp-view-btn.sp-on { background: var(--chrome-2); border-color: #b9c3d2; color: var(--ink); }
+.sp-view-btn.sp-on { background: var(--chrome-2); border-color: var(--edge); color: var(--ink); }
 /* a field's name above its values, in the filter picker */
 .sp-fgroup { display: block; padding: 9px 9px 3px; font-size: 12px; color: var(--muted); }
 .sp-view-title { font-weight: 650; font-size: 15px; }
@@ -857,10 +1806,10 @@ button.sp-prop-val:hover { background: #fff; border-color: #b9c3d2; }
    is the fix that cannot come back. */
 .sp-issue {
   display: block; position: relative; color: inherit;
-  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
   padding: 9px 10px; margin-bottom: 7px;
 }
-.sp-issue:hover { border-color: #b9c3d2; box-shadow: 0 2px 8px rgb(20 30 45 / .07); }
+.sp-issue:hover { border-color: var(--edge); box-shadow: 0 2px 8px rgb(var(--shade) / .07); }
 /* `.sp-page a` underlines every link in the reading column and out-specifies a
    bare class — a card title is a card, not a link in a sentence. */
 .sp-page a.sp-issue-title, .sp-issue-title { display: block; font-size: 13.5px; line-height: 1.4; color: inherit; text-decoration: none; }
@@ -881,7 +1830,7 @@ button.sp-issue-set {
   /* a finger's target, not a mouse's */
   padding: 4px 8px; min-height: 26px;
 }
-button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; }
+button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edge); }
 /* A FINGER: the status button is the only way to move an issue where HTML5
    drag does not exist, so on a touch device it gets a target worth aiming at.
    BOTH predicates — `coarse` is the honest one, and the width is the one a
@@ -899,6 +1848,55 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   content: ''; display: block; height: 2px; border-radius: 2px;
   background: var(--accent); margin: 0 1px;
 }
+/* THE TABLE. Rows are pages, so the first column reads as a list of links and
+   the rest as data: tabular figures, a quiet rule under the head, and no
+   vertical lines — a grid of boxes is a spreadsheet, and this is a list of
+   documents that happens to have columns. */
+.sp-view-tablewrap { overflow-x: auto; margin: 0 0 4px; }
+.sp-view-table {
+  border-collapse: collapse; width: 100%; font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+.sp-view-table th {
+  text-align: start; font-weight: 600; font-size: 12px; color: var(--muted);
+  padding: 4px 12px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.sp-view-table td {
+  padding: 7px 12px 7px 0; border-bottom: 1px solid var(--line-2, var(--line));
+  vertical-align: baseline;
+}
+.sp-view-table tr:last-child td { border-bottom: 0; }
+.sp-view-table tr:hover td { background: var(--chrome); }
+/* the page's own column carries the weight; the values are supporting text */
+.sp-view-table td:first-child { font-weight: 500; }
+.sp-view-cellink { color: var(--ink); text-decoration: none; }
+.sp-view-cellink:hover { text-decoration: underline; }
+.sp-view-empty { color: var(--ph, var(--muted)); }
+/* A HEADER AND A CELL ARE CONTROLS, and they say so only on approach: a table
+   whose every box is drawn as a button reads as a form, and this is a document.
+   So no chrome at rest, a tint on hover, and a real focus ring — the keyboard
+   is the one reader that cannot hover, and it must still be able to see where
+   it is. */
+.sp-view-sort {
+  font: inherit; color: inherit; background: none; border: 0; border-radius: 5px;
+  padding: 2px 4px; margin: 0 0 0 -4px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.sp-view-sort:hover { background: var(--chrome); color: var(--ink); }
+.sp-view-sort.sp-on { color: var(--ink); }
+.sp-sortdir { font-size: 10px; line-height: 1; }
+.sp-view-cell {
+  font: inherit; color: inherit; background: none; border: 0; border-radius: 5px;
+  padding: 2px 6px; margin: -2px 0 -2px -6px; cursor: pointer; text-align: start;
+  max-width: 100%; min-width: 2.2em;
+}
+.sp-view-cell:hover { background: var(--chrome); box-shadow: inset 0 0 0 1px var(--line); }
+.sp-view-sort:focus-visible, .sp-view-cell:focus-visible {
+  outline: 2px solid var(--accent, currentColor); outline-offset: 1px;
+}
+/* a select's value, the same chip the header strip and the board cards use */
+.sp-prop-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
 .sp-view-list { list-style: none; margin: 0; padding: 0; }
 .sp-view-list li { margin: 0 0 6px; }
 
@@ -910,4 +1908,478 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: #b9c3d2; 
   .sp-col { break-inside: avoid; margin-bottom: 10px; }
   .sp-issue { box-shadow: none; }
   .sp-prop-val { background: none; }
+}
+
+/* Journal: the day strip above an entry's title. Quiet by default — it is
+   navigation, not content — and the date reads at the weight of a subtitle. */
+.sp-jnav { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.sp-jdate { font-size: 13px; color: var(--muted); }
+.sp-jstep {
+  border: 0; background: none; cursor: pointer; color: var(--muted);
+  font: inherit; font-size: 13px; line-height: 1; padding: 3px 6px; border-radius: 6px;
+}
+.sp-jstep:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-jtoday { margin-inline-start: 2px; }
+/* Magic notes. The answer is OUTPUT, not text: it sits beside the line in the
+   accent, lighter than the writing, so a page of prose with one sum in it
+   still reads as prose. The ghost preview is the same thing at half strength —
+   it has not been committed to the document yet, and it should not look as
+   though it has. */
+/* `.sp-text` is display:block, so a sibling drops to its own line however it
+   is floated — a float after a full-width block has nothing to sit beside. The
+   host goes INLINE instead, and only on a block that actually has an answer,
+   so nothing else in the editor changes. The answer stays a SIBLING rather
+   than moving inside the host: inside, contentEditable would hand it back on
+   the next keystroke and the derived number would be committed to the file. */
+.sp-b:has(> .sp-ans) > .sp-text { display: inline }
+
+.sp-ans {
+  margin-inline-start: .45em;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  user-select: none;
+}
+.sp-b:has(> .sp-preview) > .sp-text { display: inline }
+
+.sp-preview {
+  margin-inline-start: .45em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  opacity: .8;
+}
+.sp-preview kbd {
+  font: inherit; font-size: .82em; opacity: .8;
+  border: 1px solid currentColor; border-radius: 4px; padding: 0 .3em;
+  margin-inline-start: .4em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sp-preview { animation: sp-ghost-in .12s ease-out }
+  @keyframes sp-ghost-in { from { opacity: 0 } to { opacity: .75 } }
+}
+
+/* ---- who else is here ---------------------------------------------------
+   Presence has to be legible without being loud: a shared space is still a
+   document, and a colleague reading a page two levels down the tree is not an
+   event. Dots, not banners. */
+
+.sp-live {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  border-radius: 8px; padding: 5px 8px; cursor: pointer; font: inherit; line-height: 1;
+}
+.sp-live:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-live .sp-ico { display: inline-flex; }
+.sp-live .sp-ico svg { width: 17px; height: 17px; }
+.sp-live-n:empty { display: none; }
+.sp-live-n { font-size: 12px; font-variant-numeric: tabular-nums; }
+/* LIVE is a state worth seeing at a glance, and OFF must not look broken —
+   the overwhelmingly common case is a document nobody is sharing, and a red
+   or struck-through control would make normal use look like a fault. */
+.sp-live-on { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 45%, var(--line)); }
+.sp-live-off { opacity: .75; }
+/* dialling, or retrying after a drop — not a failure yet, and not "off" */
+.sp-live-wait { opacity: .75; animation: sp-live-pulse 1.4s ease-in-out infinite; }
+@keyframes sp-live-pulse { 50% { opacity: 1; } }
+
+.sp-presence { display: inline-flex; gap: 2px; margin-inline-start: auto; padding-inline-start: 6px; }
+.sp-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  /* the dot's fill is a generated saturated hue set inline by collabui, so
+     its ink is white on both grounds — not a chrome surface. */
+  font-size: 9px; font-weight: 700; color: #fff;
+  text-transform: uppercase; letter-spacing: 0;
+}
+.sp-dot-more { background: var(--chrome-2); color: var(--muted); }
+
+.sp-people { min-width: 260px; padding: 10px; }
+.sp-pop-title { font-weight: 650; margin: 0 0 8px; }
+.sp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.sp-field-lbl { font-size: 12px; color: var(--muted); }
+.sp-input {
+  font: inherit; padding: 6px 8px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%;
+}
+.sp-plist { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.sp-pitem {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 0; background: none; font: inherit; color: inherit;
+  padding: 5px 6px; border-radius: 7px; cursor: pointer; text-align: start;
+}
+.sp-pitem:hover { background: var(--chrome-2); }
+.sp-pname { font-weight: 550; }
+/* where they are, quietly — the page title is context, not the subject */
+.sp-ppage { color: var(--muted); font-size: 12px; margin-inline-start: auto;
+  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-pempty, .sp-pnote { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.sp-pacts { display: flex; flex-direction: column; gap: 4px; }
+.sp-paction {
+  display: flex; flex-direction: column; gap: 1px; text-align: start;
+  border: 0; background: none; font: inherit; color: inherit;
+  padding: 7px 8px; border-radius: 7px; cursor: pointer;
+}
+.sp-paction:hover { background: var(--chrome-2); }
+.sp-paction span { color: var(--muted); font-size: 12px; }
+
+/* THIS device's row in the People list: it is you, so it is not a target. */
+.sp-pme { cursor: default; }
+.sp-pme:hover { background: none; }
+
+/* Remove, on a peer row. Deliberately faint until the row is hovered — a
+   revocation is one click and it is not undoable, so it must not read as
+   part of the row's own affordance (clicking a person FOLLOWS them). */
+.sp-pkick {
+  margin-inline-start: 6px; padding: 0 4px; border-radius: 5px;
+  color: var(--muted); font-size: 12px; line-height: 1.6; opacity: 0;
+}
+.sp-pitem:hover .sp-pkick { opacity: 1; }
+.sp-pkick:hover { background: color-mix(in srgb, var(--c-red) 18%, transparent); color: var(--c-red); }
+
+/* The connection line. One glance = which of the five states this copy is in,
+   and the dot carries the colour so the words never have to. */
+.sp-pstatus { font-size: 12px; color: var(--muted); margin: 2px 0 8px; }
+.sp-pstatus.ok { color: var(--accent-ink); }
+
+/* A heading inside a menu: the three width rows are a CHOICE among themselves,
+   not three more actions in the list above them. */
+.sp-menu-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 10px 4px; margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+/* ————— review comments —————
+   A marker sits in the END margin, opposite the block gutter: outside the text
+   column, so it never reflows the prose it is about, and beside the line it
+   refers to. Page-level threads sit in a row under the title instead, because
+   the page's identity is what they are about. Both are chrome — the print
+   sheet below drops them, and the reading view never paints them. */
+.sp-cm-mark {
+  position: absolute; inset-inline-end: -34px; top: 2px;
+  min-width: 21px; height: 21px; padding: 0 5px;
+  border: 1px solid var(--line); border-radius: 10px 10px 10px 3px;
+  background: var(--surface); color: var(--muted);
+  font: inherit; font-size: 11px; font-weight: 650; line-height: 19px;
+  cursor: pointer;
+}
+.sp-cm-mark:hover { border-color: var(--accent); color: var(--accent-ink); }
+/* resolved is QUIET, never gone: the argument is still in the file */
+.sp-cm-done { opacity: .45; }
+.sp-cm-new { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent); }
+/* the page-level row is in the flow, so its markers are too */
+.sp-cm-row { display: flex; gap: 4px; margin: 0 0 10px; }
+.sp-cm-row .sp-cm-mark { position: static; }
+/* the tree badge: a page with unanswered comments, seen from another page */
+.sp-cm-badge {
+  margin-inline-start: auto; flex: 0 0 auto;
+  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+  /* ink ON the fill, and the fill is brand: --accent-on does not flip. */
+  background: var(--accent); color: var(--accent-on);
+  font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center;
+}
+.sp-cm-pop { width: 290px; }
+.sp-cm-head {
+  display: flex; align-items: baseline; gap: 8px; justify-content: space-between;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); padding: 4px 6px 8px;
+}
+.sp-cm-me {
+  border: 0; background: none; font: inherit; font-size: 11px; text-transform: none;
+  letter-spacing: 0; color: var(--muted); cursor: pointer; padding: 0;
+}
+.sp-cm-me:hover { color: var(--ink); }
+.sp-cm-entries { display: flex; flex-direction: column; gap: 8px; padding: 0 6px 8px; }
+.sp-cm-entry b { font-size: 12.5px; }
+.sp-cm-time { color: var(--muted); font-size: 11px; margin-inline-start: 6px; }
+.sp-cm-entry p { margin: 2px 0 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sp-cm-reply {
+  width: 100%; resize: vertical; font: inherit; font-size: 13px;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--field);
+}
+.sp-cm-foot { display: flex; gap: 6px; padding: 8px 6px 4px; }
+@media (max-width: 820px) {
+  /* no end margin is reserved at this width — the marker tucks into the
+     column's own end edge rather than off the side of the screen */
+  .sp-cm-mark { inset-inline-end: 0; }
+}
+@media print { .sp-cm-mark, .sp-cm-row { display: none !important; } }
+
+/* ————— page covers ————— */
+/* A COVER IS FULL-BLEED. It belongs to the page rather than to the prose, so
+   it ignores the measure and escapes the reading column's padding — which is
+   why that padding is `--sp-pad-x/y` rather than four literals scattered
+   through this file. The height is viewport-relative with a floor and a
+   ceiling: a fixed 200px is a stripe on a large screen and half the window on
+   a short one. */
+.sp-cover {
+  /* NO BOTTOM MARGIN. It used to be 26px, and the inner column's -30px lift is
+     its ADJACENT SIBLING, so the two collapsed to -4px: measured, cover bottom
+     317 against icon top 313. The disc sat tangent to the picture and the
+     comment below described an arrangement that was not happening. The air
+     under the cover is the inner's business now, because only one of the two
+     can own it. */
+  margin: calc(-1 * var(--sp-pad-y, 0px)) calc(-1 * var(--sp-pad-x, 0px)) 0;
+  height: clamp(150px, 30vh, 320px);
+  overflow: hidden; position: relative; background: var(--chrome-2);
+  /* A near-white photograph — a scan, snow, a whiteboard — is the same colour
+     as the page, so without an edge it reads as "the image failed to load"
+     rather than as a picture. An inset hairline costs nothing and is invisible
+     on every other image. */
+  box-shadow: inset 0 0 0 1px rgb(var(--shade) / .08);
+}
+.sp-cover-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* The lift is what makes it read as a cover rather than as a banner sitting on
+   top of a document: the title rises INTO the picture's lower edge, which is
+   the arrangement everyone recognises. A scrim under the title would fight the
+   page background in one theme or the other, so the page's own background does
+   the work — the column is opaque and the picture ends behind it. */
+/* WHAT MAKES IT A COVER RATHER THAN A BANNER: the page's own icon rides up
+   over the picture's lower edge, on the column's own left margin. That is the
+   arrangement everybody recognises, and the icon is the thing to lift — the
+   title is a line of text and putting THAT over a photograph means a scrim,
+   contrast rules and a colour that works over every possible image. A 54px
+   disc in the page background does not. */
+/* THE LIFT IS THE ICON'S, so it only applies where an icon renders. The reading
+   view draws no page icon, and the lift still applied there: measured, cover
+   bottom 197 against title top 193 — the TITLE on the photograph, unscrimmed,
+   which is the one thing the comment above says this design exists to avoid. It
+   survived over a dark sky and would not over a light one. `:has()` asks the
+   only question that matters — is there a disc to do the lifting. */
+.sp-page.sp-has-cover .sp-page-inner { position: relative; margin-top: 26px; }
+.sp-page.sp-has-cover .sp-page-inner:has(> .sp-pageicon) { margin-top: -26px; }
+.sp-page.sp-has-cover .sp-pageicon {
+  width: 58px; height: 58px; margin-inline-start: -6px; margin-bottom: 2px;
+  background: var(--bg); border-radius: 14px; color: var(--ink-2, var(--ink));
+  box-shadow: 0 1px 4px rgb(var(--shade) / .16);
+}
+.sp-page.sp-has-cover .sp-pageicon:hover { background: var(--chrome-2); }
+.sp-page.sp-has-cover .sp-pageicon svg { width: 32px; height: 32px; }
+/* an emoji icon is TEXT in that box, and 34px is the size that fills it */
+.sp-page.sp-has-cover .sp-pageicon { font-size: 32px; line-height: 1; }
+@media print {
+  /* on paper the picture is the picture; the lift is a screen affordance, and
+     the icon is hidden in print anyway */
+  .sp-cover { height: 5cm; margin-bottom: 10mm; break-inside: avoid; }
+  .sp-page.sp-has-cover .sp-page-inner { margin-top: 0; }
+}
+
+/* ————— the gallery ————— */
+/* THE SHAPE THAT MAKES A READING LIST LOOK LIKE ONE. Cards are as wide as they
+   need to be and the grid decides how many fit — `auto-fill` with a minimum,
+   never a column count, so the same view is three across in the panel-open
+   editor and five across on a wide screen without anybody configuring it. */
+.sp-gallery {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  margin-bottom: 4px;
+}
+.sp-gcard {
+  position: relative; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden;
+}
+.sp-gcard:hover { border-color: var(--edge); box-shadow: 0 4px 14px rgb(var(--shade) / .10); }
+.sp-gcard-shot {
+  aspect-ratio: 3 / 2; background: var(--chrome-2);
+  /* the same floor the page cover gets: a white picture still has an edge */
+  box-shadow: inset 0 0 0 1px rgb(var(--shade) / .08);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.sp-gcard-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* A CARD WITH NO COVER IS NOT A HOLE. Its own hue, derived from the page id, so
+   a gallery nobody has given pictures to still reads as a set of distinct
+   things. `hsl` with an alpha keeps it a tint in both themes rather than a
+   colour that glows on the dark one. */
+.sp-gcard-bare {
+  background:
+    linear-gradient(150deg, hsl(var(--h, 210) 62% 62% / .30), hsl(calc(var(--h, 210) * 1deg + 40deg) 62% 58% / .16));
+}
+/* --ink-2, not --muted: a grey letter on a 30% tint was the same value as the
+   tint in the dark theme. */
+.sp-gcard-mark { font-size: 34px; line-height: 1; color: var(--ink-2, var(--ink)); font-weight: 600; }
+.sp-gcard-ico svg { width: 30px; height: 30px; }
+.sp-gcard-body { padding: 10px 11px 11px; }
+/* CLAMPED. One four-line title inflates its grid row and every card beside it
+   gets stretched with dead space under a one-line title — measured at seven
+   columns, six cards carrying ~60px of nothing. Two lines is the difference
+   between a grid and a pile. (`a.sp-gcard` is dead — the card is a div — so the
+   selector loses it.) */
+/* SPECIFICITY, not source order. `.sp-gcard .sp-issue-title` is (0,2,0) and
+   loses to `.sp-page a.sp-issue-title` (0,2,1) further up, which sets
+   `display: block` — so `display: -webkit-box` never applied and the clamp sat
+   there inert. Measured before this line: computed display `block`,
+   -webkit-line-clamp `2`, and a long title rendering FOUR lines with
+   scrollHeight == clientHeight, i.e. nothing clipped. The comment above was
+   describing a fix that was not in effect.
+   Going through `.sp-gcard-body` makes it (0,3,0), which beats a
+   two-classes-plus-an-element selector outright rather than by winning a tie on
+   order — the card's title is inside that wrapper in both shapes it renders as. */
+.sp-gcard .sp-gcard-body .sp-issue-title {
+  font-size: 13.5px; font-weight: 600;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sp-gcard .sp-issue-meta { margin-top: 6px; }
+
+/* THE WHOLE CARD IS THE TARGET, not the two words of its title. In a gallery
+   the picture IS the thing you point at — a shelf of book covers where only the
+   caption responds is a shelf that feels broken, and the cover is the largest
+   and most obvious target on the card by a wide margin.
+
+   Done by stretching the title's OWN link over the card rather than by wrapping
+   the card in a second anchor: one link, one accessible name, and no anchor
+   nested inside another. `.sp-gcard` is already `position: relative`, and
+   nothing between it and the title is positioned, so `inset: 0` resolves to the
+   card. Only the editable card has an anchor to stretch — in reading view the
+   title is a span, there is no link, and correctly nothing to click. */
+.sp-gcard .sp-issue-title::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+}
+
+/* ————— CANVAS ————————————————————————————————————————————————————————————
+   A bounded surface with cards placed on it (canvas.ts). The block is
+   `sp-b-canvas`; its parts are `sp-cv-*`, on the `sp-tb-*` precedent — `.sp-card`
+   is already the DIALOG card and `.sp-issue` the board's, and a third meaning
+   for one class name is how the 560px-wide board card happened.
+
+   THE SURFACE HOLDS ITS SHAPE. `aspect-ratio` from the block's own `ratio`,
+   so the same file lays out identically at 400px and at 2000px and on paper —
+   which is the whole reason the coordinates are percentages. `--sp-ratio` is
+   set inline by the renderer because it is document data; everything else here
+   is chrome. */
+.sp-b-canvas { margin: 18px 0; }
+.sp-canvas-head {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 7px;
+}
+.sp-canvas-title {
+  font-size: 13.5px; font-weight: 600; color: var(--ink-2);
+  min-width: 40px; outline: none; border-radius: 5px; padding: 1px 3px;
+}
+.sp-canvas-title:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+.sp-canvas-title[data-ph]:empty::before {
+  content: attr(data-ph); color: var(--ph); pointer-events: none;
+}
+.sp-canvas-btn { font-size: 12px; padding: 3px 9px; }
+.sp-canvas-head .sp-canvas-btn:first-of-type { margin-inline-start: auto; }
+.sp-canvas-empty {
+  position: absolute; inset-inline: 0; top: 44%; margin: 0;
+  text-align: center; color: var(--muted); font-size: 13px; pointer-events: none;
+}
+/* the empty line is positioned against the BLOCK, so the block is the frame */
+.sp-b-canvas { position: relative; }
+
+.sp-canvas-body {
+  position: relative;
+  aspect-ratio: var(--sp-ratio, 1.6);
+  background: var(--chrome);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  /* The surface reads as a surface: a faint grid, not a texture.
+     MIXED FROM `--ink`, not from `--shade`. `--shade` is the shadow token and
+     it goes to pure black in dark — a black grid on a near-black ground is a
+     grid nobody can see, which is what the first draft shipped. `--ink` flips
+     with the ground, so the same declaration is a dark grid on white and a
+     light one on black. */
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px);
+  background-size: 5% 8%;
+}
+
+/* A CARD. `--sp-x`/`--sp-y` are percentages of the surface, written by the
+   renderer from the model and by the drag while it is running — which is what
+   lets the drag move the card without a repaint, and lets the phone rule below
+   ignore the position entirely. An inline `left` could do neither. */
+.sp-canvas-body > .sp-cv-card {
+  position: absolute;
+  left: calc(var(--sp-x, 0) * 1%);
+  top: calc(var(--sp-y, 0) * 1%);
+  width: 22%; min-width: 96px;
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 13px; line-height: 1.4;
+  box-shadow: 0 1px 3px rgb(var(--shade) / .08);
+  overflow-wrap: anywhere;
+}
+.sp-canvas-body > .sp-cv-card:hover { border-color: var(--edge); }
+.sp-cv-moving { box-shadow: 0 6px 18px rgb(var(--shade) / .22) !important; z-index: 3; }
+/* while a card is being dragged the whole document stops trying to select text */
+body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
+
+/* THE GRIP AND THE ✕ are the card's own chrome, so they sit ON it rather than
+   in the gutter — the block gutter is hidden inside a canvas (below) because
+   its drag reorders a LIST, which is not what this surface means. */
+.sp-cv-grip {
+  position: absolute; top: 2px; width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; background: none; color: var(--ph); padding: 0;
+  border-radius: 5px; opacity: 0; transition: opacity .12s;
+}
+.sp-cv-grip { inset-inline-start: 2px; cursor: grab; }
+.sp-cv-grip svg { width: 13px; height: 13px; }
+.sp-cv-card:hover .sp-cv-grip, .sp-cv-grip:focus-visible { opacity: 1; }
+.sp-cv-grip:hover { color: var(--ink-2); background: var(--chrome-2); }
+.sp-cv-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* room for the controls, so a card's first line never runs under them */
+.sp-canvas-body > .sp-cv-card { padding-top: 20px; }
+/* THE BLOCK GUTTER STAYS. It is where every block in a space is turned into
+   another type, duplicated and deleted, and on a phone it is the ONLY way to
+   reach any of that — hiding it inside a canvas would have made a card the one
+   block you cannot delete without a mouse. It only moves: the gutter lives in
+   the reading column's left margin, which on a surface is another card. Inside
+   a canvas it tucks into the card's own top-left, beside the drag grip. */
+.sp-canvas-body > .sp-cv-card > .sp-gutter {
+  position: absolute; inset-inline-start: 24px; inset-inline-end: auto;
+  top: 1px; width: auto; margin: 0; padding: 0;
+  display: flex; gap: 0;
+}
+/* THE GRIP FOLLOWS THE GUTTER'S RULE, not its own. Below 820px the gutter
+   stops hiding until hover, because a touch screen has no hover to reveal it
+   with — and a drag handle that only appears on hover is exactly the same
+   problem. Measured at 719px: the gutter was drawn on every card and the grip
+   beside it was not, so the one control that moves a card was the one you
+   could not see. */
+@media (max-width: 820px) { .sp-cv-grip { opacity: 1; } }
+/* a page card inside a canvas fills its card rather than drawing a second one */
+.sp-canvas-body > .sp-cv-card .sp-pagecard {
+  border: 0; background: none; padding: 0; margin: 0; font-size: 13px;
+}
+
+/* A PHONE IS NOT A SURFACE. Four cards on a 360px-wide board are four
+   unreadable stamps, so below this width the canvas becomes what it is a
+   picture OF: the list of what is on it, in document order. The positions are
+   untouched in the file — this is a rendering choice, made where the layout
+   lives, and the same file laid out spatially again on the next screen up. */
+@media (max-width: 560px) {
+  .sp-canvas-body {
+    aspect-ratio: auto; display: flex; flex-direction: column; gap: 8px;
+    padding: 9px; background-image: none;
+  }
+  /* `relative`, not `static`: the card flows in the column but stays the
+     gutter's positioning parent, so the gutter is still OUT OF THE FLOW.
+     Putting it in the flow costs every card a 36px row it does not need —
+     the measured mistake the block gutter already made once. */
+  /* `relative`, and `left`/`top` EXPLICITLY CLEARED. A relative box still
+     honours its offsets — measured at 375px, every card kept its `left` and
+     `top` as a nudge and the surface came out as a diagonal staircase running
+     off the side of the screen. `position` alone does not undo a placement. */
+  .sp-canvas-body > .sp-cv-card {
+    position: relative; inset: auto; width: auto;
+  }
+  /* no hover on a phone, and nothing to drag to on a stacked list */
+  .sp-cv-grip { display: none; }
+}
+
+@media print {
+  /* the surface IS the content: it prints where it was placed, and it is not
+     broken across a page boundary */
+  .sp-b-canvas { break-inside: avoid; }
+  .sp-canvas-body { background: none; background-image: none; }
+  .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }

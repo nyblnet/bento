@@ -108,6 +108,63 @@ export function parseDelimited(text: string, delimiter?: string): ParsedDelimite
   return { rows, delimiter: d, ragged }
 }
 
+/**
+ * Split ONE value into fields — Text to Columns' delimiter arm.
+ *
+ * It is `parseDelimited` and not a second parser, deliberately. A cell holding
+ * `Smith, John","Acme` has to obey the same quoting rule as the same bytes in a
+ * file, and the moment there are two implementations of "where does this field
+ * end" they disagree on exactly the values nobody tests: doubled quotes, a
+ * quote that is not at the start of a field, an embedded newline. So the value
+ * is handed to the file parser as a one-line file and the row comes back.
+ *
+ * `quoted:false` is the escape hatch for data that CONTAINS quotes as text — a
+ * measurement column of `5" pipe` — where treating one as a delimiter boundary
+ * would swallow the rest of the row. It splits on the separator and nothing
+ * else.
+ *
+ * The empty value is ONE empty field, not zero: a blank row still occupies its
+ * columns, and returning `[]` would leave whatever was there untouched, which
+ * is a split the user believes landed.
+ */
+export function splitField(
+  value: string,
+  by: string,
+  opts: { quoted?: boolean; trim?: boolean } = {},
+): string[] {
+  if (by === '') return [value]
+  let raw: string[]
+  if (opts.quoted === false) raw = value.split(by)
+  else if (value.includes('\n') || value.includes('\r')) {
+    // A newline inside the value ENDS parseDelimited's row, which would drop
+    // every field after it. Swapped for a sentinel across the parse and put
+    // back afterwards — and only when there IS one, so an ordinary value can
+    // never be rewritten by the substitution.
+    const NL = '\u0000'
+    const flat = value.split('\r\n').join(NL).split('\n').join(NL).split('\r').join(NL)
+    raw = (parseDelimited(flat, by).rows[0] ?? ['']).map((f) => f.split(NL).join('\n'))
+  } else raw = parseDelimited(value, by).rows[0] ?? ['']
+  const fields = raw.length ? raw : ['']
+  return opts.trim === false ? fields : fields.map((f) => f.trim())
+}
+
+/**
+ * Cut one value at fixed character positions. `widths` are cut points measured
+ * from the start of the string, so `[3, 7]` produces three fields.
+ *
+ * A value SHORTER than a cut point yields empty fields rather than dropping
+ * them — the column count is a property of the split, not of the longest row.
+ */
+export function cutField(value: string, widths: number[], opts: { trim?: boolean } = {}): string[] {
+  const cuts = widths.filter((n) => Number.isFinite(n) && n > 0).map((n) => Math.floor(n))
+    .sort((a, b) => a - b)
+  const out: string[] = []
+  let at = 0
+  for (const c of cuts) { out.push(value.slice(at, c)); at = c }
+  out.push(value.slice(at))
+  return opts.trim === false ? out : out.map((f) => f.trim())
+}
+
 // --- Inference -------------------------------------------------------------
 
 export interface Inference {

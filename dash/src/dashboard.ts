@@ -729,17 +729,58 @@ const pickAttr = (p: PickAttrs, cat: string | null): string =>
   `data-tile="${esc(p.tile)}" data-col="${esc(p.col)}" ` +
   (cat === null ? 'data-blank="1"' : `data-cat="${esc(cat)}"`)
 
+/**
+ * The lowest and highest number across every series, in ONE pass.
+ *
+ * NEVER `Math.min(...vals)`, and this is not a style preference — condfmt.ts:52
+ * states the rule for the same reason and `extent` there is the same shape. A
+ * spread is one ARGUMENT per element, and an engine's argument limit is far
+ * below the row counts this format is sized for: measured in this build's Node,
+ * `Math.min(...)` throws `RangeError: Maximum call stack size exceeded` at about
+ * 125k arguments. A chart binds a category column, so a workbook with a
+ * high-cardinality x (an id, an order number, a timestamp) has one category —
+ * and one data point per series — per ROW. At 400k rows the tile RENDERED and
+ * then threw out of the axis calculation, which the loader painted as an opaque
+ * error card over an app that was working perfectly.
+ *
+ * `baseline` folds zero in the way `Math.min(...vals, 0)` used to: A BAR'S
+ * BASELINE IS ZERO — cropping the axis to the data makes a 2% spread look like
+ * a doubling, the oldest chart lie there is. A LINE may crop; it is read as a
+ * trend, not as an area.
+ *
+ * `any` is separate from the bounds because a chart with no numbers at all is
+ * not a chart with a baseline: with `baseline` on, folding zero in first would
+ * make an all-null series look like a legitimate 0..0 extent and draw an axis
+ * over nothing.
+ */
+export function seriesExtent(
+  series: ReadonlyArray<{ data: ReadonlyArray<number | null> }>, baseline: boolean,
+): { lo: number; hi: number; any: boolean } {
+  let lo = Infinity
+  let hi = -Infinity
+  let any = false
+  for (const s of series) {
+    for (const v of s.data) {
+      if (v === null || !Number.isFinite(v)) continue
+      any = true
+      if (v < lo) lo = v
+      if (v > hi) hi = v
+    }
+  }
+  if (!any) return { lo, hi, any }
+  if (baseline) {
+    if (lo > 0) lo = 0
+    if (hi < 0) hi = 0
+  }
+  return { lo, hi, any }
+}
+
 function cartesianSvg(
   td: Extract<TileData, { kind: 'chart' }>, pick: PickAttrs, on: Set<string | null>,
 ): string {
-  const vals = td.series.flatMap((s) => s.data).filter((v): v is number => v !== null)
-  if (!vals.length) return ''
   const line = td.chart === 'line'
-  // A BAR'S BASELINE IS ZERO. Cropping the axis to the data makes a 2% spread
-  // look like a doubling, which is the oldest chart lie there is. A LINE may
-  // crop — it is read as a trend, not as an area.
-  const lo = Math.min(...vals, line ? Infinity : 0)
-  const hi = Math.max(...vals, line ? -Infinity : 0)
+  const { lo, hi, any } = seriesExtent(td.series, !line)
+  if (!any) return ''
   const ticks = niceTicks(lo, hi === lo ? lo + 1 : hi)
   const y0 = ticks[0]
   const y1 = ticks[ticks.length - 1]

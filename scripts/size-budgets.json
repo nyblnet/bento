@@ -1,10 +1,23 @@
 {
-  "//": "Ceilings for the single-file shells. Raise one IN THE COMMIT that needs the bytes, and say what bought them. Checked by scripts/test-spaces-size.mjs.",
+  "//": "Sizes for the single-file shells. A shell with enforce:true has a hard ceiling — raise `max` IN THE COMMIT that needs the bytes and say what bought them. A shell with enforce:false is tracked, not capped: the rig reports its drift from `reference` and never fails. Checked by scripts/test-spaces-size.mjs (generic despite the name — it walks every shell listed here and skips any that is not built). THIS IS NOT THE SAME TOOL AS THE PR BUILD-SIZE COMMENT and neither replaces the other: this file is absolute and persistent, so it is the only thing that catches SLOW drift across many merged PRs; the comment is relative to a PR's own base, so it is the only thing that pins a jump on the change that caused it. See docs/DECISIONS.md.",
   "shells": {
     "spaces": {
       "path": "spaces/dist-single/Bento_Spaces.bento.html",
-      "max": 135168,
-      "//": "132 KiB. The tracker took spaces from 73 KB. Headroom is deliberate: the shell is mostly a zlib block and zlib differs across node versions \u2014 the same commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24, so a tight ceiling fails in CI for no reason. CI is the number that counts."
+      "enforce": false,
+      "reference": 258454,
+      "//": "bento/spaces has NO HARD CEILING — the maintainer's call, and it is a reasonable one: the app was declining worthwhile fixes over a few hundred bytes, which is the ceiling costing more than it saves. `reference` is a WATERMARK, not a limit: the rig prints the size and the drift since this number and never fails on it, so growth nobody chose is still visible in every run — that was always the point (see the note at the top of test-spaces-size.mjs), and it survives without the block. Move `reference` when a change buys real bytes, and say what bought them. Set enforce:true to put the ceiling back. Previous ceiling was 262144 (256 KiB). 256 KiB, raised from 240 KiB by the collaboration build-out. Measured on this branch, node 26: 238,862 B before, 250,594 B after, +11,732 B. Split, by building the same tree twice with the OLD packed catalog swapped back in: CODE is +2,308 B (share.ts, the People panel with roles and per-member Remove, the five honest connection states, the view-only lock) and LANGUAGE is +9,424 B — 31 new strings x 8 locales, four fifths of the raise. That ratio is the same one the previous note recorded and it is the honest cost of an app that opens in eight languages out of one file; twenty-four of the thirty-one strings were LIFTED from the bento/slides catalogs rather than reworded, which is what kept it to this. Headroom stays deliberate: the shell is mostly one compressed block and the packer's output differs across node versions (one commit measured 130,095 B on node 26 locally and 131,246 B on CI node 24), so a tight ceiling fails in CI for no reason. Earlier history: 166,482 B before the M3/M4 content work, the formatting UI, dark mode, the rebuilt About and the starter space, 238,862 B after."
+    },
+    "slides": {
+      "path": "slides/dist-single/Bento_Slides.bento.html",
+      "enforce": false,
+      "reference": 685328,
+      "//": "TRACKED, no ceiling. Registered 2026-08-28: until then only bento/spaces was listed, so slides had no persistent size record at all and years of 300-byte commits would have been invisible to CI. enforce:false was chosen over a ceiling for the reason spaces gave up its own — a tight limit starts declining worthwhile fixes — and because a ceiling picked without history behind it is a guess that fails somebody else's PR. `reference` is set from a CI run, never a local one: most of the shell is one deflated block and zlib's output differs by ~1KB between node versions. Move it when a change buys real bytes and say what bought them. Reference 685328 B measured on CI (node 24) in the run that registered this shell, not locally."
+    },
+    "dash": {
+      "path": "dash/dist-single/Bento_Dash.bento.html",
+      "enforce": false,
+      "reference": 165201,
+      "//": "TRACKED, no ceiling. Registered 2026-08-28, same reasoning as slides. Note dash was unmeasurable before this: the CI step sat in the spaces section, ahead of the dash build, and the rig SKIPS a shell that is not built — so it printed nothing for dash and said so quietly. The step now runs after all three builds. Reference 165201 B measured on CI (node 24) in the run that registered this shell, not locally."
     }
   }
 }

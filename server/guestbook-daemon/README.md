@@ -1,6 +1,6 @@
 # bento-guestbook-daemon
 
-The sustainable home of the public guestbook (see `working/guestbook-design.md`):
+The sustainable home of the public guestbook (see `working/design/guestbook-design.md`):
 a Cloudflare Worker that serves the current epoch from Workers KV, archives the live
 room on a cron (read-only CRDT replay), and rolls epochs with fresh credentials.
 Deployed cadence today is every 30 minutes for both — see *Deployed cadence* below.

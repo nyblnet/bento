@@ -4,17 +4,35 @@
 //
 // The brief slides set: the product demo, the launch asset and the feature
 // tour in one — every claim it makes is proven by the feature making it. So
-// the page that describes links CONTAINS a link, the page about sharing is
-// reachable only through one, and the limits page says the awkward things out
-// loud rather than letting them be discovered.
+// the page that describes links CONTAINS a link, the page that describes
+// tables IS one, the page about archiving is the archived page, and the limits
+// page says the awkward things out loud rather than letting them be
+// discovered.
 //
-// Which is why the TRACKER is here. It shipped with none of this: a fresh space
-// opened on the notes tour, and the board, the fields and ⌘⇧I existed only for
-// someone who already knew to look for them. A feature the starter does not
-// demonstrate is a feature the starter denies.
+// A FEATURE THE STARTER DOES NOT DEMONSTRATE IS A FEATURE THE STARTER DENIES.
+// That is the rule this file is judged by, and it is a rule with a maintenance
+// cost: everything that ships has to be walked back through here, or the first
+// document every user reads quietly says the app cannot do it. The tracker was
+// the first thing to arrive that way — a fresh space opened on the notes tour
+// while the board, the fields and ⌘⇧I existed only for someone who already
+// knew to look. Tables, clips, link cards, comments, calculating lines, daily
+// notes, page width, export-a-page, subtree import, the mark palette, live
+// collaboration and the properties panel all arrived the same way afterwards,
+// and are here now.
+//
+// WHAT THIS IS NOT is a manual. A feature tour that lists features is a
+// reference nobody reads twice; this should be a space somebody would keep and
+// write in, where the demonstration is the page rather than an aside on it.
+//
+// ENGLISH ONLY, deliberately, and unlike every string in the interface around
+// it. The UI follows the READER (PLATFORM §8); a document is written in a
+// language and this one is written in English. Translating the starter would
+// mean nine starters to keep in step with nine feature sets, and a space
+// somebody wrote in would be the only one of the ten that was not translated.
 
-import { FORMAT, FORMAT_VERSION, defaultTheme, type SpacesDoc, type Block, type Page } from './model.ts'
+import { FORMAT, FORMAT_VERSION, defaultTheme, writeTable, type SpacesDoc, type Block, type Page } from './model.ts'
 import { DEFAULT_FIELDS, ISSUE_FIELDS, propBlock } from './fields.ts'
+import { STARTER_DIAGRAM, STARTER_TONE } from './starterdata.ts'
 
 const nextId = (): string => `sd-${(seq++).toString(36)}`
 
@@ -22,6 +40,13 @@ const b = (type: string, html = '', extra: Partial<Block> = {}): Block =>
   ({ id: nextId(), type, html, ...extra })
 
 let seq = 0
+
+/** The one picture, in the asset table every picked image goes into. */
+const DIAGRAM = 'sd-diagram'
+
+/** When the demonstration comment thread was written. A FIXED date, not
+ *  `new Date()`: `starterDoc()` has to emit the same document twice. */
+const AT = '2026-08-20T09:14:00.000Z'
 
 /**
  * A starter ISSUE — a page whose first blocks are its fields.
@@ -49,17 +74,56 @@ export function starterDoc(): SpacesDoc {
   seq = 0
   const P = {
     home: 'sd-home',
-    links: 'sd-links',
     writing: 'sd-writing',
-    limits: 'sd-limits',
+    media: 'sd-media',
+    links: 'sd-links',
     tracker: 'sd-tracker',
+    journal: 'sd-journal',
     inbox: 'sd-inbox',
+    limits: 'sd-limits',
+    archive: 'sd-archive',
   }
 
-  // the toggle is built first so its child can name its REAL id — a parent
-  // pointing at an id that does not exist would render the child at top level
-  const toggle = b('toggle', 'A toggle — click the triangle', { open: true })
-  const callout = b('callout', 'A callout. Click the mark to make it a note, a tip, a warning.', { tone: 'tip' })
+  // Through `writeTable`, not by hand, for the reason `propBlock` is used for
+  // the issues: it is the ONE writer, and the fallback `html` it keeps in step
+  // with the cells is what an older build renders AND what the backlink index
+  // reads. A hand-written `rows` with no fallback would put a link on the page
+  // that works when clicked and appears in nobody's "Linked from" — the starter
+  // claiming a feature the starter then fails to prove.
+  const table = b('table')
+  writeTable(table, {
+    rows: [
+      ['Block', 'What it is for', 'On paper'],
+      ['Callout', 'A note, a tip, a warning', 'kept, box and all'],
+      ['Toggle', 'Detail folded away — see <a href="#p/sd-writing">Writing</a>', 'expanded'],
+      ['Comment', 'A remark for a person, not the reader', 'never'],
+    ],
+    cols: [1, 2.2, 1.4],
+    colAlign: ['', '', 'right'],
+    header: true,
+  })
+
+  // Container blocks are built FIRST so their children can name a real id — a
+  // parent pointing at an id that does not exist renders the child at top level.
+  const callout = b('callout', 'A callout. Click the mark to make it a note, a tip, an important, a warning or a caution — or to give it an emoji of your own.', { tone: 'tip' })
+  const toggle = b('toggle', 'A toggle, and this one starts folded', { open: false })
+
+  // The thread this space ships with. Two people, unresolved, so the page list
+  // badges it and the marker is in the margin where the remark belongs.
+  const commented = b('p', 'A comment is a remark for a person, not for the reader. Block options → <strong>Comment</strong>, or a page’s ⋯ → <strong>Comment on this page</strong>. There is a thread on this paragraph: the marker is out in the margin, so it never moves the writing, and the page list counts the ones nobody has settled.', {
+    comments: [{
+      id: nextId(),
+      author: 'Ada',
+      at: AT,
+      text: 'Does a comment go out with the file when I send it?',
+      replies: [{
+        id: nextId(),
+        author: 'Bo',
+        at: AT,
+        text: 'Yes — it is saved in the file. It stays out of the reading view and off the printout, but anyone you send the file to can read it. Resolve or delete it first if that matters.',
+      }],
+    }],
+  })
 
   return {
     format: FORMAT,
@@ -68,42 +132,31 @@ export function starterDoc(): SpacesDoc {
     title: 'My space',
     home: P.home,
     theme: defaultTheme(),
+    assets: { [DIAGRAM]: STARTER_DIAGRAM },
     pages: [
       {
         id: P.home,
         title: 'Welcome',
         icon: 'compass',
         blocks: [
-          b('p', 'This whole space — every page, the editor, the search — is <b>one HTML file</b>. No account, no server, nothing installed.'),
+          b('p', 'This whole space — every page, the editor, the search — is <strong>one HTML file</strong>. No account, no server, nothing installed.'),
           b('h2', 'Try it'),
           b('todo', 'Type something on this line', { done: false }),
           b('todo', 'Press <code>⏎</code> to make a new block, <code>Tab</code> to indent it', { done: false }),
-          b('todo', 'Press <code>/</code> on an empty line for headings, lists, quotes and code', { done: false }),
-          b('todo', 'Press <code>⌘K</code> to search every page at once', { done: false }),
+          b('todo', 'Press <code>/</code> on an empty line for headings, lists, tables, quotes and code', { done: false }),
+          b('todo', 'Select any words — a formatting bar appears above them', { done: false }),
+          b('todo', 'Press <code>⌘K</code>, type <em>archived</em>, and open the page that is not in the sidebar', { done: false }),
           b('p', 'Then press <code>⌘S</code>. The file on your disk now contains everything you just wrote.'),
           b('h2', 'What is here'),
-          b('p', 'Four pages, and each one demonstrates the thing it describes:'),
+          b('p', 'Seven more pages. Each one demonstrates the thing it describes, and every one of them is yours to rewrite or delete.'),
+          b('bullet', '<a href="#p/sd-writing">Writing</a> — the blocks you can make, and the marks you can put on them'),
+          b('bullet', '<a href="#p/sd-media">Tables, pictures and clips</a> — the things that are not paragraphs'),
           b('bullet', '<a href="#p/sd-links">Pages and links</a> — how a space holds more than one page'),
-          b('bullet', '<a href="#p/sd-writing">Writing</a> — the blocks you can make'),
           b('bullet', '<a href="#p/sd-tracker">Tracker</a> — the same pages, on a board'),
+          b('bullet', '<a href="#p/sd-journal">Journal</a> — a page per day, when you want one'),
+          b('bullet', '<a href="#p/sd-inbox">Inbox</a> — somewhere to put things you have not filed'),
           b('bullet', '<a href="#p/sd-limits">Sharing &amp; limits</a> — what this file can and cannot do'),
-          b('p', 'The sidebar holds the whole tree. Drag a page onto another to nest it.'),
-        ],
-      },
-      {
-        id: P.links,
-        title: 'Pages and links',
-        icon: 'link',
-        blocks: [
-          b('p', 'A space is a <b>tree of pages</b>, not a single scroll. New page: the ＋ in the sidebar, or <code>⌘⌥N</code>.'),
-          b('h2', 'Linking'),
-          b('p', 'Type <code>[[</code> anywhere to search your pages and drop a link in. If the page does not exist yet, the picker offers to make it.'),
-          b('p', 'That link back to <a href="#p/sd-home">Welcome</a> was made exactly that way.'),
-          b('h2', 'Backlinks'),
-          b('p', 'Scroll to the bottom of any page and it tells you what links <i>to</i> it. Nothing to maintain — it is derived from the links themselves every time the page opens.'),
-          b('p', 'This page links to <a href="#p/sd-writing">Writing</a>, so Writing lists this page underneath.'),
-          b('h2', 'Why one file'),
-          b('p', 'Links are page ids inside this document, so they resolve with the wifi off, from an email attachment, on a phone, and in ten years. A link between separate files could not do any of that.'),
+          b('p', 'The sidebar holds the whole tree; drag a page onto another to nest it. <code>[</code> gets the sidebar out of the way, and <code>]</code> opens the properties panel on the other side — one place that answers what you can change about the block the caret is in.'),
         ],
       },
       {
@@ -111,45 +164,99 @@ export function starterDoc(): SpacesDoc {
         title: 'Writing',
         icon: 'pen',
         blocks: [
-          b('p', 'Markdown shortcuts convert as you type them.'),
-          b('h2', 'Headings'),
+          b('p', 'Markdown shortcuts convert as you type them. What is stored is the block, never the markdown — so a heading is a heading rather than a line that starts with a hash.'),
+          b('h2', 'Headings and lists'),
           b('p', 'Type <code># </code>, <code>## </code> or <code>### </code> at the start of a line.'),
-          b('h2', 'Lists'),
           b('bullet', '<code>- </code> makes a bullet'),
           b('bullet', 'and <code>Tab</code> nests it'),
           b('number', '<code>1. </code> makes a numbered list'),
           b('todo', '<code>[] </code> makes a checkbox', { done: false }),
-          b('h2', 'Blocks that are not text'),
+          b('h2', 'Marks'),
+          b('p', 'Select any words and a small bar appears above them: <strong>bold</strong>, <em>italic</em>, <u>underline</u>, <s>strikethrough</s>, <code>inline code</code>, <mark>highlight</mark>, colour, a link, and one button that clears the lot.'),
+          b('p', 'The shortcuts are ⌘B, ⌘I, ⌘U, ⇧⌘S, ⌘E and ⇧⌘H — and ⌘K makes a link out of whatever is selected. With nothing selected, ⌘K is still the search.'),
+          b('p', 'Colour is nine names in two roles: <span class="sp-fg-red">the ink</span>, or <mark class="sp-bg-blue">the band behind the words</mark>. A fixed palette rather than a picker, so a colour can be chosen to stay readable on the page and on a printout — and it does print, because unlike a callout a coloured phrase has no second cue to fall back on.'),
+          b('h2', 'Blocks that are not paragraphs'),
           b('quote', 'A quote — type <code>&gt; </code>.'),
-          b('code', 'const space = oneFile\n// type ``` and a SPACE to make a code block', { lang: 'js' }),
-          callout,
-          b('p', 'Press <code>⏎</code> in a callout and the next line goes inside it. Empty line, <code>⌫</code>, and you are out.', { parent: callout.id }),
           b('code',
-            '// type ```js and a space — the language is yours to pick\n' +
-            'const space = { file: 1, pages: 5 }\n' +
+            '// type ```js and a SPACE — the language is yours to pick\n' +
+            'const space = { file: 1, pages: 14 }\n' +
             'console.log(`one file, ${space.pages} pages`)',
             { lang: 'js' }),
-          b('p', 'Hover a code block to see — and change — its language.'),
+          b('p', 'Eight languages are highlighted and anything else is kept exactly as written, so <code>```rust</code> round-trips and lights up by itself the day the lexer learns it. Hover the block for its language chip, or press <code>]</code> and change it in the properties panel.'),
+          callout,
+          b('p', 'Press <code>⏎</code> in a callout and the next line goes inside it. Empty line, <code>⌫</code>, and you are out. The kind is named in words as well as coloured, so it survives a black-and-white printout.', { parent: callout.id }),
           toggle,
-          b('p', 'Anything indented under a toggle folds away with it.', { parent: toggle.id }),
+          b('p', 'Anything indented under a toggle folds away with it — and a toggle always <strong>prints expanded</strong>, because a handbook that silently omits what somebody folded is a data-loss-shaped bug.', { parent: toggle.id }),
           b('divider'),
-          b('p', 'Inline: <b>⌘B</b>, <i>⌘I</i>, <u>⌘U</u>.'),
+          b('h2', 'Lines that work things out'),
+          b('p', 'End a line with <code>=</code> and it answers. The answer is never stored — change a number above and every line below follows.'),
+          b('p', 'budget = 2400'),
+          b('p', 'flights = 780'),
+          b('p', 'budget - flights ='),
+          b('p', '20% of budget ='),
+          b('p', '940 km in miles ='),
+          b('p', 'today + 3 weeks ='),
+          b('p', 'It understands arithmetic, percentages, units, dates, times, names you define, and <code>sum above</code>. Type a sum without the <code>=</code> and it shows you the answer first — press <code>Tab</code> to keep it. A line it cannot fully work out gets nothing at all, so "Meet Ana at 3" stays a sentence.'),
         ],
       },
       {
-        id: P.limits,
-        title: 'Sharing & limits',
-        icon: 'scale',
+        id: P.media,
+        title: 'Tables, pictures and clips',
+        icon: 'image',
+        width: 'wide',
         blocks: [
-          b('p', 'Worth knowing before you rely on this.'),
-          b('h2', 'Sharing is per file'),
-          b('p', 'Sending someone this file sends them <b>the whole space</b> — every page, including any you archived. There is no per-page permission, because there is no server to enforce one.'),
-          b('h2', 'Saving'),
-          b('p', 'On Chrome and Edge, <code>⌘S</code> writes back to the file you opened. Everywhere else — Safari, Firefox, and every browser on iOS — the browser gives a page no way to write to its own file, so each save downloads a <b>new copy</b>. That is a browser limitation, not a setting.'),
-          b('h2', 'Two people, two files'),
-          b('p', 'If two people edit their own copy at the same time, there is no merge. They are two files. Live collaboration is coming; until it does, this is the honest position.'),
-          b('h2', 'Size'),
-          b('p', 'Text is essentially free — hundreds of pages of prose stay a small file. Images are what make it big, because they travel inside it.'),
+          b('p', 'This page is set to <strong>Wide</strong> in the page menu, because a table wants room a paragraph does not. Column, Wide and Full are chosen per page and travel in the file; how much room the window itself gives a column is remembered for your screen and never written down.'),
+          b('h2', 'Tables'),
+          table,
+          b('p', '<code>/</code> → Table, then type. <code>Tab</code> walks the cells and appends a row when it runs off the end; rows and columns come from the bar above the table, column widths drag, and the header row can be turned off. A cell holds ordinary rich text, so the link in the Toggle row is a real link — and it shows up in that page’s backlinks like any other.'),
+          b('p', 'It leaves as a GitHub pipe table, alignment included, and a Markdown table you import arrives as one. What it is not is a spreadsheet: no formulas, nothing that recalculates. That is a different app.'),
+          b('h2', 'Pictures'),
+          b('image', '', {
+            src: `asset:${DIAGRAM}`,
+            alt: 'A space drawn as the one file it is: a window with the page list down the left, the page being written on the right, and a label saying the editor is inside.',
+            caption: 'Drawn rather than photographed, which is why it costs 632 bytes.',
+            w: 640, h: 300, width: 100,
+          }),
+          b('p', 'Drop a picture on the page, or <code>/</code> → Image. A photograph off a phone is downscaled to fit the column before it is embedded — measured, a 4.9 MB picture goes in at 33 KB — and the space says so, with the original one click away. Two copies of the same picture are stored once. Alt text and the width are in the properties panel.'),
+          b('p', 'A picture that points at an address on the web is <em>not</em> loaded until you say so; the placeholder names the site first. Opening a file somebody mailed you should not tell them that you opened it.'),
+          b('h2', 'Clips'),
+          b('media', '', {
+            kind: 'audio',
+            src: STARTER_TONE,
+            alt: 'A 1.2-second test tone',
+            controls: true,
+          }),
+          b('p', 'A real audio block, embedded, ordinary. Video is the same block with a picture in it, and it takes a poster still into the printout and into the file-manager preview, where a player would be nothing at all.'),
+          b('p', 'Nothing here plays by itself, and there is no setting that will make it. A space is an editor, a reading view, a printout and a thumbnail, and a clip that starts on its own is wrong in all four.'),
+          b('p', 'Clips are also what makes a file too heavy to mail. This one is a test tone — 9 KB of sound, and by some way the largest thing in this space.'),
+          b('h2', 'Cards for things on the web'),
+          b('link', '<a href="https://bento.page">Bento — self-contained office documents</a>', {
+            url: 'https://bento.page',
+            title: 'Bento — self-contained office documents',
+            desc: 'The project this space came out of: one HTML file that is the document, the viewer and the editor at once.',
+            site: 'bento.page',
+          }),
+          b('p', '<code>/</code> → Link to the web. Nothing is fetched — not when you make the card and not when somebody opens the space. Other apps build this card on a server that reads the address’s tags; there is no server here and there is not going to be one, so the card shows what you type, and the dialog says so.'),
+        ],
+      },
+      {
+        id: P.links,
+        title: 'Pages and links',
+        icon: 'link',
+        blocks: [
+          b('p', 'A space is a <strong>tree of pages</strong>, not one long scroll. New page: the ＋ in the sidebar, or <code>⌘⌥N</code>. Drag a page onto another to nest it.'),
+          b('h2', 'Linking'),
+          b('p', 'Type <code>[[</code> anywhere to search your pages and drop a link in. If the page does not exist yet, the picker offers to make it.'),
+          b('p', 'That link back to <a href="#p/sd-home">Welcome</a> was made exactly that way.'),
+          b('p', 'A link can also be a card of its own — <code>/</code> → Link to page:'),
+          b('pagelink', '', { page: P.tracker }),
+          b('h2', 'Backlinks'),
+          b('p', 'Scroll to the bottom of any page and it tells you what links <em>to</em> it. Nothing to maintain: it is derived from the links themselves, every time the page opens.'),
+          b('p', 'This page links to <a href="#p/sd-writing">Writing</a>, so Writing lists this page underneath — and so does <a href="#p/sd-media">Tables, pictures and clips</a>, because the link in that page’s table is a link like any other.'),
+          b('h2', 'Finding things'),
+          b('p', '<code>⌘K</code> searches every page at once — titles and the words inside blocks, including the ones folded away in a toggle and the pages you have archived. <code>⌘F</code> finds and replaces across the whole space, not only the page you are looking at.'),
+          b('h2', 'Why one file'),
+          b('p', 'Links are page ids inside this document, so they resolve with the wifi off, from a mail attachment, on a phone, and in ten years. A link between separate files could not do any of that.'),
         ],
       },
       {
@@ -157,18 +264,20 @@ export function starterDoc(): SpacesDoc {
         title: 'Tracker',
         icon: 'board',
         blocks: [
-          b('p', 'An <b>issue is a page</b>. The cards below are the pages nested under this one — open one and you are in a document you can write anything in, with its fields along the top.'),
+          b('p', 'An <strong>issue is a page</strong>. The cards below are the pages nested under this one — open one and you are in a document you can write anything in, with its fields along the top.'),
           b('p', 'Nothing here is a second kind of thing: issues search, link, print, export and back-link like every other page. A page becomes an issue when it has a status, and stops being one when it does not.'),
           b('view', 'Issues', { layout: 'board', groupBy: 'status' }),
           b('h2', 'Making them'),
           b('p', '<code>⌘⇧I</code> makes an issue. The tag button in the toolbar turns the page you are already on into one — useful when a note turns out to be work.'),
-          b('p', 'Drag a card to another column to change its status. <b>Open only</b> hides what is done; <b>Filter</b> narrows by any field.'),
+          b('p', 'Drag a card to another column to change its status; change the field at the top of a card’s page and watch the card move instead. <strong>Open only</strong> hides what is finished, and <strong>Filter</strong> narrows by any field.'),
+          b('p', 'The controls above the board are five: <strong>Board ⇄ List</strong> changes the shape, <strong>Group</strong> picks the field the columns come from, and <strong>Sort</strong> orders by any field — clicking the one you are already sorted by reverses it. <strong>Manual order</strong> is always first in that menu, because a board somebody arranged by dragging should be one click from getting that order back.'),
+          b('p', 'This page is not set to Wide and is still wide: a board takes the room it needs unless the page menu says otherwise.'),
         ],
       },
       ...[
         issue('Open this card — it is an ordinary page', P.tracker,
           { status: 'doing', priority: 'high' },
-          'You are in it. The row above is fields; everything from here down is a page — write notes, paste an image, nest a toggle. That is the whole trick: the tracker did not invent a new thing to hold work in, it put fields on the thing you already had.'),
+          'You are in it. The row above is fields; everything from here down is a page — write notes, paste a picture, nest a toggle. That is the whole trick: the tracker did not invent a new thing to hold work in, it put fields on the thing you already had.'),
         issue('Drag me to another column', P.tracker,
           { status: 'todo', priority: 'medium' },
           'Dragging a card writes the new status onto this page. Go the other way too: change the field at the top and watch the card move on the board.'),
@@ -180,15 +289,68 @@ export function starterDoc(): SpacesDoc {
           'These five are a demonstration, not a template. Delete them and the board is empty and yours — it shows whatever pages in this space have a status, wherever they live in the tree.'),
         issue('This one is finished', P.tracker,
           { status: 'done' },
-          'Done and cancelled are <i>phases</i>, not just names, which is what lets <b>Open only</b> mean something without anyone configuring a filter.'),
+          'Done and cancelled are <em>phases</em>, not just names, which is what lets <strong>Open only</strong> mean something without anyone configuring a filter.'),
       ],
+      {
+        id: P.journal,
+        title: 'Journal',
+        icon: 'book',
+        journalHome: true,
+        blocks: [
+          b('p', 'Press <code>⌘⇧J</code> and today’s entry appears under this page.'),
+          b('p', 'There is no entry for today yet, and there will not be one until you write in it. Other apps make a page for every day you happen to open them; on a filesystem that is a cheap empty file, and in a document somebody mails around it is permanent weight for nothing.'),
+          b('p', 'Arrows either side of the date walk to yesterday and tomorrow. Entries nest here, newest first, however out of order you wrote them.'),
+          b('p', 'The date is stored as <code>2026-08-06</code> and shown in your own language: a reader in Tokyo sees 2026年8月6日木曜日 out of the same file. The <em>date</em> is what makes an entry that day’s, not the title — so rename one to “Monday — sprint kickoff” and it stays exactly where it belongs.'),
+          b('p', 'An entry is an ordinary page. It searches, links, back-links, prints and exports like everything else here.'),
+        ],
+      },
       {
         id: P.inbox,
         title: 'Inbox',
         icon: 'inbox',
         blocks: [
-          b('p', 'A page to throw things into before they are worth filing.'),
-          b('p', ''),
+          b('todo', 'Type here; file it later', { done: false }),
+          b('p', 'Somewhere to throw things before they are worth a page of their own. Nothing is special about this one — it is an inbox because you decided it is.'),
+          b('p', 'When a line turns out to be work, the tag button makes it an issue. When it turns out to be a subject, <code>[[</code> gives it a page.'),
+        ],
+      },
+      {
+        id: P.limits,
+        title: 'Sharing & limits',
+        icon: 'scale',
+        blocks: [
+          b('p', 'Worth knowing before you rely on this.'),
+          b('h2', 'The file is the sharing'),
+          b('p', 'Sending someone this file sends them <strong>the whole space</strong> — every page, including the archived one. There is no per-page permission, because there is no server to enforce one. The file <em>is</em> the capability: whoever has it can read it and can edit it.'),
+          b('h2', 'Working live'),
+          b('p', 'Two tabs of the same space, or two people with the same file, edit it together: changes merge per character, and the file you save carries the state, so a copy edited on a plane rejoins as a fork rather than overwriting anybody. A coloured initial sits on the page each person is reading; click somebody in the people panel to go to where they are.'),
+          b('p', 'A space goes live only when it arrived carrying a session — a file that was saved or shared — or when you start one from the button beside ⋯. A fresh space and a template stay offline. That button says which of the three situations you are in, including the usual one, which is that nothing is shared at all.'),
+          b('p', 'The awkward part: a session is a room whose keys live in the file. Whoever holds a copy holds the room, and there are no accounts to take it back from them. <strong>Rotate keys</strong> is what revocation looks like here — it mints a new room and leaves the old copies talking to nobody.'),
+          b('h2', 'Comments'),
+          commented,
+          b('h2', 'Sending one page out'),
+          b('p', '<strong>Export page as a space…</strong> writes the page you choose — and, if you want, the pages under it — as its own file: a whole space, not an attachment. It gets a new document id and none of this file’s keys, so it is a new document rather than a fork that would try to join this one’s session. Only the pictures those pages use travel with it, and a link pointing at a page that stayed behind becomes text naming that page rather than a link to nowhere.'),
+          b('h2', 'Bringing pages in'),
+          b('p', 'The same trip backwards: choose a space, or drop one on the window, and its pages arrive under any page you pick. Ids this space already uses are renamed and the links inside the import follow them, so nothing arrives pre-broken. A folder of Markdown files comes in the same way, folder tree and <code>[[wikilinks]]</code> intact. Either one is a single <code>⌘Z</code>.'),
+          b('h2', 'Saving'),
+          b('p', 'On Chrome and Edge, <code>⌘S</code> writes back to the file you opened. Everywhere else — Safari, Firefox, and every browser on iOS — the browser gives a page no way to write to its own file, so each save downloads a <strong>new copy</strong>. That is a browser limitation, not a setting.'),
+          b('h2', 'Archived is not deleted'),
+          b('p', 'This space ships one archived page, called <strong>The archived page</strong>. Archiving takes a page out of the sidebar and leaves it in the file: still found by <code>⌘K</code>, still linkable, still there when you send the file to somebody. Archiving is the delete this app offers, because the file is the only copy there is.'),
+          b('h2', 'Two copies and no session'),
+          b('p', 'If two people edit their own copy with no session between them, there is no merge. They are two files. Putting them back together means importing one into the other and reading the result — which works, and is not the same as it having merged.'),
+          b('h2', 'Size'),
+          b('p', 'Text is essentially free: hundreds of pages of prose stay a small file. Pictures and clips are what make it big, because they travel inside it rather than beside it.'),
+        ],
+      },
+      {
+        id: P.archive,
+        title: 'The archived page',
+        icon: 'note',
+        archived: true,
+        blocks: [
+          b('p', 'You found this with <code>⌘K</code>. Nothing in this space links here, and it is not in the page list.'),
+          b('p', 'It is archived: out of the sidebar, still in the file, still searchable, still linkable. The page list keeps an <strong>Archived</strong> group at the bottom to restore from, and a page’s ⋯ menu is what puts one here.'),
+          b('p', 'Which is why <a href="#p/sd-limits">Sharing &amp; limits</a> names this page by name. Archived is not deleted, and it is not private — send the file and this goes with it.'),
         ],
       },
     ],

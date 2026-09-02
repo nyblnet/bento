@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   Panel styling for docstyles.ts's "Styles" section — kept OUT of styles.css
+   deliberately: several agents are editing this app at once, and a shared
+   stylesheet puts every one of their diffs in the same file. Everything
+   reusable already exists there (t-section, t-row, t-select, t-field, t-btn,
+   t-note, t-toggles) and is reused as-is; only what those do not cover lives
+   here, under its own `t-sty-` prefix so nothing here can collide with a
+   class another feature owns. */
+
+.t-sty-badge {
+  display: inline-block; margin-inline-start: 6px;
+  font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--accent-ink); background: var(--accent); border-radius: 999px;
+  padding: 1px 6px; vertical-align: middle;
+}
+/* the row grammar, matching .t-props .t-row's metrics — duplicated rather
+   than reusing that selector because it is scoped to `.t-props .t-row` and
+   this section may one day be mounted somewhere that scope does not reach */
+.t-sty-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.t-sty-row > span:first-child { flex: 1 1 auto; font-size: 12.5px; color: var(--muted); }
+.t-sty-row > :last-child { flex: 0 0 auto; }
+.t-sty-color {
+  width: 34px; height: 26px; padding: 2px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--field);
+  cursor: pointer;
+}
+.t-sty-actions { display: flex; gap: 6px; margin: 8px 0 2px; flex-wrap: wrap; }
+.t-sty-actions .t-btn { flex: 1 1 auto; white-space: nowrap; }

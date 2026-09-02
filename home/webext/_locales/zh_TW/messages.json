@@ -1,0 +1,521 @@
+{
+  "appDesc": {
+    "message": "將 Bento 文件直接儲存回你開啟的檔案，不必再選擇儲存位置。",
+    "description": "Chrome Web Store listing description. 132 characters maximum — the store truncates."
+  },
+  "navAll": {
+    "message": "所有文件"
+  },
+  "navFolders": {
+    "message": "資料夾"
+  },
+  "navHelp": {
+    "message": "說明与關於"
+  },
+  "navSettings": {
+    "message": "設定"
+  },
+  "addFolder": {
+    "message": "+ 添加資料夾…"
+  },
+  "searchDocs": {
+    "message": "搜尋文件"
+  },
+  "searchDocsSlash": {
+    "message": "搜尋文件   /"
+  },
+  "sortTitle": {
+    "message": "排序"
+  },
+  "sortRecent": {
+    "message": "最近修改"
+  },
+  "sortName": {
+    "message": "名称"
+  },
+  "sortFolder": {
+    "message": "資料夾"
+  },
+  "newDocument": {
+    "message": "+ 新增文件"
+  },
+  "browseAll": {
+    "message": "查看全部"
+  },
+  "reconnectFolders": {
+    "message": "重新連線資料夾"
+  },
+  "primeIntro": {
+    "message": "Chrome 接下來會询問。請選擇中间那一項："
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — 有資料夾需要重新連線",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home 需要重新連線",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome 撤銷了某個資料夾的權限。在恢復之前，儲存文件時會询問放在哪里。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnect": {
+    "message": "重新連線"
+  },
+  "ctxOpenPanel": {
+    "message": "打開 bento/home 面板"
+  },
+  "panelEmpty": {
+    "message": "你的資料夾中還沒有 Bento 文件。"
+  },
+  "noMatches": {
+    "message": "沒有与“$1”匹配的內容"
+  },
+  "rowUnplacedTip": {
+    "message": "從Finder打開一次 $1 中的文件，之後该資料夾里的全部內容都能從這里打開。"
+  },
+  "encrypted": {
+    "message": "已用密码保护"
+  },
+  "notSavedYet": {
+    "message": "尚未儲存"
+  },
+  "fileAccessOffShort": {
+    "message": "本地檔案访問已關閉",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noFoldersYet": {
+    "message": "還沒有資料夾"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 個資料夾需要重新連線",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "statusOneFolder": {
+    "message": "$1 個資料夾 · 原位儲存"
+  },
+  "statusFolders": {
+    "message": "$1 個資料夾 · 原位儲存"
+  },
+  "renewNotOffered": {
+    "message": "Chrome 沒有提示恢復",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "renewTryAfterRestart": {
+    "message": "重新啟動 Chrome 後再试一次",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "fetchingLatest": {
+    "message": "正在取得最新的 Bento…"
+  },
+  "created": {
+    "message": "已创建 $1"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 可以讀取，但還無法開啟——Chrome 不會告訴擴充功能資料夾在磁碟上的位置。<b>查看全部</b> 可一鍵找到它們。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "andMore": {
+    "message": "等 $1 個"
+  },
+  "agoJustNow": {
+    "message": "刚刚"
+  },
+  "agoMinutes": {
+    "message": "$1 分钟前"
+  },
+  "agoHour": {
+    "message": "$1 小時前"
+  },
+  "agoHours": {
+    "message": "$1 小時前"
+  },
+  "agoDay": {
+    "message": "$1 天前"
+  },
+  "agoDays": {
+    "message": "$1 天前"
+  },
+  "searchScope": {
+    "message": "搜尋會查看標題、檔案名、資料夾以及文件內的文字。"
+  },
+  "folderEmpty": {
+    "message": "此資料夾中還沒有內容"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ 新增文件</b>會在這里放一個。"
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home 還不知道 $1 在磁碟上的位置。請使用“查找我的資料夾”，或先從Finder打開该資料夾里的一個文件。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "cardRenamedTip": {
+    "message": "$1 是換了名字的 Bento 文件。可以從這里打開，但儲存時會询問位置 — 原位儲存只识别以 .bento.html 结尾的檔案。"
+  },
+  "badgeRenamed": {
+    "message": "檔案名是 .html 而不是 .bento.html — 可以從這里打開，但儲存時會询問位置。"
+  },
+  "menuOpen": {
+    "message": "打開"
+  },
+  "menuDuplicate": {
+    "message": "複製"
+  },
+  "menuRename": {
+    "message": "重命名…"
+  },
+  "menuCopyPath": {
+    "message": "複製路径"
+  },
+  "duplicatedAs": {
+    "message": "已複製為 $1"
+  },
+  "renamePrompt": {
+    "message": "重命名文件"
+  },
+  "renamedTo": {
+    "message": "已重命名為 $1"
+  },
+  "pathCopied": {
+    "message": "已複製路径"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — 尚未打開"
+  },
+  "setupTitle": {
+    "message": "两步即可就绪"
+  },
+  "setupLead": {
+    "message": "完成後，在雙擊打開的文件中按 ⌘S 會直接写回原檔案 — 再也不會询問位置。"
+  },
+  "chooseFolder": {
+    "message": "選擇資料夾…"
+  },
+  "setupStep1": {
+    "message": "選擇存放文件的資料夾"
+  },
+  "setupStep1Note": {
+    "message": "通常选一個大一些的資料夾就夠了 — 它涵蓋其中的全部內容。"
+  },
+  "setupStep2": {
+    "message": "開啟本地檔案访問",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupStep2Note": {
+    "message": "在 <code>chrome://extensions</code> → bento/home → <b>允许访問檔案網址</b>。Chrome 不允许擴充功能自行開啟。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>更新後没看到你的資料夾？</b>解壓縮載入的擴充功能是按資料夾路径识别的，所以從另一個資料夾載入新副本會被當作另一個擴充功能。你的資料夾仍然授权给旧的那個。請改為替換原資料夾中的檔案，然後在 <code>chrome://extensions</code> 中點選<b>重新載入</b>。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>本地檔案访問已關閉</b> — 未開啟前無法原位儲存。請在 <code>chrome://extensions</code> 中打開<b>允许访問檔案網址</b>。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 個資料夾需要重新連線。</b>請在<b>設定</b>中重新連線，並選擇中间那一項 — 唯一能長期有效的选項。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> 可以列出但還打不開 — Chrome 從不告诉擴充功能資料夾在磁碟上的位置。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "findFolders": {
+    "message": "查找我的資料夾"
+  },
+  "looking": {
+    "message": "正在查找…"
+  },
+  "findDeclined": {
+    "message": "<b>沒關係。</b>改為從Finder打開一次 $1 中的文件 — 本頁面會自動發現。"
+  },
+  "foundFolder": {
+    "message": "找到 $1 個資料夾"
+  },
+  "foundFolders": {
+    "message": "找到 $1 個資料夾"
+  },
+  "foundNothing": {
+    "message": "瀏覽記錄中還沒有 — 請從Finder打開一個文件"
+  },
+  "setFoldersSub": {
+    "message": "其中的文件會直接儲存回原檔案，不會询問位置。一個資料夾涵蓋其中的全部內容。"
+  },
+  "noneYet": {
+    "message": "還沒有。"
+  },
+  "savesInPlace": {
+    "message": "原位儲存"
+  },
+  "needsReconnecting": {
+    "message": "需要重新連線",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnectTip": {
+    "message": "Chrome 會询問是否恢復這個資料夾。拒绝會移除它，之後 Chrome 至少要等一次重新啟動才會再次询問。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "remove": {
+    "message": "移除"
+  },
+  "removeTip": {
+    "message": "收回访問權限。Chrome 可能仍然記着该權限，因此重新添加時可能不會再询問。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessTitle": {
+    "message": "本地檔案访問",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessSub": {
+    "message": "Chrome 不允许擴充功能自行開啟它，而不開啟就什么都無法工作。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "stateOn": {
+    "message": "開啟"
+  },
+  "stateOff": {
+    "message": "關閉"
+  },
+  "stateUnknown": {
+    "message": "未知"
+  },
+  "accessOnNote": {
+    "message": "bento/home 可以讀取你從磁碟打開的頁面。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessOffNote": {
+    "message": "打開 chrome://extensions，找到 bento/home，開啟“允许访問檔案網址”。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessUnknownNote": {
+    "message": "此瀏覽器不會報告。如果儲存時仍然询問位置，請在 chrome://extensions 中檢查。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setVersionTitle": {
+    "message": "版本"
+  },
+  "setVersionUnpacked": {
+    "message": "這份副本是以解壓縮方式載入的，Chrome 永远不會更新它。"
+  },
+  "setVersionStore": {
+    "message": "從商店安装，因此會自动更新。"
+  },
+  "versionAvailable": {
+    "message": "$1 可用"
+  },
+  "versionUpToDate": {
+    "message": "上次檢查時為最新"
+  },
+  "versionManaged": {
+    "message": "由瀏覽器保持最新"
+  },
+  "getIt": {
+    "message": "取得"
+  },
+  "checkNow": {
+    "message": "立即檢查"
+  },
+  "autoCheckPref": {
+    "message": "<b>瀏覽器启动時檢查新版本。</b><br>只向 bento.page 請求一個静态檔案。不發送任何識別碼、版本号，也不發送与你的文件有關的內容 — 比较在本机完成。關閉後不會發出任何請求；<b>立即檢查</b>仍然可用。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "expectedSha": {
+    "message": "zip 的预期 SHA-256：$1"
+  },
+  "setReachTitle": {
+    "message": "它能访問的范围",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setReachSub": {
+    "message": "只有上面的資料夾，而且只有頁面實際打開的那個檔案。不會上传任何內容，也不會讀取其他位置。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 可用。</b>這份副本是以解壓縮方式載入的，Chrome 永远不會更新它。"
+  },
+  "updateStep1": {
+    "message": "從 GitHub 下载"
+  },
+  "updateStep2": {
+    "message": "請在<b>你當初載入它的那個資料夾里</b>替換檔案 — 必须是同一個資料夾，否则 Chrome 會當作另一個擴充功能，你已授权的資料夾不會跟着過去",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateStep3": {
+    "message": "打開 <code>chrome://extensions</code>，在 bento/home 上點選<b>重新載入</b>"
+  },
+  "fetchingApp": {
+    "message": "正在取得 $1…"
+  },
+  "createdIn": {
+    "message": "已在 $3 中创建 $1（$2）"
+  },
+  "intoFolder": {
+    "message": "到 $1"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home 的作用"
+  },
+  "helpWhatSub": {
+    "message": "Bento 文件是一個自带编辑器的 HTML 檔案。直接從磁碟打開時，瀏覽器不允许它写回自身 — 因此每次儲存都會询問位置。bento/home 就是去掉這個問题的東西。"
+  },
+  "tourSaveTitle": {
+    "message": "原位儲存"
+  },
+  "tourSaveBody": {
+    "message": "⌘S 无需對話方塊，直接写回你打開的那個檔案。自动儲存和更新走的是同一条路径。"
+  },
+  "tourFindTitle": {
+    "message": "找到你的文件"
+  },
+  "tourFindBody": {
+    "message": "你資料夾中的每一個 Bento 文件，带真实標題和首頁縮圖。搜尋也涵蓋文件內的文字。"
+  },
+  "tourSwitchTitle": {
+    "message": "工作時隨手切換"
+  },
+  "tourSwitchBody": {
+    "message": "按 <kbd>Alt</kbd>+<kbd>B</kbd>，或在文件中點選右键，即可在旁边打開面板。"
+  },
+  "tourNewTitle": {
+    "message": "新增一個"
+  },
+  "tourNewBody": {
+    "message": "<b>+ 新增文件</b>會取得 Slides、Spaces 或 Dash 的當前版本，並在你的資料夾中放入一個新文件。"
+  },
+  "helpNeedsTitle": {
+    "message": "它需要你做的"
+  },
+  "helpNeedsSub": {
+    "message": "两件事，都不是這個擴充功能能替你完成的。"
+  },
+  "helpFolder": {
+    "message": "一個資料夾"
+  },
+  "helpFolderGranted": {
+    "message": "已授权 $1 個 — 其中的文件會原位儲存"
+  },
+  "helpFolderNone": {
+    "message": "尚未選擇。选一個大一些的資料夾即可涵蓋其中的全部內容。"
+  },
+  "helpAccessOff": {
+    "message": "已關閉。請在 <code>chrome://extensions</code> 中打開<b>允许访問檔案網址</b> — 擴充功能無法自行開啟。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessUnknown": {
+    "message": "此瀏覽器不會報告。如果儲存時仍然询問位置，請在 <code>chrome://extensions</code> 中檢查。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessOn": {
+    "message": "已開啟 — bento/home 可以讀取你從磁碟打開的頁面。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverTitle": {
+    "message": "它绝不會做的",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverSub": {
+    "message": "它只在上面的資料夾內讀寫，而且只讀寫頁面實際打開的那個檔案 — 由瀏覽器告知是哪一個，所以文件無法指定别人的檔案。你的文件內容不會被上传到任何地方，這個擴充功能也沒有可上传的服务器。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAboutTitle": {
+    "message": "關於"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Bento 項目的一部分 · MIT 授權"
+  },
+  "linkSource": {
+    "message": "GitHub 源码"
+  },
+  "linkIssues": {
+    "message": "報告問题"
+  },
+  "linkReleases": {
+    "message": "版本"
+  },
+  "primeMiddle": {
+    "message": "能長期有效的那個"
+  },
+  "primeNote": {
+    "message": "另外两個也能用，但 Chrome 會再次询問 — 第一個每次重新啟動都問，最後一個會等一段時间再問。"
+  },
+  "viewLayout": {
+    "message": "文件的顯示方式"
+  },
+  "viewIcons": {
+    "message": "圖示"
+  },
+  "viewList": {
+    "message": "清單"
+  },
+  "close": {
+    "message": "關閉"
+  },
+  "setLangTitle": {
+    "message": "語言"
+  },
+  "setLangSub": {
+    "message": "此擴充功能使用的語言。通常跟隨瀏覽器。"
+  },
+  "langAutomatic": {
+    "message": "自動 — 跟隨瀏覽器"
+  },
+  "setLangNote": {
+    "message": "擴充功能本身的名稱和說明來自瀏覽器，不會改變。"
+  },
+  "aboutPromo": {
+    "message": "第一次使用 Bento？範本、藝廊和 AI 編輯指南都在 $1，也歡迎到 $2 給顆星。"
+  },
+  "setThemeTitle": {
+    "message": "外觀"
+  },
+  "setThemeSub": {
+    "message": "瀏覽器的設定只是預設值，並非強制。"
+  },
+  "themeAuto": {
+    "message": "跟隨瀏覽器"
+  },
+  "themeLight": {
+    "message": "淺色"
+  },
+  "themeDark": {
+    "message": "深色"
+  },
+  "checking": {
+    "message": "正在檢查…"
+  },
+  "surveyTitle": {
+    "message": "找出文件所在的位置"
+  },
+  "surveySub": {
+    "message": "瀏覽器知道你開啟過哪些 Bento 文件，可以指出它們在哪些資料夾裡。"
+  },
+  "surveyDeclined": {
+    "message": "沒關係，你也可以手動新增資料夾。"
+  },
+  "surveyAllCovered": {
+    "message": "這個瀏覽器看過的 $1 份文件都已在你新增的資料夾中。"
+  },
+  "surveyUncovered": {
+    "message": "有 <b>$1</b> 份文件不在你新增的任何資料夾裡，$2 份已涵蓋。"
+  },
+  "surveyCovers": {
+    "message": "包含 $1 份"
+  },
+  "surveyAdd": {
+    "message": "新增這個資料夾…"
+  },
+  "surveyAdded": {
+    "message": "已新增 $1 — 其中的文件已就緒"
+  },
+  "surveyAddedElsewhere": {
+    "message": "已新增 $1，但文件並不在其中 — 請先從 Finder 開啟一份。"
+  },
+  "surveyOnlySeen": {
+    "message": "這種方式只能找到在此瀏覽器中開啟過的文件。"
+  }
+}

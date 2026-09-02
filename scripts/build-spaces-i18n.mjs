@@ -52,6 +52,34 @@ function sweepKeys() {
     }
   }
   walk(srcDir)
+
+  // …AND THE STRINGS THAT REACH t() THROUGH A VARIABLE.
+  //
+  // Block specs carry `label` and `hint` in a data table (blocks.ts), and the
+  // editor renders them with `t(item.label)` — so the sweep above, which
+  // anchors on a literal, never saw them. The consequence was silent and
+  // total: the `/` menu, the Insert dropdown and the block results in ⌘K were
+  // English in all eight languages, for every block type, since the day the
+  // table was written. Adding the strings to the catalogs did not fix it
+  // either — the packer builds PACKED from THIS list, so a catalog entry for a
+  // key the sweep misses is dropped on the way into the shell. The catalogs
+  // read 504/504 complete while the shell shipped none of them.
+  //
+  // These cannot be wrapped at the definition instead: CLAUDE.md's rule is that
+  // t() must never be called in a module-level const, because the catalog is
+  // frozen at import and the locale is chosen later.
+  //
+  // SYNTAX IS NOT LANGUAGE. A hint that is a markdown trigger — `-`, `1.`,
+  // `[]`, `>`, `---`, a code fence — is what you literally type, identical in
+  // every locale, and demanding eight translations of `-` would be noise in
+  // every catalog and a lie in each one.
+  const specSrc = readFileSync(join(srcDir, 'blocks.ts'), 'utf8')
+  const isSyntax = (v) => /^[#`\-\[\]>0-9.\s]+$/.test(v)
+  for (const m of specSrc.matchAll(/\b(?:label|hint):\s*(['"])((?:\\.|(?!\1).)*)\1/g)) {
+    const v = m[2].replace(/\\'/g, "'").replace(/\\"/g, '"')
+    if (v.length > 1 && !isSyntax(v)) keys.add(v)
+  }
+
   return [...keys].sort()
 }
 

@@ -50,8 +50,27 @@ are in `docs/DECISIONS.md` — don't reopen them.
    thumbnails (`kernel/src/save.ts`, `slides/src/preview.ts`); `bento/enc` decks
    are vetoed and any existing preview is stripped. Run
    `node scripts/test-preview.ts` after touching that path.
-6. **New UI strings go into ALL i18n catalogs** (ja, zh-Hans, zh-Hant, es, fr,
-   de, it). English-string-as-key; never call `t()` in module-level consts.
+6. **New UI strings go into ALL i18n catalogs.** English-string-as-key; never
+   call `t()` in module-level consts. **Never take the locale list from prose —
+   including this file.** It is `LOCALES` in that app's `scripts/build-*-i18n.mjs`,
+   and `ls <app>/src/i18n/` is the check. This rule said seven for a month after
+   Portuguese made it eight, and #394 shipped an app one language short because
+   it believed the sentence you are reading.
+   - **Adding a locale touches three places**, not one: the catalogue file, the
+     app's `LOCALES`, and any rig with its own copy of the list. Only
+     `build-i18n.mjs` (slides) errors on a catalogue missing from `LOCALES`;
+     the others exit 0 and silently never pack it.
+   - **A rig must derive the list, never restate it.**
+     `scripts/test-i18n-coverage.mjs` reads `PACKED_LOCALES` out of the
+     generated `packed.ts` — copy that, and a fourth copy can never go stale.
+     **It covers slides ONLY** (`coreDir` is hardcoded to `slides/src/i18n`),
+     so spaces and type have no coverage rig at all. Do not assume your app's
+     catalogues are checked by anything.
+   - **A locale code is not always a language.** `pt` is Brazilian in
+     `slides/` and drifted European in `spaces/`; no check can see this,
+     because both files are correctly named `pt.ts`. See docs/DECISIONS.md,
+     2026-08-29, before writing or reusing a catalogue for a language with
+     regional variants.
 7. **Never edit `site/`** — it's generated. Sources are `site-src/` and the
    `scripts/build-*.mjs` tooling. Same for `dist-single/`.
 8. **No AI co-author trailers on commits** (no `Co-Authored-By: Claude` or

@@ -28,8 +28,14 @@
 // agent API. That is why this lands at commit one: retrofitting op-minting
 // means rewriting the store.
 
+import { t } from './i18n.ts'
 import { applySheetProps } from './rowcol.ts'
-import type { CellOverride, View, Column, ColumnData, DashDoc, Measure, Sheet, Step, TableSheet } from './model.ts'
+// The one definition of "what counts as a number" — import's. A second
+// implementation here is how a value converts on import and refuses on a
+// type change, or the other way round.
+import { coerce, encodeColumn, inferColumn } from './import.ts'
+import { PROVENANCE_OPS } from './steps.ts'
+import type { CellOverride, Comment, View, Column, ColumnData, ColumnType, DashDoc, Measure, Sheet, Step, TableSheet, CanvasCell, CanvasSheet } from './model.ts'
 
 type Listener = () => void
 export type StoreEvent = 'doc' | 'view' | 'selection'
@@ -92,7 +98,9 @@ export type Patch =
       dropEmptyCells?: boolean
     }
   | { op: 'deleteRows'; sheet: string; rids: number[] }
-  | { op: 'setColumn'; sheet: string; col: string; patch: Record<string, unknown> }
+  | { op: 'setColumn'; sheet: string; col: string; patch: Record<string, unknown>;
+      /** the pre-conversion bytes, set only on the INVERSE of a type change */
+      data?: ColumnData }
   /** `at` is the position; omitted appends. `data` is omitted for a FORMULA
    *  column, which has no stored values — its numbers are derived from its
    *  expression, so storing them would let a file carry a number that
@@ -157,6 +165,81 @@ export type Patch =
    * readers must agree on it.
    */
   | { op: 'setSheet'; id: string; sheet?: Sheet; at?: number }
+  /**
+   * Sheet ORDER, as a permutation of the ids. The tab strip's drag, and
+   * `Move left` / `Move right`.
+   *
+   * WHY THIS EXISTS RATHER THAN TWO `setSheet`s. A move used to be a remove
+   * followed by a re-insert, which is correct — `setSheet` on a sheet already
+   * in the document REPLACES it in place, so one patch could not express a
+   * move — and its inverse was correct too, carrying the sheet and its original
+   * index so one ⌘Z put the tab back where it was rather than at the end.
+   *
+   * What it was not is CHEAP. This history is bounded by BYTES (see the header
+   * and `UNDO_BYTES`), and the accounting is `JSON.stringify` of the inverse —
+   * so the inverse of a re-insert stringified the WHOLE SHEET. Dragging a tab
+   * on a 12MB workbook spent 12MB of a 24MB budget and evicted every earlier
+   * entry: two drags and the undo stack was two drags long. O(sheet) for an
+   * operation that changes an ARRAY ORDER, which is O(number of sheets) —
+   * twenty ids, about 200 bytes, whatever the workbook weighs.
+   *
+   * MUST BE A PERMUTATION. `reorderColumns` drops ids it cannot find, which is
+   * survivable for a column list; here an id left out of `order` would DELETE
+   * a sheet, and a delete arriving inside a reorder is the kind of data loss
+   * nobody thinks to look for. It is refused loudly instead, and
+   * `crdt.committable` refuses it BEFORE the commit when a collaborator has
+   * changed the sheet list underneath it.
+   */
+  | { op: 'reorderSheets'; order: string[] }
+  /**
+   * One comment thread, by id. `comment: undefined` removes it.
+   *
+   * Per-thread rather than rewriting `Sheet.comments` through `setSheetProps`:
+   * that carried the WHOLE array in the inverse — about 75KB per keystroke at
+   * five hundred threads, against a 24MB history cap — and under collaboration
+   * it is a single LWW register, so two people adding a thread in the same
+   * moment keep one of them. Keyed by id, exactly as `setView` is.
+   */
+  | { op: 'setComment'; sheet: string; id: string; comment?: Comment; at?: number }
+  /**
+   * Cells on a SPREADSHEET sheet (`kind: 'canvas'` — the sparse A1 map that has
+   * been in the format since commit one).
+   *
+   * Keyed by **A1 address** — `A1`, `B7` — which is the format's key for this
+   * kind and not a choice made here. model.ts calls it "the classic sparse A1
+   * map"; `validate.ts` raises `bad-canvas-key` for anything else; `preview.ts`
+   * parses A1 to find the used range for a file-manager thumbnail. It is NOT
+   * `cellformula.cellKey(row, col)` — that is an internal computation key for a
+   * recalc map, and writing it into the document would have made every cell
+   * this op wrote invisible to the validator, the thumbnail and any other build.
+   *
+   * One op carries MANY cells because a paste, a fill and a delete are each one
+   * edit to a reader and must be one undo step.
+   *
+   * A `null` or `undefined` entry REMOVES the cell rather than storing an empty
+   * object — a sparse sheet whose cleared cells linger as `{}` is neither sparse
+   * nor equal to the same sheet reached another way. `null` is the spelling that
+   * survives JSON, which is what a collaborator receives.
+   */
+  | { op: 'setCanvasCells'; sheet: string; cells: Record<string, CanvasCell | null> }
+  /**
+   * Column widths and row heights on a SPREADSHEET sheet.
+   *
+   * `cols` is keyed by column LETTER and `rows` by the 1-based row number — the
+   * two halves of an A1 address, so `"C": 180` reads as the column a reader can
+   * see. A `null` removes the key, for the reason `setCanvasCells` gives.
+   *
+   * A SEPARATE OP from `setCanvasCells` rather than two more fields on it,
+   * because the containers differ in the one way an inverse cares about:
+   * `cells` is required on the kind and always exists, while `cols`/`rows` are
+   * optional — so this op creates a container on the first write and deletes it
+   * with the last key, or an apply-then-undo leaves `"cols": {}` in the file
+   * for every other reader to diff.
+   */
+  | {
+      op: 'setCanvasSizes'; sheet: string
+      cols?: Record<string, number | null>; rows?: Record<string, number | null>
+    }
   /**
    * RESERVED. Both need the transform engine, which does not exist yet. They
    * are in the union now because the discriminant cannot be retrofitted once
@@ -254,6 +337,41 @@ const ridIndex = (sheet: TableSheet, rid: number): number => {
   return -1
 }
 
+/**
+ * Change a column's type, and SAY SO when it will not go.
+ *
+ * The `setColumn` case throws when a value cannot be read as the new type,
+ * which is the right thing — refusing beats zeroing. But a throw is only half
+ * an answer, and the missing half was measured on screen: the reader picked
+ * "Money", the commit threw into the console, and the dropdown went on
+ * displaying **money** while the column header chip beside it displayed
+ * **Text**. Two controls disagreeing, no message, nothing to act on.
+ *
+ * That is the same shape as the bug this whole change exists to fix — the app
+ * knowing something and not saying it — and it is the second time this exact
+ * pattern has appeared in this codebase, after the Offline switch that stayed
+ * ticked over a preference that had not persisted.
+ *
+ * So both call sites go through here: it commits, and on refusal it reports the
+ * reason and returns false so the caller can put its control back. A third call
+ * site that forgets is the failure mode this function exists to remove.
+ */
+export function setColumnType(
+  store: Store,
+  sheetId: string,
+  colId: string,
+  next: ColumnType,
+  report: (message: string) => void,
+): boolean {
+  try {
+    store.commit({ op: 'setColumn', sheet: sheetId, col: colId, patch: { type: next } })
+    return true
+  } catch (e) {
+    report(e instanceof Error ? e.message : String(e))
+    return false
+  }
+}
+
 export function readCell(data: ColumnData | undefined, row: number): unknown {
   if (!data || row < 0) return null
   if (data.enc === 'raw') return data.v[row] ?? null
@@ -292,6 +410,27 @@ const table = (doc: DashDoc, id: string): TableSheet => {
 }
 
 /**
+ * The sheet by id, WHATEVER ITS KIND — for the ops that are about a sheet
+ * rather than about a dataset. `setSheetProps` is the one today (a name, and
+ * later anything else every kind has); `setComment` says the same thing inline
+ * because a remark on a pivot is a remark.
+ *
+ * Still throws when the id names nothing: an op that cannot find its target is
+ * an edit the user believes landed, and applyPatch's rule is to refuse loudly.
+ */
+const anySheet = (doc: DashDoc, id: string): Sheet => {
+  const s = doc.sheets.find((x: Sheet) => x.id === id)
+  if (!s) throw new Error(`no sheet ${id}`)
+  return s
+}
+
+const canvas = (doc: DashDoc, id: string): CanvasSheet => {
+  const s = doc.sheets.find((x: Sheet) => x.id === id)
+  if (!s || s.kind !== 'canvas') throw new Error(`no spreadsheet sheet ${id}`)
+  return s
+}
+
+/**
  * Apply one patch, and return the patch that undoes it.
  *
  * The inverse is built from the values actually displaced, so it costs what the
@@ -320,6 +459,75 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
       }
     }
 
+    case 'applySteps': {
+      const sheet = table(doc, p.sheet)
+      // The leading PROVENANCE ops are the attested head and are never re-run
+      // (model.ts). `applySteps` owns the RE-EXECUTABLE tail and nothing above
+      // it, so the inverse is bounded by the STEPS rather than by the data they
+      // produce — a whole-sheet inverse would put document-sized snapshots into
+      // a byte-capped history.
+      let cut = sheet.steps.findIndex(
+        (s) => !PROVENANCE_OPS.has((s as { op?: string }).op ?? ''),
+      )
+      if (cut < 0) cut = sheet.steps.length
+      const was = sheet.steps.slice(cut)
+      sheet.steps = [...sheet.steps.slice(0, cut), ...p.steps]
+      return {
+        inverse: { op: 'applySteps', sheet: p.sheet, steps: was },
+        touched: { sheet: p.sheet, structural: true },
+      }
+    }
+    case 'setCanvasCells': {
+      const sheet = canvas(doc, p.sheet)
+      // No `dropEmpty` twin of `setOverrides`: `cells` is REQUIRED on a
+      // CanvasSheet and `parseDoc` always materialises it, so there is no
+      // container to leave behind and no divergence to create.
+      const was: Record<string, CanvasCell | null> = {}
+      for (const [k, v] of Object.entries(p.cells)) {
+        // the PREVIOUS value, or null for "there was nothing here" — so the
+        // inverse of creating a cell REMOVES it rather than blanking it
+        was[k] = sheet.cells[k] ?? null
+        if (v === undefined || v === null) delete sheet.cells[k]
+        else sheet.cells[k] = v
+      }
+      return {
+        inverse: { op: 'setCanvasCells', sheet: p.sheet, cells: was },
+        touched: { sheet: p.sheet },
+      }
+    }
+
+    case 'setCanvasSizes': {
+      const sheet = canvas(doc, p.sheet)
+      const axis = (
+        which: 'cols' | 'rows', want: Record<string, number | null> | undefined,
+      ): Record<string, number | null> | undefined => {
+        if (!want) return undefined
+        const bag = (sheet[which] ??= {})
+        const was: Record<string, number | null> = {}
+        for (const [k, v] of Object.entries(want)) {
+          was[k] = bag[k] ?? null
+          if (v === undefined || v === null) delete bag[k]
+          else bag[k] = v
+        }
+        // THE CONTAINER GOES WITH ITS LAST KEY, in both directions. `cols` and
+        // `rows` are OPTIONAL on the kind, so absent and `{}` say the same
+        // thing — and if only the forward patch dropped it, undoing the FIRST
+        // width ever set would leave `"cols": {}` behind, which is a file that
+        // differs from the one the edit started with and a diff every other
+        // reader has to explain.
+        if (!Object.keys(bag).length) delete sheet[which]
+        return was
+      }
+      const cols = axis('cols', p.cols)
+      const rows = axis('rows', p.rows)
+      return {
+        inverse: {
+          op: 'setCanvasSizes', sheet: p.sheet,
+          ...(cols ? { cols } : {}), ...(rows ? { rows } : {}),
+        },
+        touched: { sheet: p.sheet },
+      }
+    }
     case 'setOverrides': {
       const sheet = table(doc, p.sheet)
       const existed = sheet.cells !== undefined
@@ -493,10 +701,85 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
       if (!col) throw new Error(`no column ${p.col}`)
       const was: Record<string, unknown> = {}
       for (const k of Object.keys(p.patch)) was[k] = (col as Record<string, unknown>)[k]
+
+      // A TYPE CHANGE MUST CONVERT THE STORAGE, or the column's declared type
+      // and its bytes disagree and every reader downstream believes the
+      // declaration.
+      //
+      // This shipped, and it produced a WRONG NUMBER at the end of a path dash
+      // itself recommends. Import lands a mixed column as `text` and advises
+      // "set the column type once you have decided what it is". Doing that used
+      // to rewrite only `col.type`: the grid began right-aligning and
+      // number-formatting the values, and `aggregate` (grid.ts) — which skips
+      // anything not already `typeof v === 'number'` — totalled them as
+      // **zero**. Measured on a real import: footer `SUM 0` against a true
+      // total of 10,308.85, which dash returns correctly from `=SUM(D2:D10)`
+      // on a spreadsheet copy of the same rows. A confident wrong total is
+      // worse than a refusal and much worse than an error.
+      //
+      // The conversion reuses IMPORT's own coercion (`inferColumn`/`coerce`/
+      // `encodeColumn`) rather than a second implementation, so "what counts as
+      // a number" has one answer here, on import, and on paste.
+      //
+      // WHAT WILL NOT CONVERT IS REFUSED, NOT ZEROED. `coerce` answers null for
+      // a value it cannot read, and writing those nulls would silently delete
+      // data on a dropdown change. So the patch throws with a count and an
+      // example, the commit is abandoned, and the column keeps both its old
+      // type and its old bytes. That matches the house rule import already
+      // follows: refuse where you cannot decide.
+      let dataWas: ColumnData | undefined
+
+      // AN INVERSE CARRYING BYTES RESTORES THEM. Undo of a type change has to
+      // put back the storage as well as the declaration; restoring only the
+      // declaration leaves exactly the disagreement this case exists to
+      // prevent, pointing the other way.
+      if (p.data !== undefined) {
+        dataWas = sheet.data[p.col]
+        sheet.data[p.col] = p.data
+        Object.assign(col, p.patch)
+        return {
+          inverse: { op: 'setColumn', sheet: p.sheet, col: p.col, patch: was, data: dataWas },
+          touched: { sheet: p.sheet, cols: [p.col], structural: true },
+        }
+      }
+
+      const nextType = p.patch.type as ColumnType | undefined
+      if (nextType !== undefined && nextType !== col.type) {
+        const n = totalRows(sheet)
+        const src = sheet.data[p.col]
+        const rawText: string[] = []
+        for (let i = 0; i < n; i++) {
+          const v = readCell(src, i)
+          rawText.push(v == null ? '' : String(v))
+        }
+        const inf = { ...inferColumn(rawText), type: nextType }
+        const out: unknown[] = []
+        let lost = 0
+        let firstLost = ''
+        for (let i = 0; i < n; i++) {
+          const t = rawText[i]
+          if (t.trim() === '') { out.push(null); continue }
+          const c = coerce(t, inf)
+          if (c === null) { lost++; if (!firstLost) firstLost = t }
+          out.push(c)
+        }
+        if (lost) {
+          throw new Error(
+            `${lost} value${lost === 1 ? '' : 's'} in “${col.name}” cannot be read as ${nextType}` +
+            `${firstLost ? ` (for example “${firstLost}”)` : ''}. The column was left as it was.`,
+          )
+        }
+        dataWas = src
+        sheet.data[p.col] = encodeColumn(out, nextType)
+      }
+
       Object.assign(col, p.patch)
       return {
-        inverse: { op: 'setColumn', sheet: p.sheet, col: p.col, patch: was },
-        touched: { sheet: p.sheet, cols: [p.col] },
+        inverse: {
+          op: 'setColumn', sheet: p.sheet, col: p.col, patch: was,
+          ...(dataWas !== undefined ? { data: dataWas } : {}),
+        },
+        touched: { sheet: p.sheet, cols: [p.col], ...(dataWas !== undefined ? { structural: true } : {}) },
       }
     }
 
@@ -524,6 +807,29 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
       }
     }
 
+    case 'setComment': {
+      // ANY sheet kind, not just a table: a remark on a pivot is a remark.
+      const sheet = doc.sheets.find((sh) => sh.id === p.sheet) as
+        (Sheet & { comments?: Comment[] }) | undefined
+      if (!sheet) throw new Error(`no sheet "${p.sheet}"`)
+      const existed = sheet.comments !== undefined
+      sheet.comments ??= []
+      const at = sheet.comments.findIndex((c) => c.id === p.id)
+      const was = at < 0 ? undefined : sheet.comments[at]
+      if (p.comment === undefined) { if (at >= 0) sheet.comments.splice(at, 1) }
+      else if (at >= 0) sheet.comments[at] = p.comment
+      else if (typeof p.at === 'number' && p.at >= 0 && p.at <= sheet.comments.length) {
+        sheet.comments.splice(p.at, 0, p.comment)
+      } else sheet.comments.push(p.comment)
+      // add-then-remove must not leave `comments: []` behind — a round trip
+      // that changes the file is a diff every other reader has to explain
+      if (!existed && sheet.comments.length === 0) delete sheet.comments
+      return {
+        inverse: { op: 'setComment', sheet: p.sheet, id: p.id, comment: was, at: at < 0 ? undefined : at },
+        touched: { sheet: p.sheet },
+      }
+    }
+
     case 'setSheet': {
       const at = doc.sheets.findIndex((sh) => sh.id === p.id)
       const was = at < 0 ? undefined : doc.sheets[at]
@@ -536,6 +842,28 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
         inverse: { op: 'setSheet', id: p.id, sheet: was, at: at < 0 ? undefined : at },
         touched: { all: true },
       }
+    }
+
+    case 'reorderSheets': {
+      const was = doc.sheets.map((s) => s.id)
+      const by = new Map(doc.sheets.map((s) => [s.id, s]))
+      // A PERMUTATION, checked all three ways — same length, every id known,
+      // no id twice. Anything else and the map below would silently drop or
+      // duplicate a sheet, which is a delete (or a second tab sharing one
+      // sheet's arrays) arriving inside an operation that only claims to
+      // change an order.
+      if (
+        p.order.length !== was.length ||
+        new Set(p.order).size !== p.order.length ||
+        p.order.some((id) => !by.has(id))
+      ) {
+        throw new Error('reorderSheets must name every sheet in the workbook exactly once')
+      }
+      doc.sheets = p.order.map((id) => by.get(id)!)
+      // `all`, as `setSheet` is: the tab strip, the grid and every panel read
+      // the sheet list. The INVERSE is what this op exists for — a list of ids,
+      // not a sheet.
+      return { inverse: { op: 'reorderSheets', order: was }, touched: { all: true } }
     }
 
     case 'setView': {
@@ -590,7 +918,17 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
       // The writer lives in rowcol.ts beside `freezeAt`, which is what emits
       // these, and is covered there. Two copies of one op is how the inverse
       // and the forward drift apart.
-      return applySheetProps(table(doc, p.sheet), p)
+      //
+      // `anySheet`, NOT `table`. This narrowed to a dataset and threw on
+      // everything else, which made the SHEET NAME — the one property every
+      // kind has — writable on datasets alone: renaming a spreadsheet tab built
+      // a valid patch and died here with `no table sheet`, and the tab strip
+      // shipped a disabled Rename for the kinds it could not reach. The op's
+      // own writer never looked at a column or a rid; the narrowing was the
+      // whole of the restriction. (`applySheetProps` still refuses every
+      // structural key, so widening the kind does not widen what can be
+      // written.)
+      return applySheetProps(anySheet(doc, p.sheet), p)
 
     case 'setTitle': {
       const was = doc.title
@@ -621,6 +959,31 @@ export class Store {
   private runCell: string | null = null
   private runTimer: ReturnType<typeof setTimeout> | undefined
   private pending: { inverse: Patch[]; touched: Touched; bytes: number } | null = null
+  /**
+   * Set while a document change is being applied and broadcast.
+   *
+   * The grid re-derives its order vector from inside the `doc` listener
+   * (grid.ts: a structural edit renumbers the rows the vector holds), so a
+   * `view()` call arriving here is DERIVED — the consequence of an edit, not
+   * something the reader did. `viewBarrier` exists to tell those two apart and
+   * this counter is the only honest way to do it.
+   */
+  private inDocChange = 0
+  /**
+   * THE READER'S LAST ACTION WAS A VIEW ACTION — see `view()` and `undo()`.
+   *
+   * Null means the last thing they did was a document edit (or nothing).
+   */
+  private viewBarrier = false
+  /**
+   * How the store speaks to the reader, when refusing.
+   *
+   * A FIELD RATHER THAN AN IMPORT, and the same shape `setColumnType` takes its
+   * `report` in: this module runs in the node rigs and must not reach the DOM.
+   * Default swallows, so a build that never lends it a voice is quieter than it
+   * should be but never wrong. panels.ts lends it `toast` today.
+   */
+  say: (message: string) => void = () => {}
 
   constructor(doc: DashDoc) {
     this.doc = doc
@@ -654,8 +1017,13 @@ export class Store {
   changedRemotely(touched: Touched = { all: true }): void {
     this.doc.modified = new Date().toISOString()
     this.lastTouched = touched
-    this.emit('doc')
-    this.emit('view')
+    // NOT a barrier reset: somebody else's edit is not the reader's last
+    // action, exactly as it is not an entry in their undo history.
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.emit('view')
+    } finally { this.inDocChange-- }
   }
 
   /** The last invalidation, for a listener that wants to repaint precisely. */
@@ -730,8 +1098,14 @@ export class Store {
     this.push({ inverse, touched, bytes })
     this.touch()
     this.lastTouched = touched
-    this.emit('doc')
-    this.runAfter()
+    // The reader's last action is a document edit again, so undo has something
+    // of theirs to reverse and no reason to hesitate.
+    this.viewBarrier = false
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.runAfter()
+    } finally { this.inDocChange-- }
   }
 
   /**
@@ -770,8 +1144,12 @@ export class Store {
     }
     merge(this.pending!.touched, r.touched)
     this.touch()
-    this.emit('doc')
-    this.runAfter()
+    this.viewBarrier = false
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.runAfter()
+    } finally { this.inDocChange-- }
     clearTimeout(this.runTimer)
     this.runTimer = setTimeout(() => this.endRun(), RUN_IDLE_MS)
   }
@@ -794,12 +1172,43 @@ export class Store {
    * `commit` is the easy mistake, and nobody notices until a file saves itself
    * every time someone clicks a column header.
    *
-   * OPEN QUESTION: Excel users press ⌘Z after a sort and expect it undone. That
-   * needs a separate view-history, not the document's undo stack — deliberately
-   * not built here, because guessing it wrong is worse than leaving it.
+   * A SORT IS STILL NOT UNDOABLE, AND UNDO NO LONGER PRETENDS OTHERWISE.
+   *
+   * The open question this comment used to hold was whether ⌘Z should reverse a
+   * sort. Measured while it was open: sort a column, press ⌘Z, and the sort
+   * stayed while the NUMBER FORMAT set two actions earlier came off. The reader
+   * keeps the thing they asked to reverse and loses a thing they were not
+   * thinking about, with nothing said either way. "Sort is not undoable" is
+   * defensible; silently undoing something else is not.
+   *
+   * A real view history still belongs to the grid, not here — `docs/DECISIONS.md`
+   * ("one view vector") puts the filters and sorts in grid.ts and the store owns
+   * only the vector they produce, so a stack kept here would restore the row
+   * order while the header arrow, the status line and the filter menu went on
+   * describing the sort that had just been undone, and the next `applyView()`
+   * would put it back. Half an undo that lies is worse than none.
+   *
+   * So the store does the one thing it CAN see and CAN promise: it notices that
+   * the reader's last action changed the rows on screen without changing the
+   * document, and makes the next undo REFUSE and say so, instead of reaching
+   * past the sort for an edit nobody asked about. One press to be told; a
+   * second press to undo the edit anyway.
+   *
+   * THE TEST FOR "THE READER DID THIS" is that the order map changed and no
+   * document change was in flight. That is deliberately about the VECTOR rather
+   * than about sorts and filters by name: the store cannot see grid.ts's
+   * `filters`/`sorts` (nor should it), and filter.ts is free to widen what a
+   * filter is without this having to hear about it. It errs towards arming —
+   * switching to a sheet that still holds a stale vector clears it here, and
+   * that arms the barrier too. Costing one keypress after a tab switch is the
+   * right side to be wrong on, and undoing an edit on the sheet you just left
+   * is the same surprise anyway.
    */
   view(mutate: () => void): void {
+    if (this.inDocChange) { mutate(); this.emit('view'); return }
+    const before = { ...this.order }
     mutate()
+    if (orderChanged(before, this.order)) this.viewBarrier = true
     this.emit('view')
   }
 
@@ -837,14 +1246,39 @@ export class Store {
     }
     this.touch()
     this.lastTouched = touched
-    this.emit('doc')
-    this.runAfter()
+    this.inDocChange++
+    try {
+      this.emit('doc')
+      this.runAfter()
+    } finally { this.inDocChange-- }
     return { inverse, touched, bytes }
+  }
+
+  /**
+   * The refusal, once. Returns true when this press was spent saying no.
+   *
+   * ONLY WHEN THERE IS SOMETHING TO REVERSE: with an empty stack the next press
+   * would do nothing either, so "press it again" would be a lie and the barrier
+   * is simply dropped. Redo is guarded on the same footing — after a sort,
+   * ⇧⌘Z reaching past it for a document edit is the same surprise pointing the
+   * other way.
+   */
+  private blocked(has: boolean): boolean {
+    if (!this.viewBarrier) return false
+    this.viewBarrier = false
+    if (!has) return false
+    // ONE LITERAL, not a concatenation: the i18n rig sweeps t() calls out of the
+    // source and cannot see through a `+`, and an unswept string is one that
+    // silently never gets translated.
+    this.say(t('Sorting and filtering are not changes to the data, so undo cannot take them back — clear them from the column’s ▾ menu. Nothing was undone; press undo again to undo the last change to the data.'))
+    this.emit('view')
+    return true
   }
 
   undo(): boolean {
     if (this.readOnly) return false
     this.endRun()
+    if (this.blocked(this.undoStack.length > 0)) return false
     const e = this.undoStack.pop()
     if (!e) return false
     this.redoStack.push(this.invert(e))
@@ -854,6 +1288,7 @@ export class Store {
   redo(): boolean {
     if (this.readOnly) return false
     this.endRun()
+    if (this.blocked(this.redoStack.length > 0)) return false
     const e = this.redoStack.pop()
     if (!e) return false
     this.undoStack.push(this.invert(e))
@@ -872,10 +1307,34 @@ export class Store {
     this.undoStack.length = 0
     this.redoStack.length = 0
     this.order = {}
+    this.viewBarrier = false
     this.lastTouched = { all: true }
     this.emit('doc')
     this.emit('view')
   }
+}
+
+/**
+ * Did the rows on screen change?
+ *
+ * BY CONTENT, not by reference: `applyView` builds a fresh array every time it
+ * runs, so reference equality would call re-applying an identical filter a
+ * change. The walk costs a pass over a vector that was just built by a pass
+ * over the same rows, and it only runs on a view change the reader made.
+ */
+function orderChanged(
+  a: Record<string, number[] | undefined>, b: Record<string, number[] | undefined>,
+): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const k of keys) {
+    const x = a[k]
+    const y = b[k]
+    if (x === y) continue
+    if (!x || !y) return true          // one of them says "no filter, no sort"
+    if (x.length !== y.length) return true
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true
+  }
+  return false
 }
 
 function merge(into: Touched, from: Touched): void {

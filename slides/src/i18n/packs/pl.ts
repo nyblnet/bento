@@ -215,6 +215,7 @@ export const strings: Catalog = {
   "This browser can’t rewrite files in place — a fresh copy went to Downloads": "Ta przeglądarka nie potrafi nadpisywać plików w miejscu — świeża kopia trafiła do Pobranych",
   "This document": "Ten dokument",
   "This file carries its own app — it works offline, forever, as is.": "Ten plik niesie własną aplikację — działa offline, na zawsze, taki jaki jest.",
+  "This window is still running v{v} — reload to finish. A v{v} backup was saved beside this file.": "To okno wciąż działa na wersji v{v} — przeładuj je, aby dokończyć. Kopię zapasową wersji v{v} zapisano obok tego pliku.",
   "This window is still running v{v} — reload to finish. A v{v} backup was downloaded.": "To okno wciąż działa na wersji v{v} — przeładuj je, aby dokończyć. Pobrano kopię zapasową wersji v{v}.",
   "This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.": "To okno wciąż działa na wersji v{v}. Jeśli nadpisano plik otwarty tutaj, przeładuj je; w przeciwnym razie otwórz zapisany plik.",
   "This window keeps running v{v} until you open the downloaded file.": "To okno działa dalej na wersji v{v}, dopóki nie otworzysz pobranego pliku.",

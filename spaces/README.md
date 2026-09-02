@@ -71,12 +71,20 @@ load contract and format additivity.
 | `src/model.ts` | the format, `buildIndex()` (tree, backlinks), id repair |
 | `src/sanitize.ts` | the inline allowlist — the only thing between a file someone mailed you and script execution |
 | `src/store.ts` | undo, and the **typing run** |
+| `src/journal.ts` | daily notes — the date is `page.journal`, never the title |
+| `src/calc.ts` | magic notes — the evaluator behind a line ending in `=`. No eval, ever |
 | `src/render.ts` | model → DOM, shared by the editor, reading view and print |
 | `src/highlight.ts` | the code lexer — text → `{kind, a, b}` ranges, no DOM, no strings |
 | `src/markdown.ts` | markdown → blocks, the folder tree → the page tree, `[[wikilinks]]` → `#p/` links. Pure and DOM-free, so the import is tested in node |
 | `src/editor.ts` | topbar, sidebar, block menu, `[[` picker, ⌘K, ⌘F, archive |
+| `src/props.ts` | the right-hand properties panel — what a block and a page can be, and the one thing it must not cost: the page's width |
+| `src/collabui.ts` | who else is here — presence in the tree, the people panel, the live control |
+| `src/comments.ts` | review threads — markers in the end margin, the thread popover, the tree badge |
+| `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |
 | `src/agent.ts` | the agent surface — `validate()`, `outline()`, `stats()`, and the patch verbs behind `window.bento` |
+| `src/assets.ts` | content-addressed images and clips, and the image downscale |
 | `src/assets.ts` | content-addressed images and the downscale |
+| `src/portable.ts` | the two exits: a page out as its own space, another space in under a page |
 | `src/about.ts` | updates, language, password, exports |
 | `src/i18n/` | per-locale catalogs; `packed.ts` is generated and is what ships |
 
@@ -108,6 +116,37 @@ actually selected; when it is not there, the block becomes text quoting the
 path, because a browser cannot open `../attachments/x.png` and a broken `<img>`
 would be a lie about what is in the file.
 
+### Getting notes out again, and back in
+
+`src/portable.ts` is both exits, pure and DOM-free like `markdown.ts`, so the
+round trip is asserted in node rather than clicked through.
+
+**Out:** `extractSpace(doc, pageId, {subtree, docId})` returns a complete
+`bento/spaces` document holding one page and, if asked, its subtree. It carries
+a **fresh `docId`** and **no `collab` at all** — an extract that kept either
+would be a fork of the space it came from, and opening it would join that room
+and sync three pages over two hundred. Only the assets those pages reference
+travel (fonts excepted — the theme names them, so every page references them).
+A link out of the extracted set becomes the literal `[[Page title]]`, the same
+thing an unresolvable wikilink becomes on the way in, so it is honest, still
+searchable, and resolves again if the two halves are ever reunited.
+
+**In:** `planGraft(host, incoming, {under})` nests another space's pages under a
+page of this one. An arriving id is KEPT when this space does not use it and
+only a collision is renamed — through `repairId`, the same derivation-from-the-
+bytes the load path uses, for the same reason. Links inside the import follow
+the rename; a link naming a page that was not in the file becomes text rather
+than a live link onto whatever host page holds that id. Assets are
+content-addressed, so a shared image merges to nothing; a key holding DIFFERENT
+bytes (which the store cannot produce, but a hand-written file can) mints a
+`~n` variant instead of overwriting the host's image. The whole graft is ONE
+`store.commit`, so it is one ⌘Z.
+
+The imported file is UNTRUSTED and gets no side door: its document block is
+read from an inert `DOMParser` document, `parseDoc` decides whether it is a
+space (refusing rather than degrading), and `sanitizeInline` runs over every
+arriving block before any of it reaches the document.
+
 ### Links are fragments
 
 `#p/<id>`, and navigation is `history.pushState(null, '', '#p/id')`. Measured:
@@ -134,10 +173,31 @@ pages are one document rather than one file each.
 
 ## Not built yet
 
-- **Collaboration.** No CRDT wiring. The sync engine is slides-shaped
-  (composite `slideId ␟ elementId` node keys); spaces needs `pageId ␟ blockId`
-  and a token RGA over `html`, which is the same shape — but genericizing it is
-  its own project, and PLATFORM §10 permits shipping without collab rather than
-  with a half-secure version.
-- **Tables, embeds, and databases.** Deliberate: the format is permanent, so a
-  block type ships when its model is right, not when its UI is ready.
+- **Fine-grained sharing.** There is a people panel, presence in the page tree
+  and a live session, but no per-person roles or invite links yet — the file is
+  still the capability, so anyone you send it to can edit.
+- **Embeds.** Deliberate: the format is permanent, so a block type ships when
+  its model is right, not when its UI is ready.
+
+  Tables and databases DID ship, as two separate things, which is the whole of
+  working/design/spaces-design.md §2.6. A **table** is content — a `table` block whose
+  `rows` are inline html, with no formulas and nothing that recalculates
+  (`tableOf`/`writeTable` in `src/model.ts`, the pipe-table export in
+  `src/blocks.ts`). A **database** is the tracker: `doc.fields` is the schema, a
+  `prop` block is a value, and a `view` block is a board or a list of them
+  (`src/fields.ts`). Recalculation is bento/dash's, and cross-app data arrives
+  as a snapshot with provenance, never as a nested runtime.
+- **Fetched link previews.** A `link` block is a card for an address on the
+  web, and every field in it is typed by the author and stored. Nothing is
+  fetched — not at render and not in the editor: reading a url's OpenGraph tags
+  means a cross-origin HTML body, which needs a server, which is the component
+  this format does not have. See `docs/DECISIONS.md`.
+- **Comments on a text RANGE.** A thread anchors to a block or to a page. A
+  range inside a block needs an offset pair that survives the concurrent edit
+  that moved it, and the format is permanent — so the anchor ships when its
+  model is right.
+
+- **Tables and embeds.** Deliberate: the format is permanent, so a block type
+  ships when its model is right, not when its UI is ready. (Databases DID ship —
+  as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a
+  `view` block is a board or a list of them. `src/fields.ts` is the core.)

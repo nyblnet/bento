@@ -11,6 +11,201 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Code on a slide — and it morphs.** A slide can hold a code snippet, syntax
+  highlighted, and when the same snippet appears on two slides in a row the code
+  *travels* between them. A line that moved moves; a call that changed position
+  slides to where it went, and the lines it passes step out of its way. Nothing
+  blanks and redraws.
+
+  This is the deck's existing morph pointed at source code. Show a refactor as
+  three slides and an audience watches the edit happen rather than comparing two
+  static screenshots — the starter deck now walks through fifteen years of
+  JavaScript, callbacks to promises to `async`/`await`, and the code rearranges
+  itself at each step.
+
+  Symbols with no counterpart on the previous slide fade in, staggered, once the
+  movement is already under way, so a newly introduced line arrives as part of
+  the same beat instead of snapping in. A word whose *role* changes while its
+  text does not — `render(` becoming `.then(render)` — keeps its identity and
+  travels, because turning a call into a reference is a refactor, not a rename.
+
+  Highlighting is built in, covers 75 languages plus diffs and Markdown, and
+  costs a deck about 10 KB. It is deliberately the cheaper of two tiers: the
+  format keeps its seam for full grammars carried as per-deck assets, and
+  nothing here closes that door.
+
+- **A deck can set its own morph tempo.** The default 0.65 seconds is tuned for
+  the ordinary case — a title sliding in, a shape growing, a journey of several
+  hundred pixels. A code symbol moves about one line height, and at that tempo
+  the whole journey is over in roughly 300 ms: measurably an animation, watchably
+  a blink. A deck built around small, precise movement can now choose a slower
+  beat, and decks that say nothing are unchanged.
+
+  This one is a document setting (`present.morphSeconds`, clamped to 0.1–6
+  seconds) with no control in the panel yet — reachable today by editing the
+  deck's JSON through **Copy document JSON** / **Replace from JSON…**.
+
+- **Deck-wide brand colours.** The Slide panel gains a **Theme** section — a
+  background, a text colour and six accents — and every colour control now
+  offers those swatches above its picker. Pick one and the deck *remembers where
+  the colour came from*, so changing the theme later updates every element using
+  it, across every slide. Pick a custom colour instead and it stays exactly as
+  you set it: choosing by hand clears the link, because a colour you chose
+  deliberately should never be overwritten by a later theme edit.
+
+  The document keeps ordinary colour values throughout, exactly as before — the
+  reference sits alongside them rather than replacing them. So a deck saved with
+  a theme still opens correctly in any earlier copy of Bento, which simply sees
+  a normal deck of normal colours.
+
+- **The web demo says where your deck went.** bento.page always hands out a new
+  deck — that is what it is for — so anyone who saved from it and came back
+  later got a blank starter and reasonably read it as lost work. Their file was
+  on disk the whole time; nothing on screen said so.
+
+  Saving from the web now leaves a line naming the file it went to, and saying
+  that this page always starts a new deck. Coming back after a save says the
+  same thing before you start typing into a fresh one, with the name of the file
+  to open — and **Start a new deck anyway** is always there, because some
+  visitors do want a fresh one.
+
+  Two things genuinely do not survive that trip and are worth knowing: version
+  history and the recovery snapshot belong to the browser, not the file, so they
+  stay behind on bento.page when the deck moves to your disk.
+
+- **Every deck you save is smaller.** The runtime each file carries is now packed
+  harder — about 26 KB off a Bento Slides file, for nothing given up. It is the
+  same compression format as before, searched more thoroughly at build time, so
+  files you already saved keep working and an older copy of Bento still updates
+  itself against a new shell exactly as it did.
+
+- **Saving into any of several granted folders.** With the browser extension
+  installed, you can grant Bento more than one folder and a deck saves back to
+  whichever one it came from. Two decks that share a filename in different
+  folders both save correctly now; previously that ambiguity made Bento decline
+  the save. Granting a large folder no longer costs anything either, so a whole
+  home directory is as cheap as a single decks folder.
+
+- **Fix: several buttons were unreadable in dark mode.** White text on a
+  near-white button — the main action in a dialog, the toast that confirms a
+  save, the active chip in a settings row, and the ＋ between slides. The
+  colour of the text was fixed while the colour behind it followed the theme,
+  so what read cleanly in light turned into white-on-white as soon as the
+  interface went dark. The panel chevrons had a milder version of the same
+  thing. Text now always takes the opposite colour to whatever it sits on.
+
+
+- **Fix: audio and video played in a show even with Autoplay switched off.**
+  Set a clip's *Autoplay* to Off and it still started the moment its slide came
+  up — every time, in a saved file, on any browser. The only way to stop it was
+  to remove the clip.
+
+  The flag was written as an empty attribute rather than left off, and the
+  slideshow engine treats an attribute that is *present* as a yes, whatever it
+  says. Bento's own check read the value and was right; it simply never got
+  asked. Present since audio and video arrived.
+
+- **Fix: a fading slide painted over the morph behind it.** When a slide set to
+  *fade* handed off to a morph, the outgoing slide dissolved on top of the
+  animation — a 450 ms curtain over a 600 ms move — so the elements appeared to
+  jump straight to their new arrangement. They had been travelling the whole
+  time, underneath. Slides that hand off to a morph now cut instead.
+
+- **Fix: a formula's new symbols appeared instantly instead of fading in.** A
+  formula gaining a term showed that term snapping into place while every other
+  symbol glided. Bento's animation engine recognised HTML and SVG elements but
+  not MathML ones, so the fade was quietly written to the wrong place and never
+  reached the screen. Formula symbols now arrive on the same staggered beat as
+  everything else.
+
+- **Fix: the palette swatches had a border you could not see on a dark panel.**
+  The new theme swatches shipped with a border colour pinned to a light-mode
+  value while the panel behind it followed the interface theme — the same
+  mismatch the dark-mode fix above removes everywhere else. The border now
+  follows the theme too.
+
+- **Fix: the toast after saving an editor copy said only "Editor".** In seven of
+  the eight built-in languages the message that confirms an editor copy was
+  saved carried the translation of the neighbouring one-word "Editor" label
+  instead of its own sentence, so a German user saving an editor copy saw a
+  toast reading `Bearbeiter` and nothing else. All eight now say what actually
+  happened. Downloadable language packs were never affected.
+
+- **Fix: a diagram could restyle other diagrams on the same slide.** An SVG
+  element can carry its own `<style>` block, and those rules were applied to the
+  whole page rather than to the drawing they belong to. So a diagram that styled
+  `.dot` or `.label` silently restyled every other SVG beside it — colours,
+  strokes and dimming rules leaking between unrelated drawings, and the more
+  diagrams a slide carried the stranger it looked.
+
+  Nothing could escape further than that: a drawing's stylesheet has never been
+  able to load or run anything, and still cannot. This was one diagram reaching
+  another's appearance, not reaching out of the document.
+
+  Bento already scoped the stylesheet you write in the element panel; the one
+  that arrives inside pasted or imported SVG markup was never scoped at all.
+  Both go through the same scoping now, and a drawing's own rules still apply to
+  it in full.
+
+## [1.0.18] — 2026-08-15
+
+- **Security: offline mode did not block everything it promised.** The switch
+  says "nothing leaves this computer", and five things still went out with it
+  on: a manual *Check for updates* called the release server, *Manage
+  languages…* downloaded the pack index and any pack you added, a deck's video
+  or image pointing at a web address still loaded from it, requests already
+  running were left to finish, and a second tab that was already in a live
+  session kept syncing edits.
+
+  The last two matter most. A remote image or video in a document is the
+  cheapest tracking beacon there is — it tells whoever hosts it that you opened
+  the file, and when — and offline mode is exactly what you would turn on
+  before opening a deck you did not write. The second tab was worse: real
+  document content kept moving.
+
+  Separately, where a browser blocks site data — a private window, or a
+  locked-down setup — the checkbox showed the switch on while nothing had been
+  stored, so it did nothing at all. It now holds for the session regardless and
+  says plainly that it will not survive a reload.
+
+  Offline mode now covers all of it: the network is reachable from exactly one
+  place in the code, flipping the switch cuts requests and connections that are
+  already open rather than only the next one, and a deck's remote images and
+  video are left unloaded. Reported privately, with a reproduction — and found
+  by watching real traffic after reading the code twice suggested there was
+  nothing wrong.
+
+- **Updating a file no longer interrupts you.** With Bento Tray installed and a
+  folder granted, "Update this file" now finishes without a single dialog. The
+  backup it leaves behind is saved **beside your document** instead of being
+  downloaded — so the copy you would roll back to sits next to the thing it
+  backs up, rather than in your downloads folder. Without the extension it is
+  still a download, exactly as before.
+
+  Two things caused the prompt. The backup was handed to the browser's download
+  machinery, which asks where to put things if you have told Chrome to; and an
+  update of a double-clicked file described itself to the extension as an
+  export, so the extension — correctly — refused to write it for you.
+
+- **Fix: Share opened cut in half on a narrow window.** Once the window is
+  narrow enough to fold the toolbar into ⋯, opening **Share** from that menu
+  drew the popover sliced down its left edge, with the properties panel showing
+  through the gap where the rest of it should have been. Share and Language now
+  open as a section of the ⋯ list itself — full width, scrolling with it,
+  nothing hanging over an edge to be cut off.
+
+  The ⋯ menu scrolls when it has more in it than fits on screen, and a box that
+  scrolls in one direction quietly clips the other whether you asked for that or
+  not. Anything floating inside it was always going to be trimmed. Wide windows
+  were never affected: the fold only happens when the toolbar runs out of room.
+
+- **The update card drops its peach stripe.** The "Version X is available" card
+  in About carried a thick accent rule down its leading edge — the only stripe
+  of its kind anywhere in the app, and a hard-coded colour, so it stayed peach
+  while everything around it moved into dark mode. It now has the same quiet
+  1px border as every other surface in the dialog and themes along with them.
+  The accent stays where it earns its place: on the button you press.
+
 ## [1.0.17] — 2026-08-10
 
 - **Security: update this file. A deck could run code hidden in its own

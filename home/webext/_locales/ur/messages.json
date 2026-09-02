@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "Bento دستاویز کو اُسی فائل میں واپس محفوظ کریں جو آپ نے کھولی تھی، منزل پوچھے بغیر۔"
+  },
+  "navAll": {
+    "message": "تمام دستاویزات"
+  },
+  "navFolders": {
+    "message": "فولڈرز"
+  },
+  "navHelp": {
+    "message": "مدد اور تعارف"
+  },
+  "navSettings": {
+    "message": "ترتیبات"
+  },
+  "addFolder": {
+    "message": "+ فولڈر شامل کریں…"
+  },
+  "searchDocs": {
+    "message": "دستاویزات میں تلاش کریں"
+  },
+  "searchDocsSlash": {
+    "message": "دستاویزات میں تلاش کریں   /"
+  },
+  "sortTitle": {
+    "message": "ترتیب"
+  },
+  "sortRecent": {
+    "message": "حال ہی میں تبدیل شدہ"
+  },
+  "sortName": {
+    "message": "نام"
+  },
+  "sortFolder": {
+    "message": "فولڈر"
+  },
+  "newDocument": {
+    "message": "+ نئی دستاویز"
+  },
+  "browseAll": {
+    "message": "سب دیکھیں"
+  },
+  "reconnectFolders": {
+    "message": "فولڈرز دوبارہ جوڑیں"
+  },
+  "primeIntro": {
+    "message": "Chrome ابھی پوچھے گا۔ درمیان والا اختیار منتخب کریں:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — ایک فولڈر کو دوبارہ جوڑنا ہے"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home کو دوبارہ جوڑنا ہے"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome نے ایک فولڈر کی اجازت واپس لے لی۔ جب تک بحال نہ ہو، ہر بار محفوظ کرنے پر پوچھا جائے گا کہ فائل کہاں رکھی جائے۔"
+  },
+  "reconnect": {
+    "message": "دوبارہ جوڑیں"
+  },
+  "ctxOpenPanel": {
+    "message": "bento/home پینل کھولیں"
+  },
+  "panelEmpty": {
+    "message": "آپ کے فولڈرز میں ابھی کوئی Bento دستاویز نہیں۔"
+  },
+  "noMatches": {
+    "message": "”$1“ سے کچھ مماثل نہیں"
+  },
+  "rowUnplacedTip": {
+    "message": "$1 کی کوئی ایک دستاویز Finder سے ایک بار کھول لیں، پھر اُس فولڈر کی ہر چیز یہیں سے کھلنے لگے گی۔"
+  },
+  "encrypted": {
+    "message": "پاس ورڈ سے محفوظ"
+  },
+  "notSavedYet": {
+    "message": "ابھی محفوظ نہیں ہوئی"
+  },
+  "fileAccessOffShort": {
+    "message": "مقامی فائل رسائی بند ہے"
+  },
+  "noFoldersYet": {
+    "message": "ابھی کوئی فولڈر نہیں"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 فولڈر کو دوبارہ جوڑنا ہے"
+  },
+  "statusOneFolder": {
+    "message": "$1 فولڈر · اپنی جگہ محفوظ کرتا ہے"
+  },
+  "statusFolders": {
+    "message": "$1 فولڈرز · اپنی جگہ محفوظ کرتے ہیں"
+  },
+  "renewNotOffered": {
+    "message": "Chrome نے اسے بحال کرنے کی پیشکش نہیں کی"
+  },
+  "renewTryAfterRestart": {
+    "message": "Chrome دوبارہ چلا کر پھر کوشش کریں"
+  },
+  "fetchingLatest": {
+    "message": "تازہ ترین Bento لایا جا رہا ہے…"
+  },
+  "created": {
+    "message": "$1 بنا دی گئی"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 پڑھی تو جا سکتی ہے مگر ابھی کھولی نہیں جا سکتی — Chrome کسی ایکسٹینشن کو نہیں بتاتا کہ فولڈر ڈسک پر کہاں ہے۔ <b>سب دیکھیں</b> انہیں ایک ہی کلک میں ڈھونڈ لیتا ہے۔"
+  },
+  "andMore": {
+    "message": " اور $1 مزید"
+  },
+  "agoJustNow": {
+    "message": "ابھی ابھی"
+  },
+  "agoMinutes": {
+    "message": "$1 منٹ پہلے"
+  },
+  "agoHour": {
+    "message": "$1 گھنٹہ پہلے"
+  },
+  "agoHours": {
+    "message": "$1 گھنٹے پہلے"
+  },
+  "agoDay": {
+    "message": "$1 دن پہلے"
+  },
+  "agoDays": {
+    "message": "$1 دن پہلے"
+  },
+  "searchScope": {
+    "message": "تلاش عنوانات، فائل کے ناموں، فولڈرز اور دستاویزات کے اندر کے الفاظ کو دیکھتی ہے۔"
+  },
+  "folderEmpty": {
+    "message": "اِس فولڈر میں ابھی کچھ نہیں"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ نئی دستاویز</b> یہاں ایک نئی رکھ دیتی ہے۔"
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home کو ابھی معلوم نہیں کہ $1 ڈسک پر کہاں ہے۔ ”میرے فولڈرز ڈھونڈیں“ استعمال کریں، یا اس کی کوئی دستاویز Finder سے ایک بار کھولیں۔"
+  },
+  "cardRenamedTip": {
+    "message": "$1 دوسرے نام والی ایک Bento دستاویز ہے۔ یہ یہیں سے کھلتی ہے، مگر محفوظ کرتے وقت منزل پوچھی جائے گی — اپنی جگہ محفوظ کرنا صرف اُن فائلوں کو پہچانتا ہے جو ‎.bento.html پر ختم ہوں۔"
+  },
+  "badgeRenamed": {
+    "message": "‎.bento.html کے بجائے ‎.html نام ہے — یہ یہیں سے کھلتی ہے، مگر محفوظ کرتے وقت منزل پوچھی جائے گی۔"
+  },
+  "menuOpen": {
+    "message": "کھولیں"
+  },
+  "menuDuplicate": {
+    "message": "نقل بنائیں"
+  },
+  "menuRename": {
+    "message": "نام بدلیں…"
+  },
+  "menuCopyPath": {
+    "message": "راستہ نقل کریں"
+  },
+  "duplicatedAs": {
+    "message": "$1 کے نام سے نقل بنی"
+  },
+  "renamePrompt": {
+    "message": "دستاویز کا نام بدلیں"
+  },
+  "renamedTo": {
+    "message": "نام بدل کر $1 کر دیا گیا"
+  },
+  "pathCopied": {
+    "message": "راستہ نقل ہو گیا"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — ابھی نہیں کھولا گیا"
+  },
+  "setupTitle": {
+    "message": "دو کام اور آپ تیار"
+  },
+  "setupLead": {
+    "message": "اِس کے بعد، ڈبل کلک سے کھولی گئی دستاویز میں ⌘S سیدھا اُسی فائل میں لکھتا ہے — منزل کبھی نہیں پوچھی جائے گی۔"
+  },
+  "chooseFolder": {
+    "message": "فولڈر منتخب کریں…"
+  },
+  "setupStep1": {
+    "message": "وہ فولڈر منتخب کریں جس میں آپ کی دستاویزات رہتی ہیں"
+  },
+  "setupStep1Note": {
+    "message": "عام طور پر ایک بڑا فولڈر کافی ہے — اُس کے اندر کی ہر چیز اِس میں آ جاتی ہے۔"
+  },
+  "setupStep2": {
+    "message": "مقامی فائل رسائی آن کریں"
+  },
+  "setupStep2Note": {
+    "message": "<code>chrome://extensions</code> ← bento/home ← <b>فائل URLs تک رسائی کی اجازت دیں</b>۔ Chrome کسی ایکسٹینشن کو یہ خود آن کرنے نہیں دیتا۔"
+  },
+  "setupUpgradeNote": {
+    "message": "<b>اپ گریڈ کیا اور سوچا کہ آپ کے فولڈرز یہیں ہوں گے؟</b> اَن پیکڈ ایکسٹینشن اپنے فولڈر کے راستے سے پہچانی جاتی ہے، اِس لیے کسی دوسرے فولڈر سے لوڈ کی گئی نئی نقل ایک الگ ایکسٹینشن ہے۔ آپ کے فولڈرز اب بھی پرانی والی سے جڑے ہیں۔ اِس کے بجائے اصل فولڈر کی فائلیں بدلیں اور <code>chrome://extensions</code> میں <b>دوبارہ لوڈ کریں</b> دبائیں۔"
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>مقامی فائل رسائی بند ہے</b> — جب تک یہ آن نہ ہو، کچھ بھی اپنی جگہ محفوظ نہیں ہوگا۔ <code>chrome://extensions</code> میں <b>فائل URLs تک رسائی کی اجازت دیں</b> آن کریں۔"
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 فولڈر کو دوبارہ جوڑنا ہے۔</b> <b>ترتیبات</b> میں اسے دوبارہ جوڑیں اور <b>ہر بار اجازت دیں</b> منتخب کریں — یہی واحد اختیار ہے جو قائم رہتا ہے۔"
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> فہرست میں دکھایا تو جا سکتا ہے مگر ابھی کھولا نہیں جا سکتا — Chrome کسی ایکسٹینشن کو کبھی نہیں بتاتا کہ فولڈر ڈسک پر کہاں ہے۔"
+  },
+  "findFolders": {
+    "message": "میرے فولڈرز ڈھونڈیں"
+  },
+  "looking": {
+    "message": "تلاش جاری ہے…"
+  },
+  "findDeclined": {
+    "message": "<b>کوئی بات نہیں۔</b> اِس کے بجائے $1 کی کوئی دستاویز Finder سے ایک بار کھول لیں — یہ صفحہ بھانپ لے گا۔"
+  },
+  "foundFolder": {
+    "message": "$1 فولڈر ملا"
+  },
+  "foundFolders": {
+    "message": "$1 فولڈرز ملے"
+  },
+  "foundNothing": {
+    "message": "تاریخ میں ابھی کچھ نہیں — Finder سے ایک دستاویز کھولیں"
+  },
+  "setFoldersSub": {
+    "message": "اِن میں رکھی دستاویزات منزل پوچھے بغیر سیدھا اُسی فائل میں محفوظ ہوتی ہیں۔ ایک فولڈر اُس کے اندر کی ہر چیز کو سمیٹ لیتا ہے۔"
+  },
+  "noneYet": {
+    "message": "ابھی کوئی نہیں۔"
+  },
+  "savesInPlace": {
+    "message": "اپنی جگہ محفوظ کرتا ہے"
+  },
+  "needsReconnecting": {
+    "message": "دوبارہ جوڑنا ہے"
+  },
+  "reconnectTip": {
+    "message": "Chrome اِس فولڈر کو بحال کرنے کی اجازت مانگے گا۔ ”اجازت نہ دیں“ اسے چھوڑ دیتا ہے، اور اُس کے بعد Chrome دوبارہ پوچھنے سے پہلے کم از کم ایک بار دوبارہ چلنے کا انتظار کرتا ہے۔"
+  },
+  "remove": {
+    "message": "ہٹائیں"
+  },
+  "removeTip": {
+    "message": "رسائی واپس لے لیتا ہے۔ Chrome اجازت یاد رکھ سکتا ہے، اِس لیے فولڈر دوبارہ شامل کرنے پر شاید کچھ نہ پوچھا جائے۔"
+  },
+  "setAccessTitle": {
+    "message": "مقامی فائل رسائی"
+  },
+  "setAccessSub": {
+    "message": "Chrome کسی ایکسٹینشن کو یہ خود آن کرنے نہیں دیتا، اور اِس کے بغیر کچھ بھی کام نہیں کرتا۔"
+  },
+  "stateOn": {
+    "message": "آن"
+  },
+  "stateOff": {
+    "message": "بند"
+  },
+  "stateUnknown": {
+    "message": "نامعلوم"
+  },
+  "accessOnNote": {
+    "message": "bento/home ڈسک سے کھولے گئے صفحات پڑھ سکتا ہے۔"
+  },
+  "accessOffNote": {
+    "message": "chrome://extensions کھولیں، bento/home تلاش کریں، ”فائل URLs تک رسائی کی اجازت دیں“ آن کریں۔"
+  },
+  "accessUnknownNote": {
+    "message": "یہ براؤزر اِس کی اطلاع نہیں دیتا۔ اگر محفوظ کرتے وقت اب بھی پوچھا جائے تو chrome://extensions میں دیکھیں۔"
+  },
+  "setVersionTitle": {
+    "message": "ورژن"
+  },
+  "setVersionUnpacked": {
+    "message": "یہ نقل اَن پیکڈ لوڈ کی گئی تھی، اِس لیے Chrome اسے کبھی اپ ڈیٹ نہیں کرے گا۔"
+  },
+  "setVersionStore": {
+    "message": "اسٹور سے نصب کی گئی، اِس لیے یہ خود اپ ڈیٹ ہوتی ہے۔"
+  },
+  "versionAvailable": {
+    "message": "$1 دستیاب ہے"
+  },
+  "versionUpToDate": {
+    "message": "آخری جانچ کے مطابق تازہ ترین"
+  },
+  "versionManaged": {
+    "message": "براؤزر اسے تازہ رکھتا ہے"
+  },
+  "getIt": {
+    "message": "حاصل کریں"
+  },
+  "checkNow": {
+    "message": "ابھی جانچیں"
+  },
+  "autoCheckPref": {
+    "message": "<b>براؤزر شروع ہونے پر نیا ورژن جانچیں۔</b><br>ایک ساکن فائل کے لیے bento.page کو ایک درخواست۔ یہ نہ کوئی شناخت کنندہ بھیجتا ہے، نہ ورژن نمبر، اور نہ آپ کی دستاویزات کے بارے میں کچھ — موازنہ یہیں ہوتا ہے۔ اسے بند کر دیں تو کبھی کوئی درخواست نہیں جائے گی؛ <b>ابھی جانچیں</b> پھر بھی کام کرتا ہے۔"
+  },
+  "expectedSha": {
+    "message": "zip کا متوقع SHA-256: $1"
+  },
+  "setReachTitle": {
+    "message": "یہ کہاں تک پہنچ سکتا ہے"
+  },
+  "setReachSub": {
+    "message": "صرف اوپر والے فولڈرز، اور صرف وہی فائل جس سے کوئی صفحہ حقیقتاً کھولا گیا تھا۔ کچھ اپ لوڈ نہیں ہوتا اور کہیں اور کچھ نہیں پڑھا جاتا۔"
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 دستیاب ہے۔</b> یہ نقل اَن پیکڈ لوڈ کی گئی تھی، اِس لیے Chrome اسے کبھی اپ ڈیٹ نہیں کرے گا۔"
+  },
+  "updateStep1": {
+    "message": "اسے GitHub سے ڈاؤن لوڈ کریں"
+  },
+  "updateStep2": {
+    "message": "فائلیں <b>اُسی فولڈر میں</b> بدلیں <b>جس سے آپ نے اسے لوڈ کیا تھا</b> — وہی فولڈر، ورنہ Chrome اسے الگ ایکسٹینشن سمجھے گا اور اجازت یافتہ فولڈرز ساتھ نہیں آئیں گے"
+  },
+  "updateStep3": {
+    "message": "<code>chrome://extensions</code> کھولیں اور bento/home پر <b>دوبارہ لوڈ کریں</b> دبائیں"
+  },
+  "fetchingApp": {
+    "message": "$1 لایا جا رہا ہے…"
+  },
+  "createdIn": {
+    "message": "$3 میں $1 ($2) بنا دی گئی"
+  },
+  "intoFolder": {
+    "message": "$1 میں"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home کیا کرتا ہے"
+  },
+  "helpWhatSub": {
+    "message": "Bento دستاویز ایک ہی HTML فائل ہے جو اپنا مدیر ساتھ لیے چلتی ہے۔ سیدھا ڈسک سے کھولنے پر براؤزر اسے خود میں واپس لکھنے نہیں دیتا — اِس لیے ہر بار محفوظ کرنے پر پوچھا جاتا ہے کہ کہاں رکھیں۔ bento/home وہی سوال ختم کر دیتا ہے۔"
+  },
+  "tourSaveTitle": {
+    "message": "اپنی جگہ محفوظ کریں"
+  },
+  "tourSaveBody": {
+    "message": "⌘S بغیر کسی ڈائیلاگ کے سیدھا اُسی فائل میں لکھتا ہے جو آپ نے کھولی تھی۔ خودکار محفوظ کرنا اور اپنی جگہ ہونے والی اپ ڈیٹس بھی اِسی راستے جاتی ہیں۔"
+  },
+  "tourFindTitle": {
+    "message": "اپنی دستاویزات ڈھونڈیں"
+  },
+  "tourFindBody": {
+    "message": "آپ کے فولڈرز کی ہر Bento دستاویز، اُس کے اصل عنوان اور پہلے صفحے کی تصویر کے ساتھ۔ تلاش اُن کے اندر لکھی باتوں تک جاتی ہے۔"
+  },
+  "tourSwitchTitle": {
+    "message": "کام کرتے کرتے بدلیں"
+  },
+  "tourSwitchBody": {
+    "message": "ساتھ میں پینل کے لیے <kbd>Alt</kbd>+<kbd>B</kbd> دبائیں، یا دستاویز کے اندر دایاں کلک کریں۔"
+  },
+  "tourNewTitle": {
+    "message": "نئی بنائیں"
+  },
+  "tourNewBody": {
+    "message": "<b>+ نئی دستاویز</b> Slides، Spaces یا Dash کا موجودہ ریلیز لا کر آپ کے فولڈر میں ایک نئی دستاویز رکھ دیتی ہے۔"
+  },
+  "helpNeedsTitle": {
+    "message": "اسے آپ سے کیا چاہیے"
+  },
+  "helpNeedsSub": {
+    "message": "دو چیزیں، اور دونوں ہی اِس ایکسٹینشن کے بس کی نہیں۔"
+  },
+  "helpFolder": {
+    "message": "ایک فولڈر"
+  },
+  "helpFolderGranted": {
+    "message": "$1 کی اجازت ہے — اُن کے اندر کی دستاویزات اپنی جگہ محفوظ ہوتی ہیں"
+  },
+  "helpFolderNone": {
+    "message": "ابھی منتخب نہیں کیا گیا۔ ایک بڑا فولڈر اُس کے اندر کی ہر چیز کو سمیٹ لیتا ہے۔"
+  },
+  "helpAccessOff": {
+    "message": "بند۔ <code>chrome://extensions</code> میں <b>فائل URLs تک رسائی کی اجازت دیں</b> آن کریں — کوئی بھی ایکسٹینشن اسے خود آن نہیں کر سکتی۔"
+  },
+  "helpAccessUnknown": {
+    "message": "یہ براؤزر اِس کی اطلاع نہیں دیتا۔ اگر محفوظ کرتے وقت اب بھی پوچھا جائے تو <code>chrome://extensions</code> میں دیکھیں۔"
+  },
+  "helpAccessOn": {
+    "message": "آن — bento/home ڈسک سے کھولے گئے صفحات پڑھ سکتا ہے۔"
+  },
+  "helpNeverTitle": {
+    "message": "یہ کبھی کیا نہیں کرتا"
+  },
+  "helpNeverSub": {
+    "message": "یہ صرف اوپر والے فولڈرز کے اندر پڑھتا اور لکھتا ہے، اور صرف وہی فائل جس سے کوئی صفحہ حقیقتاً کھولا گیا تھا — کون سی، یہ براؤزر بتاتا ہے، اِس لیے کوئی دستاویز کسی اور کی فائل کا نام نہیں لے سکتی۔ آپ کی دستاویزات کے بارے میں کچھ بھی کہیں اپ لوڈ نہیں ہوتا، اور اِس ایکسٹینشن کے پاس انہیں اپ لوڈ کرنے کے لیے کوئی سرور ہے ہی نہیں۔"
+  },
+  "helpAboutTitle": {
+    "message": "تعارف"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Bento منصوبے کا حصہ · MIT لائسنس یافتہ"
+  },
+  "linkSource": {
+    "message": "GitHub پر ماخذ"
+  },
+  "linkIssues": {
+    "message": "مسئلے کی اطلاع دیں"
+  },
+  "linkReleases": {
+    "message": "ریلیزز"
+  },
+  "primeMiddle": {
+    "message": "وہ جو قائم رہتا ہے"
+  },
+  "primeNote": {
+    "message": "باقی دونوں بھی کام کرتے ہیں، مگر Chrome دوبارہ پوچھتا ہے — پہلے کے لیے ہر بار دوبارہ چلنے پر، اور آخری کے لیے کچھ انتظار کے بعد۔"
+  },
+  "viewLayout": {
+    "message": "دستاویزات کیسے دکھائی جائیں"
+  },
+  "viewIcons": {
+    "message": "آئیکن"
+  },
+  "viewList": {
+    "message": "فہرست"
+  },
+  "close": {
+    "message": "بند کریں"
+  },
+  "setLangTitle": {
+    "message": "زبان"
+  },
+  "setLangSub": {
+    "message": "یہ ایکسٹینشن کس زبان میں بات کرتی ہے۔ عام طور پر یہ براؤزر کی پیروی کرتی ہے۔"
+  },
+  "langAutomatic": {
+    "message": "خودکار — براؤزر کی پیروی کریں"
+  },
+  "setLangNote": {
+    "message": "ایکسٹینشن کا اپنا نام اور تفصیل براؤزر سے آتے ہیں اور تبدیل نہیں ہوتے۔"
+  },
+  "aboutPromo": {
+    "message": "Bento پر نئے ہیں؟ ٹیمپلیٹس، گیلری اور AI ایڈیٹنگ گائیڈ $1 پر ملیں گے — یا $2 پر ستارہ دیں۔"
+  },
+  "setThemeTitle": {
+    "message": "ظاہری شکل"
+  },
+  "setThemeSub": {
+    "message": "براؤزر کی ترتیب پہلے سے طے شدہ ہے، لازمی نہیں۔"
+  },
+  "themeAuto": {
+    "message": "براؤزر کے مطابق"
+  },
+  "themeLight": {
+    "message": "روشن"
+  },
+  "themeDark": {
+    "message": "گہرا"
+  },
+  "checking": {
+    "message": "جانچا جا رہا ہے…"
+  },
+  "surveyTitle": {
+    "message": "معلوم کریں آپ کی دستاویزات کہاں ہیں"
+  },
+  "surveySub": {
+    "message": "براؤزر جانتا ہے کہ آپ نے کون سی Bento دستاویزات کھولی ہیں، اور بتا سکتا ہے کہ وہ کن فولڈرز میں ہیں۔"
+  },
+  "surveyDeclined": {
+    "message": "کوئی بات نہیں — آپ فولڈر خود بھی شامل کر سکتے ہیں۔"
+  },
+  "surveyAllCovered": {
+    "message": "اس براؤزر نے جو $1 دستاویزات دیکھی ہیں، وہ سب پہلے سے شامل کیے گئے فولڈر میں ہیں۔"
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> دستاویزات آپ کے شامل کردہ ہر فولڈر سے باہر ہیں۔ $2 پہلے سے شامل ہیں۔"
+  },
+  "surveyCovers": {
+    "message": "$1 پر مشتمل"
+  },
+  "surveyAdd": {
+    "message": "یہ فولڈر شامل کریں…"
+  },
+  "surveyAdded": {
+    "message": "$1 شامل ہو گیا — اس کی دستاویزات تیار ہیں"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 شامل ہو گیا، مگر دستاویزات اس میں نہیں — Finder سے ایک بار کوئی ایک کھولیں۔"
+  },
+  "surveyOnlySeen": {
+    "message": "اس طریقے سے صرف وہی دستاویزات ملتی ہیں جو اس براؤزر میں کھولی گئی ہوں۔"
+  }
+}

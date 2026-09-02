@@ -11,13 +11,16 @@
 // policies differ in BOTH directions: spaces must reject DIV/P (slides permits
 // them) and spaces adds the suite's first attribute allowlist.
 
+import { canonicalMarks, keepClasses } from './marks.ts'
+
 /** Inline tags a block may contain. Nothing here can carry block structure. */
 const ALLOWED = new Set([
   'B', 'I', 'U', 'S', 'EM', 'STRONG', 'CODE', 'BR', 'SPAN', 'MARK', 'SUB', 'SUP', 'A',
 ])
 
 /**
- * The only attribute any tag may keep, and only on `A`.
+ * The href test. One of the format's TWO attributes — the other is a palette
+ * `class` on SPAN/MARK, whose pattern lives in marks.ts (CLASS_OK).
  *
  * MATCHED AGAINST `getAttribute('href')`, NEVER the `.href` IDL property.
  *
@@ -26,7 +29,7 @@ const ALLOWED = new Set([
  * stripping every internal link — while on a static host it becomes
  * `https://…#p/abc` and passes. Measured. The bug would be invisible in the
  * environment an author develops in and total in the two environments the
- * format exists for (file://, and bento/tray on iOS).
+ * format exists for (file://, and bento/home on iOS).
  *
  * `#p/` is an intra-space page link. There is deliberately no second fragment
  * form: an undefined entry in this list is a one-way data hazard, because an
@@ -34,6 +37,32 @@ const ALLOWED = new Set([
  * silently, on the next edit that touches the block.
  */
 const HREF_OK = /^(https?:|mailto:|#p\/)/i
+
+/**
+ * The OUTWARD half of HREF_OK, for an href that is not inline html.
+ *
+ * A link card's `url` is a block FIELD, so it never passes through
+ * sanitizeInline — and a block field out of a mailed file is exactly as
+ * untrusted as an attribute in one. Returns the url to use, or '' for anything
+ * that is not an outward link, so the caller's test is "did I get a string
+ * back" rather than a boolean it can forget to act on.
+ *
+ * ALLOWLIST, and on the RAW string, for both of sanitizeInline's reasons. A
+ * blocklist of `javascript:` loses to the parser's own leniency: `ja&#9;vascript:x`
+ * and ` javascript:x` are both `javascript:` by the time an href is followed,
+ * because the URL parser strips tabs, newlines and leading whitespace from a
+ * scheme. Neither one starts with `https:`, so both fail this test — an
+ * allowlist fails CLOSED against a normalisation nobody has thought of yet.
+ *
+ * `#p/` is deliberately NOT here. An internal page link is a pagelink block,
+ * which is a different type with a different renderer; letting a link card hold
+ * one would be a second way to say the same thing, differing only in which of
+ * the two a future build fixes a bug in.
+ */
+export function externalHref(raw: unknown): string {
+  const url = typeof raw === 'string' ? raw.trim() : ''
+  return /^(https?:|mailto:)/i.test(url) ? url : ''
+}
 
 /**
  * Tags whose CONTENT should survive when the tag itself is dropped.
@@ -101,8 +130,22 @@ export function sanitizeInline(html: string): string {
       }
 
       for (const attr of [...el.attributes]) {
-        const keep = tag === 'A' && attr.name === 'href' && HREF_OK.test(attr.value)
-        if (!keep) el.removeAttribute(attr.name)
+        if (tag === 'A' && attr.name === 'href' && HREF_OK.test(attr.value)) continue
+        // THE SECOND ATTRIBUTE THIS FORMAT HAS: a palette class on SPAN or
+        // MARK, and only a name matching CLASS_OK (marks.ts). Filtered per
+        // TOKEN, so `class="sp-fg-red onclick-bait"` keeps the first and drops
+        // the second rather than failing whole and losing the colour.
+        //
+        // A CLASS, NOT A `style`. A style attribute would make this function a
+        // CSS parser — and CSS is a language with `url()` in it — while a class
+        // name can only ever select a rule in OUR stylesheet or select nothing.
+        if (tag === 'SPAN' || tag === 'MARK') {
+          if (attr.name === 'class') {
+            const kept = keepClasses(attr.value)
+            if (kept) { el.setAttribute('class', kept); continue }
+          }
+        }
+        el.removeAttribute(attr.name)
       }
       // an <a> that lost its href is no longer a link — unwrap it
       if (tag === 'A' && !el.getAttribute('href')) {
@@ -141,18 +184,18 @@ function stripAllTags(html: string): string {
  * would re-trip text merging on every keystroke.
  */
 export function canonicalize(html: string): string {
-  let out = sanitizeInline(html)
-  // one pass of adjacent-run coalescing per tag, repeated to a fixed point so
-  // <b>a</b><b>b</b><b>c</b> collapses fully
-  for (let i = 0; i < 4; i++) {
-    const before = out
-    for (const tag of ['b', 'i', 'u', 's', 'em', 'strong', 'code', 'mark']) {
-      out = out.replaceAll(`</${tag}><${tag}>`, '')
-    }
-    out = out.replace(/<(b|i|u|s|em|strong|code|mark)><\/\1>/g, '') // empty runs
-    if (out === before) break
-  }
-  return out
+  // TWO STAGES, and only the first one needs a browser. sanitizeInline decides
+  // what is ALLOWED to be here (a DOM question — it has to parse hostile markup
+  // inertly to answer it); canonicalMarks decides what SHAPE the allowed marks
+  // take, which is a string question and therefore one a rig can test.
+  //
+  // This used to be a fixed-point loop of `</b><b>` → `''` string replacements.
+  // It coalesced adjacent runs and dropped empty ones, and it could do nothing
+  // at all about §2.3's other half — nesting order — because "is this <i>
+  // inside or outside that <b>" is not a question a replaceAll can ask. So
+  // `<b><i>x</i></b>` and `<i><b>x</b></i>` were both canonical, which makes
+  // every diff and every CRDT merge of the same visible text a conflict.
+  return canonicalMarks(sanitizeInline(html))
 }
 
 /** Plain text of a block, for search and for markdown export. */
