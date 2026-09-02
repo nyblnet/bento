@@ -383,5 +383,80 @@ for (const app of SHARE_APPS) {
     `${app}: onShareCopy does not retain the file handle — the next ⌘S must not overwrite the copy with the full document`)
 }
 
+// --- the OTHER half of the round trip: pasting one back in -------------------
+//
+// Stripping `collab` out of "Copy document JSON" is right, and it changed what
+// the documented AI round trip does on the way BACK. Both directions were
+// wrong; the strip turned the first from rare into routine.
+//
+//   · a STRIPPED paste — now the ordinary case — carried no credentials, so
+//     replacing SILENTLY ENDED the live session. Measured before the fix:
+//     sharing on / room `w-abc` before, sharing off / room gone after, nothing
+//     on screen, peers still editing.
+//   · a paste carrying SOMEBODY ELSE'S credentials silently JOINED their room.
+//     Measured: `w-MINE` became `w-THEIRS`, the next edit went out under their
+//     key, and they hold the owner key that can revoke.
+//
+// The rule is the one this file's own fix draws: a saved FILE carrying its own
+// capability is the design, and pasted text is not a file. So the room belongs
+// to the open workbook and the paste replaces content only. A dropped or opened
+// workbook is unaffected and still adopts its own room.
+{
+  const about = readFileSync(new URL('../dash/src/about.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+
+  ok(/const keep = \(store\.doc as \{ collab\?: unknown \}\)\.collab/.test(about),
+    'the paste path reads the OPEN workbook’s credentials')
+  ok(/collab: keep/.test(about),
+    'and carries them onto the pasted document, so a stripped paste cannot end the session ' +
+    'and a stranger’s paste cannot move it')
+  ok(/replaceWorkbook\(hooks, merged\)/.test(about),
+    'and it is the merged document that replaces, not the pasted one')
+
+  // NOT in replaceWorkbook itself: "Duplicate as new workbook" goes through it
+  // and mints fresh credentials deliberately. Folding the rule in there would
+  // make a fork keep its ancestor's room — the opposite of what it is for.
+  const dup = about.slice(about.indexOf('function replaceWorkbook'))
+  ok(!/collab: keep/.test(dup),
+    'and replaceWorkbook itself is untouched, so Duplicate-as-new-workbook still forks its identity')
+}
+
+// --- the OTHER button with that label -----------------------------------------
+//
+// dash has TWO "Copy document JSON" buttons. #338 fixed About's. This is the
+// one on the REFUSAL surface — the screen shown when a file cannot be parsed —
+// and it was missed by the fix and by this rig alike, because it copies the raw
+// embedded block rather than a stringified document, so a check looking for a
+// document reaching a clipboard cannot see it.
+//
+// It also PRINTS that block on screen, and an error screen is the thing people
+// screenshot and paste into a chat window. A file whose `format` string is not
+// `bento/dash` — a slides deck, a space — refuses here and is perfectly good
+// JSON with live keys in it. (A newer VERSION does not refuse: format
+// additivity means it opens. Checked rather than assumed.)
+//
+// Parse what parses, strip through the SAME `docForExport`, and when the block
+// is not JSON at all leave it alone and SAY so — recovering somebody's data
+// matters more than tidiness, and "Save an untouched copy" beside it is the
+// byte-exact route regardless.
+{
+  const main = readFileSync(new URL('../dash/src/main.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+  const gate = main.slice(main.indexOf('function refuse('), main.indexOf('function refuse(') + 3000)
+
+  ok(/docForExport\(/.test(gate),
+    'the refusal screen strips through docForExport — the same stripper, not a second one')
+  ok(!/writeText\(raw\)/.test(gate),
+    'and the clipboard no longer gets the raw block with the keys still in it')
+  ok(/textContent = shown\./.test(gate),
+    'and the block PRINTED on screen is the stripped one too — an error screen gets screenshotted')
+  ok(/catch \{ return \{ text: raw, safe: false \} \}/.test(gate),
+    'an unparseable block still yields its raw text, because recovering the data is what this screen is for')
+  ok(/dx-gate-warn/.test(gate) && /take care where you paste this/.test(gate),
+    'and in that case it says the keys could not be removed, rather than leaving it to be discovered')
+  ok(/Save an untouched copy/.test(gate),
+    'with the byte-exact route still offered beside it, which is why stripping here costs nothing')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

@@ -11,11 +11,14 @@
 // nothing is hand-copied file-by-file and the guestbook / gallery imagery can't
 // silently drift between sessions.
 //
-//   node scripts/publish-site.mjs "commit message"   [--gallery] [--dry]
+//   node scripts/publish-site.mjs "commit message"   [--gallery] [--dry] [--app A]
 //
 //   --gallery   regenerate the gallery decks first (needs a built shell at
 //               slides/dist-single/ — run `npm run build:single` or a release).
 //   --dry       show what would change; don't commit or push.
+//   --app       which app this publish is releasing. Normally read from the
+//               marker release.mjs staged; pass it only for a publish that is
+//               not following a release.
 //
 // Destination repo: $BENTO_SITE_DIR, else ../bento-site beside this repo.
 
@@ -27,6 +30,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { gatePackIndex } from './sign-packs.mjs'
 import { walk, plannedDeletions, groupDeletions, supersededPacks } from './site-inventory.mjs'
+import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const site = join(root, 'site')
@@ -37,7 +41,15 @@ const dest = process.env.BENTO_SITE_DIR
 const args = process.argv.slice(2)
 const dry = args.includes('--dry')
 const doGallery = args.includes('--gallery')
-const message = args.find((a) => !a.startsWith('--'))
+const opt = (name) => {
+  const i = args.indexOf(`--${name}`)
+  return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null
+}
+// The commit message is the first BARE argument — and `--app dash` puts a bare
+// word in the list too, so the flag's value has to be skipped explicitly or
+// `publish-site.mjs --app dash "release dash-v0.2.0"` commits as "dash".
+const appFlag = opt('app')
+const message = args.find((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1] === '--app'))
 
 const die = (m) => { console.error(`✗ ${m}`); process.exit(1) }
 const run = (cmd, cmdArgs, opts = {}) =>
@@ -49,6 +61,32 @@ const capture = (cmd, cmdArgs, opts = {}) =>
 if (!existsSync(join(site, 'index.html'))) die(`no assembled site at ${site} — run release.mjs first`)
 if (!existsSync(join(dest, '.git'))) die(`destination is not a git repo: ${dest} (set BENTO_SITE_DIR?)`)
 if (!dry && !message) die('a commit message is required (or pass --dry)')
+
+// ---- WHICH APP is this publishing? -----------------------------------------
+//
+// One release builds one app, and everything below the mirror is per app: the
+// tag the GitHub release is created for, the title, the changelog the notes
+// come from, and the shell attached to it. Publishing a dash release as slides
+// is not a loud failure — it finds slides' existing release for slides' tag,
+// reports "already published", and exits 0 having created nothing.
+//
+// So the app is READ from the tree being published: release.mjs stamps
+// site/.bento-release.json with what it staged. `--app` overrides for the
+// publishes that follow no release (a landing copy tweak, a pack re-sign), and
+// the slides default keeps those behaving exactly as they always have.
+const released = (() => {
+  try { return JSON.parse(readFileSync(join(site, RELEASE_MARKER), 'utf8')) } catch { return null }
+})()
+const appKey = appFlag ?? released?.app ?? 'slides'
+const app = APPS[appKey]
+if (!app) die(`unknown --app "${appKey}". Known: ${Object.keys(APPS).join(', ')}`)
+if (appFlag && released?.app && released.app !== appFlag) {
+  console.log(`⚠ --app ${appFlag} overrides the staged marker (${released.app} v${released.version})`)
+} else if (released) {
+  console.log(`• publishing the ${released.app} release staged in site/ (v${released.version})`)
+} else {
+  console.log(`• no release marker in site/ — publishing as ${appKey} (site-only change?)`)
+}
 
 // ---- optional: regenerate the gallery --------------------------------------
 if (doGallery) {
@@ -145,18 +183,22 @@ const cmpVersion = (a, b) => {
   }
   return 0
 }
-{
-  const localManifest = join(site, 'releases/slides/manifest.json')
-  const liveManifest = join(dest, 'releases/slides/manifest.json')
-  const local = manifestVersion(localManifest)
-  const live = manifestVersion(liveManifest)
+//
+// EVERY app's channel, not just the one being released. A release seeds site/
+// from the published tree and overwrites only what it built, so the other apps'
+// manifests should come back byte-identical — and if one does not, that is
+// exactly the stale-tree case this gate exists for, arriving through an app
+// nobody was looking at.
+for (const [key, a] of Object.entries(APPS)) {
+  const local = manifestVersion(join(site, `releases/${a.dir}/manifest.json`))
+  const live = manifestVersion(join(dest, `releases/${a.dir}/manifest.json`))
   if (local && live && cmpVersion(local, live) < 0) {
     if (!args.includes('--allow-release-downgrade')) {
       die(
-        `this tree would PUBLISH AN OLDER RELEASE than the one already live:\n` +
+        `this tree would PUBLISH AN OLDER ${key} RELEASE than the one already live:\n` +
         `    staged in site/ : ${local}\n` +
         `    live on the site: ${live}\n` +
-        `  Every shipped deck checks this manifest and enforces version\n` +
+        `  Every shipped ${key} file checks this manifest and enforces version\n` +
         `  monotonicity, so publishing ${local} over ${live} breaks updates for\n` +
         `  files already in the world.\n\n` +
         `  Releases are assembled from a clean checkout of the tag (RELEASING.md),\n` +
@@ -165,9 +207,19 @@ const cmpVersion = (a, b) => {
         `  live tree first. Deliberate rollback: --allow-release-downgrade.`,
       )
     }
-    console.log(`⚠ publishing ${local} OVER live ${live} — downgrade allowed explicitly`)
+    console.log(`⚠ publishing ${key} ${local} OVER live ${live} — downgrade allowed explicitly`)
   } else if (local && live && cmpVersion(local, live) > 0) {
-    console.log(`• release channel: ${live} → ${local}`)
+    console.log(`• ${key} release channel: ${live} → ${local}`)
+  }
+}
+{
+  // The app being released MUST have a signed manifest staged beside its
+  // shell. Everything above is a comparison, and a comparison of two absent
+  // versions is silent — which is how a release could publish a shell with no
+  // manifest at all and read as a clean run.
+  const staged = join(site, `releases/${app.dir}/manifest.json`)
+  if (released && !existsSync(staged)) {
+    die(`site/ carries a ${appKey} release marker but no ${staged.slice(site.length + 1)} — re-run release.mjs (nothing signed it).`)
   }
 }
 
@@ -183,8 +235,11 @@ const cmpVersion = (a, b) => {
 //
 // The landing page is now written unconditionally (release.mjs), so only the
 // deck needs protecting, and only when this build has none to offer.
-const rsyncFlags = ['-a', '--delete', '--exclude', '.git']
-const excluded = ['.git']
+// The release marker is local staging state (which app this tree is), not site
+// content — it must never reach the CDN, and excluding it here also keeps it
+// out of the deletion inventory.
+const rsyncFlags = ['-a', '--delete', '--exclude', '.git', '--exclude', RELEASE_MARKER]
+const excluded = ['.git', RELEASE_MARKER]
 if (!existsSync(join(site, 'guestbook.bento.html'))) {
   rsyncFlags.push('--exclude', 'guestbook.bento.html')
   excluded.push('guestbook.bento.html')
@@ -286,11 +341,11 @@ if (!status) {
 const head = capture('git', ['-C', dest, 'rev-parse', '--short', 'HEAD'])
 const ver = (() => {
   try {
-    const m = JSON.parse(readFileSync(join(dest, 'releases/slides/manifest.json'), 'utf8'))
+    const m = JSON.parse(readFileSync(join(dest, `releases/${app.dir}/manifest.json`), 'utf8'))
     return JSON.parse(m.payload).version
   } catch { return '?' }
 })()
-console.log(`\n✓ published to bento-site @ ${head} (app v${ver})`)
+console.log(`\n✓ published to bento-site @ ${head} (${app.appId} v${ver})`)
 
 // ---- GitHub release --------------------------------------------------------
 // Publishing the site makes a version downloadable and self-updatable, but the
@@ -302,16 +357,22 @@ console.log(`\n✓ published to bento-site @ ${head} (app v${ver})`)
 // uploaded, so re-running publish is always safe. NOT best-effort — unlike the
 // guestbook re-seed below, a failure here is reported loudly and exits non-zero,
 // because a silent skip is the exact failure being fixed.
-const releaseShell = join(site, 'releases/slides/Bento_Slides.bento.html')
-const tag = `v${ver}`
+//
+// PER APP, all four of them: the shell attached, the tag it is created for, the
+// title, and the changelog the notes come from. Reading slides' manifest for
+// the version — as this did until dash needed a release path — makes a dash
+// publish look up slides' tag, find the release that is already there, print
+// "already published" and exit 0 with no dash release created anywhere.
+const releaseShell = join(site, `releases/${app.dir}/${app.shell}`)
+const tag = tagFor(app, ver)
 // The title names the APP, not just the version: this repo ships more than one
 // (bento/spaces and bento/dash are starting), and a page titled 'v1.0.12' does
 // not say which one the file below it is. v1.0.6 was titled by hand and got
 // this right; every release after it went through the automated step below and
 // came out as a bare tag, so the convention was lost until the six existing
-// releases were retitled on 2026-07-27. Hardcoding it here is what stops it
-// drifting a second time.
-const releaseTitle = `bento/slides ${tag}`
+// releases were retitled on 2026-07-27. The registry is what stops it drifting
+// a second time.
+const releaseTitle = `${app.label} ${tag}`
 
 const ghAvailable = (() => {
   try { capture('gh', ['auth', 'status'], { stdio: ['ignore', 'pipe', 'pipe'] }); return true }
@@ -349,17 +410,23 @@ if (ver === '?') {
     // same reason the gh check above does. Publishing is idempotent: fix the
     // CHANGELOG and re-run.
     const notes = (() => {
+      // THIS app's changelog, resolved exactly as release.mjs resolves it. The
+      // root file is slides' — it says so in its own first line — so a second
+      // app reading it would put another product's entries on its release
+      // page, or (once versions overlap) find a section that is not its own.
+      const clPath = app.changelog
+        ?? (existsSync(join(root, `${app.dir}/CHANGELOG.md`)) ? `${app.dir}/CHANGELOG.md` : 'CHANGELOG.md')
       let cl
-      try { cl = readFileSync(join(root, 'CHANGELOG.md'), 'utf8') }
-      catch (e) { die(`site is published, but CHANGELOG.md could not be read from ${root} — the GitHub release for ${tag} was NOT created.\n  ${e.message}`) }
+      try { cl = readFileSync(join(root, clPath), 'utf8') }
+      catch (e) { die(`site is published, but ${clPath} could not be read from ${root} — the GitHub release for ${tag} was NOT created.\n  ${e.message}`) }
       const start = cl.indexOf(`## [${ver}]`)
       if (start < 0) {
-        die(`site is published, but CHANGELOG.md has no '## [${ver}]' section — the GitHub release for ${tag} was NOT created.\n  Add the section, then re-run: node scripts/publish-site.mjs`)
+        die(`site is published, but ${clPath} has no '## [${ver}]' section — the GitHub release for ${tag} was NOT created.\n  Add the section, then re-run: node scripts/publish-site.mjs`)
       }
       const rest = cl.indexOf('\n## [', start + 1)
       const body = cl.slice(cl.indexOf('\n', start) + 1, rest > 0 ? rest : undefined).trim()
       if (!body) {
-        die(`site is published, but the '## [${ver}]' CHANGELOG section is empty — the GitHub release for ${tag} was NOT created.`)
+        die(`site is published, but the '## [${ver}]' section of ${clPath} is empty — the GitHub release for ${tag} was NOT created.`)
       }
       return body
     })()
@@ -373,7 +440,7 @@ if (ver === '?') {
       try { return capture('gh', ['release', 'view', tag, '--json', 'assets', '-q', '.assets[].name']) }
       catch { return '' }
     })()
-    if (!assets.includes('Bento_Slides.bento.html')) {
+    if (!assets.includes(app.shell)) {
       run('gh', ['release', 'upload', tag, releaseShell, '--clobber'])
       console.log(`✓ attached the signed shell to the existing release ${tag}`)
     } else {
@@ -387,8 +454,8 @@ if (ver === '?') {
     try { return capture('gh', ['release', 'view', tag, '--json', 'assets', '-q', '.assets[].name']) }
     catch { return '' }
   })()
-  if (!check.includes('Bento_Slides.bento.html')) {
-    die(`GitHub release ${tag} is missing Bento_Slides.bento.html after publishing — attach it before announcing.`)
+  if (!check.includes(app.shell)) {
+    die(`GitHub release ${tag} is missing ${app.shell} after publishing — attach it before announcing.`)
   }
 }
 

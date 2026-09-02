@@ -30,7 +30,7 @@
 // an undo entry that undoes nothing. Planning first also makes the whole write
 // path testable in node, where there is no store and no DOM.
 
-import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, linkCard, commentsOn } from './model.ts'
+import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, linkCard, commentsOn, pageAssetKeys } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
@@ -276,6 +276,27 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
     const own = new Set(blocks.map((b) => b.id))
     /** field keys already seen on THIS page — one value per field, per page */
     const propKeys = new Set<string>()
+
+    // ---- the cover -------------------------------------------------------
+    // A page's cover is the one asset reference that is not on a block, so it
+    // needs saying here or every cover reads as an orphan below. And a REMOTE
+    // one renders nothing at all — the field is kept (additivity), but silence
+    // is the failure this report exists to break.
+    const coverRef = typeof (p as { cover?: unknown }).cover === 'string'
+      ? String((p as { cover?: unknown }).cover) : ''
+    if (coverRef.startsWith('asset:')) {
+      const key = coverRef.slice(6)
+      usedAssets.add(key)
+      if (!(key in assets)) {
+        add({ page: p.id, code: 'missing-asset', severity: 'error', path: 'cover',
+          message: `Page "${p.title}" has a cover referencing asset "${key}", which is not in doc.assets — no cover renders.`,
+          fix: 'Add the data: URI to doc.assets under that key, or point cover at one that is there.' })
+      }
+    } else if (coverRef && isRemote(coverRef)) {
+      add({ page: p.id, code: 'remote-cover', severity: 'warning', path: 'cover',
+        message: `Page "${p.title}" has a remote cover (${coverRef.slice(0, 48)}), which is DROPPED at render — opening a space never contacts a third party.`,
+        fix: 'Embed the bytes: put the data: URI in doc.assets and reference it as asset:<key>.' })
+    }
 
     if (!blocks.length) {
       // Not cosmetic: the editor's caret, gutter and / menu all hang off a
@@ -675,6 +696,8 @@ export function statsDoc(doc: SpacesDoc): StatsResult {
         }
       }
     }
+    // the cover is a reference too, and one that is not on any block
+    for (const k of pageAssetKeys(p)) use.set(k, (use.get(k) ?? 0) + 1)
   }
   for (const f of doc.fonts ?? []) use.set(f.asset, (use.get(f.asset) ?? 0) + 1)
 

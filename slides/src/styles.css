@@ -2096,11 +2096,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* the phone-only controls exist in the DOM at every width; only the fold class
    shows them, so applyPhoneChrome never has to create or destroy anything */
 .ed-phone-only { display: none; }
+.ed-phone-tools { display: contents; }
 .ed-topbar.ed-bar-fold .ed-phone-only { display: inline-flex; }
 /* Save stays one tap; its save-AS caret does not fit beside the fold's small
    set of buttons and is the least-used half. The list it opens is not lost —
    editor.ts appends it to the bottom of ⋯ while the fold is on. */
 .ed-topbar.ed-bar-fold .ed-split-caret { display: none; }
+.ed-topbar.ed-bar-fold .ed-split > .ed-btn:first-child {
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
+  border-inline-end: 1px solid var(--line);
+}
 /* ⋯ carries the demoted buttons AND that list, so it can outgrow the
    screen in BOTH directions.
    Down: without a bound it runs off the bottom, and a dropdown is absolutely
@@ -2162,7 +2168,20 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   /* HIG touch targets — a 36px icon is a mis-tap on glass */
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
-  .ed-title { flex: 0 1 90px; }
+  .ed-title { flex: 0 1 220px; }
+  .ed-phone-tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-inline-size: max-content;
+  }
+  .ed-topbar .ed-group-right {
+    margin-inline-start: 0;
+    inline-size: fit-content;
+    flex: 0 0 auto;
+  }
 
   /* Panels become OVERLAY DRAWERS. As flex siblings the 188px sidebar left a
      214px canvas on a 402px screen — the thing you are editing became the

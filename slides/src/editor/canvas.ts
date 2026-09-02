@@ -1043,7 +1043,36 @@ export class SlideCanvas {
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()
+        // Hand this same press to Moveable, so pressing an unselected element and
+        // dragging moves it without needing a second press. Moveable cannot accept
+        // the press until its target has actually changed, and waitToChangeTarget()
+        // resolves only from componentDidMount/componentDidUpdate — the wait is a
+        // render long and there is NO synchronous path to shorten it.
+        //
+        // A fast click releases inside that gap. dragStart then replays a press
+        // whose mouseup has already been and gone, so Moveable begins a drag that
+        // nothing will ever end: the element follows the cursor, and the click that
+        // finally stops it COMMITS the move to the document (#260). Silent, and the
+        // user was only trying to select something.
+        //
+        // So cancel the handoff when the release wins the race. `mouseup`, not
+        // `pointerup` — Gesto listens for mouse events. Capture phase, so a handler
+        // that stops propagation cannot hide it from us. The guarded window is
+        // complete: selectEnd runs inside the mousedown dispatch, so a release
+        // cannot land before the listener exists. Measured at 40x CPU throttle
+        // (the reporter's symptom is hardware-speed dependent): 22/24 clicks stuck
+        // without this, 0/24 with it, deliberate held drags unaffected.
+        //
+        // Do NOT "simplify" this by making the target swap synchronous — that means
+        // reaching into react-moveable's private _checkChangeTargets(). The real fix
+        // is to stop replaying a stale press and start the drag from a live move
+        // event instead; that is a rework of this gesture, not a tidy-up.
+        let released = false
+        const onMouseUp = () => { released = true }
+        window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
         this.moveable.waitToChangeTarget().then(() => {
+          window.removeEventListener('mouseup', onMouseUp, true)
+          if (released) return
           this.moveable.dragStart(e.inputEvent)
         })
       }

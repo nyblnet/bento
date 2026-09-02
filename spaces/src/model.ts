@@ -268,6 +268,20 @@ export interface Page {
   parent?: string
   /** one emoji, never a URL — a URL would be a network dependency */
   icon?: string
+  /**
+   * A picture across the top of the page.
+   *
+   * `asset:<key>` or a `data:` URI, and NEVER a URL — for exactly the reason
+   * `icon` is not one. PLATFORM §1: opening a document must not touch the
+   * network, and a cover is the field most likely to tempt someone into a
+   * link, because that is how every hosted notes app does it. A file that
+   * arrives carrying a remote cover keeps the field (additivity) and renders
+   * NOTHING, which `coverSrc` is the single place that decides.
+   *
+   * Absent on every page written before this, so an older build renders the
+   * page it always did and round-trips the field untouched.
+   */
+  cover?: string
   /** flat, pre-order; nesting via Block.parent */
   blocks: Block[]
   /**
@@ -746,6 +760,27 @@ export const homePage =(doc: SpacesDoc): Page | undefined =>
 export function isRemote(src: string): boolean {
   if (!src) return false
   return !src.startsWith('asset:') && !src.startsWith('data:')
+}
+
+/**
+ * The cover a page actually shows — '' when it has none, and '' when what it
+ * has would reach the network.
+ *
+ * ONE PLACE decides that, because the rule has to hold for the page, the
+ * gallery card, the asset sweep and anything added later. A remote cover is
+ * not repaired and not deleted: the field round-trips, and validate() says so
+ * out loud (agent.ts) rather than the picture silently not being there.
+ */
+export function coverSrc(page: Page): string {
+  const c = (page as { cover?: unknown }).cover
+  if (typeof c !== 'string' || !c) return ''
+  return isRemote(c) ? '' : c
+}
+
+/** Every asset key a PAGE references outside its blocks — today, its cover. */
+export function pageAssetKeys(page: Page): string[] {
+  const c = (page as { cover?: unknown }).cover
+  return typeof c === 'string' && c.startsWith('asset:') ? [c.slice(6)] : []
 }
 
 /**

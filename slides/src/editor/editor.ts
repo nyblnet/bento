@@ -346,6 +346,8 @@ export class Editor {
     slidesB.classList.add('ed-phone-only')
     const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Format — show or hide the properties panel'))
     formatB.classList.add('ed-phone-only')
+    const phoneTools = div('ed-phone-tools')
+    phoneTools.append(slidesB, insertD, history)
 
     this.syncWindowTitle()
 
@@ -357,7 +359,7 @@ export class Editor {
       authored: new Map(), homeOf: new Map(),
     }
 
-    bar.append(logo, this.updatesB, title, this.fileChip, slidesB, insertD, history, insert, actions, moreD)
+    bar.append(logo, this.updatesB, title, this.fileChip, phoneTools, insert, actions, moreD)
 
     // main area
     const main = div('ed-main')

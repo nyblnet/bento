@@ -19,7 +19,17 @@
   </head>
   <body>
     <div id="bento-splash">
-      <div class="dash-splash-mark">bento<span>/</span>dash</div>
+      <!-- EXACTLY ONE nested element here, and it closes last: the splash is
+           lifted into the built shell by a non-greedy regex in
+           postbuild-compress.mjs that stops at the second closing tag. A
+           sibling would truncate the splash silently; none at all would let the
+           match run on into the app root. Hence spans, not divs, below. -->
+      <div class="dash-splash-mark">
+        <span class="dash-splash-grid" aria-hidden="true"></span>
+        <span class="dash-splash-word">bento<span>/</span>dash</span>
+        <span class="dash-splash-note">Opening workbook…</span>
+        <span class="dash-splash-stuck">This file did not finish loading. It may be an incomplete download — try downloading it again.</span>
+      </div>
     </div>
     <style>
       /* The splash paints before any script runs — before the app stylesheet
@@ -52,9 +62,56 @@
         color: light-dark(#1e2a3a, #d6dee9);
       }
       #bento-splash.done { opacity: 0; pointer-events: none; }
-      .dash-splash-mark span { color: #ff9e8a; }
+      .dash-splash-mark { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+      .dash-splash-word span { color: #ff9e8a; }
+
+      /* A GRID, NOT A LOGO. Four columns and a tinted header row, in gradients
+         — the one picture that says "spreadsheet" before a row of data exists.
+         A reader who double-clicked a file wants to know what opened, and a
+         wordmark tells them nothing they did not already know. */
+      .dash-splash-grid {
+        position: relative;
+        width: 132px;
+        height: 76px;
+        border: 1px solid light-dark(#dbe1e9, #2a3441);
+        border-radius: 5px;
+        overflow: hidden;
+        background:
+          linear-gradient(light-dark(#f4f6f9, #161d26) 0 19px, transparent 19px),
+          repeating-linear-gradient(to right, transparent 0 32px, light-dark(#e7ebf1, #232c37) 32px 33px),
+          repeating-linear-gradient(to bottom, transparent 0 18px, light-dark(#e7ebf1, #232c37) 18px 19px);
+      }
+      .dash-splash-grid::after {
+        content: "";
+        position: absolute;
+        inset: 19px 0 0;
+        background: linear-gradient(to right, transparent, light-dark(#ffd9cf, #3a2a25) 45%, transparent);
+        animation: bsSweep 1.1s ease-in-out infinite;
+      }
+      @keyframes bsSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+      .dash-splash-note,
+      .dash-splash-stuck {
+        font: 400 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: light-dark(#5b6b7f, #8b98a8);
+        opacity: 0;
+      }
+      /* Held back 400ms, so a workbook that opens immediately — most of them,
+         measured at ~100ms — never shows the word "opening" at all. */
+      .dash-splash-note { animation: bsIn 0.3s ease 0.4s forwards, bsOut 0.3s ease 12s forwards; }
+
+      /* THE ONE BACKSTOP THAT NEEDS NO JAVASCRIPT. A truncated download runs
+         nothing in the bundle, so nothing in the bundle can explain it — and
+         the old splash sat on a wordmark forever, with no error and no timeout.
+         splash.ts has revealed the app (or replaced this, at 6s) long before,
+         so reaching 12s means only one thing. */
+      .dash-splash-stuck { max-width: 30rem; text-align: center; animation: bsIn 0.3s ease 12s forwards; }
+
+      @keyframes bsIn { to { opacity: 1; } }
+      @keyframes bsOut { to { opacity: 0; } }
       @media (prefers-reduced-motion: reduce) {
         #bento-splash { transition: none; }
+        .dash-splash-grid::after { animation: none; opacity: 0; }
       }
     </style>
     <div id="app"></div>

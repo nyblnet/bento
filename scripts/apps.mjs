@@ -22,6 +22,20 @@ export const APPS = {
     appId: 'bento-slides',
     dir: 'slides',
     shell: 'Bento_Slides.bento.html',
+    /**
+     * How this app's git tag and GitHub release are named.
+     *
+     * Slides keeps the bare `vX.Y.Z` it has used for 23 releases; every other
+     * app is PREFIXED, because apps version independently and an unprefixed
+     * `v0.2.0` would sort into the middle of slides' history and claim a
+     * version slides can never use again (docs/RELEASING.md).
+     *
+     * `label` titles the GitHub release. A page titled `v1.0.12` does not say
+     * which of three apps the file below it is — the six releases cut before
+     * this was automated had to be retitled by hand on 2026-07-27.
+     */
+    tagPrefix: '',
+    label: 'bento/slides',
     /** the whole bento.page site — landing, gallery, guides — is slides-derived today */
     ownsSiteContent: true,
     /** where this app's release notes come from. The notes ride in the SIGNED
@@ -38,6 +52,8 @@ export const APPS = {
     appId: 'bento-spaces',
     dir: 'spaces',
     shell: 'Bento_Spaces.bento.html',
+    tagPrefix: 'spaces-',
+    label: 'bento/spaces',
     ownsSiteContent: false,
     // No pack catalog yet: build-i18n/sign-packs are slides-hardcoded and the
     // channel does not exist. Deferring packs is fine; deferring the CHANNEL
@@ -58,6 +74,8 @@ export const APPS = {
     appId: 'bento-dash',
     dir: 'dash',
     shell: 'Bento_Dash.bento.html',
+    tagPrefix: 'dash-',
+    label: 'bento/dash',
     ownsSiteContent: false,
     // Same reasoning as spaces: no pack catalog yet, and deferring the CATALOG
     // is fine where deferring the CHANNEL would not be.
@@ -65,3 +83,22 @@ export const APPS = {
     changelog: 'dash/CHANGELOG.md',
   },
 }
+
+/** The git tag and GitHub release name for a version of an app. */
+export const tagFor = (app, version) => `${app.tagPrefix ?? ''}v${version}`
+
+/**
+ * How a staged `site/` records WHICH app assembled it.
+ *
+ * publish-site.mjs has to know: it creates the GitHub release, and the tag,
+ * the title, the changelog and the attached shell are all per app. Passing
+ * `--app` by hand would work right up until someone forgets it, and the
+ * failure is silent — the publish would look for slides' tag, find the release
+ * that already exists, and report success while the app just released got no
+ * GitHub release at all. So release.mjs writes this and publish-site reads it;
+ * `--app` stays as an override for a publish that is not following a release.
+ *
+ * NEVER MIRRORED. It is local staging state, not site content — publish-site
+ * excludes it from the rsync (and from the deletion inventory with it).
+ */
+export const RELEASE_MARKER = '.bento-release.json'

@@ -262,6 +262,17 @@ jobs:
       - name: Splice conformance gate (dash)
         run: node scripts/shell-gate.mjs dash/dist-single/Bento_Dash.bento.html
 
+      - name: Release channel rehearsal (dash)
+        # Cuts a COMPLETE release — the real release.mjs, staged into a temp
+        # directory — with a throwaway key this step generates and discards, and
+        # then verifies the artifacts with kernel/src/update.ts itself, the code
+        # every shipped file runs, with only the embedded public key swapped.
+        # The point is the REFUSALS: a tampered manifest, a manifest signed for
+        # another app, a downgrade replay and a one-bit-flipped shell must each
+        # be rejected, and the conformance gate must refuse a shell whose doc
+        # block closes its own script. A signing pipeline cannot be tested by
+        # signing (the key never reaches CI), but this is everything except.
+        run: node scripts/test-release-channel.mjs --app dash
       - name: Shell sizes
         # TWO MECHANISMS, DELIBERATELY. This one and the advisory PR build-size
         # comment (.github/workflows/pr-build-size*.yml) answer different
@@ -636,6 +647,39 @@ jobs:
         # into a deleted row is #REF! rather than whatever slid up into it.
         run: node scripts/test-dash-a1.ts
 
+      - name: bento/dash defined names
+        # A name is a redirection, and every way it can go wrong reports a
+        # NUMBER: substituted inside quoted text or after a sheet's `!`,
+        # outranking a column of the same name, spelled like a cell address and
+        # therefore never consulted, or DROPPED when its rows are deleted
+        # instead of becoming #REF!. Ends by mounting the real grid, because an
+        # engine the app never passes the name table to is invisible.
+        run: node scripts/test-dash-names.ts
+
+      - name: bento/dash array formulas and spill
+        # A spilled cell is COMPUTED, not stored: it must never reach the file,
+        # a collision must BLOCK with #SPILL! rather than overwrite, two spills
+        # wanting one cell must pick the same winner on every machine, and the
+        # shape must survive the operators (2×3, not 6×1 — the wrong answer is
+        # right in the only cell anybody checks). Datasets deliberately do not
+        # spill; a column formula is the columnar answer to the same need.
+        run: node scripts/test-dash-spill.ts
+
+      - name: bento/dash cross-sheet references and what row 1 means
+        # Both halves of one boundary. A per-CELL formula reaches another sheet
+        # from EITHER kind of sheet — it used to work on a spreadsheet and
+        # answer #REF! on a dataset in the same workbook, which was two call
+        # sites rather than a decision. A COLUMN formula still may not, and now
+        # names the boundary instead of calling a sheet in the tab strip an
+        # unknown name: reaching across is either a position that moves or a
+        # join with no key, and dash has `join`. Then the trap underneath: an A1
+        # row is the row the addressed sheet paints in its own gutter, so a
+        # dataset's row 1 is its first DATA row and a spreadsheet copy of it is
+        # one lower — safe only because the conversion shifts LOCAL references
+        # and leaves QUALIFIED ones alone. That last one is measured against
+        # both sheets, because it is the part that would rot in silence.
+        run: node scripts/test-dash-xsheet.ts
+
       - name: bento/dash pivot
         # Subtotals are COMPUTED, not summed: an average of averages is a
         # different number, and a distinct count does not add up.
@@ -654,6 +698,17 @@ jobs:
       - name: bento/dash filter and sort
         run: node scripts/test-dash-filter.ts
 
+      - name: bento/dash filtering is REACHABLE
+        # The engine rig above proves sixteen predicates over an order vector;
+        # the app used to offer ONE of them per column — a free-text "Contains"
+        # box you had to already know the answer to spell into. This one drives
+        # the column menu over a real DOM: it opens the value checklist on a
+        # mounted grid, CLICKS a checkbox, and asserts the row indices
+        # `store.order` ends up holding — plus that a truncated list never
+        # pre-ticks itself, that a column's list honours the other columns'
+        # filters and not its own, and that none of it dirties the document.
+        run: node scripts/test-dash-filterui.ts
+
       - name: bento/dash rows and columns
         # Structure, and the rid watermark — a rid must never be minted twice,
         # which is collaboration's correctness precondition.
@@ -665,11 +720,66 @@ jobs:
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
+      - name: bento/dash conditional formatting is REACHABLE
+        # The engine rig above passes on six rule kinds; the app used to build
+        # two of them, so "highlight cells greater than N" was missing from a
+        # product that had already shipped it. This one drives the panel section
+        # with panels.ts's own KIT over a real DOM and asserts the rule OBJECT
+        # that would reach the document — plus that the menu and the panel
+        # actually mount it, which is what makes the rest of it visible.
+        run: node scripts/test-dash-condfmtui.ts
+
+      - name: bento/dash a formula column is typed by what it returns
+        # It used to be born `number`, hardcoded: a formula splitting surnames
+        # out of "Lastname, Firstname" produced a NUMBER column of text that
+        # filtered, sorted, exported and totalled wrongly. Inference is by the
+        # JS type of the computed values, never their appearance — a numeric
+        # STRING typed number is the SUM 0 bug (test-dash-coltype.ts) arriving
+        # by a new door, and that is asserted by name.
+        run: node scripts/test-dash-computedtype.ts
+
+      - name: bento/dash paste special
+        # Values only must land the COMPUTED value and NEVER an error object —
+        # the same class of damage scripts/test-dash-fill.ts records, reached
+        # from the other side. Also: formats-only cannot move a number (the
+        # column is summed before and after), a copied formula's relative refs
+        # translate while $A$1 does not and a CUT one does not translate at
+        # all, and transpose is REFUSED on a dataset because its columns are
+        # typed. Last section reads main.ts: the chord must reach the command,
+        # and the clip must be snapshotted BEFORE ⌘X clears the selection.
+        run: node scripts/test-dash-pastespecial.ts
+
+      - name: bento/dash text to columns
+        # The split reuses import.ts's delimiter parser and its type inference,
+        # so "Smith, John" quoted stays one field and an undecidable date
+        # column lands as TEXT rather than eleven months out. The overwrite is
+        # named before it happens. And the outcome is checked in the DOCUMENT:
+        # patches are committed to a real Store, the source column survives,
+        # and re-running the recorded step reproduces the same bytes.
+        run: node scripts/test-dash-tocolumns.ts
+
       - name: bento/dash side panels
         run: node scripts/test-dash-panels.ts
 
+      - name: bento/dash panel rhythm
+        # The panel's spacing has been reported broken three times. This pins
+        # the numbers — one row height, one pitch, one gutter, one radius — and
+        # refuses a second spelling of any of them, so the next drift is a build
+        # failure rather than a fourth screenshot.
+        run: node scripts/test-dash-panelrhythm.ts
+
       - name: bento/dash About dialog
         run: node scripts/test-dash-about.ts
+
+      - name: bento/dash dialog surfaces
+        # The About dialog held eight sections and measured 1361px in a 429px
+        # viewport — 3.2 screens. It is two surfaces now (About = what travels
+        # in the file; Settings = what this reader's browser remembers) plus the
+        # password, which moved to the Save menu with the other instructions
+        # about how the file gets written. This holds the seam AND the size:
+        # each surface fits a laptop screen without scrolling, measured through
+        # a box model of about.css calibrated against that 1361px.
+        run: node scripts/test-dash-surfaces.ts
 
       - name: bento/dash thumbnail preview
         # An encrypted workbook NEVER gets a preview — a plaintext title beside
@@ -696,6 +806,15 @@ jobs:
         # shifts every date by four years, silently.
         run: node scripts/test-dash-xlsx.ts
 
+      - name: bento/dash xlsx — what an import carries and what it says it dropped
+        # The gate that lost a number: `=SUM(RentCells)/B5` has no `!`, no `[`
+        # and no unknown function, so a bare defined name sailed through and
+        # the cell painted #NAME? over the 0.61 Excel had computed. Also pins
+        # the header-under-a-merged-title repair, and the freeze, per-cell
+        # format and Excel-table totals row that used to be dropped in silence.
+        # Builds real .xlsx bytes — the gate only ever sees real formula text.
+        run: node scripts/test-dash-xlsx-carry.ts
+
       - name: bento/dash WebGL
         run: node scripts/test-dash-gl.ts
 
@@ -708,6 +827,338 @@ jobs:
         # two it did not catch were found by widening it.
         run: node scripts/test-dash-sync.ts
 
+      - name: dash spreadsheet convergence rig
+        # The SPREADSHEET kind's own rig, separate from the dataset one because
+        # it is a different convergence problem: a dataset row has a rid, and a
+        # spreadsheet cell has only its address. It also pins the snapshot
+        # FALLBACK — a patch that would move cells must mint zero ops and arm
+        # the whole-state path, because two replicas shifting addresses
+        # concurrently renumber each other's writes and no ordering repairs it.
+        run: node scripts/test-dash-canvassync.ts
+
+      - name: relay protocol — one wire format, two clients
+        # dash's online.ts is a PORT of the transport slides uses (now moving
+        # into kernel/). The two files are separate text that nobody diffs, and
+        # ONE DEPLOYED WORKER verifies both: it pins the room id to a key and
+        # walks an owner→invite→member signature chain. If one client's idea of
+        # `inv.${pub}.${role}.${exp}` drifts, the symptom is not a red test — it
+        # is one app's users silently unable to join the other's rooms, on a
+        # relay that cannot be rolled back independently of the shells already
+        # in people's files. This diffs only what goes on the wire.
+        run: node scripts/test-relay-protocol.ts
+
+      - name: dash validator rig
+        # 109 checks over the shapes that read as DATA rather than as damage —
+        # a column shorter than the sheet has rows, a dictionary index past the
+        # end of its dict. Nothing here refuses to load a workbook; the point is
+        # that the user is told, because neither of those looks wrong on screen.
+        run: node scripts/test-dash-validate.ts
+
+      - name: dash comments rig
+        # A thread anchors to colId + rid, never a position, so it survives a
+        # sort. The checks that matter are the ORPHAN ones: a deleted row must
+        # leave the thread dead and saying so, not silently re-pointed at
+        # whoever inherited the row number.
+        run: node scripts/test-dash-comments.ts
+
+      - name: dash recovery rig
+        # Every branch of the offer/no-offer decision, with no DOM and no
+        # IndexedDB in it. A snapshot that cannot be parsed is not offered — a
+        # Restore button that hands the app a document it will then refuse is a
+        # dead end wearing a live button.
+        run: node scripts/test-dash-recovery.ts
+
+      - name: dash i18n rig
+        # A core catalog ships inside every saved workbook and cannot be patched
+        # without a release, so drift has to fail here rather than in the field:
+        # a catalog key the source no longer contains is a dead translation, and
+        # a {placeholder} a translation dropped is a sentence with a hole in it.
+        run: node scripts/test-dash-i18n.ts
+
+      - name: dash sheet-tabs rig
+        # Sheet order is the tab order and it lives in the DOCUMENT, so a
+        # reorder is an undoable patch whose inverse carries the ORIGINAL index
+        # — one undo puts a dragged tab back where it was, not at the end. Also
+        # guards that deleting the shown sheet steps to another TABLE sheet.
+        run: node scripts/test-dash-tabs.ts
+
+      - name: dash find rig
+        # The grid is windowed — about 40 rows of a 5,000-row sheet exist in the
+        # DOM — so the browser's own find reports "not there" for values that
+        # are. These checks cover the matcher, the view vector (a hit must never
+        # be a row the filter is hiding) and the replace refusals.
+        run: node scripts/test-dash-find.ts
+
+      - name: dash spreadsheet-cells rig
+        # The setCanvasCells patch, which writes the SPREADSHEET kind's sparse
+        # A1 map. Sparseness is not a size optimisation: a cleared cell has to
+        # be GONE, or an undone sheet is unequal to a fresh one and two
+        # replicas disagree about whether a cell exists. Also pins the
+        # collaboration fallback — the CRDT has never heard of this op, and
+        # localOne's default arm ships a whole-state snapshot rather than
+        # dropping it.
+        run: node scripts/test-dash-canvascells.ts
+
+      - name: dash step engine
+        # The relational pipeline the FORMAT has described since commit one and
+        # nothing executed. Includes a performance floor at 100k rows and a
+        # HELD-HEAP comparison against a row-shaped pipeline — wall clock does
+        # not discriminate between the two designs at this size, memory does
+        # (2.5 MB against 16.8 MB), and memory is what decides whether a
+        # workbook fits at all.
+        run: node scripts/test-dash-steps.ts
+
+      - name: dash SQL surface
+        # SQL compiles to Step[] and does not evaluate anything itself — the
+        # answer is a frame over the same columns, so it stays live rather than
+        # becoming a copy that is wrong the moment somebody edits a cell. The
+        # checks that matter are the refusals: a plain JOIN declares card:'one'
+        # so a non-unique key STOPS the pipeline instead of doubling every
+        # total, and an edit statement is refused because a query is a question.
+        run: node scripts/test-dash-sql.ts
+
+      - name: dash spreadsheet rig
+        # Rendering and editing the SPREADSHEET kind — unbounded, sparse, typed
+        # per cell. The check that matters is that a formula BELOW the data
+        # lands in a cell that did not exist, without allocating the rows it
+        # skipped: that gesture is why the kind exists.
+        run: node scripts/test-dash-canvas.ts
+
+      - name: dash promote/flatten rig
+        # The bridge between the two sheet kinds. The checks that matter are
+        # the ones about NOT destroying the source: promotion leaves the range
+        # alone, because a formula under the block and a cross-sheet reference
+        # into it both point by POSITION and emptying the cells would blank
+        # them silently. Also that a lifted column formula actually EVALUATES —
+        # Column.formula is a bare expression, and an "=" in front of it ships
+        # a column of #VALUE!.
+        run: node scripts/test-dash-promote.ts
+
+      - name: dash fill rig
+        # ⌘D and the fill handle. This guards a DATA LOSS bug that shipped:
+        # seeding from the computed value wrote error OBJECTS into stored
+        # columns and flattened formulas to constants, and ⌘D sharing an
+        # implementation with the handle made it alternate two seed rows. The
+        # two gestures are separate here, and a formula fills with its
+        # references translated.
+        run: node scripts/test-dash-fill.ts
+
+      - name: dash spreadsheet formula rig
+        # Formulas on the SPREADSHEET kind, including cross-sheet references.
+        # Sheet1!A1 used to bind to the LOCAL A1 — this sheet's number reported
+        # under another sheet's name — and ranges over a sparse sheet must cost
+        # the cells that exist, not the rectangle they span.
+        run: node scripts/test-dash-canvasformula.ts
+
+      - name: dash action-applicability rig
+        # One table saying which actions run on which sheet kind, and a reason
+        # for every one that does not. Six toolbar buttons used to throw
+        # "grid needs a table sheet" on a spreadsheet with nothing shown; the
+        # rig fails if an action is kind-scoped without a reason string.
+        run: node scripts/test-dash-actions.ts
+
+      - name: dash cell format and type rig
+        # Per-cell number format, coercion and appearance on a SPREADSHEET
+        # sheet. The checks that matter are the data-eating ones: 01234 must not
+        # silently become 1234, 1/2 must never become a date, an ambiguous
+        # d/m/yyyy is refused rather than guessed, and formatting twenty cells
+        # is ONE patch and ONE undo.
+        run: node scripts/test-dash-cellprops.ts
+
+      - name: dash theme rig
+        # A stylesheet has no type system: an undeclared token is a dead rule
+        # and a light-dark() fed a length is an invalid declaration — both
+        # silent, and both had SHIPPED. --accent-ink drew nothing and every
+        # shadow in the app computed to "none". The light palette is also
+        # diffed against slides' :root so the two cannot drift one grey at a
+        # time again.
+        run: node scripts/test-dash-theme.ts
+
+      - name: dash file write-back
+        # The single biggest data-loss risk dash shipped with: an IndexedDB
+        # snapshot was the only thing catching an hour of typing, and it is
+        # invisible, uncopyable and cleared by browsers on their own schedule.
+        # The checks that matter are the bookkeeping ones. A FAILED write must
+        # not be recorded as a baseline — record the intent and the next cycle
+        # reads "unchanged", so a permanent failure is reported once and then
+        # silently skipped forever. Also: two cycles never open concurrent
+        # writables on one handle, nothing is rethrown out of a setTimeout
+        # nobody awaits, and the refusals (read-only, template, no-handle) are
+        # ORDERED, so a read-only workbook reports the permanent reason rather
+        # than the incidental one.
+        run: node scripts/test-dash-autosave.ts
+
+      - name: dash print
+        # Every failure mode here is silent: the page that comes out has a
+        # header, a body and a total, and looks finished whatever is missing
+        # from it. The grid is windowed at ~46 rows, so the first check builds
+        # a 5,000-row sheet and counts what reaches the paper — measured in a
+        # browser too: 3,001 printed rows from a grid holding 46. The rest pin
+        # that the printout is of the VIEW VECTOR, that the totals row is the
+        # FILTERED total from the very grid.aggregate the footer calls, that no
+        # column is ever clipped off the right edge at any wide-sheet setting,
+        # and that author data reaching markup is escaped — a workbook is
+        # untrusted input, and this path builds HTML by concatenation.
+        run: node scripts/test-dash-print.ts
+
+      - name: dash grid frontier
+        # What exists below a dataset's last row: exactly one appender, with
+        # the ruled lattice stopping at the data. The grid used to LOOK like an
+        # infinite canvas and behave like a table — pressing "=" below the
+        # numbers opened the editor on the last DATA cell, so the universal
+        # spreadsheet gesture silently targeted real data. Typing on the
+        # frontier must append, and append ONCE: zero times restores the
+        # original bug, per-keystroke is a different one. Clicking must NOT
+        # append, since a control that grows the file when you look at it is
+        # worse than one that does nothing.
+        run: node scripts/test-dash-frontier.ts
+
+      - name: dash grid context menus
+        # The three menus a right-click produces — cell, row-number gutter,
+        # column header — asserted from real `contextmenu` events on a mounted
+        # grid, never from the builders. Two features have shipped complete and
+        # UNREACHABLE (the conditional-format rules, and the two gutters, which
+        # did nothing at all on a right-click), and in both cases a rig that
+        # called the builder would have been green over an app with the feature
+        # invisible on screen. So the negative control here is a grid with
+        # `installGridMenus` NOT called: the same right-clicks must produce
+        # nothing. Also pinned: the labels count the selection and the ops do
+        # that many; Escape closes a menu and its listener does not outlive it;
+        # the `+` column appender exists, is absent read-only, and costs
+        # nothing until its dialog is answered; and finding 11 — a per-cell
+        # formula is carried into a new row only when the column proves it
+        # repeats, and the reader is told either way.
+        run: node scripts/test-dash-menu.ts
+
+      - name: dash accessibility
+        # All of these fail silently to a sighted developer. The load-bearing
+        # check is aria-rowindex under virtualisation: about forty rows of a
+        # 5,000-row view exist in the DOM, so a row's position among its
+        # siblings is meaningless and the index must state its place in the
+        # FULL view. Get it wrong and a screen reader confidently announces
+        # "row 3 of 40" in a five-thousand-row sheet, which is worse than
+        # silence because it is trusted. Also guarded: activeElement after a
+        # click and after a repaint (every paint replaces innerHTML, so without
+        # restoration focus drops to BODY), one roving tab stop, and that
+        # nothing here is a live region.
+        run: node scripts/test-dash-a11y.ts
+
+      - name: dash per-cell appearance
+        # Appearance on BOTH sheet kinds, which had drifted: the format always
+        # carried bold/colour on a spreadsheet cell and a dataset cell could
+        # carry none of it. The check worth naming mounts the REAL grid and
+        # reads the emitted markup, because the pure-function checks did not
+        # need the grid to call appearanceCss at all — measured, deleting both
+        # paint calls left 69 and 123 checks green with the feature invisible
+        # on screen. This repo shipped that shape once already (--accent-ink
+        # was a token the stylesheet never declared). Also pins that appearance
+        # cannot smuggle a value or a type onto a dataset, where the COLUMN
+        # type is authoritative, and that the CRDT splits content from
+        # presentation so bolding a cell beside a concurrent retype keeps both.
+        run: node scripts/test-dash-cellfmt.ts
+
+      - name: dash column type vs storage
+        # Guards a shipped bug that produced a WRONG NUMBER at the end of a path
+        # dash itself recommends — the worst shape a defect can take: not a
+        # crash, not an error cell, a confident total that is wrong. Import
+        # lands a mixed column as text and advises setting the type; doing that
+        # used to move only `col.type`, so the grid right-aligned and
+        # number-formatted the values while `aggregate` skipped every one of
+        # them. Measured on a real .xlsx: footer SUM 0 against a true total of
+        # 10,308.85, a number dash returns correctly from =SUM() on a
+        # spreadsheet copy of the same rows. Three properties: converting works;
+        # undo restores the BYTES and not just the declaration (text→number→text
+        # is lossy, "1200.50" returns as "1200.5", which a typeof check cannot
+        # see); and what will not convert is refused rather than zeroed. The
+        # validator half is checked too, because store.ts can only stop this
+        # state being created — it still arrives from files saved by the buggy
+        # build and from hand-edited JSON, which PLATFORM §7 makes a way in.
+        run: node scripts/test-dash-coltype.ts
+
+      - name: dash starter workbook
+        # The starter ships INSIDE the shell, so it is what bento.page shows and
+        # what every downloaded copy opens with — the one document in this repo
+        # a stranger is guaranteed to see — and nothing guarded it. Two families:
+        # that it is a valid, self-consistent workbook (a starter that trips
+        # validateDoc ships the app's own warning banner to every new reader on
+        # first open), and that the NUMBERS are right. The second is the one that
+        # will catch something: the Scratch sheet reads across into the dataset
+        # by ADDRESS, so reordering, inserting or hiding a column silently
+        # re-points two totals on another sheet, and nothing about that is
+        # visible in a diff. The addresses are pinned by column NAME and the
+        # totals computed through the shipping code.
+        run: node scripts/test-dash-starter.ts
+
+      - name: dash — the off switch for a live session
+        # A polish sweep drove the app at 880px with a session running:
+        # collab.on true, the room live on the relay, and the string "Stop
+        # sharing" NOWHERE in the document — sync.css hid the toggle outright
+        # below 900px to buy width in the top bar, and that toggle is the only
+        # control that stops sharing. The nearest thing left was About's
+        # "Offline mode", which also kills the signed update check: to stop one
+        # workbook being shared you had to switch off the app's networking.
+        # The rule is narrow: a control that REPORTS nothing may stand down at a
+        # narrow width (the 390px measurement behind those rules is real and
+        # still honoured), a control that STOPS something already happening may
+        # not. Checked as CSS text because dash-dom.ts is a parser, not a layout
+        # engine, and cannot say what a viewport width does to a declaration.
+        run: node scripts/test-dash-stopsharing.ts
+
+      - name: Grid surface rig
+        # The sheet as an OBJECT ON A SURFACE. An eight-row dataset used to
+        # fill the top 180px of a 1440x900 window and leave the rest blank in
+        # the same white as the sheet, so "the table ended here" and "the app
+        # stopped drawing" looked identical — the strongest unfinished signal
+        # the app had. The fix is not more rows (test-dash-frontier.ts owns
+        # that decision and is unchanged): it is a bounded table on a --desk
+        # ground the spreadsheet kind deliberately does not get, plus the three
+        # empty states.
+        #
+        # Half of it is CSS, which has no type system and no runtime errors, so
+        # those checks read the stylesheet as text and MEASURE the palette
+        # rather than merely requiring tokens to be present — a desk 1.02:1
+        # from the paper satisfies every structural check and renders as the
+        # defect. The other half mounts a real Grid and asserts the note is one
+        # node that survives 5,000 rows.
+        run: node scripts/test-dash-surface.ts
+
+      - name: Data validation rig
+        # In-cell dropdowns and typed entry rules — Excel's Data Validation,
+        # which is NOT dash's validate.ts (that one asks whether a workbook
+        # agrees with itself). Two features, one English word, and a rig that
+        # confuses them tests neither.
+        #
+        # The checks that matter are the three a green suite would otherwise
+        # hide. (1) The dropdown and the invalid mark are asserted on the
+        # MARKUP A REAL GRID EMITS, through BOTH paint loops — the pure
+        # functions were all green with the feature invisible on screen, which
+        # is precisely the failure this repo shipped once already. (2) `reject`
+        # refuses AT THE KEYBOARD and nowhere else: a paste, an import, an undo
+        # and a remote CRDT op all LAND and are marked, because refusing an op
+        # that has already been committed elsewhere either diverges the
+        # replicas or silently discards a collaborator's work. Both arms are
+        # pinned, and a sabotage that leaks the refusal into the paste path
+        # turns the second one red. (3) A rule never changes existing data —
+        # what breaks it is marked, never deleted — and the mark is derived at
+        # paint rather than stored, so it cannot go stale. Also pins the .xlsx
+        # round trip in both directions, including Excel's INVERTED
+        # `showDropDown` attribute (1 hides it), which reads correctly in code
+        # that has it exactly backwards.
+        run: node scripts/test-dash-datavalid.ts
+
+      - name: every rig is actually run
+        # A rig nobody runs is worse than no rig, and it fails flatteringly: the
+        # file is there, the checks in it are good, git log shows it being
+        # maintained, and anyone counting coverage counts it. It just never
+        # executes, so nothing goes red and nothing says so. Five rigs landed in
+        # one afternoon — write-back, print, frontier, a11y, appearance — each
+        # written by a different agent told to write one, none of them knowing
+        # where this list lives; all five passed on disk and none were here.
+        # Also checks the reverse, since a step pointing at a deleted script
+        # fails every push for a reason unrelated to the change that triggered
+        # it, and prints the deliberate-exemption list on every run so it stays
+        # something people look at rather than somewhere failures go to hide.
+        run: node scripts/test-ci-registered.ts
       - name: Theme token gate
         # Every failure this catches is INVISIBLE in the light theme, which is
         # the one the author is looking at. A chrome surface pinned to white

@@ -58,6 +58,19 @@ scripts/.cache/
 **/*.xcodeproj/
 **/Resources/starter.bento.html
 
+# GIT WORKTREES CHECKED OUT INSIDE THE REPO. `.claude/` is a tracked directory
+# (launch.json lives there), so a worktree under it is an entire second
+# checkout sitting in `git status` — one broad `git add` sweeps thousands of
+# files, including another branch's build output, into an unrelated commit.
+#
+# This was ignored only in `.git/info/exclude`, which is per-machine and never
+# committed: it protected one laptop and nobody else's clone.
+#
+# It is NOT what deletes these directories — `git clean -fdx` reports "skip
+# repository" for a nested checkout and needs `-ff` to touch one. Ignoring is
+# about not COMMITTING them.
+.claude/worktrees/
+
 # home/android: Gradle's own state, and the two files that hold local identity.
 # Matched by FILENAME for the same reason as the secrets above — `local.properties`
 # carries an absolute SDK path and `keystore.properties` the release signing

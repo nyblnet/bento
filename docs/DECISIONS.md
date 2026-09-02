@@ -3621,6 +3621,155 @@ payload 72KB → 79KB). Most of it is the finding messages, which are the
 product: a code with no explanation is not actionable. Anyone tempted to shrink
 this should shorten prose, not drop checks.
 
+## dash: a workbook holds two kinds of sheet — spreadsheets and datasets
+
+2026-08-11. Settles a tension that was shipping as a visual lie.
+
+An 8-row dash sheet has no row 9. ArrowDown from the last row does not move,
+pressing `=` there opens the editor on the last DATA cell, and the ruled lines
+under the totals row — which look exactly like empty spreadsheet rows — are
+background paint on `.dg-table`. So the most common gesture in spreadsheets,
+"click below the numbers and type `=SUM(`", silently targets a cell holding
+real data. The footer total is not a formula and cannot be one: it is
+`sheet.totals`, a property of the column.
+
+THE DECISION: two sheet kinds, and the difference is where the type lives.
+A SPREADSHEET is typed by CELL — unbounded, sparse, `=SUM()` anywhere, a canvas
+that happens to hold numbers. A DATASET is typed by COLUMN — exactly the rows
+there are, columnar and dictionary-encoded, and the kind that earns column
+formulas, type refusal on import, conditional formats, chart binding, pivots
+and (when it lands) SQL.
+
+Neither is a lesser version of the other, and collapsing them either way loses
+something real: one type per cell destroys the column type that the columnar
+kernel and every derived feature depend on; one type per column destroys the
+scratchpad. The conversion BETWEEN them is the actual product — promote a range
+to a dataset, or open a dataset as a flat copy for the one awkward number the
+pipeline cannot express. That round trip is why people abandon BI tools for
+Excel, and dash can hold both ends of it.
+
+WIRE WORDS: `kind: 'table'` remains the dataset. Renaming it would break every
+file that exists, and "Dataset" is a display label — the rule `select()`
+already follows. The new kind is `kind: 'grid'`.
+
+This is safe to add because `parseDoc` preserves an unrecognised `kind`
+VERBATIM rather than coercing it to a table (PLATFORM §3 additivity, fixed
+earlier and commented in model.ts). Old builds round-trip a spreadsheet sheet
+without damaging it.
+
+Consequences recorded now rather than discovered later: the CRDT keys dataset
+rows by `rid` and a spreadsheet has none, so its cells are keyed by POSITION
+(`g␟<sheet>␟<col>,<row>`) and a row insert MOVES cells rather than renumbering
+identities — a different convergence problem needing its own rig, not a reused
+one. `a1.ts` already lexes `Sheet1!A1` but nothing resolves it, and a
+spreadsheet without cross-sheet refs is half a spreadsheet, so that is in scope
+for the kind. `.xlsx` import should land as a SPREADSHEET rather than guessing
+a column model — which is what `CellOverride.xlsxF` (the formula kept verbatim
+because dash cannot place it in a column model) has been evidence of all along.
+
+Full design: `docs/dash-sheet-kinds.md`. Not built.
+
+## dash: one view vector, read by everything that describes the view
+
+2026-08-11. Filtering and sorting write `store.order[sheetId]` — an index
+vector, view state, no checkpoint and no op, so they never dirty the file.
+Three surfaces described that view and only one read the vector.
+
+Measured on the starter workbook, filtered to deals over £10,000: the grid drew
+four rows worth £69,050, the footer said £97,050 in bold underneath them, the
+chart drew a third bar for two of the removed rows, and the status bar said
+"4 of 8 rows" — right, until anything else changed, because `showView()` had a
+single caller inside the filter menu.
+
+THE RULE: anything that describes the view reads the same vector. `aggregate`
+(grid.ts) takes it, `optionFor` (chart.ts) takes it as a row index list, Find
+walks it, and `viewStatusText` is derived from it in grid.ts because the grid
+owns the view. `applyView()` is the funnel every path already goes through —
+sort, filter, clear, sheet switch, structural edit — so it announces.
+
+A SORT MUST NOT MOVE A TOTAL and a FILTER MUST. A sort permutes the vector, so
+summing through it is unchanged; a filter shortens it. Both are guarded, and
+the sort case is the one worth having a test for, because getting it wrong is
+invisible.
+
+Excel agrees, which was discovered afterwards and is reassuring rather than
+load-bearing: a table's totals row is `SUBTOTAL(109, …)`, and `SUBTOTAL` ignores
+rows a filter has hidden.
+
+## dash: the chart is pinned to the sheet it was made from
+
+2026-08-11. A chart is an argument about one table — `StoryStep` already
+carried `sheet` beside `chart` for that reason. It does not follow the tab bar.
+Reading `grid.sheet` instead left the previous sheet's chart painted beside the
+new grid, and the next edit redrew it as an empty axis against columns that had
+never existed on the sheet in front of the reader.
+
+It names its sheet in the heading when that differs from the one on screen, and
+offers to re-bind rather than re-binding itself: a silent re-bind changes what
+the chart asserts without anyone asking, which is the same failure as
+staleness. If its sheet is deleted the panel closes rather than holding numbers
+about nothing.
+
+The cause of the filter half is worth recording separately: filtering emits
+`view`, never `doc`, and only `doc` was listened for. That is not a chart bug,
+it is what happens when view state is invented later than the listener.
+
+## dash: sheet tabs at the bottom, and reorder is a patch
+
+2026-08-11. Sheets moved from a list in the left properties panel to a tab
+strip along the bottom edge. The panel existed only for that list, so it is
+gone and the grid is ~200px wider at every size.
+
+Sheet order is TAB ORDER and it lives in the document, so a reorder is an
+undoable patch whose inverse carries the ORIGINAL index — one undo returns a
+dragged tab to where it was, not to the end. Reorder is implemented on mouse
+events rather than HTML5 drag-and-drop, which is untestable without a real
+mouse and dead on touch; `Move left` / `Move right` in the context menu give
+touch and keyboard the same operation.
+
+The active tab carries ONE mark: a 2px rule in the ink colour. It first shipped
+with four — rounded corners, a border, a 3px amber bar and a heavier weight —
+because each had been added to satisfy a contrast measurement and none was
+removed afterwards. The brand amber is 2.02:1 on white and cannot carry a
+non-text indicator alone, which is what forced the props. Ink is 14.51:1 light
+and 13.75:1 dark, so one mark suffices. Amber stays on things about the
+DOCUMENT: the unsaved dot, a filtered column header. A tab is navigation.
+
+## dash: Find searches the file, because the grid is a window onto it
+
+2026-08-11. About forty rows of a 5,000-row sheet exist in the DOM. Measured:
+`document.body.innerText` holds 1,528 characters for 20,000 cells, and Chrome's
+own `window.find('Customer 5000')` returns FALSE for a value plainly in the
+file. So the browser's find is not merely unhelpful here, it is WRONG with the
+browser's authority behind it, and that is what earns dash the right to take
+⌘F. Where the grid is not painted — the dashboard — the key is given back,
+because there the browser can see everything and taking it would be a downgrade.
+
+Matching runs over BOTH the displayed text and the stored value, and the hit
+records which matched. That is not cosmetic: `12,400` and `£` exist only in the
+rendering, `12400` only in the file, and which one matched decides whether
+Replace may touch the cell. A match found only in the formatted text is refused
+and counted, because there is no defensible way to push a substring of a
+rendering back into a number.
+
+Hits walk the VIEW VECTOR, so a find never jumps to a row the filter is hiding,
+and Replace patches are keyed by RID so a filter cannot re-target a write.
+
+
+### Correction, same day: the spreadsheet kind already existed
+
+The entry above proposed `kind: 'grid'`. Wrong — `CanvasSheet` is the
+spreadsheet kind and has been in the format since commit one, deliberately:
+"the classic sparse A1 map… in the format from commit one, because an escape
+hatch added later is permanently second-class (PLATFORM §3)". It carries the
+sparse cell map, per-cell value and formula, column widths and row heights, and
+per-cell colour/background/bold/alignment — which also answers the "no cell
+formatting at all" gap for that kind.
+
+So the decision stands and the model change is nil: `table` is the dataset,
+`canvas` is the spreadsheet, and the work is implementation, not format. Adding
+a third kind would have left two half-built spreadsheet kinds. "Canvas" stays
+the wire word; the label a reader sees is "Spreadsheet".
 ## 2026-08-15 — The sync engine's shape gains a text property, and children become optional
 
 **Context.** `DocShape` described a document as two levels — `parents` holding
@@ -5977,6 +6126,126 @@ the session, which is not.
 check belongs in the file people read BEFORE writing a rig; this log is what
 they read after wondering why a standard exists. That text is queued for the
 maintainer.
+## 2026-08-29 — the locale list leaves the prose; docs point at LOCALES
+
+**The rule that named the languages was wrong for a month and cost a shipped
+app a language.** `AGENTS.md` rule 6 listed seven catalogues (ja, zh-Hans,
+zh-Hant, es, fr, de, it) and `CLAUDE.md` said "7 locales"; Portuguese was added
+2026-07-25 and the docs did not follow. PR #394 added `type/src/i18n/` with
+seven catalogues and no `pt.ts`, and hard-coded the seven-locale list into its
+new build script. That session followed the written rule exactly. The rule was
+the defect.
+
+**So no document states the list any more.** Rule 6 and the `CLAUDE.md` i18n
+entry now name where the list lives — `LOCALES` in the app's
+`scripts/build-*-i18n.mjs`, with `ls <app>/src/i18n/` as the check — and carry
+the failure story, because a rule without one gets deleted by whoever finds it
+inconvenient. A count in prose is verified by nothing and is the only copy that
+can rot unnoticed; every other copy is load-bearing and fails visibly.
+
+**Three copies, not one, and the number is growing.** Adding a locale touches
+the catalogue file, the app's `LOCALES`, and any rig holding its own list.
+Saying "point at the build script" is true and incomplete: it leaves a rig's
+copy stale, which is what goes red. Measured on 2026-08-29:
+
+| | slides | spaces | type (#394) |
+|---|---|---|---|
+| `LOCALES` in build script | 8 | 8 | 7 |
+| catalogue files | 8 | 8 | 7 |
+| extra-file guard | **yes** | no | no |
+| rig with its own list | no | no | **yes** |
+
+**Only `build-i18n.mjs` errors on a catalogue missing from `LOCALES`.** On
+spaces and type, adding a catalogue without touching `LOCALES` exits 0, prints
+its locale count, and silently never packs the file — a translation that ships
+to nobody, announced by nothing. That is worse than a red build. Porting the
+guard to the sibling scripts is queued with ops and is not done here.
+
+**A rig must derive the list, never restate it.**
+`scripts/test-i18n-coverage.mjs` already does the right thing: it parses
+`PACKED_LOCALES` out of the generated `packed.ts`, so it cannot disagree with
+the build. #394's `test-type-i18n.ts` hard-codes a second list instead. The
+existing rig is the pattern to copy; a derived list is a copy that cannot rot.
+
+**Not fixed, deliberately:** this log's 2026-07-24 entry says "App UI i18n
+(7 locales)". It was true when written — one day before the entry that added
+Portuguese — and this log is append-only. It stays. Anyone grepping for stale
+counts will hit it; that is the cost of an honest record, not a defect.
+
+**The general rule, because this is not really about locales.** A count in
+prose is verified by nothing. Three files stated one today — `AGENTS.md`,
+`CLAUDE.md`, `docs/PARALLEL-WORK.md` — all three were true when written, all
+three went stale in silence, and one of them cost a shipped app a language.
+**Name the mechanism, never its current output:** the mechanism survives edits,
+the output has a half-life. That extends to this log — an append-only entry
+cannot be corrected, so a number belongs in one only when it is FROZEN. The test
+before writing one down: *could this change without the entry becoming wrong?*
+
+**A number is frozen by its framing, not by its value.** "Eleven cases went
+untested" is safe: it reports something that already happened and stays true
+forever. The same figure asserted as a standing fact — "there are eight
+catalogues" — is not, because the next locale makes it a lie nobody can edit.
+The table above says 8 twice and is safe for exactly this reason: it is stamped
+`Measured on 2026-08-29` and says the number is growing, so it reads as a
+reading taken at a moment rather than a claim about the present. Date a
+measurement and it becomes evidence; leave it undated and it becomes a fact with
+an expiry nobody sees. **The rule is not "avoid numbers" — that is unusable
+advice — it is "never write one that is still claiming to be current."**
+
+This is the same failure recorded elsewhere today from the rig side — a
+statement that was true when written, went stale without a sound, and had
+nothing checking it. Documentation and a green test suite fail identically here,
+and for the same reason: both are instruments, and an instrument nobody
+calibrates is believed longest.
+
+## 2026-08-29 — OPEN QUESTION: `pt` is two different languages in the suite
+
+**Not a decision. A question recorded because no rig can ask it.**
+
+**The facts, counted on 2026-08-29.** Both files are named `pt.ts` and both are
+correctly named, so every mechanical check passes:
+
+| | `arquivo` | `ficheiro` | `tela` | `guardar` | header declares |
+|---|---|---|---|---|---|
+| `slides/src/i18n/pt.ts` | 47 | 10 | 33 | 4 | Portuguese (**Brazilian**), explicit pt-BR terminology policy |
+| `spaces/src/i18n/pt.ts` | 9 | 58 | 3 | 7 | "Portuguese", no policy |
+
+So slides is Brazilian by declaration and spaces drifted European, under one
+locale code. A user running the suite in Portuguese meets two vocabularies.
+`type` followed slides while adding its catalogue and normalised the strings it
+reused.
+
+**The intent was Brazilian, but it was never written as a rule.** The
+2026-07-25 bundling entry adds Portuguese "because Brazil has a real
+English-proficiency gap"; `slides/src/i18n/pt.ts` states a pt-BR policy in its
+header and notes that European Portuguese "deserves its own catalog later".
+Neither is a suite-wide policy, and `spaces/` shows what happens without one.
+
+**Why this cannot be a rig.** The drift is vocabulary under an identical locale
+code. There is no signal to assert on short of a term blocklist per variant,
+and even that is not sufficient: bento/type reports that one reused string
+passed a `ficheiro`/`guardar`/`ecrã` sweep while remaining European in
+construction ("cada vez que guarda", "num computador") and had to be rewritten
+by hand. **A term-level sweep is not a conversion.**
+
+**Not clean anywhere, which is why this is a question and not a cleanup.**
+Slides violates its own stated policy 10 times (`ficheiro`) plus `guardar` and
+`ecrã`. Settling the question means retranslating a catalogue, which is
+translation work and a maintainer's call, not a documentation change.
+
+**What is actually being asked**, so it is not rediscovered:
+
+1. Is bundled `pt` pt-BR for the whole suite? The recorded reasoning says
+   Brazil, and two of three catalogues follow it.
+2. If yes, `spaces/src/i18n/pt.ts` needs converting by hand and every catalogue
+   should declare its variant in its header the way slides does.
+3. Does European Portuguese become a downloadable pack (`pt-PT`), which is what
+   the slides header anticipates and what the pack tier exists for?
+
+Until it is answered, **a new catalogue for a language with regional variants
+should state its variant in its header** and follow the sibling app that
+already declares one.
+
 ## 2026-08-29 — a green local rig run can mean half the rig never ran
 
 **`scripts/test-sanitize.ts` has two halves.** The node half imports the pure

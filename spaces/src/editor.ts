@@ -26,8 +26,8 @@ import type { MarkTag } from './marks'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
-  reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, FIELD_TYPE_LABEL,
-  cycleSort,
+  reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, fieldTypeLabel, FIELD_TYPES,
+  cycleSort, nextLayout,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { planImport, type SourceFile } from './markdown'
@@ -215,6 +215,8 @@ export class Editor {
       locked: () => this.store.readOnly || this.reading,
       repaint: () => this.paintPage(),
       pickPoster: (id) => void this.pickPoster(id),
+      pickCover: (pageId) => void this.pickCover(pageId),
+      removeCover: (pageId) => this.removeCover(pageId),
       pickMedia: (id) => void this.pickMedia(id),
       openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
       openAddProperty: (pageId, anchor) => this.openAddProperty(pageId, anchor),
@@ -1852,12 +1854,18 @@ export class Editor {
 
   private toggleViewLayout(blockId: string): void {
     const b = this.store.block(blockId)
-    const now = String((b as { layout?: unknown } | undefined)?.layout ?? 'board')
-    // Board -> list -> table -> board. `board` is the ABSENT key, never a
-    // stored 'board': a view cycled all the way round is byte-identical to one
-    // nobody ever touched, which is the same rule filter and source follow.
-    const next: Record<string, string | undefined> = { board: 'list', list: 'table', table: undefined }
-    this.editView(blockId, 'layout', next[now] ?? (now === 'table' ? undefined : 'list'))
+    // Board -> list -> table -> gallery -> board, from fields.ts — the ONE
+    // place the cycle is written. It used to be written here and again in
+    // render.ts, and when the prototype-lookup bug was found only this copy was
+    // hardened, so the button went on rendering
+    // `function toString() { [native code] }` as its label from the other one.
+    //
+    // `board` is the ABSENT key, never a stored 'board': a view cycled all the
+    // way round is byte-identical to one nobody ever touched, which is the same
+    // rule filter and source follow. nextLayout returns the WORD; turning
+    // 'board' back into a deletion is the writer's job, and this is the writer.
+    const to = nextLayout((b as { layout?: unknown } | undefined)?.layout)
+    this.editView(blockId, 'layout', to === 'board' ? undefined : to)
   }
 
   /**
@@ -3511,7 +3519,7 @@ export class Editor {
       if (spare.length) {
         pop.append(el('div', 'sp-pop-title', t('Add a property')))
         for (const f of spare) {
-          pop.append(this.menuItem('tag', f.label, t(FIELD_TYPE_LABEL[f.vt] ?? 'Text'), () => put(f)))
+          pop.append(this.menuItem('tag', f.label, fieldTypeLabel(f.vt), () => put(f)))
         }
       }
 
@@ -3523,10 +3531,10 @@ export class Editor {
       name.placeholder = t('Name')
       const type = document.createElement('select')
       type.className = 'sp-select'
-      for (const [vt, label] of Object.entries(FIELD_TYPE_LABEL)) {
+      for (const vt of FIELD_TYPES) {
         const o = document.createElement('option')
         o.value = vt
-        o.textContent = t(label)
+        o.textContent = fieldTypeLabel(vt)
         type.append(o)
       }
       type.value = 'text'
@@ -4363,6 +4371,71 @@ export class Editor {
       })()
     })
     input.click()
+  }
+
+  /**
+   * The picture across the top of a page.
+   *
+   * The IMAGE pipeline, not a second one: prepareImage downscales a phone photo
+   * before it travels, internAsset content-addresses the bytes so two pages
+   * with the same cover store it once, and the same budget asks the same
+   * question at the same size. A cover is the field most likely to be given a
+   * 6MB photograph — inventing a separate policy for it is how one app ends up
+   * with two answers to "how big is too big".
+   */
+  private async pickCover(pageId: string): Promise<void> {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) return
+      void (async () => {
+        const s = this.store
+        if (s.readOnly) return
+        this.status(t('Reading image…'))
+        let prepared
+        try { prepared = await prepareImage(file) } catch {
+          this.status(t('That file could not be read as an image')); return
+        }
+        if (prepared.dataUri.length > IMAGE_EMBED_BUDGET) {
+          const okay = confirm(t(
+            'This image is {size} and travels inside the file, making it that much bigger for everyone you send it to. Embed it anyway?',
+            { size: humanBytes(prepared.dataUri.length) },
+          ))
+          if (!okay) { this.status(''); return }
+        }
+        // hashed and interned BEFORE the commit, so the bytes and the reference
+        // land in one synchronous mutation — one undo step, exactly as an image
+        // block does it
+        const ref = await internAsset(s.doc, prepared.dataUri)
+        s.commit(() => {
+          const p = s.index.page.get(pageId)
+          if (p) p.cover = ref
+        }, { scope: 'doc' })
+        this.repaint()
+        this.status(prepared.original
+          ? t('Image added ({size})', { size: humanBytes(prepared.dataUri.length) })
+          : t('Image added, resized to fit ({from} → {to})', {
+            from: humanBytes(prepared.wasBytes), to: humanBytes(prepared.dataUri.length),
+          }))
+      })()
+    })
+    input.click()
+  }
+
+  /** No cover DELETES the key. A page whose cover was set and removed is
+   *  byte-identical to one that never had one. The bytes stay in the asset
+   *  table until nothing points at them — orphanAssets is what reports that,
+   *  and it counts covers. */
+  private removeCover(pageId: string): void {
+    const s = this.store
+    if (s.readOnly) return
+    s.commit(() => {
+      const p = s.index.page.get(pageId)
+      if (p) delete p.cover
+    }, { scope: 'doc' })
+    this.repaint()
   }
 
   // ---- importing existing notes ---------------------------------------------

@@ -1,0 +1,26 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 The Bento authors
+ */
+/* --- the conditional-formatting rule list --------------------------------
+   Rules COMPOSE (condfmt.ts), so a column can hold several and the panel has
+   to say which one the rows below are about. These are the ONLY two classes
+   this section adds: everything else is .dp-row, .dp-btn and .dp-note, so the
+   controls line up with the rest of the panel by construction rather than by
+   somebody remembering the padding. */
+.dp-cf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* the panel's shared pitch, not a second 6px — panels.css declares it, and a
+     list that left a different gap under itself than the row above it left is
+     exactly the drift this class was written to avoid */
+  margin: 0 0 var(--dp-pitch);
+}
+/* The rule being edited. A left bar rather than a fill: the swatch controls
+   below are the coloured things in this section, and a filled button beside
+   them reads as a third colour the author chose. */
+.dp-cf-list .dp-btn.dp-cf-on {
+  border-color: var(--blue);
+  box-shadow: inset 2px 0 0 var(--blue);
+  font-weight: 600;
+}

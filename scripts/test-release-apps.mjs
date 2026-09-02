@@ -31,7 +31,7 @@
 // So the registry is pinned against the app's own source of truth: its
 // package.json build script, and the configureApp() call in its main.ts.
 
-import { APPS } from './apps.mjs'
+import { APPS, tagFor } from './apps.mjs'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -108,6 +108,16 @@ for (const [key, app] of Object.entries(APPS)) {
   // The agent guide is published at /<dir>/agents.md by that app's release.
   if (app.agents) ok(existsSync(join(root, app.agents)), `${key}: agent guide exists (${app.agents})`)
   ok(typeof app.packs === 'boolean', `${key}: declares whether it has a pack channel`)
+
+  // ---- tag and title -------------------------------------------------------
+  // publish-site.mjs creates the GitHub release FOR a tag and attaches this
+  // app's shell to it. Both fail QUIETLY when the app is wrong: a dash publish
+  // that looked up slides' tag would find the release already there, print
+  // "already published", and exit 0 having created nothing.
+  ok(typeof app.tagPrefix === 'string', `${key}: declares a tagPrefix`)
+  ok(!!app.label, `${key}: declares a release title (${app.label})`)
+  ok(key === 'slides' ? app.tagPrefix === '' : app.tagPrefix === `${key}-`,
+    `${key}: tags are ${tagFor(app, pkg.version)} (slides keeps the bare form it has used for 23 releases; every other app is prefixed)`)
 }
 
 // The actual 2026-08-03 bug: two apps reading one file. Distinctness is the
@@ -126,6 +136,12 @@ const ids = Object.values(APPS).map((a) => a.appId)
 ok(new Set(ids).size === ids.length, 'app ids are unique')
 const dirs = Object.values(APPS).map((a) => a.dir)
 ok(new Set(dirs).size === dirs.length, 'app directories are unique')
+
+// Tags are the one namespace all three apps share. Slides is at 1.0.x and the
+// others start at 0.x, so an unprefixed second app would sort into the middle
+// of slides' history and claim a version slides can never use again.
+const prefixes = Object.values(APPS).map((a) => a.tagPrefix)
+ok(new Set(prefixes).size === prefixes.length, 'tag prefixes are unique — two apps cannot mint the same tag')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
