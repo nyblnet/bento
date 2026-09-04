@@ -144,6 +144,13 @@ pre-1.0.
   the save. Granting a large folder no longer costs anything either, so a whole
   home directory is as cheap as a single decks folder.
 
+- **The toolbar is centred on a phone, and the Save button has its outline
+  back.** At phone widths the deck title had 90px to sit in and now has 220px,
+  because the folded bar centres and gives the title the room it frees. The Save
+  button had lost its right-hand border and rounded corner below 700px, where
+  the caret beside it is hidden — so it read as an unfinished edge rather than a
+  button.
+
 - **Fix: several buttons were unreadable in dark mode.** White text on a
   near-white button — the main action in a dialog, the toast that confirms a
   save, the active chip in a settings row, and the ＋ between slides. The
@@ -228,6 +235,20 @@ pre-1.0.
   system that does report the old code still lands on it, and so a file already
   carrying the pack keeps working. Turkmen (`tk`) was checked at the same time
   and needed no change: `tk-TM` is what a Turkmen system reports.
+- **Fix: a single click could leave an element stuck to the cursor, and the
+  click that freed it moved the element.** Click once to select something and it
+  would occasionally follow the pointer around the slide as though you were
+  dragging it. The click that finally released it committed the move, so the
+  element stayed where the pointer happened to be — a selection turning into an
+  edit, with nothing on screen to say so and no reason to reach for undo.
+
+  This one is not about phones. It is a race between how fast the click arrives
+  and how fast the machine can respond to it, so it bites slower hardware of any
+  kind: the person who reported it hit it roughly one click in five on an older
+  desktop and never once on a current laptop. If your deck has quietly lost its
+  layout and you have never pinched a phone screen, this is the more likely
+  cause. Measured on the same machine before and after: 22 of 24 clicks stuck,
+  then 0 of 24.
 
 ## [1.0.18] — 2026-08-15
 
