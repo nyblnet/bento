@@ -32,6 +32,12 @@ pre-1.0.
   hierarchy when you resize it and the canvas, thumbnails, presenter and print
   all agree.
 
+  Lists and headings are the only part of this batch that changes what a file
+  can contain, and they are additive like everything else in the format: a deck
+  using them opens in any earlier copy of Bento, which keeps every word and
+  simply shows the list without its bullets until that copy is updated. The new
+  tags carry no attributes of their own, by construction.
+
   **Pinch to zoom, and two fingers to move the canvas.** A deck opens at
   19–27% on a handset, so it always needs zooming, and the only way to zoom was
   two small buttons in a corner. Pinch now drives the editor's own zoom,
