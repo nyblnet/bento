@@ -11,6 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.0.19] — 2026-09-04
+
 - **Bento Slides works on a phone.** Eight changes land together, because
   individually none of them was enough: a deck opened on a handset could be
   looked at and rearranged, but not written.
