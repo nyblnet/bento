@@ -73,10 +73,41 @@ function deriveLocales(): string[] {
     .filter((f) => f.endsWith('.ts') && f !== 'packed.ts')
     .map((f) => f.slice(0, -3))
   // The order already committed to, straight out of the generated file.
+  //
+  // AN ORDER IT CANNOT ESTABLISH IS A FAILURE, NOT A DEFAULT — and the first
+  // version of this got that wrong in the one way that matters. It fell back to
+  // `prior = []` on a table it could not read, from which the order becomes
+  // `onDisk.sort()`: measured on this branch by breaking only the array's
+  // syntax and running --write, every one of the eight columns permuted
+  // (["ja","zh-Hans",…] to ["de","es",…]) and the run printed "all checks
+  // passed".
+  //
+  // That is NOT data corruption and the artifact stays internally consistent —
+  // --write rewrites the table together with PACKED_LOCALES, and consumers read
+  // positionally against the list in the same file. What it destroys silently
+  // is the property this function exists to hold: that regeneration is
+  // byte-identical when nothing changed. It turns a zero-line diff into a
+  // 744-line reorder on a green run, and a 744-line reorder is exactly the diff
+  // a bad translation rides through unread.
+  //
+  // `prior = []` is right for NO TABLE AT ALL, which `existsSync` already
+  // separates. Everything else refuses.
   let prior: string[] = []
   if (existsSync(OUT)) {
     const m = /export const PACKED_LOCALES = (\[[^\]]*\])/.exec(readFileSync(OUT, 'utf8'))
-    if (m) { try { prior = JSON.parse(m[1]) as string[] } catch { prior = [] } }
+    if (!m) {
+      throw new Error(
+        'packed.ts exists but has no readable PACKED_LOCALES — refusing to guess the column order. ' +
+        'RESTORE IT FROM GIT. Deleting it instead does regenerate, but from no prior order, which ' +
+        're-alphabetises every column — a correct table and a whole-file diff, which is the outcome ' +
+        'this refusal exists to avoid arriving at by accident.')
+    }
+    try { prior = JSON.parse(m[1]) as string[] } catch {
+      throw new Error(
+        `packed.ts has a PACKED_LOCALES that is not readable JSON (${m[1].slice(0, 60)}) — ` +
+        'refusing to guess the column order. Restore it from git; deleting it re-alphabetises ' +
+        'every column instead of preserving the committed order.')
+    }
   }
   const set = new Set(onDisk)
   // kept in their committed positions, then the newcomers, sorted only among
@@ -104,6 +135,9 @@ const LOCALES = deriveLocales()
  */
 function checkPackedSet(): { ok: boolean; msg: string } {
   if (!existsSync(OUT)) return { ok: true, msg: 'no table yet' }
+  // Unreachable while `deriveLocales` runs first and throws on both of these —
+  // kept as a cheap belt if the order of operations ever changes, not because
+  // it is expected to fire.
   const m = /export const PACKED_LOCALES = (\[[^\]]*\])/.exec(readFileSync(OUT, 'utf8'))
   if (!m) return { ok: false, msg: 'packed.ts has no PACKED_LOCALES to compare against' }
   let inTable: string[] = []
@@ -113,7 +147,13 @@ function checkPackedSet(): { ok: boolean; msg: string } {
   if (!missing.length && !extra.length) return { ok: true, msg: `${inTable.length} locales, table and disk agree` }
   const parts: string[] = []
   if (missing.length) parts.push(`${missing.join(', ')} ${missing.length === 1 ? 'has a catalog' : 'have catalogs'} but no column — run --write`)
-  if (extra.length) parts.push(`${extra.join(', ')} ${extra.length === 1 ? 'has a column' : 'have columns'} but no catalog file`)
+  // Deliberately does NOT say "run --write", unlike every other failure here: a
+  // column with no catalog file means a catalog was DELETED, and that is a
+  // column removal somebody should look at rather than regenerate past.
+  if (extra.length) {
+    parts.push(`${extra.join(', ')} ${extra.length === 1 ? 'has a column' : 'have columns'} but no catalog file — ` +
+      'restore the catalog, or delete the column deliberately; this one is not for --write to decide')
+  }
   return { ok: false, msg: parts.join('; ') }
 }
 
