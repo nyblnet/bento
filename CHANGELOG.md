@@ -11,6 +11,58 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Bento Slides works on a phone.** Eight changes land together, because
+  individually none of them was enough: a deck opened on a handset could be
+  looked at and rearranged, but not written.
+
+  **Text is editable by touch.** Opening a text box was bound to double-click,
+  and a double-click never reaches the canvas from a touchscreen — so on a
+  phone a deck was effectively read-only. Elements selected, moved and resized;
+  no word in them could be changed. A tap on the box a previous tap selected
+  now opens it, and on a table it opens the cell under your thumb. Mouse
+  behaviour is untouched: one click still selects, two still open.
+
+  **A formatting bar, which is also the only route to any of this on a phone.**
+  Select words inside an open box and a bar appears over them — bold, italic,
+  underline, strikethrough, code, title, heading, body, bulleted and numbered
+  lists, and clear formatting. Bold and italic previously existed with no
+  visible way to reach them (⌘B and markdown, neither mentioned anywhere in the
+  interface); lists and headings could not be made at all. They are real list
+  and heading tags in the document, sized proportionally, so a box keeps its
+  hierarchy when you resize it and the canvas, thumbnails, presenter and print
+  all agree.
+
+  **Pinch to zoom, and two fingers to move the canvas.** A deck opens at
+  19–27% on a handset, so it always needs zooming, and the only way to zoom was
+  two small buttons in a corner. Pinch now drives the editor's own zoom,
+  anchored between your fingers rather than snapping back to the middle of the
+  slide, and the same gesture pans. The page itself still never zooms, and
+  one-finger selection and dragging are unchanged.
+
+  **Press and hold, or right-click, for a menu that belongs to the deck.**
+  There was no context menu, so a right-click produced the browser's own — Back,
+  Reload, View source — which is the wrong set of verbs for a slide and the
+  first gesture most people try. Now an element offers Edit text, Cut, Copy,
+  Duplicate, Bring to front, Send to back, Group and Delete; a thumbnail offers
+  New, Duplicate and Delete slide; the canvas offers Paste. Press and hold is
+  the same menu on a phone. The browser's own menu is deliberately left in place
+  where it is the better one — form fields, links, and text you are editing,
+  where the system carries spelling, dictation and look-up.
+
+  **The toolbar can be reached at 320px.** Fully folded the bar still needs
+  about 356px, and an iPhone SE — or any iPhone with Display Zoom on — is 320.
+  The surplus was simply cut off, which put the ⋯ button 36px past the edge of
+  the screen, taking Redo, Comment, Export PDF, Share, Language, Help and the
+  whole save-as list with it, none of which had another route on a phone. The
+  bar now scrolls, so a clipped button becomes a partly visible one.
+
+  **The panels get out of the way.** Below 700px the side panels are drawers
+  laid over the canvas rather than columns beside it. Tapping a thumbnail
+  navigated correctly and then left the drawer covering the slide it had just
+  moved to, so every slide change cost a second trip to the toggle. Picking a
+  slide now closes the list, and tapping the slide beside any open overlay
+  dismisses it. On a wide screen the panels are still columns and stay put.
+
 - **Code on a slide — and it morphs.** A slide can hold a code snippet, syntax
   highlighted, and when the same snippet appears on two slides in a row the code
   *travels* between them. A line that moved moves; a call that changed position
@@ -146,6 +198,21 @@ pre-1.0.
   that arrives inside pasted or imported SVG markup was never scoped at all.
   Both go through the same scoping now, and a drawing's own rules still apply to
   it in full.
+- **Fix: a two-finger pinch on a phone could move an element and save the move.**
+  Pinching to look closer at a slide would silently drag whatever was under
+  your fingers and commit that move to the document — no visible cause, and no
+  reason to reach for undo, so the deck was quietly wrong the next time you
+  opened it. Measured on a real deck: a title at (88, 122) landed at (566, 469)
+  after one pinch.
+
+  The first finger had already begun an ordinary drag. Multi-touch over the
+  canvas was then swallowed so the page would not zoom — but swallowing the
+  events did not end the drag that was already running underneath, and it
+  committed on release like any other. The pinch now takes the canvas and stops
+  that drag, which is the same change that made pinch-to-zoom possible.
+
+  Touch only, so phones and tablets, and it needed an element under your
+  fingers — which on a slide is the ordinary case.
 
 ## [1.0.18] — 2026-08-15
 
