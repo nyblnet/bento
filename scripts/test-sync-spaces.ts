@@ -28,11 +28,19 @@
 // The engine is the kernel's, bound to ('pages','blocks'). Nothing here is
 // spaces app code: this is the shape binding and its evidence.
 
-import { SyncEngine, shape } from '../kernel/src/sync/crdt.ts'
+import { SyncEngine } from '../kernel/src/sync/crdt.ts'
 import { mulberry32, baseDoc, randomMutation, type Doc } from './lib/sync-fixtures-spaces.ts'
 import { effectiveParents, descendantsOf } from '../spaces/src/model.ts'
 
-export const SPACES_SHAPE = shape('pages', 'blocks')
+// The binding lives with the APP (spaces/src/sync/crdt.ts), not here. Two
+// definitions of a frozen format constant is precisely how a fork starts: the
+// shape strings are minted into every persisted SyncStateJSON and every relay
+// frame, so a rig that carries its own copy can go green while the app ships
+// something else. Re-exported so existing importers are unaffected.
+// (`export … from` re-exports without binding the name locally, and this rig
+// uses it below — so it is imported and re-exported.)
+import { SPACES_SHAPE } from '../spaces/src/sync/crdt.ts'
+export { SPACES_SHAPE }
 class SpacesSync extends SyncEngine {
   constructor(actor: string) { super(actor, SPACES_SHAPE) }
 }

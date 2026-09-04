@@ -88,6 +88,37 @@ If you touch the boot, save, or build path, keep these invariants intact — the
 release process gates on them. The details are in
 [docs/architecture.md](docs/architecture.md).
 
+## How this project is developed
+
+Bento has a small maintainer-led design process, and it's worth saying plainly
+what that means for anyone reading along.
+
+**What is public:** the source, the format, and the reasoning behind shipped
+behaviour. [docs/DECISIONS.md](docs/DECISIONS.md) is an append-only log of why
+things are the way they are — dated, with the arguments intact — and
+[docs/PLATFORM.md](docs/PLATFORM.md) states the invariants that follow from
+them. If you want to know why a rule exists before you argue with it, that is
+where to look, and those two files are the ones we most want to be worth
+reading.
+
+**What is not:** plans for unreleased work. Design direction for things that
+have not shipped isn't published, there is no public roadmap beyond the one
+paragraph in the README, and there are no dates. That is a deliberate trade —
+publishing analysis of a product that doesn't exist yet commits a one-person
+project to conclusions it hasn't earned, and the reasoning gets published once
+it constrains real code, not before.
+
+**Unreleased apps live in this repo anyway.** `type/` and `dash/` are in the
+tree because the apps share one kernel and one build; each has a README saying
+what state it is in. Source being visible is not the same as a product being
+released: nothing unreleased is published, signed, or reachable through the
+update channel, and rough edges there are expected rather than reportable.
+
+**The most useful contributions**, given all that, are bug reports against
+shipped behaviour, fixes with a test or a reproduction, documentation
+corrections, and templates. For anything larger, the next section is the
+important one.
+
 ## Before you build something substantial
 
 **Check what's already in flight, and claim it.** Bento moves fast and several

@@ -5,7 +5,7 @@
 // WHAT THIS IS FOR. The shell's runtime ships DEFLATED and is inflated by a
 // loader at boot. With scripting off nothing inflates, nothing boots, and the
 // splash is never removed — so a saved space appeared as the bento boot screen
-// to macOS QuickLook, iOS Files, Bento Tray, and any preview pane that renders
+// to macOS QuickLook, iOS Files, bento/home, and any preview pane that renders
 // HTML without running it. A file whose whole promise is "this is the document"
 // showed a loading animation instead of the document.
 //
@@ -27,6 +27,21 @@
 // scoped sheet. It is a SEPARATE, deliberately plain sheet rather than an
 // extract of the real one: it renders the document honestly at a glance, and it
 // is not trying to be pixel-identical to the editor.
+//
+// AND THIS SURFACE HAS NO THEME — deliberately, now that the editor has one.
+//
+// The app's dark interface is a VIEWER preference: localStorage, read at boot
+// by kernel/src/theme.ts. Nothing here can ask for it. This render exists
+// precisely for the readers that run no script, so there is no boot, no
+// localStorage and no reader to hold a preference — there is a file manager
+// drawing a thumbnail. A `prefers-color-scheme` block here would not be the
+// reader's choice; it would be a guess made on their behalf, and it would
+// fight the one thing this render legitimately does have: `doc.theme`, the
+// colours the AUTHOR gave the document, which the sheet below paints.
+//
+// So the preview is the one surface in this app that stays the author's in
+// both themes, exactly as a thumbnail of a document should. If that ever
+// changes it has to change with the FORMAT, not with a media query.
 
 import type { SpacesDoc, Page } from './model'
 import { renderPage } from './render'
@@ -36,7 +51,16 @@ import { homePage } from './model'
  *  is a courtesy; it must never be why a file is large. */
 export const PREVIEW_BUDGET = 64 * 1024
 
-/** Anything that could run, load, or accept input has no business in a still. */
+/**
+ * Anything that could run, load, or accept input has no business in a still.
+ *
+ * `video`/`audio` are DEFENCE IN DEPTH rather than the mechanism: the render
+ * below passes `printing: true`, and render.ts draws a `media` block as a
+ * poster still under that flag, so no player element is ever built here. This
+ * catches one arriving by some other route — a future block type that embeds
+ * one, or a hand-written document — before a file manager is asked to decode
+ * video to draw an icon.
+ */
 const BANNED = 'script,iframe,object,embed,video,audio,canvas,form,input,textarea,select,button,link,meta'
 
 /** Attributes the runtime uses to find things. A still has no runtime. */
@@ -84,8 +108,26 @@ const SHEET = (doc: SpacesDoc): string => {
     `.bp figcaption{font-size:13px;color:#5B6472;margin-top:5px}`,
     `.bp aside{margin:0 0 14px;padding:12px 14px;border-radius:10px;`,
     `border:1px solid #E3E8EF;border-inline-start:3px solid ${accent};background:#F8FAFC}`,
+    // A clip's still: the author's poster frame if there is one, and a quiet
+    // labelled box if not. Flat rules only — QuickLook's WebKit is the
+    // conservative renderer this sheet is written for, so no :has(), no
+    // grid tricks, nothing that could fail to a blank rectangle.
+    `.bp .sp-media-still{margin:0 0 14px;padding:12px;border-radius:8px;`,
+    `border:1px solid #E3E8EF;background:#F8FAFC;text-align:center}`,
+    `.bp .sp-media-still img{max-width:100%;height:auto;border-radius:6px;`,
+    `display:block;margin:0 auto 8px}`,
+    `.bp .sp-media-badge{font-size:13px;color:#5B6472}`,
+    `.bp .sp-media-empty{margin:0 0 14px;padding:12px;border-radius:8px;`,
+    `border:1px dashed #E3E8EF;color:#5B6472;font-size:13px;text-align:center}`,
     `.bp code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}`,
     `.bp a{color:inherit;text-decoration:none;border-bottom:1px solid ${accent}}`,
+    // A table with no rules is four columns of words running together, which is
+    // exactly the "shows a loading animation instead of the document" failure
+    // this file exists to fix, one level down.
+    `.bp table{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:15px;table-layout:fixed}`,
+    `.bp th,.bp td{border:1px solid #E3E8EF;padding:6px 9px;text-align:start;`,
+    `vertical-align:top;word-break:break-word}`,
+    `.bp th{background:#F5F7FA;font-weight:600}`,
   ].join('')
 }
 

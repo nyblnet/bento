@@ -30,7 +30,7 @@
 // an undo entry that undoes nothing. Planning first also makes the whole write
 // path testable in node, where there is no store and no DOM.
 
-import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf } from './model.ts'
+import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, linkCard, commentsOn, pageAssetKeys } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
@@ -48,6 +48,11 @@ import {
 // real type as unknown would have an agent 'fix' working documents.
 const KNOWN_BLOCK_TYPES = SPECS.map((s) => s.type)
 const KNOWN = new Set<string>(KNOWN_BLOCK_TYPES)
+
+/** A media block whose kind is audio — anything else is drawn as video, which
+ *  is the same rule renderers and exporters here already apply. */
+const isAudio = (b: Block): boolean =>
+  b.type === 'media' && String((b as { kind?: unknown }).kind ?? 'video') === 'audio'
 
 const words = (s: string): number => (s.trim() ? s.trim().split(/\s+/).length : 0)
 
@@ -272,6 +277,27 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
     /** field keys already seen on THIS page — one value per field, per page */
     const propKeys = new Set<string>()
 
+    // ---- the cover -------------------------------------------------------
+    // A page's cover is the one asset reference that is not on a block, so it
+    // needs saying here or every cover reads as an orphan below. And a REMOTE
+    // one renders nothing at all — the field is kept (additivity), but silence
+    // is the failure this report exists to break.
+    const coverRef = typeof (p as { cover?: unknown }).cover === 'string'
+      ? String((p as { cover?: unknown }).cover) : ''
+    if (coverRef.startsWith('asset:')) {
+      const key = coverRef.slice(6)
+      usedAssets.add(key)
+      if (!(key in assets)) {
+        add({ page: p.id, code: 'missing-asset', severity: 'error', path: 'cover',
+          message: `Page "${p.title}" has a cover referencing asset "${key}", which is not in doc.assets — no cover renders.`,
+          fix: 'Add the data: URI to doc.assets under that key, or point cover at one that is there.' })
+      }
+    } else if (coverRef && isRemote(coverRef)) {
+      add({ page: p.id, code: 'remote-cover', severity: 'warning', path: 'cover',
+        message: `Page "${p.title}" has a remote cover (${coverRef.slice(0, 48)}), which is DROPPED at render — opening a space never contacts a third party.`,
+        fix: 'Embed the bytes: put the data: URI in doc.assets and reference it as asset:<key>.' })
+    }
+
     if (!blocks.length) {
       // Not cosmetic: the editor's caret, gutter and / menu all hang off a
       // block, so a page with none cannot be typed into at all. The editor
@@ -279,7 +305,7 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
       add({ page: p.id, code: 'no-blocks', severity: 'error', path: 'blocks',
         message: `Page "${p.title}" has no blocks, so there is nothing in it to put a caret in — it cannot be typed into.`,
         fix: 'Give it at least one block, e.g. { "type": "p", "html": "" }.' })
-    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'pagelink' || b.type === 'divider')) {
+    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'link' || b.type === 'divider')) {
       add({ page: p.id, code: 'empty-page', severity: 'info',
         message: `Page "${p.title}" has blocks but no content.`,
         fix: 'Write something, or remove the page. A deliberately blank page (an inbox, a stub) is fine — this is only a note.' })
@@ -326,6 +352,11 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
               fix: 'Use a block type that can carry it (image, code, quote), or inline tags only: b i u s em strong code a span mark sub sup br.' })
           }
         }
+        // A TABLE CELL'S LINKS ARE IN `html` TOO, so this scan already sees
+        // them: `writeTable` is the one writer and it keeps the fallback html
+        // as the cells joined, links intact — which is also how buildIndex
+        // finds a backlink from a cell. Scanning `rows` as well would report
+        // the same dead link twice.
         for (const m of b.html.matchAll(LINK_RE)) {
           const href = m[1]
           if (href.startsWith('#p/')) {
@@ -359,6 +390,27 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
           add({ ...at, code: 'broken-link', severity: 'error', path: 'page',
             message: `A pagelink card points at "${target || '(nothing)'}", which is not a page — it renders as "(missing page)".`,
             fix: 'Set page to a real page id, or remove the block.' })
+        }
+      }
+
+      if (b.type === 'link') {
+        // A CARD IS NOT A LINK UNTIL ITS URL IS ONE. `linkCard` returns '' for
+        // an empty url and for anything outside https:/http:/mailto: — and a
+        // card that is not clickable renders as a dead card rather than as a
+        // link that silently goes nowhere, so this is the only way to find out.
+        const c = linkCard(b)
+        if (!c.url) {
+          const raw = String(b.url ?? '')
+          add({ ...at, code: raw ? 'dead-href' : 'link-no-url', severity: raw ? 'warning' : 'error', path: 'url',
+            message: raw
+              ? `A link card's url "${raw.slice(0, 40)}" is outside the allowlist (https:, mailto:), so the card renders but is not clickable.`
+              : 'A link card has no url, so it renders as an empty card that goes nowhere.',
+            fix: 'Set url to an https: or mailto: address. Use a pagelink block for a page in this space.' })
+        }
+        if (isRemote(String(b.image ?? ''))) {
+          add({ ...at, code: 'remote-image', severity: 'warning', path: 'image',
+            message: `A link card's image (${String(b.image).slice(0, 48)}) is remote, so it is DROPPED at render — opening a space never contacts a third party.`,
+            fix: 'Embed the bytes: put the data: URI in doc.assets and reference it as asset:<key>.' })
         }
       }
 
@@ -419,26 +471,46 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
 
       const src = typeof b.src === 'string' ? b.src : ''
       if (src.startsWith('asset:')) usedAssets.add(src.slice(6))
-      if (b.type === 'image') {
+      // a video's poster is a second reference into the asset table, and one
+      // this sweep did not see — so the still an author picked would read as an
+      // orphan and validate() would advise deleting it
+      const posterRef = typeof b.poster === 'string' ? b.poster : ''
+      if (posterRef.startsWith('asset:')) usedAssets.add(posterRef.slice(6))
+      if (b.type === 'image' || b.type === 'media') {
+        const what = b.type === 'media'
+          ? (String(b.kind ?? 'video') === 'audio' ? 'An audio' : 'A video')
+          : 'An image'
         if (!src) {
-          add({ ...at, code: 'image-no-src', severity: 'error', path: 'src',
-            message: 'An image block has no src, so nothing renders.',
-            fix: 'Set src to asset:<key>, or a data: URI.' })
+          add({ ...at, code: `${b.type}-no-src`, severity: b.type === 'media' ? 'warning' : 'error', path: 'src',
+            // a media block with no src is a CHOOSER, not a hole: the editor
+            // inserts one and asks for the file second, so an unfinished block
+            // is a normal intermediate state rather than a broken document
+            message: b.type === 'media'
+              ? `${what} block has no src, so it renders as a "choose a file" box.`
+              : 'An image block has no src, so nothing renders.',
+            fix: 'Set src to asset:<key>, a data: URI, or an https: address.' })
         } else if (src.startsWith('asset:') && !(src.slice(6) in assets)) {
           add({ ...at, code: 'missing-asset', severity: 'error', path: 'src',
             message: `src references asset "${src.slice(6)}", which is not in doc.assets — nothing renders.`,
             fix: 'Add the data: URI to doc.assets under that key, or point src at one that is there.' })
         } else if (isRemote(src)) {
-          add({ ...at, code: 'remote-image', severity: 'warning', path: 'src',
-            message: `src is remote (${src.slice(0, 48)}), so it shows a placeholder naming the host until the reader clicks "Load this image". Opening a document never contacts a third party.`,
+          add({ ...at, code: b.type === 'media' ? 'remote-media' : 'remote-image', severity: 'warning', path: 'src',
+            message: `src is remote (${src.slice(0, 48)}), so it shows a placeholder naming the host until the reader agrees to load it. Opening a document never contacts a third party.`,
             fix: 'Embed the bytes: put the data: URI in doc.assets and reference it as asset:<key>.' })
         }
         if (!String(b.alt ?? '').trim()) {
           add({ ...at, code: 'image-no-alt', severity: 'warning', path: 'alt',
-            message: 'This image has no alt text — screen readers get nothing, and alt is what a reader SEES if the image is remote and unloaded.',
-            fix: 'Write what the image shows, in a sentence.' })
+            message: `${what} block has no alt text — screen readers get nothing, and alt is what a reader SEES if it is remote and unloaded.`,
+            fix: 'Write what it shows, in a sentence.' })
         }
-        if (!b.w || !b.h) {
+        // AUDIO HAS NO PIXELS. The intrinsic size is about the aspect box that
+        // holds the layout still while a picture decodes, and an audio player
+        // is a fixed-height control that never reflows anything — so asking for
+        // w/h on one is asking an author to write down a number that does not
+        // exist. Every correctly-authored audio block would have carried this
+        // finding, which is the false positive that teaches an agent to stop
+        // reading them.
+        if (!isAudio(b) && (!b.w || !b.h)) {
           add({ ...at, code: 'image-no-size', severity: 'info', path: 'w',
             message: 'No intrinsic w/h, so the page reflows under the reader as the image decodes.',
             fix: 'Set w and h to the image\'s pixel size.' })
@@ -624,6 +696,8 @@ export function statsDoc(doc: SpacesDoc): StatsResult {
         }
       }
     }
+    // the cover is a reference too, and one that is not on any block
+    for (const k of pageAssetKeys(p)) use.set(k, (use.get(k) ?? 0) + 1)
   }
   for (const f of doc.fonts ?? []) use.set(f.asset, (use.get(f.asset) ?? 0) + 1)
 
@@ -1332,4 +1406,78 @@ export function planNewIssue(doc: SpacesDoc, spec: unknown): Plan<NewIssueResult
     ...(warnings.length ? { warnings } : {}),
     apply() { doc.pages.push(page) },
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// review comments
+// ---------------------------------------------------------------------------
+
+/** One thread, with the anchor spelled out rather than implied by where it sat. */
+export interface CommentReport {
+  id: string
+  /** 'block' = about that block, 'page' = about the page as a whole */
+  anchor: 'block' | 'page'
+  pageId: string
+  pageTitle: string
+  /** present only for an anchor of 'block' */
+  blockId?: string
+  /** the href that reaches the page it is on */
+  url: string
+  author: string
+  at: string
+  /** PLAIN TEXT (model.ts CommentEntry) — never html, in or out */
+  text: string
+  resolved: boolean
+  replies: Array<{ id: string; author: string; at: string; text: string }>
+}
+
+export interface CommentQuery {
+  /** only open threads (`false`) or only settled ones (`true`) */
+  resolved?: boolean
+  /** one page's threads */
+  pageId?: string
+}
+
+/**
+ * Every review thread in the space, flat, with a TYPED ANCHOR.
+ *
+ * This is the entry point for an agent working through what a human flagged:
+ * one call gives the whole backlog of remarks, in document order, each one
+ * saying what it is about. Flat rather than nested because the caller's
+ * question is "what is outstanding", not "what does this page hold" — and
+ * because the two anchors live in two places in the file, which is a storage
+ * decision (model.ts explains why) and no business of the reader's.
+ *
+ * Defensive about every field: a comment arrives in a file somebody mailed
+ * you, so a hostile or hand-edited `replies: 3` must read as no replies rather
+ * than throw inside a report an agent is about to branch on.
+ */
+export function commentsReport(doc: SpacesDoc, query: CommentQuery = {}): CommentReport[] {
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+  const out: CommentReport[] = []
+  for (const page of doc.pages) {
+    if (query.pageId && page.id !== query.pageId) continue
+    for (const at of commentsOn(page)) {
+      const c = at.comment
+      const resolved = c.resolved === true
+      if (query.resolved !== undefined && query.resolved !== resolved) continue
+      out.push({
+        id: c.id,
+        anchor: at.blockId ? 'block' : 'page',
+        pageId: page.id,
+        pageTitle: page.title,
+        ...(at.blockId ? { blockId: at.blockId } : {}),
+        url: `#p/${page.id}`,
+        author: str(c.author),
+        at: str(c.at),
+        text: str(c.text),
+        resolved,
+        replies: (Array.isArray(c.replies) ? c.replies : [])
+          .filter((r) => r && typeof r === 'object')
+          .map((r) => ({ id: str(r.id), author: str(r.author), at: str(r.at), text: str(r.text) })),
+      })
+    }
+  }
+  return out
 }

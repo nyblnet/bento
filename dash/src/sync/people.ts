@@ -14,6 +14,7 @@
 // call site — see docs/dash-collab.md, "What this needs from main.ts".
 
 import '../sync.css'
+import { t } from '../i18n.ts'
 import type { Store } from '../store.ts'
 import type { SyncSession, Peer } from './session.ts'
 import { collabOf, onlineTransport, startSharing, stopSharing, sharingOn } from './online.ts'
@@ -37,6 +38,9 @@ const ROLE_LABEL: Record<string, string> = {
  */
 export function mountPeople(host: HTMLElement, session: SyncSession, store: Store): () => void {
   host.classList.add('dx-people')
+  // The HOST carries it too, because the 700px rule hides the whole chip and a
+  // class on a child cannot save a parent that is display:none.
+  host.classList.toggle('dx-live', sharingOn(store) && session.transportKinds.includes('online'))
 
   const render = () => {
     const c = collabOf(store.doc)
@@ -44,10 +48,24 @@ export function mountPeople(host: HTMLElement, session: SyncSession, store: Stor
     const iAmOwner = !!c?.ownerPriv
     const peers = session.peers()
     host.innerHTML =
-      `<div class="dx-people-head">` +
+      `<div class="dx-people-head${live ? ' dx-live' : ''}">` +
       `<span class="dx-people-dot${live ? ' on' : ''}"></span>` +
       `<span class="dx-people-title">${live ? 'Live' : 'Not sharing'}</span>` +
-      `<button class="dx-btn dx-people-toggle">${live ? 'Stop sharing' : 'Start live session'}</button>` +
+      // `dx-live` MARKS THE CHIP WHEN THERE IS SOMETHING TO STOP, and the
+      // responsive rules key off it. Below 900px the toggle was hidden
+      // unconditionally to buy bar width — which also removed the ONLY route to
+      // "Stop sharing": measured at 880px with a session running, `collab.on`
+      // true and the room live, the string was nowhere in the document and the
+      // only trace was an 8px dot. About's nearest control is "Offline mode",
+      // which blocks every network feature including update checks.
+      //
+      // Hiding a control that reports nothing is fine; hiding the off switch
+      // for something already happening is not. So the collapse now applies
+      // only when the workbook is NOT sharing.
+      `<button class="dx-btn dx-people-toggle${live ? ' dx-live' : ''}" title="${esc(live
+        ? t('Disconnect from the relay — collaborators stop seeing your edits')
+        : t('Put this workbook on the relay so people you send a copy to edit it live with you'))}">` +
+      `${live ? t('Stop sharing') : t('Start live session')}</button>` +
       `</div>` +
       `<ul class="dx-people-list">` +
       `<li class="dx-people-me"><span class="dx-people-chip" style="background:${esc(selfColor(session))}"></span>` +
@@ -85,9 +103,9 @@ export function mountPeople(host: HTMLElement, session: SyncSession, store: Stor
     return `<li>` +
       `<span class="dx-people-chip" style="background:${esc(p.color)}"></span>` +
       `<span class="dx-people-name">${esc(p.name)}</span>` +
-      (role ? `<span class="dx-people-role">${esc(role)}</span>` : '') +
+      (role ? `<span class="dx-people-role">${esc(t(role))}</span>` : '') +
       (p.pub ? `<span class="dx-people-key" title="${esc(p.pub)}">${esc(fingerprint(p.pub))}</span>` : '') +
-      (canRemove ? `<button class="dx-people-x" data-remove="${esc(p.pub!)}" title="Remove this device">✕</button>` : '') +
+      (canRemove ? `<button class="dx-people-x" data-remove="${esc(p.pub!)}" title="${esc(t('Remove this device from the session'))}">✕</button>` : '') +
       `</li>`
   }
 

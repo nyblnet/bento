@@ -3,7 +3,7 @@
 // Copyright (c) 2026 The Bento authors
 // U2: the public guestbook deck — one live-collab file anyone can open and
 // sign. Minting fresh credentials IS the reset mechanism ("epochs, not
-// moderation" — see working/guestbook-design.md). The deck definition lives
+// moderation" — see working/design/guestbook-design.md). The deck definition lives
 // in scripts/guestbook-deck.mjs, shared with the Cloudflare daemon
 // (server/guestbook-daemon/) which is the SUSTAINABLE home of rolls and
 // snapshots — this local builder remains for seeding and as a fallback.

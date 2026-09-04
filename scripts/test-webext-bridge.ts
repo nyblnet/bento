@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// tray/webext page-bridge rig.
+// home/webext page-bridge rig.
 //
 //   node scripts/test-webext-bridge.ts
 //
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { createContext, runInContext } from 'node:vm'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SRC = readFileSync(join(root, 'tray/webext/src/page-bridge.js'), 'utf8')
+const SRC = readFileSync(join(root, 'home/webext/src/page-bridge.js'), 'utf8')
 
 let failures = 0
 let checks = 0
@@ -92,6 +92,38 @@ for (const [id, shouldDefer] of [
     ok(!posted.some((m) => m.op === 'claim'), 'a backup does not claim — there is no file yet to resolve')
   }
   p.catch(() => {})
+}
+
+// ---- the runtime version can come from EITHER source ------------------------
+// It used to come only from `window.bento.updates.version`, which every app
+// assembles by hand — and bento/dash never included `updates`, so every Cmd-S
+// in Dash fell through to a destination prompt with a folder granted and
+// nothing saying why. The kernel now announces `__bentoRuntime` from
+// configureApp, which every app calls. Both must work: the announcement for
+// everything built from now on, the hand-made object for every document already
+// shipped.
+{
+  const { win, nativeCalls } = load({})
+  ;(win as any).__bentoRuntime = '1.0.17' // kernel-announced, no window.bento at all
+  win.showSaveFilePicker({ id: 'bento-doc', suggestedName: 'Q3.bento.html' }).catch(() => {})
+  await new Promise((r) => setTimeout(r, 0))
+  ok(nativeCalls.length === 0,
+    'a document announcing __bentoRuntime saves in place even with no window.bento — the Dash case')
+}
+{
+  const { win, nativeCalls } = load({ version: '1.0.17' }) // shipped shape, no announcement
+  win.showSaveFilePicker({ id: 'bento-doc', suggestedName: 'Q3.bento.html' }).catch(() => {})
+  await new Promise((r) => setTimeout(r, 0))
+  ok(nativeCalls.length === 0,
+    'and an already-shipped document with only window.bento.updates.version still saves in place')
+}
+{
+  const { win, nativeCalls } = load({})
+  ;(win as any).__bentoRuntime = '1.0.14' // announced, but too old to trust the id
+  win.showSaveFilePicker({ id: 'bento-doc', suggestedName: 'Q3.bento.html' }).catch(() => {})
+  await new Promise((r) => setTimeout(r, 0))
+  ok(nativeCalls.length === 1,
+    'the announcement is still gated on 1.0.15 — a pre-#213 runtime cannot be trusted to mean bento-doc')
 }
 
 // ---- the version gate: a deck older than #213 sends bento-doc for EVERYTHING

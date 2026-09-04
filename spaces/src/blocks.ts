@@ -21,7 +21,7 @@
 // `custom: true`; everything the registry can express lives here.
 
 import type { Block } from './model'
-import { effectiveParents } from './model.ts'
+import { effectiveParents, tableOf, writeTable, linkCard } from './model.ts'
 import type { IconName } from './icons'
 
 export interface BlockSpec {
@@ -87,7 +87,32 @@ export interface BlockSpec {
    * inline markdown; `indent` is set for a nested block. Absent = the text
    * alone, which is also what an UNKNOWN type gets.
    */
-  toMd?: (b: Block, text: string, indent: string, titleOf: (id: string) => string | undefined) => string[]
+  toMd?: (b: Block, text: string, indent: string, ctx: MdCtx) => string[]
+}
+
+/**
+ * What the exporter can answer for a block that describes OTHER content.
+ *
+ * A pagelink needs one title; a view needs the issues it stands for. Both are
+ * questions about the document, and a block cannot see the document — so they
+ * arrive here rather than as a second export path that would drift from this
+ * one. A context object rather than a growing parameter list, because the next
+ * derived block type will want a third question.
+ */
+export interface MdCtx {
+  titleOf: (id: string) => string | undefined
+  /** the rows a `view` block stands for, already filtered and ordered */
+  rowsOf: (b: Block) => Array<{ id: string; title: string; group?: string; fields: string }>
+  /**
+   * Inline html → inline markdown.
+   *
+   * The exporter hands every block its own `html` already converted, which is
+   * the whole of the text for every type that HAS one string of it. A table has
+   * one per cell, and the converter needs a DOM (about.ts htmlToMd parses
+   * inert), which this file deliberately does not — so it arrives through the
+   * context, exactly like the two questions above.
+   */
+  inline: (html: string) => string
 }
 
 export const SPECS: BlockSpec[] = [
@@ -191,9 +216,65 @@ export const SPECS: BlockSpec[] = [
     toMd: () => ['---'],
   },
   {
+    // A CONTENT table: rows and columns of inline html, no formulas and nothing
+    // that recalculates (working/design/spaces-design.md §2.6). Custom, because a
+    // <table> is structure the default tag-plus-inline-host renderer cannot
+    // express, and `text: false` because its editable text lives in the CELLS —
+    // a block-level inline host beside them would be a second place to type
+    // that nothing displays.
+    type: 'table', label: 'Table', hint: 'Rows and columns', icon: 'table',
+    tag: 'div', custom: true,
+    // Also the CONVERSION path (editor.setType), so it must not clobber: a
+    // table turned into a paragraph and back keeps its rows. A paragraph turned
+    // INTO a table keeps its words, in the first header cell — the alternative
+    // is a block menu entry that silently discards the line you typed.
+    init: (b) => {
+      if (Array.isArray(b.rows) && b.rows.length) return
+      const first = typeof b.html === 'string' ? b.html : ''
+      writeTable(b, {
+        rows: [[first, '', ''], ['', '', ''], ['', '', '']],
+        cols: [1, 1, 1], colAlign: ['', '', ''], header: true,
+      })
+    },
+    toMd: (b, _text, indent, ctx) => tableToMd(b, indent, ctx.inline),
+  },
+  {
     type: 'pagelink', label: 'Link to page', hint: 'A card that opens a page', icon: 'link',
     tag: 'div', custom: true,
-    toMd: (b, _text, _indent, titleOf) => [`→ [[${titleOf(String(b.page)) ?? '?'}]]`],
+    toMd: (b, _text, _indent, ctx) => [`→ [[${ctx.titleOf(String(b.page)) ?? '?'}]]`],
+  },
+  {
+    // A LINK TO SOMEWHERE ON THE WEB — the outward-facing sibling of pagelink.
+    //
+    // Every field is STORED. Notion and Slack build this card by fetching the
+    // url on a server and reading its OpenGraph tags; there is no server here
+    // and there is not going to be one, so what the card shows is what the
+    // author typed. See docs/DECISIONS.md for why not even an editor-time,
+    // opt-in fetch is on the table.
+    type: 'link', label: 'Link to the web', hint: 'A card for an address you type', icon: 'globe',
+    tag: 'div', custom: true,
+    // A LINK CARD IN MARKDOWN IS A LINK. Not a table, not a blockquote, not an
+    // html <div> — every one of those is a card-shaped thing that stops being a
+    // link the moment it leaves this app, and the ONE fact a link card carries
+    // that cannot be reconstructed is where it points.
+    //
+    // Built from the FIELDS rather than from `text`. `html` holds the same
+    // link, so the default export would already be close — but `html` is a
+    // fallback for old builds, and an export that reads it would silently
+    // export nothing at all for a card an agent wrote fields-only.
+    toMd: (b) => {
+      const c = linkCard(b)
+      // no url, no link: a card that is not clickable must not export as
+      // something a reader will click
+      if (!c.url) return [[c.title, c.desc].filter(Boolean).join(' — ')]
+      const tail = c.desc ? ` — ${c.desc}` : ''
+      // `[` and `]` in a title end the link text early and leave the url as
+      // loose parenthesised prose; a url holding a space or a bracket needs the
+      // angle form, which is what <> is FOR in CommonMark
+      const label = c.title.replace(/([[\]])/g, '\\$1')
+      const href = /[\s()<>]/.test(c.url) ? `<${c.url}>` : c.url
+      return [`[${label}](${href})${tail}`]
+    },
   },
   {
     // A FIELD VALUE on a page. Unlisted: fields are added from the issue header,
@@ -204,7 +285,21 @@ export const SPECS: BlockSpec[] = [
     // is the whole reason values are blocks rather than page keys.
     type: 'prop', label: 'Field', hint: 'A typed value on this page', icon: 'tag',
     tag: 'div', custom: true, unlisted: true,
-    toMd: (b) => [`**${String((b as { key?: unknown }).key ?? 'field')}:** ${String((b as { value?: unknown }).value ?? '')}`],
+    // FROM THE READABLE FORM, not from the raw value. `html` already says
+    // "Status: In progress" — that string is the entire reason a prop block
+    // degrades instead of vanishing, and exporting `**status:** doing` from
+    // beside it published the option ID to the one audience that has no schema
+    // to look it up in. `text` is that html, already converted.
+    //
+    // The label is bolded by splitting at the first ": " the readable form
+    // itself uses; anything unexpected is emitted whole rather than guessed at.
+    toMd: (b, text) => {
+      const at = text.indexOf(': ')
+      const raw = String((b as { value?: unknown }).value ?? '')
+      if (at < 0) return [`**${text || String((b as { key?: unknown }).key ?? 'field')}**`]
+      const shown = text.slice(at + 2)
+      return [`**${text.slice(0, at)}:** ${shown || raw || '—'}`]
+    },
   },
   {
     // A SAVED VIEW — a board or a list of the issues in this space. Also just a
@@ -212,14 +307,159 @@ export const SPECS: BlockSpec[] = [
     // anything else, and an older build shows its description instead.
     type: 'view', label: 'Board or list', hint: 'Issues, grouped or listed', icon: 'board',
     tag: 'div', custom: true,
-    toMd: (b) => [`_${String(b.html ?? 'View')}_`],
+    // THE ISSUES, not the word "Issues". A board exported as its own italic
+    // title and nothing else — so a tracker downloaded as Markdown showed a
+    // heading where the work was, and a reader had to reconstruct the board
+    // from the pages that follow. The rows are derived (the export applies the
+    // same filter and sort the screen does), which is why they arrive through
+    // the context rather than off the block.
+    toMd: (b, text, indent, ctx) => {
+      const rows = ctx.rowsOf(b)
+      const out = [`**${text || 'Issues'}**`, '']
+      if (!rows.length) return [...out, `${indent}_No issues._`]
+      let group: string | undefined
+      for (const r of rows) {
+        // grouped exactly as the board groups, and a flat list when it is one
+        if (r.group !== undefined && r.group !== group) {
+          group = r.group
+          out.push('', `${indent}**${group}**`, '')
+        }
+        const meta = r.fields ? ` — ${r.fields}` : ''
+        out.push(`${indent}- [${r.title}](#p/${r.id})${meta}`)
+      }
+      return out
+    },
+  },
+  {
+    // A SPATIAL SURFACE — a storyboard, a roadmap, a mind map. Its cards are
+    // the blocks whose `parent` is its id, exactly like a callout's body, and
+    // each one carries where it sits as two flat numbers. The whole argument
+    // for that shape (rather than an array of cards on this block) is at the
+    // top of canvas.ts; the short version is that a card is a block, so it is
+    // already searchable, exportable, backlinked and individually mergeable.
+    //
+    // `text: true`: the canvas's own `html` is its NAME. That is also what a
+    // build with no `canvas` type renders — and because the cards fall out to
+    // the top level on such a build (renderBlocks opens no container for an
+    // unknown type), the name must NOT duplicate them. A table's fallback has
+    // to hold its cells' text and pays for it in bytes; a canvas's does not.
+    type: 'canvas', label: 'Canvas', hint: 'Cards you place by hand', icon: 'canvas',
+    tag: 'div', text: true, custom: true, container: 'always',
+    // THE NAME, then the cards — which arrive on their own, as the indented
+    // lines of the blocks they are. A canvas is a picture and Markdown has no
+    // pictures, so the honest export is the list of what is on it, in document
+    // order. Positions are what does not survive, and saying so in the export
+    // would be a comment in someone else's document.
+    toMd: (_b, text) => [`**${text || 'Canvas'}**`],
   },
   {
     type: 'image', label: 'Image', hint: 'Embedded in the file', icon: 'image',
     tag: 'div', custom: true,
     toMd: (b) => [`![${String(b.alt ?? '')}](${String(b.src ?? '')})`],
   },
+  {
+    type: 'media', label: 'Video or audio', hint: 'Plays in the page', icon: 'play',
+    tag: 'div', custom: true,
+    // A fresh block has no src yet — the renderer draws a chooser and the
+    // editor wires it. `kind` is set the moment a file or a link arrives, from
+    // what the file actually IS, so the default here only has to be the shape
+    // that degrades usefully.
+    init: (b) => { if (b.kind === undefined) b.kind = 'video' },
+    // MARKDOWN HAS NO VIDEO, and pretending otherwise loses the block.
+    //
+    // Three candidates, and only one of them is right in more than one place.
+    // `![](clip.mp4)` is IMAGE syntax: every renderer that has ever existed
+    // draws a broken-image glyph for it. A bare URL on its own line becomes a
+    // player on github.com and on nothing else, so it exports as a naked
+    // string everywhere a reader is likelier to open the file. A LINK is
+    // correct in all of them: it says what the thing is and where it is, and
+    // the one renderer that could do better still shows something you can
+    // click.
+    //
+    // The target is `src` verbatim, `asset:` and data: included, exactly as
+    // the image exporter already writes it. That link does not resolve outside
+    // the space — which is the truth about an embedded clip, and a truthful
+    // dead link beats a silently dropped block.
+    toMd: (b) => {
+      const kind = String(b.kind ?? 'video') === 'audio' ? 'Audio' : 'Video'
+      const label = String(b.alt ?? '') || kind
+      const src = String(b.src ?? '')
+      return [src ? `[${label}](${src})` : `_${kind}_`]
+    },
+  },
 ]
+
+/** The `:---:` rule row's four forms, which are the whole of what GFM can say
+ *  about alignment — and the reason `colAlign` is per column, not per cell. */
+const RULE: Record<string, string> = { left: ':---', center: ':---:', right: '---:' }
+
+/**
+ * A table as a GitHub-flavoured pipe table.
+ *
+ * THE HEADER ROW IS NOT OPTIONAL IN GFM: a table without one is not a table,
+ * it is three lines of prose full of pipes. So a `header: false` table exports
+ * with an EMPTY header row, which is the form every generator uses and which
+ * this app's own importer reads back as `header: false`.
+ *
+ * Two characters end a cell early and both can arrive from a file someone
+ * mailed you: a literal `|` (escaped) and a newline, which `<br>` in a cell
+ * becomes on the way through the inline converter (turned back into `<br>`,
+ * which GFM renders inside a cell — a real newline would end the row).
+ * An EMPTY cell is emitted as a space: `||` is a column count nobody meant.
+ */
+export function tableToMd(b: Block, indent: string, inline: (html: string) => string): string[] {
+  const t = tableOf(b)
+  const cell = (html: string): string =>
+    inline(html).replace(/\|/g, '\\|').replace(/\n/g, '<br>').trim() || ' '
+  const line = (cells: string[]): string => `${indent}| ${cells.join(' | ')} |`
+  const head = t.header ? t.rows[0] : Array<string>(t.w).fill('')
+  const body = t.header ? t.rows.slice(1) : t.rows
+  return [
+    line(head.map(cell)),
+    line(t.colAlign.map((a) => RULE[a] ?? '---')),
+    ...body.map((r) => line(r.map(cell))),
+  ]
+}
+
+/**
+ * THE PLAYBACK FLAGS A SURFACE MAY APPLY — and the one it may not.
+ *
+ * `autoplay` IS ALWAYS FALSE HERE, whatever the block says. Slides learned
+ * this the expensive way: autoplay set at render time fires on the editing
+ * canvas and in every thumbnail, so it lives in present mode, which is the one
+ * surface that owns playback. A space has no such surface. It has an editor, a
+ * reading view, a printout and a file-manager still, and a clip that starts
+ * itself is wrong in every one of them — the reading view because a page you
+ * scrolled past should not start talking, the still because it is a picture.
+ *
+ * So the rule is not "the renderer happens not to set it" — that is a property
+ * of one function that the next surface would have to rediscover. It is this
+ * function, which every surface goes through, and which cannot return true.
+ * `Block.autoplay` still round-trips (PLATFORM §3); it is simply not obeyed.
+ *
+ * Pure and DOM-free, so scripts/test-spaces-model.ts pins it directly.
+ */
+export interface MediaPlayback {
+  kind: 'video' | 'audio'
+  /** absent = shown: a player with no controls is a rectangle you cannot use */
+  controls: boolean
+  loop: boolean
+  /** browsers require muted for video autoplay — kept as a plain author choice
+   *  here, because nothing in this app autoplays for it to unlock */
+  muted: boolean
+  /** ALWAYS false. See above. */
+  autoplay: false
+}
+
+export function mediaPlayback(b: Block): MediaPlayback {
+  return {
+    kind: String(b.kind ?? 'video') === 'audio' ? 'audio' : 'video',
+    controls: b.controls !== false,
+    loop: b.loop === true,
+    muted: b.muted === true,
+    autoplay: false,
+  }
+}
 
 /**
  * Callout tones — a PERMANENT vocabulary.

@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (c) 2026 The Bento authors */
+
+/* redlineview.ts — the snapshot-redline surface, a sibling section of the
+   Review tab beside review.ts's live tracked changes (see redlineview.ts's
+   header for why they are two files with two hosts). Reuses .t-card/.t-hint/
+   .btns from styles.css — this file only adds what those didn't already
+   cover: a decided card's buttons go inert rather than merely dim, so a
+   resolved redline change reads the same "done" way .t-card.done already
+   does for its background. */
+
+.t-card .btns button:disabled {
+  opacity: .5;
+  cursor: default;
+}

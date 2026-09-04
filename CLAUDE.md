@@ -22,9 +22,16 @@ names provisional.
 - `src/model.ts` — the `bento/slides` JSON document model. This is the format.
 - `src/starterdeck.ts` — the showcase starter deck (what a fresh build opens
   with): four 'sd-tile-*' elements morph through EVERY slide (the id-continuity
-  demo), one deliberate 'fade' beat exists because entrance staggers/count-ups
-  only run on non-morph entries, charts slide + hidden pie state demo the
-  bar⇄pie data morph, speaker notes double as the feature tour. Gotchas learned
+  demo) — only the title arrives by 'fade', so nothing interrupts that thread.
+  The stats beat used to fade too, on the belief that entrance staggers and
+  count-ups needed a non-morph arrival; that has been FALSE since #197 (runMorph
+  gives every unpartnered element its fx.enter, and runMorphArrivalCountUps
+  counts up anything not carried from the previous slide), and the fade was
+  costing the deck its best tile moment — the four scattered tiles collapsing
+  into the row of chips. Verified by measurement, not belief: on that morph
+  arrival all four tiles travel, 13 elements stagger in, and the count-up runs
+  0→100%. Charts slide + hidden pie state demo the bar⇄pie data morph, speaker
+  notes double as the feature tour. Gotchas learned
   building it: line shapes take their color from `fill` (not `stroke` — the
   stroke attr is what morphs tween), and the renderer draws lines horizontally
   across the element box (vertical lines = rotation), keep 96px side margins
@@ -34,7 +41,7 @@ names provisional.
   never contain `</script>`. File System Access API first, download fallback.
 - `src/preview.ts` + kernel `registerPreview` — **static first-page preview for
   file-manager thumbnails**. Thumbnailers (iOS Files, macOS QuickLook/Finder,
-  Bento Tray) render HTML with JS OFF, so every deck used to thumbnail as the
+  bento/home) render HTML with JS OFF, so every deck used to thumbnail as the
   same boot splash. Every save now writes a still render of page one into the
   shell as a plain `[data-bento-preview]` element, followed IMMEDIATELY by a
   parser-blocking `<script data-bento-preview>` that deletes both. The
@@ -523,12 +530,26 @@ names provisional.
   all (verified against pre-change code too) — resize behavior needs a
   real mouse. Present: real fullscreen via overlay.requestFullscreen at start +
   F toggle (denied requests degrade to tab-fill — that IS the testing/
-  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling — and by
-  MEASURING, not width breakpoints (zoom/OS text scale/locale width made px
-  queries clip the bar): editor.ts fitTopbar() steps down tier classes while
-  the bar overflows (ed-bar-compact hides labels, ed-bar-tight the wordmark,
-  ed-bar-fold folds into menus via applyPhoneChrome), driven by a Resize- +
-  MutationObserver on the bar.
+  sharing mode). Topbar is responsive by HIDING TEXT rather than
+  scrolling — and by MEASURING, not width breakpoints (zoom/OS text scale/
+  locale width made px queries clip the bar): editor.ts fitTopbar() steps down
+  tier classes while the bar overflows (ed-bar-compact hides labels,
+  ed-bar-tight the wordmark, ed-bar-fold folds into menus via
+  applyPhoneChrome), driven by a Resize- + MutationObserver on the bar.
+  **Below the fold's floor it DOES scroll, and that is not a retreat from the
+  above.** Fully folded the bar still needs ~356px — six 44px touch targets,
+  the mark and the title — and an iPhone SE (or any iPhone with Display Zoom
+  on) is 320px. `.ed-root` is `overflow: hidden` so a wide bar can never become
+  document scroll, so the excess was simply CUT OFF: ⋯ — which on a phone
+  carries Redo, Comment, PDF, Share, Language, Help and the whole save-as list
+  — sat at x=356 on a 320px screen and could not be reached at all (measured,
+  not inferred). Hiding text is still the strategy and still does all the work;
+  scrolling is only the floor beneath it, for the widths where the fold has
+  already surrendered everything it has. Consequence to respect: a scroll
+  container clips BOTH axes (see hard-won detail 10), so the menus hanging off
+  ＋ and ⋯ are `position: fixed` and editor.ts publishes --ed-bar-bottom for
+  them, the one thing they cannot read from CSS because it moves with the
+  safe-area insets.
   Panel show/hide lives ON the resizer strips as chevron tabs (docked
   flush to the screen edge when collapsed); phones (<700px) boot with
   both panels collapsed (canvas-first; chevrons/[/] bring them back).
@@ -603,9 +624,28 @@ names provisional.
    never fix this; only the ceiling moves. Same trap for any future chrome that
    must escape the bar. Diagnose with `document.elementsFromPoint()` — the menu
    sat fourth in the stack under its own coordinates.
+10. **`overflow-y: auto` also clips HORIZONTALLY.** There is no such thing as
+   scrolling one axis while the other still overflows visibly: set either axis
+   to a non-`visible` value and the browser computes the other to `auto`. So
+   the moment `.ed-topbar.ed-bar-fold .ed-menu` gained `max-height` +
+   `overflow-y: auto` (so a long ⋯ menu could scroll), that menu became a
+   CLIPPING BOX for everything positioned inside it. Phone chrome demotes whole
+   dropdown widgets (Share, Language) into ⋯, and `.ed-share-pop` is a 250px
+   popover anchored to its parent's end — inside the 200px menu it hung 55px
+   off the left and 69px below, both silently cut, and the properties panel
+   underneath showed through the gap so the popover looked interleaved with it.
+   A floating child can never escape a scroll container: inside ⋯ these render
+   `position: static`, as a section of the list. Anything else demoted into a
+   menu must do the same.
 
 - **Compressed shell (Phase 1)**: `scripts/postbuild-compress.mjs` (runs in
   build:single) deflates runtime JS+CSS into base64 `bento/deflate-b64` script
+  blocks with ZOPFLI (same deflate format, packed harder — the loader and every
+  saved file are untouched; ~4% off each shell, verified byte-identical through
+  Chrome's native `DecompressionStream('deflate-raw')`). `@gfx/zopfli` is a
+  devDependency of each APP, and the script resolves it from the caller's cwd
+  because scripts/ has no package.json of its own; `ZOPFLI=0` falls back to zlib
+  for a local build, never for a release.
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
   PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).
@@ -631,6 +671,27 @@ names provisional.
 - In-page scripting/testing API: `window.bento` → `{ doc, serialize() }`.
 
 ## Testing gotcha
+
+**Reading back a style property you just wrote is not a measurement.** A CSS
+transform does NOTHING to a non-replaced inline element — the browser accepts
+the declaration, `style.transform` (and `getComputedStyle`) return it verbatim,
+and the box moves zero pixels. So a check like "did the tokens get transforms?"
+passes identically whether the element travelled 400px or none. Verify motion
+with `getBoundingClientRect`, or by stepping `anim.setManual(true)` + `tick()`
+and reading rendered geometry. This cost eight rounds of "it does not animate"
+against measurements insisting it did (fixed by giving code tokens
+`display:inline-block`; `kernel/src/anim.ts` now warns when a transform channel
+targets an inline element, guarded by `scripts/test-anim-inline.ts`).
+
+Two more instruments that lie, both hit in the same session:
+- **`requestAnimationFrame` is throttled to zero in a hidden/occluded tab**, so
+  every tween silently does nothing. Check `document.visibilityState` before
+  concluding an animation is broken — a driven browser tab is often hidden.
+- **A live sampler polling the DOM mid-animation** reported zero while tokens
+  were demonstrably moving, and could never distinguish "no tween" from "a
+  tween I cannot see". Instrument the DECISION (did it pair? did onUpdate run?)
+  rather than sampling the result.
+
 
 Synthetic `PointerEvent`s do NOT trigger Moveable/Selecto (Gesto listens for mouse
 events) — dispatch `MouseEvent`s, or use trusted input. After changing selection, wait a

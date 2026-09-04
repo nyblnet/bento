@@ -52,7 +52,7 @@ const BANNED = 'script,style,noscript,iframe,object,embed,link,video,audio,canva
 const DROP_ATTRS = [
   'data-el-id', 'data-flip-id', 'data-slide-id', 'data-link', 'data-group',
   'data-show-on-hover', 'data-chart', 'data-table', 'data-autoplay',
-  'data-r', 'data-c', 'data-sym', 'contenteditable', 'draggable', 'tabindex',
+  'data-r', 'data-c', 'data-sym', 'data-msx', 'data-tok', 'data-inkpin', 'contenteditable', 'draggable', 'tabindex',
 ]
 
 /**
@@ -85,6 +85,24 @@ function inlineRuntimeCss(root: HTMLElement) {
   for (const el of Array.from(root.querySelectorAll<HTMLElement>('code'))) {
     prepend(el, 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.9em;' +
       'background:rgb(127 127 127 / 0.16);padding:0 0.28em;border-radius:3px')
+  }
+  // Rich text inside a box. Without these the thumbnailer — which runs no
+  // script and never inflates the compressed stylesheet — would render a
+  // bulleted list as unindented, unmarked lines and a heading at body size,
+  // i.e. a thumbnail that misrepresents the slide it is standing in for.
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('ul, ol'))) {
+    // same alignment rule as styles.css: an outside marker only belongs at the
+    // box's start edge when the line starts there too
+    const align = el.closest<HTMLElement>('.bento-text-inner')?.dataset.align
+    const inside = align === 'center' || align === 'right'
+    prepend(el, `margin:0;list-style:${el.tagName === 'OL' ? 'decimal' : 'disc'};` +
+      (inside ? 'padding-inline-start:0;list-style-position:inside' : 'padding-inline-start:1.35em'))
+  }
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('li'))) {
+    prepend(el, 'margin:0.12em 0')
+  }
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('h1, h2'))) {
+    prepend(el, `margin:0 0 0.2em;line-height:1.15;font-weight:700;font-size:${el.tagName === 'H1' ? '1.55em' : '1.25em'}`)
   }
 }
 

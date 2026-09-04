@@ -1,0 +1,354 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Worksheet tabs — the bottom strip.
+
+   Every colour resolves through a token in styles.css :root; nothing here
+   states a hex, and nothing here sits inside a `prefers-color-scheme` block
+   (the palette does the theming through `light-dark()`).
+
+   THE GEOMETRY IS A BOTTOM TAB'S, and that is not the same shape as a top
+   tab's. These tabs are attached to the sheet ABOVE them, so their top edge is
+   the one that has to look continuous with the grid and their bottom edge is
+   the free one: rounded at the BOTTOM, square at the top, with the active
+   marker on the bottom edge. Rounding the wrong pair reads, immediately and
+   inexplicably, as a browser tab bar that has slid to the wrong end of the
+   window. */
+
+.dx-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  padding: 0 6px;
+  min-height: 29px;
+  background: var(--panel);
+  border-top: 1px solid var(--line-strong);
+  /* the strip scrolls; the BAR never does, or the whole app grows a horizontal
+     scrollbar the moment a workbook has more sheets than fit */
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ————— the pinned controls —————
+   OUTSIDE the scroller, deliberately. Excel's trailing ＋ scrolls away with
+   the tabs, so adding a sheet to a twenty-sheet workbook starts with finding
+   the button. These two are always in the same place. */
+.dx-tab-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+.dx-tab-btn:hover { background: var(--hover); color: var(--ink); }
+.dx-tab-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.dx-tab-add { font-size: 12px; }
+.dx-tab-hide { margin-left: auto; opacity: 0.7; }
+.dx-tab-show { display: none; }
+
+/* ————— shut —————
+   `[` hides the strip, as Excel's "Show sheet tabs" option does. It collapses
+   to a chevron rather than to nothing: a control whose only way back is a key
+   you have to already know is a control that looks broken.
+
+   TWO CLASSES, not one. `.dx-tabs-shut > *` and `.dx-tab-strip` have the same
+   specificity, and the strip's own `display: flex` is written LATER in this
+   file — so the strip stayed laid out inside a 20px bar and its tabs hung out
+   of it. Measured: `getComputedStyle(strip).display` was `flex` in the shut
+   state. Two classes outrank one whatever the order. */
+.dx-tabs.dx-tabs-shut { min-height: 20px; }
+.dx-tabs.dx-tabs-shut > * { display: none; }
+.dx-tabs.dx-tabs-shut .dx-tab-show { display: block; padding: 1px 7px; }
+
+/* ————— the scrolling strip ————— */
+.dx-tab-strip {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* NOWRAP IS THE WHOLE OVERFLOW POLICY. Wrapping would push the grid up by a
+     row every time a workbook gained four sheets, and squashing would make
+     twenty tabs twenty unreadable slivers. It scrolls. */
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+.dx-tab-strip::-webkit-scrollbar { height: 0; }
+
+.dx-tab {
+  flex: 0 0 auto;
+  max-width: 190px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+  padding: 0 13px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  /* a tab is a drag handle as well as a button; the browser's own text
+     selection fights the reorder gesture */
+  user-select: none;
+}
+.dx-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dx-tab:hover { background: var(--hover); color: var(--ink); }
+.dx-tab:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+/* ————— THE ACTIVE TAB —————
+   ONE signal, carried by the ink, plus a 2px rule in the same colour.
+   No radius, no border, no fill, and no brand amber.
+
+   What was here before stacked FOUR: rounded bottom corners, a 1px border, a
+   3px amber bar and 650 weight. Each had been added to satisfy a contrast
+   measurement and none had been taken away afterwards, which is exactly what
+   over-designed looks like — a control shouting four times because nobody
+   trusted it to be heard once.
+
+   The rule is `--ink`, not `--accent`. The brand amber is 2.02:1 on white and
+   cannot carry a non-text indicator on its own, which is what forced the
+   earlier version to add a fill and a border to prop it up. Ink is 14.51:1
+   light and 13.75:1 dark against the band, so one mark does the whole job and
+   the strip stops competing with the sheet above it. Amber is still in the
+   app, on the things that are about the DOCUMENT — the unsaved dot, a filtered
+   column header — and a tab is about navigation. */
+.dx-tab.active { color: var(--ink); font-weight: 600; }
+.dx-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+/* The pressed tab must not read as hovered — `:hover` sets `--ink` too, so
+   without this the active and the hovered tab are the same colour. */
+.dx-tab.active:hover { background: transparent; }
+
+/* a sheet this build cannot open: greyed, never hidden — a tab that is missing
+   reads as a sheet that was deleted */
+.dx-tab-off { opacity: 0.62; cursor: default; }
+
+/* ————— THE KIND MARK —————
+   A 14px drawing at the head of every tab saying which of the two kinds this
+   sheet is (tabs.ts kindMarkSvg has the argument for a shape rather than a
+   letter or a hue, and for the size).
+
+   IT TAKES FULL INK EVEN ON AN IDLE TAB, and that is the one place it departs
+   from the tab it sits in. Painting it in `currentColor` — which is what this
+   rule used to do — made the mark --muted on every tab except the one you are
+   already on, i.e. it faded exactly where a scanning eye is working. The NAME
+   stays muted, because a strip of twenty equally-black names is a wall; the
+   mark does not, because it is the only thing on the strip saying what a sheet
+   IS. --ink is 14.51:1 light and 13.75:1 dark on the strip, and the 0.86 that
+   holds it a step behind the active tab's mark still leaves it far above the
+   3:1 a non-text indicator has to clear.
+
+   NO COLOUR IN IT, on purpose: about 8% of men could not separate two hues
+   here, and this is the whole answer to "what kind of sheet is this".
+
+   `display: flex` on the span, not `vertical-align`: the tab is a flex row, and
+   an inline svg baseline-aligns against a line box that does not exist here. */
+.dx-tab-mark {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  opacity: 0.86;
+}
+.dx-tab.active .dx-tab-mark { opacity: 1; }
+.dx-tab-off .dx-tab-mark { opacity: 0.7; }
+.dx-tab-mark svg { display: block; }
+
+/* ————— THE KIND, IN WORDS, ON THE ACTIVE TAB —————
+   Only the active tab carries this (tabs.ts decides; every other tab gets the
+   same word in a `.dx-tab-sr`), so the strip's width is unchanged at twenty
+   sheets and the tab the reader is looking at names its own kind without a
+   hover. It is set as a caption — smaller, letter-spaced, muted, behind a hair
+   rule — so it reads as a label ON the tab rather than as part of the sheet's
+   name: "Pipeline" is the file's word and "DATASET" is ours, and the divider is
+   what keeps a reader from thinking they renamed something. */
+.dx-tab-word {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-inline-start: 6px;
+  border-inline-start: 1px solid var(--line-strong);
+}
+/* the active tab is the only one that carries a second word, so it is the only
+   one that needs the room for it */
+.dx-tab.active { max-width: 260px; }
+
+/* The word the mark draws, for a reader who cannot see it. Not `display: none`
+   and not `visibility: hidden` — both remove it from the accessibility tree,
+   which is the one place it is meant to exist. */
+.dx-tab-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dx-tab-kind {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--wash);
+  color: var(--muted);
+}
+
+/* ————— reorder ————— */
+.dx-tab-dragging { opacity: 0.45; }
+.dx-tab-drop-before { box-shadow: inset 2px 0 0 var(--ink); }
+.dx-tab-drop-after { box-shadow: inset -2px 0 0 var(--ink); }
+/* the active tab keeps its own marker while a drop caret is on it, or the tab
+   you are dragging past stops looking like the one you are looking at */
+.dx-tab.active.dx-tab-drop-before { box-shadow: inset 2px 0 0 var(--ink); }
+.dx-tab.active.dx-tab-drop-after { box-shadow: inset -2px 0 0 var(--ink); }
+
+.dx-tab-rename {
+  width: 8em;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  padding: 1px 4px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.dx-tab-rename:focus { outline: none; }
+
+/* ————— the menus —————
+   ABOVE the anchor: the strip is the last row on the screen, so a menu that
+   dropped downwards would open past the bottom of the window. */
+.dx-tab-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 168px;
+  max-width: 220px;
+  padding: 4px;
+  /* --line-strong, like .dx-menu / .dx-pop / .dxs-menu: dash states that its
+     floating surfaces are ONE style, and this was the one that wasn't. On the
+     dark ground --line (#1f2731) against --surface (#1b222c) is barely an edge
+     at all, which is exactly when a menu over a grid needs one. */
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+}
+.dx-tab-menu button {
+  display: block;
+  width: 100%;
+  text-align: start;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-ui);
+  padding: 5px 9px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dx-tab-menu button:hover:not(:disabled) { background: var(--hover); }
+/* 0.35 — one figure for a dead control across the app; see .dx-btn[disabled] */
+.dx-tab-menu button:disabled { color: var(--muted); opacity: 0.35; cursor: default; }
+.dx-tab-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+
+/* ————— a row that TEACHES, rather than naming a command —————
+   The two kinds of sheet are this product's central distinction, and this menu
+   is the only place it is ever explained. The rows were built as a title plus a
+   subtitle span (tabs.ts, the ＋ handler) and then given NO rules of their own,
+   so they inherited the one-line ellipsis above — which is right for "Rename"
+   and cut "Typed columns — for volume, joins and charts" mid-phrase inside a
+   220px menu. A truncated explanation of the central concept explains nothing
+   and reads as a bug.
+
+   So: the row wraps, and the menu holding these rows is wide enough to wrap
+   into. `nowrap` and the ellipsis are undone explicitly rather than by
+   specificity accident — a later menu row will inherit whichever it asks for. */
+.dx-tab-menu-kinds { max-width: 296px; min-width: 248px; }
+.dx-tab-menu button.dx-tab-menu-row {
+  display: grid;
+  gap: 1px;
+  padding: 7px 9px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.dx-tab-menu-title { font-weight: 600; }
+.dx-tab-menu-why {
+  font-size: var(--fs-small);
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.dx-tab-note {
+  margin: 2px 4px 6px;
+  font-size: var(--fs-small);
+  line-height: 1.35;
+  color: var(--muted);
+}
+/* twenty sheets is a list, not a menu: it scrolls inside itself rather than
+   running off the top of the window */
+.dx-tab-menu-all { max-height: min(60vh, 420px); overflow-y: auto; }
+
+/* ————— phones —————
+   The tabs are the one piece of chrome that must survive a 375px window: on a
+   phone the strip IS the sheet navigation, so it keeps its full height and
+   the pinned buttons tighten instead. */
+@media (max-width: 480px) {
+  .dx-tabs { padding: 0 3px; gap: 2px; }
+  .dx-tab-btn { padding: 4px 5px; }
+  /* the mark stays; the padding around it is what gives. It is 14px of the
+     ~90px a phone tab gets, and it is the 14px that says what the sheet is. */
+  .dx-tab { max-width: 140px; padding: 0 8px; gap: 4px; }
+  /* THE WORD GOES, and only here. On a 375px screen the strip IS the sheet
+     navigation and a 140px tab has room for a name or for a label but not for
+     both — and the name is the thing a reader is looking for. The mark still
+     answers the kind, the tooltip and the accessible name still carry the word.
+     `display: none` rather than a narrower type size: half a word, clipped, is
+     worse than no word. */
+  .dx-tab-word { display: none; }
+  .dx-tab.active { max-width: 140px; }
+  /* the collapse chevron is the first thing to go: on a phone there is no
+     second panel competing for the height, and one fewer target at the edge of
+     a small screen is one fewer mis-tap */
+  .dx-tab-hide { display: none; }
+}

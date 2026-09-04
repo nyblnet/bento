@@ -240,8 +240,16 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-btn svg { display: block; }
 
 .ed-btn-primary {
+  /* The button is always the INVERSE of the surface it sits on, which is the
+     only pairing that survives a theme flip. `color: #fff` did not: the
+     background follows --ink, so in dark mode it turned light while the text
+     stayed white — measured at 1.21:1, the same ratio that made the panel
+     inputs unreadable before the theme tokens existed. It looked right in the
+     About dialog only because that has its own peach override, so the six
+     other primary buttons in the app were the ones nobody saw.
+     After: 14.51:1 light, 12.61:1 dark. */
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   padding: 6px 14px;
 }
 .ed-btn-primary:hover { background: var(--ink-2); }
@@ -461,7 +469,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-setchip:hover { background: var(--chrome-2); }
 .ed-setchip.active {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
 }
 
 /* ————— slide surface (shared by canvas, thumbs, present) ————— */
@@ -469,11 +477,46 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-slide { position: relative; overflow: hidden; }
 
 .bento-el { position: absolute; contain: layout style; }
-.bento-el-text .bento-text-inner {
+
+/* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
+   maths font here fixes nothing and has been reverted three times. The
+   radical's hook falling short of its overbar is Chromium drawing the overbar
+   as its own rule and missing the arm the font's glyph paints, by a fraction
+   of a pixel. It is not the font: generic `math` picks STIX on macOS and
+   Cambria Math on Windows and BOTH break, and forcing Times New Roman only
+   makes the break smaller. It is not our markup, our tagging, the stage
+   transform, the font size, or the height of the radicand (measured: the
+   deck's `b²−4ac` and a flat `b−4ac` get a byte-identical 113.8px radical).
+
+   There IS a mitigation — `msqrt { font-family: serif }` with the contents put
+   back to `math` — and it is deliberately NOT shipped: it is clean on macOS
+   and still broken on Windows. Read docs/DECISIONS.md, 2026-08-25, before
+   touching this; the rig is slides/probe/radical-join.html. */
+
+.bento-el-text,
+.bento-el-code
+ .bento-text-inner {
   overflow-wrap: break-word;
   outline: none;
   cursor: default;
 }
+
+/* Code tokens the morph may MOVE. A CSS transform does nothing to a
+   non-replaced inline element — accepted, readable back on style.transform,
+   and zero pixels of movement — so a token has to be an atomic inline-level
+   box before it can travel. LOAD-BEARING: delete this and code morphs stop
+   animating silently, with no error anywhere.
+
+   Scoped to [data-tok] rather than every span on purpose: the renderer sets
+   the attribute only on tokens with ink. Whitespace and newline tokens must
+   stay inline — a newline inside an atomic box no longer breaks the line
+   under `white-space: pre`, and the block collapses to one rendered line
+   (identically under inline-block and inline-flex; the display value was
+   never the variable that mattered). */
+.bento-el-code [data-tok] {
+  display: inline-block;
+}
+
 /* A hidden slide is still an ordinary, editable slide — it is just out of the
    show. Dimmed rather than greyed out, and the number struck through, so the
    sidebar reads as "this one will be skipped" without looking broken. */
@@ -714,8 +757,14 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   flex-direction: column;
   gap: 8px;
   padding: 11px 13px;
+  /* An even 1px rule, like every other surface in this dialog. The card used
+     to carry a 3px peach stripe down its leading edge — the generic
+     "callout" tic, and the only accent stripe anywhere in the app (the two
+     other thick borders are a CSS triangle and a quiet neutral rule on
+     .ed-lang-warn). It was redundant as well as out of place: the heading
+     names the version and the primary button already carries the accent. It
+     was also a hard-coded #FF9E8A, so it ignored the theme tokens. */
   border: 1px solid var(--line);
-  border-inline-start: 3px solid #FF9E8A;
   border-radius: 10px;
 }
 .ed-about-release {
@@ -766,7 +815,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   bottom: 26px;
   transform: translate(-50%, 12px);
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   font-size: 13px;
   padding: 9px 16px;
   border-radius: 999px;
@@ -1073,7 +1122,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 /* inline code spans inside text elements — editor, present and print alike */
 .bento-el-text code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Berkeley Mono, Menlo, Consolas, monospace;
   font-size: 0.9em;
   background: rgb(127 127 127 / 0.16);
   padding: 0 0.28em;
@@ -1385,7 +1434,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 1;
   border: none;
   background: var(--blue);
-  color: #fff;
+  color: var(--surface);
   border-radius: 50%;
   width: 16px;
   height: 16px;
@@ -2047,11 +2096,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* the phone-only controls exist in the DOM at every width; only the fold class
    shows them, so applyPhoneChrome never has to create or destroy anything */
 .ed-phone-only { display: none; }
+.ed-phone-tools { display: contents; }
 .ed-topbar.ed-bar-fold .ed-phone-only { display: inline-flex; }
 /* Save stays one tap; its save-AS caret does not fit beside the fold's small
    set of buttons and is the least-used half. The list it opens is not lost —
    editor.ts appends it to the bottom of ⋯ while the fold is on. */
 .ed-topbar.ed-bar-fold .ed-split-caret { display: none; }
+.ed-topbar.ed-bar-fold .ed-split > .ed-btn:first-child {
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
+  border-inline-end: 1px solid var(--line);
+}
 /* ⋯ carries the demoted buttons AND that list, so it can outgrow the
    screen in BOTH directions.
    Down: without a bound it runs off the bottom, and a dropdown is absolutely
@@ -2067,6 +2122,34 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   max-height: calc(100dvh - 96px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+/* A demoted widget's own popover opens INLINE, inside the ⋯ list.
+   The rule above bounds the height of a menu that can outgrow the screen, and
+   `overflow-y: auto` cannot be had on its own — a browser computes
+   `overflow-x` to `auto` too, so that menu silently became a CLIPPING box for
+   anything positioned inside it. Share is the case that showed it: phone
+   chrome demotes the whole dropdown into ⋯, and `.ed-share-pop` is a 250px
+   popover anchored to its parent's end, so inside a 200px menu it hung 55px
+   off the left edge and 69px below the bottom. Both overhangs were cut away,
+   and since the properties panel sits under exactly that strip, the panel
+   showed THROUGH the gap — the popover looked interleaved with the panel
+   behind it.
+   A floating child cannot escape a scroll container, so it stops floating:
+   inside ⋯ these render as a section of the list, scrolling with it and
+   taking its width. Nothing can be clipped because nothing overhangs. */
+.ed-topbar.ed-bar-fold .ed-menu .ed-menu {
+  position: static;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-block: 1px solid var(--line);
+  margin-block: 3px;
+  padding-inline: 6px;
 }
 
 /* --- phones proper: viewport-scoped chrome that is about TOUCH and small
@@ -2085,7 +2168,20 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   /* HIG touch targets — a 36px icon is a mis-tap on glass */
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
-  .ed-title { flex: 0 1 90px; }
+  .ed-title { flex: 0 1 220px; }
+  .ed-phone-tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-inline-size: max-content;
+  }
+  .ed-topbar .ed-group-right {
+    margin-inline-start: 0;
+    inline-size: fit-content;
+    flex: 0 0 auto;
+  }
 
   /* Panels become OVERLAY DRAWERS. As flex siblings the 188px sidebar left a
      214px canvas on a 402px screen — the thing you are editing became the
@@ -2105,6 +2201,37 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   /* the 16px resizer chevrons are replaced by real buttons in the bar */
   .ed-panel-toggle { display: none; }
   .ed-title { min-width: 0; }
+
+  /* Folding is not enough on the narrowest phones. Even fully folded the bar
+     needs ~356px — six 44px targets, the mark and the title — and an iPhone SE
+     (or any iPhone with Display Zoom on) is 320px wide. `.ed-root` sets
+     `overflow: hidden` so a wide bar can never turn into DOCUMENT scroll, and
+     the consequence was that the overflow was simply CUT OFF: ⋯ — which on a
+     phone carries Redo, Comment, PDF, Share, Language, Help and the whole
+     save-as list — hung 36px off the edge and could not be reached at all.
+     So the bar scrolls itself. The clipped button is now a partly-visible one,
+     which is its own affordance, and the fix keeps scaling if the bar ever
+     gains another control. */
+  .ed-topbar {
+    overflow-x: auto;
+    /* a sideways flick on the bar must not rubber-band the page behind it */
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ed-topbar::-webkit-scrollbar { display: none; }
+  /* A scroll container clips its children in BOTH axes, so the menus hanging
+     off ＋ and ⋯ would now be cut off by the bar itself. `fixed` takes them out
+     of that clip; it costs nothing extra to anchor, because the rule above
+     already pins these menus to the end of the screen rather than to their
+     trigger. The only thing they still need from the layout is where the bar
+     ends, which editor.ts publishes as --ed-bar-bottom. */
+  .ed-topbar .ed-dropdown.open > .ed-menu {
+    position: fixed;
+    top: calc(var(--ed-bar-bottom, 56px) + 4px);
+    inset-inline-end: max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
+    inset-inline-start: auto;
+  }
 }
 
 /* panel collapse chevrons live ON the resizer strips, not in the topbar */
@@ -2119,7 +2246,10 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
-  color: #5d6b80;
+  /* --muted, not a literal: the background follows --surface, so a fixed
+     grey-blue that read at 5.41:1 on white sat at 2.81:1 on the dark surface,
+     under the 4.5 floor. With the token it is 5.98:1 light, 5.02:1 dark. */
+  color: var(--muted);
   font-size: 11px;
   line-height: 1;
   padding: 0;
@@ -2290,6 +2420,104 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 .ed-stepper .ed-btn-icon { width: 24px; height: 24px; line-height: 1; font-size: 15px; padding: 0; }
 .ed-stepper-val { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
 input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: pointer; }
+/* --- rich text inside a box ------------------------------------------------
+   Every size here is in `em`, never px: the element's own `fontSize` is the
+   type scale, so a heading is "larger than this box" rather than a fixed size
+   that would fight the box it lives in — and resizing the box keeps the whole
+   hierarchy in proportion. Shared by the canvas, thumbnails, present and
+   print, because they all go through render.ts. */
+.bento-text-inner ul,
+.bento-text-inner ol {
+  margin: 0;
+  padding-inline-start: 1.35em;
+  list-style-position: outside;
+}
+/* Centred or right-aligned text: an `outside` marker stays pinned to the box's
+   start edge while its line moves away from it, so the bullet ends up floating
+   on its own. Keeping the marker inside the line keeps the two together — at
+   the cost of the hanging indent, which only reads as an indent when the text
+   is start-aligned anyway. */
+.bento-text-inner[data-align='center'] ul,
+.bento-text-inner[data-align='center'] ol,
+.bento-text-inner[data-align='right'] ul,
+.bento-text-inner[data-align='right'] ol {
+  padding-inline-start: 0;
+  list-style-position: inside;
+}
+.bento-text-inner li { margin: 0.12em 0; }
+.bento-text-inner ul { list-style: disc; }
+.bento-text-inner ol { list-style: decimal; }
+.bento-text-inner ul ul { list-style: circle; }
+.bento-text-inner h1,
+.bento-text-inner h2 {
+  margin: 0 0 0.2em;
+  line-height: 1.15;
+  font-weight: 700;
+}
+.bento-text-inner h1 { font-size: 1.55em; }
+.bento-text-inner h2 { font-size: 1.25em; }
+/* A heading that opens the box has nothing to separate itself from. */
+.bento-text-inner > :first-child { margin-top: 0; }
+
+/* --- selection formatting bar (editor/richtext.ts) -------------------------
+   Positioned from JS against the VIEWPORT, so the canvas scroller, a side
+   panel or the topbar can never clip it. */
+.ed-fmtbar {
+  position: fixed;
+  z-index: 130; /* above the context menu (120), which it can outlive */
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  /* the token, not white: --surface is #ffffff in light and #21262e in dark,
+     and a chrome surface pinned to a literal puts light text on a light
+     background the moment the reader is in dark mode */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(20 30 45 / 0.20);
+  user-select: none;
+}
+.ed-fmtbar-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ed-fmtbar-btn:hover { background: var(--hover, #f2f5f9); }
+/* --blue INVERTS with the theme (#5b8def light, #7aa5f5 dark), so its text has
+   to invert with it — main's own `.ed-insertgap-btn` pairs the same token with
+   var(--surface) for exactly this reason. A literal white here reads fine in
+   light mode and is the pale-on-pale case the gate exists to catch. */
+.ed-fmtbar-btn.is-on { background: var(--blue, #5b8def); color: var(--surface); }
+.ed-fmtbar-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--line); }
+/* the letter buttons should read as what they do */
+.ed-fmtbar-btn[data-cmd='bold'] { font-weight: 700; }
+.ed-fmtbar-btn[data-cmd='italic'] { font-style: italic; }
+.ed-fmtbar-btn[data-cmd='underline'] { text-decoration: underline; }
+.ed-fmtbar-btn[data-cmd='strikeThrough'] { text-decoration: line-through; }
+.ed-fmtbar-btn[data-code] { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+/* On a phone the bar is the only route to formatting, so it must not be
+   narrower than a thumb — and it may need to wrap rather than run off. */
+@media (max-width: 700px) {
+  .ed-fmtbar {
+    max-width: calc(100vw - 16px);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ed-fmtbar-btn { min-width: 36px; height: 36px; }
+}
+.ed-fmtbar-btn:disabled { opacity: 0.35; cursor: default; }
+.ed-fmtbar-btn:disabled:hover { background: transparent; }
+
 
 /* Languages dialog: built-in vs installed packs vs available to add. */
 .ed-lang-manage { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 2px; }
@@ -2355,3 +2583,140 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 [dir="rtl"] .ed-chart-json {
   direction: ltr;
 }
+
+/* --- context menu ---------------------------------------------------------
+   Positioned from JS against the VIEWPORT (ctxmenu.ts), so it is never clipped
+   by the canvas scroller, the topbar's own scroller, or a side panel. Shares
+   the dropdown look so a right-click and a bar menu read as the same object. */
+.ed-ctxmenu {
+  position: fixed;
+  z-index: 120; /* above the drawers (40) and the bar menus (50) */
+  display: flex;
+  flex-direction: column;
+  min-width: 184px;
+  padding: 4px;
+  /* the token, not white: --surface is #ffffff in light and #21262e in dark,
+     and a chrome surface pinned to a literal puts light text on a light
+     background the moment the reader is in dark mode */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(20 30 45 / 0.18);
+  user-select: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ed-ctxmenu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  /* 40px, not the bar's 44: this list is read top-to-bottom with the finger
+     already on it, where run length matters more than target area. */
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.ed-ctxmenu-item:hover:not(:disabled) { background: var(--hover, #f2f5f9); }
+.ed-ctxmenu-item:disabled { opacity: 0.4; cursor: default; }
+.ed-ctxmenu-item kbd {
+  font: inherit;
+  font-size: 11.5px;
+  color: #8a95a6;
+  white-space: nowrap;
+}
+.ed-ctxmenu-danger:not(:disabled) { color: #b4232a; }
+.ed-ctxmenu-danger:hover:not(:disabled) { background: #fdeced; }
+.ed-ctxmenu-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+
+/* A long press on the canvas or the slide list is the context-menu gesture
+   (editor.ts). iOS answers the same press with its own callout bubble — "Copy /
+   Look Up / Share" over a chunk of slide text — which would race ours and win
+   the user's attention. Text being EDITED is exempt: there the system bubble is
+   the better menu, and it carries paste, dictation and spelling with it. */
+.ed-scroll,
+.ed-sidebar .ed-thumb {
+  -webkit-touch-callout: none;
+}
+.ed-scroll .bento-editing {
+  -webkit-touch-callout: default;
+}
+
+/* ————— saved-from-the-web notice, and the return gate ————————————————————
+   The web demo always starts a new deck. Someone who saved from it and came
+   back got a blank starter and read it as lost work (docs/DECISIONS.md
+   2026-08-23). Two surfaces: a persistent line after a save, and a gate on the
+   NEXT visit. Both use theme tokens rather than literals — the notice is
+   chrome, and a chrome surface pinned to white turns light text onto a light
+   background the moment a reader is in dark mode. */
+.ed-savednote {
+  position: fixed;
+  bottom: 18px;
+  inset-inline-start: 18px;
+  z-index: 60;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 26px rgb(15 23 36 / 0.18);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.ed-savednote-name { font-size: 13px; word-break: break-all; }
+.ed-savednote-body, .ed-savednote-offer { color: var(--muted); }
+
+.ed-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgb(15 23 36 / 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.ed-gate-card {
+  width: min(420px, 100%);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgb(15 23 36 / 0.28);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ed-gate-h { margin: 0; font-size: 17px; }
+.ed-gate-body { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+.ed-gate-name {
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--chrome);
+  border: 1px solid var(--line);
+  word-break: break-all;
+}
+.ed-gate-offer { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.ed-gate-acts { display: flex; justify-content: flex-end; margin-top: 4px; }
+/* ————— brand palette swatches beside a colour control ————— */
+.ed-colorref { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.ed-swatches { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
+.ed-swatch {
+  width: 14px; height: 14px; padding: 0; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--line);
+}
+.ed-swatch:hover { transform: scale(1.15); }
+.ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }

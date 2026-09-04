@@ -25,7 +25,72 @@
 // release.mjs runs a frozen v0.1.0-style splice against the output as a gate.
 
 import { readFileSync, writeFileSync } from 'node:fs'
-import { deflateRawSync } from 'node:zlib'
+import { deflateRawSync, inflateRawSync } from 'node:zlib'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+
+/**
+ * ZOPFLI, not zlib.
+ *
+ * Zopfli emits a stream in the SAME deflate format, just packed harder — so
+ * the shipped loader is untouched, every already-saved file keeps working, and
+ * old updaters splicing into a new shell see exactly what they saw before.
+ * Verified rather than assumed: a zopfli payload handed to Chrome 148's native
+ * `DecompressionStream('deflate-raw')` inflated to a byte-identical result,
+ * SHA-256 matched, in 2.2 ms.
+ *
+ * Measured on the shipped shells: 172,470 -> 165,398 B for bento/spaces and
+ * 690,060 -> 663,760 B for bento/slides. About 4% off every file anyone saves,
+ * for a second of build time.
+ *
+ * RESOLVED FROM THE CALLER, not from this file. This script lives in scripts/
+ * and there is no package.json there or at the root, so a bare import would
+ * look in the wrong place; every app runs it from its OWN directory, which is
+ * where the dependency is declared. That is also why the failure below names
+ * the fix rather than falling back silently — a release quietly built 4%
+ * larger because someone's node_modules was stale is a regression nobody would
+ * ever notice.
+ */
+const iterations = Number(process.env.ZOPFLI_ITERS || 15)
+let zopfli
+try {
+  zopfli = createRequire(join(process.cwd(), 'package.json'))('@gfx/zopfli')
+} catch {
+  console.error(
+    'postbuild-compress: @gfx/zopfli is missing. Run `npm ci` in this app\'s\n' +
+    '  directory (it is a devDependency). Set ZOPFLI=0 to build with zlib\n' +
+    '  instead — the output is valid but about 4% larger, so never for a release.')
+  if (process.env.ZOPFLI !== '0') process.exit(1)
+}
+
+/**
+ * deflate-raw, packed by zopfli unless it was explicitly turned off.
+ *
+ * THE OUTPUT IS INFLATED AND COMPARED BACK, every time, with node's own zlib.
+ * This is not paranoia about a bug — zopfli is old and well used — it is about
+ * what this script feeds. The bytes it emits ARE the application, and the
+ * shell built from them is signed: a packer that emitted a VALID deflate
+ * stream carrying different JavaScript would be signed as genuine and would
+ * self-update its way onto every install. A round trip through a different
+ * implementation makes that undetectable-in-principle failure impossible in
+ * practice, and it costs about 2ms per shell.
+ *
+ * It also covers the duller case a signature never would: a wrong build, a
+ * truncated write, a future iteration-count change that trips a corner.
+ */
+const deflate = async (buf) => {
+  const packed = (!zopfli || process.env.ZOPFLI === '0')
+    ? deflateRawSync(buf, { level: 9 })
+    : await new Promise((res, rej) =>
+        zopfli.deflate(buf, { numiterations: iterations }, (e, out) => (e ? rej(e) : res(Buffer.from(out)))))
+  if (!inflateRawSync(packed).equals(buf)) {
+    console.error('postbuild-compress: the packed payload does not inflate back to what went in.\n' +
+      '  Refusing to write a shell whose runtime cannot be recovered. This is a bug in the\n' +
+      '  packer or a corrupted install — do not sign anything built from this tree.')
+    process.exit(1)
+  }
+  return packed
+}
 
 const path = process.argv[2]
 if (!path || path.startsWith('--')) {
@@ -62,17 +127,38 @@ if (!mod) throw new Error('module script not found')
 // back to a literal, so this cannot be worked around in the app source.
 const headPart = html.slice(0, html.indexOf('</head>'))
 const linkedRe = /<style[^>]*\brel="stylesheet"[^>]*>([\s\S]*?)<\/style>/
-const styleM = headPart.match(linkedRe)
-  // Fallback for a build that does not carry the attribute; unchanged behaviour.
-  ?? headPart.match(/<style[^>]*>([\s\S]*?)<\/style>/)
-if (!styleM) throw new Error('app stylesheet not found in head')
+// The fallback requires `>` or whitespace after the tag name, and that detail
+// is load-bearing. `<style[^>]*>` also matches `<style"`, and the kernel's
+// preview machinery contains exactly that as a STRING CONSTANT — tree-shaken
+// away until an app calls registerPreview, which is why this only surfaced
+// when bento/type grew a preview. The module script is inlined into <head>
+// ABOVE the real stylesheet, so the fallback matched a JS literal at offset
+// 2923 instead of the stylesheet at 296275, packed 293KB of JavaScript into
+// the #bento-rt-css payload, and left the real CSS uncompressed inside the JS
+// — shipping every document 147KB larger with the app still working, so
+// nothing looked wrong. A real tag is `<style>` or `<style …>`; a string
+// constant is not.
+// Searched across the WHOLE document, not just <head>. The linked stylesheet
+// carries rel="stylesheet", which is unambiguous wherever it sits — and it
+// does not always sit in the head: for bento/type, vite emits it in the BODY
+// at offset 384674 while </head> is at 309927, so a head-scoped search never
+// saw it. What it found in the head instead was `<style>${…}</style>` from
+// print.ts's page template, minified into the module script: an 8-character
+// match that packed an empty payload and left the real 34KB sheet shipping as
+// plaintext in every saved file.
+//
+// The head-scoped fallback stays for a build that carries no rel attribute,
+// which is the only case it was ever reached for.
+const styleM = html.match(linkedRe)
+  ?? headPart.match(/<style(?=[\s>])[^>]*>([\s\S]*?)<\/style>/)
+if (!styleM) throw new Error('app stylesheet not found')
 
 const js = mod[1]
 const css = styleM[1]
 
-const b64 = (s) => deflateRawSync(Buffer.from(s, 'utf8'), { level: 9 }).toString('base64')
-const jsB64 = b64(js)
-const cssB64 = b64(css)
+const b64 = async (s) => (await deflate(Buffer.from(s, 'utf8'))).toString('base64')
+const jsB64 = await b64(js)
+const cssB64 = await b64(css)
 
 // --- other parts ------------------------------------------------------------
 const notice = html.match(/<!--\s*NOTICE[\s\S]*?-->/)?.[0] ?? ''
@@ -83,8 +169,20 @@ const title = html.match(/<title>[\s\S]*?<\/title>/)?.[0] ?? `<title>${titleFall
 const splashDiv = html.match(/<div id="bento-splash"[\s\S]*?<\/div>\s*<\/div>/)?.[0] ?? ''
 const splashCss = (() => {
   const bodyPart = html.slice(html.indexOf('<body'))
-  const m = bodyPart.match(/<style[^>]*>([\s\S]*?)<\/style>/)
-  return m ? m[1] : ''
+  // The first <style> in the body is USUALLY the splash's own few rules — but
+  // it is not always. Vite emits the app stylesheet wherever it likes, and for
+  // bento/type it lands in the BODY, so "first style in body" picked up the
+  // whole 34KB sheet and inlined it here as plaintext. Combined with the
+  // payload extracted above, the app's CSS then shipped TWICE in every saved
+  // file.
+  //
+  // rel="stylesheet" is what marks the app sheet, so skip anything wearing it
+  // and take the next block instead.
+  for (const m of bodyPart.matchAll(/<style([^>]*)>([\s\S]*?)<\/style>/g)) {
+    if (/\brel="stylesheet"/.test(m[1])) continue
+    return m[2]
+  }
+  return ''
 })()
 
 const SLIDES_TOOLING = `<!--
@@ -179,7 +277,12 @@ const loader = `
     var s = document.getElementById('bento-splash'); if (s) s.remove()
   }
   if (typeof DecompressionStream === 'undefined') {
-    fail('This file needs a browser from 2023 or later (Chrome 80+, Edge, Firefox 113+, Safari 16.4+).<br>The document itself is intact \\u2014 open this file in a newer browser.')
+    // The old text said "2023 or later" and then listed Chrome 80, which is
+    // 2020 — a reader checking their version against it learns nothing. It also
+    // never said what kind of file this is, and never mentioned that the data
+    // is plain readable JSON in this same file, which is the one route out that
+    // works with no capable browser at all.
+    fail('<b>This is a bento/dash spreadsheet.</b><br>Opening it needs a browser released in 2023 or later \\u2014 Safari 16.4+, Firefox 113+, or a current Chrome or Edge.<br><br>Nothing is lost: your data is stored as plain readable JSON inside this same file. Open it in a newer browser, or open it in a text editor and look for the block marked "bento-doc".')
     return
   }
   var inflate = async function (id) {

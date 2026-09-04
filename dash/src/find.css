@@ -1,0 +1,167 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The find bar, and the marks it leaves on the grid.
+
+   Vite concatenates every IMPORTED stylesheet into one <style> in head, which
+   is what postbuild-compress deflates — so this file must be imported from
+   find.ts and never linked, and NOTHING here may depend on landing after
+   styles.css in the cascade: order follows the module graph, not intent. Two
+   consequences, both load-bearing:
+
+     · every colour is a var(), which resolves where it is used; and
+     · the cell marks out-rank styles.css by SPECIFICITY rather than by order.
+       `.dg-cell.dg-sel` there is `background: … !important`, so an equally
+       specific !important here would be settled by source order — i.e. by the
+       module graph — and the highlight would work or not work depending on
+       which file vite happened to emit first. `.dg-row .dg-cell.dg-find` is
+       one class more specific and wins either way. */
+
+:root {
+  /* Not --accent: the accent already means "the chosen sheet, the active
+     chip", and a find hit is a different kind of thing. Green reads as "here
+     it is" against both the blue selection fill (--sel) and the amber accent,
+     and stays distinguishable from the red error cells. */
+  --find-hit: light-dark(#d9f2e3, #17402c);
+  /* The CURRENT match is a fill the document did not choose, so its ink is
+     --ink-on-fill (#1e2a3a) in BOTH themes — the same rule the conditional
+     formatting section states. That fixes the dark value: #2f9e68 measured
+     4.29:1 against that ink, under AA on the one cell the whole feature exists
+     to point at. #3aad74 is 5.12:1 and reads as the same green. */
+  --find-cur: light-dark(#7ddaa6, #3aad74);
+  --find-ring: light-dark(#0f8f57, #4fd18d);
+}
+
+/* ————— the bar ————— */
+
+/* Mounted inside .dx-grid, which is `position: relative` (styles.css:521), and
+   pinned to the TOP RIGHT: the reader's eye is in the sheet, and a bar that
+   covers the first rows of the leftmost columns hides the very thing a find on
+   a small sheet is about to point at. Reveal centres the match vertically, so
+   the bar and the answer are never in the same place. */
+.dx-find {
+  position: absolute;
+  /* BELOW the sticky column headers, not over them. The header is two lines —
+     `calc(var(--row-h) + 20px)`, which grid.ts writes onto this element from its
+     ROW_H constant — and a bar pinned to the top covered the rightmost column
+     names at narrow widths, which are exactly what a reader needs in order to
+     make sense of the row the search just jumped to. */
+  top: calc(var(--row-h, 20px) + 28px);
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  width: min(360px, calc(100% - 32px));
+  background: var(--surface);
+  color: var(--ink);
+  /* --line-strong: one floating-surface style, same as .dx-menu / .dx-pop */
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-ui);
+}
+
+.dx-find[hidden] { display: none; }
+
+.dx-find-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dx-find-line[hidden] { display: none; }
+
+.dx-find input[type='search'],
+.dx-find .dx-find-r {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+}
+
+.dx-find input:focus-visible {
+  outline: 2px solid var(--sel-ring);
+  outline-offset: -1px;
+}
+
+/* Tabular figures, so "9 of 47" does not shuffle sideways into "10 of 47"
+   under the reader's eye as they hold Enter down. */
+.dx-find-count {
+  flex: 0 0 auto;
+  min-width: 5.5em;
+  text-align: right;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.dx-find-count.none { color: var(--err-ink); }
+
+.dx-find-b,
+.dx-find-t {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.dx-find-b:hover,
+.dx-find-t:hover { background: var(--hover); }
+
+.dx-find-t.on {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+}
+
+.dx-find-opts { flex-wrap: wrap; }
+
+.dx-find select {
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 3px 4px;
+}
+
+/* Where the refusals are written down. It is never decorative: if it is
+   visible, something was NOT replaced and the reader has to be able to read
+   why without hunting. */
+.dx-find-note {
+  font-size: var(--fs-small);
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.dx-find-note[hidden] { display: none; }
+.dx-find-note.warn { color: var(--warn-ink); }
+
+/* ————— the marks on the grid ————— */
+
+.dg-row .dg-cell.dg-find {
+  background: var(--find-hit) !important;
+  color: var(--ink);
+}
+
+.dg-row .dg-cell.dg-find-cur {
+  background: var(--find-cur) !important;
+  color: var(--ink-on-fill);
+  box-shadow: inset 0 0 0 2px var(--find-ring);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dg-row .dg-cell.dg-find-cur { transition: background 90ms linear; }
+}

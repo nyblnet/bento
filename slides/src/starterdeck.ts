@@ -17,7 +17,7 @@
 // Never let system-font defaults show: every text sets a face on purpose.
 
 import {
-  newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable,
+  newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable, defaultCode,
   type BentoDoc, type Slide, type SlideElement, type TextElement, type ShapeElement,
   type SvgElement, type TableElement,
 } from './model'
@@ -57,6 +57,7 @@ const T_C = 'sd-tile-c' // paper/white
 const T_D = 'sd-tile-d' // ink panel / card
 /** The formula that rearranges across the morph beat — one id, two slides. */
 const EQ = 'sd-eq'
+const CODE_ID = 'sd-code'
 const TITLE = 'sd-title'
 const KICKER = 'sd-kicker'
 const GLOW = 'sd-glow'
@@ -478,7 +479,50 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 3 · MORPH MANIFESTO ────────────────────────────────────────────────
+    // ── 3 · NO MOVING PARTS (staggers + count-ups, arriving by morph) ─────
+    // This was a 'fade' because entrance fx and count-ups once needed a
+    // non-morph arrival. Both have worked on morph arrivals since #197 —
+    // runMorph gives every unpartnered element its fx.enter, and
+    // runMorphArrivalCountUps counts up anything not carried from the previous
+    // slide — so the fade only cost the deck its best tile moment: the four
+    // scattered tiles collapsing into the row of chips at the top-left.
+    slide({
+      background: PEACH,
+      notes:
+        'The four tiles just collapsed into that row of chips — same four shapes, all deck long. ' +
+        'The numbers counted up as the slide entered; ' +
+        'that’s one checkbox on any text element. The little lines show line endings: arrow, dot, bar.',
+      elements: [
+        shape('rect', { id: T_D, x: 96, y: 54, w: 34, h: 34, radius: 9, fill: INK }),
+        shape('rect', { id: T_B, x: 140, y: 54, w: 34, h: 34, radius: 9, fill: STEEL }),
+        shape('rect', { id: T_A, x: 184, y: 54, w: 34, h: 34, radius: 9, fill: PEACH_SOFT }),
+        shape('rect', { id: T_C, x: 228, y: 54, w: 34, h: 34, radius: 9, fill: PAPER }),
+        text({
+          x: 1024, y: 54, w: 160, h: 26, html: '{{page:2}}', align: 'right',
+          fontSize: 13, fontWeight: 700, letterSpacing: 2, color: 'rgba(15,23,36,0.45)',
+        }),
+        shape('rect', { x: 96, y: 108, w: 1088, h: 1.5, radius: 0, fill: 'rgba(15,23,36,0.18)' }),
+        // No fx on these two: the kicker and title carry the SAME ids as the
+        // slide before, so they morph across and are already in motion. An
+        // fx.enter here would be silently skipped — the entrance only runs for
+        // elements with no partner on the previous slide.
+        kicker('NO MOVING PARTS', { y: 132, color: INK }),
+        title('Software with nothing<br>to install, break, or expire.', {
+          y: 170, w: 1060, h: 150, color: INK, fontSize: 50,
+        }),
+        text({ x: 96, y: 356, w: 352, h: 180, html: '1', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 2, countUp: true } }),
+        text({ x: 464, y: 356, w: 352, h: 180, html: '0', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 3, countUp: true } }),
+        text({ x: 832, y: 356, w: 352, h: 180, html: '100%', fontSize: 130, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 4, countUp: true } }),
+        shape('line', { x: 100, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineEnd: 'arrow', fx: { enter: 'fade', order: 5 } }),
+        shape('line', { x: 468, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'dot', lineEnd: 'dot', fx: { enter: 'fade', order: 5 } }),
+        shape('line', { x: 836, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'bar', lineEnd: 'bar', fx: { enter: 'fade', order: 5 } }),
+        text({ x: 96, y: 570, w: 352, h: 30, html: 'FILE TO SEND', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        text({ x: 464, y: 570, w: 352, h: 30, html: 'SERVERS REQUIRED', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        text({ x: 832, y: 570, w: 352, h: 30, html: 'YOURS, FOREVER', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+      ],
+    }),
+
+    // ── 4 · MORPH MANIFESTO ────────────────────────────────────────────────
     slide({
       notes:
         'The tiles scattered and grew — and picked up GRADIENT fills mid-morph (solid⇄gradient tweening). ' +
@@ -515,102 +559,204 @@ export function starterDoc(): BentoDoc {
           html: 'Shared ids animate between slides — position, size, color, <b>even gradients</b>.<br>Press ← then → to replay it.',
           fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
         }),
-        // Sits quietly here and becomes the point of the next slide: same id,
-        // so its SYMBOLS morph across rather than the formula crossfading.
-        text({
-          id: EQ, x: 340, y: 600, w: 600, h: 60, html: '$ax^2 + bx + c = 0$',
-          fontSize: 30, color: 'rgba(185,196,212,0.75)', align: 'center', valign: 'middle',
-        }),
       ],
     }),
 
-    // ── 3b · SYMBOL MORPH (the formula rearranges, term by term) ───────────
+    // ── 5 · SYMBOL MORPH, SIDE BY SIDE (maths and code, one mechanism) ────
+    // The deck's sub-element morph, shown on BOTH content types at once: a
+    // quadratic derivation on the left, three eras of JavaScript on the right.
+    // Same engine underneath (tokens carry identities across slides and travel
+    // to their new positions), two very different surfaces on top — which is
+    // the claim this pair of columns is here to make.
+    //
+    // The maths is the classic three-step derivation, so the beats line up
+    // with the code's callbacks -> promises (ES2015) -> async/await (ES2017):
+    // a, b and c survive all three on the left while load, render, present and
+    // confetti survive all three on the right. Both probed before authoring.
     slide({
       transition: 'morph',
       notes:
-        'The quadratic on the last slide did not crossfade into this one — a, b and c TRAVELLED, ' +
-        'out of ax² + bx + c = 0 and into the fraction, the radical and the discriminant. Tokens ' +
-        'pair by what they are and which occurrence they are, so a term that moves is seen to move. ' +
-        'Everything here is one ordinary text box: type the LaTeX between dollar signs (two for a ' +
-        'display equation like this one) and the document stores exactly that — not a picture, not ' +
-        'a font, no library fetched at runtime. Backslash-escape a dollar to show one literally, ' +
-        'as the caption does.',
+        'Two token streams, one mechanism. Both sides of this slide morph symbol by symbol: the maths is plain \u0024\u2026\u0024 in an ordinary text box, the code is a code element with 77 languages built in (about 7KB of rules, no highlighter library). Press \u2192 and watch BOTH at once \u2014 a, b and c travel through the derivation while the callback pyramid flattens into promises.',
       elements: [
         grain(),
         glow(20, [
-          { at: 0, color: 'rgba(255,158,138,0.20)' },
-          { at: 0.6, color: 'rgba(15,23,36,0)' },
-          { at: 1, color: 'rgba(62,86,120,0.24)' },
+          { at: 0, color: 'rgba(62,86,120,0.24)' },
+          { at: 0.55, color: 'rgba(15,23,36,0)' },
+          { at: 1, color: 'rgba(255,158,138,0.16)' },
         ]),
         shape('rect', {
-          id: T_A, x: 1000, y: 420, w: 300, h: 300, radius: 90, fill: PEACH,
-          fillGradient: { angle: 135, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
+          id: T_A, x: -130, y: 470, w: 300, h: 300, radius: 92, fill: PEACH,
+          fillGradient: { angle: 45, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
         }),
         shape('rect', {
-          id: T_B, x: -120, y: -110, w: 380, h: 380, radius: 100, fill: STEEL,
-          fillGradient: { angle: 225, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
+          id: T_B, x: 1060, y: -150, w: 340, h: 340, radius: 100, fill: STEEL,
+          fillGradient: { angle: 200, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
         }),
         shape('rect', {
-          id: T_C, x: -80, y: 470, w: 300, h: 300, radius: 84, fill: TILE_PAPER, opacity: 0.85,
-          fillGradient: { angle: 315, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: '#D8D3C6' }] },
+          id: T_C, x: 1080, y: 520, w: 260, h: 260, radius: 78, fill: TILE_PAPER, opacity: 0.85,
+          fillGradient: { angle: 30, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: '#D8D3C6' }] },
         }),
         shape('rect', {
-          id: T_D, x: 1030, y: -90, w: 250, h: 250, radius: 70, fill: 'transparent',
+          id: T_D, x: -80, y: -120, w: 240, h: 240, radius: 68, fill: 'transparent',
           stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
         }),
-        kicker('EVEN INSIDE A FORMULA', { x: 340, y: 176, w: 600, h: 26, align: 'center' }),
-        // Display mode ($$) so the fraction, radical and ± set at full size.
-        // a, b and c fly out of the quadratic and into their places here.
+        kicker('ONE MECHANISM, TWO LANGUAGES', { x: 340, y: 128, w: 600, h: 26, align: 'center' }),
+        // Column labels — small, so the two halves read as a comparison.
         text({
-          id: EQ, x: 190, y: 240, w: 900, h: 230,
-          html: '$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$',
-          fontSize: 62, color: '#FFFFFF', align: 'center', valign: 'middle',
+          x: 96, y: 186, w: 480, h: 24, html: 'MATHS \u2014 plain <b>\\$\u2026\\$</b> in a text box',
+          fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(185,196,212,0.62)',
+          align: 'left', valign: 'middle',
         }),
         text({
-          x: 340, y: 500, w: 600, h: 80,
-          // \$ escapes the delimiter so this line SHOWS "$…$" instead of
-          // rendering it — the first thing anyone copying this deck will hit.
-          html: 'Maths is plain <b>\\$…\\$</b> in a text box — the terms morph, not the picture.',
+          x: 640, y: 186, w: 544, h: 24, html: 'CODE \u2014 <b>77 languages</b> built in',
+          fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(185,196,212,0.62)',
+          align: 'left', valign: 'middle',
+        }),
+        // LEFT: the derivation. Display mode so fractions and the radical set
+        // at full size; a, b and c travel between the three beats.
+        text({
+          id: EQ, x: 96, y: 226, w: 480, h: 280,
+          html: '$$ax^2 + bx + c = 0$$',
+          fontSize: 30, color: '#FFFFFF', align: 'center', valign: 'middle',
+        }),
+        // RIGHT: the same trick on code, running at the same time.
+        {
+          ...defaultCode({ id: CODE_ID, x: 640, y: 226, w: 544, h: 280 }),
+          content: "load(deck, (slides) => {\n  render(slides, (frame) => {\n    present(frame)\n  })\n})\nconfetti()",
+          grammarName: 'js', fontSize: 19, lineHeight: 1.62, color: '#DCE3EC',
+          align: 'left', valign: 'middle',
+        },
+        text({
+          x: 190, y: 560, w: 900, h: 60,
+          html: 'A derivation on the left, two revisions of JavaScript on the right. Press <b>→</b> twice.',
           fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
         }),
       ],
     }),
 
-    // ── 4 · STATS BEAT (fade → staggers + count-ups) ───────────────────────
     slide({
-      background: PEACH,
-      transition: 'fade',
+      transition: 'morph',
       notes:
-        'A hard cut on purpose — rhythm. The numbers counted up as the slide entered; ' +
-        'that’s one checkbox on any text element. The little lines show line endings: arrow, dot, bar.',
+        'Left: completing the square \u2014 a, b and c did not crossfade, they moved into their new places. Right: the pyramid flattened and confetti() rose two lines to meet it. Point-free promises really did drop the parameter names, so slides and frame fading out is the diff being honest. One more \u2192.',
       elements: [
-        shape('rect', { id: T_D, x: 96, y: 54, w: 34, h: 34, radius: 9, fill: INK }),
-        shape('rect', { id: T_B, x: 140, y: 54, w: 34, h: 34, radius: 9, fill: STEEL }),
-        shape('rect', { id: T_A, x: 184, y: 54, w: 34, h: 34, radius: 9, fill: PEACH_SOFT }),
-        shape('rect', { id: T_C, x: 228, y: 54, w: 34, h: 34, radius: 9, fill: PAPER }),
+        grain(),
+        glow(200, [
+          { at: 0, color: 'rgba(62,86,120,0.24)' },
+          { at: 0.55, color: 'rgba(15,23,36,0)' },
+          { at: 1, color: 'rgba(255,158,138,0.16)' },
+        ]),
+        shape('rect', {
+          id: T_A, x: -100, y: 500, w: 270, h: 270, radius: 84, fill: PEACH,
+          fillGradient: { angle: 45, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_B, x: 1084, y: -128, w: 310, h: 310, radius: 92, fill: STEEL,
+          fillGradient: { angle: 200, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_C, x: 1054, y: 500, w: 286, h: 286, radius: 84, fill: TILE_PAPER, opacity: 0.85,
+          fillGradient: { angle: 30, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: '#D8D3C6' }] },
+        }),
+        shape('rect', {
+          id: T_D, x: -90, y: -134, w: 260, h: 260, radius: 74, fill: 'transparent',
+          stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
+        }),
+        kicker('EVERY TERM KEEPS ITS PLACE', { x: 340, y: 128, w: 600, h: 26, align: 'center' }),
+        // Column labels — small, so the two halves read as a comparison.
         text({
-          x: 1024, y: 54, w: 160, h: 26, html: '04', align: 'right',
-          fontSize: 13, fontWeight: 700, letterSpacing: 2, color: 'rgba(15,23,36,0.45)',
+          x: 96, y: 186, w: 480, h: 24, html: 'MATHS \u2014 plain <b>\\$\u2026\\$</b> in a text box',
+          fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(185,196,212,0.62)',
+          align: 'left', valign: 'middle',
         }),
-        shape('rect', { x: 96, y: 108, w: 1088, h: 1.5, radius: 0, fill: 'rgba(15,23,36,0.18)' }),
-        kicker('NO MOVING PARTS', { y: 132, color: INK, fx: { enter: 'fade-up', order: 0 } }),
-        title('Software with nothing<br>to install, break, or expire.', {
-          y: 170, w: 1060, h: 150, color: INK, fontSize: 50,
-          fx: { enter: 'fade-up', order: 1 },
+        text({
+          x: 640, y: 186, w: 544, h: 24, html: 'CODE \u2014 <b>77 languages</b> built in',
+          fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(185,196,212,0.62)',
+          align: 'left', valign: 'middle',
         }),
-        text({ x: 96, y: 356, w: 352, h: 180, html: '1', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 2, countUp: true } }),
-        text({ x: 464, y: 356, w: 352, h: 180, html: '0', fontSize: 150, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 3, countUp: true } }),
-        text({ x: 832, y: 356, w: 352, h: 180, html: '100%', fontSize: 130, fontWeight: 900, fontFamily: DISPLAY, color: INK, fx: { enter: 'fade-up', order: 4, countUp: true } }),
-        shape('line', { x: 100, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineEnd: 'arrow', fx: { enter: 'fade', order: 5 } }),
-        shape('line', { x: 468, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'dot', lineEnd: 'dot', fx: { enter: 'fade', order: 5 } }),
-        shape('line', { x: 836, y: 542, w: 150, h: 8, fill: INK, strokeWidth: 3, lineStart: 'bar', lineEnd: 'bar', fx: { enter: 'fade', order: 5 } }),
-        text({ x: 96, y: 570, w: 352, h: 30, html: 'FILE TO SEND', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
-        text({ x: 464, y: 570, w: 352, h: 30, html: 'SERVERS REQUIRED', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
-        text({ x: 832, y: 570, w: 352, h: 30, html: 'YOURS, FOREVER', fontSize: 14, fontWeight: 700, letterSpacing: 2, color: INK_SOFT, fx: { enter: 'fade', order: 6 } }),
+        // LEFT: the derivation. Display mode so fractions and the radical set
+        // at full size; a, b and c travel between the three beats.
+        text({
+          id: EQ, x: 96, y: 226, w: 480, h: 280,
+          html: '$$\\left(x + \\frac{b}{2a}\\right)^2 = \\frac{b^2 - 4ac}{4a^2}$$',
+          fontSize: 30, color: '#FFFFFF', align: 'center', valign: 'middle',
+        }),
+        // RIGHT: the same trick on code, running at the same time.
+        {
+          ...defaultCode({ id: CODE_ID, x: 640, y: 226, w: 544, h: 280 }),
+          content: "load(deck)\n  .then(render)\n  .then(present)\nconfetti()",
+          grammarName: 'js', fontSize: 19, lineHeight: 1.62, color: '#DCE3EC',
+          align: 'left', valign: 'middle',
+        },
+        text({
+          x: 190, y: 560, w: 900, h: 60,
+          html: 'Completing the square, and the pyramid flattening — <b>both travelling at once</b>.',
+          fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
+        }),
       ],
     }),
 
-    // ── 5 · CHARTS ALIVE (+ hidden pie state) ──────────────────────────────
+    slide({
+      transition: 'morph',
+      notes:
+        'async/await on the right, the quadratic formula on the left \u2014 and every symbol that survived the rewrite kept its identity the whole way. This is what a walkthrough is in Bento: duplicate the slide, edit the content, and the transition explains the change for you. No recording, no screenshots.',
+      elements: [
+        grain(),
+        glow(20, [
+          { at: 0, color: 'rgba(62,86,120,0.24)' },
+          { at: 0.55, color: 'rgba(15,23,36,0)' },
+          { at: 1, color: 'rgba(255,158,138,0.16)' },
+        ]),
+        shape('rect', {
+          id: T_A, x: -70, y: 520, w: 250, h: 250, radius: 78, fill: PEACH,
+          fillGradient: { angle: 45, stops: [{ at: 0, color: PEACH }, { at: 1, color: PEACH_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_B, x: 1100, y: -110, w: 290, h: 290, radius: 88, fill: STEEL,
+          fillGradient: { angle: 200, stops: [{ at: 0, color: '#41597A' }, { at: 1, color: STEEL_SOFT }] },
+        }),
+        shape('rect', {
+          id: T_C, x: 1030, y: 480, w: 310, h: 310, radius: 92, fill: TILE_PAPER, opacity: 0.85,
+          fillGradient: { angle: 30, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: '#D8D3C6' }] },
+        }),
+        shape('rect', {
+          id: T_D, x: -100, y: -150, w: 280, h: 280, radius: 80, fill: 'transparent',
+          stroke: 'rgba(185,196,212,0.4)', strokeWidth: 2, strokeStyle: 'dashed',
+        }),
+        kicker('NOTHING HERE REDREW', { x: 340, y: 128, w: 600, h: 26, align: 'center' }),
+        // Column labels — small, so the two halves read as a comparison.
+        text({
+          x: 96, y: 186, w: 480, h: 24, html: 'MATHS \u2014 plain <b>\\$\u2026\\$</b> in a text box',
+          fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(185,196,212,0.62)',
+          align: 'left', valign: 'middle',
+        }),
+        text({
+          x: 640, y: 186, w: 544, h: 24, html: 'CODE \u2014 <b>77 languages</b> built in',
+          fontSize: 13, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(185,196,212,0.62)',
+          align: 'left', valign: 'middle',
+        }),
+        // LEFT: the derivation. Display mode so fractions and the radical set
+        // at full size; a, b and c travel between the three beats.
+        text({
+          id: EQ, x: 96, y: 226, w: 480, h: 280,
+          html: '$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$',
+          fontSize: 30, color: '#FFFFFF', align: 'center', valign: 'middle',
+        }),
+        // RIGHT: the same trick on code, running at the same time.
+        {
+          ...defaultCode({ id: CODE_ID, x: 640, y: 226, w: 544, h: 280 }),
+          content: "const slides = await load(deck)\nconst frame = await render(slides)\npresent(frame)\nconfetti()",
+          grammarName: 'js', fontSize: 19, lineHeight: 1.62, color: '#DCE3EC',
+          align: 'left', valign: 'middle',
+        },
+        text({
+          x: 190, y: 560, w: 900, h: 60,
+          html: 'Same <b>a</b>, <b>b</b>, <b>c</b>. Same <b>load</b>, <b>render</b>, <b>present</b>. The diff is the animation.',
+          fontSize: 19, fontWeight: 500, color: MIST, align: 'center', lineHeight: 1.65,
+        }),
+      ],
+    }),
+
+    // ── 6 · CHARTS ALIVE (+ hidden pie state) ──────────────────────────────
     slide({
       id: S_CHARTS,
       background: PAPER,
@@ -721,7 +867,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 6 · TABLES (real HTML table) ───────────────────────────────────────
+    // ── 7 · TABLES (real HTML table) ───────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -807,7 +953,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 7 · MOMENTUM (line-chart hero) ─────────────────────────────────────
+    // ── 8 · MOMENTUM (line-chart hero) ─────────────────────────────────────
     slide({
       notes:
         'A chart as scenery: full-width live area chart on ink. Drag horizontally inside it to zoom — ' +
@@ -834,7 +980,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 8 · MOTION & LINES ─────────────────────────────────────────────────
+    // ── 9 · MOTION & LINES ─────────────────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -879,7 +1025,7 @@ export function starterDoc(): BentoDoc {
     }),
 
 
-    // ── 9 · CHOREOGRAPHY (base + two hidden states) ───────────────────────
+    // ── 10 · CHOREOGRAPHY (base + two hidden states) ──────────────────────
     ...(() => {
       type Scene = {
         id: string; step: string; label: string; chip: string; to: string
@@ -969,7 +1115,7 @@ export function starterDoc(): BentoDoc {
       )
     })(),
 
-    // ── 10 · HOVER FOCUS ────────────────────────────────────────────────────
+    // ── 11 · HOVER FOCUS ───────────────────────────────────────────────────
     slide({
       hover: { type: 'focus-group', dim: 0.22 },
       notes:
@@ -1019,7 +1165,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 11 · MARKDOWN ───────────────────────────────────────────────────────
+    // ── 12 · MARKDOWN ──────────────────────────────────────────────────────
     slide({
       background: PAPER,
       notes:
@@ -1052,7 +1198,7 @@ export function starterDoc(): BentoDoc {
       ],
     }),
 
-    // ── 12 · CLOSE ─────────────────────────────────────────────────────────
+    // ── 13 · CLOSE ─────────────────────────────────────────────────────────
     slide({
       notes:
         'The cast reassembles into the logo. Press Esc — this deck is already your copy of the app: ' +

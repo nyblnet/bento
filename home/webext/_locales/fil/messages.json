@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "I-save ang dokumentong Bento pabalik sa mismong file na binuksan mo, nang hindi tinatanong kung saan."
+  },
+  "navAll": {
+    "message": "Lahat ng dokumento"
+  },
+  "navFolders": {
+    "message": "Mga folder"
+  },
+  "navHelp": {
+    "message": "Tulong at tungkol"
+  },
+  "navSettings": {
+    "message": "Mga setting"
+  },
+  "addFolder": {
+    "message": "+ Magdagdag ng folder…"
+  },
+  "searchDocs": {
+    "message": "Maghanap ng dokumento"
+  },
+  "searchDocsSlash": {
+    "message": "Maghanap ng dokumento   /"
+  },
+  "sortTitle": {
+    "message": "Ayusin"
+  },
+  "sortRecent": {
+    "message": "Kamakailang binago"
+  },
+  "sortName": {
+    "message": "Pangalan"
+  },
+  "sortFolder": {
+    "message": "Folder"
+  },
+  "newDocument": {
+    "message": "+ Bagong dokumento"
+  },
+  "browseAll": {
+    "message": "Tingnan lahat"
+  },
+  "reconnectFolders": {
+    "message": "Muling ikonekta ang mga folder"
+  },
+  "primeIntro": {
+    "message": "Magtatanong ang Chrome. Piliin ang nasa gitna:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — may folder na kailangang ikonekta muli"
+  },
+  "notifyLapsedTitle": {
+    "message": "Kailangang ikonekta muli ang bento/home"
+  },
+  "notifyLapsedBody": {
+    "message": "Binawi ng Chrome ang pahintulot sa isang folder. Hangga't hindi naibabalik, tatanungin ka sa bawat pag-save kung saan ilalagay ang file."
+  },
+  "reconnect": {
+    "message": "Ikonekta muli"
+  },
+  "ctxOpenPanel": {
+    "message": "Buksan ang panel ng bento/home"
+  },
+  "panelEmpty": {
+    "message": "Wala pang dokumentong Bento sa mga folder mo."
+  },
+  "noMatches": {
+    "message": "Walang tumutugma sa “$1”"
+  },
+  "rowUnplacedTip": {
+    "message": "Buksan minsan ang kahit isang dokumento sa $1 mula sa Finder, at mabubuksan na rito ang lahat ng laman ng folder na iyon."
+  },
+  "encrypted": {
+    "message": "Protektado ng password"
+  },
+  "notSavedYet": {
+    "message": "Hindi pa na-save"
+  },
+  "fileAccessOffShort": {
+    "message": "Naka-off ang access sa lokal na file"
+  },
+  "noFoldersYet": {
+    "message": "Wala pang folder"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 folder ang kailangang ikonekta muli"
+  },
+  "statusOneFolder": {
+    "message": "$1 folder · nagsi-save sa mismong file"
+  },
+  "statusFolders": {
+    "message": "$1 folder · nagsi-save sa mismong file"
+  },
+  "renewNotOffered": {
+    "message": "Hindi nag-alok ang Chrome na ibalik ito"
+  },
+  "renewTryAfterRestart": {
+    "message": "Subukan muli pagkatapos i-restart ang Chrome"
+  },
+  "fetchingLatest": {
+    "message": "Kinukuha ang pinakabagong Bento…"
+  },
+  "created": {
+    "message": "Nalikha ang $1"
+  },
+  "panelUnplaced": {
+    "message": "Nababasa ang <b>$1</b>$2 pero hindi pa nabubuksan — hindi sinasabi ng Chrome sa isang extension kung nasaan sa disk ang isang folder. Mahahanap sila ng <b>Tingnan lahat</b> sa isang klik."
+  },
+  "andMore": {
+    "message": " at $1 pa"
+  },
+  "agoJustNow": {
+    "message": "kanina lang"
+  },
+  "agoMinutes": {
+    "message": "$1 min ang nakalipas"
+  },
+  "agoHour": {
+    "message": "$1 oras ang nakalipas"
+  },
+  "agoHours": {
+    "message": "$1 oras ang nakalipas"
+  },
+  "agoDay": {
+    "message": "$1 araw ang nakalipas"
+  },
+  "agoDays": {
+    "message": "$1 araw ang nakalipas"
+  },
+  "searchScope": {
+    "message": "Tinitingnan ng paghahanap ang mga pamagat, pangalan ng file, folder, at mga salitang nasa loob ng dokumento."
+  },
+  "folderEmpty": {
+    "message": "Wala pang laman ang folder na ito"
+  },
+  "folderEmptyHint": {
+    "message": "Maglalagay ng bago rito ang <b>+ Bagong dokumento</b>."
+  },
+  "cardUnplacedTip": {
+    "message": "Hindi pa alam ng bento/home kung nasaan sa disk ang $1. Gamitin ang “Hanapin ang mga folder ko”, o buksan minsan mula sa Finder ang kahit anong dokumento roon."
+  },
+  "cardRenamedTip": {
+    "message": "Ang $1 ay dokumentong Bento na may ibang pangalan. Nabubuksan ito rito, pero magtatanong ang pag-save kung saan ilalagay — mga file lang na nagtatapos sa .bento.html ang nakikilala ng pag-save sa mismong file."
+  },
+  "badgeRenamed": {
+    "message": "Pinangalanang .html sa halip na .bento.html — nabubuksan ito rito, pero magtatanong ang pag-save kung saan ilalagay."
+  },
+  "menuOpen": {
+    "message": "Buksan"
+  },
+  "menuDuplicate": {
+    "message": "Gumawa ng kopya"
+  },
+  "menuRename": {
+    "message": "Palitan ang pangalan…"
+  },
+  "menuCopyPath": {
+    "message": "Kopyahin ang path"
+  },
+  "duplicatedAs": {
+    "message": "Kinopya bilang $1"
+  },
+  "renamePrompt": {
+    "message": "Palitan ang pangalan ng dokumento"
+  },
+  "renamedTo": {
+    "message": "Pinalitan ng pangalang $1"
+  },
+  "pathCopied": {
+    "message": "Nakopya ang path"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — hindi pa nabubuksan"
+  },
+  "setupTitle": {
+    "message": "Dalawang bagay at handa ka na"
+  },
+  "setupLead": {
+    "message": "Pagkatapos nito, ang ⌘S sa dokumentong binuksan mo sa pamamagitan ng dobleng pag-klik ay direktang isusulat pabalik sa file — wala nang tanong kung saan, kailanman."
+  },
+  "chooseFolder": {
+    "message": "Pumili ng folder…"
+  },
+  "setupStep1": {
+    "message": "Piliin ang folder kung saan naroon ang mga dokumento mo"
+  },
+  "setupStep1Note": {
+    "message": "Kadalasan ay sapat na ang isang malawak na folder — saklaw nito ang lahat ng nasa loob."
+  },
+  "setupStep2": {
+    "message": "I-on ang access sa lokal na file"
+  },
+  "setupStep2Note": {
+    "message": "Sa <code>chrome://extensions</code> → bento/home → <b>Payagan ang access sa mga file URL</b>. Hindi pinapayagan ng Chrome na i-on ito ng extension para sa sarili nito."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Nag-upgrade at inaasahang naririto ang mga folder mo?</b> Ang isang unpacked na extension ay kinikilala sa pamamagitan ng path ng folder nito, kaya't ang bagong kopyang na-load mula sa ibang folder ay ibang extension na. Nasa lumang kopya pa rin ang mga folder mo. Sa halip, palitan ang mga file sa orihinal na folder at pindutin ang <b>I-reload</b> sa <code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Naka-off ang access sa lokal na file</b> — walang mase-save sa mismong file hangga't hindi ito naka-on. I-on ang <b>Payagan ang access sa mga file URL</b> sa <code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 folder ang kailangang ikonekta muli.</b> Ikonekta itong muli sa <b>Mga setting</b>, at piliin ang <b>Payagan sa bawat pagbisita</b> — ito lang ang pagpipiliang nananatili."
+  },
+  "noticeUnplaced": {
+    "message": "Nakalilista ang <b>$1</b> pero hindi pa nabubuksan — hindi kailanman sinasabi ng Chrome sa isang extension kung nasaan sa disk ang isang folder."
+  },
+  "findFolders": {
+    "message": "Hanapin ang mga folder ko"
+  },
+  "looking": {
+    "message": "Naghahanap…"
+  },
+  "findDeclined": {
+    "message": "<b>Walang problema.</b> Sa halip, buksan minsan mula sa Finder ang kahit anong dokumento sa $1 — mapapansin ito ng pahinang ito."
+  },
+  "foundFolder": {
+    "message": "Nakahanap ng $1 folder"
+  },
+  "foundFolders": {
+    "message": "Nakahanap ng $1 folder"
+  },
+  "foundNothing": {
+    "message": "Wala pang laman ang kasaysayan — magbukas ng isang dokumento mula sa Finder"
+  },
+  "setFoldersSub": {
+    "message": "Ang mga dokumentong nasa mga ito ay direktang nase-save pabalik sa file, nang hindi tinatanong kung saan. Saklaw ng isang folder ang lahat ng nasa loob nito."
+  },
+  "noneYet": {
+    "message": "Wala pa."
+  },
+  "savesInPlace": {
+    "message": "nagsi-save sa mismong file"
+  },
+  "needsReconnecting": {
+    "message": "kailangang ikonekta muli"
+  },
+  "reconnectTip": {
+    "message": "Hihingi ang Chrome ng pahintulot na ibalik ang folder na ito. Binibitawan ito ng “Huwag payagan”, at pagkatapos ay maghihintay ang Chrome ng kahit isang restart bago muling magtanong."
+  },
+  "remove": {
+    "message": "Alisin"
+  },
+  "removeTip": {
+    "message": "Binabawi ang access. Maaaring tandaan pa rin ng Chrome ang pahintulot, kaya't baka hindi na magtanong kapag ibinalik mo ang folder."
+  },
+  "setAccessTitle": {
+    "message": "Access sa lokal na file"
+  },
+  "setAccessSub": {
+    "message": "Hindi pinapayagan ng Chrome na i-on ito ng extension para sa sarili nito, at walang gumagana kung wala ito."
+  },
+  "stateOn": {
+    "message": "Naka-on"
+  },
+  "stateOff": {
+    "message": "Naka-off"
+  },
+  "stateUnknown": {
+    "message": "Hindi alam"
+  },
+  "accessOnNote": {
+    "message": "Nababasa ng bento/home ang mga pahinang binuksan mo mula sa disk."
+  },
+  "accessOffNote": {
+    "message": "Buksan ang chrome://extensions, hanapin ang bento/home, i-on ang “Payagan ang access sa mga file URL”."
+  },
+  "accessUnknownNote": {
+    "message": "Hindi ito iniuulat ng browser na ito. Kung nagtatanong pa rin ang pag-save, tingnan ito sa chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "Bersyon"
+  },
+  "setVersionUnpacked": {
+    "message": "Na-load ang kopyang ito nang unpacked, kaya't hindi ito kailanman i-a-update ng Chrome."
+  },
+  "setVersionStore": {
+    "message": "Na-install mula sa store, kaya't ina-update nito ang sarili."
+  },
+  "versionAvailable": {
+    "message": "Available na ang $1"
+  },
+  "versionUpToDate": {
+    "message": "pinakabago noong huling pagsusuri"
+  },
+  "versionManaged": {
+    "message": "pinananatiling bago ng browser"
+  },
+  "getIt": {
+    "message": "Kunin"
+  },
+  "checkNow": {
+    "message": "Tingnan ngayon"
+  },
+  "autoCheckPref": {
+    "message": "<b>Maghanap ng bagong bersyon kapag nagsimula ang browser.</b><br>Isang kahilingan sa bento.page para sa isang static na file. Wala itong ipinapadalang pagkakakilanlan, numero ng bersyon, o anuman tungkol sa mga dokumento mo — dito mismo nangyayari ang paghahambing. I-off ito at wala nang kahit anong hihilingin; gumagana pa rin ang <b>Tingnan ngayon</b>."
+  },
+  "expectedSha": {
+    "message": "Inaasahang SHA-256 ng zip: $1"
+  },
+  "setReachTitle": {
+    "message": "Ano ang naaabot nito"
+  },
+  "setReachSub": {
+    "message": "Ang mga folder lang sa itaas, at ang file lang na talagang pinagbuksan ng isang pahina. Walang ina-upload at walang binabasa saanman."
+  },
+  "updateAvailable": {
+    "message": "<b>Available na ang bento/home $1.</b> Na-load ang kopyang ito nang unpacked, kaya't hindi ito kailanman i-a-update ng Chrome."
+  },
+  "updateStep1": {
+    "message": "I-download ito mula sa GitHub"
+  },
+  "updateStep2": {
+    "message": "Palitan ang mga file <b>sa folder na pinag-load-an mo nito</b> — sa parehong folder, o ituturing ito ng Chrome na ibang extension at hindi kasama ang mga folder na binigyan mo ng pahintulot"
+  },
+  "updateStep3": {
+    "message": "Buksan ang <code>chrome://extensions</code> at pindutin ang <b>I-reload</b> sa bento/home"
+  },
+  "fetchingApp": {
+    "message": "Kinukuha ang $1…"
+  },
+  "createdIn": {
+    "message": "Nalikha ang $1 ($2) sa $3"
+  },
+  "intoFolder": {
+    "message": "sa $1"
+  },
+  "helpWhatTitle": {
+    "message": "Ang ginagawa ng bento/home"
+  },
+  "helpWhatSub": {
+    "message": "Ang dokumentong Bento ay iisang HTML file na dala ang sarili nitong editor. Kapag binuksan mismo mula sa disk, hindi ito pinapayagan ng browser na magsulat pabalik sa sarili nito — kaya't tinatanong ka ng bawat pag-save kung saan ilalagay. Ang bento/home ang nag-aalis ng tanong na iyon."
+  },
+  "tourSaveTitle": {
+    "message": "I-save sa mismong file"
+  },
+  "tourSaveBody": {
+    "message": "Direktang isinusulat ng ⌘S pabalik sa file na binuksan mo, walang dialog. Ganoon din ang daan ng autosave at ng mga update sa mismong file."
+  },
+  "tourFindTitle": {
+    "message": "Hanapin ang mga dokumento mo"
+  },
+  "tourFindBody": {
+    "message": "Bawat dokumentong Bento sa mga folder mo, kasama ang tunay nitong pamagat at larawan ng unang pahina. Saklaw ng paghahanap ang nakasulat sa loob nila."
+  },
+  "tourSwitchTitle": {
+    "message": "Maglipat habang nagtatrabaho"
+  },
+  "tourSwitchBody": {
+    "message": "Pindutin ang <kbd>Alt</kbd>+<kbd>B</kbd>, o mag-right-click sa loob ng isang dokumento, para sa panel sa tabi nito."
+  },
+  "tourNewTitle": {
+    "message": "Gumawa ng bago"
+  },
+  "tourNewBody": {
+    "message": "Kinukuha ng <b>+ Bagong dokumento</b> ang kasalukuyang release ng Slides, Spaces, o Dash at naglalagay ng bagong dokumento sa folder mo."
+  },
+  "helpNeedsTitle": {
+    "message": "Ang kailangan nito sa iyo"
+  },
+  "helpNeedsSub": {
+    "message": "Dalawang bagay, at pareho nilang wala sa kapangyarihan ng extension na ito na ayusin."
+  },
+  "helpFolder": {
+    "message": "Isang folder"
+  },
+  "helpFolderGranted": {
+    "message": "$1 ang pinahintulutan — nase-save sa mismong file ang mga dokumento sa loob"
+  },
+  "helpFolderNone": {
+    "message": "Hindi pa napipili. Saklaw ng isang malawak na folder ang lahat ng nasa loob nito."
+  },
+  "helpAccessOff": {
+    "message": "Naka-off. I-on ang <b>Payagan ang access sa mga file URL</b> sa <code>chrome://extensions</code> — walang extension ang makapag-o-on nito para sa sarili nito."
+  },
+  "helpAccessUnknown": {
+    "message": "Hindi ito iniuulat ng browser na ito. Kung nagtatanong pa rin ang pag-save, tingnan ito sa <code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "Naka-on — nababasa ng bento/home ang mga pahinang binuksan mo mula sa disk."
+  },
+  "helpNeverTitle": {
+    "message": "Ang hindi nito kailanman ginagawa"
+  },
+  "helpNeverSub": {
+    "message": "Nagbabasa at nagsusulat lang ito sa loob ng mga folder sa itaas, at sa file lang na talagang pinagbuksan ng isang pahina — ang browser ang nagsasabi kung alin, kaya't hindi maaaring pangalanan ng isang dokumento ang file ng iba. Walang anuman tungkol sa mga dokumento mo ang ina-upload kahit saan, at walang server ang extension na mapag-a-upload-an ng mga ito."
+  },
+  "helpAboutTitle": {
+    "message": "Tungkol"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · bahagi ng proyektong Bento · lisensyadong MIT"
+  },
+  "linkSource": {
+    "message": "Source sa GitHub"
+  },
+  "linkIssues": {
+    "message": "Mag-ulat ng problema"
+  },
+  "linkReleases": {
+    "message": "Mga release"
+  },
+  "primeMiddle": {
+    "message": "ang nananatili"
+  },
+  "primeNote": {
+    "message": "Gumagana rin ang dalawa pa, pero magtatanong muli ang Chrome — sa bawat restart para sa una, at pagkatapos ng paghihintay para sa huli."
+  },
+  "viewLayout": {
+    "message": "Kung paano ipinapakita ang mga dokumento"
+  },
+  "viewIcons": {
+    "message": "Mga icon"
+  },
+  "viewList": {
+    "message": "Listahan"
+  },
+  "close": {
+    "message": "Isara"
+  },
+  "setLangTitle": {
+    "message": "Wika"
+  },
+  "setLangSub": {
+    "message": "Kung anong wika ang ginagamit ng extension na ito. Karaniwang sumusunod ito sa browser."
+  },
+  "langAutomatic": {
+    "message": "Awtomatiko — sundan ang browser"
+  },
+  "setLangNote": {
+    "message": "Ang pangalan at paglalarawan mismo ng extension ay galing sa browser at hindi nagbabago."
+  },
+  "aboutPromo": {
+    "message": "Bago sa Bento? Makikita ang mga template, ang gallery at ang gabay sa pag-edit gamit ang AI sa $1 — o bigyan ito ng star sa $2."
+  },
+  "setThemeTitle": {
+    "message": "Anyo"
+  },
+  "setThemeSub": {
+    "message": "Ang setting ng browser ang default, hindi kinakailangan."
+  },
+  "themeAuto": {
+    "message": "Sundin ang browser"
+  },
+  "themeLight": {
+    "message": "Maliwanag"
+  },
+  "themeDark": {
+    "message": "Madilim"
+  },
+  "checking": {
+    "message": "Sinusuri…"
+  },
+  "surveyTitle": {
+    "message": "Hanapin kung nasaan ang mga dokumento mo"
+  },
+  "surveySub": {
+    "message": "Alam ng browser kung anong mga dokumentong Bento ang binuksan mo. Masasabi nito kung anong mga folder ang kinalalagyan."
+  },
+  "surveyDeclined": {
+    "message": "Walang problema — puwede mong idagdag nang manu-mano ang mga folder."
+  },
+  "surveyAllCovered": {
+    "message": "Lahat ng $1 dokumentong nakita ng browser na ito ay nasa folder nang naidagdag mo."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumento ang wala sa alinmang folder na idinagdag mo. $2 ang saklaw na."
+  },
+  "surveyCovers": {
+    "message": "saklaw ang $1"
+  },
+  "surveyAdd": {
+    "message": "Idagdag ang folder na ito…"
+  },
+  "surveyAdded": {
+    "message": "Naidagdag ang $1 — handa na ang mga dokumento rito"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Naidagdag ang $1, pero wala roon ang mga dokumento — magbukas ng isa mula sa Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "Ang mga dokumentong binuksan sa browser na ito lang ang makikita sa paraang ito."
+  }
+}

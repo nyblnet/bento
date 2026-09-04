@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Serves the tray/webext capability probes on TWO origins.
+// Serves the home/webext capability probes on TWO origins.
 //
 //   node scripts/probe-origins.mjs
 //   → open http://localhost:5301/probe/parent.html in YOUR OWN browser
@@ -19,7 +19,7 @@
 // without ever prompting, because a driven browser must not be able to hand out
 // filesystem write access. So an agent testing this gets `denied` no matter
 // what the truth is. That trap already produced two wrong conclusions during
-// this design (working/home-design.md §3.2). Only a human in a real browser
+// this design (working/design/home-design.md §3.2). Only a human in a real browser
 // window can answer it.
 
 import { createServer } from 'node:http'

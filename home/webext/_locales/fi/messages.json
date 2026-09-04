@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "Tallenna Bento-asiakirja takaisin avaamaasi tiedostoon kysymättä sijaintia."
+  },
+  "navAll": {
+    "message": "Kaikki asiakirjat"
+  },
+  "navFolders": {
+    "message": "Kansiot"
+  },
+  "navHelp": {
+    "message": "Ohje ja tietoja"
+  },
+  "navSettings": {
+    "message": "Asetukset"
+  },
+  "addFolder": {
+    "message": "+ Lisää kansio…"
+  },
+  "searchDocs": {
+    "message": "Hae asiakirjoista"
+  },
+  "searchDocsSlash": {
+    "message": "Hae asiakirjoista   /"
+  },
+  "sortTitle": {
+    "message": "Lajittele"
+  },
+  "sortRecent": {
+    "message": "Viimeksi muutettu"
+  },
+  "sortName": {
+    "message": "Nimi"
+  },
+  "sortFolder": {
+    "message": "Kansio"
+  },
+  "newDocument": {
+    "message": "+ Uusi asiakirja"
+  },
+  "browseAll": {
+    "message": "Selaa kaikkia"
+  },
+  "reconnectFolders": {
+    "message": "Yhdistä kansiot uudelleen"
+  },
+  "primeIntro": {
+    "message": "Chrome kysyy kohta. Valitse keskimmäinen vaihtoehto:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — kansio täytyy yhdistää uudelleen"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home täytyy yhdistää uudelleen"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome poisti kansion käyttöoikeuden. Ennen sen palauttamista jokainen tallennus kysyy, mihin tiedosto sijoitetaan."
+  },
+  "reconnect": {
+    "message": "Yhdistä uudelleen"
+  },
+  "ctxOpenPanel": {
+    "message": "Avaa bento/home -paneeli"
+  },
+  "panelEmpty": {
+    "message": "Kansioissasi ei ole vielä Bento-asiakirjoja."
+  },
+  "noMatches": {
+    "message": "Mikään ei vastaa hakua ”$1”"
+  },
+  "rowUnplacedTip": {
+    "message": "Avaa yksi asiakirja kansiosta $1 kerran Finderissa, niin kaikki siinä kansiossa avautuu täältä."
+  },
+  "encrypted": {
+    "message": "Salasanasuojattu"
+  },
+  "notSavedYet": {
+    "message": "Ei vielä tallennettu"
+  },
+  "fileAccessOffShort": {
+    "message": "Paikallisten tiedostojen käyttö on pois päältä"
+  },
+  "noFoldersYet": {
+    "message": "Ei vielä kansioita"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 kansio täytyy yhdistää uudelleen"
+  },
+  "statusOneFolder": {
+    "message": "$1 kansio · tallentaa paikalleen"
+  },
+  "statusFolders": {
+    "message": "$1 kansiota · tallentavat paikalleen"
+  },
+  "renewNotOffered": {
+    "message": "Chrome ei tarjoutunut palauttamaan sitä"
+  },
+  "renewTryAfterRestart": {
+    "message": "Yritä uudelleen käynnistettyäsi Chromen uudelleen"
+  },
+  "fetchingLatest": {
+    "message": "Haetaan uusinta Bentoa…"
+  },
+  "created": {
+    "message": "$1 luotu"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 voidaan lukea, mutta ei vielä avata — Chrome ei kerro laajennukselle, missä kansio levyllä sijaitsee. <b>Selaa kaikkia</b> löytää ne yhdellä napsautuksella."
+  },
+  "andMore": {
+    "message": " ja $1 muuta"
+  },
+  "agoJustNow": {
+    "message": "juuri nyt"
+  },
+  "agoMinutes": {
+    "message": "$1 min sitten"
+  },
+  "agoHour": {
+    "message": "$1 tunti sitten"
+  },
+  "agoHours": {
+    "message": "$1 tuntia sitten"
+  },
+  "agoDay": {
+    "message": "$1 päivä sitten"
+  },
+  "agoDays": {
+    "message": "$1 päivää sitten"
+  },
+  "searchScope": {
+    "message": "Haku katsoo otsikoita, tiedostonimiä, kansioita ja asiakirjojen sisällä olevia sanoja."
+  },
+  "folderEmpty": {
+    "message": "Tässä kansiossa ei ole vielä mitään"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Uusi asiakirja</b> luo tänne uuden."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home ei vielä tiedä, missä $1 on levyllä. Käytä ”Etsi kansioni” tai avaa siitä yksi asiakirja Finderissa kerran."
+  },
+  "cardRenamedTip": {
+    "message": "$1 on Bento-asiakirja toisella nimellä. Se avautuu täältä, mutta tallennus kysyy sijaintia — paikalleen tallennus tunnistaa vain tiedostot, joiden pääte on .bento.html."
+  },
+  "badgeRenamed": {
+    "message": "Nimenä .html eikä .bento.html — avautuu täältä, mutta tallennus kysyy sijaintia."
+  },
+  "menuOpen": {
+    "message": "Avaa"
+  },
+  "menuDuplicate": {
+    "message": "Monista"
+  },
+  "menuRename": {
+    "message": "Nimeä uudelleen…"
+  },
+  "menuCopyPath": {
+    "message": "Kopioi polku"
+  },
+  "duplicatedAs": {
+    "message": "Monistettu nimellä $1"
+  },
+  "renamePrompt": {
+    "message": "Nimeä asiakirja uudelleen"
+  },
+  "renamedTo": {
+    "message": "Nimettiin $1"
+  },
+  "pathCopied": {
+    "message": "Polku kopioitu"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — ei vielä avattu"
+  },
+  "setupTitle": {
+    "message": "Kaksi asiaa, ja olet valmis"
+  },
+  "setupLead": {
+    "message": "Sen jälkeen ⌘S kaksoisnapsautuksella avatussa asiakirjassa kirjoittaa suoraan takaisin tiedostoon — sijaintia ei kysytä enää koskaan."
+  },
+  "chooseFolder": {
+    "message": "Valitse kansio…"
+  },
+  "setupStep1": {
+    "message": "Valitse kansio, jossa asiakirjasi ovat"
+  },
+  "setupStep1Note": {
+    "message": "Yksi laaja kansio riittää yleensä — se kattaa kaiken sen sisällä."
+  },
+  "setupStep2": {
+    "message": "Ota paikallisten tiedostojen käyttö käyttöön"
+  },
+  "setupStep2Note": {
+    "message": "Kohdassa <code>chrome://extensions</code> → bento/home → <b>Salli tiedosto-URL-osoitteiden käyttö</b>. Chrome ei anna laajennuksen ottaa tätä käyttöön itse."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Päivititkö ja odotit kansioidesi olevan täällä?</b> Purettu laajennus tunnistetaan kansiopolustaan, joten toisesta kansiosta ladattu uusi kopio on eri laajennus. Kansiosi kuuluvat yhä vanhalle. Korvaa sen sijaan alkuperäisen kansion tiedostot ja paina <b>Lataa uudelleen</b> kohdassa <code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Paikallisten tiedostojen käyttö on pois päältä</b> — mitään ei tallenneta paikalleen ennen kuin se on päällä. Ota <b>Salli tiedosto-URL-osoitteiden käyttö</b> käyttöön kohdassa <code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 kansio täytyy yhdistää uudelleen.</b> Yhdistä se uudelleen kohdassa <b>Asetukset</b> ja valitse <b>Salli joka käynnillä</b> — ainoa vaihtoehto, joka kestää."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> voidaan luetella, mutta ei vielä avata — Chrome ei koskaan kerro laajennukselle, missä kansio levyllä sijaitsee."
+  },
+  "findFolders": {
+    "message": "Etsi kansioni"
+  },
+  "looking": {
+    "message": "Etsitään…"
+  },
+  "findDeclined": {
+    "message": "<b>Ei se mitään.</b> Avaa sen sijaan yksi asiakirja kansiosta $1 Finderissa kerran — tämä sivu huomaa sen."
+  },
+  "foundFolder": {
+    "message": "Löytyi $1 kansio"
+  },
+  "foundFolders": {
+    "message": "Löytyi $1 kansiota"
+  },
+  "foundNothing": {
+    "message": "Historiassa ei ole vielä mitään — avaa yksi asiakirja Finderissa"
+  },
+  "setFoldersSub": {
+    "message": "Näiden asiakirjat tallentuvat suoraan takaisin tiedostoon ilman sijaintikysymystä. Kansio kattaa kaiken sen sisällä."
+  },
+  "noneYet": {
+    "message": "Ei vielä yhtään."
+  },
+  "savesInPlace": {
+    "message": "tallentaa paikalleen"
+  },
+  "needsReconnecting": {
+    "message": "täytyy yhdistää uudelleen"
+  },
+  "reconnectTip": {
+    "message": "Chrome kysyy, palautetaanko tämä kansio. ”Älä salli” hylkää sen, ja sen jälkeen Chrome odottaa vähintään uudelleenkäynnistyksen ennen kuin kysyy uudelleen."
+  },
+  "remove": {
+    "message": "Poista"
+  },
+  "removeTip": {
+    "message": "Poistaa käyttöoikeuden. Chrome saattaa silti muistaa luvan, joten kansion lisääminen takaisin ei ehkä kysy uudelleen."
+  },
+  "setAccessTitle": {
+    "message": "Paikallisten tiedostojen käyttö"
+  },
+  "setAccessSub": {
+    "message": "Chrome ei anna laajennuksen ottaa tätä käyttöön itse, eikä mikään toimi ilman sitä."
+  },
+  "stateOn": {
+    "message": "Päällä"
+  },
+  "stateOff": {
+    "message": "Pois"
+  },
+  "stateUnknown": {
+    "message": "Tuntematon"
+  },
+  "accessOnNote": {
+    "message": "bento/home voi lukea sivuja, jotka avasit levyltä."
+  },
+  "accessOffNote": {
+    "message": "Avaa chrome://extensions, etsi bento/home ja ota käyttöön ”Salli tiedosto-URL-osoitteiden käyttö”."
+  },
+  "accessUnknownNote": {
+    "message": "Tämä selain ei kerro sitä. Jos tallennus yhä kysyy, tarkista se kohdassa chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "Versio"
+  },
+  "setVersionUnpacked": {
+    "message": "Tämä kopio ladattiin purettuna, joten Chrome ei koskaan päivitä sitä."
+  },
+  "setVersionStore": {
+    "message": "Asennettu kaupasta, joten se päivittää itsensä."
+  },
+  "versionAvailable": {
+    "message": "$1 on saatavilla"
+  },
+  "versionUpToDate": {
+    "message": "ajan tasalla viimeisimmän tarkistuksen mukaan"
+  },
+  "versionManaged": {
+    "message": "selain pitää ajan tasalla"
+  },
+  "getIt": {
+    "message": "Hae se"
+  },
+  "checkNow": {
+    "message": "Tarkista nyt"
+  },
+  "autoCheckPref": {
+    "message": "<b>Tarkista uusi versio, kun selain käynnistyy.</b><br>Yksi pyyntö osoitteeseen bento.page staattisesta tiedostosta. Se ei lähetä tunnisteita, versionumeroa eikä mitään asiakirjoistasi — vertailu tehdään täällä. Ota pois päältä, eikä mitään pyydetä koskaan; <b>Tarkista nyt</b> toimii silti."
+  },
+  "expectedSha": {
+    "message": "Zip-tiedoston odotettu SHA-256: $1"
+  },
+  "setReachTitle": {
+    "message": "Mihin tämä yltää"
+  },
+  "setReachSub": {
+    "message": "Vain yllä oleviin kansioihin ja vain siihen tiedostoon, josta sivu todella avattiin. Mitään ei lähetetä eikä mitään lueta muualta."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 on saatavilla.</b> Tämä kopio ladattiin purettuna, joten Chrome ei koskaan päivitä sitä."
+  },
+  "updateStep1": {
+    "message": "Lataa se GitHubista"
+  },
+  "updateStep2": {
+    "message": "Korvaa tiedostot <b>siinä kansiossa, josta latasit sen</b> — samassa kansiossa, tai Chrome pitää sitä eri laajennuksena eivätkä myönnetyt kansiosi seuraa mukana"
+  },
+  "updateStep3": {
+    "message": "Avaa <code>chrome://extensions</code> ja paina bento/homen kohdalla <b>Lataa uudelleen</b>"
+  },
+  "fetchingApp": {
+    "message": "Haetaan $1…"
+  },
+  "createdIn": {
+    "message": "Luotiin $1 ($2) kansioon $3"
+  },
+  "intoFolder": {
+    "message": "kansioon $1"
+  },
+  "helpWhatTitle": {
+    "message": "Mitä bento/home tekee"
+  },
+  "helpWhatSub": {
+    "message": "Bento-asiakirja on yksi HTML-tiedosto, joka kantaa oman editorinsa. Suoraan levyltä avattuna selain ei anna sen kirjoittaa takaisin itseensä — joten tallennus kysyy joka kerta sijaintia. bento/home poistaa tuon kysymyksen."
+  },
+  "tourSaveTitle": {
+    "message": "Tallenna paikalleen"
+  },
+  "tourSaveBody": {
+    "message": "⌘S kirjoittaa suoraan takaisin avaamaasi tiedostoon ilman valintaikkunaa. Automaattitallennus ja paikalleen tehdyt päivitykset kulkevat samaa reittiä."
+  },
+  "tourFindTitle": {
+    "message": "Löydä asiakirjasi"
+  },
+  "tourFindBody": {
+    "message": "Jokainen Bento-asiakirja kansioissasi, oikealla otsikollaan ja kuvalla ensimmäisestä sivusta. Haku kattaa myös sen, mitä niiden sisällä lukee."
+  },
+  "tourSwitchTitle": {
+    "message": "Vaihda työn lomassa"
+  },
+  "tourSwitchBody": {
+    "message": "Paina <kbd>Alt</kbd>+<kbd>B</kbd> tai napsauta asiakirjan sisällä hiiren oikealla — paneeli avautuu viereen."
+  },
+  "tourNewTitle": {
+    "message": "Tee uusi"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Uusi asiakirja</b> hakee Slidesin, Spacesin tai Dashin nykyisen julkaisun ja luo uuden asiakirjan kansioosi."
+  },
+  "helpNeedsTitle": {
+    "message": "Mitä se tarvitsee sinulta"
+  },
+  "helpNeedsSub": {
+    "message": "Kaksi asiaa, joita kumpaakaan tämä laajennus ei voi itse järjestää."
+  },
+  "helpFolder": {
+    "message": "Kansio"
+  },
+  "helpFolderGranted": {
+    "message": "$1 myönnetty — niiden sisällä olevat asiakirjat tallentuvat paikalleen"
+  },
+  "helpFolderNone": {
+    "message": "Ei vielä valittu. Yksi laaja kansio kattaa kaiken sen sisällä."
+  },
+  "helpAccessOff": {
+    "message": "Pois. Ota <b>Salli tiedosto-URL-osoitteiden käyttö</b> käyttöön kohdassa <code>chrome://extensions</code> — mikään laajennus ei voi ottaa tätä käyttöön itse."
+  },
+  "helpAccessUnknown": {
+    "message": "Tämä selain ei kerro sitä. Jos tallennus yhä kysyy, tarkista se kohdassa <code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "Päällä — bento/home voi lukea sivuja, jotka avasit levyltä."
+  },
+  "helpNeverTitle": {
+    "message": "Mitä se ei koskaan tee"
+  },
+  "helpNeverSub": {
+    "message": "Se lukee ja kirjoittaa vain yllä olevien kansioiden sisällä ja vain sen tiedoston, josta sivu todella avattiin — selain kertoo kumman, joten asiakirja ei voi nimetä jonkun toisen tiedostoa. Mitään asiakirjoistasi ei lähetetä minnekään, eikä laajennuksella ole palvelinta, jonne ne lähetettäisiin."
+  },
+  "helpAboutTitle": {
+    "message": "Tietoja"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · osa Bento-projektia · MIT-lisenssi"
+  },
+  "linkSource": {
+    "message": "Lähdekoodi GitHubissa"
+  },
+  "linkIssues": {
+    "message": "Ilmoita ongelmasta"
+  },
+  "linkReleases": {
+    "message": "Julkaisut"
+  },
+  "primeMiddle": {
+    "message": "se, joka kestää"
+  },
+  "primeNote": {
+    "message": "Kaksi muutakin toimivat, mutta Chrome kysyy uudelleen — ensimmäisessä joka käynnistyksellä ja viimeisessä odotusajan jälkeen."
+  },
+  "viewLayout": {
+    "message": "Miten asiakirjat näytetään"
+  },
+  "viewIcons": {
+    "message": "Kuvakkeet"
+  },
+  "viewList": {
+    "message": "Luettelo"
+  },
+  "close": {
+    "message": "Sulje"
+  },
+  "setLangTitle": {
+    "message": "Kieli"
+  },
+  "setLangSub": {
+    "message": "Millä kielellä tämä laajennus puhuu. Yleensä se seuraa selainta."
+  },
+  "langAutomatic": {
+    "message": "Automaattinen — seuraa selainta"
+  },
+  "setLangNote": {
+    "message": "Laajennuksen oma nimi ja kuvaus tulevat selaimesta eivätkä muutu."
+  },
+  "aboutPromo": {
+    "message": "Bento uutta sinulle? Mallit, galleria ja tekoälymuokkausopas löytyvät osoitteesta $1 — tai anna tähti palvelussa $2."
+  },
+  "setThemeTitle": {
+    "message": "Ulkoasu"
+  },
+  "setThemeSub": {
+    "message": "Selaimen asetus on oletus, ei vaatimus."
+  },
+  "themeAuto": {
+    "message": "Seuraa selainta"
+  },
+  "themeLight": {
+    "message": "Vaalea"
+  },
+  "themeDark": {
+    "message": "Tumma"
+  },
+  "checking": {
+    "message": "Tarkistetaan…"
+  },
+  "surveyTitle": {
+    "message": "Etsi missä asiakirjasi ovat"
+  },
+  "surveySub": {
+    "message": "Selain tietää, mitkä Bento-asiakirjat olet avannut. Se voi kertoa, missä kansioissa ne ovat."
+  },
+  "surveyDeclined": {
+    "message": "Ei se mitään — voit lisätä kansiot käsin."
+  },
+  "surveyAllCovered": {
+    "message": "Kaikki $1 asiakirjaa, jotka tämä selain on nähnyt, ovat jo lisätyssä kansiossa."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> asiakirjaa on kaikkien lisättyjen kansioiden ulkopuolella. $2 on jo katettu."
+  },
+  "surveyCovers": {
+    "message": "kattaa $1"
+  },
+  "surveyAdd": {
+    "message": "Lisää tämä kansio…"
+  },
+  "surveyAdded": {
+    "message": "$1 lisätty — sen asiakirjat ovat valmiina"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 lisätty, mutta asiakirjat eivät ole siellä — avaa yksi Finderissa kerran."
+  },
+  "surveyOnlySeen": {
+    "message": "Näin löytyvät vain tässä selaimessa avatut asiakirjat."
+  }
+}

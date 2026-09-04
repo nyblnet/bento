@@ -8,6 +8,7 @@ import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElem
 import { morphKey, paginates } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
+import { renderCodeInto } from './code'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -428,7 +429,23 @@ function tagSymbols(mathml: string): string {
     if (!txt) continue
     const n = seen.get(txt) ?? 0
     seen.set(txt, n + 1)
-    ;(leaf as HTMLElement).dataset.sym = `${txt}#${n}`
+      ; (leaf as HTMLElement).dataset.sym = `${txt}#${n}`
+  }
+  // Scaffolding gets its own key, on a SEPARATE attribute. A fraction bar and
+  // a radical are drawn by the mfrac/msqrt box itself, not by any token, so
+  // they carry no data-sym and used to be the one part of a formula that
+  // neither travelled nor faded — they were simply there from frame one while
+  // everything around them animated. They must never enter the symbol morph:
+  // transforming a container would move its children a second time, on top of
+  // their own travel. Keyed by tag occurrence so scaffolding that SURVIVES a
+  // step (the outer fraction of a rearranged equation) is recognised and left
+  // alone, while genuinely new scaffolding can be faded in.
+  const struct = new Map<string, number>()
+  for (const box of Array.from(tpl.content.querySelectorAll('mfrac, msqrt, mroot, menclose, mover, munder, munderover'))) {
+    const tag = box.tagName.toLowerCase()
+    const n = struct.get(tag) ?? 0
+    struct.set(tag, n + 1)
+      ; (box as HTMLElement).dataset.msx = `${tag}#${n}`
   }
   return tpl.innerHTML
 }
@@ -466,7 +483,25 @@ export function resolveMath(html: string): string {
   return out.replace(/\\\$/g, '$') // the escape has done its job
 }
 
-const ALLOWED_TAGS = new Set(['B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE'])
+/**
+ * The rich-text vocabulary a text element (and a table cell) may use.
+ *
+ * Every tag here is ATTRIBUTE-FREE by construction — the sanitizer strips all
+ * attributes unconditionally, so a tag can only ever mean what its name means.
+ * That is why formatting is expressed as semantic tags rather than styled
+ * spans: a `<span style>` route would need the sanitizer to start reasoning
+ * about declarations, and this format's whole defence is that it does not.
+ *
+ * The block tags (UL/OL/LI, H1/H2) are newer than the inline ones. An older
+ * shell that has not heard of them UNWRAPS them and keeps the words, so a deck
+ * with lists opens everywhere — it simply loses the bullets until the reader
+ * updates. Sanitizing happens at RENDER time, so that degradation is visual
+ * only; the model keeps the markup unless that box is edited in the old shell.
+ */
+const ALLOWED_TAGS = new Set([
+  'B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE',
+  'UL', 'OL', 'LI', 'H1', 'H2',
+])
 
 /** Keep pasted/edited rich text down to a safe inline subset. */
 export function sanitizeHtml(html: string): string {
@@ -543,8 +578,13 @@ function stripAllTags(html: string): string {
  * `importNode(n, true)` copied them wholesale.
  */
 export const SVG_TAGS = new Set([
-  // structure. `style` stays: it cannot execute, and scopeCss (hard-won detail
-  // #7) is what keeps its rules from leaking into every other svg on the page.
+  // structure. `style` stays: it cannot execute, its text is run through
+  // sanitizeSvgCss, and sanitizeSvg SCOPES it to the element instance (hard-won
+  // detail #7) so its rules cannot leak into every other svg on the page.
+  // That scoping is passed IN — the sanitizer has no element to name on its
+  // own. An earlier version of this comment credited scopeCss directly, which
+  // was false: scopeCss's only caller took `el.css`, the model field, and the
+  // markup path below was never scoped at all.
   'svg', 'g', 'defs', 'symbol', 'use', 'switch', 'desc', 'title', 'metadata', 'style', 'view', 'a',
   // shapes and text
   'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
@@ -780,7 +820,13 @@ export function sanitizeSvgCss(css: string): string {
  * `id` is deliberately never stripped: svg gradients and markers resolve
  * through document-global `url(#…)`, so an id sweep blanks the artwork.
  */
-export function sanitizeSvg(markup: string): DocumentFragment {
+/**
+ * `scope` is REQUIRED, not optional. The bug this signature exists to prevent
+ * was precisely a markup path that never got scoped, so an optional parameter
+ * would leave the leak one omission away and make the unsafe call the shorter
+ * one. There is one caller; costing it a selector is free.
+ */
+export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
   const out = document.createDocumentFragment()
   if (!markup) return out
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
@@ -828,7 +874,10 @@ export function sanitizeSvg(markup: string): DocumentFragment {
         // html parser really does build here: inside foreign content the
         // tokenizer stays in the data state, so `<svg><style><img src=x
         // onerror=…></style>` parses that img as an ELEMENT, not as css text.
-        el.textContent = sanitizeSvgCss(el.textContent ?? '')
+        // Scoped as well as sanitized. An svg <style> applies DOCUMENT-WIDE, so
+        // one diagram's rules reach every other svg on the page — the exact
+        // hazard scopeCss exists for, which until now only `el.css` got.
+        el.textContent = scopeCss(sanitizeSvgCss(el.textContent ?? ''), scope)
         continue
       }
       walk(el)
@@ -1002,6 +1051,11 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         if (ts.fill === 'none') inner.style.color = 'transparent'
       }
       inner.style.textAlign = el.align
+      // List markers need to know. `outside` hangs a marker at the box's start
+      // edge, which is only where it belongs when the line starts there too —
+      // centre or right the text and the markers stay pinned to the left,
+      // detached from the words they belong to (styles.css keys off this).
+      inner.dataset.align = el.align
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
@@ -1070,7 +1124,12 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         audio.controls = el.controls !== false
         audio.loop = !!el.loop
         audio.preload = 'metadata'
-        audio.dataset.autoplay = el.autoplay ? '1' : ''
+        // OMITTED, not emptied, when autoplay is off. Reveal decides autoplay
+        // with hasAttribute('data-autoplay') — presence, not value — so
+        // data-autoplay="" made it play a clip the author had switched OFF
+        // (reported 2026-08-22). Our own startMediaIn reads [data-autoplay="1"]
+        // and was never the problem; Reveal simply gets there first.
+        if (el.autoplay) audio.dataset.autoplay = '1'
         audio.style.cssText = 'width:100%;display:block' + inert
         const wrap = document.createElement('div')
         wrap.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center'
@@ -1092,7 +1151,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       video.muted = el.muted !== false
       video.playsInline = true
       video.preload = 'metadata'
-      video.dataset.autoplay = el.autoplay ? '1' : ''
+      if (el.autoplay) video.dataset.autoplay = '1' // presence is the flag — see the audio case
       video.style.cssText = `width:100%;height:100%;object-fit:${el.fit ?? 'contain'};border-radius:${radius}px;display:block;background:#0b0f14` + inert
       if (!el.src) {
         const ph = document.createElement('div')
@@ -1132,7 +1191,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // whatever the deck carried in a <script> or an onload — see sanitizeSvg.
       // The <img> branch above is inert already (an image is script-disabled),
       // which is why only this path changes.
-      node.appendChild(sanitizeSvg(markup))
+      node.appendChild(sanitizeSvg(markup, `[data-el-id="${CSS.escape(el.id)}"]`))
       const svg = node.querySelector('svg')
       if (svg) {
         svg.style.width = '100%'
@@ -1147,6 +1206,46 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
           svg.prepend(style)
         }
       }
+      break
+    }
+    case 'code': {
+      node.style.display = 'flex'
+      node.style.flexDirection = 'column'
+      node.style.justifyContent = VALIGN[el.valign]
+      // Clip at the ELEMENT box — the size the author chose — and never at the
+      // <pre> (see below). Code sets `white-space: pre`, so a long line does
+      // not wrap and would otherwise run across the slide over whatever sits
+      // beside it; bounding it to its own box keeps the author's layout
+      // contract. The box is normally far larger than the lines inside it,
+      // which is exactly the room a morphing token needs.
+      node.style.overflow = 'hidden'
+      const inner = document.createElement('pre')
+      inner.className = 'bento-text-inner'
+      inner.dir = 'auto'
+      inner.style.fontSize = `${el.fontSize}px`
+      inner.style.fontFamily = el.fontFamily || doc.theme.fontFamily
+      inner.style.textAlign = el.align
+      inner.style.lineHeight = String(el.lineHeight)
+      inner.style.width = '100%'
+      inner.style.color = el.color
+      inner.classList.add('bento-code')
+      inner.style.whiteSpace = 'pre'
+      inner.style.margin = '0'
+      // NOT overflow:hidden here. A <pre> is only as tall as its own lines,
+      // and a morphing token starts at its position on the OTHER slide —
+      // outside those bounds whenever the block gets shorter. Clipping at this
+      // level painted a travelling token 48px below the box and cut it away:
+      // it vanished for the first half of its journey and popped into view
+      // mid-flight, and only in the direction where the code got shorter,
+      // since the taller side had room for the same motion. That asymmetry is
+      // what made it read as a pairing bug rather than a painting one.
+      // Found in a screenshot — the DOM reported opacity 1, a correct 80px
+      // transform and a sensible rect, all true, all outside a clipping box.
+      if (!renderCodeInto(inner, el, doc)) {
+        // Fallback to unformatted text
+        inner.innerText = el.content
+      }
+      node.appendChild(inner)
       break
     }
   }

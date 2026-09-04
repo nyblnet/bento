@@ -175,6 +175,34 @@ function roundTrip(name: string, make: (s: TableSheet) => Patch | Patch[]) {
   ok(sheetOf(st.doc).cells!['amount:9'].v === 999,
     'the orphan is left alone — it is evidence, and deleting it here would hide the problem')
 }
+// THE SAME HAZARD, WORN BY A COMMENT. A thread anchors to colId + rid so it
+// survives a sort, which means an orphaned thread — its row deleted, the thread
+// kept as the record of the question — still NAMES rid 1. Handing rid 1 to the
+// next row inserted would silently re-point "is this the signed number?" at
+// somebody else's number, and the thread would look live again.
+{
+  const st = new Store(fresh())
+  const s0 = sheetOf(st.doc)
+  s0.comments = [{
+    id: 'cmt-1', author: 'Andy', at: '2026-08-06T00:00:00.000Z',
+    text: 'is this the signed number?',
+    anchor: { kind: 'cell', col: 'amount', rid: 12 },
+  }]
+  const p = insertRowsAt(s0, 4, 1)[0] as Extract<Patch, { op: 'insertRows' }>
+  ok(p.rids[0] === 13, 'a rid is minted above the rid an ORPHANED COMMENT names (12 → 13)')
+  // and with the watermark gone — an older file, or one that lost the stamp in
+  // a merge — the comment is the ONLY evidence rid 12 was ever used
+  const s1 = sheetOf(new Store(fresh()).doc)
+  s1.comments = s0.comments
+  delete s1.nextRid
+  ok(_internals.nextRidFloor(s1) === 13,
+    'and it holds with no nextRid stamp at all, where the comment is the only record that rid existed')
+  // a sheet-anchored thread names no rid and must not push the floor anywhere
+  const s2 = sheetOf(new Store(fresh()).doc)
+  s2.comments = [{ id: 'c2', author: 'A', at: '2026-08-06T00:00:00.000Z', text: 'hm', anchor: { kind: 'sheet' } }]
+  delete s2.nextRid
+  ok(_internals.nextRidFloor(s2) === 5, 'a sheet-anchored thread names no row, so it moves the floor not at all')
+}
 {
   // the durable path: a stamped water mark wins even when nothing else shows it
   const st = new Store(fresh())

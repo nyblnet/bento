@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "Bento 문서를 저장 위치를 묻는 창 없이 열었던 파일에 그대로 저장합니다."
+  },
+  "navAll": {
+    "message": "모든 문서"
+  },
+  "navFolders": {
+    "message": "폴더"
+  },
+  "navHelp": {
+    "message": "도움말 및 정보"
+  },
+  "navSettings": {
+    "message": "설정"
+  },
+  "addFolder": {
+    "message": "+ 폴더 추가…"
+  },
+  "searchDocs": {
+    "message": "문서 검색"
+  },
+  "searchDocsSlash": {
+    "message": "문서 검색   /"
+  },
+  "sortTitle": {
+    "message": "정렬"
+  },
+  "sortRecent": {
+    "message": "최근 변경순"
+  },
+  "sortName": {
+    "message": "이름"
+  },
+  "sortFolder": {
+    "message": "폴더"
+  },
+  "newDocument": {
+    "message": "+ 새 문서"
+  },
+  "browseAll": {
+    "message": "전체 보기"
+  },
+  "reconnectFolders": {
+    "message": "폴더 다시 연결"
+  },
+  "primeIntro": {
+    "message": "Chrome이 곧 묻습니다. 가운데 항목을 선택하세요:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — 다시 연결이 필요한 폴더가 있습니다"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home을 다시 연결해야 합니다"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome이 폴더 권한을 해제했습니다. 복구하기 전까지는 문서를 저장할 때마다 저장 위치를 묻습니다."
+  },
+  "reconnect": {
+    "message": "다시 연결"
+  },
+  "ctxOpenPanel": {
+    "message": "bento/home 패널 열기"
+  },
+  "panelEmpty": {
+    "message": "폴더에 아직 Bento 문서가 없습니다."
+  },
+  "noMatches": {
+    "message": "“$1”과(와) 일치하는 항목이 없습니다"
+  },
+  "rowUnplacedTip": {
+    "message": "$1의 문서를 Finder에서 한 번만 열면, 그 폴더 안의 모든 문서를 여기서 열 수 있습니다."
+  },
+  "encrypted": {
+    "message": "암호로 보호됨"
+  },
+  "notSavedYet": {
+    "message": "아직 저장되지 않음"
+  },
+  "fileAccessOffShort": {
+    "message": "로컬 파일 접근이 꺼져 있습니다"
+  },
+  "noFoldersYet": {
+    "message": "아직 폴더가 없습니다"
+  },
+  "foldersNeedReconnect": {
+    "message": "폴더 $1개를 다시 연결해야 합니다"
+  },
+  "statusOneFolder": {
+    "message": "폴더 $1개 · 제자리 저장"
+  },
+  "statusFolders": {
+    "message": "폴더 $1개 · 제자리 저장"
+  },
+  "renewNotOffered": {
+    "message": "Chrome이 복구를 제안하지 않았습니다"
+  },
+  "renewTryAfterRestart": {
+    "message": "Chrome을 다시 시작한 뒤 시도하세요"
+  },
+  "fetchingLatest": {
+    "message": "최신 Bento를 가져오는 중…"
+  },
+  "created": {
+    "message": "$1 만듦"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2은(는) 읽을 수 있지만 아직 열 수 없습니다 — Chrome은 폴더가 디스크의 어디에 있는지 확장 프로그램에 알려주지 않습니다. <b>전체 보기</b>로 한 번에 찾을 수 있습니다."
+  },
+  "andMore": {
+    "message": " 외 $1개"
+  },
+  "agoJustNow": {
+    "message": "방금"
+  },
+  "agoMinutes": {
+    "message": "$1분 전"
+  },
+  "agoHour": {
+    "message": "$1시간 전"
+  },
+  "agoHours": {
+    "message": "$1시간 전"
+  },
+  "agoDay": {
+    "message": "$1일 전"
+  },
+  "agoDays": {
+    "message": "$1일 전"
+  },
+  "searchScope": {
+    "message": "검색은 제목, 파일 이름, 폴더, 그리고 문서 안의 단어까지 살펴봅니다."
+  },
+  "folderEmpty": {
+    "message": "이 폴더에는 아직 아무것도 없습니다"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ 새 문서</b>로 여기에 하나 만드세요."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home은 $1이(가) 디스크의 어디에 있는지 아직 모릅니다. “내 폴더 찾기”를 쓰거나, 그 안의 문서를 Finder에서 한 번 여세요."
+  },
+  "cardRenamedTip": {
+    "message": "$1은(는) 다른 이름으로 저장된 Bento 문서입니다. 여기서 열리지만 저장할 때 위치를 묻습니다 — 제자리 저장은 .bento.html로 끝나는 파일만 인식합니다."
+  },
+  "badgeRenamed": {
+    "message": ".bento.html이 아니라 .html로 되어 있습니다 — 열리지만 저장할 때 위치를 묻습니다."
+  },
+  "menuOpen": {
+    "message": "열기"
+  },
+  "menuDuplicate": {
+    "message": "복제"
+  },
+  "menuRename": {
+    "message": "이름 바꾸기…"
+  },
+  "menuCopyPath": {
+    "message": "경로 복사"
+  },
+  "duplicatedAs": {
+    "message": "$1(으)로 복제했습니다"
+  },
+  "renamePrompt": {
+    "message": "문서 이름 바꾸기"
+  },
+  "renamedTo": {
+    "message": "$1(으)로 이름을 바꿨습니다"
+  },
+  "pathCopied": {
+    "message": "경로를 복사했습니다"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — 아직 열지 않음"
+  },
+  "setupTitle": {
+    "message": "두 가지만 하면 준비 끝"
+  },
+  "setupLead": {
+    "message": "이후로는 더블클릭해서 연 문서에서 ⌘S를 누르면 그 파일에 바로 저장됩니다 — 저장 위치를 묻는 일은 다시 없습니다."
+  },
+  "chooseFolder": {
+    "message": "폴더 선택…"
+  },
+  "setupStep1": {
+    "message": "문서가 있는 폴더를 선택하세요"
+  },
+  "setupStep1Note": {
+    "message": "넓은 폴더 하나면 대개 충분합니다 — 그 안의 모든 것이 포함됩니다."
+  },
+  "setupStep2": {
+    "message": "로컬 파일 접근을 켜세요"
+  },
+  "setupStep2Note": {
+    "message": "<code>chrome://extensions</code> → bento/home → <b>파일 URL에 대한 액세스 허용</b>. Chrome은 확장 프로그램이 이 설정을 스스로 켜도록 허용하지 않습니다."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>업그레이드했는데 폴더가 그대로 있을 줄 아셨나요?</b> 압축을 푼 확장 프로그램은 폴더 경로로 식별되므로, 다른 폴더에서 새 사본을 불러오면 별개의 확장 프로그램이 됩니다. 폴더 권한은 여전히 예전 것에 남아 있습니다. 대신 원래 폴더의 파일을 교체하고 <code>chrome://extensions</code>에서 <b>새로고침</b>을 누르세요."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>로컬 파일 접근이 꺼져 있습니다</b> — 켜기 전까지는 제자리 저장이 되지 않습니다. <code>chrome://extensions</code>에서 <b>파일 URL에 대한 액세스 허용</b>을 켜세요."
+  },
+  "noticeLapsed": {
+    "message": "<b>폴더 $1개를 다시 연결해야 합니다.</b> <b>설정</b>에서 다시 연결하고 <b>방문할 때마다 허용</b>을 선택하세요 — 유일하게 유지되는 선택지입니다."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b>은(는) 목록에는 나오지만 아직 열 수 없습니다 — Chrome은 폴더가 디스크의 어디에 있는지 확장 프로그램에 결코 알려주지 않습니다."
+  },
+  "findFolders": {
+    "message": "내 폴더 찾기"
+  },
+  "looking": {
+    "message": "찾는 중…"
+  },
+  "findDeclined": {
+    "message": "<b>괜찮습니다.</b> 대신 $1의 문서를 Finder에서 한 번 열어 보세요 — 이 페이지가 알아챕니다."
+  },
+  "foundFolder": {
+    "message": "폴더 $1개를 찾았습니다"
+  },
+  "foundFolders": {
+    "message": "폴더 $1개를 찾았습니다"
+  },
+  "foundNothing": {
+    "message": "기록에 아직 아무것도 없습니다 — Finder에서 문서를 하나 열어 보세요"
+  },
+  "setFoldersSub": {
+    "message": "여기 있는 문서는 저장 위치를 묻지 않고 파일에 바로 저장됩니다. 폴더는 그 안의 모든 것을 포함합니다."
+  },
+  "noneYet": {
+    "message": "아직 없습니다."
+  },
+  "savesInPlace": {
+    "message": "제자리 저장"
+  },
+  "needsReconnecting": {
+    "message": "다시 연결 필요"
+  },
+  "reconnectTip": {
+    "message": "Chrome이 이 폴더를 복구할지 묻습니다. “허용 안 함”을 누르면 해제되고, 그 뒤로는 다시 묻기까지 재시작 이상을 기다립니다."
+  },
+  "remove": {
+    "message": "제거"
+  },
+  "removeTip": {
+    "message": "접근 권한을 없앱니다. Chrome이 권한을 기억할 수 있으므로, 폴더를 다시 추가해도 묻지 않을 수 있습니다."
+  },
+  "setAccessTitle": {
+    "message": "로컬 파일 접근"
+  },
+  "setAccessSub": {
+    "message": "Chrome은 확장 프로그램이 이 설정을 스스로 켜도록 허용하지 않으며, 이것 없이는 아무것도 동작하지 않습니다."
+  },
+  "stateOn": {
+    "message": "켜짐"
+  },
+  "stateOff": {
+    "message": "꺼짐"
+  },
+  "stateUnknown": {
+    "message": "알 수 없음"
+  },
+  "accessOnNote": {
+    "message": "bento/home이 디스크에서 연 페이지를 읽을 수 있습니다."
+  },
+  "accessOffNote": {
+    "message": "chrome://extensions를 열고 bento/home을 찾아 “파일 URL에 대한 액세스 허용”을 켜세요."
+  },
+  "accessUnknownNote": {
+    "message": "이 브라우저는 상태를 알려주지 않습니다. 저장할 때 여전히 묻는다면 chrome://extensions에서 확인하세요."
+  },
+  "setVersionTitle": {
+    "message": "버전"
+  },
+  "setVersionUnpacked": {
+    "message": "이 사본은 압축을 풀어 불러왔으므로 Chrome이 절대 업데이트하지 않습니다."
+  },
+  "setVersionStore": {
+    "message": "스토어에서 설치되어 스스로 업데이트됩니다."
+  },
+  "versionAvailable": {
+    "message": "$1을(를) 사용할 수 있습니다"
+  },
+  "versionUpToDate": {
+    "message": "마지막 확인 기준 최신"
+  },
+  "versionManaged": {
+    "message": "브라우저가 최신 상태로 유지합니다"
+  },
+  "getIt": {
+    "message": "받기"
+  },
+  "checkNow": {
+    "message": "지금 확인"
+  },
+  "autoCheckPref": {
+    "message": "<b>브라우저를 시작할 때 새 버전을 확인합니다.</b><br>bento.page에 정적 파일 하나를 요청합니다. 식별자도, 버전 번호도, 문서에 관한 어떤 것도 보내지 않습니다 — 비교는 이곳에서 이루어집니다. 끄면 아무것도 요청하지 않으며, <b>지금 확인</b>은 그대로 동작합니다."
+  },
+  "expectedSha": {
+    "message": "zip의 예상 SHA-256: $1"
+  },
+  "setReachTitle": {
+    "message": "접근 범위"
+  },
+  "setReachSub": {
+    "message": "위의 폴더, 그리고 페이지가 실제로 열린 파일만입니다. 아무것도 업로드하지 않으며 다른 곳은 읽지 않습니다."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1을(를) 사용할 수 있습니다.</b> 이 사본은 압축을 풀어 불러왔으므로 Chrome이 절대 업데이트하지 않습니다."
+  },
+  "updateStep1": {
+    "message": "GitHub에서 내려받으세요"
+  },
+  "updateStep2": {
+    "message": "<b>불러왔던 그 폴더 안의</b> 파일을 교체하세요 — 같은 폴더여야 합니다. 그렇지 않으면 Chrome이 다른 확장 프로그램으로 취급해 허용한 폴더가 따라오지 않습니다"
+  },
+  "updateStep3": {
+    "message": "<code>chrome://extensions</code>를 열고 bento/home의 <b>새로고침</b>을 누르세요"
+  },
+  "fetchingApp": {
+    "message": "$1을(를) 가져오는 중…"
+  },
+  "createdIn": {
+    "message": "$3에 $1($2)을(를) 만들었습니다"
+  },
+  "intoFolder": {
+    "message": "$1에"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home이 하는 일"
+  },
+  "helpWhatSub": {
+    "message": "Bento 문서는 자체 편집기를 품은 하나의 HTML 파일입니다. 디스크에서 바로 열면 브라우저가 자기 자신에게 쓰는 것을 허용하지 않으므로, 저장할 때마다 위치를 묻습니다. bento/home은 그 질문을 없앱니다."
+  },
+  "tourSaveTitle": {
+    "message": "제자리 저장"
+  },
+  "tourSaveBody": {
+    "message": "⌘S를 누르면 대화상자 없이 열었던 파일에 바로 씁니다. 자동 저장과 제자리 업데이트도 같은 경로를 씁니다."
+  },
+  "tourFindTitle": {
+    "message": "문서 찾기"
+  },
+  "tourFindBody": {
+    "message": "폴더 안의 모든 Bento 문서를 실제 제목과 첫 페이지 그림과 함께 보여줍니다. 검색은 문서 안에 쓰인 내용까지 포함합니다."
+  },
+  "tourSwitchTitle": {
+    "message": "작업하며 전환"
+  },
+  "tourSwitchBody": {
+    "message": "<kbd>Alt</kbd>+<kbd>B</kbd>를 누르거나 문서 안에서 오른쪽 클릭하면 옆에 패널이 열립니다."
+  },
+  "tourNewTitle": {
+    "message": "새로 만들기"
+  },
+  "tourNewBody": {
+    "message": "<b>+ 새 문서</b>는 Slides, Spaces, Dash의 현재 릴리스를 가져와 폴더에 새 문서를 만듭니다."
+  },
+  "helpNeedsTitle": {
+    "message": "필요한 두 가지"
+  },
+  "helpNeedsSub": {
+    "message": "두 가지 모두 이 확장 프로그램이 스스로 처리할 수 없는 일입니다."
+  },
+  "helpFolder": {
+    "message": "폴더"
+  },
+  "helpFolderGranted": {
+    "message": "$1개 허용됨 — 그 안의 문서는 제자리에 저장됩니다"
+  },
+  "helpFolderNone": {
+    "message": "아직 선택하지 않았습니다. 넓은 폴더 하나면 그 안의 모든 것이 포함됩니다."
+  },
+  "helpAccessOff": {
+    "message": "꺼짐. <code>chrome://extensions</code>에서 <b>파일 URL에 대한 액세스 허용</b>을 켜세요 — 어떤 확장 프로그램도 이 설정을 스스로 켤 수 없습니다."
+  },
+  "helpAccessUnknown": {
+    "message": "이 브라우저는 상태를 알려주지 않습니다. 저장할 때 여전히 묻는다면 <code>chrome://extensions</code>에서 확인하세요."
+  },
+  "helpAccessOn": {
+    "message": "켜짐 — bento/home이 디스크에서 연 페이지를 읽을 수 있습니다."
+  },
+  "helpNeverTitle": {
+    "message": "결코 하지 않는 일"
+  },
+  "helpNeverSub": {
+    "message": "위의 폴더 안에서만, 그리고 페이지가 실제로 열린 파일만 읽고 씁니다 — 어느 파일인지는 브라우저가 알려주므로 문서가 남의 파일을 지목할 수 없습니다. 문서에 관한 어떤 것도 어디에도 업로드되지 않으며, 이 확장 프로그램에는 업로드할 서버 자체가 없습니다."
+  },
+  "helpAboutTitle": {
+    "message": "정보"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Bento 프로젝트의 일부 · MIT 라이선스"
+  },
+  "linkSource": {
+    "message": "GitHub 소스"
+  },
+  "linkIssues": {
+    "message": "문제 신고"
+  },
+  "linkReleases": {
+    "message": "릴리스"
+  },
+  "primeMiddle": {
+    "message": "계속 유지되는 항목"
+  },
+  "primeNote": {
+    "message": "나머지 둘도 동작하지만 Chrome이 다시 묻습니다 — 첫 번째는 재시작할 때마다, 마지막은 일정 시간이 지난 뒤에."
+  },
+  "viewLayout": {
+    "message": "문서 표시 방식"
+  },
+  "viewIcons": {
+    "message": "아이콘"
+  },
+  "viewList": {
+    "message": "목록"
+  },
+  "close": {
+    "message": "닫기"
+  },
+  "setLangTitle": {
+    "message": "언어"
+  },
+  "setLangSub": {
+    "message": "이 확장 프로그램이 사용하는 언어입니다. 보통은 브라우저를 따릅니다."
+  },
+  "langAutomatic": {
+    "message": "자동 — 브라우저를 따름"
+  },
+  "setLangNote": {
+    "message": "확장 프로그램 자체의 이름과 설명은 브라우저에서 오므로 바뀌지 않습니다."
+  },
+  "aboutPromo": {
+    "message": "Bento가 처음이신가요? 템플릿과 갤러리, AI 편집 가이드는 $1에 있습니다. $2에서 별을 눌러 주셔도 좋습니다."
+  },
+  "setThemeTitle": {
+    "message": "모양"
+  },
+  "setThemeSub": {
+    "message": "브라우저 설정은 기본값일 뿐, 강제 사항은 아닙니다."
+  },
+  "themeAuto": {
+    "message": "브라우저 설정 따르기"
+  },
+  "themeLight": {
+    "message": "밝게"
+  },
+  "themeDark": {
+    "message": "어둡게"
+  },
+  "checking": {
+    "message": "확인 중…"
+  },
+  "surveyTitle": {
+    "message": "문서가 어디에 있는지 찾기"
+  },
+  "surveySub": {
+    "message": "브라우저는 당신이 연 Bento 문서를 알고 있습니다. 어떤 폴더에 있는지 알려줄 수 있습니다."
+  },
+  "surveyDeclined": {
+    "message": "괜찮습니다. 폴더는 직접 추가할 수도 있습니다."
+  },
+  "surveyAllCovered": {
+    "message": "이 브라우저가 본 $1개의 문서는 모두 이미 추가한 폴더 안에 있습니다."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b>개의 문서가 추가한 어떤 폴더에도 없습니다. $2개는 이미 포함되어 있습니다."
+  },
+  "surveyCovers": {
+    "message": "$1개 포함"
+  },
+  "surveyAdd": {
+    "message": "이 폴더 추가…"
+  },
+  "surveyAdded": {
+    "message": "$1 추가됨 — 안의 문서를 쓸 수 있습니다"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1을(를) 추가했지만 문서는 그 안에 없습니다 — Finder에서 한 번 열어 주세요."
+  },
+  "surveyOnlySeen": {
+    "message": "이 방법으로는 이 브라우저에서 연 문서만 찾을 수 있습니다."
+  }
+}

@@ -1,12 +1,35 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// The About surface: what this file is, who wrote it, how it updates, what
-// language it speaks, and every way back out of it.
+// About: what THIS FILE is — its identity, its size, its properties, its
+// history, and the JSON it is made of.
 //
-// A self-contained document has nowhere else to put any of this. PLATFORM §6
-// (signed update), §7 (the JSON round-trip), §8 (viewer-scoped language) and
-// §3 (identity, and the one sanctioned way to change it) all need a surface,
-// and one dialog behind the wordmark is the whole of it.
+// A self-contained document has nowhere else to put any of this. PLATFORM §3
+// (identity, and the one sanctioned way to change it) and §7 (the JSON round
+// trip) both need a surface, and this is it.
+//
+// THE SPLIT, AND WHY. This dialog used to hold everything: what the file is,
+// its properties, updates, language, appearance, password, version history and
+// the JSON round trip — eight sections, 1361px tall in a 429px viewport, which
+// is three and a bit screens of scroll. Nothing in it was wrong; they were
+// simply not one thing, and a reader looking for "what language is this in"
+// scrolled past their own password to find it.
+//
+// The seam is one the codebase had already drawn. Language, theme and the
+// update check follow the READER and are kept in this browser (PLATFORM §8);
+// everything here travels in the FILE. So:
+//
+//   · settings.ts — language, appearance, updates, the network switch. Yours.
+//   · about.ts    — identity, properties, history, the document as JSON. The
+//                   file's.
+//   · saveui.ts   — the password, with the other decisions about how this
+//                   workbook gets WRITTEN (a template, a read-only copy, a
+//                   fork). It is not a fact about the file and it is not a
+//                   preference of the reader's: it is an instruction about
+//                   every save from now on, and rule 3 of that file already
+//                   reasons about encryption on every export path.
+//
+// The test for a new control is which of those three sentences it finishes.
+// There is no fourth.
 //
 // TWO THINGS HERE ARE NOT COSMETIC and are the reason this is a module rather
 // than a slab of markup in main.ts:
@@ -18,25 +41,31 @@
 //     `planReplace` below is the fix.
 //   · THE DIALOG SITS INSIDE TWO DOCUMENT-LEVEL HANDLERS. main.ts routes bare
 //     keystrokes into the grid and sniffs every paste for CSV; both would fire
-//     while someone is typing an author name or pasting JSON in here.
+//     while someone is typing an author name or pasting JSON in here. Both are
+//     stopped in dialog.ts, for both surfaces at once.
 
-import './about.css'
-import {
-  APP_VERSION, applyUpdate, applyUpdateInPlace, canUpdateInPlace, checkForUpdates,
-  offlineEnabled, type ReleaseInfo,
-} from '../../kernel/src/update.ts'
-import {
-  canWriteInPlace, isEncryptionActive, openedFileName, saveFile, setEncryptionPassword,
-} from '../../kernel/src/save.ts'
-import {
-  addVersion, clearRecovery, clearVersions, listVersions,
-} from '../../kernel/src/autosave.ts'
-import { t, locale, localeChoices, setLocale } from './i18n.ts'
-import { docBudget, docBytes, parseDoc, rowCount, type DashDoc, type DocMeta } from './model.ts'
-import type { Store } from './store.ts'
+import { openDialog } from './dialog.ts'
+import { openSettings, updateWaiting, type SettingsHooks } from './settings.ts'
+import { APP_VERSION } from '../../kernel/src/update.ts'
+import { canWriteInPlace, isEncryptionActive, openedFileName } from '../../kernel/src/save.ts'
+import { addVersion, listVersions } from '../../kernel/src/autosave.ts'
+// CIRCULAR, DELIBERATELY, and safe: recovery.ts imports `planReplace` from
+// here. Both directions are used only inside function bodies — nothing at
+// the time either is called, under Node's loader and Vite's bundler alike.
+// The alternative was a third module for one banner, or a hook wired through
+// main.ts that a future edit could quietly forget to pass, which would put the
+// two restore paths straight back into disagreeing about reversibility.
+import { offerUndoRestore } from './recovery.ts'
+import { t } from './i18n.ts'
+import { docBudget, docBytes, parseDoc, rowCount, type DashDoc, type DocMeta , docForExport } from './model.ts'
 
-export interface AboutHooks {
-  store: Store
+// The update check and the theme moved to settings.ts with the surface that
+// shows them. They are re-exported because main.ts calls `checkAtLaunch` from
+// here — that import is boot code owned by another module, and a rename that
+// buys nothing is a merge conflict that buys nothing.
+export { shouldCheckAtLaunch, checkAtLaunch, openSettings } from './settings.ts'
+
+export interface AboutHooks extends SettingsHooks {
   /** The sheet the grid is showing. Not derivable here — the grid owns it. */
   showingSheet: () => string
   /** Point the grid at another sheet (and repaint it). */
@@ -102,6 +131,12 @@ const newDocId = (): string =>
  * The docId keys autosave recovery and the local version timeline, so a
  * duplicate that kept it would inherit the original's history and overwrite
  * its recovery snapshot — two files racing to restore each other's work.
+ *
+ * THE ONE COPY OF THIS RULE. About used to offer "Duplicate as new workbook…"
+ * beside the Save menu's "Save as new workbook…", which was the same fork
+ * written twice — and the two spellings had already drifted (the menu's kept
+ * `template: true`, so a fork of a template was a template). The button is gone
+ * from the dialog; this function stayed, and the menu calls it.
  */
 export function duplicateWorkbook(doc: DashDoc, docId: string = newDocId()): DashDoc {
   const clone = JSON.parse(JSON.stringify(doc)) as DashDoc
@@ -137,92 +172,6 @@ export function workbookStats(doc: DashDoc): WorkbookStats {
   return { sheets: doc.sheets.length, tables, rows: rowCount(doc), columns, bytes: docBytes(doc) }
 }
 
-// --- theme: a VIEWER preference, never the document's --------------------------
-//
-// The same shape as story.ts's reduced-motion switch and the interface
-// language: this is ONE PERSON's preference about their own screen, so it
-// lives in localStorage and never enters the format (PLATFORM §8). Two people
-// opening the same workbook may sit in different themes exactly as they may
-// read it in different languages, and a file that carried a theme would be a
-// file that changed everyone's screen because of what one author preferred.
-//
-// `doc.theme` in model.ts is a DIFFERENT thing and must not be confused with
-// this: that is the document's own palette, it travels in the file, and it
-// colours the charts and the static preview. Nothing here reads or writes it.
-//
-// THE MECHANISM IS A TRANSIENT <style>, AND IT HAD TO BE. The obvious
-// implementation — `data-theme` on <html>, matched by `:root[data-theme=…]` in
-// styles.css — QUIETLY WRITES THE PREFERENCE INTO EVERY SAVED FILE.
-// `capturePristine()` (kernel/src/save.ts) clones the LIVE document at boot, so
-// anything sitting on the root element by then is in the shell every ⌘S
-// produces: measured, `bento.serialize()` came back with
-// `<html lang="en" data-theme="light">`, and that file would then force one
-// reader's choice on everyone who opened it. Exactly the bug this whole design
-// exists to avoid, arriving through the back door.
-//
-// A node carrying `data-bento-transient` is stripped from every serialized
-// shell (kernel save.ts TRANSIENT_SELECTOR) — the same mechanism the
-// compressed shell uses for its inflated stylesheet. So the override is a
-// <style> element carrying that attribute, and it declares `color-scheme`
-// rather than any colour: styles.css writes the palette as `light-dark()`
-// pairs, which resolve against the used `color-scheme`, so pinning that one
-// property flips every token at once. 'auto' REMOVES the element — the absence
-// of an override is what "follow the OS" means.
-//
-// `:root:root` for specificity (0,2,0), not `!important` and not a reliance on
-// document order: this <style> is appended at module load, while the app's own
-// stylesheet arrives from the deflate loader in the built shell and from Vite's
-// injector in dev, and those two orders are not the same.
-//
-// --bar-opacity rides along because `light-dark()` is colour-only; see the
-// note beside it in styles.css.
-
-export type ThemePref = 'auto' | 'light' | 'dark'
-
-const THEME_KEY = 'bento-theme'
-const THEME_STYLE_ID = 'dx-theme'
-
-/** The dark ground's data-bar opacity, kept in step with styles.css. */
-const BAR_OPACITY: Record<'light' | 'dark', string> = { light: '0.55', dark: '0.45' }
-
-export function readThemePref(): ThemePref {
-  try {
-    const v = localStorage.getItem(THEME_KEY)
-    return v === 'light' || v === 'dark' ? v : 'auto'
-  } catch { return 'auto' }
-}
-
-export function applyTheme(pref: ThemePref = readThemePref()): void {
-  const existing = document.getElementById(THEME_STYLE_ID)
-  if (pref === 'auto') { existing?.remove(); return }
-  const style = existing ?? document.createElement('style')
-  style.id = THEME_STYLE_ID
-  // Never let this reach a saved file (see above). Set before the node is in
-  // the document, so there is no window in which an unmarked style exists.
-  style.setAttribute('data-bento-transient', '')
-  style.textContent =
-    `:root:root{color-scheme:${pref};--bar-opacity:${BAR_OPACITY[pref]}}`
-  if (!existing) document.head.append(style)
-}
-
-export function setThemePref(pref: ThemePref): void {
-  try {
-    if (pref === 'auto') localStorage.removeItem(THEME_KEY)
-    else localStorage.setItem(THEME_KEY, pref)
-  } catch { /* private mode — the choice still holds for this session */ }
-  applyTheme(pref)
-}
-
-// AT MODULE LOAD, and deliberately not from `mountAbout`: main.ts imports this
-// module while it is booting and mounts About near the END of that boot, so
-// waiting for the hook would paint the whole workspace in the wrong theme
-// first. Here the rule lands before the app is built and while the splash is
-// still covering the screen — which is also what lets the splash itself follow
-// an explicit choice (index.html gives it `light-dark()` colours and nothing
-// else). Guarded because scripts/test-dash-about.ts imports this module in
-// Node, where there is no document to touch.
-if (typeof document !== 'undefined') applyTheme()
-
 // --- the local version timeline ---------------------------------------------
 
 /** Roughly one kept version per this much editing. Slides' number. */
@@ -248,72 +197,44 @@ export async function rememberVersion(doc: DashDoc): Promise<void> {
 // --- the dialog ---------------------------------------------------------------
 
 /** Wire the ways in. The wordmark and the version chip are already in the top
- *  bar and neither does anything else, which is how slides does it too. */
+ *  bar and neither does anything else, which is how slides does it too.
+ *
+ *  THE CHIP GOES TO SETTINGS, not here. It reads `v0.3.0`, and when the launch
+ *  check finds something it reads `v0.3.0 → v0.4.0` — the question it raises is
+ *  "am I running the newest app", which is now a Settings question. The ⓘ
+ *  button and the mark, which say *this workbook*, open this dialog. That is
+ *  the whole of the promise that you can tell which surface holds what from
+ *  the name of the thing you clicked.
+ *
+ *  A `[data-act="settings"]` button is wired if the top bar has one. It is
+ *  optional because the top bar is another module's, and About's own footer
+ *  reaches Settings either way. */
 export function mountAbout(app: HTMLElement, hooks: AboutHooks): void {
-  for (const el of app.querySelectorAll<HTMLElement>('.dx-mark, .dx-ver')) {
+  const arm = (el: HTMLElement, title: string, open: () => void) => {
     el.dataset.about = '1'
     el.tabIndex = 0
     el.setAttribute('role', 'button')
-    el.title = t('About this workbook')
-    el.addEventListener('click', () => openAbout(hooks))
+    el.title = title
+    el.addEventListener('click', open)
     el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAbout(hooks) }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
     })
+  }
+  for (const el of app.querySelectorAll<HTMLElement>('.dx-mark')) {
+    arm(el, t('About this workbook'), () => openAbout(hooks))
+  }
+  for (const el of app.querySelectorAll<HTMLElement>('.dx-ver')) {
+    arm(el, t('Settings — language, appearance and updates'), () => openSettings(hooks))
+  }
+  for (const el of app.querySelectorAll<HTMLElement>('[data-act="settings"]')) {
+    el.addEventListener('click', () => openSettings(hooks))
   }
 }
 
 export function openAbout(hooks: AboutHooks): void {
   const { store } = hooks
-  document.querySelector('.dx-about-back')?.remove()
-
-  const back = document.createElement('div')
-  back.className = 'dx-about-back'
-  const card = document.createElement('div')
-  card.className = 'dx-about'
-  card.setAttribute('role', 'dialog')
-  card.setAttribute('aria-modal', 'true')
-  card.setAttribute('aria-label', t('About this workbook'))
-  const close = () => back.remove()
-
-  // --- small builders
-  const h = (label: string) => {
-    const n = document.createElement('h2')
-    n.textContent = label
-    return n
-  }
-  const note = (text: string) => {
-    const n = document.createElement('p')
-    n.className = 'dx-about-note'
-    n.textContent = text
-    return n
-  }
-  const value = (text: string) => {
-    const n = document.createElement('span')
-    n.className = 'dx-about-val'
-    n.textContent = text
-    return n
-  }
-  const row = (label: string, node: HTMLElement) => {
-    const r = document.createElement('div')
-    r.className = 'dx-about-row'
-    const s = document.createElement('span')
-    s.textContent = label
-    r.append(s, node)
-    return r
-  }
-  const button = (label: string, fn: () => void) => {
-    const b = document.createElement('button')
-    b.className = 'dx-btn'
-    b.textContent = label
-    b.addEventListener('click', fn)
-    return b
-  }
-  const actions = (...nodes: HTMLElement[]) => {
-    const wrap = document.createElement('div')
-    wrap.className = 'dx-about-actions'
-    wrap.append(...nodes)
-    return wrap
-  }
+  const d = openDialog(t('About this workbook'))
+  const { card, note, close } = d
 
   // --- what this is ---------------------------------------------------------
   const stats = workbookStats(store.doc)
@@ -323,16 +244,16 @@ export function openAbout(hooks: AboutHooks): void {
     'bento/dash {version} · {sheets} sheet(s), {rows} row(s), {columns} column(s). The workbook, the grid and the formula engine are all in this one file.',
     { version: APP_VERSION, sheets: stats.sheets, rows: stats.rows, columns: stats.columns },
   )
-  card.append(h(t('This file')), lede)
+  card.append(d.h(t('This file')), lede)
 
   const opened = openedFileName()
-  if (opened) card.append(row(t('File'), value(opened)))
-  card.append(row(t('Size'), value(t('{size} of a {budget} budget', {
+  if (opened) card.append(d.row(t('File'), d.value(opened)))
+  card.append(d.row(t('Size'), d.value(t('{size} of a {budget} budget', {
     size: bytes(stats.bytes), budget: bytes(docBudget(canWriteInPlace())),
   }))))
   // The docId is the identity every restore, recovery and future merge keys
   // off, and the only place a reader can see it is here.
-  card.append(row(t('Document id'), value(store.doc.docId ?? t('(none — this workbook has no id)'))))
+  card.append(d.row(t('Document id'), d.value(store.doc.docId ?? t('(none — this workbook has no id)'))))
   if (!canWriteInPlace()) {
     card.append(note(t('This browser cannot write back to the file, so every save makes a new copy. Chrome and Edge on a computer can save in place.')))
   }
@@ -347,7 +268,7 @@ export function openAbout(hooks: AboutHooks): void {
   // the sheet except setTitle, and faking one (commit a setTitle with the
   // current title) would put an entry in the undo stack whose undo visibly does
   // nothing. Better a property that ⌘Z ignores than a ⌘Z that lies.
-  card.append(h(t('Document properties')))
+  card.append(d.h(t('Document properties')))
   const setMeta = (key: string, v: string) => {
     if (store.readOnly) return
     const meta: DocMeta = store.doc.meta ?? (store.doc.meta = {})
@@ -370,140 +291,19 @@ export function openAbout(hooks: AboutHooks): void {
     input.value = String(store.doc.meta?.[key] ?? '')
     input.disabled = store.readOnly
     input.addEventListener('change', () => setMeta(key, input.value.trim()))
-    card.append(row(label, input))
+    card.append(d.row(label, input))
   }
   // The title is edited in the top bar and only there — a second field for it
   // here would have to be kept in step with that input, and the loser of that
   // race silently overwrites the winner.
   card.append(note(t('Properties travel in the file. The title is edited in the top bar.')))
 
-  // --- updates --------------------------------------------------------------
-  card.append(h(t('Updates')))
-  const upStatus = note(t('An update is verified before anything is rewritten: the release manifest is signed, and its signature is checked against a key inside this file.'))
-  card.append(upStatus)
-  const upActions = actions()
-  card.append(upActions)
-  upActions.append(button(t('Check for updates'), () => {
-    if (offlineEnabled()) {
-      upStatus.textContent = t('Offline mode is on, so nothing was contacted.')
-      return
-    }
-    upStatus.textContent = t('Checking…')
-    void checkForUpdates().then((res) => {
-      if (res.status === 'current') {
-        upStatus.textContent = t('You have the newest version ({v}).', { v: APP_VERSION })
-        return
-      }
-      if (res.status !== 'update') {
-        upStatus.textContent = t('Could not check for updates: {why}', { why: res.message })
-        return
-      }
-      const rel: ReleaseInfo = res.release
-      upStatus.textContent = t('Version {v} is available.', { v: rel.version })
-      upActions.append(button(t('Update this file'), () => {
-        upStatus.textContent = t('Downloading and verifying…')
-        // Two shapes, and the difference is worth stating because one of them
-        // leaves the file on disk untouched and the other does not.
-        const run = canUpdateInPlace()
-          ? applyUpdateInPlace(rel, store.doc).then((ok) => ok
-            ? t('Updated. A backup of the old version was downloaded beside it — reload to run {v}.', { v: rel.version })
-            : t('Cancelled — nothing was changed.'))
-          : applyUpdate(rel, store.doc).then(() =>
-            t('Downloaded. Open the new file — this one is unchanged.'))
-        void run
-          .then((msg) => { upStatus.textContent = msg })
-          .catch((err: unknown) => {
-            upStatus.textContent = t('The update was refused: {why}', {
-              why: err instanceof Error ? err.message : String(err),
-            })
-          })
-      }))
-    })
-  }))
-
-  // --- language -------------------------------------------------------------
-  card.append(h(t('Language')))
-  const choices = localeChoices()
-  const sel = document.createElement('select')
-  for (const c of choices) {
-    const o = document.createElement('option')
-    o.value = c.code
-    o.textContent = c.label
-    if (c.code === locale()) o.selected = true
-    sel.append(o)
-  }
-  sel.addEventListener('change', () => {
-    setLocale(sel.value)
-    close()
-    // NOT a repaint: main.ts builds the top bar, the grid chrome and the status
-    // bar from one template string with no way back in, so there is nothing to
-    // call. Menus, dialogs and findings built after this point are localized;
-    // the chrome catches up on the next open.
-    openAbout(hooks)
-  })
-  card.append(row(t('Interface language'), sel))
-  card.append(note(choices.length > 1
-    // the same rule as slides and spaces: language follows the READER
-    ? t('Language follows whoever opens the file. It is never written into the document, so a workbook reads in each reader’s own language. The rest of the interface catches up next time this file is opened.')
-    : t('Only English so far. Language follows whoever opens the file and is never written into the document.')))
-
-  // --- appearance -----------------------------------------------------------
-  // Beside Language, because it is the same KIND of setting: both follow the
-  // reader, neither is in the file. Applied live — the palette is custom
-  // properties, so the running app re-resolves without a rebuild, and unlike
-  // the language picker this one does not have to close and reopen the dialog.
-  card.append(h(t('Appearance')))
-  const themes: Array<[ThemePref, string]> = [
-    ['auto', t('Match my system')],
-    ['light', t('Light')],
-    ['dark', t('Dark')],
-  ]
-  const themeSel = document.createElement('select')
-  const current = readThemePref()
-  for (const [v, label] of themes) {
-    const o = document.createElement('option')
-    o.value = v
-    o.textContent = label
-    if (v === current) o.selected = true
-    themeSel.append(o)
-  }
-  themeSel.addEventListener('change', () => setThemePref(themeSel.value as ThemePref))
-  card.append(row(t('Theme'), themeSel))
-  card.append(note(t('The theme follows whoever opens the file and is kept in this browser only — it is never written into the workbook, so one file can be light on your screen and dark on someone else’s.')))
-
-  // --- password -------------------------------------------------------------
-  card.append(h(t('Password')))
-  const pwNote = note(isEncryptionActive()
-    ? t('This workbook is encrypted. Every save stays encrypted.')
-    : t('A password encrypts the workbook inside the file. There is no recovery — lose it and the data is gone.'))
-  card.append(pwNote)
-  card.append(actions(button(
-    isEncryptionActive() ? t('Remove password…') : t('Set a password…'),
-    () => {
-      if (isEncryptionActive()) {
-        if (!confirm(t('Remove the password? The next save writes the workbook in the clear.'))) return
-        setEncryptionPassword(null)
-        pwNote.textContent = t('Password removed. Save to write the workbook unencrypted.')
-        return
-      }
-      const pw = prompt(t('Choose a password. There is no way to recover it.'))
-      if (!pw) return
-      setEncryptionPassword(pw)
-      // Snapshots written BEFORE this moment are plaintext copies of the very
-      // thing now being encrypted, sitting in IndexedDB. Both stores: the
-      // single recovery snapshot and the whole version timeline.
-      void clearRecovery(store.doc.docId)
-      void clearVersions(store.doc.docId)
-      pwNote.textContent = t('Password set. Save to write the workbook encrypted, and keep the password somewhere safe.')
-    },
-  )))
-
   // --- version history ------------------------------------------------------
-  card.append(h(t('Version history')))
+  card.append(d.h(t('Version history')))
   const versions = document.createElement('div')
   versions.className = 'dx-about-vers'
   card.append(versions)
-  card.append(note(t('Versions are kept in this browser only — never in the file, never online. Restoring replaces the whole workbook and cannot be undone.')))
+  card.append(note(t('Versions are kept in this browser only — never in the file, never online. Restoring replaces the whole workbook, and offers one undo.')))
   void listVersions(store.doc.docId).then((list) => {
     if (!list.length) {
       versions.replaceChildren(note(t('No versions kept yet — they accumulate as you edit.')))
@@ -513,10 +313,11 @@ export function openAbout(hooks: AboutHooks): void {
       const b = document.createElement('button')
       b.className = 'dx-about-ver'
       b.disabled = store.readOnly
-      const when = document.createElement('span')
-      when.textContent = new Date(snap.at).toLocaleString([], {
+      const stamp = new Date(snap.at).toLocaleString([], {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      }) + (i === 0 ? ` · ${t('most recent')}` : '')
+      })
+      const when = document.createElement('span')
+      when.textContent = stamp + (i === 0 ? ` · ${t('most recent')}` : '')
       const doIt = document.createElement('span')
       doIt.textContent = t('Restore')
       b.append(when, doIt)
@@ -525,43 +326,55 @@ export function openAbout(hooks: AboutHooks): void {
         // trusted: it may predate an id repair, or a sheet this build refuses.
         const res = parseDoc(snap.json)
         if (!res.ok) { alert(t('That version could not be read.')); return }
-        if (!confirm(t('Restore this version? The current workbook is replaced and this cannot be undone.'))) return
-        if (replaceWorkbook(hooks, res.doc)) close()
-        else alert(t('That version has no table sheet to show.'))
+        // Held BEFORE the swap: `replaceDoc` empties both undo stacks, so this
+        // object is the only route back to the workbook on screen right now.
+        const before = store.doc
+        if (!replaceWorkbook(hooks, res.doc)) {
+          alert(t('That version has no table sheet to show.'))
+          return
+        }
+        close()
+        // THE SAME OFFER THE RECOVERY BANNER MAKES, from the same function.
+        // This was a `confirm()` reading "this cannot be undone" — which was a
+        // second answer to a question the app had already answered one way, and
+        // the weaker one: it asks BEFORE, when the reader cannot yet see what
+        // they would be agreeing to, instead of handing them a way back AFTER,
+        // when they can.
+        offerUndoRestore(hooks, before, t('Restored the version from {when}.', { when: stamp }))
       })
       return b
     }))
   })
 
   // --- ways out -------------------------------------------------------------
-  card.append(h(t('Take it elsewhere')))
+  //
+  // TWO BUTTONS NOW, not five. This section used to carry "Save a copy…" and
+  // "Duplicate as new workbook…" as well, both of which the Save menu already
+  // offers — "Save a copy…" under the identical label, and the fork as "Save as
+  // new workbook…". Two doors to one action in one app is how they drift, and
+  // these two had: the menu's fork kept `template: true` and About's did not.
+  // The Save menu keeps them (it is where a reader looks for a file to come out
+  // of the app, and it handles the released file handle and the size
+  // confirmation properly); what stayed here is the thing that is NOT a save at
+  // all — the document as text, for an AI or another tool.
+  card.append(d.h(t('Take it elsewhere')))
   const outNote = note(t('The whole workbook is plain JSON inside this file — copy it into any tool or AI, and bring the edited JSON back.'))
-  const replaceBtn = button(t('Replace from JSON…'), () => openPaste())
-  const duplicateBtn = button(t('Duplicate as new workbook…'), () => {
-    // Identity fork, and this window BECOMES the copy: the save below points
-    // ⌘S at the new file, so leaving the old document loaded would mean the
-    // next save wrote the ORIGINAL workbook into it.
-    const clone = duplicateWorkbook(store.doc)
-    if (!replaceWorkbook(hooks, clone)) return
-    close()
-    void saveFile(clone, true)
-  })
-  // Both of these load a document into the running app, which is the one thing
-  // a frozen workbook must not do — see replaceWorkbook. Disabled rather than
-  // silently refused; the read-only note at the top of the dialog says why.
+  const replaceBtn = d.button(t('Replace from JSON…'), () => openPaste())
+  // Loads a document into the running app, which is the one thing a frozen
+  // workbook must not do — see replaceWorkbook. Disabled rather than silently
+  // refused; the read-only note at the top of the dialog says why.
   replaceBtn.disabled = store.readOnly
-  duplicateBtn.disabled = store.readOnly
-  card.append(actions(
-    button(t('Copy document JSON'), () => {
-      void navigator.clipboard?.writeText(JSON.stringify(store.doc, null, 2))
+  card.append(d.actions(
+    d.button(t('Copy document JSON'), () => {
+      // stripped — this lands on a clipboard and then, often, in a chat window
+      void navigator.clipboard?.writeText(JSON.stringify(docForExport(store.doc), null, 2))
         .then(() => { outNote.textContent = t('Copied — {size} of JSON.', { size: bytes(stats.bytes) }) })
         .catch(() => { outNote.textContent = t('This browser refused clipboard access.') })
     }),
     replaceBtn,
-    duplicateBtn,
-    button(t('Save a copy…'), () => { void saveFile(store.doc, true) }),
   ))
   card.append(outNote)
+  card.append(note(t('A copy, a template or a read-only copy: the ▾ beside Save.')))
 
   /** The paste panel. A textarea, not `prompt()`: this is a whole workbook. */
   function openPaste(): void {
@@ -571,7 +384,7 @@ export function openAbout(hooks: AboutHooks): void {
     ta.className = 'dx-about-paste'
     ta.spellcheck = false
     ta.placeholder = t('Paste bento/dash document JSON here')
-    const go = button(t('Replace workbook'), () => {
+    const go = d.button(t('Replace workbook'), () => {
       if (!ta.value.trim()) { ta.focus(); return }
       const res = parseDoc(ta.value)
       if (!res.ok) {
@@ -582,46 +395,70 @@ export function openAbout(hooks: AboutHooks): void {
       // Undo does NOT reach across this. Store.replaceDoc empties both stacks,
       // so unlike slides there is no ⌘Z back — say so before, not after.
       if (!confirm(t('Replace this workbook with the pasted JSON? This cannot be undone.'))) return
-      if (!replaceWorkbook(hooks, res.doc)) {
+      // THE ROOM BELONGS TO THIS FILE, NOT TO THE PASTED TEXT. Content is
+      // replaced; the collaboration credentials are this workbook's and stay.
+      //
+      // Both directions were wrong, and #338 turned the first from rare into
+      // routine by stripping `collab` out of "Copy document JSON":
+      //
+      //   · a STRIPPED paste — now the ordinary AI round trip — carried no
+      //     credentials, so replacing silently ENDED the live session. Measured:
+      //     sharing on / room `w-abc` before, sharing off / room gone after,
+      //     with nothing on screen saying so while peers kept editing.
+      //   · a paste carrying SOMEBODY ELSE'S credentials silently JOINED their
+      //     room. Measured: my room became `w-THEIRS` and my next edit went out
+      //     under their key, with them holding the owner key that can revoke.
+      //
+      // The line is the one #338 draws itself — a saved FILE carrying its own
+      // capability is the design, and pasted text is not a file. So a dropped
+      // or opened workbook still adopts its own room; this does not.
+      //
+      // Not folded into `replaceWorkbook`: the Save menu's fork goes through it
+      // too and mints fresh credentials ON PURPOSE.
+      const keep = (store.doc as { collab?: unknown }).collab
+      const merged = keep === undefined
+        ? res.doc
+        : { ...res.doc, collab: keep } as DashDoc
+      if (!replaceWorkbook(hooks, merged)) {
         outNote.textContent = t('That workbook has no table sheet to show.')
         return
       }
       close()
     })
-    const bar = actions(go, button(t('Cancel'), () => { ta.remove(); bar.remove() }))
-    // BEFORE the Close button, not appended to the card: `append` puts it after
-    // Close, which on a dialog this tall means the panel opens below the fold
-    // and the click reads as "nothing happened".
-    card.insertBefore(ta, closeBtn)
-    card.insertBefore(bar, closeBtn)
+    const bar = d.actions(go, d.button(t('Cancel'), () => { ta.remove(); bar.remove() }))
+    // BEFORE the footer, not appended to the card: `append` puts it after the
+    // Close button, which means the panel opens below everything and the click
+    // reads as "nothing happened".
+    card.insertBefore(ta, foot)
+    // SAY WHAT IT KEEPS. The paste replaces the content and not the room, which
+    // is the right answer in both directions but is invisible either way — and
+    // a live session quietly ending or quietly moving is exactly the class of
+    // thing this app states rather than leaves to be discovered.
+    if ((store.doc as { collab?: { on?: boolean } }).collab?.on) {
+      card.insertBefore(
+        note(t('Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.')),
+        foot,
+      )
+    }
+    card.insertBefore(bar, foot)
     ta.focus()
     ta.scrollIntoView({ block: 'nearest' })
   }
 
-  const closeBtn = button(t('Close'), close)
-  closeBtn.classList.add('dx-about-close')
-  card.append(closeBtn)
-
-  // main.ts owns two DOCUMENT-level handlers that this dialog sits inside:
-  //   · a keydown that routes any bare printable key into the selected cell —
-  //     and its guard is `INPUT || isContentEditable`, so a TEXTAREA is not
-  //     covered: typing JSON in here would have typed into the grid as well.
-  //   · a paste sniffer that treats any clipboard text with a comma or a tab as
-  //     a CSV import, and calls preventDefault — so pasting a workbook, or an
-  //     author name with a comma in it, imported a junk sheet instead.
-  // Both are stopped at the backdrop, which contains everything in the dialog.
-  // ⌘S is stopped with them, deliberately: saving from behind a modal that may
-  // be mid-edit is not a gesture worth preserving.
-  back.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') close()
-    e.stopPropagation()
-  })
-  back.addEventListener('paste', (e) => e.stopPropagation())
-  back.addEventListener('mousedown', (e) => { if (e.target === back) close() })
-
-  back.append(card)
-  document.body.append(back)
-  card.querySelector('button')?.focus()
+  // --- the footer -----------------------------------------------------------
+  // The way ACROSS, beside the way out. About and Settings are two halves of
+  // one question people ask in one breath ("what is this thing / how do I make
+  // it speak French"), and a reader who guessed wrong should be one click from
+  // right rather than back in the top bar hunting.
+  const toSettings = d.button(t('Settings'), () => openSettings(hooks))
+  toSettings.title = t('Settings — language, appearance and updates')
+  // …and it carries the update dot, because the badge that brought the reader
+  // to ⓘ has to lead somewhere. The release itself is offered in Settings.
+  if (updateWaiting()) toSettings.classList.add('dx-update-badge')
+  const foot = d.actions(toSettings, d.button(t('Close'), close))
+  foot.classList.add('dx-about-foot')
+  card.append(foot)
+  d.mount()
 }
 
 /**
