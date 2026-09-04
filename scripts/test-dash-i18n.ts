@@ -44,8 +44,78 @@ const srcDir = join(root, 'dash/src')
 const i18nDir = join(srcDir, 'i18n')
 const OUT = join(i18nDir, 'packed.ts')
 
-/** Locale columns, in order. English is the key, so it is never a column. */
-const LOCALES = ['ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'it'] as const
+/**
+ * Locale columns, in order. English is the key, so it is never a column.
+ *
+ * DERIVED, BECAUSE THIS FILE IS BOTH THE RIG AND THE GENERATOR. The list used
+ * to be a hardcoded seven, which meant it DEFINED the set it then went on to
+ * check — so when `pt` shipped in slides, type and spaces and not here, this
+ * rig reported "every core catalog is complete" with perfect honesty about
+ * seven locales, and there was no angle from which it could see the eighth.
+ * A list that both defines and verifies a set cannot detect that the set is
+ * wrong. Deriving it makes that unrepresentable rather than merely fixed.
+ *
+ * THE SET COMES FROM DISK. Every `*.ts` in `i18n/` except the generated table.
+ * Adding `pt.ts` is now the whole act of adding Portuguese.
+ *
+ * THE ORDER COMES FROM THE EXISTING TABLE, and that is the load-bearing half.
+ * `packed.ts` is POSITIONAL — each key maps to an array of translations indexed
+ * by this list — so deriving the order from `readdirSync` would trade one
+ * silent bug for a worse one: the day the sort order and the generated order
+ * disagree, every translation shifts by a column, in a file that still looks
+ * perfectly well-formed. So the previous `PACKED_LOCALES` is read back and
+ * preserved exactly, and anything new is APPENDED. Column stability stops
+ * being a rule somebody has to remember and becomes a property of the
+ * generator.
+ */
+function deriveLocales(): string[] {
+  const onDisk = readdirSync(i18nDir)
+    .filter((f) => f.endsWith('.ts') && f !== 'packed.ts')
+    .map((f) => f.slice(0, -3))
+  // The order already committed to, straight out of the generated file.
+  let prior: string[] = []
+  if (existsSync(OUT)) {
+    const m = /export const PACKED_LOCALES = (\[[^\]]*\])/.exec(readFileSync(OUT, 'utf8'))
+    if (m) { try { prior = JSON.parse(m[1]) as string[] } catch { prior = [] } }
+  }
+  const set = new Set(onDisk)
+  // kept in their committed positions, then the newcomers, sorted only among
+  // themselves so a multi-locale addition is at least deterministic
+  return [
+    ...prior.filter((l) => set.has(l)),
+    ...onDisk.filter((l) => !prior.includes(l)).sort(),
+  ]
+}
+
+const LOCALES = deriveLocales()
+
+/**
+ * The set on disk and the set in the table must agree.
+ *
+ * This is what catches a HALF-LANDED change, which is the specific hazard of a
+ * generator that is also a rig: add `pt.ts` and forget `--write`, and the table
+ * has seven columns while the app believes in eight. It also catches the
+ * reverse — a column for a catalog somebody deleted. Either way the rig would
+ * otherwise keep passing, because everything it checks would still be
+ * internally consistent.
+ *
+ * It subsumes the "catalog file not listed in LOCALES" guard the other apps
+ * carry: that guard detects a state which, here, can no longer occur.
+ */
+function checkPackedSet(): { ok: boolean; msg: string } {
+  if (!existsSync(OUT)) return { ok: true, msg: 'no table yet' }
+  const m = /export const PACKED_LOCALES = (\[[^\]]*\])/.exec(readFileSync(OUT, 'utf8'))
+  if (!m) return { ok: false, msg: 'packed.ts has no PACKED_LOCALES to compare against' }
+  let inTable: string[] = []
+  try { inTable = JSON.parse(m[1]) as string[] } catch { return { ok: false, msg: 'PACKED_LOCALES is not readable JSON' } }
+  const missing = LOCALES.filter((l) => !inTable.includes(l))
+  const extra = inTable.filter((l) => !LOCALES.includes(l))
+  if (!missing.length && !extra.length) return { ok: true, msg: `${inTable.length} locales, table and disk agree` }
+  const parts: string[] = []
+  if (missing.length) parts.push(`${missing.join(', ')} ${missing.length === 1 ? 'has a catalog' : 'have catalogs'} but no column — run --write`)
+  if (extra.length) parts.push(`${extra.join(', ')} ${extra.length === 1 ? 'has a column' : 'have columns'} but no catalog file`)
+  return { ok: false, msg: parts.join('; ') }
+}
 
 /**
  * Strings that reach t() through a module const rather than as a literal.
@@ -120,6 +190,9 @@ const SAME_AS_ENGLISH: Record<string, string[]> = {
   ja: ['OK'],
   de: ['Dashboard', 'Format', 'Name', 'OK', 'Symbol', 'Text', 'Updates'],
   it: ['Dashboard', 'File', 'Formula', 'Max', 'Min', 'OK', 'vs', 'editor'],
+  // 'Total' and 'editor' are the same word in Portuguese; 'OK' and 'vs' are
+  // borrowed unchanged, as they are in the Italian list above.
+  pt: ['OK', 'Total', 'editor', 'vs'],
 }
 
 // --- sweeping the source -----------------------------------------------------
@@ -455,6 +528,16 @@ if (process.argv.includes('--write')) {
   ok('packed.ts matches the per-locale catalogs')
 }
 
+// The SET check, distinct from the CONTENT check above. `--write` regenerates
+// the table from whatever catalogs exist, so the content comparison can be
+// perfectly green over a table that is simply missing a locale — which is what
+// shipped: seven columns, an eighth catalog nowhere, and every check passing.
+{
+  const r = checkPackedSet()
+  if (r.ok) ok(`PACKED_LOCALES covers every catalog on disk (${r.msg})`)
+  else fail(`packed.ts and dash/src/i18n/ disagree about which locales exist — ${r.msg}`)
+}
+
 // --- the wiring, actually run ------------------------------------------------
 //
 // Everything above reads FILES. This part boots the real facade — the same
@@ -506,7 +589,11 @@ const RESOLVE: Array<[string, string]> = [
   ['it-CH', 'it'], ['es-MX', 'es'],
   ['zh-CN', 'zh-Hans'], ['zh-SG', 'zh-Hans'], ['zh', 'zh-Hans'],
   ['zh-TW', 'zh-Hant'], ['zh-HK', 'zh-Hant'], ['zh-MO', 'zh-Hant'],
-  ['pt-BR', 'en'],   // dash carries no pt: it must degrade, not guess
+  // Was ['pt-BR', 'en'] with the comment "dash carries no pt: it must degrade,
+  // not guess" — a correct assertion about a real absence, which then had to be
+  // read every time as a statement about what dash SHOULD do. It carries pt now.
+  ['pt-BR', 'pt'],
+  ['pt', 'pt'],
   ['xx-YY', 'en'],
 ]
 let resolveBad = 0
