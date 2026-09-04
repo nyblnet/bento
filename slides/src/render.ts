@@ -483,7 +483,25 @@ export function resolveMath(html: string): string {
   return out.replace(/\\\$/g, '$') // the escape has done its job
 }
 
-const ALLOWED_TAGS = new Set(['B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE'])
+/**
+ * The rich-text vocabulary a text element (and a table cell) may use.
+ *
+ * Every tag here is ATTRIBUTE-FREE by construction — the sanitizer strips all
+ * attributes unconditionally, so a tag can only ever mean what its name means.
+ * That is why formatting is expressed as semantic tags rather than styled
+ * spans: a `<span style>` route would need the sanitizer to start reasoning
+ * about declarations, and this format's whole defence is that it does not.
+ *
+ * The block tags (UL/OL/LI, H1/H2) are newer than the inline ones. An older
+ * shell that has not heard of them UNWRAPS them and keeps the words, so a deck
+ * with lists opens everywhere — it simply loses the bullets until the reader
+ * updates. Sanitizing happens at RENDER time, so that degradation is visual
+ * only; the model keeps the markup unless that box is edited in the old shell.
+ */
+const ALLOWED_TAGS = new Set([
+  'B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE',
+  'UL', 'OL', 'LI', 'H1', 'H2',
+])
 
 /** Keep pasted/edited rich text down to a safe inline subset. */
 export function sanitizeHtml(html: string): string {
@@ -1033,6 +1051,11 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         if (ts.fill === 'none') inner.style.color = 'transparent'
       }
       inner.style.textAlign = el.align
+      // List markers need to know. `outside` hangs a marker at the box's start
+      // edge, which is only where it belongs when the line starts there too —
+      // centre or right the text and the markers stay pinned to the left,
+      // detached from the words they belong to (styles.css keys off this).
+      inner.dataset.align = el.align
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'

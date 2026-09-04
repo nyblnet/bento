@@ -41,6 +41,7 @@ import {
   valuesOf, isIssue, issuesOf, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
   sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
+  VIEW_LAYOUTS, layoutOf, nextLayout,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
@@ -572,8 +573,156 @@ for (const [label, input, err] of [
     .split('.sp-view-tablewrap')[1]?.slice(0, 120) ?? ''),
     '…and scrolls inside itself, so a wide table never scrolls the page sideways')
 
-  // Cycling all the way round must leave the block as it started.
-  ok(/table: undefined/.test(ed), 'cycling past table clears the key rather than storing "board"')
+  // Cycling all the way round must leave the block as it started. The cycle
+  // ends at GALLERY now, so it is the last shape that clears the key.
+  //
+  // Asked of the CYCLE, not of the source. This assertion used to read
+  // /gallery: undefined/ against editor.ts, which is a test of how the line is
+  // spelled: moving the cycle into fields.ts kept every behaviour and turned it
+  // red, and hardening the same lookup against Object.prototype would have left
+  // it green. So the shape question goes to nextLayout, and the writer question
+  // goes to the writer's own body — not to the whole file, on the `coverFn`
+  // precedent below, because `undefined` appears hundreds of times in editor.ts.
+  ok(nextLayout('gallery') === 'board', 'the shape after the last one is the board again')
+  const toggleFn = ed.slice(ed.indexOf('private toggleViewLayout'),
+    ed.indexOf('private openViewGroup'))
+  ok(toggleFn.length > 0 && /'layout',\s*to === 'board' \? undefined :/.test(toggleFn),
+    '…and the click WRITES that as a deleted key rather than a stored "board"')
+}
+
+// ---- a page has a cover, and a view can be a gallery -----------------------
+// COVERS ARE THE ONE FIELD THAT WOULD TEMPT SOMEBODY INTO A URL, because that
+// is how every hosted notes app stores one — and a URL in a document is a
+// network request on open (PLATFORM §1), which `icon` already refuses in the
+// same terms. So the refusal is not a comment: `coverSrc` is the ONE place that
+// decides, and everything (the page, the gallery card) goes through it.
+//
+// The other half is that a cover is an asset reference that is NOT on a block,
+// and every asset sweep in the app was written as a loop over blocks. Miss one
+// and the failure is silent and specific: the readout calls every cover an
+// orphan and offers to delete it, or a page grafted into another space arrives
+// with a cover pointing at nothing.
+{
+  const fs = await import('node:fs')
+  const { coverSrc, pageAssetKeys } = await import('../spaces/src/model.ts')
+  const { orphanAssets } = await import('../spaces/src/assets.ts')
+
+  // 1. ADDITIVITY: a build that predates the field round-trips it untouched,
+  //    and this build does not invent one.
+  const withCover = parseDoc(doc({
+    assets: { k1: 'data:image/png;base64,AAA' },
+    pages: [{ id: 'p1', title: 'One', cover: 'asset:k1', blocks: [{ id: 'b1', type: 'p', html: 'hi' }] }],
+  }))
+  ok(withCover.ok === true, 'a page carrying a cover loads')
+  const cd = (withCover as { doc: SpacesDoc }).doc
+  ok(cd.pages[0].cover === 'asset:k1', '…and the cover survives the round trip')
+  ok((cd.pages[1] ?? {}).cover === undefined && parseDoc(doc()).ok === true
+    && ((parseDoc(doc()) as { doc: SpacesDoc }).doc.pages[0] as { cover?: unknown }).cover === undefined,
+    '…and a page written before covers existed still has none')
+
+  // 2. NEVER THE NETWORK. The field is KEPT (additivity) and renders nothing.
+  ok(coverSrc({ id: 'x', title: '', blocks: [], cover: 'asset:k1' } as unknown as Page) === 'asset:k1',
+    'an asset cover renders')
+  ok(coverSrc({ id: 'x', title: '', blocks: [], cover: 'data:image/png;base64,AAA' } as unknown as Page)
+    === 'data:image/png;base64,AAA', 'an embedded cover renders')
+  ok(coverSrc({ id: 'x', title: '', blocks: [], cover: 'https://example.com/a.jpg' } as unknown as Page) === '',
+    'a REMOTE cover renders nothing — opening a document never touches the network')
+  ok(coverSrc({ id: 'x', title: '', blocks: [], cover: '/cover.jpg' } as unknown as Page) === '',
+    '…and a relative path is remote too, because it is a real request on a static host')
+  ok(coverSrc({ id: 'x', title: '', blocks: [] } as unknown as Page) === '', 'no cover, no picture')
+
+  // 3. A COVER IS A USE. This is the assertion that catches the block-only loop.
+  ok(pageAssetKeys(cd.pages[0]).join(',') === 'k1', 'a page reports the asset its cover holds')
+  ok(orphanAssets(cd).length === 0,
+    'a cover\'s bytes are not an orphan — nothing else on the page points at them')
+  const dropped = JSON.parse(JSON.stringify(cd)) as SpacesDoc
+  delete (dropped.pages[0] as { cover?: unknown }).cover
+  ok(orphanAssets(dropped).join(',') === 'k1', '…and they ARE one once the cover is removed')
+
+  // 4. A COVER TRAVELS. Extract carries the bytes; graft remaps the key.
+  const cut = extractSpace(cd, 'p1', { docId: 'doc-x', now: '2026-08-22T00:00:00.000Z' })
+  ok((cut.doc.assets ?? {}).k1 !== undefined, 'a page extracted on its own takes its cover with it')
+  const host = (parseDoc(doc({
+    assets: { k1: 'data:image/png;base64,ZZZ' },
+    pages: [{ id: 'h1', title: 'Host', blocks: [{ id: 'hb1', type: 'image', src: 'asset:k1' }] }],
+  })) as { doc: SpacesDoc }).doc
+  const plan = planGraft(host, JSON.parse(JSON.stringify(cut.doc)), {})
+  const landed = plan.pages.find((p) => p.title === 'One')!
+  ok(String(landed.cover).startsWith('asset:') && landed.cover !== 'asset:k1',
+    'a grafted cover follows its bytes to their new key — the host already had a DIFFERENT k1')
+  ok(plan.assets[String(landed.cover).slice(6)] === 'data:image/png;base64,AAA',
+    '…and the bytes it lands on are the ones it arrived with')
+
+  // 5. THE GALLERY. The shape the covers exist for.
+  const render = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+  const ed2 = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
+  const props2 = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
+  ok(/layout === 'gallery'/.test(render), 'a view can be a gallery')
+  ok(nextLayout('table') === 'gallery' && nextLayout('gallery') === 'board',
+    '…reachable from the one layout control, which cycles through it')
+  ok(/resolveSrc\(coverSrc\(r\.page\), doc\)/.test(render),
+    '…and a card asks coverSrc for the picture, so a remote cover is refused there too')
+  ok(/sp-gcard-bare/.test(render),
+    '…and a page with no cover gets a panel of its own rather than a hole')
+  ok(/pickCover\(pageId: string\)/.test(ed2), 'a cover is chosen through the editor')
+  // the METHOD's own body, not the file: `prepareImage` appears in four other
+  // places, so a check that only proved the file mentions it would pass with a
+  // cover picker that read the raw bytes and skipped the budget entirely
+  const coverFn = ed2.slice(ed2.indexOf('private async pickCover'),
+    ed2.indexOf('private removeCover'))
+  ok(/prepareImage\(file\)/.test(coverFn) && /internAsset\(/.test(coverFn)
+    && /IMAGE_EMBED_BUDGET/.test(coverFn),
+    '…through the IMAGE pipeline: downscaled, content-addressed, and the same budget question')
+  ok(/delete p\.cover/.test(ed2), 'removing a cover DELETES the key rather than storing an empty string')
+  ok(/pickCover\(page\.id\)/.test(props2), 'the properties panel offers it, beside the icon')
+}
+
+
+// ---- a t() the extractor cannot SEE ----------------------------------------
+// scripts/build-spaces-i18n.mjs sweeps t() call sites for LITERAL strings, plus
+// one dedicated indirection (it reads `label:`/`hint:` out of blocks.ts, because
+// the block menu renders them as `t(item.label)`). Anything else — most of all
+// `t(SOME_MAP[key])` — compiles, runs, and reaches no catalog. The coverage
+// figure cannot see it either: the packer builds its key list from what it
+// swept, so eight locales report 100% while the control reads English.
+//
+// This class has cost three separate strings, two of them found by this check:
+//   · the panel's plural forms (caught before merge)
+//   · the view layout button — "Board", "List" and "Show as a list" were WRITTEN
+//     in de.ts and ABSENT from packed.ts: translations already done, dropped
+//   · FIELD_TYPE_LABEL — five of six property types (Select, Number, Date,
+//     Person, Labels) were in NO catalog at all
+//
+// SCOPE: map and property lookups, which is the shape that bites. A bare
+// `t(param)` inside a helper is not flagged — its callers pass literals, which
+// the sweep sees at the call site, and the second t() is a harmless miss that
+// returns its argument.
+{
+  const fs = await import('node:fs')
+  const srcDir = new URL('../spaces/src/', import.meta.url)
+  const offenders: string[] = []
+  for (const f of fs.readdirSync(srcDir).filter((n: string) => n.endsWith('.ts'))) {
+    // COMMENTS ARE NOT CODE. The first draft of this check flagged its own
+    // prose — two doc comments that quote `t(MAP[key])` while explaining why it
+    // is wrong. A source scan that cannot tell code from a sentence about code
+    // reports the documentation as the bug.
+    const text = fs.readFileSync(new URL(f, srcDir), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+    // t(NAME[...]) or t(NAME.prop) — a lookup whose result is displayed
+    for (const [, expr] of text.matchAll(/\bt\(\s*([A-Za-z_$][\w$]*\s*(?:\[[^\]]*\]|\.[\w$]+))/g)) {
+      const e = expr.trim()
+      // THE ONE INDIRECTION THE EXTRACTOR IMPLEMENTS. It reads every `label:`
+      // and `hint:` literal out of blocks.ts, so `x.label` / `x.hint` is swept
+      // whatever the loop variable is called — spec, item, i. The BRACKET form
+      // is what stays flagged, because that is the shape that has actually
+      // shipped English three times.
+      if (/\.(label|hint)$/.test(e)) continue
+      offenders.push(`${f}: t(${e.slice(0, 40)})`)
+    }
+  }
+  ok(offenders.length === 0,
+    `no t() reads a map the extractor cannot sweep${offenders.length ? ' — ' + offenders.join(' | ') : ''}`)
 }
 
 // ---- find & replace: the number shown IS the number changed ----------------
@@ -3400,6 +3549,48 @@ function fsTable(f: string): string {
       Math.hypot(n.x - before[i].x, n.y - before[i].y)))
     ok(moved < 0.5, 'graph: one more tick on a settled layout barely moves anything')
   }
+}
+
+
+// ---- A LAYOUT KEY OUT OF A FILE IS NOT A PROPERTY NAME ----------------------
+// A view block is plain JSON in a document someone mailed you, and `layout` is
+// a free string in it. The renderer picked the button's word out of an object
+// literal by that string, guarded by TRUTHINESS — and `WORD['toString']` is a
+// native function, which is truthy. So `layout:"toString"` rendered the layout
+// button's label as `function toString() { [native code] }` and wrote the same
+// text into data-next.
+//
+// The reason it survived a review: the cycle was written TWICE, once in
+// editor.ts for what a click STORES and once in render.ts for what the button
+// SAYS. The hardening went into the editor's copy, and the editor's comment
+// then asserted the label was safe — while the label was still coming from the
+// other, unguarded copy. One function now, called by both, and checked here by
+// CALLING it rather than by grepping the source for the guard.
+{
+  for (const evil of ['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__']) {
+    const shapes = VIEW_LAYOUTS as readonly string[]
+    ok(shapes.includes(layoutOf(evil)),
+      `layout:${JSON.stringify(evil)} resolves to a real shape (${layoutOf(evil)}), never a native function`)
+    ok(shapes.includes(nextLayout(evil)),
+      `…and what follows it is a shape too (${nextLayout(evil)}), so data-next is never a function body`)
+  }
+
+  // The honest shapes still work, or the guard above would be a way to break
+  // the feature and call it secure.
+  ok(VIEW_LAYOUTS.every((l) => layoutOf(l) === l), 'every real layout resolves to itself')
+  ok(layoutOf(undefined) === 'board' && layoutOf('') === 'board' && layoutOf('mosaic') === 'board',
+    'absent, empty, and a key from a NEWER build all land on the board')
+
+  // THE CYCLE CLOSES. As many steps as there are shapes returns where it
+  // started — which is what makes "cycled all the way round is byte-identical
+  // to untouched" true rather than aspirational.
+  for (const start of VIEW_LAYOUTS) {
+    let at: string = start
+    for (let i = 0; i < VIEW_LAYOUTS.length; i++) at = nextLayout(at)
+    ok(at === start, `${VIEW_LAYOUTS.length} steps from ${start} comes back to ${start}`)
+  }
+  ok(new Set(VIEW_LAYOUTS.map((l) => nextLayout(l))).size === VIEW_LAYOUTS.length,
+    'the cycle reaches every shape — none is stranded off it')
 }
 
 

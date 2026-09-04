@@ -14,6 +14,53 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **The whole gallery card is the target, and a long title stops inflating its
+  row.** In a shelf of covers the picture is what you point at, so the title's
+  link now stretches over the card rather than the card holding a second one —
+  one link, one accessible name. And the two-line clamp on card titles was
+  written but never in effect: `.sp-gcard .sp-issue-title` loses on specificity
+  to `.sp-page a.sp-issue-title`, so `display: -webkit-box` never applied and
+  `-webkit-line-clamp` sat inert. Measured in the built shell: computed display
+  `block` and a long title rendering four lines with nothing clipped. It clamps
+  to two now.
+
+- **A layout out of a file cannot reach `Object.prototype`.** `layout` is a free
+  string in a view block, and the renderer picked the button's word out of an
+  object literal by it, guarded by truthiness — but `WORD['toString']` is a
+  native function, and truthy. A page hand-authored with `layout:"toString"`
+  rendered its layout button as `function toString() { [native code] }`. The
+  cycle was written twice, once for what a click stores and once for what the
+  button says; the guard had been added to the first copy only, and its comment
+  asserted the label was safe while the label came from the second. One
+  `nextLayout` in `fields.ts` now, called by both.
+
+- **Every displayed word reaches the catalogs.** The view layout button read
+  English in all eight languages: it was written `t(LAYOUT_WORD[here])`, and the
+  extractor sweeps LITERALS, so no catalog ever learned the strings existed —
+  while the coverage figure said 100%, because it counts what it swept.
+  "Board", "List" and "Show as a list" were sitting translated in the catalogs
+  and being dropped. The same shape hid five of the six property-type names
+  (Select, Number, Date, Person, Labels), which were in no catalog at all. Both
+  now choose their words at the call site, and a rig check fails on any `t()`
+  that reads a map the extractor cannot see.
+
+- **Page covers, and a gallery to show them off.** A page can carry a picture
+  across the top of it — chosen in the properties panel beside the icon, and
+  the page's own icon rides up over its lower edge. A view has a fourth shape
+  in the layout cycle: **Gallery**, a grid of cards showing each page's cover,
+  its title and the values it carries. That is the shape that makes a reading
+  list or a film log look like one rather than like a backlog.
+
+  **A cover is never a URL.** `asset:` or `data:` only, for the same reason a
+  page icon is one emoji and never an address: opening a document must not
+  touch the network. A file that arrives carrying a remote cover keeps the
+  field and shows no picture, and the validator says so. Covers go through the
+  same pipeline an image block does — downscaled before they travel, stored
+  once however many pages use them, the same question asked above 4MB.
+
+  Additive: absent on every page written before this, and a card with no cover
+  gets a tinted panel of its own carrying the page's icon.
+
 - **A graph view.** ⋯ → *Graph* draws the space as its pages and the links
   between them: every non-archived page is a node, sized by how connected it
   is, joined by an edge for every `[[wikilink]]` and for every parent/child

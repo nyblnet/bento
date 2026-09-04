@@ -2096,11 +2096,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* the phone-only controls exist in the DOM at every width; only the fold class
    shows them, so applyPhoneChrome never has to create or destroy anything */
 .ed-phone-only { display: none; }
+.ed-phone-tools { display: contents; }
 .ed-topbar.ed-bar-fold .ed-phone-only { display: inline-flex; }
 /* Save stays one tap; its save-AS caret does not fit beside the fold's small
    set of buttons and is the least-used half. The list it opens is not lost —
    editor.ts appends it to the bottom of ⋯ while the fold is on. */
 .ed-topbar.ed-bar-fold .ed-split-caret { display: none; }
+.ed-topbar.ed-bar-fold .ed-split > .ed-btn:first-child {
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
+  border-inline-end: 1px solid var(--line);
+}
 /* ⋯ carries the demoted buttons AND that list, so it can outgrow the
    screen in BOTH directions.
    Down: without a bound it runs off the bottom, and a dropdown is absolutely
@@ -2162,7 +2168,20 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   /* HIG touch targets — a 36px icon is a mis-tap on glass */
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
-  .ed-title { flex: 0 1 90px; }
+  .ed-title { flex: 0 1 220px; }
+  .ed-phone-tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-inline-size: max-content;
+  }
+  .ed-topbar .ed-group-right {
+    margin-inline-start: 0;
+    inline-size: fit-content;
+    flex: 0 0 auto;
+  }
 
   /* Panels become OVERLAY DRAWERS. As flex siblings the 188px sidebar left a
      214px canvas on a 402px screen — the thing you are editing became the
@@ -2182,6 +2201,37 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   /* the 16px resizer chevrons are replaced by real buttons in the bar */
   .ed-panel-toggle { display: none; }
   .ed-title { min-width: 0; }
+
+  /* Folding is not enough on the narrowest phones. Even fully folded the bar
+     needs ~356px — six 44px targets, the mark and the title — and an iPhone SE
+     (or any iPhone with Display Zoom on) is 320px wide. `.ed-root` sets
+     `overflow: hidden` so a wide bar can never turn into DOCUMENT scroll, and
+     the consequence was that the overflow was simply CUT OFF: ⋯ — which on a
+     phone carries Redo, Comment, PDF, Share, Language, Help and the whole
+     save-as list — hung 36px off the edge and could not be reached at all.
+     So the bar scrolls itself. The clipped button is now a partly-visible one,
+     which is its own affordance, and the fix keeps scaling if the bar ever
+     gains another control. */
+  .ed-topbar {
+    overflow-x: auto;
+    /* a sideways flick on the bar must not rubber-band the page behind it */
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ed-topbar::-webkit-scrollbar { display: none; }
+  /* A scroll container clips its children in BOTH axes, so the menus hanging
+     off ＋ and ⋯ would now be cut off by the bar itself. `fixed` takes them out
+     of that clip; it costs nothing extra to anchor, because the rule above
+     already pins these menus to the end of the screen rather than to their
+     trigger. The only thing they still need from the layout is where the bar
+     ends, which editor.ts publishes as --ed-bar-bottom. */
+  .ed-topbar .ed-dropdown.open > .ed-menu {
+    position: fixed;
+    top: calc(var(--ed-bar-bottom, 56px) + 4px);
+    inset-inline-end: max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
+    inset-inline-start: auto;
+  }
 }
 
 /* panel collapse chevrons live ON the resizer strips, not in the topbar */
@@ -2370,6 +2420,104 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 .ed-stepper .ed-btn-icon { width: 24px; height: 24px; line-height: 1; font-size: 15px; padding: 0; }
 .ed-stepper-val { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
 input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: pointer; }
+/* --- rich text inside a box ------------------------------------------------
+   Every size here is in `em`, never px: the element's own `fontSize` is the
+   type scale, so a heading is "larger than this box" rather than a fixed size
+   that would fight the box it lives in — and resizing the box keeps the whole
+   hierarchy in proportion. Shared by the canvas, thumbnails, present and
+   print, because they all go through render.ts. */
+.bento-text-inner ul,
+.bento-text-inner ol {
+  margin: 0;
+  padding-inline-start: 1.35em;
+  list-style-position: outside;
+}
+/* Centred or right-aligned text: an `outside` marker stays pinned to the box's
+   start edge while its line moves away from it, so the bullet ends up floating
+   on its own. Keeping the marker inside the line keeps the two together — at
+   the cost of the hanging indent, which only reads as an indent when the text
+   is start-aligned anyway. */
+.bento-text-inner[data-align='center'] ul,
+.bento-text-inner[data-align='center'] ol,
+.bento-text-inner[data-align='right'] ul,
+.bento-text-inner[data-align='right'] ol {
+  padding-inline-start: 0;
+  list-style-position: inside;
+}
+.bento-text-inner li { margin: 0.12em 0; }
+.bento-text-inner ul { list-style: disc; }
+.bento-text-inner ol { list-style: decimal; }
+.bento-text-inner ul ul { list-style: circle; }
+.bento-text-inner h1,
+.bento-text-inner h2 {
+  margin: 0 0 0.2em;
+  line-height: 1.15;
+  font-weight: 700;
+}
+.bento-text-inner h1 { font-size: 1.55em; }
+.bento-text-inner h2 { font-size: 1.25em; }
+/* A heading that opens the box has nothing to separate itself from. */
+.bento-text-inner > :first-child { margin-top: 0; }
+
+/* --- selection formatting bar (editor/richtext.ts) -------------------------
+   Positioned from JS against the VIEWPORT, so the canvas scroller, a side
+   panel or the topbar can never clip it. */
+.ed-fmtbar {
+  position: fixed;
+  z-index: 130; /* above the context menu (120), which it can outlive */
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  /* the token, not white: --surface is #ffffff in light and #21262e in dark,
+     and a chrome surface pinned to a literal puts light text on a light
+     background the moment the reader is in dark mode */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(20 30 45 / 0.20);
+  user-select: none;
+}
+.ed-fmtbar-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ed-fmtbar-btn:hover { background: var(--hover, #f2f5f9); }
+/* --blue INVERTS with the theme (#5b8def light, #7aa5f5 dark), so its text has
+   to invert with it — main's own `.ed-insertgap-btn` pairs the same token with
+   var(--surface) for exactly this reason. A literal white here reads fine in
+   light mode and is the pale-on-pale case the gate exists to catch. */
+.ed-fmtbar-btn.is-on { background: var(--blue, #5b8def); color: var(--surface); }
+.ed-fmtbar-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--line); }
+/* the letter buttons should read as what they do */
+.ed-fmtbar-btn[data-cmd='bold'] { font-weight: 700; }
+.ed-fmtbar-btn[data-cmd='italic'] { font-style: italic; }
+.ed-fmtbar-btn[data-cmd='underline'] { text-decoration: underline; }
+.ed-fmtbar-btn[data-cmd='strikeThrough'] { text-decoration: line-through; }
+.ed-fmtbar-btn[data-code] { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+/* On a phone the bar is the only route to formatting, so it must not be
+   narrower than a thumb — and it may need to wrap rather than run off. */
+@media (max-width: 700px) {
+  .ed-fmtbar {
+    max-width: calc(100vw - 16px);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ed-fmtbar-btn { min-width: 36px; height: 36px; }
+}
+.ed-fmtbar-btn:disabled { opacity: 0.35; cursor: default; }
+.ed-fmtbar-btn:disabled:hover { background: transparent; }
+
 
 /* Languages dialog: built-in vs installed packs vs available to add. */
 .ed-lang-manage { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 2px; }
@@ -2434,6 +2582,71 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 [dir="rtl"] .ed-about-json,
 [dir="rtl"] .ed-chart-json {
   direction: ltr;
+}
+
+/* --- context menu ---------------------------------------------------------
+   Positioned from JS against the VIEWPORT (ctxmenu.ts), so it is never clipped
+   by the canvas scroller, the topbar's own scroller, or a side panel. Shares
+   the dropdown look so a right-click and a bar menu read as the same object. */
+.ed-ctxmenu {
+  position: fixed;
+  z-index: 120; /* above the drawers (40) and the bar menus (50) */
+  display: flex;
+  flex-direction: column;
+  min-width: 184px;
+  padding: 4px;
+  /* the token, not white: --surface is #ffffff in light and #21262e in dark,
+     and a chrome surface pinned to a literal puts light text on a light
+     background the moment the reader is in dark mode */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(20 30 45 / 0.18);
+  user-select: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ed-ctxmenu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  /* 40px, not the bar's 44: this list is read top-to-bottom with the finger
+     already on it, where run length matters more than target area. */
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.ed-ctxmenu-item:hover:not(:disabled) { background: var(--hover, #f2f5f9); }
+.ed-ctxmenu-item:disabled { opacity: 0.4; cursor: default; }
+.ed-ctxmenu-item kbd {
+  font: inherit;
+  font-size: 11.5px;
+  color: #8a95a6;
+  white-space: nowrap;
+}
+.ed-ctxmenu-danger:not(:disabled) { color: #b4232a; }
+.ed-ctxmenu-danger:hover:not(:disabled) { background: #fdeced; }
+.ed-ctxmenu-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+
+/* A long press on the canvas or the slide list is the context-menu gesture
+   (editor.ts). iOS answers the same press with its own callout bubble — "Copy /
+   Look Up / Share" over a chunk of slide text — which would race ours and win
+   the user's attention. Text being EDITED is exempt: there the system bubble is
+   the better menu, and it carries paste, dictation and spelling with it. */
+.ed-scroll,
+.ed-sidebar .ed-thumb {
+  -webkit-touch-callout: none;
+}
+.ed-scroll .bento-editing {
+  -webkit-touch-callout: default;
 }
 
 /* ————— saved-from-the-web notice, and the return gate ————————————————————

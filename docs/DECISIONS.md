@@ -6245,3 +6245,39 @@ translation work and a maintainer's call, not a documentation change.
 Until it is answered, **a new catalogue for a language with regional variants
 should state its variant in its header** and follow the sibling app that
 already declares one.
+
+## 2026-08-29 — a green local rig run can mean half the rig never ran
+
+*Neighbour to "five rigs reported passes for work they were not doing" above,
+and a DIFFERENT failure. Those rigs were broken everywhere, CI included —
+unregistered, or reading a path their corpus had moved off. This one is wired up
+and runs correctly in CI; it is only on a developer's machine that it quietly
+runs half of itself. If you are here because a rig lied, that entry is the one
+about rigs that never ran at all.*
+
+**`scripts/test-sanitize.ts` has two halves.** The node half imports the pure
+functions — `sanitizeSvgCss`, `svgAttrAllowed`, `SVG_TAGS` — and runs anywhere.
+The browser half drives real Chrome, because the parts it tests need a DOM.
+Where there is no Chrome it says so and skips, and the run still ends green.
+
+**So a pass locally does not tell you the thing you edited was tested.**
+`sanitizeSvg` needs a DOM, which means it is covered ONLY by the browser half.
+A change to it can pass five rigs on a laptop and be caught by CI a minute
+later, which is exactly what happened to the svg `<style>` scoping change: five
+rigs green locally, `✗ the svg <style> is kept` in CI.
+
+**The rule: run the rig that covers the file you edited, and check which half of
+it ran.** Not how many rigs passed — which ones, and whether the half that
+covers your change was one of them. A skip that prints like a pass is an
+instrument that lies, and this repo already keeps a list of those: a CSS
+transform on an inline element that reads back correctly and moves nothing;
+`document.fonts.check()` returning true for a font that is not installed; rAF
+throttled to zero in a hidden tab; an SVG rasteriser that ignores
+`font-family`. This is the same family — the instrument answers a question you
+did not ask.
+
+**The first version of this finding was wrong, and the correction is the
+useful part.** It was filed as "`sanitizeSvg` has no rig coverage", which is
+false — the coverage exists and it works. "Your green local run may have
+skipped it" is both true and actionable; "there is no coverage" would have sent
+someone to write a rig that already exists.

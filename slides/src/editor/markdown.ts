@@ -8,8 +8,12 @@
 // - markdownToHtml: converts pasted plain text (inline patterns + bullets +
 //   line breaks) into the sanitized inline-HTML subset text elements store.
 //
-// Deliberately inline-only: slides have no headings/lists DOM — bullets are a
-// "• " glyph, matching how decks lay out list lines as separate text rows.
+// This module stays INLINE-ONLY, and now by choice rather than by necessity.
+// A text box can hold real ul/ol/li and h1/h2 since the formatting bar landed
+// (editor/richtext.ts), but typing "- " still yields a "• " glyph: autoformat
+// fires mid-keystroke, and silently converting the line you are typing into a
+// list item moves the caret and captures Enter from then on. The bar is where
+// a list is asked for explicitly; this is where a bullet is typed.
 
 const INLINE: Array<{ re: RegExp; tag: string }> = [
   { re: /\*\*([^*\n]+)\*\*$/, tag: 'b' },

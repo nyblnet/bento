@@ -1957,7 +1957,8 @@ export class PropsPanel {
     this.store.select([])
   }
 
-  private reorder(els: SlideElement[], where: 'front' | 'back') {
+  /** Also driven by the canvas context menu (editor.ts). */
+  reorder(els: SlideElement[], where: 'front' | 'back') {
     const ids = new Set(els.map((e) => e.id))
     this.store.commit(() => {
       const slide = this.store.slide

@@ -9,7 +9,7 @@
 // story, native ⌘F, print fidelity and lossless markdown export at once, from
 // one decision.
 
-import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard } from './model'
+import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
@@ -17,7 +17,8 @@ import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys,
-  sortRows, unknownSortKeys, sortDirOf, type ViewSort, type FieldSpec,
+  sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
+  type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
@@ -978,6 +979,34 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   }
   if (width) inner.classList.add('sp-wide')
 
+  // THE COVER, above everything, and FULL-BLEED rather than inside the column.
+  // That is what makes it read as a cover instead of as the first image in the
+  // page: it belongs to the page, not to the prose, so it ignores the measure
+  // the way a book's jacket ignores the type area. It escapes the reading
+  // column's padding with negative margins off `--sp-pad-x/y`, which is why
+  // that padding is written as variables — a hard-coded -44px would be wrong on
+  // a phone, wrong in reading mode and wrong in print, all silently.
+  //
+  // `resolveSrc` is the same lookup an image block goes through, and `coverSrc`
+  // is what refuses a remote one — so a cover can never make opening a document
+  // a network request (PLATFORM §1).
+  const cover = resolveSrc(coverSrc(page), doc)
+  if (cover) {
+    art.classList.add('sp-has-cover')
+    const wrap = document.createElement('div')
+    wrap.className = 'sp-cover'
+    const img = document.createElement('img')
+    img.className = 'sp-cover-img'
+    img.src = cover
+    // DECORATIVE, deliberately. The page's own title is right underneath it and
+    // says the same thing; a screen reader announcing "cover image" before every
+    // title is noise, and there is nowhere to write alt text for it anyway.
+    img.alt = ''
+    img.setAttribute('aria-hidden', 'true')
+    wrap.appendChild(img)
+    art.appendChild(wrap)
+  }
+
   const h = document.createElement('h1')
   h.className = 'sp-title'
   h.dataset.pageTitle = page.id
@@ -998,6 +1027,49 @@ function shownValue(f: FieldSpec | undefined, value: unknown): string {
   if (f?.vt === 'select') return optionOf(f, value)?.label ?? String(value)
   if (f?.vt === 'labels') return Array.isArray(value) ? value.join(', ') : String(value)
   return String(value)
+}
+
+/**
+ * A stable hue for a page with no cover.
+ *
+ * FNV-1a over the id, which is the same cheap hash assets.ts falls back to:
+ * every reader of one file computes the same colour, and a page keeps its
+ * colour when it is renamed.
+ *
+ * A CURATED SET, not 360 free hues. Free hue was measured drawing 61 and 54 in
+ * the same grid — the same dirty chartreuse twice — and five cards as
+ * peach/pink/pink/lavender/lavender: two near-duplicate pairs out of five. It
+ * also lands on olive and mustard, which no amount of alpha rescues, and goes
+ * muddy in the dark theme. Eight stops spaced around the wheel and chosen to
+ * be distinguishable at 30% alpha on both grounds; neighbours in a grid differ
+ * because the stops differ, not because the hash happened to spread.
+ */
+const CARD_HUES = [210, 265, 320, 8, 32, 48, 152, 186]
+
+function hueOf(id: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+  return CARD_HUES[h % CARD_HUES.length]
+}
+
+/**
+ * What a coverless card shows: the page's icon, else the first character of
+ * its title.
+ *
+ * The same rule `calloutMark` follows and for the same reasons — a name from
+ * the icon set is markup we wrote, anything else is TEXT out of a file someone
+ * sent you, and `Object.hasOwn` keeps `toString` from resolving to a function.
+ */
+function pageMark(host: HTMLElement, page: Page): void {
+  const icon = typeof page.icon === 'string' ? page.icon : ''
+  if (icon) {
+    if (Object.hasOwn(ICONS, icon)) { host.innerHTML = ICONS[icon as IconName]; host.classList.add('sp-gcard-ico') }
+    else host.textContent = icon
+    return
+  }
+  // [...str][0], not str[0]: an emoji or a CJK title is not one UTF-16 unit,
+  // and slicing one in half renders a replacement character.
+  host.textContent = [...(page.title || '?').trim()][0] ?? '?'
 }
 
 /**
@@ -1049,20 +1121,38 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // THREE shapes now, so the button says what you are looking at and the
     // click moves to the next one. A menu to choose between three is still a
     // menu too many; a cycle is one control and one word.
-    const LAYOUT_WORD: Record<string, string> = { board: 'Board', list: 'List', table: 'Table' }
-    const here = LAYOUT_WORD[layout] ? layout : 'board'
+    // `layoutOf`, not a lookup in a local map: the cycle is ONE fact and it now
+    // lives in fields.ts, because it used to live here AND in editor.ts and the
+    // two drifted. A view block hand-authored with layout:"toString" — plain
+    // JSON, in a file someone sent you — made the truthiness test here pass on
+    // a native function, and the button's label rendered as
+    // `function toString() { [native code] }`. The editor's copy had been
+    // hardened and its comment said the label was safe; the label is rendered
+    // here, and this half had not been.
+    const here = layoutOf(layout)
     const asList = here !== 'board'
     // Three WHOLE sentences rather than one with the shape interpolated into
     // it. "Show as a {what}" reads fine in English and breaks in half the
     // catalogs, where the article and the adjective agree with the noun's
     // gender — der Tafel / die Liste, un tableau / une liste. Two of these
     // three keys already existed for the same reason.
-    const NEXT_TIP: Record<string, string> = {
-      board: 'Show as a list', list: 'Show as a table', table: 'Show as a board',
+    // THE EXTRACTOR SWEEPS LITERALS. `t(WORD[here])` compiles, runs, and is
+    // never translated by anybody: no catalog ever learns the string exists,
+    // and the packer still reports 100% because it builds coverage from the
+    // keys it swept. Measured on main: "Board", "List" and "Show as a list"
+    // were present in de.ts and ABSENT from packed.ts — translations already
+    // written, dropped on the floor, while the button read English in all eight
+    // locales. So the words are chosen HERE, as literals the sweep can see;
+    // fields.ts answers "which shape is this" and "what comes next".
+    const LAYOUT_LABEL: Record<ViewLayout, string> = {
+      board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
     }
-    const NEXT: Record<string, string> = { board: 'list', list: 'table', table: 'board' }
-    const layoutB = btn('viewLayout', t(LAYOUT_WORD[here]), t(NEXT_TIP[here]))
-    layoutB.dataset.next = NEXT[here]
+    const NEXT_LABEL: Record<ViewLayout, string> = {
+      board: t('Show as a list'), list: t('Show as a table'),
+      table: t('Show as a gallery'), gallery: t('Show as a board'),
+    }
+    const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
+    layoutB.dataset.next = nextLayout(here)
 
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per
@@ -1189,6 +1279,155 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     }
     if (meta.childElementCount) a.appendChild(meta)
     return a
+  }
+
+  // TABLE — the shape a base is usually looked at in, and the one this app did
+  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
+  // declared order: a table of books should not carry an Estimate column
+  // because the vocabulary happens to contain one, and a page that has a field
+  // the others lack should not be the reason everyone gets an empty column.
+  if (layout === 'table') {
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    const wrap = document.createElement('div')
+    // its own scroller: a wide table must not make the PAGE scroll sideways
+    wrap.className = 'sp-view-tablewrap'
+    const table = document.createElement('table')
+    table.className = 'sp-view-table'
+    const thead = document.createElement('thead')
+    const hr = document.createElement('tr')
+    const th0 = document.createElement('th')
+    th0.textContent = t('Page')
+    hr.appendChild(th0)
+    for (const k of keys) {
+      const th = document.createElement('th')
+      th.textContent = fieldByKey(doc, k)?.label ?? k
+      hr.appendChild(th)
+    }
+    thead.appendChild(hr)
+    table.appendChild(thead)
+    const tb = document.createElement('tbody')
+    for (const r of rows) {
+      const tr = document.createElement('tr')
+      const td0 = document.createElement('td')
+      // the page itself, reached the same way a card reaches it
+      const a = document.createElement('a')
+      a.className = 'sp-view-cellink'
+      a.href = `#p/${r.page.id}`
+      a.dataset.page = r.page.id
+      a.textContent = r.page.title || t('Untitled')
+      td0.appendChild(a)
+      tr.appendChild(td0)
+      for (const k of keys) {
+        const td = document.createElement('td')
+        const f = fieldByKey(doc, k)
+        const v = r.values.get(k)
+        // THROUGH THE OPTION, so a select shows its label and its colour rather
+        // than the id the model stores — the same thing propHtml does for the
+        // header strip, and for the same reason: the id is not for reading.
+        const opt = optionOf(f, v)
+        if (opt) {
+          const chip = document.createElement('span')
+          chip.className = 'sp-prop-chip'
+          const dot = document.createElement('span')
+          dot.className = 'sp-prop-dot'
+          if (opt.color) dot.style.background = opt.color
+          chip.append(dot, document.createTextNode(opt.label))
+          td.appendChild(chip)
+        } else if (v !== undefined && v !== null && String(v) !== '') {
+          td.textContent = String(v)
+        } else {
+          td.className = 'sp-view-empty'
+          td.textContent = '—'
+        }
+        tr.appendChild(td)
+      }
+      tb.appendChild(tr)
+    }
+    table.appendChild(tb)
+    wrap.appendChild(table)
+    host.appendChild(wrap)
+    return
+  }
+
+  // GALLERY — the shape that makes a reading list look like a reading list. A
+  // board answers "what state is this in" and a table answers "what does it
+  // say"; a gallery answers "which one is it", which for books, films, recipes
+  // and people is the question actually being asked, and is why the covers
+  // exist at all.
+  //
+  // A card without a cover is not a hole. It gets a tinted panel carrying the
+  // page's own icon (or its first letter), on a hue derived from the page id —
+  // so a gallery of pages nobody has given a picture to still reads as a set of
+  // distinct things rather than as a grid of grey rectangles.
+  if (layout === 'gallery') {
+    const grid = document.createElement('div')
+    grid.className = 'sp-gallery'
+    for (const r of rows) {
+      const cardEl = document.createElement('div')
+      cardEl.className = 'sp-gcard'
+      cardEl.dataset.issue = r.page.id
+
+      const shot = document.createElement('div')
+      shot.className = 'sp-gcard-shot'
+      const src = resolveSrc(coverSrc(r.page), doc)
+      if (src) {
+        const img = document.createElement('img')
+        img.src = src
+        img.alt = ''
+        img.setAttribute('aria-hidden', 'true')
+        // A gallery is many pictures at once — the one place in this app where
+        // decoding them all up front is a real cost, and the one place the
+        // browser can be told not to.
+        img.loading = 'lazy'
+        img.decoding = 'async'
+        shot.appendChild(img)
+      } else {
+        shot.classList.add('sp-gcard-bare')
+        // deterministic, so a page keeps its colour across reloads, readers and
+        // machines — the same reason ids are repaired from the id and never
+        // from Math.random
+        shot.style.setProperty('--h', String(hueOf(r.page.id)))
+        const mark = document.createElement('span')
+        mark.className = 'sp-gcard-mark'
+        pageMark(mark, r.page)
+        shot.appendChild(mark)
+      }
+      cardEl.appendChild(shot)
+
+      const body = document.createElement('div')
+      body.className = 'sp-gcard-body'
+      const t1 = document.createElement(opts.editable === false ? 'span' : 'a')
+      t1.className = 'sp-issue-title'
+      if (t1 instanceof HTMLAnchorElement) t1.href = `#p/${r.page.id}`
+      t1.textContent = r.page.title || t('Untitled')
+      body.appendChild(t1)
+
+      // EVERY field the page carries, not the tracker's four. A gallery of
+      // books whose cards showed Priority and Estimate and not the Author would
+      // be the board wearing a different shape.
+      const meta = document.createElement('span')
+      meta.className = 'sp-issue-meta'
+      for (const f of fieldsOf(doc)) {
+        const v = r.values.get(f.key)
+        if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue
+        const chip = document.createElement('span')
+        chip.className = 'sp-issue-chip'
+        const o = optionOf(f, v)
+        if (o?.color) {
+          const d = document.createElement('span')
+          d.className = 'sp-prop-dot'
+          d.style.background = o.color
+          chip.appendChild(d)
+        }
+        chip.append(document.createTextNode(shownValue(f, v)))
+        meta.appendChild(chip)
+      }
+      if (meta.childElementCount) body.appendChild(meta)
+      cardEl.appendChild(body)
+      grid.appendChild(cardEl)
+    }
+    host.appendChild(grid)
+    return
   }
 
   // TABLE — the shape a base is usually looked at in, and the one this app did

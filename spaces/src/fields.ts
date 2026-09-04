@@ -26,6 +26,10 @@
 //    is. Keeping it in step with `value` is this file's job.
 
 import type { SpacesDoc, Page, Block } from './model'
+// .ts extension: the model rig loads this file under node, whose resolver will
+// not follow an extensionless import. Vite is unaffected — the same fix main
+// already carries for i18n/packed.
+import { t } from './i18n.ts'
 
 /** What a field holds. Deliberately few: every one costs an editor and a
  *  permanent commitment, and a tracker needs exactly these. */
@@ -36,14 +40,29 @@ export type FieldType = 'select' | 'person' | 'number' | 'date' | 'text' | 'labe
  * words and never translated; the labels are English source strings that t()
  * looks up at render time — never here, where they would freeze at import.
  */
-export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
-  text: 'Text',
-  select: 'Select',
-  number: 'Number',
-  date: 'Date',
-  person: 'Person',
-  labels: 'Labels',
+/**
+ * What each type is called to somebody choosing one.
+ *
+ * A FUNCTION with literal t() calls, not a map of English read back through
+ * `t(MAP[key])`. The extractor sweeps LITERALS, so the map version compiled,
+ * ran, and put five of these six words in no catalog at all — measured: Select,
+ * Number, Date, Person and Labels were absent from packed.ts while eight locales
+ * reported 100%, because the packer counts what it swept. `t()` at call time,
+ * never in a module-level const, which would freeze at import.
+ */
+export function fieldTypeLabel(vt: FieldType): string {
+  switch (vt) {
+    case 'select': return t('Select')
+    case 'number': return t('Number')
+    case 'date': return t('Date')
+    case 'person': return t('Person')
+    case 'labels': return t('Labels')
+    default: return t('Text')
+  }
 }
+
+/** The types a new field can be, in the order the picker offers them. */
+export const FIELD_TYPES: FieldType[] = ['text', 'select', 'number', 'date', 'person', 'labels']
 
 export interface FieldOption {
   id: string
@@ -601,4 +620,44 @@ export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
   if (dir === undefined) return [{ key }]
   if (dir === 'asc') return [{ key, dir: 'desc' }]
   return undefined
+}
+
+/**
+ * THE SHAPES A VIEW CAN TAKE, and the order the one button cycles them in.
+ *
+ * Written down ONCE. It used to live twice — a `NEXT` map in render.ts for the
+ * button's label and a `next` map in editor.ts for what the click stores — and
+ * the two drifted the way two copies of one fact always do. When the
+ * prototype-lookup bug below was found, the fix was applied to the editor's
+ * copy and not the renderer's, and the editor's comment then asserted the whole
+ * thing was safe while the label it named was still being rendered from the
+ * unguarded copy.
+ *
+ * `board` is the ABSENT key, never a stored 'board': a view cycled all the way
+ * round is byte-identical to one nobody ever touched, which is the rule filter
+ * and source already follow. `nextLayout` returns the word; the caller that
+ * WRITES is the one that turns 'board' back into a deletion.
+ */
+export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery'] as const
+export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
+
+/**
+ * The layout a view is ACTUALLY in, whatever its block claims.
+ *
+ * `Object.hasOwn`, never a truthiness test or a bare `in`: a view block is
+ * plain JSON in a file someone sent you, and `LAYOUT['toString']` on an object
+ * literal is a native function — truthy, and stringifying to
+ * `function toString() { [native code] }`, which is what the layout button
+ * rendered as its own label. A key from a NEWER build lands on `board` rather
+ * than nowhere, so the control is never a button that does nothing.
+ */
+export function layoutOf(raw: unknown): ViewLayout {
+  const s = String(raw ?? 'board')
+  return (VIEW_LAYOUTS as readonly string[]).includes(s) ? (s as ViewLayout) : 'board'
+}
+
+/** The next shape in the cycle: board → list → table → gallery → board. */
+export function nextLayout(raw: unknown): ViewLayout {
+  const here = layoutOf(raw)
+  return VIEW_LAYOUTS[(VIEW_LAYOUTS.indexOf(here) + 1) % VIEW_LAYOUTS.length]
 }

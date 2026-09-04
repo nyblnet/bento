@@ -530,12 +530,26 @@ names provisional.
   all (verified against pre-change code too) — resize behavior needs a
   real mouse. Present: real fullscreen via overlay.requestFullscreen at start +
   F toggle (denied requests degrade to tab-fill — that IS the testing/
-  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling — and by
-  MEASURING, not width breakpoints (zoom/OS text scale/locale width made px
-  queries clip the bar): editor.ts fitTopbar() steps down tier classes while
-  the bar overflows (ed-bar-compact hides labels, ed-bar-tight the wordmark,
-  ed-bar-fold folds into menus via applyPhoneChrome), driven by a Resize- +
-  MutationObserver on the bar.
+  sharing mode). Topbar is responsive by HIDING TEXT rather than
+  scrolling — and by MEASURING, not width breakpoints (zoom/OS text scale/
+  locale width made px queries clip the bar): editor.ts fitTopbar() steps down
+  tier classes while the bar overflows (ed-bar-compact hides labels,
+  ed-bar-tight the wordmark, ed-bar-fold folds into menus via
+  applyPhoneChrome), driven by a Resize- + MutationObserver on the bar.
+  **Below the fold's floor it DOES scroll, and that is not a retreat from the
+  above.** Fully folded the bar still needs ~356px — six 44px touch targets,
+  the mark and the title — and an iPhone SE (or any iPhone with Display Zoom
+  on) is 320px. `.ed-root` is `overflow: hidden` so a wide bar can never become
+  document scroll, so the excess was simply CUT OFF: ⋯ — which on a phone
+  carries Redo, Comment, PDF, Share, Language, Help and the whole save-as list
+  — sat at x=356 on a 320px screen and could not be reached at all (measured,
+  not inferred). Hiding text is still the strategy and still does all the work;
+  scrolling is only the floor beneath it, for the widths where the fold has
+  already surrendered everything it has. Consequence to respect: a scroll
+  container clips BOTH axes (see hard-won detail 10), so the menus hanging off
+  ＋ and ⋯ are `position: fixed` and editor.ts publishes --ed-bar-bottom for
+  them, the one thing they cannot read from CSS because it moves with the
+  safe-area insets.
   Panel show/hide lives ON the resizer strips as chevron tabs (docked
   flush to the screen edge when collapsed); phones (<700px) boot with
   both panels collapsed (canvas-first; chevrons/[/] bring them back).

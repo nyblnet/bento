@@ -7,7 +7,7 @@
 // the work: identical bytes are stored once, and a photo off a phone is
 // downscaled before it travels, visibly and reversibly.
 
-import type { SpacesDoc } from './model'
+import { pageAssetKeys, type SpacesDoc } from './model.ts'
 
 /** Longest edge kept when downscaling. Above this, detail is invisible in a
  *  text column and costs megabytes. */
@@ -88,6 +88,9 @@ export async function internAsset(doc: SpacesDoc, dataUri: string): Promise<stri
 export function orphanAssets(doc: SpacesDoc): string[] {
   const used = new Set<string>()
   for (const p of doc.pages) {
+    // a page's COVER is a reference outside its blocks, and the only one. Miss
+    // it and every cover reads as an orphan the readout offers to delete.
+    for (const k of pageAssetKeys(p)) used.add(k)
     for (const b of p.blocks) {
       for (const v of [b.src, (b as Record<string, unknown>).poster]) {
         if (typeof v === 'string' && v.startsWith('asset:')) used.add(v.slice(6))
