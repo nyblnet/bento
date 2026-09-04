@@ -6333,5 +6333,60 @@ bento-team-lead, who checked it rather than repeating it.
 Follow-up filed for `dash` + `scripts/` (two zones): add `dash/src/i18n/pt.ts`,
 add `pt` to `test-dash-i18n.ts`, regenerate `packed.ts`. Not done here — this
 zone writes no code.
+## 2026-09-04 — reconcile COMMITS against the changelog, never the changelog against itself
+
+**A changelog cannot be proof-read for what is missing from it.** Reading the
+section tells you whether the entries present are well written; it cannot tell
+you about a change that has no entry, because there is nothing there to catch
+your eye. The only direction that finds a gap is the other one: walk
+`git log <last tag>..main` and ask, of each commit, which entry covers it.
+
+**The evidence, from one release cycle.** Every gap found in the run-up to this
+cut was found that way, and none was found by anyone reading the file:
+
+| gap | how big |
+|---|---|
+| the eight phone/touch PRs (#271–#292) | the release's headline feature — bento/slides was unusable on a phone before it |
+| #402, svg style scoping | landed after the section was last reconstructed |
+| #366, sticky move after a fast click | a SILENT document mutation, and not phone-specific |
+| #294 / #295, phone chrome | uncovered entirely |
+
+The section had been read carefully several times in between. It went from 12
+entries to 18 under a check that reads no prose at all.
+
+**Two rules the exercise produced, both of which cost something to learn.**
+
+**A commit subject is a claim about a branch, not about what shipped.** The one
+commit in this cycle correctly absent from the notes is the first-party pptx
+importer: it lands in the kernel and nothing in `slides/src/main.ts` reaches it,
+so a note would promise an importer a user cannot find. Its subject line says a
+pptx importer shipped, and believing the subject would have produced a false
+entry. Re-check it at each cut — the day it gets a menu item it needs a line.
+The same shape cost a retraction elsewhere in this log on the same day — see
+the 2026-09-04 entry "CORRECTION: #394 was the fix, not the casualty" — where a
+fact true of a PR while it was open was recorded as a fact about the tree.
+
+**Whether a fix earns its OWN entry is a different question from whether it is
+covered at all.** Split a fix out when its damage is INVISIBLE — #278 (a pinch
+committing a move) and #366 (a click committing a move) both got their own
+lines, because someone whose deck quietly lost its layout will scan for exactly
+that and find nothing if it sits inside a paragraph about something else. A
+VISIBLE defect can be described where it naturally falls: #274's unreachable ⋯
+stayed inside the phone entry, whose subhead already leads with it, because
+anyone who hit it knows what they hit. But "notable" does not mean "invisible" —
+#294 and #295 are visible, earn no line of their own, and still needed covering.
+
+**Placement follows the reader, not the code.** #366 is a race between a click
+and a render, so it bites slow hardware of any kind; filed under the phone
+entry, a desktop user would have read the neighbouring pinch entry, seen
+"phones, two fingers", and concluded it was not their bug. The entry says
+outright that it is not about phones, and that sentence is what makes it
+findable by the person who needs it.
+
+**Do this before every cut, not when someone remembers.** Release notes ride
+inside the SIGNED update manifest and the channel refuses to re-sign a version,
+so an entry missing at the cut cannot be added afterwards — the check has one
+chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
+mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
