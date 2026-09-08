@@ -40,6 +40,7 @@
 // checks, key by key, through `checkElementProp`.
 
 import type { Slide, SlideElement } from './model'
+import { isWebUrl } from './model'
 import { parseThemeRef } from './palette.ts'
 import { MODEL_KEYS } from './modelkeys.generated'
 
@@ -311,6 +312,23 @@ const chartOption: Check = (v) => {
   return pure(v, LIMITS.optionDepth) ? v : DROP
 }
 
+/**
+ * Beta build, the `embed` element. `url` is what a live iframe LOADS, so it
+ * is held to http(s) and nothing else: a `javascript:` or `data:` page in a
+ * sandboxed frame cannot reach this document, but it would still be a page
+ * of someone else's choosing running on the reader's screen. `view` is svg
+ * markup or an `asset:` ref and gets the svg element's own ceiling; what the
+ * renderer does with the markup is the renderer's business (sanitizeSvg).
+ * `doc` is the source: an asset ref, or the same bounded plain JSON a chart
+ * option is held to: a source is data, never code (docs/format.md).
+ */
+// Not held to CSS_BREAKOUT: a query string legitimately carries `;` and
+// quotes, and the one consumer assigns it as a DOM property (`iframe.src`),
+// where it is a value and never re-parsed as markup (the mediaRef argument).
+const webUrl: Check = (v) =>
+  typeof v === 'string' && v.length <= LIMITS.prose && isWebUrl(v) ? v : DROP
+const embedDoc: Check = (v) => (typeof v === 'string' ? cssValue()(v) : chartOption(v))
+
 // `el` is required: a connector end with no element to anchor to is dangling,
 // and editor.syncConnectors drops those anyway
 const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
@@ -395,6 +413,8 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   source: shape(['tableId'], { tableId: cssValue() }, ['tableId']),
   columns: list(LIMITS.cols, shape(['w'], { w: num(0, 1e6) }, ['w'])),
   rows: tableRows, header: bool, style: tableStyle,
+  // embed (Beta build)
+  app: cssValue(), view: str(LIMITS.markup), doc: embedDoc, url: webUrl, live: bool,
   type: oneOf(...Object.keys(MODEL_KEYS.element)),
 }
 
@@ -424,7 +444,9 @@ const ELEMENT_CHECKS: Record<string, Check> = {
  * throwing — losing a whole pasted element over a defaultable number is the
  * worse trade. `svg` is absent for a different reason: its content comes from
  * `markup` OR `asset` (2 of the 4780 elements in a real deck use the asset
- * form), and svgMarkup already falls back to ''.
+ * form), and svgMarkup already falls back to ''. `embed` (Beta build) is
+ * absent for the same reason: an empty or refused `view` paints a
+ * placeholder, never throws.
  */
 const REQUIRED_ELEMENT_KEYS: Record<string, readonly string[]> = {
   text: ['html'],

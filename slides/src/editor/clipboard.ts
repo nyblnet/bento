@@ -35,6 +35,9 @@ function assetKeysOf(els: SlideElement[]): Set<string> {
     if ((el.type === 'image' || el.type === 'media') && typeof el.src === 'string' && el.src.startsWith('asset:')) keys.add(el.src.slice(6))
     const a = (el as { asset?: string }).asset
     if (typeof a === 'string') keys.add(a) // svg elements reference an asset key
+    // embed (Beta build): the view may live in doc.assets, and a paste that
+    // kept the reference and lost the picture would paint a hole
+    if (el.type === 'embed' && typeof el.view === 'string' && el.view.startsWith('asset:')) keys.add(el.view.slice(6))
   }
   return keys
 }
@@ -159,6 +162,9 @@ function rewriteRefs(els: SlideElement[], remap: Map<string, string>) {
     }
     const a = (el as { asset?: string }).asset
     if (typeof a === 'string' && remap.has(a)) (el as { asset?: string }).asset = remap.get(a)
+    if (el.type === 'embed' && typeof el.view === 'string' && el.view.startsWith('asset:')) {
+      const k = el.view.slice(6); if (remap.has(k)) el.view = 'asset:' + remap.get(k)
+    }
   }
 }
 

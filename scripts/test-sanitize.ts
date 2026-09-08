@@ -322,6 +322,19 @@ function draw(markup: string, css?: string): HTMLElement {
   return surface
 }
 
+/** Beta build: the same path for an embed element's view. */
+function drawEmbed(view: string): HTMLElement {
+  const doc = newDoc()
+  const slide = doc.slides[0]
+  slide.elements = [{
+    id: 'em1', type: 'embed', x: 0, y: 0, w: 200, h: 200,
+    rotation: 0, opacity: 1, app: 'web', view,
+  } as any]
+  const surface = renderSlide(slide, doc)
+  document.body.appendChild(surface)
+  return surface
+}
+
 if (location.pathname === '/meta.html') {
   // Finding 2, the live half: if the meta survives the walk, Chrome navigates
   // this document to /pwned.html and the dumped DOM is somebody else's page.
@@ -517,6 +530,18 @@ if (location.pathname === '/meta.html') {
     check('an unclosed tag still draws — text/html, not the fatal xml parser',
       !!sloppy.querySelector('svg') && !!sloppy.querySelector('circle'))
 
+    // Beta build: the embed element's view is the same kind of author markup
+    // and goes through the same walk. Its whole purpose is to carry markup
+    // someone else produced, which makes it the most attractive place in the
+    // format to hide a script. (No backticks in this comment: it lives inside
+    // probeSource's template literal.)
+    const embedded = drawEmbed('<svg viewBox="0 0 20 20"><rect id="ev" width="10" height="10"/>' +
+      '<scr' + 'ipt>window.__pwn(91)</scr' + 'ipt><rect onload="window.__pwn(92)" width="1" height="1"/>' +
+      '<image href="' + O + '/embed-view.png" width="1" height="1"/></svg>')
+    check('9 — an embed view drops its <script> and on* handler and keeps the picture',
+      embedded.querySelectorAll('script').length === 0 && !embedded.querySelector('[onload]') &&
+      !!embedded.querySelector('.bento-el-embed svg rect#ev'))
+
     // Give every payload its chance: insertion alone is not the only trigger.
     // Measured on the pre-sanitizer build, where the difference showed: a
     // form-driven javascript: needs the submit button CLICKED, and an
@@ -649,6 +674,7 @@ async function runBrowserSection(chrome: string) {
     ok(!hits.includes('/xlink.svg'), '7 — nor an xlink:href <use> pointing out of the document')
     ok(hits.includes('/remote.png'), 'an <image href="http(s)://…"> still loads — that one is allowed on purpose')
     ok(hits.includes('/xlink-remote.png'), 'and so does the xlink:href spelling of it — the policy is not a ban on pictures')
+    ok(hits.includes('/embed-view.png'), '9 — an embed view is held to the svg policy, no stricter: its <image> loads too')
   } finally {
     server.close()
     fs.rmSync(tmp, { recursive: true, force: true })

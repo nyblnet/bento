@@ -90,6 +90,7 @@ const ELEMENTS = {
   chart: 'ChartElement',
   table: 'TableElement',
   media: 'MediaElement',
+  embed: 'EmbedElement', // Beta build, see docs/agents.md "Beta build: embed"
 }
 
 const tables = {

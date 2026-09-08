@@ -4,8 +4,8 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
-import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
-import { morphKey, paginates } from './model'
+import type { BentoDoc, EmbedElement, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
+import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
 import { renderCodeInto } from './code'
@@ -135,6 +135,48 @@ export function stripRemoteRefs(node: HTMLElement): void {
 
 function svgMarkup(el: SvgElement, doc: BentoDoc): string {
   return (el.asset ? doc.assets?.[el.asset] : el.markup) ?? ''
+}
+
+// --- embed (Beta build) -----------------------------------------------------
+
+/** The only url a live frame will load. Judged here as well as at the paste
+ *  boundary, because a deck opened from disk never passes through untrusted.ts. */
+
+/**
+ * May this embed get a live iframe right now?
+ *
+ * Two different kinds of offline, one answer. Bento's offline switch is a
+ * privacy promise ("nothing leaves this computer") and is asked through
+ * net.ts, the one place that knows it; a missing network is `navigator.onLine`.
+ * Both fall back to `view`, which is what makes the deck presentable on
+ * conference wifi and what keeps the switch honest. Pure, so the rig can
+ * inspect the decision without a DOM (scripts/test-beta-embed.ts).
+ */
+export function liveFrameAllowed(el: EmbedElement): boolean {
+  if (el.live !== true || el.app !== 'web') return false
+  const url = typeof el.url === 'string' ? el.url.trim() : ''
+  if (!isWebUrl(url) || remoteSrcBlocked(url)) return false
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined
+  return !nav || nav.onLine !== false
+}
+
+/**
+ * The live frame. Sandboxed with NO `allow-same-origin` and no top
+ * navigation: every deck is untrusted input, and a page of someone else's
+ * choosing gets a screen, never this document. `error` swaps back to the
+ * view underneath; the view is never removed, so a frame that fails to paint
+ * still leaves a picture.
+ */
+function liveFrame(el: EmbedElement, opts: RenderOpts): HTMLIFrameElement {
+  const frame = document.createElement('iframe')
+  frame.setAttribute('sandbox', 'allow-scripts allow-forms')
+  frame.referrerPolicy = 'no-referrer'
+  frame.title = el.url ?? ''
+  frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:transparent'
+    + (opts.liveMedia ? '' : ';pointer-events:none') // inert on the canvas, same reason as media
+  frame.addEventListener('error', () => frame.remove(), { once: true })
+  frame.src = el.url!.trim()
+  return frame
 }
 
 /**
@@ -1206,6 +1248,50 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
           svg.prepend(style)
         }
       }
+      break
+    }
+    case 'embed': {
+      // Beta build. The view ALWAYS paints, by the svg element's own two
+      // paths: an inert data-URI <img> for thumbnails, sanitizeSvg live. An
+      // unknown `app` is rendered, not rejected: its view is still a picture.
+      // The live frame is layered on top only when liveFrameAllowed says so,
+      // and never in a thumbnail, which must not reach the network for a
+      // sidebar.
+      node.dataset.embed = '1'
+      node.style.overflow = 'hidden' // .bento-el is already positioned; the frame sits over the view
+      const markup = resolveAsset(doc, el.view ?? '')
+      let painted = false
+      if (markup) {
+        if (opts.svgAsImage) {
+          const img = document.createElement('img')
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup)
+          img.draggable = false
+          img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block'
+          node.appendChild(img)
+          painted = true
+        } else {
+          node.appendChild(sanitizeSvg(markup, `[data-el-id="${CSS.escape(el.id)}"]`))
+          const svg = node.querySelector('svg')
+          if (svg) {
+            svg.style.width = '100%'
+            svg.style.height = '100%'
+            svg.style.display = 'block'
+            painted = true
+          }
+        }
+      }
+      if (!painted) {
+        // Never an empty box: a view that is missing or was refused still
+        // says what it is, and its source is still there to open elsewhere.
+        const ph = document.createElement('div')
+        ph.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#eef2f7;color:#93a2b6;font-size:14px'
+        ph.textContent = el.app === 'web' && el.url ? el.url : `⧉ ${el.app || 'embed'}`
+        node.appendChild(ph)
+      }
+      // ...and only on a LIVE surface (present mode passes liveMedia). The
+      // editor canvas re-renders on every edit; a frame there would navigate
+      // to the author's URL on each repaint, inert or not.
+      if (!opts.svgAsImage && opts.liveMedia && liveFrameAllowed(el)) node.appendChild(liveFrame(el, opts))
       break
     }
     case 'code': {
