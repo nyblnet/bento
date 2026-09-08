@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Transparent until touched. A document list wants the ROWS to be quiet and
+     the thumbnails to carry the page, so the row earns its background only
+     while the finger is on it. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?android:attr/colorControlHighlight">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <corners android:radius="@dimen/radius" />
+        </shape>
+    </item>
+</ripple>

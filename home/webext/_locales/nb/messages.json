@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "Lagre et Bento-dokument tilbake i filen du åpnet, uten å bli spurt om hvor."
+  },
+  "navAll": {
+    "message": "Alle dokumenter"
+  },
+  "navFolders": {
+    "message": "Mapper"
+  },
+  "navHelp": {
+    "message": "Hjelp og om"
+  },
+  "navSettings": {
+    "message": "Innstillinger"
+  },
+  "addFolder": {
+    "message": "+ Legg til en mappe…"
+  },
+  "searchDocs": {
+    "message": "Søk i dokumenter"
+  },
+  "searchDocsSlash": {
+    "message": "Søk i dokumenter   /"
+  },
+  "sortTitle": {
+    "message": "Sorter"
+  },
+  "sortRecent": {
+    "message": "Sist endret"
+  },
+  "sortName": {
+    "message": "Navn"
+  },
+  "sortFolder": {
+    "message": "Mappe"
+  },
+  "newDocument": {
+    "message": "+ Nytt dokument"
+  },
+  "browseAll": {
+    "message": "Vis alle"
+  },
+  "reconnectFolders": {
+    "message": "Koble til mapper på nytt"
+  },
+  "primeIntro": {
+    "message": "Chrome spør straks. Velg det midterste alternativet:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — en mappe må kobles til på nytt"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home må kobles til på nytt"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome har trukket tilbake tillatelsen til en mappe. Til den er gjenopprettet, spør hver lagring hvor filen skal ligge."
+  },
+  "reconnect": {
+    "message": "Koble til på nytt"
+  },
+  "ctxOpenPanel": {
+    "message": "Åpne bento/home-panelet"
+  },
+  "panelEmpty": {
+    "message": "Ingen Bento-dokumenter i mappene dine ennå."
+  },
+  "noMatches": {
+    "message": "Ingenting samsvarer med «$1»"
+  },
+  "rowUnplacedTip": {
+    "message": "Åpne ett dokument i $1 én gang fra Finder, så kan alt i den mappen åpnes herfra."
+  },
+  "encrypted": {
+    "message": "Passordbeskyttet"
+  },
+  "notSavedYet": {
+    "message": "Ikke lagret ennå"
+  },
+  "fileAccessOffShort": {
+    "message": "Tilgang til lokale filer er av"
+  },
+  "noFoldersYet": {
+    "message": "Ingen mapper ennå"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 mappe må kobles til på nytt"
+  },
+  "statusOneFolder": {
+    "message": "$1 mappe · lagrer på stedet"
+  },
+  "statusFolders": {
+    "message": "$1 mapper · lagrer på stedet"
+  },
+  "renewNotOffered": {
+    "message": "Chrome tilbød ikke å gjenopprette den"
+  },
+  "renewTryAfterRestart": {
+    "message": "Prøv igjen etter å ha startet Chrome på nytt"
+  },
+  "fetchingLatest": {
+    "message": "Henter nyeste Bento…"
+  },
+  "created": {
+    "message": "$1 opprettet"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 kan leses, men ikke åpnes ennå — Chrome forteller ikke en utvidelse hvor en mappe ligger på disken. <b>Vis alle</b> finner dem med ett klikk."
+  },
+  "andMore": {
+    "message": " og $1 til"
+  },
+  "agoJustNow": {
+    "message": "akkurat nå"
+  },
+  "agoMinutes": {
+    "message": "for $1 min siden"
+  },
+  "agoHour": {
+    "message": "for $1 time siden"
+  },
+  "agoHours": {
+    "message": "for $1 timer siden"
+  },
+  "agoDay": {
+    "message": "for $1 dag siden"
+  },
+  "agoDays": {
+    "message": "for $1 dager siden"
+  },
+  "searchScope": {
+    "message": "Søket ser på titler, filnavn, mapper og ordene inne i dokumentene."
+  },
+  "folderEmpty": {
+    "message": "Ingenting i denne mappen ennå"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Nytt dokument</b> legger et ferskt her."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home vet ikke hvor $1 ligger på disken ennå. Bruk «Finn mappene mine», eller åpne et dokument derfra i Finder én gang."
+  },
+  "cardRenamedTip": {
+    "message": "$1 er et Bento-dokument under et annet navn. Det åpnes herfra, men lagring spør etter et sted — lagring på stedet gjenkjenner bare filer som slutter på .bento.html."
+  },
+  "badgeRenamed": {
+    "message": "Heter .html i stedet for .bento.html — det åpnes herfra, men lagring spør etter et sted."
+  },
+  "menuOpen": {
+    "message": "Åpne"
+  },
+  "menuDuplicate": {
+    "message": "Dupliser"
+  },
+  "menuRename": {
+    "message": "Gi nytt navn…"
+  },
+  "menuCopyPath": {
+    "message": "Kopier sti"
+  },
+  "duplicatedAs": {
+    "message": "Duplisert som $1"
+  },
+  "renamePrompt": {
+    "message": "Gi dokumentet nytt navn"
+  },
+  "renamedTo": {
+    "message": "Fikk navnet $1"
+  },
+  "pathCopied": {
+    "message": "Sti kopiert"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — ikke åpnet ennå"
+  },
+  "setupTitle": {
+    "message": "To ting, så er du klar"
+  },
+  "setupLead": {
+    "message": "Etter dette skriver ⌘S i et dokument du åpnet med dobbeltklikk rett tilbake til filen — aldri mer spørsmål om hvor."
+  },
+  "chooseFolder": {
+    "message": "Velg en mappe…"
+  },
+  "setupStep1": {
+    "message": "Velg mappen dokumentene dine ligger i"
+  },
+  "setupStep1Note": {
+    "message": "Én bred mappe holder som regel — den dekker alt inni."
+  },
+  "setupStep2": {
+    "message": "Slå på tilgang til lokale filer"
+  },
+  "setupStep2Note": {
+    "message": "I <code>chrome://extensions</code> → bento/home → <b>Tillat tilgang til fil-URL-er</b>. Chrome lar ikke en utvidelse slå dette på selv."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Oppgradert og ventet å finne mappene dine her?</b> En utpakket utvidelse identifiseres av mappestien sin, så en ny kopi lastet fra en annen mappe blir en annen utvidelse. Mappene dine hører fortsatt til den gamle. Bytt heller ut filene i den opprinnelige mappen og trykk <b>Last inn på nytt</b> i <code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Tilgang til lokale filer er av</b> — ingenting lagres på stedet før den er på. Slå på <b>Tillat tilgang til fil-URL-er</b> i <code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 mappe må kobles til på nytt.</b> Koble den til igjen under <b>Innstillinger</b>, og velg <b>Tillat ved hvert besøk</b> — det eneste alternativet som varer."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> kan vises i listen, men ikke åpnes ennå — Chrome forteller aldri en utvidelse hvor en mappe ligger på disken."
+  },
+  "findFolders": {
+    "message": "Finn mappene mine"
+  },
+  "looking": {
+    "message": "Leter…"
+  },
+  "findDeclined": {
+    "message": "<b>Helt greit.</b> Åpne heller et dokument i $1 fra Finder én gang — denne siden merker det."
+  },
+  "foundFolder": {
+    "message": "Fant $1 mappe"
+  },
+  "foundFolders": {
+    "message": "Fant $1 mapper"
+  },
+  "foundNothing": {
+    "message": "Ingenting i loggen ennå — åpne ett dokument fra Finder"
+  },
+  "setFoldersSub": {
+    "message": "Dokumenter i disse lagres rett tilbake til filen, uten spørsmål om hvor. En mappe dekker alt inni."
+  },
+  "noneYet": {
+    "message": "Ingen ennå."
+  },
+  "savesInPlace": {
+    "message": "lagrer på stedet"
+  },
+  "needsReconnecting": {
+    "message": "må kobles til på nytt"
+  },
+  "reconnectTip": {
+    "message": "Chrome spør om denne mappen kan gjenopprettes. «Ikke tillat» slipper den, og deretter venter Chrome minst en omstart før den spør igjen."
+  },
+  "remove": {
+    "message": "Fjern"
+  },
+  "removeTip": {
+    "message": "Fjerner tilgangen. Chrome kan fortsatt huske tillatelsen, så å legge mappen til igjen spør kanskje ikke."
+  },
+  "setAccessTitle": {
+    "message": "Tilgang til lokale filer"
+  },
+  "setAccessSub": {
+    "message": "Chrome lar ikke en utvidelse slå dette på selv, og ingenting virker uten."
+  },
+  "stateOn": {
+    "message": "På"
+  },
+  "stateOff": {
+    "message": "Av"
+  },
+  "stateUnknown": {
+    "message": "Ukjent"
+  },
+  "accessOnNote": {
+    "message": "bento/home kan lese sider du har åpnet fra disken."
+  },
+  "accessOffNote": {
+    "message": "Åpne chrome://extensions, finn bento/home og slå på «Tillat tilgang til fil-URL-er»."
+  },
+  "accessUnknownNote": {
+    "message": "Denne nettleseren oppgir det ikke. Hvis lagring fortsatt spør, sjekk det i chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "Versjon"
+  },
+  "setVersionUnpacked": {
+    "message": "Denne kopien ble lastet utpakket, så Chrome oppdaterer den aldri."
+  },
+  "setVersionStore": {
+    "message": "Installert fra butikken, så den oppdaterer seg selv."
+  },
+  "versionAvailable": {
+    "message": "$1 er tilgjengelig"
+  },
+  "versionUpToDate": {
+    "message": "oppdatert ved siste sjekk"
+  },
+  "versionManaged": {
+    "message": "holdes oppdatert av nettleseren"
+  },
+  "getIt": {
+    "message": "Hent den"
+  },
+  "checkNow": {
+    "message": "Sjekk nå"
+  },
+  "autoCheckPref": {
+    "message": "<b>Se etter en ny versjon når nettleseren starter.</b><br>Én forespørsel til bento.page om en statisk fil. Den sender ingen identifikatorer, ingen versjonsnummer og ingenting om dokumentene dine — sammenligningen skjer her. Slå den av, og ingenting blir noen gang forespurt; <b>Sjekk nå</b> virker fortsatt."
+  },
+  "expectedSha": {
+    "message": "Forventet SHA-256 for zip-filen: $1"
+  },
+  "setReachTitle": {
+    "message": "Hva dette når"
+  },
+  "setReachSub": {
+    "message": "Bare mappene over, og bare filen en side faktisk ble åpnet fra. Ingenting lastes opp, og ingenting leses andre steder."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 er tilgjengelig.</b> Denne kopien ble lastet utpakket, så Chrome oppdaterer den aldri."
+  },
+  "updateStep1": {
+    "message": "Last den ned fra GitHub"
+  },
+  "updateStep2": {
+    "message": "Bytt ut filene <b>i mappen du lastet den fra</b> — samme mappe, ellers behandler Chrome den som en annen utvidelse, og mappene du har gitt tilgang til følger ikke med"
+  },
+  "updateStep3": {
+    "message": "Åpne <code>chrome://extensions</code> og trykk <b>Last inn på nytt</b> på bento/home"
+  },
+  "fetchingApp": {
+    "message": "Henter $1…"
+  },
+  "createdIn": {
+    "message": "Opprettet $1 ($2) i $3"
+  },
+  "intoFolder": {
+    "message": "i $1"
+  },
+  "helpWhatTitle": {
+    "message": "Hva bento/home gjør"
+  },
+  "helpWhatSub": {
+    "message": "Et Bento-dokument er én HTML-fil som bærer sin egen redigerer. Åpnet rett fra disken lar ikke en nettleser den skrive tilbake til seg selv — så hver lagring spør hvor filen skal ligge. bento/home fjerner det spørsmålet."
+  },
+  "tourSaveTitle": {
+    "message": "Lagre på stedet"
+  },
+  "tourSaveBody": {
+    "message": "⌘S skriver rett tilbake til filen du åpnet, uten dialog. Autolagring og oppdateringer på stedet går samme vei."
+  },
+  "tourFindTitle": {
+    "message": "Finn dokumentene dine"
+  },
+  "tourFindBody": {
+    "message": "Alle Bento-dokumenter i mappene dine, med sin virkelige tittel og et bilde av første side. Søket dekker også det som står inni dem."
+  },
+  "tourSwitchTitle": {
+    "message": "Bytt mens du jobber"
+  },
+  "tourSwitchBody": {
+    "message": "Trykk <kbd>Alt</kbd>+<kbd>B</kbd>, eller høyreklikk inne i et dokument, for et panel ved siden av."
+  },
+  "tourNewTitle": {
+    "message": "Lag et nytt"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Nytt dokument</b> henter gjeldende utgave av Slides, Spaces eller Dash og legger et ferskt dokument i mappen din."
+  },
+  "helpNeedsTitle": {
+    "message": "Hva den trenger fra deg"
+  },
+  "helpNeedsSub": {
+    "message": "To ting, begge utenfor denne utvidelsens makt til å ordne."
+  },
+  "helpFolder": {
+    "message": "En mappe"
+  },
+  "helpFolderGranted": {
+    "message": "$1 gitt tilgang — dokumenter i dem lagres på stedet"
+  },
+  "helpFolderNone": {
+    "message": "Ikke valgt ennå. Én bred mappe dekker alt inni."
+  },
+  "helpAccessOff": {
+    "message": "Av. Slå på <b>Tillat tilgang til fil-URL-er</b> i <code>chrome://extensions</code> — ingen utvidelse kan slå dette på selv."
+  },
+  "helpAccessUnknown": {
+    "message": "Denne nettleseren oppgir det ikke. Hvis lagring fortsatt spør, sjekk det i <code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "På — bento/home kan lese sider du har åpnet fra disken."
+  },
+  "helpNeverTitle": {
+    "message": "Hva den aldri gjør"
+  },
+  "helpNeverSub": {
+    "message": "Den leser og skriver bare inne i mappene over, og bare filen en side faktisk ble åpnet fra — nettleseren sier hvilken, så et dokument kan ikke peke ut andres fil. Ingenting om dokumentene dine lastes opp noe sted, og utvidelsen har ingen tjener å laste dem opp til."
+  },
+  "helpAboutTitle": {
+    "message": "Om"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · del av Bento-prosjektet · MIT-lisensiert"
+  },
+  "linkSource": {
+    "message": "Kildekode på GitHub"
+  },
+  "linkIssues": {
+    "message": "Meld fra om et problem"
+  },
+  "linkReleases": {
+    "message": "Utgivelser"
+  },
+  "primeMiddle": {
+    "message": "det som varer"
+  },
+  "primeNote": {
+    "message": "De to andre virker også, men Chrome spør igjen — ved hver omstart for det første, og etter en ventetid for det siste."
+  },
+  "viewLayout": {
+    "message": "Hvordan dokumenter vises"
+  },
+  "viewIcons": {
+    "message": "Ikoner"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Lukk"
+  },
+  "setLangTitle": {
+    "message": "Språk"
+  },
+  "setLangSub": {
+    "message": "Hvilket språk denne utvidelsen snakker. Normalt følger den nettleseren."
+  },
+  "langAutomatic": {
+    "message": "Automatisk — følg nettleseren"
+  },
+  "setLangNote": {
+    "message": "Utvidelsens eget navn og beskrivelse kommer fra nettleseren og endrer seg ikke."
+  },
+  "aboutPromo": {
+    "message": "Ny med Bento? Finn maler, galleriet og AI-redigeringsguiden på $1 — eller gi den en stjerne på $2."
+  },
+  "setThemeTitle": {
+    "message": "Utseende"
+  },
+  "setThemeSub": {
+    "message": "Nettleserens innstilling er standarden, ikke et krav."
+  },
+  "themeAuto": {
+    "message": "Følg nettleseren"
+  },
+  "themeLight": {
+    "message": "Lyst"
+  },
+  "themeDark": {
+    "message": "Mørkt"
+  },
+  "checking": {
+    "message": "Sjekker…"
+  },
+  "surveyTitle": {
+    "message": "Finn hvor dokumentene dine er"
+  },
+  "surveySub": {
+    "message": "Nettleseren vet hvilke Bento-dokumenter du har åpnet. Den kan si hvilke mapper de ligger i."
+  },
+  "surveyDeclined": {
+    "message": "Helt greit — du kan legge til mapper for hånd."
+  },
+  "surveyAllCovered": {
+    "message": "Alle $1 dokumenter denne nettleseren har sett ligger allerede i en lagt til mappe."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumenter ligger utenfor alle mappene du har lagt til. $2 er allerede dekket."
+  },
+  "surveyCovers": {
+    "message": "dekker $1"
+  },
+  "surveyAdd": {
+    "message": "Legg til denne mappen…"
+  },
+  "surveyAdded": {
+    "message": "$1 lagt til — dokumentene i den er klare"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 lagt til, men dokumentene ligger ikke der — åpne ett fra Finder én gang."
+  },
+  "surveyOnlySeen": {
+    "message": "Bare dokumenter som er åpnet i denne nettleseren kan finnes slik."
+  }
+}

@@ -7,7 +7,12 @@
          editor visibly stops short of the screen edges. The app fills the screen
          and positions its own chrome; it never needs the browser to pad it. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="color-scheme" content="only light" />
+    <!-- The app ships a dark interface (styles.css theme tokens), so it tells
+         the browser it handles both. kernel/src/theme.ts restates the resolved
+         value inline on <html> at boot, which is what makes an explicit choice
+         beat the OS setting; this meta is what covers the moment before that.
+         The SPLASH is dark in both themes and says so in its own rules. -->
+    <meta name="color-scheme" content="light dark" />
     <meta name="generator" content="bento-spaces" />
     <title>bento/spaces</title>
     <!-- NOTICE

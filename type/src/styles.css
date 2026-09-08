@@ -1,0 +1,1085 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   bento/type — chrome and page.
+
+   The token set is the suite's, character for character, from
+   slides/src/styles.css and spaces/src/styles.css. Do not fork it: a person
+   with two Bento apps open should not be able to tell they were built
+   separately, and the accent is doing brand work in all three.
+
+   The page sits on LIGHT chrome and is separated by a shadow, exactly as a
+   slide does on the slides canvas (.ed-stage). Dark surround is the obvious
+   instinct for a document editor and it is not what this suite does. */
+
+/* ————— tokens —————
+   Split in two on purpose:
+
+   THEMED (chrome) flips with the theme. NOT THEMED (paper, geometry) does not.
+   Dark theme dims the APP, never the document: a slide's background is data the
+   author chose, and a page is white because paper is white. Somebody proofing a
+   contract at midnight still has to see what will print. */
+
+:root {
+  /* document surface — deliberately outside the themed set */
+  --paper: #fff;
+  --paper-ink: #1a1a1a;
+  --paper-ink-2: #3a3d44;
+  --paper-rule: #c3cad4;
+  --paper-link-underline: #a9bcd8;
+  /* Tracked changes are PAPER ink, so they sit in the unthemed block with the
+     rest of it. The page is white in dark mode — it is paper — and a tracked
+     insertion that lightened with the chrome would be the one thing on the
+     sheet that changed colour with a preference. It also means the screen and
+     the print are the same ink, which is what a signed-off redline needs. */
+  --paper-trk: #1a6b4a;
+  --paper-trk-bg: #eaf3ef;
+  --paper-trk-del: #a3312a;
+
+  /* geometry */
+  --radius: 10px;
+  --page-w: 816px; --page-h: 1056px;
+  --mar-x: 104px; --mar-t: 104px; --mar-b: 104px;
+  --gutter: 250px;
+
+  /* find highlights — they sit ON the page, so like --paper they do NOT theme:
+     a match must look the same to the person proofing at midnight as it will
+     when the page is printed. */
+  --find-hit: #ffe9a8;
+  --find-cur: #f7a600;
+  --find-ink: #1a1a1a;
+}
+
+/* LIGHT — the suite's shared palette, character for character with
+   slides/src/styles.css and spaces/src/styles.css. */
+:root, :root[data-theme="light"] {
+  --ink: #1e2a3a;
+  --ink-2: #31445c;
+  --chrome: #f5f7fa;
+  --chrome-2: #eceff4;
+  --line: #e3e8ef;
+  --muted: #5b6472;
+  --accent: #f7a600;
+  --accent-ink: #7a5200;
+  --blue: #5b8def;
+  --field: #ffffff;          /* form-control surface — CHROME, not paper */
+  --grid-dot: #d5dbe4;
+  --good: #1c7a45;
+  --bad: #c0392b;
+  --warnc: #a06a12;
+  --page-shadow: 0 10px 40px rgb(20 30 45 / 0.18), 0 2px 8px rgb(20 30 45 / 0.10);
+}
+
+/* DARK — the same roles, not the same values. `--ink` is the chrome's
+   FOREGROUND, so it inverts; `--accent` does not, because it is brand. */
+:root[data-theme="dark"] {
+  --ink: #e7eaf0;
+  --ink-2: #b3bcca;
+  --chrome: #1b1f26;
+  --chrome-2: #262b34;
+  --line: #333a45;
+  --muted: #8b95a4;
+  --accent: #f7a600;
+  --accent-ink: #3a2a00;      /* text ON the accent, so it flips */
+  --blue: #7aa5f5;            /* lifted: #5b8def is too dark to read here */
+  --field: #12151a;
+  --grid-dot: #2b313b;
+  /* deeper, because a white page on a dark canvas needs more separation than
+     the same page on a light one */
+  --good: #5fb87a;
+  --bad: #e06c5c;
+  --warnc: #e0a33c;
+  --page-shadow: 0 14px 48px rgb(0 0 0 / 0.55), 0 2px 10px rgb(0 0 0 / 0.4);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--chrome);
+  overscroll-behavior: none;
+}
+#app { display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: hidden; }
+/* THREE columns, the suite's arrangement: navigation, the document, and the
+   properties of what is selected. slides and dash both do this and say so —
+   two Bento apps that lay themselves out differently read as two products. */
+.t-main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 250px; overflow: hidden; }
+/* The paper is a FIXED width — it is paper — so the middle column can be too
+   narrow for it. Never clip: scroll. Measured at 1120px with both panels open,
+   the column was 620px against a 1066px page and the page was cut off. */
+.t-scroll { overflow-x: auto; }
+.t-main.t-side-off { grid-template-columns: 0 1fr 250px; }
+.t-main.t-props-off { grid-template-columns: 250px 1fr 0; }
+.t-main.t-side-off.t-props-off { grid-template-columns: 0 1fr 0; }
+.t-props {
+  background: var(--chrome); border-inline-start: 1px solid var(--line);
+  overflow: auto; min-width: 0;
+}
+.t-props .t-panel { display: block; }
+.t-props .t-panel[hidden] { display: none; }
+/* the house geometry: 11px uppercase section headers, copied deliberately */
+.t-section {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+  margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--line);
+}
+.t-props > .t-panel > :first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.t-props-empty { padding: 14px 12px; font-size: 12px; color: var(--muted); }
+/* the panel's own furniture — the suite's metrics: 12.5px rows, the control
+   right-aligned at a fixed width, as slides and dash both do */
+.t-sec-body { padding: 0 0 4px; }
+.t-props .t-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.t-props .t-row > span:first-child { flex: 1 1 auto; font-size: 12.5px; color: var(--muted); }
+.t-props .t-row > :last-child { flex: 0 0 auto; }
+.t-toggles { display: flex; gap: 2px; margin: 6px 0; flex-wrap: wrap; }
+.t-toggles .t-btn { min-width: 30px; min-height: 28px; padding: 4px 7px; }
+.t-field { width: 68px; font: inherit; font-size: 12.5px; color: var(--ink);
+  background: var(--field); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; }
+.t-field-wide { width: 130px; }
+.t-props .t-note { margin: 4px 0 8px; }
+.t-side { background: var(--chrome); border-inline-end: 1px solid var(--line); overflow: auto; }
+.t-tabs { display: flex; position: sticky; top: 0; z-index: 5;
+  background: var(--chrome); border-bottom: 1px solid var(--line); }
+.t-tabs button { flex: 1; border: 0; border-radius: 0; background: transparent;
+  color: var(--muted); padding: 9px 4px; font-size: 11.5px; cursor: pointer; }
+.t-tabs button:hover { background: var(--chrome-2); }
+.t-tabs button.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 600; }
+.t-panel { display: none; padding: 10px 12px; }
+.t-panel.on { display: block; }
+
+/* The Navigate tab's segmented control. Quieter than the tabs above it on
+   purpose: these are four views of one question, and giving them the same
+   weight as Navigate/Review/Sources would read as seven tabs again. */
+.t-seg { display: flex; gap: 2px; margin-bottom: 9px; padding: 2px;
+  background: var(--chrome-2); border-radius: 7px; }
+.t-seg button { flex: 1; border: 0; border-radius: 5px; background: transparent;
+  color: var(--muted); padding: 4px 2px; font: inherit; font-size: 11px;
+  cursor: pointer; white-space: nowrap; }
+.t-seg button:hover { color: var(--ink-2); }
+.t-seg button.on { background: var(--chrome); color: var(--ink); font-weight: 600; }
+.t-view { display: none; }
+.t-view.on { display: block; }
+.t-outline a.pagerow .pg { float: none; margin-inline-end: 8px; }
+
+/* Review stacks three sections in one tab, so each says what it is. Without
+   the rule a comment card and a tracked change sat flush against each other
+   and read as one list of two unrelated things. */
+.t-side .t-sub { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin: 14px 0 7px; }
+.t-side .t-sub:first-child { margin-top: 0; }
+.t-side #reviewPanel:not(:empty), .t-side #sigsPanel:not(:empty) {
+  border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+.t-hint { color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.t-outline a { display: block; color: var(--ink-2); text-decoration: none; padding: 3px 6px;
+  border-radius: 4px; font-size: 12px; line-height: 1.35; cursor: pointer; }
+.t-outline a:hover { background: var(--chrome-2); }
+.t-outline a.h3 { padding-inline-start: 18px; color: var(--muted); font-size: 11.5px; }
+.t-outline .pg { float: inline-end; color: var(--muted);
+  font: 10px/1.5 ui-monospace, SFMono-Regular, monospace; }
+.t-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px;
+  margin-bottom: 7px; background: var(--field); }
+.t-card .who { font-size: 10.5px; color: var(--muted); margin-bottom: 4px; }
+.t-card .what { font-size: 12px; line-height: 1.45; word-break: break-word; color: var(--ink); }
+.t-card .what del { color: var(--bad); text-decoration: line-through; }
+.t-card .what ins { color: var(--good); text-decoration: none; }
+.t-card .btns { display: flex; gap: 5px; margin-top: 7px; }
+.t-card .btns button { flex: 1; padding: 3px 6px; font-size: 11px; font: inherit;
+  border: 1px solid var(--line); background: var(--chrome); color: var(--ink-2);
+  border-radius: 6px; cursor: pointer; }
+.t-card .btns button:hover { background: var(--chrome-2); }
+.t-card.done { opacity: .45; }
+.t-fp { font: 10px/1.5 ui-monospace, SFMono-Regular, monospace; color: var(--muted);
+  word-break: break-all; margin-top: 3px; }
+.t-ok { color: var(--good); } .t-bad { color: var(--bad); } .t-warn { color: var(--warnc); }
+
+/* ————— toolbar —————
+   ONE ROW, and the same furniture every other app in the suite puts there:
+   the mark (which is also the way into About), a panel toggle, the document
+   title, a status line, then the tools. It was two stacked rows of text
+   buttons, which is the single loudest way this app read as a different
+   product. Class names are type's; the STRUCTURE and the metrics are shared
+   with slides/src/styles.css and spaces/src/styles.css deliberately. */
+.t-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  background: var(--chrome); border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+  /* A grid item's automatic minimum size is its MIN-CONTENT width, so without
+     this the bar simply refused to be narrower than its buttons (measured:
+     1135px inside a 1000px window) and #app clipped the overflow. Its own
+     scrollWidth then equalled its clientWidth, so fitBar's overflow test could
+     never fire and the tiers never engaged — the bar looked fine to the code
+     and was cut off on screen. */
+  min-width: 0;
+}
+
+/* the suite's mark — identical geometry and colours in all three apps */
+.t-mark {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
+  white-space: nowrap; padding: 4px 7px 4px 4px; user-select: none;
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  color: var(--ink); cursor: pointer;
+}
+.t-mark:hover { background: var(--chrome-2); }
+.t-mark-svg { display: block; flex: 0 0 auto; }
+.t-mark-word span { color: #FF9E8A; }
+
+.t-doctitle {
+  /* Sized, not greedy — the right group's margin-inline-start:auto is the
+     spacer, so a long title cannot push the tools off the bar. */
+  flex: 0 1 260px;
+  /* A hard floor, not `min-width: 0`. Without it flexbox has nothing to stop
+     shrinking at and will crush the title toward zero before it ever counts
+     as "overflow" (measured: 16px wide, narrower than a single glyph) — the
+     t-bar-tight/-fold flex-basis steps below are what SHOULD do the shrinking;
+     this is the backstop for whatever gap remains, and the last width fitBar's
+     tooTight() check treats as still-readable before it gives up and folds
+     the title away entirely (see .t-bar-micro). */
+  min-width: 72px;
+  font: inherit; font-size: 14px; color: var(--ink);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 5px 8px; text-overflow: ellipsis;
+}
+.t-doctitle:hover { background: var(--chrome-2); }
+.t-doctitle:focus { background: var(--field); border-color: var(--blue); outline: none; }
+
+.t-status {
+  font-size: 12px; color: var(--muted); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+
+.t-right { margin-inline-start: auto; display: flex; align-items: center; gap: 4px; }
+.t-group { display: flex; align-items: center; gap: 2px; }
+.t-group + .t-group { margin-inline-start: 6px; padding-inline-start: 6px;
+  border-inline-start: 1px solid var(--line); }
+
+.t-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: inherit; font-size: 13px; color: var(--ink-2);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 6px 9px; min-width: 32px; min-height: 32px;
+  cursor: pointer; white-space: nowrap;
+}
+.t-btn:hover { background: var(--chrome-2); }
+.t-btn:active { background: var(--line); }
+.t-btn.on { background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 600; }
+.t-primary { background: var(--ink); color: var(--chrome); padding: 6px 12px; }
+.t-primary:hover { background: var(--ink-2); }
+
+.t-select {
+  font: inherit; font-size: 13px; color: var(--ink-2);
+  background: var(--field); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 8px; cursor: pointer;
+}
+
+/* the ⋯ menu — secondary actions, off the bar but one click away */
+.t-menuwrap { position: relative; }
+.t-menu {
+  position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 60;
+  min-width: 200px; padding: 5px;
+  background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(20 30 45 / .16), 0 2px 6px rgb(20 30 45 / .08);
+}
+.t-menu button {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  font: inherit; font-size: 13px; color: var(--ink-2); text-align: start;
+  background: transparent; border: 0; border-radius: 7px;
+  padding: 7px 9px; cursor: pointer;
+}
+.t-menu button:hover { background: var(--chrome-2); }
+.t-menu-sep { height: 1px; background: var(--line); margin: 5px 4px; }
+/* A bar button (`.t-btn`) reparented into the ⋯ menu at the fold tier
+   (main.ts setBarFolded) is still a `.t-btn` — its OWN rules (inline-flex,
+   fixed min-width) would make it a stray icon chip in a list of full-width
+   rows. `.t-menu button`'s selector is more specific (0,1,1 vs 0,1,0) so it
+   wins the conflicting properties without an !important war; this just
+   covers the one property that selector doesn't touch. */
+.t-menu .t-btn { width: 100%; justify-content: flex-start; }
+/* Icon-only bar buttons lean on `title` for their name; a menu row has no
+   hover to reveal that, so it needs visible text. `.t-mlbl` (main.ts
+   toolButton) is the fallback label those buttons carry for exactly this
+   case — invisible while the button lives in the bar, shown only once it is
+   actually inside a menu, so it costs nothing until it is needed. */
+.t-mlbl { display: none; }
+.t-menu .t-mlbl { display: inline; }
+
+/* RESPONSIVE, the suite's way: hide TEXT, never scroll the bar — and size it
+   by MEASURING, not by width breakpoints (slides/src/editor/editor.ts
+   fitTopbar explains why at length: browser zoom, OS text scaling and wider
+   translations all change how much room the same buttons need at the same
+   viewport width, and each one clipped the end of the bar).
+   The tiers are applied by fitBar() in main.ts, widest first. */
+.t-bar-compact .t-lbl { display: none; }
+/* `#moreMenu` is DOM-nested inside `.t-bar` (`.t-menuwrap` sits in `.t-right`),
+   so the rule above also matched every `.t-lbl` INSIDE the ⋯ menu — meaning
+   Snapshot/Review/Sign/Print/About (main.ts, built with the same `label()`
+   helper as the bar's own buttons) silently lost their text the moment the
+   bar reached the compact tier, even though a menu row never participates in
+   the bar's width squeeze and its text was never optional. Same fix as
+   `.t-mlbl` above, for the label spans that already existed before it; same
+   specificity as the rule it corrects, so it only wins by coming after it. */
+.t-menu .t-lbl { display: inline; }
+.t-bar-compact .t-primary { padding: 6px 9px; }
+.t-bar-tight .t-mark-word { display: none; }
+.t-bar-tight .t-doctitle { flex-basis: 160px; }
+.t-bar-fold .t-status { display: none; }
+.t-bar-fold .t-doctitle { flex-basis: 110px; }
+.t-bar-fold .t-group + .t-group { margin-inline-start: 2px; padding-inline-start: 2px; }
+/* Everything the fold tier could move into ⋯ (main.ts FOLD_GROUPS) is gone
+   from the bar by the time this matters, so an emptied `.t-group` host is
+   left with no children — collapse it rather than let its `gap` reserve
+   space for buttons that are no longer there. */
+.t-bar-fold .t-group:empty { display: none; }
+/* The last resort: even folded, a bar can be too narrow for a title that has
+   nowhere left to shrink. Drop it cleanly instead of crushing it below one
+   legible character — the window title and the About dialog still show it. */
+.t-bar-micro .t-doctitle { display: none; }
+
+/* ————— the page ————— */
+.t-scroll {
+  overflow: auto; padding: 28px 0 200px; scrollbar-gutter: stable both-edges;
+  /* the slides canvas texture, so a page and a slide sit on the same surface */
+  background:
+    radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--chrome);
+}
+.t-wrap { position: relative; margin: 0 auto; width: calc(var(--page-w) + var(--gutter)); }
+.t-paper {
+  background: var(--paper);
+  width: var(--page-w); min-height: var(--page-h);
+  padding: var(--mar-t) var(--mar-x) var(--mar-b);
+  /* the slides canvas shadow, so a page and a slide read as the same object */
+  box-shadow: var(--page-shadow);
+  border-radius: 2px;
+  position: relative; z-index: 1;
+  color: var(--paper-ink);
+  /* The document's own typeface. The fallback is the historical default, so a
+     file that says nothing about type is byte-for-byte unchanged. */
+  font: var(--doc-size, 17px)/1.62 var(--doc-family, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif);
+  hyphens: auto; -webkit-hyphens: auto;
+}
+.t-paper:focus { outline: none; }
+.t-paper h1 { font-size: 26px; line-height: 1.24; font-weight: 600; margin: 0 0 14px; hyphens: none; }
+.t-paper h2 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; hyphens: none; break-after: avoid; }
+.t-paper h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--paper-ink-2); hyphens: none; }
+.t-paper p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
+.t-paper p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+/* ————— figures ————— */
+.t-paper .t-figure {
+  margin: 14px 0; text-align: center;
+  /* an image is atomic: it must not be split across a page, and pagination is
+     told the same thing by data-atomic */
+  break-inside: avoid; page-break-inside: avoid;
+}
+.t-paper .t-figure img { max-width: 100%; height: auto; vertical-align: top; }
+.t-paper .t-figure[data-align="left"] { text-align: left; }
+.t-paper .t-figure[data-align="right"] { text-align: right; }
+/* a source that will not load leaves a visible frame rather than a silent gap
+   that pagination has already reserved height for */
+.t-paper .t-figure[data-broken] img { min-height: 80px; outline: 1px dashed var(--paper-rule); }
+
+/* ————— tables —————
+   Ruled, not boxed: a contract table wants horizontal rules and air, not a grid
+   of borders. `table-layout: fixed` so a long cell widens nothing — the measure
+   is the page's, and a table that changes it makes the page look broken. */
+.t-paper .t-table {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+  margin: 0 0 12px; font-size: .95em;
+}
+.t-paper .t-table th, .t-paper .t-table td {
+  border-bottom: 1px solid var(--paper-rule);
+  padding: 6px 10px 6px 0; vertical-align: top;
+  text-align: start; text-indent: 0; hyphens: none;
+}
+.t-paper .t-table th {
+  font-weight: 600; border-bottom-width: 1.5px;
+  color: var(--paper-ink);
+}
+.t-paper .t-table tr:last-child td { border-bottom: 0; }
+/* a padded cell in a short final row is structure, not content */
+.t-paper .t-table td[data-pad] { opacity: .35; }
+
+/* ————— lists —————
+   Justified like body text, because a list in a contract is prose that happens
+   to be enumerated. `text-indent` is reset: `p + p` gives paragraphs a first-line
+   indent and a list item is not a continued paragraph.
+
+   The markers are OUTSIDE the text column so the text edge stays flush with the
+   paragraphs above and below — a list that shifts the measure makes the page
+   look broken even though nothing is wrong. */
+.t-paper ul, .t-paper ol {
+  margin: 0 0 10px; padding-inline-start: 1.6em;
+}
+.t-paper li {
+  margin: 0 0 3px; text-align: justify; text-indent: 0;
+  orphans: 2; widows: 2;
+}
+/* a nested list tucks under its parent item and loses the outer gap */
+.t-paper li > ul, .t-paper li > ol { margin: 3px 0 0; }
+.t-paper ul { list-style: disc; }
+.t-paper ul ul { list-style: circle; }
+.t-paper ul ul ul { list-style: square; }
+.t-paper ol { list-style: decimal; }
+.t-paper ol ol { list-style: lower-alpha; }
+.t-paper ol ol ol { list-style: lower-roman; }
+.t-paper li::marker { color: var(--paper-ink-2); }
+
+.t-paper blockquote {
+  margin: 12px 0 12px 24px; padding-inline-start: 14px;
+  border-inline-start: 2px solid var(--line);
+  color: var(--paper-ink-2); font-style: italic;
+}
+.t-paper strong { font-weight: 600; }
+.t-paper code {
+  font: 0.88em/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--chrome-2); padding: 1px 4px; border-radius: 3px;
+}
+.t-paper a { color: var(--blue); text-decoration: none; border-bottom: .5px solid var(--paper-link-underline); }
+.t-paper sup.t-note {
+  font: 600 9px/1 -apple-system, system-ui, sans-serif;
+  color: var(--accent-ink); vertical-align: super; cursor: pointer; padding: 0 1px;
+}
+.t-paper sup.t-note:hover { background: rgb(247 166 0 / 0.22); border-radius: 2px; }
+
+/* Decorations live OUTSIDE the editable: they cannot be typed into, cannot
+   enter the undo stack, and cannot perturb layout. */
+.t-deco { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.t-deco .rule {
+  position: absolute; left: var(--mar-x);
+  width: calc(var(--page-w) - var(--mar-x) * 2);
+  border-top: 1px solid var(--line);
+}
+.t-deco .tick { position: absolute; width: 10px; border-top: 1px solid var(--paper-rule); }
+.t-deco .num {
+  position: absolute; color: var(--muted);
+  font: 10px/1 -apple-system, system-ui, sans-serif; letter-spacing: .07em;
+}
+.t-deco .sidenote {
+  position: absolute; left: var(--page-w);
+  width: calc(var(--gutter) - 26px); margin-inline-start: 22px;
+  font: 11.5px/1.42 -apple-system, system-ui, sans-serif;
+  color: var(--muted);
+  padding-inline-start: 11px;
+  border-inline-start: 2px solid var(--accent);
+}
+.t-deco .sidenote b {
+  font: 600 9px/1 -apple-system, system-ui, sans-serif;
+  color: var(--accent-ink); vertical-align: super; margin-inline-end: 4px;
+}
+
+/* ————— dialogs —————
+   NOTE the class names: `.t-card` was already the review card in the sidebar,
+   so the About dialog uses `.t-dlg`. Reusing it inherited the card's padding
+   and 11px buttons and made the dialog look like a comment. */
+.t-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 6vh 16px; overflow: auto;
+  background: rgb(20 30 45 / .38);
+}
+.t-dlg {
+  width: min(560px, 100%);
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 24px 64px rgb(20 30 45 / .28), 0 4px 12px rgb(20 30 45 / .12);
+  padding: 18px 20px 14px;
+}
+.t-dlg-h {
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+  margin: 20px 0 8px; padding-top: 12px; border-top: 1px solid var(--line);
+}
+.t-dlg-h:first-of-type { border-top: 0; padding-top: 0; }
+.t-dlg .t-row {
+  display: flex; align-items: center; gap: 10px; margin: 8px 0;
+}
+.t-dlg .t-row > span:first-child { flex: 0 0 120px; color: var(--muted); font-size: 13px; }
+.t-about-blurb { font-size: 13.5px; line-height: 1.5; color: var(--ink-2); margin: 6px 0; }
+.t-about-val { font-size: 13px; color: var(--ink-2); margin: 4px 0; }
+.t-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.t-note { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 6px 0 0; }
+.t-about-head { margin-bottom: 4px; }
+.t-about-logo {
+  display: inline-flex; align-items: center; gap: 10px;
+  text-decoration: none; color: inherit;
+}
+.t-about-logo b { display: block; font-size: 15px; white-space: nowrap; }
+/* Scoped to the version line. Unscoped, this also caught the brand slash
+   INSIDE the <b> — `bento<span>/</span>type` — turning it into a block and
+   breaking the wordmark across three lines. */
+.t-about-logo > div > span { display: block; font-size: 12px; color: var(--muted); }
+
+/* `hidden` must actually hide. A class that sets `display` beats the hidden
+   attribute's UA rule, so `.t-btn[hidden]` stayed inline-flex and the
+   "Update this file" button was visible before any check had run. */
+.t-btn[hidden], [hidden] { display: none !important; }
+.t-dlg-foot { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+/* ————— find and replace —————
+   The matches are painted with the CSS Custom Highlight API, so nothing is
+   inserted into the page: no wrapper element inside contentEditable to move
+   the caret, and nothing that `readBlock` could read back into the model.
+   The current match is the ACCENT; the others are a pale wash of it, which is
+   the distinction a person scanning the page needs at a glance. */
+::highlight(t-find) { background-color: var(--find-hit); color: var(--find-ink); }
+::highlight(t-find-cur) { background-color: var(--find-cur); color: var(--find-ink); }
+
+.t-find { display: grid; gap: 7px; }
+.t-find input[type="text"] {
+  width: 100%; font: inherit; font-size: 12px; padding: 5px 7px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--field); color: var(--ink);
+}
+.t-find input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.t-find-opts { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); }
+.t-find-opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.t-find-bar { display: flex; align-items: center; gap: 5px; }
+.t-find-count { flex: 1; font-size: 11.5px; color: var(--muted); }
+.t-find-actions { display: flex; gap: 5px; }
+.t-find-actions button { flex: 1; }
+.t-find button {
+  font: inherit; font-size: 11.5px; padding: 3px 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--chrome); color: var(--ink-2);
+}
+.t-find button:hover:not(:disabled) { background: var(--chrome-2); }
+.t-find button:disabled { opacity: .45; cursor: default; }
+/* ── captions, numbering and cross-references (xref.ts) ───────────────────
+   The caption LABEL and every reference are derived text written into empty
+   atoms after render, so nothing here may reserve space by content: a rule
+   that generated the words in CSS would put them out of reach of print,
+   selection and copy, and would have to know the document's language. */
+.t-paper figcaption {
+  margin: -4px 0 14px; font-size: 14.5px; line-height: 1.5;
+  color: var(--paper-ink-2); text-align: start; hyphens: none;
+  break-before: avoid;                 /* a caption never starts a page alone */
+}
+.t-paper .t-cap-num { font-weight: 600; color: var(--paper-ink); margin-inline-end: .35em; }
+.t-paper .t-xref { color: var(--blue); white-space: nowrap; }
+/* A broken reference must be impossible to read past — it is prose that has
+   lost its meaning, not a styling detail. */
+.t-paper .t-xref-broken,
+.t-xref-broken { color: var(--bad); font-weight: 600; }
+.t-paper .t-xref-broken { background: color-mix(in srgb, var(--bad) 12%, transparent); border-radius: 2px; }
+
+/* The picker reuses the house dialog chrome (.t-overlay + .t-dlg) — a second
+   scrim and card would drift from About's the first time either is touched. */
+.t-xref-pick { width: min(440px, 100%); }
+.t-xref-pick h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+.t-xref-style { margin-bottom: 10px; }
+.t-xref-style select {
+  width: 100%; font: inherit; font-size: 12.5px; padding: 5px 6px;
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.t-xref-list { display: flex; flex-direction: column; gap: 3px; }
+.t-xref-list button {
+  display: flex; gap: 8px; align-items: baseline; text-align: start;
+  font: inherit; font-size: 12.5px; padding: 6px 8px; cursor: pointer;
+  background: transparent; color: var(--ink);
+  border: 1px solid transparent; border-radius: 6px;
+}
+.t-xref-list button:hover, .t-xref-list button:focus-visible {
+  background: var(--chrome-2); border-color: var(--line); outline: none;
+}
+.t-xref-list button span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-xref-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+.t-xref-item {
+  display: block; color: var(--ink-2); text-decoration: none;
+  padding: 3px 6px; border-radius: 5px; font-size: 12px; line-height: 1.45;
+}
+.t-xref-item:hover { background: var(--chrome-2); }
+.t-xref-broken-head { margin: 12px 0 4px; font-size: 11px; color: var(--bad); font-weight: 600; }
+/* ─────────────────────────────────────────────────────── the link popover
+   CHROME, not document: it floats over the page and must follow the reader's
+   theme, so no --paper token appears here (scripts/test-type-theme.mjs would
+   fail the build if one did, and it would be a white box in dark mode). */
+.t-link-pop {
+  position: fixed; z-index: 60;
+  display: flex; align-items: center; gap: 4px;
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 6px; max-width: min(440px, calc(100vw - 16px));
+  box-shadow: 0 12px 32px rgb(20 30 45 / .22), 0 2px 8px rgb(20 30 45 / .12);
+}
+.t-link-url {
+  font: inherit; font-size: 13px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 8px; width: 240px; min-width: 0;
+}
+.t-link-url:focus { border-color: var(--blue); outline: none; }
+.t-link-pop .t-btn { padding: 6px 8px; }
+.t-link-ok { color: var(--ink); font-weight: 600; }
+.t-link-rm { color: var(--bad); }
+
+/* Which link you are standing on, while the popover is open. Scoped to the
+   page, so this rule may use a document token — and must, or the marker would
+   invert with the chrome while the paper stays white. */
+.t-paper a.t-link-on {
+  background: rgb(91 141 239 / .16);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px rgb(91 141 239 / .35);
+}
+/* ————— section numbers and the table of contents —————
+   LAYOUT (the columns, the indent, the fixed page column) is emitted inline by
+   toc.ts, because print.ts carries its own stylesheet and a TOC that got its
+   columns from here would print as a run-on paragraph. What lives here is
+   COLOUR and affordance — the parts that follow the theme and that only the
+   editor has. Both are derived content: `[data-derived]` is the core's atom
+   marker, so nothing selected here can ever be typed into the document. */
+.t-paper .t-secnum { color: var(--paper-ink-2); }
+.t-paper .t-toc-e { color: var(--paper-ink); border-bottom: 0; cursor: pointer;
+                    border-radius: 3px; padding: 1px 3px; margin-inline-end: -3px; }
+.t-paper .t-toc-e:hover { background: var(--chrome-2); }
+.t-paper .t-toc-n, .t-paper .t-toc-p { color: var(--paper-ink-2); }
+/* the entries are not prose: no justification, no first-line indent */
+.t-paper .t-toc { text-align: start; }
+/* ————— paragraph layout & page setup (layout.ts) —————
+
+   ENGAGED, NOT ALWAYS ON. `data-lay` is set on the paper only when the document
+   carries its own paragraph defaults, so a document that never opened Page
+   Setup renders through the rules above, untouched. Per-paragraph properties
+   are inline styles and beat both.
+
+   The page stays UNTHEMED here as everywhere else: the break rule is drawn in
+   a --paper token, because it is furniture ON the page and has to be visible
+   against white paper at midnight, not against the chrome. */
+.t-paper[data-lay] p,
+.t-paper[data-lay] li {
+  text-align: var(--lay-align, justify);
+  line-height: var(--lay-lh, 1.62);
+}
+.t-paper[data-lay] p {
+  /* the `p + p` pair below is what the defaults replace: overriding one half of
+     a margin/padding hack and leaving the other is how spacing goes wrong by
+     exactly 10px */
+  margin-top: var(--lay-sb, 0px);
+  margin-bottom: var(--lay-sa, 10px);
+  padding-top: 0;
+  text-indent: 0;
+}
+.t-paper[data-lay] p + p { text-indent: var(--lay-ind, 1.4em); }
+
+/* Asymmetric margins. The padding shorthand above sets both sides from
+   --mar-x; this overrides the inline axis when a bound document gives the two
+   sides different widths, and falls back to --mar-x when it does not. */
+.t-paper { padding-inline: var(--mar-l, var(--mar-x)) var(--mar-r, var(--mar-x)); }
+
+/* An author's page break, while pagination has not been taught to honour it:
+   the paragraph that starts a page is marked where it starts. */
+.t-paper [data-break] {
+  border-top: 1.5px dashed var(--paper-rule);
+  margin-top: 18px; padding-top: 12px;
+}
+
+/* the Layout panel */
+.t-lay-g { margin-bottom: 14px; }
+.t-lay-h {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 0 0 6px;
+}
+.t-lay-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.t-lay-row label { flex: 1 1 auto; color: var(--ink-2); font-size: 12px; }
+.t-lay-row .t-select { flex: 0 0 auto; }
+.t-lay-unit { color: var(--muted); font-size: 11px; width: 18px; }
+.t-lay-check {
+  display: flex; align-items: center; gap: 7px;
+  color: var(--ink-2); font-size: 12px; margin-bottom: 5px; cursor: pointer;
+}
+.t-input {
+  font: inherit; font-size: 12px; color: var(--ink);
+  background: var(--field); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 6px; width: 68px; min-width: 0;
+}
+.t-input:focus { border-color: var(--blue); outline: none; }
+.t-dlg .t-input { width: 90px; }
+/* ————— comments —————
+   The layer is a SIBLING of .t-deco, not a child: drawPages() calls
+   deco.replaceChildren() on every repagination and would wipe anything a
+   feature put there. Highlights are absolutely positioned boxes computed from
+   Range.getClientRects(), so nothing is drawn inside the editable — which is
+   also why a comment can never reach print (print.ts renders blocks from the
+   model and this module never touches a block).
+
+   Colours are token-derived throughout; the translucent highlight is a
+   color-mix of the accent rather than a literal, so a theme change carries it. */
+.t-cmt-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+/* HIDING COMMENTS is a VIEWER preference, like the theme — it is about reading
+   this document today, not about the document, so it never enters the file and
+   the threads are untouched. One class on the root turns off the marginal
+   apparatus and leaves the words exactly where they were. */
+.t-hide-comments .t-cmt-layer, .t-hide-comments .t-cmt-card { display: none; }
+.t-cmt-hl {
+  position: absolute; border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.t-cmt-hl.on { background: color-mix(in srgb, var(--accent) 42%, transparent); }
+.t-cmt-hl.done { background: color-mix(in srgb, var(--muted) 16%, transparent); box-shadow: none; }
+
+/* the margin, the same gutter the footnote sidenotes use */
+.t-cmt-card {
+  position: absolute; left: var(--page-w);
+  width: calc(var(--gutter) - 26px); margin-inline-start: 22px;
+  pointer-events: auto; cursor: pointer;
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-inline-start: 2px solid var(--accent);
+  border-radius: 7px; padding: 6px 8px;
+  font: 11.5px/1.45 -apple-system, system-ui, sans-serif;
+}
+.t-cmt-card.on { border-color: var(--accent); box-shadow: 0 2px 10px rgb(20 30 45 / .14); }
+.t-cmt-card.done { opacity: .5; border-inline-start-color: var(--muted); }
+.t-cmt-card .who { color: var(--muted); font-size: 10.5px; }
+.t-cmt-card .what { color: var(--ink); word-break: break-word; }
+.t-cmt-card .msg + .msg { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); }
+
+/* the reply box, shared by the margin card and the panel item */
+.acts { margin-top: 6px; }
+.acts textarea {
+  width: 100%; resize: vertical; font: inherit; font-size: 11.5px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
+}
+.acts .btns { display: flex; gap: 5px; margin-top: 5px; }
+.acts .btns button {
+  flex: 1; font: inherit; font-size: 11px; padding: 3px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--chrome); color: var(--ink-2);
+}
+.acts .btns button:hover { background: var(--chrome-2); }
+
+/* the panel list */
+.t-cmt-item { cursor: pointer; }
+.t-cmt-item.on { border-color: var(--accent); }
+.t-cmt-item .quote {
+  font-size: 11px; color: var(--muted); margin: 3px 0 4px;
+  padding-inline-start: 6px; border-inline-start: 2px solid var(--accent);
+  word-break: break-word;
+}
+/* a detached thread: its words are gone, so the quote is struck through and the
+   accent rail drops to muted — it is history, not a place you can click to */
+.t-cmt-item .quote.gone { text-decoration: line-through; border-inline-start-color: var(--muted); }
+.t-cmt-item .reply {
+  margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line);
+  padding-inline-start: 8px;
+}
+/* ————— citations & the bibliography (cite.ts) —————
+
+   The in-document citation is an ATOM: it occupies a position and no
+   characters, so it is styled as one indivisible thing the caret steps over,
+   exactly as `sup.t-note` is. It takes the PAPER ink, not the chrome ink,
+   because it is part of the printed sentence — a citation that dimmed with
+   the app's dark theme would print differently from how it reads.
+
+   A citation whose entry is missing is tinted with --bad and keeps its text
+   ("[?knuth1984]"), because the failure has to survive being printed. */
+.t-paper .t-cite {
+  color: var(--paper-ink);
+  white-space: nowrap;
+  cursor: default;
+  border-radius: 2px;
+}
+.t-paper .t-cite:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.t-paper .t-cite.miss {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+/* ————— the Sources panel ————— */
+.t-cite-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+.t-cite-style {
+  flex: 1 1 100%; font: inherit; font-size: 12px; padding: 4px 6px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.t-cite-btn, .t-cite-mini {
+  font: inherit; font-size: 11.5px; padding: 4px 8px; cursor: pointer;
+  color: var(--ink-2); background: var(--chrome);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.t-cite-btn:hover, .t-cite-mini:hover { background: var(--chrome-2); }
+.t-cite-go { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.t-cite-h {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin: 14px 0 6px;
+}
+.t-cite-miss {
+  border: 1px solid var(--bad); border-radius: 8px; padding: 7px 9px; margin-bottom: 8px;
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+.t-cite-miss-h { font-size: 11.5px; font-weight: 600; color: var(--bad); margin-bottom: 4px; }
+.t-cite-miss code { display: inline-block; margin: 0 5px 3px 0; }
+.t-cite-list { display: flex; flex-direction: column; gap: 7px; }
+.t-cite-ref { display: flex; gap: 7px; font-size: 11.5px; line-height: 1.45; color: var(--ink-2); }
+.t-cite-ref .n { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.t-cite-ref .r { word-break: break-word; }
+
+/* ————— the import and picker dialogs ————— */
+.t-cite-paste, .t-cite-search {
+  width: 100%; font: inherit; font-size: 12.5px; padding: 6px 8px; margin-top: 8px;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.t-cite-paste { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.t-cite-pick { max-height: 46vh; overflow: auto; margin-top: 8px; }
+.t-cite-row {
+  display: flex; gap: 8px; align-items: flex-start; padding: 6px 7px;
+  border-radius: 7px; cursor: pointer;
+}
+.t-cite-row:hover { background: var(--chrome-2); }
+.t-cite-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.t-cite-row b { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.t-cite-row i { display: block; font-size: 12px; font-style: normal; color: var(--ink-2); }
+.t-cite-row code { font-size: 11px; color: var(--muted); }
+/* ————— mathematics —————
+   The metrics are computed in math/layout.ts and arrive as inline styles; this
+   block only supplies what is CONSTANT — display roles, the rule colours, and
+   the fonts. Nothing here may carry a number that the layout engine also knows,
+   or the two would drift and every formula would be subtly wrong.
+
+   COLOUR IS `currentColor`, everywhere. A formula is text: it must be the same
+   ink as the sentence it sits in, on the always-white page and equally in the
+   Math panel's live preview, which sits on CHROME and therefore inverts with
+   the theme. One token would have been wrong in one of those two places.
+
+   `line-height: 1` is load-bearing. The layout engine models a line box as
+   rising 0.75em and falling 0.22em from its baseline, which is only true when
+   nothing adds leading — with the paper's 1.62 line-height every stacked box
+   would be spaced by an amount the engine never accounted for. */
+.t-math {
+  display: inline-block;
+  line-height: 1;
+  white-space: nowrap;
+  hyphens: none; -webkit-hyphens: none;
+  text-indent: 0;
+  font-family: "STIX Two Math", "Cambria Math", "Latin Modern Math",
+               "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-style: normal; font-weight: normal;
+}
+/* A formula never justifies, never hyphenates and never breaks: the spacing
+   inside it is typeset, not text. */
+.t-paper .t-math { text-align: start; }
+
+/* the variants — the only place a letter's shape is decided */
+.t-math .t-mi { font-style: italic; }
+.t-math .t-mb { font-weight: 700; }
+.t-math .t-mbi { font-weight: 700; font-style: italic; }
+.t-math .t-msf { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.t-math .t-mtt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.t-math .t-mop { font-style: normal; }
+.t-math .t-mbig { display: inline-block; }
+/* prose inside a formula wears the PAGE's face, not the maths face */
+.t-math .t-mtext {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  white-space: pre-wrap;
+}
+.t-math .t-msp { display: inline-block; }
+
+/* fractions: the bar is the numerator's bottom border, so it is exactly as
+   wide as the wider of the two rows and needs no width of its own */
+.t-math .t-mfrac { display: inline-block; text-align: center; }
+.t-math .t-mnum, .t-math .t-mden { display: block; }
+.t-math .t-mnum { border-bottom: 0 solid currentColor; }
+
+/* scripts */
+.t-math .t-mss { display: inline-block; text-align: start; }
+.t-math .t-mss > .t-msup, .t-math .t-mss > .t-msub { display: block; }
+.t-math .t-mside { display: inline-block; }
+
+/* limits above and below a big operator */
+.t-math .t-mlim { display: inline-block; text-align: center; }
+.t-math .t-mlim > span { display: block; }
+
+/* radicals. `non-scaling-stroke` (set in the markup) keeps the surd's stroke
+   even however far it is stretched; the width here is what stops a tall
+   radical from also becoming a wide one. */
+.t-math .t-msurd {
+  display: inline-block; width: .58em; overflow: visible;
+  fill: none; stroke: currentColor; stroke-width: .055em;
+  stroke-linecap: round; stroke-linejoin: miter;
+}
+.t-math .t-mrad { display: inline-block; border-top: 0 solid currentColor; }
+.t-math .t-mroot { display: inline-block; margin-inline-end: -.32em; }
+
+/* over- and underlines */
+.t-math .t-mbar { display: inline-block; }
+.t-math .t-mbar.t-over { border-top: 0 solid currentColor; }
+.t-math .t-mbar.t-under { border-bottom: 0 solid currentColor; }
+
+/* accents are ABSOLUTE: they add no width, so `\hat{x}` is exactly as wide as
+   `x` and a hatted symbol in a fraction still centres correctly */
+.t-math .t-macc { position: relative; display: inline-block; }
+.t-math .t-maccm {
+  position: absolute; inset-inline: 0; text-align: center;
+  line-height: 1; pointer-events: none;
+}
+
+/* matrices, cases and aligned — one inline-table, centred on the math axis */
+.t-math .t-mmatrix { display: inline-table; border-collapse: collapse; }
+.t-math .t-mrow2 { display: table-row; }
+.t-math .t-mcell {
+  display: table-cell; padding: var(--t-mpad, .16em) .3em; text-align: center;
+}
+.t-math .t-mmatrix.t-mleft .t-mcell { text-align: start; padding-inline-end: .7em; }
+.t-math .t-mmatrix.t-mleft .t-mcell:last-child { padding-inline-end: .3em; }
+
+/* delimiters stretch about the axis, which is 0.5em below the top of a
+   line-height:1 box — the one place a metric is duplicated between the engine
+   and the stylesheet, because a transform-origin cannot be computed per box
+   without a second inline style on every fence */
+.t-math .t-mdelim { display: inline-block; transform-origin: 50% .5em; }
+
+/* a display equation is its own paragraph-level object */
+.t-math.t-math-display { display: block; text-align: center; }
+.t-paper [data-kind="math"] {
+  margin: 16px 0; text-align: center; text-indent: 0;
+  hyphens: none; -webkit-hyphens: none; font-size: 1.06em;
+}
+
+/* what a formula does when it is wrong: says so, in place, and keeps setting */
+.t-math .t-merr {
+  color: var(--bad); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .86em; font-style: normal;
+}
+.t-math-bad { text-decoration: underline dotted var(--bad); text-underline-offset: 4px; }
+
+/* ————— the Math panel ————— */
+.t-mathsrc {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px;
+}
+.t-mathsrc:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.t-mathprev {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 52px; margin: 8px 0; padding: 10px 8px; overflow-x: auto;
+  font-size: 17px; color: var(--ink);
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px;
+}
+
+
+/* Tracked changes. Word's convention — coloured underline for an insertion,
+   strike for a deletion — because a document full of them is read by people who
+   have read a thousand of them elsewhere, and inventing a new visual language
+   for the most conventional feature in the category helps nobody. */
+.t-paper ins.t-trk { text-decoration: underline; text-decoration-thickness: 1px;
+  text-underline-offset: 2px; color: var(--paper-trk); background: var(--paper-trk-bg); }
+.t-paper del.t-trk { text-decoration: line-through; color: var(--paper-trk-del); opacity: .75; }
+/* Nothing to override for print: the ink is unthemed, so what is on screen is
+   what comes out of the printer — which is the point, since a tracked document
+   is usually printed precisely to be read and signed off on paper. */
+.t-trk-row { display: flex; gap: 5px; margin-top: 6px; }
+.t-trk-row button { flex: 1; padding: 3px 6px; font: inherit; font-size: 11px;
+  border: 1px solid var(--line); background: var(--chrome); color: var(--ink-2);
+  border-radius: 5px; cursor: pointer; }
+.t-trk-row button:hover { background: var(--chrome-2); color: var(--ink); }
+
+
+/* An embedded Bento artifact. Centred and bounded by the text column: an
+   embed is a figure, and a chart wider than the words it explains reads as a
+   different document interrupting this one. */
+.t-paper .t-embed { margin: 16px 0; text-align: center; }
+.t-paper .t-embed-view { display: inline-block; max-width: min(100%, var(--embed-w, 100%)); }
+.t-paper .t-embed-view svg { max-width: 100%; height: auto; }
+.t-paper .t-embed figcaption { margin-top: 6px; font-size: 12px; color: var(--paper-ink-2); font-style: italic; }
+.t-paper .t-embed-missing { padding: 22px 14px; border: 1px dashed var(--paper-rule);
+  border-radius: 8px; color: var(--paper-ink-2); font-size: 12.5px; }
+
+
+/* The block grip: a handle in the page's own left margin that reorders a
+   block. Hover-only, so a page at rest is just the document — the same rule
+   bento/spaces uses for its gutter, and the reason an affordance can exist at
+   all without becoming furniture. */
+.t-deco .t-grip-layer { position: absolute; inset: 0; pointer-events: none; }
+.t-deco .t-grip {
+  position: absolute; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 24px; padding: 0; border: 0; border-radius: 5px;
+  /* PAPER ink, not chrome ink: this floats over a white sheet, and the sheet
+     stays white in dark mode while every chrome token inverts. */
+  color: var(--paper-rule); background: transparent; cursor: grab;
+  opacity: 0; transition: opacity .12s;
+  pointer-events: auto;
+}
+/* ONE at a time, not a column of them. Driven by script rather than :hover,
+   because the grips live in an overlay and CSS cannot ask which block the
+   pointer is over. */
+.t-deco .t-grip.on { opacity: .7; }
+/* The + shares the grip's reveal: they are one gutter, two buttons, as in
+   bento/spaces. It sits further out so the grip stays nearest the text — the
+   handle you reach for while reading, with insertion one step beyond. */
+.t-deco .t-plus { cursor: pointer; }
+.t-deco .t-grip.t-grip-dragging { opacity: 1; cursor: grabbing; }
+/* While a drag is live the whole page shows the grabbing cursor, or it
+   reverts the moment the pointer leaves the 26px handle. */
+body.t-dragging, body.t-dragging * { cursor: grabbing !important; user-select: none; }
+/* Where the block will land. */
+.t-deco .t-droptip {
+  position: absolute; inset-inline: 0; height: 2px; margin-top: -1px;
+  background: var(--accent); border-radius: 2px; pointer-events: none;
+}
+.t-deco .t-droptip::before {
+  content: ''; position: absolute; inset-inline-start: -3px; top: -3px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+}
+.t-deco .t-grip:hover, .t-deco .t-grip:focus-visible {
+  opacity: 1; color: var(--paper-ink-2);
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.t-deco .t-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The grip menu borrows .t-menu's ITEM styling, but none of its placement.
+   .t-menu is built to hang from the right edge of a topbar button's wrapper,
+   so it sets inset-inline-end:0 — and this one is appended to <body> and
+   positioned by script from the left. With a left AND a right edge pinned, the
+   box stretched from the grip to the window edge: a full-width white band
+   across the document and the properties panel. */
+.t-grip-menu {
+  position: absolute; z-index: 60; display: block;
+  inset-inline-end: auto;          /* the whole bug: unpin the right edge */
+  top: auto;                       /* script places it, in page coordinates */
+  min-width: 150px; width: max-content;
+}
+/* A disabled item must LOOK disabled. "Move up" on the first block is
+   correctly inert, and rendered identically to "Move down" — so the menu
+   silently did nothing and looked like it had failed. */
+.t-menu button:disabled { opacity: .4; cursor: default; }
+.t-menu button:disabled:hover { background: transparent; }
+
+/* It is chrome sitting ON the sheet, so it must never reach paper. */
+@media print { .t-deco .t-grip-layer { display: none; } }
+
+
+/* The selection toolbar.
+   It FOLLOWS THE THEME, like every other floating surface in this app — the ⋯
+   menu, the grip menu, the comment cards. It was dark in both themes at first,
+   on the argument that a white bar over white paper would need a border to
+   exist; but the comment cards sit beside the paper in exactly these tokens,
+   with exactly that border, and read as chrome perfectly well. So the argument
+   was already disproved inside this stylesheet, and all the dark version
+   bought was the only dark UI in an otherwise light app. It borrows .t-menu's
+   surface and .t-btn.on's active state so it is the same object as the rest. */
+.t-selbar {
+  position: absolute; z-index: 70;
+  display: flex; align-items: center; gap: 1px;
+  padding: 4px; border-radius: 10px;
+  background: var(--field); border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgb(20 30 45 / .16), 0 2px 6px rgb(20 30 45 / .08);
+}
+.t-selbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 7px; background: transparent;
+  color: var(--ink-2); cursor: pointer;
+}
+.t-selbtn:hover { background: var(--chrome-2); color: var(--ink); }
+.t-selbtn.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.t-selbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.t-selsep { width: 1px; height: 18px; margin: 0 3px; background: var(--line); }
+
+/* Neither of these is part of the document. */
+@media print { .t-selbar, .t-deco .t-grip-layer { display: none; } }

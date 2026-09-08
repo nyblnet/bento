@@ -897,7 +897,7 @@ export function openStoryEditor(src: StorySource): HTMLElement {
 
     el.innerHTML =
       `<div class="ds-ed-head"><b>${esc(t('Data story'))}</b>` +
-      `<button class="ds-btn" data-act="shut">✕</button></div>` +
+      `<button class="ds-btn" data-act="shut" title="${esc(t('Close the story editor'))}">✕</button></div>` +
       (story.steps.length
         ? `<ol class="ds-steps">${rows}</ol>`
         : `<p class="ds-hint">${esc(t('Filter, sort and chart the sheet, then capture it as the first step.'))}</p>`) +

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GENERATED from home/assets/home-icon.svg by home/assets/make-icons.mjs.
+  Do not edit: run `node home/assets/make-icons.mjs` instead.
+
+  The themed-icon layer (Android 13+). Colour cannot carry the mark when the
+  system tints it, so the compartments are knocked out of the tray with evenOdd
+  fill — the same rhythm as the full-colour icon, legible as a silhouette.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M37.39,26 H70.61 A11.39,11.39 0 0 1 82,37.39 V70.61 A11.39,11.39 0 0 1 70.61,82 H37.39 A11.39,11.39 0 0 1 26,70.61 V37.39 A11.39,11.39 0 0 1 37.39,26 Z M37.13,32.17 H41.1 A4.96,4.96 0 0 1 46.06,37.13 V70.87 A4.96,4.96 0 0 1 41.1,75.83 H37.13 A4.96,4.96 0 0 1 32.17,70.87 V37.13 A4.96,4.96 0 0 1 37.13,32.17 Z M54.99,32.17 H70.87 A4.96,4.96 0 0 1 75.83,37.13 V47.05 A4.96,4.96 0 0 1 70.87,52.02 H54.99 A4.96,4.96 0 0 1 50.03,47.05 V37.13 A4.96,4.96 0 0 1 54.99,32.17 Z M54.99,55.98 H70.87 A4.96,4.96 0 0 1 75.83,60.95 V70.87 A4.96,4.96 0 0 1 70.87,75.83 H54.99 A4.96,4.96 0 0 1 50.03,70.87 V60.95 A4.96,4.96 0 0 1 54.99,55.98 Z" />
+</vector>

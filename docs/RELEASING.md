@@ -1,10 +1,28 @@
-# Releasing bento/slides
+# Releasing a Bento app
 
 Releases are cut **locally** — the signing key never leaves the maintainer's
 machine, and the signed bytes are exactly the served bytes (no CI rebuild can
 drift from the manifest hash). Shipped files check
-`https://bento.page/releases/slides/manifest.json` (user-initiated only) and
-verify the manifest signature against the public key embedded in every shell.
+`https://bento.page/releases/<app>/manifest.json` (at launch, and on demand)
+and verify the manifest signature against the public key embedded in every
+shell.
+
+**One release builds one app.** `scripts/apps.mjs` is the registry — three apps
+today, each with its own directory, shell name, changelog, tag prefix, app id
+and manifest path:
+
+| app | `--app` | tag | manifest | GitHub release title |
+|---|---|---|---|---|
+| bento/slides | `slides` (default) | `vX.Y.Z` | `/releases/slides/manifest.json` | `bento/slides vX.Y.Z` |
+| bento/spaces | `spaces` | `spaces-vX.Y.Z` | `/releases/spaces/manifest.json` | `bento/spaces spaces-vX.Y.Z` |
+| bento/dash | `dash` | `dash-vX.Y.Z` | `/releases/dash/manifest.json` | `bento/dash dash-vX.Y.Z` |
+
+The steps below are the same for all three; where an app differs, the registry
+says so rather than this file. `scripts/test-release-apps.mjs` pins the
+registry against the tree (CI runs it), and
+`scripts/test-release-channel.mjs` rehearses a whole release with a throwaway
+key it generates and discards — including the refusals, which is the half that
+matters. Neither needs the signing key.
 
 ## One-time setup
 
@@ -46,7 +64,8 @@ verify the manifest signature against the public key embedded in every shell.
    the reader decides whether to update.
 
    **Each app has its own changelog** (`scripts/apps.mjs` → `changelog`):
-   slides reads the root `CHANGELOG.md`, spaces reads `spaces/CHANGELOG.md`.
+   slides reads the root `CHANGELOG.md`, spaces reads `spaces/CHANGELOG.md`,
+   dash reads `dash/CHANGELOG.md`.
    Every app read the root one until 2026-08-03, which would have signed
    slides' release notes into a spaces manifest and shown them to every spaces
    user. `scripts/test-release-apps.mjs` now pins the distinctness, and:
@@ -70,24 +89,27 @@ verify the manifest signature against the public key embedded in every shell.
      if the bug never shipped, announcing it tells people about breakage they
      never had. The commit history is the record for those.
 
-1. Bump **that app's** `package.json` version — `slides/package.json` or
-   `spaces/package.json` (it becomes `APP_VERSION` in the shell and the
-   manifest version — single source of truth). Apps version independently.
+1. Bump **that app's** `package.json` version — `slides/package.json`,
+   `spaces/package.json` or `dash/package.json` (it becomes `APP_VERSION` in
+   the shell and the manifest version — single source of truth). Apps version
+   independently.
 2. Land it and tag. `main` is branch-protected and requires a pull request, so
    the bump CANNOT be committed directly — open a small PR for it, merge, then
    tag the merge commit.
 
-   **Tags are per app.** Slides keeps the bare `vX.Y.Z` form it has used for
-   23 releases; every other app is prefixed:
+   **Tags are per app**, from the registry's `tagPrefix`. Slides keeps the bare
+   `vX.Y.Z` form it has used for 23 releases; every other app is prefixed:
 
    ```sh
    git tag vX.Y.Z <merge-sha>          # slides
-   git tag spaces-vX.Y.Z <merge-sha>   # every other app
+   git tag spaces-vX.Y.Z <merge-sha>   # spaces
+   git tag dash-vX.Y.Z <merge-sha>     # dash
    ```
 
-   Slides is at 1.0.x and spaces starts at 0.1.0, so an unprefixed spaces tag
-   would sort into the middle of slides' history and claim a version slides can
-   never use again.
+   Slides is at 1.0.x and the others start at 0.x, so an unprefixed tag would
+   sort into the middle of slides' history and claim a version slides can never
+   use again. `publish-site.mjs` derives the tag from the same registry field,
+   so the tag you push and the release it creates cannot disagree.
 
    **Build from a clean checkout of that tag**, not from whatever the main
    working tree happens to be on. Several sessions may have their own branches
@@ -110,9 +132,16 @@ verify the manifest signature against the public key embedded in every shell.
    including scratch ones (a `backup/…` tag from a history rewrite escaped this
    way and had to be deleted from the remote).
 
-4. `node scripts/release.mjs [--app slides|spaces]` — builds, signs, assembles
-   `./site/` (CNAME, landing page, live demo, download, signed manifest,
-   language packs + their signed index). `--app` defaults to `slides`.
+4. `node scripts/release.mjs [--app slides|spaces|dash]` — builds, signs,
+   assembles `./site/` (CNAME, landing page, live demo, download, signed
+   manifest, language packs + their signed index). `--app` defaults to
+   `slides`. It finishes by printing the exact tag-push and publish commands
+   for the app it just built.
+
+   It also stamps `site/.bento-release.json` with the app and version it
+   staged. `publish-site.mjs` reads that to name the tag, the release title and
+   the shell it attaches — all per app, and all silently wrong if it guesses.
+   The marker is never mirrored to the site.
 
    **One release builds one app.** `site/` is mirrored authoritatively, so the
    script SEEDS it from the published tree first and overwrites only what this
@@ -177,9 +206,9 @@ verify the manifest signature against the public key embedded in every shell.
    > exists only for a deliberate rollback.
 
 6. **The GitHub release is created for you** by `publish-site.mjs` — it makes
-   the release for the tag, attaches
-   `site/releases/slides/Bento_Slides.bento.html`, and takes the notes from
-   this version's CHANGELOG section (so the two can't drift). It is idempotent:
+   the release for **that app's** tag, attaches that app's shell from
+   `site/releases/<app>/`, and takes the notes from that app's CHANGELOG
+   section for this version (so the two can't drift). It is idempotent:
    an existing release is left alone and only a missing asset is uploaded, so
    re-running publish is safe.
 
@@ -192,9 +221,9 @@ verify the manifest signature against the public key embedded in every shell.
    things no local gate can prove, and some are only exercisable once published:
 
    ```sh
-   curl -s https://bento.page/releases/slides/manifest.json | head -c 200
+   curl -s https://bento.page/releases/<app>/manifest.json | head -c 200
    curl -s -o /dev/null -w '%{http_code}\n' https://bento.page/releases/slides/packs.json
-   gh release view vX.Y.Z --json body --jq '.body | length'
+   gh release view <tag> --json body --jq '.body | length'
    ```
 
    - the served shell's sha256 matches the manifest AND the artifact you
@@ -212,6 +241,46 @@ verify the manifest signature against the public key embedded in every shell.
    - open the PREVIOUS version's file → About → Check for updates. It should
      offer the new version, show the inline notes, and the downloaded copy must
      boot with the document intact.
+
+## Rehearsing a release (no key, nothing published)
+
+```sh
+cd dash && npm run build:single && cd ..
+node scripts/test-release-channel.mjs --app dash
+```
+
+Cuts a COMPLETE release into a temp directory with a throwaway ECDSA key the
+rig generates and deletes — it never looks at `~/.bento/release-key.json` —
+then checks the artifacts with `kernel/src/update.ts` **itself**, the code
+every shipped file runs, with only the embedded public key swapped for the
+throwaway half. It asserts the positives (gate passes, manifest shape, the pin
+is the sha256 of the staged bytes, a correctly signed manifest is offered) and,
+more importantly, the refusals: a tampered payload, a manifest validly signed
+for a **different app**, a downgrade replay, a shell with one bit flipped, and
+a shell whose doc block closes its own script. CI runs it for dash on every PR.
+
+This is as close to a release as anything can get without the key. What it
+cannot cover is the live channel — step 7 above is still the last word.
+
+## Releasing an app that is not slides
+
+Everything above, with three things worth saying plainly:
+
+- **The shared site is slides-derived** (landing, gallery, `/help`, `/q`, 404,
+  guestbook, the root `agents.md`). Only a slides release rebuilds it; every
+  other release leaves the published copies exactly as they are — which is why
+  a release SEEDS `site/` from the live tree first and why publishing refuses
+  to delete anything (`--allow-deletions` is not a habit to acquire).
+- **Language packs are slides-only today** (`packs: false` in the registry).
+  `build-i18n.mjs`/`sign-packs.mjs` are slides-hardcoded end to end, so another
+  app stages no packs rather than staging unsigned ones. Its core catalogs ship
+  compiled into the shell and are complete; the pack CHANNEL is deferred, and
+  deferring the channel would be the thing not to do.
+- **The first release of an app has no predecessor to update from.** Its
+  manifest starts the channel; the download and the GitHub release are how the
+  first copies get out. Test the update path with the SECOND release, from a
+  copy of the first — that is the first moment the channel can actually be
+  exercised end to end.
 
 ## Language packs
 
@@ -297,6 +366,13 @@ New strings go in ALL core catalogs (`slides/src/i18n/*.ts`), and
 
 ```sh
 node scripts/build-i18n.mjs
+```
+
+Each app has its own catalogs and its own generator, and CI gates all three:
+
+```sh
+node scripts/build-spaces-i18n.mjs      # spaces
+node scripts/test-dash-i18n.ts --write  # dash
 ```
 
 ## Rules

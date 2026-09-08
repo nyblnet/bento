@@ -28,12 +28,30 @@
 //      the visible rows; totalling the column is a real number that answers a
 //      question nobody asked.
 
-import {
-  passes, buildOrder, distinctValues, summarize, compare, isBlank,
-  needsWholeColumn, type Get, type Predicate,
-} from '../dash/src/filter.ts'
-import type { TableSheet } from '../dash/src/model.ts'
-import { readCell } from '../dash/src/store.ts'
+import { registerHooks } from 'node:module'
+
+// This rig reads `aggregate` out of grid.ts, and grid.ts now reaches a
+// component that imports its own stylesheet (find.ts → find.css). Resolving CSS
+// is Vite's job and not Node's — comments.ts's and panels.ts's rigs settled this
+// pattern, and co-locating a component with its styles is not something a rig
+// gets to break.
+registerHooks({
+  load(url, context, next) {
+    if (url.endsWith('.css')) {
+      return { format: 'module', source: 'export {}', shortCircuit: true }
+    }
+    return next(url, context)
+  },
+})
+
+const {
+  passes, buildOrder, distinctValues, summarize, compare, isBlank, needsWholeColumn,
+} = await import('../dash/src/filter.ts')
+type Get = import('../dash/src/filter.ts').Get
+type Predicate = import('../dash/src/filter.ts').Predicate
+type TableSheet = import('../dash/src/model.ts').TableSheet
+const { readCell } = await import('../dash/src/store.ts')
+const { aggregate, canTotal, viewStatusText } = await import('../dash/src/grid.ts')
 
 let failures = 0
 let checks = 0
@@ -350,6 +368,115 @@ ok(eq(order([{ col: 'amount', pred: { op: 'topN', n: 0 } }], []), []),
     && sheet.rids.length === 1,
   'THE DOCUMENT IS UNTOUCHED: sorting and filtering are view state, so no ' +
     'checkpoint, no dirty flag, no collab op')
+}
+
+
+// ============================================ FOOTER TOTALS OVER A FILTER
+//
+// The bug this guards: `totalsRow` looped over every row in the sheet and never
+// read the view vector. Filter the starter sheet to deals over £10,000 and the
+// grid showed four rows worth £69,050 while the footer said £97,050, in bold,
+// directly underneath them — the total including the rows the filter had just
+// removed. The status bar said "4 of 8 rows" the whole time, so two readouts on
+// one screen disagreed and the bigger one was wrong.
+{
+  const vals: unknown[] = [10, 20, 'n/a', 30, 40, null, 50, 60]
+  const read = (i: number) => vals[i]
+  const all = vals.length
+
+  ok(aggregate('sum', read, all, null) === 210, 'with no view vector, sum covers the whole sheet')
+
+  // the four "visible" rows: indices 0, 3, 6, 7 → 10 + 30 + 50 + 60
+  const view = [0, 3, 6, 7]
+  ok(aggregate('sum', read, view.length, view) === 150,
+    'with a view vector, sum covers ONLY the rows it names — the whole bug, in one number')
+  ok(aggregate('avg', read, view.length, view) === 37.5, 'and avg averages the same population')
+  ok(aggregate('min', read, view.length, view) === 10 && aggregate('max', read, view.length, view) === 60,
+    'min and max come from the filtered rows too')
+  ok(aggregate('count', read, view.length, view) === 4, 'count counts what it saw')
+
+  // a SORT is a permutation: same rows, different order, so the answer cannot move
+  const sorted = [7, 6, 4, 3, 0, 1, 2, 5]
+  ok(aggregate('sum', read, sorted.length, sorted) === aggregate('sum', read, all, null),
+    'a sort is a permutation of the same rows, so every total is unchanged — only a FILTER moves them')
+
+  // blanks and text are skipped, never counted as zero
+  ok(aggregate('avg', read, all, null) === 35,
+    'avg divides by the numbers it actually saw (6), not by the row count (8) — an average over blanks is not an average')
+  ok(aggregate('count', read, all, null) === 6, 'and count agrees with it')
+
+  // AN EMPTY POPULATION HAS NO ANSWER, and these three lines used to assert the
+  // bug. The old text read "a filter matching nothing totals 0 rather than
+  // NaN": it was written to rule out NaN and Infinity, which it did, and then
+  // settled on 0 — a VALUE, drawn in the column's format, indistinguishable
+  // from a real result. Filter to a stage no deal is in and the footer said
+  // `sum £0` and `avg 0%` under an empty grid. That is failure 6 in this file's
+  // own header wearing different clothes: a real number answering a question
+  // nobody could have asked. Guarding NaN was right and stopping there was not.
+  ok(aggregate('sum', read, 0, []) === null && aggregate('avg', read, 0, []) === null,
+    'a filter matching nothing has NO total — null, not a confident 0')
+  ok(aggregate('min', read, 0, []) === null && aggregate('max', read, 0, []) === null,
+    'and min/max over nothing are null, not 0 and not Infinity')
+  ok(aggregate('count', read, 0, []) === 0,
+    'COUNT is the exception: "how many did I see" is answerable, and the answer is 0')
+
+  // The same hole without a filter: a numeric column that is entirely blank.
+  // `n` rows exist, none is a number, so `seen` is 0 by a different route.
+  const blanks = [null, null, 'n/a']
+  ok(aggregate('sum', (i) => blanks[i], 3, null) === null,
+    'a column of blanks has no sum either — the emptiness is the population, not the row count')
+  ok(aggregate('count', (i) => blanks[i], 3, null) === 0,
+    'and count says plainly that it saw none of them')
+}
+
+
+// ================================ WHICH COLUMNS MAY BE OFFERED A TOTAL
+//
+// The footer cell is a control now: an empty cell under a numeric column
+// invites a total. It must not invite one anywhere the answer would be
+// nonsense — `aggregate` skips every non-number, so a sum offered on a column
+// of names paints `SUM 0` under it, which is a wrong answer with a control
+// beside it saying it was asked for.
+{
+  ok(canTotal('number') && canTotal('money') && canTotal('percent'),
+    'a total is offered on the three numeric types')
+  ok(!canTotal('text') && !canTotal('bool') && !canTotal('enum'),
+    'and never on text, bool or enum, where every aggregate is 0')
+  ok(!canTotal('date'),
+    'nor on a date, which is stored as a string here and aggregates to nothing')
+}
+
+// ================================ WHAT THE STATUS BAR SAYS ABOUT THE VIEW
+//
+// The bug this guards: this text was computed by a closure inside the filter
+// menu, so it was right exactly once. Sort from a column header, switch sheets,
+// or clear from the properties panel and the label kept describing a view that
+// had gone — "4 of 8 rows" was observed sitting under a DIFFERENT SHEET. A
+// readout that is only true when you arrived through one particular door is
+// worse than none, because it is believed.
+{
+  const asc = (name: string) => ({ name, dir: 'asc' as const })
+  const desc = (name: string) => ({ name, dir: 'desc' as const })
+
+  ok(viewStatusText(null, 8, []) === '',
+    'no filter and no sort says NOTHING — there is nothing to report')
+  ok(viewStatusText(8, 8, []) === '',
+    'and a view vector that hides no rows says nothing either: "8 of 8 rows" is ' +
+    'true, useless, and trains the reader to stop looking at the line')
+  ok(viewStatusText(4, 8, []) === '4 of 8 rows',
+    'a filter reports the rows it left showing, against the rows there are')
+  ok(viewStatusText(0, 8, []) === '0 of 8 rows',
+    'a filter that matches nothing says so — an empty grid with a blank status ' +
+    'bar is the moment a reader concludes the data is gone')
+  ok(viewStatusText(8, 8, [desc('Value')]) === 'Sorted by Value ▼',
+    'a sort hides nothing, so it says what it DID instead')
+  ok(viewStatusText(null, 8, [asc('Region')]) === 'Sorted by Region ▲',
+    'and the arrow follows the direction')
+  ok(viewStatusText(null, 8, [asc('Region'), desc('Value')]) === 'Sorted by Region ▲, Value ▼',
+    'every key, in the order they were added — a second key silently dropped ' +
+    'from the label is how a "wrong" sort gets reported')
+  ok(viewStatusText(4, 8, [desc('Value')]) === '4 of 8 rows  ·  Sorted by Value ▼',
+    'filtered AND sorted reports both facts, because both are true')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

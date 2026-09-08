@@ -5,9 +5,11 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
+import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
+import { PALETTE_SLOTS, paletteOf, refAt, setColor } from '../palette'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
@@ -255,7 +257,8 @@ export class PropsPanel {
       this.edit(() => { this.store.doc.size.height = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
     showCustomSize(presetKey === 'Custom…')
     this.row('Background', this.color(slide.background, (v, fin) =>
-      this.edit(() => { this.store.slide.background = v }, fin)))
+      this.edit(() => { this.store.slide.background = v }, fin),
+      { id: null, path: 'background' }))
     this.row('Transition', this.select(
       ['none', 'fade', 'slide', 'zoom', 'morph'],
       slide.transition,
@@ -317,6 +320,7 @@ export class PropsPanel {
 
 
     // interactivity: naming, state-of, hover focus
+    this.buildThemeProps()
     this.section(t('Interactivity'))
     const name = document.createElement('input')
     name.type = 'text'
@@ -435,7 +439,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
+    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —
@@ -446,6 +450,7 @@ export class PropsPanel {
     if (el.type === 'chart') this.buildChartProps(el)
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
+    if (el.type === 'code') this.buildCodeProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -953,7 +958,8 @@ export class PropsPanel {
       }, true)))
     if (!tgrad) {
       this.row('Color', this.color(el.color, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin)))
+        this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),
+        { id: el.id, path: 'color' }))
     } else {
       this.row('Grad. angle', this.number(tgrad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
@@ -1124,7 +1130,8 @@ export class PropsPanel {
 
     if (!grad) {
       this.row('Fill', this.colorAlpha(el.fill, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin)))
+        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
+        { id: el.id, path: 'fill' }))
     } else {
       this.row('Grad. angle', this.number(grad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
@@ -1740,6 +1747,38 @@ export class PropsPanel {
     }
   }
 
+  private buildCodeProps(el: CodeElement) {
+    this.section(t('Source Code'))
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    this.host.appendChild(status)
+    // Font Size
+    // Shown in POINTS (the unit office users know); the model stores slide-space
+    // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
+    this.row('Size (pt)', this.number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+      this.mutate(el.id, (e) => {
+        (e as CodeElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
+      }, fin)))
+    // Alignment
+    this.row('Align', this.select(['left', 'center', 'right'], el.align, (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).align = v as CodeElement['align'] }, true)))
+    // V-Alignment
+    this.row('V-align', this.select(['top', 'middle', 'bottom'], el.valign, (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).valign = v as CodeElement['valign'] }, true)))
+    // Line height
+    this.row('Line height', this.number(el.lineHeight, 0.05, (v, fin) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).lineHeight = Math.max(v, 0.5) }, fin)))
+    // Language — selects the built-in tokenizer table. grammarName doubles as
+    // the language id; grammarAssetId/themeAssetId stay in the format as the
+    // seam for a future signed-extension tier carrying real TextMate grammars
+    // as deck assets, at which point pickers for them return here.
+    const langs = Object.keys(LANGS).sort().concat(['diff', 'md'])
+    this.row(t('Language'), this.select(langs, el.grammarName ?? 'js', (v) =>
+      this.mutate(el.id, (e) => { (e as CodeElement).grammarName = v }, true)))
+    status.textContent = t('{n} languages built in', { n: String(langs.length) })
+    this.host.appendChild(status)
+  }
+
   // --- element ops --------------------------------------------------------------
 
   private opsRow(els: SlideElement[]) {
@@ -1918,7 +1957,8 @@ export class PropsPanel {
     this.store.select([])
   }
 
-  private reorder(els: SlideElement[], where: 'front' | 'back') {
+  /** Also driven by the canvas context menu (editor.ts). */
+  reorder(els: SlideElement[], where: 'front' | 'back') {
     const ids = new Set(els.map((e) => e.id))
     this.store.commit(() => {
       const slide = this.store.slide
@@ -1986,18 +2026,104 @@ export class PropsPanel {
     return input
   }
 
-  private color(value: string, onEdit: (v: string, final: boolean) => void): HTMLElement {
+  private color(
+    value: string,
+    onEdit: (v: string, final: boolean) => void,
+    /** when given, offer the deck's brand palette above the free picker.
+     *  `id: null` means the property belongs to the slide, not an element. */
+    ref?: { id: string | null; path: string },
+  ): HTMLElement {
     const input = document.createElement('input')
     input.type = 'color'
     input.value = /^#[0-9a-fA-F]{6}$/.test(value) ? value : parseColor(value).hex
     input.addEventListener('input', () => onEdit(input.value, false))
-    input.addEventListener('change', () => onEdit(input.value, true))
-    return input
+    // A colour chosen by hand must CLEAR any palette reference on this path.
+    // Without that, the next theme edit silently overwrites a colour somebody
+    // picked deliberately — which reads as the app changing their work.
+    input.addEventListener('change', () => {
+      onEdit(input.value, true)
+      if (ref) this.setRef(ref, input.value, null)
+    })
+    if (!ref) return input
+    const wrap = document.createElement('div')
+    wrap.className = 'ed-colorref'
+    wrap.appendChild(this.paletteSwatches(ref, input))
+    wrap.appendChild(input)
+    return wrap
+  }
+
+  /** Write a colour and its palette reference together, as one undoable edit. */
+  private setRef(ref: { id: string | null; path: string }, literal: string, token: string | null) {
+    this.edit(() => {
+      const holder = ref.id ? this.store.element(ref.id) : this.store.slide
+      if (holder) setColor(holder as never, ref.path, literal, token)
+    }, true)
+  }
+
+  /**
+   * The deck's brand colours as clickable swatches.
+   *
+   * Choosing one records WHERE the colour came from, so editing the theme later
+   * re-derives it — that is the whole difference between a deck that can be
+   * re-branded and one that has 400 hex literals in it.
+   */
+  private paletteSwatches(ref: { id: string | null; path: string }, input: HTMLInputElement): HTMLElement {
+    const row = document.createElement('div')
+    row.className = 'ed-swatches'
+    const palette = paletteOf(this.store.doc)
+    const holder = (ref.id ? this.store.element(ref.id) : this.store.slide) as never
+    const current = holder ? refAt(holder, ref.path) : undefined
+    for (const slot of PALETTE_SLOTS) {
+      const base = palette[slot]
+      if (!base) continue // hlink/folHlink are usually unset — don't show empties
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-swatch'
+      b.style.background = base
+      b.title = slot
+      if (current && current.split(' ')[0] === slot) b.classList.add('is-on')
+      b.addEventListener('click', () => {
+        input.value = /^#[0-9a-fA-F]{6}$/.test(base) ? base : parseColor(base).hex
+        this.setRef(ref, base, slot)
+      })
+      row.appendChild(b)
+    }
+    return row
+  }
+
+  /**
+   * Deck-wide brand colours. Editing one re-derives every colour in the deck
+   * that points at it (editor.syncThemeRefs), which is what makes a Bento deck
+   * re-brandable rather than a pile of literals.
+   */
+  private buildThemeProps() {
+    this.section(t('Theme'))
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Deck-wide brand colours. Anything using a theme colour follows when you change it here.')
+    this.host.appendChild(hint)
+    const theme = this.store.doc.theme
+    const slot = (label: string, get: () => string, set: (v: string) => void) =>
+      this.row(label, this.color(get(), (v, fin) => this.edit(() => set(v), fin)))
+    slot('Background', () => theme.background, (v) => { this.store.doc.theme.background = v })
+    slot('Text', () => theme.color, (v) => { this.store.doc.theme.color = v })
+    slot('Accent', () => theme.accent, (v) => { this.store.doc.theme.accent = v })
+    for (const n of [2, 3, 4, 5, 6] as const) {
+      const key = `accent${n}` as const
+      slot(t('Accent {n}', { n: String(n) }), () => paletteOf(this.store.doc)[key], (v) => {
+        const t2 = this.store.doc.theme
+        ;(t2.palette ??= {})[key] = v
+      })
+    }
   }
 
   /** Color swatch + opacity %. Native color inputs have no alpha channel, so
    *  the pair round-trips rgba()/#rrggbbaa strings losslessly. */
-  private colorAlpha(value: string, onEdit: (v: string, final: boolean) => void): HTMLElement {
+  private colorAlpha(
+    value: string,
+    onEdit: (v: string, final: boolean) => void,
+    ref?: { id: string | null; path: string },
+  ): HTMLElement {
     const wrap = document.createElement('div')
     wrap.className = 'ed-coloralpha'
     const parsed = parseColor(value)
@@ -2017,10 +2143,19 @@ export class PropsPanel {
       onEdit(combineColor(col.value, a), final)
     }
     col.addEventListener('input', () => emit(false))
-    col.addEventListener('change', () => emit(true))
+    // picking by hand clears the palette reference — see color() for why
+    col.addEventListener('change', () => {
+      emit(true)
+      if (ref) this.setRef(ref, combineColor(col.value, parseFloat(alpha.value) / 100 || 1), null)
+    })
     alpha.addEventListener('change', () => emit(true))
     wrap.append(col, alpha)
-    return wrap
+    if (!ref) return wrap
+    const outer = document.createElement('div')
+    outer.className = 'ed-colorref'
+    outer.appendChild(this.paletteSwatches(ref, col))
+    outer.appendChild(wrap)
+    return outer
   }
 
   /** Weight picker with the familiar named weights; stores the numeric value. */

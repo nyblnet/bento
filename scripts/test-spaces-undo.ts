@@ -3,11 +3,13 @@
 // Copyright (c) 2026 The Bento authors
 // Undo: depth on a real document, and correctness across mixed scopes.
 //
-//   esbuild scripts/test-spaces-undo.ts --bundle --platform=node --format=esm …
+//   node scripts/test-spaces.mjs undo        # or just: node scripts/test-spaces.mjs
 //
 // (Bundled rather than run directly because store.ts imports './model' without
-// an extension, which node's ESM resolver cannot follow. Same pattern as the
-// autosave and validate rigs.)
+// an extension, which node's ESM resolver cannot follow. Handing this file
+// straight to node fails with ERR_MODULE_NOT_FOUND, which reads like a broken
+// product rather than a missing build step — the runner above does what CI
+// does. Same pattern as the autosave and validate rigs.)
 //
 // WHY. Every checkpoint used to stringify the WHOLE document. Measured on a
 // 200-page, 2.5 MB handbook: fifty edits left an undo depth of NINE, because
@@ -27,6 +29,7 @@
 
 import { Store } from '../spaces/src/store.ts'
 import { parseDoc, FORMAT, type SpacesDoc } from '../spaces/src/model.ts'
+import { planGraft } from '../spaces/src/portable.ts'
 
 let checks = 0
 let failures = 0
@@ -166,6 +169,53 @@ console.log('bento/spaces undo\n')
   s.readOnly = true
   s.commit(() => { s.doc.pages[0].blocks[0].html = 'nope' })
   ok(!s.canUndo && textOf(s, 'a') === 'A0', 'a read-only space neither changes nor records')
+}
+
+// ---- importing a whole space is ONE undo step ------------------------------
+//
+// The Markdown import is one step and says so in its own summary; a subtree
+// import moves more — pages, blocks, images and fonts — and a half-applied one
+// is not something a single ⌘Z could put back. This is the assertion that the
+// commit is genuinely one entry and that undoing it leaves the space exactly as
+// it was, ids and all. It lives here rather than in the model rig because it
+// needs the real Store, which imports './model' without an extension.
+{
+  const host = load([page('a', 'A0'), page('b', 'B0')])
+  const s = new Store(host)
+  const before = JSON.stringify(s.doc.pages)
+
+  const incoming = load([
+    // collides with the host on BOTH ids, which is the interesting case
+    { id: 'a', title: 'Arriving', blocks: [
+      { id: 'ab', type: 'p', html: 'see <a href="#p/a2">the other</a>' },
+      { id: 'ac', type: 'image', src: 'asset:k1' },
+    ] },
+    { id: 'a2', title: 'The other', parent: 'a', blocks: [{ id: 'a2b', type: 'p', html: 'x' }] },
+  ])
+  incoming.assets = { k1: 'data:image/png;base64,AAAA' }
+
+  const plan = planGraft(s.doc, incoming, { under: 'b' })
+  s.commit(() => {
+    s.doc.pages.push(...plan.pages)
+    Object.assign((s.doc.assets ??= {}), plan.assets)
+  })
+
+  ok(s.doc.pages.length === 4, 'the import landed')
+  const ids = s.doc.pages.flatMap((p) => [p.id, ...p.blocks.map((b) => b.id)])
+  ok(new Set(ids).size === ids.length, 'and every id in the merged space is still unique')
+  ok(s.doc.assets?.k1 === 'data:image/png;base64,AAAA', 'the image came with it')
+
+  s.undo()
+  ok(s.doc.pages.length === 2, 'ONE ⌘Z removes the whole import — pages, blocks and all')
+  ok(JSON.stringify(s.doc.pages) === before, 'and what is left is byte-identical to the space before it')
+  ok(!s.canUndo, 'the import took exactly one undo entry, not one per page')
+  // Deliberately NOT asserted the other way: undo snapshots exclude `assets`
+  // (store.ts), so the image bytes stay behind exactly as they do after undoing
+  // a Markdown import. Pruning them would break REDO, which re-inserts blocks
+  // pointing at those very keys — the importer's summary says "removes the
+  // imported pages" for this reason.
+  s.redo()
+  ok(s.doc.pages.length === 4 && s.doc.assets?.k1 !== undefined, 'redo brings the import back intact')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

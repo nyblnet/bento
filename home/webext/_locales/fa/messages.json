@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "سند Bento را بدون پرسش دربارهٔ مقصد، در همان فایلی که باز کرده‌اید ذخیره کنید."
+  },
+  "navAll": {
+    "message": "همهٔ سندها"
+  },
+  "navFolders": {
+    "message": "پوشه‌ها"
+  },
+  "navHelp": {
+    "message": "راهنما و درباره"
+  },
+  "navSettings": {
+    "message": "تنظیمات"
+  },
+  "addFolder": {
+    "message": "+ افزودن پوشه…"
+  },
+  "searchDocs": {
+    "message": "جست‌وجو در سندها"
+  },
+  "searchDocsSlash": {
+    "message": "جست‌وجو در سندها   /"
+  },
+  "sortTitle": {
+    "message": "مرتب‌سازی"
+  },
+  "sortRecent": {
+    "message": "تغییریافته‌های اخیر"
+  },
+  "sortName": {
+    "message": "نام"
+  },
+  "sortFolder": {
+    "message": "پوشه"
+  },
+  "newDocument": {
+    "message": "+ سند تازه"
+  },
+  "browseAll": {
+    "message": "مرور همه"
+  },
+  "reconnectFolders": {
+    "message": "اتصال دوبارهٔ پوشه‌ها"
+  },
+  "primeIntro": {
+    "message": "Chrome همین حالا می‌پرسد. گزینهٔ میانی را انتخاب کنید:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — یک پوشه نیاز به اتصال دوباره دارد"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home نیاز به اتصال دوباره دارد"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome اجازهٔ یک پوشه را پس گرفت. تا بازگردانده نشود، هر بار ذخیره‌کردن از شما می‌پرسد فایل را کجا بگذارد."
+  },
+  "reconnect": {
+    "message": "اتصال دوباره"
+  },
+  "ctxOpenPanel": {
+    "message": "باز کردن پنل bento/home"
+  },
+  "panelEmpty": {
+    "message": "هنوز سند Bento‌ای در پوشه‌های شما نیست."
+  },
+  "noMatches": {
+    "message": "چیزی با «$1» مطابقت ندارد"
+  },
+  "rowUnplacedTip": {
+    "message": "یک بار هر سندی را در $1 از Finder باز کنید تا هرچه در آن پوشه است از همین‌جا باز شود."
+  },
+  "encrypted": {
+    "message": "محافظت‌شده با گذرواژه"
+  },
+  "notSavedYet": {
+    "message": "هنوز ذخیره نشده"
+  },
+  "fileAccessOffShort": {
+    "message": "دسترسی به فایل‌های محلی خاموش است"
+  },
+  "noFoldersYet": {
+    "message": "هنوز پوشه‌ای نیست"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 پوشه نیاز به اتصال دوباره دارد"
+  },
+  "statusOneFolder": {
+    "message": "$1 پوشه · در جای خود ذخیره می‌کند"
+  },
+  "statusFolders": {
+    "message": "$1 پوشه · در جای خود ذخیره می‌کنند"
+  },
+  "renewNotOffered": {
+    "message": "Chrome بازگرداندن آن را پیشنهاد نکرد"
+  },
+  "renewTryAfterRestart": {
+    "message": "پس از راه‌اندازی دوبارهٔ Chrome دوباره تلاش کنید"
+  },
+  "fetchingLatest": {
+    "message": "در حال دریافت تازه‌ترین Bento…"
+  },
+  "created": {
+    "message": "$1 ساخته شد"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 خوانده می‌شود اما هنوز باز نمی‌شود — Chrome به افزونه نمی‌گوید یک پوشه کجای دیسک است. <b>مرور همه</b> آن‌ها را با یک کلیک پیدا می‌کند."
+  },
+  "andMore": {
+    "message": " و $1 مورد دیگر"
+  },
+  "agoJustNow": {
+    "message": "همین حالا"
+  },
+  "agoMinutes": {
+    "message": "$1 دقیقه پیش"
+  },
+  "agoHour": {
+    "message": "$1 ساعت پیش"
+  },
+  "agoHours": {
+    "message": "$1 ساعت پیش"
+  },
+  "agoDay": {
+    "message": "$1 روز پیش"
+  },
+  "agoDays": {
+    "message": "$1 روز پیش"
+  },
+  "searchScope": {
+    "message": "جست‌وجو عنوان‌ها، نام فایل‌ها، پوشه‌ها و واژه‌های درون سندها را می‌بیند."
+  },
+  "folderEmpty": {
+    "message": "هنوز چیزی در این پوشه نیست"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ سند تازه</b> یکی تازه اینجا می‌گذارد."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home هنوز نمی‌داند $1 کجای دیسک است. از «پوشه‌هایم را پیدا کن» استفاده کنید، یا یک بار سندی از آن را از Finder باز کنید."
+  },
+  "cardRenamedTip": {
+    "message": "$1 سند Bento‌ای با نامی دیگر است. از همین‌جا باز می‌شود، اما ذخیره‌کردن مقصد را می‌پرسد — ذخیرهٔ در جا تنها فایل‌هایی را می‌شناسد که به ‎.bento.html ختم می‌شوند."
+  },
+  "badgeRenamed": {
+    "message": "به‌جای ‎.bento.html با نام ‎.html — از همین‌جا باز می‌شود، اما ذخیره‌کردن مقصد را می‌پرسد."
+  },
+  "menuOpen": {
+    "message": "باز کردن"
+  },
+  "menuDuplicate": {
+    "message": "تکثیر"
+  },
+  "menuRename": {
+    "message": "تغییر نام…"
+  },
+  "menuCopyPath": {
+    "message": "رونوشت مسیر"
+  },
+  "duplicatedAs": {
+    "message": "با نام $1 تکثیر شد"
+  },
+  "renamePrompt": {
+    "message": "تغییر نام سند"
+  },
+  "renamedTo": {
+    "message": "نام به $1 تغییر کرد"
+  },
+  "pathCopied": {
+    "message": "مسیر رونوشت شد"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — هنوز باز نشده"
+  },
+  "setupTitle": {
+    "message": "دو کار و آماده‌اید"
+  },
+  "setupLead": {
+    "message": "پس از این، ⌘S در سندی که با دوبار کلیک باز کرده‌اید مستقیم در همان فایل می‌نویسد — دیگر هرگز مقصدی پرسیده نمی‌شود."
+  },
+  "chooseFolder": {
+    "message": "انتخاب پوشه…"
+  },
+  "setupStep1": {
+    "message": "پوشه‌ای را که سندهایتان در آن است انتخاب کنید"
+  },
+  "setupStep1Note": {
+    "message": "معمولاً یک پوشهٔ فراگیر کافی است — هرچه درونش باشد را می‌پوشاند."
+  },
+  "setupStep2": {
+    "message": "دسترسی به فایل‌های محلی را روشن کنید"
+  },
+  "setupStep2Note": {
+    "message": "در <code>chrome://extensions</code> ← bento/home ← <b>اجازهٔ دسترسی به نشانی‌های فایل</b>. Chrome به هیچ افزونه‌ای اجازه نمی‌دهد این را خودش روشن کند."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>ارتقا داده‌اید و انتظار داشتید پوشه‌هایتان اینجا باشند؟</b> افزونهٔ بازنشده با مسیر پوشه‌اش شناخته می‌شود، پس نسخهٔ تازه‌ای که از پوشه‌ای دیگر بارگذاری شود افزونه‌ای دیگر است. پوشه‌های شما هنوز به نسخهٔ قدیمی تعلق دارند. به‌جای آن فایل‌های پوشهٔ اصلی را جایگزین کنید و در <code>chrome://extensions</code> دکمهٔ <b>بارگذاری دوباره</b> را بزنید."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>دسترسی به فایل‌های محلی خاموش است</b> — تا روشن نشود چیزی در جای خود ذخیره نمی‌شود. <b>اجازهٔ دسترسی به نشانی‌های فایل</b> را در <code>chrome://extensions</code> روشن کنید."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 پوشه نیاز به اتصال دوباره دارد.</b> در <b>تنظیمات</b> دوباره متصلش کنید و <b>اجازه در هر بازدید</b> را انتخاب کنید — تنها گزینه‌ای که ماندگار است."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> فهرست می‌شود اما هنوز باز نمی‌شود — Chrome هرگز به افزونه نمی‌گوید یک پوشه کجای دیسک است."
+  },
+  "findFolders": {
+    "message": "پوشه‌هایم را پیدا کن"
+  },
+  "looking": {
+    "message": "در حال جست‌وجو…"
+  },
+  "findDeclined": {
+    "message": "<b>اشکالی ندارد.</b> به‌جایش یک بار سندی را در $1 از Finder باز کنید — این صفحه متوجه می‌شود."
+  },
+  "foundFolder": {
+    "message": "$1 پوشه پیدا شد"
+  },
+  "foundFolders": {
+    "message": "$1 پوشه پیدا شد"
+  },
+  "foundNothing": {
+    "message": "هنوز چیزی در تاریخچه نیست — یک سند را از Finder باز کنید"
+  },
+  "setFoldersSub": {
+    "message": "سندهای درون این‌ها بدون پرسش مقصد مستقیم در همان فایل ذخیره می‌شوند. یک پوشه هرچه درونش باشد را می‌پوشاند."
+  },
+  "noneYet": {
+    "message": "هنوز هیچ."
+  },
+  "savesInPlace": {
+    "message": "در جای خود ذخیره می‌کند"
+  },
+  "needsReconnecting": {
+    "message": "نیاز به اتصال دوباره دارد"
+  },
+  "reconnectTip": {
+    "message": "Chrome برای بازگرداندن این پوشه اجازه می‌خواهد. «اجازه نده» آن را رها می‌کند و پس از آن Chrome دست‌کم یک راه‌اندازی دوباره صبر می‌کند تا دوباره بپرسد."
+  },
+  "remove": {
+    "message": "حذف"
+  },
+  "removeTip": {
+    "message": "دسترسی را پس می‌گیرد. Chrome ممکن است اجازه را همچنان به یاد داشته باشد، پس افزودن دوبارهٔ پوشه شاید چیزی نپرسد."
+  },
+  "setAccessTitle": {
+    "message": "دسترسی به فایل‌های محلی"
+  },
+  "setAccessSub": {
+    "message": "Chrome به هیچ افزونه‌ای اجازه نمی‌دهد این را خودش روشن کند و بدون آن هیچ‌چیز کار نمی‌کند."
+  },
+  "stateOn": {
+    "message": "روشن"
+  },
+  "stateOff": {
+    "message": "خاموش"
+  },
+  "stateUnknown": {
+    "message": "نامعلوم"
+  },
+  "accessOnNote": {
+    "message": "bento/home می‌تواند صفحه‌هایی را که از دیسک باز کرده‌اید بخواند."
+  },
+  "accessOffNote": {
+    "message": "chrome://extensions را باز کنید، bento/home را بیابید و «اجازهٔ دسترسی به نشانی‌های فایل» را روشن کنید."
+  },
+  "accessUnknownNote": {
+    "message": "این مرورگر آن را گزارش نمی‌کند. اگر ذخیره‌کردن هنوز می‌پرسد، در chrome://extensions بررسی کنید."
+  },
+  "setVersionTitle": {
+    "message": "نسخه"
+  },
+  "setVersionUnpacked": {
+    "message": "این نسخه بازنشده بارگذاری شده، پس Chrome هرگز به‌روزش نمی‌کند."
+  },
+  "setVersionStore": {
+    "message": "از فروشگاه نصب شده، پس خودش را به‌روز می‌کند."
+  },
+  "versionAvailable": {
+    "message": "$1 در دسترس است"
+  },
+  "versionUpToDate": {
+    "message": "بر پایهٔ آخرین بررسی به‌روز است"
+  },
+  "versionManaged": {
+    "message": "مرورگر آن را به‌روز نگه می‌دارد"
+  },
+  "getIt": {
+    "message": "دریافت"
+  },
+  "checkNow": {
+    "message": "همین حالا بررسی کن"
+  },
+  "autoCheckPref": {
+    "message": "<b>هنگام آغاز مرورگر نسخهٔ تازه را بررسی کن.</b><br>یک درخواست به bento.page برای یک فایل ایستا. هیچ شناسه‌ای، شماره نسخه‌ای یا چیزی دربارهٔ سندهای شما نمی‌فرستد — مقایسه همین‌جا انجام می‌شود. خاموشش کنید و هرگز چیزی درخواست نمی‌شود؛ <b>همین حالا بررسی کن</b> همچنان کار می‌کند."
+  },
+  "expectedSha": {
+    "message": "SHA-256 مورد انتظار برای فایل zip: $1"
+  },
+  "setReachTitle": {
+    "message": "دسترسی‌اش تا کجاست"
+  },
+  "setReachSub": {
+    "message": "تنها پوشه‌های بالا، و تنها همان فایلی که صفحه واقعاً از آن باز شده است. چیزی بارگذاری نمی‌شود و جای دیگری چیزی خوانده نمی‌شود."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 در دسترس است.</b> این نسخه بازنشده بارگذاری شده، پس Chrome هرگز به‌روزش نمی‌کند."
+  },
+  "updateStep1": {
+    "message": "آن را از GitHub دانلود کنید"
+  },
+  "updateStep2": {
+    "message": "فایل‌ها را <b>در همان پوشه‌ای که از آن بارگذاری کردید</b> جایگزین کنید — همان پوشه، وگرنه Chrome آن را افزونه‌ای دیگر می‌شمارد و پوشه‌های اجازه‌داده‌شده همراهش نمی‌آیند"
+  },
+  "updateStep3": {
+    "message": "<code>chrome://extensions</code> را باز کنید و روی bento/home دکمهٔ <b>بارگذاری دوباره</b> را بزنید"
+  },
+  "fetchingApp": {
+    "message": "در حال دریافت $1…"
+  },
+  "createdIn": {
+    "message": "$1 ($2) در $3 ساخته شد"
+  },
+  "intoFolder": {
+    "message": "در $1"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home چه می‌کند"
+  },
+  "helpWhatSub": {
+    "message": "سند Bento یک فایل HTML است که ویرایشگر خودش را با خود دارد. وقتی مستقیم از دیسک باز شود، مرورگر نمی‌گذارد در خودش بنویسد — پس ذخیره‌کردن هر بار می‌پرسد کجا بگذاردش. bento/home همان پرسش را برمی‌دارد."
+  },
+  "tourSaveTitle": {
+    "message": "ذخیره در جای خود"
+  },
+  "tourSaveBody": {
+    "message": "⌘S بدون هیچ کادر گفت‌وگویی مستقیم در همان فایلی که باز کرده‌اید می‌نویسد. ذخیرهٔ خودکار و به‌روزرسانی‌های در جا هم از همین راه می‌روند."
+  },
+  "tourFindTitle": {
+    "message": "سندهایتان را پیدا کنید"
+  },
+  "tourFindBody": {
+    "message": "هر سند Bento در پوشه‌هایتان، با عنوان واقعی‌اش و تصویری از صفحهٔ نخستش. جست‌وجو آنچه را درونشان نوشته شده هم دربر می‌گیرد."
+  },
+  "tourSwitchTitle": {
+    "message": "هنگام کار جابه‌جا شوید"
+  },
+  "tourSwitchBody": {
+    "message": "<kbd>Alt</kbd>+<kbd>B</kbd> را بزنید، یا درون یک سند راست‌کلیک کنید، تا پنلی کنارش باز شود."
+  },
+  "tourNewTitle": {
+    "message": "یکی تازه بسازید"
+  },
+  "tourNewBody": {
+    "message": "<b>+ سند تازه</b> نسخهٔ کنونی Slides، Spaces یا Dash را می‌آورد و سندی تازه در پوشهٔ شما می‌گذارد."
+  },
+  "helpNeedsTitle": {
+    "message": "چه چیزی از شما می‌خواهد"
+  },
+  "helpNeedsSub": {
+    "message": "دو چیز، که هیچ‌کدام در توان این افزونه نیست خودش ترتیبش را بدهد."
+  },
+  "helpFolder": {
+    "message": "یک پوشه"
+  },
+  "helpFolderGranted": {
+    "message": "$1 اجازه داده شده — سندهای درونشان در جای خود ذخیره می‌شوند"
+  },
+  "helpFolderNone": {
+    "message": "هنوز انتخاب نشده. یک پوشهٔ فراگیر هرچه درونش باشد را می‌پوشاند."
+  },
+  "helpAccessOff": {
+    "message": "خاموش. <b>اجازهٔ دسترسی به نشانی‌های فایل</b> را در <code>chrome://extensions</code> روشن کنید — هیچ افزونه‌ای نمی‌تواند این را خودش روشن کند."
+  },
+  "helpAccessUnknown": {
+    "message": "این مرورگر آن را گزارش نمی‌کند. اگر ذخیره‌کردن هنوز می‌پرسد، در <code>chrome://extensions</code> بررسی کنید."
+  },
+  "helpAccessOn": {
+    "message": "روشن — bento/home می‌تواند صفحه‌هایی را که از دیسک باز کرده‌اید بخواند."
+  },
+  "helpNeverTitle": {
+    "message": "چه کاری هرگز نمی‌کند"
+  },
+  "helpNeverSub": {
+    "message": "تنها درون پوشه‌های بالا می‌خواند و می‌نویسد، و تنها همان فایلی را که صفحه واقعاً از آن باز شده است — مرورگر می‌گوید کدام، پس سندی نمی‌تواند نام فایل کس دیگری را ببرد. هیچ‌چیز دربارهٔ سندهای شما به جایی بارگذاری نمی‌شود، و افزونه اصلاً سروری برای بارگذاری آن‌ها ندارد."
+  },
+  "helpAboutTitle": {
+    "message": "درباره"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · بخشی از پروژهٔ Bento · با پروانهٔ MIT"
+  },
+  "linkSource": {
+    "message": "کد منبع در GitHub"
+  },
+  "linkIssues": {
+    "message": "گزارش مشکل"
+  },
+  "linkReleases": {
+    "message": "انتشارها"
+  },
+  "primeMiddle": {
+    "message": "گزینه‌ای که ماندگار است"
+  },
+  "primeNote": {
+    "message": "دو گزینهٔ دیگر هم کار می‌کنند، اما Chrome دوباره می‌پرسد — برای اولی در هر راه‌اندازی دوباره، و برای آخری پس از مدتی انتظار."
+  },
+  "viewLayout": {
+    "message": "شیوهٔ نمایش سندها"
+  },
+  "viewIcons": {
+    "message": "آیکون‌ها"
+  },
+  "viewList": {
+    "message": "فهرست"
+  },
+  "close": {
+    "message": "بستن"
+  },
+  "setLangTitle": {
+    "message": "زبان"
+  },
+  "setLangSub": {
+    "message": "زبانی که این افزونه با آن سخن می‌گوید. معمولاً از مرورگر پیروی می‌کند."
+  },
+  "langAutomatic": {
+    "message": "خودکار — پیروی از مرورگر"
+  },
+  "setLangNote": {
+    "message": "نام و توضیح خودِ افزونه از مرورگر می‌آید و تغییر نمی‌کند."
+  },
+  "aboutPromo": {
+    "message": "تازه با Bento آشنا شده‌اید؟ الگوها، نگارخانه و راهنمای ویرایش با هوش مصنوعی در $1 هستند — یا در $2 ستاره بدهید."
+  },
+  "setThemeTitle": {
+    "message": "ظاهر"
+  },
+  "setThemeSub": {
+    "message": "تنظیم مرورگر پیش‌فرض است، نه الزام."
+  },
+  "themeAuto": {
+    "message": "مطابق مرورگر"
+  },
+  "themeLight": {
+    "message": "روشن"
+  },
+  "themeDark": {
+    "message": "تیره"
+  },
+  "checking": {
+    "message": "در حال بررسی…"
+  },
+  "surveyTitle": {
+    "message": "پیدا کنید سندهایتان کجا هستند"
+  },
+  "surveySub": {
+    "message": "مرورگر می‌داند چه سندهای Bento‌ای باز کرده‌اید و می‌تواند بگوید در کدام پوشه‌ها هستند."
+  },
+  "surveyDeclined": {
+    "message": "اشکالی ندارد — می‌توانید پوشه‌ها را دستی اضافه کنید."
+  },
+  "surveyAllCovered": {
+    "message": "هر $1 سندی که این مرورگر دیده، از پیش در پوشه‌ای است که افزوده‌اید."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> سند بیرون از همهٔ پوشه‌هایی است که افزوده‌اید. $2 سند از پیش پوشش داده شده‌اند."
+  },
+  "surveyCovers": {
+    "message": "شامل $1"
+  },
+  "surveyAdd": {
+    "message": "این پوشه را اضافه کن…"
+  },
+  "surveyAdded": {
+    "message": "$1 افزوده شد — سندهای درون آن آماده‌اند"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 افزوده شد، اما سندها در آن نیستند — یک بار یکی را از Finder باز کنید."
+  },
+  "surveyOnlySeen": {
+    "message": "با این روش تنها سندهایی پیدا می‌شوند که در این مرورگر باز شده‌اند."
+  }
+}

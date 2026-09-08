@@ -1,0 +1,129 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 The Bento authors
+ *
+ * One design system for every surface the extension has.
+ *
+ * There were three: the home page had tokens and dark mode, the popup had 21
+ * hardcoded colours and no dark mode, the options page had 16 and no dark mode.
+ * The same product in three costumes, and the popup — the surface people
+ * actually open — was the one that turned white at midnight.
+ *
+ * Tokens only below the palette. If a colour appears twice in this file it is a
+ * mistake; if it appears in a page's own <style> it is almost certainly one too.
+ */
+
+:root {
+  --bg: #f6f8fa;      --panel: #fff;      --ink: #17222f;   --dim: #6b7a8d;
+  --line: #e4e9ef;    --hover: #eef2f6;   --accent: #16273e; --peach: #ff9e8a;
+  --good: #2e9e5b;    --bad: #c2453b;     --warn: #c9a227;
+  --on-accent: #fff;  --on-good: #fff;
+  --shadow: 0 1px 2px rgba(20,35,60,.06), 0 8px 24px rgba(20,35,60,.06);
+  --lift: 0 2px 6px rgba(20,35,60,.10), 0 14px 34px rgba(20,35,60,.12);
+  --r: 9px;
+}
+/* Keyed on the ATTRIBUTE, not on `prefers-color-scheme`.
+ *
+ * theme.js resolves auto/light/dark before the first paint and stamps the
+ * answer on <html>, exactly as `kernel/src/theme.ts` does for bento/slides —
+ * whose stylesheet likewise contains no media query. Doing it in CSS as well
+ * would mean writing every dark value a second time, and the rule at the top
+ * of this file is that a colour appearing twice is a mistake. It would also be
+ * wrong: a media query cannot be overridden by a user who wants light chrome
+ * on a dark machine, which is the whole point of offering the choice. */
+:root[data-theme="dark"] {
+  --bg: #0f1720;    --panel: #16202b;   --ink: #e7edf4;   --dim: #90a1b4;
+  --line: #24313f;  --hover: #1d2937;   --accent: #e7edf4; --peach: #ff9e8a;
+  --on-accent: #0f1720;  /* --on-good stays white: it sits on green in both themes */
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.34);
+  --lift: 0 2px 6px rgba(0,0,0,.45), 0 16px 40px rgba(0,0,0,.46);
+}
+
+* { box-sizing: border-box }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.55 -apple-system, system-ui, "Segoe UI", sans-serif;
+}
+
+/* --- type ---------------------------------------------------------------- */
+h1 { font-size: 19px; margin: 0; letter-spacing: -.015em }
+h2 { font-size: 15px; margin: 0 0 6px }
+.dim { color: var(--dim) }
+.warn { color: var(--bad) }
+code { background: var(--hover); padding: 1px 5px; border-radius: 4px; font-size: 12.5px }
+
+/* --- controls ------------------------------------------------------------ */
+.btn, select, input[type="search"], input[type="text"] {
+  font: inherit; padding: 7px 11px; border: 1px solid var(--line);
+  border-radius: var(--r); background: var(--panel); color: inherit;
+}
+.btn { cursor: pointer }
+.btn:hover, select:hover { background: var(--hover) }
+.btn:focus-visible, input:focus-visible, select:focus-visible,
+.card:focus-visible, .navitem:focus-visible {
+  outline: 2px solid var(--peach); outline-offset: 2px
+}
+input:focus { outline: 2px solid var(--peach); outline-offset: -1px; border-color: transparent }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
+.btn.primary:hover { filter: brightness(1.12) }
+.btn.ghost { border-style: dashed; color: var(--dim); background: none; text-align: start }
+.btn.ghost:hover { background: var(--hover); color: var(--ink) }
+.btn.link { border: 0; background: none; color: var(--dim); padding: 0;
+  text-decoration: underline; font-size: 12px }
+.btn.link:hover { color: var(--ink); background: none }
+.btn[disabled] { opacity: .55; cursor: default }
+
+/* --- state dots ---------------------------------------------------------- */
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--dim) }
+.dot.ok { background: var(--good) } .dot.bad { background: var(--bad) }
+.dot.meh { background: var(--warn) }
+
+/* --- surfaces ------------------------------------------------------------ */
+.notice {
+  padding: 10px 13px; border-radius: 10px; background: var(--panel);
+  border: 1px solid var(--line); color: var(--dim); font-size: 13px;
+  box-shadow: var(--shadow);
+}
+.notice b { color: var(--ink) }
+.notice.bad { border-color: color-mix(in srgb, var(--bad) 40%, var(--line)) }
+
+.menu {
+  position: fixed; z-index: 20; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: var(--lift); padding: 5px; min-width: 176px;
+}
+.menu button {
+  display: block; width: 100%; text-align: start; border: 0; background: none;
+  color: inherit; font: inherit; padding: 6px 9px; border-radius: 7px; cursor: pointer;
+}
+.menu button:hover { background: var(--hover) }
+.menu .sep { height: 1px; background: var(--line); margin: 5px 4px }
+.menu .note { color: var(--dim); font-size: 12px; padding: 4px 9px 6px }
+
+/* Centred without naming a side. `left: 50%` + `translateX(-50%)` also centres,
+   but the translate is PHYSICAL: under RTL it pushes the same direction while
+   the anchor flips, so the toast drifts off centre. Auto margins do not care
+   which way the document runs. */
+.toast {
+  position: fixed; inset-inline: 0; bottom: 26px;
+  margin-inline: auto; width: max-content; max-width: calc(100% - 32px);
+  background: var(--accent); color: var(--on-accent); padding: 9px 15px;
+  border-radius: 999px; box-shadow: var(--lift); font-size: 13px; z-index: 30;
+}
+
+/* --- the mark ------------------------------------------------------------ */
+/* The radius lives in the art (icons/icon.svg), never in a CSS crop. */
+.mark { display: block; flex: none }
+
+/* --- Chrome's own dialog, drawn ------------------------------------------ */
+/* Its three options are near-identical pills and its wording says nothing about
+   what each one costs, so pointing at the middle one in prose does not work. */
+.prime { border: 1px solid var(--line); border-radius: 10px; padding: 9px; background: var(--panel) }
+.prime p { margin: 0 0 7px; color: var(--dim); font-size: 12.5px }
+.prime .opt {
+  border-radius: 999px; padding: 5px 9px; font-size: 12px; text-align: center;
+  background: var(--hover); color: var(--dim); margin-bottom: 5px;
+}
+.prime .opt.pick { background: var(--accent); color: var(--on-accent); font-weight: 600 }
+/* The unlabelled pills are shape, not text: they stand for "the one above" and
+   "the one below" without claiming to know what Chrome calls them. */
+.prime .opt:empty { min-height: 1.55em }
+.prime .primeNote { margin: 7px 0 0; color: var(--dim); font-size: 12px }

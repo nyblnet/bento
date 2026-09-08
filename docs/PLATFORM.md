@@ -198,16 +198,33 @@ engine, `app.ts` (per-app identity via `configureApp`), `doc.ts` (the
 `KernelDoc` envelope). Apps import these through facades at their own paths.
 
 The CRDT engine is `kernel/src/sync/crdt.ts` now. It takes its document shape
-as a `DocShape` at construction (two property names: the doc key holding the
-parent array, the parent key holding the child array), so one algebra serves
-bento/slides and bento/spaces with neither app's vocabulary in the kernel. An
-app imports its own binding — `slides/src/sync/crdt.ts` → `SLIDES_SHAPE` —
+as a `DocShape` at construction, so one algebra serves every app with no app's
+vocabulary in the kernel. A shape is four things:
+
+- `parents` — the doc key holding the parent array (`slides`, `pages`, `body`)
+- `children` — the parent key holding the child array, or `null` for a FLAT
+  document that has no element layer (bento/type: a block IS the paragraph)
+- `text` — the property that gets the token RGA rather than a last-writer-wins
+  register. This is the one that decides whether two people can type in the
+  same paragraph at once, which is why it is named rather than assumed.
+- `maps` — doc-level keys merged per KEY rather than as one value, so two
+  people adding different entries both keep theirs. Always includes `assets`
+  and `blobs`; an app adds its own (bento/type: `footnotes`).
+
+An app imports its own binding — `slides/src/sync/crdt.ts` → `SLIDES_SHAPE` —
 never the engine directly.
 
-Also shared but NOT yet in `kernel/`: the session/transport layer
-(`slides/src/sync/session.ts`, `online.ts`, `blobs.ts`) and the relay
-(`server/`). Those are still slides-shaped — treat them as kernel-zone for
-serialization.
+The session and transport are in `kernel/src/sync/` too: `session.ts` (the
+differ hook, shadow, presence, catch-up, gap recovery, the fork snapshot
+exchange), `online.ts` (the E2EE relay transport) and `blobs.ts`. An app
+supplies a small `SyncHost` for the handful of decisions the kernel cannot
+make — what an EMPTY document is and how to repair it, how to clamp a view onto
+a document that changed underneath it, where a person is for presence, which
+store events its editor listens to, and what embedded media looks like in an op
+batch — plus its shape-bound engine class. `slides/src/sync/*` are facades.
+
+Still shared but outside the kernel: the relay (`server/`). Treat it as
+kernel-zone for serialization.
 
 Shared build tooling: `scripts/postbuild-compress.mjs` (parameterised per app
 via `--generator` / `--title`) and `scripts/shell-gate.mjs`.
@@ -225,7 +242,11 @@ A new Bento app is on-platform when it:
 - [ ] self-saves (FSA + download) and autosaves per §4
 - [ ] supports the `bento/enc` envelope per §4 (or explicitly documents why not yet)
 - [ ] ships collab dormant-by-default per §5, or ships without collab wired
-      rather than with a half-secure version
+      rather than with a half-secure version. Wiring it is now two small
+      files, not a port: `src/sync/crdt.ts` declaring the app's `DocShape`,
+      and `src/sync/session.ts` supplying a `SyncHost` (§9). Copying another
+      app's session is the wrong move and was the actual history here —
+      bento/dash ported the transport, and the copy is still being unpicked.
 - [ ] verifies signed updates per §6 with its own manifest path
 - [ ] exposes the AI round-trip surface per §7
 - [ ] uses the shared i18n runtime per §8

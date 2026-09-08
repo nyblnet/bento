@@ -109,6 +109,41 @@ ok(whiteSurfaces.length === 0,
     `every themed role is referenced by a rule${unused.length ? ` — defined but unused: ${unused.join(', ')}` : ''}`)
 }
 
+// ---- 4b. a themed background never carries a literal foreground -----------
+// The pairing that breaks on a theme flip. `.ed-btn-primary` was
+// `background: var(--ink); color: #fff` — correct in light, and in dark the
+// background followed --ink to a light value while the text stayed white:
+// measured 1.21:1, unreadable, on six buttons across the app. It survived
+// review because the About dialog has its own override, so the one instance
+// anybody looked at was fine.
+//
+// Only tokens that ACTUALLY INVERT are an offence. `--accent` is the same
+// peach in both themes, so a literal foreground on it is stable and allowed —
+// flagging those would train people to ignore this check.
+{
+  const valuesIn = (body) => Object.fromEntries(
+    [...body.matchAll(/^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);/gmi)].map((m) => [m[1], m[2].trim().toLowerCase()]))
+  const L = valuesIn(light ?? ''), D = valuesIn(dark ?? '')
+  const inverts = (tok) => L[tok] && D[tok] && L[tok] !== D[tok]
+
+  const offenders = []
+  for (const [, , sel, body] of rules) {
+    const bg = body.match(/background(?:-color)?\s*:\s*var\((--[a-z0-9-]+)/i)
+    if (!bg || !inverts(bg[1])) continue
+    // A literal colour, i.e. one that is not itself a token. Tested on the
+    // CAPTURED value rather than with a lookahead: `\s*(?!var\()` backtracks —
+    // it gives back a space and then happily matches ` var(--ink)`, which had
+    // this check reporting three false positives on its first run.
+    const fg = body.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i)
+    if (!fg || /^var\(/.test(fg[1].trim())) continue
+    const s2 = sel.replace(/\/\*[\s\S]*?\*\//g, '').trim().split(',')[0].trim()
+    if (EXEMPT.test(s2)) continue
+    offenders.push(`${s2} — background ${bg[1]} inverts, but color is ${fg[1].trim()}`)
+  }
+  ok(offenders.length === 0,
+    `no rule pairs an inverting background token with a literal text colour${offenders.length ? `\n        ${offenders.join('\n        ')}` : ''}`)
+}
+
 // ---- 5. the light palette has not forked from the suite -------------------
 const SHARED = { '--ink': '#1e2a3a', '--ink-2': '#31445c', '--chrome': '#f5f7fa',
   '--chrome-2': '#eceff4', '--line': '#e3e8ef', '--muted': '#5b6472',

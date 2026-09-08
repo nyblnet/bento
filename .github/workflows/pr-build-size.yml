@@ -1,0 +1,149 @@
+name: PR build size
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    if: github.event.action != 'edited' || github.event.changes.base != null
+    concurrency:
+      # Keep unrelated title/body edits from cancelling a real measurement.
+      group: pr-build-size-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - name: Check out base commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Build base bento/slides
+        working-directory: base/slides
+        run: |
+          npm ci
+          npm run build:single
+
+      - name: Build base bento/spaces
+        working-directory: base/spaces
+        run: |
+          npm ci
+          npm run build:single
+
+      - name: Build base bento/dash
+        working-directory: base/dash
+        run: |
+          npm ci
+          npm run build:single
+
+      - name: Record base sizes
+        env:
+          BASE_ROOT: ${{ github.workspace }}/base
+          OUTPUT_PATH: ${{ runner.temp }}/bento-base-sizes.json
+        run: |
+          node --input-type=module <<'NODE'
+          import { statSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+
+          const files = {
+            'bento/slides': 'slides/dist-single/Bento_Slides.bento.html',
+            'bento/spaces': 'spaces/dist-single/Bento_Spaces.bento.html',
+            'bento/dash': 'dash/dist-single/Bento_Dash.bento.html',
+          };
+          const sizes = Object.fromEntries(
+            Object.entries(files).map(([app, file]) => [
+              app,
+              statSync(join(process.env.BASE_ROOT, file)).size,
+            ]),
+          );
+          writeFileSync(process.env.OUTPUT_PATH, JSON.stringify(sizes), { mode: 0o600 });
+          NODE
+
+      - name: Remove base checkout
+        run: rm -rf -- "$GITHUB_WORKSPACE/base"
+
+      - name: Check out PR head commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+
+      - name: Build PR bento/slides
+        working-directory: head/slides
+        run: |
+          npm ci
+          npm run build:single
+
+      - name: Build PR bento/spaces
+        working-directory: head/spaces
+        run: |
+          npm ci
+          npm run build:single
+
+      - name: Build PR bento/dash
+        working-directory: head/dash
+        run: |
+          npm ci
+          npm run build:single
+
+      - name: Create report
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SIZES_PATH: ${{ runner.temp }}/bento-base-sizes.json
+          HEAD_ROOT: ${{ github.workspace }}/head
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPORT_DIRECTORY: ${{ runner.temp }}/bento-pr-build-size
+        run: |
+          node --input-type=module <<'NODE'
+          import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+
+          const files = {
+            'bento/slides': 'slides/dist-single/Bento_Slides.bento.html',
+            'bento/spaces': 'spaces/dist-single/Bento_Spaces.bento.html',
+            'bento/dash': 'dash/dist-single/Bento_Dash.bento.html',
+          };
+          const baseSizes = JSON.parse(readFileSync(process.env.BASE_SIZES_PATH, 'utf8'));
+          const report = {
+            schemaVersion: 1,
+            pullRequest: Number(process.env.PR_NUMBER),
+            baseSha: process.env.BASE_SHA,
+            headSha: process.env.HEAD_SHA,
+            apps: Object.entries(files).map(([app, file]) => ({
+              app,
+              baseBytes: baseSizes[app],
+              headBytes: statSync(join(process.env.HEAD_ROOT, file)).size,
+            })),
+          };
+          mkdirSync(process.env.REPORT_DIRECTORY, { recursive: true });
+          writeFileSync(
+            join(process.env.REPORT_DIRECTORY, 'report.json'),
+            JSON.stringify(report),
+            { mode: 0o600 },
+          );
+          NODE
+
+      - name: Upload report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bento-pr-build-size
+          path: ${{ runner.temp }}/bento-pr-build-size/report.json
+          if-no-files-found: error
+          retention-days: 1

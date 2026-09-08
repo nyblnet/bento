@@ -143,7 +143,7 @@ function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
 // --- static first-page preview (file-manager thumbnails) ---------------------
 //
 // THE PROBLEM. A Bento file is one HTML document, and thumbnailers — iOS
-// Files, macOS QuickLook/Finder, the Bento Tray app — render HTML with
+// Files, macOS QuickLook/Finder, the bento/home app — render HTML with
 // JavaScript DISABLED (verified: `qlmanage -t` renders <noscript> content).
 // Until our runtime boots, every deck genuinely IS the same bytes plus the
 // boot splash, so every deck thumbnailed as the same dark box.
@@ -544,7 +544,7 @@ export type SavePurpose = 'in-place' | 'copy' | 'share' | 'backup'
  * view-only copy.
  *
  * The other reason is not incidental. A host that polyfills
- * `showSaveFilePicker` (tray/ios over UIDocument, tray/webext over a directory
+ * `showSaveFilePicker` (home/ios over UIDocument, home/webext over a directory
  * grant) sees ONLY the options bag. `saveFile(doc, forcePicker)` used to reach
  * this function with byte-identical arguments for ⌘S and for "Save a copy…",
  * so a host could not distinguish them — and one that guessed wrong overwrote
@@ -559,7 +559,7 @@ export const pickerIdFor = (purpose: SavePurpose): string =>
         : 'bento-share'
 
 /**
- * Is a HOST polyfilling the picker — tray/ios, tray/webext — rather than the
+ * Is a HOST polyfilling the picker — home/ios, home/webext — rather than the
  * browser's own?
  *
  * The kernel cannot infer this. `showSaveFilePicker` exists either way, and a
@@ -604,7 +604,21 @@ async function pickHandle(
       // update onwards opens where the first one saved.
       ...(fileHandle ? { startIn: fileHandle } : {}),
       id: pickerIdFor(purpose),
-      types: [{ description: appConfig().appName, accept: { 'text/html': ['.html'] } }],
+      // `.bento.html`, NOT `.html`, and the compound extension is the point.
+      //
+      // `suggestedFileName` has always produced `.bento.html`, but the picker
+      // accepted `.html` — so an author who edited the name to "Q3" got
+      // `Q3.html`, and a document named that is a second-class citizen
+      // everywhere the convention is what identifies us: home/webext injects
+      // its save bridge on `file:///*.bento.html`, so such a file opens fine
+      // and then asks where to save, and home/ios matches the same way.
+      //
+      // Bento was manufacturing the exception and then being asked to cope with
+      // it. Accepting only the compound extension means the browser appends it
+      // to a bare name, which is what everybody meant. Compound suffixes are
+      // explicitly legal here (`.tar.gz` is the spec's own example) and the
+      // limit is 16 characters against this one's 11.
+      types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
     })
   } catch (err: any) {
     if (err?.name === 'AbortError') return null
@@ -749,7 +763,7 @@ export async function writeUpdatedFileAs(
  * With a host, the backup goes where it belongs — beside the original, inside
  * the folder already granted. The host derives the directory itself, from the
  * sender's own resolved path; `name` is only ever validated against that, never
- * trusted as a path. See tray/webext/src/background.js `backup`.
+ * trusted as a path. See home/webext/src/background.js `backup`.
  *
  * Without a host this stays a download, because the alternative is a picker and
  * a picker is strictly worse than the status quo for the majority case.
@@ -764,7 +778,7 @@ export async function writeBackupBeside(html: string, name: string): Promise<'be
       const handle = await (window as any).showSaveFilePicker({
         suggestedName: name,
         id: pickerIdFor('backup'),
-        types: [{ description: appConfig().appName, accept: { 'text/html': ['.html'] } }],
+        types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
       })
       if (handle) {
         await writeHandle(handle, html)

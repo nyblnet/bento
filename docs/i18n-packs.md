@@ -439,7 +439,7 @@ but not yet on `main` — do not describe it as shipped.
       joining `he` and the original `ko`; Turkmen followed. With the 9 bundled
       catalogs that is 31 languages:
 
-      ar bn da fa fi he hi id ko ms nb nl pl ru sv th tk tl tr uk ur vi
+      ar bn da fa fi fil he hi id ko ms nb nl pl ru sv th tk tr uk ur vi
 
       Four are RTL (ar, fa, he, ur) and every one of them is a pack — the
       chrome-direction work landed before any of them, so each got mirrored
@@ -448,6 +448,13 @@ but not yet on `main` — do not describe it as shipped.
       and LTR, so `RTL_LANGS` is untouched and base-language matching already
       resolves `tk-TM` → `tk`. It is also the first pack with a named
       translator: Mekan Soltanov (github.com/msoltanov).
+
+      Filipino is filed as `fil`, not the ISO 639-1 `tl` it shipped under: a
+      pack's code is what `navigator.language` is matched against, and every
+      current browser reports Filipino as `fil` / `fil-PH`, so under `tl` it
+      could never be auto-selected. `tl` remains an alias (`ALIASES` in
+      `slides/src/packs.ts`). `tk` was checked at the same time and is
+      correct as it stands — `tk-TM` is what a Turkmen system reports.
 
       The 21 were complete at 693/693 when they landed. The source has grown
       since, so today they sit at 703/706, and `tk` — written against the

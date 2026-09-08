@@ -1,0 +1,521 @@
+{
+  "appDesc": {
+    "message": "開いた Bento ドキュメントを、保存先を尋ねられることなく元のファイルに保存します。",
+    "description": "Chrome Web Store listing description. 132 characters maximum — the store truncates."
+  },
+  "navAll": {
+    "message": "すべてのドキュメント"
+  },
+  "navFolders": {
+    "message": "フォルダ"
+  },
+  "navHelp": {
+    "message": "ヘルプと情報"
+  },
+  "navSettings": {
+    "message": "設定"
+  },
+  "addFolder": {
+    "message": "+ フォルダを追加…"
+  },
+  "searchDocs": {
+    "message": "ドキュメントを検索"
+  },
+  "searchDocsSlash": {
+    "message": "ドキュメントを検索   /"
+  },
+  "sortTitle": {
+    "message": "並べ替え"
+  },
+  "sortRecent": {
+    "message": "最近変更したもの"
+  },
+  "sortName": {
+    "message": "名前"
+  },
+  "sortFolder": {
+    "message": "フォルダ"
+  },
+  "newDocument": {
+    "message": "+ 新規ドキュメント"
+  },
+  "browseAll": {
+    "message": "すべて表示"
+  },
+  "reconnectFolders": {
+    "message": "フォルダを再接続"
+  },
+  "primeIntro": {
+    "message": "次に Chrome が尋ねます。真ん中を選んでください:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — フォルダの再接続が必要です",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home の再接続が必要です",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome がフォルダの権限を取り消しました。元に戻すまで、ドキュメントの保存時に保存先を尋ねられます。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnect": {
+    "message": "再接続"
+  },
+  "ctxOpenPanel": {
+    "message": "bento/home パネルを開く"
+  },
+  "panelEmpty": {
+    "message": "フォルダ内にまだ Bento ドキュメントがありません。"
+  },
+  "noMatches": {
+    "message": "「$1」に一致するものはありません"
+  },
+  "rowUnplacedTip": {
+    "message": "$1 のドキュメントを Finder から一度開けば、そのフォルダのすべてをここから開けるようになります。"
+  },
+  "encrypted": {
+    "message": "パスワード保護あり"
+  },
+  "notSavedYet": {
+    "message": "まだ保存されていません"
+  },
+  "fileAccessOffShort": {
+    "message": "ローカルファイルへのアクセスがオフです",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noFoldersYet": {
+    "message": "フォルダがまだありません"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 個のフォルダの再接続が必要です",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "statusOneFolder": {
+    "message": "$1 個のフォルダ · 上書き保存"
+  },
+  "statusFolders": {
+    "message": "$1 個のフォルダ · 上書き保存"
+  },
+  "renewNotOffered": {
+    "message": "Chrome は復元を提案しませんでした",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "renewTryAfterRestart": {
+    "message": "Chrome を再起動してからもう一度お試しください",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "fetchingLatest": {
+    "message": "最新の Bento を取得中…"
+  },
+  "created": {
+    "message": "$1 を作成しました"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 は読み取れますが、まだ開けません。Chrome はフォルダーのディスク上の場所を拡張機能に伝えないためです。<b>すべて表示</b> ならワンクリックで見つかります。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "andMore": {
+    "message": "ほか $1 件"
+  },
+  "agoJustNow": {
+    "message": "たった今"
+  },
+  "agoMinutes": {
+    "message": "$1 分前"
+  },
+  "agoHour": {
+    "message": "$1 時間前"
+  },
+  "agoHours": {
+    "message": "$1 時間前"
+  },
+  "agoDay": {
+    "message": "$1 日前"
+  },
+  "agoDays": {
+    "message": "$1 日前"
+  },
+  "searchScope": {
+    "message": "検索対象はタイトル、ファイル名、フォルダ、そしてドキュメント内の文章です。"
+  },
+  "folderEmpty": {
+    "message": "このフォルダにはまだ何もありません"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ 新規ドキュメント</b>でここに 1 つ作成できます。"
+  },
+  "cardUnplacedTip": {
+    "message": "$1 がディスク上のどこにあるか、bento/home はまだ知りません。「フォルダを探す」を使うか、Finder からそのフォルダのドキュメントを一度開いてください。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "cardRenamedTip": {
+    "message": "$1 は別名の Bento ドキュメントです。ここから開けますが、保存時に保存先を尋ねられます — 上書き保存は .bento.html で終わるファイルのみ認識します。"
+  },
+  "badgeRenamed": {
+    "message": ".bento.html ではなく .html という名前です — ここから開けますが、保存時に保存先を尋ねられます。"
+  },
+  "menuOpen": {
+    "message": "開く"
+  },
+  "menuDuplicate": {
+    "message": "複製"
+  },
+  "menuRename": {
+    "message": "名前を変更…"
+  },
+  "menuCopyPath": {
+    "message": "パスをコピー"
+  },
+  "duplicatedAs": {
+    "message": "$1 として複製しました"
+  },
+  "renamePrompt": {
+    "message": "ドキュメントの名前を変更"
+  },
+  "renamedTo": {
+    "message": "$1 に名前を変更しました"
+  },
+  "pathCopied": {
+    "message": "パスをコピーしました"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — まだ開いていません"
+  },
+  "setupTitle": {
+    "message": "2 つだけで準備完了"
+  },
+  "setupLead": {
+    "message": "これが済めば、ダブルクリックで開いたドキュメントで ⌘S を押すと、保存先を尋ねられることなく元のファイルへ直接書き戻されます。"
+  },
+  "chooseFolder": {
+    "message": "フォルダを選択…"
+  },
+  "setupStep1": {
+    "message": "ドキュメントを置いているフォルダを選ぶ"
+  },
+  "setupStep1Note": {
+    "message": "通常は広めのフォルダを 1 つで十分です — 中身すべてが対象になります。"
+  },
+  "setupStep2": {
+    "message": "ローカルファイルへのアクセスをオンにする",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupStep2Note": {
+    "message": "<code>chrome://extensions</code> → bento/home → <b>ファイルの URL へのアクセスを許可する</b>。Chrome は拡張機能が自分でオンにすることを許しません。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>更新したのにフォルダが見当たりませんか。</b>展開した拡張機能はフォルダのパスで識別されるため、別のフォルダから新しいコピーを読み込むと別の拡張機能として扱われます。フォルダは以前のコピーに許可されたままです。元のフォルダのファイルを置き換え、<code>chrome://extensions</code> で<b>更新</b>を押してください。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>ローカルファイルへのアクセスがオフです</b> — オンにするまで上書き保存はできません。<code>chrome://extensions</code> で<b>ファイルの URL へのアクセスを許可する</b>をオンにしてください。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 個のフォルダの再接続が必要です。</b><b>設定</b>で再接続し、真ん中の選択肢を選んでください — 唯一ずっと続くものです。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> は一覧に出せますがまだ開けません — Chrome は拡張機能にフォルダのディスク上の場所を教えません。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "findFolders": {
+    "message": "フォルダを探す"
+  },
+  "looking": {
+    "message": "検索中…"
+  },
+  "findDeclined": {
+    "message": "<b>問題ありません。</b>代わりに $1 のドキュメントを Finder から一度開いてください — このページが気づきます。"
+  },
+  "foundFolder": {
+    "message": "$1 個のフォルダが見つかりました"
+  },
+  "foundFolders": {
+    "message": "$1 個のフォルダが見つかりました"
+  },
+  "foundNothing": {
+    "message": "履歴にまだありません — Finder からドキュメントを 1 つ開いてください"
+  },
+  "setFoldersSub": {
+    "message": "この中のドキュメントは、保存先を尋ねられることなく元のファイルへ直接保存されます。フォルダは中身すべてを対象にします。"
+  },
+  "noneYet": {
+    "message": "まだありません。"
+  },
+  "savesInPlace": {
+    "message": "上書き保存"
+  },
+  "needsReconnecting": {
+    "message": "再接続が必要",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnectTip": {
+    "message": "Chrome がこのフォルダの復元を尋ねます。拒否するとフォルダは外れ、その後 Chrome は少なくとも 1 回の再起動を待ってから再度尋ねます。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "remove": {
+    "message": "削除"
+  },
+  "removeTip": {
+    "message": "アクセスを解除します。Chrome 側は権限を覚えている場合があるため、再度追加しても尋ねられないことがあります。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessTitle": {
+    "message": "ローカルファイルへのアクセス",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessSub": {
+    "message": "Chrome は拡張機能が自分でこれをオンにすることを許しません。オンでなければ何も動きません。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "stateOn": {
+    "message": "オン"
+  },
+  "stateOff": {
+    "message": "オフ"
+  },
+  "stateUnknown": {
+    "message": "不明"
+  },
+  "accessOnNote": {
+    "message": "ディスクから開いたページを bento/home が読み取れます。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessOffNote": {
+    "message": "chrome://extensions を開き、bento/home を探して「ファイルの URL へのアクセスを許可する」をオンにしてください。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessUnknownNote": {
+    "message": "このブラウザは状態を報告しません。保存時に保存先を尋ねられる場合は chrome://extensions で確認してください。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setVersionTitle": {
+    "message": "バージョン"
+  },
+  "setVersionUnpacked": {
+    "message": "このコピーは展開して読み込まれたため、Chrome が更新することはありません。"
+  },
+  "setVersionStore": {
+    "message": "ストアからインストールされているため、自動で更新されます。"
+  },
+  "versionAvailable": {
+    "message": "$1 が利用できます"
+  },
+  "versionUpToDate": {
+    "message": "前回の確認時点で最新"
+  },
+  "versionManaged": {
+    "message": "ブラウザが最新に保っています"
+  },
+  "getIt": {
+    "message": "入手"
+  },
+  "checkNow": {
+    "message": "今すぐ確認"
+  },
+  "autoCheckPref": {
+    "message": "<b>ブラウザの起動時に新しいバージョンを確認する。</b><br>bento.page の静的ファイルへのリクエストが 1 回だけ。識別子もバージョン番号も、ドキュメントに関する情報も送りません — 比較はこの端末で行われます。オフにすれば何も送信されず、<b>今すぐ確認</b>は引き続き使えます。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "expectedSha": {
+    "message": "zip の想定 SHA-256: $1"
+  },
+  "setReachTitle": {
+    "message": "アクセスできる範囲",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setReachSub": {
+    "message": "上のフォルダだけ、しかもページが実際に開かれた元のファイルだけです。どこにもアップロードせず、他の場所を読むこともありません。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 が利用できます。</b>このコピーは展開して読み込まれたため、Chrome が更新することはありません。"
+  },
+  "updateStep1": {
+    "message": "GitHub からダウンロード"
+  },
+  "updateStep2": {
+    "message": "<b>読み込んだフォルダの中で</b>ファイルを置き換えてください — 同じフォルダでないと Chrome は別の拡張機能として扱い、許可済みのフォルダは引き継がれません",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateStep3": {
+    "message": "<code>chrome://extensions</code> を開き、bento/home の<b>更新</b>を押す"
+  },
+  "fetchingApp": {
+    "message": "$1 を取得中…"
+  },
+  "createdIn": {
+    "message": "$3 に $1（$2）を作成しました"
+  },
+  "intoFolder": {
+    "message": "$1 へ"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home でできること"
+  },
+  "helpWhatSub": {
+    "message": "Bento ドキュメントは、エディタごと入った 1 つの HTML ファイルです。ディスクから直接開くと、ブラウザは自分自身への書き戻しを許さないため、保存のたびに保存先を尋ねられます。bento/home はその質問をなくします。"
+  },
+  "tourSaveTitle": {
+    "message": "その場で保存"
+  },
+  "tourSaveBody": {
+    "message": "⌘S はダイアログなしで、開いたファイルへ直接書き戻します。自動保存とアップデートも同じ経路を通ります。"
+  },
+  "tourFindTitle": {
+    "message": "ドキュメントを見つける"
+  },
+  "tourFindBody": {
+    "message": "フォルダ内のすべての Bento ドキュメントを、本当のタイトルと 1 ページ目の画像付きで表示します。検索は中の文章も対象です。"
+  },
+  "tourSwitchTitle": {
+    "message": "作業しながら切り替える"
+  },
+  "tourSwitchBody": {
+    "message": "<kbd>Alt</kbd>+<kbd>B</kbd> を押すか、ドキュメント内で右クリックすると、隣にパネルが開きます。"
+  },
+  "tourNewTitle": {
+    "message": "新しく作る"
+  },
+  "tourNewBody": {
+    "message": "<b>+ 新規ドキュメント</b>は Slides・Spaces・Dash の最新版を取得し、フォルダに新しいドキュメントを置きます。"
+  },
+  "helpNeedsTitle": {
+    "message": "必要なもの"
+  },
+  "helpNeedsSub": {
+    "message": "2 つだけ。どちらもこの拡張機能では用意できないものです。"
+  },
+  "helpFolder": {
+    "message": "フォルダ"
+  },
+  "helpFolderGranted": {
+    "message": "$1 個を許可済み — 中のドキュメントは上書き保存されます"
+  },
+  "helpFolderNone": {
+    "message": "まだ選ばれていません。広めのフォルダを 1 つ選べば中身すべてが対象になります。"
+  },
+  "helpAccessOff": {
+    "message": "オフです。<code>chrome://extensions</code> で<b>ファイルの URL へのアクセスを許可する</b>をオンにしてください — 拡張機能が自分でオンにすることはできません。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessUnknown": {
+    "message": "このブラウザは状態を報告しません。保存時に保存先を尋ねられる場合は <code>chrome://extensions</code> で確認してください。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessOn": {
+    "message": "オン — ディスクから開いたページを bento/home が読み取れます。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverTitle": {
+    "message": "決してしないこと",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverSub": {
+    "message": "読み書きするのは上のフォルダの中だけ、しかもページが実際に開かれた元のファイルだけです — どのファイルかはブラウザが伝えるので、ドキュメントが他人のファイルを指定することはできません。ドキュメントの内容がどこかへ送られることはなく、送る先のサーバーもありません。",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAboutTitle": {
+    "message": "このアプリについて"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Bento プロジェクトの一部 · MIT ライセンス"
+  },
+  "linkSource": {
+    "message": "GitHub のソース"
+  },
+  "linkIssues": {
+    "message": "問題を報告"
+  },
+  "linkReleases": {
+    "message": "リリース"
+  },
+  "primeMiddle": {
+    "message": "ずっと続くもの"
+  },
+  "primeNote": {
+    "message": "他の 2 つでも動きますが、Chrome は再び尋ねます — 1 つ目は再起動のたびに、最後のものはしばらく待ってから。"
+  },
+  "viewLayout": {
+    "message": "ドキュメントの表示方法"
+  },
+  "viewIcons": {
+    "message": "アイコン"
+  },
+  "viewList": {
+    "message": "リスト"
+  },
+  "close": {
+    "message": "閉じる"
+  },
+  "setLangTitle": {
+    "message": "言語"
+  },
+  "setLangSub": {
+    "message": "この拡張機能が話す言語です。通常はブラウザーに従います。"
+  },
+  "langAutomatic": {
+    "message": "自動 — ブラウザーに従う"
+  },
+  "setLangNote": {
+    "message": "拡張機能自体の名前と説明はブラウザーから来るため、変わりません。"
+  },
+  "aboutPromo": {
+    "message": "Bento は初めてですか？テンプレート、ギャラリー、AI 編集ガイドは $1 にあります。$2 でスターを付けることもできます。"
+  },
+  "setThemeTitle": {
+    "message": "外観"
+  },
+  "setThemeSub": {
+    "message": "ブラウザーの設定は既定値であって、強制ではありません。"
+  },
+  "themeAuto": {
+    "message": "ブラウザーに合わせる"
+  },
+  "themeLight": {
+    "message": "ライト"
+  },
+  "themeDark": {
+    "message": "ダーク"
+  },
+  "checking": {
+    "message": "確認中…"
+  },
+  "surveyTitle": {
+    "message": "ドキュメントの場所を探す"
+  },
+  "surveySub": {
+    "message": "ブラウザーは、あなたが開いた Bento ドキュメントを把握しています。どのフォルダーにあるかを教えられます。"
+  },
+  "surveyDeclined": {
+    "message": "問題ありません。フォルダーは手動でも追加できます。"
+  },
+  "surveyAllCovered": {
+    "message": "このブラウザーが見た $1 件のドキュメントは、すべて追加済みのフォルダーにあります。"
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> 件のドキュメントが、追加したどのフォルダーにもありません。$2 件は対象済みです。"
+  },
+  "surveyCovers": {
+    "message": "$1 件を含む"
+  },
+  "surveyAdd": {
+    "message": "このフォルダーを追加…"
+  },
+  "surveyAdded": {
+    "message": "$1 を追加しました。中のドキュメントは利用できます"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 を追加しましたが、ドキュメントはその中にありません。Finder から一度開いてください。"
+  },
+  "surveyOnlySeen": {
+    "message": "この方法で見つかるのは、このブラウザーで開いたドキュメントだけです。"
+  }
+}

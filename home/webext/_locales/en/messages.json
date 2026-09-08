@@ -1,0 +1,546 @@
+{
+  "appName": {
+    "message": "bento/home",
+    "description": "Product name. Not translated."
+  },
+  "appDesc": {
+    "message": "Save a Bento document back to the file you opened, without a destination prompt.",
+    "description": "Chrome Web Store listing description. 132 characters maximum — the store truncates."
+  },
+  "navAll": {
+    "message": "All documents"
+  },
+  "navFolders": {
+    "message": "Folders"
+  },
+  "navHelp": {
+    "message": "Help & about"
+  },
+  "navSettings": {
+    "message": "Settings"
+  },
+  "addFolder": {
+    "message": "+ Add a folder…"
+  },
+  "searchDocs": {
+    "message": "Search documents"
+  },
+  "searchDocsSlash": {
+    "message": "Search documents   /",
+    "description": "The slash hints at the / keyboard shortcut."
+  },
+  "sortTitle": {
+    "message": "Sort"
+  },
+  "sortRecent": {
+    "message": "Recently changed"
+  },
+  "sortName": {
+    "message": "Name"
+  },
+  "sortFolder": {
+    "message": "Folder"
+  },
+  "newDocument": {
+    "message": "+ New document"
+  },
+  "browseAll": {
+    "message": "Browse all"
+  },
+  "reconnectFolders": {
+    "message": "Reconnect folders"
+  },
+  "primeIntro": {
+    "message": "Chrome will ask next. Pick the middle option:",
+    "description": "Above a drawing of Chrome’s three-option dialog. Deliberately says POSITION, not Chrome’s button names — the order is the same in every language, the wording is not."
+  },
+  "actionTitle": {
+    "message": "bento/home",
+    "description": "Tooltip on the toolbar icon."
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — a folder needs reconnecting",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home needs reconnecting",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome dropped permission for a folder. Until it is restored, saving a document will ask you where to put it.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnect": {
+    "message": "Reconnect"
+  },
+  "ctxOpenPanel": {
+    "message": "Open bento/home panel",
+    "description": "Right-click menu item inside a local document."
+  },
+  "panelEmpty": {
+    "message": "No Bento documents in your folders yet."
+  },
+  "noMatches": {
+    "message": "Nothing matches “$1”"
+  },
+  "rowUnplacedTip": {
+    "message": "Open any document in $1 once from Finder, and everything in that folder becomes openable from here."
+  },
+  "encrypted": {
+    "message": "Password-protected"
+  },
+  "notSavedYet": {
+    "message": "Not saved yet"
+  },
+  "fileAccessOffShort": {
+    "message": "Local file access is off",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noFoldersYet": {
+    "message": "No folders yet"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 folder needs reconnecting",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "statusOneFolder": {
+    "message": "$1 folder · saves in place"
+  },
+  "statusFolders": {
+    "message": "$1 folders · saves in place"
+  },
+  "renewNotOffered": {
+    "message": "Chrome did not offer to restore it",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "renewTryAfterRestart": {
+    "message": "Try again after restarting Chrome",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "fetchingLatest": {
+    "message": "Fetching the latest Bento…"
+  },
+  "created": {
+    "message": "Created $1"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 can be read but not opened yet — Chrome does not tell an extension where a folder is on disk. <b>Browse all</b> can find them in one click.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "andMore": {
+    "message": " and $1 more"
+  },
+  "agoJustNow": {
+    "message": "just now"
+  },
+  "agoMinutes": {
+    "message": "$1 min ago"
+  },
+  "agoHour": {
+    "message": "$1 hour ago"
+  },
+  "agoHours": {
+    "message": "$1 hours ago"
+  },
+  "agoDay": {
+    "message": "$1 day ago"
+  },
+  "agoDays": {
+    "message": "$1 days ago"
+  },
+  "searchScope": {
+    "message": "Search looks at titles, file names, folders and the words inside documents."
+  },
+  "folderEmpty": {
+    "message": "Nothing in this folder yet"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ New document</b> puts a fresh one here."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home does not know where $1 is on disk yet. Use “Find my folders”, or open any document in it from Finder once.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "cardRenamedTip": {
+    "message": "$1 is a Bento document under another name. It opens from here, but saving will ask for a destination — in-place saving only recognises files ending .bento.html."
+  },
+  "badgeRenamed": {
+    "message": "Named .html rather than .bento.html — it opens from here, but saving will ask for a destination."
+  },
+  "menuOpen": {
+    "message": "Open"
+  },
+  "menuDuplicate": {
+    "message": "Duplicate"
+  },
+  "menuRename": {
+    "message": "Rename…"
+  },
+  "menuCopyPath": {
+    "message": "Copy path"
+  },
+  "duplicatedAs": {
+    "message": "Duplicated as $1"
+  },
+  "renamePrompt": {
+    "message": "Rename document"
+  },
+  "renamedTo": {
+    "message": "Renamed to $1"
+  },
+  "pathCopied": {
+    "message": "Path copied"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — not opened yet"
+  },
+  "setupTitle": {
+    "message": "Two things and you are set up"
+  },
+  "setupLead": {
+    "message": "After this, ⌘S on a document you opened by double-clicking writes straight back to the file — no destination prompt, ever."
+  },
+  "chooseFolder": {
+    "message": "Choose a folder…"
+  },
+  "setupStep1": {
+    "message": "Choose the folder your documents live in"
+  },
+  "setupStep1Note": {
+    "message": "One broad folder is usually enough — it covers everything inside it."
+  },
+  "setupStep2": {
+    "message": "Turn on local file access",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupStep2Note": {
+    "message": "In <code>chrome://extensions</code> → bento/home → <b>Allow access to file URLs</b>. Chrome does not let an extension turn this on for itself.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Upgrading and expected your folders to be here?</b> An unpacked extension is identified by its folder path, so loading a new copy from a different folder makes it a different extension. Your folders are still granted to the old one. Replace the files in the original folder and press <b>Reload</b> in <code>chrome://extensions</code> instead.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Local file access is off</b> — nothing saves in place until it is on. Turn on <b>Allow access to file URLs</b> in <code>chrome://extensions</code>.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 folder needs reconnecting.</b> Reconnect it in <b>Settings</b>, and choose <b>Allow on every visit</b> — the only option that lasts.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> can be listed but not opened yet — Chrome never tells an extension where a folder is on disk.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "findFolders": {
+    "message": "Find my folders"
+  },
+  "looking": {
+    "message": "Looking…"
+  },
+  "findDeclined": {
+    "message": "<b>No problem.</b> Open any document in $1 from Finder once instead — this page notices."
+  },
+  "foundFolder": {
+    "message": "Found $1 folder"
+  },
+  "foundFolders": {
+    "message": "Found $1 folders"
+  },
+  "foundNothing": {
+    "message": "Nothing in history yet — open one document from Finder"
+  },
+  "setFoldersSub": {
+    "message": "Documents in these save straight back to the file, with no destination prompt. A folder covers everything inside it."
+  },
+  "noneYet": {
+    "message": "None yet."
+  },
+  "savesInPlace": {
+    "message": "saves in place"
+  },
+  "needsReconnecting": {
+    "message": "needs reconnecting",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnectTip": {
+    "message": "Chrome will ask to restore this folder. “Don’t allow” drops it, and Chrome then waits a restart or more before offering again.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "remove": {
+    "message": "Remove"
+  },
+  "removeTip": {
+    "message": "Takes access away. Chrome may still remember the permission, so adding the folder back may not ask again.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessTitle": {
+    "message": "Local file access",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessSub": {
+    "message": "Chrome will not let an extension turn this on for itself, and nothing works without it.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "stateOn": {
+    "message": "On"
+  },
+  "stateOff": {
+    "message": "Off"
+  },
+  "stateUnknown": {
+    "message": "Unknown"
+  },
+  "accessOnNote": {
+    "message": "bento/home can read pages you opened from disk.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessOffNote": {
+    "message": "Open chrome://extensions, find bento/home, turn on “Allow access to file URLs”.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessUnknownNote": {
+    "message": "This browser will not report it. If saves still prompt, check it in chrome://extensions.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setVersionTitle": {
+    "message": "Version"
+  },
+  "setVersionUnpacked": {
+    "message": "This copy was loaded unpacked, so Chrome will never update it."
+  },
+  "setVersionStore": {
+    "message": "Installed from the store, so it updates itself."
+  },
+  "versionAvailable": {
+    "message": "$1 is available"
+  },
+  "versionUpToDate": {
+    "message": "up to date as of the last check"
+  },
+  "versionManaged": {
+    "message": "kept current by the browser"
+  },
+  "getIt": {
+    "message": "Get it"
+  },
+  "checkNow": {
+    "message": "Check now"
+  },
+  "autoCheckPref": {
+    "message": "<b>Check for a new version when the browser starts.</b><br>One request to bento.page for a static file. It sends no identifiers, no version number and nothing about your documents — the comparison happens here. Turn it off and nothing is ever requested; <b>Check now</b> still works.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "expectedSha": {
+    "message": "Expected SHA-256 of the zip: $1"
+  },
+  "setReachTitle": {
+    "message": "What this can reach",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setReachSub": {
+    "message": "Only the folders above, and only the file a page was actually opened from. Nothing is uploaded and nothing is read anywhere else.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 is available.</b> This copy was loaded unpacked, so Chrome will never update it."
+  },
+  "updateStep1": {
+    "message": "Download it from GitHub"
+  },
+  "updateStep2": {
+    "message": "Replace the files <b>in the folder you loaded it from</b> — same folder, or Chrome treats it as a different extension and your granted folders do not come with it",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateStep3": {
+    "message": "Open <code>chrome://extensions</code> and press <b>Reload</b> on bento/home"
+  },
+  "fetchingApp": {
+    "message": "Fetching $1…"
+  },
+  "createdIn": {
+    "message": "Created $1 ($2) in $3"
+  },
+  "intoFolder": {
+    "message": "into $1"
+  },
+  "helpWhatTitle": {
+    "message": "What bento/home does"
+  },
+  "helpWhatSub": {
+    "message": "A Bento document is one HTML file that carries its own editor. Opened straight from disk, a browser will not let it write back to itself — so saving asks you where to put it, every time. bento/home is what removes that question."
+  },
+  "tourSaveTitle": {
+    "message": "Save in place"
+  },
+  "tourSaveBody": {
+    "message": "⌘S writes straight back to the file you opened, with no dialog. Autosave and in-place updates go the same way."
+  },
+  "tourFindTitle": {
+    "message": "Find your documents"
+  },
+  "tourFindBody": {
+    "message": "Every Bento document in your folders, with its real title and a picture of its first page. Search covers what is written inside them."
+  },
+  "tourSwitchTitle": {
+    "message": "Switch while you work"
+  },
+  "tourSwitchBody": {
+    "message": "Press <kbd>Alt</kbd>+<kbd>B</kbd>, or right-click inside a document, for a panel beside it."
+  },
+  "tourNewTitle": {
+    "message": "Make a new one"
+  },
+  "tourNewBody": {
+    "message": "<b>+ New document</b> fetches the current release of Slides, Spaces or Dash and puts a fresh document in your folder."
+  },
+  "helpNeedsTitle": {
+    "message": "What it needs from you"
+  },
+  "helpNeedsSub": {
+    "message": "Two things, both outside this extension’s power to arrange."
+  },
+  "helpFolder": {
+    "message": "A folder"
+  },
+  "helpFolderGranted": {
+    "message": "$1 granted — documents inside them save in place"
+  },
+  "helpFolderNone": {
+    "message": "Not chosen yet. One broad folder covers everything inside it."
+  },
+  "helpAccessOff": {
+    "message": "Off. Turn on <b>Allow access to file URLs</b> in <code>chrome://extensions</code> — no extension can turn this on for itself.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessUnknown": {
+    "message": "This browser will not report it. If saves still prompt, check it in <code>chrome://extensions</code>.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessOn": {
+    "message": "On — bento/home can read pages you opened from disk.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverTitle": {
+    "message": "What it never does",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverSub": {
+    "message": "It reads and writes only inside the folders above, and only the file a page was actually opened from — the browser tells it which, so a document cannot name somebody else’s file. Nothing about your documents is uploaded anywhere, and the extension has no server to upload them to.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAboutTitle": {
+    "message": "About"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · part of the Bento project · MIT licensed"
+  },
+  "linkSource": {
+    "message": "Source on GitHub"
+  },
+  "linkIssues": {
+    "message": "Report a problem"
+  },
+  "linkReleases": {
+    "message": "Releases"
+  },
+  "primeMiddle": {
+    "message": "the one that lasts",
+    "description": "Label on the highlighted middle pill. Describes what the option DOES; do not substitute Chrome’s own button text, which cannot be verified per language."
+  },
+  "primeNote": {
+    "message": "The other two work too, but Chrome asks again — every restart for the first, and after a wait for the last.",
+    "description": "Explains the two unlabelled pills by consequence rather than by name."
+  },
+  "viewLayout": {
+    "message": "How documents are shown",
+    "description": "Tooltip on the icons/list segmented control as a whole."
+  },
+  "viewIcons": {
+    "message": "Icons",
+    "description": "Tooltip on the icon-grid button. REVIEW: the noun a file browser uses for thumbnail view."
+  },
+  "viewList": {
+    "message": "List",
+    "description": "Tooltip on the list button. REVIEW: the noun a file browser uses for list/detail view."
+  },
+  "close": {
+    "message": "Close",
+    "description": "Tooltip on the About dialog close button."
+  },
+  "setLangTitle": {
+    "message": "Language",
+    "description": "Settings section heading for the language picker."
+  },
+  "setLangSub": {
+    "message": "Which language this extension speaks. It normally follows the browser.",
+    "description": "Sub-line under the Language heading. REVIEW: \"the browser\" means Chrome/Edge itself."
+  },
+  "langAutomatic": {
+    "message": "Automatic — follow the browser",
+    "description": "First entry in the language picker — follow the browser rather than choosing."
+  },
+  "setLangNote": {
+    "message": "The extension's own name and description come from the browser and do not change.",
+    "description": "REVIEW: explains that the extension NAME on the chrome://extensions card is set by the browser and a choice here cannot change it."
+  },
+  "aboutPromo": {
+    "message": "New to Bento? Find templates, the gallery and the AI editing guide at $1 — or star it on $2.",
+    "description": "About dialog: invitation back to the project. $1 is a link to bento.page, $2 a link to GitHub. REVIEW: keep both placeholders — they are rendered as links."
+  },
+  "setThemeTitle": {
+    "message": "Appearance",
+    "description": "Settings section heading for light/dark."
+  },
+  "setThemeSub": {
+    "message": "The browser's setting is the default, not a requirement.",
+    "description": "Settings section blurb under Appearance."
+  },
+  "themeAuto": {
+    "message": "Match the browser",
+    "description": "Theme option: follow the browser/OS setting. REVIEW: the wording browsers use for \"system\" in this language."
+  },
+  "themeLight": {
+    "message": "Light",
+    "description": "Theme option: light."
+  },
+  "themeDark": {
+    "message": "Dark",
+    "description": "Theme option: dark."
+  },
+  "checking": {
+    "message": "Checking…",
+    "description": "Shown in the About version row while a manual update check is running."
+  },
+  "surveyTitle": {
+    "message": "Find where your documents are"
+  },
+  "surveySub": {
+    "message": "The browser knows which Bento documents you have opened. It can say which folders they are in."
+  },
+  "surveyDeclined": {
+    "message": "No problem — you can add folders by hand."
+  },
+  "surveyAllCovered": {
+    "message": "All $1 documents this browser has seen are already in a folder you added."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documents are outside every folder you added. $2 are already covered."
+  },
+  "surveyCovers": {
+    "message": "covers $1"
+  },
+  "surveyAdd": {
+    "message": "Add this folder…"
+  },
+  "surveyAdded": {
+    "message": "Added $1 — the documents in it are ready"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Added $1, but the documents are not in it — open one from Finder once."
+  },
+  "surveyOnlySeen": {
+    "message": "Only documents opened in this browser can be found this way."
+  }
+}

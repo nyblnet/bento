@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The LIGHT palette. Names and values are taken from home/webext/src/ui.css so
+  the two surfaces we design ourselves actually look related — the extension is
+  the house style, and it is a cool near-white, not the cream of the logo. (The
+  logo palette lives below and is used only by the launcher icon.)
+
+  values-night/colors.xml redefines every one of these. Anything hardcoded in
+  Kotlin instead of named here is a colour that cannot follow the system theme.
+-->
+<resources>
+    <color name="bg">#F6F8FA</color>
+    <color name="panel">#FFFFFF</color>
+    <color name="ink">#17222F</color>
+    <color name="dim">#6B7A8D</color>
+    <color name="line">#E4E9EF</color>
+    <color name="accent">#16273E</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="placeholder">#E4E9EF</color>
+
+    <!-- The mark's own colours, for the launcher icon only. These do NOT change
+         with the system theme: the icon is the icon. -->
+    <color name="tray_navy">#16273E</color>
+    <color name="tray_cream">#F0EBE0</color>
+    <color name="tray_steel">#5E7699</color>
+    <color name="tray_peach">#FF9E8A</color>
+</resources>

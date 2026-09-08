@@ -1,0 +1,323 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bento/home</title>
+<link rel="icon" href="../icons/icon.svg">
+<link rel="stylesheet" href="ui.css">
+<!-- Blocking, and before the body: stamps the theme so the FIRST paint is right. -->
+<script src="theme.js"></script>
+<style>
+  /* Page-specific layout only. Everything shared — palette, controls, notices,
+     menus, toasts — lives in ui.css, so this page and the popup cannot drift
+     into looking like two different products, which they had. */
+
+  body { height: 100vh; display: grid; grid-template-columns: 232px 1fr }
+
+  /* ---------------------------------------------------------------- sidebar */
+  aside { border-inline-end: 1px solid var(--line); padding: 18px 12px; display: flex;
+    flex-direction: column; gap: 4px; overflow-y: auto }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 4px 8px 14px;
+    border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+    width: 100%; text-align: start; border-radius: 8px }
+  .brand:hover { background: var(--hover) }
+  .brand .mark { width: 24px; height: 24px }
+  .brand b { font-size: 15px; letter-spacing: -.01em;
+    direction: ltr; unicode-bidi: isolate }
+  .brand b i { color: var(--peach); font-style: normal }
+
+  .navitem { display: flex; align-items: center; gap: 9px; width: 100%; text-align: start;
+    padding: 7px 9px; border: 0; border-radius: 8px; background: none; color: inherit;
+    font: inherit; cursor: pointer }
+  .navitem:hover { background: var(--hover) }
+  .navitem[aria-current="true"] { background: var(--hover); font-weight: 600 }
+  .navitem .n { margin-inline-start: auto; color: var(--dim); font-size: 12px;
+    font-variant-numeric: tabular-nums }
+  .seclabel { color: var(--dim); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    padding: 14px 9px 5px }
+  aside .spacer { flex: 1 }
+
+  /* ------------------------------------------------------------------- main */
+  main { display: flex; flex-direction: column; min-width: 0; height: 100vh }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 16px 22px 12px }
+  .bar h1 { flex: none }
+  .search { flex: 1; max-width: 340px; position: relative }
+  .search input { width: 100%; padding-inline-start: 30px }
+  .search .mag { position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--dim); font-size: 12px; pointer-events: none }
+  .grow { flex: 1 }
+
+  /* segmented icons/list control */
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+    flex: none }
+  .seg button { border: 0; background: var(--panel); color: var(--dim); font: inherit;
+    font-size: 13px; line-height: 1; padding: 6px 9px; cursor: pointer }
+  .seg button + button { border-inline-start: 1px solid var(--line) }
+  .seg button:hover { background: var(--hover); color: var(--ink) }
+  .seg button[aria-pressed="true"] { background: var(--hover); color: var(--ink) }
+
+  /* ----------------------------------------------------------- about dialog */
+  .dlg { border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+    color: var(--ink); padding: 0; max-width: 30rem; width: calc(100vw - 40px);
+    box-shadow: var(--lift) }
+  .dlg::backdrop { background: rgba(0, 0, 0, .45) }
+  .dlghead { display: flex; align-items: center; gap: 9px; padding: 14px 16px 10px }
+  .dlghead .mark { width: 22px; height: 22px }
+  .dlghead b { font-size: 15px; direction: ltr; unicode-bidi: isolate }
+  .dlghead b i { color: var(--peach); font-style: normal }
+  .dlg .x { border: 0; background: none; color: var(--dim); font: inherit; cursor: pointer;
+    padding: 3px 6px; border-radius: 6px; line-height: 1 }
+  .dlg .x:hover { background: var(--hover); color: var(--ink) }
+  .dlghead .ver { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums }
+  #aboutBody { padding: 0 16px 16px; display: grid; gap: 10px }
+  #aboutBody p { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.55 }
+  /* The invitation back to the project — the same one bento/slides makes. */
+  .ab-promo { color: var(--dim); font-size: 13px; line-height: 1.55 }
+  /* `bento.page` and `GitHub` are Latin runs sitting inside Arabic, Persian,
+     Hebrew or Urdu prose. Isolating each one stops the surrounding paragraph's
+     bidi resolution from dragging its neighbouring punctuation to the wrong
+     side of it — the same class of bug as the `.html` badge, but embedded in a
+     sentence rather than standing alone. */
+  .ab-promo a { color: var(--ink); unicode-bidi: isolate }
+  /* Version status reuses the `.row` shape Settings uses, so the two screens
+     look like one product saying one thing. */
+  .ab-ver { margin: 0 }
+  .ab-note, .ab-foot { color: var(--dim); font-size: 12.5px; line-height: 1.5 }
+  .ab-foot { border-top: 1px solid var(--line); padding-top: 10px }
+  .dlghead .wordmark { display: flex; align-items: center; gap: 9px; text-decoration: none;
+    color: inherit; border-radius: 7px; padding: 2px 4px; margin-inline-start: -4px }
+  .dlghead .wordmark:hover { background: var(--hover) }
+
+  /* WHY NOT BUTTONS. These were four `.btn` pills that wrapped 3-then-1 and
+     read as four actions of equal weight — in a dialog whose only real action
+     is "Check now". Two of them also repeated links the promo sentence above
+     already carries, so the same destination was offered twice in one box.
+     A quiet dot-separated row says "here is where this lives" without
+     competing with the button that does something. */
+  .ab-links { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0;
+    font-size: 12.5px }
+  .ab-links a { color: var(--dim); text-decoration: none; padding: 2px 0;
+    unicode-bidi: isolate }
+  .ab-links a:hover { color: var(--ink); text-decoration: underline }
+  /* Separator drawn by CSS, not typed into the markup — a literal '·' between
+     anchors would be a bidi-neutral character sitting between links, and in
+     RTL it lands on the wrong side of the one it follows. */
+  /* Half-strength DIM, not `--line`. `--line` is a BORDER colour: measured
+     against the dialog's own background in dark mode its contrast was so low
+     that the separators were invisible, and the row read as three items with
+     odd gaps rather than a list. */
+  .ab-links a:not(:last-child)::after { content: '·'; color: var(--dim); opacity: .5;
+    margin-inline: 9px; text-decoration: none; display: inline-block }
+
+  /* the folder survey */
+  .survey { margin-top: 9px }
+  .survey-out:not(:empty) { margin-top: 10px; display: grid; gap: 6px }
+  .survey-out .row { margin-bottom: 0 }
+  .survey-out .sub { margin: 0; font-size: 12.5px; color: var(--dim) }
+  .survey-out b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    direction: ltr; unicode-bidi: isolate }
+
+  #notice { display: grid; gap: 8px; padding: 0 22px 10px }
+  #notice:empty { padding: 0 }
+
+  .scroll { flex: 1; overflow-y: auto; padding: 6px 22px 28px }
+
+  /* ------------------------------------------------------------------ grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(214px, 1fr));
+    gap: 16px; align-content: start }
+  .card { position: relative; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--panel); overflow: hidden; box-shadow: var(--shadow); cursor: pointer;
+    text-align: start; padding: 0; color: inherit; font: inherit; display: flex;
+    flex-direction: column; transition: transform .13s ease, box-shadow .13s ease }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--lift) }
+  /* An unopenable card must not read as a BROKEN card: the text stays full
+     strength and only the picture area is marked, so "waiting" does not look
+     like "faulty" — and neither looks like a document that simply has no
+     thumbnail yet, which is perfectly healthy. */
+  .card[disabled] { cursor: default }
+  .card[disabled]:hover { transform: none; box-shadow: var(--shadow) }
+  .card.unplaced .shot { border: 1px dashed var(--line);
+    background: repeating-linear-gradient(45deg, transparent, transparent 7px,
+      var(--hover) 7px, var(--hover) 14px) }
+  .card.unplaced .cardbody b { opacity: .75 }
+
+  .shot { aspect-ratio: 16/9; background: var(--hover); position: relative; overflow: hidden;
+    border-bottom: 1px solid var(--line) }
+  .shot iframe { width: 1280px; height: 720px; border: 0; transform-origin: 0 0;
+    position: absolute; inset-inline-start: 0; top: 0; pointer-events: none }
+  .shot .glyph { position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--dim); font-size: 26px }
+  .shot .label { position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--dim); font-size: 12px }
+
+  .cardbody { padding: 10px 12px 12px; display: flex; gap: 8px; align-items: flex-start }
+  .cardbody .txt { min-width: 0; flex: 1 }
+  .cardbody b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis }
+  .cardbody span { display: block; color: var(--dim); font-size: 12px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis }
+  .more { border: 0; background: none; color: var(--dim); cursor: pointer; font: inherit;
+    padding: 2px 5px; border-radius: 6px; line-height: 1 }
+  .more:hover { background: var(--hover); color: var(--ink) }
+
+  /* Which Bento a document is, and whether it is named like one. Both sit on
+     the picture so they never push the title around. */
+
+  .badges { position: absolute; top: 7px; inset-inline-end: 7px; display: flex; gap: 4px }
+  .badges span { background: var(--panel); border: 1px solid var(--line); color: var(--dim);
+    font-size: 10.5px; line-height: 1; padding: 3px 5px; border-radius: 5px;
+    letter-spacing: .02em;
+    /* Every badge is a Latin technical string — an app name, or the literal
+       extension `.html`. Under `dir="rtl"` the leading dot is bidi-NEUTRAL and
+       gets reordered to the end, so the badge read `html.` in Arabic, Persian,
+       Hebrew and Urdu. Isolating each badge pins its own direction without
+       affecting the order the badges themselves sit in, which must still
+       mirror. */
+    direction: ltr; unicode-bidi: isolate }
+
+  /* ------------------------------------------------------------ list mode */
+  /* The SAME card markup, relaid out. The thumbnail re-fits itself because
+     decorate() scales the preview iframe from a ResizeObserver on `.shot`
+     (home.js), so switching modes needs no JS beyond the class — and a
+     document keeps its picture, which is the point of icons-vs-list rather
+     than pictures-vs-none. */
+  .grid.as-list { grid-template-columns: 1fr; gap: 5px }
+  .as-list .card { flex-direction: row; align-items: center; gap: 12px;
+    padding: 6px 10px; border-radius: 9px }
+  .as-list .card:hover { transform: none; box-shadow: var(--lift) }
+  .as-list .shot { width: 84px; flex: none; border-bottom: 0;
+    border: 1px solid var(--line); border-radius: 5px }
+  .as-list .shot .glyph { font-size: 15px }
+  .as-list .shot .label { font-size: 9px; padding: 0 4px; text-align: center }
+  .as-list .cardbody { padding: 0; flex: 1; min-width: 0; align-items: center }
+  .as-list .cardbody b { white-space: nowrap }
+  /* Out of the picture and onto the row: at 84px wide they would cover the
+     thumbnail they are meant to annotate.
+     ORDER was the fiddly part. `.more` lives inside `.cardbody`, so a badge
+     placed after the body rendered after the ⋯ and the two read as one
+     control; moving the badge before the body instead pushed the THUMBNAILS
+     out of alignment by the badge's width, which is the one thing a list is
+     for avoiding. So the ⋯ is pinned to the row end and everything else keeps
+     its natural order — thumbnails flush, badges beside the text they
+     annotate. */
+  .as-list .card { padding-inline-end: 32px }
+  .as-list .badges { position: static; flex: none; order: 2 }
+  .as-list .more { position: absolute; inset-inline-end: 8px; top: 50%;
+    transform: translateY(-50%) }
+
+  /* ------------------------------------------------------- empty and set-up */
+  .empty { max-width: 52ch; color: var(--dim); padding: 20px 0 }
+  .empty h2 { color: var(--ink) }
+  .empty p { margin: 0 0 10px }
+  .steps { display: grid; gap: 10px; margin: 18px 0 0; max-width: 46ch }
+  .step { display: flex; gap: 11px; align-items: flex-start; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 13px;
+    box-shadow: var(--shadow) }
+  .step .num { width: 21px; height: 21px; border-radius: 50%; background: var(--hover);
+    color: var(--ink); font-size: 12px; display: grid; place-items: center; flex: none;
+    font-variant-numeric: tabular-nums }
+  .step .txt { flex: 1 }
+  /* The step's TITLE, not every <b> inside it. Unscoped, this turned a bolded
+     phrase in the middle of the note into its own line and broke the sentence
+     around it. */
+  .step .txt > b { display: block; color: var(--ink) }
+  .step small { color: var(--dim); font-size: 12.5px; display: block }
+  .step small b { color: var(--ink) }
+  .step.done .num { background: var(--good); color: var(--on-good) }
+  .step .btn { margin-top: 9px }
+
+  /* ---------------------------------------------------------------- settings */
+  .panel { max-width: 44rem }
+  .panel section { margin-bottom: 26px }
+  .panel h2 { margin-bottom: 4px }
+  .panel .sub { color: var(--dim); margin: 0 0 12px; font-size: 13px }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 13px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    margin-bottom: 7px }
+  .row b { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .row .note { color: var(--dim); font-size: 12.5px; flex: 1 }
+  .row .btn { padding: 4px 9px; font-size: 12.5px }
+
+  /* ------------------------------------------------------------------- help */
+  .tour { display: grid; gap: 12px; margin: 4px 0 8px; max-width: 46rem;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) }
+  .tour .card { padding: 14px 15px; cursor: default; display: block }
+  .tour .card:hover { transform: none; box-shadow: var(--shadow) }
+  /* The card's TITLE, not every <b> in it — exactly the mistake `.step b` made,
+     which turned a bolded phrase mid-sentence into its own line. Made twice
+     now, which is what an unscoped element selector inside a component is for. */
+  .tour .card > b { display: block; margin-bottom: 3px }
+  .tour p { margin: 0; color: var(--dim); font-size: 13px }
+  .tour kbd { background: var(--hover); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 5px; font: inherit; font-size: 12px }
+  .links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px }
+</style>
+
+<aside>
+  <!-- The wordmark is the way to About, exactly as it is in bento/slides.
+       It was a sidebar nav item here, which made "what is this program" a
+       destination you navigate to and lose your place from — and made the same
+       question look like two different features across two Bento apps. -->
+  <button class="brand" id="brand" data-i18n-title="helpAboutTitle">
+    <img class="mark" src="../icons/icon.svg" alt="">
+    <b>bento<i>/</i>home</b>
+  </button>
+
+  <button class="navitem" id="navAll" aria-current="true">
+    <span class="dot"></span> <span data-i18n="navAll"></span> <span class="n" id="nAll"></span>
+  </button>
+
+  <div class="seclabel" data-i18n="navFolders"></div>
+  <div id="folders"></div>
+
+  <button class="btn ghost" id="addFolder" data-i18n="addFolder"></button>
+
+  <div class="spacer"></div>
+  <button class="navitem" id="help"><span class="dot"></span> <span data-i18n="navHelp"></span></button>
+  <button class="navitem" id="settings"><span class="dot"></span> <span data-i18n="navSettings"></span></button>
+</aside>
+
+<main>
+  <div class="bar">
+    <h1 id="heading" data-i18n="navAll"></h1>
+    <div class="search" id="searchWrap">
+      <span class="mag">⌕</span>
+      <input id="q" type="search" data-i18n-placeholder="searchDocsSlash" autocomplete="off">
+    </div>
+    <select id="sort" data-i18n-title="sortTitle">
+      <option value="recent" data-i18n="sortRecent"></option>
+      <option value="name" data-i18n="sortName"></option>
+      <option value="folder" data-i18n="sortFolder"></option>
+    </select>
+    <!-- Icons or list, the way every file browser has offered since before the
+         web. Labelled by TITLE and marked with aria-pressed rather than drawn
+         with text: at 30 locales a two-word label is two more strings to get
+         right in each, and the glyphs are the convention people already read. -->
+    <div class="seg" id="layout" role="group" data-i18n-title="viewLayout">
+      <button data-layout="icons" data-i18n-title="viewIcons" aria-pressed="true">▦</button>
+      <button data-layout="list" data-i18n-title="viewList" aria-pressed="false">☰</button>
+    </div>
+    <span class="grow"></span>
+    <button class="btn primary" id="new" data-i18n="newDocument"></button>
+  </div>
+
+  <div id="notice"></div>
+  <div class="scroll"><div class="grid" id="grid"></div></div>
+</main>
+
+<!-- About lives in a dialog, not a view: it answers a question you ask WHILE
+     doing something else, and a <dialog> returns you to exactly where you were.
+     Content is built in home.js so the version and the links stay in one place. -->
+<dialog id="aboutDlg" class="dlg">
+  <div class="dlghead">
+    <a class="wordmark" href="https://bento.page" target="_blank" rel="noopener" title="bento.page">
+      <img class="mark" src="../icons/icon.svg" alt="">
+      <b>bento<i>/</i>home</b>
+    </a>
+    <span class="ver" id="aboutVer"></span>
+    <span class="grow"></span>
+    <button class="x" id="aboutClose" data-i18n-title="close">✕</button>
+  </div>
+  <div id="aboutBody"></div>
+</dialog>
+
+<script type="module" src="home.js"></script>

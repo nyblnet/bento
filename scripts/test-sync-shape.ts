@@ -22,7 +22,7 @@
 // silently holding slides' shape, and the resulting room cannot be repaired in
 // the field.
 
-import { SyncEngine, SyncState, SLIDES_SHAPE } from '../slides/src/sync/crdt.ts'
+import { SyncEngine, SyncState, SLIDES_SHAPE, shape } from '../slides/src/sync/crdt.ts'
 import type { DocShape } from '../slides/src/sync/crdt.ts'
 
 let failures = 0
@@ -36,11 +36,10 @@ function ok(cond: boolean, msg: string) {
 console.log('bento-sync — the document-shape seam\n')
 
 /** bento/spaces: pages hold blocks. The binding spaces will ship. */
-const SPACES_SHAPE: DocShape = {
-  parents: 'pages',
-  children: 'blocks',
-  skipDoc: new Set(['pages', 'modified', 'collab', 'format', 'version']),
-}
+// Built with `shape()`, not by hand. A literal here omitted `text` when that
+// field was added and silently disabled the token RGA for this shape — the
+// engine now refuses such a shape, and this rig should model what apps do.
+const SPACES_SHAPE: DocShape = shape('pages', 'blocks')
 class SpacesSync extends SyncEngine {
   constructor(actor: string) { super(actor, SPACES_SHAPE) }
 }

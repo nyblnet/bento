@@ -1,0 +1,93 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The Cell section of the properties panel — three controls panels.css has no
+   shape for, and nothing else. Everything that CAN be a `.dp-row` is one: two
+   stylesheets describing the same row is how a panel starts to look like two
+   panels.
+
+   THE CORNERS COME FROM panels.css, not from the app's --radius. These three
+   controls sit in a column of `.dp-row` fields, and the panel's control radius
+   is 6px (slides') where dash's app-wide --radius is 7px — so a preview at 7
+   beside a pattern field at 6 was a one-pixel disagreement repeated down the
+   Cell section. --dp-radius is declared on `.dp-panel`, so it is the same
+   number the field above is using, by construction rather than by copying. */
+
+/* ————— the format preview —————
+   A value, printed the way the chosen pattern prints it. It FILLS the control
+   column that panels.css lays out (`--dp-ctl`) rather than restating 110px, so
+   the section keeps its column when the panel narrows and stacks — a hard 110px
+   here was a second definition of the same measurement, and the two would drift
+   the first time either moved. Monospace-tabular, so switching decimals moves
+   the digits you are looking at rather than the whole string. */
+.dc-preview {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--dp-row, 26px);
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius);
+  background: var(--wash);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the cell is empty, so this is a SAMPLE — it must not read as the cell's value */
+.dc-preview-sample { color: var(--muted); font-style: italic; }
+
+/* ————— colour, with an off state —————
+   `<input type="color">` always holds a colour, so "no background" cannot be
+   said by the swatch. The × is the off switch; the diagonal slash is what says
+   the swatch is not in effect, since the input still paints its fallback. */
+.dc-colour {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;                          /* the control column — see .dc-preview */
+  min-width: 0;
+}
+.dc-colour input[type='color'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--dp-row, 26px);
+  padding: 0 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+.dc-colour input[type='color']:disabled { cursor: default; opacity: 0.5; }
+
+/* Not set: the swatch is showing a DEFAULT, not the cell's colour, and it has
+   to say so — otherwise every unstyled cell looks like it was painted. */
+.dc-colour-off input[type='color'] {
+  opacity: 0.4;
+  background:
+    linear-gradient(to top right,
+      transparent calc(50% - 1px), var(--line-strong) 50%, transparent calc(50% + 1px));
+}
+
+.dc-clear {
+  flex: none;
+  width: 20px;
+  height: var(--dp-row, 26px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius);
+  background: var(--surface);
+  color: var(--muted);
+  font: 13px/1 inherit;
+  cursor: pointer;
+}
+.dc-clear:hover:not(:disabled) { color: var(--ink); border-color: var(--line-strong); }
+.dc-clear:disabled { opacity: 0.35; cursor: default; }
+
+/* The currency symbol is one or two glyphs; the full control width for `£`
+   reads as a field that wants a sentence. It narrows from the START of the
+   control column, so its left edge is still the panel's one control line —
+   a narrow field that shrank from the right would break the column it is
+   trying to sit politely inside. */
+.dp-row input.dp-narrow { width: 56px; justify-self: start; }

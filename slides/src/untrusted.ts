@@ -40,6 +40,7 @@
 // checks, key by key, through `checkElementProp`.
 
 import type { Slide, SlideElement } from './model'
+import { parseThemeRef } from './palette.ts'
 import { MODEL_KEYS } from './modelkeys.generated'
 
 /** Reject. JSON has no `undefined`, so it can never collide with a real value. */
@@ -66,6 +67,8 @@ export const LIMITS = {
    *  render.ts:cssColor caps at 48 — it FALLS BACK past that, this DROPS, so a
    *  little more headroom here costs a degraded colour rather than a lost one. */
   color: 64,
+  /** palette references on one element — far above any real element */
+  themeRefs: 64,
   /** a CSS font stack names several families */
   fontStack: 300,
   /** placeholder prompts and comment prose */
@@ -322,7 +325,38 @@ const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
  * were unknown; scripts/test-clipboard.ts asserts the coverage, so adding a
  * field to model.ts fails the rig until it is taught here too.
  */
+/**
+ * Palette references: a map of property PATH → palette token.
+ *
+ * Two reasons this cannot be waved through. The paths are WALKED by
+ * palette.ts to write a resolved colour, so a path segment of `__proto__` or
+ * `constructor` is reaching for the prototype chain — the writer refuses to
+ * create anything that is not already a string, which blocks it, but a paste
+ * boundary should not be relying on a downstream guard. And a token that does
+ * not parse is dead weight the validator will report forever, so it is dropped
+ * here rather than carried.
+ */
+const themeRefs: Check = (v) => {
+  if (!isPlainObject(v)) return DROP
+  const out: Record<string, string> = {}
+  let n = 0
+  for (const key of Object.keys(v)) {
+    if (++n > LIMITS.themeRefs) break
+    const token = v[key]
+    if (typeof token !== 'string' || token.length > LIMITS.scalar) continue
+    if (key.length > LIMITS.scalar) continue
+    // path segments: identifiers and array indices only
+    const segs = key.split('.')
+    if (!segs.length || !segs.every((sg) => /^[A-Za-z_$][A-Za-z0-9_$]*$|^\d+$/.test(sg))) continue
+    if (segs.some((sg) => sg === PROTO || sg === 'constructor' || sg === 'prototype')) continue
+    if (!parseThemeRef(token)) continue
+    out[key] = token
+  }
+  return Object.keys(out).length ? out : DROP
+}
+
 const ELEMENT_CHECKS: Record<string, Check> = {
+  themeRefs,
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
   groupId: cssValue(), showOnHover: cssValue(), link: cssValue(),
@@ -441,8 +475,9 @@ export function sanitizeElement(value: unknown): SlideElement | null {
   return out as unknown as SlideElement
 }
 
+
 const SLIDE_CHECKS: Record<string, Check> = {
-  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(),
+  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs,
   // background is a CSS `background` shorthand, so it gets the colour rule at
   // the shorthand's length — wide enough for a multi-stop linear-gradient(),
   // still no url() reaching for the network from a pasted slide

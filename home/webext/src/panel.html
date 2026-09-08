@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bento/home</title>
+<link rel="icon" href="../icons/icon.svg">
+<link rel="stylesheet" href="ui.css">
+<!-- Blocking, and before the body: stamps the theme so the FIRST paint is right. -->
+<script src="theme.js"></script>
+<style>
+  /* Page-specific layout only; the palette and controls come from ui.css.
+   *
+   * THIS WAS A POPUP, and a popup was the wrong container for it. Its job is
+   * switching documents while you are working IN one — and a popup dies the
+   * moment it loses focus, which is the moment you click into the thing you
+   * were switching to. A side panel stays beside the document. Same markup,
+   * same code; the container is what changed.
+   *
+   * So the width is no longer fixed at 340px: a side panel is resizable, and
+   * the list has to hold at any width the user drags it to. */
+
+  body { min-width: 260px; height: 100vh; display: flex; flex-direction: column }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex: none }
+  header .count { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums;
+    flex: none }
+  .search { flex: 1; position: relative; min-width: 0 }
+  .search input { width: 100%; padding: 5px 9px; padding-inline-start: 27px; font-size: 13px }
+  .search .mag { position: absolute; inset-inline-start: 9px; top: 50%; transform: translateY(-50%);
+    color: var(--dim); font-size: 12px; pointer-events: none }
+
+  /* --- the documents, which are the point --- */
+  /* Grows to whatever height the panel has, rather than a popup's fixed cap. */
+  .docs { flex: 1; overflow-y: auto; padding: 0 8px; min-height: 0 }
+  .doc { display: flex; gap: 10px; align-items: center; width: 100%; text-align: start;
+    padding: 7px 6px; border: 0; background: none; border-radius: 8px; cursor: pointer;
+    font: inherit; color: inherit }
+  .doc:hover { background: var(--hover) }
+  .doc:disabled { cursor: default }
+  .doc:disabled .thumb { border-style: dashed }
+  .doc:disabled .meta b { opacity: .75 }
+
+  .thumb { width: 56px; height: 32px; border-radius: 4px; border: 1px solid var(--line);
+    background: var(--hover); flex: none; overflow: hidden; position: relative }
+  .thumb iframe { width: 224px; height: 128px; border: 0; transform: scale(.25);
+    transform-origin: 0 0; position: absolute; inset-inline-start: 0; top: 0; pointer-events: none }
+  .thumb .lock, .thumb .blank { display: grid; place-items: center; height: 100%;
+    color: var(--dim) }
+  .thumb .lock { font-size: 14px }
+  .thumb .blank { font-size: 15px; line-height: 1 }
+
+  .meta { flex: 1; min-width: 0 }
+  .meta b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis }
+  .meta span { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; display: block }
+
+  .empty { padding: 6px 14px 12px; color: var(--dim); font-size: 12.5px }
+
+  /* --- everything below is plumbing, and looks like it --- */
+  footer { border-top: 1px solid var(--line); padding: 9px 14px 12px; margin-top: 6px;
+    flex: none }
+  .status { display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: 12px }
+  .status .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap }
+  footer .btn:not(.link) { width: 100%; margin-top: 8px }
+  #prime { margin-top: 9px }
+</style>
+
+<!-- No logo and no name here. Chrome draws its OWN side-panel header with the
+     extension's icon and name directly above this document, so a second one is
+     the same words twice — which is exactly how it looked. The space goes to
+     the thing a switcher actually needs. -->
+<header>
+  <div class="search">
+    <span class="mag">⌕</span>
+    <input id="q" type="search" data-i18n-placeholder="searchDocs" autocomplete="off">
+  </div>
+  <span class="count" id="count"></span>
+</header>
+
+<div class="docs" id="docs"></div>
+<div class="empty" id="empty" hidden></div>
+
+<footer>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span class="grow" id="statusText"></span>
+    <button class="btn link" id="browse" data-i18n="browseAll"></button>
+    <button class="btn link" id="open" data-i18n="navSettings"></button>
+  </div>
+
+  <!-- POSITION, not Chrome's words.
+       This used to reproduce Chrome's three button labels so the highlighted
+       one matched what the user was about to see. That works in English and is
+       a liability in twenty-nine languages: the labels must match Chrome's own
+       UI exactly, nothing here can verify that they do, and a wrong one points
+       confidently at a button that does not exist.
+       The dialog's ORDER is the same in every language, so the drawing shows
+       three pills with the middle one marked and says what it does rather than
+       what it is called. Unverifiable in no language. -->
+  <div class="prime" id="prime" hidden>
+    <p data-i18n="primeIntro"></p>
+    <div class="opt"></div>
+    <div class="opt pick" data-i18n="primeMiddle"></div>
+    <div class="opt"></div>
+    <p class="primeNote" data-i18n-html="primeNote"></p>
+  </div>
+
+  <button class="btn primary" id="renew" data-i18n="reconnectFolders" hidden></button>
+  <button class="btn" id="new" data-i18n="newDocument"></button>
+</footer>
+
+<script type="module" src="panel.js"></script>

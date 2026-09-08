@@ -1,0 +1,9 @@
+<!-- GENERATED from home/assets/home-icon.svg by home/assets/make-icons.mjs. Do not edit. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"
+     viewBox="0 0 32 32" role="img" aria-label="bento home">
+  <rect width="32" height="32" fill="#16273E"/>
+  <rect x="4.2" y="4.2" width="23.6" height="23.6" rx="4.8" fill="#F0EBE0"/>
+  <rect x="6.8" y="6.8" width="5.86" height="18.4" rx="2.09" fill="#5E7699"/>
+  <rect x="14.33" y="6.8" width="10.87" height="8.36" rx="2.09" fill="#FF9E8A"/>
+  <rect x="14.33" y="16.84" width="10.87" height="8.36" rx="2.09" fill="#16273E"/>
+</svg>

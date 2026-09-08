@@ -4,7 +4,7 @@
 // Cut a release for ONE app: build its shell, sign its manifest, and assemble
 // the complete static site for bento.page into ./site/.
 //
-//   node scripts/release.mjs [--app slides|spaces] [--no-build] [--key path]
+//   node scripts/release.mjs [--app slides|spaces|dash] [--no-build] [--key path] [--out dir]
 //
 // ONE RELEASE BUILDS ONE APP, and `site/` is mirrored authoritatively — so the
 // site is SEEDED from the published tree first and this build overwrites only
@@ -40,7 +40,7 @@ import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
 import { gateShell } from './shell-gate.mjs'
-import { APPS } from './apps.mjs'
+import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
@@ -58,7 +58,13 @@ if (!app) {
 
 const version = JSON.parse(readFileSync(join(root, `${app.dir}/package.json`), 'utf8')).version
 const shellSrc = join(root, `${app.dir}/dist-single/${app.shell}`)
-const site = join(root, 'site')
+// Where the site is assembled. `site/` for a real release — publish-site.mjs
+// mirrors exactly that path — and `--out` for a rehearsal, so
+// scripts/test-release-channel.mjs can drive the REAL pipeline with a
+// throwaway key without wiping whatever a maintainer has staged. (The whole
+// point of the rig is that it exercises this script rather than a second copy
+// of its steps, and the first thing this script does is rmSync the tree.)
+const site = opt('out', join(root, 'site'))
 
 /** The live tree, resolved exactly as publish-site.mjs resolves it. */
 const published = process.env.BENTO_SITE_DIR
@@ -407,6 +413,18 @@ if (app.ownsSiteContent) {
   console.log(`site content: owned by slides — left as published (${app.appId} release)`)
 }
 
-console.log(`\nSite assembled for v${version}:`)
+// Which app assembled this tree. publish-site.mjs reads it to name the tag,
+// the GitHub release and the shell it attaches — all per app, and all silently
+// wrong (or silently skipped) if it guesses slides. See apps.mjs RELEASE_MARKER.
+writeFileSync(
+  join(site, RELEASE_MARKER),
+  JSON.stringify({ app: appKey, appId: app.appId, version, at: new Date().toISOString() }, null, 2) + '\n',
+)
+
+console.log(`\nSite assembled for ${app.appId} v${version}:`)
 execFileSync('find', [site, '-type', 'f'], { stdio: 'inherit' })
-console.log('\nPublish ./site/ to the gh-pages branch (docs/RELEASING.md).')
+console.log(
+  `\nNext (docs/RELEASING.md):\n` +
+  `  git push origin ${tagFor(app, version)}      # the GitHub release is created FOR the tag\n` +
+  `  node scripts/publish-site.mjs "release ${tagFor(app, version)}"`,
+)

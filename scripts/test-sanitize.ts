@@ -478,8 +478,40 @@ if (location.pathname === '/meta.html') {
       !!art.querySelector('feColorMatrix')!.getAttribute('values'))
     check('viewBox and preserveAspectRatio survive the parser round-trip',
       art.querySelector('svg')!.getAttribute('viewBox') === '0 0 1280 720')
-    check('the svg <style> is kept — scopeCss is what stops it leaking',
-      (art.querySelector('style')?.textContent ?? '').includes('.dot{fill:url(#bp-ga-am)}'))
+    // The <style> INSIDE the markup is kept because removing it breaks real
+    // decks, and its content is filtered by sanitizeSvgCss. This check asserts
+    // only that the RULES SURVIVE — deliberately NOT whether they are scoped,
+    // because that is changing underneath it: on main the markup sheet is
+    // unscoped (scopeCss's one call site takes el.css, not the markup), and
+    // PR #402 scopes it. Claiming either state here would make this rig a
+    // hostage to that PR's merge order.
+    //
+    // Hence the whitespace squash, which is the whole reason this is not a plain
+    // includes(): scopeCss emits the scope, a space, the selector, then a space
+    // before the brace — so scoping rewrites '.dot{fill:...}' as
+    // '[data-el-id="..."] .dot {fill:...}' and a literal substring test fails on
+    // ONE INSERTED SPACE while the rules are perfectly intact. Measured both
+    // ways. The two checks below cover the scoping question properly, on el.css,
+    // which is the field scopeCss actually guards.
+    //
+    // NOTE, and this cost a build: everything here is inside probeSource's
+    // template literal. A backtick or a dollar-brace in a COMMENT is still code
+    // to the parser and ends the template early.
+    // NOTE the DOUBLED backslash: this line lives inside probeSource's template
+    // literal, where a single backslash-s is an escape that collapses to a bare
+    // 's' — the regex became /s+/g and stripped the letter s out of the markup
+    // (the element id 'sv1' came back as 'v1', which is how it was caught).
+    const squash = (css) => css.replace(/\\s+/g, '')
+    check('the svg <style> inside the markup is kept, with its rules intact',
+      squash(art.querySelector('style')?.textContent ?? '').includes(squash('.dot{fill:url(#bp-ga-am)}')))
+
+    const scoped = draw('<svg viewBox="0 0 20 20"><rect id="sc" width="10" height="10"/></svg>',
+      '.z{fill:red}@keyframes k{to{opacity:0}}')
+    const elSheet = scoped.querySelector('svg > style')?.textContent ?? ''
+    check('el.css IS scoped to the element — this is what keeps one diagram out of another',
+      elSheet.includes('[data-el-id="sv1"] .z') && elSheet.trim().indexOf('.z') !== 0)
+    check('and @keyframes stays top-level — a prefixed keyframes name resolves to nothing',
+      elSheet.includes('@keyframes k') && !elSheet.includes('[data-el-id="sv1"] @keyframes'))
 
     const sloppy = draw('<svg viewBox="0 0 20 20"><rect width="10" height="10"><circle cx="5" cy="5" r="2"/></svg>')
     check('an unclosed tag still draws — text/html, not the fatal xml parser',

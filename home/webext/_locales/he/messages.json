@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "שמרו מסמך Bento בחזרה אל הקובץ שפתחתם, בלי שאלה על יעד."
+  },
+  "navAll": {
+    "message": "כל המסמכים"
+  },
+  "navFolders": {
+    "message": "תיקיות"
+  },
+  "navHelp": {
+    "message": "עזרה ואודות"
+  },
+  "navSettings": {
+    "message": "הגדרות"
+  },
+  "addFolder": {
+    "message": "+ הוספת תיקייה…"
+  },
+  "searchDocs": {
+    "message": "חיפוש במסמכים"
+  },
+  "searchDocsSlash": {
+    "message": "חיפוש במסמכים   /"
+  },
+  "sortTitle": {
+    "message": "מיון"
+  },
+  "sortRecent": {
+    "message": "שונו לאחרונה"
+  },
+  "sortName": {
+    "message": "שם"
+  },
+  "sortFolder": {
+    "message": "תיקייה"
+  },
+  "newDocument": {
+    "message": "+ מסמך חדש"
+  },
+  "browseAll": {
+    "message": "עיון בהכול"
+  },
+  "reconnectFolders": {
+    "message": "חיבור מחדש של תיקיות"
+  },
+  "primeIntro": {
+    "message": "Chrome עומד לשאול. בחרו באפשרות האמצעית:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — תיקייה זקוקה לחיבור מחדש"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home זקוק לחיבור מחדש"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome ביטל את ההרשאה לתיקייה. עד שתשוחזר, כל שמירה תשאל אתכם היכן להניח את הקובץ."
+  },
+  "reconnect": {
+    "message": "חיבור מחדש"
+  },
+  "ctxOpenPanel": {
+    "message": "פתיחת החלונית של bento/home"
+  },
+  "panelEmpty": {
+    "message": "אין עדיין מסמכי Bento בתיקיות שלכם."
+  },
+  "noMatches": {
+    "message": "שום דבר לא תואם ל„$1”"
+  },
+  "rowUnplacedTip": {
+    "message": "פתחו פעם אחת מסמך כלשהו ב־$1 דרך Finder, וכל מה שבתיקייה ההיא ייפתח מכאן."
+  },
+  "encrypted": {
+    "message": "מוגן בסיסמה"
+  },
+  "notSavedYet": {
+    "message": "עדיין לא נשמר"
+  },
+  "fileAccessOffShort": {
+    "message": "הגישה לקבצים מקומיים כבויה"
+  },
+  "noFoldersYet": {
+    "message": "אין עדיין תיקיות"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 תיקיות זקוקות לחיבור מחדש"
+  },
+  "statusOneFolder": {
+    "message": "$1 תיקייה · שומרת במקום"
+  },
+  "statusFolders": {
+    "message": "$1 תיקיות · שומרות במקום"
+  },
+  "renewNotOffered": {
+    "message": "Chrome לא הציע לשחזר אותה"
+  },
+  "renewTryAfterRestart": {
+    "message": "נסו שוב לאחר הפעלה מחדש של Chrome"
+  },
+  "fetchingLatest": {
+    "message": "מוריד את Bento העדכני…"
+  },
+  "created": {
+    "message": "$1 נוצר"
+  },
+  "panelUnplaced": {
+    "message": "אפשר לקרוא את <b>$1</b>$2 אך עדיין לא לפתוח — Chrome אינו מגלה להרחבה היכן תיקייה נמצאת בדיסק. <b>עיון בהכול</b> מוצא אותם בלחיצה אחת."
+  },
+  "andMore": {
+    "message": " ועוד $1"
+  },
+  "agoJustNow": {
+    "message": "ממש עכשיו"
+  },
+  "agoMinutes": {
+    "message": "לפני $1 דק׳"
+  },
+  "agoHour": {
+    "message": "לפני $1 שעה"
+  },
+  "agoHours": {
+    "message": "לפני $1 שעות"
+  },
+  "agoDay": {
+    "message": "לפני $1 יום"
+  },
+  "agoDays": {
+    "message": "לפני $1 ימים"
+  },
+  "searchScope": {
+    "message": "החיפוש בוחן כותרות, שמות קבצים, תיקיות והמילים שבתוך המסמכים."
+  },
+  "folderEmpty": {
+    "message": "אין עדיין דבר בתיקייה הזאת"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ מסמך חדש</b> יניח כאן מסמך חדש."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home עדיין לא יודע היכן $1 נמצאת בדיסק. השתמשו ב„מצא את התיקיות שלי”, או פתחו פעם אחת דרך Finder מסמך כלשהו שבתוכה."
+  },
+  "cardRenamedTip": {
+    "message": "$1 הוא מסמך Bento תחת שם אחר. הוא נפתח מכאן, אך השמירה תשאל על יעד — שמירה במקום מזהה רק קבצים שמסתיימים ב־‎.bento.html."
+  },
+  "badgeRenamed": {
+    "message": "נקרא ‎.html במקום ‎.bento.html — נפתח מכאן, אך השמירה תשאל על יעד."
+  },
+  "menuOpen": {
+    "message": "פתיחה"
+  },
+  "menuDuplicate": {
+    "message": "שכפול"
+  },
+  "menuRename": {
+    "message": "שינוי שם…"
+  },
+  "menuCopyPath": {
+    "message": "העתקת נתיב"
+  },
+  "duplicatedAs": {
+    "message": "שוכפל בשם $1"
+  },
+  "renamePrompt": {
+    "message": "שינוי שם המסמך"
+  },
+  "renamedTo": {
+    "message": "השם שונה ל־$1"
+  },
+  "pathCopied": {
+    "message": "הנתיב הועתק"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — עדיין לא נפתחה"
+  },
+  "setupTitle": {
+    "message": "שני דברים ואתם מוכנים"
+  },
+  "setupLead": {
+    "message": "מכאן ואילך, ⌘S במסמך שפתחתם בלחיצה כפולה כותב היישר בחזרה אל הקובץ — בלי שאלה על יעד, לעולם."
+  },
+  "chooseFolder": {
+    "message": "בחירת תיקייה…"
+  },
+  "setupStep1": {
+    "message": "בחרו את התיקייה שבה נמצאים המסמכים שלכם"
+  },
+  "setupStep1Note": {
+    "message": "תיקייה רחבה אחת מספיקה בדרך כלל — היא מכסה את כל מה שבתוכה."
+  },
+  "setupStep2": {
+    "message": "הפעילו גישה לקבצים מקומיים"
+  },
+  "setupStep2Note": {
+    "message": "ב־<code>chrome://extensions</code> ← bento/home ← <b>אפשר גישה לכתובות של קבצים</b>. Chrome אינו מרשה להרחבה להפעיל זאת בעצמה."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>שדרגתם וציפיתם שהתיקיות שלכם יהיו כאן?</b> הרחבה לא ארוזה מזוהה לפי נתיב התיקייה שלה, ולכן עותק חדש שנטען מתיקייה אחרת הוא הרחבה אחרת. התיקיות שלכם עדיין מוקצות לישנה. במקום זאת החליפו את הקבצים בתיקייה המקורית ולחצו <b>טען מחדש</b> ב־<code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>הגישה לקבצים מקומיים כבויה</b> — שום דבר לא יישמר במקום עד שתופעל. הפעילו <b>אפשר גישה לכתובות של קבצים</b> ב־<code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 תיקיות זקוקות לחיבור מחדש.</b> חברו אותן מחדש ב<b>הגדרות</b>, ובחרו <b>אפשר בכל ביקור</b> — האפשרות היחידה שמחזיקה מעמד."
+  },
+  "noticeUnplaced": {
+    "message": "אפשר להציג את <b>$1</b> ברשימה אך עדיין לא לפתוח — Chrome לעולם אינו מגלה להרחבה היכן תיקייה נמצאת בדיסק."
+  },
+  "findFolders": {
+    "message": "מצא את התיקיות שלי"
+  },
+  "looking": {
+    "message": "מחפש…"
+  },
+  "findDeclined": {
+    "message": "<b>אין בעיה.</b> במקום זאת פתחו פעם אחת דרך Finder מסמך כלשהו ב־$1 — הדף הזה יבחין בכך."
+  },
+  "foundFolder": {
+    "message": "נמצאה $1 תיקייה"
+  },
+  "foundFolders": {
+    "message": "נמצאו $1 תיקיות"
+  },
+  "foundNothing": {
+    "message": "אין עדיין דבר בהיסטוריה — פתחו מסמך אחד דרך Finder"
+  },
+  "setFoldersSub": {
+    "message": "מסמכים שבתוכן נשמרים היישר בחזרה אל הקובץ, בלי שאלה על יעד. תיקייה מכסה את כל מה שבתוכה."
+  },
+  "noneYet": {
+    "message": "אין עדיין."
+  },
+  "savesInPlace": {
+    "message": "שומרת במקום"
+  },
+  "needsReconnecting": {
+    "message": "זקוקה לחיבור מחדש"
+  },
+  "reconnectTip": {
+    "message": "Chrome יבקש רשות לשחזר את התיקייה הזאת. „אל תאפשר” מוותר עליה, ולאחר מכן Chrome ממתין לפחות להפעלה מחדש לפני שישאל שוב."
+  },
+  "remove": {
+    "message": "הסרה"
+  },
+  "removeTip": {
+    "message": "שוללת את הגישה. ייתכן ש־Chrome עדיין יזכור את ההרשאה, ולכן הוספה מחדש של התיקייה עשויה לא לשאול שוב."
+  },
+  "setAccessTitle": {
+    "message": "גישה לקבצים מקומיים"
+  },
+  "setAccessSub": {
+    "message": "Chrome אינו מרשה להרחבה להפעיל זאת בעצמה, ובלי זה שום דבר לא עובד."
+  },
+  "stateOn": {
+    "message": "מופעל"
+  },
+  "stateOff": {
+    "message": "כבוי"
+  },
+  "stateUnknown": {
+    "message": "לא ידוע"
+  },
+  "accessOnNote": {
+    "message": "bento/home יכול לקרוא דפים שפתחתם מהדיסק."
+  },
+  "accessOffNote": {
+    "message": "פתחו את chrome://extensions, מצאו את bento/home והפעילו „אפשר גישה לכתובות של קבצים”."
+  },
+  "accessUnknownNote": {
+    "message": "הדפדפן הזה אינו מדווח על כך. אם השמירה עדיין שואלת, בדקו זאת ב־chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "גרסה"
+  },
+  "setVersionUnpacked": {
+    "message": "העותק הזה נטען לא ארוז, ולכן Chrome לעולם לא יעדכן אותו."
+  },
+  "setVersionStore": {
+    "message": "הותקן מהחנות, ולכן הוא מתעדכן בעצמו."
+  },
+  "versionAvailable": {
+    "message": "$1 זמינה"
+  },
+  "versionUpToDate": {
+    "message": "עדכנית נכון לבדיקה האחרונה"
+  },
+  "versionManaged": {
+    "message": "הדפדפן שומר עליה עדכנית"
+  },
+  "getIt": {
+    "message": "הורדה"
+  },
+  "checkNow": {
+    "message": "בדוק עכשיו"
+  },
+  "autoCheckPref": {
+    "message": "<b>בדוק אם יש גרסה חדשה בעת הפעלת הדפדפן.</b><br>בקשה אחת אל bento.page עבור קובץ סטטי. היא אינה שולחת מזהים, אינה שולחת מספר גרסה ואינה שולחת דבר על המסמכים שלכם — ההשוואה מתבצעת כאן. כבו אותה ושום דבר לא יתבקש לעולם; <b>בדוק עכשיו</b> ימשיך לעבוד."
+  },
+  "expectedSha": {
+    "message": "ערך SHA-256 הצפוי של קובץ ה־zip: $1"
+  },
+  "setReachTitle": {
+    "message": "עד לאן זה מגיע"
+  },
+  "setReachSub": {
+    "message": "רק התיקיות שלמעלה, ורק הקובץ שממנו דף אכן נפתח. שום דבר אינו מועלה ושום דבר אינו נקרא בשום מקום אחר."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 זמינה.</b> העותק הזה נטען לא ארוז, ולכן Chrome לעולם לא יעדכן אותו."
+  },
+  "updateStep1": {
+    "message": "הורידו אותה מ־GitHub"
+  },
+  "updateStep2": {
+    "message": "החליפו את הקבצים <b>בתיקייה שממנה טענתם אותה</b> — אותה תיקייה, אחרת Chrome יראה בה הרחבה אחרת והתיקיות שהרשיתם לא יבואו איתה"
+  },
+  "updateStep3": {
+    "message": "פתחו את <code>chrome://extensions</code> ולחצו <b>טען מחדש</b> על bento/home"
+  },
+  "fetchingApp": {
+    "message": "מוריד את $1…"
+  },
+  "createdIn": {
+    "message": "נוצר $1 ($2) ב־$3"
+  },
+  "intoFolder": {
+    "message": "אל $1"
+  },
+  "helpWhatTitle": {
+    "message": "מה bento/home עושה"
+  },
+  "helpWhatSub": {
+    "message": "מסמך Bento הוא קובץ HTML יחיד שנושא את העורך שלו עמו. כשהוא נפתח היישר מהדיסק, הדפדפן אינו מרשה לו לכתוב בחזרה אל עצמו — ולכן כל שמירה שואלת היכן להניח אותו. bento/home הוא מה שמסלק את השאלה הזאת."
+  },
+  "tourSaveTitle": {
+    "message": "שמירה במקום"
+  },
+  "tourSaveBody": {
+    "message": "⌘S כותב היישר בחזרה אל הקובץ שפתחתם, בלי חלון דו־שיח. שמירה אוטומטית ועדכונים במקום הולכים באותה דרך."
+  },
+  "tourFindTitle": {
+    "message": "מצאו את המסמכים שלכם"
+  },
+  "tourFindBody": {
+    "message": "כל מסמך Bento בתיקיות שלכם, עם הכותרת האמיתית שלו ותמונה של העמוד הראשון. החיפוש מקיף גם את מה שכתוב בתוכם."
+  },
+  "tourSwitchTitle": {
+    "message": "החליפו תוך כדי עבודה"
+  },
+  "tourSwitchBody": {
+    "message": "הקישו <kbd>Alt</kbd>+<kbd>B</kbd>, או לחצו לחיצה ימנית בתוך מסמך, לקבלת חלונית לצדו."
+  },
+  "tourNewTitle": {
+    "message": "צרו מסמך חדש"
+  },
+  "tourNewBody": {
+    "message": "<b>+ מסמך חדש</b> מוריד את המהדורה הנוכחית של Slides, Spaces או Dash ומניח מסמך חדש בתיקייה שלכם."
+  },
+  "helpNeedsTitle": {
+    "message": "מה הוא צריך מכם"
+  },
+  "helpNeedsSub": {
+    "message": "שני דברים, ושניהם מחוץ ליכולתה של ההרחבה הזאת לסדר."
+  },
+  "helpFolder": {
+    "message": "תיקייה"
+  },
+  "helpFolderGranted": {
+    "message": "$1 הורשו — מסמכים שבתוכן נשמרים במקום"
+  },
+  "helpFolderNone": {
+    "message": "עדיין לא נבחרה. תיקייה רחבה אחת מכסה את כל מה שבתוכה."
+  },
+  "helpAccessOff": {
+    "message": "כבוי. הפעילו <b>אפשר גישה לכתובות של קבצים</b> ב־<code>chrome://extensions</code> — שום הרחבה אינה יכולה להפעיל זאת בעצמה."
+  },
+  "helpAccessUnknown": {
+    "message": "הדפדפן הזה אינו מדווח על כך. אם השמירה עדיין שואלת, בדקו זאת ב־<code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "מופעל — bento/home יכול לקרוא דפים שפתחתם מהדיסק."
+  },
+  "helpNeverTitle": {
+    "message": "מה הוא לעולם אינו עושה"
+  },
+  "helpNeverSub": {
+    "message": "הוא קורא וכותב רק בתוך התיקיות שלמעלה, ורק את הקובץ שממנו דף אכן נפתח — הדפדפן מוסר איזה, כך שמסמך אינו יכול לנקוב בקובץ של מישהו אחר. שום דבר על המסמכים שלכם אינו מועלה לשום מקום, ולהרחבה אין בכלל שרת להעלות אליו."
+  },
+  "helpAboutTitle": {
+    "message": "אודות"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · חלק מפרויקט Bento · ברישיון MIT"
+  },
+  "linkSource": {
+    "message": "קוד המקור ב־GitHub"
+  },
+  "linkIssues": {
+    "message": "דיווח על תקלה"
+  },
+  "linkReleases": {
+    "message": "מהדורות"
+  },
+  "primeMiddle": {
+    "message": "זו שמחזיקה מעמד"
+  },
+  "primeNote": {
+    "message": "גם השתיים האחרות עובדות, אך Chrome ישאל שוב — בכל הפעלה מחדש עבור הראשונה, ולאחר המתנה עבור האחרונה."
+  },
+  "viewLayout": {
+    "message": "איך המסמכים מוצגים"
+  },
+  "viewIcons": {
+    "message": "סמלים"
+  },
+  "viewList": {
+    "message": "רשימה"
+  },
+  "close": {
+    "message": "סגירה"
+  },
+  "setLangTitle": {
+    "message": "שפה"
+  },
+  "setLangSub": {
+    "message": "באיזו שפה ההרחבה הזאת מדברת. בדרך כלל היא עוקבת אחרי הדפדפן."
+  },
+  "langAutomatic": {
+    "message": "אוטומטי — לעקוב אחרי הדפדפן"
+  },
+  "setLangNote": {
+    "message": "השם והתיאור של ההרחבה עצמה מגיעים מהדפדפן ואינם משתנים."
+  },
+  "aboutPromo": {
+    "message": "חדשים ב־Bento? תבניות, הגלריה ומדריך העריכה עם AI נמצאים ב־$1 — או תנו כוכב ב־$2."
+  },
+  "setThemeTitle": {
+    "message": "מראה"
+  },
+  "setThemeSub": {
+    "message": "ההגדרה של הדפדפן היא ברירת המחדל, לא חובה."
+  },
+  "themeAuto": {
+    "message": "לפי הדפדפן"
+  },
+  "themeLight": {
+    "message": "בהיר"
+  },
+  "themeDark": {
+    "message": "כהה"
+  },
+  "checking": {
+    "message": "בודק…"
+  },
+  "surveyTitle": {
+    "message": "מצאו איפה המסמכים שלכם"
+  },
+  "surveySub": {
+    "message": "הדפדפן יודע אילו מסמכי Bento פתחתם, והוא יכול לומר באילו תיקיות הם נמצאים."
+  },
+  "surveyDeclined": {
+    "message": "אין בעיה — אפשר להוסיף תיקיות ידנית."
+  },
+  "surveyAllCovered": {
+    "message": "כל $1 המסמכים שהדפדפן הזה ראה כבר נמצאים בתיקייה שהוספתם."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> מסמכים נמצאים מחוץ לכל התיקיות שהוספתם. $2 כבר מכוסים."
+  },
+  "surveyCovers": {
+    "message": "מכילה $1"
+  },
+  "surveyAdd": {
+    "message": "הוספת התיקייה הזאת…"
+  },
+  "surveyAdded": {
+    "message": "$1 נוספה — המסמכים בתוכה מוכנים"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 נוספה, אבל המסמכים אינם בה — פתחו אחד מ־Finder פעם אחת."
+  },
+  "surveyOnlySeen": {
+    "message": "כך אפשר למצוא רק מסמכים שנפתחו בדפדפן הזה."
+  }
+}

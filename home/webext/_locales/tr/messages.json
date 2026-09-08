@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "Bir Bento belgesini, hedef sorulmadan açtığınız dosyaya geri kaydedin."
+  },
+  "navAll": {
+    "message": "Tüm belgeler"
+  },
+  "navFolders": {
+    "message": "Klasörler"
+  },
+  "navHelp": {
+    "message": "Yardım ve hakkında"
+  },
+  "navSettings": {
+    "message": "Ayarlar"
+  },
+  "addFolder": {
+    "message": "+ Klasör ekle…"
+  },
+  "searchDocs": {
+    "message": "Belgelerde ara"
+  },
+  "searchDocsSlash": {
+    "message": "Belgelerde ara   /"
+  },
+  "sortTitle": {
+    "message": "Sırala"
+  },
+  "sortRecent": {
+    "message": "Son değiştirilen"
+  },
+  "sortName": {
+    "message": "Ad"
+  },
+  "sortFolder": {
+    "message": "Klasör"
+  },
+  "newDocument": {
+    "message": "+ Yeni belge"
+  },
+  "browseAll": {
+    "message": "Tümüne göz at"
+  },
+  "reconnectFolders": {
+    "message": "Klasörleri yeniden bağla"
+  },
+  "primeIntro": {
+    "message": "Chrome birazdan soracak. Ortadaki seçeneği seçin:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — bir klasörün yeniden bağlanması gerekiyor"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home'un yeniden bağlanması gerekiyor"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome bir klasörün iznini geri aldı. İzin geri verilene kadar her kaydetme, dosyanın nereye konacağını soracak."
+  },
+  "reconnect": {
+    "message": "Yeniden bağla"
+  },
+  "ctxOpenPanel": {
+    "message": "bento/home panelini aç"
+  },
+  "panelEmpty": {
+    "message": "Klasörlerinizde henüz Bento belgesi yok."
+  },
+  "noMatches": {
+    "message": "“$1” ile eşleşen bir şey yok"
+  },
+  "rowUnplacedTip": {
+    "message": "$1 içindeki herhangi bir belgeyi Finder'dan bir kez açın; o klasördeki her şey buradan açılabilir hale gelir."
+  },
+  "encrypted": {
+    "message": "Parola korumalı"
+  },
+  "notSavedYet": {
+    "message": "Henüz kaydedilmedi"
+  },
+  "fileAccessOffShort": {
+    "message": "Yerel dosya erişimi kapalı"
+  },
+  "noFoldersYet": {
+    "message": "Henüz klasör yok"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 klasörün yeniden bağlanması gerekiyor"
+  },
+  "statusOneFolder": {
+    "message": "$1 klasör · yerinde kaydeder"
+  },
+  "statusFolders": {
+    "message": "$1 klasör · yerinde kaydeder"
+  },
+  "renewNotOffered": {
+    "message": "Chrome geri yüklemeyi önermedi"
+  },
+  "renewTryAfterRestart": {
+    "message": "Chrome'u yeniden başlattıktan sonra tekrar deneyin"
+  },
+  "fetchingLatest": {
+    "message": "En son Bento alınıyor…"
+  },
+  "created": {
+    "message": "$1 oluşturuldu"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 okunabiliyor ama henüz açılamıyor — Chrome bir uzantıya bir klasörün diskte nerede olduğunu söylemez. <b>Tümüne göz at</b> onları tek tıkla bulur."
+  },
+  "andMore": {
+    "message": " ve $1 tane daha"
+  },
+  "agoJustNow": {
+    "message": "az önce"
+  },
+  "agoMinutes": {
+    "message": "$1 dk önce"
+  },
+  "agoHour": {
+    "message": "$1 saat önce"
+  },
+  "agoHours": {
+    "message": "$1 saat önce"
+  },
+  "agoDay": {
+    "message": "$1 gün önce"
+  },
+  "agoDays": {
+    "message": "$1 gün önce"
+  },
+  "searchScope": {
+    "message": "Arama; başlıklara, dosya adlarına, klasörlere ve belgelerin içindeki sözcüklere bakar."
+  },
+  "folderEmpty": {
+    "message": "Bu klasörde henüz bir şey yok"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Yeni belge</b> buraya yeni bir tane koyar."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home, $1 klasörünün diskte nerede olduğunu henüz bilmiyor. “Klasörlerimi bul”u kullanın ya da içindeki bir belgeyi Finder'dan bir kez açın."
+  },
+  "cardRenamedTip": {
+    "message": "$1, başka bir adla kaydedilmiş bir Bento belgesidir. Buradan açılır, ancak kaydetme bir hedef soracaktır — yerinde kaydetme yalnızca .bento.html ile biten dosyaları tanır."
+  },
+  "badgeRenamed": {
+    "message": ".bento.html yerine .html olarak adlandırılmış — buradan açılır, ancak kaydetme bir hedef soracaktır."
+  },
+  "menuOpen": {
+    "message": "Aç"
+  },
+  "menuDuplicate": {
+    "message": "Çoğalt"
+  },
+  "menuRename": {
+    "message": "Yeniden adlandır…"
+  },
+  "menuCopyPath": {
+    "message": "Yolu kopyala"
+  },
+  "duplicatedAs": {
+    "message": "$1 olarak çoğaltıldı"
+  },
+  "renamePrompt": {
+    "message": "Belgeyi yeniden adlandır"
+  },
+  "renamedTo": {
+    "message": "$1 olarak yeniden adlandırıldı"
+  },
+  "pathCopied": {
+    "message": "Yol kopyalandı"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — henüz açılmadı"
+  },
+  "setupTitle": {
+    "message": "İki şey ve hazırsınız"
+  },
+  "setupLead": {
+    "message": "Bundan sonra, çift tıklayarak açtığınız bir belgede ⌘S doğrudan dosyaya yazar — bir daha asla hedef sorulmaz."
+  },
+  "chooseFolder": {
+    "message": "Klasör seç…"
+  },
+  "setupStep1": {
+    "message": "Belgelerinizin bulunduğu klasörü seçin"
+  },
+  "setupStep1Note": {
+    "message": "Genelde geniş tek bir klasör yeter — içindeki her şeyi kapsar."
+  },
+  "setupStep2": {
+    "message": "Yerel dosya erişimini açın"
+  },
+  "setupStep2Note": {
+    "message": "<code>chrome://extensions</code> → bento/home → <b>Dosya URL'lerine erişime izin ver</b>. Chrome, bir uzantının bunu kendi başına açmasına izin vermez."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Yükselttiniz ve klasörlerinizi burada mı bekliyordunuz?</b> Paketlenmemiş bir uzantı klasör yoluyla tanınır, dolayısıyla başka bir klasörden yüklenen yeni bir kopya farklı bir uzantıdır. Klasörleriniz hâlâ eskisine bağlı. Bunun yerine özgün klasördeki dosyaları değiştirin ve <code>chrome://extensions</code> içinde <b>Yeniden yükle</b>ye basın."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Yerel dosya erişimi kapalı</b> — açılana kadar hiçbir şey yerinde kaydedilmez. <code>chrome://extensions</code> içinde <b>Dosya URL'lerine erişime izin ver</b>i açın."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 klasörün yeniden bağlanması gerekiyor.</b> <b>Ayarlar</b>'dan yeniden bağlayın ve <b>Her ziyarette izin ver</b>i seçin — kalıcı olan tek seçenek budur."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> listelenebiliyor ama henüz açılamıyor — Chrome bir uzantıya bir klasörün diskte nerede olduğunu asla söylemez."
+  },
+  "findFolders": {
+    "message": "Klasörlerimi bul"
+  },
+  "looking": {
+    "message": "Aranıyor…"
+  },
+  "findDeclined": {
+    "message": "<b>Sorun değil.</b> Bunun yerine $1 içindeki bir belgeyi Finder'dan bir kez açın — bu sayfa fark eder."
+  },
+  "foundFolder": {
+    "message": "$1 klasör bulundu"
+  },
+  "foundFolders": {
+    "message": "$1 klasör bulundu"
+  },
+  "foundNothing": {
+    "message": "Geçmişte henüz bir şey yok — Finder'dan bir belge açın"
+  },
+  "setFoldersSub": {
+    "message": "Bunların içindeki belgeler, hedef sorulmadan doğrudan dosyaya geri kaydedilir. Bir klasör içindeki her şeyi kapsar."
+  },
+  "noneYet": {
+    "message": "Henüz yok."
+  },
+  "savesInPlace": {
+    "message": "yerinde kaydeder"
+  },
+  "needsReconnecting": {
+    "message": "yeniden bağlanması gerekiyor"
+  },
+  "reconnectTip": {
+    "message": "Chrome bu klasörü geri yüklemek için soracak. “İzin verme” onu bırakır ve Chrome sonrasında yeniden sormadan önce en az bir yeniden başlatma bekler."
+  },
+  "remove": {
+    "message": "Kaldır"
+  },
+  "removeTip": {
+    "message": "Erişimi geri alır. Chrome izni yine de hatırlayabilir, bu yüzden klasörü geri eklemek yeniden sormayabilir."
+  },
+  "setAccessTitle": {
+    "message": "Yerel dosya erişimi"
+  },
+  "setAccessSub": {
+    "message": "Chrome bir uzantının bunu kendi başına açmasına izin vermez ve bu olmadan hiçbir şey çalışmaz."
+  },
+  "stateOn": {
+    "message": "Açık"
+  },
+  "stateOff": {
+    "message": "Kapalı"
+  },
+  "stateUnknown": {
+    "message": "Bilinmiyor"
+  },
+  "accessOnNote": {
+    "message": "bento/home, diskten açtığınız sayfaları okuyabilir."
+  },
+  "accessOffNote": {
+    "message": "chrome://extensions'ı açın, bento/home'u bulun, “Dosya URL'lerine erişime izin ver”i açın."
+  },
+  "accessUnknownNote": {
+    "message": "Bu tarayıcı bunu bildirmiyor. Kaydetme hâlâ soruyorsa chrome://extensions'tan kontrol edin."
+  },
+  "setVersionTitle": {
+    "message": "Sürüm"
+  },
+  "setVersionUnpacked": {
+    "message": "Bu kopya paketlenmemiş olarak yüklendi, bu yüzden Chrome onu asla güncellemez."
+  },
+  "setVersionStore": {
+    "message": "Mağazadan kuruldu, bu yüzden kendini günceller."
+  },
+  "versionAvailable": {
+    "message": "$1 mevcut"
+  },
+  "versionUpToDate": {
+    "message": "son kontrole göre güncel"
+  },
+  "versionManaged": {
+    "message": "tarayıcı tarafından güncel tutuluyor"
+  },
+  "getIt": {
+    "message": "İndir"
+  },
+  "checkNow": {
+    "message": "Şimdi denetle"
+  },
+  "autoCheckPref": {
+    "message": "<b>Tarayıcı başlarken yeni sürüm olup olmadığını denetle.</b><br>bento.page'e statik bir dosya için tek bir istek. Hiçbir tanımlayıcı, sürüm numarası ya da belgelerinizle ilgili bir şey göndermez — karşılaştırma burada yapılır. Kapatın, hiçbir zaman istek gönderilmez; <b>Şimdi denetle</b> yine çalışır."
+  },
+  "expectedSha": {
+    "message": "Zip dosyasının beklenen SHA-256 değeri: $1"
+  },
+  "setReachTitle": {
+    "message": "Bunun erişebildikleri"
+  },
+  "setReachSub": {
+    "message": "Yalnızca yukarıdaki klasörler ve yalnızca bir sayfanın gerçekten açıldığı dosya. Hiçbir şey yüklenmez ve başka hiçbir yerde bir şey okunmaz."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 mevcut.</b> Bu kopya paketlenmemiş olarak yüklendi, bu yüzden Chrome onu asla güncellemez."
+  },
+  "updateStep1": {
+    "message": "GitHub'dan indirin"
+  },
+  "updateStep2": {
+    "message": "Dosyaları <b>onu yüklediğiniz klasörde</b> değiştirin — aynı klasör olmalı, yoksa Chrome bunu farklı bir uzantı sayar ve izin verdiğiniz klasörler onunla gelmez"
+  },
+  "updateStep3": {
+    "message": "<code>chrome://extensions</code>'ı açın ve bento/home'da <b>Yeniden yükle</b>ye basın"
+  },
+  "fetchingApp": {
+    "message": "$1 alınıyor…"
+  },
+  "createdIn": {
+    "message": "$3 içinde $1 ($2) oluşturuldu"
+  },
+  "intoFolder": {
+    "message": "$1 içine"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home ne yapar"
+  },
+  "helpWhatSub": {
+    "message": "Bir Bento belgesi, kendi düzenleyicisini taşıyan tek bir HTML dosyasıdır. Doğrudan diskten açıldığında tarayıcı kendine geri yazmasına izin vermez — bu yüzden kaydetme her seferinde nereye konacağını sorar. bento/home bu soruyu ortadan kaldırır."
+  },
+  "tourSaveTitle": {
+    "message": "Yerinde kaydet"
+  },
+  "tourSaveBody": {
+    "message": "⌘S, iletişim kutusu olmadan doğrudan açtığınız dosyaya yazar. Otomatik kaydetme ve yerinde güncellemeler de aynı yolu izler."
+  },
+  "tourFindTitle": {
+    "message": "Belgelerinizi bulun"
+  },
+  "tourFindBody": {
+    "message": "Klasörlerinizdeki her Bento belgesi, gerçek başlığı ve ilk sayfasının görüntüsüyle birlikte. Arama, içlerinde yazılanları da kapsar."
+  },
+  "tourSwitchTitle": {
+    "message": "Çalışırken geçiş yapın"
+  },
+  "tourSwitchBody": {
+    "message": "Yanında bir panel için <kbd>Alt</kbd>+<kbd>B</kbd>'ye basın ya da bir belgenin içine sağ tıklayın."
+  },
+  "tourNewTitle": {
+    "message": "Yeni bir tane oluşturun"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Yeni belge</b>, Slides, Spaces ya da Dash'in güncel sürümünü alır ve klasörünüze yeni bir belge koyar."
+  },
+  "helpNeedsTitle": {
+    "message": "Sizden ne istiyor"
+  },
+  "helpNeedsSub": {
+    "message": "İki şey; ikisi de bu uzantının kendi başına halledebileceği şeyler değil."
+  },
+  "helpFolder": {
+    "message": "Bir klasör"
+  },
+  "helpFolderGranted": {
+    "message": "$1 izin verildi — içlerindeki belgeler yerinde kaydedilir"
+  },
+  "helpFolderNone": {
+    "message": "Henüz seçilmedi. Geniş tek bir klasör içindeki her şeyi kapsar."
+  },
+  "helpAccessOff": {
+    "message": "Kapalı. <code>chrome://extensions</code> içinde <b>Dosya URL'lerine erişime izin ver</b>i açın — hiçbir uzantı bunu kendi başına açamaz."
+  },
+  "helpAccessUnknown": {
+    "message": "Bu tarayıcı bunu bildirmiyor. Kaydetme hâlâ soruyorsa <code>chrome://extensions</code>'tan kontrol edin."
+  },
+  "helpAccessOn": {
+    "message": "Açık — bento/home, diskten açtığınız sayfaları okuyabilir."
+  },
+  "helpNeverTitle": {
+    "message": "Asla yapmadıkları"
+  },
+  "helpNeverSub": {
+    "message": "Yalnızca yukarıdaki klasörlerin içinde ve yalnızca bir sayfanın gerçekten açıldığı dosyada okur ve yazar — hangisi olduğunu tarayıcı söyler, dolayısıyla bir belge başkasının dosyasını gösteremez. Belgelerinizle ilgili hiçbir şey hiçbir yere yüklenmez ve uzantının onları yükleyeceği bir sunucusu yoktur."
+  },
+  "helpAboutTitle": {
+    "message": "Hakkında"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Bento projesinin parçası · MIT lisanslı"
+  },
+  "linkSource": {
+    "message": "GitHub'da kaynak"
+  },
+  "linkIssues": {
+    "message": "Sorun bildir"
+  },
+  "linkReleases": {
+    "message": "Sürümler"
+  },
+  "primeMiddle": {
+    "message": "kalıcı olan"
+  },
+  "primeNote": {
+    "message": "Diğer ikisi de çalışır, ama Chrome yeniden sorar — ilki için her yeniden başlatmada, sonuncusu için bir bekleme sonrasında."
+  },
+  "viewLayout": {
+    "message": "Belgelerin gösterilme biçimi"
+  },
+  "viewIcons": {
+    "message": "Simgeler"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Kapat"
+  },
+  "setLangTitle": {
+    "message": "Dil"
+  },
+  "setLangSub": {
+    "message": "Bu uzantının konuştuğu dil. Normalde tarayıcıyı izler."
+  },
+  "langAutomatic": {
+    "message": "Otomatik — tarayıcıyı izle"
+  },
+  "setLangNote": {
+    "message": "Uzantının kendi adı ve açıklaması tarayıcıdan gelir ve değişmez."
+  },
+  "aboutPromo": {
+    "message": "Bento'da yeni misiniz? Şablonlar, galeri ve yapay zekâ düzenleme rehberi $1 adresinde — ya da $2 üzerinde yıldız verin."
+  },
+  "setThemeTitle": {
+    "message": "Görünüm"
+  },
+  "setThemeSub": {
+    "message": "Tarayıcının ayarı varsayılandır, zorunluluk değil."
+  },
+  "themeAuto": {
+    "message": "Tarayıcıyla aynı"
+  },
+  "themeLight": {
+    "message": "Açık"
+  },
+  "themeDark": {
+    "message": "Koyu"
+  },
+  "checking": {
+    "message": "Denetleniyor…"
+  },
+  "surveyTitle": {
+    "message": "Belgelerinizin nerede olduğunu bulun"
+  },
+  "surveySub": {
+    "message": "Tarayıcı hangi Bento belgelerini açtığınızı bilir. Hangi klasörlerde olduklarını söyleyebilir."
+  },
+  "surveyDeclined": {
+    "message": "Sorun değil — klasörleri elle de ekleyebilirsiniz."
+  },
+  "surveyAllCovered": {
+    "message": "Bu tarayıcının gördüğü $1 belgenin tamamı zaten eklediğiniz bir klasörde."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> belge eklediğiniz hiçbir klasörde değil. $2 tanesi zaten kapsanıyor."
+  },
+  "surveyCovers": {
+    "message": "$1 belge içeriyor"
+  },
+  "surveyAdd": {
+    "message": "Bu klasörü ekle…"
+  },
+  "surveyAdded": {
+    "message": "$1 eklendi — içindeki belgeler hazır"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 eklendi, ama belgeler orada değil — Finder'dan bir tanesini bir kez açın."
+  },
+  "surveyOnlySeen": {
+    "message": "Bu yolla yalnızca bu tarayıcıda açılmış belgeler bulunabilir."
+  }
+}

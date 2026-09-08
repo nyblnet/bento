@@ -1,0 +1,521 @@
+{
+  "appDesc": {
+    "message": "Speichert ein Bento-Dokument zurück in die geöffnete Datei, ohne nach dem Ort zu fragen.",
+    "description": "Chrome Web Store listing description. 132 characters maximum — the store truncates."
+  },
+  "navAll": {
+    "message": "Alle Dokumente"
+  },
+  "navFolders": {
+    "message": "Ordner"
+  },
+  "navHelp": {
+    "message": "Hilfe & Über"
+  },
+  "navSettings": {
+    "message": "Einstellungen"
+  },
+  "addFolder": {
+    "message": "+ Ordner hinzufügen…"
+  },
+  "searchDocs": {
+    "message": "Dokumente durchsuchen"
+  },
+  "searchDocsSlash": {
+    "message": "Dokumente durchsuchen   /"
+  },
+  "sortTitle": {
+    "message": "Sortieren"
+  },
+  "sortRecent": {
+    "message": "Zuletzt geändert"
+  },
+  "sortName": {
+    "message": "Name"
+  },
+  "sortFolder": {
+    "message": "Ordner"
+  },
+  "newDocument": {
+    "message": "+ Neues Dokument"
+  },
+  "browseAll": {
+    "message": "Alle anzeigen"
+  },
+  "reconnectFolders": {
+    "message": "Ordner neu verbinden"
+  },
+  "primeIntro": {
+    "message": "Chrome fragt als Nächstes. Wählen Sie die mittlere Option:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — ein Ordner muss neu verbunden werden",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home muss neu verbunden werden",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome hat die Berechtigung für einen Ordner entzogen. Bis sie wiederhergestellt ist, wird beim Speichern nach einem Ort gefragt.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnect": {
+    "message": "Neu verbinden"
+  },
+  "ctxOpenPanel": {
+    "message": "Bento-Tray-Leiste öffnen"
+  },
+  "panelEmpty": {
+    "message": "Noch keine Bento-Dokumente in Ihren Ordnern."
+  },
+  "noMatches": {
+    "message": "Nichts passt zu „$1“"
+  },
+  "rowUnplacedTip": {
+    "message": "Öffnen Sie einmal ein Dokument in $1 im Finder, dann lässt sich alles in diesem Ordner von hier öffnen."
+  },
+  "encrypted": {
+    "message": "Passwortgeschützt"
+  },
+  "notSavedYet": {
+    "message": "Noch nicht gespeichert"
+  },
+  "fileAccessOffShort": {
+    "message": "Zugriff auf lokale Dateien ist aus",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noFoldersYet": {
+    "message": "Noch keine Ordner"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 Ordner muss neu verbunden werden",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "statusOneFolder": {
+    "message": "$1 Ordner · speichert direkt"
+  },
+  "statusFolders": {
+    "message": "$1 Ordner · speichert direkt"
+  },
+  "renewNotOffered": {
+    "message": "Chrome hat die Wiederherstellung nicht angeboten",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "renewTryAfterRestart": {
+    "message": "Nach einem Neustart von Chrome erneut versuchen",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "fetchingLatest": {
+    "message": "Neuestes Bento wird geladen…"
+  },
+  "created": {
+    "message": "$1 erstellt"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 kann gelesen, aber noch nicht geöffnet werden — Chrome verrät einer Erweiterung nicht, wo ein Ordner auf der Festplatte liegt. <b>Alle anzeigen</b> findet sie mit einem Klick.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "andMore": {
+    "message": " und $1 weitere"
+  },
+  "agoJustNow": {
+    "message": "gerade eben"
+  },
+  "agoMinutes": {
+    "message": "vor $1 Min."
+  },
+  "agoHour": {
+    "message": "vor $1 Stunde"
+  },
+  "agoHours": {
+    "message": "vor $1 Stunden"
+  },
+  "agoDay": {
+    "message": "vor $1 Tag"
+  },
+  "agoDays": {
+    "message": "vor $1 Tagen"
+  },
+  "searchScope": {
+    "message": "Gesucht wird in Titeln, Dateinamen, Ordnern und im Text der Dokumente."
+  },
+  "folderEmpty": {
+    "message": "Noch nichts in diesem Ordner"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Neues Dokument</b> legt hier eines an."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home weiß noch nicht, wo $1 auf der Festplatte liegt. Nutzen Sie „Meine Ordner finden“ oder öffnen Sie einmal ein Dokument daraus im Finder.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "cardRenamedTip": {
+    "message": "$1 ist ein Bento-Dokument unter anderem Namen. Es lässt sich von hier öffnen, beim Speichern wird aber nach einem Ort gefragt — direktes Speichern erkennt nur Dateien auf .bento.html."
+  },
+  "badgeRenamed": {
+    "message": "Heißt .html statt .bento.html — lässt sich von hier öffnen, beim Speichern wird aber nach einem Ort gefragt."
+  },
+  "menuOpen": {
+    "message": "Öffnen"
+  },
+  "menuDuplicate": {
+    "message": "Duplizieren"
+  },
+  "menuRename": {
+    "message": "Umbenennen…"
+  },
+  "menuCopyPath": {
+    "message": "Pfad kopieren"
+  },
+  "duplicatedAs": {
+    "message": "Als $1 dupliziert"
+  },
+  "renamePrompt": {
+    "message": "Dokument umbenennen"
+  },
+  "renamedTo": {
+    "message": "In $1 umbenannt"
+  },
+  "pathCopied": {
+    "message": "Pfad kopiert"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — noch nicht geöffnet"
+  },
+  "setupTitle": {
+    "message": "Zwei Dinge, dann ist alles bereit"
+  },
+  "setupLead": {
+    "message": "Danach schreibt ⌘S bei einem per Doppelklick geöffneten Dokument direkt in die Datei zurück — nie wieder eine Frage nach dem Ort."
+  },
+  "chooseFolder": {
+    "message": "Ordner wählen…"
+  },
+  "setupStep1": {
+    "message": "Wählen Sie den Ordner, in dem Ihre Dokumente liegen"
+  },
+  "setupStep1Note": {
+    "message": "Ein großzügiger Ordner genügt meist — er deckt alles darin ab."
+  },
+  "setupStep2": {
+    "message": "Zugriff auf lokale Dateien einschalten",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupStep2Note": {
+    "message": "Unter <code>chrome://extensions</code> → bento/home → <b>Zugriff auf Datei-URLs zulassen</b>. Chrome lässt eine Erweiterung das nicht selbst einschalten.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Aktualisiert und Ihre Ordner fehlen?</b> Eine entpackte Erweiterung wird über ihren Ordnerpfad identifiziert; eine neue Kopie aus einem anderen Ordner ist deshalb eine andere Erweiterung. Ihre Ordner sind weiterhin für die alte freigegeben. Ersetzen Sie stattdessen die Dateien im ursprünglichen Ordner und drücken Sie unter <code>chrome://extensions</code> auf <b>Aktualisieren</b>.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Zugriff auf lokale Dateien ist aus</b> — bis er an ist, wird nichts direkt gespeichert. Schalten Sie <b>Zugriff auf Datei-URLs zulassen</b> unter <code>chrome://extensions</code> ein.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 Ordner muss neu verbunden werden.</b> Verbinden Sie ihn in den <b>Einstellungen</b> neu und wählen Sie die mittlere Option — die einzige, die bleibt.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> kann aufgelistet, aber noch nicht geöffnet werden — Chrome verrät einer Erweiterung nie, wo ein Ordner auf der Festplatte liegt.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "findFolders": {
+    "message": "Meine Ordner finden"
+  },
+  "looking": {
+    "message": "Wird gesucht…"
+  },
+  "findDeclined": {
+    "message": "<b>Kein Problem.</b> Öffnen Sie stattdessen einmal ein Dokument in $1 im Finder — diese Seite bemerkt es."
+  },
+  "foundFolder": {
+    "message": "$1 Ordner gefunden"
+  },
+  "foundFolders": {
+    "message": "$1 Ordner gefunden"
+  },
+  "foundNothing": {
+    "message": "Noch nichts im Verlauf — öffnen Sie ein Dokument im Finder"
+  },
+  "setFoldersSub": {
+    "message": "Dokumente hierin speichern direkt zurück in die Datei, ohne Nachfrage nach dem Ort. Ein Ordner deckt alles darin ab."
+  },
+  "noneYet": {
+    "message": "Noch keine."
+  },
+  "savesInPlace": {
+    "message": "speichert direkt"
+  },
+  "needsReconnecting": {
+    "message": "muss neu verbunden werden",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnectTip": {
+    "message": "Chrome fragt, ob dieser Ordner wiederhergestellt werden soll. Ablehnen entfernt ihn, und Chrome wartet danach mindestens einen Neustart, bevor es erneut fragt.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "remove": {
+    "message": "Entfernen"
+  },
+  "removeTip": {
+    "message": "Entzieht den Zugriff. Chrome merkt sich die Berechtigung möglicherweise weiterhin, sodass beim erneuten Hinzufügen nicht noch einmal gefragt wird.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessTitle": {
+    "message": "Zugriff auf lokale Dateien",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessSub": {
+    "message": "Chrome lässt eine Erweiterung das nicht selbst einschalten, und ohne funktioniert nichts.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "stateOn": {
+    "message": "An"
+  },
+  "stateOff": {
+    "message": "Aus"
+  },
+  "stateUnknown": {
+    "message": "Unbekannt"
+  },
+  "setVersionTitle": {
+    "message": "Version"
+  },
+  "setVersionUnpacked": {
+    "message": "Diese Kopie wurde entpackt geladen, Chrome aktualisiert sie also nie."
+  },
+  "setVersionStore": {
+    "message": "Aus dem Store installiert, aktualisiert sich also selbst."
+  },
+  "versionAvailable": {
+    "message": "$1 ist verfügbar"
+  },
+  "versionUpToDate": {
+    "message": "aktuell laut letzter Prüfung"
+  },
+  "versionManaged": {
+    "message": "vom Browser aktuell gehalten"
+  },
+  "getIt": {
+    "message": "Holen"
+  },
+  "checkNow": {
+    "message": "Jetzt prüfen"
+  },
+  "autoCheckPref": {
+    "message": "<b>Beim Start des Browsers nach einer neuen Version suchen.</b><br>Eine Anfrage an bento.page nach einer statischen Datei. Sie sendet keine Kennungen, keine Versionsnummer und nichts über Ihre Dokumente — der Vergleich findet hier statt. Ausgeschaltet wird nie etwas angefragt; <b>Jetzt prüfen</b> funktioniert weiterhin.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "expectedSha": {
+    "message": "Erwarteter SHA-256 der ZIP-Datei: $1"
+  },
+  "setReachTitle": {
+    "message": "Worauf dies zugreifen kann",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setReachSub": {
+    "message": "Nur die Ordner oben und nur die Datei, aus der eine Seite tatsächlich geöffnet wurde. Nichts wird hochgeladen und nichts anderswo gelesen.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 ist verfügbar.</b> Diese Kopie wurde entpackt geladen, Chrome aktualisiert sie also nie."
+  },
+  "updateStep1": {
+    "message": "Von GitHub herunterladen"
+  },
+  "updateStep2": {
+    "message": "Ersetzen Sie die Dateien <b>in dem Ordner, aus dem Sie sie geladen haben</b> — derselbe Ordner, sonst behandelt Chrome sie als andere Erweiterung und Ihre freigegebenen Ordner kommen nicht mit",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateStep3": {
+    "message": "Öffnen Sie <code>chrome://extensions</code> und drücken Sie bei bento/home auf <b>Aktualisieren</b>"
+  },
+  "fetchingApp": {
+    "message": "$1 wird geladen…"
+  },
+  "createdIn": {
+    "message": "$1 ($2) in $3 erstellt"
+  },
+  "intoFolder": {
+    "message": "nach $1"
+  },
+  "helpWhatTitle": {
+    "message": "Was bento/home tut"
+  },
+  "helpWhatSub": {
+    "message": "Ein Bento-Dokument ist eine HTML-Datei, die ihren eigenen Editor mitbringt. Direkt von der Festplatte geöffnet, lässt ein Browser sie nicht in sich selbst zurückschreiben — beim Speichern wird also jedes Mal nach einem Ort gefragt. bento/home nimmt diese Frage weg."
+  },
+  "tourSaveTitle": {
+    "message": "Direkt speichern"
+  },
+  "tourSaveBody": {
+    "message": "⌘S schreibt ohne Dialog direkt in die geöffnete Datei zurück. Automatisches Speichern und Updates gehen denselben Weg."
+  },
+  "tourFindTitle": {
+    "message": "Ihre Dokumente finden"
+  },
+  "tourFindBody": {
+    "message": "Jedes Bento-Dokument in Ihren Ordnern, mit echtem Titel und einem Bild der ersten Seite. Die Suche erfasst auch den Text darin."
+  },
+  "tourSwitchTitle": {
+    "message": "Wechseln während der Arbeit"
+  },
+  "tourSwitchBody": {
+    "message": "Drücken Sie <kbd>Alt</kbd>+<kbd>B</kbd> oder klicken Sie mit der rechten Maustaste in ein Dokument, für eine Leiste daneben."
+  },
+  "tourNewTitle": {
+    "message": "Ein neues anlegen"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Neues Dokument</b> lädt die aktuelle Version von Slides, Spaces oder Dash und legt ein frisches Dokument in Ihrem Ordner an."
+  },
+  "helpNeedsTitle": {
+    "message": "Was es von Ihnen braucht"
+  },
+  "helpNeedsSub": {
+    "message": "Zwei Dinge, beide außerhalb der Macht dieser Erweiterung."
+  },
+  "helpFolder": {
+    "message": "Ein Ordner"
+  },
+  "helpFolderGranted": {
+    "message": "$1 freigegeben — Dokumente darin speichern direkt"
+  },
+  "helpFolderNone": {
+    "message": "Noch nicht gewählt. Ein großzügiger Ordner deckt alles darin ab."
+  },
+  "helpAccessOff": {
+    "message": "Aus. Schalten Sie <b>Zugriff auf Datei-URLs zulassen</b> unter <code>chrome://extensions</code> ein — keine Erweiterung kann das für sich selbst tun.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessUnknown": {
+    "message": "Dieser Browser meldet es nicht. Wird beim Speichern weiterhin gefragt, prüfen Sie es unter <code>chrome://extensions</code>.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessOn": {
+    "message": "An — bento/home kann Seiten lesen, die Sie von der Festplatte geöffnet haben.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverTitle": {
+    "message": "Was es nie tut",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverSub": {
+    "message": "Es liest und schreibt nur in den Ordnern oben und nur die Datei, aus der eine Seite tatsächlich geöffnet wurde — der Browser sagt, welche das ist, sodass ein Dokument nicht die Datei eines anderen benennen kann. Nichts über Ihre Dokumente wird irgendwohin hochgeladen, und die Erweiterung hat auch keinen Server dafür.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAboutTitle": {
+    "message": "Über"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Teil des Bento-Projekts · MIT-Lizenz"
+  },
+  "linkSource": {
+    "message": "Quellcode auf GitHub"
+  },
+  "linkIssues": {
+    "message": "Problem melden"
+  },
+  "linkReleases": {
+    "message": "Versionen"
+  },
+  "primeMiddle": {
+    "message": "die, die bleibt"
+  },
+  "primeNote": {
+    "message": "Die anderen beiden funktionieren auch, aber Chrome fragt erneut — bei der ersten nach jedem Neustart, bei der letzten nach einer Wartezeit."
+  },
+  "accessOnNote": {
+    "message": "bento/home kann Seiten lesen, die Sie von der Festplatte geöffnet haben.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessOffNote": {
+    "message": "Öffnen Sie chrome://extensions, suchen Sie bento/home und schalten Sie „Zugriff auf Datei-URLs zulassen“ ein.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessUnknownNote": {
+    "message": "Dieser Browser meldet es nicht. Wird beim Speichern weiterhin gefragt, prüfen Sie es unter chrome://extensions.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "viewLayout": {
+    "message": "Wie Dokumente angezeigt werden"
+  },
+  "viewIcons": {
+    "message": "Symbole"
+  },
+  "viewList": {
+    "message": "Liste"
+  },
+  "close": {
+    "message": "Schließen"
+  },
+  "setLangTitle": {
+    "message": "Sprache"
+  },
+  "setLangSub": {
+    "message": "In welcher Sprache diese Erweiterung spricht. Normalerweise folgt sie dem Browser."
+  },
+  "langAutomatic": {
+    "message": "Automatisch — dem Browser folgen"
+  },
+  "setLangNote": {
+    "message": "Name und Beschreibung der Erweiterung selbst stammen vom Browser und ändern sich nicht."
+  },
+  "aboutPromo": {
+    "message": "Neu bei Bento? Vorlagen, die Galerie und den KI-Bearbeitungsleitfaden gibt es auf $1 — oder gib dem Projekt einen Stern auf $2."
+  },
+  "setThemeTitle": {
+    "message": "Erscheinungsbild"
+  },
+  "setThemeSub": {
+    "message": "Die Einstellung des Browsers ist die Vorgabe, keine Pflicht."
+  },
+  "themeAuto": {
+    "message": "Wie der Browser"
+  },
+  "themeLight": {
+    "message": "Hell"
+  },
+  "themeDark": {
+    "message": "Dunkel"
+  },
+  "checking": {
+    "message": "Wird geprüft…"
+  },
+  "surveyTitle": {
+    "message": "Finden, wo Ihre Dokumente liegen"
+  },
+  "surveySub": {
+    "message": "Der Browser weiß, welche Bento-Dokumente Sie geöffnet haben. Er kann sagen, in welchen Ordnern sie liegen."
+  },
+  "surveyDeclined": {
+    "message": "Kein Problem — Sie können Ordner von Hand hinzufügen."
+  },
+  "surveyAllCovered": {
+    "message": "Alle $1 Dokumente, die dieser Browser gesehen hat, liegen bereits in einem hinzugefügten Ordner."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> Dokumente liegen außerhalb aller hinzugefügten Ordner. $2 sind bereits abgedeckt."
+  },
+  "surveyCovers": {
+    "message": "enthält $1"
+  },
+  "surveyAdd": {
+    "message": "Diesen Ordner hinzufügen…"
+  },
+  "surveyAdded": {
+    "message": "$1 hinzugefügt — die Dokumente darin sind bereit"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 hinzugefügt, aber die Dokumente liegen nicht darin — öffnen Sie eines einmal im Finder."
+  },
+  "surveyOnlySeen": {
+    "message": "So lassen sich nur Dokumente finden, die in diesem Browser geöffnet wurden."
+  }
+}

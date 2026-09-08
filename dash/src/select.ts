@@ -107,6 +107,83 @@ export type Action =
   | { kind: 'paste' }
   | { kind: 'undo' }
   | { kind: 'redo' }
+  /**
+   * ⌘B / ⌘I / ⌘U — the appearance of the selected CELLS, on either kind of
+   * sheet. Declared here rather than as three actions because the field is the
+   * only thing that differs and the card should say so once per key.
+   *
+   * NOT handled by `Grid.handleKey`: it falls through (no motion, no match),
+   * and main.ts picks it up beside ⌘D, because a style write goes through
+   * cellfmt.ts's patch builders and the grid does not write cells for the
+   * panel. Same division `fill` already uses.
+   */
+  | { kind: 'style'; field: 'bold' | 'italic' | 'underline' }
+  /** Push the top row of the selection down through the rest of it (⌘D, ⌘↵). */
+  | { kind: 'fill' }
+  /**
+   * PASTE SPECIAL — open the menu of what to paste (values, formulas,
+   * formats, transposed).
+   *
+   * NOT handled by `Grid.handleKey`, and not by the document `paste` listener
+   * either: the browser only delivers a `paste` EVENT for the browser's own
+   * paste chord, so a second chord has to read the clip this app remembered
+   * when the copy happened. main.ts owns both, beside `fill` and `style`, for
+   * the reason those two are there — this WRITES CELLS, which the selection
+   * model cannot do.
+   *
+   * ⌘⇧V is the chord because Excel's own ⌘⌃V cannot be described by this map
+   * (it probes ⌘ and ctrl separately, never together) and because ⇧ is what
+   * Sheets uses for the same family. keyToAction ALSO answers pasteSpecial for
+   * ⌘⌃V — it costs one condition and it is the key half the world's fingers
+   * already know.
+   */
+  | { kind: 'pasteSpecial' }
+  /**
+   * TEXT TO COLUMNS — split the selected column on a delimiter or at fixed
+   * widths.
+   *
+   * Excel has no shortcut for this (it is a ribbon button), and the reason to
+   * claim one here is the SPREADSHEET kind: a dataset reaches the command from
+   * its cell menu and its column-header menu, and `kind:'canvas'` has neither
+   * — grid.ts declines to open the dataset cell menu over a spreadsheet, and
+   * it is right to. Without a key, half the app cannot reach the feature at
+   * all. ⌘⇧D sits beside ⌘D, which is already this map's answer to "the
+   * browser wanted that key for a bookmark".
+   */
+  | { kind: 'textToColumns' }
+  /**
+   * OPEN THE FIND BAR — and this map entry is why ⌘F is safe to claim at all.
+   *
+   * The grid is windowed: about 55 of a 5,000-row sheet's rows exist in the
+   * DOM, so the BROWSER's ⌘F searches those 55 and tells the reader that a
+   * value in their own file is not there. Leaving the key unclaimed is not
+   * neutral, it is a wrong answer with the browser's authority behind it. The
+   * implementation lives in find.ts, in the CAPTURE phase, exactly as help.ts
+   * implements '?': this map says what the key MEANS, and it is the only place
+   * that does — the shortcut card is generated from it.
+   */
+  | { kind: 'find' }
+  /**
+   * ctrl+PageUp / ctrl+PageDown: the previous and next sheet, as they have been
+   * in every spreadsheet since Excel 5. tabs.ts owns the verb and implements it
+   * in the capture phase, the way panels.ts owns `]`.
+   */
+  | { kind: 'sheetStep'; dir: -1 | 1 }
+  /** ⌘G / ⇧⌘G: the next and previous match, without going back to the field. */
+  | { kind: 'findNext'; back: boolean }
+  /**
+   * The three verbs below are NOT the grid's, and they are in this map anyway.
+   *
+   * A keyboard that cannot list itself is a keyboard nobody finds: every one of
+   * these is a key this application already claims, so leaving them out of the
+   * one place that says what a key means guarantees the shortcut card is a
+   * hand-written copy that drifts. Declaring them changes nothing at run time —
+   * `applyMotion` reports them unhandled, so whoever owns the verb still runs
+   * it (main.ts saves, help.ts opens the card, panels.ts toggles the panels).
+   */
+  | { kind: 'save' }
+  | { kind: 'help' }
+  | { kind: 'panel'; side: 'left' | 'right' }
 
 /** Structurally a KeyboardEvent, so a real event passes straight in. */
 export interface KeyLike {
@@ -127,6 +204,16 @@ const ARROWS: Record<string, [number, number]> = {
  * NULL IS THE IMPORTANT RETURN. A grid that claims every keystroke swallows the
  * ones that should start an edit (typing a digit), and one that claims a
  * modified key it does not implement turns a shortcut into a cursor move.
+ *
+ * THREE PRINTABLE KEYS ARE CLAIMED — '?', '[' and ']' — and none of them is
+ * claimed HERE: help.ts and panels.ts take them in the CAPTURE phase, before
+ * main.ts's typing route runs. They are declared anyway, because a keyboard
+ * described in three files is a keyboard described wrongly in two of them, and
+ * because main.ts's printable-key route should ask this map whether a key is
+ * spoken for before handing it to `grid.typeInto`. That question is what makes
+ * ⇧Space select a row: without it the printable route sees a space, opens a
+ * cell editor, and the binding below never runs (measured — ⇧Space typed a
+ * space into the cell for as long as it has existed).
  */
 export function keyToAction(e: KeyLike): Action | null {
   const shift = e.shiftKey === true
@@ -146,18 +233,53 @@ export function keyToAction(e: KeyLike): Action | null {
 
   switch (e.key) {
     case 'Tab': return { kind: 'tab', back: shift }
-    case 'Enter': return { kind: 'enter', back: shift }
+    // ⌘↵ FILLS rather than moving. It used to fall through to a plain Enter,
+    // which made the one key a spreadsheet user presses to push a value through
+    // a selected block a second, indistinguishable way of moving down one cell.
+    case 'Enter': return cmd ? { kind: 'fill' } : { kind: 'enter', back: shift }
     case 'Home': return { kind: 'home', whole: cmd, extend: shift }
     case 'End': return { kind: 'end', whole: cmd, extend: shift }
-    case 'PageUp': return { kind: 'move', dr: -1, dc: 0, unit: 'page', extend: shift }
-    case 'PageDown': return { kind: 'move', dr: 1, dc: 0, unit: 'page', extend: shift }
+    case 'PageUp': return cmd
+      ? { kind: 'sheetStep', dir: -1 }
+      : { kind: 'move', dr: -1, dc: 0, unit: 'page', extend: shift }
+    case 'PageDown': return cmd
+      ? { kind: 'sheetStep', dir: 1 }
+      : { kind: 'move', dr: 1, dc: 0, unit: 'page', extend: shift }
     case 'Escape': return { kind: 'cancel' }
     // Mac keyboards send Backspace where a PC sends Delete, and both mean
     // "empty these cells" in a grid.
     case 'Delete': case 'Backspace': return { kind: 'clear' }
     case 'F2': return { kind: 'edit' }
-    // A bare space types a space; only the modified forms select.
-    case ' ': return shift ? { kind: 'selectRow' } : cmd ? { kind: 'selectCol' } : null
+    // A bare space types a space; only the modified forms select. ⌘⇧Space is
+    // the whole sheet — Excel and Sheets both widen the selection one step at a
+    // time (cell → column → sheet) and a user who has learned that reaches for
+    // it before they reach for ⌘A.
+    case ' ': return cmd && shift ? { kind: 'selectAll' }
+      : shift ? { kind: 'selectRow' }
+        : cmd ? { kind: 'selectCol' } : null
+    /**
+     * '?' opens the shortcut card — and this entry alone opens nothing.
+     *
+     * '?' is PRINTABLE, and main.ts hands printable keys to `grid.typeInto`
+     * before it ever consults this map, so help.ts claims the keystroke in the
+     * CAPTURE phase exactly as panels.ts claims '[' and ']'. What this entry
+     * buys is that the card can describe the key that opens it without anybody
+     * typing the row by hand. The cost is one character that can no longer
+     * START a cell entry: F2 first (or double-click), then type it.
+     *
+     * ⌘? is deliberately NOT help. It is ⌘⇧/ on a US layout, and claiming a
+     * modified key we do not implement is how a shortcut becomes a dead key.
+     */
+    case '?': return cmd ? null : { kind: 'help' }
+    /**
+     * '[' and ']' are IMPLEMENTED IN panels.ts, in the capture phase. They are
+     * declared here so the keyboard has ONE description and the card stays
+     * generated; nothing reads this entry to toggle a panel. ⌘[ is not a panel
+     * toggle for the same reason ⌘? is not help — panels.ts ignores modified
+     * forms, so the map must too or the card advertises a key that does nothing.
+     */
+    case '[': return cmd ? null : { kind: 'panel', side: 'left' }
+    case ']': return cmd ? null : { kind: 'panel', side: 'right' }
   }
 
   if (!cmd) return null
@@ -168,11 +290,167 @@ export function keyToAction(e: KeyLike): Action | null {
     case 'a': return { kind: 'selectAll' }
     case 'c': return { kind: 'copy' }
     case 'x': return { kind: 'cut' }
-    case 'v': return { kind: 'paste' }
+    // ⇧ is the paste-special menu, and so is holding ⌘ AND ctrl together —
+    // Excel's own ⌘⌃V. The map folds ⌘ and ctrl into one `cmd` everywhere
+    // else because no binding has ever needed them apart; this one does, so it
+    // asks for both explicitly rather than changing the fold for everybody.
+    case 'v': return shift || (e.metaKey === true && e.ctrlKey === true)
+      ? { kind: 'pasteSpecial' } : { kind: 'paste' }
     case 'z': return shift ? { kind: 'redo' } : { kind: 'undo' }
     case 'y': return { kind: 'redo' }
+    // ⌘D is the fill people actually press — ⌘↵ is Excel's, ⌘D is Sheets' and
+    // Excel's both. Unclaimed it is the browser's bookmark dialog, which is
+    // what a spreadsheet user gets today for reaching for fill-down.
+    case 'd': return shift ? { kind: 'textToColumns' } : { kind: 'fill' }
+    // ⌘F and ⌘G are the two keys every application on the platform already
+    // means by "find" and "find again", and both are the browser's by default
+    // — which is precisely the problem, because the browser can only see the
+    // rows the virtualiser left in the DOM. Shift is deliberately ignored on
+    // 'f' (⇧⌘F is the same verb) and load-bearing on 'g'.
+    // ⌘B / ⌘I / ⌘U. The browser's own defaults here (bookmarks bar, view
+    // source on some builds) are the reason a grid must claim them explicitly;
+    // every spreadsheet on the platform already means bold/italic/underline.
+    case 'b': return { kind: 'style', field: 'bold' }
+    case 'i': return { kind: 'style', field: 'italic' }
+    case 'u': return { kind: 'style', field: 'underline' }
+    case 'f': return { kind: 'find' }
+    case 'g': return { kind: 'findNext', back: shift }
+    case 's': return { kind: 'save' }
+    // Sheets' shortcut-card key, and the one that does not cost a printable
+    // character. '?' above is the same verb for people who learned it in slides.
+    case '/': return { kind: 'help' }
   }
   return null
+}
+
+// --- Describing the map ------------------------------------------------------
+//
+// THE SHORTCUT CARD IS GENERATED FROM keyToAction, never written beside it.
+//
+// A hand-kept list of keys drifts inside one release and then teaches people
+// bindings that no longer exist — worse than no list, because a wrong list is
+// believed. So the card asks the map: probe it across the whole key space and
+// report what it answers. Add a case to the switch above and the row appears
+// with no other edit; delete one and the row disappears.
+//
+// The probe is EXHAUSTIVE rather than a curated list of keys to ask about,
+// because a curated list is the same maintenance burden with an extra step in
+// front of it. It is a few hundred pure function calls, run when the card
+// opens.
+//
+// What is NOT derivable, and must not be faked here: gestures that never reach
+// this map at all (a bare printable key opens the editor; double-click; the
+// fill handle). help.ts writes those as prose, clearly labelled as prose.
+
+/** One key combination, in the shape a shortcut card wants to draw. */
+export interface KeyChord {
+  key: string
+  /** 'either' = ⌘ or ctrl, which is the usual case — the map folds them. */
+  mod: 'none' | 'either' | 'meta' | 'ctrl'
+  shift: boolean
+  alt: boolean
+}
+
+/** Every key that produces one action, and the action itself. */
+export interface BindingRow {
+  /** the action's identity with direction left out: 'move.edge.extend', 'copy' */
+  sig: string
+  action: Action
+  chords: KeyChord[]
+}
+
+/**
+ * What an action IS, with the parts a key already expresses left out.
+ *
+ * ↑ and ↓ are ONE binding ("move one cell") because the arrow says which way,
+ * so dr/dc are not in the signature. ↓ and ⌘↓ are TWO, so `unit` is. Getting
+ * this wrong in either direction produces a card with four rows saying the same
+ * thing, or one row hiding a shortcut.
+ */
+export function actionSig(a: Action): string {
+  switch (a.kind) {
+    case 'move': return `move.${a.unit}${a.extend ? '.extend' : ''}`
+    case 'tab': case 'enter': case 'findNext': return `${a.kind}${a.back ? '.back' : ''}`
+    case 'home': case 'end':
+      return `${a.kind}${a.whole ? '.whole' : ''}${a.extend ? '.extend' : ''}`
+    case 'panel': return `panel.${a.side}`
+    // Three keys, three rows: the field IS the difference, so leaving it out
+    // would collapse bold, italic and underline into one line reading "⌘B".
+    case 'style': return `style.${a.field}`
+    default: return a.kind
+  }
+}
+
+const FN_KEYS = Array.from({ length: 12 }, (_, i) => `F${i + 1}`)
+const NAMED_KEYS = [
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'Tab', 'Enter', 'Escape', 'Home', 'End', 'PageUp', 'PageDown',
+  'Delete', 'Backspace', 'Insert', ...FN_KEYS,
+]
+// Printable ASCII, minus A–Z: the map folds case, so probing 'z' covers 'Z',
+// and probing both would report every letter shortcut twice.
+const PRINTABLE_KEYS = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i))
+  .filter((c) => !(c >= 'A' && c <= 'Z'))
+const PROBE_KEYS = [...NAMED_KEYS, ...PRINTABLE_KEYS]
+
+/**
+ * Every binding the map holds, grouped by what it does.
+ *
+ * `map` is a parameter so the rig can prove this is DERIVED: hand it a mapper
+ * with an extra binding and the extra binding must appear in the output. A
+ * hardcoded table passes every other test and fails that one.
+ */
+export function describeBindings(map: (e: KeyLike) => Action | null = keyToAction): BindingRow[] {
+  interface Found { key: string; mod: 'meta' | 'ctrl' | 'none'; shift: boolean; alt: boolean; action: Action }
+  const found: Found[] = []
+
+  for (const key of PROBE_KEYS) {
+    for (const mod of ['none', 'meta', 'ctrl'] as const) {
+      const ask = (shift: boolean, alt: boolean): Action | null =>
+        map({ key, shiftKey: shift, altKey: alt, metaKey: mod === 'meta', ctrlKey: mod === 'ctrl' })
+      const bare = (shift: boolean, alt: boolean): Action | null =>
+        map({ key, shiftKey: shift, altKey: alt })
+      const sameAs = (a: Action, other: Action | null): boolean =>
+        other !== null && actionSig(other) === actionSig(a)
+      for (const alt of [false, true]) {
+        for (const shift of [false, true]) {
+          const action = ask(shift, alt)
+          if (!action) continue
+          // A MODIFIER THAT DOES NOT CHANGE THE ANSWER IS NOT PART OF THE
+          // BINDING. ⇧Delete still clears and so does ⌘Delete; printing all
+          // three as though they were three shortcuts is noise the reader has
+          // to rule out one row at a time — and it is how a card ends up
+          // teaching ⌘Esc.
+          if (shift && sameAs(action, ask(false, alt))) continue
+          if (alt && sameAs(action, ask(shift, false))) continue
+          if (mod !== 'none' && sameAs(action, bare(shift, alt))) continue
+          found.push({ key, mod, shift, alt, action })
+        }
+      }
+    }
+  }
+
+  // ⌘ and ctrl are one binding wherever the map folds them (it does, today,
+  // everywhere) — but they are probed separately so that the day one of them
+  // means something different, the card says so instead of picking a winner.
+  const twin = (c: Found, want: 'meta' | 'ctrl'): Found | undefined => found.find((o) =>
+    o.mod === want && o.key === c.key && o.shift === c.shift && o.alt === c.alt &&
+    actionSig(o.action) === actionSig(c.action))
+
+  const rows: BindingRow[] = []
+  const bySig = new Map<string, BindingRow>()
+  const put = (action: Action, chord: KeyChord): void => {
+    const sig = actionSig(action)
+    let row = bySig.get(sig)
+    if (!row) { row = { sig, action, chords: [] }; bySig.set(sig, row); rows.push(row) }
+    row.chords.push(chord)
+  }
+  for (const c of found) {
+    if (c.mod === 'ctrl' && twin(c, 'meta')) continue          // emitted as 'either'
+    const mod = c.mod === 'meta' ? (twin(c, 'ctrl') ? 'either' : 'meta') : c.mod
+    put(c.action, { key: c.key, mod, shift: c.shift, alt: c.alt })
+  }
+  return rows
 }
 
 // --- Selection -------------------------------------------------------------
@@ -604,6 +882,64 @@ export function parseTsv(text: string): string[][] {
 // `target` is the TOTAL length of the result, seeds included — a drag covers
 // rows 5..20, so the caller asks for 16 and gets 16, with no off-by-one
 // arithmetic at the call site. Asking for fewer than there are seeds truncates.
+
+/**
+ * A cell as a FILL reads it: the formula it holds, or the value it stores.
+ *
+ * NEVER the computed value of a formula, and that distinction is the whole
+ * reason this type exists. A fill that seeds from what a cell SHOWS turns a
+ * formula into the constant it happened to evaluate to — and, when the
+ * evaluation failed, writes the ERROR OBJECT into the column as if somebody had
+ * typed it. Both are silent data loss: the file afterwards holds no record that
+ * there was ever a formula, or a number, there.
+ */
+export interface FillCell {
+  /** the stored value, when the cell has no formula */
+  v?: unknown
+  /** the formula SOURCE (`=B1*2`), when it has one */
+  f?: string
+  /**
+   * Which seed this output came from, for a formula. The caller translates the
+   * references by however far the cell moved, and only it knows the distance —
+   * a dataset reads through a sort order, so the visible gap is not the gap the
+   * addresses moved by.
+   */
+  src?: number
+}
+
+/**
+ * The two fill GESTURES, which are not one operation:
+ *
+ *   'copy'   — ⌘D. The top row of the selection is laid over the rest, exactly
+ *              as it stands. Excel's Fill Down, and the reason ⌘D on a column
+ *              of numbers does not invent a count.
+ *   'series' — the fill HANDLE. The selected block IS the seed and the drag
+ *              extends it, so two seeds mean a step and the fill continues.
+ *
+ * Sharing one implementation is what made ⌘D over a two-row selection read TWO
+ * seeds and alternate them down the column, overwriting every other row with
+ * its neighbour's value.
+ */
+export type FillMode = 'copy' | 'series'
+
+/**
+ * Fill `target` cells from `seeds`.
+ *
+ * A FORMULA IS COPIED, NEVER CONTINUED. Excel does not read a series out of
+ * expressions and neither does this: when any seed holds a formula the seeds
+ * repeat in order, each output remembering (`src`) which seed it came from so
+ * the caller can translate its references. Values fill by the mode's rule.
+ */
+export function fillCells(seeds: FillCell[], target: number, mode: FillMode): FillCell[] {
+  if (target <= 0 || !seeds.length) return []
+  if (mode === 'copy' || seeds.some((s) => s.f !== undefined)) {
+    return Array.from({ length: target }, (_, i) => {
+      const k = i % seeds.length
+      return seeds[k].f !== undefined ? { f: seeds[k].f, src: k } : { v: seeds[k].v }
+    })
+  }
+  return fillSeries(seeds.map((s) => s.v), target).map((v) => ({ v }))
+}
 
 /** Repeat the seeds until the target is covered. The fill handle's plain drag. */
 export function fillDown(values: unknown[], target: number): unknown[] {

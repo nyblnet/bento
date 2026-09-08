@@ -1,0 +1,67 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (c) 2026 The Bento authors */
+
+/* Author identity + comment edit/delete — the feature-local styles for
+   comments.ts (thread edit/delete controls) and about.ts (the "You" name
+   field). Kept out of styles.css because that file is owned by other work
+   happening on this app in parallel; this file is imported directly from
+   comments.ts, and vite folds it into the single shipped <style> tag same as
+   every other app stylesheet. */
+
+/* ---- "You" name field, About dialog ------------------------------------ */
+
+.t-about-name-input {
+  width: 100%;
+  max-width: 220px;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--field, var(--chrome));
+  color: var(--ink);
+}
+.t-about-name-input:focus { border-color: var(--blue, var(--accent)); outline: none; }
+
+/* ---- per-message edit/delete -------------------------------------------
+   Small ghost buttons beside a message's byline, shown only on a message
+   whose author matches the name currently in localStorage — see
+   comments.ts buildMessage() for why that is an honour-system check, not
+   access control. */
+
+.t-cmt-msgtools {
+  float: inline-end;
+  display: inline-flex;
+  gap: 4px;
+  margin-inline-start: 6px;
+}
+.t-cmt-msgbtn {
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.t-cmt-msgbtn:hover { background: var(--chrome-2); color: var(--ink); border-color: var(--line); }
+
+/* In-place edit box — sized and styled to match the reply textarea
+   (.acts textarea in styles.css) so a message being edited doesn't look
+   like a different control from the one you'd reply with. */
+.t-cmt-edit {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+  margin-top: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field, var(--chrome));
+  color: var(--ink);
+  resize: vertical;
+}

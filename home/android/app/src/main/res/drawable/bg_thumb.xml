@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What a row shows before its thumbnail has rendered, and for documents that
+     carry no preview at all — an encrypted one never will. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/placeholder" />
+    <corners android:radius="@dimen/radius_small" />
+</shape>

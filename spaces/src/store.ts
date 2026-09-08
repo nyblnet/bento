@@ -16,7 +16,7 @@ type Scope = 'doc' | 'page'
 import { type SpacesDoc, type Page, type Block, buildIndex, type SpaceIndex, homePage } from './model'
 
 type Listener = () => void
-type Event = 'doc' | 'page' | 'tree' | 'selection'
+type Event = 'doc' | 'page' | 'tree' | 'selection' | 'dirty'
 
 /** Idle that closes a run. Autosave debounces longer, so no snapshot lands mid-run. */
 const RUN_IDLE_MS = 600
@@ -189,7 +189,35 @@ export class Store {
     if (wasClean) this.emit('doc')
   }
 
-  private reindex(): void {
+  /**
+   * Set the unsaved flag from outside a commit.
+   *
+   * The kernel session calls this after applying a REMOTE change: the document
+   * on screen now differs from the file on disk, which is true however the
+   * change arrived. It is deliberately separate from the `doc` event — this
+   * app reads `doc` as "you edited something" and paints "Edited" from it, so
+   * a colleague's keystroke must move the dot without claiming to be yours.
+   */
+  setDirty(v: boolean): void {
+    if (this.dirty === v) return
+    this.dirty = v
+    // NOT 'doc'. The editor reads 'doc' as "you edited something" and paints
+    // "Edited" from it; a colleague's keystroke must move the unsaved dot
+    // without claiming to be yours. 'dirty' carries the dot and nothing else.
+    this.emit('dirty')
+  }
+
+  /**
+   * Rebuild the id index, and fall back to the home page if the page being
+   * viewed no longer exists.
+   *
+   * PUBLIC because a remote collaborator's edit lands on `doc` directly —
+   * bypassing commit, deliberately, so it never joins this person's undo
+   * stack — and every `block(id)` / `page` read after that would otherwise
+   * answer from a stale index. sync/session.ts calls it. It was private while
+   * the only writer was the store itself.
+   */
+  reindex(): void {
     this.index = buildIndex(this.doc)
     if (!this.index.page.has(this.pageId)) this.pageId = homePage(this.doc)?.id ?? ''
   }

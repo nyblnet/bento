@@ -7,13 +7,25 @@
 // the work: identical bytes are stored once, and a photo off a phone is
 // downscaled before it travels, visibly and reversibly.
 
-import type { SpacesDoc } from './model'
+import { pageAssetKeys, type SpacesDoc } from './model.ts'
 
 /** Longest edge kept when downscaling. Above this, detail is invisible in a
  *  text column and costs megabytes. */
 export const MAX_EDGE = 1600
 /** Above this, ask before embedding rather than silently making a 30MB file. */
 export const IMAGE_EMBED_BUDGET = 4 * 1024 * 1024
+/**
+ * The same question for a video or an audio clip, at twice the threshold.
+ *
+ * Higher than the image budget ON PURPOSE, and the reason is that nothing here
+ * can be made smaller. A photo off a phone is downscaled before it travels
+ * (prepareImage), so 4MB is a number an author almost never meets; a clip is
+ * embedded byte for byte, because re-encoding video in a browser tab means
+ * shipping an encoder and taking minutes over it. So the budget is the point
+ * at which the question is worth asking rather than a size we can rescue, and
+ * it matches slides' MEDIA_EMBED_BUDGET so the two apps ask at the same place.
+ */
+export const MEDIA_EMBED_BUDGET = 8 * 1024 * 1024
 /** Where a space stops being comfortable to mail. Warn, never block. */
 export const SPACE_WEIGHT_WARN = 25 * 1024 * 1024
 
@@ -76,6 +88,9 @@ export async function internAsset(doc: SpacesDoc, dataUri: string): Promise<stri
 export function orphanAssets(doc: SpacesDoc): string[] {
   const used = new Set<string>()
   for (const p of doc.pages) {
+    // a page's COVER is a reference outside its blocks, and the only one. Miss
+    // it and every cover reads as an orphan the readout offers to delete.
+    for (const k of pageAssetKeys(p)) used.add(k)
     for (const b of p.blocks) {
       for (const v of [b.src, (b as Record<string, unknown>).poster]) {
         if (typeof v === 'string' && v.startsWith('asset:')) used.add(v.slice(6))

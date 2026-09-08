@@ -1,0 +1,488 @@
+{
+  "appDesc": {
+    "message": "যে ফাইলটি খুলেছেন সেখানেই Bento নথি ফিরিয়ে সংরক্ষণ করুন, গন্তব্য জিজ্ঞাসা ছাড়াই।"
+  },
+  "navAll": {
+    "message": "সব নথি"
+  },
+  "navFolders": {
+    "message": "ফোল্ডার"
+  },
+  "navHelp": {
+    "message": "সহায়তা ও পরিচিতি"
+  },
+  "navSettings": {
+    "message": "সেটিংস"
+  },
+  "addFolder": {
+    "message": "+ ফোল্ডার যোগ করুন…"
+  },
+  "searchDocs": {
+    "message": "নথি খুঁজুন"
+  },
+  "searchDocsSlash": {
+    "message": "নথি খুঁজুন   /"
+  },
+  "sortTitle": {
+    "message": "সাজান"
+  },
+  "sortRecent": {
+    "message": "সম্প্রতি পরিবর্তিত"
+  },
+  "sortName": {
+    "message": "নাম"
+  },
+  "sortFolder": {
+    "message": "ফোল্ডার"
+  },
+  "newDocument": {
+    "message": "+ নতুন নথি"
+  },
+  "browseAll": {
+    "message": "সব দেখুন"
+  },
+  "reconnectFolders": {
+    "message": "ফোল্ডার আবার যুক্ত করুন"
+  },
+  "primeIntro": {
+    "message": "Chrome এখনই জিজ্ঞাসা করবে। মাঝের বিকল্পটি বেছে নিন:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — একটি ফোল্ডার আবার যুক্ত করা দরকার"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home আবার যুক্ত করা দরকার"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome একটি ফোল্ডারের অনুমতি প্রত্যাহার করেছে। সেটি ফিরে না আসা পর্যন্ত প্রতিবার সংরক্ষণে জিজ্ঞাসা করা হবে ফাইলটি কোথায় রাখবেন।"
+  },
+  "reconnect": {
+    "message": "আবার যুক্ত করুন"
+  },
+  "ctxOpenPanel": {
+    "message": "bento/home প্যানেল খুলুন"
+  },
+  "panelEmpty": {
+    "message": "আপনার ফোল্ডারে এখনও কোনো Bento নথি নেই।"
+  },
+  "noMatches": {
+    "message": "“$1”-এর সঙ্গে কিছুই মেলেনি"
+  },
+  "rowUnplacedTip": {
+    "message": "$1-এর যেকোনো একটি নথি Finder থেকে একবার খুলুন, তাহলে ওই ফোল্ডারের সবকিছু এখান থেকেই খোলা যাবে।"
+  },
+  "encrypted": {
+    "message": "পাসওয়ার্ড-সুরক্ষিত"
+  },
+  "notSavedYet": {
+    "message": "এখনও সংরক্ষিত হয়নি"
+  },
+  "fileAccessOffShort": {
+    "message": "স্থানীয় ফাইল অ্যাক্সেস বন্ধ"
+  },
+  "noFoldersYet": {
+    "message": "এখনও কোনো ফোল্ডার নেই"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1টি ফোল্ডার আবার যুক্ত করা দরকার"
+  },
+  "statusOneFolder": {
+    "message": "$1টি ফোল্ডার · জায়গাতেই সংরক্ষণ করে"
+  },
+  "statusFolders": {
+    "message": "$1টি ফোল্ডার · জায়গাতেই সংরক্ষণ করে"
+  },
+  "renewNotOffered": {
+    "message": "Chrome সেটি ফিরিয়ে দেওয়ার প্রস্তাব দেয়নি"
+  },
+  "renewTryAfterRestart": {
+    "message": "Chrome আবার চালু করে ফের চেষ্টা করুন"
+  },
+  "fetchingLatest": {
+    "message": "সর্বশেষ Bento আনা হচ্ছে…"
+  },
+  "created": {
+    "message": "$1 তৈরি হয়েছে"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 পড়া গেলেও এখনও খোলা যাচ্ছে না — ফোল্ডারটি ডিস্কের কোথায় আছে Chrome তা কোনো এক্সটেনশনকে জানায় না। <b>সব দেখুন</b> এক ক্লিকেই সেগুলো খুঁজে দেয়।"
+  },
+  "andMore": {
+    "message": " এবং আরও $1টি"
+  },
+  "agoJustNow": {
+    "message": "এইমাত্র"
+  },
+  "agoMinutes": {
+    "message": "$1 মিনিট আগে"
+  },
+  "agoHour": {
+    "message": "$1 ঘণ্টা আগে"
+  },
+  "agoHours": {
+    "message": "$1 ঘণ্টা আগে"
+  },
+  "agoDay": {
+    "message": "$1 দিন আগে"
+  },
+  "agoDays": {
+    "message": "$1 দিন আগে"
+  },
+  "searchScope": {
+    "message": "খোঁজ শিরোনাম, ফাইলের নাম, ফোল্ডার এবং নথির ভেতরের শব্দ — সবই দেখে।"
+  },
+  "folderEmpty": {
+    "message": "এই ফোল্ডারে এখনও কিছু নেই"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ নতুন নথি</b> এখানে একটি নতুন নথি রাখে।"
+  },
+  "cardUnplacedTip": {
+    "message": "$1 ডিস্কের কোথায় আছে bento/home এখনও জানে না। “আমার ফোল্ডার খুঁজুন” ব্যবহার করুন, কিংবা এর ভেতরের কোনো নথি Finder থেকে একবার খুলুন।"
+  },
+  "cardRenamedTip": {
+    "message": "$1 হলো অন্য নামে থাকা একটি Bento নথি। এটি এখান থেকে খোলে, তবে সংরক্ষণের সময় গন্তব্য জিজ্ঞাসা করা হবে — জায়গাতেই সংরক্ষণ কেবল .bento.html দিয়ে শেষ হওয়া ফাইল চেনে।"
+  },
+  "badgeRenamed": {
+    "message": ".bento.html-এর বদলে .html নাম — এখান থেকে খোলে, তবে সংরক্ষণের সময় গন্তব্য জিজ্ঞাসা করা হবে।"
+  },
+  "menuOpen": {
+    "message": "খুলুন"
+  },
+  "menuDuplicate": {
+    "message": "অনুলিপি করুন"
+  },
+  "menuRename": {
+    "message": "নাম বদলান…"
+  },
+  "menuCopyPath": {
+    "message": "পাথ কপি করুন"
+  },
+  "duplicatedAs": {
+    "message": "$1 নামে অনুলিপি হয়েছে"
+  },
+  "renamePrompt": {
+    "message": "নথির নাম বদলান"
+  },
+  "renamedTo": {
+    "message": "নাম বদলে $1 করা হয়েছে"
+  },
+  "pathCopied": {
+    "message": "পাথ কপি হয়েছে"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — এখনও খোলা হয়নি"
+  },
+  "setupTitle": {
+    "message": "দুটি কাজ, তারপরেই তৈরি"
+  },
+  "setupLead": {
+    "message": "এরপর ডাবল-ক্লিক করে খোলা নথিতে ⌘S সরাসরি সেই ফাইলেই লেখে — গন্তব্য আর কখনও জিজ্ঞাসা করা হবে না।"
+  },
+  "chooseFolder": {
+    "message": "ফোল্ডার বাছুন…"
+  },
+  "setupStep1": {
+    "message": "আপনার নথি যে ফোল্ডারে থাকে সেটি বাছুন"
+  },
+  "setupStep1Note": {
+    "message": "সাধারণত একটি বড় ফোল্ডারই যথেষ্ট — এর ভেতরের সবকিছু এতে ধরা পড়ে।"
+  },
+  "setupStep2": {
+    "message": "স্থানীয় ফাইল অ্যাক্সেস চালু করুন"
+  },
+  "setupStep2Note": {
+    "message": "<code>chrome://extensions</code> → bento/home → <b>ফাইল URL-এ অ্যাক্সেসের অনুমতি দিন</b>। Chrome কোনো এক্সটেনশনকে এটি নিজে চালু করতে দেয় না।"
+  },
+  "setupUpgradeNote": {
+    "message": "<b>আপগ্রেড করেছেন আর ভেবেছিলেন ফোল্ডারগুলো এখানেই থাকবে?</b> আনপ্যাকড এক্সটেনশন চেনা যায় তার ফোল্ডার পাথ দিয়ে, তাই অন্য ফোল্ডার থেকে লোড করা নতুন অনুলিপি আলাদা একটি এক্সটেনশন। আপনার ফোল্ডারগুলো এখনও পুরোনোটিরই। বরং মূল ফোল্ডারের ফাইলগুলো বদলে <code>chrome://extensions</code>-এ <b>পুনরায় লোড করুন</b> চাপুন।"
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>স্থানীয় ফাইল অ্যাক্সেস বন্ধ</b> — চালু না হওয়া পর্যন্ত কিছুই জায়গাতে সংরক্ষিত হবে না। <code>chrome://extensions</code>-এ <b>ফাইল URL-এ অ্যাক্সেসের অনুমতি দিন</b> চালু করুন।"
+  },
+  "noticeLapsed": {
+    "message": "<b>$1টি ফোল্ডার আবার যুক্ত করা দরকার।</b> <b>সেটিংস</b>-এ গিয়ে আবার যুক্ত করুন এবং <b>প্রতিবার অনুমতি দিন</b> বাছুন — একমাত্র এই বিকল্পটিই টেকে।"
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> তালিকায় দেখানো গেলেও এখনও খোলা যাচ্ছে না — ফোল্ডারটি ডিস্কের কোথায় আছে Chrome তা কোনো এক্সটেনশনকে কখনও জানায় না।"
+  },
+  "findFolders": {
+    "message": "আমার ফোল্ডার খুঁজুন"
+  },
+  "looking": {
+    "message": "খোঁজা হচ্ছে…"
+  },
+  "findDeclined": {
+    "message": "<b>কোনো অসুবিধা নেই।</b> বরং $1-এর একটি নথি Finder থেকে একবার খুলুন — এই পাতাটি টের পাবে।"
+  },
+  "foundFolder": {
+    "message": "$1টি ফোল্ডার পাওয়া গেছে"
+  },
+  "foundFolders": {
+    "message": "$1টি ফোল্ডার পাওয়া গেছে"
+  },
+  "foundNothing": {
+    "message": "ইতিহাসে এখনও কিছু নেই — Finder থেকে একটি নথি খুলুন"
+  },
+  "setFoldersSub": {
+    "message": "এগুলোর ভেতরের নথি গন্তব্য জিজ্ঞাসা ছাড়াই সরাসরি ফাইলেই সংরক্ষিত হয়। একটি ফোল্ডার তার ভেতরের সবকিছু ধরে।"
+  },
+  "noneYet": {
+    "message": "এখনও কিছু নেই।"
+  },
+  "savesInPlace": {
+    "message": "জায়গাতেই সংরক্ষণ করে"
+  },
+  "needsReconnecting": {
+    "message": "আবার যুক্ত করা দরকার"
+  },
+  "reconnectTip": {
+    "message": "Chrome এই ফোল্ডারটি ফিরিয়ে দেওয়ার অনুমতি চাইবে। “অনুমতি দেবেন না” সেটি ছেড়ে দেয়, আর তারপর Chrome আবার জিজ্ঞাসা করার আগে অন্তত একবার পুনরায় চালুর অপেক্ষা করে।"
+  },
+  "remove": {
+    "message": "সরান"
+  },
+  "removeTip": {
+    "message": "অ্যাক্সেস প্রত্যাহার করে। Chrome অনুমতিটি মনে রাখতে পারে, তাই ফোল্ডারটি আবার যোগ করলে হয়তো কিছুই জিজ্ঞাসা করা হবে না।"
+  },
+  "setAccessTitle": {
+    "message": "স্থানীয় ফাইল অ্যাক্সেস"
+  },
+  "setAccessSub": {
+    "message": "Chrome কোনো এক্সটেনশনকে এটি নিজে চালু করতে দেয় না, আর এটি ছাড়া কিছুই কাজ করে না।"
+  },
+  "stateOn": {
+    "message": "চালু"
+  },
+  "stateOff": {
+    "message": "বন্ধ"
+  },
+  "stateUnknown": {
+    "message": "অজানা"
+  },
+  "accessOnNote": {
+    "message": "bento/home ডিস্ক থেকে খোলা পাতাগুলো পড়তে পারে।"
+  },
+  "accessOffNote": {
+    "message": "chrome://extensions খুলুন, bento/home খুঁজুন, “ফাইল URL-এ অ্যাক্সেসের অনুমতি দিন” চালু করুন।"
+  },
+  "accessUnknownNote": {
+    "message": "এই ব্রাউজার তা জানায় না। সংরক্ষণে এখনও জিজ্ঞাসা করা হলে chrome://extensions-এ দেখে নিন।"
+  },
+  "setVersionTitle": {
+    "message": "সংস্করণ"
+  },
+  "setVersionUnpacked": {
+    "message": "এই অনুলিপিটি আনপ্যাকড অবস্থায় লোড করা হয়েছিল, তাই Chrome একে কখনও আপডেট করবে না।"
+  },
+  "setVersionStore": {
+    "message": "স্টোর থেকে ইনস্টল করা, তাই এটি নিজেই আপডেট হয়।"
+  },
+  "versionAvailable": {
+    "message": "$1 পাওয়া যাচ্ছে"
+  },
+  "versionUpToDate": {
+    "message": "শেষ পরীক্ষার হিসেবে হালনাগাদ"
+  },
+  "versionManaged": {
+    "message": "ব্রাউজারই হালনাগাদ রাখে"
+  },
+  "getIt": {
+    "message": "নিন"
+  },
+  "checkNow": {
+    "message": "এখনই দেখুন"
+  },
+  "autoCheckPref": {
+    "message": "<b>ব্রাউজার চালু হলে নতুন সংস্করণ আছে কিনা দেখুন।</b><br>একটি স্থির ফাইলের জন্য bento.page-এ একটিমাত্র অনুরোধ। এটি কোনো শনাক্তকারী, সংস্করণ নম্বর বা আপনার নথি সম্পর্কে কিছুই পাঠায় না — তুলনাটি এখানেই হয়। বন্ধ করে দিলে কখনও কোনো অনুরোধ যাবে না; <b>এখনই দেখুন</b> তবু কাজ করবে।"
+  },
+  "expectedSha": {
+    "message": "zip-এর প্রত্যাশিত SHA-256: $1"
+  },
+  "setReachTitle": {
+    "message": "এটি কতদূর পৌঁছাতে পারে"
+  },
+  "setReachSub": {
+    "message": "কেবল উপরের ফোল্ডারগুলো, আর কেবল সেই ফাইল যেটি থেকে পাতাটি সত্যিই খোলা হয়েছিল। কিছুই আপলোড হয় না এবং অন্য কোথাও কিছুই পড়া হয় না।"
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 পাওয়া যাচ্ছে।</b> এই অনুলিপিটি আনপ্যাকড অবস্থায় লোড করা হয়েছিল, তাই Chrome একে কখনও আপডেট করবে না।"
+  },
+  "updateStep1": {
+    "message": "GitHub থেকে ডাউনলোড করুন"
+  },
+  "updateStep2": {
+    "message": "ফাইলগুলো <b>যে ফোল্ডার থেকে লোড করেছিলেন সেখানেই</b> বদলান — একই ফোল্ডার, নইলে Chrome একে আলাদা এক্সটেনশন ধরবে এবং অনুমতি পাওয়া ফোল্ডারগুলো সঙ্গে যাবে না"
+  },
+  "updateStep3": {
+    "message": "<code>chrome://extensions</code> খুলে bento/home-এ <b>পুনরায় লোড করুন</b> চাপুন"
+  },
+  "fetchingApp": {
+    "message": "$1 আনা হচ্ছে…"
+  },
+  "createdIn": {
+    "message": "$3-এ $1 ($2) তৈরি হয়েছে"
+  },
+  "intoFolder": {
+    "message": "$1-এ"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home কী করে"
+  },
+  "helpWhatSub": {
+    "message": "একটি Bento নথি হলো একটিমাত্র HTML ফাইল, যা নিজের সম্পাদক সঙ্গে নিয়ে চলে। সরাসরি ডিস্ক থেকে খুললে ব্রাউজার তাকে নিজের ভেতরে ফিরে লিখতে দেয় না — তাই প্রতিবার সংরক্ষণে জিজ্ঞাসা করা হয় কোথায় রাখবেন। bento/home সেই প্রশ্নটাই সরিয়ে দেয়।"
+  },
+  "tourSaveTitle": {
+    "message": "জায়গাতেই সংরক্ষণ"
+  },
+  "tourSaveBody": {
+    "message": "⌘S কোনো ডায়ালগ ছাড়াই সরাসরি সেই ফাইলে লেখে যেটি আপনি খুলেছিলেন। স্বয়ংক্রিয় সংরক্ষণ ও জায়গাতেই হওয়া আপডেটও একই পথে যায়।"
+  },
+  "tourFindTitle": {
+    "message": "আপনার নথি খুঁজুন"
+  },
+  "tourFindBody": {
+    "message": "আপনার ফোল্ডারের প্রতিটি Bento নথি, তার আসল শিরোনাম আর প্রথম পাতার ছবিসহ। খোঁজ নথির ভেতরে লেখা কথাও ছুঁয়ে যায়।"
+  },
+  "tourSwitchTitle": {
+    "message": "কাজ করতে করতে বদলান"
+  },
+  "tourSwitchBody": {
+    "message": "পাশে একটি প্যানেলের জন্য <kbd>Alt</kbd>+<kbd>B</kbd> চাপুন, কিংবা নথির ভেতরে ডান-ক্লিক করুন।"
+  },
+  "tourNewTitle": {
+    "message": "নতুন একটি বানান"
+  },
+  "tourNewBody": {
+    "message": "<b>+ নতুন নথি</b> Slides, Spaces বা Dash-এর বর্তমান রিলিজ এনে আপনার ফোল্ডারে একটি নতুন নথি রাখে।"
+  },
+  "helpNeedsTitle": {
+    "message": "আপনার কাছে এর যা দরকার"
+  },
+  "helpNeedsSub": {
+    "message": "দুটি জিনিস, দুটোই এই এক্সটেনশনের নিজে সামলানোর সাধ্যের বাইরে।"
+  },
+  "helpFolder": {
+    "message": "একটি ফোল্ডার"
+  },
+  "helpFolderGranted": {
+    "message": "$1টির অনুমতি আছে — এদের ভেতরের নথি জায়গাতেই সংরক্ষিত হয়"
+  },
+  "helpFolderNone": {
+    "message": "এখনও বাছা হয়নি। একটি বড় ফোল্ডার তার ভেতরের সবকিছু ধরে।"
+  },
+  "helpAccessOff": {
+    "message": "বন্ধ। <code>chrome://extensions</code>-এ <b>ফাইল URL-এ অ্যাক্সেসের অনুমতি দিন</b> চালু করুন — কোনো এক্সটেনশনই এটি নিজে চালু করতে পারে না।"
+  },
+  "helpAccessUnknown": {
+    "message": "এই ব্রাউজার তা জানায় না। সংরক্ষণে এখনও জিজ্ঞাসা করা হলে <code>chrome://extensions</code>-এ দেখে নিন।"
+  },
+  "helpAccessOn": {
+    "message": "চালু — bento/home ডিস্ক থেকে খোলা পাতাগুলো পড়তে পারে।"
+  },
+  "helpNeverTitle": {
+    "message": "এটি কখনও যা করে না"
+  },
+  "helpNeverSub": {
+    "message": "এটি কেবল উপরের ফোল্ডারগুলোর ভেতরে পড়ে ও লেখে, আর কেবল সেই ফাইলে যেটি থেকে পাতাটি সত্যিই খোলা হয়েছিল — কোনটি, তা ব্রাউজারই বলে দেয়, তাই কোনো নথি অন্য কারও ফাইলের নাম নিতে পারে না। আপনার নথি সম্পর্কে কিছুই কোথাও আপলোড হয় না, আর এক্সটেনশনটির আপলোড করার মতো কোনো সার্ভারই নেই।"
+  },
+  "helpAboutTitle": {
+    "message": "পরিচিতি"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Bento প্রকল্পের অংশ · MIT লাইসেন্সপ্রাপ্ত"
+  },
+  "linkSource": {
+    "message": "GitHub-এ সোর্স"
+  },
+  "linkIssues": {
+    "message": "সমস্যার কথা জানান"
+  },
+  "linkReleases": {
+    "message": "রিলিজ"
+  },
+  "primeMiddle": {
+    "message": "যেটি টিকে থাকে"
+  },
+  "primeNote": {
+    "message": "বাকি দুটোও কাজ করে, তবে Chrome আবার জিজ্ঞাসা করে — প্রথমটির ক্ষেত্রে প্রতিবার পুনরায় চালুতে, আর শেষেরটির ক্ষেত্রে কিছুক্ষণ অপেক্ষার পর।"
+  },
+  "viewLayout": {
+    "message": "নথি কীভাবে দেখানো হবে"
+  },
+  "viewIcons": {
+    "message": "আইকন"
+  },
+  "viewList": {
+    "message": "তালিকা"
+  },
+  "close": {
+    "message": "বন্ধ করুন"
+  },
+  "setLangTitle": {
+    "message": "ভাষা"
+  },
+  "setLangSub": {
+    "message": "এই এক্সটেনশন কোন ভাষায় কথা বলে। সাধারণত এটি ব্রাউজারকে অনুসরণ করে।"
+  },
+  "langAutomatic": {
+    "message": "স্বয়ংক্রিয় — ব্রাউজার অনুসরণ করুন"
+  },
+  "setLangNote": {
+    "message": "এক্সটেনশনের নিজের নাম ও বিবরণ ব্রাউজার থেকে আসে এবং বদলায় না।"
+  },
+  "aboutPromo": {
+    "message": "Bento-তে নতুন? টেমপ্লেট, গ্যালারি আর AI সম্পাদনার নির্দেশিকা পাবেন $1-এ — কিংবা $2-এ একটি স্টার দিন।"
+  },
+  "setThemeTitle": {
+    "message": "চেহারা"
+  },
+  "setThemeSub": {
+    "message": "ব্রাউজারের সেটিং হলো ডিফল্ট, বাধ্যতামূলক নয়।"
+  },
+  "themeAuto": {
+    "message": "ব্রাউজার অনুসারে"
+  },
+  "themeLight": {
+    "message": "উজ্জ্বল"
+  },
+  "themeDark": {
+    "message": "গাঢ়"
+  },
+  "checking": {
+    "message": "পরীক্ষা করা হচ্ছে…"
+  },
+  "surveyTitle": {
+    "message": "আপনার নথি কোথায় আছে খুঁজুন"
+  },
+  "surveySub": {
+    "message": "ব্রাউজার জানে আপনি কোন Bento নথি খুলেছেন। সেগুলো কোন ফোল্ডারে আছে তা বলতে পারে।"
+  },
+  "surveyDeclined": {
+    "message": "কোনো অসুবিধা নেই — আপনি নিজেই ফোল্ডার যোগ করতে পারেন।"
+  },
+  "surveyAllCovered": {
+    "message": "এই ব্রাউজারের দেখা $1টি নথিই ইতিমধ্যে আপনার যোগ করা ফোল্ডারে আছে।"
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b>টি নথি আপনার যোগ করা কোনো ফোল্ডারেই নেই। $2টি ইতিমধ্যে অন্তর্ভুক্ত।"
+  },
+  "surveyCovers": {
+    "message": "$1টি অন্তর্ভুক্ত"
+  },
+  "surveyAdd": {
+    "message": "এই ফোল্ডারটি যোগ করুন…"
+  },
+  "surveyAdded": {
+    "message": "$1 যোগ হয়েছে — এর ভেতরের নথি প্রস্তুত"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 যোগ হয়েছে, তবে নথিগুলো এতে নেই — Finder থেকে একবার একটি খুলুন।"
+  },
+  "surveyOnlySeen": {
+    "message": "এভাবে কেবল এই ব্রাউজারে খোলা নথিই পাওয়া যায়।"
+  }
+}

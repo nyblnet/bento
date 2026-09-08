@@ -78,8 +78,27 @@ type SlideElement = { id: string }
 export interface DocShape {
   /** doc-level key holding the PARENT array: 'slides' | 'pages' */
   readonly parents: string
-  /** parent-level key holding the CHILD array: 'elements' | 'blocks' */
-  readonly children: string
+  /**
+   * Parent-level key holding the CHILD array: 'elements' | 'blocks' — or
+   * `null` for a FLAT document, one level deep.
+   *
+   * bento/type is flat: a block IS the paragraph, so there is nothing beneath
+   * it. Rather than make such an app invent an empty child array on every
+   * node, the engine treats a childless shape as having no element layer at
+   * all — `C()` reads as empty and the differ therefore never mints an element
+   * op. See the guard in `applyEffect` for the receiving side.
+   */
+  readonly children: string | null
+  /**
+   * The property carrying collaboratively-edited TEXT, which gets the token
+   * RGA rather than a last-writer-wins register.
+   *
+   * Named rather than hard-coded because it is the one property whose merge
+   * behaviour decides whether two people can type in the same paragraph at
+   * once. It was `'html'` in both existing apps, so the default keeps every
+   * shipped file byte-identical; an app whose text lives elsewhere says so.
+   */
+  readonly text: string
   /**
    * Doc-level keys the differ never syncs.
    *
@@ -92,20 +111,47 @@ export interface DocShape {
    * an assertion instead.
    */
   readonly skipDoc: ReadonlySet<string>
+  /**
+   * Doc-level keys that are MAPS, merged per key rather than as one value.
+   *
+   * `assets` and `blobs` were hard-coded for this, with the right reason
+   * attached: two people adding different assets concurrently must both keep
+   * theirs. Any id-keyed map wants the same treatment, and an app has no way
+   * to ask for it while the names are baked in — bento/type's `footnotes` is
+   * one (note id → note text), and as a whole-value register it loses a note
+   * BODY while both references survive, leaving a marker pointing at nothing.
+   */
+  readonly maps: ReadonlySet<string>
 }
 
 /** Derived, never authored: the volatile set is the same for every app apart
  *  from the container name, so writing it out twice invites them to drift. */
-export const shape = (parents: string, children: string): DocShape => {
+export const shape = (
+  parents: string,
+  children: string | null,
+  text = 'html',
+  maps: readonly string[] = [],
+): DocShape => {
   const skipDoc = new Set([parents, 'modified', 'collab', 'format', 'version'])
-  return { parents, children, skipDoc }
+  // `assets` and `blobs` are per-key for every app and always have been —
+  // unioned rather than defaulted so an app naming its own map cannot drop them.
+  return { parents, children, text, skipDoc, maps: new Set(['assets', 'blobs', ...maps]) }
 }
 
 /** The parent array of a document, and the child array of a parent. Indexed
  *  access through the descriptor: `d['slides']` is the same lookup `d.slides`
  *  was, so these are byte-neutral by construction. */
 const P = (S: DocShape, d: BentoDoc): Slide[] => (d as unknown as Record<string, Slide[]>)[S.parents]
-const C = (S: DocShape, p: Slide): SlideElement[] => (p as unknown as Record<string, SlideElement[]>)[S.children]
+/**
+ * A parent's children — empty, and FROZEN, when the shape is flat.
+ *
+ * Frozen on purpose: every mutating call site is supposed to be unreachable
+ * without an element layer, and a throw says so at once. Silently swallowing a
+ * push is how a replica ends up quietly missing content.
+ */
+const NO_CHILDREN: SlideElement[] = Object.freeze([]) as unknown as SlideElement[]
+const C = (S: DocShape, p: Slide): SlideElement[] =>
+  S.children === null ? NO_CHILDREN : (p as unknown as Record<string, SlideElement[]>)[S.children]
 /**
  * …and the write-back form for the child array.
  *
@@ -114,7 +160,54 @@ const C = (S: DocShape, p: Slide): SlideElement[] => (p as unknown as Record<str
  * future edit that reassigns it would be replacing the array the caller's
  * document still points at.
  */
-const setC = (S: DocShape, p: Slide, v: SlideElement[]): void => { (p as unknown as Record<string, SlideElement[]>)[S.children] = v }
+const setC = (S: DocShape, p: Slide, v: SlideElement[]): void => {
+  if (S.children === null) return // a flat document has no child array to write
+  ;(p as unknown as Record<string, SlideElement[]>)[S.children] = v
+}
+
+/**
+ * Collaboration credentials, as they live in the file.
+ *
+ * PLATFORM-level, not app-level (§2): every Bento document carries `docId` and
+ * may carry `collab`, and the relay, the invite chain and the fork-merge all
+ * work purely in these terms. The shape is documented at length in
+ * bento/slides' model.ts, which is where it was written, and in
+ * docs/collab-design.md.
+ */
+export interface CollabCreds {
+  room: string
+  key: string
+  on?: boolean
+  sync?: SyncStateJSON
+  writerPub?: string
+  writerPriv?: string
+  role?: 'writer' | 'reader'
+  v?: number
+  owner?: string
+  ownerPriv?: string
+  invite?: { pub: string; priv: string; role: 'writer' | 'commenter'; exp?: number; sig: string }
+}
+
+/** A blob the document references but does not inline. */
+export interface BlobRef { key: string; mime: string; size: number }
+
+/**
+ * The document, as the SESSION needs to see it.
+ *
+ * crdt.ts keeps `SyncDoc` deliberately opaque (`object`) because the ENGINE
+ * genuinely does not care what is in a document — it is told the shape. The
+ * session is a different layer and does care about a few fields, but only the
+ * ones PLATFORM §2 guarantees EVERY Bento document has, so each app's own
+ * document type already satisfies it structurally — no conversion, and no
+ * index signature, which would have forced every app to declare one.
+ */
+export interface SyncDoc {
+  docId: string
+  collab?: CollabCreds
+  assets?: Record<string, string>
+  blobs?: Record<string, BlobRef>
+  modified?: string
+}
 
 export const DOC_NODE = '@doc'
 
@@ -256,7 +349,11 @@ export interface OrdOp extends OpBase {
 /** M3 — text RGA delta for one element's html. */
 export interface TxtOp extends OpBase {
   op: 'txt'
-  /** composite element key */
+  /**
+   * The node the text lives on: a composite element key, or a bare parent id
+   * for an app whose text sits on the parent (bento/type's blocks). The field
+   * keeps its name because it is on the wire in every shipped file.
+   */
   el: string
   /** seed reference: (l,a) of the RGA base this delta applies to */
   sd: Reg
@@ -378,6 +475,18 @@ export class SyncEngine {
   readonly S: DocShape
 
   constructor(actor: string, shape: DocShape) {
+    // A hand-built DocShape that omits `text` disables the token RGA SILENTLY:
+    // every property comparison against `undefined` fails, so collaborative
+    // text quietly degrades to last-writer-wins and two people typing in one
+    // paragraph destroy each other's work. Measured — a literal missing this
+    // field turned four passing checks red with no other symptom. Build shapes
+    // with `shape()`; if you must hand-build one, this says so immediately.
+    if (!shape.text) throw new Error('DocShape.text is required — build it with shape()')
+    // Same reasoning for `maps`, which arrived later: a literal without it
+    // does not degrade quietly, it throws deep inside the differ on the first
+    // doc-property diff. Failing here names the actual cause.
+    if (!shape.maps) throw new Error('DocShape.maps is required — build it with shape()')
+
     this.actor = actor
     this.S = shape
   }
@@ -496,7 +605,7 @@ export class SyncEngine {
       if (SKIP_DOC.has(k)) continue
       // `assets` and `blobs` are per-KEY registers, not whole-map ones, so two
       // people adding different assets concurrently both keep theirs.
-      if (k === 'assets' || k === 'blobs') {
+      if (this.S.maps.has(k)) {
         const ba = (b[k] ?? {}) as Record<string, unknown>
         const aa = (a[k] ?? {}) as Record<string, unknown>
         for (const ak of new Set([...Object.keys(ba), ...Object.keys(aa)])) {
@@ -571,8 +680,20 @@ export class SyncEngine {
       for (const k of new Set([...Object.keys(bp), ...Object.keys(ap)])) {
         if (k === this.S.children || k === 'id') continue
         if (JSON.stringify(bp[k]) === JSON.stringify(ap[k])) continue
+        // Text on a PARENT gets the same token RGA as text on a child. An app
+        // whose text lives one level up (bento/type: a block IS the paragraph)
+        // would otherwise get a last-writer-wins register here, and two people
+        // typing in one paragraph would silently destroy each other's work.
+        if (k === this.S.text && opts.text && typeof bp[k] === 'string' && typeof ap[k] === 'string') {
+          const t = this.diffText(id, bp[k] as string, ap[k] as string)
+          if (t) {
+            push(t)
+            continue
+          }
+        }
         const o = push<SetOp>({ ...this.stamp(), op: 'set', sl: id, k, v: clone(ap[k]) })
         this.regs[`${id} ${k}`] = [o.l, o.a]
+        if (k === this.S.text) delete this.txt[id] // LWW reset wins over RGA state
       }
     }
     // slide order: minimal ord ops (keep the longest already-ordered run).
@@ -609,8 +730,8 @@ export class SyncEngine {
         for (const k of new Set([...Object.keys(bp), ...Object.keys(ap)])) {
           if (k === 'id') continue
           if (JSON.stringify(bp[k]) === JSON.stringify(ap[k])) continue
-          if (k === 'html' && opts.text && typeof bp.html === 'string' && typeof ap.html === 'string') {
-            const t = this.diffText(id, bp.html as string, ap.html as string)
+          if (k === this.S.text && opts.text && typeof bp[this.S.text] === 'string' && typeof ap[this.S.text] === 'string') {
+            const t = this.diffText(id, bp[this.S.text] as string, ap[this.S.text] as string)
             if (t) {
               push(t)
               continue
@@ -618,7 +739,7 @@ export class SyncEngine {
           }
           const o = push<SetOp>({ ...this.stamp(), op: 'set', sl, el: id, k, v: clone(ap[k]) })
           this.regs[`${id} ${k}`] = [o.l, o.a]
-          if (k === 'html') delete this.txt[id] // LWW reset wins over RGA state
+          if (k === this.S.text) delete this.txt[id] // LWW reset wins over RGA state
         }
       }
       // no cross-slide move branch: the composite key IS (slide, id), so a
@@ -721,7 +842,7 @@ export class SyncEngine {
       // seed, so both their edits merge; after a set-html reset or a node
       // rebirth the lamport has grown, so fresh seeds out-rank stale ones.
       const sd: Reg = [
-        Math.max(this.regs[`${el} html`]?.[0] ?? 0, this.births[el]?.[0] ?? 0),
+        Math.max(this.regs[`${el} ${this.S.text}`]?.[0] ?? 0, this.births[el]?.[0] ?? 0),
         contentHash(oldHtml),
       ]
       st = this.txt[el] = { sd, toks: seedTokens(sd, oldHtml) }
@@ -796,6 +917,24 @@ export class SyncEngine {
   }
 
   private applyEffect(doc: BentoDoc, op: Op, res: ApplyResult) {
+    // A FLAT document has no element layer, so an element-scoped op has
+    // nowhere to land. It should never arrive — peers in a room share a shape
+    // — but the frame came off the wire, and materializing it would either
+    // throw against the frozen child array or invent a key the format does not
+    // have. Dropping is the only safe reading, and the version vector still
+    // advanced in applyOne, so delivery does not stall behind it.
+    const scope = op as Partial<{ el: string; kind: string; id: string }>
+    // `el` does NOT mean "element" on a txt op — there it is the NODE key,
+    // which for a flat document is the block's own id. Reading it as an
+    // element key here dropped every collaborative keystroke type would ever
+    // send, while structure ops kept converging: the rig saw one author's
+    // edits land and the other's silently vanish.
+    const elementScoped = scope.kind === 'element' ||
+      (op.op === 'txt' ? String(scope.el).includes(SEP) : scope.el !== undefined)
+    if (this.S.children === null && elementScoped) {
+      dbg(scope.el ?? scope.id ?? '?', `${op.op} DROP no element layer in this shape`)
+      return
+    }
     switch (op.op) {
       case 'set':
         this.applySet(doc, op, res)
@@ -826,6 +965,28 @@ export class SyncEngine {
     return (s ? C(this.S, s) : undefined)?.find((e) => e.id === bare) ?? this.limbo[key]
   }
 
+  /**
+   * Split a doc-level property key into (map, entry) if it addresses a
+   * declared map — `assets.logo` → ['assets','logo'].
+   *
+   * Matched against the SHAPE rather than by looking for a dot: an ordinary
+   * property whose name happens to contain one must not be mistaken for a map
+   * entry and quietly written into a sub-object.
+   */
+  private mapKey(k: string): [string, string] | undefined {
+    const i = k.indexOf('.')
+    if (i <= 0) return undefined
+    const field = k.slice(0, i)
+    return this.S.maps.has(field) ? [field, k.slice(i + 1)] : undefined
+  }
+
+  /** either level: composite keys carry SEP, parent ids never do */
+  private findNode(doc: BentoDoc, id: string): Record<string, unknown> | undefined {
+    return (id.includes(SEP) ? this.findEl(doc, id) : this.findSlide(doc, id)) as
+      | Record<string, unknown>
+      | undefined
+  }
+
   private applySet(doc: BentoDoc, op: SetOp, res: ApplyResult) {
     const nodeId = op.el ?? op.sl ?? DOC_NODE
     const rk = `${nodeId} ${op.k}`
@@ -850,11 +1011,10 @@ export class SyncEngine {
     }
     if (nodeId === DOC_NODE) {
       this.regs[rk] = [op.l, op.a]
-      if (op.k.startsWith('assets.') || op.k.startsWith('blobs.')) {
-        const isBlob = op.k.startsWith('blobs.')
-        const field = isBlob ? 'blobs' : 'assets'
+      const dot = this.mapKey(op.k)
+      if (dot) {
+        const [field, ak] = dot
         const map = ((doc as unknown as Record<string, Record<string, unknown>>)[field] ??= {})
-        const ak = op.k.slice(field.length + 1)
         if (op.v === undefined) delete map[ak]
         else map[ak] = clone(op.v)
       } else {
@@ -878,15 +1038,15 @@ export class SyncEngine {
     // JSON.stringify(undefined) is undefined — String() keeps this debug
     // line from throwing on every property REMOVAL.
     dbg(nodeId, `set ${op.k}@${op.l},${op.a} APPLY ${String(JSON.stringify(op.v)).slice(0, 40)}`)
-    if (op.el && op.k === 'html') {
-      const gen = this.txt[op.el]
+    if (nodeId !== DOC_NODE && op.k === this.S.text) {
+      const gen = this.txt[nodeId]
       if (gen && cmpReg([op.l, op.a], gen.sd) < 0) {
         // a live text generation outranks this set — value loses, reg advances
         this.regs[rk] = [op.l, op.a]
         return
       }
-      dbg(op.el, `set-html@${op.l},${op.a} RESET kills gen`)
-      delete this.txt[op.el] // the set out-stamps the generation: reset
+      dbg(nodeId, `set-text@${op.l},${op.a} RESET kills gen`)
+      delete this.txt[nodeId] // the set out-stamps the generation: reset
     }
     this.regs[rk] = [op.l, op.a]
     if (op.v === undefined) delete target[op.k]
@@ -928,7 +1088,7 @@ export class SyncEngine {
     if (this.dead(id)) return // a delete still out-stamps this insert
     const existing = this.findSlide(doc, id)
     if (existing) {
-      this.assignNode(existing as unknown as Record<string, unknown>, src as unknown as Record<string, unknown>, id, stamp, ['id', this.S.children])
+      this.assignNode(existing as unknown as Record<string, unknown>, src as unknown as Record<string, unknown>, id, stamp, this.S.children === null ? ['id'] : ['id', this.S.children])
     } else {
       const sl = clone(src)
       setC(this.S, sl, []) // members materialize separately via insertElement
@@ -971,7 +1131,7 @@ export class SyncEngine {
     // a text generation that survived the node's death (it out-ranked the
     // tomb) is the html authority — re-materialize over the ins payload
     const g = this.txt[id]
-    if (g && 'html' in live) (live as unknown as { html: string }).html = materialize(g)
+    if (g && this.S.text in live) (live as unknown as Record<string, string>)[this.S.text] = materialize(g)
   }
 
   /**
@@ -984,7 +1144,7 @@ export class SyncEngine {
   private assignNode(node: Record<string, unknown>, payload: Record<string, unknown>, id: string, birth: Reg, skip: string[]) {
     for (const k of new Set([...Object.keys(node), ...Object.keys(payload)])) {
       if (skip.includes(k)) continue
-      if (k === 'html' && this.txt[id]) {
+      if (k === this.S.text && this.txt[id]) {
         if (this.txt[id].sd[0] < birth[0]) {
           // the RGA's seed predates this rebirth — void it; the assignment
           // wins even over higher-lamport deltas (they drop on every replica)
@@ -1054,7 +1214,7 @@ export class SyncEngine {
       dbg(id, `stash-replay ${k} := ${String(JSON.stringify(ent.v)).slice(0, 40)}`)
       if ('v' in ent) node[k] = clone(ent.v)
       else delete node[k]
-      if (k === 'html') delete this.txt[id]
+      if (k === this.S.text) delete this.txt[id]
     }
     delete this.stash[id]
   }
@@ -1148,7 +1308,7 @@ export class SyncEngine {
       dbg(op.el, `txt@${op.l},${op.a} DROP birth ${JSON.stringify(birth)} > sd ${op.sd[0]}`)
       return
     }
-    const rr = this.regs[`${op.el} html`]
+    const rr = this.regs[`${op.el} ${this.S.text}`]
     if (rr && cmpReg(op.sd, rr) < 0) {
       dbg(op.el, `txt@${op.l},${op.a} DROP reg ${JSON.stringify(rr)}`)
       return
@@ -1167,8 +1327,8 @@ export class SyncEngine {
       if (op.base === undefined) {
         // seeds are deterministic (lamport + content hash): if our current
         // html IS the seed's base we can rebuild it without the base op
-        const node = this.findEl(doc, op.el)
-        const html = node && 'html' in node ? ((node as unknown as { html: string }).html as string) : undefined
+        const node = this.findNode(doc, op.el)
+        const html = node && this.S.text in node ? ((node as unknown as Record<string, string>)[this.S.text] as string) : undefined
         if (html !== undefined && contentHash(html) === op.sd[1]) {
           dbg(op.el, `txt@${op.l},${op.a} RECONSTRUCT from html`)
           st = this.txt[op.el] = { sd: clone(op.sd), toks: seedTokens(op.sd, html) }
@@ -1193,9 +1353,9 @@ export class SyncEngine {
       return
     }
     const advanced = applyTxtToState(st!, op)
-    const el = this.findEl(doc, op.el)
-    if (el && 'html' in el) {
-      ;(el as unknown as { html: string }).html = materialize(st!)
+    const el = this.findNode(doc, op.el)
+    if (el && this.S.text in el) {
+      ;(el as unknown as Record<string, string>)[this.S.text] = materialize(st!)
       res.changed = true
     } else if (!el) {
       ;(this.pending[op.el] ??= []).push(op)
@@ -1371,7 +1531,7 @@ export class SyncEngine {
       const dst = lNode(id)
       if (!src || !dst) continue
       const isSlide = rSlides.has(id) || !!this.findSlide(doc, id)
-      this.assignNode(dst, src, id, this.births[id], isSlide ? ['id', this.S.children] : ['id'])
+      this.assignNode(dst, src, id, this.births[id], isSlide ? this.S.children === null ? ['id'] : ['id', this.S.children] : ['id'])
       res.changed = true
       if (isSlide) res.structure = true
     }
@@ -1397,14 +1557,14 @@ export class SyncEngine {
       const src = rNode(nodeId)
       const dst = lNode(nodeId)
       if (!src || !dst) continue
-      if (key === 'html') {
+      if (key === this.S.text) {
         const gen = this.txt[nodeId]
         if (gen && cmpReg(rr, gen.sd) < 0) continue // generation outranks the set
         if (gen) delete this.txt[nodeId]
       }
-      if (nodeId === DOC_NODE && (key.startsWith('assets.') || key.startsWith('blobs.'))) {
-        const field = key.startsWith('blobs.') ? 'blobs' : 'assets'
-        const ak = key.slice(field.length + 1)
+      const mk = nodeId === DOC_NODE ? this.mapKey(key) : undefined
+      if (mk) {
+        const [field, ak] = mk
         const rm = ((rdoc as unknown as Record<string, Record<string, unknown>>)[field] ?? {})
         const lm = ((doc as unknown as Record<string, Record<string, unknown>>)[field] ??= {})
         if (rm[ak] === undefined) delete lm[ak]
@@ -1417,7 +1577,7 @@ export class SyncEngine {
     // text RGA union (generations void when out-ranked by births or sets)
     for (const el of Object.keys(this.txt)) {
       const b = this.births[el]
-      const rr = this.regs[`${el} html`]
+      const rr = this.regs[`${el} ${this.S.text}`]
       if ((b && this.txt[el].sd[0] < b[0]) || (rr && cmpReg(this.txt[el].sd, rr) < 0))
         delete this.txt[el]
     }
@@ -1425,15 +1585,15 @@ export class SyncEngine {
       if (this.dead(el)) continue
       const b = this.births[el]
       if (b && rt.sd[0] < b[0]) continue
-      const rr = this.regs[`${el} html`]
+      const rr = this.regs[`${el} ${this.S.text}`]
       if (rr && cmpReg(rt.sd, rr) < 0) continue
       const lt = this.txt[el]
       const c = lt ? cmpReg(rt.sd, lt.sd) : 1
       if (c > 0) this.txt[el] = clone(rt)
       else if (c === 0) mergeToks(lt!, rt)
       else continue
-      const node = this.findEl(doc, el)
-      if (node && 'html' in node) (node as unknown as { html: string }).html = materialize(this.txt[el])
+      const node = this.findNode(doc, el)
+      if (node && this.S.text in node) (node as unknown as Record<string, string>)[this.S.text] = materialize(this.txt[el])
       res.changed = true
     }
     if (res.structure) this.rematerialize(doc)

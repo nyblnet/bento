@@ -57,7 +57,7 @@ registerHooks({
 const {
   catOf, deriveTile, rowList, rowsForTile, selectionFilters, sheetGet,
   toggleSelection, selectionChips, pickedOn, withView, viewsOf, defaultDashboard,
-  niceTicks, Dashboard, DEFAULT_COLS,
+  niceTicks, seriesExtent, Dashboard, DEFAULT_COLS,
 } = await import('../dash/src/dashboard.ts')
 type DashTile = import('../dash/src/dashboard.ts').DashTile
 type DashView = import('../dash/src/dashboard.ts').DashView
@@ -505,6 +505,111 @@ console.log('\nodds and ends')
   const c = asChart(deriveTile(overridden, CHART, null))
   ok(c.series[0].data[0] === 1250,
     'and the CHART sees it too, because every bound column reaches optionFor through the same accessor')
+}
+
+// ============================================ the axis at the row target (§7)
+//
+// A 400k-row workbook RENDERED its dashboard and then threw `RangeError:
+// Maximum call stack size exceeded` out of the axis calculation, and the loader
+// painted an opaque error card over an app that was working. The cause was
+// `Math.min(...vals, 0)` — one ARGUMENT per data point — and a chart bound to a
+// high-cardinality x column (an id, an order number, a timestamp) has one point
+// per ROW. condfmt.ts:52 had already written the rule down; the dashboard's axis
+// was the site that had not read it.
+//
+// THIS SECTION EXERCISES THE SIZE THAT BROKE, not a convenient small one. A rig
+// that asserts over 100 points proves nothing whatsoever about an argument-list
+// limit, so the first check below establishes that the OLD expression really
+// does throw at this size in this engine — otherwise the guard beneath it is
+// unfalsifiable — and the rest run the real function over the same array.
+// Cost: ~1.2M numbers, allocated and walked twice. Measured at well under a
+// second, which is why it is inline rather than behind a flag.
+
+console.log('\nthe axis survives the row count the format is sized for')
+{
+  const N = 400_000
+  const seriesAt = (n: number, base: number): Array<number | null> => {
+    const out: Array<number | null> = new Array(n)
+    // Values that are NOT monotonic, so a min/max that accidentally reads only
+    // the ends still has to find the real extremes in the middle.
+    for (let i = 0; i < n; i++) out[i] = base + ((i * 7919) % 1000)
+    // one genuine null per series: a category with no value is a category
+    out[n >> 1] = null
+    return out
+  }
+  const big = [
+    { name: 's1', data: seriesAt(N, 0) },
+    { name: 's2', data: seriesAt(N, -500) },
+    { name: 's3', data: seriesAt(N, 10_000) },
+  ]
+
+  // THE HAZARD IS REAL AT THIS SIZE, in this engine, today. Without this check
+  // the one under it could pass on an engine with no argument limit and nobody
+  // would know the rig had stopped testing anything.
+  let spreadThrew = false
+  try {
+    const flat: number[] = []
+    for (const s of big) for (const v of s.data) if (v !== null) flat.push(v)
+    Math.min(...flat, 0)
+  } catch (e) {
+    spreadThrew = e instanceof RangeError
+  }
+  ok(spreadThrew,
+    `Math.min(...) over ${3 * N} arguments still throws a RangeError here — the hazard this guards is not hypothetical`)
+
+  // CAUGHT, not left to escape. A regression here THROWS rather than returning
+  // a wrong number, and an uncaught throw would take the rig's remaining checks
+  // down with it — which reports the fault as "the rig crashed" instead of
+  // naming the one thing that broke. That is also exactly what it did to the
+  // app: the loader painted an error card, and nothing said which line.
+  const safe = (
+    s: ReadonlyArray<{ data: ReadonlyArray<number | null> }>, baseline: boolean,
+  ): { lo: number; hi: number; any: boolean } | Error => {
+    try { return seriesExtent(s, baseline) } catch (e) { return e as Error }
+  }
+
+  const t0 = Date.now()
+  const bars = safe(big, true)
+  const ms = Date.now() - t0
+  ok(!(bars instanceof Error) && bars.any && bars.lo === -500 && bars.hi === 10_999,
+    `seriesExtent walks ${3 * N} points without a spread and finds the true extremes (${ms}ms)` +
+    (bars instanceof Error ? ` — threw ${bars.name}: ${bars.message}` : ''))
+
+  const lines = safe(big, false)
+  ok(!(lines instanceof Error) && lines.lo === -500 && lines.hi === 10_999,
+    'and a line, which may crop, gets the same bounds when the data already spans zero')
+
+  // The baseline rule, which is the behaviour `Math.min(...vals, 0)` was
+  // spelling. A BAR'S BASELINE IS ZERO: cropping the axis to the data makes a
+  // 2% spread look like a doubling. A LINE is read as a trend and may crop.
+  const above = [{ name: 'a', data: [980, 1000, 1020] as Array<number | null> }]
+  ok(seriesExtent(above, true).lo === 0,
+    'a bar chart whose values are all positive still starts its axis at zero')
+  ok(seriesExtent(above, false).lo === 980,
+    'and a line chart crops to its data, because a trend is not an area')
+  const below = [{ name: 'a', data: [-30, -10] as Array<number | null> }]
+  ok(seriesExtent(below, true).hi === 0 && seriesExtent(below, true).lo === -30,
+    'an all-negative bar chart folds zero in at the TOP — the baseline is zero from either side')
+
+  // Parity with the expression that was replaced, at a size the spread survives.
+  // This is what says the loop is the same function and not merely a fast one.
+  const M = 20_000
+  const mid = [{ name: 'm', data: seriesAt(M, -7) }, { name: 'n', data: seriesAt(M, 3) }]
+  const flat: number[] = []
+  for (const s of mid) for (const v of s.data) if (v !== null) flat.push(v)
+  const got = seriesExtent(mid, true)
+  ok(got.lo === Math.min(...flat, 0) && got.hi === Math.max(...flat, 0),
+    'and over 40k points it agrees exactly with the spread it replaced, bar for bar')
+
+  // An all-null series is NOT a chart with a zero baseline. Folding zero in
+  // first would give a legitimate-looking 0..0 extent and draw an axis over
+  // nothing — the "empty result drawn as zero" failure in this file's header,
+  // arriving through the axis instead of through the derivation.
+  ok(!seriesExtent([{ name: 'z', data: [null, null] }], true).any,
+    'a series with no numbers reports `any: false` rather than a 0..0 axis')
+  ok(!seriesExtent([], true).any, 'and so does a chart with no series at all')
+  ok(!seriesExtent([{ name: 'z', data: [NaN, Infinity] }], true).any,
+    'NaN and Infinity are not numbers a person can plot, and they never become bounds')
 }
 
 // ==================================================== NEGATIVE CONTROLS

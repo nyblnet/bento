@@ -31,8 +31,8 @@
 import { readFileSync } from 'node:fs'
 import {
   Selection, normalize, contains, size, rangeOf, keyToAction, applyMotion,
-  tsvFromRange, parseTsv, fillDown, fillSeries,
-  type Action, type CellRef,
+  tsvFromRange, parseTsv, fillDown, fillSeries, describeBindings, actionSig,
+  type Action, type CellRef, type KeyLike, type KeyChord,
 } from '../dash/src/select.ts'
 
 let failures = 0
@@ -111,6 +111,34 @@ const at = (s: Selection): [number, number] => [s.cursor.row, s.cursor.col]
   ok(a('z') === null, 'a bare "z" is not undo')
   ok(a(' ') === null, 'a bare space is not a selection command')
   ok(a('F5') === null, 'a key this model does not own returns null rather than being swallowed')
+
+  // --- the bindings a spreadsheet user arrives already knowing
+  eq(a('Enter', { metaKey: true }), { kind: 'fill' },
+    '⌘Enter FILLS the selection — it used to be a second way to move down one cell')
+  ok(!(j(a('Enter', { metaKey: true })) === j(a('Enter'))),
+    'and it is no longer indistinguishable from a plain Enter')
+  eq(a('d', { ctrlKey: true }), { kind: 'fill' },
+    '⌘D fills down too — unclaimed it is the browser\'s bookmark dialog')
+  eq(a('s', { metaKey: true }), { kind: 'save' },
+    '⌘S is IN the map even though main.ts performs the save: a key the map cannot describe is a key the card cannot show')
+  eq(a(' ', { ctrlKey: true, shiftKey: true }), { kind: 'selectAll' },
+    '^⇧Space selects the sheet — the last step of Excel\'s cell → column → sheet widening')
+  eq(a(' ', { metaKey: true, shiftKey: true }), { kind: 'selectAll' }, 'and ⌘⇧Space is the same')
+  ok(!(j(a(' ', { ctrlKey: true, shiftKey: true })) === j(a(' ', { shiftKey: true }))),
+    'and it is not the row-select it used to fall through to')
+  eq(a('?'), { kind: 'help' }, '"?" opens the shortcut card')
+  eq(a('/', { metaKey: true }), { kind: 'help' }, 'and so does ⌘/, which costs no printable character')
+  eq(a('['), { kind: 'panel', side: 'left' }, '"[" is declared here — panels.ts implements it')
+  eq(a(']'), { kind: 'panel', side: 'right' }, '"]" likewise')
+
+  // the wrong answers for the new half: a modified form nobody implements must
+  // stay null, or the card advertises a dead key
+  ok(a('[', { metaKey: true }) === null, '⌘[ is NOT a panel toggle — panels.ts ignores modified forms, so this must too')
+  ok(a('?', { metaKey: true }) === null, '⌘? is not help — ⌘/ is')
+  ok(a('d') === null, 'a bare "d" is typing, not fill')
+  ok(a('s') === null, 'a bare "s" is typing, not save')
+  ok(a('/') === null, 'a bare "/" is typing — a slash is a real thing to put in a cell')
+  ok(a('?', { altKey: true }) === null, 'and alt still refuses everything, including help')
 }
 
 // ------------------------------------------------- moving, clamping, extend
@@ -322,6 +350,116 @@ const at = (s: Selection): [number, number] => [s.cursor.row, s.cursor.col]
   ok(press('c', { metaKey: true }) === false,
     'and reports FALSE for ⌘C — the clipboard is not a selection operation, and pretending it is loses the copy')
   ok(press('F5') === false, 'an unmapped key is not consumed')
+  // The three verbs the map DECLARES and does not own. applyMotion must not
+  // claim them: the grid returns whatever it says, and a true here would
+  // preventDefault the keystroke away from main.ts, help.ts and panels.ts —
+  // i.e. ⌘S would stop saving the moment the map learned the word "save".
+  ok(press('s', { metaKey: true }) === false, 'applyMotion does not consume ⌘S — main.ts still saves')
+  ok(press('?') === false, 'nor "?" — help.ts opens the card')
+  ok(press('[') === false, 'nor "[" — panels.ts toggles the panel')
+  ok(press('Enter', { metaKey: true }) === false,
+    'nor ⌘Enter: fill WRITES CELLS, which a selection model cannot do — the grid has to hear the miss')
+  press('ArrowDown')
+  const before = at(s)
+  press('Enter', { metaKey: true })
+  eq(at(s), before, 'and ⌘Enter leaves the cursor exactly where it was rather than moving down like a plain Enter')
+}
+
+// ------------------------------------------- the shortcut card, generated
+//
+// help.ts draws no key of its own: it asks describeBindings() what the map
+// says. These checks are what make that claim testable — the last three prove
+// it by handing the describer a DIFFERENT map and requiring the output to
+// follow. A hardcoded table passes everything above and fails those.
+{
+  const rows = describeBindings()
+  const bySig = new Map(rows.map((r) => [r.sig, r]))
+  const has = (sig: string, key: string, mod?: KeyChord['mod'], shift?: boolean): boolean =>
+    (bySig.get(sig)?.chords ?? []).some((c) =>
+      c.key === key && (mod === undefined || c.mod === mod) && (shift === undefined || c.shift === shift))
+
+  ok(rows.length > 20, `the probe finds the whole key set (${rows.length} distinct actions)`)
+  eq(rows.length, bySig.size, 'and every action appears as exactly ONE row — the keys are grouped, not listed')
+
+  ok(has('copy', 'c', 'either'), '⌘C shows up under copy, as a chord that takes EITHER modifier')
+  ok(has('redo', 'z', 'either', true) && has('redo', 'y'), 'redo shows both of its keys')
+  ok(has('selectAll', 'a') && has('selectAll', ' ', 'either', true), 'select-all shows ⌘A and ⌘⇧Space')
+  ok(has('fill', 'd') && has('fill', 'Enter'), 'fill shows ⌘D and ⌘Enter')
+  ok(has('help', '?', 'none') && has('help', '/', 'either'), 'help shows the bare ? and ⌘/')
+  ok(has('panel.left', '[') && has('panel.right', ']'), 'the panel keys are described even though panels.ts owns them')
+  ok(has('save', 's'), 'and ⌘S, which main.ts owns')
+
+  const arrows = bySig.get('move.cell')!.chords
+  eq(arrows.length, 4, 'moving one cell is ONE row with four arrow chords, not four rows')
+  ok(arrows.every((c) => c.mod === 'none' && !c.shift && !c.alt), 'and the plain arrows carry no modifier')
+  ok(bySig.get('move.edge')!.chords.every((c) => c.mod === 'either'), '⌘arrow is the edge jump')
+
+  // the redundant-modifier rule: shift does not change what Delete means, so
+  // "⇧Del" must not appear beside "Del" as if it were a second shortcut
+  const clear = bySig.get('clear')!.chords
+  eq(clear.map((c) => c.key).sort(), ['Backspace', 'Delete'], 'clear lists exactly its two keys')
+  ok(clear.every((c) => !c.shift), 'and NOT their shift variants, which mean the same thing')
+  ok(rows.every((r) => r.chords.every((c) => !c.alt)),
+    'no row anywhere carries an alt chord — the map refuses alt, so the card must never teach one')
+
+  // --- the property that matters: this is DERIVED
+  const plus = (e: KeyLike): Action | null =>
+    (e.key === 'q' && (e.metaKey || e.ctrlKey)) ? { kind: 'copy' } : keyToAction(e)
+  ok(describeBindings(plus).find((r) => r.sig === 'copy')?.chords.some((c) => c.key === 'q') === true,
+    'ADD a binding to the map and it appears in the card with no edit to help.ts')
+
+  const minus = (e: KeyLike): Action | null => {
+    const a = keyToAction(e)
+    return a && a.kind === 'copy' ? null : a
+  }
+  ok(!describeBindings(minus).some((r) => r.sig === 'copy'),
+    'REMOVE one and its row is gone — the card cannot outlive the binding it describes')
+
+  const exotic = (e: KeyLike): Action | null =>
+    e.key === 'F9' ? ({ kind: 'wibble' } as unknown as Action) : keyToAction(e)
+  const wib = describeBindings(exotic).find((r) => r.sig === 'wibble')
+  ok(wib !== undefined && wib.chords.some((c) => c.key === 'F9'),
+    'an action kind the describer has never heard of still comes out — nothing here is a list of known verbs')
+
+  ok(describeBindings(() => null).length === 0,
+    'and a map that binds nothing describes nothing — the probe reports the map, not a fixture')
+
+  eq(actionSig({ kind: 'move', dr: -1, dc: 0, unit: 'edge', extend: true }),
+    'move.edge.extend', 'a signature drops the DIRECTION (the key already says it) and keeps the unit')
+  eq(actionSig({ kind: 'move', dr: 0, dc: 1, unit: 'edge', extend: true }),
+    'move.edge.extend', 'so ⌘⇧→ and ⌘⇧↑ are one row')
+  ok(!(actionSig({ kind: 'move', dr: 1, dc: 0, unit: 'cell', extend: false }) ===
+       actionSig({ kind: 'move', dr: 1, dc: 0, unit: 'edge', extend: false })),
+    'and ↓ is NOT ⌘↓ — collapsing those would hide a shortcut inside another row')
+}
+
+// ------------------------------------------- the card names every binding
+//
+// help.ts owns the ENGLISH for each action and nothing else. The two checks
+// below are the anti-drift pair, read out of the source the same way the
+// ROW_H check reads grid.ts: an action nobody has named would print its raw
+// signature at a user, and a name for an action that no longer exists is the
+// first line of a card that has started lying.
+{
+  const help = readFileSync(new URL('../dash/src/help.ts', import.meta.url), 'utf8')
+  // Either quote style: a reformatter turning 'move.cell' into "move.cell" is
+  // not a defect, and a guard that fails on it teaches people to delete the
+  // guard. What must fail is the table going MISSING, which the size check below
+  // catches whatever the quoting.
+  const named = new Set([...help.matchAll(/^ {2}['"]([^'"]+)['"]:\s*\[/gm)].map((m) => m[1]))
+  // A regex that matched nothing would make BOTH checks below vacuous.
+  ok(named.size > 20, `help.ts's label table was found and read (${named.size} entries)`)
+
+  const sigs = describeBindings().map((r) => r.sig)
+  const unnamed = sigs.filter((s) => !named.has(s))
+  ok(unnamed.length === 0, `every binding the map holds has English in help.ts (unnamed: ${j(unnamed)})`)
+  const stale = [...named].filter((s) => !sigs.includes(s))
+  ok(stale.length === 0, `and every label in help.ts still matches a live binding (stale: ${j(stale)})`)
+
+  ok(/addEventListener\('keydown',[\s\S]{0,600}?,\s*true\)/.test(help),
+    'help.ts claims "?" in the CAPTURE phase — in the bubble phase main.ts would have typed it into a cell first')
+  ok(help.includes("import './help.css'"),
+    'and imports its stylesheet, so vite folds it into the one <style> the shell deflates')
 }
 
 // ----------------------------------------------------------------- TSV out

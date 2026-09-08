@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The DARK palette, from the same source as the light one — the
+  prefers-color-scheme block in home/webext/src/ui.css.
+
+  Note `accent` inverts: in light it is the navy wordmark colour on white, in
+  dark it becomes the near-white and `on_accent` becomes the dark ground. A
+  primary button is dark-on-light in one theme and light-on-dark in the other,
+  which is why both halves are named rather than one being assumed.
+-->
+<resources>
+    <color name="bg">#0F1720</color>
+    <color name="panel">#16202B</color>
+    <color name="ink">#E7EDF4</color>
+    <color name="dim">#90A1B4</color>
+    <color name="line">#24313F</color>
+    <color name="accent">#E7EDF4</color>
+    <color name="on_accent">#0F1720</color>
+    <color name="placeholder">#24313F</color>
+</resources>

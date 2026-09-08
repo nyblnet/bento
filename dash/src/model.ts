@@ -137,11 +137,26 @@ export interface CellOverride {
   by?: string
   at?: string
   why?: string
+  /**
+   * PRESENTATION, and on this kind that word is a boundary rather than a
+   * category. See the APPEARANCE block at the foot of this file: the COLUMN
+   * owns the type on a dataset, so everything here changes how a cell is
+   * DRAWN and nothing here changes what it IS. `format` in particular is a
+   * display pattern only — applying one never re-reads the value, which is
+   * exactly what it does on the spreadsheet kind (cellprops.ts rules 6–8).
+   */
   note?: string
+  format?: string
   color?: string
   bg?: string
   bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  wrap?: boolean
   align?: string
+  border?: string
+  borderColor?: string
+  borderStyle?: string
   [extra: string]: unknown
 }
 
@@ -176,16 +191,67 @@ export type Step =
   | { op: 'sort'; by: string; dir: 'asc' | 'desc' }
   | { op: 'group'; by: string[]; agg: Array<{ fn: string; of?: string; as: string }> }
   | { op: 'join'; with: string; on: [string, string]; card: 'one' | 'many'; fields: string[] }
+  /** Top-N. Typed here rather than riding the open fallback, because the SQL
+   *  surface writes these and an untyped step is one nobody can refactor. */
+  | { op: 'limit'; n: number; offset?: number }
+  /**
+   * Stack another sheet's rows onto this one. Columns match by NAME, never by
+   * position: SQL unions positionally because a result set has no stable column
+   * identity, and dash's columns do — so positional matching would file amounts
+   * under dates the moment two sheets carry the same columns in a different
+   * order.
+   */
+  | { op: 'union'; with: string | string[]; all?: boolean }
   /** Hand corrections to a DERIVED sheet, keyed by a business key rather than a
    *  row position, so a re-import cannot re-apply one to the wrong row. A patch
    *  whose key vanished is a `stale-patch` finding, not a disappearance. */
   | { op: 'patch'; key: string[]; edits: PatchEdit[] }
+  // ── added for Text to Columns (one contiguous block) ──────────────────────
+  /**
+   * Split one text column into several — Excel's Text to Columns, as a
+   * DECLARATION rather than a one-off mutation, so the lineage survives.
+   *
+   * WHY THIS IS NOT A `derive`. `derive` is one expression producing one
+   * column, and it was the first thing tried. Fixed width it expresses
+   * perfectly (`MID(col, start, len)`), and that arm really is emitted as
+   * derives. A DELIMITER it cannot express: formula.ts has no SPLIT, and the
+   * Excel workaround — `TRIM(MID(SUBSTITUTE(c, ",", REPT(" ", 100)), …))` —
+   * collapses every run of spaces inside a field and silently truncates a
+   * field longer than the pad. Beyond the expression, three things belong to
+   * the split as a WHOLE and cannot live in N independent steps: the delimiter
+   * (edited in one place, not N places that can disagree), the quoting rule,
+   * and the TYPE INFERENCE, which must be import.ts's column-wide refusal
+   * (`inferColumn`) and not `derive`'s per-value guess.
+   *
+   * The SOURCE COLUMN IS ALWAYS KEPT. Excel overwrites it with field one; that
+   * makes the operation destructive and, worse here, non-idempotent — a step
+   * that consumed its own input cannot be re-run. Keeping it means running the
+   * pipeline twice produces the same sheet, which is what a re-runnable step
+   * has to promise.
+   */
+  | {
+      op: 'split'; col: string
+      /** delimiter mode: the separator, verbatim (never a regexp) */
+      by?: string
+      /** fixed-width mode: cut points, in characters from the start */
+      widths?: number[]
+      /** the columns to produce, in order. Ids are the caller's, so a re-run
+       *  lands on the same columns rather than minting new ones each time. */
+      into: Array<{ id: string; name: string }>
+      /** honour RFC-4180 quoting when splitting on a delimiter (default true) */
+      quoted?: boolean
+      /** trim each field's outer whitespace (default true) */
+      trim?: boolean
+    }
+  // ── end of the Text to Columns block ──────────────────────────────────────
   /** Unknown ops survive parse → serialize and mark their descendants
    *  `unresolved`. Views then show last known values with a badge, NEVER zero —
    *  an empty bar chart reads as ZERO, which is a number, which is a lie. */
   | { op: string; [k: string]: unknown }
 
 export interface TableSheet {
+  /** discussion threads — see the comments block at the foot of this file */
+  comments?: Comment[]
   id: string
   name: string
   kind: 'table'
@@ -234,6 +300,8 @@ export interface TableSheet {
  * hatch added later is permanently second-class (PLATFORM §3).
  */
 export interface CanvasSheet {
+  /** discussion threads — see the comments block at the foot of this file */
+  comments?: Comment[]
   id: string
   name: string
   kind: 'canvas'
@@ -246,14 +314,95 @@ export interface CanvasSheet {
 export interface CanvasCell {
   v?: unknown
   f?: string
+  /** appearance — the same vocabulary `CellOverride` carries, deliberately.
+   *  See the APPEARANCE block at the foot of this file. */
   format?: string
   note?: string
   color?: string
   bg?: string
   bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  wrap?: boolean
   align?: string
+  border?: string
+  borderColor?: string
+  borderStyle?: string
   [extra: string]: unknown
 }
+
+// --- APPEARANCE, and why it is spelled twice --------------------------------
+//
+// `CanvasCell` (spreadsheet) and `CellOverride` (dataset) carry the SAME
+// appearance fields, listed independently in both interfaces rather than
+// factored into a shared `interface Appearance` the two extend.
+//
+// That is not laziness. These two interfaces are the FORMAT — a reader of this
+// file is reading the file on disk, and a field that only appears through an
+// `extends` two screens away is a field somebody misses. cellfmt.ts holds the
+// one runtime list (`APPEARANCE_FIELDS`) that every writer and painter goes
+// through, and `scripts/test-dash-cellfmt.ts` asserts the two interfaces and
+// that list stay in step, which is the check an `extends` would have bought.
+//
+// The fields, and what each is FOR:
+//
+//   format       a display pattern (`#,##0.00`). On the spreadsheet kind it is
+//                also the cell's TYPE declaration (cellprops.ts rule 1); on the
+//                dataset kind it is display ONLY and never re-reads a value.
+//   color / bg   ink and fill, `#rrggbb`.
+//   bold         "600", not the CSS number — an author's word.
+//   italic       .
+//   underline    .
+//   wrap         let a long value use more than one line. ABSENT means the row
+//                stays one line high and the value is clipped, which is what
+//                every grid here has always done.
+//   align        'left' | 'center' | 'right'. Absent = the type's own default
+//                (numbers right, text left), which is not the same as 'left'.
+//   border       WHICH EDGES, as a subset of "trbl" in that order — "b" is an
+//                underscore rule, "trbl" is a box. A string rather than four
+//                booleans because a box is one decision and four registers
+//                would let a merge produce three sides of one.
+//   borderColor  `#rrggbb`. Absent = the grid's own rule colour.
+//   borderStyle  'solid' | 'dashed' | 'dotted'. Absent = solid.
+//
+// EVERY ONE IS OPTIONAL AND ABSENT MEANS OFF (PLATFORM §3). A cleared field is
+// DELETED, never stored as `false` or `''` — otherwise un-bolding a cell leaves
+// a file that differs from the one before anyone bolded it, and two documents
+// that should be equal are not. Old files carry none of these and must render
+// exactly as they did; a build that does not know them must round-trip them
+// untouched, which the open `[extra: string]` index signature is what
+// guarantees.
+//
+// WIDTH IS DELIBERATELY ABSENT. Excel has thick borders; dash has one hairline,
+// because a per-cell width is a fourth register on a decoration and the grid
+// draws a 1px lattice that a 3px cell border only fights.
+
+/**
+ * The appearance fields, as data — the ONE runtime list, and it lives here
+ * because it is part of the FORMAT rather than part of a panel.
+ *
+ * Two very different readers need it and neither may retype it:
+ *
+ *   * cellfmt.ts writes through it, so no writer on either kind can touch a
+ *     key outside it (which is how per-cell appearance is stopped from
+ *     becoming per-cell TYPE on a dataset).
+ *   * sync/crdt.ts splits an override's registers by it, so bolding a cell
+ *     while somebody else retypes it keeps both. crdt.ts is deliberately free
+ *     of imports beyond this file and the store's writer — it runs in a node
+ *     rig with no DOM — which is the other reason the list cannot live beside
+ *     the panel that draws it.
+ *
+ * `format` and `note` are presentation too but are NOT here: they predate this
+ * vocabulary, and `format` on the SPREADSHEET kind is a type declaration
+ * (cellprops.ts rule 1) rather than decoration. Each consumer adds them
+ * explicitly, which keeps that difference visible instead of buried in a list.
+ */
+export const APPEARANCE_FIELDS = [
+  'bold', 'italic', 'underline', 'wrap', 'align',
+  'color', 'bg', 'border', 'borderColor', 'borderStyle',
+] as const
+
+export type AppearanceField = typeof APPEARANCE_FIELDS[number]
 
 /**
  * A pivot sheet holds a SPEC and never the numbers it produces — the same rule
@@ -261,6 +410,8 @@ export interface CanvasCell {
  * double the file.
  */
 export interface PivotSheet {
+  /** discussion threads — see the comments block at the foot of this file */
+  comments?: Comment[]
   id: string
   name: string
   kind: 'pivot'
@@ -411,6 +562,42 @@ export interface DocMeta {
   [extra: string]: unknown
 }
 
+// --- DEFINED NAMES ----------------------------------------------------------
+//
+// `TaxRate`, `Q3Sales` — a word a formula can use in place of a number or a
+// range. The field predates the implementation; what it gained is `ref`.
+//
+// WORKBOOK-SCOPED, ONE NAMESPACE. Excel has both workbook and sheet scope, and
+// the collision rules between them are the fiddly part: a sheet-local name
+// shadows the workbook one, `Sheet1!TaxRate` reaches past the shadow, and the
+// same word can mean two things two tabs apart. dash's whole claim is that a
+// number can be traced to where it came from, and a name whose meaning depends
+// on which tab you are reading is the opposite of that. So there is one table,
+// at the document, and `TaxRate` means one thing everywhere.
+//
+// A COLUMN NAME WINS. A dataset sheet's `SUM(amount)` already binds `amount` on
+// that sheet, and documents exist that do it. A document-level name must not be
+// able to silently re-point a working column formula at something else, so a
+// defined name only fills in where no column of that sheet claimed the word.
+// That is the local-beats-global instinct Excel's sheet scope encodes, kept
+// without a second namespace to spell it.
+//
+// A DELETED TARGET IS `#REF!`, NEVER A DROPPED NAME. When rows under `Q3Sales`
+// are deleted the entry STAYS and its `ref` becomes `#REF!`, so every formula
+// using it says so and the definition is still there to be repointed. Deleting
+// the entry would turn the same event into `#NAME?` at every use — "you never
+// defined that", which is a lie about what happened.
+
+export interface DefinedName {
+  /** A literal — `TaxRate` = 0.2. Mutually exclusive with `ref`; `ref` wins. */
+  v?: number | string
+  /** An A1 reference or range, sheet-qualified where it needs to be. */
+  ref?: string
+  /** The sentence that makes the number arguable rather than merely present. */
+  note?: string
+  [extra: string]: unknown
+}
+
 export interface DashDoc {
   format: typeof FORMAT
   version: number
@@ -424,7 +611,16 @@ export interface DashDoc {
   measures?: Record<string, Measure>
   /** the data story — see the Story block at the foot of this file */
   story?: Story
-  names?: Record<string, { v: number | string; note?: string }>
+  /**
+   * The chart panel, if one is open. See `OpenChart`.
+   *
+   * ADDITIVE, like `story`: a build that has never heard of it keeps it on a
+   * round trip and opens with no chart, which is exactly what every build did
+   * before this field existed.
+   */
+  chart?: OpenChart
+  /** Defined names — see the DEFINED NAMES block just above `DashDoc`. */
+  names?: Record<string, DefinedName>
   views?: View[]
   theme?: Theme
   /**
@@ -439,6 +635,26 @@ export interface DashDoc {
   readonly?: boolean
   template?: boolean
   [extra: string]: unknown
+}
+
+/**
+ * The document with its collaboration SECRETS removed, for anything a person
+ * copies or hands to somebody else.
+ *
+ * The same fix bento/spaces needed, found by the same rig on the same day: a
+ * SyncSession is constructed at boot, so `collab` is minted for every workbook,
+ * and "Copy document JSON" put the read key, the write key and the owner key
+ * (which can also revoke) on the clipboard. bento/slides hit this first and
+ * wrote the rig — whose every path was hardcoded to slides/, which is why two
+ * more apps reintroduced it.
+ *
+ * Strips by REMOVING, so a private field added to the credentials later is
+ * covered without anyone remembering to act.
+ */
+export function docForExport(doc: DashDoc): DashDoc {
+  const { collab, ...rest } = doc as DashDoc & { collab?: unknown }
+  void collab
+  return rest as DashDoc
 }
 
 // --- Budgets. App constants, never kernel — nothing in kernel/src reads an
@@ -708,6 +924,35 @@ export const rowCount = (doc: DashDoc): number =>
 import type { ChartBinding } from './chart.ts'
 import type { Viz3dBinding } from './viz3d.ts'
 
+/**
+ * THE CHART PANEL IS DOCUMENT STATE, and it was not.
+ *
+ * `binding` and the id of the sheet it is pinned to lived in two module-local
+ * `let`s in main.ts, under a comment reading "derived at render, never stored".
+ * Deriving it at render is right — the numbers must never be a stale copy of
+ * the sheet — but "which columns am I charting, on which sheet" is not derived
+ * from anything. It is a choice somebody made, and it was thrown away by a
+ * reload, by closing the tab, and by saving the file and sending it: the
+ * recipient opened a workbook with no chart in it and no way to know one had
+ * ever been drawn.
+ *
+ * ONE, NOT A LIST, because the panel is one. A second stored chart would have
+ * no way to be shown, and a field the UI cannot express is a field that goes
+ * wrong quietly. `views` is the place a workbook keeps many charts.
+ *
+ * `sheet` is an id and may DANGLE — the sheet it named can be deleted by a
+ * build that does not know this field exists, which is the whole point of an
+ * additive field. Nothing may throw on that: `main.ts` drops the panel and
+ * `validate.ts` reports it, exactly as they already do when the sheet is
+ * deleted in front of you.
+ */
+export interface OpenChart {
+  /** the id of the TABLE sheet the chart is an argument about */
+  sheet: string
+  /** the same binding shape chart.ts and StoryStep use — columns, not numbers */
+  binding: ChartBinding
+}
+
 // --- data story --------------------------------------------------------------
 //
 // An ADDITIVE top-level field (`DashDoc.story`). A build that has never heard of
@@ -808,5 +1053,159 @@ export interface StoryStep {
 
 export interface Story {
   steps: StoryStep[]
+  [extra: string]: unknown
+}
+
+// --- comments -----------------------------------------------------------------
+//
+// Threads live on the SHEET (`Sheet.comments`), not on the document, so a sheet
+// delete takes its threads with it and an undo brings them back — for free,
+// through the `setSheet` patch that already carries the whole sheet. The sheet
+// id is deliberately NOT inside the anchor: it is implied by location, and a
+// second copy is a second source of truth that can disagree with the first.
+//
+// A CELL anchor is column identity plus ROW identity, never a position. Sorting
+// and filtering are view state, so a positional anchor points at a different
+// number the instant somebody clicks a column header — the same class of bug as
+// the canonical-versus-visible index that deleted the wrong row.
+
+/**
+ * What a comment is about.
+ *
+ * An OPEN union, like model.ts's `Policy` and `StoredPredicate`: a kind this
+ * build does not know must PARSE and must round-trip, so `resolveAnchor`
+ * reports it as `unknown` and the interface lists it as an anchor written by a
+ * newer build rather than dropping the thread.
+ */
+export type CommentAnchor =
+  /** one cell, by column identity and row identity — never by position */
+  | { kind: 'cell'; col: string; rid: number }
+  | { kind: 'column'; col: string }
+  | { kind: 'sheet' }
+  | { kind: string; [k: string]: unknown }
+
+export interface CommentReply {
+  id: string
+  author: string
+  /** ISO 8601, UTC. The reader's locale formats it; the file never carries one. */
+  at: string
+  text: string
+  [extra: string]: unknown
+}
+
+export interface Comment {
+  id: string
+  anchor: CommentAnchor
+  author: string
+  at: string
+  text: string
+  replies?: CommentReply[]
+  /**
+   * ABSENT means open. Resolving writes `true`; reopening DELETES the key
+   * rather than writing `false`, so resolve-then-reopen leaves the file exactly
+   * as it found it — `freezeAt`'s rule, and the reason a round trip through the
+   * interface produces no diff for every other reader to notice.
+   */
+  resolved?: boolean
+  /**
+   * What the anchor NAMED when the comment was written — the column's name, the
+   * 1-based row, and the cell's value as it was DISPLAYED.
+   *
+   * A legibility aid and never data: it is what lets an orphan say "on Amount,
+   * row 12, which read £22,750" instead of naming an id nobody recognises, and
+   * it is how a reader spots a comment that re-attached to a re-imported column
+   * that is no longer the same column. `value` is a formatted string precisely
+   * so nothing can be tempted to compute with it.
+   */
+  was?: { col?: string; row?: number; value?: string }
+  [extra: string]: unknown
+}
+
+// --- DATA VALIDATION, and why it lives in two different places --------------
+//
+// Excel's Data Validation: a rule saying what may be ENTERED — a list (which
+// draws an in-cell dropdown), a number range, a date range, a text length, or
+// a formula. Nothing here is `validate.ts`, which is DOCUMENT validation
+// ("does this workbook agree with itself"), and nothing here is `isOneOf`,
+// which is a FILTER predicate. Three different questions that English spells
+// the same way; the code must not.
+//
+// THE RULE HAS TWO HOMES BECAUSE THE TWO SHEET KINDS ARE NOT SYMMETRIC
+// (docs/dash-sheet-kinds.md — the difference between them IS where the type
+// lives), and picking one home for both is exactly the leakage the appearance
+// round was careful about, run in reverse:
+//
+//   * On a DATASET (`kind:'table'`) the COLUMN declares the type, and a
+//     validation rule is a NARROWING of that type. So it rides on the column
+//     (`Column.validate`), written with the existing `setColumn` patch — which
+//     is already one LWW register per column per key. A per-CELL rule on this
+//     kind would be a per-cell type through the back door: the thing that
+//     earns a dataset its column formulas, its import refusal and its chart
+//     binding is that the column, and only the column, says what a value is.
+//     A `list` rule here is very nearly an `enum` type, and is deliberately
+//     not spelled as one: `type` is what the values ARE (and coercion follows
+//     it), `validate` is what a person may TYPE (and only entry consults it),
+//     so an imported column of free text can be constrained tomorrow without
+//     re-reading a million cells today.
+//
+//   * On a SPREADSHEET (`kind:'canvas'`) there is no column to hang it on, so
+//     it attaches to a RANGE, exactly as Excel's `<dataValidation sqref>`
+//     does, and the list of ranges is a SHEET field (`CanvasSheet.validations`)
+//     written with the existing `setSheetProps`. NOT a field on `CanvasCell`:
+//     a rule over B2:B5000 would be five thousand keys in a map whose whole
+//     promise is that a cell nobody touched costs zero bytes, and under
+//     collaboration (docs/dash-collab.md §6.9) a spreadsheet cell is keyed by
+//     its ADDRESS, so a rule stored per address inherits every problem a
+//     row-insert already has and multiplies it by the rule.
+//
+// Neither field needs a new patch op, and that is a property of the design
+// rather than luck: a rule belongs to a thing the format already has an op for.
+//
+// The cost of the sheet-level list is stated rather than hidden: `validations`
+// is ONE register, so two people adding a rule to the same spreadsheet in the
+// same moment keep one of the two. That is `condfmt`'s bargain already, it is
+// the right one for a list edited rarely and deliberately, and it is not the
+// bargain for cell CONTENT, which is why content is not stored this way.
+
+/** What a rule tests. Open union: an unknown kind must PARSE and round-trip. */
+export type DataRuleKind =
+  | 'list' | 'number' | 'date' | 'textLength' | 'formula' | (string & {})
+
+/**
+ * What happens when an entry fails.
+ *
+ * `warn` is the DEFAULT and `reject` is deliberately the narrower promise —
+ * see datavalid.ts's header for the collaboration argument, which is the whole
+ * reason this field is not simply Excel's `errorStyle`.
+ */
+export type DataRuleOn = 'warn' | 'reject' | (string & {})
+
+export interface DataRule {
+  kind: DataRuleKind
+  /** `kind:'list'` — the permitted values, in the order the dropdown shows. */
+  list?: string[]
+  /** `kind:'list'` — suppress the in-cell arrow. ABSENT means show it. */
+  noDropdown?: boolean
+  /** `number`/`textLength`: a number. `date`: an ISO `YYYY-MM-DD`. Either bound
+   *  may be absent, which is how "at least 0" is spelled. */
+  min?: number | string
+  max?: number | string
+  /** `kind:'formula'` — carried verbatim, checked only when this build can. */
+  formula?: string
+  /** ABSENT means an empty cell is allowed (Excel's `ignoreBlank`, defaulted
+   *  the same way). `false` makes blank a violation. */
+  blank?: boolean
+  /** Default `warn`. */
+  on?: DataRuleOn
+  /** What to say when it fails. Absent = a sentence generated from the rule. */
+  message?: string
+  [extra: string]: unknown
+}
+
+/** One rule over one A1 range on a SPREADSHEET sheet. */
+export interface RangeValidation {
+  /** `B2:B100`. A single cell is `B2:B2` or `B2`. */
+  ref: string
+  rule: DataRule
   [extra: string]: unknown
 }
