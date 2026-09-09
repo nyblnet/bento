@@ -396,7 +396,7 @@ jobs:
 
       - name: Slide image export in browser
         # Proves file:// rasterization and zero export fetches with pixels plus
-        # a CDP request log. --characterize is manual-only and never runs here.
+        # a CDP request log.
         run: node scripts/test-slide-image-export-browser.ts
 
       - name: Export-secrets rig

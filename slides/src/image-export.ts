@@ -276,15 +276,15 @@ export function rasterSize(
 }
 
 // ============================================================================
-// The raster half. Everything below needs a browser, and every claim it makes
-// is measured by scripts/test-slide-image-export-browser.ts from a real
-// file:// page — not by reading this code.
+// The raster half. Browser-dependent behaviour below is exercised by
+// scripts/test-slide-image-export-browser.ts from a real file:// page; the
+// historical allocation measurements are recorded separately below.
 // ============================================================================
 
 // --- measured limits --------------------------------------------------------
 //
-// MEASURED, Chrome 151.0.7922.138 (macOS arm64), by
-// `scripts/test-slide-image-export-browser.ts --characterize`:
+// MEASURED, Chrome 151.0.7922.138 (macOS arm64), in the one-off allocation
+// characterization run recorded here (not retained in the regression rig):
 //
 //   per side, thin rectangles:  4096 / 8192 / 10000 / 16384 / 22000 / 32768 all
 //                               drew, read back and encoded (≤19ms each)
@@ -1699,18 +1699,11 @@ export function assertNoExternalRenderedResources(
 
 // --- export CSS -------------------------------------------------------------
 
-/**
- * Strip every `cursor` declaration.
- *
- * NOT a split on ';': a cursor value may be `url(data:image/svg+xml;base64,…)`,
- * and that data URI carries its own semicolons. Issue #261's reporter broke XML
- * parsing on exactly this shape, so the scan respects url() and quoting.
- *
- * They go because a static image has no pointer, and because a raw `<svg>`
- * inside a `url()` is the single most awkward thing to carry across an XML
- * boundary — removing it is cheaper than escaping it.
- */
-export function stripCursorDecls(css: string): string {
+/** Remove selected CSS declarations without splitting values on punctuation. */
+function stripCssDeclarations(
+  css: string,
+  discard: (property: string) => boolean,
+): string {
   /** Skip whitespace and comments — both may sit between a property and its colon. */
   const skipTrivia = (from: number): number => {
     let i = from
@@ -1747,13 +1740,13 @@ export function stripCursorDecls(css: string): string {
     const startsDecl = i === 0 || css[i - 1] === '{' || css[i - 1] === ';' || css[i - 1] === '}'
     if (!startsDecl) { i++; continue }
     const declAt = skipTrivia(i)
-    // The property name is an IDENT, so it takes escapes: `cur\73or` and
-    // `\63ursor` are both `cursor` to every browser and to neither a
-    // case-insensitive indexOf nor a regex over the literal word.
+    // Property names are IDENTs and may be escaped, so match the decoded name.
     const { name, next } = readCssIdent(css, declAt)
-    if (!name || name.toLowerCase() !== 'cursor') { i = Math.max(declAt + 1, i + 1); continue }
-    // A custom property called --cursor is a different thing entirely.
-    if (css.slice(declAt, declAt + 2) === '--') { i = next; continue }
+    const property = name.toLowerCase()
+    if (!name || property.startsWith('--') || !discard(property)) {
+      i = Math.max(declAt + 1, i + 1)
+      continue
+    }
     const colon = skipTrivia(next)
     if (css[colon] !== ':') { i = next; continue }
 
@@ -1785,6 +1778,26 @@ export function stripCursorDecls(css: string): string {
   }
   out += css.slice(copiedTo)
   return out
+}
+
+/**
+ * Strip every `cursor` declaration.
+ *
+ * NOT a split on ';': a cursor value may be `url(data:image/svg+xml;base64,…)`,
+ * and that data URI carries its own semicolons. Issue #261's reporter broke XML
+ * parsing on exactly this shape, so the scan respects url() and quoting.
+ */
+export function stripCursorDecls(css: string): string {
+  return stripCssDeclarations(css, (property) => property === 'cursor')
+}
+
+/** Remove animation and transition declarations, including vendor spellings. */
+function stripMotionDecls(css: string): string {
+  return stripCssDeclarations(css, (property) => {
+    const standard = property.replace(/^-[a-z0-9]+-/, '')
+    return standard === 'animation' || standard.startsWith('animation-') ||
+      standard === 'transition' || standard.startsWith('transition-')
+  })
 }
 
 /**
@@ -1943,7 +1956,7 @@ const EXPORT_OVERRIDES =
  * is omitted here only so that preflight can report the typed resource error.
  */
 export function buildExportCss(doc: BentoDoc, _budgets: ExportBudgets = EXPORT_BUDGETS): string {
-  return collectExportCss() + fontFaceCss(doc) + EXPORT_OVERRIDES
+  return stripMotionDecls(collectExportCss()) + fontFaceCss(doc) + EXPORT_OVERRIDES
 }
 
 // --- making the render static ----------------------------------------------
@@ -1982,21 +1995,20 @@ function replaceMediaWithStills(
 }
 
 /**
- * Take every `cursor` out of the RENDERED slide, not just out of the app sheet.
+ * Take interactive CSS out of the RENDERED slide, not just out of the app sheet.
  *
- * A still image has no pointer, so a cursor is never a resource this export
- * needs — and treating one as a forbidden fetch would refuse a deck over
- * something harmless. Removing it is both kinder and stricter than auditing it:
- * an author's `cursor: url(…)`, however it is spelled, simply stops existing
- * before anything can ask whether it would load.
+ * A still image has no pointer or timeline. Removing cursor, animation and
+ * transition declarations at their source also beats author `!important`
+ * rules and inline styles; a low-specificity override cannot guarantee that.
  */
-function stripCursorFromRendered(surface: HTMLElement): void {
+function stripInteractiveCssFromRendered(surface: HTMLElement): void {
+  const makeStatic = (css: string) => stripMotionDecls(stripCursorDecls(css))
   for (const style of Array.from(surface.querySelectorAll('style'))) {
-    style.textContent = stripCursorDecls(style.textContent ?? '')
+    style.textContent = makeStatic(style.textContent ?? '')
   }
   for (const node of Array.from(surface.querySelectorAll<HTMLElement>('[style]'))) {
     const own = node.getAttribute('style') ?? ''
-    const lean = stripCursorDecls(own)
+    const lean = makeStatic(own)
     if (lean !== own) node.setAttribute('style', lean)
   }
   // SVG also takes `cursor` as a presentation ATTRIBUTE.
@@ -2361,9 +2373,9 @@ async function rasterizeSlideImageCore(opts: RasterizeSlideImageCoreOptions): Pr
     { hidePlaceholders: true, fields })
   replaceMediaWithStills(surface, plannedSlide.slide, doc, fields)
 
-  // 7. cursors go BEFORE the audit: a still has no pointer, so a cursor is
-  // never a resource to weigh — removing it is both kinder and stricter.
-  stripCursorFromRendered(surface)
+  // 7. interactive CSS goes BEFORE the audit: a still has no pointer or
+  // timeline, so those declarations are not resources the export needs.
+  stripInteractiveCssFromRendered(surface)
 
   // 8. audit while still detached — mounting is what fetches
   assertNoExternalRenderedResources(surface, cssText, n, budgets, opts.inventory.keys)

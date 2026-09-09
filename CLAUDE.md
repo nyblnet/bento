@@ -87,8 +87,9 @@ names provisional.
   `slides/node_modules/.bin/esbuild scripts/test-slide-image-export.ts --bundle
   --platform=node --format=esm --outfile=$TMPDIR/t.mjs && node $TMPDIR/t.mjs`
   plus the browser rig after touching it; after `build:single`, run the shipped
-  acceptance rig. `--characterize` is manual-only. These do not exercise native
-  OS save-panel UX or tray/WebExtension writeback.
+  acceptance rig. The one-off Chrome allocation characterization is recorded in
+  `image-export.ts`, not retained as a regression mode. These tests do not
+  exercise native OS save-panel UX or tray/WebExtension writeback.
 - `src/autosave.ts` (v0.9.8) — auto-save + local version history, IndexedDB
   (`bento-autosave`, two stores: `recovery` single-latest-per-docId, `versions`
   capped timeline). Editor debounces (2.5s) on `doc` events: writes a recovery
