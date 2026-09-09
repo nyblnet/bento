@@ -6623,15 +6623,49 @@ focus-return that no app had.
 the maintainer's default and it holds for structure; where slides has the least,
 the fuller implementation wins on its merits and this entry says which.
 
-**Token VALUES are deliberately NOT settled here.** slides, spaces and type
-agree; dash has diverged forward with `--line-strong`, `--shadow-pop`,
-`--radius-lg` and a `light-dark()` dark mode. Which way that resolves is a
-maintainer's ruling and a later tier of this work. Until then every value in
-`menu.css` reads through a `--bkm-*` property whose fallback chain lands on
-whatever the host app already defines, so an app that adopts the primitive keeps
-the appearance it has today. Only two values had to be picked, because a shared
-rule cannot hold four: the trigger offset (6px) and the stacking level (60),
-each the majority of the four and each overridable per app.
+**Token VALUES are deliberately NOT settled here**, and neither is the theming
+MECHANISM. dash has `--line-strong`, `--shadow-pop`, `--radius-lg` and `--hover`
+that the other three lack, and a `--radius` of 7px against their 10px. Separately
+— and more importantly for a shared sheet — the four theme by three different
+mechanisms: slides and type via `:root[data-theme="dark"]`, spaces via that AND a
+`prefers-color-scheme` media query, dash via `light-dark()`, which resolves off
+`color-scheme`. All four DO have a dark theme; what differs is who decides.
+
+**A shared stylesheet therefore cannot express themed values with
+`light-dark()`.** slides sets `:root { color-scheme: only light }` deliberately
+(`slides/src/styles.css:96`) because without it a dark-mode phone renders native
+form controls dark under the app's dark ink — "blank" dropdowns — and Chrome on
+Android may force-darken the page. Under `only light`, every `light-dark()`
+value pins to its light half forever, so a shared sheet built on it would
+silently cost slides the dark theme it already has.
+
+`menu.css` sidesteps all of it: every value reads through a `--bkm-*` property
+whose fallback chain **consumes whatever themed token the host app already
+defines, by whichever mechanism that app themes it**. That is why one sheet
+survives four theming mechanisms without picking one, why adoption is
+appearance-neutral, and why tier 1 did not have to wait for the mechanism
+ruling. Only two values had to be picked, because a shared rule cannot hold
+four: the trigger offset (6px) and the stacking level (60), each the majority
+and each overridable per app.
+
+**The literal at the end of a themed chain is a latent dark-mode bug**, and this
+is the one defect tier 1 actually shipped and then caught. A chain ends in a
+light-only literal so the rule is never invalid; an app defining none of the
+tokens above it silently gets that literal in DARK mode. `type` has no
+`--surface` — its chrome surface token is `--field` — so `--bkm-bg` fell through
+to `#fff`, which would have painted a white menu under light ink. Fixed by
+extending the chain, and guarded by `scripts/test-ui-menu.ts`, which now asserts
+statically that every colour chain reaches a token each of the four apps both
+DEFINES and THEMES. A comment naming the gap was not enough; it named this one
+and the fallback was still wrong.
+
+**A boundary for tier 4, found here and not settled here.** Menus are chrome,
+and chrome should follow the theme — every app already themes the token this
+sheet consumes. The DOCUMENT must not, which `kernel/src/theme.ts:17-18` states
+outright. `type` draws that line explicitly and correctly, with `--paper` for
+the page and `--field` commented "form-control surface — CHROME, not paper".
+The shared token set should make that distinction explicit rather than inherit
+whichever app's habit arrives first.
 
 **The kernel ships CSS now, which it never did before.** Verified end to end
 rather than assumed: an app's `import '../../kernel/src/ui/menu.css'` is folded

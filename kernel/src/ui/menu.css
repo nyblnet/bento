@@ -14,11 +14,45 @@
 
    ————— VALUES ARE THE HOST APP'S, STRUCTURE AND BEHAVIOUR ARE SHARED —————
 
-   The four apps disagree about tokens. slides, spaces and type agree with each
-   other; dash has diverged FORWARD — `--line-strong`, `--shadow-pop`,
-   `--radius-lg`, and a `light-dark()` dark mode — and nobody decided that, it
-   happened. Resolving it is a maintainer's ruling and it is tier 4 of this
-   project, so this file does not pre-empt it either way.
+   The four apps disagree about tokens: dash has `--line-strong`,
+   `--shadow-pop`, `--radius-lg` and `--hover`, which the other three lack, and
+   a `--radius` of 7px against their 10px. Resolving that is a maintainer's
+   ruling and it is tier 4 of this project, so this file does not pre-empt it.
+
+   They ALSO disagree about the theming MECHANISM, which matters more here and
+   is the reason this sheet imposes none:
+
+     slides   :root[data-theme="dark"]   + :root { color-scheme: only light }
+     type     :root[data-theme="dark"]
+     spaces   [data-theme="dark"] AND a prefers-color-scheme media query
+     dash     light-dark() + a media query — i.e. color-scheme, i.e. the OS
+
+   All four DO have a dark theme; `--ink: #e7eaf0` sits in three of the dark
+   blocks (slides:39, spaces:165, type:75). What differs is who decides.
+
+   A SHARED SHEET MUST NOT USE `light-dark()`. It resolves off `color-scheme`,
+   and slides sets `:root { color-scheme: only light }` deliberately
+   (styles.css:96) — without it, dark-mode phones render native form controls
+   dark while the app's ink stays dark ("blank" dropdowns), and Chrome on
+   Android may force-darken the page. Under `only light` every `light-dark()`
+   value pins to its LIGHT half forever, so a shared sheet built on it would
+   silently cost slides the dark theme it already has.
+
+   The fallback chains below sidestep the whole question: they CONSUME whatever
+   themed token the host app already defines, by whichever mechanism that app
+   themes it. That is why this one sheet survives four different theming
+   mechanisms without picking one, and it is why tier 1 does not have to wait
+   for the tier 4 ruling.
+
+   A NOTE FOR TIER 4, found here and not settled here. Menus are CHROME, and
+   chrome SHOULD follow the theme — every app already themes the token this
+   sheet consumes for it. The document must not. type draws that line
+   explicitly and correctly: `--paper` is the page, `--field` is "form-control
+   surface — CHROME, not paper", and only the second is a menu's business. The
+   shared token set should make that boundary explicit rather than inherit
+   whichever app's habit arrives first. kernel/src/theme.ts:17-18 already says
+   a theme is a viewer preference and the document does not invert; the token
+   names are where an app either honours that or quietly does not.
 
    Instead every value reads through a `--bkm-*` property whose fallback chain
    lands on whatever the host already defines. An app that defines
@@ -53,7 +87,16 @@
   flex-direction: column;
   min-width: var(--bkm-min-width, 200px);
   padding: 5px;
-  background: var(--bkm-bg, var(--surface, #fff));
+  /* `--field` is in the chain because type has no `--surface` — its chrome
+     surface token is `--field`, themed #ffffff → #12151a and commented "form-
+     control surface — CHROME, not paper". Without it this fell through to the
+     literal below, which is LIGHT-ONLY, so a type menu in dark mode would have
+     painted white under light ink. A hardcoded literal at the end of a themed
+     chain is a dark-mode bug waiting for the first app that misses the token,
+     which is why `scripts/test-ui-menu.ts` now asserts every chain here
+     resolves to a token each app actually defines, rather than trusting this
+     comment to be remembered. */
+  background: var(--bkm-bg, var(--surface, var(--field, #fff)));
   border: 1px solid var(--bkm-border, var(--line-strong, var(--line, #e3e8ef)));
   border-radius: var(--bkm-radius, var(--radius-lg, var(--radius, 10px)));
   box-shadow: var(--bkm-shadow, var(--shadow-pop, 0 12px 32px rgb(20 30 45 / 0.16)));

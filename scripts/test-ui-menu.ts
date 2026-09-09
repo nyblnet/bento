@@ -259,5 +259,89 @@ const A = (el: unknown, k: string): string | null => (el as any).getAttribute(k)
   inner.destroy()
 }
 
+// ————— 10. EVERY THEMED FALLBACK CHAIN REACHES A TOKEN THE APP ACTUALLY THEMES
+//
+// menu.css styles CHROME, and chrome follows the theme. Each colour reads
+// through a chain like `var(--bkm-bg, var(--surface, var(--field, #fff)))`, and
+// the literal at the end is LIGHT-ONLY — it exists so the rule is never
+// invalid, not because any app should reach it. An app that defines none of the
+// tokens in a chain silently gets that light literal in DARK mode: a white menu
+// under light ink, which is the mirror of the dark-on-dark bug slides fixed with
+// `color-scheme: only light`.
+//
+// This was not hypothetical. `type` has no `--surface` at all — its chrome
+// surface token is `--field` — so the first version of the chain fell through
+// to `#fff` for the one app whose gap the comment had already noted and whose
+// fallback had not been fixed. A comment is not a guard. This is.
+//
+// The four apps theme by three different MECHANISMS (slides and type via
+// `[data-theme="dark"]`, spaces via both that and a media query, dash via
+// `light-dark()`), so "is this token themed" has to accept all three.
+{
+  const { readFileSync } = await import('node:fs')
+  const APPS = ['slides', 'spaces', 'dash', 'type']
+  const css = readFileSync(new URL('../kernel/src/ui/menu.css', import.meta.url), 'utf8')
+
+  /** Every `--token` a chain falls through, in order, ignoring our own. */
+  const chains: Array<{ prop: string; tokens: string[] }> = []
+  for (const line of css.split('\n')) {
+    const decl = /^\s*(background|color|border|box-shadow|outline)?[^:]*:\s*var\(--bkm-([a-z-]+),(.*)$/.exec(line)
+    if (!decl) continue
+    // `--[a-z-]+` stopped at the digit in `--chrome-2` and reported a token
+    // nobody defines. Digits are part of a custom-property name.
+    const tokens = [...decl[3].matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((m) => m[1])
+    if (tokens.length) chains.push({ prop: decl[2], tokens })
+  }
+  ok('found the themed chains to check', chains.length >= 4)
+
+  /** Tokens an app defines at all, and the subset it actually themes. */
+  function tokensOf(app: string): { all: Set<string>; themed: Set<string> } {
+    const src = readFileSync(new URL(`../${app}/src/styles.css`, import.meta.url), 'utf8')
+    const all = new Set<string>()
+    const themed = new Set<string>()
+    for (const m of src.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+      all.add(m[1])
+      // dash themes by resolving against color-scheme, in the value itself
+      if (m[2].includes('light-dark(')) themed.add(m[1])
+    }
+    // …the other three theme by re-declaring inside a dark block. Brace-count
+    // from each one so a nested rule inside a media query is still counted.
+    for (const start of [...src.matchAll(/\[data-theme=["']dark["']\][^{]*\{|@media[^{]*prefers-color-scheme:\s*dark[^{]*\{/g)]) {
+      let depth = 0
+      let i = start.index! + start[0].length - 1
+      for (; i < src.length; i++) {
+        if (src[i] === '{') depth++
+        else if (src[i] === '}') { depth--; if (!depth) break }
+      }
+      for (const m of src.slice(start.index!, i).matchAll(/(--[a-z0-9-]+)\s*:/g)) themed.add(m[1])
+    }
+    return { all, themed }
+  }
+
+  // Only the colour-bearing chains must be THEMED. A radius or a font size is
+  // the same in both themes by design, so requiring it here would be noise.
+  const COLOUR = new Set(['bg', 'border', 'ink', 'hover', 'ico', 'focus'])
+
+  // `shadow` is deliberately exempt from BOTH checks. Only dash has a shadow
+  // token (`--shadow-pop`); spaces has none at all, and slides and type write
+  // their menu shadow as a literal today. So the literal here IS the intended
+  // value for three of four apps rather than a gap — and unlike a background or
+  // an ink, a translucent shadow that does not follow the theme is not a
+  // legibility failure. If tier 4 mints a shared shadow token, move `shadow`
+  // into COLOUR above and this becomes a real check.
+  const EXEMPT = new Set(['shadow'])
+
+  for (const app of APPS) {
+    const { all, themed } = tokensOf(app)
+    for (const { prop, tokens } of chains) {
+      if (EXEMPT.has(prop)) continue
+      const defined = tokens.find((t) => all.has(t))
+      ok(`${app}: --bkm-${prop} reaches a token ${app} defines (${tokens.join(' → ')})`, defined)
+      if (!defined || !COLOUR.has(prop)) continue
+      ok(`${app}: --bkm-${prop} lands on ${defined}, which ${app} themes`, themed.has(defined))
+    }
+  }
+}
+
 console.log(failures ? `\ntest-ui-menu: ${failures} FAILED of ${checks}` : `test-ui-menu: ${checks} checks OK`)
 process.exit(failures ? 1 : 0)
