@@ -6578,3 +6578,69 @@ Pointers: `kernel/src/ui/panel.ts`, `kernel/src/ui/panel.css`,
 `scripts/test-ui-panel.ts` (62 checks; the drag/RTL/collapse/persistence/drawer
 behaviours are each mutation-caught, and the theming guard is reproduced from
 tier 1 — to be factored into one shared helper when both primitives have landed).
+## 2026-09-09 — Shared UI primitives live in the kernel; the menu is the first, and values stay the app's
+
+**Decision.** The seven UI primitives every Bento app implements independently
+move into `kernel/src/ui/`, one at a time, each as its own serialized kernel PR.
+The menu/dropdown is first: `kernel/src/ui/menu.ts` + `menu.css`, guarded by
+`scripts/test-ui-menu.ts`. **This lands the shared definition only — each app's
+migration is that app zone's own change**, per the kernel zone's rule that a
+kernel PR never carries the app half.
+
+**Why, and it is not bytes.** Each Bento app is one self-contained file, so
+shared code is bundled into each anyway; measured, the primitive adds 604
+compressed bytes to the slides shell while slides still carries its own menu
+code as well. A general primitive can easily cost more than the specific thing
+one app needed. The return is elsewhere.
+
+Comparing CSS selector NAMES across the apps finds nothing — two apps
+implementing the identical dropdown as `.ed-menu` and `.dv-menu` register as
+zero overlap, which is why an earlier count of 11 shared selectors out of 2,156
+concluded, wrongly, that there was nothing to share. Compared by CONCEPT, seven
+primitives are implemented four times over. The dropdown is one design copied
+four times, and the tell is the offset from the trigger: slides `calc(100% +
+4px)`, spaces `+5px`, dash `+6px`, type `+6px`. Nobody designed 4, 5, 6, 6.
+
+**The real cost is that hard-won knowledge has nowhere to live.** CLAUDE.md's
+hard-won details 9 and 10 — a flex item's `z-index` is a CEILING that caps every
+descendant, and `overflow-y: auto` also clips HORIZONTALLY — cost slides real
+debugging. Slides, spaces AND dash each record both traps in their own source,
+because each hit the same wall independently. Type records only one. Three teams
+paid for the same two lessons, and the only home either lesson had was a comment
+in one app's CSS. `menu.css` is now that home.
+
+**What differed between the four was invisible, and that is what the primitive
+fixes.** Of slides' eight dropdowns, five had no outside-press dismissal at all,
+one hand-rolled it inline and two called a helper; none closed on Escape. Three
+of the four apps publish no `aria-expanded` anywhere. No app had arrow-key
+navigation. slides and spaces each add document listeners per dropdown and
+remove none. So the primitive takes dash's single delegated listener pair and
+mutual exclusion, spaces' ARIA and disabled/selected row semantics, slides'
+split-button and phone-fold structure — and adds the arrow-key navigation and
+focus-return that no app had.
+
+**"Slides is the basis" is true of the CSS and false of the behaviour.** It was
+the maintainer's default and it holds for structure; where slides has the least,
+the fuller implementation wins on its merits and this entry says which.
+
+**Token VALUES are deliberately NOT settled here.** slides, spaces and type
+agree; dash has diverged forward with `--line-strong`, `--shadow-pop`,
+`--radius-lg` and a `light-dark()` dark mode. Which way that resolves is a
+maintainer's ruling and a later tier of this work. Until then every value in
+`menu.css` reads through a `--bkm-*` property whose fallback chain lands on
+whatever the host app already defines, so an app that adopts the primitive keeps
+the appearance it has today. Only two values had to be picked, because a shared
+rule cannot hold four: the trigger offset (6px) and the stacking level (60),
+each the majority of the four and each overridable per app.
+
+**The kernel ships CSS now, which it never did before.** Verified end to end
+rather than assumed: an app's `import '../../kernel/src/ui/menu.css'` is folded
+by Vite into the single stylesheet that `scripts/postbuild-compress.mjs`
+deflates into the `#bento-rt-css` payload, and the rules inflate intact out of
+the built shell. No build change was needed. `menu.ts` deliberately does NOT
+import its own stylesheet: keeping them separate is what lets the rig exercise
+the whole primitive in node with no build machinery and no CSS-import stub.
+
+Pointers: `kernel/src/ui/menu.ts` (the four-app comparison, function by
+function), `kernel/src/ui/menu.css` (details 9 and 10, written down once),
+`scripts/test-ui-menu.ts` (what each check guards, and which app's gap it is).
