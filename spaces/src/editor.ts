@@ -37,6 +37,7 @@ import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
 import { openAbout } from './about'
 import { openGraphView } from './graph.ts'
+import { pageToDeck, type DeckNote, type DeckNoteCode } from './todeck.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
@@ -415,6 +416,9 @@ export class Editor {
         menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
           close(); this.openExportSpace()
         }))
+        menu.append(this.menuItem('canvas', t('Export page as slides…'), t('The page as a bento/slides deck, ready to paste into Bento Slides'), () => {
+          close(); this.openExportDeck()
+        }))
       }
     })
     more.classList.add('sp-more', 'sp-dd-end')
@@ -448,6 +452,9 @@ export class Editor {
       }))
       menu.append(this.menuItem('page', t('Export page as a space…'), t('One page and what is under it, as its own file'), () => {
         close(); this.openExportSpace()
+      }))
+      menu.append(this.menuItem('canvas', t('Export page as slides…'), t('The page as a bento/slides deck, ready to paste into Bento Slides'), () => {
+        close(); this.openExportDeck()
       }))
     })
     saveMore.classList.add('sp-caret', 'sp-dd-end')
@@ -4693,6 +4700,95 @@ export class Editor {
   }
 
   /**
+   * PAGE → DECK.
+   *
+   * What this hands over is the deck's DOCUMENT JSON, not a `.bento.html`
+   * deck — src/todeck.ts explains why that is the honest scope from inside
+   * this app. So the dialog's job is to say what the artefact IS and what to
+   * do with it, and then to say, before anything is downloaded, exactly what
+   * of this page did not survive the crossing. A silent lossy export is the
+   * failure mode here; the summary is the feature.
+   */
+  openExportDeck(): void {
+    const s = this.store
+    this.openOverlay(t('Export a page as slides'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Export a page as slides')))
+
+      const what = document.createElement('p')
+      what.className = 'sp-note'
+      what.textContent = t('The page becomes a deck’s document. Open Bento Slides and use “Replace from JSON…” in its About dialog — or window.bento.loadDoc() from a script.')
+      card.append(what)
+
+      const pick = document.createElement('select')
+      pick.className = 'sp-select'
+      for (const { page, depth } of s.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === s.pageId) o.selected = true
+        pick.append(o)
+      }
+      const pageRow = el('div', 'sp-row')
+      pageRow.append(el('span', '', t('Page')), pick)
+      card.append(pageRow)
+
+      const summary = document.createElement('p')
+      summary.className = 'sp-note'
+      const losses = document.createElement('ul')
+      losses.className = 'sp-note'
+      card.append(summary, losses)
+
+      // Built from the REAL export, not described in the abstract — the same
+      // choice openExportSpace makes, and for the same reason: the counts have
+      // to move as the choice does or they are decoration.
+      let out = pageToDeck(s.doc, pick.value)
+      const recount = (): void => {
+        out = pageToDeck(s.doc, pick.value)
+        summary.textContent = t('{n} slide(s).', { n: out.slides })
+        losses.textContent = ''
+        if (!out.notes.length) return
+        const head = document.createElement('li')
+        head.textContent = t('What did not come across as it stands:')
+        losses.append(head)
+        for (const n of out.notes) {
+          const li = document.createElement('li')
+          li.textContent = n.n > 1 ? `${deckNoteText(n)} (×${n.n})` : deckNoteText(n)
+          losses.append(li)
+        }
+      }
+      pick.addEventListener('change', recount)
+      recount()
+
+      const name = (): string =>
+        `${(s.doc.pages.find((p) => p.id === pick.value)?.title || 'deck').replace(/[^\w.-]+/g, '-')}.bento-slides.json`
+
+      const copyB = plainBtn(t('Copy the deck JSON'), () => {
+        navigator.clipboard?.writeText(JSON.stringify(out.doc, null, 2))
+          .then(() => { copyB.textContent = t('Copied') })
+          .catch(() => { copyB.textContent = t('Could not copy') })
+          .finally(() => { setTimeout(() => { copyB.textContent = t('Copy the deck JSON') }, 1800) })
+      })
+
+      const acts = el('div', 'sp-actions')
+      acts.append(
+        plainBtn(t('Download the deck JSON'), () => {
+          const blob = new Blob([JSON.stringify(out.doc, null, 2)], { type: 'application/json' })
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = name()
+          a.click()
+          URL.revokeObjectURL(a.href)
+          close()
+          this.status(t('Exported {n} slide(s) as a deck', { n: out.slides }))
+        }, true),
+        copyB,
+        plainBtn(t('Close'), close),
+      )
+      card.append(acts)
+    })
+  }
+
+  /**
    * Import, in ONE undoable step.
    *
    * Everything slow or asynchronous — reading files, decoding and re-encoding
@@ -5328,6 +5424,38 @@ function plainBtn(label: string, onClick: () => void, primary = false): HTMLButt
   b.textContent = label
   b.addEventListener('click', onClick)
   return b
+}
+
+/**
+ * One `DeckNote` in the reader's own language.
+ *
+ * A SWITCH OF LITERALS, deliberately, and not `t(TEXT[code])`. The i18n
+ * extractor sweeps `t()` calls whose argument is a LITERAL STRING out of the
+ * source; a lookup table would compile, run, report 100% coverage in the
+ * packer, and ship English in all eight locales — which has already happened
+ * once in this app, to the block menu labels. The document's own copy of these
+ * sentences lives in todeck.ts and is deliberately English: a saved artefact's
+ * words are its author's, not its next reader's browser's.
+ */
+function deckNoteText(n: DeckNote): string {
+  const code: DeckNoteCode = n.code
+  switch (code) {
+    case 'image-remote': return t('A picture that lives on the web was left out — a deck never fetches.')
+    case 'media-remote': return t('A clip that lives on the web was left out — a deck never fetches.')
+    case 'media-embedded': return t('A clip travelled as embedded bytes, so the deck is large.')
+    case 'link-flattened': return t('A link kept its words; a slide has nowhere to put the address.')
+    case 'pagelink': return t('A card that opened another page became its title.')
+    case 'toggle-open': return t('A fold is shown open — a slide cannot fold.')
+    case 'callout-plain': return t('A callout kept its words and its kind, in a plain panel.')
+    case 'canvas-flattened': return t('A canvas became a slide; the card sizes were chosen here.')
+    case 'table-split': return t('A table was too tall for one slide and continues on the next.')
+    case 'view-derived': return t('A board became a table of the rows it stood for.')
+    case 'unknown-block': return t('A block this build does not know became its text.')
+    case 'empty-block': return t('A block with nothing in it was left out.')
+    case 'rtl': return t('This space reads right-to-left; a deck has no such setting.')
+    case 'comments': return t('Review comments stayed behind, on purpose.')
+    case 'icon-glyph': return t('The page’s icon is one of this app’s own glyphs, not an emoji, and did not travel.')
+  }
 }
 
 // ---- dropped files ----------------------------------------------------------
