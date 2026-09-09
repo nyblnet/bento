@@ -81,6 +81,32 @@ The release that came out of watching somebody use 0.2.0.
   and take unsaved edits with it; a `?` shortcut card generated from the key map
   itself; and ⇧Space selects the row, which had never worked.
 
+- **The 3D view answers to the filter, says what it is showing, and no longer
+  opens on a plot of one column against itself.** Three faults, and the third
+  is the one that made the other two hard to see.
+
+  Filtering the sheet changed the grid, the status bar, the footer and the 2D
+  chart, and left the 3D plot drawing every row — filter the starter workbook
+  to one region and three readouts said "3 of 8 rows, £50,750" beside a picture
+  of all eight. It subscribes to view changes now, and reads the same vector the
+  footer totals do, so the plot cannot describe a different population from the
+  numbers beside it.
+
+  Axis titles, the colour legend and the count of rows dropped for having no
+  value existed, and were drawn only by the no-WebGL fallback — so the browser
+  that could not render in 3D got the labelled picture and every ordinary
+  browser got an unlabelled one. They are drawn over the plot now. The dropped
+  count is the part that matters: values with no number are left out rather than
+  plotted as zero, which is right, and until now nothing said so.
+
+  And the default binding took the first three numeric columns, which on the
+  starter workbook meant Value, Probability, and Weighted — a column defined as
+  Value × Probability. The third axis was a function of the other two, so the
+  cloud was a surface and told you nothing. A column with a formula is no longer
+  used as an axis while a stored one is available; and where a sheet has only
+  two independent measures, it opens as 3D bars over two categories instead,
+  which is both true to the data and the view a spreadsheet cannot draw.
+
 ## [0.2.0] — 2026-08-03
 
 First release. A workbook is one self-contained HTML file: the data, the grid,

@@ -1023,10 +1023,20 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     kindBtn.textContent = viz.kind[0].toUpperCase() + viz.kind.slice(1)
     const scene = buildScene(sheet, viz, sheet.id === shownId
       ? (grid.computed as Map<string, unknown[]>)
-      : (recalc(sheet, store.doc.modified).values as Map<string, unknown[]>))
+      : (recalc(sheet, store.doc.modified).values as Map<string, unknown[]>),
+      // THE VIEW VECTOR — the same one the footer totals and the 2D chart read.
+      // Its absence is why this plot ignored the filter completely.
+      store.order[sheet.id] ?? null)
     vizDown = mountViz3d(chartBody, scene)
   }
   store.on('doc', () => { if (viz) draw3d() })
+  // FILTERING AND SORTING ARE VIEW STATE: `store.view()` emits `view` and never
+  // `doc`, because they must not dirty the file. `drawChart` has been on both
+  // since that was found; `draw3d` was on `doc` alone, so a filter changed the
+  // grid, the status bar, the footer and the 2D chart, and left the 3D plot
+  // showing every row — beside three readouts that had already corrected
+  // themselves. Same subscription, same reason, ten lines further down.
+  store.on('view', () => { if (viz) draw3d() })
   app.querySelector('[data-act="viz3d"]')!.addEventListener('click', () => {
     const sheet = dataset('viz3d')
     if (!sheet) return

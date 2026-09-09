@@ -58,7 +58,7 @@ import {
   normalize as vnorm, dot as vdot,
   type Mat4, type Vec3,
 } from './gl.ts'
-import type { TableSheet } from './model.ts'
+import type { Column, TableSheet } from './model.ts'
 import { readCell } from './store.ts'
 import { isErr } from './formula.ts'
 
@@ -674,19 +674,47 @@ export function buildScene(
   sheet: TableSheet,
   binding: Viz3dBinding,
   computed?: Map<string, unknown[]>,
+  /**
+   * The view vector — `store.order[sheet.id]`: the canonical row indices the
+   * reader can SEE, in the order they see them, or null/undefined for every
+   * row. Exactly the argument `chart.ts` takes, for exactly the reason its
+   * comment gives, and this plot did not take it.
+   *
+   * Measured before the fix, on the starter workbook filtered to Region =
+   * North: the grid showed 3 rows, the status bar said "3 of 8 rows", the
+   * footer said £50,750 — and the plot beside all of that drew all EIGHT
+   * points, unchanged. That is the same failure as the footer that ignored the
+   * filter, in the panel next to the one where it was fixed: the fix went into
+   * `drawChart` and never crossed to `draw3d`.
+   *
+   * IT APPLIES TO EVERY BOUND COLUMN OR TO NONE, which is why it is projected
+   * HERE rather than at the call site. `buildScatter` and `buildGrid` zip x, y,
+   * z, colour and size BY INDEX; project one and not another and the plot pairs
+   * the wrong height with the wrong position — plausible, and wrong. Projecting
+   * inside `col` makes that unrepresentable: after this, `rows` counts the view
+   * and every array is view-local, so nothing downstream can disagree about
+   * which population it is describing. `scene.rows`/`scene.dropped` then report
+   * the VIEW's counts, which is what the reader is being told about.
+   */
+  view?: number[] | null,
 ): Scene {
-  const rows = sheet.rids.reduce((a, [, c]) => a + c, 0)
-  if (rows === 0) return emptyScene(binding.kind, 'this sheet has no rows yet')
+  const all = sheet.rids.reduce((a, [, c]) => a + c, 0)
+  const rows = view ? view.length : all
+  if (all === 0) return emptyScene(binding.kind, 'this sheet has no rows yet')
+  // A filter that matches nothing is not the same statement as an empty sheet,
+  // and saying "no rows yet" over a live filter would send the reader looking
+  // for data that is right there.
+  if (rows === 0) return emptyScene(binding.kind, 'the filter leaves no rows to plot', all)
 
   const nameOf = (id?: string): string =>
     id ? (sheet.columns.find((c) => c.id === id)?.name ?? id) : ''
   const col = (id?: string): unknown[] | null => {
     if (!id) return null
     const c = computed?.get(id)
-    if (c) return c
+    if (c) return view ? view.map((r) => c[r]) : c
     const d = sheet.data[id]
     if (!d) return null
-    return Array.from({ length: rows }, (_, i) => readCell(d, i))
+    return Array.from({ length: rows }, (_, i) => readCell(d, view ? view[i] : i))
   }
 
   switch (binding.kind) {
@@ -1050,7 +1078,30 @@ function graticule(): Mesh {
  * actually shaped for, and return null rather than force one that is wrong.
  */
 export function defaultViz3d(sheet: TableSheet): Viz3dBinding | null {
-  const numeric = sheet.columns.filter((c) => c.type === 'number' || c.type === 'money' || c.type === 'percent')
+  const isNum = (c: Column): boolean => c.type === 'number' || c.type === 'money' || c.type === 'percent'
+  /**
+   * A DERIVED COLUMN IS NEVER AN INDEPENDENT AXIS, and the starter workbook is
+   * the proof of what happens when the default does not know that.
+   *
+   * This bound the first three numeric columns in declaration order. On
+   * `sheet-pipeline` those are Value (money), Probability (percent) and
+   * Weighted (money) — `closed` is a date and drops out — and `weighted` is
+   * `formula: 'value * prob'` (starter.ts). So the plot every new user met was
+   * x = Value, y = Probability, **z = Value × Probability**: a surface, drawn
+   * as a cloud, in which the third dimension carries no information the first
+   * two do not already have. It looked like an argument against 3D and it was
+   * an argument against this function.
+   *
+   * A column with a `formula` is a function of columns already on the sheet, so
+   * using one as an axis plots a variable against itself. Stored columns are
+   * preferred for x/y/z; a computed one is still allowed to COLOUR or SIZE the
+   * points, where being derived is informative rather than degenerate, and is
+   * still used as an axis if there is nothing else — a sheet of three formula
+   * columns is better plotted than refused.
+   */
+  const stored = sheet.columns.filter((c) => isNum(c) && !c.formula)
+  const derived = sheet.columns.filter((c) => isNum(c) && !!c.formula)
+  const numeric = [...stored, ...derived]
   const cat = sheet.columns.filter((c) => c.type === 'text' || c.type === 'enum' || c.type === 'date')
   const find = (re: RegExp) => numeric.find((c) => re.test(c.name) || re.test(c.id))
   // `\b` matters: without it "platform" is a latitude column.
@@ -1059,17 +1110,36 @@ export function defaultViz3d(sheet: TableSheet): Viz3dBinding | null {
   if (lat && lon && lat.id !== lon.id) {
     return { kind: 'globe', lat: lat.id, lon: lon.id, color: numeric.find((c) => c.id !== lat.id && c.id !== lon.id)?.id }
   }
-  if (numeric.length >= 3) {
-    return {
-      kind: 'scatter',
-      x: numeric[0].id, y: numeric[1].id, z: numeric[2].id,
-      color: numeric[3]?.id ?? cat[0]?.id,
-      size: numeric[4]?.id,
-    }
-  }
-  if (cat.length >= 2 && numeric.length >= 1) {
-    return { kind: 'bars', x: cat[0].id, y: cat[1].id, z: numeric[0].id, agg: 'sum' }
-  }
+  const scatter = (): Viz3dBinding => ({
+    kind: 'scatter',
+    x: numeric[0].id, y: numeric[1].id, z: numeric[2].id,
+    color: numeric[3]?.id ?? cat[0]?.id,
+    size: numeric[4]?.id,
+  })
+  const bars = (): Viz3dBinding =>
+    ({ kind: 'bars', x: cat[0].id, y: cat[1].id, z: numeric[0].id, agg: 'sum' })
+
+  // THREE INDEPENDENT AXES, or this is not a scatter worth drawing.
+  if (stored.length >= 3) return scatter()
+
+  // ONLY TWO STORED MEASURES — the starter workbook's exact shape, and the
+  // reason preferring stored columns is not on its own enough. `sheet-pipeline`
+  // has Value and Probability and nothing else independent, so a scatter of it
+  // can only reach three dimensions by taking a derived column, whatever the
+  // preference says. There is no honest scatter here to pick.
+  //
+  // 3D BARS ARE, and they are the better answer twice over: a category x
+  // category x measure grid is a genuinely three-dimensional reading of a
+  // pipeline (who is selling how much, where), and it is the thing a
+  // spreadsheet cannot draw — which is the whole claim this view is here to
+  // make. A degenerate scatter drawn ahead of a truthful grid was the default
+  // arguing against its own feature.
+  if (cat.length >= 2 && numeric.length >= 1) return bars()
+
+  // LAST RESORT, and deliberately still allowed: a sheet whose numeric columns
+  // are all computed, with nothing to group by, is better plotted than refused.
+  // Preferring stored columns is a preference, never a ban.
+  if (numeric.length >= 3) return scatter()
   return null
 }
 
@@ -1344,6 +1414,9 @@ export interface Viz3dOpts {
   elevation?: number
   /** point radius as a fraction of the scene radius */
   pointScale?: number
+  /** label colour for the overlay — same default as the fallback's, so the two
+   *  renderers cannot drift apart on the one thing they now both draw. */
+  ink?: string
 }
 
 /**
@@ -1463,19 +1536,43 @@ export function mountViz3d(host: HTMLElement, scene: Scene, opts: Viz3dOpts = {}
   host.textContent = ''
   if (scene.empty || !supportsWebGL2()) return mountFallback(host, scene, opts)
 
+  // A POSITIONED WRAPPER, because the labels go OVER the canvas.
+  //
+  // `overlaySvg` — axis titles, the colour legend and the dropped-row count —
+  // had exactly one call site, inside `fallbackSvg`. So the machine that CANNOT
+  // do WebGL2 got the labelled, honest picture and every ordinary browser got a
+  // bare canvas: measured in the built shell, one <canvas>, zero text nodes,
+  // zero overlay elements. `Scene.axes` and `Scene.legend` were computed on
+  // every build and thrown away.
+  //
+  // The dropped-row count is the half that is not cosmetic, and this file
+  // already says so: nulls are dropped rather than zeroed (correctly — a
+  // missing value coerced to 0 is a crater, and craters look like findings),
+  // and `overlaySvg`'s own comment calls the count "not optional: it is the
+  // only place the fallback can say that some rows are not in the picture".
+  // It was the only place FULL STOP, and the primary renderer said nothing.
+  //
+  // Deliberately a sibling layer rather than anything inside the GL path:
+  // the same string the fallback builds, positioned over the canvas,
+  // `pointer-events:none` so the orbit drag still lands on the canvas beneath.
+  const wrap = document.createElement('div')
+  wrap.className = 'dash-viz3d dash-viz3d-gl'
+  wrap.style.cssText = 'position:relative;width:100%;height:100%'
+  host.appendChild(wrap)
+
   const canvas = document.createElement('canvas')
   // `touch-action:none` so a one-finger drag orbits instead of scrolling the
   // page; `user-select:none` because an orbit drag that runs off the canvas
   // otherwise selects the surrounding page text and leaves it highlighted.
   canvas.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;user-select:none'
-  host.appendChild(canvas)
+  wrap.appendChild(canvas)
   const view = new GLView(canvas)
   // supportsWebGL2() can be TRUE while this particular context fails: browsers
   // cap live contexts at about 16, and a dashboard that swaps tiles reaches it.
   // Falling back to the SVG is much better than a blank canvas.
   if (!view.ok) {
     view.dispose()
-    canvas.remove()
+    wrap.remove()
     return mountFallback(host, scene, opts)
   }
 
@@ -1489,6 +1586,21 @@ export function mountViz3d(host: HTMLElement, scene: Scene, opts: Viz3dOpts = {}
     siz: m.sizes ? view.buffer(m.sizes) : null,
     idx: m.indices ? view.buffer(m.indices, { index: true }) : null,
   }))
+
+  const labels = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  labels.setAttribute('aria-hidden', 'true')
+  labels.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none'
+  wrap.appendChild(labels)
+  // Only when the BOX changes. The overlay is a function of the scene and the
+  // size, never of the camera, so redrawing it per orbit frame would rebuild
+  // this markup on every mouse move for no change at all.
+  let lw = -1, lh = -1
+  const drawLabels = (w: number, h: number) => {
+    if (w === lw && h === lh) return
+    lw = w; lh = h
+    labels.setAttribute('viewBox', `0 0 ${w} ${h}`)
+    labels.innerHTML = overlaySvg(scene, w, h, opts.ink ?? '#C7D0DE')
+  }
 
   const cam = frameCamera(scene, opts)
   const bg = hexToRgb(opts.background ?? '#0E1420')
@@ -1531,6 +1643,7 @@ export function mountViz3d(host: HTMLElement, scene: Scene, opts: Viz3dOpts = {}
         ...(b.idx ? { index: b.idx } : {}),
       })
     }
+    drawLabels(canvas.clientWidth || 640, canvas.clientHeight || 420)
     if (opts.autoRotate) { cam.rotate(-0.4, 0); schedule() }
   }
   const schedule = () => {
@@ -1549,7 +1662,7 @@ export function mountViz3d(host: HTMLElement, scene: Scene, opts: Viz3dOpts = {}
     detach()
     ro?.disconnect()
     view.dispose()
-    canvas.remove()
+    wrap.remove()
   }
 }
 
