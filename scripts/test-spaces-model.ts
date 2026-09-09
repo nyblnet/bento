@@ -43,6 +43,11 @@ import {
   sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
   VIEW_LAYOUTS, layoutOf, nextLayout,
 } from '../spaces/src/fields.ts'
+import {
+  CAL_SPANS, spanOf, nextSpan, dateOf, dateFieldsOf, splitByDate, dateHint,
+  monthGrid, monthOf, monthLabel, stepMonth, daysApart, defaultMonth,
+  firstWeekday, weekdayNames, timelineDays,
+} from '../spaces/src/calendar.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
   canonicalMarks, applyMark, clearMarks, markActive, linkAt, linkAttrs, htmlToMd,
@@ -573,8 +578,12 @@ for (const [label, input, err] of [
     .split('.sp-view-tablewrap')[1]?.slice(0, 120) ?? ''),
     '…and scrolls inside itself, so a wide table never scrolls the page sideways')
 
-  // Cycling all the way round must leave the block as it started. The cycle
-  // ends at GALLERY now, so it is the last shape that clears the key.
+  // Cycling all the way round must leave the block as it started. Asked of the
+  // LAST shape rather than of a shape named here: the cycle has grown twice
+  // (gallery, then calendar) and both times this line was the thing that had to
+  // be edited to say a different word. Reading the last entry off the tuple
+  // asks the question that actually matters — whatever ends the cycle clears
+  // the key — and keeps asking it at the sixth shape.
   //
   // Asked of the CYCLE, not of the source. This assertion used to read
   // /gallery: undefined/ against editor.ts, which is a test of how the line is
@@ -583,7 +592,8 @@ for (const [label, input, err] of [
   // it green. So the shape question goes to nextLayout, and the writer question
   // goes to the writer's own body — not to the whole file, on the `coverFn`
   // precedent below, because `undefined` appears hundreds of times in editor.ts.
-  ok(nextLayout('gallery') === 'board', 'the shape after the last one is the board again')
+  ok(nextLayout(VIEW_LAYOUTS[VIEW_LAYOUTS.length - 1]) === 'board',
+    'the shape after the last one is the board again')
   const toggleFn = ed.slice(ed.indexOf('private toggleViewLayout'),
     ed.indexOf('private openViewGroup'))
   ok(toggleFn.length > 0 && /'layout',\s*to === 'board' \? undefined :/.test(toggleFn),
@@ -658,7 +668,7 @@ for (const [label, input, err] of [
   const ed2 = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const props2 = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
   ok(/layout === 'gallery'/.test(render), 'a view can be a gallery')
-  ok(nextLayout('table') === 'gallery' && nextLayout('gallery') === 'board',
+  ok(nextLayout('table') === 'gallery' && VIEW_LAYOUTS.includes('gallery'),
     '…reachable from the one layout control, which cycles through it')
   ok(/resolveSrc\(coverSrc\(r\.page\), doc\)/.test(render),
     '…and a card asks coverSrc for the picture, so a remote cover is refused there too')
@@ -3593,6 +3603,278 @@ function fsTable(f: string): string {
     'the cycle reaches every shape — none is stranded off it')
 }
 
+
+// ---- the CALENDAR layout ---------------------------------------------------
+// WHAT THIS PROVES, and every check below is BEHAVIOURAL — the functions are
+// imported and run. A source grep over render.ts would have passed while the
+// grid was empty, which is the class of failure this zone has measured twice.
+//
+//   1. The grid has the right NUMBER OF CELLS. Four, five and six week months
+//      all exist, and the reader's first day of the week moves the boundary —
+//      February 2026 is exactly four weeks starting Sunday and five starting
+//      Monday. A hard-coded 35 loses the last days of a six-week month with no
+//      symptom but a missing entry.
+//   2. Every date is built from COMPONENTS, so the answer is the same at UTC+14
+//      and UTC-11. This file is run under both.
+//   3. Nothing is DROPPED. A page the rule finds no date for is in `undated`,
+//      never gone.
+//   4. Untrusted input cannot reach `Object.prototype` through any of it.
+{
+  const calDoc = (fields: unknown[] = DEFAULT_FIELDS as unknown[]): SpacesDoc =>
+    ({ fields, pages: [] } as unknown as SpacesDoc)
+  const crow = (id: string, journal?: string, values: Record<string, unknown> = {}): IssueRow =>
+    ({
+      page: { id, title: id, blocks: [], ...(journal ? { journal } : {}) } as unknown as Page,
+      values: new Map(Object.entries(values)),
+    })
+
+  // --- the shape cycle, on the layout cycle's own discipline ---------------
+  ok((VIEW_LAYOUTS as readonly string[]).includes('calendar'), 'a view can be a calendar')
+  ok(layoutOf('calendar') === 'calendar' && nextLayout('gallery') === 'calendar',
+    '…reachable from the ONE layout control, which cycles through it')
+  ok(CAL_SPANS[0] === 'month' && spanOf(undefined) === 'month',
+    'month is the ABSENT key, so a view nobody toggled carries no span at all')
+  ok(nextSpan('month') === 'timeline' && nextSpan('timeline') === 'month',
+    'the two shapes toggle, and the toggle closes')
+  for (const evil of ['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__']) {
+    ok((CAL_SPANS as readonly string[]).includes(spanOf(evil)),
+      `span:${JSON.stringify(evil)} resolves to a real shape (${spanOf(evil)}), never a native function`)
+    ok((CAL_SPANS as readonly string[]).includes(nextSpan(evil)),
+      '…and what follows it is a shape too, so data-next is never a function body')
+  }
+  ok(spanOf('quarter') === 'month', 'a span from a NEWER build falls back to the month grid')
+
+  // --- WHICH DATE ----------------------------------------------------------
+  const cdoc = calDoc()
+  ok(dateOf(cdoc, crow('a', '2026-08-06')) === '2026-08-06',
+    'a journal entry is dated by its journal date')
+  ok(dateOf(cdoc, crow('b', undefined, { due: '2026-08-09' })) === '2026-08-09',
+    '…a page without one falls to the first date FIELD it carries a value for')
+  ok(dateOf(cdoc, crow('c', '2026-08-06', { due: '2027-01-01' })) === '2026-08-06',
+    '…and the journal date wins when a page has both')
+  ok(dateOf(cdoc, crow('e')) === '', 'a page with neither has NO date rather than a guessed one')
+  // 2026-13-99 is digit-shaped and is not a day; every Date-based formatter
+  // rolls it into some OTHER real date, which is the confident wrong answer
+  ok(dateOf(cdoc, crow('f', undefined, { due: '2026-13-99' })) === '',
+    'a digit-shaped non-date is undated, never rolled over into a day it is not')
+  ok(dateOf(cdoc, crow('g', undefined, { due: 20260809 })) === '',
+    '…and a number in a date field is undated too, rather than stringified into one')
+  {
+    // the rule is "the first date field WITH A VALUE", not "the first date
+    // field": a page with an empty Due and a filled Published is dated by
+    // Published, or the rule would drop it for carrying the wrong empty box
+    const two = calDoc([
+      { key: 'due', label: 'Due', vt: 'date' },
+      { key: 'pub', label: 'Published', vt: 'date' },
+    ])
+    ok(dateOf(two, crow('h', undefined, { due: '', pub: '2026-03-04' })) === '2026-03-04',
+      'an EMPTY date field is skipped for the next one, not treated as the answer')
+    ok(dateFieldsOf(two).length === 2, 'the hint names every date field the schema declares')
+  }
+
+  // --- NOTHING IS DROPPED --------------------------------------------------
+  {
+    const rows = [crow('a', '2026-08-06'), crow('b', '2026-08-06'),
+      crow('c', undefined, { due: '2026-08-09' }), crow('d'), crow('e')]
+    const split = splitByDate(cdoc, rows)
+    ok(split.days.get('2026-08-06')?.length === 2, 'two pages on one day share a cell')
+    ok(split.undated.length === 2, 'the undated pages are KEPT, in their own bucket')
+    const seen = [...split.days.values()].reduce((n, v) => n + v.length, 0) + split.undated.length
+    ok(seen === rows.length,
+      `every row the view holds is somewhere in the calendar (${seen}/${rows.length})`)
+  }
+  {
+    // the day keys come out of a document someone sent you. A plain object
+    // would read `days['__proto__']` back as the prototype and `days['toString']`
+    // as a native function; a Map has no prototype keys to collide with.
+    const evil = splitByDate(calDoc([{ key: 'due', label: 'Due', vt: 'date' }]),
+      [crow('x', '2026-08-06'), crow('y')])
+    ok(evil.days.get('__proto__') === undefined && evil.days.get('toString') === undefined,
+      'the day index reaches Object.prototype for nothing')
+    ok(evil.days.size === 1, '…and holds exactly the days it was given')
+  }
+
+  // --- THE GRID, counted ---------------------------------------------------
+  // Sunday-first and Monday-first are different grids for the same month, so
+  // the count is asked of both explicitly rather than of whatever this machine
+  // happens to be set to.
+  for (const [ym, loc, want, why] of [
+    // Feb 2026 has 28 days and 1 Feb 2026 is a SUNDAY: exactly four weeks in a
+    // Sunday-first locale, and five in a Monday-first one. The one month where
+    // a grid can be 28 cells at all.
+    ['2026-02', 'en-US', 28, 'a 28-day month starting on the first weekday is FOUR weeks'],
+    ['2026-02', 'en-GB', 35, '…and FIVE weeks when the same month starts on the last one'],
+    // 1 Aug 2026 is a Saturday: six weeks whichever end the week starts.
+    ['2026-08', 'en-GB', 42, 'a month that spills past five weeks gets SIX, never a clipped five'],
+    ['2026-08', 'en-US', 42, '…in a Sunday-first locale too'],
+    // 1 Sep 2026 is a Tuesday: the ordinary five.
+    ['2026-09', 'en-GB', 35, 'and the ordinary month is five'],
+  ] as const) {
+    const cells = monthGrid(ym, loc)
+    ok(cells.length === want, `${why} — ${ym}/${loc} is ${cells.length} cells`)
+    ok(cells.length % 7 === 0, `…and ${ym}/${loc} is whole weeks`)
+  }
+  {
+    // EVERY DAY OF THE MONTH IS PRESENT EXACTLY ONCE. The cell count being
+    // right is necessary and not sufficient — an off-by-one in the lead would
+    // give 35 correct-looking cells with the 31st missing and the 30th twice.
+    for (const ym of ['2026-01', '2026-02', '2024-02', '2026-08', '2026-09', '2026-12']) {
+      const inMonth = monthGrid(ym, 'en-GB').filter((c) => c.inMonth).map((c) => c.iso)
+      const days = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)), 0).getDate()
+      const want = Array.from({ length: days }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`)
+      ok(inMonth.join(',') === want.join(','),
+        `${ym}: all ${days} days present, once each, in order`)
+    }
+    ok(monthGrid('2024-02', 'en-GB').filter((c) => c.inMonth).length === 29,
+      'a leap February has 29 days, from the calendar rather than from a table')
+    ok(monthGrid('2026-02', 'en-GB').filter((c) => c.inMonth).length === 28,
+      '…and a non-leap one has 28')
+  }
+  {
+    // the grid is CONTIGUOUS: every cell is the day after the one before it,
+    // across the month boundaries at both ends
+    const cells = monthGrid('2026-08', 'en-GB')
+    let contiguous = true
+    for (let i = 1; i < cells.length; i++) {
+      if (daysApart(cells[i - 1].iso, cells[i].iso) !== 1) contiguous = false
+    }
+    ok(contiguous, 'the grid is one unbroken run of days, leading and trailing weeks included')
+    ok(cells[0].inMonth === false && cells[cells.length - 1].inMonth === false,
+      '…and the days outside the month are marked as such rather than blanked out')
+  }
+  {
+    // EVERY GRID STARTS ON THE READER'S FIRST WEEKDAY, and ends the day before
+    // it. Added after a sabotage run: replacing the component-built date with
+    // `new Date(`${ym}-01T00:00:00Z`)` — the exact UTC-parse bug journal.ts
+    // exists to warn about — slid the whole grid one day west of Greenwich, and
+    // the day-coverage checks above ALL PASSED, because a uniform shift still
+    // contains every day of the month exactly once. It just puts them in the
+    // wrong columns. The weekday of the first cell is the invariant a shifted
+    // grid cannot satisfy; the day list is not.
+    const dow = (iso: string): number => {
+      const [y, m, d] = iso.split('-').map(Number)
+      return new Date(y, m - 1, d).getDay()
+    }
+    for (const [ym, loc] of [
+      ['2026-02', 'en-US'], ['2026-02', 'en-GB'], ['2026-08', 'en-US'],
+      ['2026-08', 'en-GB'], ['2026-09', 'ja'], ['2026-12', 'de'], ['2024-02', 'pt'],
+    ] as const) {
+      const cells = monthGrid(ym, loc)
+      ok(dow(cells[0].iso) === firstWeekday(loc),
+        `${ym}/${loc}: the grid begins on the reader’s own first weekday`)
+      ok(dow(cells[cells.length - 1].iso) === (firstWeekday(loc) + 6) % 7,
+        `…and ends on the day before it, so no week is half-drawn`)
+      const days = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)), 0).getDate()
+      ok(cells.some((c) => c.iso === `${ym}-01`)
+        && cells.some((c) => c.iso === `${ym}-${String(days).padStart(2, '0')}`),
+        `…and holds both ends of ${ym} rather than clipping one`)
+    }
+  }
+  ok(monthGrid('2026-13', 'en-GB').length === 0 && monthGrid('nonsense', 'en-GB').length === 0,
+    'a month that is not a month draws no grid rather than a garbage one')
+
+  // --- FIRST DAY OF THE WEEK, and the column headings ----------------------
+  ok(firstWeekday('en-US') === 0, 'the week starts on Sunday in en-US')
+  ok(firstWeekday('en-GB') === 1, '…and on Monday in en-GB')
+  for (const loc of ['en-US', 'en-GB', 'ja', 'de', 'pt', 'zh-Hans']) {
+    const names = weekdayNames(loc)
+    ok(names.length === 7 && new Set(names).size === 7,
+      `${loc}: seven distinct weekday names, from Intl rather than a hand-written map`)
+  }
+  // FROM INTL, not from a table of English words. Sabotaging the formatter into
+  // a hardcoded ['Sun','Mon',…] passed every check above — seven distinct names
+  // is true of an English array too. Comparing across scripts is what makes the
+  // difference visible, and it is the same failure the extractor sweep
+  // punishes: a hand-written weekday map reaches no catalog and ships English
+  // to all eight locales while the packer reports 100%.
+  // AS SETS, not as ordered lists. The first draft compared `join(',')` and the
+  // `ja` half of it passed under the sabotage FOR THE WRONG REASON: ja starts
+  // its week on Sunday and en-GB on Monday, so two identical English arrays
+  // come back rotated and compare unequal. The set has no rotation to hide in.
+  const sameNames = (a: string, b: string): boolean =>
+    [...new Set(weekdayNames(a))].sort().join(',') === [...new Set(weekdayNames(b))].sort().join(',')
+  ok(!sameNames('ja', 'en-GB'),
+    'the weekday names are the READER’S, not English translated by nobody')
+  ok(!sameNames('de', 'en-GB'),
+    '…in every script, not only the ones that do not use the Latin alphabet')
+  {
+    // the headings are ROTATED with the week, not merely translated: getting
+    // this wrong labels the columns correctly and puts every entry one column
+    // out, which looks right until you check a date
+    const us = weekdayNames('en-US'), gb = weekdayNames('en-GB')
+    ok(us[0] === gb[6] && us[1] === gb[0],
+      'a Sunday-first locale gets the same seven names ROTATED, not relabelled')
+    const first = monthGrid('2026-02', 'en-US')[0]
+    ok(first.iso === '2026-02-01' && new Date(2026, 1, 1).getDay() === 0,
+      '…and the grid starts on the reader’s own first weekday')
+  }
+  ok(/2026/.test(monthLabel('2026-08', 'en-GB')) && monthLabel('2026-08', 'en-GB') !== '2026-08',
+    'the month is named through Intl, so it is the reader’s own word and never stored')
+  ok(monthLabel('2026-08', 'ja') !== monthLabel('2026-08', 'de'),
+    '…and two readers of one file see two different words for one stored date')
+
+  // --- MONTH ARITHMETIC ----------------------------------------------------
+  ok(stepMonth('2026-12', 1) === '2027-01' && stepMonth('2026-01', -1) === '2025-12',
+    'stepping past December carries the year')
+  ok(stepMonth('2026-08', 6) === '2027-02' && stepMonth('2026-08', -8) === '2025-12',
+    '…in both directions, by any number of months')
+  ok(monthOf('2026-08-06') === '2026-08' && monthOf('2026-13-99') === '',
+    'a non-date belongs to no month')
+
+  // --- DAYS APART, the one place UTC is right ------------------------------
+  ok(daysApart('2026-08-06', '2026-08-07') === 1, 'one day apart is one')
+  ok(daysApart('2026-08-07', '2026-08-06') === -1, '…and signed')
+  ok(daysApart('2026-02-28', '2026-03-01') === 1, 'February rolls into March')
+  ok(daysApart('2024-02-28', '2024-03-01') === 2, '…with the leap day in between when there is one')
+  ok(daysApart('2025-12-31', '2026-01-01') === 1, 'and the year boundary is one day, not 365')
+  // THE DST TRAP, stated as an assertion rather than as a comment. In
+  // Europe/Berlin 29 March 2026 is 23 hours long and 25 October is 25; in
+  // America/Los_Angeles it is 8 March and 1 November. Local-midnight
+  // subtraction gives 0.958 and 1.042 days there and rounds to the wrong
+  // answer. Both pairs are checked in every timezone this rig runs under.
+  for (const [a, b] of [['2026-03-28', '2026-03-30'], ['2026-10-24', '2026-10-26'],
+    ['2026-03-07', '2026-03-09'], ['2026-10-31', '2026-11-02']] as const) {
+    ok(daysApart(a, b) === 2,
+      `${a} → ${b} is exactly 2 days across a DST boundary (TZ=${process.env.TZ ?? 'system'})`)
+  }
+
+  // --- WHICH MONTH IT OPENS ON ---------------------------------------------
+  ok(defaultMonth(['2026-08-06', '2026-09-02'], '2026-08-20') === '2026-08',
+    'the grid opens on TODAY’S month when anything falls in it')
+  ok(defaultMonth(['2019-04-02', '2019-04-30'], '2026-08-20') === '2019-04',
+    '…and on the data’s own month when nothing does, rather than an empty grid')
+  ok(defaultMonth([], '2026-08-20') === '2026-08', 'an empty view opens on this month')
+  // 20 August → 1 June is 80 days back and → 1 November is 73 days on, so the
+  // FUTURE one is nearer. Written with the numbers checked rather than assumed:
+  // the first draft of this line asserted June because June "looks" closer on
+  // the page, and the rig caught it.
+  ok(defaultMonth(['2026-06-01', '2026-11-01'], '2026-08-20') === '2026-11',
+    'the NEAREST dated row decides, and it can be the one in the future')
+  ok(defaultMonth(['2026-06-01', '2026-12-25'], '2026-08-20') === '2026-06',
+    '…or the one in the past, when that is the nearer')
+  ok(defaultMonth(['2026-08-10', '2026-08-30'], '2026-08-20') === '2026-08',
+    '…and a tie goes to the later of the two')
+  ok(defaultMonth(['nonsense', '2019-04-02'], '2026-08-20') === '2019-04',
+    'a junk value in the list is ignored rather than deciding the month')
+
+  // --- THE TIMELINE --------------------------------------------------------
+  {
+    const rows = [crow('a', '2026-01-02'), crow('b', '2026-08-06'), crow('c', '2026-03-04')]
+    const days = timelineDays(splitByDate(cdoc, rows).days)
+    ok(days.join(',') === '2026-08-06,2026-03-04,2026-01-02',
+      'the timeline reads NEWEST FIRST, whatever order the pages are in')
+  }
+
+  // --- THE HINT ------------------------------------------------------------
+  // It has to SAY the rule, because the rule is fixed rather than chosen. And
+  // it goes through t() as a literal with an interpolated list — a sentence
+  // assembled from fragments does not survive the eight catalogs.
+  ok(/Due/.test(dateHint(calDoc())), 'the view says out loud which date it used')
+  ok(dateHint(calDoc([{ key: 'x', label: 'X', vt: 'text' }])) === 'Dated by the journal date.',
+    '…and says so differently when the schema declares no date field at all')
+  ok(dateHint(calDoc([{ key: 'due', vt: 'date' }])).includes('due'),
+    'a schema entry with no label falls back to its key rather than printing undefined')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

@@ -20,6 +20,7 @@ import {
   sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
   type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
+import { renderCalendar, spanOf, nextSpan } from './calendar.ts'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
@@ -1082,6 +1083,7 @@ function pageMark(host: HTMLElement, page: Page): void {
  */
 function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpts): void {
   const layout = String((b as { layout?: unknown }).layout ?? 'board')
+  const calSpan = (b as { span?: unknown }).span
   const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
@@ -1146,13 +1148,26 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // fields.ts answers "which shape is this" and "what comes next".
     const LAYOUT_LABEL: Record<ViewLayout, string> = {
       board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
+      calendar: t('Calendar'),
     }
     const NEXT_LABEL: Record<ViewLayout, string> = {
       board: t('Show as a list'), list: t('Show as a table'),
-      table: t('Show as a gallery'), gallery: t('Show as a board'),
+      table: t('Show as a gallery'), gallery: t('Show as a calendar'),
+      calendar: t('Show as a board'),
     }
     const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
     layoutB.dataset.next = nextLayout(here)
+
+    // THE CALENDAR'S SECOND SHAPE, on the pattern `groupBy` already set: a
+    // parameter of ONE layout gets its own control, shown only while that
+    // layout is on, rather than a sixth entry in a cycle everybody has to click
+    // through. Whole sentences again, for the reason three lines up.
+    const spanB = here === 'calendar'
+      ? btn('viewSpan',
+        spanOf(calSpan) === 'timeline' ? t('Timeline') : t('Month'),
+        spanOf(calSpan) === 'timeline' ? t('Show a month at a time') : t('Show a timeline'))
+      : undefined
+    if (spanB) spanB.dataset.next = nextSpan(calSpan)
 
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per
@@ -1188,7 +1203,8 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
       t('Choose which pages this view holds'), !!(hasKey || underId))
 
-    head.append(layoutB, sourceB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
+    head.append(layoutB, ...(spanB ? [spanB] : []), sourceB,
+      ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -1553,6 +1569,24 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     table.appendChild(tb)
     wrap.appendChild(table)
     host.appendChild(wrap)
+    return
+  }
+
+  // CALENDAR — the shape that answers "when". Its own file: the arithmetic is
+  // the part of this app most likely to be wrong east of UTC, and it wanted a
+  // rig that can import it without a DOM. `layoutOf`, not the raw string, so a
+  // block claiming `layout:"toString"` cannot reach this branch and everything
+  // a newer build might name falls through to the board.
+  if (layoutOf(layout) === 'calendar') {
+    renderCalendar(host, {
+      doc,
+      rows,
+      blockId: b.id,
+      span: spanOf(calSpan),
+      locale: locale(),
+      editable: opts.editable,
+      card: (r) => card(r.page, r.values),
+    })
     return
   }
 
