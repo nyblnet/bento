@@ -23,6 +23,7 @@ import {
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
+import { viewEmbed, anchorOf } from './embed.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -50,6 +51,17 @@ export interface RenderOpts {
    * it would travel to the next person the file is mailed to.
    */
   allowRemote?: (src: string) => boolean
+  /**
+   * The pages already open above this render, host page first — the embed
+   * cycle and depth guard (embed.ts `viewEmbed`).
+   *
+   * NOT a document field and not module state: it is a fact about one render
+   * pass, and two surfaces render at once (the editor canvas and the still
+   * preview), so a shared counter between them would be a race that only shows
+   * up in a saved thumbnail. `renderBlocks` seeds it with the page it was
+   * given, so nothing outside this file ever has to pass it.
+   */
+  embedChain?: readonly string[]
 }
 
 // The tag and list maps come from the block registry (blocks.ts), so a new
@@ -66,6 +78,10 @@ export interface RenderOpts {
  */
 export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): DocumentFragment {
   const frag = document.createDocumentFragment()
+  // The embed guard starts here, with the page being drawn, so an embed of the
+  // page you are ON is a cycle at depth zero. Seeded rather than mutated: the
+  // caller's opts object is not ours to write to.
+  if (!opts.embedChain) opts = { ...opts, embedChain: [page.id] }
   // MAGIC NOTES' CONTEXT, accumulated as the pass goes. A name is defined by a
   // line and usable by the lines BELOW it — the same direction a person reads
   // in, and the reason this needs no second pass and cannot cycle.
@@ -373,6 +389,11 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       return el
     }
 
+    case 'embed': {
+      renderEmbed(el, b, doc, opts)
+      return el
+    }
+
     case 'link': {
       // A CARD DRAWN ENTIRELY FROM THE FILE.
       //
@@ -656,6 +677,73 @@ function renderTable(b: Block, opts: RenderOpts): HTMLElement {
   table.appendChild(body)
   wrap.appendChild(table)
   return wrap
+}
+
+/**
+ * An embed: the source page's own blocks, drawn here.
+ *
+ * THREE THINGS THIS DOES THAT ARE NOT DECORATION.
+ *
+ * It is ATTRIBUTED and clickable. A block of someone else's page dropped into
+ * yours with no seam is a lie about where the words live, and the reader who
+ * wants to fix a typo has nowhere to go. The header names the source page and
+ * links to it, and the section when there is one.
+ *
+ * It is NEVER EDITABLE, whatever the host surface is. The blocks belong to
+ * another page; an editable host here would write a keystroke into `html` on a
+ * block the editor is not showing, and the change would appear to happen
+ * nowhere. `editable: false` on the nested render is the whole of that.
+ *
+ * And it carries NO `data-block-id`. The editor's paint sweeps every
+ * `[data-block-id]` under the page and hangs a drag gutter, a checkbox
+ * handler, a language chip on each — all keyed to `store.block(id)`, which
+ * resolves ANY id in the document. A checkbox ticked inside an embed would
+ * have committed to the source page from a surface that was not showing it.
+ * Stripping the hook is one line and closes the whole class.
+ */
+function renderEmbed(el: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpts): void {
+  const box = document.createElement('div')
+  box.className = 'sp-embed'
+  const view = viewEmbed(b, doc, opts.embedChain ?? [])
+
+  const head = document.createElement(view.page ? 'a' : 'div')
+  head.className = 'sp-embed-src'
+  const anchor = anchorOf(b)
+  if (view.page) {
+    ;(head as HTMLAnchorElement).href = `#p/${view.page.id}`
+    head.textContent = anchor ? `${view.page.title} › ${anchor}` : view.page.title
+    head.setAttribute('aria-label', t('Embedded from {page}', { page: view.page.title }))
+  } else {
+    head.textContent = anchor ? `[[?#${anchor}]]` : '[[?]]'
+    head.classList.add('sp-dead')
+  }
+  box.appendChild(head)
+
+  if (!view.ok) {
+    const note = document.createElement('p')
+    note.className = 'sp-embed-note'
+    note.textContent =
+      view.why === 'cycle' ? t('This embed is inside itself — the loop stops here.')
+        : view.why === 'depth' ? t('Embeds are not followed deeper than this.')
+          : view.why === 'no-section' ? t('No section named {name} on this page.', { name: view.anchor ?? '' })
+            : t('This embed points at a page that is not here.')
+    box.appendChild(note)
+    el.appendChild(box)
+    return
+  }
+
+  const body = document.createElement('div')
+  body.className = 'sp-embed-body'
+  body.appendChild(renderBlocks({ ...view.page, blocks: view.blocks }, doc, {
+    ...opts,
+    editable: false,
+    embedChain: [...(opts.embedChain ?? []), view.page.id],
+  }))
+  for (const node of body.querySelectorAll<HTMLElement>('[data-block-id]')) {
+    delete node.dataset.blockId
+  }
+  box.appendChild(body)
+  el.appendChild(box)
 }
 
 /**

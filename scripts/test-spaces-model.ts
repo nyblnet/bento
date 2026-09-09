@@ -49,7 +49,11 @@ import {
   CLASS_OK, keepClasses,
 } from '../spaces/src/marks.ts'
 import { extractSpace, planGraft, subtreeIds } from '../spaces/src/portable.ts'
-import { planUpdatePage } from '../spaces/src/agent.ts'
+import {
+  EMBED_MAX_DEPTH, isPageRef, anchorOf, sectionOf, headingsOf, viewEmbed, embedReaches,
+  parseEmbedLine, embedToMd, linkEmbeds,
+} from '../spaces/src/embed.ts'
+import { planUpdatePage, validateDoc } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
 import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
@@ -3591,6 +3595,293 @@ function fsTable(f: string): string {
   }
   ok(new Set(VIEW_LAYOUTS.map((l) => nextLayout(l))).size === VIEW_LAYOUTS.length,
     'the cycle reaches every shape — none is stranded off it')
+}
+
+
+// ---- TRANSCLUSION ----------------------------------------------------------
+//
+// An `embed` block shows another page LIVE. Everything asserted here is the
+// part that fails silently: a loop that would hang the renderer, a target that
+// is gone, a section name that matches nothing, and the two halves of the
+// Obsidian round trip — `![[Page]]` in, `![[Page]]` out. markdown.ts carried a
+// comment saying "there is no transclusion in the model" and quietly demoted
+// every embed in an imported vault to a plain link; this is what replaced it.
+{
+  const space = (): SpacesDoc => JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-embed', title: 'Space', home: 'A', theme: {},
+    pages: [
+      { id: 'A', title: 'Alpha', blocks: [
+        { id: 'a1', type: 'p', html: 'top of alpha' },
+        { id: 'a2', type: 'embed', page: 'B', html: '<a href="#p/B">Beta</a>' },
+      ] },
+      { id: 'B', title: 'Beta', blocks: [
+        { id: 'b1', type: 'p', html: 'intro' },
+        { id: 'b2', type: 'h2', html: 'Roll<b>out</b>' },
+        { id: 'b3', type: 'p', html: 'first step' },
+        { id: 'b4', type: 'h3', html: 'Details' },
+        { id: 'b5', type: 'p', html: 'the detail' },
+        { id: 'b6', type: 'h2', html: 'Risks' },
+        { id: 'b7', type: 'p', html: 'the risk' },
+      ] },
+    ],
+  }))
+
+  // ---- the section slice ---------------------------------------------------
+  const doc0 = space()
+  const beta = doc0.pages[1]
+  const roll = sectionOf(beta, 'rollout')
+  ok(roll !== null && roll.map((b) => b.id).join(',') === 'b2,b3,b4,b5',
+    'a section is its heading, its prose and its SUBheadings, stopping at the next h2')
+  ok(sectionOf(beta, 'Details')?.map((b) => b.id).join(',') === 'b4,b5',
+    'an h3 section stops at the next heading of the same or higher rank')
+  ok(sectionOf(beta, 'ROLL OUT') === null && sectionOf(beta, 'rollout') !== null,
+    'heading names match on their TEXT, tags stripped — and not on a name nobody wrote')
+  ok(sectionOf(beta, 'Nowhere') === null,
+    'a name that matches nothing returns null, never the whole page')
+
+  // A HEADING NAME OUT OF A MAILED FILE. `HEADINGS` is a plain object keyed on
+  // b.type, so `'toString' in HEADINGS` is true and would hand back a native
+  // function — the bug this app has shipped twice. Object.hasOwn is why these
+  // are misses rather than a rank of NaN.
+  for (const evil of ['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty']) {
+    ok(sectionOf(beta, evil) === null, `anchor ${JSON.stringify(evil)} finds no section`)
+    const poisoned: Page = { id: 'X', title: 'X', blocks: [{ id: 'x1', type: evil, html: 'Rollout' }] }
+    ok(sectionOf(poisoned, 'Rollout') === null,
+      `a block of type ${JSON.stringify(evil)} is not treated as a heading`)
+    ok(headingsOf(poisoned).length === 0,
+      `…and the picker does not offer it as one either`)
+  }
+
+  // THE PICKER AND THE RESOLVER AGREE. Every name the editor can offer is a
+  // name sectionOf finds — otherwise a section you chose reports as missing.
+  ok(headingsOf(beta).map((h) => h.text).join('|') === 'Rollout|Details|Risks',
+    'headingsOf lists every heading, in page order, as plain text')
+  ok(headingsOf(beta).every((h) => sectionOf(beta, h.text) !== null),
+    'and every one of them resolves — the picker cannot offer a dead section')
+
+  // ---- what one embed shows ------------------------------------------------
+  const whole = viewEmbed(doc0.pages[0].blocks[1], doc0, ['A'])
+  ok(whole.ok && whole.page.id === 'B' && whole.blocks.length === beta.blocks.length,
+    'an embed with no anchor shows the whole target page')
+  const narrowed = viewEmbed({ id: 'e', type: 'embed', page: 'B', anchor: 'Risks' }, doc0, ['A'])
+  ok(narrowed.ok && narrowed.blocks.map((b) => b.id).join(',') === 'b6,b7',
+    'an embed with an anchor shows that section and nothing else')
+  const noSec = viewEmbed({ id: 'e', type: 'embed', page: 'B', anchor: 'Ghost' }, doc0, ['A'])
+  ok(!noSec.ok && noSec.why === 'no-section',
+    'an anchor that matches nothing is REPORTED, not quietly widened to the whole page')
+
+  // ---- a dangling ref ------------------------------------------------------
+  const gone = viewEmbed({ id: 'e', type: 'embed', page: 'nope' }, doc0, ['A'])
+  ok(!gone.ok && gone.why === 'missing', 'a target that is not a page is a named miss')
+  ok(!viewEmbed({ id: 'e', type: 'embed' }, doc0, ['A']).ok,
+    'and an embed with no target at all does not throw')
+  for (const evil of ['toString', '__proto__', 'constructor', 'valueOf']) {
+    const v = viewEmbed({ id: 'e', type: 'embed', page: evil }, doc0, ['A'])
+    ok(!v.ok && v.why === 'missing' && v.page === undefined,
+      `page ${JSON.stringify(evil)} resolves to nothing, never to a native function`)
+  }
+
+  // ---- cycles --------------------------------------------------------------
+  //
+  // The renderer walks a chain of open pages; a target already on that chain
+  // is the loop, and it stops with a NAMED placeholder (the page is still
+  // returned, so the reader is told which one repeats) rather than a blank.
+  const loop = viewEmbed(doc0.pages[0].blocks[1], doc0, ['X', 'B', 'A'])
+  ok(!loop.ok && loop.why === 'cycle' && loop.page?.title === 'Beta',
+    'a target already open above this block is a cycle, and the placeholder can name it')
+  ok(!viewEmbed({ id: 'e', type: 'embed', page: 'A' }, doc0, ['A']).ok,
+    'a page embedding ITSELF is a cycle at depth zero')
+
+  // …and the shape a cycle check cannot see: a chain of DISTINCT pages.
+  const deep = viewEmbed(doc0.pages[0].blocks[1], doc0, ['P0', 'P1', 'P2', 'P3'])
+  ok(!deep.ok && deep.why === 'depth',
+    `an embed chain is not followed deeper than ${EMBED_MAX_DEPTH} pages`)
+  ok(viewEmbed(doc0.pages[0].blocks[1], doc0, ['P0', 'P1', 'P2']).ok,
+    '…and exactly at the cap it still renders, so the limit is off-by-none')
+
+  // The validator's question, which one render path cannot answer.
+  const cyc: SpacesDoc = space()
+  cyc.pages[1].blocks.push({ id: 'b8', type: 'embed', page: 'A' })
+  ok(embedReaches(cyc, 'A', 'B'), 'A embeds B embeds A is reported as a loop')
+  ok(!embedReaches(doc0, 'A', 'B'), 'and a one-way embed is not')
+  ok(embedReaches(cyc, 'A', 'A'), 'a page reaches itself trivially')
+  // TERMINATION on a document that already cycles: this runs on hand-edited
+  // files, and a loop check that hangs on a looping file is worse than none.
+  ok(!embedReaches(cyc, 'nobody', 'B'), 'the walk terminates on a cycling document')
+
+  // ---- backlinks -----------------------------------------------------------
+  // NO `html` ON THIS ONE, deliberately. Every embed the editor writes carries
+  // a fallback link, and the index's inline-link sweep would find THAT — so an
+  // embed with html cannot tell you whether the index understands embeds at
+  // all. An agent-written block is the one that can, and it is also the one
+  // that would silently have no backlink if it did not.
+  const bare: SpacesDoc = space()
+  bare.pages[0].blocks.push({ id: 'a9', type: 'embed', page: 'B' })
+  const ix = buildIndex(bare)
+  ok(ix.backlinks.get('B')?.some((s2) => s2.blockId === 'a9'),
+    'an embed with no fallback html still appears in "Linked from", as a pagelink does')
+  ok(!String(bare.pages[0].blocks.find((b) => b.id === 'a9')?.html ?? '').includes('#p/'),
+    '…and it really had no link in its html for the inline sweep to find')
+  ok(isPageRef({ id: 'x', type: 'embed', page: 'B' }) &&
+     isPageRef({ id: 'x', type: 'pagelink', page: 'B' }) &&
+     !isPageRef({ id: 'x', type: 'embed' }) && !isPageRef({ id: 'x', type: 'p', page: 'B' }),
+    'isPageRef is exactly "a block that names a page id"')
+
+  // ---- the default is never stored ----------------------------------------
+  ok(anchorOf({ id: 'x', type: 'embed', page: 'B' }) === undefined &&
+     anchorOf({ id: 'x', type: 'embed', page: 'B', anchor: '  ' }) === undefined &&
+     anchorOf({ id: 'x', type: 'embed', page: 'B', anchor: ' Risks ' }) === 'Risks',
+    'no anchor and a blank anchor are the same absent default; a real one is trimmed')
+
+  // ---- markdown IN ---------------------------------------------------------
+  ok(parseEmbedLine('![[Design notes]]')?.target === 'Design notes',
+    'a whole line of ![[Note]] is an embed')
+  const withSec = parseEmbedLine('![[Design notes#Rollout]]')
+  ok(withSec?.target === 'Design notes' && withSec?.anchor === 'Rollout',
+    '…and ![[Note#Section]] carries the section')
+  ok(parseEmbedLine('![[Note|shown]]')?.target === 'Note' &&
+     parseEmbedLine('![[Note|shown]]')?.anchor === undefined,
+    'an |alias has nothing to be the text of, so it is dropped rather than stored')
+  ok(parseEmbedLine('![[Note#^abc123]]')?.anchor === undefined,
+    'a ^block anchor lands on the page — this model has no block anchors')
+  ok(parseEmbedLine('see ![[Note]] here') === null && parseEmbedLine('[[Note]]') === null,
+    'an embed inside a sentence, and a plain wikilink, are not blocks')
+
+  const note = parseNote('# Plan\n\nsome prose\n\n![[Design notes#Rollout]]\n\n![[pic.png]]\n\nsee ![[Other]] inline\n', 'Plan')
+  const kinds = note.blocks.map((b) => b.type).join(',')
+  ok(kinds === 'p,embed,image,p', `a standalone embed line becomes an embed block (got ${kinds})`)
+  ok(note.blocks[1].anchor === 'Rollout' && note.blocks[1].page === undefined,
+    'the parser carries the section and NO page — no page ids exist at parse time')
+  ok(String(note.blocks[1].html).includes('#w/Design%20notes'),
+    '…it carries the same #w/ placeholder link every other block carries')
+  ok(note.blocks[2].type === 'image' && note.blocks[2].src === 'pic.png',
+    '![[picture.png]] is still an IMAGE — imageOf owns the extension list and runs first')
+  ok(String(note.blocks[3].html).includes('#w/Other'),
+    'and an inline ![[…]] is still a link inside its sentence')
+
+  // ---- markdown IN, resolved ----------------------------------------------
+  const plan = planImport([
+    { path: 'Vault/Plan.md', text: '# Plan\n\n![[Design notes#Rollout]]\n\n![[Missing note]]\n' },
+    { path: 'Vault/Design notes.md', text: '# Design notes\n\n## Rollout\n\nship it\n' },
+  ], { rootTitle: 'Vault' })
+  const planPage = plan.pages.find((p) => p.title === 'Plan')!
+  const design = plan.pages.find((p) => p.title === 'Design notes')!
+  const emb = planPage.blocks.find((b) => b.type === 'embed')
+  ok(emb !== undefined && emb.page === design.id,
+    'an imported embed points at the page its wikilink named')
+  ok(emb?.anchor === 'Rollout' && sectionOf(design, String(emb?.anchor)) !== null,
+    '…and its section resolves against the page that arrived')
+  ok(planPage.blocks.every((b) => b.type !== 'embed' || b.page !== undefined),
+    'no imported embed is left with a placeholder for a target')
+  const dead = planPage.blocks.find((b) => String(b.html ?? '').includes('[[Missing note]]'))
+  ok(dead !== undefined && dead.type === 'p',
+    'an embed of a note that was not in the import becomes the literal text the author typed')
+
+  // linkEmbeds on its own, since planImport is the only caller.
+  const pending: Page[] = [{ id: 'P', title: 'P', blocks: [
+    { id: 'e1', type: 'embed', html: '<a href="#p/B">Beta</a>', anchor: 'Risks' },
+    { id: 'e2', type: 'embed', html: '[[Nowhere]]', anchor: 'Risks' },
+  ] }]
+  const res = linkEmbeds(pending)
+  ok(res.linked === 1 && res.dropped === 1, 'linkEmbeds counts both outcomes')
+  ok(pending[0].blocks[0].page === 'B' && pending[0].blocks[0].anchor === 'Risks',
+    'a resolved embed takes its target from the html the wikilink sweep rewrote')
+  ok(pending[0].blocks[1].type === 'p' && pending[0].blocks[1].page === undefined &&
+     pending[0].blocks[1].anchor === undefined,
+    'an unresolved one becomes a paragraph and keeps no half-set fields')
+
+  // ---- markdown OUT, and the round trip ------------------------------------
+  const spec = SPEC.get('embed')!
+  const ctx = { titleOf: (id: string) => (id === 'B' ? 'Beta' : undefined), rowsOf: () => [], inline: (h: string) => h }
+  ok(spec.toMd!({ id: 'e', type: 'embed', page: 'B' }, '', '', ctx).join('') === '![[Beta]]',
+    'an embed exports as the ![[Page]] it was imported from')
+  ok(spec.toMd!({ id: 'e', type: 'embed', page: 'B', anchor: 'Risks' }, '', '', ctx).join('') === '![[Beta#Risks]]',
+    '…and carries its section with it')
+  ok(embedToMd(undefined, undefined) === '![[?]]',
+    'an embed whose target is gone exports as a visible ?, never as an empty ![[]]')
+
+  // THE FULL LOOP: export → parse → resolve → the same target and section.
+  const md = spec.toMd!({ id: 'e', type: 'embed', page: 'B', anchor: 'Risks' }, '', '', ctx).join('\n')
+  const back = planImport([
+    { path: 'V/Alpha.md', text: `# Alpha\n\n${md}\n` },
+    { path: 'V/Beta.md', text: '# Beta\n\n## Risks\n\nthe risk\n' },
+  ], { rootTitle: 'V' })
+  const alphaBack = back.pages.find((p) => p.title === 'Alpha')!
+  const betaBack = back.pages.find((p) => p.title === 'Beta')!
+  const round = alphaBack.blocks.find((b) => b.type === 'embed')
+  ok(round?.page === betaBack.id && round?.anchor === 'Risks',
+    'an embed survives export to Markdown and back with its target and its section')
+
+  // ---- extract and graft ---------------------------------------------------
+  const wide: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-wide', title: 'Wide', home: 'R', theme: {},
+    pages: [
+      { id: 'R', title: 'Root', blocks: [
+        { id: 'r1', type: 'embed', page: 'K', anchor: 'Risks', html: '<a href="#p/K">Kid</a>' },
+        { id: 'r2', type: 'embed', page: 'Z', anchor: 'Risks', html: '<a href="#p/Z">Zed</a>' },
+      ] },
+      { id: 'K', title: 'Kid', parent: 'R', blocks: [{ id: 'k1', type: 'h2', html: 'Risks' }] },
+      { id: 'Z', title: 'Zed', blocks: [{ id: 'z1', type: 'p', html: 'away' }] },
+    ],
+  }))
+  const cutOut = extractSpace(wide, 'R', { docId: 'doc-cut', now: '2026-09-09T00:00:00.000Z' })
+  const cutRoot = cutOut.doc.pages[0]
+  ok(cutRoot.blocks[0].type === 'embed' && cutRoot.blocks[0].page === 'K',
+    'an embed whose target travelled still points at it')
+  ok(cutRoot.blocks[1].type === 'p' && cutRoot.blocks[1].page === undefined &&
+     cutRoot.blocks[1].anchor === undefined &&
+     String(cutRoot.blocks[1].html).includes('[[Zed]]'),
+    'an embed whose target stayed behind becomes the same honest text a pagelink becomes')
+
+  const host: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-host', title: 'Host', home: 'H', theme: {},
+    pages: [
+      { id: 'H', title: 'Host home', blocks: [{ id: 'h1', type: 'p', html: '' }] },
+      // the host already owns 'V2', so the visitor's page of that id must be
+      // renumbered — which is the only way this exercises the remap at all
+      { id: 'V2', title: 'Host two', blocks: [{ id: 'h2', type: 'p', html: '' }] },
+    ],
+  }))
+  // an id COLLISION with the host, so the graft has to renumber and the embed
+  // has to follow it — the case a copied `page` would silently get wrong
+  const visitor: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-vis', title: 'Visitor', home: 'H', theme: {},
+    pages: [
+      { id: 'H', title: 'Visitor home', blocks: [
+        { id: 'v1', type: 'embed', page: 'V2', anchor: 'Risks', html: '<a href="#p/V2">Two</a>' },
+      ] },
+      { id: 'V2', title: 'Two', parent: 'H', blocks: [{ id: 'v2', type: 'h2', html: 'Risks' }] },
+    ],
+  }))
+  const graft = planGraft(host, visitor, {})
+  const landed = graft.pages[0].blocks[0]
+  ok(graft.pages[0].id !== 'H', 'the grafted root was renumbered around the host id collision')
+  ok(landed.type === 'embed' && landed.page === graft.pages[1].id && landed.page !== 'V2',
+    'and its embed followed the renumbering instead of pointing at the visitor’s old id')
+  ok(landed.anchor === 'Risks', 'the section came with it')
+  const grafted: SpacesDoc = { ...host, pages: [...host.pages, ...graft.pages] }
+  ok(viewEmbed(landed, grafted, [graft.pages[0].id]).ok,
+    'the grafted embed RESOLVES in the document it landed in — the whole point of the remap')
+
+  // ---- validate ------------------------------------------------------------
+  const sick: SpacesDoc = space()
+  sick.pages[0].blocks.push({ id: 'a3', type: 'embed', page: 'nope' })
+  sick.pages[0].blocks.push({ id: 'a4', type: 'embed', page: 'B', anchor: 'Ghost' })
+  const sickCodes = validateDoc(sick).findings.map((i) => i.code)
+  ok(sickCodes.includes('broken-embed'), 'validate names an embed whose target is not a page')
+  ok(sickCodes.includes('no-section'), '…an anchor that matches no heading on the target')
+  ok(validateDoc(sick).findings.filter((i) => i.code === 'broken-embed')[0].severity === 'error',
+    'a dead embed is an error, not a note')
+
+  // The loop gets its OWN document, because a page that is on a cycle is
+  // reported as a cycle FIRST: a section name on a block whose whole embed is
+  // cut short is not the thing to tell the author about.
+  const looped: SpacesDoc = space()
+  looped.pages[1].blocks.push({ id: 'b9', type: 'embed', page: 'A', html: '<a href="#p/A">Alpha</a>' })
+  ok(validateDoc(looped).findings.some((i) => i.code === 'embed-cycle'),
+    '…and a loop, which renders as a stub nobody would notice')
+  ok(validateDoc(space()).findings.every((i) => !String(i.code).startsWith('embed') && i.code !== 'broken-embed'),
+    'and a healthy embed raises nothing at all')
 }
 
 
