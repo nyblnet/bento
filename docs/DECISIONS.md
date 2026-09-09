@@ -6441,4 +6441,3 @@ the reason `chart.ts` already gives: it applies to every bound column or to
 none. The builders zip x, y, z, colour and size by index; project one and not
 another and the plot pairs the wrong height with the wrong position, plausibly.
 
-Claude-Session: https://claude.ai/code/session_01KMa2npzDHQNyvAXnYuhQr3
