@@ -477,6 +477,33 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **Page templates, and a template for the daily note.** Open a page you would
+  like to reuse, and the page's ⋯ menu offers **Save as template**. From then on
+  the ＋ above the page list offers a blank page or any of your templates, and
+  the new page arrives with the blocks, the icon and the width of the one you
+  saved. With no templates saved the ＋ makes a blank page exactly as it always
+  did — the picker only appears once there is something in it.
+
+  The one that earns the feature is **Use for daily notes**: pick a template in
+  ⋯ → Templates… and every new journal entry starts with your structure instead
+  of an empty page. It is the most-used workflow in Obsidian and Logseq and it
+  was the only thing a daily note here could not do.
+
+  Write `{{date}}` anywhere in a template and each new page gets its own date
+  there — `{{date:iso}}` for `2026-03-14`, `{{date:short}}` for a tight space,
+  `{{date+1:iso}}` for tomorrow, plus `{{time}}` and `{{title}}`. Expanded ONCE,
+  when the page is made, so what lands in the file is ordinary text an older
+  build reads the same way. A journal entry gets the date it is FOR: backfilling
+  Tuesday's note on Thursday writes Tuesday.
+
+  Templates live in the document (`doc.templates`) rather than as hidden pages,
+  so they never appear in search, the graph, backlinks, the sidebar or the
+  Markdown export — and the flip side, stated plainly: they travel with the FILE
+  and not with a page you graft into another space. Additive as ever: a file
+  written before this has no templates key and opens unchanged, and turning the
+  daily-note setting off deletes the key rather than storing a default. Saving
+  or deleting a template is one ⌘Z.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
