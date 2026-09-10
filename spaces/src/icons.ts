@@ -108,6 +108,10 @@ export const ICONS = {
   // readily as for video; a film reel and a speaker would be two menu entries
   // for one entry's worth of block.
   play: svg('<rect x="2" y="4" width="20" height="16" rx="2.5"/><path d="M10.5 9.2 15 12l-4.5 2.8z" fill="currentColor"/>'),
+  // A microphone on its stand — the recording mark everywhere, and legible at
+  // 16px only because the capsule is a filled-weight rounded rect rather than
+  // the outlined pill lucide draws.
+  mic: svg('<rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS

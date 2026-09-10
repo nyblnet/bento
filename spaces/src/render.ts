@@ -288,9 +288,18 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
           link.className = 'sp-btn sp-remote-load'
           link.textContent = t('Use a link…')
           link.dataset.linkMedia = b.id
+          // RECORDING IS A THIRD SOURCE, not a third block type: what it
+          // produces is the same `media` block with `kind: 'audio'` a picked
+          // .m4a produces. The button is editor chrome like the other two, so
+          // a reader, a printout and a still never see it.
+          const rec = document.createElement('button')
+          rec.type = 'button'
+          rec.className = 'sp-btn sp-remote-load'
+          rec.textContent = t('Record…')
+          rec.dataset.recordMedia = b.id
           const row = document.createElement('div')
           row.className = 'sp-media-actions'
-          row.append(pick, link)
+          row.append(pick, rec, link)
           box.appendChild(row)
         }
         fig.appendChild(box)

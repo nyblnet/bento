@@ -1131,6 +1131,17 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 5px;
 }
+/* A LONG MENU MUST NOT RUN OFF THE BOTTOM OF THE SCREEN.
+   Measured with the Insert menu open at a 861px viewport: the menu laid out
+   890px tall from y=43, so its bottom edge sat at 935 — 74px below the fold,
+   with `overflow-y: visible` and no ceiling. The LAST entry was therefore not
+   merely awkward to reach, it could not be clicked at all, and adding the
+   twentieth block type is what made that unmissable rather than what caused
+   it (the nineteenth was already half-cut).
+   Safe to scroll here in a way slides' ⋯ menu is not (hard-won detail 10): a
+   scroll container clips BOTH axes, and everything these items open is an
+   overlay appended to the body, never a popover positioned inside the menu. */
+.sp-ddmenu { max-height: calc(100dvh - 64px); overflow-y: auto; overscroll-behavior: contain; }
 .sp-dd.sp-open .sp-ddmenu { display: flex; }
 .sp-dd:last-child .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
 .sp-dditem {
@@ -2383,3 +2394,33 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ————— voice notes —————
+   The recorder panel. It lives inside .sp-card, so the scrim, the width and
+   the escape handling are the About dialog's and there is no second dialog
+   shell here. What is added is the two things a recording needs that nothing
+   else in the app has: a level meter, and a clock. */
+.sp-rec { width: min(400px, 92vw); }
+.sp-rec-meter {
+  height: 8px; border-radius: 4px; background: var(--chrome-2);
+  overflow: hidden; margin: 4px 4px 10px;
+}
+/* Width, never a transform: the bar is a proportion of a box and a scale would
+   also stretch the rounded ends. `transition` keeps a 10Hz tick from reading
+   as a stutter without ever lagging behind the voice. */
+.sp-rec-bar {
+  height: 100%; width: 0; background: var(--blue); border-radius: 4px;
+  transition: width .1s linear;
+}
+.sp-rec-time {
+  font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 600;
+  color: var(--ink); margin: 0 4px 6px; letter-spacing: .01em;
+}
+.sp-rec-note { font-size: 13px; color: var(--muted); margin: 0 4px 8px; }
+.sp-rec-warn {
+  font-size: 13px; color: var(--ink); margin: 0 4px 10px; padding: 8px 10px;
+  border-radius: 8px; background: var(--chrome-2); border: 1px solid var(--line);
+}
+.sp-rec-preview { display: block; width: 100%; margin: 0 4px 10px; }
+.sp-rec-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 4px 4px; }
+@media (prefers-reduced-motion: reduce) { .sp-rec-bar { transition: none; } }

@@ -1,0 +1,200 @@
+import { readFileSync, writeFileSync } from 'node:fs'
+const dir = '/Users/andy/devel/bento/.claude/worktrees/agent-ae75bcffed021c7d4/spaces/src/i18n'
+
+const K = {
+  V: 'Voice note',
+  R: 'Record straight into the page',
+  DEN: 'The microphone was not allowed. The browser may have blocked it, or the permission request may have been dismissed — allow it for this page and try again.',
+  NOD: 'No microphone was found. Plug one in, or choose a file instead.',
+  BUSY: 'The microphone is busy — another app or tab may be using it. Close that and try again.',
+  INS: 'This page is not on a secure connection, so the browser will not open the microphone. Open the file from disk, or over https.',
+  UNS: 'This browser cannot record audio. You can still choose an audio file.',
+  FAIL: 'The recording could not be started.',
+  OVER: 'This recording is past the size a document travels comfortably at. You can keep it — you will be asked to confirm — but it will make the file that much heavier for everyone you send it to.',
+  NEAR: 'This recording is getting long enough to make the document noticeably heavier to send.',
+  SUM: '{length} · {format} · about {size} in the file',
+  PORT: 'This browser records in a format some older players cannot open. It plays in this app on any modern browser.',
+  AGAIN: 'Record again',
+  ASK: 'Asking for the microphone…',
+  RECING: 'Recording. Nothing leaves this file.',
+  STOP: 'Stop',
+  RECD: 'Record…',
+}
+
+const T = {
+  fr: {
+    V: 'Note vocale',
+    R: 'Enregistrer directement dans la page',
+    DEN: 'Le microphone n’a pas été autorisé. Le navigateur l’a peut-être bloqué, ou la demande d’autorisation a été ignorée — autorisez-le pour cette page et réessayez.',
+    NOD: 'Aucun microphone n’a été trouvé. Branchez-en un, ou choisissez un fichier à la place.',
+    BUSY: 'Le microphone est occupé — une autre application ou un autre onglet l’utilise peut-être. Fermez-le et réessayez.',
+    INS: 'Cette page n’est pas sur une connexion sécurisée : le navigateur n’ouvrira pas le microphone. Ouvrez le fichier depuis le disque, ou en https.',
+    UNS: 'Ce navigateur ne peut pas enregistrer d’audio. Vous pouvez toujours choisir un fichier audio.',
+    FAIL: 'L’enregistrement n’a pas pu démarrer.',
+    OVER: 'Cet enregistrement dépasse la taille à laquelle un document circule confortablement. Vous pouvez le conserver — une confirmation vous sera demandée — mais le fichier sera d’autant plus lourd pour tous ceux à qui vous l’envoyez.',
+    NEAR: 'Cet enregistrement devient assez long pour alourdir sensiblement l’envoi du document.',
+    SUM: '{length} · {format} · environ {size} dans le fichier',
+    PORT: 'Ce navigateur enregistre dans un format que certains lecteurs anciens ne peuvent pas ouvrir. Il se lit dans cette application sur tout navigateur récent.',
+    AGAIN: 'Réenregistrer',
+    ASK: 'Demande d’accès au microphone…',
+    RECING: 'Enregistrement en cours. Rien ne sort de ce fichier.',
+    STOP: 'Arrêter',
+    RECD: 'Enregistrer une note vocale…',
+  },
+  es: {
+    V: 'Nota de voz',
+    R: 'Grabar directamente en la página',
+    DEN: 'No se permitió el micrófono. Puede que el navegador lo haya bloqueado, o que se haya descartado la solicitud de permiso: permítelo para esta página e inténtalo de nuevo.',
+    NOD: 'No se encontró ningún micrófono. Conecta uno, o elige un archivo.',
+    BUSY: 'El micrófono está ocupado: puede que otra aplicación o pestaña lo esté usando. Ciérrala e inténtalo de nuevo.',
+    INS: 'Esta página no está en una conexión segura, así que el navegador no abrirá el micrófono. Abre el archivo desde el disco, o por https.',
+    UNS: 'Este navegador no puede grabar audio. Aún puedes elegir un archivo de audio.',
+    FAIL: 'No se pudo iniciar la grabación.',
+    OVER: 'Esta grabación supera el tamaño con el que un documento viaja cómodamente. Puedes conservarla —se te pedirá confirmación— pero el archivo será más pesado para todos a quienes se lo envíes.',
+    NEAR: 'Esta grabación se está haciendo lo bastante larga como para que el documento pese notablemente más al enviarlo.',
+    SUM: '{length} · {format} · unos {size} en el archivo',
+    PORT: 'Este navegador graba en un formato que algunos reproductores antiguos no pueden abrir. Se reproduce en esta aplicación en cualquier navegador moderno.',
+    AGAIN: 'Grabar otra vez',
+    ASK: 'Pidiendo el micrófono…',
+    RECING: 'Grabando. Nada sale de este archivo.',
+    STOP: 'Detener',
+    RECD: 'Grabar…',
+  },
+  de: {
+    V: 'Sprachnotiz',
+    R: 'Direkt auf der Seite aufnehmen',
+    DEN: 'Das Mikrofon wurde nicht freigegeben. Der Browser hat es womöglich blockiert, oder die Berechtigungsanfrage wurde weggeklickt — erlaube es für diese Seite und versuche es erneut.',
+    NOD: 'Es wurde kein Mikrofon gefunden. Schließe eines an, oder wähle stattdessen eine Datei.',
+    BUSY: 'Das Mikrofon ist belegt — womöglich benutzt es eine andere App oder ein anderer Tab. Schließe sie und versuche es erneut.',
+    INS: 'Diese Seite läuft nicht über eine sichere Verbindung, deshalb öffnet der Browser das Mikrofon nicht. Öffne die Datei von der Festplatte, oder über https.',
+    UNS: 'Dieser Browser kann kein Audio aufnehmen. Du kannst weiterhin eine Audiodatei auswählen.',
+    FAIL: 'Die Aufnahme konnte nicht gestartet werden.',
+    OVER: 'Diese Aufnahme ist größer, als ein Dokument bequem reist. Du kannst sie behalten — es folgt eine Rückfrage — aber die Datei wird für alle, denen du sie schickst, entsprechend schwerer.',
+    NEAR: 'Diese Aufnahme wird lang genug, um das Dokument beim Versenden merklich schwerer zu machen.',
+    SUM: '{length} · {format} · etwa {size} in der Datei',
+    PORT: 'Dieser Browser nimmt in einem Format auf, das manche älteren Player nicht öffnen können. In dieser App läuft es in jedem modernen Browser.',
+    AGAIN: 'Neu aufnehmen',
+    ASK: 'Mikrofon wird angefragt…',
+    RECING: 'Aufnahme läuft. Nichts verlässt diese Datei.',
+    STOP: 'Stopp',
+    RECD: 'Aufnehmen…',
+  },
+  it: {
+    V: 'Nota vocale',
+    R: 'Registra direttamente nella pagina',
+    DEN: 'Il microfono non è stato autorizzato. Il browser potrebbe averlo bloccato, oppure la richiesta di autorizzazione è stata ignorata: consentilo per questa pagina e riprova.',
+    NOD: 'Nessun microfono trovato. Collegane uno, oppure scegli un file.',
+    BUSY: 'Il microfono è occupato: potrebbe usarlo un’altra app o un’altra scheda. Chiudila e riprova.',
+    INS: 'Questa pagina non è su una connessione sicura, quindi il browser non aprirà il microfono. Apri il file dal disco, oppure via https.',
+    UNS: 'Questo browser non può registrare audio. Puoi comunque scegliere un file audio.',
+    FAIL: 'Non è stato possibile avviare la registrazione.',
+    OVER: 'Questa registrazione supera la dimensione con cui un documento viaggia comodamente. Puoi tenerla — ti verrà chiesta una conferma — ma il file sarà più pesante per tutti quelli a cui lo mandi.',
+    NEAR: 'Questa registrazione sta diventando abbastanza lunga da appesantire sensibilmente l’invio del documento.',
+    SUM: '{length} · {format} · circa {size} nel file',
+    PORT: 'Questo browser registra in un formato che alcuni lettori più vecchi non riescono ad aprire. In questa app si riproduce su qualsiasi browser moderno.',
+    AGAIN: 'Registra di nuovo',
+    ASK: 'Richiesta del microfono…',
+    RECING: 'Registrazione in corso. Niente esce da questo file.',
+    STOP: 'Ferma',
+    RECD: 'Registra…',
+  },
+  pt: {
+    V: 'Nota de voz',
+    R: 'Gravar diretamente na página',
+    DEN: 'O microfone não foi autorizado. O navegador pode tê-lo bloqueado, ou o pedido de permissão pode ter sido ignorado — autorize-o para esta página e tente novamente.',
+    NOD: 'Não foi encontrado nenhum microfone. Ligue um, ou escolha um ficheiro.',
+    BUSY: 'O microfone está ocupado — outra aplicação ou outro separador pode estar a usá-lo. Feche-a e tente novamente.',
+    INS: 'Esta página não está numa ligação segura, por isso o navegador não abre o microfone. Abra o ficheiro a partir do disco, ou em https.',
+    UNS: 'Este navegador não consegue gravar áudio. Ainda pode escolher um ficheiro de áudio.',
+    FAIL: 'Não foi possível iniciar a gravação.',
+    OVER: 'Esta gravação ultrapassa o tamanho com que um documento viaja confortavelmente. Pode mantê-la — ser-lhe-á pedida uma confirmação — mas o ficheiro ficará mais pesado para todos a quem o enviar.',
+    NEAR: 'Esta gravação está a ficar longa o suficiente para tornar o documento notavelmente mais pesado de enviar.',
+    SUM: '{length} · {format} · cerca de {size} no ficheiro',
+    PORT: 'Este navegador grava num formato que alguns leitores mais antigos não conseguem abrir. Reproduz-se nesta aplicação em qualquer navegador moderno.',
+    AGAIN: 'Gravar de novo',
+    ASK: 'A pedir o microfone…',
+    RECING: 'A gravar. Nada sai deste ficheiro.',
+    STOP: 'Parar',
+    RECD: 'Gravar…',
+  },
+  ja: {
+    V: 'ボイスメモ',
+    R: 'ページに直接録音します',
+    DEN: 'マイクが許可されませんでした。ブラウザがブロックしたか、許可のリクエストが閉じられた可能性があります。このページに対して許可して、もう一度お試しください。',
+    NOD: 'マイクが見つかりませんでした。接続するか、代わりにファイルを選んでください。',
+    BUSY: 'マイクが使用中です。別のアプリやタブが使っている可能性があります。それを閉じて、もう一度お試しください。',
+    INS: 'このページは安全な接続ではないため、ブラウザはマイクを開きません。ファイルをディスクから、または https で開いてください。',
+    UNS: 'このブラウザは音声を録音できません。音声ファイルを選ぶことはできます。',
+    FAIL: '録音を開始できませんでした。',
+    OVER: 'この録音は、ドキュメントが無理なくやり取りできるサイズを超えています。残すこともできます（確認が表示されます）が、送る相手全員にとってファイルがその分重くなります。',
+    NEAR: 'この録音は、ドキュメントの送信が目に見えて重くなるほど長くなってきています。',
+    SUM: '{length} · {format} · ファイル内で約 {size}',
+    PORT: 'このブラウザは、一部の古いプレーヤーでは開けない形式で録音します。このアプリでは、最新のブラウザであれば再生できます。',
+    AGAIN: '録音し直す',
+    ASK: 'マイクを要求しています…',
+    RECING: '録音中。何もこのファイルの外には出ません。',
+    STOP: '停止',
+    RECD: '録音…',
+  },
+  'zh-Hans': {
+    V: '语音笔记',
+    R: '直接录进页面',
+    DEN: '麦克风未获允许。浏览器可能已阻止，或者权限请求被关闭了——请为此页面允许麦克风后重试。',
+    NOD: '没有找到麦克风。请接入一个，或改为选择文件。',
+    BUSY: '麦克风正被占用——可能有其他应用或标签页在使用。请关闭后重试。',
+    INS: '此页面不在安全连接上，浏览器不会开启麦克风。请从磁盘打开该文件，或改用 https。',
+    UNS: '此浏览器无法录音。你仍然可以选择一个音频文件。',
+    FAIL: '无法开始录音。',
+    OVER: '这段录音超出了文档便于传送的大小。你可以保留它——系统会请你确认——但文件会因此对每一位收件人都更重。',
+    NEAR: '这段录音已经长到会让文档明显更难发送。',
+    SUM: '{length} · {format} · 在文件中约 {size}',
+    PORT: '此浏览器录制的格式，某些较旧的播放器无法打开。在本应用中，任何现代浏览器都能播放。',
+    AGAIN: '重新录制',
+    ASK: '正在请求麦克风…',
+    RECING: '正在录音。没有任何内容离开这个文件。',
+    STOP: '停止',
+    RECD: '录制…',
+  },
+  'zh-Hant': {
+    V: '語音筆記',
+    R: '直接錄進頁面',
+    DEN: '麥克風未獲允許。瀏覽器可能已封鎖，或權限請求被關閉了——請為此頁面允許麥克風後再試一次。',
+    NOD: '找不到麥克風。請接上一個，或改為選擇檔案。',
+    BUSY: '麥克風正被占用——可能有其他應用程式或分頁正在使用。請關閉後再試一次。',
+    INS: '此頁面不在安全連線上，瀏覽器不會開啟麥克風。請從磁碟開啟該檔案，或改用 https。',
+    UNS: '此瀏覽器無法錄音。你仍然可以選擇一個音訊檔案。',
+    FAIL: '無法開始錄音。',
+    OVER: '這段錄音超出了文件便於傳送的大小。你可以保留它——系統會請你確認——但檔案會因此對每一位收件者都更重。',
+    NEAR: '這段錄音已經長到會讓文件明顯更難傳送。',
+    SUM: '{length} · {format} · 在檔案中約 {size}',
+    PORT: '此瀏覽器錄製的格式，某些較舊的播放器無法開啟。在本應用程式中，任何現代瀏覽器都能播放。',
+    AGAIN: '重新錄製',
+    ASK: '正在要求麥克風…',
+    RECING: '正在錄音。沒有任何內容離開這個檔案。',
+    STOP: '停止',
+    RECD: '錄製…',
+  },
+}
+
+const q = (s) => JSON.stringify(s)
+
+for (const [loc, map] of Object.entries(T)) {
+  const path = `${dir}/${loc}.ts`
+  let src = readFileSync(path, 'utf8')
+  const lines = src.split('\n')
+  for (const [slot, en] of Object.entries(K)) {
+    const line = `  ${q(en)}: ${q(map[slot])},`
+    // insert before the first entry line whose key sorts after this one
+    let at = -1
+    for (let i = 0; i < lines.length; i++) {
+      const m = /^\s{2}"((?:\\.|[^"])*)":/.exec(lines[i])
+      if (!m) continue
+      const key = JSON.parse(`"${m[1]}"`)
+      if (key > en) { at = i; break }
+    }
+    if (at < 0) throw new Error(`no insert point for ${en} in ${loc}`)
+    lines.splice(at, 0, line)
+  }
+  writeFileSync(path, lines.join('\n'))
+  console.log(loc, 'ok')
+}

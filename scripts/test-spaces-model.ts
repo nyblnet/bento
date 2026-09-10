@@ -59,6 +59,11 @@ import {
   canvasRatio, cardPos, cardsOf, freeSlot, slotFor, nextRatio, ratioName, clampPct, round1,
   CANVAS_RATIO, RATIO_MIN, RATIO_MAX,
 } from '../spaces/src/canvas.ts'
+import {
+  AUDIO_MIME_CANDIDATES, pickAudioMime, audioFormat, micTrouble, recorderAvailability,
+  formatElapsed, meterLevel, embeddedSize, budgetVerdict, VOICE_BITRATE,
+} from '../spaces/src/record.ts'
+import { MEDIA_EMBED_BUDGET, internAsset, orphanAssets } from '../spaces/src/assets.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
 import {
   buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
@@ -3591,6 +3596,191 @@ function fsTable(f: string): string {
   }
   ok(new Set(VIEW_LAYOUTS.map((l) => nextLayout(l))).size === VIEW_LAYOUTS.length,
     'the cycle reaches every shape — none is stranded off it')
+}
+
+
+// ————— VOICE NOTES —————
+//
+// The recorder is DOM machinery and cannot run here; what can, and what the
+// bugs actually live in, is the arithmetic and the classification. Four
+// properties, each of which fails silently in a way only the RECIPIENT of the
+// document would ever notice.
+{
+  // 1. CODEC CHOICE. A hardcoded mime produces a file that plays on the
+  //    developer's machine and nowhere else, so the choice is a function of
+  //    what this browser says it can write — and the ORDER is playback reach,
+  //    not the browser's own preference. Chrome will happily record WebM/Opus
+  //    and would be asked first by any list written from what is convenient.
+  const only = (...ok: string[]) => (type: string) => ok.includes(type)
+
+  ok(pickAudioMime(only('audio/webm;codecs=opus', 'audio/mp4')) === 'audio/mp4',
+    'offered both, it takes MP4 over WebM — the recipient is the one who has to open it')
+  ok(pickAudioMime(only('audio/mp4;codecs=mp4a.40.2', 'audio/mp4')) === 'audio/mp4;codecs=mp4a.40.2',
+    'the fully-specified AAC type wins over the bare container when both are offered')
+  ok(pickAudioMime(only('audio/webm;codecs=opus', 'audio/webm')) === 'audio/webm;codecs=opus',
+    'a browser that can only write WebM still gets a recording — the list degrades, it does not refuse')
+  ok(pickAudioMime(only('audio/ogg;codecs=opus', 'audio/webm')) === 'audio/ogg;codecs=opus',
+    'Ogg/Opus outranks WebM/Opus: same codec, the container more players open')
+  ok(pickAudioMime(only()) === '',
+    'nothing supported means NO mimeType is passed — the UA picks, which beats throwing')
+  ok(pickAudioMime(undefined) === '',
+    'a browser with no isTypeSupported at all lands in the same place')
+  ok(pickAudioMime(() => { throw new Error('nope') }) === '',
+    'a probe that THROWS is a no, not a crash — some builds throw on a type they dislike')
+
+  // THE FALLBACK LADDER. `isTypeSupported` is necessary and NOT sufficient:
+  // measured in Chrome on macOS, it answers true for AAC-in-MP4, the recorder
+  // constructs, start() returns — and the first encode raises EncodingError
+  // for a zero-byte recording. A type that has been WATCHED to fail is fed
+  // back in and the next rung is taken.
+  const all = only(...AUDIO_MIME_CANDIDATES)
+  ok(pickAudioMime(all) === 'audio/mp4;codecs=mp4a.40.2', 'with everything on offer, the top rung')
+  ok(pickAudioMime(all, new Set(['audio/mp4;codecs=mp4a.40.2'])) === 'audio/mp4',
+    'the rung that failed is skipped and the next one taken')
+  ok(pickAudioMime(all, new Set(AUDIO_MIME_CANDIDATES)) === '',
+    'every rung having failed, it falls through to the UA default rather than repeating one')
+  {
+    // Climb the whole ladder rejecting each rung: every candidate is visited
+    // exactly once, in order, and then it ends. No loop, no repeat.
+    const seen: string[] = []
+    const gone = new Set<string>()
+    for (let i = 0; i < AUDIO_MIME_CANDIDATES.length + 3; i++) {
+      const m = pickAudioMime(all, gone)
+      if (!m) break
+      seen.push(m)
+      gone.add(m)
+    }
+    ok(seen.length === AUDIO_MIME_CANDIDATES.length,
+      `the ladder has exactly ${seen.length} rungs and terminates — a retry loop that repeated one would hang the recorder`)
+    ok(seen.join('|') === AUDIO_MIME_CANDIDATES.join('|'), '…and it is climbed in the declared order')
+  }
+
+  // The list is a promise about portability, so it is pinned rather than left
+  // to drift: MP4 first, WebM last.
+  ok(AUDIO_MIME_CANDIDATES[0].startsWith('audio/mp4'),
+    'the first candidate is MP4 — the only audio every shipping browser decodes')
+  ok(AUDIO_MIME_CANDIDATES[AUDIO_MIME_CANDIDATES.length - 1].startsWith('audio/webm'),
+    'and WebM is LAST, because it is the one a recipient may not be able to open')
+  ok(AUDIO_MIME_CANDIDATES.every((c) => c.startsWith('audio/')),
+    'every candidate is audio — a voice note must never negotiate a video track')
+  ok(new Set(AUDIO_MIME_CANDIDATES).size === AUDIO_MIME_CANDIDATES.length,
+    'no duplicates, so the order means what it says')
+
+  // The one line of UI that tells an author what they just made.
+  ok(audioFormat('audio/mp4;codecs=mp4a.40.2').portable === true, 'MP4 is portable')
+  ok(audioFormat('audio/mpeg').portable === true, 'MP3 is portable')
+  ok(audioFormat('audio/webm;codecs=opus').portable === false,
+    'WebM is not — and saying so is the whole point of the field')
+  ok(audioFormat('audio/ogg').portable === false, 'nor is Ogg')
+  ok(audioFormat('audio/webm;codecs=opus').label === 'WebM',
+    'the label is the CONTAINER: that is what decides whether a player opens the file at all')
+  ok(audioFormat('').label === '?' && audioFormat('').portable === false,
+    'an unknown type reads as unknown and NOT as portable — the safe direction to be wrong in')
+
+  // 2. THE BUDGET, asked about what the document will actually WEIGH. Inside
+  //    the file the clip is base64, four characters per three bytes, so asking
+  //    the budget about the raw count lets a clip a third over the line
+  //    through without a word.
+  ok(embeddedSize(3) >= 4, 'three bytes become at least four characters')
+  ok(embeddedSize(3_000_000) > 4_000_000,
+    'base64 inflation is counted — 3MB of audio is over 4MB of document')
+  ok(embeddedSize(1000, 'audio/mp4') > embeddedSize(1000, ''),
+    'the data: preamble counts too, small as it is')
+  ok(budgetVerdict(1000) === 'ok', 'a short note is simply fine')
+  ok(budgetVerdict(MEDIA_EMBED_BUDGET + 1) === 'over',
+    'past MEDIA_EMBED_BUDGET is over — the same threshold the file picker asks at, not a second one')
+  ok(budgetVerdict(MEDIA_EMBED_BUDGET) === 'ok' || budgetVerdict(MEDIA_EMBED_BUDGET) === 'near',
+    'exactly at the budget is not yet over')
+  ok(budgetVerdict(Math.round(MEDIA_EMBED_BUDGET * 0.9)) === 'near',
+    'and there is a WARNING band before it, because the only moment a recording can be made shorter is while it is still running')
+  {
+    // WHAT HAPPENS AT THE LIMIT, in minutes rather than in adjectives. At
+    // 64 kbit/s the warning band opens around ten minutes and the confirm
+    // lands around thirteen; a long meeting therefore DOES reach it, is told
+    // so while it is still running, and is then asked — never silently
+    // refused and never silently embedded.
+    const secondsToBudget = MEDIA_EMBED_BUDGET / (embeddedSize(VOICE_BITRATE / 8) )
+    ok(secondsToBudget > 600,
+      `at ${VOICE_BITRATE} bit/s a recording runs ${Math.round(secondsToBudget / 60)} minutes before it reaches the budget — a note never meets it`)
+    ok(secondsToBudget < 3600,
+      '…and an hour-long meeting DOES, so the warning is not decoration')
+  }
+
+  // 3. EVERY WAY A MICROPHONE CAN SAY NO, and they are all normal states. The
+  //    classification is what decides which sentence the reader sees, and a
+  //    reader shown "an error occurred" has nothing to act on.
+  const asErr = (name: string) => Object.assign(new Error(name), { name })
+  ok(micTrouble(asErr('NotAllowedError')) === 'denied',
+    'blocked, or a dismissed prompt — indistinguishable, so ONE state whose wording covers both')
+  ok(micTrouble(asErr('NotFoundError')) === 'nodevice', 'no microphone attached')
+  ok(micTrouble(asErr('OverconstrainedError')) === 'nodevice',
+    'no device that fits the constraints is also "no microphone" to a reader')
+  ok(micTrouble(asErr('NotReadableError')) === 'inuse', 'the device is held by something else')
+  ok(micTrouble(asErr('SecurityError')) === 'insecure', 'the origin is not allowed to ask')
+  ok(micTrouble(asErr('TypeError')) === 'unsupported', 'the API is not there')
+  ok(micTrouble(undefined) === 'failed' && micTrouble(null) === 'failed',
+    'and anything unrecognised is a plain failure rather than a wrong diagnosis')
+  ok(micTrouble(asErr('SomeFutureError')) === 'failed',
+    'including an error name from a browser newer than this build')
+
+  // Availability is asked WITHOUT prompting anybody, and it separates "too old"
+  // from "insecure" because the remedies are different sentences.
+  const gum = { mediaDevices: { getUserMedia: () => {} } }
+  ok(recorderAvailability(gum, true, true) === 'ok', 'both halves present is ok')
+  ok(recorderAvailability(undefined, true, false) === 'insecure',
+    'no mediaDevices on an insecure origin is the INSECURE message, not the unsupported one')
+  ok(recorderAvailability(undefined, true, true) === 'unsupported',
+    '…and the same absence on a secure origin means the browser cannot do it')
+  ok(recorderAvailability(gum, false, true) === 'unsupported',
+    'getUserMedia without MediaRecorder cannot record either')
+  ok(recorderAvailability(gum, true, false) === 'ok',
+    'A LOCAL FILE STILL RECORDS: Chrome and Firefox treat file:// as trustworthy, so the gate is the API being there — gating on https would have banned the ordinary way these documents are opened')
+
+  // 4. THE READOUTS. A clock read in colons, and a meter that moves.
+  ok(formatElapsed(0) === '0:00', 'a fresh recording reads 0:00')
+  ok(formatElapsed(7_400) === '0:07', 'seconds are floored, never rounded up past what was captured')
+  ok(formatElapsed(65_000) === '1:05', 'a minute rolls over with a padded second')
+  ok(formatElapsed(3_600_000) === '1:00:00', 'an hour grows the field rather than showing 60:00')
+  ok(formatElapsed(3_725_000) === '1:02:05', 'and both lower fields stay padded')
+  ok(formatElapsed(-500) === '0:00', 'a clock skew backwards reads 0:00, never "-1:59"')
+
+  const flat = new Uint8Array(256).fill(128)
+  ok(meterLevel(flat) === 0, 'silence centres on 128 and reads zero')
+  const loud = Uint8Array.from({ length: 256 }, (_, i) => (i % 2 ? 255 : 1))
+  ok(meterLevel(loud) === 1, 'a full-scale square wave clamps at 1 rather than overflowing the bar')
+  const quiet = Uint8Array.from({ length: 256 }, (_, i) => 128 + (i % 2 ? 8 : -8))
+  const mid = meterLevel(quiet)
+  ok(mid > 0 && mid < 1, `a quiet voice reads between the ends (${mid.toFixed(3)})`)
+  ok(meterLevel(quiet) > 8 / 128,
+    'and it is DISPLAY-GAINED: speech at a normal distance must leave the first tenth of the bar, or the meter reads as broken')
+  ok(meterLevel(new Uint8Array(0)) === 0, 'an empty buffer is silence, not NaN')
+}
+
+// 5. A RECORDING IS STORED LIKE ANY OTHER FILE, which is the whole reason
+//    this feature needed no new storage path. Interning is what makes two
+//    blocks pointing at one recording cost one copy, and it is asserted here
+//    on the recorder's own shape (an audio data: URI) rather than assumed
+//    from the image case.
+{
+  const d = JSON.parse(doc()) as SpacesDoc
+  const clip = 'data:audio/mp4;base64,' + 'AAAA'.repeat(64)
+  const other = 'data:audio/mp4;base64,' + 'BBBB'.repeat(64)
+  const a = await internAsset(d, clip)
+  const b = await internAsset(d, clip)
+  const c = await internAsset(d, other)
+  ok(a.startsWith('asset:'), 'a recording becomes an asset: reference, never inline bytes on the block')
+  ok(a === b, 'THE SAME RECORDING INTERNED TWICE IS ONE KEY — two blocks share one copy')
+  ok(Object.keys(d.assets ?? {}).length === 2,
+    'so two references to one clip plus one other clip is TWO stored values, not three')
+  ok(c !== a, 'and a different recording is a different key')
+
+  // The orphan readout must see a media src, or a deleted voice note would
+  // keep its bytes in the file forever with nothing pointing at them.
+  d.pages[0].blocks.push({ id: 'v1', type: 'media', kind: 'audio', src: a, html: '' })
+  ok(!orphanAssets(d).includes(a.slice(6)),
+    'a clip a media block references is NOT an orphan')
+  ok(orphanAssets(d).includes(c.slice(6)),
+    '…and one nothing references IS, so deleting a voice note can reclaim its bytes')
 }
 
 

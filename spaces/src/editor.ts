@@ -49,6 +49,7 @@ import { PropsPanel } from './props'
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
+import { openVoiceRecorder } from './record'
 
 const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctrlKey'
 
@@ -300,6 +301,15 @@ export class Editor {
           else this.focusBlock(fresh.id)
         }))
       }
+      // VOICE NOTE. Not a SLASH_ITEM, because SLASH_ITEMS is the block
+      // registry and this makes no new block type — it makes a `media` block
+      // with `kind: 'audio'`, exactly as picking an .m4a does. Listed here as
+      // its own entry all the same: "Video or audio" is where you go with a
+      // file you already have, and a recording is a different intention.
+      menu.append(this.menuItem('mic', t('Voice note'), t('Record straight into the page'), () => {
+        close()
+        this.recordVoice(null)
+      }))
     })
 
     this.undoB = iconBtn('undo', t('Undo (⌘Z)'), () => { this.store.undo(); this.repaint() })
@@ -2463,6 +2473,9 @@ export class Editor {
       for (const btn of node.querySelectorAll<HTMLElement>('[data-link-media]')) {
         btn.addEventListener('click', () => this.linkMedia(id))
       }
+      for (const btn of node.querySelectorAll<HTMLElement>('[data-record-media]')) {
+        btn.addEventListener('click', () => this.recordVoice(id))
+      }
       const b = s.block(id)
       if (s.readOnly || this.reading || !b || !b.src) continue
       const kind = String(b.kind ?? 'video') === 'audio' ? 'audio' : 'video'
@@ -4276,7 +4289,7 @@ export class Editor {
   async placeMedia(
     blockId: string | null,
     file: File | Blob,
-    opts: { insertAfter?: string | null } = {},
+    opts: { insertAfter?: string | null; alt?: string } = {},
   ): Promise<void> {
     const s = this.store
     this.status(t('Reading file…'))
@@ -4302,8 +4315,57 @@ export class Editor {
     }
 
     const ref = await internAsset(s.doc, dataUri)
-    this.writeMedia(blockId, opts.insertAfter ?? null, (b) => { b.src = ref; b.kind = kind })
+    this.writeMedia(blockId, opts.insertAfter ?? null, (b) => {
+      b.src = ref
+      b.kind = kind
+      if (opts.alt) b.alt = opts.alt
+    })
     this.status(t('Clip added ({size})', { size: humanBytes(dataUri.length) }))
+  }
+
+  /**
+   * Record a voice note into the page.
+   *
+   * The recorder is in record.ts and knows nothing about the document: it
+   * hands back a Blob, and from there this is EXACTLY the picked-file path —
+   * `placeMedia` reads the bytes, asks the budget question, interns them and
+   * makes one commit. So a recording costs one undo step, two recordings of
+   * the same bytes are stored once, and no `media` field means anything new.
+   *
+   * `destroy()` is wired to `overlayReflow`, which `closeOverlay` calls before
+   * it removes the node — so Escape, a click on the scrim, opening another
+   * overlay and navigating to another page all hand the microphone back
+   * through the same one path.
+   */
+  recordVoice(blockId: string | null, insertAfter: string | null = null): void {
+    if (this.store.readOnly || this.reading) return
+    this.closeOverlay()
+    const returnFocus = document.activeElement as HTMLElement | null
+    const back = el('div', 'sp-overlay')
+    const close = () => {
+      this.closeOverlay()
+      document.removeEventListener('keydown', onKey, true)
+      returnFocus?.focus?.()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+    const view = openVoiceRecorder({
+      onCancel: () => close(),
+      onDone: (result) => {
+        close()
+        // The Blob carries the recorder's own mimeType, which is what makes
+        // placeMedia read `kind: 'audio'` off it rather than defaulting to
+        // video — see the kind test there.
+        void this.placeMedia(blockId, result.blob, { insertAfter, alt: t('Voice note') })
+      },
+    })
+    back.append(view.el)
+    back.addEventListener('mousedown', (e) => { if (e.target === back) close() })
+    document.addEventListener('keydown', onKey, true)
+    document.body.append(back)
+    this.overlay = back
+    this.overlayReflow = () => view.destroy()
   }
 
   /**
