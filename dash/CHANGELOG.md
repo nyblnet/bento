@@ -81,6 +81,18 @@ The release that came out of watching somebody use 0.2.0.
   and take unsaved edits with it; a `?` shortcut card generated from the key map
   itself; and ⇧Space selects the row, which had never worked.
 
+- **A value too wide for its column can be read by hovering it.** Cells clip
+  with an ellipsis, and until now the rest of the value was simply gone — the
+  only way to recover it was to click the cell and read the formula bar, once
+  per cell, down a column you were trying to scan. Hovering now shows the whole
+  value.
+
+  Only where it is actually needed: whether a cell clips depends on the
+  rendered glyphs, the column width and the font the reader got, so it is
+  measured on hover rather than guessed when the grid is drawn. A value that
+  fits gets no tooltip, and dragging a column wider takes the tooltip away
+  again.
+
 ## [0.2.0] — 2026-08-03
 
 First release. A workbook is one self-contained HTML file: the data, the grid,
