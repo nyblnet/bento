@@ -711,6 +711,39 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   not the number of pages in it: measured on a synthetic 1000-page, 2.5MB
   space, 6.5ms per page open, against 1.9ms for the backlink index the app
   already built. A 100-page space is 1.3ms.
+- **A view's filter can ask a real question.** It had two things to say — "show
+  me what is open" and "show me these values" — under five layouts that exist to
+  hold books, tasks and dates. "Published after 2020", "due this week", "not
+  tagged draft", "title contains onboarding" and "has no due date" were all
+  unaskable. A view now carries **conditions**: a field, an operator and a
+  value, built in the Filter popover and listed there in words.
+
+  Eleven operators, chosen per field type rather than collected. Numbers and
+  dates get `is more than` / `is at least` / `is less than` / `is at most`, and
+  two of them AND into a range. Dates also get relative windows — Today, This
+  week, This month, In the past (which is what "overdue" is), In the future —
+  resolved against **your own day in your own timezone**, and against your own
+  locale's week: the same file answers "this week" as Monday–Sunday in Berlin
+  and Sunday–Saturday in Chicago, because a week start is a reader's fact and
+  not a document's. Text gets `contains` / `does not contain`, matching what is
+  on the screen rather than what is stored underneath, so a status matches its
+  label. Everything gets `is` / `is not` and `is empty` / `is not empty` — the
+  question membership could never ask, because an unset value is the absence of
+  a value rather than one of its values. A condition can also ask about the page
+  **title**, which is not a property and no field name could reach.
+
+  Conditions are a flat list with one switch — **Match all** or **Match any** —
+  and no nesting, deliberately: a filter you cannot read at a glance is worse
+  than one that cannot ask everything, and the popover is a sheet on a phone.
+  The Filter chip counts them alongside the old two.
+
+  Nothing written before this changes. Every existing filter runs through
+  exactly the code it always did and selects exactly the rows it always did, and
+  a view whose conditions are all removed goes back to being byte-identical to
+  one nobody ever filtered. An **older build** opening a file with conditions
+  ignores them, shows a superset of the rows, and says so in the banner it
+  already had for a newer sort — and a **newer** operator meeting this build
+  does the same rather than hiding rows for a rule nobody can see.
 
 ## [0.1.0] — 2026-08-03
 

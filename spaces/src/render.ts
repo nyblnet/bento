@@ -21,6 +21,7 @@ import {
   type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
 import { renderCalendar, spanOf, nextSpan } from './calendar.ts'
+import { unknownFilterOps } from './query.ts'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
@@ -1186,7 +1187,7 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   const filter = (b as { filter?: unknown }).filter
   const sort = (b as { sort?: unknown }).sort
   const all = viewRows(doc, (b as { source?: unknown }).source)
-  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
+  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter, r.page)), sort)
 
   const head = document.createElement('div')
   head.className = 'sp-view-head'
@@ -1307,7 +1308,9 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
 
   // A rule this build cannot evaluate means the view shows MORE than its author
   // asked for. Additivity keeps the rule; honesty says so.
-  const unknown = unknownFilterKeys(filter)
+  // ...and the same rule one level down: an OPERATOR from a newer build is a
+  // rule that was not applied, which is the same superset with the same banner.
+  const unknown = [...unknownFilterKeys(filter), ...unknownFilterOps(filter)]
   if (unknown.length) {
     const note = document.createElement('p')
     note.className = 'sp-view-empty'

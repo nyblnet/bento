@@ -32,6 +32,10 @@ import {
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
 import { nextSpan } from './calendar.ts'
+import {
+  clausesOf, clauseSummary, isAny, opsFor, opLabel, numberOpLabel, windowLabel,
+  DATE_WINDOWS, type Clause, type QueryOp,
+} from './query.ts'
 import { planImport, type SourceFile } from './markdown'
 import { extractSpace, planGraft } from './portable'
 import { headingsOf } from './embed.ts'
@@ -1903,6 +1907,17 @@ export class Editor {
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
     setTimeout(() => document.addEventListener('mousedown', away), 0)
+    // A POPOVER THAT OPENS ANOTHER POPOVER used to be closed by the first one's
+    // own dismissal listener. `away` removed itself only when it FIRED, so the
+    // outgoing popover left it attached; the first mousedown inside the new
+    // popover was "outside" the old one, and closeOverlay() — which by then
+    // pointed at the NEW popover — tore down the thing that had just been
+    // opened. Measured: click Filter → Add condition → click the value box, and
+    // the form vanished with `document.querySelectorAll('.sp-pop').length === 0`
+    // before a character could be typed. Nothing had chained popovers before
+    // the condition builder, so the bug was latent rather than new.
+    const outgoing = this.overlayReflow
+    this.overlayReflow = () => { outgoing?.(); document.removeEventListener('mousedown', away) }
   }
 
   /**
@@ -2076,13 +2091,147 @@ export class Editor {
     })
   }
 
+  /** Add, remove or re-combine a view's typed conditions. */
+  private editClauses(blockId: string, edit: (list: Clause[]) => Clause[]): void {
+    this.editViewFilter(blockId, (f) => {
+      const next = edit(clausesOf(f))
+      // an empty list is DELETED, never stored: the same rule `is` and `open`
+      // follow, and what keeps a view conditioned and then cleared
+      // byte-identical to one nobody ever touched
+      if (next.length) f.where = next
+      else { delete f.where; delete f.any }
+      // `any` over one clause is a distinction without a difference, and a
+      // stored key that changes nothing is a key somebody has to explain
+      if (next.length < 2) delete f.any
+    })
+  }
+
   /**
-   * The filter picker: every option of every select field, as toggles.
+   * Build one condition: a field, an operator, a value.
    *
-   * Deliberately NOT a query builder — no operators, no and/or, no nesting.
-   * A list of values you can switch on is the whole of what a board needs, it
-   * fits a phone sheet, and it cannot grow a language that then has to be
-   * supported forever.
+   * A FORM, not a three-step menu chain. The three parts are one thought and
+   * picking them through three popovers is the interaction that makes a filter
+   * builder unusable — and the form is four native controls, which is what
+   * makes it fit a phone sheet without a layout of its own.
+   *
+   * The operator list follows the FIELD TYPE (query.ts `opsFor`), because "is
+   * more than" on a date and "is after" on a number are both questions nobody
+   * asks, and the value control follows the OPERATOR: options for a select, a
+   * window for `in`, a date picker for a date, nothing at all for `is empty`.
+   */
+  private openAddCondition(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (!s.block(blockId) || s.readOnly || this.reading) return
+    const fields = fieldsOf(s.doc)
+    this.popover(anchor, (pop) => {
+      pop.append(el('div', 'sp-pop-title', t('Add a condition')))
+
+      const wrap = (labelText: string, control: HTMLElement) => {
+        const row = el('div', 'sp-field')
+        row.append(el('label', 'sp-field-lbl', labelText), control)
+        return row
+      }
+      const opt = (sel: HTMLSelectElement, value: string, label: string) => {
+        const o = document.createElement('option')
+        o.value = value
+        o.textContent = label
+        sel.append(o)
+      }
+
+      const keySel = document.createElement('select')
+      keySel.className = 'sp-input'
+      opt(keySel, ':title', t('Title'))
+      for (const f of fields) opt(keySel, f.key, f.label)
+
+      const opSel = document.createElement('select')
+      opSel.className = 'sp-input'
+
+      const valBox = el('div', 'sp-field')
+      const valLbl = el('label', 'sp-field-lbl', t('Value'))
+
+      const fieldNow = () => fields.find((f) => f.key === keySel.value)
+      const buildOps = () => {
+        opSel.textContent = ''
+        const f = fieldNow()
+        for (const o of opsFor(f?.vt)) opt(opSel, o, f?.vt === 'number' ? numberOpLabel(o) : opLabel(o))
+      }
+      const buildValue = () => {
+        valBox.textContent = ''
+        const f = fieldNow()
+        const op = opSel.value
+        // `is empty` and `is not empty` are the two questions with no operand,
+        // so the control is ABSENT rather than disabled — a greyed box invites
+        // somebody to try to type in it
+        if (op === 'empty' || op === 'notEmpty') return
+        valBox.append(valLbl)
+        if (op === 'in') {
+          const sel = document.createElement('select')
+          sel.className = 'sp-input'
+          for (const w of DATE_WINDOWS) opt(sel, w, windowLabel(w))
+          valBox.append(sel)
+        } else if (f?.options?.length && (op === 'eq' || op === 'ne')) {
+          const sel = document.createElement('select')
+          sel.className = 'sp-input'
+          for (const o of f.options) opt(sel, o.id, o.label)
+          valBox.append(sel)
+        } else {
+          const input = document.createElement('input')
+          input.className = 'sp-input'
+          input.type = f?.vt === 'number' ? 'number' : f?.vt === 'date' ? 'date' : 'text'
+          valBox.append(input)
+        }
+      }
+      keySel.addEventListener('change', () => { buildOps(); buildValue() })
+      opSel.addEventListener('change', buildValue)
+      buildOps()
+      buildValue()
+
+      pop.append(wrap(t('Field'), keySel), wrap(t('Condition'), opSel), valBox)
+
+      const add = document.createElement('button')
+      add.type = 'button'
+      add.className = 'sp-btn sp-primary'
+      add.textContent = t('Add condition')
+      add.addEventListener('click', () => {
+        const op = opSel.value as QueryOp
+        const input = valBox.querySelector('select, input') as HTMLInputElement | HTMLSelectElement | null
+        const raw = input ? input.value : ''
+        // a condition with nothing in its box narrows nothing and would count
+        // for nothing on the chip — so it is not added at all rather than
+        // stored as a rule that does not apply
+        if (!input || raw !== '') {
+          const c: Clause = { key: keySel.value, op }
+          if (input) c.v = fieldNow()?.vt === 'number' && Number.isFinite(Number(raw)) ? Number(raw) : raw
+          this.editClauses(blockId, (list) => [...list, c])
+        }
+        this.closeOverlay()
+      })
+      pop.append(add)
+      // The popover's keyboard trap focuses the POP, which is right for a list
+      // of menu items and wrong for a form: you would arrive on a container and
+      // have to Tab three times to reach the box you opened this to fill in.
+      // Measured before this line: after clicking Add condition,
+      // `document.activeElement` was `div.sp-pop`, and typing put the text
+      // nowhere. The trap runs on its own tick, so this has to as well.
+      setTimeout(() => keySel.focus(), 0)
+    })
+  }
+
+  /**
+   * The filter picker: the options of every select field as toggles, and the
+   * typed conditions under them.
+   *
+   * IT USED TO BE TOGGLES ONLY, and the comment here said so as a decision:
+   * "deliberately NOT a query builder… it cannot grow a language that then has
+   * to be supported forever." Half of that stands and half of it did not
+   * survive contact with the app. What stands is the shape — a FLAT list of
+   * conditions, one all/any switch, no nesting, so the popover is still a list
+   * you read top to bottom on a phone. What did not is the scope: a view with
+   * five layouts over a filter that can only ask "which of these values" cannot
+   * ask what its own layouts exist for — a calendar over dates that cannot say
+   * "this week", a table over numbers that cannot say "more than". The
+   * value-toggle list stays FIRST and unchanged, because it is still the one
+   * question a board is asked most.
    */
   private openViewFilter(blockId: string, anchor: HTMLElement): void {
     const s = this.store
@@ -2116,10 +2265,34 @@ export class Editor {
         pop.append(item)
       }
     }
+    const conds = clausesOf(cur)
+    pop.append(el('div', 'sp-fgroup', t('Conditions')))
+    for (let i = 0; i < conds.length; i++) {
+      const at = i
+      // the row IS the remove control — a summary with a separate ✕ needs a
+      // layout of its own, and every other list in this popover is already one
+      // tap = one change
+      pop.append(this.menuItem('trash', clauseSummary(s.doc, conds[at]), t('Remove'), () => {
+        this.closeOverlay()
+        this.editClauses(blockId, (list) => list.filter((_, j) => j !== at))
+      }))
+    }
+    pop.append(this.menuItem('plus', t('Add condition'), '', () => this.openAddCondition(blockId, anchor)))
+    if (conds.length > 1) {
+      const any = isAny(cur)
+      // ONE switch for the whole list. Per-clause and/or is a tree, and a tree
+      // needs a UI that can show one; this is the 90% and it reads in a line.
+      pop.append(this.menuItem('toggle', any ? t('Match any condition') : t('Match all conditions'),
+        t('Switch between all and any'), () => {
+          this.closeOverlay()
+          this.editViewFilter(blockId, (f) => { if (any) delete f.any; else f.any = true })
+        }))
+    }
+
     pop.append(this.menuItem('trash', t('Clear filter'), '', () => {
       this.closeOverlay()
       // unknown keys survive: this clears what this build put there
-      this.editViewFilter(blockId, (f) => { delete f.is; delete f.open })
+      this.editViewFilter(blockId, (f) => { delete f.is; delete f.open; delete f.where; delete f.any })
     }))
     })
   }
