@@ -576,6 +576,35 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   most want to be warned about before rewriting a page — and it survives being
   extracted or grafted into another space, where a target that did not travel
   becomes the same honest `[[Name]]` text a page link becomes.
+- **A view can be a CALENDAR.** The fifth shape on the one layout button —
+  board, list, table, gallery, calendar — and the one that answers *when*. It
+  has two forms behind a second button: a month grid, and a timeline that reads
+  newest first. Two forms rather than two entries in the cycle, because they are
+  one question at two densities (a month grid is useless on dates spread over
+  years, and a timeline cannot show you the shape of a week), and because the
+  layout control is a cycle whose cost is one click for everybody every time
+  they pass a shape they did not want.
+
+  **Which date a page sits on is a rule, not a setting, and the view says the
+  rule out loud**: its journal date if it is a journal entry, otherwise the
+  first date field in the schema it carries a real date for. A page with neither
+  is listed under "No date" — visible, because a calendar quietly holding fewer
+  pages than the count beside its own title is a view lying about what it
+  contains, and the pages it would drop are exactly the ones somebody forgot to
+  date. A value that is digit-shaped but not a day (`2026-13-99`) is no date
+  rather than a confident wrong one.
+
+  Month names, weekday names and **which day the week starts on** all come from
+  the reader's own locale, so the same file is a Sunday-first 2026年9月 in Tokyo
+  and a Monday-first September 2026 in London. Nothing formatted is ever stored.
+  Measured in a built shell: February 2026 draws 28 cells in four rows, August
+  2026 draws 42 in six, September 35 in five — the count is derived from the
+  month and the reader, never assumed.
+
+  `layout: "calendar"` and `span: "timeline"` are additive: verified against a
+  build that has never heard of either, which renders the board and round-trips
+  both keys untouched. And `board`/`month` stay the ABSENT keys — a view cycled
+  all the way round, span and all, is byte-identical to one nobody touched.
 
 ## [0.1.0] — 2026-08-03
 

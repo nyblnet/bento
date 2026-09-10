@@ -2474,3 +2474,59 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
    flex PARENT; dropped into a plain span each became a block of its own. */
 .sp-tpl-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sp-tpl-name svg { width: 15px; height: 15px; display: block; color: var(--muted); }
+/* ---- the calendar layout -------------------------------------------------
+   A GRID OF SEVEN COLUMNS, and the number of ROWS is never asserted here: a
+   month is four, five or six weeks depending on the month and on where the
+   reader's week starts, so `grid-auto-rows` lets the cells the renderer emitted
+   decide. `repeat(6, …)` would clip a six-week month's last week silently. */
+.sp-cal-hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+.sp-cal-bar { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
+.sp-cal-month { font-weight: 600; font-size: 14px; min-width: 8.5em; text-align: center; }
+.sp-cal-step { padding: 2px 8px; }
+.sp-cal-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 8px; overflow: hidden; margin-bottom: 4px;
+}
+.sp-cal-wd {
+  background: var(--chrome); color: var(--muted);
+  font-size: 11px; font-weight: 600; text-align: center; padding: 5px 2px;
+}
+.sp-cal-cell {
+  background: var(--surface); min-height: 76px; padding: 4px 5px 6px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+/* the neighbouring months' days are drawn, not hollowed out: a grid whose
+   corners are holes reads as broken, and an entry on the 1st of next month is
+   what somebody looking at the last week of this one wants to see */
+.sp-cal-out { background: var(--chrome-2, var(--chrome)); }
+.sp-cal-out .sp-cal-num { opacity: .45; }
+.sp-cal-today { box-shadow: inset 0 0 0 2px var(--accent, var(--edge)); }
+.sp-cal-today .sp-cal-num { color: var(--accent, var(--ink)); font-weight: 700; }
+.sp-cal-num { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sp-cal-entry {
+  display: block; font-size: 12px; line-height: 1.3; color: var(--ink);
+  text-decoration: none; background: var(--chrome); border-radius: 4px;
+  padding: 2px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-cal-entry:hover { background: var(--edge, var(--chrome)); text-decoration: underline; }
+.sp-cal-day { margin: 0 0 14px; }
+.sp-cal-dayhead {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  padding-bottom: 4px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.sp-cal-undated { margin-top: 14px; }
+.sp-cal-undated-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.sp-cal-undated-list .sp-cal-entry { max-width: 220px; }
+/* A PHONE CANNOT SHOW SEVEN READABLE COLUMNS of entries, but it can show the
+   shape of the month. The cells shrink and the entries become dots-with-a-tail
+   rather than disappearing — an empty-looking calendar is worse than a cramped
+   one, because it is wrong. */
+@media (max-width: 640px) {
+  .sp-cal-cell { min-height: 54px; padding: 3px 2px 4px; }
+  .sp-cal-entry { font-size: 10px; padding: 1px 3px; }
+}
+@media print {
+  /* the arrows navigate nothing on paper */
+  .sp-cal-bar .sp-cal-step { display: none; }
+}

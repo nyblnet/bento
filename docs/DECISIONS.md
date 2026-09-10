@@ -6445,3 +6445,59 @@ uses `Object.hasOwn` (so `{{date:constructor}}` is literal text rather than
 `Object`'s constructor stringified into the reader's page). Both are pinned by
 assertions in `scripts/test-spaces-model.ts` that were watched to fail under
 deliberate sabotage.
+## 2026-09-09 — a calendar is ONE layout with two shapes, and its date is a rule
+
+bento/spaces gained a fifth view layout, `calendar`. Three choices in it are
+the kind a later session would otherwise re-open and settle differently.
+
+**A month grid and a timeline are ONE entry in the layout cycle, not two.**
+They are not peers of board/list/table/gallery. Those four answer four
+different questions; these two answer one question — *when?* — at two
+densities, and both densities are real in this app: journal entries are daily
+and dense, a reading list's dates are sparse across years. A month grid is
+useless on the second (thirty-six mostly-empty months to page through) and a
+timeline cannot show the shape of a week. So both ship, behind ONE cycle entry,
+with the choice on a second button that appears only while the calendar is on.
+
+The reason it is not six entries is that the layout control is a CYCLE, and a
+cycle's cost is linear: every added shape is one more click for everybody who
+did not want it, in both directions. The precedent for the alternative was
+already in the file — `groupBy` is a board-only parameter with its own button,
+hidden for every other shape — so this is the existing answer to "one shape,
+one parameter" rather than a new mechanism. `span` is a STRING (`timeline`,
+absent = month) and not a boolean, because `week` and `year` are the obvious
+next two and a boolean cannot be widened afterwards.
+
+**Which date a page sits on is FIXED and stated, not configured.** The rule is:
+`page.journal` when it is a real ISO date, else the first `date`-typed field in
+schema order the page carries a real value for, else no date. A `dateBy` key on
+the view would be a permanent format field bought to express a preference
+nobody has asked for; the format's own rule is that every key ships forever
+into files on other people's disks. What the UI owes instead is HONESTY, so the
+view prints the rule above the grid.
+
+**A page with no date is SHOWN, in its own bucket.** This is the half that
+would be tempting to skip. A calendar that silently holds fewer pages than the
+count beside its own title is a view lying about what it contains — and the
+pages it drops are precisely the ones somebody forgot to date, which is the
+thing they most need to see. Same reasoning for a digit-shaped non-date
+(`2026-13-99`): it is undated, never rolled forward into a real day it is not,
+because every Date-based formatter will do that silently and confidently.
+
+**Dates are built from COMPONENTS and formatted through Intl, never parsed.**
+`new Date('2026-01-01')` is UTC midnight by spec and is the previous day for
+every reader west of Greenwich; journal.ts already carried this argument and
+the calendar is where it bites hardest, because a whole grid shifts by one
+column. The one place UTC is correct is subtracting two calendar dates, where
+`Date.UTC` is what makes a day exactly a day across a daylight-saving boundary.
+Month names, weekday names and the reader's FIRST DAY OF THE WEEK all come from
+`Intl` — the last of those shifts the grid rather than relabelling it, so a
+hand-written table gets the columns wrong in half the world as well as being
+untranslatable (the extractor sweeps `t()` literals, so `t(MONTHS[m])` reaches
+no catalog while the packer reports 100%).
+
+Measured in a built shell rather than asserted: February 2026 draws 28 cells in
+four rendered rows in a Sunday-first locale and 35 in five in a Monday-first
+one, August 2026 draws 42 in six, September 35 in five. The cell count is
+derived from the month AND the reader; a fixed 35 silently loses the last days
+of a six-week month, which is the classic failure of every calendar grid.
