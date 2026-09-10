@@ -1782,6 +1782,50 @@ button.sp-prop-val:hover { background: var(--surface); border-color: var(--edge)
 }
 .sp-view-empty { color: var(--muted); font-size: 14px; }
 
+/* ── relations and rollups (relations.ts) ────────────────────────────────────
+   A relation reads as the pages it names; a rollup reads as a number nobody
+   typed. The two are told apart by WEIGHT and not by colour: a derived value is
+   set in the muted ink the labels already use, so a strip of chips still reads
+   as one row rather than as two kinds of thing fighting. */
+/* ONE inline box for the whole list. Its parent chip is a flex row with a gap,
+   and a separator dropped in as a sibling becomes a flex item with that gap on
+   both sides — "Write the spec , Ship it". */
+.sp-rel-set { display: inline; }
+.sp-rel { color: var(--accent, var(--ink)); }
+a.sp-rel { text-decoration: none; }
+a.sp-rel:hover { text-decoration: underline; }
+/* A REFERENCE THAT POINTS AT NOTHING IS SHOWN, not hidden — validate() calls it
+   an error, and somebody has to be able to see which one broke. Dotted, never
+   red: it is a fact about the file, not an alarm in the middle of a sentence. */
+.sp-rel-missing {
+  color: var(--muted); border-bottom: 1px dotted var(--edge); cursor: help;
+}
+.sp-prop-derived .sp-prop-val {
+  background: none; border-style: dashed; color: var(--muted); cursor: default;
+}
+.sp-view-derived { color: var(--muted); }
+
+/* the page list inside the relation picker */
+.sp-rellist { max-height: 260px; overflow-y: auto; }
+.sp-pop-note { padding: 9px 11px; color: var(--muted); font-size: 13px; }
+
+/* the rollup builder, revealed only when "Rollup" is the chosen type */
+.sp-rollup {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  flex: 1 1 100%; padding-top: 2px;
+}
+/* A CLASS BEATS `[hidden]`, and the UA rule is the one that loses. `el.hidden`
+   is display:none at USER-AGENT origin, so any author `display` on the same
+   element wins outright and the element stays on screen with its hidden
+   property faithfully reporting true. Measured on the built shell: with the
+   type set to Text, `roll.hidden` was true, `getComputedStyle().display` was
+   `flex`, and the box was 107px tall — the whole builder visible under every
+   field type. Reading the property back would have said it was hidden. */
+.sp-rollup[hidden] { display: none; }
+.sp-rollup-row { display: flex; align-items: center; gap: 6px; flex: 1 1 100%; }
+.sp-rollup-word { color: var(--muted); font-size: 12.5px; flex: 0 0 auto; }
+.sp-rollup .sp-select { flex: 1 1 auto; min-width: 0; }
+
 /* The board scrolls SIDEWAYS inside itself — never the page. A horizontally
    scrolling document is the thing that makes a phone unusable. */
 .sp-board {

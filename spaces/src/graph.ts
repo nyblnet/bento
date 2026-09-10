@@ -75,6 +75,17 @@ export interface GraphEdge {
   b: number
   /** number of `[[wikilink]]`/pagelink references between the two, either way */
   links: number
+  /**
+   * number of RELATION-field references between the two, either way.
+   *
+   * COUNTED APART FROM `links` because it is a different kind of statement. A
+   * wikilink is prose that happens to mention a page; a relation is a typed
+   * assertion someone made in a field — "the Author of this IS that page" — and
+   * a picture of a space that draws the two identically is throwing away the
+   * half that has structure in it. Drawn accented and solid, where a mention is
+   * drawn as the faint line it always was.
+   */
+  rel: number
   /** true when one is the other's parent in the page tree */
   tree: boolean
 }
@@ -142,7 +153,7 @@ export function buildGraph(doc: SpacesDoc, index: SpaceIndex): Graph {
     const k = key(a, b)
     const hit = seen.get(k)
     if (hit !== undefined) return edges[hit]
-    const e: GraphEdge = { a: Math.min(a, b), b: Math.max(a, b), links: 0, tree: false }
+    const e: GraphEdge = { a: Math.min(a, b), b: Math.max(a, b), links: 0, rel: 0, tree: false }
     seen.set(k, edges.length)
     edges.push(e)
     return e
@@ -156,7 +167,10 @@ export function buildGraph(doc: SpacesDoc, index: SpaceIndex): Graph {
       const a = at.get(s.pageId)
       // a self-link is a real thing to write and a nothing to draw
       if (a === undefined || a === b) continue
-      edgeFor(a, b).links++
+      // TYPED OR PROSE, never both: buildIndex emits one entry per reference
+      // and stamps `rel` only on the ones that came through a relation field.
+      if (s.rel) edgeFor(a, b).rel++
+      else edgeFor(a, b).links++
     }
   }
   // …and the tree, which is a relationship the reader can see in the sidebar
@@ -173,7 +187,7 @@ export function buildGraph(doc: SpacesDoc, index: SpaceIndex): Graph {
   for (const e of edges) {
     nodes[e.a].deg++
     nodes[e.b].deg++
-    const w = e.links + (e.tree ? 1 : 0)
+    const w = e.links + e.rel + (e.tree ? 1 : 0)
     nodes[e.a].weight += w
     nodes[e.b].weight += w
   }
@@ -557,9 +571,15 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
       const b = g.nodes[e.b]
       const lit = dim && (hover === e.a || hover === e.b)
       const faded = dim && !lit
-      ctx.globalAlpha = faded ? 0.08 : e.links > 0 ? 0.7 : 0.42
-      ctx.strokeStyle = lit ? pal.accent : pal.edge
-      ctx.lineWidth = Math.min(0.7 + 0.45 * (e.links || 1), 3) * Math.min(scale, 1.4)
+      // A TYPED EDGE IS DRAWN AS ONE. A relation is a statement somebody made
+      // in a field, not a page mentioned in a sentence, so it reads at full
+      // strength and in the accent colour even when nothing is hovered — the
+      // structure in a space should be visible without pointing at it. Prose
+      // links keep exactly the weights they always had.
+      const typed = e.rel > 0
+      ctx.globalAlpha = faded ? 0.08 : typed ? 0.85 : e.links > 0 ? 0.7 : 0.42
+      ctx.strokeStyle = lit || (typed && !faded) ? pal.accent : pal.edge
+      ctx.lineWidth = Math.min(0.7 + 0.45 * (e.links + e.rel || 1), 3) * Math.min(scale, 1.4)
       ctx.beginPath()
       ctx.moveTo(sx(nx(a, e.a)), sy(ny(a, e.a)))
       ctx.lineTo(sx(nx(b, e.b)), sy(ny(b, e.b)))
@@ -803,6 +823,9 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
   // background tab still arrives. Six numbers on a node thrown away at close.
   ;(back as unknown as { __graph: unknown }).__graph = {
     nodes: g.nodes.length, edges: g.edges.length, layoutMs, reduced,
+    // how many of those edges are TYPED — the one number that says whether the
+    // relation half of the picture is being drawn at all
+    typed: g.edges.filter((e) => e.rel > 0).length,
     get reveal() { return reveal },
     get frames() { return frames },
   }

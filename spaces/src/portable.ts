@@ -18,7 +18,9 @@
 
 // `.ts` extensions ON PURPOSE: node resolves this module directly for the rig.
 import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
-import { esc } from './sanitize.ts'
+import { esc, escText } from './sanitize.ts'
+import { type FieldSpec, fieldByKey } from './fields.ts'
+import { relationIds, relationLinks, relationValue } from './relations.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
 const PAGE_LINK = /<a\s([^>]*?)href="#p\/([^"]*)"([^>]*)>([\s\S]*?)<\/a>/g
@@ -63,6 +65,63 @@ function relink(
     return literalLink(r.text, label)
   })
   return { html: out, changed, cut }
+}
+
+/**
+ * A RELATION IS A PAGE REFERENCE, so it moves the way every other one does.
+ *
+ * `isPageRef` in embed.ts makes exactly this point about `pagelink` and
+ * `embed`, and a relation is the case that would otherwise have been missed
+ * here. Its html is `#p/` links — that is what makes the value degrade — so
+ * `relink` above already repoints the READABLE half, and an export therefore
+ * LOOKED right while its stored `value` still named ids from the space it left.
+ * A grafted page would read correctly and query as though related to nothing.
+ *
+ * `map` gives the same two answers `relink` gives (the id to carry now, or null
+ * to drop it), so the two can never disagree about a reference that did not
+ * travel. The html is REBUILT from the surviving ids rather than left to
+ * relink's output, because the two write a dropped reference differently:
+ * relink keeps the page's old TITLE, which is the honest thing for prose, but
+ * here the value has just lost that id and the readable form must lose it too —
+ * or the block says it has two authors and stores one.
+ *
+ * `titleOf` answers for ids that are not in any document yet: a graft's pages
+ * have their FINAL ids before they are pushed anywhere.
+ */
+function relinkRelation(
+  b: Block,
+  f: FieldSpec,
+  map: (id: string) => string | null,
+  titleOf: (id: string) => string | undefined,
+): { changed: number; cut: number } {
+  const ids = relationIds((b as Record<string, unknown>).value)
+  if (!ids.length) return { changed: 0, cut: 0 }
+  const kept: string[] = []
+  let changed = 0
+  let cut = 0
+  for (const id of ids) {
+    const next = map(id)
+    if (next === null) { cut++; continue }
+    if (next !== id) changed++
+    kept.push(next)
+  }
+  if (!changed && !cut) return { changed: 0, cut: 0 }
+  const value = relationValue(kept)
+  ;(b as Record<string, unknown>).value = value
+  const targets = kept.map((id) => {
+    const title = titleOf(id)
+    return title === undefined ? { id } : { id, page: { id, title, blocks: [] } as Page }
+  })
+  b.html = `${escText(f.label || f.key)}: ${relationLinks(targets) || '\u2014'}`
+  return { changed, cut }
+}
+
+/** The relation field a `prop` block names, if it names one. */
+const relationFieldOf = (doc: SpacesDoc, b: Block): FieldSpec | undefined => {
+  if (b.type !== 'prop') return undefined
+  const key = String((b as { key?: unknown }).key ?? '')
+  const f = key ? fieldByKey(doc, key) : undefined
+  return f?.vt === 'relation' ? f : undefined
 }
 
 /** Every asset key a block references (`asset:<key>`). */
@@ -180,7 +239,17 @@ export function extractSpace(
     if (p.id === rootId) delete p.parent
     else if (p.parent && !inSet.has(p.parent)) p.parent = rootId
     for (const b of p.blocks) {
-      if (b.html) {
+      // A RELATION IS HANDLED INSTEAD OF ITS html, never as well as. Its html
+      // IS the `#p/` links, so running `relink` over it too would repoint the
+      // same reference twice and COUNT it twice — the export then reports two
+      // unlinked references where a reader can see one. buildIndex draws the
+      // same one-or-the-other line, for the same reason.
+      const relF = relationFieldOf(doc, b)
+      if (relF) {
+        const r = relinkRelation(b, relF, (id) => (inSet.has(id) ? id : null),
+          (id) => titleOf.get(id))
+        unlinked += r.cut
+      } else if (b.html) {
         const r = relink(b.html, target)
         b.html = r.html
         unlinked += r.cut
@@ -341,9 +410,26 @@ export function planGraft(
     if (!arrived.has(id)) return { text: titleOf.get(id) ?? id }
     return { id: idMap.get(id) ?? id }
   }
+  /** final id → title, for the readable form of a relation that travelled */
+  const finalTitle = new Map(pages.map((p) => [p.id, p.title]))
   for (const p of pages) {
     for (const b of p.blocks) {
-      if (b.html) {
+      // A RELATION IS HANDLED INSTEAD OF ITS html, never as well as. Its html
+      // IS the `#p/` links, so running `relink` over it too would repoint the
+      // same reference twice and COUNT it twice — the export then reports two
+      // unlinked references where a reader can see one. buildIndex draws the
+      // same one-or-the-other line, for the same reason.
+      const relF = relationFieldOf(incoming, b)
+      if (relF) {
+        // TITLES COME FROM THE FINAL IDS. `pages` above already carries the
+        // renamed ids, so the readable form is written against the space the
+        // page is arriving IN, not the one it left.
+        const r = relinkRelation(b, relF,
+          (id) => (arrived.has(id) ? (idMap.get(id) ?? id) : null),
+          (id) => finalTitle.get(id))
+        relinked += r.changed
+        dropped += r.cut
+      } else if (b.html) {
         const r = relink(b.html, target)
         b.html = r.html
         dropped += r.cut

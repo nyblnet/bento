@@ -26,6 +26,11 @@
 //    is. Keeping it in step with `value` is this file's job.
 
 import type { SpacesDoc, Page, Block } from './model'
+// TYPE-ONLY, and that is what keeps the two modules acyclic: relations.ts
+// imports this file's functions at runtime, this file imports only its shape.
+// A type import is erased at build, so nothing here depends on relations.ts
+// having been evaluated first.
+import type { RollupSpec } from './relations.ts'
 // .ts extension: the model rig loads this file under node, whose resolver will
 // not follow an extensionless import. Vite is unaffected — the same fix main
 // already carries for i18n/packed.
@@ -33,7 +38,12 @@ import { t } from './i18n.ts'
 
 /** What a field holds. Deliberately few: every one costs an editor and a
  *  permanent commitment, and a tracker needs exactly these. */
-export type FieldType = 'select' | 'person' | 'number' | 'date' | 'text' | 'labels'
+export type FieldType =
+  | 'select' | 'person' | 'number' | 'date' | 'text' | 'labels'
+  /** page ids — see relations.ts, which owns everything about these two */
+  | 'relation'
+  /** derived from a relation at READ time and never stored — relations.ts */
+  | 'rollup'
 
 /**
  * What each type is called to somebody choosing one. Keys are the model's
@@ -57,12 +67,14 @@ export function fieldTypeLabel(vt: FieldType): string {
     case 'date': return t('Date')
     case 'person': return t('Person')
     case 'labels': return t('Labels')
+    case 'relation': return t('Relation')
+    case 'rollup': return t('Rollup')
     default: return t('Text')
   }
 }
 
 /** The types a new field can be, in the order the picker offers them. */
-export const FIELD_TYPES: FieldType[] = ['text', 'select', 'number', 'date', 'person', 'labels']
+export const FIELD_TYPES: FieldType[] = ['text', 'select', 'number', 'date', 'person', 'labels', 'relation', 'rollup']
 
 export interface FieldOption {
   id: string
@@ -87,6 +99,12 @@ export interface FieldSpec {
   options?: FieldOption[]
   /** shown on a new issue when nothing is chosen */
   def?: string
+  /**
+   * ONLY on a `rollup` field: what it derives from. Read through
+   * `relations.ts rollupOf`, never directly — it comes out of a document, so a
+   * `via` inherited from Object.prototype is a shape this has to survive.
+   */
+  rollup?: RollupSpec
 }
 
 /**
@@ -171,9 +189,16 @@ export function propHtml(f: FieldSpec, value: unknown): string {
   const esc = (v: unknown) =>
     String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const label = typeof f?.label === 'string' && f.label ? f.label : String(f?.key ?? 'field')
+  // A RELATION IS NOT WRITTEN HERE. Its readable form is a link carrying the
+  // target's TITLE, which needs the document — so the writers go through
+  // `relations.ts propHtmlOf`, which handles that case and delegates every
+  // other one straight back to this function. What is left here is the
+  // fallback for a caller with no document in hand: the ids, comma-separated,
+  // which at least says how many there are and which pages they name.
   const shown =
     f.vt === 'select' ? (optionOf(f, value)?.label ?? String(value ?? ''))
-      : f.vt === 'labels' ? (Array.isArray(value) ? value.join(', ') : String(value ?? ''))
+      : f.vt === 'labels' || f.vt === 'relation'
+        ? (Array.isArray(value) ? value.join(', ') : String(value ?? ''))
         : String(value ?? '')
   return `${esc(label)}: ${esc(shown) || '—'}`
 }

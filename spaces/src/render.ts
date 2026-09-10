@@ -21,6 +21,9 @@ import {
   type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
+import {
+  resolveRelation, rollupValue, rollupsFor, rollupOf, valueTextOf, targetTitle,
+} from './relations.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
 
@@ -101,6 +104,25 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
     frag.appendChild(strip)
   }
 
+  // ROLLUPS SIT IN THE SAME STRIP AND ARE NOT BLOCKS.
+  //
+  // A rollup is derived every paint and never stored (relations.ts), so there
+  // is no `prop` block to draw and nothing here iterates one. It is appended
+  // after the stored values because it is an ANSWER ABOUT them, and it reads
+  // that way: Tasks, then Total estimate.
+  //
+  // The strip is created lazily when a page's prop blocks are not at the top
+  // and there is therefore no header — otherwise a rollup on such a page would
+  // simply not be drawn, which is the silent kind of missing.
+  const rollups = rollupsFor(doc, page)
+  const stripFor = (): HTMLElement => {
+    if (strip) return strip
+    strip = document.createElement('div')
+    strip.className = 'sp-props'
+    frag.insertBefore(strip, frag.firstChild)
+    return strip
+  }
+
   page.blocks.forEach((b, i) => {
     // MAGIC NOTES' CONTEXT IS FED AFTER THE BLOCK IS DRAWN, not before, and the
     // order is the whole difference between `sum above` working and reading 0:
@@ -168,6 +190,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       stack.push([b.id, node, b.type])
     }
   })
+  for (const f of rollups) stripFor().appendChild(rollupChip(doc, page, f))
   return frag
 }
 
@@ -508,9 +531,12 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
         if (opt.color) dot.style.background = opt.color
         val.appendChild(dot)
       }
-      const text = document.createElement('span')
-      text.textContent = shownValue(f, value)
-      val.appendChild(text)
+      if (f?.vt === 'relation') fillRelation(val, doc, value, !opts.editable)
+      else {
+        const text = document.createElement('span')
+        text.textContent = shownValue(f, value, doc)
+        val.appendChild(text)
+      }
       el.appendChild(val)
       return el
     }
@@ -1022,11 +1048,103 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
 
 /** What a value reads as. Mirrors fields.ts propHtml, which writes the same
  *  text into the block so an older build shows it too. */
-function shownValue(f: FieldSpec | undefined, value: unknown): string {
-  if (value === undefined || value === null || value === '') return '—'
+function shownValue(f: FieldSpec | undefined, value: unknown, doc?: SpacesDoc): string {
+  if (value === undefined || value === null || value === '') return '\u2014'
+  // A RELATION reads as the pages' TITLES, never their ids — the ids are not
+  // for reading, exactly as a select's id is not. Without a document in hand
+  // there is nothing to resolve them against, so the old behaviour stands.
+  if (f?.vt === 'relation' && doc) return valueTextOf(doc, f, value) || '\u2014'
   if (f?.vt === 'select') return optionOf(f, value)?.label ?? String(value)
   if (f?.vt === 'labels') return Array.isArray(value) ? value.join(', ') : String(value)
   return String(value)
+}
+
+/**
+ * A relation value, drawn as the pages it names.
+ *
+ * `linky` decides whether each page is an `<a>` or plain text, and it is FALSE
+ * on the editable canvas for a structural reason rather than a stylistic one:
+ * the chip there is a `<button>` that opens the picker, and an anchor inside a
+ * button is invalid html that browsers resolve by swallowing one of the two
+ * click behaviours. A reader — a locked space, a printout — gets real links.
+ *
+ * A DANGLING id is shown, marked, and NOT made clickable. A link that renders
+ * and goes nowhere is the failure validate() calls an error; showing the id is
+ * how somebody finds out which reference broke.
+ */
+function fillRelation(into: HTMLElement, doc: SpacesDoc, value: unknown, linky: boolean): void {
+  const targets = resolveRelation(doc, value)
+  if (!targets.length) {
+    into.appendChild(document.createTextNode('\u2014'))
+    return
+  }
+  // ONE INLINE WRAPPER, not the chip's flex row. `.sp-prop-val` is a flex
+  // container with `gap: 6px`, so appending the pages and the ", " between them
+  // as siblings made every separator a flex item with six pixels on BOTH sides:
+  // the strip read "Write the spec , Ship it". Inside one inline box the comma
+  // sets the way a comma sets. Seen in a screenshot, which is the instrument
+  // the node rigs do not have.
+  const list = document.createElement('span')
+  list.className = 'sp-rel-set'
+  into.appendChild(list)
+  targets.forEach((tt, i) => {
+    if (i) list.appendChild(document.createTextNode(', '))
+    if (!tt.page) {
+      const miss = document.createElement('span')
+      miss.className = 'sp-rel-missing'
+      miss.title = t('This links to a page that is not in this space.')
+      miss.textContent = tt.id
+      list.appendChild(miss)
+      return
+    }
+    if (linky) {
+      const a = document.createElement('a')
+      a.href = `#p/${tt.id}`
+      a.dataset.page = tt.id
+      a.className = 'sp-rel'
+      a.textContent = targetTitle(tt)
+      list.appendChild(a)
+    } else {
+      const span = document.createElement('span')
+      span.className = 'sp-rel'
+      span.textContent = targetTitle(tt)
+      list.appendChild(span)
+    }
+  })
+}
+
+/**
+ * One rollup chip: the label, and the answer derived this instant.
+ *
+ * NEVER A CONTROL. Every other chip in the strip opens a picker because every
+ * other chip stands for a value somebody can set; a rollup has nothing to set,
+ * and a button that opens nothing is worse than a plain reading. What it does
+ * carry is a `title` saying where the number came from, because a number with
+ * no visible source is the thing spreadsheets are hated for.
+ */
+function rollupChip(doc: SpacesDoc, page: Page, f: FieldSpec): HTMLElement {
+  const el = document.createElement('div')
+  // `sp-b` IS LOAD-BEARING, not decoration. Every rendered block carries it and
+  // it is where `line-height: 1.65` comes from; `.sp-prop-val` declares
+  // `font: inherit`, so a chip outside a block inherits `normal` instead and
+  // comes out SHORTER than the stored chips beside it in the same row.
+  // Measured in a browser on the built shell: 23px tall at y+153.58 without it,
+  // 29.45 at y+150.36 with it, against a stored chip's 30.45 at y+149.86.
+  el.className = 'sp-b sp-prop sp-prop-derived'
+  el.dataset.field = f.key
+  const label = document.createElement('span')
+  label.className = 'sp-prop-key'
+  label.textContent = f.label ?? f.key
+  const val = document.createElement('span')
+  val.className = 'sp-prop-val'
+  const r = rollupValue(doc, page, f)
+  val.textContent = r.text
+  const via = fieldByKey(doc, rollupOf(f)?.via ?? '')
+  val.title = r.why === 'cycle' || r.why === 'depth'
+    ? t('This rollup depends on itself, so it has no answer.')
+    : t('Worked out from {field} — not stored.', { field: via?.label ?? rollupOf(f)?.via ?? '' })
+  el.append(label, val)
+  return el
 }
 
 /**
@@ -1287,7 +1405,16 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   // because the vocabulary happens to contain one, and a page that has a field
   // the others lack should not be the reason everyone gets an empty column.
   if (layout === 'table') {
-    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    // A ROLLUP COLUMN EARNS ITS PLACE THROUGH THE RELATION IT FOLLOWS. Nothing
+    // stores a rollup, so `values.has(k)` is false for every row and the column
+    // would never appear — the same silent-missing failure the header strip's
+    // lazy strip exists to avoid. A row carrying the relation has an answer,
+    // including the answer "0".
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => {
+      if (rows.some((r) => r.values.has(k))) return true
+      const spec = rollupOf(fieldByKey(doc, k))
+      return !!spec && rows.some((r) => r.values.has(spec.via))
+    })
     const wrap = document.createElement('div')
     // its own scroller: a wide table must not make the PAGE scroll sideways
     wrap.className = 'sp-view-tablewrap'
@@ -1321,6 +1448,14 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
         const td = document.createElement('td')
         const f = fieldByKey(doc, k)
         const v = r.values.get(k)
+        // A ROLLUP CELL IS NOT A STORED VALUE — it is worked out here, for
+        // this row's page, exactly as the header chip is.
+        if (f?.vt === 'rollup') {
+          td.className = 'sp-view-derived'
+          td.textContent = rollupValue(doc, r.page, f).text
+          tr.appendChild(td)
+          continue
+        }
         // THROUGH THE OPTION, so a select shows its label and its colour rather
         // than the id the model stores — the same thing propHtml does for the
         // header strip, and for the same reason: the id is not for reading.
@@ -1333,8 +1468,14 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
           if (opt.color) dot.style.background = opt.color
           chip.append(dot, document.createTextNode(opt.label))
           td.appendChild(chip)
+        } else if (f?.vt === 'relation') {
+          // NOT LINKED IN A CELL: the editable table makes each cell a
+          // <button>, and an anchor inside one is invalid html that browsers
+          // resolve by swallowing one of the two click behaviours. The page
+          // column beside it is the link, so nothing here is unreachable.
+          fillRelation(td, doc, v, false)
         } else if (v !== undefined && v !== null && String(v) !== '') {
-          td.textContent = String(v)
+          td.textContent = shownValue(f, v, doc)
         } else {
           td.className = 'sp-view-empty'
           td.textContent = '—'
@@ -1419,7 +1560,7 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
           d.style.background = o.color
           chip.appendChild(d)
         }
-        chip.append(document.createTextNode(shownValue(f, v)))
+        chip.append(document.createTextNode(shownValue(f, v, doc)))
         meta.appendChild(chip)
       }
       if (meta.childElementCount) body.appendChild(meta)
@@ -1436,7 +1577,16 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   // because the vocabulary happens to contain one, and a page that has a field
   // the others lack should not be the reason everyone gets an empty column.
   if (layout === 'table') {
-    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    // A ROLLUP COLUMN EARNS ITS PLACE THROUGH THE RELATION IT FOLLOWS. Nothing
+    // stores a rollup, so `values.has(k)` is false for every row and the column
+    // would never appear — the same silent-missing failure the header strip's
+    // lazy strip exists to avoid. A row carrying the relation has an answer,
+    // including the answer "0".
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => {
+      if (rows.some((r) => r.values.has(k))) return true
+      const spec = rollupOf(fieldByKey(doc, k))
+      return !!spec && rows.some((r) => r.values.has(spec.via))
+    })
     const wrap = document.createElement('div')
     // its own scroller: a wide table must not make the PAGE scroll sideways
     wrap.className = 'sp-view-tablewrap'
@@ -1504,8 +1654,11 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
         if (opt.color) dot.style.background = opt.color
         chip.append(dot, document.createTextNode(opt.label))
         into.appendChild(chip)
+      } else if (f?.vt === 'relation') {
+        // see the sibling branch: never an anchor inside a cell button
+        fillRelation(into, doc, v, false)
       } else if (v !== undefined && v !== null && String(v) !== '') {
-        into.appendChild(document.createTextNode(shownValue(f, v)))
+        into.appendChild(document.createTextNode(shownValue(f, v, doc)))
       } else {
         into.classList.add('sp-view-empty')
         into.appendChild(document.createTextNode('\u2014'))
@@ -1533,6 +1686,14 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
         // of its own. It is emitted even for a page carrying no such prop block:
         // an empty cell is how the field gets ONTO that page, exactly as
         // dropping a card into a column is.
+        // A ROLLUP CELL IS NOT A CONTROL — there is nothing to write.
+        if (f?.vt === 'rollup') {
+          const roll = rollupValue(doc, r.page, f)
+          td.className = 'sp-view-derived'
+          td.appendChild(document.createTextNode(roll.text))
+          tr.appendChild(td)
+          continue
+        }
         if (opts.editable && f) {
           const cell = document.createElement('button')
           cell.type = 'button'

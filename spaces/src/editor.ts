@@ -25,8 +25,13 @@ import { FormatBar } from './formatbar'
 import type { MarkTag } from './marks'
 import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
 import {
-  fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
+  fieldByKey, fieldsOf, propBlock, propBlockOf, isIssue, headerLength,
   reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, fieldTypeLabel, FIELD_TYPES,
+} from './fields.ts'
+import {
+  propHtmlOf, relationIds, relationValue, rollupFnLabel, ROLLUP_FNS, type RollupFn,
+} from './relations.ts'
+import {
   cycleSort, nextLayout,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
@@ -1431,7 +1436,12 @@ export class Editor {
    */
   private applyField(b: Block, f: FieldSpec, value: unknown): void {
     ;(b as Record<string, unknown>).value = value
-    b.html = propHtml(f, value)
+    // THROUGH relations.ts, which resolves a relation's page TITLES and hands
+    // every other field type straight back to fields.ts propHtml. A relation
+    // written through the plain form would store page ids as its readable
+    // text — visible to an older build, a thumbnailer, a grep and the markdown
+    // export, and meaningless in all four.
+    b.html = propHtmlOf(this.store.doc, f, value)
   }
 
   /**
@@ -1519,6 +1529,13 @@ export class Editor {
   private fieldPicker(
     f: FieldSpec, cur: unknown, anchor: HTMLElement, write: (v: unknown) => void,
   ): void {
+    // A ROLLUP HAS NOTHING TO PICK. Nothing renders one as a control, so this
+    // is unreachable today — and it is exactly the guard that stops a future
+    // caller from opening a text box over a derived value and writing a stored
+    // copy of a derived answer into the document.
+    if (f.vt === 'rollup') return
+    if (f.vt === 'relation') { this.relationPicker(f, cur, anchor, write); return }
+
     this.closeOverlay()
 
     const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
@@ -1566,6 +1583,91 @@ export class Editor {
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
     setTimeout(() => document.addEventListener('mousedown', away), 0)
+  }
+
+  /**
+   * CHOOSING PAGES — the picker a relation needs and no other field type does.
+   *
+   * MULTI-SELECT AND IT STAYS OPEN. Every other picker writes once and closes,
+   * because every other value is one thing; a relation is a SET, and a picker
+   * that closed on the first pick would make "three authors" three trips
+   * through the same menu. Each toggle commits on its own — one undo step per
+   * page added or removed, which is one step per thing the person did.
+   *
+   * A SEARCH BOX, not a scroll. The list is every page in the space, and a
+   * space is the one document in this app that is expected to have hundreds.
+   * Chosen pages sort to the top so what is already set is never hidden behind
+   * a filter someone typed.
+   *
+   * ARCHIVED PAGES ARE OFFERED. An archive is "out of the way", not "gone" —
+   * the sidebar still finds them and a link into one still works — and a
+   * relation to a page someone archived last week is exactly the reference a
+   * tracker needs to keep making.
+   */
+  private relationPicker(
+    _f: FieldSpec, cur: unknown, anchor: HTMLElement, write: (v: unknown) => void,
+  ): void {
+    this.closeOverlay()
+    const s = this.store
+
+    const pop = el('div', this.isDrawer() ? 'sp-pop sp-sheet' : 'sp-pop')
+    pop.setAttribute('role', 'menu')
+    this.trapAndClose(pop)
+
+    let chosen = relationIds(cur)
+    const search = document.createElement('input')
+    search.className = 'sp-find'
+    search.type = 'text'
+    search.placeholder = t('Find a page')
+    const list = el('div', 'sp-rellist')
+
+    const rebuild = (): void => {
+      list.textContent = ''
+      const q = search.value.trim().toLowerCase()
+      const picked = new Set(chosen)
+      const pages = s.doc.pages
+        .filter((p) => !q || (p.title || '').toLowerCase().includes(q))
+        // chosen first, document order within each half
+        .sort((a, b) => (picked.has(b.id) ? 1 : 0) - (picked.has(a.id) ? 1 : 0))
+      if (!pages.length) {
+        list.append(el('div', 'sp-pop-note', t('No page matches that.')))
+        return
+      }
+      // A CAP, because this list is rebuilt on every keystroke and a space with
+      // two thousand pages would rebuild two thousand buttons per character.
+      // Search is what reaches the rest, which is why the box is above it.
+      for (const p of pages.slice(0, 50)) {
+        const item = document.createElement('button')
+        item.type = 'button'
+        item.className = 'sp-dditem' + (picked.has(p.id) ? ' sp-sel' : '')
+        item.textContent = p.title || t('Untitled')
+        item.addEventListener('click', () => {
+          chosen = picked.has(p.id) ? chosen.filter((x) => x !== p.id) : [...chosen, p.id]
+          write(relationValue(chosen))
+          rebuild()
+        })
+        list.append(item)
+      }
+    }
+    search.addEventListener('input', rebuild)
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') e.preventDefault()
+    })
+    rebuild()
+
+    const done = el('button', 'sp-btn sp-primary', t('Done'))
+    done.addEventListener('click', () => this.closeOverlay())
+    pop.append(search, list, done)
+
+    this.overlay = pop
+    document.body.append(pop)
+    if (this.isDrawer()) pop.classList.add('sp-sheet-in')
+    else this.placed(pop, anchor)
+    const away = (ev: MouseEvent) => {
+      if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
+    }
+    setTimeout(() => document.addEventListener('mousedown', away), 0)
+    afterPaint(() => search.focus())
   }
 
   /**
@@ -3508,6 +3610,12 @@ export class Editor {
           if (fields) (s.doc as { fields?: FieldSpec[] }).fields = fields
           const p = s.index.page.get(pageId)
           if (!p) return
+          // A ROLLUP GETS NO BLOCK. It is derived every paint from the relation
+          // it follows (relations.ts), so a block for it would be a frozen copy
+          // this build ignores and an older build renders as fact. Declaring
+          // the field is the whole of adding it; it appears on this page the
+          // moment the page carries `via`.
+          if (f.vt === 'rollup') return
           p.blocks.splice(headerLength(p), 0, propBlock(f, f.def ?? '', newBlock('prop').id))
         })
         this.closeOverlay()
@@ -3515,7 +3623,10 @@ export class Editor {
         this.status(t('Added {name}', { name: f.label }))
       }
 
-      const spare = fieldsOf(s.doc).filter((f) => !has.has(f.key))
+      // ROLLUPS ARE NOT IN THE "ADD" LIST. There is nothing to add: a rollup
+      // shows up wherever its relation does, and offering it here would invite
+      // exactly the stored copy the line above refuses to write.
+      const spare = fieldsOf(s.doc).filter((f) => !has.has(f.key) && f.vt !== 'rollup')
       if (spare.length) {
         pop.append(el('div', 'sp-pop-title', t('Add a property')))
         for (const f of spare) {
@@ -3531,23 +3642,99 @@ export class Editor {
       name.placeholder = t('Name')
       const type = document.createElement('select')
       type.className = 'sp-select'
+      const relations = fieldsOf(s.doc).filter((x) => x.vt === 'relation')
       for (const vt of FIELD_TYPES) {
+        // A ROLLUP WITH NOTHING TO FOLLOW CANNOT BE MADE. Offering it before
+        // any relation exists would put a field in the vocabulary that shows an
+        // em dash forever and reports `rollup-no-relation` from validate() —
+        // and the person who chose it has no way to know why. Make a relation
+        // first and the option appears.
+        if (vt === 'rollup' && !relations.length) continue
         const o = document.createElement('option')
         o.value = vt
         o.textContent = fieldTypeLabel(vt)
         type.append(o)
       }
       type.value = 'text'
+
+      // ---- the rollup builder, revealed only when it is the chosen type -----
+      //
+      // THREE ANSWERS AND NO MORE: which relation to follow, what to read on
+      // the pages it reaches, and how to combine them. Every one of them is a
+      // picker over what the document already declares, so a rollup made here
+      // is a rollup that can be worked out — the failure modes validate()
+      // reports are all reachable only by hand-editing the file.
+      const roll = el('div', 'sp-rollup')
+      roll.hidden = true
+      const via = document.createElement('select')
+      via.className = 'sp-select'
+      for (const r of relations) {
+        const o = document.createElement('option')
+        o.value = r.key
+        o.textContent = r.label
+        via.append(o)
+      }
+      const fn = document.createElement('select')
+      fn.className = 'sp-select'
+      for (const name0 of ROLLUP_FNS) {
+        const o = document.createElement('option')
+        o.value = name0
+        o.textContent = rollupFnLabel(name0)
+        fn.append(o)
+      }
+      const of = document.createElement('select')
+      of.className = 'sp-select'
+      {
+        const o = document.createElement('option')
+        o.value = ''
+        // The empty choice is not "nothing" — it is the PAGE itself, which is
+        // what `count` and `list` want most of the time.
+        o.textContent = t('the page itself')
+        of.append(o)
+      }
+      for (const x of fieldsOf(s.doc)) {
+        // A ROLLUP OF A ROLLUP is legal and useful (relations.ts guards the
+        // cycle), so nothing is filtered out here.
+        const o = document.createElement('option')
+        o.value = x.key
+        o.textContent = x.label
+        of.append(o)
+      }
+      const rollRow = (label: string, control: HTMLElement): HTMLElement => {
+        const row = el('label', 'sp-rollup-row')
+        control.setAttribute('aria-label', label)
+        row.append(el('span', 'sp-rollup-word', label), control)
+        return row
+      }
+      roll.append(
+        rollRow(t('Follow this relation'), via),
+        rollRow(t('Read this field on each page'), of),
+        rollRow(t('Show'), fn),
+      )
+      type.addEventListener('change', () => { roll.hidden = type.value !== 'rollup' })
+
       const add = el('button', 'sp-btn sp-primary', t('Add'))
       const submit = () => {
         const label = name.value.trim()
         if (!label) { name.focus(); return }
-        const spec: FieldSpec = { key: freeFieldKey(s.doc, label), label, vt: type.value as FieldSpec['vt'] }
+        const vt = type.value as FieldSpec['vt']
+        const spec: FieldSpec = { key: freeFieldKey(s.doc, label), label, vt }
+        if (vt === 'rollup') {
+          if (!via.value) { type.value = 'text'; return }
+          // A DEFAULT IS NEVER STORED (PLATFORM §3): `fn: 'count'` and an
+          // absent `of` are the two defaults, so a rollup left at them is
+          // byte-identical to one written by a build with no picker at all.
+          spec.rollup = {
+            via: via.value,
+            ...(of.value ? { of: of.value } : {}),
+            ...(fn.value && fn.value !== 'count' ? { fn: fn.value as RollupFn } : {}),
+          }
+        }
         put(spec, withField(s.doc, spec))
       }
       add.addEventListener('click', submit)
       name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } })
-      form.append(name, type, add)
+      form.append(name, type, roll, add)
       pop.append(form)
       afterPaint(() => name.focus())
     })

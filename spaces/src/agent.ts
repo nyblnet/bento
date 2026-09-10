@@ -37,6 +37,9 @@ import { orphanAssets, humanBytes } from './assets.ts'
 import {
   type FieldSpec, ISSUE_FIELDS, fieldsOf, fieldByKey, optionOf, propBlock, propHtml, valuesOf, isIssue, headerLength,
 } from './fields.ts'
+import {
+  propHtmlOf, relationIds, rollupOf, rollupValue, rollupFields, isRelation, ROLLUP_FNS,
+} from './relations.ts'
 
 // ---------------------------------------------------------------------------
 // shared helpers
@@ -266,7 +269,41 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
     if (f && typeof f.key === 'string' && f.key && typeof f.label === 'string') { fieldOf.set(f.key, f); continue }
     add({ code: 'bad-field-schema', severity: 'error', path: 'fields',
       message: `A field in doc.fields has no string key and label (${JSON.stringify(f ?? null).slice(0, 60)}). Writing a value for it THROWS while building its readable form, so the editor's field picker fails on click and the page does not repaint.`,
-      fix: 'Give every entry a string `key`, a string `label`, and a `vt` of select | person | number | date | text | labels.' })
+      fix: 'Give every entry a string `key`, a string `label`, and a `vt` of select | person | number | date | text | labels | relation | rollup.' })
+  }
+
+  // ---- rollup declarations -------------------------------------------------
+  // A rollup is the one field type whose SPEC can be wrong on its own, with no
+  // value anywhere to be wrong about — and it fails silently: a chip that shows
+  // an em dash forever, on a page whose data is perfectly fine.
+  for (const f of fieldOf.values()) {
+    if (f.vt !== 'rollup') continue
+    const spec = rollupOf(f)
+    if (!spec) {
+      add({ code: 'bad-rollup', severity: 'error', path: 'fields',
+        message: `Field "${f.key}" is a rollup but does not say what it rolls up, so it shows nothing on every page forever.`,
+        fix: `Give it { "rollup": { "via": "<a relation field's key>", "of": "<a field's key>", "fn": "${ROLLUP_FNS.join(' | ')}" } }. \`of\` may be omitted for a count.` })
+      continue
+    }
+    const via = fieldOf.get(spec.via)
+    if (!via) {
+      add({ code: 'rollup-no-relation', severity: 'error', path: 'fields',
+        message: `Rollup "${f.key}" follows "${spec.via}", which is not a field in doc.fields — it has nothing to walk and shows nothing.`,
+        fix: `Point via at a relation field. Declared relations: ${[...fieldOf.values()].filter((x) => isRelation(x)).map((x) => x.key).join(', ') || '(none — add one with "vt": "relation")'}.` })
+    } else if (!isRelation(via)) {
+      add({ code: 'rollup-no-relation', severity: 'error', path: 'fields',
+        message: `Rollup "${f.key}" follows "${spec.via}", which is a ${via.vt} field and not a relation — only a relation names pages to roll up.`,
+        fix: 'Point via at a field whose "vt" is "relation".' })
+    }
+    // `of` naming a field this schema does not declare is INFO for the same
+    // reason unknown-field-key is: doc.fields is additive, so it is how a newer
+    // build's field arrives. The rollup reads nothing here and says so rather
+    // than pretending the answer is zero.
+    if (spec.of && !fieldOf.has(spec.of)) {
+      add({ code: 'rollup-unknown-field', severity: 'info', path: 'fields',
+        message: `Rollup "${f.key}" reads "${spec.of}" on the pages it follows, which is not a field in doc.fields — every page reads as empty here, so the rollup shows nothing.`,
+        fix: `Declare "${spec.of}" in doc.fields, or point \`of\` at one of: ${[...fieldOf.keys()].join(', ')}.` })
+    }
   }
 
   // ---- pages and blocks ---------------------------------------------------
@@ -445,6 +482,43 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
           add({ ...at, code: 'unknown-field-value', severity: 'info', path: 'value',
             message: `"${String(value)}" is not one of ${key}'s options, so it is shown verbatim and grouped apart from the rest.`,
             fix: `Use an option id — ${(f.options ?? []).map((o) => o.id).join(', ')} — or declare this one in doc.fields. The value is kept either way.` })
+        } else if (f.vt === 'rollup') {
+          // A STORED ROLLUP IS THE ONE THING THIS FEATURE MUST NOT ALLOW.
+          // Rollups are derived every paint (relations.ts) precisely so they
+          // cannot go stale, and a `prop` block for one is a frozen copy that
+          // this build ignores and an older build renders as fact — a number
+          // that was right once, presented forever.
+          add({ ...at, code: 'stored-rollup', severity: 'warning', path: 'value',
+            message: `"${key}" is a rollup, which is worked out from its relation every time the page is drawn and is never stored. This block's value is ignored here and shown as fact by any build that does not know the field.`,
+            fix: 'Remove the block. The rollup appears on any page carrying the relation it follows, with no value of its own.' })
+        } else if (f.vt === 'relation') {
+          // COMPARED BY IDS, NOT BY TEXT. A relation's readable html carries
+          // the target's TITLE, and a title drifts every time somebody renames
+          // a page — which is not an error and must never be reported as one,
+          // or every rename in a space would light this up. The IDS are the
+          // value; the titles are a rendering the reader redraws each paint.
+          const want = relationIds(value)
+          const got: string[] = []
+          for (const m of String(b.html ?? '').matchAll(LINK_RE)) {
+            const href = m[1]
+            if (href.startsWith('#p/')) got.push(href.slice(3))
+          }
+          const missing = want.filter((id) => !pageIx.has(id))
+          for (const id of missing) {
+            add({ ...at, code: 'broken-relation', severity: 'error', path: 'value',
+              message: `"${key}" relates this page to "${id}", which is not a page in this space — the value shows as a dead id and every rollup over it counts one page fewer than the field claims.`,
+              fix: 'Point it at a real page id, create that page, or remove it from the value. The id is kept either way.' })
+          }
+          // Only the LIVE ids are expected in the html: a dangling one is
+          // deliberately not written as a link (relations.ts), because a link
+          // that renders and goes nowhere is the failure above wearing a
+          // clickable coat.
+          const live = want.filter((id) => pageIx.has(id))
+          if (got.join('\u001f') !== live.join('\u001f')) {
+            add({ ...at, code: 'prop-html-stale', severity: 'warning', path: 'html',
+              message: `This relation's readable form names ${got.length ? got.map((g) => `"${g}"`).join(', ') : 'no page'} where its value names ${live.length ? live.map((g) => `"${g}"`).join(', ') : 'none'}. An older build, a thumbnailer, a grep and the markdown export show the html — so they all show the wrong pages.`,
+              fix: 'Write both together: bento.setField(page, key, [pageId…]) does, and so does the editor. Never assign `value` on its own.' })
+          }
         } else if (b.html !== propHtml(f, value)) {
           // THE ONE THAT MATTERS. `html` is what an older build, a
           // thumbnailer, a grep and the markdown export see, and it is ALL
@@ -528,6 +602,30 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
     }
     usedAssets.add(f.asset)
   }
+  // ---- rollups that cannot be worked out -----------------------------------
+  //
+  // ASKED BY RUNNING THE SAME FUNCTION THE RENDERER RUNS, never by a second
+  // analysis of the schema. A cycle is a property of the DOCUMENT — page A
+  // relates to B, B relates back to A, and each rolls up the other's rollup —
+  // so it cannot be seen in doc.fields alone, and a schema-only check would
+  // report a document that works and miss the one that does not.
+  for (const p of pages) {
+    for (const f of rollupFields(doc)) {
+      const spec = rollupOf(f)
+      if (!spec || !valuesOf(p).has(spec.via)) continue
+      const r = rollupValue(doc, p, f)
+      if (r.why !== 'cycle' && r.why !== 'depth') continue
+      add({ page: p.id, code: r.why === 'cycle' ? 'rollup-cycle' : 'rollup-depth',
+        severity: 'warning', path: 'fields',
+        message: r.why === 'cycle'
+          ? `Rollup "${f.key}" on page "${p.title}" depends on itself through "${spec.via}", so it has no answer and shows a loop mark instead of a number.`
+          : `Rollup "${f.key}" on page "${p.title}" follows a chain of rollups deeper than this build walks, so it shows a loop mark instead of a number.`,
+        fix: r.why === 'cycle'
+          ? 'Break the loop: point one of the rollups at a plain field rather than at another rollup, or remove the relation that closes it.'
+          : 'Shorten the chain — a rollup of a rollup of a rollup is usually one field that could be computed directly.' })
+    }
+  }
+
   const orphans = orphanAssets(doc)
   if (orphans.length) {
     // ONE finding, not one per key: an author who deleted a photo-heavy page
@@ -799,7 +897,7 @@ function syncProp(doc: SpacesDoc, b: Block): void {
   const key = String((b as Record<string, unknown>).key ?? '')
   const f = key ? fieldByKey(doc, key) : undefined
   if (!f || typeof f.label !== 'string') return
-  ;(b as Record<string, unknown>).html = propHtml(f, (b as Record<string, unknown>).value)
+  ;(b as Record<string, unknown>).html = propHtmlOf(doc, f, (b as Record<string, unknown>).value)
 }
 
 export function planInsertBlocks(
@@ -1222,8 +1320,13 @@ export function planSetField(doc: SpacesDoc, pageId: string, key: unknown, value
     }
   }
 
-  const html = propHtml(f, value)
+  const html = propHtmlOf(doc, f, value)
   const fresh = mine.length ? null : propBlock(f, value, uid('b'))
+  // `propBlock` builds its html from the spec alone, which cannot resolve a
+  // relation's titles. The doc-aware form is the authority — otherwise a
+  // relation set on a page that had none would store page ids as its readable
+  // text while every other path stored links.
+  if (fresh) fresh.html = html
   const warning = optionWarning(f, value)
   return {
     ok: true,

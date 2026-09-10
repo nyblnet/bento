@@ -15,6 +15,7 @@
 
 import type { CollabCreds } from './sync/crdt.ts'
 import { esc, externalHref } from './sanitize.ts'
+import { relationRefs } from './relations.ts'
 
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
@@ -560,8 +561,16 @@ export interface SpaceIndex {
   /** page id → child pages in order; '' = root */
   children: Map<string, Page[]>
   block: Map<string, { block: Block; pageId: string }>
-  /** target page id → the blocks that link to it */
-  backlinks: Map<string, Array<{ pageId: string; blockId: string }>>
+  /**
+   * target page id → the blocks that link to it.
+   *
+   * `rel` names the RELATION FIELD a reference came through, and is absent for
+   * every other kind. That is what makes a relation a typed edge rather than a
+   * mention: "Author → Ada Lovelace" is a statement about the two pages, where
+   * a `[[wikilink]]` in a sentence is somebody writing prose. The graph draws
+   * them differently and the backlink list can say which field it was.
+   */
+  backlinks: Map<string, Array<{ pageId: string; blockId: string; rel?: string }>>
 }
 
 /**
@@ -672,7 +681,7 @@ export function buildIndex(doc: SpacesDoc): SpaceIndex {
   const page = new Map<string, Page>()
   const children = new Map<string, Page[]>()
   const block = new Map<string, { block: Block; pageId: string }>()
-  const backlinks = new Map<string, Array<{ pageId: string; blockId: string }>>()
+  const backlinks = new Map<string, Array<{ pageId: string; blockId: string; rel?: string }>>()
 
   for (const p of doc.pages) page.set(p.id, p)
   for (const p of doc.pages) {
@@ -696,7 +705,26 @@ export function buildIndex(doc: SpacesDoc): SpaceIndex {
       // the same links by construction, and scanning both would report every
       // cell link twice — which is why extending this to always scan `rows`
       // was tried during the starter work and reverted.
-      const linkSrc = b.html || (Array.isArray(b.rows) ? tableCellsText(b.rows) : '')
+      //
+      // A RELATION PROP BLOCK IS READ FROM ITS VALUE, NOT ITS html, and it is
+      // one or the other rather than both — for exactly the `rows` reason
+      // above. A relation's readable html IS a list of `#p/` links (that is
+      // what makes it degrade), so scanning both would report every relation
+      // twice and draw every relation edge at double weight.
+      //
+      // Only a DECLARED relation takes this path. A prop block whose key names
+      // a field this schema does not have — a newer build's relation arriving
+      // in an older one — falls through to the html scan and still produces a
+      // backlink, untyped. Losing the link entirely would be the worse half of
+      // the trade.
+      const rels = relationRefs(doc, b as { type?: string; key?: unknown; value?: unknown })
+      if (rels.length) {
+        const key = String((b as { key?: unknown }).key ?? '')
+        for (const target of rels) {
+          pushInto(backlinks, linkTarget(target, page), { pageId: p.id, blockId: b.id, rel: key })
+        }
+      }
+      const linkSrc = rels.length ? '' : b.html || (Array.isArray(b.rows) ? tableCellsText(b.rows) : '')
       if (linkSrc) {
         for (const m of linkSrc.matchAll(LINK_RE)) {
           pushInto(backlinks, linkTarget(m[1], page), { pageId: p.id, blockId: b.id })

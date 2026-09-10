@@ -63,6 +63,13 @@ import type { Block, Page } from '../spaces/src/model.ts'
 import {
   buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
 } from '../spaces/src/graph.ts'
+import {
+  relationIds, relationValue, resolveRelation, relationHtml, relationLinks,
+  propHtmlOf, valueTextOf, rollupOf, rollupFn, rollupValue, rollupFields,
+  rollupsFor, relationRefs, remapRelation, isRelation, rollupNumber,
+  ROLLUP_FNS, ROLLUP_MAX_DEPTH,
+} from '../spaces/src/relations.ts'
+import { validateDoc } from '../spaces/src/agent.ts'
 
 let failures = 0
 let checks = 0
@@ -437,8 +444,12 @@ for (const [label, input, err] of [
   ok(/pop\.style\.maxHeight = /.test(ed), '…place() gives it the room the anchor actually leaves')
   // Both popover builders must route through the helper, or the one that does
   // not will size itself once and stay that size while the window moves.
+  // THREE builders now: the generic popover, the field picker, and the
+  // relation picker (relations.ts). The number is the point — a new one that
+  // sizes itself will fail here rather than quietly staying one height while
+  // the window moves.
   const viaHelper = (ed.match(/else this\.placed\(pop, anchor\)/g) ?? []).length
-  ok(viaHelper === 2, 'both popover call sites place through the same helper')
+  ok(viaHelper === 3, `every popover call site places through the same helper (${viaHelper})`)
   ok(/addEventListener\('resize', reflow\)/.test(ed), '…which re-places on resize')
   ok(/removeEventListener\('resize', reflow\)/.test(ed), '…and takes the listener back off when it closes')
 
@@ -1979,9 +1990,15 @@ function fsTable(f: string): string {
   const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
 
-  ok((ed.match(/propHtml\(/g) ?? []).length === 1,
-    'editor.ts calls propHtml in exactly ONE place — applyField, the single writer')
-  ok(/private applyField\([^)]*\)[^{]*\{\s*;?\(b as Record<string, unknown>\)\.value = value\s*b\.html = propHtml\(f, value\)/.test(ed),
+  // The editor now writes through `propHtmlOf` (relations.ts), which resolves a
+  // relation's page TITLES and hands every other type back to fields.ts
+  // propHtml unchanged. Still exactly one call, still the same single writer —
+  // the count is what stops a second one appearing.
+  ok((ed.match(/propHtmlOf\(/g) ?? []).length === 1,
+    'editor.ts calls propHtmlOf in exactly ONE place — applyField, the single writer')
+  ok(!/\bpropHtml\(/.test(ed),
+    '…and never the doc-less form, which would store a relation as page ids')
+  ok(/private applyField\([^)]*\)[^{]*\{\s*;?\(b as Record<string, unknown>\)\.value = value\s*(\/\/[^\n]*\n\s*)*b\.html = propHtmlOf\(this\.store\.doc, f, value\)/.test(ed),
     '…and that writer sets value and html together, in adjacent statements')
   ok(!/\.value = optId/.test(ed),
     'the drop handler does not assign a value of its own')
@@ -3591,6 +3608,415 @@ function fsTable(f: string): string {
   }
   ok(new Set(VIEW_LAYOUTS.map((l) => nextLayout(l))).size === VIEW_LAYOUTS.length,
     'the cycle reaches every shape — none is stranded off it')
+}
+
+
+// ===========================================================================
+// RELATIONS and ROLLUPS (spaces/src/relations.ts)
+// ===========================================================================
+//
+// EVERY ASSERTION HERE CALLS THE FUNCTION. Not one of them reads the source
+// for a guard: this file already carries the story of the layout-cycle bug,
+// where the hardening went into one of two copies and the test that "proved"
+// it was a grep over the copy that was fixed. Relations touch six files, so
+// there are six places for that to happen again.
+
+const relDoc = (over: Record<string, unknown> = {}): SpacesDoc => ({
+  format: FORMAT, version: 1, docId: 'd1', title: 'T',
+  fields: [
+    { key: 'status', label: 'Status', vt: 'select', options: [{ id: 'todo', label: 'Todo' }] },
+    { key: 'estimate', label: 'Estimate', vt: 'number' },
+    { key: 'tasks', label: 'Tasks', vt: 'relation' },
+    { key: 'author', label: 'Author', vt: 'relation' },
+    { key: 'ntasks', label: 'Task count', vt: 'rollup', rollup: { via: 'tasks' } },
+    { key: 'total', label: 'Total', vt: 'rollup', rollup: { via: 'tasks', of: 'estimate', fn: 'sum' } },
+  ],
+  pages: [],
+  theme: {},
+  ...over,
+} as unknown as SpacesDoc)
+
+const relPage = (id: string, title: string, props: Array<[string, unknown]>, extra: Record<string, unknown> = {}): Page =>
+  ({
+    id, title,
+    blocks: props.map(([k, v], i) => ({ id: `${id}-${i}`, type: 'prop', key: k, value: v, html: '' })),
+    ...extra,
+  } as unknown as Page)
+
+// ---- 1. reading a value ---------------------------------------------------
+{
+  ok(JSON.stringify(relationIds(['a', 'b'])) === '["a","b"]', 'an array of ids reads as itself')
+  ok(JSON.stringify(relationIds('a')) === '["a"]',
+    'a BARE STRING is one id — a hand-written file, an agent or an older importer writes that, and a relation that read as empty would be a value that vanished')
+  ok(JSON.stringify(relationIds('')) === '[]' && JSON.stringify(relationIds(undefined)) === '[]'
+    && JSON.stringify(relationIds(null)) === '[]',
+    'unset, in all three shapes the rest of this app uses for it, is no ids')
+  ok(JSON.stringify(relationIds([' a ', 'a', '', 7, null, 'b'])) === '["a","b"]',
+    'blanks, duplicates and non-strings are dropped and the ORDER someone picked survives')
+  ok(relationValue([]) === '' && JSON.stringify(relationValue(['a'])) === '["a"]',
+    "an empty relation STORES as '' — the same unset every other field type uses, so cleared and never-set are one state and not two")
+}
+
+// ---- 2. UNTRUSTED IDS: no prototype key is ever a page --------------------
+//
+// The bug this app has shipped twice, reproduced against relations. Every id
+// here is a real key on Object.prototype and every one is truthy through a
+// plain-object lookup.
+{
+  const doc = relDoc({ pages: [relPage('p1', 'One', [])] })
+  for (const evil of ['__proto__', 'toString', 'constructor', 'valueOf', 'hasOwnProperty']) {
+    const got = resolveRelation(doc, [evil])
+    ok(got.length === 1 && got[0].id === evil && got[0].page === undefined,
+      `a relation to ${JSON.stringify(evil)} resolves to NOTHING, never to a native function`)
+    ok(!relationHtml(doc, [evil]).includes('<a '),
+      `…and is not written as a link, so it cannot render as a live link that goes nowhere`)
+  }
+  // …and rollups walk the same lookup
+  const cd = relDoc({ pages: [relPage('p1', 'One', [['tasks', ['toString']]])] })
+  const r = rollupValue(cd, cd.pages[0], cd.fields![4] as never)
+  ok(r.ok && r.n === 0, 'a rollup over a prototype-key id counts ZERO pages, and does not throw')
+  ok(JSON.stringify(r.dangling) === '["toString"]', '…and reports the id as dangling')
+}
+
+// ---- 3. degradation: the html an older build renders ----------------------
+{
+  const doc = relDoc({ pages: [
+    relPage('p1', 'Book', [['author', ['p2']]]),
+    relPage('p2', 'Ada <Lovelace>', []),
+  ] })
+  const f = doc.fields![3] as never
+  const html = propHtmlOf(doc, f, ['p2'])
+  ok(html === 'Author: <a href="#p/p2">Ada &lt;Lovelace&gt;</a>',
+    `a relation's readable html is a real LINK carrying the target's title, escaped (${html})`)
+  ok(!html.includes('<Lovelace>'), 'a title carrying markup cannot reach the html as markup')
+  ok(propHtmlOf(doc, f, '') === 'Author: —', 'an unset relation reads as an em dash, like every other unset field')
+  // every OTHER type is handed straight back to fields.ts, unchanged
+  const sel = doc.fields![0] as never
+  ok(propHtmlOf(doc, sel, 'todo') === propHtml(sel, 'todo'),
+    'a non-relation goes through fields.ts propHtml untouched — one readable form, not two')
+  ok(relationLinks([{ id: 'x' }]) === '[[x]]',
+    'a DANGLING id degrades to the literal [[…]] portable.ts already uses, never to a dead link')
+}
+
+// ---- 4. the backlink index sees a relation, and sees it ONCE --------------
+{
+  const doc = relDoc({ pages: [
+    relPage('p1', 'Book', [['author', ['p2']]]),
+    relPage('p2', 'Ada', []),
+  ] })
+  // the html is what the writers write — set it so the block is realistic
+  doc.pages[0].blocks[0].html = propHtmlOf(doc, doc.fields![3] as never, ['p2'])
+  const ix = buildIndex(doc)
+  const back = ix.backlinks.get('p2') ?? []
+  ok(back.length === 1,
+    `a relation produces exactly ONE backlink, not one from the value and a second from its html (${back.length})`)
+  ok(back[0].rel === 'author',
+    'and it is TYPED — it carries the field key, which is what makes it an edge rather than a mention')
+  ok(back[0].pageId === 'p1' && back[0].blockId === 'p1-0', '…anchored at the block that holds the value')
+
+  // an UNDECLARED relation key still backlinks, untyped, through the html
+  const older = relDoc({ fields: [{ key: 'x', label: 'X', vt: 'text' }], pages: [
+    { id: 'p1', title: 'A', blocks: [
+      { id: 'b1', type: 'prop', key: 'newrel', value: ['p2'], html: 'New: <a href="#p/p2">Ada</a>' },
+    ] },
+    relPage('p2', 'Ada', []),
+  ] as never })
+  const b2 = buildIndex(older).backlinks.get('p2') ?? []
+  ok(b2.length === 1 && b2[0].rel === undefined,
+    "a NEWER build's relation, whose field this schema does not declare, still backlinks through its html — untyped, but never lost")
+}
+
+// ---- 5. the graph draws a typed edge --------------------------------------
+{
+  const doc = relDoc({ pages: [
+    relPage('p1', 'Book', [['author', ['p2']]]),
+    relPage('p2', 'Ada', []),
+    { id: 'p3', title: 'Prose', blocks: [{ id: 'b3', type: 'p', html: 'see <a href="#p/p2">Ada</a>' }] } as never,
+  ] })
+  doc.pages[0].blocks[0].html = propHtmlOf(doc, doc.fields![3] as never, ['p2'])
+  const g = buildGraph(doc, buildIndex(doc))
+  const at = g.at
+  const relEdge = g.edges.find((e) => (e.a === at.get('p1') && e.b === at.get('p2')) || (e.b === at.get('p1') && e.a === at.get('p2')))
+  const proseEdge = g.edges.find((e) => (e.a === at.get('p3') && e.b === at.get('p2')) || (e.b === at.get('p3') && e.a === at.get('p2')))
+  ok(!!relEdge && relEdge.rel === 1 && relEdge.links === 0,
+    'a relation is counted as a TYPED edge and not as a prose link')
+  ok(!!proseEdge && proseEdge.rel === 0 && proseEdge.links === 1,
+    '…and a wikilink is still counted as prose — the two never merge into one number')
+  ok(g.nodes[at.get('p2')!].deg === 2, 'the target is connected to both, so its size still counts them')
+}
+
+// ---- 6. rollups: the arithmetic ------------------------------------------
+{
+  const doc = relDoc({ pages: [
+    relPage('p0', 'Project', [['tasks', ['t1', 't2', 't3']]]),
+    relPage('t1', 'One', [['estimate', 3]]),
+    relPage('t2', 'Two', [['estimate', '5']]),
+    relPage('t3', 'Three', []),
+  ] })
+  const F = (key: string) => doc.fields!.find((x) => x.key === key)! as never
+  const page = doc.pages[0]
+  const at = (fn: string, of?: string) =>
+    rollupValue(doc, page, { key: 'r', label: 'R', vt: 'rollup', rollup: { via: 'tasks', ...(of ? { of } : {}), fn } } as never)
+
+  ok(at('count').n === 3, 'count with no `of` is how many pages the relation names')
+  ok(at('count', 'estimate').n === 2,
+    'count WITH an `of` is how many of them carry a value for it — the question a tracker is actually asked')
+  ok(at('sum', 'estimate').n === 8, "sum coerces a stringly-typed number: 3 + '5' is 8, not '35'")
+  ok(at('min', 'estimate').n === 3 && at('max', 'estimate').n === 5, 'min and max ignore the page with no value')
+  ok(at('list').text === 'One, Two, Three', 'list with no `of` reads the page TITLES')
+  ok(at('list', 'estimate').text === '3, 5', '…and with one, the values, skipping the blanks')
+  ok(rollupValue(doc, doc.pages[1], F('total')).text === '—',
+    'a page carrying no relation at all has no answer, and says so with an em dash rather than 0')
+
+  // 0.1 + 0.2 must not read as 0.30000000000000004 in somebody's total
+  const fd = relDoc({ pages: [
+    relPage('p0', 'P', [['tasks', ['a', 'b']]]),
+    relPage('a', 'A', [['estimate', 0.1]]),
+    relPage('b', 'B', [['estimate', 0.2]]),
+  ] })
+  ok(rollupValue(fd, fd.pages[0], F('total')).text === '0.3',
+    'float noise is rounded out of the readable answer (0.1 + 0.2 reads 0.3)')
+  ok(rollupNumber(0.1 + 0.2) === '0.3' && rollupNumber(1 / 3) === '0.333333333',
+    '…at the ninth decimal, which is well inside double precision and well outside anything a reader notices')
+}
+
+// ---- 7. rollups: NEVER STORED --------------------------------------------
+{
+  const doc = relDoc({ pages: [
+    relPage('p0', 'Project', [['tasks', ['t1']]]),
+    relPage('t1', 'One', [['estimate', 4]]),
+  ] })
+  const F = (key: string) => doc.fields!.find((x) => x.key === key)! as never
+  const before = JSON.stringify(doc)
+  const r1 = rollupValue(doc, doc.pages[0], F('total'))
+  ok(r1.n === 4 && JSON.stringify(doc) === before,
+    'working out a rollup writes NOTHING into the document — the derivation is the value')
+  // change the source; the answer follows, with nothing invalidated
+  ;(doc.pages[1].blocks[0] as { value?: unknown }).value = 9
+  ok(rollupValue(doc, doc.pages[0], F('total')).n === 9,
+    'change a linked page and the rollup re-answers, because nothing downstream was ever frozen')
+  ok(rollupsFor(doc, doc.pages[0]).map((f) => f.key).join(',') === 'ntasks,total',
+    'a page carrying the relation shows every rollup over it')
+  ok(rollupsFor(doc, doc.pages[1]).length === 0,
+    '…and a page that does not carry it shows none — a reading list does not grow a Total estimate')
+  // an EMPTY relation still shows its rollups: "0 tasks" is an answer
+  const empty = relDoc({ pages: [relPage('p0', 'P', [['tasks', '']])] })
+  ok(rollupsFor(empty, empty.pages[0]).length === 2,
+    'an EMPTY relation still shows its rollups — a chip that vanished at zero is a chip you cannot trust')
+}
+
+// ---- 8. cycles and depth --------------------------------------------------
+{
+  // A rolls up B's rollup, B rolls up A's rollup, and each relates to the other
+  const doc = relDoc({
+    fields: [
+      { key: 'peer', label: 'Peer', vt: 'relation' },
+      { key: 'ra', label: 'RA', vt: 'rollup', rollup: { via: 'peer', of: 'rb', fn: 'sum' } },
+      { key: 'rb', label: 'RB', vt: 'rollup', rollup: { via: 'peer', of: 'ra', fn: 'sum' } },
+    ],
+    pages: [relPage('a', 'A', [['peer', ['b']]]), relPage('b', 'B', [['peer', ['a']]])],
+  })
+  const RA = doc.fields!.find((x) => x.key === 'ra')! as never
+  const out = rollupValue(doc, doc.pages[0], RA)
+  ok(out.ok === false && out.why === 'cycle',
+    'A rolls up B rolls up A is reported as a CYCLE rather than recursing until the stack gives out')
+  ok(out.text === '↺',
+    "…and RENDERS as a loop mark, not as 0 and not as a blank — both of those read as data and would become somebody's total")
+
+  // a page that relates to ITSELF is the shortest cycle there is
+  const self = relDoc({
+    fields: [
+      { key: 'peer', label: 'Peer', vt: 'relation' },
+      { key: 'ra', label: 'RA', vt: 'rollup', rollup: { via: 'peer', of: 'ra', fn: 'sum' } },
+    ],
+    pages: [relPage('a', 'A', [['peer', ['a']]])],
+  })
+  ok(rollupValue(self, self.pages[0], self.fields![1] as never).why === 'cycle',
+    'a page related to itself is caught by the same guard')
+
+  // a LONG chain that is not a cycle: distinct pages, each rolling up the next
+  const n = ROLLUP_MAX_DEPTH + 3
+  const pages: Page[] = []
+  for (let i = 0; i < n; i++) {
+    pages.push(relPage(`p${i}`, `P${i}`,
+      i === n - 1 ? [['estimate', 1]] : [['peer', [`p${i + 1}`]]]))
+  }
+  const deep = relDoc({
+    fields: [
+      { key: 'estimate', label: 'Estimate', vt: 'number' },
+      { key: 'peer', label: 'Peer', vt: 'relation' },
+      { key: 'chain', label: 'Chain', vt: 'rollup', rollup: { via: 'peer', of: 'chain', fn: 'sum' } },
+    ],
+    pages,
+  })
+  const dr = rollupValue(deep, deep.pages[0], deep.fields![2] as never)
+  ok(dr.why === 'depth' || dr.text === '↺',
+    `a chain of ${n} distinct pages — not a cycle, so the cycle check cannot see it — is stopped by the DEPTH cap`)
+}
+
+// ---- 9. a rollup spec out of a document -----------------------------------
+{
+  ok(rollupOf({ key: 'x', label: 'X', vt: 'number' } as never) === undefined,
+    'a field that is not a rollup has no spec')
+  ok(rollupOf({ key: 'x', label: 'X', vt: 'rollup' } as never) === undefined,
+    'a rollup with no declaration has none either — validate() reports it, nothing throws')
+  for (const bad of ['via', 42, [], null, { of: 'x' }, { via: '' }, { via: 7 }]) {
+    ok(rollupOf({ key: 'x', label: 'X', vt: 'rollup', rollup: bad } as never) === undefined,
+      `a rollup declared as ${JSON.stringify(bad)} is not a usable one, and does not throw`)
+  }
+  // the prototype trap again, on the spec this time
+  const proto = Object.create({ via: 'tasks', fn: 'sum' }) as Record<string, unknown>
+  ok(rollupOf({ key: 'x', label: 'X', vt: 'rollup', rollup: proto } as never) === undefined,
+    'a `via` INHERITED from Object.prototype is not a declaration — Object.hasOwn, never a bare `in`')
+  ok(rollupFn('toString') === 'count' && rollupFn(undefined) === 'count' && rollupFn('sum') === 'sum',
+    'an fn from a newer build (or a prototype key) falls back to count, the answer that is always meaningful')
+  ok(ROLLUP_FNS.every((fn) => rollupFn(fn) === fn), 'and every real one resolves to itself')
+  // a default is NEVER STORED
+  const spec = rollupOf({ key: 'x', label: 'X', vt: 'rollup', rollup: { via: 'tasks', fn: 'count', of: '' } } as never)
+  ok(JSON.stringify(spec) === '{"via":"tasks"}',
+    "a rollup left at its defaults keeps NO key for them — byte-identical to one written by a build with no picker (PLATFORM §3)")
+}
+
+// ---- 10. what portable.ts moves -------------------------------------------
+{
+  const doc = relDoc({ pages: [
+    relPage('root', 'Root', []),
+    relPage('kid', 'Kid', [['author', ['out']]], { parent: 'root' }),
+    relPage('out', 'Outside', []),
+  ] })
+  doc.pages[1].blocks[0].html = propHtmlOf(doc, doc.fields![3] as never, ['out'])
+
+  const ex = extractSpace(doc, 'root', { docId: 'd2', now: 'now' })
+  const moved = ex.doc.pages.find((p) => p.id === 'kid')!
+  ok(JSON.stringify((moved.blocks[0] as { value?: unknown }).value) === '""',
+    'a relation to a page that did NOT travel is dropped from the value — a grafted page does not arrive pointing at nothing')
+  ok(moved.blocks[0].html === 'Author: —',
+    "…and its readable form loses it too, so the block cannot say it has an author and store none")
+  ok(ex.stats.unlinked === 1, 'and the export reports it as an unlinked reference')
+
+  // a relation INSIDE what travels survives untouched
+  const both = extractSpace(relDoc({ pages: [
+    relPage('root', 'Root', [['author', ['kid']]]),
+    relPage('kid', 'Kid', [], { parent: 'root' }),
+  ] }), 'root', { docId: 'd3', now: 'now' })
+  ok(JSON.stringify((both.doc.pages[0].blocks[0] as { value?: unknown }).value) === '["kid"]',
+    'a relation whose target travelled with it is left byte-identical, not rewritten to an equal value')
+
+  // graft: an id that collides is renamed, and the relation follows it
+  const host = relDoc({ pages: [relPage('kid', 'Host page', [])] })
+  const incoming = relDoc({ pages: [
+    relPage('kid', 'Visitor', []),
+    relPage('other', 'Other', [['author', ['kid']]]),
+  ] })
+  const plan = planGraft(host, incoming, {})
+  const newKid = plan.pages[0].id
+  const rel = plan.pages[1].blocks[0]
+  ok(newKid !== 'kid', 'a colliding page id is renamed on the way in')
+  ok(JSON.stringify((rel as { value?: unknown }).value) === JSON.stringify([newKid]),
+    '…and the relation pointing at it is repointed at the new id, not left on the HOST page of the same name')
+  ok(rel.html === `Author: <a href="#p/${newKid}">Visitor</a>`,
+    "…with its readable form rebuilt against the ids and titles it is arriving WITH")
+  ok(plan.stats.relinked >= 1, 'and the graft counts it as a relink')
+
+  const gone = planGraft(host, relDoc({ pages: [relPage('only', 'Only', [['author', ['nowhere']]])] }), {})
+  ok(JSON.stringify((gone.pages[0].blocks[0] as { value?: unknown }).value) === '""'
+    && gone.stats.dropped >= 1,
+    'a relation naming nothing in the imported file is dropped and counted, never left dangling')
+}
+
+// ---- 11. validate() reports, and never throws -----------------------------
+{
+  const doc = relDoc({ pages: [
+    relPage('p1', 'Book', [['author', ['ghost']]]),
+  ] })
+  doc.pages[0].blocks[0].html = propHtmlOf(doc, doc.fields![3] as never, ['ghost'])
+  const v = validateDoc(doc)
+  const codes = v.findings.map((f) => f.code)
+  ok(codes.includes('broken-relation'),
+    'a relation naming a page that does not exist is REPORTED, at error severity')
+  ok(!codes.includes('prop-html-stale'),
+    "…and its html is NOT also reported stale — a dangling id is deliberately not written as a link, so the two agree")
+
+  // a title that has drifted is not an error: the ids are the value
+  const drift = relDoc({ pages: [relPage('p1', 'Book', [['author', ['p2']]]), relPage('p2', 'Renamed', [])] })
+  drift.pages[0].blocks[0].html = 'Author: <a href="#p/p2">The Old Name</a>'
+  ok(!validateDoc(drift).findings.some((f) => f.code === 'prop-html-stale'),
+    'a title that drifted after a rename is NOT reported — every rename in a space would otherwise light this up')
+  // …but a value the html does not name IS
+  drift.pages[0].blocks[0].html = 'Author: <a href="#p/p9">Somebody</a>'
+  ok(validateDoc(drift).findings.some((f) => f.code === 'prop-html-stale'),
+    '…while html naming a DIFFERENT page than the value is exactly what this check is for')
+
+  // a stored rollup is the one thing this feature must not allow
+  const stored = relDoc({ pages: [relPage('p1', 'P', [['tasks', ['x']], ['total', 42]])] })
+  ok(validateDoc(stored).findings.some((f) => f.code === 'stored-rollup'),
+    'a `prop` block for a ROLLUP is reported — a frozen answer this build ignores and an older one renders as fact')
+
+  // schema faults
+  const badSchema = relDoc({ fields: [
+    { key: 'a', label: 'A', vt: 'rollup' },
+    { key: 'b', label: 'B', vt: 'rollup', rollup: { via: 'nope' } },
+    { key: 'c', label: 'C', vt: 'number' },
+    { key: 'd', label: 'D', vt: 'rollup', rollup: { via: 'c' } },
+  ], pages: [relPage('p1', 'P', [])] })
+  const sc = validateDoc(badSchema).findings.map((f) => f.code)
+  ok(sc.includes('bad-rollup'), 'a rollup that does not say what it rolls up is reported')
+  ok(sc.filter((c) => c === 'rollup-no-relation').length === 2,
+    '…and so are a `via` naming nothing and a `via` naming a field that is not a relation')
+
+  // a cycle is reported by RUNNING the renderer's own function, not by a
+  // second analysis of the schema
+  const cyc = relDoc({
+    fields: [
+      { key: 'peer', label: 'Peer', vt: 'relation' },
+      { key: 'ra', label: 'RA', vt: 'rollup', rollup: { via: 'peer', of: 'ra', fn: 'sum' } },
+    ],
+    pages: [relPage('a', 'A', [['peer', ['a']]])],
+  })
+  ok(validateDoc(cyc).findings.some((f) => f.code === 'rollup-cycle'),
+    'a rollup that depends on itself is reported')
+
+  // NOTHING here throws on a document nobody has validated
+  let threw = ''
+  try {
+    validateDoc(relDoc({
+      fields: [{ key: 'r', label: 'R', vt: 'rollup', rollup: 'not an object' }, { key: 'x', label: 'X', vt: 'relation' }],
+      pages: [relPage('p1', 'P', [['x', { not: 'a list' }], ['r', 1]])],
+    } as never))
+  } catch (e) { threw = String((e as Error).message) }
+  ok(threw === '', `validate() survives a document that is wrong in every way it can be (${threw})`)
+}
+
+// ---- 12. relationRefs is the ONE predicate --------------------------------
+{
+  const doc = relDoc({ pages: [] })
+  ok(JSON.stringify(relationRefs(doc, { type: 'prop', key: 'author', value: ['p2'] })) === '["p2"]',
+    'a declared relation prop block reports its targets')
+  ok(relationRefs(doc, { type: 'prop', key: 'status', value: 'todo' }).length === 0,
+    'a select does not — its value is a word, not a page')
+  ok(relationRefs(doc, { type: 'prop', key: 'nosuch', value: ['p2'] }).length === 0,
+    'and neither does a key the schema does not declare, which is what keeps buildIndex from double-counting it')
+  ok(relationRefs(doc, { type: 'p', key: 'author', value: ['p2'] }).length === 0, 'a paragraph is not a value')
+  ok(isRelation(doc.fields![2] as never) && !isRelation(doc.fields![0] as never), 'isRelation reads the schema')
+}
+
+// ---- 13. remapRelation leaves an untouched value alone --------------------
+{
+  ok(remapRelation(['a', 'b'], (id) => id) === null,
+    'a value nothing happened to comes back NULL, so an export leaves it byte-identical rather than rewriting it to an equal one')
+  ok(remapRelation('', () => null) === null, 'and an empty one is nothing to do')
+  const r = remapRelation(['a', 'b'], (id) => (id === 'a' ? 'A' : null))!
+  ok(JSON.stringify(r.value) === '["A"]' && r.changed === 1 && r.cut === 1,
+    'a rename and a drop are counted apart — one is a reference that moved, the other one that did not travel')
+}
+
+// ---- 14. plain text, for a cell and for a list ----------------------------
+{
+  const doc = relDoc({ pages: [relPage('p1', 'One', []), relPage('p2', 'Two', [])] })
+  ok(valueTextOf(doc, doc.fields![2] as never, ['p1', 'p2']) === 'One, Two',
+    'a relation reads as its pages TITLES — the ids are not for reading, exactly as a select id is not')
+  ok(valueTextOf(doc, doc.fields![0] as never, 'todo') === 'Todo', 'and a select still reads as its option label')
+  ok(valueTextOf(doc, doc.fields![2] as never, '') === '', 'unset is empty, and the caller decides what an em dash is')
 }
 
 
