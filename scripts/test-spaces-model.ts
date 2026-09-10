@@ -43,6 +43,9 @@ import {
   sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
   VIEW_LAYOUTS, layoutOf, nextLayout,
 } from '../spaces/src/fields.ts'
+import {
+  unknownFilterOps, clauseCount, clauseSummary, windowRange, opsFor,
+} from '../spaces/src/query.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
   canonicalMarks, applyMark, clearMarks, markActive, linkAt, linkAttrs, htmlToMd,
@@ -1967,6 +1970,206 @@ function fsTable(f: string): string {
   ok(propBlockOf(page, 'status')?.id === 'b1', 'a page reports the BLOCK holding a field, not just its value')
   ok(propBlockOf(page, 'priority') === undefined,
     'and a field it does not carry has none — the drop creates one through propBlock')
+}
+
+// ---- a view can ask a REAL QUESTION ---------------------------------------
+// `filter` had two keys — a phase flag and value membership — so a view could
+// ask "which of these values" and nothing else. `where` is the third, and
+// everything here is a thing that fails silently: a condition this build cannot
+// read must show MORE rows and say so rather than fewer and stay quiet; a
+// relative date must mean the reader's own day and not UTC's; a clause out of a
+// mailed file must not throw out of a render; and — the one that matters most —
+// EVERY FILTER WRITTEN BEFORE THIS must select exactly the rows it always did.
+{
+  const F = [
+    { key: 'status', label: 'Status', vt: 'select', options: [
+      { id: 'todo', label: 'Todo', group: 'unstarted' },
+      { id: 'done', label: 'Shipped', group: 'done' },
+    ] },
+    { key: 'year', label: 'Year', vt: 'number' },
+    { key: 'due', label: 'Due', vt: 'date' },
+    { key: 'labels', label: 'Labels', vt: 'labels' },
+    { key: 'note', label: 'Note', vt: 'text' },
+  ] as unknown as FieldSpec[]
+
+  const issue = (id: string, title: string, v: Record<string, unknown>): Page => ({
+    id, title,
+    blocks: Object.entries(v).map(([key, value], i) => ({
+      id: `${id}-${i}`, type: 'prop', key, value,
+      html: `${key}: ${String(value)}`,
+    })) as Block[],
+  })
+
+  const doc = {
+    format: FORMAT, version: 1, docId: 'q', title: 'Q', theme: {}, fields: F,
+    pages: [
+      issue('a', 'Onboarding rewrite', { status: 'todo', year: 2019, due: '2026-01-05', labels: ['draft'], note: 'alpha' }),
+      issue('b', 'Ship the thing', { status: 'todo', year: 2021, due: '2026-01-10', labels: ['bug', 'ui'], note: '' }),
+      issue('c', 'Old business', { status: 'done', year: 2024, due: '2025-12-31', labels: [], note: 'beta' }),
+      issue('d', 'No dates here', { status: 'todo', year: 2030, labels: ['draft', 'ui'] }),
+    ],
+  } as unknown as SpacesDoc
+
+  /** WHICH PAGES a filter selects — the assertion this whole section is about.
+   *  Not "does this boolean come back true": the failure is a view showing the
+   *  wrong ROWS, and only rows can show it. */
+  const sel = (filter: unknown, today?: string): string =>
+    issuesOf(doc).filter((r) => passesFilter(doc, r.values, filter, r.page, today)).map((r) => r.page.id).join('')
+
+  ok(sel(undefined) === 'abcd', 'no filter is every row, exactly as before')
+
+  // ————— THE COMPATIBILITY PROOF —————
+  // Every filter shape that could exist in a file written before `where` did,
+  // over the same rows, selecting what it always selected. If one line here
+  // moves, files on other people's disks have quietly changed meaning.
+  ok(sel({ open: true }) === 'abd', 'an OLD open-only filter still selects exactly its rows')
+  ok(sel({ is: { status: ['todo'] } }) === 'abd', '…an OLD membership filter likewise')
+  ok(sel({ is: { labels: ['ui'] } }) === 'bd', '…including one over a list-valued field')
+  ok(sel({ open: true, is: { labels: ['draft'] } }) === 'ad', '…and two old keys still AND together')
+  ok(sel({ is: { status: [] } }) === 'abcd', '…and an empty list is still NO CONSTRAINT')
+  ok(sel({}) === 'abcd' && sel({ where: [] }) === 'abcd',
+    'an empty filter and an empty clause list are both "everything"')
+
+  // ————— numbers: ranges and comparison —————
+  ok(sel({ where: [{ key: 'year', op: 'gt', v: 2020 }] }) === 'bcd', 'published after 2020')
+  ok(sel({ where: [{ key: 'year', op: 'gte', v: 2021 }] }) === 'bcd', '…inclusively with gte')
+  ok(sel({ where: [{ key: 'year', op: 'lt', v: 2021 }] }) === 'a', '…and lt is the other side')
+  ok(sel({ where: [{ key: 'year', op: 'gte', v: 2021 }, { key: 'year', op: 'lte', v: 2024 }] }) === 'bc',
+    'two clauses AND into a RANGE — which is what the flat list is for')
+  ok(sel({ where: [{ key: 'year', op: 'gt', v: '2020' }] }) === 'bcd',
+    'a numeric field compares numerically even when the stored operand is a string')
+  ok(sel({ where: [{ key: 'note', op: 'gt', v: 'alz' }] }) === 'c',
+    'a non-numeric field compares as TEXT — the operator is not refused, it answers honestly')
+
+  // ————— dates —————
+  // Values are `YYYY-MM-DD`, whose string order IS chronological order, so no
+  // Date object is anywhere near a comparison.
+  ok(sel({ where: [{ key: 'due', op: 'lt', v: '2026-01-01' }] }) === 'c', 'due before a date')
+  ok(sel({ where: [{ key: 'due', op: 'gte', v: '2026-01-05' }] }) === 'ab', '…and on or after one')
+  ok(sel({ where: [{ key: 'due', op: 'eq', v: '2026-01-10' }] }) === 'b', 'due exactly on a day')
+
+  // RELATIVE dates, with today INJECTED so the rig is not at the mercy of a
+  // clock. Under TZ=Pacific/Kiritimati (UTC+14) and TZ=Pacific/Niue (UTC-11)
+  // these must be the same rows — which they are because nothing here parses a
+  // date string into a Date.
+  ok(sel({ where: [{ key: 'due', op: 'in', v: 'past' }] }, '2026-01-06') === 'ac', 'overdue = "in the past"')
+  ok(sel({ where: [{ key: 'due', op: 'in', v: 'future' }] }, '2026-01-06') === 'b', '…and "in the future"')
+  ok(sel({ where: [{ key: 'due', op: 'in', v: 'today' }] }, '2026-01-05') === 'a', '…and today is one day')
+  ok(sel({ where: [{ key: 'due', op: 'in', v: 'month' }] }, '2026-01-20') === 'ab',
+    'this month is the calendar month, so a December date is out of a January window')
+  ok(sel({ where: [{ key: 'due', op: 'in', v: 'today' }] }, '2026-01-06') === '',
+    'a window nothing falls in selects nothing — and page d, which has no due date at all, is not in it')
+
+  // the week, and its LOCALE-DEPENDENT start. 2026-01-05 is a Monday.
+  ok(JSON.stringify(windowRange('week', '2026-01-07', 'de-DE')) === '{"from":"2026-01-05","to":"2026-01-11"}',
+    'a Monday-start locale puts Wednesday 7 Jan in Mon 5 – Sun 11')
+  ok(JSON.stringify(windowRange('week', '2026-01-07', 'en-US')) === '{"from":"2026-01-04","to":"2026-01-10"}',
+    '…and a Sunday-start locale puts the same day in Sun 4 – Sat 10')
+  ok(JSON.stringify(windowRange('week', '2026-01-07', 'de-DE')) !== JSON.stringify(windowRange('week', '2026-01-07', 'en-US')),
+    'so the week a view means is READ from the locale rather than assumed — the two answers differ')
+  ok(windowRange('today', '2026-03-01')?.from === '2026-03-01',
+    'today is one day, whatever the timezone the process is running in')
+  ok(windowRange('past', '2026-03-01')?.to === '2026-02-28',
+    'the day before 1 March 2026 is 28 February — calendar arithmetic, not minus 86,400,000')
+  ok(windowRange('month', '2026-02-14')?.to === '2026-02-28' &&
+     windowRange('month', '2024-02-14')?.to === '2024-02-29',
+    '…and a month ends where the calendar says, leap years included')
+  ok(windowRange('future', '2025-12-31')?.from === '2026-01-01', 'and a window crosses a year end')
+  // The DST boundary is where epoch arithmetic stops agreeing with a calendar:
+  // 29 March 2026 is 23 hours long in Berlin, so 30 March minus 86,400,000 ms
+  // read back in local components is the 28th. Run under TZ=Europe/Berlin.
+  ok(windowRange('past', '2026-03-30')?.to === '2026-03-29',
+    'the day before a spring-forward Monday is the Sunday, not the Saturday')
+  ok(windowRange('future', '2026-03-28')?.from === '2026-03-29',
+    '…and the day after the Saturday is that same Sunday')
+
+  // ————— text —————
+  ok(sel({ where: [{ key: 'note', op: 'contains', v: 'ALP' }] }) === 'a', 'contains is case-insensitive')
+  ok(sel({ where: [{ key: 'note', op: 'notContains', v: 'a' }] }) === 'bd',
+    '…and its negation covers the rows with no value at all')
+  ok(sel({ where: [{ key: ':title', op: 'contains', v: 'onboarding' }] }) === 'a',
+    'a condition can ask about the TITLE, which is not a prop block and no field key could reach')
+  ok(sel({ where: [{ key: ':title', op: 'notContains', v: 'e' }] }) === '',
+    '…and it is the real title, not a placeholder')
+  ok(sel({ where: [{ key: 'labels', op: 'contains', v: 'draft' }] }) === 'ad',
+    'contains on a list-valued field reads the joined labels')
+  ok(sel({ where: [{ key: 'status', op: 'contains', v: 'shipp' }] }) === 'c',
+    'and on a select it reads the option LABEL — "Shipped", never the stored id "done", because contains is a question about what is on the screen')
+
+  // ————— negation and absence —————
+  ok(sel({ where: [{ key: 'labels', op: 'ne', v: 'draft' }] }) === 'bc', 'pages NOT tagged draft')
+  ok(sel({ where: [{ key: 'status', op: 'ne', v: 'done' }] }) === 'abd', '…and a select negates the same way')
+  ok(sel({ where: [{ key: 'due', op: 'empty' }] }) === 'd', 'an unset value is a question of its own')
+  ok(sel({ where: [{ key: 'due', op: 'notEmpty' }] }) === 'abc', '…in both directions')
+  ok(sel({ where: [{ key: 'labels', op: 'empty' }] }) === 'c',
+    'an EMPTY LIST is empty — [] is the absence of labels, not one label')
+  ok(sel({ where: [{ key: 'note', op: 'empty' }] }) === 'bd',
+    'and so is the empty string, which is what an unset text field holds')
+
+  // ————— all / any —————
+  ok(sel({ where: [{ key: 'year', op: 'gt', v: 2020 }, { key: 'labels', op: 'eq', v: 'ui' }] }) === 'bd',
+    'clauses AND by default')
+  ok(sel({ any: true, where: [{ key: 'year', op: 'lt', v: 2020 }, { key: 'status', op: 'eq', v: 'done' }] }) === 'ac',
+    '…and `any` ORs the same two')
+  ok(sel({ any: true, where: [{ key: 'year', op: 'gt', v: 2020 }] }) === 'bcd',
+    '`any` over one clause is that clause')
+  // `any` reaches ONLY `where`. If it ever reached `is` or `open`, every file
+  // carrying those keys would change meaning.
+  ok(sel({ any: true, open: true, where: [{ key: 'status', op: 'eq', v: 'done' }] }) === '',
+    'an old key still ANDs with the new list, whatever `any` says')
+
+  // ————— a rule from a NEWER BUILD, one level down —————
+  const newer = { where: [{ key: 'year', op: 'approximately', v: 2021 }] }
+  ok(unknownFilterOps(newer).join() === 'approximately', 'an operator this build cannot evaluate is REPORTED')
+  ok(unknownFilterOps({ where: [{ key: 'due', op: 'in', v: 'fortnight' }] }).join() === 'in:fortnight',
+    '…and so is a window word inside an operator this build does know')
+  ok(unknownFilterOps({ where: [{ key: 'year', op: 'gt', v: 1 }] }).length === 0, '…and a known one is not')
+  ok(sel(newer) === 'abcd',
+    'an unknown operator shows MORE, never fewer — hiding rows for a rule nobody can see is the silent loss')
+  ok(sel({ any: true, where: [{ key: 'year', op: 'approximately', v: 2021 }, { key: 'year', op: 'lt', v: 2020 }] }) === 'abcd',
+    '…and under `any` it passes rather than being skipped, which is the same direction')
+  ok(JSON.parse(JSON.stringify({ type: 'view', filter: newer })).filter.where[0].op === 'approximately',
+    'and the rule itself round-trips verbatim')
+  ok(unknownFilterKeys({ where: [], any: true, open: true }).length === 0,
+    '`where` and `any` are known keys HERE — it is an older build that reports them, and it already does')
+
+  // ————— a clause out of a file somebody mailed you —————
+  // None of this may throw, and none of it may quietly empty a board.
+  ok(sel({ where: 'drop table' }) === 'abcd', 'a `where` that is not an array is no constraint')
+  ok(sel({ where: [null, 7, 'x', {}, { key: 'year' }, { op: 'gt' }] }) === 'abcd',
+    '…and neither is a list of things that are not clauses')
+  ok(sel({ where: [{ key: 'year', op: 'gt' }] }) === 'abcd',
+    'a half-built condition narrows nothing rather than emptying the board')
+  ok(sel({ where: [{ key: '__proto__', op: 'notEmpty' }] }) === '',
+    'a key naming a prototype member reads as an ABSENT field, not as Object.prototype')
+  ok(sel({ where: [{ key: 'toString', op: 'notEmpty' }] }) === '',
+    '…and so does the other one that has bitten this app twice')
+  ok(sel({ where: [{ key: 'year', op: 'gt', v: { toString: 1 } as never }] }) === 'abcd',
+    'an operand that is not a string or a number is dropped, not coerced')
+  ok(clauseCount({ where: [{ key: 'year', op: 'gt', v: 1 }, { key: 'x', op: 'nope', v: 1 }, { key: 'y', op: 'lt' }] }) === 1,
+    'the chip counts only what actually narrows')
+  ok(filterCount({ open: true, is: { status: ['a'] }, where: [{ key: 'year', op: 'gt', v: 1 }] }) === 3,
+    '…and the Filter chip counts the conditions alongside the old two keys')
+  ok(filterCount({ where: [] }) === 0 && filterCount(undefined) === 0,
+    'and an empty one still counts nothing')
+
+  // ————— what the popover says a clause means —————
+  ok(clauseSummary(doc, { key: 'status', op: 'eq', v: 'done' }) === 'Status is Shipped',
+    'a summary names the field and shows the option LABEL, not its stored id')
+  ok(clauseSummary(doc, { key: 'year', op: 'gt', v: 2020 }) === 'Year is more than 2020',
+    '…and a number gets the words a number takes')
+  ok(clauseSummary(doc, { key: 'due', op: 'in', v: 'week' }) === 'Due is within This week',
+    '…and a window is named rather than shown as its stored word')
+  ok(clauseSummary(doc, { key: ':title', op: 'notEmpty' }) === 'Title is not empty',
+    '…and an operator with no operand does not leave a dangling one')
+
+  // ————— the operator picker —————
+  ok(opsFor('date').includes('in') && !opsFor('number').includes('in'),
+    'only a date is offered a relative window')
+  ok(!opsFor('date').includes('contains') && opsFor('text').includes('contains'),
+    'and only text-shaped fields are offered contains')
+  ok(sel({ where: [{ key: 'due', op: 'contains', v: '2026-01' }] }) === 'ab',
+    'but an operator the picker does not OFFER still EVALUATES — a filter from an agent or a newer build must not stop selecting its rows')
 }
 
 // ---- the board's writes go through the ONE writer -------------------------

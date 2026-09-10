@@ -6390,3 +6390,51 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+
+## 2026-09-10 — spaces view filters: a FLAT condition list, and unknown operators show MORE
+
+**Decision.** `bento/spaces` `ViewFilter` gains two keys and no more: `where`, a
+FLAT array of `{key, op, v?}` clauses, and `any`, a boolean that ORs them
+instead of ANDing them. Eleven operators — `eq` `ne` `gt` `gte` `lt` `lte`
+`contains` `notContains` `empty` `notEmpty` `in` — plus five relative date
+windows for `in` (`today` `week` `month` `past` `future`). The engine is
+`spaces/src/query.ts`; `fields.ts` calls into it and is otherwise unchanged.
+
+**Why flat, and not a tree.** A nested group needs a UI that can show, build and
+unbuild a tree, and the filter popover is a bottom sheet on a phone. "Due this
+week AND not tagged draft" and "urgent OR overdue" are the shapes people
+actually ask for and both are flat. Nesting stays available later as another
+additive key, where widening a flat list into a tree afterwards would not be.
+
+**Why `any` reaches only `where`.** The result is `open AND is AND (where,
+combined by all-or-any)`. Letting `any` reach `is` or `open` would change what a
+file already on somebody's disk means, which no key may ever do.
+
+**Unknown operators show MORE rows, never fewer, and say so.** An operator this
+build cannot evaluate is reported by `unknownFilterOps` (the sibling of
+`unknownFilterKeys`) and treated as no constraint under AND — and as PASSING
+under `any`, because skipping a clause in an OR leaves fewer ways through and
+would hide rows for a rule nobody can read. Both directions are the same rule:
+a superset with a banner over it, never a silently wrong set. This follows the
+precedents already in `fields.ts` — `isOpenPhase` counts an unknown status as
+open, an empty `is` list is no constraint. An OLDER build meeting `where` does
+the same one level up: unknown key, superset, existing banner.
+
+**Dates never construct a Date from a string.** A `date` field holds
+`YYYY-MM-DD`, whose string order is its chronological order in every timezone,
+so comparison is string comparison. Windows are built from journal.ts's
+`todayISO`/`stepDay` — calendar arithmetic in the reader's own zone.
+`new Date('2026-01-01')` is UTC midnight by spec and therefore the previous day
+for half the world; it appears nowhere in query.ts. The week START is read from
+`Intl.Locale.weekInfo` (Monday fallback) and is VIEWER-scoped, never stored:
+the same file answers "this week" as Mon–Sun in Berlin and Sun–Sat in Chicago,
+the same rule the app already follows for language and date formatting.
+
+**No `eval`, no `new Function`** — a filter comes out of a mailed file exactly
+like block html, and calc.ts's argument carries over unchanged. Fixed operator
+table, typed values, returns a boolean.
+
+Coverage: 69 behavioural assertions in `scripts/test-spaces-model.ts` asserting
+on ROWS, including a compatibility block proving every pre-`where` filter shape
+still selects exactly its old rows; 13 sabotages, all caught.
