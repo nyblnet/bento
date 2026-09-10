@@ -11,12 +11,13 @@
 
 import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
+import { decorateTags } from './tags.ts'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
-  passesFilter, filterCount, unknownFilterKeys,
+  passesFilter, filterCount, unknownFilterKeys, unknownSourceKeys,
   sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
   type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
@@ -668,6 +669,7 @@ function renderTable(b: Block, opts: RenderOpts): HTMLElement {
         td.dataset.cell = b.id
       }
       td.innerHTML = sanitizeInline(cell)
+      decorateTags(td)
       tr.appendChild(td)
     })
     if (head) {
@@ -829,6 +831,11 @@ function inlineHost(b: Block, opts: RenderOpts): HTMLElement {
   inner.dir = 'auto'
   if (opts.editable) inner.contentEditable = 'true'
   inner.innerHTML = sanitizeInline(b.html ?? '')
+  // Chips are drawn INTO the editable host, and taken back out of whatever the
+  // editor commits (`tags.ts readInline`). Rendering them only in the reader
+  // would be safer and would also mean the one view people actually write in
+  // is the one view that cannot show a tag.
+  decorateTags(inner)
   if (!b.html) inner.dataset.empty = '1'
   return inner
 }
@@ -1292,19 +1299,41 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // WHICH PAGES. Named after what it answers rather than "Source", because
     // the question in the reader's head is "what is in this?" — and it says the
     // answer, not the word, when there is one.
-    const src = (b as { source?: { has?: unknown; under?: unknown } }).source
+    const src = (b as { source?: { has?: unknown; under?: unknown; tag?: unknown } }).source
     const hasKey = typeof src?.has === 'string' ? src.has : ''
     const underId = typeof src?.under === 'string' ? src.under : ''
+    const tagKey = typeof src?.tag === 'string' ? src.tag : ''
     const srcLabel = hasKey ? (fieldByKey(doc, hasKey)?.label ?? hasKey)
       : underId ? (doc.pages.find((p) => p.id === underId)?.title || t('Untitled'))
-        : t('Issues')
+        // the tag SAYS ITSELF — no lookup, and the hash is what makes it read
+        // as a tag rather than as a page somebody happened to call "recipe"
+        : tagKey ? '#' + tagKey
+          : t('Issues')
     const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
-      t('Choose which pages this view holds'), !!(hasKey || underId))
+      t('Choose which pages this view holds'), !!(hasKey || underId || tagKey))
 
     head.append(layoutB, ...(spanB ? [spanB] : []), sourceB,
       ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
+
+  // A SOURCE this build cannot evaluate is the WORST of the three, and it had
+  // no warning at all until now — `unknownSourceKeys` existed in fields.ts and
+  // nothing called it. An unreadable filter over-shows; an unreadable SOURCE
+  // means the view silently falls back to the backlog and shows a completely
+  // different set of pages, with the header still naming the source it cannot
+  // apply. Measured against a build of `main`: a view sourced on a tag renders
+  // as Issues there, and says nothing.
+  //
+  // That build is already shipped and cannot be told. What this fixes is
+  // forward: the FOURTH selector, whenever somebody adds one, degrades loudly.
+  const unknownSrc = unknownSourceKeys((b as { source?: unknown }).source)
+  if (unknownSrc.length) {
+    const note = document.createElement('p')
+    note.className = 'sp-view-empty'
+    note.textContent = t('This view chooses its pages in a way this build does not understand, so it is showing the backlog instead.')
+    host.appendChild(note)
+  }
 
   // A rule this build cannot evaluate means the view shows MORE than its author
   // asked for. Additivity keeps the rule; honesty says so.
