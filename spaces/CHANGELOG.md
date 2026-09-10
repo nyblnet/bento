@@ -630,6 +630,40 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   notes, so a presenter opening it next week is told too. Speaker notes are
   otherwise NOT invented: mapping review comments onto them would move a remark
   addressed to a person into a file people present from.
+- **A space you can hand to a reader.** "Save a reading copy…" (in the share
+  popover) writes a second file that opens as a **document** rather than as an
+  editor: the pages, the tree, ⌘K search and print, and none of the machinery
+  for changing them. The eye toggle is the same view for the file you are
+  writing in — it now takes the tools away rather than merely switching them
+  off, and every page carries a Previous / Next pair so a reader can go through
+  a space without hunting the sidebar.
+
+  What the copy leaves behind is the point, and it comes in three grades:
+
+  - **Cryptographic.** `doc.collab` is deleted outright, so the copy holds no
+    room, no symmetric read key and no private signing key of any kind — owner,
+    writer or invite. Whoever you send it to cannot read the room's history,
+    cannot write to it, and cannot join it, because the material a socket must
+    present to the relay is not in the file.
+  - **Format-level.** Comment threads are gone from the bytes, page-level and
+    block-level, replies included. Comments are workspace, not publication, and
+    a copy that merely hid them would still be a file whose JSON block carries
+    every remark anyone made about the draft.
+  - **Cosmetic.** `doc.readonly` itself. It states what the file is and the app
+    honours it; anyone can open the HTML and change it back. It is intent, never
+    a lock, and nothing in this release presents it as one.
+
+  `doc.readonly` was declared in the format and read by nothing until recently —
+  now it opens the reader. Old builds ignore the flag and open the space
+  editable, which is the correct degradation: the guarantees that matter are
+  bytes that are not in the file, and those are absent whatever opens it. A
+  reading copy of a password-protected space is written encrypted with the same
+  password, and carries no file-manager preview — a plaintext home page beside
+  the ciphertext is the leak the password exists to prevent.
+
+  `scripts/test-spaces-reading.ts` asserts all of it on the SERIALIZED document
+  rather than on "the strip function ran", the way the invite rig does.
+
 
 ## [0.1.0] — 2026-08-03
 

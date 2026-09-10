@@ -52,6 +52,7 @@ import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
 import { offlineEnabled } from '../../kernel/src/net.ts'
 import { startSharing } from '../../kernel/src/sync/online.ts'
 import * as shareModule from './share.ts'
+import { readerNav, readingCopy } from './reading'
 import { ICONS, type IconName } from './icons'
 import { PropsPanel } from './props'
 import {
@@ -122,6 +123,15 @@ export class Editor {
   private painting = false
   /** reading view: the document without the machinery for changing it */
   private reading = false
+  /**
+   * This FILE is a reading copy (`doc.readonly`), not a view someone toggled.
+   *
+   * The difference is whether there is anything to go back to. A reading view
+   * is a mode you leave; a reading copy has no editing to return to, so the eye
+   * and the ways to write this file go away entirely rather than sitting there
+   * doing nothing. See reading.ts for what such a copy carries.
+   */
+  private sealed = false
   /**
    * Remote image urls this READER has agreed to load, this session only.
    *
@@ -249,6 +259,11 @@ export class Editor {
   private build(): void {
     this.root.innerHTML = ''
     this.root.className = 'sp-app'
+    // build() rewrites className outright, so the mode has to be re-applied or
+    // anything that repaints the shell (About's onRepaint, a language change)
+    // silently drops the reader back into the editor.
+    if (this.reading) this.root.classList.add('sp-reading')
+    if (this.sealed) this.root.classList.add('sp-sealed')
 
     const bar = el('header', 'sp-bar')
     // THE SUITE'S MARK, and the way into About — the same control slides has.
@@ -283,6 +298,8 @@ export class Editor {
     this.statusEl = el('span', 'sp-status')
 
     // insert — the block menu, reachable without knowing "/" exists
+    // named so reading mode can take it away — it is the one control in the bar
+    // whose entire purpose is changing the document
     const insert = this.dropdown('plus', t('Insert'), t('Insert a block — text, headings, lists, code, images'), (menu, close) => {
       for (const item of SLASH_ITEMS) {
         menu.append(this.menuItem(item.icon, t(item.label), t(item.hint), () => {
@@ -484,6 +501,7 @@ export class Editor {
       () => this.toggleInsp())
     inspB.classList.add('sp-insp-toggle')
 
+    insert.classList.add('sp-ins-dd')
     const right = el('div', 'sp-group sp-group-right')
     right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
 
@@ -596,7 +614,8 @@ export class Editor {
    * they saved.
    */
   private toggleReading(force?: boolean): void {
-    this.reading = force ?? !this.reading
+    // A sealed copy has one state, and it is this one.
+    this.reading = this.sealed ? true : (force ?? !this.reading)
     this.root.classList.toggle('sp-reading', this.reading)
     this.readB?.classList.toggle('sp-on', this.reading)
     this.readB?.setAttribute('aria-pressed', String(this.reading))
@@ -604,6 +623,19 @@ export class Editor {
     this.paintPage()
     this.props?.refresh()
     this.status(this.reading ? t('Reading view — press Esc or the eye to edit') : t('Editing'))
+  }
+
+  /**
+   * This file was saved for reading — so open it as a document.
+   *
+   * Called once, from boot, for a `doc.readonly` file. The lock on the store is
+   * separate and already applied (main.ts); this is the surface half.
+   */
+  enterReadingCopy(): void {
+    this.sealed = true
+    this.root.classList.add('sp-sealed')
+    this.toggleReading(true)
+    this.status('')
   }
 
   /** Undo/redo must LOOK unavailable when they are, or they read as broken. */
@@ -1338,6 +1370,13 @@ export class Editor {
     this.main.append(view)
     this.wire(view)
     view.querySelector('.sp-page-inner')?.append(this.backlinks(page.id))
+    // The reader's way through the space. Only in reading mode: an editor has
+    // the sidebar, the gutters and ⌘K, and a pair of chapter links under every
+    // page would be furniture in the way of the writing.
+    if (this.reading) {
+      const rnav = readerNav(s.doc, page.id, (id) => s.goToPage(id))
+      if (rnav) view.querySelector('.sp-page-inner')?.append(rnav)
+    }
     // Comments are EDITOR-ONLY. The gate is here rather than in comments.ts
     // because this is the object that knows which view it is in — and the
     // renderer, which print and the reading view share, has never heard of
@@ -3227,7 +3266,7 @@ export class Editor {
       this.paintPage(); this.paintTree()
       return
     }
-    if (e.key === 'Escape' && this.reading && !this.overlay) { e.preventDefault(); this.toggleReading(false); return }
+    if (e.key === 'Escape' && this.reading && !this.sealed && !this.overlay) { e.preventDefault(); this.toggleReading(false); return }
     if (this.overlay) return // the overlay owns the keyboard while it is open
 
     // A TABLE CELL IS NOT A BLOCK HOST, so the block keymap below does not
@@ -5458,6 +5497,11 @@ export class Editor {
    * the room, which writes AND revokes, the inviter included.
    */
   private async shareCopy(kind: import('./share.ts').ShareKind): Promise<void> {
+    // A READING COPY IS SEALED, so it must not go live first — that is the one
+    // thing the other two branches do that would be wrong here. Going live on
+    // the way out would arm this space's session for a file that carries none
+    // of its keys, which is a session nobody asked for.
+    if (kind === 'reading') { await this.saveReadingCopy(); return }
     await this.goLive()
     // Committed first for the same reason slides commits its text edit: a
     // half-typed block that only exists in the DOM is not in the copy.
@@ -5480,6 +5524,23 @@ export class Editor {
         ? t('Editor copy saved — recipients join live with edit access')
         : t('Read-only copy saved — it follows the live session, view only'))
     }
+  }
+
+  /**
+   * Save a copy for somebody who is only going to read it.
+   *
+   * A DERIVED document (reading.ts), never `store.doc`: the whole point is what
+   * the copy does not contain — no collaboration credentials at all, and no
+   * comment threads. What it DOES keep is the space itself, so the recipient
+   * gets the pages, the search and the tree, and no editing tools.
+   */
+  private async saveReadingCopy(): Promise<void> {
+    // Committed first for the same reason the share copies commit: a half-typed
+    // block that only exists in the DOM is not in the copy.
+    this.store.endRun()
+    const out = readingCopy(this.store.doc)
+    const ok = await this.onShareCopy?.(out, 'reading')
+    if (ok) this.status(t('Reading copy saved — it opens as a document, with no keys and no comments'))
   }
 
   /** Turn the live session on (idempotent). Sharing a copy calls this first. */
