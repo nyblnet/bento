@@ -2383,3 +2383,44 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ---- in-file version history (about.ts + history.ts) ----------------------
+   The row is the same .sp-ab-version the browser-local timeline uses, with a
+   second button beside it; the diff hangs UNDER the row rather than beside it,
+   because a word diff of prose needs the full width of the card and the card
+   is only 560px. Colours come from the shared --c-green/--c-red tokens, which
+   both themes define, so this needs no dark block of its own. */
+.sp-hist-row { display: flex; flex-direction: column; }
+.sp-hist-head { display: flex; align-items: center; gap: 4px; }
+.sp-hist-head .sp-ab-version { flex: 1 1 auto; min-width: 0; }
+.sp-hist-diff-btn {
+  flex: 0 0 auto; padding: 6px 9px; border: 1px solid transparent;
+  border-radius: 8px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.sp-hist-diff-btn:hover { background: var(--chrome-2); border-color: var(--line); color: var(--ink); }
+.sp-hist-diff-btn[aria-expanded='true'] { color: var(--blue); }
+.sp-hist-diff {
+  margin: 2px 0 10px; padding: 8px 10px; border-inline-start: 2px solid var(--line);
+  background: var(--chrome); border-radius: 0 8px 8px 0;
+  max-height: 320px; overflow-y: auto;
+}
+.sp-hist-page { font-size: 12px; font-weight: 600; margin: 6px 0 2px; }
+.sp-hist-page:first-child { margin-top: 0; }
+.sp-hist-chip {
+  display: inline-block; margin-inline-start: 6px; padding: 0 6px;
+  border-radius: 999px; background: var(--chrome-2); color: var(--muted);
+  font-size: 11px; font-weight: 400;
+}
+.sp-hist-line {
+  margin: 0 0 4px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.sp-hist-line ins {
+  text-decoration: none; background: color-mix(in srgb, var(--c-green) 16%, transparent);
+  color: var(--c-green);
+}
+.sp-hist-line del {
+  background: color-mix(in srgb, var(--c-red) 14%, transparent); color: var(--c-red);
+}
+.sp-hist-empty { color: var(--muted); font-style: italic; }

@@ -36,6 +36,9 @@ import {
   canWriteInPlace, openedFileName,
 } from '../../kernel/src/save.ts'
 import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
+import {
+  revisionsOf, historyIsForeign, changesAt, restoredDoc, clearHistory, historyBytes,
+} from './history'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
@@ -517,6 +520,162 @@ export function openAbout(hooks: AboutHooks): void {
       // made in one direction only is half a promise.
       note(t('Another bento/spaces file can arrive the same way, nested under any page.')),
     )
+  }
+
+  // ---- the timeline INSIDE THE FILE ---------------------------------------
+  //
+  // First, and above the browser-local one below, because it is the one that
+  // survives being emailed. The section under this exists in one browser; this
+  // one is a field of the document, so it travels to another machine, to
+  // whoever the file is sent to, and — since it is inside the same JSON the
+  // envelope encrypts — inside the password when one is set.
+  //
+  // Rendered SYNCHRONOUSLY: unlike the IndexedDB list this reads a field of the
+  // document that is already in memory, so there is nothing to wait for.
+  {
+    const inSec = section(t('Versions in this file'))
+    const inBody = document.createElement('div')
+    inBody.className = 'sp-ab-versions'
+    inSec.append(inBody)
+
+    const renderInFile = (): void => {
+      inBody.textContent = ''
+      const revs = revisionsOf(store.doc)
+      if (!revs.length) {
+        inBody.append(note(historyIsForeign(store.doc)
+          ? t('This file carries a history this version cannot read. It is kept exactly as it arrived.')
+          : t('No versions yet — one is kept every time you save.')))
+        return
+      }
+      // newest first: the answer to "put back what I had before lunch" is
+      // nearer the top of the list than the bottom of it
+      for (let i = revs.length - 1; i >= 0; i--) {
+        const v = revs[i]
+        const when = new Date(v.at).toLocaleString([], {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        })
+        const rep = changesAt(revs, i)
+        const row = document.createElement('div')
+        row.className = 'sp-hist-row'
+
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.className = 'sp-ab-version'
+        const left = document.createElement('span')
+        left.className = 'sp-ab-when'
+        left.textContent = when
+        const tag = document.createElement('span')
+        tag.className = 'sp-ab-vtag'
+        // The summary is DERIVED here rather than stored — see history.ts. The
+        // file holds counts nobody has to translate; the sentence is made in
+        // the reader's language, every time the dialog opens.
+        tag.textContent = v.label || (rep.pagesChanged || rep.blocksChanged
+          ? t('{p} page(s), {b} block(s) changed', { p: rep.pagesChanged, b: rep.blocksChanged })
+          : t('The space’s title or appearance changed'))
+        const doIt = document.createElement('span')
+        doIt.className = 'sp-ab-vdo'
+        doIt.textContent = t('Restore')
+        b.append(left, tag, doIt)
+        b.addEventListener('click', () => {
+          const next = restoredDoc(store.doc, i)
+          if (!next) { say(t('That version could not be read')); return }
+          store.replaceDoc(next)
+          onRepaint()
+          close()
+          say(t('Restored the version from {when} — ⌘Z undoes it', { when }))
+        })
+
+        const showBtn = document.createElement('button')
+        showBtn.type = 'button'
+        showBtn.className = 'sp-hist-diff-btn'
+        showBtn.textContent = t('Changes')
+        showBtn.setAttribute('aria-expanded', 'false')
+        let panel: HTMLElement | null = null
+        showBtn.addEventListener('click', () => {
+          if (panel) { panel.remove(); panel = null; showBtn.setAttribute('aria-expanded', 'false'); return }
+          panel = renderDiff(rep)
+          row.append(panel)
+          showBtn.setAttribute('aria-expanded', 'true')
+        })
+
+        const head = document.createElement('div')
+        head.className = 'sp-hist-head'
+        head.append(b, showBtn)
+        row.append(head)
+        inBody.append(row)
+      }
+    }
+    renderInFile()
+
+    const size = historyBytes(store.doc)
+    inSec.append(note(t('Kept inside the document, so they travel with it — to another machine, to whoever you send it to, and inside the password when one is set.')))
+    if (size) inSec.append(note(t('History takes {size} of this file.', { size: humanBytes(size) })))
+    // Said in the dialog and not only in the source: the one property of
+    // in-file history that surprises people is that a page you deleted is
+    // still in the file until the budget folds it away.
+    inSec.append(note(t('Versions include text you have deleted. Clear them before sending the file if that matters.')))
+    if (!store.readOnly && revisionsOf(store.doc).length) {
+      inSec.append(actions(danger(t('Clear history'), inSec, {
+        what: t('Remove every version kept in this file?'),
+        why: t('The past text goes with them, including anything you deleted. Save the file for it to take effect.'),
+        go: t('Clear history'),
+        run: () => {
+          clearHistory(store.doc)
+          renderInFile()
+          say(t('History removed. Save to write the file without it.'))
+        },
+      })))
+    }
+  }
+
+  /**
+   * A change report, drawn.
+   *
+   * WORD granularity, for the reason type/src/redline.ts gives: a line diff
+   * calls a reflowed paragraph wholly rewritten, and a character diff marks
+   * "30" → "60" as one glyph nobody can see. The words come out of the block's
+   * TEXT, never its markup — a reader comparing two versions is comparing what
+   * they wrote, not which tag it is wrapped in.
+   */
+  function renderDiff(rep: ReturnType<typeof changesAt>): HTMLElement {
+    const box = document.createElement('div')
+    box.className = 'sp-hist-diff'
+    if (!rep.pages.length) { box.append(note(t('Nothing changed'))); return box }
+    for (const p of rep.pages.slice(0, 12)) {
+      const h = document.createElement('div')
+      h.className = 'sp-hist-page'
+      h.textContent = p.title || t('Untitled')
+      if (p.kind === 'added') h.append(chip(t('New page')))
+      else if (p.kind === 'removed') h.append(chip(t('Deleted page')))
+      else if (p.wasTitled !== undefined) h.append(chip(t('Renamed from “{title}”', { title: p.wasTitled || t('Untitled') })))
+      box.append(h)
+      for (const b of p.blocks.slice(0, 20)) {
+        const line = document.createElement('p')
+        line.className = 'sp-hist-line'
+        for (const part of b.parts) {
+          if (!part.text) continue
+          const el = document.createElement(part.op === 'ins' ? 'ins' : part.op === 'del' ? 'del' : 'span')
+          el.textContent = part.text
+          line.append(el)
+        }
+        if (!line.childNodes.length) {
+          const el = document.createElement('span')
+          el.className = 'sp-hist-empty'
+          el.textContent = b.type
+          line.append(el)
+        }
+        box.append(line)
+      }
+      if (p.blocks.length > 20) box.append(chip('…'))
+    }
+    return box
+  }
+
+  function chip(text: string): HTMLElement {
+    const s = document.createElement('span')
+    s.className = 'sp-hist-chip'
+    s.textContent = text
+    return s
   }
 
   // ---- ways out ----------------------------------------------------------

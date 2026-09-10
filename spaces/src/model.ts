@@ -14,6 +14,7 @@
 // There is no server; a break here is permanent.
 
 import type { CollabCreds } from './sync/crdt.ts'
+import type { Revision } from './history.ts'
 import { esc, externalHref } from './sanitize.ts'
 
 export const FORMAT = 'bento/spaces'
@@ -364,6 +365,20 @@ export interface SpacesDoc {
    * `import type` is erased, so this adds no runtime dependency.
    */
   collab?: CollabCreds
+  /**
+   * IN-FILE VERSION HISTORY — the space's own past, travelling with the file.
+   *
+   * Oldest first, each entry the CHANGE from the one before it. The engine,
+   * the budget that bounds this array and the reasoning for all of it live in
+   * history.ts; the field is declared here because the field is the FORMAT.
+   *
+   * `import type` only, so there is no runtime cycle between the two modules —
+   * history.ts imports this file's values, and this one imports nothing back.
+   *
+   * Absent on every space written before this, and absent again the moment
+   * history is cleared: no revisions means no key, never `revisions: []`.
+   */
+  revisions?: Revision[]
   [extra: string]: unknown
 }
 

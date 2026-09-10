@@ -592,6 +592,13 @@ rather than vanishing quietly at save time.
 - **Never write a page with an empty `blocks` array.** Nothing in it can take a
   caret, so it is a page nobody can type in. Give it `[{ "type": "p", "html":
   "" }]` — `bento.newPage()` does exactly that.
+- `doc.revisions` is the space's **version history, kept inside the file** —
+  each entry the change from the one before it, oldest first, bounded to 128 KB.
+  Treat it exactly as you treat `docId` and `assets`: carry it through
+  untouched. If you rewrite a whole document rather than patching it, copy the
+  field across or you delete the author's history without saying so. The patch
+  verbs (`updateBlock`, `insertBlocks`, …) never touch it; only saving appends
+  to it, and only the About dialog's **Clear history** removes it.
 - `readonly: true` and a `policy` this build does not know both open **frozen**
   — the file round-trips byte-exact and edits are refused.
 - A remote image `src` shows a placeholder until the reader asks for it. Embed
