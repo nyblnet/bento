@@ -756,6 +756,33 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-pagecard:hover { background: var(--chrome); }
 .sp-pagecard.sp-dead { color: var(--muted); font-style: italic; font-weight: 400; }
 
+/* ————— embeds (transclusion) —————
+   A QUOTATION, DRAWN AS ONE. The rule down the left edge and the inset are the
+   blockquote's, not the page card's: what is inside came from somewhere else
+   and is being shown here, which is exactly what a quote mark has always meant.
+   The card border was tried and read as a widget — a thing to press rather than
+   a passage to read.
+
+   The source line is the ATTRIBUTION and sits above the content, small and
+   quiet, because it is a citation and not a heading. It is also the way back to
+   the page, so it keeps a hover state; a citation nobody can click is how a
+   reader ends up searching the sidebar for the page they are already looking at. */
+.sp-b-embed { margin: 10px 0; }
+.sp-embed { border-inline-start: 3px solid var(--line); padding-inline-start: 14px; }
+.sp-embed-src {
+  display: block; font-size: 12px; color: var(--muted);
+  text-decoration: none; margin-bottom: 4px;
+}
+a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
+.sp-embed-src.sp-dead { font-style: italic; }
+/* The nested page's own blocks keep their spacing, minus the first and last
+   margins — an embed that opens with a blank line looks like a rendering bug. */
+.sp-embed-body > :first-child { margin-block-start: 0; }
+.sp-embed-body > :last-child { margin-block-end: 0; }
+/* A NAMED PLACEHOLDER, never a blank: a cycle, a depth stop and a missing page
+   each say which one they are, in the reader's language. */
+.sp-embed-note { color: var(--muted); font-style: italic; font-size: 13px; margin: 0; }
+
 /* ————— link cards (outward) —————
    Deliberately the page card's sibling: same border, radius and hover, so the
    two read as one family and the difference a reader sees is the one that

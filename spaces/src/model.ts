@@ -17,6 +17,9 @@ import type { CollabCreds } from './sync/crdt.ts'
 // Type-only, and therefore erased: no runtime dependency, no import cycle.
 import type { PageTemplate } from './templates.ts'
 import { esc, externalHref } from './sanitize.ts'
+// A VALUE import, and the cycle it looks like is not one: embed.ts imports
+// only TYPES from here, and a type import is erased before anything runs.
+import { isPageRef } from './embed.ts'
 
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
@@ -107,8 +110,26 @@ export interface Block {
   /** intrinsic px at insert: holds the aspect box while the image decodes */
   w?: number
   h?: number
-  /** pagelink: the target page id */
+  /**
+   * pagelink, embed: the target page id.
+   *
+   * ONE FIELD FOR BOTH, because both mean the identical thing — "this block
+   * refers to that page" — and every sweep in the app that follows a page
+   * reference (backlinks, extract, graft, validate, the graph) then extends by
+   * a name in one condition instead of growing a second concept it could
+   * forget. embed.ts `isPageRef` is that condition.
+   */
   page?: string
+  /**
+   * embed: the heading inside the target page to show, instead of all of it.
+   *
+   * Absent = the whole page, which is the common case and therefore the case
+   * that stores no bytes. Matched by NAME, case- and whitespace-insensitively,
+   * never by position: a section moved up the page is still that section, and
+   * an index would silently show the wrong one. A name that matches nothing is
+   * reported, never quietly widened back to the whole page.
+   */
+  anchor?: string
 
   /**
    * table: the cells, row-major, each one INLINE HTML.
@@ -719,8 +740,14 @@ export function buildIndex(doc: SpacesDoc): SpaceIndex {
           pushInto(backlinks, linkTarget(m[1], page), { pageId: p.id, blockId: b.id })
         }
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string') {
-        pushInto(backlinks, b.page, { pageId: p.id, blockId: b.id })
+      // AN EMBED IS A REFERENCE, so it backlinks exactly as a pagelink does.
+      // "Linked from" is how an author finds out who depends on a page before
+      // rewriting it, and an embed is the strongest dependency in the model —
+      // the page it names is not merely mentioned, it is being SHOWN
+      // somewhere else. Leaving embeds out would make the one reference you
+      // most need to be warned about the one the panel does not list.
+      if (isPageRef(b)) {
+        pushInto(backlinks, String(b.page), { pageId: p.id, blockId: b.id })
       }
     }
   }

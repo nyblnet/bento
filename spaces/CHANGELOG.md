@@ -552,6 +552,30 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   written before this has no templates key and opens unchanged, and turning the
   daily-note setting off deletes the key rather than storing a default. Saving
   or deleting a template is one ⌘Z.
+- **A page can show another page: transclusion.** The new `embed` block draws a
+  live view of another page — or of one heading's section of it, chosen by name
+  — attributed to its source and clickable through to it. It stores a
+  REFERENCE and never a copy, so the source page stays the single copy of the
+  words and every embed of it changes when it does.
+
+  This closes a hole in the Obsidian import that nothing reported. `markdown.ts`
+  had parsed `![[Page]]` since the importer was written and carried a comment
+  saying "an embed of a note is just a link to it, because there is no
+  transclusion in the model" — so a vault arrived with every embed silently
+  demoted to a plain link. A whole line of `![[Page]]` or `![[Page#Section]]`
+  is now an embed, and exports back as itself; an `![[…]]` inside a sentence is
+  still a link, because a block cannot live in the middle of one.
+
+  What the reader is never shown is a blank box. A loop (A embeds B embeds A)
+  renders as a named placeholder that says which page repeats, an embed chain
+  is followed at most three pages deep, a target that has been deleted says so,
+  and an `anchor` that matches no heading says THAT rather than quietly falling
+  back to the whole page. `validate()` names all four (`broken-embed`,
+  `embed-cycle`, `no-section`). An embed also appears in "Linked from" like a
+  page link does — it is the strongest reference in the model, and the one you
+  most want to be warned about before rewriting a page — and it survives being
+  extracted or grafted into another space, where a target that did not travel
+  becomes the same honest `[[Name]]` text a page link becomes.
 
 ## [0.1.0] — 2026-08-03
 

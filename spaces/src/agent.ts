@@ -34,6 +34,7 @@ import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, 
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
+import { isPageRef, anchorOf, sectionOf, embedReaches } from './embed.ts'
 import {
   type FieldSpec, ISSUE_FIELDS, fieldsOf, fieldByKey, optionOf, propBlock, propHtml, valuesOf, isIssue, headerLength,
 } from './fields.ts'
@@ -305,7 +306,7 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
       add({ page: p.id, code: 'no-blocks', severity: 'error', path: 'blocks',
         message: `Page "${p.title}" has no blocks, so there is nothing in it to put a caret in — it cannot be typed into.`,
         fix: 'Give it at least one block, e.g. { "type": "p", "html": "" }.' })
-    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'link' || b.type === 'divider')) {
+    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'embed' || b.type === 'link' || b.type === 'divider')) {
       add({ page: p.id, code: 'empty-page', severity: 'info',
         message: `Page "${p.title}" has blocks but no content.`,
         fix: 'Write something, or remove the page. A deliberately blank page (an inbox, a stub) is fine — this is only a note.' })
@@ -390,6 +391,31 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
           add({ ...at, code: 'broken-link', severity: 'error', path: 'page',
             message: `A pagelink card points at "${target || '(nothing)'}", which is not a page — it renders as "(missing page)".`,
             fix: 'Set page to a real page id, or remove the block.' })
+        }
+      }
+
+      // AN EMBED IS A PAGELINK THAT SHOWS ITS TARGET, so it can go wrong in
+      // three ways instead of one — and every one of them is silent to a
+      // reader who never saw the page it was supposed to be showing.
+      if (b.type === 'embed') {
+        const target = typeof b.page === 'string' ? b.page : ''
+        const anchor = anchorOf(b)
+        if (!target || !pageIx.has(target)) {
+          add({ ...at, code: 'broken-embed', severity: 'error', path: 'page',
+            message: `An embed points at "${target || '(nothing)'}", which is not a page — it renders as a note saying so instead of the content.`,
+            fix: 'Set page to a real page id, or remove the block.' })
+        } else if (embedReaches(doc, p.id, target)) {
+          // NAMED, not merely counted: the renderer stops the loop safely (a
+          // placeholder where the repeat would be), so this is not a crash
+          // waiting to happen — it is content the author believes is on the
+          // page and that nobody will ever see.
+          add({ ...at, code: 'embed-cycle', severity: 'error', path: 'page',
+            message: `This embed of "${pageIx.get(target)?.title ?? target}" leads back to this page, so the loop is cut short and the rest of the embed is not shown.`,
+            fix: 'Point the embed at a page that does not embed this one, or narrow it to a section with anchor.' })
+        } else if (anchor && !sectionOf(pageIx.get(target)!, anchor)) {
+          add({ ...at, code: 'no-section', severity: 'warning', path: 'anchor',
+            message: `No heading named "${anchor}" on "${pageIx.get(target)?.title ?? target}" — the embed shows a note instead of that section.`,
+            fix: 'Match anchor to a heading on that page, or remove anchor to embed the whole page.' })
         }
       }
 
@@ -600,7 +626,9 @@ export function outlineDoc(doc: SpacesDoc): OutlineResult {
       if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') {
         headings.push({ id: b.id, level: Number(b.type.slice(1)) as 1 | 2 | 3, text })
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string' && !links.includes(b.page)) links.push(b.page)
+      // pagelink AND embed: both name a page, and an outline that listed only
+      // the first would under-report exactly the dependency that hurts most.
+      if (isPageRef(b) && !links.includes(String(b.page))) links.push(String(b.page))
       for (const m of (b.html ?? '').matchAll(/href\s*=\s*["']#p\/([^"']+)["']/g)) {
         if (!links.includes(m[1])) links.push(m[1])
       }
