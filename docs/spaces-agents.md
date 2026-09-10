@@ -237,6 +237,42 @@ Links are same-document fragments:
 
 `href` must match `^(https?:|mailto:|#p/)`. Anything else is stripped.
 
+## Footnotes
+
+A footnote reference is the literal text `[^label]` inside a block's `html`,
+and the notes live in one document-level table:
+
+```json
+{
+  "pages": [{ "id": "p1", "title": "Coffee", "blocks": [
+    { "id": "b8", "type": "p", "html": "Coffee grows in the tropics.[^1]" }
+  ] }],
+  "footnotes": { "1": "Between Cancer and Capricorn." }
+}
+```
+
+The reference is **text, not markup** — no tag, no attribute, nothing for the
+sanitizer to allow — so it survives every edit and every sanitize pass exactly
+the way the word beside it does, and a build that predates footnotes shows the
+sentence with `[^1]` in it and round-trips the `footnotes` key untouched.
+
+A label is `[A-Za-z0-9_-]{1,32}`. It is an **identifier, not a number**: notes
+are numbered by order of appearance and the number is derived when the page is
+drawn, so inserting a reference earlier on the page renumbers everything after
+it and nothing in the file changes. Never write a number into the model and
+never expect `[^1]` to render as 1.
+
+Numbering is **per page** — the page is what prints and what a reader reads.
+The section at the foot of a page is derived too: it is that page's references,
+in order, so there is no block to add and nothing to keep in step. A note's
+value is inline `html`, under the same allowlist as a block's.
+
+`[^label]` inside a `code` block is left alone. It is not scanned in one and
+never becomes a reference.
+
+Markdown import and export both speak `[^1]` and `[^1]: the note.`, so an
+Obsidian or Pandoc vault keeps its footnotes in both directions.
+
 ## The issue tracker
 
 **An issue is a page.** There is no issue type and no flag: a page carrying a
@@ -489,6 +525,13 @@ embed anchors that name no heading (`no-section`), unknown block types, block
 markup inside inline `html` (and markup that is dropped whole), hrefs outside the
 allowlist, images with no `alt`, no size, a missing `asset:` or a remote `src`,
 a `home` naming nothing, pages with no blocks, and assets nothing references.
+
+On footnotes it adds `dangling-footnote` (**warning**: a `[^label]` with no
+note behind it — the reference still renders, numbered, into an empty note),
+`orphan-footnote` (**info**: a note in `doc.footnotes` that nothing references,
+so it is never numbered and never printed — it is kept, never deleted) and
+`unreachable-footnote` (**warning**: a label outside the grammar above, which
+no `[^label]` can ever match).
 
 On the tracker it adds: `prop-html-stale` (a value whose readable `html` says
 something else — the check worth running after any hand edit),

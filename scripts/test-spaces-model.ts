@@ -53,6 +53,9 @@ import {
 } from '../spaces/src/query.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
+  notesOnPage, markRefs, noteOf, orphanNotes, danglingRefs, refsIn, definitionLines,
+} from '../spaces/src/footnotes.ts'
+import {
   canonicalMarks, applyMark, clearMarks, markActive, linkAt, linkAttrs, htmlToMd,
   CLASS_OK, keepClasses,
 } from '../spaces/src/marks.ts'
@@ -5269,6 +5272,219 @@ function fsTable(f: string): string {
     ok(evil.tags.get('__proto__')?.pages.join() === 'p1',
       '#__proto__ is an ordinary tag in a Map, not a way to reach Object.prototype')
     ok(({} as Record<string, unknown>).polluted === undefined, 'and nothing was polluted')
+// ---- 9. FOOTNOTES ----------------------------------------------------------
+//
+// The anchor is a TEXT TOKEN (`[^1]`) in a block's html and the number is
+// DERIVED at render time from order of appearance — spaces/src/footnotes.ts
+// argues both at length. What follows pins the two properties that make that
+// design worth anything, and they are asserted BEHAVIOURALLY (the functions are
+// imported and run) rather than by grepping the source, because a source grep
+// passes through a live regression: this rig has watched that happen twice.
+{
+  const mkdoc = (pages: SpacesDoc["pages"], footnotes?: Record<string, string>): SpacesDoc =>
+    ({
+      format: FORMAT, version: 1, docId: 'd1', title: 'T',
+      pages, theme: {} as never, ...(footnotes ? { footnotes } : {}),
+    }) as unknown as SpacesDoc
+
+  // ---- numbering is derived, so an INSERT renumbers what follows -----------
+  //
+  // THE LOAD-BEARING ONE. If the number were stored, this is the case that
+  // would be wrong and silent: the author inserts a note earlier in the page
+  // and every note after it keeps the number it was born with.
+  {
+    const page = {
+      id: 'p1', title: 'P',
+      blocks: [
+        { id: 'b1', type: 'p', html: 'The first claim.[^a]' },
+        { id: 'b2', type: 'p', html: 'The second claim.[^b]' },
+      ],
+    }
+    const doc = mkdoc([page], { a: 'note A', b: 'note B' })
+
+    const before = notesOnPage(doc, page as never)
+    ok(before.num.get('a') === 1 && before.num.get('b') === 2,
+      'footnotes number 1,2 in order of appearance')
+    // RENDERED, not just the map: markRefs is what the reader actually sees.
+    ok(markRefs('The second claim.[^b]', before, 'p1').includes('>2</a>'),
+      'the second reference RENDERS as 2')
+
+    // now insert a THIRD note ahead of both of them
+    page.blocks.unshift({ id: 'b0', type: 'p', html: 'An earlier aside.[^c]' })
+    ;(doc as { footnotes: Record<string, string> }).footnotes.c = 'note C'
+
+    const after = notesOnPage(doc, page as never)
+    ok(after.num.get('c') === 1 && after.num.get('a') === 2 && after.num.get('b') === 3,
+      'inserting a footnote BEFORE the others renumbers them: c=1, a=2, b=3')
+    ok(markRefs('The first claim.[^a]', after, 'p1').includes('>2</a>'),
+      'the first claim RENDERS as 2 now — the number moved with the page, not with the note')
+    ok(markRefs('The second claim.[^b]', after, 'p1').includes('>3</a>'),
+      'the second claim RENDERS as 3')
+    // and the DOCUMENT still says what the author wrote
+    ok(page.blocks[1].html === 'The first claim.[^a]',
+      'the model still holds the label, never the number — nothing was rewritten')
+
+    // a repeat of the same label reuses its number, as every footnote system does
+    const rep = notesOnPage(mkdoc([{ id: 'p9', title: 'P', blocks: [
+      { id: 'x', type: 'p', html: 'one[^a] two[^b] again[^a]' },
+    ] }], { a: 'A', b: 'B' }), { id: 'p9', title: 'P', blocks: [
+      { id: 'x', type: 'p', html: 'one[^a] two[^b] again[^a]' },
+    ] } as never)
+    ok(rep.order.length === 2 && rep.num.get('a') === 1 && rep.num.get('b') === 2,
+      'the same label twice on a page is one note, numbered once')
+  }
+
+  // ---- markdown round trip: [^1] in and [^1] out ---------------------------
+  {
+    const src = [
+      '# Imported',
+      '',
+      'Coffee is grown in the tropics.[^1] Tea is not.[^tea]',
+      '',
+      '[^1]: Between the Tropics of Cancer and Capricorn.',
+      '[^tea]: Mostly, anyway.',
+      '',
+    ].join('\n')
+    const note = parseNote(src, 'file')
+    ok(note.footnotes?.['1'] === 'Between the Tropics of Cancer and Capricorn.',
+      'a [^1]: definition line is taken out of the file and becomes a note')
+    ok(note.footnotes?.tea === 'Mostly, anyway.', 'a named label survives too')
+    const prose = note.blocks.map((b) => b.html ?? '').join(' ')
+    ok(prose.includes('[^1]') && prose.includes('[^tea]'),
+      'the REFERENCES pass through untouched — markdown and this model spell them the same')
+    ok(!prose.includes('Tropics of Cancer'),
+      'the definition line did NOT arrive as a paragraph (the silent-downgrade failure)')
+
+    // ...and back out again
+    const doc = mkdoc([{ id: 'p1', title: 'Imported', blocks: note.blocks }], note.footnotes)
+    const lines = definitionLines(doc, doc.pages[0], (h) => h)
+    ok(lines[0] === '[^1]: Between the Tropics of Cancer and Capricorn.',
+      'exporting writes the definition back in the same syntax')
+    ok(lines.length === 2 && lines[1] === '[^tea]: Mostly, anyway.',
+      '…for every note the page references, in rendered order')
+
+    // the whole loop, twice: parse → export → parse must be a fixed point
+    const again = parseNote(['# Imported', '', prose, '', ...lines, ''].join('\n'), 'file')
+    ok(JSON.stringify(again.footnotes) === JSON.stringify(note.footnotes),
+      'markdown round trip is lossless: the same notes come back under the same labels')
+  }
+
+  // ---- a note is not read through the prototype chain ----------------------
+  //
+  // `doc.footnotes` is DATA OUT OF A FILE. A bare lookup hands back
+  // Object.prototype.toString for the label `toString` — a FUNCTION, which is
+  // truthy, so a `?? ''` never fires and its source gets stringified into the
+  // page. That exact bug has shipped twice in this app.
+  {
+    const doc = mkdoc([{ id: 'p1', title: 'P', blocks: [
+      { id: 'b1', type: 'p', html: 'trap[^toString] and[^constructor]' },
+    ] }])
+    ok(noteOf(doc, 'toString') === undefined, 'noteOf("toString") is undefined, not a function')
+    const notes = notesOnPage(doc, doc.pages[0])
+    ok(notes.dangling.length === 2, 'both prototype labels are DANGLING, not satisfied')
+    const out = markRefs('trap[^toString] and[^constructor]', notes, 'p1')
+    ok(!out.includes('function') && !out.includes('native code'),
+      'and nothing from Object.prototype reaches the rendered html')
+  }
+
+  // ---- hostile / hand-edited shapes never throw ----------------------------
+  {
+    for (const bad of ['yes', 42, null, [], { a: 5 }, { 'a b': 'x' }]) {
+      const doc = mkdoc([{ id: 'p1', title: 'P', blocks: [{ id: 'b', type: 'p', html: 'x[^a]' }] }])
+      ;(doc as Record<string, unknown>).footnotes = bad
+      let threw = false
+      try {
+        const n = notesOnPage(doc, doc.pages[0])
+        markRefs('x[^a]', n, 'p1')
+        orphanNotes(doc)
+        danglingRefs(doc)
+      } catch { threw = true }
+      ok(!threw, `a footnotes field of ${JSON.stringify(bad)} is ignored, never iterated into a throw`)
+    }
+  }
+
+  // ---- an unknown reference stays the author's own text --------------------
+  {
+    const doc = mkdoc([{ id: 'p1', title: 'P', blocks: [
+      { id: 'b', type: 'p', html: 'see [^nope] and [^yes]' },
+    ] }], { yes: 'here' })
+    const n = notesOnPage(doc, doc.pages[0])
+    const out = markRefs('see [^nope] and [^yes]', n, 'p1')
+    // A DANGLING REFERENCE IS STILL NUMBERED, deliberately: it gets a marker
+    // and an EMPTY row in the section, which is both the authoring gesture
+    // (type [^1], get a slot to write into) and the honest reading — the note
+    // is missing, not the reference. Leaving it as raw `[^nope]` in the reading
+    // view was the other candidate and shows the reader syntax they never typed.
+    ok((out.match(/sp-fnref/g) ?? []).length === 2,
+      'a reference with no note is still numbered — the note is what is missing, not the reference')
+    ok(!out.includes('[^nope]'), '…so no raw token is left in the reading view')
+    ok(danglingRefs(doc).length === 1 && danglingRefs(doc)[0].label === 'nope',
+      'and it is reported as dangling, with the block it is in')
+    // a token this page's numbering does not know is untouched — that is the
+    // path a table cell from another page, or a half-typed `[^`, takes
+    ok(markRefs('other [^elsewhere]', n, 'p1') === 'other [^elsewhere]',
+      'a token outside this page’s numbering is left exactly as the author typed it')
+  }
+
+  // ---- an orphaned note is reported and never deleted ----------------------
+  {
+    const doc = mkdoc([{ id: 'p1', title: 'P', blocks: [{ id: 'b', type: 'p', html: 'nothing here' }] }],
+      { a: 'a note nobody points at' })
+    ok(JSON.stringify(orphanNotes(doc)) === '["a"]', 'a note nothing references is reported as an orphan')
+    ok(noteOf(doc, 'a') === 'a note nobody points at', '…and is still in the document, untouched')
+  }
+
+  // ---- a code block is not scanned ----------------------------------------
+  {
+    const doc = mkdoc([{ id: 'p1', title: 'P', blocks: [
+      { id: 'b', type: 'code', html: 'grep &quot;[^a]&quot; file', lang: 'sh' },
+    ] }], { a: 'A' })
+    ok(notesOnPage(doc, doc.pages[0]).order.length === 0,
+      '`[^a]` in a shell snippet is a shell snippet, not a footnote')
+  }
+
+  // ---- format additivity: the key survives a build that ignores it ---------
+  {
+    const json = JSON.stringify({
+      format: FORMAT, version: 1, docId: 'd', title: 'T',
+      pages: [{ id: 'p', title: 'P', blocks: [{ id: 'b', type: 'p', html: 'x[^1]' }] }],
+      theme: {}, footnotes: { '1': 'kept' },
+    })
+    const res = parseDoc(json)
+    ok(res.ok && (res.doc as { footnotes?: Record<string, string> }).footnotes?.['1'] === 'kept',
+      'doc.footnotes round-trips parseDoc untouched')
+    ok(res.ok && JSON.parse(JSON.stringify(res.doc)).footnotes['1'] === 'kept',
+      '…and survives re-serialization, which is what an older build does with it')
+  }
+
+  // ---- importing two files that both number from 1 ------------------------
+  //
+  // Two vaults collide by construction. Without the rename, the second file's
+  // [^1] would be answered by the FIRST file's note: a wrong footnote, which is
+  // worse than a missing one because nothing looks broken.
+  {
+    const plan = planImport([
+      { path: 'a.md', text: '# A\n\nAlpha.[^1]\n\n[^1]: from A\n' },
+      { path: 'b.md', text: '# B\n\nBeta.[^1]\n\n[^1]: from B\n' },
+    ], { rootTitle: 'Imported' })
+    const bodies = Object.values(plan.footnotes).sort()
+    ok(bodies.length === 2 && bodies[0] === 'from A' && bodies[1] === 'from B',
+      'both files’ notes survive the import — neither is swallowed by the other')
+    const pageA = plan.pages.find((p) => p.title === 'A')!
+    const pageB = plan.pages.find((p) => p.title === 'B')!
+    const refA = refsIn(pageA.blocks.map((b) => b.html ?? '').join(' '))[0]
+    const refB = refsIn(pageB.blocks.map((b) => b.html ?? '').join(' '))[0]
+    ok(refA !== refB, 'the colliding label was renamed in exactly one of the two files')
+    ok(plan.footnotes[refA] === 'from A' && plan.footnotes[refB] === 'from B',
+      'and each page’s reference resolves to ITS OWN note')
+
+    // the same file twice is not a collision — re-importing must not fork a note
+    const same = planImport([
+      { path: 'a.md', text: '# A\n\nAlpha.[^1]\n\n[^1]: from A\n' },
+      { path: 'c/a.md', text: '# A2\n\nAlpha.[^1]\n\n[^1]: from A\n' },
+    ], { rootTitle: 'Imported' })
+    ok(Object.keys(same.footnotes).length === 1,
+      'an identical note under the same label is the same note, not a fork')
   }
 }
 

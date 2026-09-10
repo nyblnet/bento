@@ -41,6 +41,7 @@ import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
 import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
+import { definitionLines } from './footnotes.ts'
 import { humanBytes } from './assets'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
 import { parseDoc, uid } from './model'
@@ -893,6 +894,16 @@ export function toMarkdown(store: Store): string {
         out.push(...lines.flatMap((l) => l.split('\n')).map((l) => (l ? quote + l : quote.trimEnd())))
         out.push(sep)
       })
+      // FOOTNOTE DEFINITIONS, AFTER THE PAGE THEY BELONG TO.
+      //
+      // Per page, not once at the end, because markdown scopes a definition to
+      // its file and the export is ONE file: a `[^1]` on page nine answered by
+      // page one's note would be a wrong footnote rather than a missing one.
+      // The references themselves need nothing here — `[^1]` is already the
+      // text in `html`, so htmlToMd carries it out unchanged, which is the
+      // whole point of the anchor being a text token (src/footnotes.ts).
+      const defs = definitionLines(store.doc, page, htmlToMd)
+      if (defs.length) { out.push(...defs, '') }
     }
   }
   walk()

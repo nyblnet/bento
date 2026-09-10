@@ -799,4 +799,7 @@ export const ja: Catalog = {
   "Match any condition": "いずれかの条件に一致",
   "Match all conditions": "すべての条件に一致",
   "Switch between all and any": "「すべて」と「いずれか」を切り替える",
+  "Footnotes": "脚注",
+  "Back to the text": "本文に戻る",
+  "Write the note": "脚注を入力",
 }

@@ -36,6 +36,7 @@ import { aliasesOf, nameKey } from './mentions.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
 import { isPageRef, anchorOf, sectionOf, embedReaches } from './embed.ts'
+import { danglingRefs, orphanNotes, LABEL_OK } from './footnotes.ts'
 import {
   type FieldSpec, ISSUE_FIELDS, fieldsOf, fieldByKey, optionOf, propBlock, propHtml, valuesOf, isIssue, headerLength,
 } from './fields.ts'
@@ -605,6 +606,40 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
     add({ code: 'orphan-asset', severity: 'info', path: 'assets',
       message: `${orphans.length} asset(s) (${humanBytes(bytes)}) are in doc.assets but referenced by nothing.`,
       fix: `Delete these keys to shrink the file: ${orphans.slice(0, 8).join(', ')}${orphans.length > 8 ? ', …' : ''}` })
+  }
+
+  // ---- footnotes -----------------------------------------------------------
+  // BOTH HALVES ARE REPORTED AND NEITHER IS AN ERROR, because neither loses a
+  // word: a dangling reference still shows the `[^1]` the author typed and a
+  // note nothing points at is still the note they wrote. What they lose is the
+  // CONNECTION, and a connection is exactly the thing an author cannot see is
+  // missing by reading the page. Neither can throw — every lookup here goes
+  // through footnotes.ts, which uses Object.hasOwn and tolerates a
+  // `"footnotes": "yes"` out of a hand-edited file.
+  for (const d of danglingRefs(doc)) {
+    add({ page: d.pageId, block: d.blockId, code: 'dangling-footnote', severity: 'warning', path: 'footnotes',
+      message: `A footnote reference [^${d.label}] has no note behind it, so it renders as the literal text "[^${d.label}]" instead of a number.`,
+      fix: `Add "${d.label}" to doc.footnotes, or delete the [^${d.label}] from the text.` })
+  }
+  const loose = orphanNotes(doc)
+  if (loose.length) {
+    // ONE finding, like the orphan assets above and for the same reason: the
+    // actionable fact is the total plus the labels, not a row each.
+    add({ code: 'orphan-footnote', severity: 'info', path: 'footnotes',
+      message: `${loose.length} footnote(s) in doc.footnotes are referenced by nothing, so they are never numbered and never printed: ${loose.slice(0, 8).join(', ')}${loose.length > 8 ? ', …' : ''}`,
+      fix: 'Put a [^label] back in the text, or delete the key from doc.footnotes.' })
+  }
+  const rawNotes = (doc as { footnotes?: unknown }).footnotes
+  if (rawNotes && typeof rawNotes === 'object' && !Array.isArray(rawNotes)) {
+    // A label outside the token grammar can never be REFERENCED — `[^a b]`
+    // does not match — so the note is unreachable however many times it is
+    // written into the prose. Silent, and only findable from here.
+    const bad = Object.keys(rawNotes as object).filter((k) => !LABEL_OK.test(k))
+    if (bad.length) {
+      add({ code: 'unreachable-footnote', severity: 'warning', path: 'footnotes',
+        message: `${bad.length} footnote label(s) are outside the reference grammar (letters, digits, "_" and "-", up to 32), so no [^label] can ever point at them: ${bad.slice(0, 5).map((b) => JSON.stringify(b)).join(', ')}`,
+        fix: 'Rename the key to a plain label and update the [^label] in the text.' })
+    }
   }
 
   const counts: Record<Severity, number> = { error: 0, warning: 0, info: 0 }

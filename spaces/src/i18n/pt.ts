@@ -799,4 +799,7 @@ export const pt: Catalog = {
   "Match any condition": "Corresponde a qualquer condição",
   "Match all conditions": "Corresponde a todas as condições",
   "Switch between all and any": "Alternar entre todas e qualquer",
+  "Footnotes": "Notas de rodapé",
+  "Back to the text": "Voltar ao texto",
+  "Write the note": "Escreva a nota",
 }

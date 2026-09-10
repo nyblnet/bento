@@ -924,5 +924,56 @@ const issue = (id: string, values: Record<string, unknown>, extra: Record<string
     'every field is coerced to the type the report promises')
 }
 
+// ---- footnotes: both broken shapes are REPORTED and neither throws ---------
+//
+// An orphaned note (the sentence went, the note stayed) and a dangling
+// reference (the note went, the marker stayed) are the two ways a footnote can
+// come apart, and BOTH are invisible from the page: the prose still reads, the
+// file still parses, and nothing is missing that an author would notice. That
+// is precisely the shape of thing a validator exists for.
+{
+  const doc = load([
+    p('p1', [
+      { id: 'b1', type: 'p', html: 'A claim.[^1] Another.[^gone]' },
+    ]),
+  ], { footnotes: { '1': 'the note', spare: 'nobody points at me', 'a b': 'unreachable' } })
+
+  const v = validateDoc(doc)
+  const codes = new Set(v.findings.map((f) => f.code))
+  ok(codes.has('dangling-footnote'), 'a reference with no note behind it is reported')
+  ok(codes.has('orphan-footnote'), 'a note nothing references is reported')
+  ok(codes.has('unreachable-footnote'),
+    'a label no [^token] could ever match is reported — the note is stranded, silently')
+
+  const dang = v.findings.filter((f) => f.code === 'dangling-footnote')
+  ok(dang.length === 1 && dang[0].block === 'b1' && dang[0].page === 'p1',
+    'the dangling one names the page and block it is in, so it can be found')
+  ok(dang.every((f) => f.severity === 'warning'),
+    'and it is a WARNING, not an error — no word was lost, only the connection')
+  ok(v.findings.filter((f) => f.code === 'orphan-footnote').every((f) => f.severity === 'info'),
+    'an orphaned note is INFO: it is still somebody’s writing, sitting in the file')
+  ok(v.findings.filter((f) => f.code.endsWith('footnote')).every((f) => !!f.fix && !!f.message),
+    'every footnote finding says what is wrong AND how to fix it')
+
+  // NEITHER MAY EVER THROW. `doc.footnotes` arrives in a file somebody mailed
+  // you, so every shape a hand edit or a generator can produce has to be inert.
+  for (const bad of ['yes', 7, null, [], { a: 5 }, { a: null }]) {
+    let threw = false
+    try {
+      validateDoc(load([p('p1', [{ id: 'b1', type: 'p', html: 'x[^a]' }])], { footnotes: bad }))
+    } catch { threw = true }
+    ok(!threw, `validate() survives footnotes: ${JSON.stringify(bad)}`)
+  }
+
+  // a document with matched references and notes reports NEITHER — a validator
+  // that cries wolf on good documents is one an agent learns to skip
+  const clean = validateDoc(load([
+    p('p1', [{ id: 'b1', type: 'p', html: 'A claim.[^1]' }]),
+  ], { footnotes: { '1': 'the note' } }))
+  const cleanCodes = new Set(clean.findings.map((f) => f.code))
+  ok(!cleanCodes.has('dangling-footnote') && !cleanCodes.has('orphan-footnote'),
+    'a document whose footnotes all match reports nothing about them')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

@@ -799,4 +799,7 @@ export const de: Catalog = {
   "Match any condition": "Beliebige Bedingung erfüllen",
   "Match all conditions": "Alle Bedingungen erfüllen",
   "Switch between all and any": "Zwischen alle und beliebig wechseln",
+  "Footnotes": "Fußnoten",
+  "Back to the text": "Zurück zum Text",
+  "Write the note": "Notiz schreiben",
 }

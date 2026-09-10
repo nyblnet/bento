@@ -799,4 +799,7 @@ export const zh_Hans: Catalog = {
   "Match any condition": "满足任一条件",
   "Match all conditions": "满足全部条件",
   "Switch between all and any": "在“全部”和“任一”之间切换",
+  "Footnotes": "脚注",
+  "Back to the text": "返回正文",
+  "Write the note": "撰写脚注",
 }

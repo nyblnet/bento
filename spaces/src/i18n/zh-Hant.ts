@@ -799,4 +799,7 @@ export const zh_Hant: Catalog = {
   "Match any condition": "符合任一條件",
   "Match all conditions": "符合所有條件",
   "Switch between all and any": "在「全部」與「任一」之間切換",
+  "Footnotes": "註腳",
+  "Back to the text": "回到內文",
+  "Write the note": "撰寫註腳",
 }
