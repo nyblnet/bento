@@ -577,8 +577,21 @@ export type InkTool = 'pen' | 'eraser' | null
 const PREF_COLOR = 'bento-sp-ink-color'
 const PREF_WIDTH = 'bento-sp-ink-width'
 
-export const pen: { tool: InkTool; color: string | null; width: number } = {
+export const pen: { tool: InkTool; on: string | null; color: string | null; width: number } = {
   tool: null,
+  /**
+   * WHICH ink block the tool is armed on.
+   *
+   * This exists because every finished stroke COMMITS and repaints, which
+   * rebuilds the page's DOM and re-runs `wireInk` — so the armed state cannot
+   * live on the element. Measured in a real browser: without this, the first
+   * stroke landed and the pen then silently put itself down, so the second
+   * stroke scrolled the page instead of drawing.
+   *
+   * A block ID rather than a bare boolean, so a page with two drawings on it
+   * arms the one you picked up the pen on and not both.
+   */
+  on: null,
   color: null,
   width: INK_WIDTH,
 }
@@ -662,8 +675,18 @@ function wireOne(host: HTMLElement, id: string, hooks: InkHooks): void {
    * it is put down, and in the READING VIEW (no toolbar, nothing to arm) it is
    * never set at all.
    */
-  const arm = (tool: InkTool): void => {
-    pen.tool = tool
+  /**
+   * PAINT ONLY — this block's look, with no opinion about the global pen.
+   *
+   * The split from `arm` below is not tidiness. `wireInk` runs over EVERY ink
+   * block on the page after every repaint, so a page with two drawings on it
+   * re-applies this twice; when the two were one function, wiring the drawing
+   * you were NOT holding the pen on called `arm(null)` and cleared
+   * `pen.tool` — so the tool silently put itself down and the very next stroke
+   * did nothing at all. Measured in a real browser, where it showed up as
+   * "every second stroke is lost".
+   */
+  const paintArmed = (tool: InkTool): void => {
     svg.style.touchAction = tool ? 'none' : ''
     svg.style.cursor = tool ? 'crosshair' : ''
     host.classList.toggle('sp-ink-armed', tool !== null)
@@ -671,7 +694,16 @@ function wireOne(host: HTMLElement, id: string, hooks: InkHooks): void {
       el.setAttribute('aria-pressed', String(el.dataset.inkTool === tool))
     }
   }
-  arm(null)
+  /** Pick a tool up or put it down. The only writer of the global pen state. */
+  const arm = (tool: InkTool): void => {
+    pen.tool = tool
+    pen.on = tool ? id : null
+    paintArmed(tool)
+  }
+  // RE-ARM ACROSS THE REPAINT, rather than starting disarmed. `wireInk` runs
+  // again after every committed stroke, and a pen that puts itself down after
+  // one line is a pen nobody can draw with.
+  paintArmed(pen.on === id ? pen.tool : null)
 
   if (bar) {
     for (const el of bar.querySelectorAll<HTMLElement>('[data-ink-tool]')) {
@@ -812,13 +844,19 @@ function wireOne(host: HTMLElement, id: string, hooks: InkHooks): void {
       hooks.repaint()
       return
     }
+    // BOTH buffers are taken BEFORE either is cleared. An earlier draft reset
+    // `press` on the line above the `pressureWidth(…, press)` call and passed
+    // the empty array, so every stylus stroke came out at the nominal width and
+    // pressure looked implemented while doing nothing. Found by measuring a
+    // stored stroke's `w` in a real browser, which is the only place it shows.
     const drawn = pts
+    const pressed = press
     pts = []
     press = []
     live?.remove()
     live = null
     if (drawn.length < 2) return
-    const rec = strokeRecord(drawn, pen.color, pressureWidth(pen.width, ptype, press))
+    const rec = strokeRecord(drawn, pen.color, pressureWidth(pen.width, ptype, pressed))
     if (!rec) return
     const b = hooks.block(id)
     if (!b) return
