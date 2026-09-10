@@ -42,6 +42,7 @@ import {
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
   sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
   VIEW_LAYOUTS, layoutOf, nextLayout,
+  viewRows, unknownSourceKeys,
 } from '../spaces/src/fields.ts'
 import { inlineHtml, parseNote, planImport } from '../spaces/src/markdown.ts'
 import {
@@ -61,8 +62,12 @@ import {
 } from '../spaces/src/canvas.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
 import {
-  buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
+  buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds, TAG_EDGE_MAX,
 } from '../spaces/src/graph.ts'
+import {
+  parseTags, ancestorsOf, buildTagIndex, keysUnder, pagesWithTag, pageHasTag,
+  tagList, matchTags,
+} from '../spaces/src/tags.ts'
 
 let failures = 0
 let checks = 0
@@ -558,8 +563,25 @@ for (const [label, input, err] of [
   const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
 
   ok(/export function viewRows\(/.test(fields), 'a view selects its rows through one function')
-  ok(/if \(!has && !under\) return issuesOf\(doc\)/.test(fields),
-    '…and with no source it is still the backlog, so old view blocks are unchanged')
+  // BEHAVIOURAL, not a source grep. This assertion used to read
+  // /if \(!has && !under\) return issuesOf\(doc\)/ against fields.ts, which is
+  // a test of how the line is SPELLED: adding a third selector (`tag`) kept
+  // every behaviour it was defending and turned it red anyway. Ask viewRows.
+  {
+    const sdoc = JSON.parse(doc({
+      pages: [
+        { id: 'v', title: 'Board', blocks: [{ id: 'vb', type: 'view' }] },
+        { id: 'i1', title: 'One', blocks: [{ id: 's1', type: 'prop', key: 'status', value: 'todo' }] },
+        { id: 'i2', title: 'Two', blocks: [{ id: 's2', type: 'prop', key: 'status', value: 'done' }] },
+        { id: 'n1', title: 'Prose', blocks: [{ id: 'x1', type: 'p', html: 'no fields' }] },
+      ],
+    }))
+    const back = JSON.stringify(issuesOf(sdoc).map((r) => r.page.id))
+    ok(back === '["i1","i2"]', 'the fixture has a backlog to compare against')
+    ok(JSON.stringify(viewRows(sdoc, undefined).map((r) => r.page.id)) === back
+      && JSON.stringify(viewRows(sdoc, {}).map((r) => r.page.id)) === back,
+      '…and with no source it is still the backlog, so old view blocks are unchanged')
+  }
   ok(/viewRows\(doc, \(b as \{ source\?: unknown \}\)\.source\)/.test(render),
     'the renderer asks for the block\'s own source rather than the issues')
 
@@ -3591,6 +3613,273 @@ function fsTable(f: string): string {
   }
   ok(new Set(VIEW_LAYOUTS.map((l) => nextLayout(l))).size === VIEW_LAYOUTS.length,
     'the cycle reaches every shape — none is stranded off it')
+}
+
+
+// ---- 22. inline #tags ------------------------------------------------------
+// WHAT THIS PROVES, and the order matters: the expensive failure here is not
+// "a tag was missed", it is "a `#` that is NOT a tag became one". A parser
+// that reads every code sample, every URL fragment and every internal page
+// link as a tag turns the index into noise on the first real document, and
+// there is no server to re-run afterwards.
+//
+// Every case below is exercised by CALLING the parser, never by grepping the
+// source for a guard — the layout-cycle bug two sections up is what that costs.
+{
+  // --- the positives: a hash-word is a tag ---
+  const tags = (html: string) => parseTags(html).map((h) => h.key)
+
+  ok(tags('planning a <b>meal</b> #recipe today').join() === 'recipe',
+    'a tag mid-sentence is found')
+  ok(tags('#recipe at the start').join() === 'recipe', 'a tag at the start of a block is found')
+  ok(tags('two #apples and #pears').join() === 'apples,pears', 'two tags in one line')
+  ok(tags('trailing dot #recipe.').join() === 'recipe', 'the sentence-ending full stop is not part of the tag')
+  ok(tags('(#recipe) and "#soup"').join() === 'recipe,soup', 'brackets and quotes open a tag')
+  ok(tags('#рецепт and #レシピ').join() === 'рецепт,レシピ',
+    'a tag is not ASCII — this app ships eight catalogs')
+  ok(tags('#work-in-progress').join() === 'work-in-progress', 'hyphens are tag characters')
+  ok(tags('#work- done').join() === 'work', 'a TRAILING hyphen belongs to the sentence')
+  ok(tags('#Recipe and #recipe').join() === 'recipe,recipe',
+    'the KEY is case-folded, so one tag written two ways is one tag')
+  ok(parseTags('#Recipe').map((h) => h.label).join() === 'Recipe',
+    '…while the LABEL keeps the casing that was actually typed')
+
+  // --- the negatives: every `#` that means something else ---
+  // Each of these is a real thing that appears in a note, and each one is a
+  // separate rule in TAG_SCAN. They are asserted one at a time so a regression
+  // names the case it broke rather than "tags are wrong".
+  const none = (html: string, why: string) =>
+    ok(parseTags(html).length === 0, `NOT a tag: ${why} — ${JSON.stringify(html)}`)
+
+  // These three would ALL be tags in plain prose — `#include`, `#recipe` and
+  // `#production` are perfectly good hash-words. That is the point: they prove
+  // the `<code>` exclusion, where `#!/bin/sh` and `--grep #42` would have
+  // passed anyway on the punctuation and numeric rules and proved nothing.
+  none('<code>#include &lt;stdio.h&gt;</code>', 'a `#` in inline code')
+  none('<code>#recipe</code> is the literal text', 'a would-be tag inside inline code')
+  none('run <code>gi\u0074 log --grep #production</code> here', 'inline code mid-sentence')
+  none('<a href="#p/abc123">Recipes</a>', 'the app\'s own #p/ page link (href is an attribute, not text)')
+  none('<a href="#p/abc/b7">a block link</a>', 'the two-segment #p/page/block form')
+  none('<a href="https://x.example/#top">a fragment link</a>', 'a URL fragment inside a link')
+  // The three above are carried by tag-STRIPPING (the href never becomes
+  // text). This one is carried by the `<a>` exclusion itself: a link whose own
+  // TEXT is a hash-word — which is what an autolinked url looks like — and the
+  // one case where keeping link text would put a tag in the index that the
+  // renderer refuses to chip.
+  none('<a href="https://x.example/t">#p/abc123</a>', 'a link whose visible TEXT is a hash-word')
+  none('<a href="#p/abc">#recipe</a>', 'a page link labelled with a hash-word')
+  none('see https://x.example/page#section for more', 'a bare URL fragment in prose')
+  none('see https://x.example/#top now', 'a bare URL fragment whose hash follows a slash')
+  none('# Title', 'a Markdown ATX heading — `#` plus a space')
+  none('## Deeper', 'a Markdown h2')
+  none('###### six', 'a Markdown h6')
+  none('the language C# is fine', 'a `#` INSIDE a word')
+  none('a#b', 'a `#` between two word characters')
+  none('closes #42 today', 'an issue number')
+  none('a #404 page', 'another issue number')
+  none('#1', 'a bare digit')
+  none('the accent is #fff', 'a three-digit CSS hex colour')
+  none('the accent is #f7a600', 'a six-digit CSS hex colour')
+  none('the accent is #f7a600cc', 'an eight-digit CSS hex colour with alpha')
+  none('nothing here: # ', 'a lone hash')
+  none('#!', 'a hash before punctuation')
+
+  // MARKDOWN ROUND TRIP. The heading rule here and markdown.ts's own reader
+  // must AGREE about what a heading is, or `#recipe` pasted as Markdown
+  // becomes an h1 while the tag index still counts it as a tag.
+  {
+    const note = parseNote('#recipe stew\n\n# Real heading\n\nsee #project/bento\n', 'n')
+    const kinds = note.blocks.map((b) => b.type).join()
+    ok(kinds.startsWith('p,h1,p') || kinds.startsWith('p,h1'),
+      `a line beginning #tag imports as a PARAGRAPH, and # + space as a heading (${kinds})`)
+    const first = note.blocks[0]
+    ok((first.html ?? '').includes('#recipe'),
+      'and the tag survives the import as the text it was')
+    ok(parseTags(first.html).map((h) => h.key).join() === 'recipe',
+      '…so the imported block indexes the same tag it was written with')
+    // OUT again: html → markdown must give the hash back, unescaped.
+    ok(htmlToMd('a #recipe and #project/bento') === 'a #recipe and #project/bento',
+      'markdown EXPORT emits `#tag` verbatim — in, out, byte for byte')
+  }
+
+  // A tag that LOOKS like a colour but is nested is still a tag: the hex test
+  // is deliberately scoped to flat keys, so `#fff/ideas` is not swallowed.
+  ok(tags('#fff/ideas').join() === 'fff/ideas', 'the hex-colour rule does not eat a NESTED tag')
+
+  // --- nesting ---
+  ok(tags('#project/bento is going well').join() === 'project/bento', 'a nested tag is ONE tag')
+  ok(tags('#a/b/c').join() === 'a/b/c', 'nesting goes as deep as it is written')
+  ok(ancestorsOf('project/bento/ui').join() === 'project,project/bento',
+    'every ancestor of a nested tag, shallowest first')
+  ok(ancestorsOf('recipe').length === 0, 'a flat tag has no ancestors')
+
+  // --- word breaks: the two readers must agree ---
+  // `#re<b>cipe</b>` is TWO text nodes in the DOM, so the string reader has to
+  // break the word in the same place. If it closed the gap instead it would
+  // read `recipe` where the chip renderer draws `re`, and the index would
+  // claim a tag nobody can see.
+  ok(tags('#re<b>cipe</b>').join() === 're',
+    'an inline mark inside a tag BREAKS it, exactly as the DOM walker sees it')
+  ok(tags('<b>#recipe</b>').join() === 'recipe', 'a tag wholly inside a mark is intact')
+
+  // --- entities ---
+  ok(tags('a &amp; #recipe').join() === 'recipe', 'an entity before a tag decodes to a valid opener')
+  ok(tags('&lt;p&gt; #recipe').join() === 'recipe',
+    'entities decode AFTER tags are stripped, so &lt;p&gt; cannot become markup')
+  ok(tags('&nbsp;#recipe').join() === 'recipe', 'a non-breaking space opens a tag')
+
+  // --- the index ---
+  const tdoc = {
+    format: FORMAT, version: 1, docId: 'd1', title: 'T', theme: {},
+    pages: [
+      { id: 'p1', title: 'Stew', blocks: [
+        { id: 'b1', type: 'p', html: 'a #Recipe for winter' },
+        { id: 'b2', type: 'p', html: 'also #recipe and #project/bento' },
+      ] },
+      { id: 'p2', title: 'Soup', blocks: [
+        { id: 'b3', type: 'p', html: 'another #recipe' },
+      ] },
+      { id: 'p3', title: 'Notes', blocks: [
+        { id: 'b4', type: 'p', html: 'no tags here' },
+        // a table that arrived WITHOUT html — the same silent hole buildIndex
+        // documents for backlinks, and it must not reopen for tags
+        { id: 'b5', type: 'table', rows: [['x', 'see #recipe'], ['y', 'z']] },
+      ] },
+      { id: 'p4', title: 'Archived', archived: true, blocks: [
+        { id: 'b6', type: 'p', html: '#recipe in the archive' },
+      ] },
+    ],
+  } as unknown as SpacesDoc
+  // Captured BEFORE anything indexes it. A sabotage that made buildTagIndex
+  // write a `tags` array onto each page went GREEN against a `before` taken
+  // after the first index build — the mutation was already in both sides.
+  const pristine = JSON.stringify(tdoc)
+  const tix = buildTagIndex(tdoc)
+
+  ok(tix.tags.get('recipe')?.label === 'Recipe',
+    'the label is the FIRST occurrence in document order — deterministic across readers')
+  ok(tix.tags.get('recipe')?.refs.length === 5,
+    'every occurrence is a ref, including a repeat in the same page and a table cell')
+  ok(tix.tags.get('recipe')?.pages.join() === 'p1,p2,p3,p4',
+    'pages are deduped and in document order')
+  ok(tix.tags.get('recipe')?.pages.length === 4 && tix.tags.get('project/bento')?.pages.length === 1,
+    'a nested tag is its own entry')
+  ok(!tix.tags.has('project'),
+    'a PARENT nobody wrote has no entry of its own — the index records what is written')
+  ok(keysUnder(tix, 'project').join() === 'project/bento',
+    '…but it is reachable: keysUnder finds what is nested below it')
+  ok(pagesWithTag(tdoc, tix, 'project').map((p) => p.id).join() === 'p1',
+    'a view on #project therefore includes the page that only carries #project/bento')
+  ok(pageHasTag(tix, 'p1', 'project') && !pageHasTag(tix, 'p2', 'project'),
+    'pageHasTag answers the same question per page')
+  ok(pageHasTag(tix, 'p1', 'PROJECT'), 'and it folds case, like every other tag lookup')
+  ok(tix.byPage.get('p1')?.join() === 'recipe,project/bento',
+    'byPage lists a page\'s tags once each, in first-seen order')
+  ok((tix.byPage.get('p3') ?? []).join() === 'recipe',
+    'a table with rows and no html still contributes its cell tags')
+  ok(tix.tags.get('recipe')?.pages.includes('p4') === true,
+    'an ARCHIVED page is indexed — the archive is out of the way, not deleted')
+
+  ok(tagList(tix)[0].key === 'recipe', 'tagList is most-used first')
+  ok(matchTags(tix, 'ecip').map((e) => e.key).join() === 'recipe',
+    'matchTags is a substring search over keys — what ⌘K\'s # mode runs')
+  ok(matchTags(tix, 'zzz').length === 0, 'and it finds nothing when there is nothing')
+
+  // --- a view sourced on a tag ---
+  ok(unknownSourceKeys({ tag: 'recipe' }).length === 0,
+    '`tag` is a source key this build understands')
+  ok(unknownSourceKeys({ galaxy: 1 }).join() === 'galaxy',
+    '…and a key from a NEWER build is still reported')
+  {
+    const rows = viewRows(tdoc, { tag: 'recipe' })
+    ok(rows.map((r) => r.page.id).join() === 'p1,p2,p3',
+      'a view sourced on #recipe holds the pages that carry it — archived excluded, as every view is')
+    ok(viewRows(tdoc, { tag: 'project' }).map((r) => r.page.id).join() === 'p1',
+      'and a view on a parent tag reaches its children')
+    ok(viewRows(tdoc, { tag: 'nosuchtag' }).length === 0, 'an unwritten tag selects nothing')
+  }
+
+  // --- the graph ---
+  // Two pages that share a tag are related even though neither links to the
+  // other and neither is the other's parent. That relationship exists ONLY in
+  // the prose, which is why it had to be drawn from the same index.
+  {
+    const gdoc = {
+      format: FORMAT, version: 1, docId: 'g1', title: 'G', theme: {},
+      pages: [
+        { id: 'g1', title: 'Stew', blocks: [{ id: 'x1', type: 'p', html: 'winter #recipe' }] },
+        { id: 'g2', title: 'Soup', blocks: [{ id: 'x2', type: 'p', html: 'quick #recipe' }] },
+        { id: 'g3', title: 'Alone', blocks: [{ id: 'x3', type: 'p', html: 'nothing' }] },
+      ],
+    } as unknown as SpacesDoc
+    const g = buildGraph(gdoc, buildIndex(gdoc))
+    const tagEdges = g.edges.filter((e) => e.tag)
+    ok(tagEdges.length === 1 && tagEdges[0].links === 0 && tagEdges[0].tree === false,
+      'a shared tag draws ONE undirected edge, with no link and no tree behind it')
+    ok(g.nodes[tagEdges[0].a].deg === 1 && g.nodes[tagEdges[0].b].deg === 1,
+      '…and it counts toward both pages\' connectedness, so the dots grow')
+    ok(g.nodes.find((n) => n.title === 'Alone')?.deg === 0,
+      'a page with no tag stays an orphan')
+
+    // THE CAP. Past TAG_EDGE_MAX pages a tag is a category, not a
+    // relationship, and n(n-1)/2 lines is not a picture of anything.
+    const many = {
+      format: FORMAT, version: 1, docId: 'g2', title: 'G', theme: {},
+      pages: Array.from({ length: TAG_EDGE_MAX + 1 }, (_, i) => ({
+        id: 'm' + i, title: 'M' + i, blocks: [{ id: 'y' + i, type: 'p', html: 'a #note here' }],
+      })),
+    } as unknown as SpacesDoc
+    ok(buildGraph(many, buildIndex(many)).edges.length === 0,
+      `a tag on ${TAG_EDGE_MAX + 1} pages draws NOTHING — one over the cap`)
+    const atCap = JSON.parse(JSON.stringify(many)) as SpacesDoc
+    atCap.pages.pop()
+    ok(buildGraph(atCap, buildIndex(atCap)).edges.length === (TAG_EDGE_MAX * (TAG_EDGE_MAX - 1)) / 2,
+      `…and exactly at ${TAG_EDGE_MAX} it still draws every pair`)
+  }
+
+  // --- FORMAT ADDITIVITY, measured rather than assumed ---
+  // The claim is that a tag costs the file NOTHING, so a build that predates
+  // this one renders a tagged paragraph as ordinary prose. The way to measure
+  // it is that the document is byte-identical before and after the index runs,
+  // and that the block's html is still just the words.
+  {
+    tagList(buildTagIndex(tdoc))
+    pagesWithTag(tdoc, buildTagIndex(tdoc), 'recipe')
+    pageHasTag(buildTagIndex(tdoc), 'p1', 'recipe')
+    ok(JSON.stringify(tdoc) === pristine,
+      'building the index MUTATES NOTHING — the tag is only ever in the prose')
+    ok(!Object.hasOwn(tdoc.pages[0] as object, 'tags'),
+      '…and specifically: no page gains a `tags` array that could disagree with the prose')
+    ok(tdoc.pages[0].blocks[0].html === 'a #Recipe for winter',
+      'and the stored html is the sentence, with no tag markup in it at all')
+  }
+  {
+    // The one that would actually break an older build: nothing this feature
+    // touches introduces a field. A round trip through parseDoc keeps the
+    // document identical, which is the same test additivity uses above.
+    const r = parseDoc(JSON.stringify(tdoc))
+    ok(r.ok && JSON.stringify(r.doc.pages) === JSON.stringify(tdoc.pages),
+      'a tagged document round-trips through parseDoc unchanged')
+  }
+
+  // --- pathological input ---
+  ok(parseTags('#' + 'a'.repeat(500)).length === 0, 'an absurdly long key is not indexed')
+  ok(parseTags(undefined).length === 0 && parseTags('').length === 0,
+    'absent and empty html are not an error')
+  ok(buildTagIndex({ pages: [] } as unknown as SpacesDoc).tags.size === 0,
+    'a document with no pages yields an empty index')
+  ok(buildTagIndex({} as unknown as SpacesDoc).tags.size === 0,
+    'and a document with no `pages` at all does not throw')
+  {
+    // prototype keys, the same class of bug as layoutOf above: a Map is used
+    // rather than an object precisely so `#__proto__` cannot reach one
+    const evil = buildTagIndex({
+      pages: [{ id: 'p1', title: 'x', blocks: [{ id: 'b1', type: 'p', html: '#__proto__ #constructor' }] }],
+    } as unknown as SpacesDoc)
+    ok(evil.tags.get('__proto__')?.pages.join() === 'p1',
+      '#__proto__ is an ordinary tag in a Map, not a way to reach Object.prototype')
+    ok(({} as Record<string, unknown>).polluted === undefined, 'and nothing was polluted')
+  }
 }
 
 

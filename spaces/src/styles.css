@@ -420,6 +420,29 @@ option { background: var(--field); color: var(--ink); }
 /* the accent at a tint a paragraph can be read through, and an explicit ink:
    `mark`'s UA default is black on yellow, which is not this document's ink */
 .sp-body mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 .08em; }
+
+/* THE #TAG CHIP.
+   Drawn at render into content that is often contenteditable, and taken back
+   out of whatever the editor commits (tags.ts). So it must stay INLINE and
+   selectable-through: no `display: inline-block`, no `contenteditable=false`,
+   no `user-select: none`. A caret has to be able to walk into it and a
+   backspace has to delete one character, because inside the editor this is a
+   word somebody is still typing. Everything here is paint. */
+.sp-tag {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 4px; padding: 0 .22em; cursor: pointer;
+  text-decoration: none; white-space: nowrap;
+}
+.sp-tag:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.sp-tag-kids { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.sp-tag-chip {
+  font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 0; border-radius: 999px; padding: 3px 10px;
+}
+.sp-tag-chip:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.sp-tag-count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 /* No blanket link colour here. There was one — `.sp-body a { color: var(--blue) }`
    — and it never painted a single prose link: `.sp-page a` sets the ink at the
    same specificity and later in the sheet, so it won every time. What the rule

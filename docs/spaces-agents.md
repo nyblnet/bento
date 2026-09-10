@@ -266,6 +266,36 @@ list**: `{ "type": "view", "layout": "board", "groupBy": "status",
 "html": "Issues by status" }`. Put it on a page of its own — a page carrying a
 view is laid out wide.
 
+A view's `source` says which pages it holds: `{ "has": "<fieldKey>" }`,
+`{ "under": "<pageId>" }`, or `{ "tag": "<tagKey>" }`. Absent means the
+backlog. The tag key is **lower-case** and reaches nested tags, so
+`{"tag":"project"}` also holds the pages carrying `#project/bento`.
+
+### Tags
+
+Write `#tag` in a block's `html` — that is the whole storage. **There is no
+`tags` field on a page and you must not invent one**: the index is derived from
+the prose every time it is asked for, exactly as backlinks are, so a stored
+list would be a second copy that goes wrong the first time anything edits
+`html` without knowing tags exist. Nothing to maintain, nothing to keep in
+step.
+
+What is and is not a tag, since a `#` means several things:
+
+| written | read as |
+|---|---|
+| `#recipe`, `#work-in-progress`, `#レシピ` | a tag |
+| `#project/bento` | ONE nested tag, also counted under `project` |
+| `# Title` | a Markdown heading — a tag never has a space after the hash |
+| `#42`, `#404` | an issue number, not a tag |
+| `#fff`, `#f7a600` | a CSS colour, not a tag |
+| `C#`, `a#b` | a `#` inside a word |
+| `<code>#include</code>` | code |
+| `https://x.example/p#top` | a URL fragment |
+| `<a href="#p/abc">…</a>` | a page link — the href is an attribute, never text |
+
+Tags are case-folded for matching and keep the casing you typed for display.
+
 **Not in this format, deliberately**: teams, per-user permissions,
 notifications, automation. The file is the team boundary and the capability.
 
@@ -281,6 +311,8 @@ notifications, automation. The file is the team boundary and the capability.
 | an aside, or detail most readers skip | `toggle` with its body as `parent` children | folds away, and always PRINTS expanded |
 | a warning the reader must not miss | `callout` with the `tone` that fits | it is boxed, named and legible in print and without colour vision — but three per page and none of them registers |
 | anything you would print | remember toggles print open and archived pages are excluded | |
+
+| a topic that recurs across pages | an inline `#tag` in the sentence | the index, ⌘K's `#` mode, a view sourced on it and the graph all derive from it |
 
 **The most-missed feature is backlinks.** They are derived — link to a page and
 it lists the linker, with no maintenance. A space where pages only link *down*

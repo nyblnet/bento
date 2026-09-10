@@ -139,5 +139,33 @@ if (lostBy.length) {
 ok(/\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(md), 'a link card exports with its address intact')
 ok(/!\[[^\]]+\]\([^)]+\)/.test(md), 'an image exports with its alt text and reference')
 
+// #TAG, IN AND OUT. A tag lives in the prose and nowhere else, so it costs the
+// exporter nothing — which is precisely the claim that has to be measured
+// rather than assumed. Two things could break it and both are silent: an
+// exporter that escaped the hash for Markdown's sake (`\#recipe`), and a
+// parser that read a line beginning `#recipe` as an ATX heading and ate the
+// word. Either one loses the classification of every note in the space.
+{
+  const st = new Store(starterDoc())
+  const page = st.doc.pages[0]
+  page.blocks.push(
+    { id: 'tg1', type: 'p', html: 'a note about #recipe and #project/bento' } as never,
+    { id: 'tg2', type: 'p', html: '#leading tag at the start of a line' } as never,
+  )
+  st.reindex()
+  ok(st.tags.tags.get('recipe')?.pages.includes(page.id) === true,
+    'the tag index finds a tag written into a page')
+
+  const out = toMarkdown(st as never)
+  ok(out.includes('#recipe') && out.includes('#project/bento'),
+    'Markdown export emits the hash unescaped — `#recipe`, not `\\#recipe`')
+
+  const back = parseNote(out.slice(out.indexOf('#leading')), 'x')
+  ok(back.blocks[0]?.type === 'p',
+    'a line that BEGINS with a tag reads back as a paragraph, never a heading')
+  ok(String(back.blocks[0]?.html ?? '').includes('#leading'),
+    '…with the tag still in it')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

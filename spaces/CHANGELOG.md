@@ -14,6 +14,41 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **`#tag` in the prose, and everything that follows from it.** Type `#recipe`
+  in a sentence and it renders as a clickable chip; the chip opens a tag sheet
+  listing every page carrying it. Tags reach ⌘K (a query starting with `#`
+  lists tags and how much of the space each covers), a view's **source** (a
+  base can be "everything tagged #recipe", chosen from the Pages · button),
+  and the graph (two pages sharing a tag draw an edge, capped at eight pages
+  per tag — past that a tag is a category, not a relationship).
+
+  **A tag is stored exactly once, in the words.** There is no `page.tags`
+  array and there must not be one: the index is derived from `html` every time
+  something asks, the same way backlinks already are, so it can never disagree
+  with what is written. The consequence worth having is that this costs the
+  FILE nothing — measured against a build of the previous release, a tagged
+  paragraph renders there as ordinary prose, byte-identical, with no chip and
+  no lost text.
+
+  `#project/bento` is one **nested** tag, and it counts under `#project` too —
+  settled now rather than later, because reading it as the flat tag `project`
+  first would silently change the meaning of text already in files when
+  nesting arrived. The tag sheet walks up and down that hierarchy.
+
+  What is deliberately NOT a tag, each one tested by running the parser:
+  `# Title` (a Markdown heading — a tag has no space after the hash), `#42`
+  and `#404` (issue numbers), `#fff` and `#f7a600` (CSS colours), `C#` and
+  `a#b` (a hash inside a word), a `#` in `<code>`, a URL fragment such as
+  `https://x.example/p#top`, and this app's own `#p/` page links.
+
+- **A view whose source this build cannot read now says so.** `unknownSourceKeys`
+  existed and nothing called it, so a view selecting its pages in a way the
+  build does not understand silently fell back to the backlog and showed a
+  different set of pages while its header still named the source. It shows a
+  line now, the way an unreadable filter already did. Known limitation, stated
+  because it cannot be fixed retroactively: builds shipped before this one
+  still degrade silently, so a view sourced on a tag reads as Issues there.
+
 - **The whole gallery card is the target, and a long title stops inflating its
   row.** In a shelf of covers the picture is what you point at, so the title's
   link now stretches over the card rather than the card holding a second one —
