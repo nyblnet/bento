@@ -845,6 +845,38 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   of every version history ever built and matters more when the document is
   something you send. The dialog says so and offers **Clear history**; a page
   extracted as its own space carries none of the parent's.
+- **The starter space demonstrates the twelve features above.** `starter.ts`
+  states its own rule — a feature the starter does not demonstrate is a feature
+  the starter denies — and none of the twelve had been walked back through it,
+  so the first document every new user opened quietly said the app could not do
+  any of them. Two pages are new: **Planning** (a calendar of what has a date,
+  an overdue table, and a filtered list — three views asking three real
+  questions) and **Handing it over** (reading it, sending a reading copy,
+  exporting it as slides, printing it). The rest arrive inside pages that
+  already existed, because a page titled "Footnotes" explaining footnotes is
+  the failure this file is written against.
+
+  Every claim is carried by document data rather than by prose about it:
+  Welcome transcludes the **Saving** section of Sharing & limits instead of
+  repeating it; the tracker's cards gained due dates, estimates and a project,
+  so the calendar has days to sit on and the filters have something to exclude;
+  the tracker answers to *the board* and the journal to *daily notes*, so both
+  pages list real unlinked mentions of themselves; the space ships a **Daily
+  note** template wired to ⌘⇧J and a **Meeting** template, which is also what
+  makes the sidebar's ＋ offer a choice at all. Verified in a built shell, not
+  asserted: the overdue view holds 3 of 5 cards, the tag view 2 pages, clicking
+  a column header reorders the rows, ⌘⇧J produces the template's three
+  headings, and *Handing it over* exports as six slides.
+
+  **Two notes that are workarounds, not preferences.** The starter keeps
+  footnotes out of any section it also transcludes — a reference inside an
+  embedded body draws its number on the host page while the note stays on the
+  source page, so the marker points at an anchor that is not there. And the
+  page that describes tags cannot yet show a tag *chip*, for a reason recorded
+  against the tag work rather than here.
+- **Fixed: `Reset access…` was still called `Rotate keys` in the starter.** The
+  control was renamed and the one document every user reads was not, so the
+  starter named a button that does not exist.
 
 ## [0.1.0] — 2026-08-03
 
