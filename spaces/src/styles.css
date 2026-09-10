@@ -1900,6 +1900,27 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-view-list { list-style: none; margin: 0; padding: 0; }
 .sp-view-list li { margin: 0 0 6px; }
 
+/* CHARTS: the timeline and the workload chart.
+   Almost nothing here. Both pictures are svg carrying their own colour and
+   geometry as PRESENTATION ATTRIBUTES (render.ts says why), so this file owns
+   only the box around them — which is exactly what makes them print, and what
+   makes them survive into the file-manager still, whose stylesheet is not this
+   one. A rule here that the picture depended on would be a rule the thumbnail
+   never sees. */
+.sp-gt-wrap, .sp-wl-wrap { overflow-x: auto; margin: 0 0 6px; }
+.sp-gt-note { margin: 2px 0 0; font-size: 12.5px; }
+.sp-wl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+
+/* Print: the scroller is a screen affordance and paper has no scrollbar, so it
+   becomes an ordinary box — otherwise a timeline wider than the page is
+   silently guillotined, which is the same class of bug as a board printing as
+   a cut-off row of columns (below). `min-width` goes with it for the same
+   reason: it is there to keep labels legible on a phone. */
+@media print {
+  .sp-gt-wrap, .sp-wl-wrap { overflow: visible; }
+  .sp-gt-wrap svg, .sp-wl-wrap svg { min-width: 0 !important; break-inside: avoid; }
+}
+
 /* Print: a board is columns of cards on screen and a LIST on paper — a
    horizontal scroller cannot be printed, and cutting it off would silently
    drop issues. */

@@ -18,8 +18,15 @@ import {
   fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys,
   sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
-  type ViewSort, type FieldSpec, type ViewLayout,
+  type ViewSort, type FieldSpec, type ViewLayout, type IssueRow,
 } from './fields'
+import { ganttModel } from './gantt.ts'
+import { workloadModel, workloadOption, bucketField } from './workload.ts'
+import { todayISO } from './journal.ts'
+// THE SHARED CHART ENGINE, from the kernel and not from this app. dash already
+// imports it from outside slides, so this is a settled cross-app path rather
+// than a new one — and it is read-only: kernel/src is a serialized zone.
+import { chartSnapshotSvg } from '../../kernel/src/charts.ts'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
@@ -1130,7 +1137,12 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // hardened and its comment said the label was safe; the label is rendered
     // here, and this half had not been.
     const here = layoutOf(layout)
-    const asList = here !== 'board'
+    // WHICH SHAPES HAVE BUCKETS. A list, a table and a gallery have no columns,
+    // so "the field the columns come from" is not a question they can be asked.
+    // A workload chart's BARS are buckets — it is the same question with the
+    // same key and the same answer, which is the whole reason it is a layout
+    // here rather than a block with a vocabulary of its own.
+    const grouped = here === 'board' || here === 'workload'
     // Three WHOLE sentences rather than one with the shape interpolated into
     // it. "Show as a {what}" reads fine in English and breaks in half the
     // catalogs, where the article and the adjective agree with the noun's
@@ -1146,10 +1158,12 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // fields.ts answers "which shape is this" and "what comes next".
     const LAYOUT_LABEL: Record<ViewLayout, string> = {
       board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
+      gantt: t('Timeline'), workload: t('Workload'),
     }
     const NEXT_LABEL: Record<ViewLayout, string> = {
       board: t('Show as a list'), list: t('Show as a table'),
-      table: t('Show as a gallery'), gallery: t('Show as a board'),
+      table: t('Show as a gallery'), gallery: t('Show as a timeline'),
+      gantt: t('Show as a workload chart'), workload: t('Show as a board'),
     }
     const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
     layoutB.dataset.next = nextLayout(here)
@@ -1157,8 +1171,17 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per
     // distinct string and call it a board.
-    const groupB = btn('viewGroup', field ? `${t('Group')} · ${field.label}` : t('Group'),
-      t('Choose the field the columns come from'))
+    // The button must name the field the view is ACTUALLY bucketed by, which
+    // for a workload chart with no stored `groupBy` is the person field and not
+    // `status` — saying "Group · Status" over a chart of people would be the
+    // control and the picture disagreeing, which is worse than no control.
+    const shown = here === 'workload' && !Object.hasOwn(b as object, 'groupBy')
+      ? bucketField(doc) : field
+    const groupB = btn('viewGroup', shown ? `${t('Group')} · ${shown.label}` : t('Group'),
+      here === 'workload'
+        ? t('Choose the field the bars come from')
+        : t('Choose the field the columns come from'))
+    groupB.dataset.shape = here
 
     const sortKey = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
     const sortField = sortKey && fieldByKey(doc, sortKey.key)
@@ -1188,7 +1211,7 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
       t('Choose which pages this view holds'), !!(hasKey || underId))
 
-    head.append(layoutB, sourceB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
+    head.append(layoutB, sourceB, ...(grouped ? [groupB] : []), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -1279,6 +1302,29 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     }
     if (meta.childElementCount) a.appendChild(meta)
     return a
+  }
+
+  // GANTT — one bar per page, from its start to its due date. A layout and not
+  // a `chart` block; the argument is in gantt.ts.
+  //
+  // `layoutOf`, not the raw string: a `layout` out of a mailed file can be
+  // anything, and this branch must never be entered by a value that only looks
+  // like one of ours.
+  if (layoutOf(layout) === 'gantt') {
+    renderGantt(host, doc, rows, groupKey)
+    return
+  }
+
+  // WORKLOAD — the same rows, added up per bucket. The only shape here whose
+  // marks are not pages, which is exactly the objection gantt.ts answers.
+  if (layoutOf(layout) === 'workload') {
+    // `groupBy` ABSENT falls through to workload.ts's own default (the person
+    // field), because absent has always meant "the sensible default for this
+    // shape" and a board's default is not a chart's. A block that STORES a
+    // groupBy gets what it stored, in every layout.
+    renderWorkload(host, doc, rows,
+      Object.hasOwn(b as object, 'groupBy') ? groupKey : undefined)
+    return
   }
 
   // TABLE — the shape a base is usually looked at in, and the one this app did
@@ -1614,4 +1660,257 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     board.appendChild(col)
   }
   host.appendChild(board)
+}
+
+// --- charts ------------------------------------------------------------------
+//
+// TWO SHAPES, ONE HOST. Both `gantt` and `workload` are `view` LAYOUTS rather
+// than a new block type; the argument is in gantt.ts and is not repeated here.
+// What belongs here is how they are PAINTED, and the one rule both follow:
+//
+//   THE PICTURE IS SVG WITH PRESENTATION ATTRIBUTES, NOT CSS CLASSES.
+//
+// Not a style preference. This app draws the same block on four surfaces — the
+// editor, the reading view, PAPER, and the file-manager still (preview.ts) —
+// and the still carries its OWN small stylesheet, deliberately, because
+// QuickLook's renderer is a conservative one. A bar coloured by a `.sp-gt-bar`
+// rule in styles.css is a bar that is invisible in a thumbnail and, on paper,
+// is at the mercy of the browser's "do not print backgrounds" default. Colour,
+// geometry and size travel INSIDE the element, so the four surfaces cannot
+// disagree, and `@media print` has nothing left to get wrong.
+
+/** A colour a `fill=` attribute will certainly accept, or nothing. Same test
+ *  preview.ts makes, and for the same reason: the theme comes out of a file. */
+const flatColor = (v: unknown): string | null => {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return /^#[0-9a-f]{3,8}$/i.test(s) || /^rgb/i.test(s) ? s : null
+}
+
+const svgEl = (name: string, attrs: Record<string, string | number>): SVGElement => {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', name)
+  for (const k of Object.keys(attrs)) el.setAttribute(k, String(attrs[k]))
+  return el
+}
+
+const GRID = '#E3E8EF'
+const MUTED = '#5B6472'
+const DANGER = '#E5484D'
+const INK = '#1E2A3A'
+
+/** Logical drawing size. The svg scales to its container through the viewBox,
+ *  so these are proportions, not pixels on anybody's screen. */
+const GT = { w: 960, name: 210, padR: 14, head: 28, row: 26, bar: 12 }
+
+/** As many characters as fit the name column at 12px. Measuring is not
+ *  available here (the block is painted before layout) and a `<title>` child
+ *  carries the whole name anyway, so a cheap cut with an ellipsis beats a
+ *  clipPath that silently swallows half a word. */
+const cut = (s: string, n = 28): string => (s.length <= n ? s : `${s.slice(0, n - 1)}…`)
+
+function renderGantt(host: HTMLElement, doc: SpacesDoc, rows: IssueRow[], groupKey: string): void {
+  const m = ganttModel(doc, rows, todayISO(), groupKey)
+
+  if (m.noDateField) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = t('A timeline needs a date field. Add one and it appears here.')
+    host.appendChild(p)
+    return
+  }
+  if (!m.bars.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = m.undated
+      ? t('No page here has a date yet.')
+      : t('No issues match this filter.')
+    host.appendChild(p)
+    return
+  }
+
+  const accent = flatColor((doc.theme as { accent?: unknown } | undefined)?.accent) ?? '#5B8DEF'
+  const x0 = GT.name
+  const tw = GT.w - GT.name - GT.padR
+  const h = GT.head + m.bars.length * GT.row + 10
+
+  const wrap = document.createElement('div')
+  // its own scroller, exactly as the table layout has: a schedule with thirty
+  // rows is tall, never wide, but a phone is 320px and the name column plus a
+  // month of track does not fit in it. The PAGE must not scroll sideways.
+  wrap.className = 'sp-gt-wrap'
+  const svg = svgEl('svg', {
+    viewBox: `0 0 ${GT.w} ${h}`, width: GT.w, height: h,
+    role: 'img', 'aria-label': t('Timeline'),
+  })
+  svg.setAttribute('style', `width:100%;height:auto;display:block;min-width:${Math.round(GT.w / 1.5)}px`)
+
+  // gridlines and their labels
+  for (const tick of m.ticks) {
+    const x = x0 + tick.x * tw
+    svg.appendChild(svgEl('line', { x1: x, y1: GT.head - 8, x2: x, y2: h - 6, stroke: GRID, 'stroke-width': 1 }))
+    const lab = svgEl('text', { x: x + 3, y: GT.head - 12, fill: MUTED, 'font-size': 11 })
+    lab.textContent = tick.label
+    svg.appendChild(lab)
+  }
+
+  // TODAY. Only when it is inside the span — gantt.ts refuses to stretch the
+  // chart to reach it, and a marker clamped to the edge would read as "today is
+  // the last day of this project". When it is outside, the note below says so
+  // in words, which is a thing a line cannot say.
+  if (m.todayX !== null) {
+    const x = x0 + m.todayX * tw
+    svg.appendChild(svgEl('line', {
+      x1: x, y1: GT.head - 10, x2: x, y2: h - 6,
+      stroke: INK, 'stroke-width': 1.5, opacity: 0.45,
+    }))
+    const lab = svgEl('text', { x: x + 4, y: h - 1, fill: INK, opacity: 0.55, 'font-size': 10 })
+    lab.textContent = t('Today')
+    svg.appendChild(lab)
+  }
+
+  m.bars.forEach((b, i) => {
+    const cy = GT.head + i * GT.row + GT.row / 2
+    const fill = flatColor(b.color) ?? accent
+
+    // The NAME is a link, and it is an svg <a>, so the whole picture is one
+    // element on every surface. The editor's delegated handler matches on
+    // closest('a') + an href starting `#p/`, which an SVGAElement satisfies;
+    // the preview strips href along with every other runtime attribute, so the
+    // still shows the same words without being clickable, which is correct.
+    const a = svgEl('a', { href: `#p/${b.pageId}` })
+    const name = svgEl('text', { x: 0, y: cy + 4, fill: INK, 'font-size': 12 })
+    name.textContent = cut(b.title || t('Untitled'))
+    const full = svgEl('title', {})
+    full.textContent = b.title || t('Untitled')
+    name.appendChild(full)
+    a.appendChild(name)
+    svg.appendChild(a)
+
+    // the row's own track, so a bar in the middle of a wide span still reads as
+    // a position on a line rather than as a rectangle floating in space
+    svg.appendChild(svgEl('line', {
+      x1: x0, y1: cy, x2: x0 + tw, y2: cy, stroke: GRID, 'stroke-width': 1, opacity: 0.7,
+    }))
+
+    let mark: SVGElement
+    if (b.milestone) {
+      // A DIAMOND, because a date with no duration is not a bar. This is what
+      // every issue written before `start` existed looks like — see the field
+      // comment in fields.ts; it is the installed base, not an edge case.
+      const cx = x0 + b.x * tw
+      const r = 6
+      mark = svgEl('path', {
+        d: `M${cx} ${cy - r}L${cx + r} ${cy}L${cx} ${cy + r}L${cx - r} ${cy}Z`,
+        fill, stroke: b.overdue ? DANGER : 'none', 'stroke-width': b.overdue ? 1.5 : 0,
+      })
+    } else {
+      mark = svgEl('rect', {
+        x: x0 + b.x * tw, y: cy - GT.bar / 2,
+        // a one-day task is one day wide, never zero — but a one-day task in a
+        // ten-year span rounds to a third of a pixel, so the floor is the one
+        // place the model's fraction is overridden and it is a VISIBILITY floor
+        width: Math.max(3, b.w * tw), height: GT.bar, rx: 3,
+        fill,
+        stroke: b.invalid || b.overdue ? DANGER : 'none',
+        'stroke-width': b.invalid || b.overdue ? 1.5 : 0,
+        'stroke-dasharray': b.invalid ? '3 2' : '',
+      })
+    }
+    const why = svgEl('title', {})
+    // The dates as the FILE holds them — ISO, unambiguous in every locale, and
+    // the thing somebody fixing a wrong row needs to see. The axis is localized
+    // because it is a label; this is a value.
+    why.textContent = b.invalid
+      ? t('{a} to {b} — the end is before the start', { a: b.to, b: b.from })
+      : b.milestone ? `${b.title} · ${b.from}` : `${b.title} · ${b.from} → ${b.to}`
+    mark.appendChild(why)
+    svg.appendChild(mark)
+  })
+
+  wrap.appendChild(svg)
+  host.appendChild(wrap)
+
+  // WHAT THE PICTURE COULD NOT SAY. Every one of these is a count that would
+  // otherwise be a silent difference between the chart and the document, which
+  // is the whole failure mode of drawing a picture of somebody else's numbers.
+  const notes: string[] = []
+  if (m.dropped) notes.push(t('{n} more not shown', { n: String(m.dropped) }))
+  if (m.undated) notes.push(t('{n} with no date', { n: String(m.undated) }))
+  if (m.todayX === null) notes.push(t('Today is outside this range'))
+  // "{n} end before they start" reads wrong at n=1 in English and needs a
+  // plural rule in half the catalogs; t() has no plural machinery and should
+  // not grow one for a footnote. A noun phrase is correct at every n in every
+  // one of the eight languages, which is the cheaper answer.
+  const bad = m.bars.filter((b) => b.invalid).length
+  if (bad) notes.push(t('{n} with the end before the start', { n: String(bad) }))
+  if (notes.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty sp-gt-note'
+    p.textContent = notes.join(' · ')
+    host.appendChild(p)
+  }
+}
+
+function renderWorkload(host: HTMLElement, doc: SpacesDoc, rows: IssueRow[], groupKey?: string): void {
+  const m = workloadModel(doc, rows, groupKey, t('Unassigned'),
+    (n) => t('Other ({n})', { n: String(n) }))
+
+  if (!m.sum) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = t('A workload chart adds up a number field. This space has none.')
+    host.appendChild(p)
+    return
+  }
+  if (!m.bars.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = t('No issues match this filter.')
+    host.appendChild(p)
+    return
+  }
+
+  const accent = flatColor((doc.theme as { accent?: unknown } | undefined)?.accent) ?? '#5B8DEF'
+  const wrap = document.createElement('div')
+  wrap.className = 'sp-wl-wrap'
+  // THE SHARED ENGINE, kernel/src/charts.ts — this app draws no chart of its
+  // own. `chartSnapshotSvg` and not `mountChart`: the live path exists for
+  // slides' present mode, where a chart is hovered and zoomed; here the same
+  // markup has to survive being printed and being handed to a thumbnailer that
+  // runs no script, and a still does that by being a still.
+  wrap.innerHTML = chartSnapshotSvg({ w: 720, h: 320, option: workloadOption(m, accent) })
+  const svg = wrap.querySelector('svg')
+  // the engine asks for height:100% (it is sized by its host in slides); in a
+  // flowing column that is zero, so the aspect comes from the viewBox instead
+  if (svg) svg.setAttribute('style', 'width:100%;height:auto;display:block;min-width:420px')
+  host.appendChild(wrap)
+
+  // THE NUMBERS, IN WORDS, BESIDE THE PICTURE. Three jobs at once and it is the
+  // cheapest way to do any of them: the axis labels are truncated to fit, a
+  // chart is unreadable to a screen reader, and a bar's height is not a value
+  // anybody can quote. Rendered from the SAME model the chart is, so the two
+  // can never disagree.
+  const list = document.createElement('p')
+  list.className = 'sp-wl-legend'
+  for (const b of m.bars) {
+    const chip = document.createElement('span')
+    chip.className = 'sp-issue-chip'
+    const dot = document.createElement('span')
+    dot.className = 'sp-prop-dot'
+    dot.style.background = flatColor(b.color) ?? accent
+    chip.append(dot, document.createTextNode(`${b.label} · ${b.total}`))
+    list.appendChild(chip)
+  }
+  host.appendChild(list)
+
+  const notes: string[] = []
+  if (m.folded) notes.push(t('{n} more grouped as Other', { n: String(m.folded) }))
+  if (m.ignored) notes.push(t('{n} left out: not a number', { n: String(m.ignored) }))
+  const blank = m.bars.reduce((s, b) => s + b.blank, 0)
+  if (blank) notes.push(t('{n} with no estimate', { n: String(blank) }))
+  if (notes.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty sp-gt-note'
+    p.textContent = notes.join(' · ')
+    host.appendChild(p)
+  }
 }

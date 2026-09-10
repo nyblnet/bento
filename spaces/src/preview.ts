@@ -128,6 +128,16 @@ const SHEET = (doc: SpacesDoc): string => {
     `.bp th,.bp td{border:1px solid #E3E8EF;padding:6px 9px;text-align:start;`,
     `vertical-align:top;word-break:break-word}`,
     `.bp th{background:#F5F7FA;font-weight:600}`,
+    // A CHART IS AN <svg> AND THE STILL KEEPS IT. It carries its own colours
+    // and geometry as presentation attributes (render.ts), so nothing about the
+    // picture depends on a rule in styles.css — which is the point, because
+    // styles.css is not loaded here. The engine asks for `height:100%` from its
+    // slides host; in this flowing column that is zero, so the aspect comes
+    // back from the viewBox.
+    // `!important` because the picture's own inline style carries a min-width
+    // that keeps its labels legible on a phone, and a thumbnail is narrower than
+    // any phone — inline loses to nothing else.
+    `.bp svg{max-width:100%;height:auto;display:block;min-width:0!important}`,
   ].join('')
 }
 

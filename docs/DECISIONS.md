@@ -6390,3 +6390,80 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+
+## 2026-09-10 — a chart in bento/spaces is a `view` LAYOUT, not a `chart` block
+
+Two shapes landed together — a timeline (`layout:"gantt"`) and a workload chart
+(`layout:"workload"`) — and the question they forced is where a chart lives in
+this app at all. Nothing in the format held one before. The answer binds every
+chart that comes after, so it is written here rather than only in the source.
+
+**They are layouts.** Three reasons, in the order they should be weighed.
+
+1. **The input vocabulary already exists and cannot be duplicated cheaply.**
+   Both shapes need `source` (which pages), `filter` (which of them), `sort` (in
+   what order) and `groupBy` (bucketed how). A `chart` block would have to grow
+   four keys carrying those same four meanings. The format is permanent and
+   there is no server, so that is not a duplication that gets tidied later — it
+   is two vocabularies for one question, in every file ever saved. `fields.ts`
+   already refuses to grow a second ordering mechanism beside `sort` for exactly
+   this reason.
+
+2. **The degradation is measurably better, and it was measured.** `layoutOf()`
+   maps an unrecognised layout to `board`. A shell built from the previous
+   release, shown `{"type":"view","layout":"gantt"}`, renders a board of the
+   same pages, keeps `layout:"gantt"` through a save, and keeps the new `start`
+   prop blocks too — checked in a browser against a real `origin/main` build,
+   not inferred. A `chart` block would have fallen to the unknown-type path and
+   rendered its `html`: one line of text where a schedule was.
+
+3. **The honest counter-argument loses on scope, and is recorded so it can be
+   re-opened.** A Gantt genuinely is a layout of pages — one page, one bar. A
+   workload chart genuinely is an AGGREGATE: it has fewer marks than rows, and
+   no mark is a page. If those two had wanted different homes the right answer
+   would have been to say so. They do not, because the aggregation is a property
+   of the OUTPUT while every input key keeps the meaning it already had —
+   `groupBy` is "the field the buckets come from", which is what it means on a
+   board too. A board with summed columns is what a workload chart is.
+
+**What this decision does NOT cover, and what should be a block.** A chart of
+data that is not pages — a `table` block's numbers, say. It has no `source`, no
+`filter` and no rows, and shares nothing with a view but the engine. When that
+arrives it should be its own block type, and this entry is not a precedent
+against it.
+
+**The engine is the kernel's, read-only.** `kernel/src/charts.ts`, imported the
+way dash already imports it from outside slides. Measured cost of pulling the
+engine into the spaces shell: **+6.2KB** compressed for charts-lite and anim.ts
+together, against a shell of ~278KB.
+
+**Six is the ceiling for the one cycling layout button.** One control and one
+word beats a menu at three or four shapes; at six, five clicks to cross the ring
+is already the worse trade. A seventh shape should convert that control into a
+picker rather than extend the cycle.
+
+### Two consequences of adding `start` to the default schema
+
+**Absent `start` is the installed base, not an edge case.** The tracker shipped
+with `due` and nothing else, so every issue in every file already written has a
+due date and no start. Drawing those as zero-width bars would render every
+existing tracker as a column of hairlines. They draw as a **milestone diamond**
+at the one date the author gave — a date with no duration, which is what the
+file says. The symmetric case (a start with no due) is a diamond too.
+
+**A picture of somebody else's numbers must not be quietly wrong.** Each
+bad-data case is decided, not left to arithmetic: a due date before the start is
+drawn between the two dates that are really in the file and FLAGGED, never
+silently swapped (a swap draws a confident schedule nobody typed, and looks
+correct); a malformed date is an absent date; a negative or non-numeric estimate
+is excluded from the sum AND counted, because a −3 absorbed into a bar makes
+somebody look lighter than the work they hold; and an oversized view draws a
+capped, deterministically ordered chart that says how many rows it did not draw.
+
+**Dates are integer day numbers computed arithmetically (days-from-civil), with
+no `Date` constructed for any comparison.** The rig runs under five timezones,
+and that matrix earned its keep in this change: a sabotage replacing the
+arithmetic with `new Date(y, m-1, d)` passed every assertion under `TZ=UTC` and
+failed under `TZ=Pacific/Kiritimati`. A one-timezone run cannot see that class
+of bug at all, from the inside.
