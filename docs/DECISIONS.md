@@ -6390,3 +6390,69 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-10 — aliases resolve at LINK time; a word-boundary rule built for English is not a degradation in Japanese, it is a zero
+
+bento/spaces gained page **aliases** and **unlinked mentions** (`spaces/src/mentions.ts`).
+Four things were settled that a later session could otherwise contradict.
+
+**An alias is resolved where a name becomes a page id, and nowhere else.**
+`Page.aliases` is read by exactly one function — `nameIndex` — which the
+`[[…]]` resolver, ⌘K and the `[[` page picker all call. What gets written into
+the file is an ordinary `#p/<id>` href, so `buildIndex`'s backlinks, the graph,
+export, print and the CRDT never learn that aliases exist. The alternative,
+resolving at render time, would give every one of those a second way to name a
+page, and they would drift. If a future feature wants alias-aware behaviour,
+the answer is to call `nameIndex`, not to teach another module about the field.
+
+**All three surfaces or none.** An alias that reaches the resolver but not
+search is worse than no alias: you file something under the name you use for
+it, and then cannot find it by that name — which reads as the search being
+broken. Half an alias was the shape this nearly shipped in.
+
+**Collisions are reported, never repaired.** Two pages can claim one name
+because a file arrives already written. `nameIndex` settles it identically in
+every replica — a TITLE always beats an alias, then document order — and
+`validate()` reports `alias-collision` naming the page a `[[link]]` will
+actually reach. Repairing it would rename something the author wrote; saying
+nothing would leave a link landing somewhere nobody chose. This is the one
+place the app tells you about a clash it resolved on your behalf.
+
+**The word-boundary rule is the CJK decision, and it is not a tuning
+parameter.** Unlinked mentions match a page's names against every other page's
+prose, so a boundary rule is what keeps "Roadmap" out of "Roadmaps". The
+obvious spelling is `\b`, or its Unicode equivalent `(?<![\p{L}\p{N}_])`.
+Applied to Japanese that does not find fewer mentions — it finds NONE, ever,
+because every kana beside a name is a letter and the assertion never opens.
+This app ships ja, zh-Hans and zh-Hant; a rule with that property is a silent
+total failure in three of its nine locales, and it passes every test written in
+English.
+
+So a boundary is required only where the NAME's own edge character is a word
+character in a script that separates words, and the minimum scannable length is
+three code points for such a name and two for one containing Han, kana or
+Hangul. The stated cost, because it is real and someone will find it: a Han
+name also matches inside a longer Han compound (京都 inside 東京都). That is
+what every CJK-aware substring search in the world does, it is visible, and it
+is bounded; the alternative is a feature that does not exist for a third of the
+supported languages. `scripts/test-spaces-mentions.ts` asserts both halves.
+
+Two mechanical notes worth not rediscovering. The `v` regex flag expresses this
+boundary as one set difference and is NOT used: `v` is Safari 17 while this
+app's floor is Safari 16.4 (`DecompressionStream`, which the shell's own loader
+needs), and a regex the engine cannot COMPILE throws at construction — the cost
+of being wrong is a panel that throws on every page open, not a missing match.
+Measured, all four spellings of the boundary run within noise of each other, so
+the choice is the floor and nothing else. And the run-splitting scanner
+separates skipped regions with U+0000 rather than a space: with a space,
+`New<a>x</a>York` collapses to `New York` and the scanner reports a mention
+nobody wrote.
+
+**It is not the quadratic thing it sounds like.** "Every page's title against
+every page's text" is N×M; the reader's panel never computes that. Opening a
+page scans the document once for THAT page's names, so the cost is the size of
+the space and not the number of pages in it. Measured on a synthetic 1000-page,
+2.5MB space: 6.5ms to open a page, against 1.9ms for the backlink index the app
+already builds on every commit. The all-pairs answer exists for the agent
+surface (`bento.mentions()`) at ~1s on the same space, and is not on any paint
+path.
