@@ -33,6 +33,7 @@
 import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, linkCard, commentsOn, pageAssetKeys } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
+import { countWords, headingsOf, type Heading } from './outline.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
 import {
   type FieldSpec, ISSUE_FIELDS, fieldsOf, fieldByKey, optionOf, propBlock, propHtml, valuesOf, isIssue, headerLength,
@@ -54,7 +55,11 @@ const KNOWN = new Set<string>(KNOWN_BLOCK_TYPES)
 const isAudio = (b: Block): boolean =>
   b.type === 'media' && String((b as { kind?: unknown }).kind ?? 'video') === 'audio'
 
-const words = (s: string): number => (s.trim() ? s.trim().split(/\s+/).length : 0)
+// ONE counter, shared with the panel a person reads. It was a whitespace split
+// here, which counts a 400-character Japanese page as one word — and the count
+// in the toolbar and the count in `stats()` disagreeing about the same page is
+// the exact drift a second copy of a fact produces. outline.ts owns it now.
+const words = countWords
 
 const utf8len = (s: string): number =>
   typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(s).length : s.length
@@ -548,7 +553,10 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
 // outline()
 // ---------------------------------------------------------------------------
 
-export interface OutlineHeading { id: string; level: 1 | 2 | 3; text: string }
+/** Re-exported: `headingsOf` in outline.ts is the one heading parser, and this
+ *  is the shape it returns. The agent surface keeps its own name for it because
+ *  `docs/spaces-agents.md` documents that name. */
+export type OutlineHeading = Heading
 
 export interface OutlineNode {
   id: string
@@ -591,15 +599,12 @@ export function outlineDoc(doc: SpacesDoc): OutlineResult {
   const emitted = new Set<string>()
 
   const node = (p: Page, depth: number): OutlineNode => {
-    const headings: OutlineHeading[] = []
+    const headings: OutlineHeading[] = headingsOf(p)
     const links: string[] = []
     let w = 0
     for (const b of p.blocks) {
       const text = textOf(b.html)
       w += words(text)
-      if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') {
-        headings.push({ id: b.id, level: Number(b.type.slice(1)) as 1 | 2 | 3, text })
-      }
       if (b.type === 'pagelink' && typeof b.page === 'string' && !links.includes(b.page)) links.push(b.page)
       for (const m of (b.html ?? '').matchAll(/href\s*=\s*["']#p\/([^"']+)["']/g)) {
         if (!links.includes(m[1])) links.push(m[1])

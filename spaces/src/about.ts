@@ -39,6 +39,7 @@ import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../..
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
+import { countWords } from './outline.ts'
 import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
@@ -783,13 +784,11 @@ function releaseNotes(notes: string): HTMLElement {
  * has no inter-word space, so its characters are counted individually — the
  * convention every word processor uses — and the rest splits on whitespace.
  */
-const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/g
-function countWords(text: string): number {
-  if (!text) return 0
-  const cjk = text.match(CJK)?.length ?? 0
-  const rest = text.replace(CJK, ' ').trim()
-  return cjk + (rest ? rest.split(/\s+/).length : 0)
-}
+// The body of this used to live here, character for character, alongside a
+// whitespace-only copy in agent.ts. Three counters for one number is how the
+// dialog and the toolbar end up disagreeing about the same page. outline.ts
+// owns it; the comment above stays because the REASONING is what a reader
+// needs and it is still true.
 
 /** Real UTF-8 bytes of the document, not characters — MB is a promise. */
 function byteLength(doc: SpacesDoc): number {

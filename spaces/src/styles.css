@@ -2383,3 +2383,178 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ————— writing ergonomics: the outline rail, focus, typewriter, word count —————
+   All four are the READER'S preferences (localStorage, never the file), so
+   every rule here hangs off a class on `.sp-app` that JS sets from storage —
+   never off anything the document can say. See src/outline.ts. */
+
+/* THE RAIL IS A FLEX ITEM, 26px wide, and the readable list is an OVERLAY
+   inside it. A third resizable panel would have been the wrong shape: the page
+   list and the properties panel already own the two edges and a phone boots
+   with both collapsed, so an outline that took the tree's place on a narrow
+   screen would be a regression wearing a feature's clothes. At 26px the column
+   loses almost nothing, and opening the list reflows nothing at all. */
+.sp-outline {
+  flex: 0 0 26px; min-width: 0; position: relative;
+  background: var(--bg); border-inline-start: 1px solid var(--line);
+  /* A z-index on a flex item is a CEILING for its whole subtree, even at
+     `position: static` — nothing inside can ever paint above it, and raising a
+     child's z-index cannot escape it. So this is the ONE value that governs the
+     overlay too, and it sits under the page-list drawer (50) and every dialog
+     (60) on purpose. Diagnose with document.elementsFromPoint(), not by
+     reading the rule. */
+  z-index: 4;
+}
+.sp-outline[hidden] { display: none; }
+.sp-ol-ticks {
+  position: sticky; top: 0;
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 18px 0 18px 7px; align-items: flex-start;
+  /* The floor beneath outline.ts fitTicks(), which tightens the gap to fit the
+     rail. Past a few hundred headings even a 1px gap does not fit, and a sticky
+     column that overflows does not scroll — it paints over the page below it.
+     Clipping is the honest failure: the ticks are a summary, and the complete
+     list is one hover away and scrolls properly. */
+  max-height: 100%; overflow: hidden;
+}
+[dir='rtl'] .sp-ol-ticks { padding: 18px 7px 18px 0; align-items: flex-end; }
+.sp-ol-tick {
+  display: block; height: 2px; border: 0; padding: 0; border-radius: 2px;
+  background: var(--edge, var(--line)); cursor: pointer;
+  transition: background .15s ease, width .15s ease;
+}
+.sp-ol-tick.sp-ol-l1 { width: 13px; }
+.sp-ol-tick.sp-ol-l2 { width: 9px; }
+.sp-ol-tick.sp-ol-l3 { width: 6px; }
+.sp-ol-tick:hover { background: var(--ink-2); }
+.sp-ol-tick.sp-now { background: var(--accent); height: 3px; }
+
+/* The list appears on hover OR keyboard focus — the ticks are real buttons, so
+   tabbing into the rail opens it, and each tick carries its heading's text as
+   its accessible name so the rail is usable without ever opening the list. */
+.sp-ol-panel {
+  position: absolute; top: 10px; inset-inline-end: 4px;
+  width: 232px; max-width: min(232px, calc(100vw - 40px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 26px rgb(var(--shade) / .16);
+  padding: 8px 6px; opacity: 0; visibility: hidden;
+  transform: translateY(-3px);
+  transition: opacity .14s ease, transform .14s ease, visibility .14s;
+}
+.sp-outline:hover .sp-ol-panel,
+.sp-outline:focus-within .sp-ol-panel {
+  opacity: 1; visibility: visible; transform: none;
+}
+.sp-ol-head {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted); padding: 2px 8px 7px;
+}
+/* `overflow-y: auto` ALSO CLIPS HORIZONTALLY — setting either axis to a
+   non-`visible` value computes the other to `auto` — so this box is a clipping
+   box and nothing positioned inside it can ever escape. Survivable here for
+   exactly one reason: everything in it is a plain in-flow row. Never add a
+   popover, menu or custom tooltip inside `.sp-ol-list`; hang it on `.sp-outline`
+   instead, outside the scroller. */
+.sp-ol-list { max-height: min(60vh, 460px); overflow-y: auto; }
+.sp-ol-item {
+  display: block; width: 100%; text-align: start;
+  font: inherit; font-size: 13px; line-height: 1.35; color: var(--ink-2);
+  background: transparent; border: 0; border-radius: 7px;
+  padding: 5px 8px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-ol-item.sp-ol-l1 { font-weight: 600; color: var(--ink); }
+.sp-ol-item.sp-ol-l2 { padding-inline-start: 20px; }
+.sp-ol-item.sp-ol-l3 { padding-inline-start: 32px; font-size: 12.5px; }
+.sp-ol-item:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-ol-item.sp-now {
+  background: var(--chrome); color: var(--ink);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+[dir='rtl'] .sp-ol-item.sp-now { box-shadow: inset -2px 0 0 var(--accent); }
+.sp-ol-empty { font-size: 12.5px; color: var(--muted); margin: 0; padding: 2px 8px 6px; }
+.sp-ol-empty[hidden] { display: none; }
+
+/* A 26px rail is not a phone control, and the reading column has no 26px to
+   spare there. The outline stays reachable from the ⋯ menu, which opens it as a
+   drawer over the page — the same idiom the page list already uses at this
+   width, so it is not a second thing to learn. */
+@media (max-width: 820px) {
+  .sp-outline { display: none; }
+  .sp-outline.sp-open {
+    display: block; position: fixed; inset: 0 0 0 auto; width: 268px;
+    z-index: 50; box-shadow: 0 0 50px rgb(var(--shade) / .3);
+    padding-top: max(14px, env(safe-area-inset-top));
+    border-inline-start: 1px solid var(--line); overflow: hidden;
+  }
+  [dir='rtl'] .sp-outline.sp-open { inset: 0 auto 0 0; }
+  .sp-outline.sp-open .sp-ol-ticks { display: none; }
+  .sp-outline.sp-open .sp-ol-panel {
+    position: static; width: auto; max-width: none;
+    opacity: 1; visibility: visible; transform: none;
+    border: 0; box-shadow: none; background: transparent;
+  }
+  .sp-outline.sp-open .sp-ol-list { max-height: calc(100vh - 70px); }
+  .sp-outline.sp-open .sp-ol-item { font-size: 15px; padding: 9px 10px; }
+}
+
+/* ————— focus mode —————
+   EVERY ANCESTOR of the caret's block is lit, not just the block itself:
+   `opacity` composites down the tree, so a paragraph inside a callout inside a
+   list item would render at 0.26 cubed however bright its own rule claimed to
+   be. outline.ts walks the [data-block-id] chain and marks each link of it. */
+.sp-app.sp-focus .sp-page-inner .sp-b,
+.sp-app.sp-focus .sp-title {
+  opacity: .26; transition: opacity .22s ease;
+}
+.sp-app.sp-focus .sp-page-inner .sp-b.sp-focus-now { opacity: 1; }
+/* Chrome recedes too, and comes back the moment you reach for it. Focus mode
+   that dims only the prose still leaves a toolbar competing for the eye. */
+.sp-app.sp-focus .sp-bar,
+.sp-app.sp-focus .sp-side,
+.sp-app.sp-focus .sp-insp {
+  opacity: .4; transition: opacity .22s ease;
+}
+.sp-app.sp-focus .sp-bar:hover,
+.sp-app.sp-focus .sp-bar:focus-within,
+.sp-app.sp-focus .sp-side:hover,
+.sp-app.sp-focus .sp-side:focus-within,
+.sp-app.sp-focus .sp-insp:hover,
+.sp-app.sp-focus .sp-insp:focus-within { opacity: 1; }
+/* A dim that fades is a dim that distracts when motion is unwelcome. */
+@media (prefers-reduced-motion: reduce) {
+  .sp-app.sp-focus .sp-page-inner .sp-b,
+  .sp-app.sp-focus .sp-title,
+  .sp-app.sp-focus .sp-bar,
+  .sp-app.sp-focus .sp-side,
+  .sp-app.sp-focus .sp-insp { transition: none; }
+}
+
+/* ————— typewriter mode —————
+   The last line of a page has to be able to REACH the middle of the screen, and
+   `40vh` of tail padding cannot lift it past 60% of the way up. Nothing else
+   about the mode is CSS: the scrolling is measured geometry in outline.ts. */
+.sp-app.sp-typewriter .sp-main { padding-bottom: 72vh; }
+
+/* ————— the word count —————
+   In the bar, before the status text: everything ahead of the status is
+   fixed-width, so a chip placed there can never be shoved sideways when the
+   status grows from nothing to a whole sentence. */
+.sp-wc {
+  font-size: 12px; color: var(--muted); white-space: nowrap;
+  padding: 3px 8px; border-radius: 7px; background: var(--chrome);
+  font-variant-numeric: tabular-nums;
+}
+.sp-wc[hidden] { display: none; }
+.sp-wc-n { font-weight: 600; color: var(--ink-2); }
+/* The tiers the bar already steps through: the unit words go first, then the
+   whole chip, before anything a person presses has to leave. */
+.sp-bar-compact .sp-wc-unit, .sp-bar-compact .sp-wc-sep, .sp-bar-compact .sp-wc-min { display: none; }
+.sp-bar-fold .sp-wc { display: none; }
+
+@media print {
+  .sp-outline, .sp-wc { display: none !important; }
+  /* A focused block is a live editing state, never a property of the page. */
+  .sp-app.sp-focus .sp-page-inner .sp-b, .sp-app.sp-focus .sp-title { opacity: 1; }
+}

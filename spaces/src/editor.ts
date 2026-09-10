@@ -46,6 +46,7 @@ import { startSharing } from '../../kernel/src/sync/online.ts'
 import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
 import { PropsPanel } from './props'
+import { Writing } from './outline.ts'
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
@@ -151,6 +152,10 @@ export class Editor {
   /** review threads — markers in the end margin, badges in the tree */
   private comments: CommentsUi
   private format!: FormatBar
+  // Outline rail, focus mode, typewriter mode and the word count. Everything
+  // about them — the listeners, the geometry, the localStorage — is in
+  // outline.ts; this class only owns where the two elements are hung.
+  private writing!: Writing
   onSave: (() => void) | null = null
   onSaveAs: ((suffix: string) => void) | null = null
   /**
@@ -328,6 +333,9 @@ export class Editor {
       hint: string
       run: () => void
       keep?: (b: HTMLButtonElement) => void
+      /** A MODE, not a command: the menu row shows whether it is on. A toggle
+       *  that looks the same in both states is a toggle you press twice. */
+      sel?: () => boolean
     }
 
     // Reached while writing, so it stays in the bar until the bar runs out of
@@ -353,6 +361,19 @@ export class Editor {
         run: () => this.openImport() },
       { icon: 'graph', label: t('Graph'), hint: t('Every page, and what links to what'),
         run: () => this.openGraph() },
+      // THE WRITING MODES LIVE IN ⋯, at every width. Each is set once and left
+      // alone for a session or more, which is this bar's own rule for what
+      // does NOT get a button: a control in the bar for something you touch
+      // twice a day is a control in the way of everything you touch constantly.
+      // Each carries its key, so the menu is also where you learn the key.
+      { icon: 'bullet', label: t('Outline'), hint: '⌘⇧O',
+        run: () => this.toggleOutline(), sel: () => this.writing.isOn('outline') },
+      { icon: 'eye', label: t('Focus mode'), hint: t('Dim everything but the line you are writing'),
+        run: () => this.writing.toggle('focus'), sel: () => this.writing.isOn('focus') },
+      { icon: 'text', label: t('Typewriter mode'), hint: t('Keep the line you are writing centred'),
+        run: () => this.writing.toggle('typewriter'), sel: () => this.writing.isOn('typewriter') },
+      { icon: 'scale', label: t('Word count'), hint: t('Words and reading time, in the toolbar'),
+        run: () => this.writing.toggle('count'), sel: () => this.writing.isOn('count') },
       { icon: 'print', label: t('Print or save as PDF'), hint: '⌘P', run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), hint: t('Version, language, password, exports'),
         run: () => this.openAbout() },
@@ -396,7 +417,8 @@ export class Editor {
         }, { off: !this.store.canRedo }))
       }
       for (const a of menuActions) {
-        menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() }))
+        menu.append(this.menuItem(a.icon, a.label, a.hint, () => { close(); a.run() },
+          a.sel ? { selected: a.sel() } : {}))
       }
       // …and only THEN what the bar itself has had to give up. Listing these
       // unconditionally is what made ⋯ a duplicate of the visible row.
@@ -473,7 +495,18 @@ export class Editor {
     // a button's width, so undo lands where redo just was. Past the history
     // group it grows into the slack the right group's margin-auto already
     // holds, and nothing before it can move. Reported against slides as #300.
-    bar.append(pagesB, mark, title, history, this.statusEl, right)
+    // Writing ergonomics: created before the bar is assembled because the word
+    // count is one of the bar's own children. It goes BEFORE the status, where
+    // everything ahead of it is fixed-width and so nothing can shove it.
+    this.writing = new Writing({
+      root: this.root,
+      main: () => this.main,
+      page: () => this.store.page,
+      goToBlock: (id) => this.jumpToBlock(id),
+      say: (msg) => this.status(msg),
+    })
+
+    bar.append(pagesB, mark, title, history, this.writing.chip, this.statusEl, right)
 
     // Drive the fit now, and again whenever the bar's size or its CONTENT
     // changes. The ResizeObserver is the primary width signal — it fires for
@@ -508,7 +541,11 @@ export class Editor {
     if (this.inspClosed) this.inspector.classList.add('sp-pane-closed')
 
     const body = el('div', 'sp-body')
-    body.append(this.sidebar, this.makeResizer(), this.main, this.makeInspResizer(), this.inspector)
+    // The outline rail sits between the reading column and the properties
+    // strip: it is 26px of ticks, not a third panel, so the two panels that
+    // already own the edges keep their place and their widths.
+    body.append(this.sidebar, this.makeResizer(), this.main, this.writing.rail,
+      this.makeInspResizer(), this.inspector)
     this.root.append(bar, body)
     this.applyPaneWidth()
     this.syncPaneChevron()
@@ -923,6 +960,50 @@ export class Editor {
   }
 
   /**
+   * The outline: a 26px rail of ticks on a laptop, a drawer on a phone.
+   *
+   * The same split `toggleSidebar` already makes, and for the same reason —
+   * below the breakpoint the reading column needs the whole width, so a
+   * collapsed 0px column would leave nothing to reopen it from. Above it the
+   * rail is simply shown or hidden, and the preference is remembered.
+   */
+  toggleOutline(force?: boolean): void {
+    if (!this.isDrawer()) { this.writing.toggle('outline', force); return }
+    this.writing.toggle('outline', true)
+    const open = force ?? !this.writing.rail.classList.contains('sp-open')
+    this.writing.rail.classList.toggle('sp-open', open)
+    document.querySelector('.sp-ol-scrim')?.remove()
+    if (open) {
+      const scrim = el('div', 'sp-scrim sp-ol-scrim')
+      scrim.addEventListener('click', () => this.toggleOutline(false))
+      document.body.append(scrim)
+    }
+  }
+
+  /**
+   * Scroll a block into view and put the caret in it.
+   *
+   * `focusBlock` alone is not enough for an outline jump: a heading someone
+   * clicked in a list they cannot see the destination of has to actually MOVE
+   * the column, and focusing an element that is already technically focusable
+   * scrolls it only as far as the browser feels like. So the scroll is explicit
+   * and measured, and the focus is the second half rather than the mechanism.
+   */
+  private jumpToBlock(id: string): void {
+    // A heading can sit inside a closed toggle, and jumping to a block that is
+    // not on screen scrolls to wherever its collapsed ancestor happens to be.
+    // Find already solved this: unfold FIRST, repaint, then measure — never the
+    // other way round, or the measurement is taken against the old layout.
+    if (this.store.pageId && this.revealBlock(this.store.pageId, id)) this.paintPage()
+    const node = this.main.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`)
+    if (!node) return
+    const box = node.getBoundingClientRect()
+    const view = this.main.getBoundingClientRect()
+    this.main.scrollTop += box.top - view.top - 28
+    if (!this.store.readOnly && !this.reading) this.focusBlock(id, false)
+  }
+
+  /**
    * Bind the live session to the UI.
    *
    * Called once from main.ts with the session that already exists — the
@@ -1180,7 +1261,13 @@ export class Editor {
     // is about to replace every one of them.
     this.format?.close()
     this.main.innerHTML = ''
-    if (!page) { this.main.append(el('p', 'sp-empty', t('This space has no pages.'))); return }
+    if (!page) {
+      this.main.append(el('p', 'sp-empty', t('This space has no pages.')))
+      // An empty space still has to CLEAR the outline and zero the count — a
+      // rail still showing the last page's headings is worse than no rail.
+      this.writing?.refresh()
+      return
+    }
 
     this.painting = true
     const trail: string[] = []
@@ -1274,6 +1361,10 @@ export class Editor {
     // renderer, which print and the reading view share, has never heard of
     // them at all.
     if (!this.reading) this.comments?.refresh()
+    // The outline, the highlight and the count are all derived from the page
+    // that was just painted, so they are re-derived from it here rather than
+    // kept in step by their own listeners. One repaint, one truth.
+    this.writing?.refresh()
     this.painting = false
   }
 
@@ -3088,6 +3179,13 @@ export class Editor {
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
+    // The two writing modes that are worth reaching for mid-sentence. There is
+    // deliberately no key for typewriter mode: ⌘⇧T is the browser's own
+    // reopen-closed-tab and stealing it would cost more than the mode saves, so
+    // it lives in ⋯ with the others and the menu row says the key it has not
+    // got by not printing one.
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); this.toggleOutline(); return }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); this.writing.toggle('focus'); return }
     // `[` collapses the page list, `]` opens the properties panel — the pair
     // slides uses. BOTH ask the same question first.
     //
@@ -3419,6 +3517,11 @@ export class Editor {
         ['⌘⌥N', t('New page')],
         ['⌘⇧J', t("Today's journal")],
         ['⌘⇧I', t('New issue')],
+      ]],
+      [t('Writing modes'), [
+        ['⌘⇧O', t('Show or hide the outline')],
+        ['⌘⇧F', t('Focus mode')],
+        ['⋯', t('Typewriter mode, and the word count')],
       ]],
       [t('The workspace'), [
         ['[', t('Show or hide the page list')],
