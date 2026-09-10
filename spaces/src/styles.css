@@ -706,7 +706,10 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* A WIDE TABLE SCROLLS. The measure belongs to the document, so a six-column
    table must not widen the prose column on a phone — it gets its own scroller
    and the paragraph above it keeps its line length. */
-.sp-tb-wrap { overflow-x: auto; position: relative; }
+/* `overscroll-behavior-x` for the reason spelled out on `.sp-board`: a
+   sideways swipe that runs out of table must stop, not become the browser's
+   back gesture. */
+.sp-tb-wrap { overflow-x: auto; overscroll-behavior-x: contain; position: relative; }
 .sp-tb {
   width: 100%; border-collapse: collapse; table-layout: fixed;
   font-size: 15px; line-height: 1.5;
@@ -1460,14 +1463,60 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* Hit targets: a 30px button is a miss on a touch screen. */
 @media (pointer: coarse) {
   .sp-bar .sp-btn { min-width: 40px; min-height: 40px; justify-content: center; }
+  /* The sharing button is a `.sp-live`, not a `.sp-btn`, so the rule above
+     stepped straight over it: measured at 320px with the coarse rules applied,
+     five bar controls came out 40×40 and this one 35×29 — the odd one out, and
+     the one that opens a popover. Widening it does not cost the bar its fit:
+     Save's right edge stays at 311 inside 320. */
+  .sp-bar .sp-live { min-width: 40px; min-height: 40px; justify-content: center; }
   .sp-dditem { padding-block: 11px; }
 }
+
+/* WHILE A FINGER IS DRAGGING. The press that starts a touch drag is also the
+   press that arms text selection on iOS and Android, and a card whose title is
+   being selected mid-drag paints a blue smear across the gesture. touch.ts
+   clears the selection when the hold fires; this stops a new one starting. */
+body.sp-touchdrag, body.sp-touchdrag * { -webkit-user-select: none; user-select: none; }
+/* AND SCROLL SNAPPING STANDS DOWN WHILE IT LASTS. The board's
+   `scroll-snap-type: x proximity` is right for a thumb flicking between
+   columns and wrong for the 12px-per-frame creep that carries a held card
+   towards an off-screen column: each step lands inside the proximity of the
+   snap point it just left and is pulled straight back. Measured before this
+   rule, with the finger parked at the board's right edge for 1400ms:
+   scrollLeft 0 → 0. */
+body.sp-touchdrag .sp-board { scroll-snap-type: none; }
 
 /* A menu opened from the right end of the bar must open INWARD. Anchoring
    every dropdown to its start edge put the ⋯ and Save menus half off-screen at
    375px — the items were there, just unreadable. */
 .sp-dd-end .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
 .sp-ddmenu { max-width: calc(100vw - 20px); }
+
+/* A MENU TALLER THAN THE WINDOW IS A MENU WITH ITEMS NOBODY CAN REACH.
+   Measured on the built shell at 390×800: Insert laid out 19 items 1000px tall
+   with its bottom at y = 1053, so five of them — Table, Link to the web, Image,
+   Video or audio and the divider above them — were 253px below the viewport;
+   ⋯ laid out 928px with its bottom at 981. The menu is `position: absolute`
+   inside a fixed bar, so the page cannot be scrolled to them and there is no
+   gesture that reaches them at all. Not a phone bug, either: at 861px of
+   browser height on a laptop the same five items are off the bottom.
+
+   `100dvh`, not `100vh`: on a phone `vh` is the tall viewport with the URL bar
+   retracted, so a cap written in `vh` still runs the menu under the chrome that
+   is actually on screen.
+
+   BOTH AXES ARE SPELLED OUT ON PURPOSE. Setting one to a non-`visible` value
+   computes the other to `auto`, and a scroll container CLIPS what is positioned
+   inside it — a floating child can never escape one (CLAUDE.md's ⋯/Share
+   popover trap, which cost slides a silently half-drawn popover). Every child
+   of these menus today is a `position: static` `.sp-dditem`, verified in the
+   built shell: 16 of 16 in ⋯, 19 of 19 in Insert. Anything demoted in here
+   later must be a SECTION OF THE LIST, never a popover anchored to it. */
+.sp-ddmenu {
+  max-height: calc(100dvh - 64px);
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain;
+}
 
 /* ————— find & replace on a small screen —————
    Measured at a 575px viewport: the bar laid out 644px wide and started at
@@ -1787,6 +1836,14 @@ button.sp-prop-val:hover { background: var(--surface); border-color: var(--edge)
 .sp-board {
   display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px;
   scroll-snap-type: x proximity;
+  /* …AND THE SWIPE STOPS AT ITS OWN EDGE. `overflow-x: auto` keeps the board's
+     columns out of the document, but by default a touch scroll that reaches
+     the end of a scroller CHAINS to its ancestors — and on a phone the
+     outermost ancestor is the browser's own back-navigation gesture. Measured
+     at 390px: the board holds 1452px of columns in a 257px box, so a reader
+     swiping through five columns hits that end on nearly every gesture.
+     Containment ends the scroll where the board does. */
+  overscroll-behavior-x: contain;
 }
 .sp-col {
   flex: 0 0 232px; min-width: 232px; scroll-snap-align: start;
@@ -1852,7 +1909,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
    the rest as data: tabular figures, a quiet rule under the head, and no
    vertical lines — a grid of boxes is a spreadsheet, and this is a list of
    documents that happens to have columns. */
-.sp-view-tablewrap { overflow-x: auto; margin: 0 0 4px; }
+.sp-view-tablewrap { overflow-x: auto; overscroll-behavior-x: contain; margin: 0 0 4px; }
 .sp-view-table {
   border-collapse: collapse; width: 100%; font-size: 13.5px;
   font-variant-numeric: tabular-nums;

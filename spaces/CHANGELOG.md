@@ -486,6 +486,47 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **A finger can do the four things only a mouse could.** Reordering a block,
+  nesting a page in the tree, moving an issue card between columns and moving a
+  card on a canvas were all mouse-only: the first three are HTML5
+  drag-and-drop, which never fires from a touch, and the fourth listened for
+  `mousedown`. Two had a fallback (Move up / Move down in the block menu; tap a
+  card's status chip) and **the page tree had none** — nesting a page was
+  impossible on a phone by any route. Press and hold now starts the same drag,
+  and holding a card at the edge of a board or a list scrolls it along, since at
+  390px only one of six columns is on screen at a time.
+
+  A finger that MOVES is still scrolling. Nothing is captured until the press
+  has been held still, so a swipe that starts on a card scrolls the page exactly
+  as it did before.
+
+- **Pinch to zoom the graph.** One finger already panned it, but zoom was on the
+  scroll wheel alone — so on a phone the one view whose whole point is a crowded
+  picture could be shoved around and never scaled. Two fingers zoom about the
+  point between them and pan at the same time; the second finger also ends the
+  one-finger drag it interrupts, so the two gestures no longer fight.
+
+- **A menu taller than the window has items nobody can reach.** Measured on a
+  390×800 phone: Insert laid out 19 items 1000px tall, putting Table, Link to
+  the web, Image and Video or audio 253px below the screen with no gesture that
+  reaches them — the menu is positioned inside a fixed bar, so the page cannot
+  scroll to them. ⋯ lost its last five the same way. Both scroll now, and this
+  was never only a phone bug: on an 860px laptop window the last Insert item was
+  off the bottom too.
+
+- **A sideways swipe stops at the edge of what it is scrolling.** A board or a
+  wide table that runs out of content handed the rest of the gesture to the
+  browser, which on a phone is the back-navigation swipe. It ends where the
+  board does.
+
+- **A wide page stops giving away a third of a phone.** "Wide" is 80% of the
+  window, which is a sensible proportion on a desktop and 283px on a 390px
+  phone — with the block gutter's 26px that left a 257px column inside a 390px
+  screen. It takes the whole width below 850px and is unchanged above it
+  (measured at 1400px: 872px before and after). And the sharing button, alone
+  among the toolbar's controls, was 35×29 rather than the 40×40 every other one
+  gets on a touch screen.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

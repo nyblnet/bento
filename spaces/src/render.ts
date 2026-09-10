@@ -954,7 +954,16 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   // 80% keeps a visible step at every size, and the 1500px cap keeps Wide from
   // becoming an unreadable line on a very large screen — at which point Full is
   // the thing to pick, deliberately.
-  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, 80%)'
+  // …WITH A FLOOR, because a proportion has nothing to be a proportion OF on a
+  // phone. 80% of a 354px page is 283px, and the 26px the gutter takes there
+  // leaves a 257px column on a 390px screen — a third of the display given to
+  // margin on the setting whose entire purpose is "room for a board or a
+  // table", and reachable in one tap ("Use this width for every page" is a
+  // per-screen preference). `max(80%, 680px)` is the same 80% wherever 80% is
+  // at least 680px (a container of 850px and up) and the whole container below
+  // that, since a max-width wider than the box does nothing. Measured at 390px:
+  // column 257 → 328, the page's left margin 79 → 26.
+  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, max(80%, 680px))'
   else if (doc.theme.measure) {
     // AND THE DEFAULT ITSELF GROWS. 720px is ~88 characters at 16px, which is
     // already at the long end — so this does not widen the line much; what it
