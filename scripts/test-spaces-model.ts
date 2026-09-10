@@ -59,6 +59,12 @@ import {
   parseEmbedLine, embedToMd, linkEmbeds,
 } from '../spaces/src/embed.ts'
 import { planUpdatePage, validateDoc } from '../spaces/src/agent.ts'
+import { pageToDeck } from '../spaces/src/todeck.ts'
+// CROSS-ZONE READ-ONLY: bento/slides' own load gate and its generated key list.
+// Nothing under slides/ is written by this rig or by the feature it covers.
+import { parseDoc as slidesParseDoc } from '../slides/src/model.ts'
+import { MODEL_KEYS } from '../slides/src/modelkeys.generated.ts'
+import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
 import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
@@ -4388,6 +4394,393 @@ function fsTable(f: string): string {
     '…and says so differently when the schema declares no date field at all')
   ok(dateHint(calDoc([{ key: 'due', vt: 'date' }])).includes('due'),
     'a schema entry with no label falls back to its key rather than printing undefined')
+
+// ---------------------------------------------------------------------------
+// PAGE → DECK (spaces/src/todeck.ts)
+//
+// CROSS-ZONE, AND SAID OUT LOUD. This block imports `slides/src/model.ts` and
+// `slides/src/modelkeys.generated.ts` to READ — nothing under `slides/` is
+// edited by the branch that added this. That is the only guard there is on the
+// other side: bento/slides has no rig that knows this exporter exists, so the
+// two things below are what stand between us and silent drift.
+//
+//   · `parseDoc` is slides' OWN load gate. If the emitted document stops being
+//     loadable — the format string, the version, an empty slides array — this
+//     fails here rather than in somebody's browser.
+//   · MODEL_KEYS is generated FROM slides' model. Asserting that every key this
+//     exporter writes is in it turns "slides renamed a field" into a red rig
+//     instead of a property the renderer silently ignores.
+//
+// Everything here is BEHAVIOURAL: build a page, run the exporter, assert on the
+// document that comes out. Source greps pass straight through live regressions
+// in this zone — measured twice on #392.
+{
+  const deckDoc = (pages: unknown[], over: Record<string, unknown> = {}): SpacesDoc => ({
+    format: FORMAT, version: 1, docId: 'd1', title: 'Space',
+    theme: { background: '#FFFFFF', color: '#1E2A3A', accent: '#F7A600', fontFamily: 'Georgia' },
+    pages, ...over,
+  } as unknown as SpacesDoc)
+
+  const PNG = 'data:image/png;base64,iVBORw0KGgo='
+
+  const page = (blocks: unknown[], over: Record<string, unknown> = {}) =>
+    ({ id: 'p1', title: 'Launch plan', blocks, ...over })
+
+  // --- 1. it LOADS. slides' own gate, not ours.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: 'Why now' },
+      { id: 'b2', type: 'p', html: 'Because.' },
+    ])]), 'p1', { docId: 'deck', now: '' })
+    const loaded = slidesParseDoc(JSON.stringify(out.doc))
+    ok(!!loaded, 'the emitted document loads through bento/slides own parseDoc')
+    ok(!!loaded && loaded.slides.length === out.slides,
+      `parseDoc keeps every slide the exporter counted (${out.slides})`)
+    ok(out.doc.title === 'Launch plan', 'the deck is titled after the page, not the space')
+    ok(out.doc.theme.fontFamily === 'Georgia' && out.doc.theme.accent === '#F7A600',
+      'the space theme carries across to the deck theme')
+  }
+
+  // --- 2. every key is a key bento/slides has. THE drift detector.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: 'H' },
+      { id: 'b2', type: 'p', html: 'p' },
+      { id: 'b3', type: 'table', rows: [['a', 'b'], ['1', '2']], cols: [1, 1], colAlign: ['', 'right'] },
+      { id: 'b4', type: 'image', src: 'asset:k' },
+      { id: 'b5', type: 'media', src: 'asset:k', kind: 'video' },
+    ], { icon: '🚀', cover: 'asset:k' })], { assets: { k: PNG } }), 'p1', { docId: 'd', now: '' })
+
+    // quiet: one line per element type would drown the rig's output
+    const seenTypes = new Set<string>()
+    const ok2 = (cond: boolean, msg: string): void => {
+      if (cond && seenTypes.has(msg)) return
+      seenTypes.add(msg)
+      ok(cond, msg)
+    }
+    const docKeys = MODEL_KEYS.doc as string[]
+    const slideKeys = MODEL_KEYS.slide as string[]
+    const bad: string[] = []
+    for (const k of Object.keys(out.doc)) if (!docKeys.includes(k)) bad.push(`doc.${k}`)
+    for (const s of out.doc.slides) {
+      for (const k of Object.keys(s)) if (!slideKeys.includes(k)) bad.push(`slide.${k}`)
+      const byType = MODEL_KEYS.element as unknown as Record<string, string[]>
+      for (const e of s.elements) {
+        const allowed = Object.hasOwn(byType, e.type) ? byType[e.type] : []
+        ok2(allowed.length > 0, `bento/slides knows an element type called ${e.type}`)
+        for (const k of Object.keys(e)) if (!allowed.includes(k)) bad.push(`${e.type}.${k}`)
+        // a table's nested shapes are their own key lists over there
+        if (e.type === 'table') {
+          const tbl = e as unknown as { style: object; rows: Array<{ cells: object[] }> }
+          const styleKeys = (MODEL_KEYS as unknown as Record<string, string[]>).tableStyle
+          const cellKeys = (MODEL_KEYS as unknown as Record<string, string[]>).tableCell
+          for (const k of Object.keys(tbl.style)) if (!styleKeys.includes(k)) bad.push(`tableStyle.${k}`)
+          for (const r of tbl.rows) for (const c of r.cells) {
+            for (const k of Object.keys(c)) if (!cellKeys.includes(k)) bad.push(`tableCell.${k}`)
+          }
+        }
+      }
+    }
+    ok(bad.length === 0, `every key the exporter writes exists in bento/slides model (${bad.join(', ') || 'none unknown'})`)
+  }
+
+  // --- 3. what starts a slide, and what does not.
+  {
+    const titles = (blocks: unknown[]): string[] =>
+      pageToDeck(deckDoc([page(blocks)]), 'p1', { docId: 'd', now: '' })
+        .doc.slides.slice(1) // [0] is the title slide
+        .map((s) => {
+          const el = s.elements.find((e) => e.type === 'text' && (e as { role?: string }).role === 'title')
+          return el ? (el as { html: string }).html : ''
+        })
+
+    ok(titles([
+      { id: '1', type: 'h1', html: 'One' },
+      { id: '2', type: 'p', html: 'a' },
+      { id: '3', type: 'h2', html: 'Two' },
+      { id: '4', type: 'p', html: 'b' },
+    ]).join('|') === 'One|Two', 'h1 and h2 each start a slide and become its title')
+
+    ok(titles([
+      { id: '1', type: 'h1', html: 'One' },
+      { id: '2', type: 'p', html: 'a' },
+      { id: '3', type: 'h3', html: 'Sub' },
+      { id: '4', type: 'p', html: 'b' },
+    ]).join('|') === 'One', 'h3 does NOT start a slide — a deck of sub-sub-headings is a deck nobody wrote')
+
+    ok(titles([
+      { id: '1', type: 'p', html: 'a' },
+      { id: '2', type: 'divider' },
+      { id: '3', type: 'p', html: 'b' },
+    ]).length === 2, 'a divider starts a second, untitled slide')
+  }
+
+  // --- 4. NO NETWORK (PLATFORM §1). Nothing the deck carries may be fetchable.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: 'Pictures' },
+      { id: 'b2', type: 'image', src: 'http://tracker.example/p.png', alt: 'remote' },
+      { id: 'b3', type: 'image', src: 'asset:evil' },
+      { id: 'b4', type: 'image', src: 'asset:good' },
+      { id: 'b5', type: 'media', src: 'https://cdn.example/v.mp4', kind: 'video' },
+    ], { cover: 'https://cdn.example/c.jpg' })], {
+      // THE INDIRECTION BUG THIS ZONE SHIPPED ONCE: `asset:evil` is local by
+      // inspection and remote after the table has had its say. The question has
+      // to be asked about the RESOLVED value.
+      assets: { evil: 'http://tracker.example/hidden.png', good: PNG },
+    }), 'p1', { docId: 'd', now: '' })
+
+    const srcs: string[] = []
+    for (const s of out.doc.slides) {
+      for (const e of s.elements) {
+        for (const k of ['src', 'poster']) {
+          const v = (e as unknown as Record<string, unknown>)[k]
+          if (typeof v === 'string' && v) srcs.push(v)
+        }
+      }
+    }
+    const table = out.doc.assets ?? {}
+    const values = Object.keys(table).map((k) => String(table[k]))
+    // AFTER THE TABLE HAS HAD ITS SAY. The first draft of this asked about the
+    // string on the element, which is the exact hole #396 closed on the reading
+    // side: `asset:k` is local by inspection and `assets.k` is whatever the
+    // document says. Sabotaging the exporter's gate left every element src
+    // reading `asset:…` and the bytes behind one of them still an http url, and
+    // this assertion passed. It resolves now.
+    const resolved = (v: string): string =>
+      v.startsWith('asset:')
+        ? (Object.hasOwn(out.doc.assets ?? {}, v.slice(6)) ? String((out.doc.assets ?? {})[v.slice(6)]) : '')
+        : v
+    ok(srcs.map(resolved).every((v) => v.startsWith('data:')),
+      `no element src reaches the network once the deck's own asset table has had its say (${srcs.length} checked)`)
+    ok(srcs.filter((v) => v.startsWith('asset:'))
+      .every((v) => Object.hasOwn(table, v.slice(6))),
+      'every asset: ref the deck carries resolves in the DECK’s own table — no dangling ref to the space it came from')
+    ok(values.length > 0 && values.every((v) => v.startsWith('data:')),
+      `every asset the deck carries is embedded bytes (${values.length})`)
+    ok(out.notes.filter((n) => n.code === 'image-remote').reduce((a, n) => a + n.n, 0) === 3,
+      'all three would-be-fetched pictures (a cover, a plain url, one behind an asset key) are reported')
+    ok(out.notes.some((n) => n.code === 'media-remote'), 'a remote clip is reported too')
+    // and the good one really did travel
+    ok(values.includes(PNG), 'the local picture travelled as its bytes')
+  }
+
+  // --- 5. untrusted markup never reaches the deck.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: '<img src=x onerror="alert(1)">Head' },
+      { id: 'b2', type: 'p', html: 'a <a href="javascript:alert(1)">link</a> b' },
+      { id: 'b3', type: 'p', html: '<script>alert(1)</script><b>bold</b>' },
+      // THE CASE THAT MAKES ESCAPING LOAD-BEARING. A raw `<script>` is already
+      // gone by the time marks.ts has parsed the runs — so a rig that only
+      // tests that one passes with the escaping REMOVED (measured). An
+      // entity-encoded tag survives parsing as TEXT and becomes live markup the
+      // moment it is written back out unescaped.
+      { id: 'b5', type: 'p', html: '&lt;img src=x onerror=alert(1)&gt; and &lt;script&gt;bad()&lt;/script&gt;' },
+      { id: 'b4', type: 'table', rows: [['<img onerror=alert(1)>', 'ok']], cols: [1, 1] },
+    ])]), 'p1', { docId: 'd', now: '' })
+    // ABOUT THE TAGS, not about substrings of the JSON. The escaped form of an
+    // attack is TEXT that legitimately contains the word "onerror", so a
+    // substring test on the serialized document is both a false alarm there and
+    // (measured) no alarm at all where it matters.
+    const htmls: string[] = []
+    for (const sl of out.doc.slides) {
+      for (const e of sl.elements) {
+        const h = (e as unknown as { html?: unknown }).html
+        if (typeof h === 'string') htmls.push(h)
+        const rows = (e as unknown as { rows?: Array<{ cells: Array<{ html: string }> }> }).rows
+        if (rows) for (const r of rows) for (const c of r.cells) htmls.push(c.html)
+      }
+    }
+    const OKTAG = /^<\/?(strong|em|u|s|code|br|ul|ol|li)>$/
+    const tags = htmls.flatMap((h) => h.match(/<[^>]*>/g) ?? [])
+    const rogue = tags.filter((tg) => !OKTAG.test(tg))
+    ok(rogue.length === 0,
+      `every tag in the deck's html is one bento/slides renders, attribute-free (${rogue.slice(0, 3).join(' ') || `${tags.length} tags, all clean`})`)
+    ok(!htmls.some((h) => /javascript:/i.test(h)), 'no javascript: url survives into the deck')
+    ok(!tags.some((tg) => /^<a\b/i.test(tg)), 'no <a> survives — bento/slides unwraps it anyway, so the words are what is kept')
+    ok(htmls.some((h) => h.includes('<strong>bold</strong>')),
+      'the marks that DO survive are still there — the guard is not "strip everything"')
+    ok(htmls.some((h) => h.includes('&lt;img')),
+      'an entity-encoded tag stays encoded — it is text, and it goes on being text')
+    ok(out.notes.some((n) => n.code === 'link-flattened'), 'the lost address is reported, not silent')
+  }
+
+  // --- 6. a prototype key in the asset table is a lookup, never a function.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'image', src: 'asset:toString' },
+      { id: 'b2', type: 'image', src: 'asset:constructor' },
+    ])], { assets: {} }), 'p1', { docId: 'd', now: '' })
+    const all = JSON.stringify(out.doc)
+    ok(!all.includes('native code') && !all.includes('function '),
+      'asset:toString resolves to nothing, never to a stringified native function')
+  }
+
+  // --- 7. tables: shape, alignment, header, and the split that is reported.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: 'Numbers' },
+      {
+        id: 'b2', type: 'table', header: true,
+        rows: [['Q', 'Rev'], ['Q1', '<b>10</b>'], ['Q2', '20']],
+        cols: [2, 1], colAlign: ['', 'right'],
+      },
+    ])]), 'p1', { docId: 'd', now: '' })
+    const tbl = out.doc.slides.flatMap((s) => s.elements).find((e) => e.type === 'table') as
+      undefined | { columns: Array<{ w: number }>; rows: Array<{ cells: Array<{ html: string; align?: string }> }>; header: boolean }
+    ok(!!tbl, 'a spaces table becomes a bento/slides table element')
+    ok(!!tbl && tbl.header === true && tbl.rows.length === 3, 'header flag and row count carry')
+    ok(!!tbl && tbl.columns.map((c) => c.w).join(',') === '2,1', 'fractional column weights carry')
+    ok(!!tbl && tbl.rows[1].cells[1].align === 'right' && tbl.rows[0].cells[1].align === 'right',
+      'per-COLUMN alignment becomes per-cell alignment on every row, header included')
+    ok(!!tbl && /<strong>10<\/strong>/.test(tbl.rows[1].cells[1].html),
+      'a cell keeps the marks it had')
+
+    // THE BOX MUST BE TALL ENOUGH FOR ITS OWN ROWS. A bento/slides table draws
+    // into a fixed-height element, so a box shorter than its content CLIPS —
+    // the first end-to-end render showed three of five rows and the fourth cut
+    // through the middle, and nothing in this rig or in slides' validate()
+    // said a word. The bound is derived from the style the exporter itself
+    // writes, so it moves with a font-size change instead of pinning a
+    // constant: one line of text, plus the cell padding, plus the rule.
+    {
+      const t2 = tbl as unknown as {
+        h: number; rows: unknown[]
+        style: { fontSize: number; cellPadY: number; borderWidth: number }
+      }
+      const minRow = t2.style.fontSize * 1.2 + t2.style.cellPadY * 2 + t2.style.borderWidth
+      ok(t2.h >= t2.rows.length * minRow,
+        `the table box is tall enough for every row it holds (${t2.h}px for ${t2.rows.length} rows, ${Math.ceil(minRow)}px each)`)
+    }
+
+    const tall = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: 'Long' },
+      { id: 'b2', type: 'table', header: true, rows: [['name', 'n'], ...Array.from({ length: 60 }, (_, i) => [`r${i}`, `${i}`])], cols: [1, 1] },
+    ])]), 'p1', { docId: 'd', now: '' })
+    const tables = tall.doc.slides.flatMap((s) => s.elements).filter((e) => e.type === 'table')
+    ok(tables.length > 1, `a table too tall for one slide continues on the next (${tables.length} parts)`)
+    ok(tall.notes.some((n) => n.code === 'table-split'), '…and says so')
+    const carried = tables.reduce((a, e) => a + ((e as { rows: unknown[] }).rows.length - 1), 0)
+    ok(carried === 60, `every body row travels across the split (${carried}/60) — a silent truncation is the failure mode here`)
+  }
+
+  // --- 8. lists become real <ul>/<ol>, with nesting and to-do state.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'bullet', html: 'One' },
+      { id: 'b2', type: 'bullet', html: 'Nested', parent: 'b1' },
+      { id: 'b3', type: 'bullet', html: 'Two' },
+    ])]), 'p1', { docId: 'd', now: '' })
+    const html = out.doc.slides.flatMap((s) => s.elements)
+      .filter((e) => e.type === 'text').map((e) => (e as { html: string }).html).join('')
+    ok(/<ul>.*<li>One<\/li>.*<ul>.*<li>Nested<\/li>.*<\/ul>.*<li>Two<\/li>/s.test(html),
+      'a bullet run becomes one nested <ul>, in document order')
+
+    const todo = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'todo', html: 'Done', done: true },
+      { id: 'b2', type: 'todo', html: 'Not', done: false },
+    ])]), 'p1', { docId: 'd', now: '' })
+    const th = todo.doc.slides.flatMap((s) => s.elements)
+      .filter((e) => e.type === 'text').map((e) => (e as { html: string }).html).join('')
+    ok(th.includes('☑ Done') && th.includes('☐ Not'), 'a to-do carries whether it is ticked')
+  }
+
+  // --- 9. a canvas keeps the arrangement the author made.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'canvas', html: 'Roadmap' },
+      { id: 'b2', type: 'p', html: 'Left', parent: 'b1', x: 0, y: 0 },
+      { id: 'b3', type: 'p', html: 'Right', parent: 'b1', x: 90, y: 80 },
+    ])]), 'p1', { docId: 'd', now: '' })
+    const texts = out.doc.slides.flatMap((s) => s.elements)
+      .filter((e) => e.type === 'text') as Array<{ html: string; x: number; y: number; w: number; h: number }>
+    const left = texts.find((e) => e.html.includes('Left'))
+    const right = texts.find((e) => e.html.includes('Right'))
+    ok(!!left && !!right && right.x > left.x && right.y > left.y,
+      'a card further right and further down on the canvas is further right and down on the slide')
+    ok(out.notes.some((n) => n.code === 'canvas-flattened'), 'and the invented card size is reported')
+  }
+
+  // --- 10. a board exports the ROWS it stands for, not the word "Issues".
+  {
+    const spaceDoc = deckDoc([
+      page([{ id: 'v1', type: 'view', html: 'Backlog' }]),
+      { id: 'i1', title: 'Fix the thing', blocks: [{ id: 'x1', type: 'prop', key: 'status', value: 'todo', html: 'Status: To do' }] },
+      { id: 'i2', title: 'Ship the other', blocks: [{ id: 'x2', type: 'prop', key: 'status', value: 'doing', html: 'Status: In progress' }] },
+    ])
+    const out = pageToDeck(spaceDoc, 'p1', { docId: 'd', now: '' })
+    const tbl = out.doc.slides.flatMap((s) => s.elements).find((e) => e.type === 'table') as
+      undefined | { rows: Array<{ cells: Array<{ html: string }> }> }
+    const cells = tbl ? tbl.rows.flatMap((r) => r.cells.map((c) => c.html)).join('|') : ''
+    ok(cells.includes('Fix the thing') && cells.includes('Ship the other'),
+      'a view block exports the issues it stands for, by name')
+    ok(out.notes.some((n) => n.code === 'view-derived'), 'and says what it did')
+  }
+
+  // --- 11. nothing lands off the canvas.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: 'A page with a lot on it' },
+      ...Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, type: 'p', html: `Paragraph number ${i} with a reasonable amount of prose in it.` })),
+      { id: 'c1', type: 'canvas', html: 'Board' },
+      { id: 'c2', type: 'p', html: 'Far corner', parent: 'c1', x: 100, y: 100 },
+    ])]), 'p1', { docId: 'd', now: '' })
+    const off: string[] = []
+    for (const s of out.doc.slides) {
+      for (const e of s.elements) {
+        const b = e as unknown as { x: number; y: number; w: number; h: number; type: string }
+        if (b.x < 0 || b.y < 0 || b.x + b.w > 1280 || b.y + b.h > 720) off.push(`${b.type}@${b.x},${b.y} ${b.w}x${b.h}`)
+      }
+    }
+    ok(off.length === 0, `no element sits off the 1280x720 canvas (${off.slice(0, 3).join('; ') || 'all inside'})`)
+    ok(out.doc.slides.length > 2, `a long page spills onto continuation slides (${out.doc.slides.length})`)
+  }
+
+  // --- 12. loss reaches the FILE, not only the dialog.
+  {
+    const out = pageToDeck(deckDoc([page([
+      { id: 'b1', type: 'h1', html: 'Risks' },
+      { id: 'b2', type: 'toggle', html: 'Hidden detail', open: false },
+      { id: 'b3', type: 'p', html: 'Inside the fold', parent: 'b2' },
+    ])]), 'p1', { docId: 'd', now: '' })
+    const notes = out.doc.slides.map((s) => s.notes).join('\n')
+    ok(out.notes.some((n) => n.code === 'toggle-open'), 'a fold shown open is reported')
+    ok(notes.trim().length > 0, 'the report is written into the deck’s own speaker notes, so it survives the hand-off')
+    const body = out.doc.slides.flatMap((s) => s.elements)
+      .filter((e) => e.type === 'text').map((e) => (e as { html: string }).html).join('')
+    ok(body.includes('Inside the fold'),
+      'a closed fold’s content is CARRIED, not hidden — a slide cannot fold, and dropping it would be data loss')
+  }
+
+  // --- 12b. a page icon is only sometimes an emoji.
+  //
+  // `Page.icon` is documented as one emoji, and the app also accepts a name from
+  // its own icon set — the starter space's pages use those. Written onto a slide
+  // as text it reads as the word "image" above the title, which is exactly what
+  // the first end-to-end render into a built bento/slides shell showed.
+  {
+    const emoji = pageToDeck(deckDoc([page([{ id: 'b', type: 'p', html: 'x' }], { icon: '🚀' })]), 'p1', { docId: 'd', now: '' })
+    const named = pageToDeck(deckDoc([page([{ id: 'b', type: 'p', html: 'x' }], { icon: 'image' })]), 'p1', { docId: 'd', now: '' })
+    const htmlOf = (r: ReturnType<typeof pageToDeck>): string =>
+      r.doc.slides[0].elements.filter((e) => e.type === 'text').map((e) => (e as { html: string }).html).join('|')
+    ok(htmlOf(emoji).includes('🚀'), 'an emoji page icon travels onto the title slide')
+    ok(!htmlOf(named).includes('image'), 'a NAMED icon does not — it would read as the word "image" above the title')
+    ok(named.notes.some((n) => n.code === 'icon-glyph'), '…and it is reported rather than dropped in silence')
+    ok(!emoji.notes.some((n) => n.code === 'icon-glyph'), 'an emoji is not reported as a loss')
+  }
+
+  // --- 13. the degenerate inputs still produce something that loads.
+  {
+    for (const [what, out] of [
+      ['an empty page', pageToDeck(deckDoc([page([])]), 'p1', { docId: 'd', now: '' })],
+      ['a page id that is not there', pageToDeck(deckDoc([page([])]), 'nope', { docId: 'd', now: '' })],
+      ['a document with no theme', pageToDeck({ format: FORMAT, version: 1, docId: 'd', title: 'T', pages: [page([{ id: 'b', type: 'p', html: 'x' }])] } as unknown as SpacesDoc, 'p1', { docId: 'd', now: '' })],
+    ] as Array<[string, ReturnType<typeof pageToDeck>]>) {
+      ok(out.doc.slides.length > 0 && !!slidesParseDoc(JSON.stringify(out.doc)),
+        `${what} still produces a deck that loads`)
+    }
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

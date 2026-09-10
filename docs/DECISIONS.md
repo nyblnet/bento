@@ -6501,3 +6501,72 @@ four rendered rows in a Sunday-first locale and 35 in five in a Monday-first
 one, August 2026 draws 42 in six, September 35 in five. The cell count is
 derived from the month AND the reader; a fixed 35 silently loses the last days
 of a six-week month, which is the classic failure of every calendar grid.
+
+## 2026-09-09 — PAGE → DECK emits a DOCUMENT, not a file, and says what it dropped
+
+`bento/spaces` can turn a page into a `bento/slides` presentation
+(`spaces/src/todeck.ts`, Save → Export page as slides…). Three things about it
+are settled and should not be relitigated without new facts.
+
+**It emits the deck's document JSON, not a `.bento.html` deck.** The stronger
+product moment is obviously the file, and it is not reachable from inside
+`spaces/`. A self-contained deck is a document spliced into a slides SHELL, and
+this app has exactly three ways to obtain one: bundle it (about half a megabyte
+of another app inside every space, forever, for a feature most spaces never
+use), fetch it (PLATFORM §1 — opening a document must not touch the network,
+and a build-time fetch would still need the release channel and its signature),
+or have the two apps produce a joint shell, which is a change in two zones this
+one may not edit. So the hand-off is the interchange path bento/slides already
+documents and already supports: "Replace from JSON…" in its About dialog, and
+`window.bento.loadDoc()` for a script. The Markdown exporter is the precedent —
+it writes another format faithfully and hands it over. **If a joint shell ever
+exists, this is the decision to revisit; nothing else about the exporter
+changes, because the document it produces is already the whole payload.**
+
+**A page has no speaker notes, and none are invented.** The tempting mapping is
+review comments → `slide.notes`: both are authored, both travel in the file,
+neither is shown to a reader. It was rejected. A comment is workspace, it is
+addressed to a named person, and a deck's notes travel in every copy of the
+deck — so the mapping would quietly disclose a remark its author never put in
+the document. What the notes carry instead is the export's own account of what
+did not survive the crossing, per slide. That is deliberate: the dialog's list
+is gone the moment it closes, and the presenter who opens the deck next week is
+the person who needs to know that the page had a video on it.
+
+**Loss is reported by CODE, translated at the call site.** `todeck.ts` returns
+`DeckNote {code, n, where}` and never an English sentence; `editor.ts` turns
+each code into its own literal `t()` call. This is the `LAYOUT_WORD` lesson
+applied before the fact — the i18n extractor sweeps `t()` calls with a literal
+argument, so `t(TEXT[code])` compiles, runs, reports 100% coverage and ships
+English in all eight locales. The copy written INTO the document stays English
+on purpose: a saved artefact's words are its author's, not its next reader's
+browser's.
+
+### The cross-zone coupling, and what actually guards it
+
+`spaces/` writes `bento/slides`' format while being forbidden to edit
+`slides/`. Two guards, and it is worth being precise about which failures each
+one catches, because the gap between them is real:
+
+- **A TYPE-ONLY import of `slides/src/model.ts`.** Erased at build time, so it
+  costs the spaces shell nothing, and a field renamed or narrowed over there is
+  a compile error here. It caught a missing required `modified` on the first
+  run.
+- **A rig that runs the emitted document through slides' OWN `parseDoc`, and
+  checks every key it writes against `slides/src/modelkeys.generated.ts`.** In
+  `scripts/test-spaces-model.ts`, importing from `slides/` to READ. Loadability
+  and unknown-key drift both go red here instead of in a browser.
+
+**Neither guard covers BEHAVIOUR**, and there is nothing on the slides side that
+knows this exporter exists. A renderer that stopped honouring `valign`, or a
+table that started sizing its rows differently, would pass both. That was
+accepted knowingly rather than solved, and it is written down so the next
+session does not discover it as a surprise. The measurement that does cover
+behaviour is manual: load the emitted deck into a built slides shell over
+`http://127.0.0.1` and run its `validate()`, which measures with the real
+renderer. Doing that found three defects the node rig could not: every element
+past slides' 96px margin convention, two text boxes overflowing by 10px and
+15px because the no-DOM width estimate was too generous for lists, and a table
+CLIPPED to three of its five rows because the element box was sized at 36px a
+row when a row draws at about 45. Only the third of those has a rig assertion
+now, and it is a derived bound rather than a measurement.

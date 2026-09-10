@@ -605,6 +605,31 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   build that has never heard of either, which renders the board and round-trips
   both keys untouched. And `board`/`month` stay the ABSENT keys — a view cycled
   all the way round, span and all, is byte-identical to one nobody touched.
+- **A page becomes a deck.** Save → **Export page as slides…** turns one page
+  into a `bento/slides` presentation: headings start slides, lists stay lists,
+  a table stays a table, a board becomes a table of the rows it stands for, and
+  a canvas becomes a slide with every card where you put it. The page's title,
+  icon and cover make the title slide; the space's theme becomes the deck's.
+  No hosted notes app can hand you a presentation you own outright, and this
+  one can, because both apps are the same repository.
+
+  **What it hands over is the deck's document JSON**, which you paste into
+  Bento Slides through its own "Replace from JSON…" — not a finished
+  `.bento.html`. A self-contained deck is a document spliced into a slides
+  SHELL, and the only ways for this app to have one are bundling half a
+  megabyte of another app into every space or fetching it, which is the one
+  thing opening a document must never do. The Markdown export sets the
+  precedent: write the other format faithfully and hand it over.
+
+  **Nothing is fetched, and nothing is dropped in silence.** Every picture
+  travels as its bytes, re-interned in the deck's own asset table; anything
+  that would still reach the network — including bytes hidden one `asset:`
+  indirection away, the hole closed on the reading side in 0.1.x — is left out
+  and said out loud. The dialog lists what did not come across before you
+  download anything, and the same list is written into the deck's speaker
+  notes, so a presenter opening it next week is told too. Speaker notes are
+  otherwise NOT invented: mapping review comments onto them would move a remark
+  addressed to a person into a file people present from.
 
 ## [0.1.0] — 2026-08-03
 
