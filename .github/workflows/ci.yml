@@ -251,6 +251,16 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: spaces aliases and unlinked mentions
+        # The assertions that matter in this one are the NEGATIVES: a page
+        # title found inside a code block, an existing link, a bare URL or the
+        # middle of a longer word must all produce NO mention, and a title full
+        # of regex metacharacters must not throw. It also asserts that a name
+        # surrounded by kana matches, which a `\b`-style boundary silently
+        # never does — a rule built for English is a total failure in ja,
+        # zh-Hans and zh-Hant rather than a partial one.
+        run: node scripts/test-spaces-mentions.ts
+
       - name: spaces rig manifest
         # Bookkeeping, not a ninth run of the eight steps above. scripts/
         # test-spaces.mjs is the local entry point for the spaces suite (two of

@@ -334,6 +334,29 @@ export interface Page {
    * falls back to the measure rather than to nothing.
    */
   width?: 'wide' | 'full'
+  /**
+   * Other names this page answers to — `[[NYC]]` and `[[New York]]` reaching
+   * the same page.
+   *
+   * A LINK-TIME notion, deliberately. An alias is resolved where a name
+   * becomes a page id (src/mentions.ts `nameIndex`, read by the `[[…]]`
+   * resolver, ⌘K and the page picker), so the link that gets written is an
+   * ordinary `#p/<id>` href and the backlink index, the graph, export and
+   * collaboration never learn that aliases exist. Nothing downstream has a
+   * second way to name a page.
+   *
+   * Additive: absent on every page written before this, and an ABSENT key is
+   * the default — clearing the last alias deletes the field rather than
+   * storing `[]`, so a page that never had one is byte-identical to a page
+   * that had one and lost it. A build that predates this round-trips the
+   * array untouched and simply does not resolve by it.
+   *
+   * Two pages may claim the same alias; nothing here prevents it, because a
+   * file arrives already written. `nameIndex` resolves it deterministically
+   * (titles before aliases, then document order) and validate() reports it —
+   * see `alias-collision` in agent.ts.
+   */
+  aliases?: string[]
   /** the one page daily entries hang from, so the sidebar stays a tree */
   journalHome?: boolean
   /** out of the sidebar, still searchable and linkable, and ENUMERATED at

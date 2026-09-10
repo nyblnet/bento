@@ -664,6 +664,53 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   `scripts/test-spaces-reading.ts` asserts all of it on the SERIALIZED document
   rather than on "the strip function ran", the way the invite rig does.
 
+- **A page can answer to more than one name.** "Also known as" in the page
+  panel takes a comma-separated list — "NYC, the Big Apple" on a page titled
+  New York — and every one of those names reaches the page from a
+  `[[wikilink]]`, from ⌘K search, and from the `[[` page picker. All three, on
+  purpose: an alias that links but cannot be searched means you file something
+  under the name you use for it and then cannot find it by that name, which
+  reads as the search being broken rather than the alias being half-built.
+
+  The alias is resolved where a name becomes a page id, so what gets written
+  into the file is an ordinary `#p/<id>` link — backlinks, the graph, export,
+  print and collaboration never learn that aliases exist. `aliases` is a new,
+  absent-by-default key; clearing the last one deletes it again, so a page that
+  had an alias and lost it is byte-identical to one that never had one, and an
+  older build round-trips the array untouched.
+
+  Two pages can claim one name, because a file arrives already written. The
+  resolver settles it the same way in every copy — a title always beats an
+  alias, then document order — and `bento.validate()` reports it as
+  `alias-collision`, naming which page a `[[link]]` will actually reach. It is
+  the one place this app tells you about a clash it resolved on your behalf.
+
+- **Unlinked mentions: "this page is named in six others you never linked."**
+  Under the backlinks, every place this page's title or aliases appear as plain
+  words somewhere else, each with the sentence it appears in and a button that
+  turns those exact words into a link.
+
+  Most of the work is in what it refuses to find. A title inside a code block
+  or a code span, inside a link you already made, inside a URL or a mail
+  address, or in the middle of a longer word is not a mention; nor is a block
+  that already links here; nor is the page's own text. Names shorter than three
+  characters are not scanned for at all, because a page called "It" mentions
+  everything.
+
+  **CJK was designed for, not discovered.** A word-boundary rule built for
+  English does not degrade in Japanese, it returns exactly zero — every kana
+  beside a name is a letter, so the boundary never opens. So a boundary is
+  required only where the name's own edge is a word character in a script that
+  separates words, and two Han characters count as a whole name where three
+  Latin ones are the floor. 私は東京に住んでいます mentions 東京. The cost of
+  that rule, stated because it is real: a Han name also matches inside a longer
+  Han compound.
+
+  And it is not the quadratic thing it sounds like. Reading a page scans the
+  document ONCE for that page's names, so the cost is the size of the space and
+  not the number of pages in it: measured on a synthetic 1000-page, 2.5MB
+  space, 6.5ms per page open, against 1.9ms for the backlink index the app
+  already built. A 100-page space is 1.3ms.
 
 ## [0.1.0] — 2026-08-03
 

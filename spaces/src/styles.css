@@ -843,6 +843,19 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 .sp-backlink-list a:hover { text-decoration: underline; }
 .sp-snippet { color: var(--muted); margin-inline-start: 8px; }
 
+/* Unlinked mentions: the same list as the backlinks, one step quieter, with
+   the Link button only visible on hover/focus so a page with thirty of them
+   is not thirty buttons shouting. Focus-within keeps it reachable by keyboard,
+   where hover does not exist at all. */
+.sp-mentions { padding-top: 16px; margin-top: 22px; }
+.sp-mentions:empty { display: none; }
+.sp-mentions .sp-backlink-list li { display: flex; align-items: baseline; gap: 6px; }
+.sp-mentions .sp-snippet { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-mention-link { flex: none; padding: 1px 8px; font-size: 12px; opacity: 0; transition: opacity 0.12s; }
+.sp-mentions li:hover .sp-mention-link,
+.sp-mentions li:focus-within .sp-mention-link { opacity: 1; }
+@media (hover: none) { .sp-mention-link { opacity: 1; } }
+
 /* ————— menus + overlays ————— */
 .sp-overlay {
   position: fixed; inset: 0; background: rgb(var(--shade) / .34);
@@ -1223,7 +1236,8 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
   body.sp-printing .sp-printroot { display: block; }
   .sp-printroot .sp-page { break-after: page; }
   .sp-printroot .sp-page:last-child { break-after: auto; }
-  .sp-printroot .sp-pageicon, .sp-printroot .sp-backlinks { display: none; }
+  .sp-printroot .sp-pageicon, .sp-printroot .sp-backlinks,
+  .sp-printroot .sp-mentions { display: none; }
   @page { margin: 18mm 16mm; }
 }
 

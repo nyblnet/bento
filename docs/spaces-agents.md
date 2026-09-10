@@ -336,6 +336,12 @@ notifications, automation. The file is the team boundary and the capability.
 it lists the linker, with no maintenance. A space where pages only link *down*
 the tree wastes the one thing this format does that a folder of files cannot.
 
+**Give a page `aliases` when people call it more than one thing.** `aliases:
+["NYC", "the Big Apple"]` on a page titled New York makes all three names reach
+it from a `[[wikilink]]`, from ⌘K and from the `[[` picker — and makes prose
+that says "NYC" show up as an unlinked mention on that page. It costs one array
+and it is the cheapest way to make a space find things for its reader.
+
 ## `window.bento`
 
 ```js
@@ -345,6 +351,7 @@ bento.pages()                              // [{id, title, parent, archived, blo
 bento.getPage(id)                          // one page, with its blocks
 bento.search(q)                            // [{pageId, title, blockId}]
 bento.outline()                            // the whole space as a tree
+bento.mentions(pageId?)                    // where a page is named but not linked
 bento.validate()                           // what is wrong or suspect
 bento.stats()                              // pages, blocks, words, bytes, biggest assets
 bento.comments(query?)                     // review threads, flat, with a typed anchor
@@ -443,6 +450,31 @@ bento.outline()
 In sidebar order (depth-first). Headings carry their **block id**, so what comes
 back can be handed straight to `updateBlock` or `moveBlock`. `links` is what
 that page points at, which is the other half of the backlinks a reader sees.
+
+### `bento.mentions()`
+
+```js
+bento.mentions('p-abc')   // that page's unlinked mentions
+bento.mentions()          // every page's, as { pageId: Mention[] }
+// Mention: { pageId, fromPage, fromBlock, matched, htmlStart, htmlEnd, snippet }
+```
+
+Where a page's **title or aliases** appear as plain words in some other page
+without a link. `matched` is the text as it was actually written, and
+`htmlStart`/`htmlEnd` are offsets into `fromBlock`'s `html`, so a link can be
+spliced in exactly where the words are rather than found again by string search
+— which would hit the wrong occurrence when the name appears twice.
+
+It never reports a name inside a code block, a code span, a link that already
+exists, a URL or a mail address; nor in a block that already links to the
+target; nor in the page's own text; nor as part of a longer word. Names under
+three characters (two, for a name written in Han, kana or Hangul) are not
+scanned for at all.
+
+**READ ONLY on purpose.** Deciding that a sentence meant *that* page is a
+judgement, and an agent that rewrote a hundred blocks on a guess would be
+unreviewable. Link the ones you are sure of with `updateBlock`, and leave the
+rest to the panel, where a person can see the sentence before deciding.
 
 ### `bento.stats()`
 
