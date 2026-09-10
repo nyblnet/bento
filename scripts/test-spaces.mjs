@@ -50,6 +50,7 @@ const RIGS = [
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },
+  { name: 'ink',     file: 'scripts/test-spaces-ink.ts' },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
 ]
 

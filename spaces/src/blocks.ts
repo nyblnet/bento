@@ -353,6 +353,25 @@ export const SPECS: BlockSpec[] = [
     toMd: (_b, text) => [`**${text || 'Canvas'}**`],
   },
   {
+    // A DRAWING — a sketch, a diagram, a thing circled. Its strokes are a field
+    // on this block rather than blocks of their own, which is the OPPOSITE of
+    // the call canvas made for its cards; the full argument for why the two
+    // differ is at the top of ink.ts. The short version: a card degrades into a
+    // paragraph and a stroke degrades into litter.
+    //
+    // `text: true`: the block's own `html` is the drawing's NAME, and that name
+    // is what a build with no `ink` type renders in its place. It must not try
+    // to duplicate the drawing — there is nothing text could say about it —
+    // only to say what the drawing was.
+    type: 'ink', label: 'Drawing', hint: 'Sketch with a pen', icon: 'edit',
+    tag: 'div', text: true, custom: true,
+    // THE NAME. A drawing is a picture and Markdown has no pictures it could
+    // point at here — the strokes are in the file, not in a file. Exporting a
+    // rasterised copy would put a second, diverging representation of the
+    // drawing in the document, which is the thing the whole format avoids.
+    toMd: (_b, text) => [`**${text || 'Drawing'}**`],
+  },
+  {
     type: 'image', label: 'Image', hint: 'Embedded in the file', icon: 'image',
     tag: 'div', custom: true,
     toMd: (b) => [`![${String(b.alt ?? '')}](${String(b.src ?? '')})`],

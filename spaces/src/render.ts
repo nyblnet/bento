@@ -23,6 +23,7 @@ import {
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
+import { renderInkHead, renderInkSurface, renderInkTools } from './ink.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -525,6 +526,16 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
         .find((p) => p.blocks.some((x) => x.id === b.id))?.blocks
         .filter((x) => x.parent === b.id).length ?? 0
       renderCanvasHead(el, b, opts.editable === true, cards)
+      return el
+    }
+
+    case 'ink': {
+      // The name, the surface, and — only where there is an editor — the pen.
+      // Reader, print and the file-manager still get the drawing and nothing
+      // that looks like a control they cannot use.
+      renderInkHead(el, b, opts.editable === true)
+      el.appendChild(renderInkSurface(b, opts.editable === true))
+      if (opts.editable && !opts.printing) renderInkTools(el, b)
       return el
     }
 

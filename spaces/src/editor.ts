@@ -19,6 +19,7 @@ import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { wireCanvas, placeNewCard } from './canvas.ts'
+import { wireInk, loadPen } from './ink.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
@@ -179,6 +180,8 @@ export class Editor {
   constructor(root: HTMLElement, store: Store) {
     this.root = root
     this.store = store
+    // the pen this reader last drew with — a session fact, like the panel below
+    loadPen()
     // the reader's panel, restored — never the document's
     try {
       const w = Number(localStorage.getItem('bento-sp-pane'))
@@ -2364,6 +2367,13 @@ export class Editor {
         commit: (fn, opts) => this.store.commit(fn, opts),
         repaint: () => this.paintPage(),
         pickPage: (then) => this.openPagePicker('', null, then),
+      })
+      // Ink keeps its own wiring in its own file, for the canvas's reason: the
+      // pen, the eraser and the surface are one feature and touch nothing here.
+      wireInk(view, {
+        block: (id) => this.store.block(id),
+        commit: (fn, opts) => this.store.commit(fn, opts),
+        repaint: () => this.paintPage(),
       })
     }
 

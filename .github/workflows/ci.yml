@@ -233,6 +233,17 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: spaces ink
+        # The ink block is almost all pure functions over numbers, and every one
+        # of its failure modes is silent: a codec that does not round-trip nudges
+        # a drawing on every save, an RDP that keeps the wrong points quietly
+        # turns a sketch into a different sketch, and a stroke out of a mailed
+        # file that THROWS takes the whole page down inside renderBlock. The rig
+        # also prints what a realistic 34-stroke drawing costs in bytes — the
+        # size rig's watermark discipline, for the one field that grows without
+        # anybody typing.
+        run: node scripts/test-spaces-ink.ts
+
       - name: spaces rig manifest
         # Bookkeeping, not a ninth run of the eight steps above. scripts/
         # test-spaces.mjs is the local entry point for the spaces suite (two of

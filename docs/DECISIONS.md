@@ -6390,3 +6390,77 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-10 — a stroke is a FIELD, where a card is a BLOCK; both axes are percent of WIDTH
+
+bento/spaces gained freehand drawing (`ink`). Two shape calls in it contradict
+the nearest precedent in the same app on purpose, and both are the kind a future
+session would otherwise "fix" back.
+
+**1. `ink.strokes` is an array field on one block, not a block per stroke.**
+`spaces/src/canvas.ts` argues at length that a canvas CARD must be a block
+rather than an entry in an array, for three reasons. A stroke re-derives all
+three rather than inheriting them, and two come out the other way.
+
+- *"A second place text lives"* — **does not transfer.** That reason is about
+  words: a card's text has to be a block's `html` so ⌘F finds it, `buildIndex`
+  backlinks it, one sanitizer canonicalises it and one markdown pass exports
+  it. A stroke has no words at all. The `ink` block's own `html` carries the
+  drawing's NAME and is all four of those things.
+- *"It would degrade badly"* — **transfers, and reverses.** A card as a block
+  degrades beautifully: on a build with no `canvas` type the cards fall out to
+  the top level and read as paragraphs. A stroke as a block degrades into
+  LITTER — a forty-stroke sketch falls out as forty EMPTY paragraphs the author
+  has to delete forty times. One block with the strokes in a field degrades to
+  its name, and the strokes ride along untouched (PLATFORM §3).
+- *"It loses edits under collaboration"* — **transfers, and is ACCEPTED.**
+  `strokes` is one array and therefore one last-writer-wins register: two
+  people drawing on the same `ink` block concurrently keep one of the two sets,
+  silently. This is `table.rows`' limitation exactly, and it is documented in
+  `ink.ts`, in the changelog and in `docs/spaces-agents.md` rather than
+  half-fixed. The fix — a node per stroke — is precisely the shape the
+  degradation argument rejects, and it would carry ~45 bytes of id/type/parent
+  per ~9-byte stroke. Two people drawing on two different `ink` blocks converge
+  normally.
+
+The general rule this establishes: **the canvas argument is about the thing
+being a unit of MEANING that the rest of the app already knows how to handle.**
+Where a payload is not text, is not individually addressable by links or
+search, and would leave visible debris on an older build, the array field is
+right and the block is wrong.
+
+**2. Ink coordinates are percentages of the surface's WIDTH on BOTH axes**,
+where a canvas card's `y` is a percentage of its HEIGHT. Percentages for
+canvas.ts's reason — one file, read at 320px and 2560px and printed. One unit
+for both axes because a card is *placed* and a stroke is a *shape*: percent-of-
+width across and percent-of-height down is a non-uniform system, so a
+hand-drawn circle would be stored as an ellipse and would re-shear the moment
+the surface's `ratio` changed. So `y` runs 0..100/ratio, the viewBox is
+`0 0 100 100/ratio`, `stroke-width` is in the same unit and is
+resolution-independent for free, and changing the shape REFRAMES rather than
+rescaling (slides' page-size rule). Anyone tempted to "make ink consistent with
+canvas" would be introducing shear.
+
+**3. Inline SVG, never `<canvas>`.** Not a drawing-quality call — a surface
+call. A canvas element is a bitmap at its laid-out size, so it prints blurred;
+`spaces/src/preview.ts` BANS `canvas` outright and strips `src`, so a drawing
+in one is a blank rectangle in the file-manager still; and the reading view of
+a saved space is DOM with the runtime deflated, so strokes needing script are
+strokes that vanish where the format promises they will not. The svg needed no
+change to `preview.ts`: `d`, `stroke` and `viewBox` are not attributes a still
+strips, and the surface carries its sizing as an INLINE style because in a
+thumbnailer no `.sp-*` rule exists.
+
+**4. Pressure is per stroke, not per point**, and only from `pointerType ===
+'pen'`. `PointerEvent.pressure` is 0.5 for a held mouse button and for touch
+digitizers reporting no force, so reading it from those makes every mouse
+stroke a deliberate-looking "medium". Per point is a size decision, not a
+fidelity one: SVG cannot vary `stroke-width` along a path, so honouring it
+means a filled outline polygon several times the bytes of the centre line. A
+`p` array is additive if it ever earns them.
+
+Measured, since the file gets emailed: a realistic 34-stroke drawing (8,397 raw
+samples) stores as 6,964 B — 635 points at 11.0 B each, 27× smaller than the
+raw samples as JSON pairs. RDP at 0.15% of the width removes 96% of samples,
+and `scripts/test-spaces-ink.ts` asserts the tolerance as a contract: no
+original point ends up further than it from the polyline that replaced it.

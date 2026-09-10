@@ -2383,3 +2383,83 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ————— INK ———————————————————————————————————————————————————————————————
+
+   APPENDED AT THE END OF THE FILE, ON PURPOSE. Nine branches were open against
+   this stylesheet at once; a block inserted next to the canvas rules would have
+   conflicted with every one of them for no benefit, and these rules cascade
+   against nothing above.
+
+   THE SVG SIZES ITSELF. `renderInkSurface` writes `width:100%;height:auto` as
+   an INLINE style, not a class, because the file-manager still (preview.ts)
+   runs with the whole runtime stylesheet still deflated — a drawing sized by a
+   `.sp-*` rule would be a blank box in exactly the thumbnail this app promises
+   to draw. Everything here is chrome around that. */
+.sp-b-ink { margin: 18px 0; }
+.sp-ink-head {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 7px;
+}
+.sp-ink-title {
+  font-size: 13.5px; font-weight: 600; color: var(--ink-2);
+  min-width: 40px; outline: none; border-radius: 5px; padding: 1px 3px;
+}
+.sp-ink-title:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+.sp-ink-title[data-ph]:empty::before {
+  content: attr(data-ph); color: var(--ph); pointer-events: none;
+}
+.sp-b-ink .sp-ink-surface {
+  background: var(--chrome);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  /* The paper reads as paper: a faint grid, mixed from `--ink` so it flips with
+     the ground. `--shade` goes to pure black in dark and would be invisible —
+     the canvas surface learned that one the hard way. */
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--ink) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--ink) 6%, transparent) 1px, transparent 1px);
+  background-size: 5% 5%;
+}
+/* ARMED IS VISIBLE. A surface that silently swallows touches is a bug report;
+   the ring says the pen is down and the cursor says where it will land. */
+.sp-ink-armed .sp-ink-surface {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.sp-ink-tools {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 7px;
+}
+.sp-ink-btn { font-size: 12px; padding: 3px 9px; }
+.sp-ink-btn[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+}
+.sp-ink-swatches, .sp-ink-nibs { display: flex; align-items: center; gap: 4px; }
+.sp-ink-swatch {
+  width: 18px; height: 18px; border-radius: 50%; padding: 0;
+  border: 1px solid var(--line); cursor: pointer;
+}
+.sp-ink-swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+.sp-ink-nib {
+  width: 22px; height: 22px; border-radius: 6px; padding: 0; cursor: pointer;
+  border: 1px solid var(--line); background: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sp-ink-nib > span { display: block; border-radius: 50%; background: currentColor; }
+.sp-ink-nib[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+@media print {
+  /* THE DRAWING IS THE CONTENT. It prints where it sits, whole — an svg is
+     resolution-independent, so this is the printer's resolution and not the
+     screen's, which is the reason the strokes are not a <canvas>. */
+  .sp-b-ink { break-inside: avoid; }
+  .sp-b-ink .sp-ink-surface { background: none; background-image: none; border-color: #999; }
+  .sp-ink-tools { display: none !important; }
+}

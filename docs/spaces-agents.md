@@ -80,10 +80,43 @@ unique ids the first time.
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
 | `view` | `layout`, `groupBy`, `html` | a board or list of this space's issues |
+| `ink` | `strokes`, `ratio`, `html` | a freehand drawing — see **Drawings** |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
 there is no `props` object.
+
+### Drawings
+
+An `ink` block is a freehand sketch. Its `html` is the drawing's **name** (that
+is all an older build renders in its place, so do not try to describe the
+picture in it), and its strokes are a flat array:
+
+```jsonc
+{ "id": "b9", "type": "ink",
+  "html": "How it works",
+  "ratio": 1.6,                  // width ÷ height of the surface; absent = 1.6
+  "strokes": [
+    { "d": "M12.5 8l3.2 1.4 -1.1 4" },          // the default pen
+    { "d": "M40 10l10 0 0 8 -10 0 0 -8",
+      "c": "#E5484D",            // #rgb/#rgba/#rrggbb/#rrggbbaa — absent = the document's ink
+      "w": 0.75 }                // stroke width, absent = 0.36
+  ]
+}
+```
+
+**Coordinates are percentages of the surface's WIDTH — both axes.** That is the
+one place this differs from a `canvas`, whose card `y` is a percentage of its
+height: a stroke is a shape, and two different units would store a circle as an
+ellipse. So `x` runs 0–100 and `y` runs 0–`100/ratio`, and `w` is in the same
+unit, which is why a drawing looks the same at 320px, at 2560px and on paper.
+
+`d` is an SVG path in a deliberately tiny grammar: `M`/`m` and `L`/`l` only,
+with SVG's implicit repetition. **Curves, arcs and `Z` are rejected** — a stroke
+whose `d` this build cannot parse is not drawn, and the field still round-trips
+untouched. Coordinates are quantised to two decimals. A stroke drawn in the app
+is simplified (Ramer–Douglas–Peucker) before it is written, so hand-written
+paths do not need to be dense: put down the points that carry the shape.
 
 ### Link cards
 

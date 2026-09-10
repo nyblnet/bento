@@ -477,6 +477,96 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **Freehand drawing.** A new `ink` block: pen, eraser, eight colours, four
+  nibs, and an undo that is the app's own undo. A sketch, a diagram, a thing
+  circled — none of which was possible anywhere in the app before.
+
+  **Its own block type, not a layer on `canvas` and not a layer on `image`.**
+  A canvas is cards you place, and ink on it would be a second, differently-
+  shaped payload every canvas would carry to render nothing; an image layer
+  would say you cannot draw without first having a photograph. (Ink inside a
+  canvas is free anyway: a card is a block, and an `ink` block with a `parent`
+  is a card.) Annotating a picture is `ink` plus one additive `src` field, which
+  is named in `ink.ts` so a follow-up does not invent a second spelling — it is
+  not built.
+
+  **The strokes are a field on the block, which is the opposite of the call the
+  canvas made for its cards — deliberately.** canvas.ts argues that a card must
+  be a BLOCK for three reasons, and a stroke re-derives all three rather than
+  inheriting them. Two invert. "It would be a second place text lives" does not
+  transfer at all: a stroke has no words for ⌘F to find, `buildIndex` to
+  backlink or markdown to export, and the block's `html` still carries the
+  drawing's name. "It would degrade badly" transfers and points the other way —
+  a card falls out of an unknown container as a readable paragraph, but a
+  forty-stroke sketch as forty blocks would fall out as forty EMPTY paragraphs
+  the author then has to delete forty times. One block with a `strokes` field
+  degrades to its name, and the strokes ride along untouched.
+
+  **The third reason transfers and is accepted as a limitation.** `strokes` is
+  one array, so under collaboration it is ONE last-writer-wins register: two
+  people drawing on the SAME drawing at the same moment keep one of the two
+  sets, silently. `table.rows` has the identical limitation and documents it.
+  The fix — a node per stroke — is exactly the shape the degradation argument
+  rejects, so it is written down rather than half-built. Two people drawing on
+  two different `ink` blocks converge normally.
+
+  **Coordinates are percentages, both axes of the surface's WIDTH.** Percentages
+  for the canvas's reason: the same file is read at 320px and at 2560px and
+  printed on A4. Of the *width* on both axes — where a canvas card's `y` is a
+  percentage of its height — because a card is placed and a stroke is a SHAPE:
+  two units would store a hand-drawn circle as an ellipse and re-shear it the
+  moment the surface's shape changed. Changing the shape reframes, never
+  rescales.
+
+  **Measured, because this document gets emailed.** A realistic 34-stroke
+  drawing — 8,397 raw pointer samples — stores as **6,964 bytes**, 635 points at
+  11.0 B each. The same samples as raw JSON coordinate pairs would be 180 KiB,
+  27× larger. Three things do that work: Ramer–Douglas–Peucker at 0.15% of the
+  width (96% of samples removed, and the rig asserts that no original point ends
+  up further than the tolerance from the line that replaced it), quantisation to
+  a 0.01%-of-width grid, and relative deltas in a plain SVG path string. A
+  packed binary would be perhaps 20% smaller and would not be a thing anyone
+  could read or hand-edit.
+
+  **Pressure and pointer type.** `pressure` is read only from a stylus —
+  `PointerEvent.pressure` is 0.5 for a mouse button that is down and for touch
+  digitizers that report no force, so reading it from those would make every
+  mouse stroke a "medium pressure" one. A stylus pressed firmly draws a fatter
+  stroke than one brushed lightly; a finger and a mouse draw the nominal width.
+  It is per stroke rather than per point, which is a size decision made in the
+  open: SVG cannot vary `stroke-width` along a path, so honouring per-point
+  pressure means a filled outline polygon several times the bytes of the centre
+  line it replaces. A `p` array is additive if it is ever worth them.
+
+  **A finger does not fight the page.** `touch-action: none` is set on the
+  surface only while a tool is armed and cleared when it is put down — and in
+  the reading view, where there is nothing to arm, it is never set. A drawing
+  that permanently claimed its own touches would be a hole in every page where
+  a swipe does nothing, on the one device where a swipe is how you move.
+
+  **Inline SVG, never `<canvas>`,** and the reasons are about the surfaces this
+  app has to be right on. A canvas element is a bitmap at whatever size it was
+  laid out at, so on paper it is a blurred sketch; `preview.ts` bans `canvas`
+  outright and strips `src`, so a drawing in one would be a blank rectangle in
+  the file-manager thumbnail; and the reading view of a saved space is DOM, so
+  strokes that need script to appear are strokes that vanish exactly where this
+  format promises they will not. An svg is none of those, and it needed no
+  change to `preview.ts` at all — it survives the still because `d`, `stroke`
+  and `viewBox` are not attributes a still has any reason to strip.
+
+  **Strokes arrive in a file somebody mailed you.** Nothing builds markup from
+  them: paths are `createElementNS` + `setAttribute`. The stored `d` never
+  reaches the DOM verbatim either — it is parsed into points and re-emitted by
+  this build's own writer, in a grammar with `M`/`m` and `L`/`l` and nothing
+  else, so curves, arcs, `Z` and `</script>` are all simply not paths. A colour
+  is an allowlist on the raw string (`url(#…)` is not one), a width is clamped,
+  and a malformed stroke is dropped rather than thrown on. `Object.hasOwn`
+  throughout, so a `strokes` inherited from `Object.prototype` is not the
+  document's strokes. 100 assertions in `scripts/test-spaces-ink.ts`.
+
+  An older build renders the drawing's name and round-trips every stroke
+  untouched, which is the sane fallback rather than a lossy one.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
