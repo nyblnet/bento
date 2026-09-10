@@ -63,6 +63,12 @@ import type { Block, Page } from '../spaces/src/model.ts'
 import {
   buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
 } from '../spaces/src/graph.ts'
+import {
+  type PageTemplate, applyTemplate, expandTokens, instantiateBlocks, journalTemplate,
+  makeTemplate, putTemplate, removeTemplate, setJournalTemplate, templateById, templatesOf,
+} from '../spaces/src/templates.ts'
+import { planJournal, todayISO } from '../spaces/src/journal.ts'
+import { newPage } from '../spaces/src/model.ts'
 
 let failures = 0
 let checks = 0
@@ -3632,6 +3638,185 @@ function fsTable(f: string): string {
   ok(/\bdataset\.sortCol\b/.test(ren),
     'the surviving table branch renders sortable headers')
   ok(seen.get('table') === 1, 'exactly one table branch, so that header markup is reachable')
+
+// ---- page templates --------------------------------------------------------
+// BEHAVIOURAL, every one of them: the functions are imported and run. This zone
+// has measured twice that a source-grep assertion passes straight through a
+// live regression (#392), so nothing here reads the source of anything.
+{
+  const mk = (over: Record<string, unknown> = {}): SpacesDoc =>
+    (parseDoc(doc(over)) as { doc: SpacesDoc }).doc
+
+  // TOLERANCE. `doc.templates` arrives out of a file somebody mailed you.
+  ok(templatesOf(mk()).length === 0, 'a document with no templates has none')
+  ok(templatesOf(mk({ templates: 7 })).length === 0, 'a non-array templates field yields none, not a throw')
+  ok(templatesOf(mk({ templates: [null, 3, {}, { id: '' }, { id: 't1' }] })).length === 1,
+    'entries with no usable id are dropped and the good one survives')
+  ok(templatesOf(mk({ templates: [{ id: 't1' }] }))[0].blocks.length === 0,
+    'a template with no blocks array reads as an empty one')
+  ok(templatesOf(mk({ templates: [{ id: 't1' }] }))[0].name === 't1',
+    'a template with no name falls back to its id rather than to undefined')
+
+  // THE INDIRECTION THIS APP HAS SHIPPED TWICE. An id out of the document must
+  // never reach Object.prototype.
+  const proto = mk({ templates: [{ id: 't1', name: 'A', blocks: [] }] })
+  ok(templateById(proto, 'constructor') === undefined, '"constructor" is not a template')
+  ok(templateById(proto, '__proto__') === undefined, '"__proto__" is not a template')
+  ok(templateById(proto, 'toString') === undefined, '"toString" is not a template')
+  ok(templateById(proto, 't1')?.name === 'A', 'a real id still resolves')
+  ok(journalTemplate(mk({ journalTemplate: 'constructor' })) === undefined,
+    'a journal setting naming a prototype key resolves to nothing')
+
+  // CAPTURE. What a template must NOT carry is the half worth asserting.
+  const src: Page = {
+    id: 'p9', title: 'Standup', icon: '📓', width: 'wide',
+    parent: 'p1', journal: '2026-01-02', archived: true,
+    comments: [{ id: 'c1', author: 'A', at: '2026-01-01', text: 'private' }],
+    blocks: [
+      { id: 'b1', type: 'h2', html: 'Notes' },
+      { id: 'b2', type: 'todo', html: 'ship it', parent: 'b1' },
+    ],
+  }
+  const tpl = makeTemplate(src, 'Standup')
+  ok(tpl.name === 'Standup' && tpl.title === 'Standup', 'the name is taken, and the title with it')
+  ok(tpl.icon === '📓' && tpl.width === 'wide', 'the icon and the width travel')
+  ok(!('parent' in tpl) && !('journal' in tpl) && !('archived' in tpl) && !('comments' in tpl),
+    'the parent, the date, the archive flag and the review threads do NOT')
+  src.blocks[0].html = 'edited afterwards'
+  ok(tpl.blocks[0].html === 'Notes', 'the capture is a deep copy — editing the page cannot reach it')
+
+  // INSTANTIATION. Fresh ids, remapped parents, and a block that can hold a caret.
+  const made = instantiateBlocks(tpl)
+  ok(made.length === 2, 'both blocks arrive')
+  ok(made.every((b) => b.id !== 'b1' && b.id !== 'b2'), 'every block gets a FRESH id')
+  ok(new Set(made.map((b) => b.id)).size === 2, 'and the fresh ids are distinct')
+  ok(made[1].parent === made[0].id, 'a parent link is remapped to the new ids, not left pointing at the template')
+  const orphan = instantiateBlocks({ id: 'x', name: 'x', blocks: [{ id: 'b1', type: 'p', html: 'a', parent: 'gone' }] })
+  ok(orphan[0].parent === undefined, 'a parent naming a block outside the template is dropped, as parseDoc drops one')
+  ok(instantiateBlocks({ id: 'x', name: 'x', blocks: [] }).length === 1,
+    'an empty template still yields one block — a page with none has nowhere to put the caret')
+
+  // TOKENS. Expanded ONCE, here, and the model stores the result.
+  const ctx = { date: '2026-03-14', locale: 'en-GB', title: 'Ledger' }
+  ok(expandTokens('{{date:iso}}', ctx) === '2026-03-14', '{{date:iso}} is the ISO date')
+  ok(expandTokens('{{date+1:iso}}', ctx) === '2026-03-15', '{{date+1:iso}} is the next calendar day')
+  ok(expandTokens('{{date-14:iso}}', ctx) === '2026-02-28', '{{date-14:iso}} steps back across a month end')
+  ok(expandTokens('{{title}}', ctx) === 'Ledger', '{{title}} is the page title')
+  ok(expandTokens('{{date}}', ctx).includes('2026') && expandTokens('{{date}}', ctx) !== '2026-03-14',
+    '{{date}} is the reader-facing long form, not the ISO string')
+  ok(expandTokens('a {{ date : iso }} b', ctx) === 'a 2026-03-14 b', 'whitespace inside the braces is tolerated')
+  ok(expandTokens('nothing here', ctx) === 'nothing here', 'a string with no tokens comes back identical')
+  ok(expandTokens('{{author}}', ctx) === '{{author}}', 'a token this build does not know stays literal')
+  // THE PROTOTYPE GUARD, on the format record. Without Object.hasOwn this
+  // resolves to Object's constructor and stringifies a function into the page.
+  ok(expandTokens('{{date:constructor}}', ctx) === '{{date:constructor}}',
+    '{{date:constructor}} is literal text, not Object.prototype.constructor')
+  ok(expandTokens('{{date:toString}}', ctx) === '{{date:toString}}', 'and neither is toString a date format')
+  ok(expandTokens('{{title+1}}', ctx) === '{{title+1}}', 'an offset on a non-date token is not a token at all')
+  ok(expandTokens('<b>{{title}}</b>', { title: '<script>' }, (s) => s.replace(/</g, '&lt;')) === '<b>&lt;script></b>',
+    'the encoder is applied to the VALUE and not to the surrounding html')
+  ok(expandTokens('{{date:iso}}', { date: '2026-13-99' }) === todayISO(),
+    'a nonsense date in the context falls back to today rather than to a rolled-over wrong day')
+
+  // APPLYING. keepTitle is what the journal needs.
+  const dated: PageTemplate = {
+    id: 't2', name: 'Daily', title: '{{date:iso}} log',
+    blocks: [{ id: 'b1', type: 'p', html: 'Written on {{date:iso}}' }],
+  }
+  const target: Page = { id: 'pz', title: 'Untitled', blocks: [{ id: 'old', type: 'p', html: 'gone' }] }
+  applyTemplate(target, dated, { date: '2026-03-14' })
+  ok(target.title === '2026-03-14 log', 'the template title is expanded onto the page')
+  ok(target.blocks.length === 1 && target.blocks[0].html === 'Written on 2026-03-14',
+    'and the blocks REPLACE what was there')
+  ok(target.blocks[0].id !== 'old' && target.blocks[0].id !== 'b1', 'with a fresh id')
+
+  const kept: Page = { id: 'pk', title: '2026-03-14', journal: '2026-03-14', blocks: [] }
+  applyTemplate(kept, dated, { date: '2026-03-14' }, true)
+  ok(kept.title === '2026-03-14', 'keepTitle leaves a journal entry titled by its own date')
+  ok(kept.blocks[0].html === 'Written on 2026-03-14', 'and still takes the blocks')
+
+  // THE JOURNAL, END TO END. The entry's OWN date, never today's — a template
+  // with {{date}} in it must be right on the day you backfill, too.
+  const jdoc = mk({ templates: [dated], journalTemplate: 't2' })
+  const plan = planJournal(jdoc, '2026-03-15')
+  const jtpl = journalTemplate(jdoc)!
+  applyTemplate(plan.page, jtpl, { date: String(plan.page.journal) }, true)
+  ok(plan.page.blocks[0].html === 'Written on 2026-03-15',
+    'a journal entry made for the 15th says the 15th, whatever day it is made on')
+  ok(plan.page.title === '2026-03-15', 'and keeps the ISO title the journal model depends on')
+
+  // THE COLLECTION. A default is an ABSENT KEY, on the way back as well.
+  const cdoc = mk()
+  putTemplate(cdoc, { id: 't1', name: 'One', blocks: [] })
+  putTemplate(cdoc, { id: 't2', name: 'Two', blocks: [] })
+  ok(templatesOf(cdoc).length === 2, 'two templates go in')
+  putTemplate(cdoc, { id: 't1', name: 'One again', blocks: [] })
+  ok(templatesOf(cdoc).length === 2 && templateById(cdoc, 't1')?.name === 'One again',
+    'the same id REPLACES rather than duplicating')
+  setJournalTemplate(cdoc, 't2')
+  ok(cdoc.journalTemplate === 't2', 'the daily-note setting points at a real template')
+  setJournalTemplate(cdoc, 'nope')
+  ok(!('journalTemplate' in cdoc), 'an id that names nothing DELETES the key rather than storing a dangling one')
+  setJournalTemplate(cdoc, 't2')
+  removeTemplate(cdoc, 't2')
+  ok(!('journalTemplate' in cdoc), 'removing the journal template takes the setting with it')
+  removeTemplate(cdoc, 't1')
+  ok(!('templates' in cdoc), 'removing the last template deletes the key — back to byte-identical with a file that never had one')
+
+  // ADDITIVITY (PLATFORM §3). An older build must round-trip all of this.
+  const round = mk({
+    templates: [{ id: 't1', name: 'One', blocks: [{ id: 'b1', type: 'p', html: 'x' }], futureField: 9 }],
+    journalTemplate: 't1',
+  })
+  const back = (parseDoc(JSON.stringify(round)) as { doc: SpacesDoc }).doc
+  ok(JSON.stringify(back.templates) === JSON.stringify(round.templates),
+    'templates survive a parse → serialize → parse round trip byte-for-byte')
+  ok(back.journalTemplate === 't1', 'and so does the daily-note setting')
+  ok((templatesOf(back)[0] as Record<string, unknown>).futureField === 9,
+    'a field a LATER build put on a template is still there after this one has read it')
+
+  // THEY ARE NOT PAGES, and that is the whole reason for the separate
+  // collection: nothing that walks doc.pages can see them, including the two
+  // surfaces that would have needed a gate first.
+  const walled = mk({
+    pages: [
+      { id: 'p1', title: 'One', blocks: [{ id: 'b1', type: 'p', html: 'hi' }] },
+      { id: 'p2', title: 'Two', blocks: [{ id: 'b2', type: 'p', html: 'hi' }] },
+    ],
+    templates: [{
+      id: 't1', name: 'Linky',
+      blocks: [{ id: 'tb1', type: 'p', html: 'see <a href="#p/p1">One</a>' }],
+    }],
+  })
+  const widx = buildIndex(walled)
+  ok(widx.page.size === 2, 'the page index counts the pages and not the template')
+  ok((widx.backlinks.get('p1') ?? []).length === 0,
+    'a link inside a TEMPLATE creates no backlink — the graph, the sidebar and the export all walk pages')
+  ok(widx.block.get('tb1') === undefined, 'a template block is not in the block index either')
+
+  // …until it is instantiated, at which point it IS an ordinary page and every
+  // one of those surfaces sees it. A feature that is invisible forever is not
+  // a feature.
+  //
+  // Asserted on the INDEX rather than on the backlink, because sanitizeInline
+  // has no DOM in node and its fallback strips every tag — including the <a>
+  // this would need. The browser pass in the PR covers the link itself; what
+  // node can prove is the part that matters here, that the instantiated page
+  // is an ordinary indexed page and its blocks are ordinary indexed blocks.
+  const born = newPage('From the template')
+  applyTemplate(born, templatesOf(walled)[0])
+  walled.pages.push(born)
+  const bidx = buildIndex(walled)
+  ok(bidx.page.size === 3, 'a page MADE from a template is in the page index, like any other page')
+  ok(bidx.block.get(born.blocks[0].id)?.pageId === born.id,
+    'and its blocks are in the block index, under it')
+  ok(born.blocks[0].html?.includes('One'), 'with the template\'s words intact')
+
+  // docContentKey: saving a template is a real edit, so crash recovery sees it.
+  const before = mk()
+  const after = mk()
+  putTemplate(after, { id: 't1', name: 'One', blocks: [] })
+  ok(docContentKey(before) !== docContentKey(after), 'adding a template changes the content key')
 }
 
 
