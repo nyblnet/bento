@@ -18,6 +18,7 @@
 // `scripts/test-spaces-model.ts`, which node resolves without a bundler.
 import { type Block, type Page, uid, writeTable } from './model.ts'
 import { esc } from './sanitize.ts'
+import { takeDefinitions, mergeNotes, renameRefs } from './footnotes.ts'
 import { keepClasses } from './marks.ts'
 
 /** A tab indents four columns. Nothing here depends on the exact number; it
@@ -193,6 +194,17 @@ export interface ParsedNote {
   remoteImages: number
   /** markdown tables, which this model has no block for yet */
   tables: number
+  /**
+   * `[^1]: the note.` definitions, by label — absent when the file has none.
+   *
+   * TAKEN OUT BEFORE THE BLOCK PARSER RUNS. A definition line left in the
+   * stream parses as an ordinary paragraph, which is the silent downgrade this
+   * importer has produced once before (`![[embed]]` arriving as a plain link):
+   * nothing errors, the words are all still there, and the construct is gone.
+   * The REFERENCES need no handling at all — `[^1]` is the same text in
+   * markdown and in this model (src/footnotes.ts).
+   */
+  footnotes?: Record<string, string>
 }
 
 const mk = (type: string, extra: Partial<Block> = {}): Block => ({ id: uid('b'), type, ...extra })
@@ -222,7 +234,11 @@ function imageOf(line: string): { ref: string; alt: string; caption?: string } |
  * pointing at a page whose name is nowhere in the sidebar.
  */
 export function parseNote(text: string, fileTitle: string): ParsedNote {
-  const lines = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n')
+  // FOOTNOTE DEFINITIONS COME OUT FIRST, before a single line is classified.
+  // They are a document-level table, not blocks, and a line the block parser
+  // has already turned into a paragraph cannot be un-turned.
+  const { rest: lines, notes: footnotes } =
+    takeDefinitions(text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n'))
   const blocks: Block[] = []
   const images: PendingImage[] = []
   let remoteImages = 0
@@ -423,6 +439,8 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     images,
     remoteImages,
     tables,
+    // absent when the file had none — a default is never stored (PLATFORM §3)
+    ...(Object.keys(footnotes).length ? { footnotes } : {}),
   }
 }
 
@@ -495,6 +513,18 @@ export interface ImportPlan {
   /** local image references, still to be resolved against picked files */
   images: PendingImage[]
   stats: ImportStats
+  /**
+   * The document's footnotes AFTER the import — `opts.existingNotes` with
+   * every imported note merged in, so the caller assigns it whole.
+   *
+   * A SUPERSET, never a patch, because merging renames: two vaults both number
+   * their footnotes from 1, so importing more than one file collides by
+   * construction, and the second file's `[^1]` must not be answered by the
+   * first file's note. Whatever was renamed has already been rewritten in that
+   * file's blocks, here, where it is still known which blocks came from which
+   * file.
+   */
+  footnotes: Record<string, string>
 }
 
 const normalizePath = (p: string): string =>
@@ -528,6 +558,9 @@ export function planImport(
      * arrive as dead text.
      */
     resolveExisting?: (target: string) => string | undefined
+    /** the footnotes the space already has, so an imported label that would
+     *  land on a DIFFERENT note is renamed rather than silently reused */
+    existingNotes?: Record<string, string>
   },
 ): ImportPlan {
   const src = files
@@ -544,6 +577,8 @@ export function planImport(
 
   const pages: Page[] = []
   const images: PendingImage[] = []
+  const footnotes: Record<string, string> = { ...(opts.existingNotes ?? {}) }
+  const usedLabels = new Set(Object.keys(footnotes))
   const stats: ImportStats = {
     files: src.length, pages: 0, blocks: 0, linked: 0, dangling: 0,
     frontmatter: 0, tables: 0, remoteImages: 0, duplicateNames: 0,
@@ -619,6 +654,14 @@ export function planImport(
       page.blocks.push(...frontmatterBlocks(note.frontmatter))
     }
     page.blocks.push(...note.blocks)
+    if (note.footnotes) {
+      // PER FILE, while it is still known which blocks are this file's — after
+      // the loop every page is just a page and a rename could not be aimed.
+      const renames = mergeNotes(footnotes, note.footnotes, usedLabels)
+      if (renames.size) {
+        for (const b of note.blocks) if (b.html) b.html = renameRefs(b.html, renames)
+      }
+    }
     for (const img of note.images) images.push({ ...img, dir })
     stats.tables += note.tables
     stats.remoteImages += note.remoteImages
@@ -655,7 +698,7 @@ export function planImport(
   for (const p of pages) stats.blocks += p.blocks.length
   stats.duplicateNames = collisions
   stats.pages = pages.length
-  return { pages, images, stats }
+  return { pages, images, stats, footnotes }
 }
 
 /**

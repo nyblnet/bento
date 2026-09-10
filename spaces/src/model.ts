@@ -350,6 +350,29 @@ export interface SpacesDoc {
   home?: string
   theme: Theme
   assets?: Record<string, string>
+  /**
+   * FOOTNOTES, by label → inline html. See src/footnotes.ts for the whole
+   * design; the two things that belong in the FORMAT's own file are these.
+   *
+   * DOC-LEVEL AND KEYED, which is bento/type's shape (type/src/model.ts) and
+   * is chosen for its reason: a note has to be able to outlive the paragraph
+   * that points at it, and keying it by label means moving a paragraph between
+   * pages carries the reference and nothing else.
+   *
+   * NO NUMBER IS STORED HERE OR ANYWHERE. Footnotes are numbered by order of
+   * appearance, so the number is a fact about the page and not about the note;
+   * it is derived at render time, the way calc.ts derives an answer and slides
+   * derives a page number. The LABEL is an identifier — `[^1]` is what pandoc
+   * and Obsidian store too, and it can perfectly well render as "3".
+   *
+   * The REFERENCE is the literal text `[^label]` inside a block's html: a text
+   * token, so it moves with the prose through every edit, sanitize pass,
+   * canonicalisation and CRDT merge, and so no allowlist in sanitize.ts had to
+   * change for it. An older build shows the sentence with `[^1]` in it and
+   * round-trips this key untouched — absent means no footnotes, which is the
+   * behaviour every build shipped before this one already has.
+   */
+  footnotes?: Record<string, string>
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   readonly?: boolean
   template?: boolean
@@ -548,7 +571,11 @@ export const newPage = (title = 'Untitled', extra: Partial<Page> = {}): Page =>
 
 /** Content that matters for "did this change" — excludes volatile fields. */
 export function docContentKey(doc: SpacesDoc): string {
-  return JSON.stringify([doc.title, doc.home, doc.pages])
+  // `footnotes` is content: a note's text is somebody's writing and lives
+  // nowhere else, so a recovery snapshot that ignored it would compare equal to
+  // a document whose notes had all been rewritten. Appended at the END so the
+  // key for a document with no footnotes changes shape once and never again.
+  return JSON.stringify([doc.title, doc.home, doc.pages, doc.footnotes])
 }
 
 // ---- derived, NEVER stored -------------------------------------------------

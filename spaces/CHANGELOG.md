@@ -477,6 +477,33 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **Footnotes.** A mark in the prose, the note at the foot of the page — write
+  `[^1]` where the mark goes and the note appears as a numbered slot below the
+  page to write into. Notes print, export as `[^1]: the note.` and import back
+  the same way, so an Obsidian or Pandoc vault keeps its footnotes in both
+  directions rather than losing them silently on the way in.
+
+  **The number is never stored.** Footnotes are numbered by order of appearance
+  and the number is worked out when the page is drawn, the way a magic note's
+  answer and a slide's page number are: put a new reference above two existing
+  ones and they renumber to 2 and 3 with nothing in the file changing. Measured
+  in the built shell — `[^1]` renders as "2" while `block.html` still says
+  `[^1]`. A stored number would have been wrong from the first sentence anyone
+  moved, and nothing would have said so.
+
+  **The reference is text, not markup**, which is the whole reason it survives
+  editing: `[^1]` moves with the prose through a keystroke, a sanitize pass, a
+  canonicalisation and a merge exactly the way the word beside it does, because
+  there is no offset to keep in step and no attribute for the allowlist to have
+  an opinion about. It also means a build that predates this shows the sentence
+  with `[^1]` in it and hands the `footnotes` key back untouched — verified by
+  loading a footnoted document into a shell built from the previous release.
+
+  A reference whose note has been deleted still renders, numbered, into an
+  empty note; a note whose reference has gone is kept, never quietly dropped.
+  `bento.validate()` reports both (`dangling-footnote`, `orphan-footnote`) and
+  names the block. Costs 3,176 bytes on the shell.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
