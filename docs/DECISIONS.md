@@ -14,6 +14,45 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-09-10 — bento/spaces reading copies: two tiers, and a guarantee is removal not a flag
+
+**Decision.** A space has TWO published shapes and no third. `doc.readonly` is a
+SEALED reading copy (no session, opens in the reader); `collab.role:'reader'` is
+a LIVE view-only copy (follows the room, cryptographically cannot write). Both
+already existed in the format; "Save a reading copy…" is the button that finally
+writes the first, and `spaces/src/reading.ts` is what it writes.
+
+**No fourth tier.** bento/slides has three because its presentation package and
+its live reader answer different questions; spaces' two answer the same two, and
+a new "published" field would be a second spelling of `readonly` that old files
+answer only one of.
+
+**A reading copy strips `doc.collab` ENTIRELY** — not `writerPriv`/`ownerPriv`
+the way an invite does. An invite keeps `room` + `key` because it is meant to
+follow; a sealed copy follows nothing, so the read capability has no job, and a
+published file is the one most likely to reach someone you do not know. It also
+deletes every comment thread (`Page.comments`, `Block.comments`): comments are
+workspace, not publication.
+
+**The rule this exists to state.** `readonly` is INTENT and protects nothing —
+the document block is plaintext by design, so a recipient can clear it. What a
+reading copy guarantees is what is ABSENT from its bytes, and that holds whatever
+opens the file, including a build that predates the flag (which opens the space
+editable — the correct degradation). Any future work here must keep saying which
+of its guarantees are cryptographic, which format-level and which cosmetic, and
+must never present the third as the first.
+
+**Encrypted spaces inherit, deliberately.** A reading copy is written through
+`serializeAuto`, so it stays encrypted with the same password and — via
+`previewAllowed` — carries no file-manager still. A plaintext home page beside
+the ciphertext is the leak the password exists to prevent.
+
+Assertions are on the SERIALIZED document, not on "the strip ran":
+`scripts/test-spaces-reading.ts`, following `scripts/test-spaces-invite.ts`.
+Details and the three-grade breakdown: the header of `spaces/src/reading.ts`.
+
+---
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both

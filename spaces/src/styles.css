@@ -1301,6 +1301,68 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-app.sp-reading .sp-page-inner { font-size: 17px; }
 .sp-app.sp-reading .sp-title { margin-bottom: 18px; }
 
+/* THE TOOLS GO, NOT THE DOCUMENT. Reading view was a font-size bump and some
+   padding: every editing control was still on screen, merely inert, which
+   reads as a broken editor rather than as a document. What leaves is anything
+   whose only purpose is CHANGING the space; what stays is everything a reader
+   uses — the page tree, ⌘K search, print, ⋯, and the eye to come back.
+   `!important` throughout because these are one-line overrides of the layout
+   rules that build each control, not a competition of specificity. */
+.sp-app.sp-reading .sp-group-history,
+.sp-app.sp-reading .sp-ins-dd,
+.sp-app.sp-reading .sp-insp-toggle,
+.sp-app.sp-reading .sp-insp,
+.sp-app.sp-reading .sp-insp-rz,
+.sp-app.sp-reading .sp-fmt,
+.sp-app.sp-reading .sp-side-head .sp-btn,
+.sp-app.sp-reading .sp-rowmore,
+.sp-app.sp-reading .sp-gutter,
+.sp-app.sp-reading .sp-pageicon { display: none !important; }
+
+/* A SEALED READING COPY (`doc.readonly`) has no editing to go back to, so the
+   eye, the ways to write this file and the live control are not hidden-because-
+   inert, they are absent. Nothing here is protection — see reading.ts on which
+   guarantees are cryptographic and which are only this. */
+.sp-app.sp-sealed .sp-sec,
+.sp-app.sp-sealed .sp-split,
+.sp-app.sp-sealed .sp-live-slot,
+/* connectSync REPLACES the slot with the real control, which carries `.sp-live`
+   and not the slot class — measured in the built shell: the slot selector alone
+   left a 35x29 button in a sealed copy, and it opens a share popover for a file
+   that carries no keys and can start no session. */
+.sp-app.sp-sealed .sp-live { display: none !important; }
+
+/* The reader's footer: what came before, what comes next.
+   `.sp-page a` underlines every link in the reading column and out-specifies a
+   bare class (see the issue-card note below), so these say so with `.sp-page`
+   in front of them. */
+.sp-rnav {
+  display: flex; align-items: stretch; gap: 12px;
+  margin: 54px 0 0; padding-top: 20px; border-top: 1px solid var(--line);
+}
+.sp-rnav-gap { flex: 1 1 0; }
+.sp-page a.sp-rnav-link, .sp-rnav-link {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 11px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); text-decoration: none;
+}
+.sp-rnav-link:hover { border-color: var(--edge); background: var(--chrome-2); }
+.sp-rnav-next { text-align: end; }
+.sp-rnav-kicker {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+}
+.sp-rnav-title {
+  font-size: 14.5px; font-weight: 600; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* PAPER WANTS WHAT READING MODE WANTS — no tools — and it already hides the
+   bar, the panels and the gutters. The footer is the one thing reading mode
+   ADDS, so it is the one thing this has to take away again: a "Next ›" card is
+   a control, and a control on paper is a card that does nothing. */
+@media print { .sp-rnav { display: none !important; } }
+
 /* A remote image that has not been loaded. Deliberately quiet and boxy — it
    holds the place without pretending to be the picture. */
 .sp-remote {

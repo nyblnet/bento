@@ -592,8 +592,16 @@ rather than vanishing quietly at save time.
 - **Never write a page with an empty `blocks` array.** Nothing in it can take a
   caret, so it is a page nobody can type in. Give it `[{ "type": "p", "html":
   "" }]` — `bento.newPage()` does exactly that.
-- `readonly: true` and a `policy` this build does not know both open **frozen**
-  — the file round-trips byte-exact and edits are refused.
+- `readonly: true` marks a READING COPY: the file opens in the reader (no
+  editing tools, no comment markers, a Previous/Next pair under each page) and
+  `bento.readonly` is true, so every write returns `err: 'readonly'`. A
+  `policy` this build does not know opens **frozen** for a different reason —
+  we do not understand the file — and is likewise refused. In both cases the
+  document round-trips byte-exact.
+  `readonly` is INTENT, not a lock: the document block is plaintext, so anyone
+  can clear the flag. What a reading copy actually guarantees is what it does
+  not contain — `doc.collab` (every room credential) and every comment thread
+  are removed when it is written.
 - A remote image `src` shows a placeholder until the reader asks for it. Embed
   the bytes as an `asset:` instead — see **Images** above.
 - There is no collaboration yet. Two people editing two copies get two files
