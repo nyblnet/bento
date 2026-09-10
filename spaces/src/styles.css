@@ -2628,6 +2628,7 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
 @media print {
   /* the arrows navigate nothing on paper */
   .sp-cal-bar .sp-cal-step { display: none; }
+}
 /* ---------------------------------------------------------------------------
    FOOTNOTES (src/footnotes.ts)
 
