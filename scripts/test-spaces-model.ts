@@ -70,6 +70,12 @@ import { pageToDeck } from '../spaces/src/todeck.ts'
 // Nothing under slides/ is written by this rig or by the feature it covers.
 import { parseDoc as slidesParseDoc } from '../slides/src/model.ts'
 import { MODEL_KEYS } from '../slides/src/modelkeys.generated.ts'
+import { starterDoc } from '../spaces/src/starter.ts'
+import {
+  contentOf, recordRevision, revisionsOf, historyIsForeign, applyRevisions,
+  restoredDoc, pruneRevisions, clearHistory, diffWords, changesAt,
+  HISTORY_BUDGET, HISTORY_MAX,
+} from '../spaces/src/history.ts'
 import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
 import { escText, externalHref } from '../spaces/src/sanitize.ts'
@@ -5488,6 +5494,326 @@ function fsTable(f: string): string {
   }
 }
 
+
+
+// --- IN-FILE VERSION HISTORY (spaces/src/history.ts) -------------------------
+//
+// THE LOAD-BEARING ASSERTION IS THE ROUND TRIP, and it is asserted on the
+// SERIALIZED BYTES: restoring revision N must produce the content that was
+// recorded at N, character for character — not "the same blocks" and not "the
+// same text". Everything else here (the budget, the fold, the diff) is only
+// worth having if that holds, so it is checked first and checked again after
+// every operation that rewrites the chain.
+//
+// The equivalent of type/src/redline.ts's two invariants — the standard the
+// brief set for whether a history feature is honest — is asserted on the word
+// diff in section 6:
+//     everything that is not an insertion, joined  ==  the old text
+//     everything that is not a deletion,   joined  ==  the new text
+{
+  const J = (v: unknown) => JSON.stringify(v)
+  const B = (v: unknown) => new TextEncoder().encode(J(v)).length
+  const mkDoc = (): SpacesDoc => JSON.parse(J({
+    format: FORMAT, version: 1, docId: 'd-hist', title: 'Space',
+    home: 'p1',
+    theme: { background: '#fff', color: '#000', accent: '#f00', fontFamily: 'x' },
+    pages: [
+      { id: 'p1', title: 'One', icon: 'star', blocks: [
+        { id: 'b1', type: 'p', html: 'the quick brown fox' },
+        { id: 'b2', type: 'p', html: 'second line' },
+      ] },
+      { id: 'p2', title: 'Two', blocks: [{ id: 'b3', type: 'p', html: 'other page' }] },
+    ],
+  })) as SpacesDoc
+
+  // ---- 1. the round trip, on the bytes -------------------------------------
+  {
+    const d = mkDoc()
+    const stamps: string[] = []
+    const save = () => { recordRevision(d); stamps.push(J(contentOf(d))) }
+
+    save()                                                    // rev 0: the space as it is
+    d.pages[0].blocks[0].html = 'the quick red fox'
+    save()                                                    // rev 1: one word
+    d.pages[0].title = 'One (renamed)'
+    d.pages.push({ id: 'p3', title: 'Three', blocks: [{ id: 'b9', type: 'p', html: 'new' }] })
+    save()                                                    // rev 2: rename + a new page
+    d.pages.splice(1, 1)                                      // p2 deleted
+    d.theme.accent = '#0f0'
+    save()                                                    // rev 3: delete + theme
+
+    const revs = revisionsOf(d)
+    ok(revs.length === 4, `four saves record four revisions (${revs.length})`)
+    let exact = 0
+    for (let i = 0; i < revs.length; i++) {
+      const back = restoredDoc(d, i)
+      if (back && J(contentOf(back)) === stamps[i]) exact++
+      else console.log(`     at ${i}:\n       want ${stamps[i]}\n       got  ${back ? J(contentOf(back)) : 'null'}`)
+    }
+    ok(exact === revs.length,
+      `restore(N) is BYTE-IDENTICAL to the content saved at N, for all ${revs.length} revisions`)
+
+    // A restore leaves the file the same document. Rolling back `docId` would
+    // make "restore" mean "become a different file", which it must never mean.
+    const back0 = restoredDoc(d, 0)!
+    ok(back0.docId === d.docId && back0.format === d.format,
+      'a restore changes CONTENT only — docId and format survive it')
+    ok(J(back0.revisions) === J(d.revisions),
+      'and the history survives it too: restoring is an edit, not a rewind of the file')
+  }
+
+  // ---- 2. a save that changed nothing writes nothing -----------------------
+  {
+    const d = mkDoc()
+    recordRevision(d)
+    const one = J(d.revisions)
+    const again = recordRevision(d)
+    ok(again === null && J(d.revisions) === one,
+      'a save that changed nothing records no revision and grows the file by zero bytes')
+
+    const fresh = mkDoc()
+    ok(!Object.hasOwn(fresh, 'revisions'),
+      'a document nobody has saved carries NO revisions key — absent, not an empty array')
+    recordRevision(fresh)
+    clearHistory(fresh)
+    ok(!Object.hasOwn(fresh, 'revisions'),
+      'and clearing history removes the key rather than leaving `revisions: []`')
+  }
+
+  // ---- 3. additivity, in both directions -----------------------------------
+  {
+    const d = mkDoc()
+    recordRevision(d)
+    ;(d.revisions![0] as unknown as Record<string, unknown>).futureField = { note: 'from 2036' }
+    d.pages[0].blocks[0].html = 'edited'
+    recordRevision(d)
+    ok(J((d.revisions![0] as unknown as Record<string, unknown>).futureField) === J({ note: 'from 2036' }),
+      'an unknown field on an existing revision survives a later save untouched')
+
+    // `revisions` holding a shape this build cannot read is LEFT ALONE. It is
+    // not an array, so it is not ours to overwrite — additivity is a promise
+    // made to the FUTURE as much as to the past.
+    const alien = mkDoc()
+    ;(alien as unknown as Record<string, unknown>).revisions = { v: 2, entries: [] }
+    ok(historyIsForeign(alien), 'a non-array `revisions` is recognised as a shape this build cannot read')
+    const before = J((alien as unknown as Record<string, unknown>).revisions)
+    ok(recordRevision(alien) === null &&
+       J((alien as unknown as Record<string, unknown>).revisions) === before,
+      '…and a save never writes over it')
+    ok(revisionsOf(alien).length === 0, '…and it is read as no history rather than misread')
+  }
+
+  // ---- 4. the budget: it TIERS, it does not fail ---------------------------
+  {
+    ok(HISTORY_BUDGET === 128 * 1024 && HISTORY_MAX === 60,
+      `the ceilings are the ones documented: ${HISTORY_BUDGET} B and ${HISTORY_MAX} entries`)
+
+    const d = mkDoc()
+    for (let i = 0; i < 40; i++) {
+      d.pages[0].blocks[0].html = `revision ${i} of the first paragraph`
+      recordRevision(d)
+    }
+    const full = revisionsOf(d)
+    ok(full.length === 40, `40 edits, 40 revisions kept under the real budget (${full.length})`)
+
+    // Tier 2: squeeze the budget until the oldest entries fold, then check the
+    // property that makes folding legitimate — every revision that SURVIVES
+    // still restores exactly what it restored before.
+    const wantById = new Map<string, string>()
+    for (let i = 0; i < full.length; i++) wantById.set(full[i].id, J(applyRevisions(full, i)))
+    const squeezed = pruneRevisions(full, 2 * 1024, 60)
+    ok(squeezed.length > 1 && squeezed.length < full.length,
+      `a 2 KB budget folds the oldest entries: ${full.length} → ${squeezed.length}`)
+    let stillExact = 0
+    for (let i = 0; i < squeezed.length; i++) {
+      if (J(applyRevisions(squeezed, i)) === wantById.get(squeezed[i].id)) stillExact++
+    }
+    ok(stillExact === squeezed.length,
+      `every surviving revision still restores EXACTLY what it did before the fold (${stillExact}/${squeezed.length})`)
+    ok(B(squeezed) <= 2 * 1024, 'and the folded list is actually under the budget it was folded to')
+
+    // The count ceiling bites on its own, on a space so small that bytes never would.
+    const capped = pruneRevisions(full, HISTORY_BUDGET, 5)
+    ok(capped.length === 5, `HISTORY_MAX caps the list independently of bytes (${capped.length})`)
+    ok(J(applyRevisions(capped, capped.length - 1)) === J(applyRevisions(full, full.length - 1)),
+      'and the newest state is untouched by the cap — resolution is dropped from the PAST')
+
+    // Tier 3: a space whose own content will not fit keeps NO history, rather
+    // than a half-history it cannot honour.
+    ok(pruneRevisions(full, 10, 60).length === 0,
+      'a budget below one whole snapshot yields no revisions at all — tier 3, stated not silent')
+  }
+
+  // ---- 5. randomised edit sequences ----------------------------------------
+  //
+  // The chain has to survive interleaved creation, deletion, reordering and
+  // RESURRECTION of the same page id — exactly where a hand-written merge of
+  // two patch objects would go wrong, and the reason pruneRevisions folds by
+  // re-deriving instead. 200 sequences, every revision of every one verified.
+  {
+    let seed = 12345
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
+    const pick = (n: number) => Math.floor(rnd() * n)
+    let good = 0
+    const total = 200
+    for (let s = 0; s < total; s++) {
+      const d = mkDoc()
+      const stamps: string[] = []
+      for (let step = 0; step < 8; step++) {
+        const pages = d.pages
+        switch (pick(6)) {
+          case 0: if (pages.length) pages[pick(pages.length)].title = `T${step}`; break
+          case 1: {
+            const p = pages[pick(pages.length)]
+            if (p && p.blocks.length) p.blocks[pick(p.blocks.length)].html = `edit ${s}.${step}`
+            break
+          }
+          case 2:
+            pages.push({ id: `np${pick(4)}`, title: `N${step}`, blocks: [{ id: `nb${step}`, type: 'p', html: 'x' }] })
+            break
+          case 3: if (pages.length > 1) pages.splice(pick(pages.length), 1); break
+          case 4: if (pages.length > 1) {
+            const [m] = pages.splice(pick(pages.length), 1)
+            pages.splice(pick(pages.length + 1), 0, m)
+          } break
+          default: {
+            const p = pages[pick(pages.length)]
+            if (!p) break
+            if (p.blocks.length > 1) { const [b] = p.blocks.splice(pick(p.blocks.length), 1); p.blocks.unshift(b) }
+            else p.blocks.push({ id: `xb${step}`, type: 'p', html: 'added' })
+          }
+        }
+        // duplicate page ids are not a state the app can reach, and the patch
+        // is keyed by id — normalise rather than assert about nonsense
+        const seen = new Set<string>()
+        d.pages = d.pages.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)))
+        if (recordRevision(d)) stamps.push(J(contentOf(d)))
+      }
+      const revs = revisionsOf(d)
+      let seqOk = revs.length === stamps.length
+      for (let i = 0; i < revs.length && seqOk; i++) {
+        const back = restoredDoc(d, i)
+        if (!back || J(contentOf(back)) !== stamps[i]) seqOk = false
+      }
+      if (seqOk) good++
+    }
+    ok(good === total,
+      `${total} randomised sequences (rename/edit/create/delete/reorder/resurrect): every revision restores byte-exactly (${good}/${total})`)
+  }
+
+  // ---- 6. the word diff ----------------------------------------------------
+  {
+    const parts = diffWords('the quick brown fox', 'the quick red fox')
+    const del = parts.filter((p) => p.op === 'del').map((p) => p.text).join('')
+    const ins = parts.filter((p) => p.op === 'ins').map((p) => p.text).join('')
+    ok(del === 'brown' && ins === 'red',
+      `WORD granularity: "brown" → "red" is one word out, one word in (del=${J(del)} ins=${J(ins)})`)
+
+    // The case redline.ts names: a CHARACTER diff calls 30 → 60 one glyph,
+    // which nobody can see. This must mark the whole number.
+    const n = diffWords('we grew 30 percent', 'we grew 60 percent')
+    ok(n.filter((p) => p.op === 'del').map((p) => p.text).join('') === '30' &&
+       n.filter((p) => p.op === 'ins').map((p) => p.text).join('') === '60',
+      '"30" → "60" is a whole word changing, not one character inside one')
+
+    // …and it is not a LINE diff either: one word changed in a three-line
+    // block leaves the other two lines as equal runs.
+    const lines = diffWords('alpha line\nbeta line\ngamma line', 'alpha line\nbeta LINE\ngamma line')
+    ok(lines.filter((p) => p.op !== 'eq').map((p) => p.text).join(' ') === 'line LINE',
+      'a reflow-proof diff: one word in the middle line changes, the other two lines stay equal')
+
+    // THE TWO INVARIANTS. Anything that is not an insertion reconstructs the
+    // old text; anything that is not a deletion reconstructs the new one. If
+    // either fails, the view is showing a change that did not happen.
+    const pairs: Array<[string, string]> = [
+      ['the quick brown fox', 'the quick red fox'],
+      ['', 'all new text here'],
+      ['everything goes away', ''],
+      ['a b c d e f g', 'g f e d c b a'],
+      ['one\ntwo\nthree', 'one\ntwo and a half\nthree'],
+      ['same', 'same'],
+      ['  leading and trailing  ', ' leading and trailing '],
+      ['naïve café résumé', 'naive cafe resume'],
+    ]
+    let both = 0
+    for (const [a, b] of pairs) {
+      const p = diffWords(a, b)
+      const oldSide = p.filter((x) => x.op !== 'ins').map((x) => x.text).join('')
+      const newSide = p.filter((x) => x.op !== 'del').map((x) => x.text).join('')
+      if (oldSide === a && newSide === b) both++
+      else console.log(`     invariant broken for ${J(a)} → ${J(b)}: ${J(oldSide)} / ${J(newSide)}`)
+    }
+    ok(both === pairs.length,
+      `reject-all == the old text and accept-all == the new text, for all ${pairs.length} pairs`)
+
+    ok(diffWords('a  b', 'a  b').every((p) => p.op === 'eq'),
+      'identical text yields no insertions and no deletions, doubled spaces included')
+  }
+
+  // ---- 7. the change report the dialog draws -------------------------------
+  {
+    const d = mkDoc()
+    recordRevision(d)
+    d.pages[0].blocks[0].html = 'the quick red fox'
+    d.pages.splice(1, 1)
+    recordRevision(d)
+    const rep = changesAt(revisionsOf(d), 1)
+    const gone = rep.pages.find((p) => p.kind === 'removed')
+    ok(!!gone && gone.title === 'Two', 'a deleted page is reported as removed, by the title it had')
+    ok(!!gone && gone.blocks.length > 0 && gone.blocks.every((b) => b.kind === 'removed'),
+      '…with its text shown as text that went, not as a silent absence')
+    const changed = rep.pages.find((p) => p.id === 'p1')
+    ok(!!changed && changed.blocks.length === 1 && changed.blocks[0].kind === 'changed',
+      'the edited page reports exactly the ONE block that changed, not all of them')
+    ok(rep.pagesChanged === 2 && rep.blocksChanged === 2,
+      `the counts behind the summary line are derived, never stored (${rep.pagesChanged}/${rep.blocksChanged})`)
+
+    // The summary carries no language. A label baked at save time would be one
+    // author's UI language, shown to every reader of an eight-language file.
+    ok(revisionsOf(d).every((r) => !Object.hasOwn(r, 'label')),
+      'no revision the app records carries a label — the sentence is made at render time')
+  }
+
+  // ---- 8. what history actually costs, on a real space ---------------------
+  //
+  // The starter space is the realistic case: 14 pages, 142 blocks, ~37 KB of
+  // pages. The numbers are PRINTED rather than pinned to a magic constant — a
+  // number nobody can reproduce is not evidence — but the RATIO is asserted,
+  // because "a whole snapshot per save" is the design this replaces and being
+  // an order of magnitude cheaper than it is the whole claim.
+  {
+    const d = starterDoc()
+    const contentBytes = B(contentOf(d))
+    recordRevision(d)
+    const baseBytes = B(d.revisions)
+    let before = baseBytes
+    const deltas: number[] = []
+    for (let i = 0; i < 20; i++) {
+      const p = d.pages[i % d.pages.length]
+      if (p.blocks.length) p.blocks[0].html = `${p.blocks[0].html ?? ''} — edited pass ${i}`
+      recordRevision(d)
+      const now = B(d.revisions)
+      deltas.push(now - before)
+      before = now
+    }
+    const avg = Math.round(deltas.reduce((a, b) => a + b, 0) / deltas.length)
+    console.log(`     starter space: content ${contentBytes} B · base revision ${baseBytes} B`)
+    console.log(`     20 further saves: +${before - baseBytes} B total, ${avg} B average, ${Math.max(...deltas)} B worst`)
+    console.log(`     whole history after 21 saves: ${before} B (budget ${HISTORY_BUDGET} B)`)
+    ok(avg * 10 < contentBytes,
+      `an ordinary save costs an order of magnitude less than a whole snapshot would (${avg} B vs ${contentBytes} B)`)
+    ok(before < HISTORY_BUDGET,
+      `21 saves of the starter space sit inside the budget (${before} B < ${HISTORY_BUDGET} B)`)
+    ok(revisionsOf(d).length === 21, 'and nothing had to be folded away to get there')
+
+    // The page EXTRACT must not carry it. An extract is a file somebody sends,
+    // and the space's history describes pages that did not travel — including
+    // the text of pages that were deleted from it.
+    const ex = extractSpace(d, d.pages[0].id, { docId: 'ex-1', subtree: false })
+    ok(!Object.hasOwn(ex.doc, 'revisions'),
+      'a page extract carries NO history — it starts its own at its first save')
+  }
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

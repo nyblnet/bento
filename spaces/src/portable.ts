@@ -240,6 +240,12 @@ export function extractSpace(
   if (!fonts.length) delete out.fonts
   delete out.collab
   delete out.template
+  // The whole space's history describes pages that did NOT travel — including
+  // the text of pages that were deleted from it. An extract of one page is a
+  // file somebody sends; carrying the rest of the space's past inside it is a
+  // disclosure nobody asked for and nobody would look for. The extract starts
+  // its own history at its first save.
+  delete out.revisions
 
   return {
     doc: out,
