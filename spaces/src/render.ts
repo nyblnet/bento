@@ -66,6 +66,7 @@ export interface RenderOpts {
    * given, so nothing outside this file ever has to pass it.
    */
   embedChain?: readonly string[]
+  /**
    * DERIVED, and set by `renderBlocks` for its own descent — never by a caller.
    *
    * Footnote numbering is a fact about a whole PAGE (order of appearance), and

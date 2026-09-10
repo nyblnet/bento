@@ -77,7 +77,6 @@ import {
   restoredDoc, pruneRevisions, clearHistory, diffWords, changesAt,
   HISTORY_BUDGET, HISTORY_MAX,
 } from '../spaces/src/history.ts'
-import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
 import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
