@@ -766,4 +766,13 @@ export const pt: Catalog = {
   "Versions in this file": "Versões dentro deste ficheiro",
   "Versions include text you have deleted. Clear them before sending the file if that matters.": "As versões incluem texto que apagaste. Limpa-as antes de enviar o ficheiro, se isso importar.",
   "{p} page(s), {b} block(s) changed": "{p} página(s), {b} bloco(s) alterados",
+  "Indent": "Avançar",
+  "Move back out": "Recuar de novo",
+  "Block format": "Formato do bloco",
+  "Block options — type, list, indent": "Opções do bloco — tipo, lista, avanço",
+  "This block is not nested": "Este bloco não está aninhado",
+  "a block nests under the one above it": "um bloco aninha-se sob o que está acima",
+  "A block nests under the one above it — this one has nothing above it": "Um bloco aninha-se sob o que está acima — este não tem nada acima",
+  "Between blocks, and between the lines of one": "Entre blocos, e entre as linhas de um",
+  "Off the edge of a block, into the next": "Da borda de um bloco para o seguinte",
 }

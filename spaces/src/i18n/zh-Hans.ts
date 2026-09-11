@@ -766,4 +766,13 @@ export const zh_Hans: Catalog = {
   "Versions in this file": "此文件中的版本",
   "Versions include text you have deleted. Clear them before sending the file if that matters.": "版本里包含你已经删掉的文字。如果这一点要紧，请在发送文件前先清除历史。",
   "{p} page(s), {b} block(s) changed": "{p} 个页面、{b} 个块有改动",
+  "Indent": "缩进",
+  "Move back out": "退回一级",
+  "Block format": "块格式",
+  "Block options — type, list, indent": "块选项 — 类型、列表、缩进",
+  "This block is not nested": "这个块没有嵌套",
+  "a block nests under the one above it": "块会嵌套在它上面的那个块里",
+  "A block nests under the one above it — this one has nothing above it": "块会嵌套在它上面的那个块里 — 这个块上面没有别的块",
+  "Between blocks, and between the lines of one": "在块之间移动，也在一个块的各行之间移动",
+  "Off the edge of a block, into the next": "越过块的边缘，进入下一个块",
 }

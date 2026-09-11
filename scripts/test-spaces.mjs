@@ -57,6 +57,7 @@ const RIGS = [
   { name: 'agent',   file: 'scripts/test-spaces-agent.ts' },
   { name: 'journal', file: 'scripts/test-spaces-journal.ts', tzs: TZS_JOURNAL },
   { name: 'calc',    file: 'scripts/test-spaces-calc.ts', tzs: TZS_CALC },
+  { name: 'caret',   file: 'scripts/test-spaces-caret.ts' },
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },

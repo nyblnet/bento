@@ -766,4 +766,13 @@ export const ja: Catalog = {
   "Versions in this file": "このファイルの中のバージョン",
   "Versions include text you have deleted. Clear them before sending the file if that matters.": "バージョンには、削除した本文も含まれます。気になる場合は、ファイルを送る前に履歴を削除してください。",
   "{p} page(s), {b} block(s) changed": "{p} ページ・{b} ブロックが変更",
+  "Indent": "字下げ",
+  "Move back out": "戻す",
+  "Block format": "ブロックの書式",
+  "Block options — type, list, indent": "ブロックのオプション — 種類、リスト、字下げ",
+  "This block is not nested": "このブロックは入れ子になっていません",
+  "a block nests under the one above it": "ブロックは一つ上のブロックの中に入ります",
+  "A block nests under the one above it — this one has nothing above it": "ブロックは一つ上のブロックの中に入ります — このブロックより上には何もありません",
+  "Between blocks, and between the lines of one": "ブロック間、および一つのブロック内の行間",
+  "Off the edge of a block, into the next": "ブロックの端を越えて次のブロックへ",
 }

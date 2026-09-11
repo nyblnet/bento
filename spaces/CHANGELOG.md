@@ -877,6 +877,55 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 - **Fixed: `Reset access…` was still called `Rotate keys` in the starter.** The
   control was renamed and the one document every user reads was not, so the
   starter named a button that does not exist.
+- **The arrow keys move between blocks, and within one first.** Every block is
+  its own `contenteditable` host, which is what keeps a Selection block-scoped
+  so splitting and merging can never re-mint an id — and the price, until now,
+  was that the browser's own caret movement stopped dead at a block boundary.
+  ↑ and ↓ did nothing at all; ← and → did nothing at the edges. There was no
+  arrow handling in the editor whatsoever.
+
+  ↓ from the first line of a wrapped paragraph means its second line, not the
+  next block, so the question asked is not "which block is this" but "is the
+  caret on the edge VISUAL line of its host" — measured off the caret's own
+  rectangle against the host's line boxes, never counted in characters, because
+  where a line wraps depends on the font, the width, the language and the marks.
+  The goal column is kept across consecutive vertical steps, so down onto a
+  short line and down again comes back out near the original x, and a pointer
+  ends the run. ← at the start of a block goes to the end of the one before and
+  → at the end to the start of the next. It crosses callouts, toggles and canvas
+  cards for free — they render in document order — and a table is stepped by its
+  GRID, because cells are row-major in the DOM and column-major on the screen;
+  entering one from above or below lands in the column the goal column is over,
+  not in the first cell. The table's own ⇥ and ⏎ are untouched.
+
+- **Tab on a block with nothing above it now says so.** A space expresses
+  nesting with one field — `Block.parent`, pointing at a preceding sibling — so
+  the first block at its level has nothing to nest under. `indent()` walked
+  backwards looking for one, found none, and returned in silence: no indent, no
+  feedback, no explanation, which reads as a broken app rather than as a gesture
+  that does not apply. It refuses out loud now, in the status line and with a
+  nudge on the block itself, and the indent control shows the reason before the
+  key is pressed.
+
+  The alternative was to allow it by storing an indent LEVEL, the way Google
+  Docs does. That is a permanent format addition and a SECOND way to express
+  nesting, which the renderer, the markdown export, the outline, the graph and
+  the CRDT would each have to reconcile forever; a silent Tab is worth an
+  afternoon and a duplicate nesting model is worth every future version. Notion,
+  Workflowy, Bear and Logseq all refuse the same case, because they all nest by
+  parenthood too. Nothing about the format changed. ⇧Tab still outdents — and
+  now explains itself when there is nothing to outdent from — and Tab still
+  commits a showing calc answer before it considers indenting at all.
+
+- **Bullets, numbers, to-dos, quotes, headings, indent and outdent have a
+  control.** There were none: the formatting bar is inline-only and appears on a
+  SELECTION, which is the wrong trigger for "make this a bullet" — you want that
+  with a caret and nothing selected. So the block's own format is a row at the
+  top of the block menu, the one the gutter grip opens and the one that is
+  already a bottom sheet on a phone. Indent and outdent existed on no surface at
+  all before this, at any width: ⇥ and ⇧⇥ were their only gesture, and a phone
+  keyboard has neither. ⌘/ opens the menu from the keyboard, since the gutter is
+  hover-revealed and ⇥ inside a block is indent.
 
 ## [0.1.0] — 2026-08-03
 
