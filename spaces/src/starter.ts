@@ -32,6 +32,32 @@
 // be pointed at, so they are pointed at from a page whose own shape is the
 // thing they act on, and never from a page about them.
 //
+// And so did the round after THOSE: the Gantt and workload view layouts, the
+// `start` date field they schedule from, the burndown/burnup/cumulative-flow
+// chart blocks with `doc.trail` and `doc.periods` behind them, and the block
+// bar (⌘/) with the indent and outdent controls that existed on no surface at
+// any width before it.
+//
+// THE BLOCK BAR IS THE INTERESTING ONE, because it is pure chrome — it has no
+// document surface at all, so by the pointing-at rule above it would get a
+// paragraph saying "press ⌘/" and nothing else. It does not. It gets a list
+// that is WRONG ON PURPOSE (Writing → "A list in the wrong shape"), where the
+// nesting is obviously implied and obviously absent, plus two paragraphs
+// sitting among the Inbox's to-dos in the wrong block type. The control is the
+// natural way to finish the page, so the reader ends up having USED the
+// gesture rather than having read about it — which is the difference between a
+// demonstration and a manual, and it is available for any chrome whose effect
+// is visible in a document at all. The same trick carries the indent REFUSAL
+// (a first item you are invited to press Tab on, so the thing that changed —
+// that it now says why — is the thing you meet) and caret-crosses-blocks (a
+// run of short lines and "hold ↓ from the top", which is the only length at
+// which the new behaviour is noticeable).
+//
+// TOUCH IS STILL ONLY POINTED AT, and honestly so: a coarse pointer cannot be
+// simulated by anything a page may contain (block `html` goes through
+// sanitize.ts with a CLASS_OK allowlist, so a page cannot even carry its own
+// media-query CSS). Welcome says what to do with a finger and stops there.
+//
 // WHAT THIS IS NOT is a manual. A feature tour that lists features is a
 // reference nobody reads twice; this should be a space somebody would keep and
 // write in, where the demonstration is the page rather than an aside on it.
@@ -59,6 +85,146 @@ const DIAGRAM = 'sd-diagram'
 /** When the demonstration comment thread was written. A FIXED date, not
  *  `new Date()`: `starterDoc()` has to emit the same document twice. */
 const AT = '2026-08-20T09:14:00.000Z'
+
+/**
+ * DOES THE STARTER SHIP A SEEDED `doc.trail`? YES — ONE SERIES, QUARANTINED
+ * AND LABELLED — AND ALSO A CHART WITH NO PERIOD AT ALL. Both, on purpose.
+ *
+ * This is the hardest call in the file, so the argument is written out rather
+ * than left to be re-derived by whoever reads the numbers below and assumes
+ * they are a convenience.
+ *
+ * THE CASE AGAINST SEEDING IS REAL AND IT IS NOT SQUEAMISHNESS. `trail.ts`
+ * states the rule the field exists for — *store an observation the current
+ * document cannot reproduce* — and `charts.ts` goes further at the one place a
+ * reader can start recording: "No past trail key is ever fabricated: the days
+ * before the record existed are gaps." A starter that fabricates a fortnight
+ * would be the only document in the world doing the exact thing the feature
+ * declines to do on the reader's behalf, and the first person to notice is by
+ * definition the person deciding whether to trust the charts.
+ *
+ * WHY IT SHIPS ANYWAY. `chartData` returns `empty: !runs.length`, and a
+ * starter period is a FIXED window (every date in this file is fixed, because
+ * `starterDoc()` must emit the same bytes twice) — so it is always in the past,
+ * the live today-point never falls inside it, and a chart of an unseeded period
+ * draws NOTHING, forever, in every copy. That is not the version-history
+ * compromise it would be mistaken for: version history has no versions in a
+ * fresh space and points at a control in About that DOES something. An empty
+ * burndown points at nothing and teaches nothing.
+ *
+ * And the part that decides it: everything these three charts are actually
+ * clever about only exists over a real span. A gap drawn as a gap rather than
+ * as zero, the "recording starts here" left edge, a thinned sample drawn
+ * differently from a daily reading, the ideal guide, scope that grew mid-sprint,
+ * four stacked CFD bands — charts.ts opens by explaining that it draws its own
+ * SVG rather than calling charts-lite for precisely these properties. One live
+ * point demonstrates not one of them.
+ *
+ * SO THE FICTION IS QUARANTINED RATHER THAN MIXED IN, and that is what makes
+ * it defensible rather than merely convenient:
+ *
+ *  · IT IS ITS OWN SERIES. The keys are `sample/2026-08-17`, not `2026-08-17`.
+ *    `recordTrail` only ever writes the DEFAULT series, so the reader's own
+ *    record starts empty and can never be contaminated by, confused with, or
+ *    averaged against these rows. The series mechanism already exists for
+ *    exactly this ("the only mechanism by which two different scopes can ever
+ *    be charted") — it is not being bent.
+ *  · IT IS LABELLED WHERE IT IS MET, three times over: the period's own label
+ *    reads "Sample sprint (invented numbers)", which is the string the chart
+ *    header prints and the string the period picker offers; the page's first
+ *    paragraph says it; and the page says which sprint it is NOT (these numbers
+ *    are not the five demo cards, and could not be — a trail row holds counts
+ *    and no page ids, by design).
+ *  · IT IS INERT. The period is `closed`, so nothing protects it from pruning
+ *    and nothing recomputes it; it never claims to be about this document.
+ *
+ * AND THE REAL MECHANISM IS DEMONSTRATED TOO, which is the half a seeded
+ * series cannot do. The third chart on that page carries NO period. It renders
+ * "This chart has no period yet" and the working "Choose a period…" button, and
+ * the page tells the reader to press it: `startPeriod` takes a baseline from
+ * their live board and backfills TODAY's row (periods.ts), so one press turns
+ * that chart into a true observation of their own space, made by them, today.
+ * The reader gets the shapes from the sample and the act from the real one.
+ *
+ * WHAT IT COSTS, measured rather than estimated — see the changelog entry for
+ * the numbers this build produced. Ten rows plus one period is low single-digit
+ * KB of document JSON before compression, and the shell ships deflated. It is
+ * the largest thing in this file that is not the audio clip.
+ *
+ * ONE LOSS, SAID OUT LOUD. `clearTrail()` exists in trail.ts and has no UI
+ * wired to it yet, so a reader who wants these rows gone must delete the page
+ * (which does not remove them) or edit the JSON. That is a gap, it is filed,
+ * and it is the strongest remaining argument for the other answer.
+ */
+const SAMPLE_SERIES = 'sample'
+const SPRINT = { id: 'sd-sprint', from: '2026-08-17', to: '2026-08-28' }
+
+/**
+ * The invented fortnight, as a table rather than as ten literal rows.
+ *
+ * `[dayOffset, todo, doing, review, done, ptTodo, ptDoing, ptReview, ptDone]`.
+ * 2026-08-17 is a Monday and 2026-08-28 the Friday twelve days later, so the
+ * two MISSING offsets (5 and 6) are a Saturday and a Sunday — which is what
+ * puts a real gap in the middle of the drawn line, and a gap is the one thing
+ * charts.ts says must never be allowed to look like a zero.
+ *
+ * Nine issues and 24 points on the Monday; on the second Monday a tenth issue
+ * arrives and scope becomes 27, which is the scope-creep story a burnup exists
+ * to tell and a burndown cannot (there, it is only a line that stops falling).
+ * It ends at 9 points remaining — a sprint that nearly finished, not one that
+ * landed on zero, because a guide line the reality meets exactly is the one
+ * picture a burndown never actually draws.
+ *
+ * The REVIEW band swells through the second week and is drained on the last
+ * day. That is the CFD's whole reason to exist — a widening band is a queue
+ * before anybody has called it one — and it has to be IN the numbers, because
+ * prose beside a flat chart claiming a queue is the starter denying a feature
+ * while appearing to demonstrate it.
+ *
+ * Zero-valued options are omitted from the row, per `TrailRow`.
+ */
+const SAMPLE_DAYS: ReadonlyArray<readonly number[]> = [
+  [0, 8, 1, 0, 0, 21, 3, 0, 0],
+  [1, 6, 2, 1, 0, 16, 5, 3, 0],
+  [2, 5, 2, 1, 1, 13, 5, 3, 3],
+  [3, 4, 2, 2, 1, 11, 5, 5, 3],
+  [4, 3, 2, 2, 2, 8, 5, 5, 6],
+  // 5, 6 — Saturday and Sunday. Nobody opened the file, so there is no row.
+  [7, 3, 2, 3, 2, 9, 5, 7, 6],
+  [8, 2, 2, 3, 3, 6, 5, 7, 9],
+  [9, 1, 2, 4, 3, 4, 4, 10, 9],
+  [10, 1, 1, 4, 4, 3, 3, 9, 12],
+  [11, 0, 1, 3, 6, 0, 3, 6, 18],
+]
+
+/** `2026-08-17` + n, by UTC ordinal arithmetic on the LABEL — the discipline
+ *  trail.ts sets and journal.ts's rig runs under six timezones. No local `Date`
+ *  is constructed, so no DST boundary and no reader's timezone can move a key. */
+function sampleDay(offset: number): string {
+  const [y, m, d] = SPRINT.from.split('-').map(Number)
+  const at = new Date(Date.UTC(y, m - 1, d) + offset * 86400000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${at.getUTCFullYear()}-${pad(at.getUTCMonth() + 1)}-${pad(at.getUTCDate())}`
+}
+
+/** The sample series, as the `doc.trail` map the charts read. */
+function sampleTrail(): Record<string, { n: Record<string, number>; e: Record<string, number> }> {
+  const out: Record<string, { n: Record<string, number>; e: Record<string, number> }> = {}
+  for (const [off, todo, doing, review, done, pTodo, pDoing, pReview, pDone] of SAMPLE_DAYS) {
+    const n: Record<string, number> = {}
+    const e: Record<string, number> = {}
+    const put = (id: string, c: number, p: number) => {
+      if (c > 0) n[id] = c
+      if (p > 0) e[id] = p
+    }
+    put('todo', todo, pTodo)
+    put('doing', doing, pDoing)
+    put('review', review, pReview)
+    put('done', done, pDone)
+    out[`${SAMPLE_SERIES}/${sampleDay(off)}`] = { n, e }
+  }
+  return out
+}
 
 /**
  * A starter ISSUE — a page whose first blocks are its fields.
@@ -99,6 +265,7 @@ export function starterDoc(): SpacesDoc {
     links: 'sd-links',
     tracker: 'sd-tracker',
     planning: 'sd-planning',
+    progress: 'sd-progress',
     journal: 'sd-journal',
     inbox: 'sd-inbox',
     handover: 'sd-handover',
@@ -119,6 +286,15 @@ export function starterDoc(): SpacesDoc {
   // (query.ts), so a date behind us stays behind us; `week` or `future` would
   // have been an empty view for every reader after the first.
   const DUE = { a: '2026-08-24', b: '2026-08-26', c: '2026-08-28' }
+
+  // START dates, so the Gantt on the Planning page draws BARS and not a column
+  // of hairlines. Deliberately not on every card: `fields.ts` names the fact
+  // that "every issue in every file already written has a due date and no
+  // start", so one card here has a due date and no start and is drawn as the
+  // milestone diamond that case renders as — the installed-base shape, in the
+  // one document everybody sees. A fourth card has neither date and is the
+  // "undated: not drawn, counted" line the Gantt prints underneath itself.
+  const START = { a: '2026-08-17', b: '2026-08-18', c: '2026-08-24' }
 
   // Through `writeTable`, not by hand, for the reason `propBlock` is used for
   // the issues: it is the ONE writer, and the fallback `html` it keeps in step
@@ -186,6 +362,36 @@ export function starterDoc(): SpacesDoc {
     home: P.home,
     theme: defaultTheme(),
     assets: { [DIAGRAM]: STARTER_DIAGRAM },
+
+    // THE SAMPLE SPRINT AND ITS RECORD. The whole argument for shipping these
+    // at all — and for shipping them as their own SERIES rather than as the
+    // default one — is at `SAMPLE_SERIES` above; do not reduce it to a shorter
+    // comment here, because the short version reads as a convenience and it is
+    // not one.
+    //
+    // `closed`, `series`, and a `base` taken on the first day: `base.e` is what
+    // the burndown's ideal guide descends from and what the burnup draws as the
+    // committed line, and scope growing past it on the second Monday is the
+    // only story a burnup tells that a burndown cannot.
+    //
+    // The LABEL is load-bearing. It is what `renderChartBlock` prints in every
+    // chart header and what the period picker offers a reader who later adds a
+    // chart of their own, so it is the one place the fiction is guaranteed to
+    // be met — it says so there rather than only in the prose beside it.
+    periods: {
+      [SPRINT.id]: {
+        // "Sample sprint (invented numbers)" and not "Sample sprint — invented
+        // numbers": `renderChartBlock` prints `${kind} — ${label}`, so an
+        // em-dash in the label gives every chart header two of them.
+        label: 'Sample sprint (invented numbers)',
+        from: SPRINT.from,
+        to: SPRINT.to,
+        series: SAMPLE_SERIES,
+        base: { at: SPRINT.from, n: 9, e: 24 },
+        closed: true as const,
+      },
+    },
+    trail: sampleTrail(),
 
     // THE NOTES, keyed by label, doc-level. Numbering is NOT here and is not
     // anywhere — it is order of appearance on a page, worked out at render
@@ -259,12 +465,13 @@ export function starterDoc(): SpacesDoc {
           b('h2', 'If you are holding a phone'),
           b('p', 'The two chevrons at the edges of the screen are the page list and the properties panel; on a phone both start out of the way. Anything you would drag with a mouse — a block by its grip, a page onto another page to nest it, a card to the next column — moves if you <strong>press and hold it still for a moment first</strong> and then drag. Move straight away and the page scrolls, which is what you meant the other nine times.'),
           b('h2', 'What is here'),
-          b('p', 'Nine more pages. Each one demonstrates the thing it describes, and every one of them is yours to rewrite or delete.'),
+          b('p', 'Ten more pages. Each one demonstrates the thing it describes, and every one of them is yours to rewrite or delete. Two of them are left deliberately unfinished, and say so — finishing them is how you meet the controls that do it.'),
           b('bullet', '<a href="#p/sd-writing">Writing</a> — the blocks you can make, and the marks you can put on them'),
           b('bullet', '<a href="#p/sd-media">Tables, pictures and clips</a> — the things that are not paragraphs'),
           b('bullet', '<a href="#p/sd-links">Pages and links</a> — how a space holds more than one page'),
           b('bullet', '<a href="#p/sd-tracker">Tracker</a> — the same pages, on a board'),
-          b('bullet', '<a href="#p/sd-planning">Planning</a> — the same pages again, by date, and only the ones you asked for'),
+          b('bullet', '<a href="#p/sd-planning">Planning</a> — the same pages again, by date, on a schedule, and shared out between people'),
+          b('bullet', '<a href="#p/sd-progress">How it is going</a> — three charts of what the file remembers'),
           b('bullet', '<a href="#p/sd-journal">Journal</a> — a page per day, when you want one'),
           b('bullet', '<a href="#p/sd-inbox">Inbox</a> — somewhere to put things you have not filed'),
           b('bullet', '<a href="#p/sd-handover">Handing it over</a> — reading it, sending it, presenting it, printing it'),
@@ -284,6 +491,38 @@ export function starterDoc(): SpacesDoc {
           b('bullet', 'and <code>Tab</code> nests it'),
           b('number', '<code>1. </code> makes a numbered list'),
           b('todo', '<code>[] </code> makes a checkbox', { done: false }),
+          // ── THE PAGE THAT IS UNFINISHED ON PURPOSE ────────────────────────
+          // The block bar is chrome: ⌘/ has no document surface, so by the
+          // rule at the top of this file it would get a paragraph telling you
+          // to press it. Instead the list below is WRONG — flat, with the
+          // nesting obviously implied — and the reader fixes it. They end up
+          // having used indent, the bar, or Tab, whichever they reached for.
+          //
+          // THE REFUSAL IS NOT DEMONSTRATED HERE, and the reason is worth
+          // keeping because it was found by pressing the key rather than by
+          // reading `indentTarget`. This section first said "now press Tab on
+          // Bag itself and watch it refuse" — and Bag INDENTS. `indentTarget`
+          // refuses `{why:'first'}` for the first block AT ITS LEVEL, and Bag
+          // has the paragraph above it, so Tab nests the bullet under that
+          // paragraph exactly as asked. The only block that refuses is the
+          // FIRST BLOCK ON A PAGE, so the invitation lives on the Inbox, whose
+          // first block is a to-do at the top of the page. Writing a starter
+          // claim about a control without operating the control is how the
+          // starter ends up denying a feature while appearing to prove one.
+          //
+          // AND IT IS LONG ENOUGH TO WALK. Arrow keys crossing a block
+          // boundary is new and is unnoticeable on one block; six short lines
+          // is the shortest run where holding ↓ demonstrates it.
+          b('h2', 'A list in the wrong shape'),
+          b('p', 'This list is flat and should not be. Put the caret on <strong>passport</strong> and press <code>Tab</code> — or open <code>⌘/</code> and use the indent arrow, which is the same thing with a button on it. Four of these six lines belong under the one above them.'),
+          b('bullet', 'Bag'),
+          b('bullet', 'passport'),
+          b('bullet', 'charger'),
+          b('bullet', 'Kitchen'),
+          b('bullet', 'turn the boiler down'),
+          b('bullet', 'bins out'),
+          b('p', 'Nesting here is <em>parenthood</em> — a block belongs to the one above it — and not a number stored on the line. That is why <code>Tab</code> puts <strong>passport</strong> under <strong>Bag</strong> and never anywhere else, why moving <strong>Bag</strong> takes everything under it along, and why the very first block on a page has nothing to indent under and is told so out loud rather than having the key swallowed. There is a line at the top of the <a href="#p/sd-inbox">Inbox</a> you can try that on.'),
+          b('p', 'While you are in there: <code>⌘/</code> is the whole block menu for the block the caret is in — text, three headings, bullet, number, to-do, quote, and indent both ways. It is the one route that does not need a mouse to find the grip out in the margin, and on a phone it is the same sheet the grip opens. And hold <code>↓</code> from <strong>Bag</strong>: the caret walks out of one block and into the next instead of stopping at the end of the line.'),
           b('h2', 'Marks'),
           b('p', 'Select any words and a small bar appears above them: <strong>bold</strong>, <em>italic</em>, <u>underline</u>, <s>strikethrough</s>, <code>inline code</code>, <mark>highlight</mark>, colour, a link, and one button that clears the lot.'),
           b('p', 'The shortcuts are ⌘B, ⌘I, ⌘U, ⇧⌘S, ⌘E and ⇧⌘H — and ⌘K makes a link out of whatever is selected. With nothing selected, ⌘K is still the search.'),
@@ -396,28 +635,38 @@ export function starterDoc(): SpacesDoc {
           b('h2', 'Making them'),
           b('p', '<code>⌘⇧I</code> makes an issue. The tag button in the toolbar turns the page you are already on into one — useful when a note turns out to be work.'),
           b('p', 'Drag a card to another column to change its status; change the field at the top of a card’s page and watch the card move instead. On a phone, press and hold the card still for a moment before you drag — otherwise the board scrolls, which is the other thing a finger on a board usually means.'),
-          b('p', 'The button above the board that says <strong>Board</strong> is a cycle, not a switch: it steps through the five shapes the same pages can take — board, list, table, gallery, calendar — and always names the one you are looking at. <strong>Group</strong> picks the field the columns come from, <strong>Sort</strong> orders by any field (clicking the one you are already sorted by reverses it), <strong>Pages</strong> chooses which pages the view holds at all, <strong>Open only</strong> hides what is finished, and <strong>Filter</strong> asks a real question — <a href="#p/sd-planning">Planning</a> is three views that do. <strong>Manual order</strong> is always first in the Sort menu, because a board somebody arranged by dragging should be one click from getting that order back.'),
+          // SEVEN, not five. `VIEW_LAYOUTS` grew by two and this sentence was
+          // the starter denying both of them — the maintenance cost the rule
+          // at the top of this file names, arriving exactly as predicted.
+          b('p', 'The button above the board that says <strong>Board</strong> is a cycle, not a switch: it steps through the seven shapes the same pages can take — board, list, table, gallery, calendar, timeline and workload — and always names the one you are looking at. <strong>Group</strong> picks the field the columns come from, <strong>Sort</strong> orders by any field (clicking the one you are already sorted by reverses it), <strong>Pages</strong> chooses which pages the view holds at all, <strong>Open only</strong> hides what is finished, and <strong>Filter</strong> asks a real question — <a href="#p/sd-planning">Planning</a> is three views that do. <strong>Manual order</strong> is always first in the Sort menu, because a board somebody arranged by dragging should be one click from getting that order back.'),
           b('h2', 'The same five, as a table'),
           b('view', 'Every issue', { layout: 'table' }),
           b('p', 'The columns are whichever fields these pages actually carry. Click a heading to sort by it, again to reverse it, a third time to put the manual order back — and click any cell to change the value right here, without opening the page. A cell that is empty still takes a click: that is how the field gets onto a page that never had it.'),
           b('p', 'This page is not set to Wide and is still wide: a board takes the room it needs unless the page menu says otherwise.'),
         ],
       },
+      // ASSIGNEES, which the cards did not carry before. Two names and one
+      // blank, because a workload chart of five cards all held by nobody is one
+      // "Unassigned" bar, which is not a picture of anything. Ada and Bo are
+      // the two people already in this space — they are the comment thread on
+      // the Sharing & limits page — rather than two more invented names.
       ...[
         issue('Open this card — it is an ordinary page', P.tracker,
-          { status: 'doing', priority: 'high', estimate: '3', due: DUE.a, project: 'Starter tour' },
+          { status: 'doing', priority: 'high', assignee: 'Ada', estimate: '3', start: START.b, due: DUE.a, project: 'Starter tour' },
           'You are in it. The row above is fields; everything from here down is a page — write notes, paste a picture, nest a toggle. That is the whole trick: the tracker did not invent a new thing to hold work in, it put fields on the thing you already had.'),
         issue('Drag me to another column', P.tracker,
-          { status: 'todo', priority: 'medium', estimate: '1', due: DUE.b, project: 'Starter tour' },
+          { status: 'todo', priority: 'medium', assignee: 'Bo', estimate: '1', start: START.c, due: DUE.b, project: 'Starter tour' },
           'Dragging a card writes the new status onto this page. Go the other way too: change the field at the top and watch the card move on the board.'),
+        // NO START, on purpose: the milestone case. See `START` above.
         issue('Press ⌘⇧I to make your own', P.tracker,
-          { status: 'todo', priority: 'urgent', estimate: '5', due: DUE.c, project: 'Starter tour' },
-          'A new issue arrives with status, priority, assignee and estimate already on it, and the caret in the body waiting for you.'),
+          { status: 'todo', priority: 'urgent', assignee: 'Ada', estimate: '5', due: DUE.c, project: 'Starter tour' },
+          'A new issue arrives with status, priority, assignee and estimate already on it, and the caret in the body waiting for you. It has no <strong>Start</strong> until you give it one — which is why this card is a diamond rather than a bar on the <a href="#p/sd-planning">Planning</a> page: a date with no duration is what the file actually says.'),
+        // NEITHER DATE, on purpose: the Gantt's "undated" line.
         issue('Delete all of this once you have seen it', P.tracker,
           { status: 'backlog', project: 'Starter tour' },
           'These five are a demonstration, not a template. Delete them and the board is empty and yours — it shows whatever pages in this space have a status, wherever they live in the tree.'),
         issue('This one is finished', P.tracker,
-          { status: 'done', estimate: '2', due: DUE.a, project: 'Starter tour' },
+          { status: 'done', assignee: 'Bo', estimate: '2', start: START.a, due: DUE.a, project: 'Starter tour' },
           'Done and cancelled are <em>phases</em>, not just names, which is what lets <strong>Open only</strong> mean something without anyone configuring a filter.'),
       ],
       {
@@ -444,7 +693,64 @@ export function starterDoc(): SpacesDoc {
             filter: { where: [{ key: 'project', op: 'contains', v: 'starter' }, { key: 'estimate', op: 'gte', v: 2 }] },
           }),
           b('p', '<strong>Project contains “starter”</strong> matches the words you would see on the screen, not an id hidden behind them, and it does not care about capitals. <strong>Estimate is 2 or more</strong> is the other half of a range — pair it with <em>is at most</em> and you have one. The card with no estimate is not swept in on a technicality: an unset value is the absence of a value, not a small one.'),
+          // ── THE GANTT ──────────────────────────────────────────────────────
+          // A view layout, not a chart block, and it lives on THIS page rather
+          // than on "How it is going" because that split is the whole point:
+          // everything here is derived from the pages, live, every time it is
+          // drawn; everything there is read from a record. Putting a schedule
+          // beside a burndown would blur the one distinction gantt.ts and
+          // charts.ts both open by making.
+          //
+          // `groupBy: 'status'` so the bars take their colour from the board's
+          // own columns — the same five colours, so a reader recognises them
+          // without a key. Every date here is fixed and in the past, so the
+          // "today" marker sits outside the span for every reader after the
+          // first, which is a state the renderer handles (`todayX: null`) and
+          // is honest: this is last fortnight's schedule.
+          b('h2', 'When it all runs'),
+          b('view', 'Schedule', { layout: 'gantt', groupBy: 'status' }),
+          b('p', 'The same five cards again, drawn between their <strong>Start</strong> and their <strong>Due</strong> — one bar each, coloured by the column they are in on the board. This is the <strong>Timeline</strong> stop on the shape button above any view; nothing is stored to make it, and a bar moves the moment somebody changes a date on the page it came from.'),
+          b('p', 'Two of the cards are not bars, and both are telling you something true. <strong>Press ⌘⇧I to make your own</strong> has a due date and no start, so it is a <em>diamond</em> — a date with no duration is what the file actually says, and drawing it as a zero-width bar would be a hairline pretending to be a schedule. That is not an edge case: every issue written before <strong>Start</strong> existed is in exactly that shape. <strong>Delete all of this once you have seen it</strong> has neither date, so it is not drawn at all — and is counted underneath instead, because a chart that quietly holds fewer rows than it says it does is worse than an untidy one.'),
+          b('p', 'Give the diamond a start date and watch it become a bar. There are no dependency arrows and no critical path: pointing one task at another needs a way to name a page in a field, and this space has exactly one way to point at a page — a link in a sentence — so rather than invent a second one that would be permanent, there is none.'),
+          // ── THE WORKLOAD ───────────────────────────────────────────────────
+          // No `groupBy`: `bucketField` finds the person field by itself, which
+          // is the behaviour worth demonstrating — the block stores nothing and
+          // the chart still buckets by the right thing. The cards carry Ada,
+          // Bo and one blank on purpose (see the issues above).
+          b('h2', 'Who is holding what'),
+          b('view', 'Workload', { layout: 'workload' }),
+          b('p', 'The last shape on the button: the same pages again, with their estimates added up per person. Ada is holding eight points across two cards and Bo three across two, which is the only question this picture is for. Nothing says <strong>Assignee</strong> anywhere on this block — a workload chart bucketed by status would not be a workload chart, so an absent <strong>Group</strong> means the person field, and it finds that field from the schema rather than from its name.'),
+          b('p', 'The bar with nobody on it is the card in the backlog, and it is flat rather than missing: it holds one page and no estimate, and the view says so under the chart. An unset estimate is the absence of a number and never a zero that quietly makes somebody\'s column look lighter — and a value that is not a number at all is excluded and counted out loud, for the same reason.'),
           b('p', 'Somewhere to put the ones that are not work yet: a view that only shows what I could finish before lunch #idea.'),
+        ],
+      },
+      {
+        id: P.progress,
+        title: 'How it is going',
+        icon: 'graph',
+        blocks: [
+          b('p', 'The <a href="#p/sd-planning">Planning</a> page asks the pages questions and they answer from what they say today. This page cannot do that, and the difference is the whole subject: <strong>no amount of looking at a board tells you what it looked like last Tuesday</strong>. So the file writes a line down each day it is edited — how many issues were in each column, how many points — and these three charts read it back.'),
+          b('p', 'Which means one honest warning before you read them, and it is the reason this paragraph is second and not last:'),
+          b('callout', 'The first two charts below are drawn from <strong>invented numbers</strong>. They are a made-up fortnight called “Sample sprint”, kept in a record of its own so it can never mix with what this file records about you, and they are here because an empty chart teaches nobody what a burndown is. The third chart is real, empty, and yours to start.', { tone: 'important' }),
+          b('h2', 'Burndown — how much is left'),
+          b('chart', 'Burndown — Sample sprint (17–28 August 2026)', { kind: 'burndown', period: SPRINT.id }),
+          b('p', 'Work remaining, day by day, with a straight guide from what was committed on the first morning down to nothing on the last. Real work does not follow the guide, which is the only reason to draw it.'),
+          b('p', 'Look at the middle of the line: there is a <strong>gap</strong>, not a dip. That Saturday and Sunday nobody opened the file, so nothing was observed, and an unobserved day is drawn as a hole rather than as a zero — a chart that joined it up would be showing you a number nobody ever wrote down. It is the same refusal as a calculating line that will not guess: absent is a real answer and it is not the same answer as none.'),
+          b('p', 'The line also goes back <em>up</em> on the Monday after that gap, which no amount of working harder can cause. Something arrived. A burndown can only show you that as a week where nothing seemed to happen, which is why there is a second chart.'),
+          b('h2', 'Burnup — and the work that arrived late'),
+          b('chart', 'Burnup — Sample sprint (17–28 August 2026)', { kind: 'burnup', period: SPRINT.id }),
+          b('p', 'The same fortnight with the question turned over: how much is <em>done</em>, against how much there is to do. The upper line is the scope, and it <strong>steps up on the second Monday</strong> — three more points arrived after the sprint had started. A burndown cannot show you that; the line just stops falling and it looks like a bad week.'),
+          b('p', 'What is <em>not</em> recorded, deliberately: which issues those were. A day\'s line holds counts and totals and no page ids at all, so nobody can ever ask this file who closed what and when. That is a privacy decision rather than a byte-saving one, and the cost is real — there is no per-issue account of what arrived mid-sprint, and there is not going to be one.'),
+          b('h2', 'Cumulative flow — where the work is sitting'),
+          b('chart', 'Cumulative flow — Sample sprint (17–28 August 2026)', { kind: 'cfd', period: SPRINT.id }),
+          b('p', 'Every column of the board, stacked. The band that keeps widening is the one where work is piling up — here it is <strong>In review</strong>, swelling right through the second week and only drained on the last day, which is what a queue looks like before anybody has called it one. The bands are the board\'s own columns in the board\'s own colours, so rename a column or recolour it and last month\'s chart follows. Delete one, and old days keep their band and it says it no longer knows the name, rather than quietly losing the work that was in it.'),
+          b('h2', 'And now a real one'),
+          b('p', 'This chart is about <strong>your</strong> space and it is empty, because nothing has been recorded yet — there is no history of a file before somebody started keeping one, and this app will not make one up.'),
+          b('chart', 'Burnup — no period yet', { kind: 'burnup' }),
+          b('p', 'Press <strong>Choose a period…</strong> and then <strong>New two-week period from today</strong>. It takes a baseline from the board next door as it stands right now, writes today\'s line, and points this chart at it — and from then on every day you edit this file adds another. Come back in a week and there is a line; that line will be true, which is the only thing that separates it from the two above.'),
+          b('h2', 'What this costs you'),
+          b('p', 'A day is about 170 bytes, so a year of them is around 60 KB — and it is capped against the size of the space itself rather than by a flat number, because 60 KB of record beside a 40 KB document is absurd and beside a 2 MB one is nothing. Past the cap the oldest days are thinned to one a week, then one a month, then dropped, and a thinned point is drawn differently from a daily one so you can see which is which. Thinning always keeps a day somebody actually observed; it never averages two into a third that nobody did.'),
+          b('p', 'And it does not travel. A <strong>reading copy</strong> carries none of this — see <a href="#p/sd-handover">Handing it over</a>, where you can check that claim in about thirty seconds. What a record like this quietly discloses is not the numbers, it is the <em>cadence</em>: which days the file was touched, which weeks nothing moved, who works on a Sunday. That is worth a sentence before you send one.'),
         ],
       },
       {
@@ -472,8 +778,24 @@ export function starterDoc(): SpacesDoc {
         blocks: [
           b('todo', 'Type here; file it later', { done: false }),
           b('todo', 'Ask whether the second screen ever arrived', { done: false }),
+          // TWO PARAGRAPHS AMONG THE TO-DOS, on purpose — the second half of
+          // the block-bar demonstration that Writing starts. The inconsistency
+          // is visible at a glance (no checkbox), the intent is obviously the
+          // same as the lines around them, and ⌘/ → To-do is the one gesture
+          // that fixes it. Nothing on this page explains the bar; the page is
+          // simply wrong in a way the bar is the natural way to put right.
+          b('p', 'Chase the invoice — this line and the one under it are not to-dos yet'),
+          b('p', 'Book the room for the retro'),
           b('todo', 'A page that lists what I owe people #idea', { done: false }),
           b('todo', 'The piece Ada sent, before it goes stale #read', { done: false }),
+          b('p', 'Two of the lines above have no checkbox. Put the caret in one and press <code>⌘/</code> — the row that opens turns a block into whatever it should have been: a to-do, a bullet, a heading, a quote. It is the same row the grip in the margin opens, and the same sheet a phone gets from the bottom of the screen, so there is one place for "what kind of thing is this line" rather than three.'),
+          // THE REFUSAL, demonstrated rather than described — and it has to be
+          // THIS page, because the only block `indentTarget` refuses is the
+          // first one on a page and this page's first block is a to-do at the
+          // very top. (Writing's list cannot do it: its first item has a
+          // paragraph above it, so Tab nests under the paragraph. Found by
+          // pressing the key.)
+          b('p', 'One more, on the <em>first</em> line of this page — <strong>Type here; file it later</strong>. Put the caret in it and press <code>Tab</code>. Nothing indents, and the app says why along the bottom of the window instead of quietly eating the key: a block nests under the one above it, and that one has nothing above it. The indent arrow in <code>⌘/</code> is greyed for the same reason and carries the same sentence, so the answer is there before you press anything as well as after.'),
           b('p', 'Somewhere to throw things before they are worth a page of their own. Nothing is special about this one — it is an inbox because you decided it is.'),
           b('p', 'When a line turns out to be work, the tag button makes it an issue. When it belongs to a particular day rather than to a subject, it goes in your daily notes. When it turns out to be a subject, <code>[[</code> gives it a page. When it turns out to be neither and you are not stopping to decide, put a <code>#</code> in front of a word and carry on writing — that is a tag, and it is the only classification most notes ever get. It is not filed anywhere: it lives in the sentence you wrote it in, and everything else is derived from that. <code>⌘K</code> finds it, the graph draws it, and tags nest with a slash, so #project catches #project/bento too.'),
           b('p', 'And a view can hold every page carrying one, wherever in the tree it ended up:'),
@@ -491,6 +813,13 @@ export function starterDoc(): SpacesDoc {
           b('p', 'The eye in the toolbar is the <strong>reading view</strong>: the same pages with the editing tools taken away, footnotes as numbers rather than as the text you typed, no comment markers, and a link to the previous and next page at the foot. <code>Esc</code> comes back. It is a view and not a state of the document — nothing is saved, nobody else is affected, and it is the honest way to find out what somebody else will see.'),
           b('h2', 'Sending it to somebody who will only read it'),
           b('p', '<strong>Save a reading copy…</strong>, in the popover beside ⋯, writes a different file: the pages with no editing tools, no comment threads, and none of this space’s keys, so it can never join the live session this one may be in. It opens saying what it is. That is the only one of these four that changes a document at all — the copy carries a flag the original does not, which is why it is a copy and not a setting.'),
+          // A CLAIM THE READER CAN DISPROVE IN THIRTY SECONDS beats three they
+          // have to take on trust. Both of these name a specific artefact in
+          // THIS file, by page, so "strips workspace content" stops being an
+          // assertion and becomes an experiment — and if either ever stops
+          // being true, the starter says something checkably false rather than
+          // something vaguely reassuring.
+          b('p', 'Do not take that on trust — it is checkable, and it takes half a minute. Save a reading copy of this space and open it. Go to <a href="#p/sd-limits">Sharing &amp; limits</a>: the comment thread Ada and Bo are having under <strong>Comments</strong> is not there, marker and all. Then go to <a href="#p/sd-progress">How it is going</a>: the three charts are blank, because the daily record they read is not in that file either. A record of which days a file was worked on is not something to hand out with a document somebody only needed to read.'),
           b('h2', 'Putting it on a screen'),
           b('p', '<strong>Export page as slides…</strong> — beside <strong>Save</strong>, with the other ways of writing this document somewhere else — turns one page into a <em>bento/slides</em> deck. Every <code>#</code> and <code>##</code> heading starts a slide and becomes its title, so a page written in sections is already a talk: this one comes out as six.'),
           b('p', 'The dialog counts them before you commit, and lists what did not survive the trip. It will tell you, for instance, that this page’s icon stayed behind, because it is one of this app’s own glyphs rather than an emoji. A page is prose and a deck is slides, and some of a page has no slide shape at all — so the losses are named here rather than discovered by you in front of a room. What you get is the deck’s JSON; Bento Slides takes it with <strong>Replace from JSON…</strong> in its About dialog.'),
@@ -529,6 +858,9 @@ export function starterDoc(): SpacesDoc {
           b('h2', 'What you saved before'),
           b('p', 'Every save keeps a version <em>inside the file</em>. ⋯ → <strong>About this space</strong> → <strong>Versions in this file</strong> is the list, with <strong>Changes</strong> beside each row to see what moved and <strong>Restore</strong> to go back — and <code>⌘Z</code> undoes a restore, so it is not a decision you have to be sure about. Because they live in the document rather than in this browser, they are still there on another machine, and still there for whoever you send the file to, and sealed inside the password when there is one[^hist].'),
           b('p', 'Which is the awkward part, and the reason it is on this page rather than a happier one: a version holds text you have since deleted. Anyone you send the file to can read it back out. <strong>Clear history</strong> sits in the same dialog, next to the number telling you how much of the file the versions are currently taking; the list stops at sixty, oldest first, so it cannot grow without limit.'),
+          b('h2', 'What it remembers about how you work'),
+          b('p', 'If this space is tracking work, it writes one line a day into the file: how many issues sat in each column, how many points. That is what <a href="#p/sd-progress">How it is going</a> draws, and it exists because no amount of looking at today\'s board tells you what last Tuesday\'s looked like. It holds counts and totals and never a page id, so this file can never be asked who closed what and when.'),
+          b('p', 'The awkward part is not the numbers, it is the <strong>cadence</strong>. A row exists for each day the file was edited and no row exists for the days it was not — so the record quietly says which weeks nothing moved and who was working at the weekend. That is why a reading copy carries none of it, and why it is named here rather than left to be discovered. It is also why this space ships a made-up fortnight rather than a real one: the sample on that page is labelled as invented, kept in a record of its own, and is not an observation of anybody.'),
           b('h2', 'Archived is not deleted'),
           b('p', 'This space ships one archived page, called <strong>The archived page</strong>. Archiving takes a page out of the sidebar and leaves it in the file: still found by <code>⌘K</code>, still linkable, still there when you send the file to somebody. Archiving is the delete this app offers, because the file is the only copy there is.'),
           b('h2', 'Two copies and no session'),

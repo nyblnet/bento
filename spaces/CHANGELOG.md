@@ -995,6 +995,72 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   days a file was touched is not, and that should not travel to a client by
   accident.
 
+- **A reading copy really does strip the working record now.** The line above,
+  and `docs/spaces-agents.md`, and `trail.ts`'s own header have all said since
+  the trail landed that a reading copy carries none of it. It carried all of
+  it: `stripRecord` had exactly ONE call site, in the page-extract path, and
+  `readingCopy` never called it. So every reading copy ever written went out
+  with `doc.trail` and `doc.periods` intact — not the pages, not the comments,
+  not the keys, but the cadence. Which days the file was worked on, which weeks
+  nothing moved, who was editing on a Sunday. Fixed, and the reading rig now
+  asserts it by scanning the whole serialized copy for a canary day and a
+  period label, the way it already scans for key material. Both assertions were
+  watched to FAIL against the unfixed function before being believed.
+
+  Found by writing a starter page that tells the reader to go and check the
+  claim. That is the argument for falsifiable documentation in one line: the
+  sentence could not be written without somebody looking.
+
+- **The starter space demonstrates the project-management work.** A feature the
+  starter does not demonstrate is a feature the starter denies, and five had
+  arrived since it was last written. It gains a page — **How it is going** —
+  and extends four others.
+
+  - **Planning** now carries a **Gantt** and a **workload chart**, because both
+    are live views of the same pages the rest of that page is about. The five
+    demo cards gained `start` dates and two assignees to give them something to
+    draw: three bars, one **milestone diamond** (a card with a due date and no
+    start — which is not an edge case, it is every issue in every file written
+    before `start` existed) and one card with neither date, which is not drawn
+    and is counted underneath instead.
+  - **How it is going** carries the three trail charts. Two are drawn from a
+    **labelled, invented fortnight** and the third has no period at all and is
+    the one you start yourself.
+  - **Writing** gains a six-line list that is FLAT AND SHOULD NOT BE, and the
+    **Inbox** gains two paragraphs sitting among its to-dos. Both are wrong on
+    purpose: the block bar (⌘/), indent, and the change-this-block-type row are
+    chrome with no document surface, so rather than a paragraph telling you to
+    press a key, the page is unfinished in a way only that control finishes. A
+    reader ends up having USED the gesture. The first line of the Inbox is
+    where Tab's refusal is met, because the only block that refuses is the
+    first one on a page.
+  - The tracker said the view button "steps through the five shapes". There are
+    seven.
+
+  **THE STARTER SHIPS A SEEDED `doc.trail`, AND IT IS QUARANTINED AND
+  LABELLED.** This was the hard call and the reasoning is written out at the
+  site in `starter.ts`, because the numbers alone read like a convenience.
+  Against: the trail stores observations, and the app refuses to fabricate past
+  days even for the reader who asks it to. For: a starter period is a fixed
+  window in the past, so an unseeded chart draws NOTHING in every copy forever
+  — and everything these charts are clever about (a gap drawn as a gap rather
+  than a zero, a thinned sample, the recording-starts-here edge, scope that
+  grew mid-sprint, stacked bands) exists only over a real span. So both: ten
+  rows under their own series id `sample/…`, which `recordTrail` never writes
+  to and so can never mix with what the file records about you; a period
+  labelled "Sample sprint (invented numbers)", which is the string every chart
+  header prints; and a fourth chart with no period, whose **Choose a period…**
+  button takes a real baseline from the board and writes today's real row.
+
+  **What it costs, measured:** 1,222 B of document JSON in every saved file
+  (1,052 B of trail across 10 rows — 105 B/row — plus 170 B of period), which
+  is 1.7% of the 70,964 B starter document, and 492 B in the compressed shell.
+  The whole content change is 5,204 B of shell (373,257 → 378,461 B).
+
+  **One loss, said out loud:** `clearTrail()` exists and has no UI wired to it,
+  so a reader who wants the sample rows gone has no button. That is the
+  strongest argument for the other answer and it is filed, not hidden.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
