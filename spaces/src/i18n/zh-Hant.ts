@@ -629,4 +629,13 @@ export const zh_Hant: Catalog = {
   "Date": "日期",
   "Person": "人員",
   "Labels": "標籤",
+  "Indent": "縮排",
+  "Move back out": "退回一層",
+  "Block format": "區塊格式",
+  "Block options — type, list, indent": "區塊選項 — 類型、清單、縮排",
+  "This block is not nested": "這個區塊沒有巢狀",
+  "a block nests under the one above it": "區塊會巢狀於它上面的那個區塊",
+  "A block nests under the one above it — this one has nothing above it": "區塊會巢狀於它上面的那個區塊 — 這個區塊上面沒有別的區塊",
+  "Between blocks, and between the lines of one": "在區塊之間移動，也在一個區塊的各行之間移動",
+  "Off the edge of a block, into the next": "越過區塊的邊緣，進入下一個區塊",
 }

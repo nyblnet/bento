@@ -2383,3 +2383,50 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ————— the block format row —————
+   Lives at the top of the block menu, which is a bottom SHEET on a phone, so
+   this is the same markup at both widths and the touch targets are sized for
+   the smaller of them (44px is the floor a thumb needs; the row wraps rather
+   than scrolls, because a scroll container inside a popover clips the other
+   axis too). blockbar.ts records why these controls are not in the selection
+   toolbar. */
+.sp-blockbar {
+  display: flex; flex-wrap: wrap; gap: 2px; align-items: center;
+  padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
+}
+.sp-blockbar-gap { flex: 1 1 auto; min-width: 4px; }
+.sp-blockbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  /* 28, not 30: eight type buttons plus their gaps have to fit one row of a
+     260px popover (8×28 + 7×2 = 238 ≤ 248 of usable width), so the row breaks
+     between the types and the two nesting controls rather than orphaning the
+     quote button on a line of its own. Measured in the built shell. */
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px;
+  background: none; color: var(--ink-2); cursor: pointer;
+}
+.sp-blockbtn svg { width: 17px; height: 17px; }
+.sp-blockbtn:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-blockbtn.sp-sel { background: var(--chrome-2); color: var(--accent); }
+/* aria-disabled, NOT disabled: the control has to stay focusable so a keyboard
+   can reach the label that explains why it is off (blockbar.ts). So the opacity
+   is the only thing that changes — clicks still land, and land on the code that
+   says why. */
+.sp-blockbtn.sp-off { opacity: .38; }
+@media (pointer: coarse) {
+  .sp-blockbar { gap: 4px; padding-bottom: 8px; }
+  .sp-blockbtn { width: 44px; height: 44px; }
+  .sp-blockbtn svg { width: 20px; height: 20px; }
+}
+
+/* A refused gesture, at the block it was aimed at. The words are in the status
+   line; this is the pointer. Motion only — no layout, so it cannot reflow the
+   prose under the caret. */
+@media (prefers-reduced-motion: no-preference) {
+  .sp-nudge { animation: sp-nudge .34s ease; }
+  @keyframes sp-nudge {
+    0%, 100% { transform: none }
+    25% { transform: translateX(3px) }
+    60% { transform: translateX(-2px) }
+  }
+}
