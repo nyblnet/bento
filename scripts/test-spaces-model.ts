@@ -643,6 +643,7 @@ for (const [label, input, err] of [
   // precedent below, because `undefined` appears hundreds of times in editor.ts.
   ok(nextLayout(VIEW_LAYOUTS[VIEW_LAYOUTS.length - 1]) === 'board',
     'the shape after the last one is the board again')
+  ok(nextLayout('workload') === 'board', 'the shape after the last one is the board again')
   const toggleFn = ed.slice(ed.indexOf('private toggleViewLayout'),
     ed.indexOf('private openViewGroup'))
   ok(toggleFn.length > 0 && /'layout',\s*to === 'board' \? undefined :/.test(toggleFn),
@@ -717,7 +718,11 @@ for (const [label, input, err] of [
   const ed2 = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const props2 = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
   ok(/layout === 'gallery'/.test(render), 'a view can be a gallery')
-  ok(nextLayout('table') === 'gallery' && VIEW_LAYOUTS.includes('gallery'),
+  // Seven shapes now: board -> list -> table -> gallery -> calendar -> gantt
+  // -> workload -> board. Calendar and gantt each extended the cycle without
+  // seeing the other, so this assertion is the merged truth, not either half.
+  ok(nextLayout('table') === 'gallery' && nextLayout('gallery') === 'calendar'
+     && VIEW_LAYOUTS.includes('gallery'),
     '…reachable from the one layout control, which cycles through it')
   ok(/resolveSrc\(coverSrc\(r\.page\), doc\)/.test(render),
     '…and a card asks coverSrc for the picture, so a remote cover is refused there too')

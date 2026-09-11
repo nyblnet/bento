@@ -82,6 +82,7 @@ unique ids the first time.
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
 | `view` | `layout`, `span`, `groupBy`, `html` | a board, list, table, gallery or calendar of this space's pages |
 | `view` | `layout`, `groupBy`, `sort`, `source`, `filter`, `html` | a board or list of this space's issues |
+| `view` | `layout`, `groupBy`, `source`, `filter`, `sort`, `html` | a board, list, table, gallery, timeline or workload chart of this space's pages |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
@@ -301,6 +302,7 @@ document-level** — `doc.fields`, absent means the built-in seven.
     { "key": "assignee", "label": "Assignee", "vt": "person" },
     { "key": "estimate", "label": "Estimate", "vt": "number" },
     { "key": "labels",   "label": "Labels",   "vt": "labels" },
+    { "key": "start",    "label": "Start",    "vt": "date"   },
     { "key": "due",      "label": "Due",      "vt": "date"   },
     { "key": "project",  "label": "Project",  "vt": "text"   }
   ],
@@ -422,6 +424,25 @@ What is and is not a tag, since a `#` means several things:
 | `<a href="#p/abc">…</a>` | a page link — the href is an attribute, never text |
 
 Tags are case-folded for matching and keep the casing you typed for display.
+`layout` is one of `board` (the default, and the ABSENT key — never write
+`"board"`), `list`, `table`, `gallery`, `gantt` and `workload`. **A chart is a
+layout here, not a block type**, so every shape reads the same four keys and a
+build that predates a shape draws a board of the same pages rather than a
+fallback line of text.
+
+- **`gantt`** draws one bar per page, from its `start` date to its `due` date,
+  with today marked and overdue work outlined. A page with only ONE of the two
+  dates gets a **milestone diamond** at the date it has — which is what every
+  issue written before `start` existed looks like, so do not add a made-up
+  `start` to "fix" one. A page with neither is left out and counted.
+- **`workload`** adds up the first `vt:"number"` field in the schema per bucket
+  and draws a bar chart. The bucket is `groupBy`; absent, it is the first
+  `vt:"person"` field. A negative or non-numeric estimate is excluded and
+  reported rather than summed — do not write one expecting it to subtract.
+
+Both honour `source` and `filter`, so "the workload for this project" is
+`{ "layout": "workload", "source": { "under": "<page id>" }, "filter": { "open": true } }`
+and needs no key of its own.
 
 **Not in this format, deliberately**: teams, per-user permissions,
 notifications, automation. The file is the team boundary and the capability.

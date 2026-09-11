@@ -205,6 +205,18 @@ jobs:
             TZ=$tz node scripts/test-spaces-journal.ts
           done
 
+      - name: Spaces timeline and workload rig (several timezones)
+        # A chart is a picture of data that came out of a file somebody mailed
+        # you, and every way it can be wrong is a way it stays silent about it:
+        # a bar in the wrong month still looks like a bar. Half of what this rig
+        # asserts is a date, so it runs in five timezones for the reasons
+        # journal.ts records — including a half-hour DST offset.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-gantt.ts
+          done
+
       - name: Magic notes evaluator (several timezones)
         # Two failure modes, and the second is what would make the feature worse
         # than not having it: a WRONG answer (silent, confident, in somebody's

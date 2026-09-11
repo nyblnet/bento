@@ -124,6 +124,28 @@ export const DEFAULT_FIELDS: FieldSpec[] = [
   { key: 'assignee', label: 'Assignee', vt: 'person' },
   { key: 'estimate', label: 'Estimate', vt: 'number' },
   { key: 'labels', label: 'Labels', vt: 'labels' },
+  /**
+   * START and DUE, in that order, because a schedule has two ends.
+   *
+   * `start` is NEW — the tracker shipped with `due` and nothing else, which is
+   * enough for a deadline and not enough for a bar. Adding it is additive in
+   * the ordinary way (a page that has never carried one has no `prop` block for
+   * it, and absent still means unset), but it has one consequence worth naming
+   * out loud rather than discovering:
+   *
+   *   EVERY ISSUE IN EVERY FILE ALREADY WRITTEN HAS A DUE DATE AND NO START.
+   *
+   * So "absent start" is not an edge case, it is the entire installed base, and
+   * a Gantt that drew it as a zero-width bar would render every existing
+   * tracker as a column of hairlines. It draws a MILESTONE DIAMOND at the due
+   * date instead — a date with no duration, which is what the file actually
+   * says. gantt.ts carries the rule at the site that implements it.
+   *
+   * Not in ISSUE_FIELDS: a new issue is seeded with status, priority, assignee
+   * and estimate, and dates appear when somebody sets one — the same as `due`
+   * has always behaved, and the same as `labels` and `project`.
+   */
+  { key: 'start', label: 'Start', vt: 'date' },
   { key: 'due', label: 'Due', vt: 'date' },
   { key: 'project', label: 'Project', vt: 'text' },
 ]
@@ -690,7 +712,22 @@ export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
  * and source already follow. `nextLayout` returns the word; the caller that
  * WRITES is the one that turns 'board' back into a deletion.
  */
-export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery', 'calendar'] as const
+/**
+ * `gantt` and `workload` join the cycle rather than becoming a second block
+ * type. The argument is in gantt.ts, at length, because every chart this app
+ * grows after them inherits it. The half that belongs HERE is the one this
+ * function already guarantees: `layoutOf` maps a word it does not know to
+ * `board`, so a build that predates these two meets `layout:"gantt"`, draws a
+ * board of the same pages, and writes the key back untouched.
+ *
+ * SIX IS THE CEILING FOR A CYCLE BUTTON. One control and one word beats a menu
+ * at three or four; at six, five clicks to cross the list is already the worse
+ * trade, and a seventh shape should convert this control into a picker rather
+ * than extend the ring. Written down here because the next person to add a
+ * layout will read this line and not the changelog.
+ */
+export const VIEW_LAYOUTS =
+  ['board', 'list', 'table', 'gallery', 'calendar', 'gantt', 'workload'] as const
 export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
 
 /**
@@ -709,6 +746,7 @@ export function layoutOf(raw: unknown): ViewLayout {
 }
 
 /** The next shape: board → list → table → gallery → calendar → board. */
+/** The next shape: board → list → table → gallery → gantt → workload → board. */
 export function nextLayout(raw: unknown): ViewLayout {
   const here = layoutOf(raw)
   return VIEW_LAYOUTS[(VIEW_LAYOUTS.indexOf(here) + 1) % VIEW_LAYOUTS.length]
