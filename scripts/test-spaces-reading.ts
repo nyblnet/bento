@@ -71,6 +71,9 @@ function ok(cond: boolean, msg: string) {
 }
 
 /** Text that could only have come from a comment thread. */
+// Values chosen so the assertion can scan the WHOLE serialized copy for them.
+const TRAIL_CANARY = 987654
+const PERIOD_NOTE = 'TRAIL-PERIOD-LABEL-CANARY'
 const PAGE_NOTE = 'PAGE-COMMENT-CANARY-do-not-publish'
 const BLOCK_NOTE = 'BLOCK-COMMENT-CANARY-do-not-publish'
 const REPLY_NOTE = 'REPLY-COMMENT-CANARY-do-not-publish'
@@ -106,6 +109,14 @@ async function freshDoc(): Promise<SpacesDoc> {
       { id: 'p3', title: 'Travel', blocks: [{ id: 'b4', type: 'p', html: 'Book early.' }] },
     ],
     collab,
+    // THE WORKING RECORD. In the fixture because a reading copy that carries it
+    // is the bug this rig did not catch for the whole of its first life: what
+    // `doc.trail` discloses is CADENCE — which days the file was touched, which
+    // weeks nothing moved — and the reading copy is the file most likely to go
+    // to somebody outside the room. A canon value, so the assertion is a scan
+    // of the whole serialized copy rather than a check that one key is gone.
+    trail: { '2026-09-07': { n: { todo: 2, done: TRAIL_CANARY } } },
+    periods: { s1: { label: PERIOD_NOTE, from: '2026-09-07', to: '2026-09-18' } },
     // A field this build has never heard of. Format additivity (PLATFORM §4):
     // a round trip through any export must leave it exactly as it arrived.
     somethingFromTheFuture: { keep: 'me' },
@@ -166,6 +177,21 @@ ok(copy.pages[0].comments === undefined, 'Page.comments is deleted, not set to a
 ok(copy.pages[0].blocks[1].comments === undefined, 'Block.comments is deleted, not emptied')
 
 // ---------------------------------------------------------------------------
+console.log('\na reading copy — FORMAT-LEVEL: the working record is not in the file')
+
+// WHY THIS BLOCK EXISTS. trail.ts has said since the trail landed that "a
+// reading copy carries none of it (`stripRecord`)" — and until 2026-09-11
+// `stripRecord` had exactly ONE call site, in portable.ts's page extract. Every
+// reading copy ever written carried `doc.trail` and `doc.periods`. A comment in
+// one file asserting what a function in another file does is not a guarantee;
+// this is. Scanned over the whole serialized copy, the way the key material
+// above is, because a record smuggled under a second name must fail too.
+ok(!text.includes(String(TRAIL_CANARY)), 'no day of the trail survives in the bytes')
+ok(!text.includes(PERIOD_NOTE), "nor a period's label — the sprint the numbers were about")
+ok(copy.trail === undefined, 'doc.trail is absent outright, not emptied to {}')
+ok(copy.periods === undefined, 'doc.periods too — DOC_MAPS is the list, not a hand-written pair')
+
+// ---------------------------------------------------------------------------
 console.log('\na reading copy — COSMETIC: the flag, which protects nothing')
 
 ok(copy.readonly === true, 'doc.readonly is set, so the app opens it as a document')
@@ -194,8 +220,8 @@ const added = [...after].filter((k) => !before.has(k))
 const removed = [...before].filter((k) => !after.has(k))
 ok(added.length === 1 && added[0] === 'readonly',
    `exactly one top-level key is ADDED, and it is the flag (added: ${JSON.stringify(added)})`)
-ok(removed.length === 1 && removed[0] === 'collab',
-   `exactly one top-level key is removed, and it is collab (removed: ${JSON.stringify(removed)})`)
+ok(removed.length === 3 && ['collab', 'periods', 'trail'].every((k) => removed.includes(k)),
+   `exactly three top-level keys are removed — collab and the working record (removed: ${JSON.stringify(removed.slice().sort())})`)
 
 // ---------------------------------------------------------------------------
 console.log('\nit is a copy, and it is idempotent')

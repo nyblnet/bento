@@ -72,6 +72,7 @@
 
 import type { SpacesDoc, Page } from './model'
 import { stripCollabSecrets } from './share'
+import { stripRecord } from './trail.ts'
 import { t } from './i18n'
 
 /** Is this file one that was saved for reading? */
@@ -90,6 +91,20 @@ const clone = (doc: SpacesDoc): SpacesDoc => JSON.parse(JSON.stringify(doc)) as 
  * with no `keepRoom` deletes `doc.collab` entirely — it is share.ts's list, not
  * a second copy of it, because a private field added to `CollabCreds` later
  * must be covered here without anyone remembering to act.
+ *
+ * `stripRecord` is here for the same reason and was MISSING until 2026-09-11.
+ * trail.ts has said since it landed that "a reading copy carries none of it
+ * (`stripRecord`)" — and `stripRecord` had exactly one call site, in
+ * portable.ts's page extract. So every reading copy ever written carried
+ * `doc.trail` and `doc.periods`: not the pages, not the comments, not the keys,
+ * but the cadence — which days the file was touched, which weeks nothing moved,
+ * work on a Sunday — under a field name nobody would think to look at, in the
+ * one file most likely to be sent to a stranger.
+ *
+ * Found by writing a starter page that invited the reader to CHECK the claim,
+ * which is the whole argument for falsifiable documentation: the sentence
+ * "comments and the record are gone, go and look" cannot be written without
+ * somebody going and looking.
  */
 export function readingCopy(doc: SpacesDoc): SpacesDoc {
   const out = clone(doc)
@@ -98,6 +113,7 @@ export function readingCopy(doc: SpacesDoc): SpacesDoc {
   // follows nothing, so there is nothing for them to be for.
   stripCollabSecrets(out)
   stripComments(out)
+  stripRecord(out)
   return out
 }
 
