@@ -35,6 +35,7 @@ import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
 import { viewEmbed, anchorOf } from './embed.ts'
 import { markRefs, notesOnPage, noteOf, noteId, refId, type PageNotes } from './footnotes.ts'
+import { renderChartBlock } from './charts.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -581,6 +582,16 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
     case 'view': {
       el.classList.add('sp-view')
       renderView(el, b, doc, opts)
+      return el
+    }
+
+    case 'chart': {
+      // A CHART OF THE TRAIL, not of the pages — see blocks.ts and charts.ts
+      // for why that makes it a block rather than a view layout. `todayISO()`
+      // is the reader's own wall-clock day: the today point is DERIVED from
+      // live state, every earlier day is read from the record.
+      el.classList.add('sp-chart')
+      renderChartBlock(el, b, doc, todayISO(), { editable: opts.editable === true })
       return el
     }
 

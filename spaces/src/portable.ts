@@ -21,6 +21,7 @@ import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from '
 import { esc } from './sanitize.ts'
 import { isPageRef } from './embed.ts'
 import { allNotes, mergeNotes, renameRefs } from './footnotes.ts'
+import { stripRecord } from './trail.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
 const PAGE_LINK = /<a\s([^>]*?)href="#p\/([^"]*)"([^>]*)>([\s\S]*?)<\/a>/g
@@ -246,6 +247,14 @@ export function extractSpace(
   // disclosure nobody asked for and nobody would look for. The extract starts
   // its own history at its first save.
   delete out.revisions
+  // THE RECORD GOES TOO — the trail and the periods. Same reasoning as
+  // `collab`: an extract of three pages has no business carrying the working
+  // record of a team whose pages did not travel with it, and the numbers in it
+  // were counted over a board that is not in this file. What a trail discloses
+  // is cadence, and an extract is the copy most likely to be sent to somebody
+  // outside the room. Derived from `DOC_MAPS`, so a third record map added
+  // later is covered without anyone remembering to act.
+  stripRecord(out)
 
   return {
     doc: out,

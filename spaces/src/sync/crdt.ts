@@ -13,6 +13,7 @@ export * from '../../../kernel/src/sync/crdt.ts'
 
 import { SyncEngine, shape } from '../../../kernel/src/sync/crdt.ts'
 import type { DocShape } from '../../../kernel/src/sync/crdt.ts'
+import { DOC_MAPS } from '../trail.ts'
 
 /**
  * bento/spaces: the document holds `pages`, a page holds `blocks`.
@@ -29,7 +30,24 @@ import type { DocShape } from '../../../kernel/src/sync/crdt.ts'
  * of the document. Trying to sync the tree as a hierarchy would put two sources
  * of truth in the file.
  */
-export const SPACES_SHAPE: DocShape = shape('pages', 'blocks')
+/**
+ * `DOC_MAPS` are the doc-level keys merged PER KEY rather than as one value.
+ *
+ * `doc.trail` is the reason: an array — or a whole-map register — would make
+ * two people working on the same day into one last-writer-wins register, and
+ * one of them would silently lose their row. Per key, Monday's row and
+ * Tuesday's row are separate registers and both survive any interleaving. The
+ * SAME day still resolves last-writer-wins and that is acceptable here and only
+ * here, because a row is not authored content: both replicas counted over
+ * nearly the same document, so LWW picks one truthful sample rather than losing
+ * an edit. `doc.periods` rides along for the same reason — two people defining
+ * different periods in one week must both keep theirs.
+ *
+ * The list is trail.ts's, not a second copy: `model.ts parseDoc` folds dotted
+ * keys back using the same names, and two copies of that list is exactly how
+ * the hazard and its mitigation drift apart.
+ */
+export const SPACES_SHAPE: DocShape = shape('pages', 'blocks', 'html', DOC_MAPS)
 
 /** The engine bound to bento/spaces. */
 export class SyncState extends SyncEngine {

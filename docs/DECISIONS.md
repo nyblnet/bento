@@ -7005,3 +7005,121 @@ and that matrix earned its keep in this change: a sabotage replacing the
 arithmetic with `new Date(y, m-1, d)` passed every assertion under `TZ=UTC` and
 failed under `TZ=Pacific/Kiritimati`. A one-timezone run cannot see that class
 of bug at all, from the inside.
+---
+
+## 2026-09-11 — The derivation rule, restated narrowly: a record is not a derivation
+
+**Decision.** `bento/spaces` gains `doc.trail` — a map of `YYYY-MM-DD` (or
+`<seriesId>/<YYYY-MM-DD>`) to the counts that were true on that day. That is a
+STORED observation, and this codebase has refused stored answers everywhere
+else: `calc.ts` stores `budget * 0.3 =` and never the answer, `fields.ts
+viewRows` refuses to keep its own copy of the rows ("a database that keeps its
+own copy of the rows is a database that disagrees with the document"), and
+`model.ts tableOf` normalises at read time rather than by rewriting.
+
+The rule those three actually follow is narrower than "everything derives", and
+it is this:
+
+> **Never store what the current document already implies. Do store an
+> observation it cannot reproduce.**
+
+Under that reading the trail is not an exception. The past is not a function of
+the present state: no recomputation over today's pages answers "how many points
+were open on 3 September". Four members of the same class are already in the
+format — `page.created`/`page.edited`, `Comment.at`, `Page.journal` (the date a
+page IS), and `doc.revisions` when it lands. Every one is a timestamped
+observation nobody can recompute.
+
+**The falsifiable half, which the charts hold to and a rig asserts.** The
+chart's TODAY point is derived from live state; only strictly-earlier days are
+read from the trail. Change an estimate now and today's point moves
+immediately, exactly as `calc.ts` promises. The record is consulted only for
+days that have closed, where there is nothing left to disagree with.
+
+Rejected: deriving burndown from `doc.revisions` instead. Its pruning folds the
+distant past first — which is exactly the resolution a chart of last sprint
+needs — revisions are keyed to saves rather than days (so daily points would be
+a resampling decision made at render time), folding the chain per point per
+render is 90 whole-space reconstructions for a 90-day chart, and "Clear history"
+is a first-class control, so the chart would silently empty when someone tidied
+up.
+
+**Pointers.** `spaces/src/trail.ts` (the shape and the rule), `spaces/src/
+observe.ts` (one counting rule — the board's), `scripts/test-spaces-trail.ts`.
+
+## 2026-09-11 — The host follows the data source: charts of pages are views, charts of the trail are blocks
+
+**Decision.** Gantt and workload are `view` LAYOUTS (#443) and that stays right:
+they read pages live, and `source`/`filter`/`sort`/`groupBy` genuinely narrow
+them at read time. Burndown, burnup and cumulative flow are a NEW `chart` BLOCK
+instead — `{ type:'chart', kind, period, html }`.
+
+**Why they are different in kind.** They read `doc.trail`, whose rows are counts
+written at aggregation time. You cannot retroactively filter "project = Apollo"
+out of a stored count of 47, because the pages that made it are deliberately not
+in the record. A view layout would therefore hand them `source` and `filter`
+keys that LOOK like they narrow the chart and silently do not — the exact
+failure mode this codebase keeps hitting. #443's own reasoning left this door
+open: "what does want a chart block is a chart of data that is not pages."
+
+What DOES narrow a trail chart is frozen onto its `doc.periods` entry at commit
+time, where editing a view next month cannot retroactively redefine last
+month's sprint. A dangling `period` renders "this chart's period is gone",
+never an empty graph.
+
+**These three draw their own SVG rather than calling `kernel/src/charts.ts`,**
+and the reason is measured rather than preferred. Charts-lite interprets the
+ECharts option shape but implements a subset: `renderCartesian` maps every datum
+through `num(v, 0)`, so an ABSENT DAY WOULD DRAW AS ZERO — which is the one
+thing these charts exist not to do; there is no `stack` support, and a CFD is
+stacked bands by definition; and `stroke-dasharray` is set only to animate a
+sweep, so a thinned weekly sample could not be drawn distinguishably from a
+daily reading. Kernel is serialized and this is not a kernel change, so spaces
+draws them, exactly as `graph.ts` draws the graph view rather than shipping d3.
+
+**Pointers.** `spaces/src/charts.ts`, `spaces/src/periods.ts`,
+`spaces/src/blocks.ts` (the registry entry).
+
+## 2026-09-11 — One record budget, proportional: the record never outweighs what it is a record of
+
+**Decision.** `doc.trail` and (when it lands) `doc.revisions` share ONE ceiling,
+computed from the document's own content:
+
+```
+recordBudget = clamp(25% of content bytes, 64 KB, 256 KB)
+```
+
+where content is `title`/`home`/`theme`/`pages` — the same four fields history
+covers, and deliberately NOT `assets`: one embedded photograph is bigger than
+any ceiling here, and a space with a picture in it has not thereby earned more
+room to record cadence in.
+
+**Why not two fixed constants.** A 32 KB trail budget beside a 128 KB history
+budget is 160 KB of record: absurd in a 37 KB space and unremarkable in a 2 MB
+one. Two absolute ceilings do not scale with the document they are attached to.
+
+Each tiers independently within the shared ceiling, and **the trail thins
+first** — its allowance is the budget less what history currently holds. A trail
+can be thinned without losing a day's meaning (a weekly sample is still an
+observation somebody made); folding two revisions together loses the ability to
+restore to the point between them. On a build where only one of the two exists,
+that one simply has the whole budget, and history's bytes are read generically
+off `doc.revisions` so neither side needs to know about the other.
+
+Thinning SELECTS and never averages — an averaged row is a number nobody
+observed, the same lie as interpolating a gap, written to disk — and a row that
+survives a thinning carries `s`, the span it stands for, reaching back only as
+far as the earliest row it replaced. A GAP IS DRAWN AS A GAP: no interpolation,
+no carry-forward, no zero, and absent must look different from zero (a day with
+nothing open is a point at zero; a day nobody opened the file is nothing at
+all).
+
+**Two consequences worth stating.** The trail is stripped from published copies
+and page extracts — cadence is what it discloses, adding an opt-in later is
+safe and un-leaking a sent file is impossible. And the trail is excluded from
+undo (`store.ts snapshot`), because a row is an observation rather than an
+editing step; `doc.periods` is NOT excluded, because starting a period is
+something a person did.
+
+**Pointers.** `spaces/src/trail.ts` (`recordBudget`, `pruneTrail`, `slots`),
+`scripts/test-spaces-trail.ts` (the tiering, the gaps, the sabotages).

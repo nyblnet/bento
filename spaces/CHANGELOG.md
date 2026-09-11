@@ -963,6 +963,37 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   all before this, at any width: ⇥ and ⇧⇥ were their only gesture, and a phone
   keyboard has neither. ⌘/ opens the menu from the keyboard, since the gutter is
   hover-revealed and ⇥ inside a block is indent.
+- **Progress charts — burndown, burnup and cumulative flow — over a record the
+  file keeps of itself.** A tracker could always tell you what is open today and
+  never what was open last Tuesday, because the only artefact that ever knew was
+  gone. A space now writes one small row a day (`doc.trail`): how many issues
+  sat in each status, and their summed estimates. Counts only — no page ids, no
+  assignee breakdown, no per-issue anything, on purpose and permanently. A
+  `chart` block draws it against a `doc.periods` window you name ("Sprint 12,
+  1–20 Sept"), with the scope frozen as it was when you started the period, so
+  editing a view next month cannot redefine last month's sprint.
+
+  **Days nobody worked are drawn as gaps, not as zeroes.** The line breaks, the
+  region is hatched, and the legend says "not recorded" — because a carried-
+  forward value looks exactly like data, and an interpolated weekend shows work
+  happening on Sunday. A day with nothing open is still a point at zero, and the
+  two look different. When the record gets long the distant past is thinned to
+  one reading a week; those points join with a DASHED line, so a weekly sample
+  is never mistaken for a daily one, and thinning always keeps a row somebody
+  actually observed rather than averaging two into a number nobody ever saw.
+
+  **Today's point is computed live, every earlier day is read from the record.**
+  Change an estimate now and the chart moves now; yesterday's row stands
+  whatever you do to the document today.
+
+  Nothing turns itself on: a space with no issues writes no rows, and a space
+  that recorded and then cleared is byte-identical to one that never did. The
+  record never outweighs what it is a record of — trail and version history
+  share one ceiling, a quarter of the document's own content between 64 KB and
+  256 KB, and it thins rather than failing. It is stripped from reading copies
+  and page extracts: the aggregate counts are dull, but the pattern of which
+  days a file was touched is not, and that should not travel to a client by
+  accident.
 
 ## [0.1.0] — 2026-08-03
 

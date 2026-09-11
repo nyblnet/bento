@@ -45,6 +45,10 @@ const esbuild = join(root, 'slides/node_modules/.bin/esbuild')
 // implementation from a broken one.
 const TZS_JOURNAL = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Niue', 'Australia/Lord_Howe']
 const TZS_CALC = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati']
+// The trail's key is a LOCAL day. Kiritimati (UTC+14) and Niue (UTC-11) bracket
+// every hour where "which day is it" has two answers, which is the whole bug
+// class here.
+const TZS_TRAIL = ['UTC', 'Europe/Berlin', 'Pacific/Kiritimati', 'Pacific/Niue']
 
 const RIGS = [
   // The model rig carries the CALENDAR layout's arithmetic now — month grids,
@@ -62,6 +66,7 @@ const RIGS = [
   // or a sum derived from one, and a date bug that only shows east of UTC is
   // exactly what a one-timezone run cannot see.
   { name: 'gantt',   file: 'scripts/test-spaces-gantt.ts', tzs: TZS_JOURNAL },
+  { name: 'trail',   file: 'scripts/test-spaces-trail.ts', tzs: TZS_TRAIL, bundle: true },
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },

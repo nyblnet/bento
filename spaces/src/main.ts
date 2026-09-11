@@ -18,6 +18,8 @@ import { APP_VERSION } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
 import { i18nApi } from '../../kernel/src/i18n.ts'
 import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult } from './model'
+import { recordTrail } from './observe.ts'
+import { protectedDays } from './periods.ts'
 import {
   validateDoc, outlineDoc, statsDoc,
   planInsertBlocks, planUpdateBlock, planRemoveBlocks, planMoveBlock, planUpdatePage, planRemovePage,
@@ -376,9 +378,37 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // So a version is added on a throttle while editing, and unthrottled on save.
   // The kernel caps and prunes the timeline; both stores stay empty while a
   // password is set.
+  /**
+   * Today's row, if this space is a tracker and this copy may write at all.
+   *
+   * A READER COPY AND A SEALED READING COPY WRITE NOTHING. `store.readOnly`
+   * covers both, and it is the same check every other writer in this app makes
+   * — a trail row is a write, and "opening a file does not modify it" has no
+   * exception for a write the app made up itself.
+   */
+  const recordToday = (): void => {
+    if (store.readOnly) return
+    const today = todayISO()
+    recordTrail(store.doc, { today, protect: protectedDays(store.doc, today) })
+  }
+
   let timer: ReturnType<typeof setTimeout> | undefined
   store.on('doc', () => {
     clearTimeout(timer)
+    // THE TRAIL IS WRITTEN ON CHANGE, NEVER ON OPEN, and on the debounce that
+    // already exists rather than on a second one. It runs BEFORE the encryption
+    // guard below, on purpose: `doc.trail` is a document field, so it is inside
+    // the `bento/enc` envelope and encrypted by the same pass over the same
+    // JSON. There is no plaintext artefact beside the ciphertext, so — unlike a
+    // recovery snapshot — there is nothing to refuse. An encrypted space keeps
+    // its charts.
+    //
+    // Outside `store.commit` deliberately: a record of an observation is not an
+    // editing step and does not belong in anybody's undo stack (store.ts's
+    // snapshot excludes it for the same reason). The row rides out with the
+    // next op batch the session diffs, and every replica writes its own day
+    // anyway.
+    recordToday()
     if (isEncryptionActive()) return
     timer = setTimeout(() => {
       void putRecovery(store.doc)

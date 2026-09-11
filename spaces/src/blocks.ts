@@ -350,6 +350,29 @@ export const SPECS: BlockSpec[] = [
     },
   },
   {
+    // A CHART OF THE TRAIL — burndown, burnup, cumulative flow.
+    //
+    // NOT A `view` LAYOUT, and the distinction is the rule rather than a filing
+    // preference: THE HOST FOLLOWS THE DATA SOURCE. A view reads pages live, so
+    // `source`/`filter`/`sort` genuinely narrow it at read time. These read
+    // `doc.trail`, whose rows are counts written at aggregation time — the
+    // pages that made a stored 47 are deliberately not in the record, so a
+    // `filter` key here would look like it narrowed the chart and silently
+    // would not. What DOES narrow it is frozen onto the period at commit
+    // (src/charts.ts).
+    //
+    // `text: false` and a readable `html`: the block carries its own sentence
+    // — "Burndown — Sprint 12 (1–14 Sept)" — which is what an older build, a
+    // grep, a markdown export and the static preview see. Same degradation rule
+    // every `prop` block follows.
+    type: 'chart', label: 'Chart of progress', hint: 'Burndown, burnup or cumulative flow', icon: 'board',
+    tag: 'div', custom: true,
+    init: (b) => { if (b.kind === undefined) b.kind = 'burndown' },
+    // MARKDOWN HAS NO CHART, and the honest export is the sentence the block
+    // already carries rather than a picture-shaped thing that is not a picture.
+    toMd: (_b, text) => [`**${text || 'Chart'}**`],
+  },
+  {
     // A SPATIAL SURFACE — a storyboard, a roadmap, a mind map. Its cards are
     // the blocks whose `parent` is its id, exactly like a callout's body, and
     // each one carries where it sits as two flat numbers. The whole argument

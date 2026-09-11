@@ -229,6 +229,21 @@ jobs:
             TZ=$tz node scripts/test-spaces-calc.ts
           done
 
+      - name: Trail, periods and progress charts (several timezones)
+        # A trail row's key is a LOCAL day, so the whole bug class here is the
+        # one the journal rig exists for. Kiritimati (UTC+14) and Niue (UTC-11)
+        # bracket every hour where "which day is it" has two answers. The rest
+        # of the rig is behavioural: it writes rows, draws the charts, and
+        # asserts that a gap draws as a gap and never as a zero.
+        # (Bundled: it reaches store.ts, whose imports are extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-trail.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-trail.mjs"
+          for tz in UTC Europe/Berlin Pacific/Kiritimati Pacific/Niue; do
+            echo "--- $tz"
+            TZ=$tz node "$RUNNER_TEMP/test-spaces-trail.mjs"
+          done
+
       - name: Spaces Markdown round-trip rig
         # The About dialog promises, in eight languages, that "a space is never
         # a dead end … every page exports as Markdown". This is that sentence,

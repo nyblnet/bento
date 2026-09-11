@@ -248,7 +248,21 @@ export class Store {
     // and it is a LOG, not content — undoing an edit should not un-record that
     // the edit happened. `restore` puts the live list back for the same reason
     // it puts the live assets back.
-    const { assets: _assets, revisions: _revisions, ...rest } = this.doc
+    // change during an ordinary edit, so snapshotting them 100 times is waste.
+    //
+    // `trail` IS EXCLUDED FOR A DIFFERENT AND STRONGER REASON. A row is an
+    // OBSERVATION, not an editing step: it lands on the autosave debounce,
+    // outside any commit, so a row written between a checkpoint and an undo
+    // would be reverted by that undo — worse, an undo could restore a STALE row
+    // over a newer one, silently deleting a day of chart nobody asked to
+    // delete. Excluding it here makes the record non-undoable by construction
+    // rather than by anybody remembering.
+    //
+    // `doc.periods` is deliberately NOT excluded. Starting a period is
+    // something a person DID, inside a commit, and ⌘Z must take it back like
+    // any other edit. The two fields look alike and are not: one is a record of
+    // what was, the other is an authored decision about what to chart.
+    const { assets: _assets, revisions: _revisions, trail: _trail, ...rest } = this.doc
     return JSON.stringify(rest)
   }
 
@@ -284,12 +298,20 @@ export class Store {
       // reach here, and dropping the entry is better than throwing.
       if (at >= 0) this.doc.pages[at] = JSON.parse(entry.json) as Page
     } else {
-      const assets = this.doc.assets
-      const revisions = this.doc.revisions
+      // Everything snapshot() left out is carried across from the LIVE document,
+      // never from the entry — that is what "excluded from undo" has to mean on
+      // the way back as well as on the way in. Three things qualify now, from
+      // three branches that could not see each other: assets (large, unchanging),
+      // revisions and trail (records of what happened, which an undo of today's
+      // typing has no business rewriting). `periods` is deliberately NOT here —
+      // starting a period is something a person did inside a commit, and ⌘Z
+      // must reach it.
+      const { assets, revisions, trail } = this.doc
       this.doc = {
         ...(JSON.parse(entry.json) as SpacesDoc),
         ...(assets ? { assets } : {}),
         ...(revisions ? { revisions } : {}),
+        ...(trail ? { trail } : {}),
       }
     }
     this.pageId = entry.viewId
