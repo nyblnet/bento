@@ -15,6 +15,11 @@
 
 import type { CollabCreds } from './sync/crdt.ts'
 import { esc, externalHref } from './sanitize.ts'
+// A LEAF module (types only, no runtime imports of its own), which is what lets
+// the parser call into it: the dotted-key fold has to run before anything else
+// sees the document.
+import { foldDottedMapKeys, type Trail } from './trail.ts'
+import type { Periods } from './periods.ts'
 
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
@@ -364,6 +369,22 @@ export interface SpacesDoc {
    * `import type` is erased, so this adds no runtime dependency.
    */
   collab?: CollabCreds
+  /**
+   * THE RECORD: what was true on a day (src/trail.ts), and the windows charted
+   * from it (src/periods.ts).
+   *
+   * Both are MAPS merged per key under collaboration (`DOC_MAPS`), both are
+   * absent until something is recorded, and both are deleted rather than
+   * emptied when they are cleared — a space that was tracked and then cleared
+   * is byte-identical to one that never was.
+   *
+   * A trail row holds COUNTS and nothing else. No page ids, no assignee
+   * breakdown, no per-issue anything: that is a budget rule and a privacy rule
+   * at once, and it is written here so a later session does not add the
+   * surveillance shape as the obvious next step.
+   */
+  trail?: Trail
+  periods?: Periods
   [extra: string]: unknown
 }
 
@@ -453,6 +474,16 @@ export function parseDoc(json: string): ParseResult {
     return { ok: false, err: 'json', detail: (e as Error).message }
   }
   if (!isObj(raw)) return { ok: false, err: 'shape', detail: 'the document block is not a JSON object' }
+
+  // A PEER RUNNING AN OLDER SHAPE writes a doc-level map entry as a literal
+  // top-level key: it receives `set k="trail.2026-09-03"`, cannot resolve
+  // `trail` as a map, and stores the dotted name verbatim — which additivity
+  // would then preserve forever. Folding it back is cheap, deterministic and
+  // self-healing, and it repairs files that were damaged before this existed.
+  // Done HERE rather than in a kernel handshake: the hazard belongs to any
+  // future doc-level map, and six lines in a file this app owns beat a change
+  // to shared machinery every app depends on.
+  foldDottedMapKeys(raw)
 
   if (raw.format !== FORMAT) {
     return {
