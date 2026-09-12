@@ -21,8 +21,13 @@
      cell. Violet is the only hue in dash that is not already spoken for.
      These two lines belong in styles.css :root beside --err-ink; they are here
      only because this file may not edit that one. */
-  --cmt: light-dark(#7c3aed, #a78bfa);
-  --cmt-wash: light-dark(#f5f0ff, #2a2140);
+  --cmt: #7c3aed;
+  --cmt-wash: #f5f0ff;
+}
+
+:root[data-theme="dark"] {
+  --cmt: #a78bfa;
+  --cmt-wash: #2a2140;
 }
 
 /* ————— the marker —————

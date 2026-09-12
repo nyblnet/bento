@@ -29,6 +29,7 @@ import {
 import { disconnectOnline, joinFromDoc } from './sync/online.ts'
 import type { SyncSession } from './sync/session.ts'
 import { openDialog } from './dialog.ts'
+import { themeChoice, setTheme, type ThemeChoice } from '../../kernel/src/theme.ts'
 import { t, locale, localeChoices, setLocale } from './i18n.ts'
 import type { Store } from './store.ts'
 
@@ -122,85 +123,33 @@ export const updateWaiting = (): boolean => launchCheck?.status === 'update'
 // --- theme: a VIEWER preference, never the document's --------------------------
 //
 // The same shape as story.ts's reduced-motion switch and the interface
-// language: this is ONE PERSON's preference about their own screen, so it
-// lives in localStorage and never enters the format (PLATFORM §8).
+// language: ONE PERSON's preference about their own screen, in localStorage,
+// never in the format (PLATFORM §8). `doc.theme` in model.ts is a DIFFERENT
+// thing — the document's own palette, which travels in the file and colours
+// the charts and the static preview. Nothing here touches it.
 //
-// `doc.theme` in model.ts is a DIFFERENT thing and must not be confused with
-// this: that is the document's own palette, it travels in the file, and it
-// colours the charts and the static preview. Nothing here reads or writes it.
+// THE MECHANISM IS kernel/src/theme.ts, shared with slides, spaces and type:
+// `data-theme` on <html>, which styles.css keys off, plus `color-scheme` for
+// the browser's own furniture. Dash had its own store here until 2026-09-12 —
+// a transient <style> pinning `color-scheme`, with the palette written as
+// light-dark() pairs — and the reason it gave was a real, measured bug: with
+// the attribute set at module load, `bento.serialize()` came back with
+// `<html data-theme="light">`, because capturePristine() clones the live
+// document and every save re-serializes that clone.
 //
-// THE MECHANISM IS A TRANSIENT <style>, AND IT HAD TO BE. The obvious
-// implementation — `data-theme` on <html>, matched by `:root[data-theme=…]` in
-// styles.css — QUIETLY WRITES THE PREFERENCE INTO EVERY SAVED FILE.
-// `capturePristine()` (kernel/src/save.ts) clones the LIVE document at boot, so
-// anything sitting on the root element by then is in the shell every ⌘S
-// produces: measured, `bento.serialize()` came back with
-// `<html lang="en" data-theme="light">`, and that file would then force one
-// reader's choice on everyone who opened it. Exactly the bug this whole design
-// exists to avoid, arriving through the back door.
+// THE ANSWER TO THAT IS ORDER, NOT A DIFFERENT MECHANISM. startTheme() is
+// called from main.ts AFTER capturePristine() and before the first paint, so
+// the pristine copy never carries the attribute and nothing is painted in the
+// wrong theme first. slides documents the same two constraints at its own call
+// site. The rig proves the saved-file half by serializing under a dark theme
+// and grepping the result.
 //
-// A node carrying `data-bento-transient` is stripped from every serialized
-// shell (kernel save.ts TRANSIENT_SELECTOR) — the same mechanism the
-// compressed shell uses for its inflated stylesheet. So the override is a
-// <style> element carrying that attribute, and it declares `color-scheme`
-// rather than any colour: styles.css writes the palette as `light-dark()`
-// pairs, which resolve against the used `color-scheme`, so pinning that one
-// property flips every token at once. 'auto' REMOVES the element — the absence
-// of an override is what "follow the OS" means.
-//
-// `:root:root` for specificity (0,2,0), not `!important` and not a reliance on
-// document order: this <style> is appended at module load, while the app's own
-// stylesheet arrives from the deflate loader in the built shell and from Vite's
-// injector in dev, and those two orders are not the same.
-//
-// --bar-opacity rides along because `light-dark()` is colour-only; see the
-// note beside it in styles.css.
+// What decided the switch: measured in a browser, `data-theme="dark"` on dash
+// did nothing, so a shared kernel stylesheet keyed off the attribute — the only
+// key slides can use, since it pins `color-scheme: only light` — could not have
+// themed dash at all. The same localStorage key ('bento-theme') was already in
+// use here, so an existing preference carries over untouched.
 
-export type ThemePref = 'auto' | 'light' | 'dark'
-
-const THEME_KEY = 'bento-theme'
-const THEME_STYLE_ID = 'dx-theme'
-
-/** The dark ground's data-bar opacity, kept in step with styles.css. */
-const BAR_OPACITY: Record<'light' | 'dark', string> = { light: '0.55', dark: '0.45' }
-
-export function readThemePref(): ThemePref {
-  try {
-    const v = localStorage.getItem(THEME_KEY)
-    return v === 'light' || v === 'dark' ? v : 'auto'
-  } catch { return 'auto' }
-}
-
-export function applyTheme(pref: ThemePref = readThemePref()): void {
-  const existing = document.getElementById(THEME_STYLE_ID)
-  if (pref === 'auto') { existing?.remove(); return }
-  const style = existing ?? document.createElement('style')
-  style.id = THEME_STYLE_ID
-  // Never let this reach a saved file (see above). Set before the node is in
-  // the document, so there is no window in which an unmarked style exists.
-  style.setAttribute('data-bento-transient', '')
-  style.textContent =
-    `:root:root{color-scheme:${pref};--bar-opacity:${BAR_OPACITY[pref]}}`
-  if (!existing) document.head.append(style)
-}
-
-export function setThemePref(pref: ThemePref): void {
-  try {
-    if (pref === 'auto') localStorage.removeItem(THEME_KEY)
-    else localStorage.setItem(THEME_KEY, pref)
-  } catch { /* private mode — the choice still holds for this session */ }
-  applyTheme(pref)
-}
-
-// AT MODULE LOAD, and deliberately not from a hook: main.ts imports about.ts
-// (which imports this) while it is booting and mounts its dialogs near the END
-// of that boot, so waiting for a hook would paint the whole workspace in the
-// wrong theme first. Here the rule lands before the app is built and while the
-// splash is still covering the screen — which is also what lets the splash
-// itself follow an explicit choice (index.html gives it `light-dark()` colours
-// and nothing else). Guarded because the rigs import this module in Node, where
-// there is no document to touch.
-if (typeof document !== 'undefined') applyTheme()
 
 // --- the dialog ---------------------------------------------------------------
 
@@ -253,13 +202,13 @@ export function openSettings(hooks: SettingsHooks): void {
   // rebuild, and unlike the language picker this one does not have to close and
   // reopen the dialog.
   card.append(d.h(t('Appearance')))
-  const themes: Array<[ThemePref, string]> = [
+  const themes: Array<[ThemeChoice, string]> = [
     ['auto', t('Match my system')],
     ['light', t('Light')],
     ['dark', t('Dark')],
   ]
   const themeSel = document.createElement('select')
-  const current = readThemePref()
+  const current = themeChoice()
   for (const [v, label] of themes) {
     const o = document.createElement('option')
     o.value = v
@@ -267,7 +216,7 @@ export function openSettings(hooks: SettingsHooks): void {
     if (v === current) o.selected = true
     themeSel.append(o)
   }
-  themeSel.addEventListener('change', () => setThemePref(themeSel.value as ThemePref))
+  themeSel.addEventListener('change', () => setTheme(themeSel.value as ThemeChoice))
   card.append(d.row(t('Theme'), themeSel))
 
   // --- updates --------------------------------------------------------------

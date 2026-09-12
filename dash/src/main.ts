@@ -28,6 +28,7 @@ import {
   canWriteInPlace, downloadFile, suggestedFileName, openedFileName, registerPreview,
   currentFileName,
 } from '../../kernel/src/save.ts'
+import { startTheme } from '../../kernel/src/theme.ts'
 import { putRecovery, pruneOld } from '../../kernel/src/autosave.ts'
 import { FileWriteBack } from './writeback.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
@@ -162,6 +163,15 @@ configureApp({
 })
 
 capturePristine()
+
+// Theme: AFTER capturePristine, BEFORE the first paint — slides' two lines,
+// for slides' two reasons. capturePristine clones the LIVE document and every
+// save re-serializes that clone, so `data-theme` on <html> must not exist yet
+// or a viewer's preference travels inside every file they save (dash measured
+// exactly that once, which is why it used to theme through a transient <style>
+// instead — see settings.ts). And before the paint, because applying it later
+// renders the workspace light and then flips it, which reads as a bug.
+startTheme()
 
 // The file-manager thumbnail. Registered BEFORE any save can happen: a save
 // that ran first would write a shell with no preview in it, and the next

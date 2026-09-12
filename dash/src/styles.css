@@ -17,22 +17,42 @@
    charts and the static preview. Do not conflate them; nothing here is ever
    read from or written to the document.
 
-   HOW THE SWITCH WORKS. `light-dark()` resolves against the element's used
-   `color-scheme`, so a token's two values sit on ONE line where they can be
-   compared — and there is no second copy of the palette inside a
-   `prefers-color-scheme` block to fall out of step with the first. The default
-   `light dark` follows the OS; an explicit choice pins `color-scheme` through
-   a single rule about.ts injects, and it wins in BOTH directions (a reader on
-   a dark desktop who wants a light sheet is as real a case as the reverse).
+   HOW THE SWITCH WORKS — and how it used to, because the old way was reasoned
+   and someone will otherwise put it back. :root holds the LIGHT palette; the
+   `:root[data-theme="dark"]` block right after it redefines the tokens that
+   vary. kernel/src/theme.ts puts `data-theme` on <html> — resolving 'auto'
+   against the OS itself, and re-resolving when the OS flips — and also sets
+   `color-scheme`, which is what turns the scrollbars, the caret, the native
+   selects and the resize grippers dark. Stylesheets key off the attribute;
+   `color-scheme` is for the browser's own furniture. That is the division
+   theme.ts states, and it is the one slides, spaces and type already follow.
 
-   `color-scheme` is also what turns the scrollbars, the caret, the native
-   selects and the resize grippers dark, and it is declared HERE rather than in
-   index.html's <meta name="color-scheme"> because a CSS declaration on the
-   root element beats that meta — verified in the browser, both directions.
+   Dash used `light-dark()` pairs until 2026-09-12, for two reasons this file
+   gave at the time. One: a token's two values sat on ONE line, with no second
+   copy of the palette to drift from the first. That was a real advantage and
+   is the cost of this change; the dark block keeps the same order and the same
+   section markers to make side-by-side reading as cheap as it can be, and the
+   rig fails on any dark token with no light twin. Two: "an attribute on <html>
+   is cloned into every saved file by capturePristine()". True — and answered
+   by ORDER, not by avoiding the attribute: main.ts calls startTheme() AFTER
+   capturePristine() and before the first paint, so the pristine copy every
+   save re-serializes never carries it. slides documents the same two lines.
+   The comment also said slides "has none to copy"; it has had a dark block
+   since #285. What actually decided it: measured in a browser, setting
+   `data-theme="dark"` on dash did NOTHING, so a shared kernel stylesheet keyed
+   off the attribute — which is the only key slides can use, since it pins
+   `color-scheme: only light` — could not have themed dash at all. Three apps
+   on one mechanism and one on another is the divergence, whatever the values.
 
-   WHICH TOKENS VARY: exactly the ones written as a `light-dark()` pair. The
+   `color-scheme: light dark` stays on :root below, for two things that run
+   BEFORE theme.ts does: index.html's splash, which is painted from
+   `light-dark()` colours before any script runs and so can only follow the OS,
+   and the browser furniture in that same window. theme.ts overrides both the
+   moment it runs.
+
+   WHICH TOKENS VARY: exactly the ones that appear in the dark block. The
    plain values — the brand amber, the radii, the type scale, the row height —
-   are the same object on both grounds and are deliberately NOT paired. The
+   are the same object on both grounds and are deliberately NOT themed. The
    amber is the interesting one: it reads ON the dark ground at 9.25:1, so the
    accent does not change when the lights go out. It is 2.02:1 on white, which
    is why it is only ever a border, a badge or a mark there and never body
@@ -51,32 +71,32 @@
      The name on the left is dash's; slides' name for the same thing is given
      in the comment, and is aliased at the foot of this block so a rule ported
      from slides resolves without being rewritten. */
-  --bg: light-dark(#ffffff, #0e1319);          /* the page, and the sheet itself */
+  --bg: #ffffff;          /* the page, and the sheet itself */
   /* chrome bands: top bar, status bar. slides: --chrome */
-  --panel: light-dark(#f5f7fa, #161c24);
+  --panel: #f5f7fa;
   /* Raised opaque surfaces — menus, dialogs, popovers, inputs, buttons, the
      side panels. On white it IS the page colour; on dark it has to lift off
      the page or a menu floating over the grid has no edge but its shadow, and
      shadows barely read on a dark ground. */
-  --surface: light-dark(#ffffff, #1b222c);
+  --surface: #ffffff;
   /* menu rows, buttons, list items. slides: --chrome-2 */
-  --hover: light-dark(#eceff4, #26303d);
+  --hover: #eceff4;
   /* A wash for hover states drawn OVER unknown content (a chart band, a table
      row that may already be tinted). Alpha, not a colour, for that reason. */
-  --wash: light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.07));
-  --line: light-dark(#e3e8ef, #1f2731);
-  --line-strong: light-dark(#cbd5e1, #2f3a49);
-  --ink: light-dark(#1e2a3a, #d6dee9);
+  --wash: rgb(0 0 0 / 0.04);
+  --line: #e3e8ef;
+  --line-strong: #cbd5e1;
+  --ink: #1e2a3a;
   /* Secondary ink — control labels, panel rows. slides: --ink-2. dash had no
      such token and reached for --muted, which is a CAPTION grey and a step too
      light for a word somebody is meant to act on. */
-  --ink-2: light-dark(#31445c, #b9c5d4);
+  --ink-2: #31445c;
   /* MEASURED, and the reason this is slides' #5b6472 rather than the #64748b
      dash had: --muted carries 11–11.5px captions, and at #64748b it was
      4.34:1 on --hover and 4.22:1 on --accent-wash — under AA on the two
      grounds a caption most often lands on. slides' grey is 5.19:1 and 5.30:1
      on those same two, 5.57:1 on --panel, and it is the same hue family. */
-  --muted: light-dark(#5b6472, #93a0b2);
+  --muted: #5b6472;
   --accent: #f7a600;
   /* Ink for a word that MEANS amber — a partial total, a "＋ add" invitation —
      where the amber itself is 2.02:1 on white and cannot be the text. slides:
@@ -85,13 +105,13 @@
      value is the amber ink --warn-ink already uses, so the app carries one
      amber-on-dark and not two. MEASURED: 6.92:1 on white, 9.22:1 on the dark
      header band. */
-  --accent-ink: light-dark(#7a5200, #f0b357);
+  --accent-ink: #7a5200;
   --slash: #ff9e8a;                            /* the wordmark's peach */
   /* Focus, and the selection ring, are ONE colour — see the focus note below.
      slides calls it --blue and uses it for the same job. */
   --blue: var(--sel-ring);
   /* slides' scrim and its two shadow tiers (popover, dialog), verbatim. */
-  --scrim: light-dark(rgb(15 23 36 / 0.38), rgb(2 5 9 / 0.66));
+  --scrim: rgb(15 23 36 / 0.38);
   /* ————— THE SHADOWS HAVE TO BE BUILT THIS WAY, and it is not a style choice —————
      `light-dark()` is a <color> function. A CUSTOM property holds any token
      stream, so `--shadow-pop: light-dark(0 12px 32px …, …)` is a perfectly
@@ -113,28 +133,28 @@
      Light on a dark desktop would get light surfaces wearing dark-tuned
      shadows. `scripts/test-dash-theme.ts` now fails on any light-dark() whose
      light half is not a colour. */
-  --shadow-pop-color: light-dark(rgb(15 23 36 / 0.18), rgb(0 0 0 / 0.55));
-  --shadow-dialog-color: light-dark(rgb(15 23 36 / 0.3), rgb(0 0 0 / 0.7));
+  --shadow-pop-color: rgb(15 23 36 / 0.18);
+  --shadow-dialog-color: rgb(15 23 36 / 0.3);
   --shadow-pop: 0 12px 32px var(--shadow-pop-color);
   --shadow-dialog: 0 18px 50px var(--shadow-dialog-color);
 
   /* ————— semantic ————— */
-  --warn-bg: light-dark(#fffbeb, #221b0d);     /* the findings strip */
-  --warn-ink: light-dark(#b45309, #f0b357);
-  --warn-chip: light-dark(#fef3c7, #3a2e10);
-  --err-ink: light-dark(#b91c1c, #ff9b8f);
-  --err-bg: light-dark(#fef2f2, #2b1618);
-  --up-ink: light-dark(#1f8a5b, #4fbf8b);
-  --down-ink: light-dark(#c0503c, #f08a78);
+  --warn-bg: #fffbeb;     /* the findings strip */
+  --warn-ink: #b45309;
+  --warn-chip: #fef3c7;
+  --err-ink: #b91c1c;
+  --err-bg: #fef2f2;
+  --up-ink: #1f8a5b;
+  --down-ink: #c0503c;
   /* The toast inverts against the app on light and merely lifts on dark:
      a white slab on a dark sheet is a flashbulb, not a status line. */
-  --toast-bg: light-dark(#1e2a3a, #2b3543);
-  --toast-ink: light-dark(#ffffff, #e8edf5);
+  --toast-bg: #1e2a3a;
+  --toast-ink: #ffffff;
   /* Accent-tinted surfaces — the active sheet, a filter chip. Distinct from
      --sel: this one means "this is the chosen one", not "this is selected
      data", and the two stopped being the same colour when selection went
      blue. */
-  --accent-wash: light-dark(#fdf0d6, #38290c);
+  --accent-wash: #fdf0d6;
   /* The bar under the ACTIVE worksheet tab — a non-text indicator, so it has a
      3:1 floor to clear rather than a decorative one. MEASURED against the tab
      it sits on: the brand amber is 9.25:1 on the dark sheet and 2.02:1 on the
@@ -166,7 +186,7 @@
      ground the labels came out at 3.6:1 and the axis was unreadable. The light
      value here IS the kernel's default, so light-theme charts are untouched;
      see the rule near .dx-chart-body for why CSS can reach them at all. */
-  --chart-ink: light-dark(#6b7280, #a7b3c4);
+  --chart-ink: #6b7280;
 
   /* COUPLED TO grid.ts `ROW_H`, and there is no mechanism keeping them honest.
      The body is virtualised: JS positions every row at `top: i * ROW_H` as an
@@ -230,12 +250,12 @@
 
      Text on it: --muted is 5.28:1 (light) and 5.97:1 (dark), --ink 12.81:1 and
      11.69:1 — the empty-state note is the only thing that ever lands here. */
-  --desk: light-dark(#eef1f6, #1b232d);
+  --desk: #eef1f6;
 
-  --grid-line: light-dark(#edf0f4, #212a35);
-  --grid-head: light-dark(#fbfcfd, #151c25); /* the header/gutter band */
-  --grid-head-ink: light-dark(#4a5568, #a9b6c7);
-  --grid-head-on: light-dark(#dbe7fb, #1d3050); /* a selected row/column header */
+  --grid-line: #edf0f4;
+  --grid-head: #fbfcfd; /* the header/gutter band */
+  --grid-head-ink: #4a5568;
+  --grid-head-on: #dbe7fb; /* a selected row/column header */
 
   /* ————— selection —————
      Cool, and deliberately NOT the brand amber. The amber tint used to sit on
@@ -243,15 +263,23 @@
      the document had coloured were the same warm smear; the two things are
      unrelated and now cannot be confused. --sel-ring is the cursor cell's ring
      and the range outline; --sel is the range fill. */
-  --sel: light-dark(#eef4ff, #16243c);
-  --sel-ring: light-dark(#2563eb, #3b82f6);
+  --sel: #eef4ff;
+  --sel-ring: #2563eb;
 
   /* ————— one scale, five surfaces —————
      The pivot, the dashboard, the story editor, the save menu and the About
      dialog were each written separately and each picked its own radii, shadows
      and caption size. These are the agreed values; every one of those files
      now reads them rather than restating a number. */
-  --radius: 7px;         /* controls: buttons, inputs, chips */
+  /* 10px, NOT 7px, and the 7px was a real choice, not drift: dash split the
+     radius into a three-step scale (control / floating surface / dialog) and
+     7px was the control step, recorded as a deliberate divergence in
+     test-dash-theme.ts. It goes because `--radius` is about to be a SHARED
+     token in kernel's stylesheet with one value across four apps, and a dash
+     that redefined it would be the one app whose buttons differ from the
+     other three. --radius-lg and --radius-xl are dash's own and keep the scale
+     where dash still needs it; `--radius` and `--radius-lg` now coincide. */
+  --radius: 10px;        /* controls: buttons, inputs, chips — the shared value */
   --radius-lg: 10px;     /* floating surfaces: menus, popovers, cards */
   --radius-xl: 14px;     /* dialogs */
   /* the two shadows are theme-varying and live in the palette block above */
@@ -278,20 +306,65 @@
   --chrome-2: var(--hover);
 }
 
-/* THE EXPLICIT OVERRIDE IS NOT IN THIS FILE, and that is not an oversight.
-   It is a `:root:root{color-scheme:…}` rule injected at boot by about.ts
-   inside a `data-bento-transient` <style>, because the natural version — an
-   attribute on <html> plus `:root[data-theme=…]` rules here — is CLONED INTO
-   EVERY SAVED FILE by capturePristine() and would force one reader's
-   preference on everyone who opened the workbook afterwards. The whole story
-   is in about.ts; what matters here is that flipping `color-scheme` is all an
-   override does, and every `light-dark()` pair above follows it.
+/* THE DARK PALETTE, keyed off `data-theme` — see the note above :root for why
+   this is a block and no longer a light-dark() pair per token. Same names, same
+   ORDER, same section markers as :root, so the two can be read side by side;
+   a token that appears here and not in :root is a bug the rig catches. */
+:root[data-theme="dark"] {
 
-   What DOES belong here is the OS default for the one token light-dark()
-   cannot carry. */
-@media (prefers-color-scheme: dark) {
-  :root { --bar-opacity: 0.45; }
+  /* ————— ground and chrome ————— */
+  --bg: #0e1319;
+  --panel: #161c24;
+  --surface: #1b222c;
+  --hover: #26303d;
+  --wash: rgb(255 255 255 / 0.07);
+  --line: #1f2731;
+  --line-strong: #2f3a49;
+  --ink: #d6dee9;
+  --ink-2: #b9c5d4;
+  --muted: #93a0b2;
+  --accent-ink: #f0b357;
+  --scrim: rgb(2 5 9 / 0.66);
+
+  /* ————— THE SHADOWS HAVE TO BE BUILT THIS WAY, and it is not a style choice ————— */
+  --shadow-pop-color: rgb(0 0 0 / 0.55);
+  --shadow-dialog-color: rgb(0 0 0 / 0.7);
+
+  /* ————— semantic ————— */
+  --warn-bg: #221b0d;
+  --warn-ink: #f0b357;
+  --warn-chip: #3a2e10;
+  --err-ink: #ff9b8f;
+  --err-bg: #2b1618;
+  --up-ink: #4fbf8b;
+  --down-ink: #f08a78;
+  --toast-bg: #2b3543;
+  --toast-ink: #e8edf5;
+  --accent-wash: #38290c;
+  --chart-ink: #a7b3c4;
+
+  /* ————— THE DESK: the ground a DATASET sits on ————— */
+  --desk: #1b232d;
+  --grid-line: #212a35;
+  --grid-head: #151c25;
+  --grid-head-ink: #a9b6c7;
+  --grid-head-on: #1d3050;
+
+  /* ————— selection ————— */
+  --sel: #16243c;
+  --sel-ring: #3b82f6;
+
+  /* the one themed token that is not a colour; was a media query */
+  --bar-opacity: 0.45;
 }
+
+/* NO OS MEDIA QUERY, deliberately. `data-theme` is always EXPLICIT on <html>:
+   kernel/src/theme.ts resolves 'auto' against prefers-color-scheme itself,
+   sets the attribute, and re-sets it when the OS flips. A media block here
+   would be a second opinion about the same fact, and the two would disagree
+   the first time a reader chose the opposite of their OS. --bar-opacity, the
+   one themed token that is not a colour, therefore lives in the dark block
+   above with everything else. */
 
 * { box-sizing: border-box; }
 
@@ -1584,8 +1657,13 @@ html, body {
    about the same cell. Declared here rather than in comments.css so the theme
    owns both halves of the pair. */
 :root {
-  --cmt: light-dark(#7c5cff, #a48bff);
-  --cmt-wash: light-dark(#f2efff, #241f3d);
+  --cmt: #7c5cff;
+  --cmt-wash: #f2efff;
+}
+
+:root[data-theme="dark"] {
+  --cmt: #a48bff;
+  --cmt-wash: #241f3d;
 }
 
 /* ————— the spreadsheet kind (grid.ts, `kind: 'canvas'`) —————
