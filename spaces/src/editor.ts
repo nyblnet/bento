@@ -40,6 +40,10 @@ import { openGraphView } from './graph.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
+import { applyTemplate, journalTemplate } from './templates.ts'
+import {
+  type TemplateHost, openTemplates, openNewPagePicker, savePageAsTemplate,
+} from './templateui.ts'
 import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
 import { offlineEnabled } from '../../kernel/src/net.ts'
 import { startSharing } from '../../kernel/src/sync/online.ts'
@@ -349,6 +353,8 @@ export class Editor {
       { icon: 'board', label: t('New issue'), hint: '⌘⇧I', run: () => this.newIssue() },
       { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
         run: () => this.makeIssue() },
+      { icon: 'copy', label: t('Templates…'), hint: t('Save a page to reuse, and start new ones from it'),
+        run: () => openTemplates(this.templateHost) },
       { icon: 'markdown', label: t('Import Markdown…'), hint: t('A folder of notes, or another space'),
         run: () => this.openImport() },
       { icon: 'graph', label: t('Graph'), hint: t('Every page, and what links to what'),
@@ -985,7 +991,14 @@ export class Editor {
     // with the other secondary actions instead, which puts it in the ⋯ menu on
     // a phone from one list rather than two. Dropping a folder on the window
     // still works and is how most people will actually find it.
-    head.append(iconBtn('plus', t('New page (⌘⌥N)'), () => this.newPage()))
+    // Once the space HAS templates, the ＋ offers them; with none it makes a
+    // blank page as it always did (openNewPagePicker returns false and the
+    // fallback runs). The check is on the document, so the control only grows
+    // for the author who asked for it.
+    const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => {
+      if (!openNewPagePicker(this.templateHost, plus, () => this.newPage())) this.newPage()
+    })
+    head.append(plus)
     this.sidebar.append(head)
 
     const list = el('ul', 'sp-tree')
@@ -1141,6 +1154,14 @@ export class Editor {
     if (s.readOnly) return
     const plan = planJournal(s.doc, iso)
     if (plan.add.length) {
+      // THE ENTRY'S OWN DATE, not today's: stepping to tomorrow's note has to
+      // write tomorrow's date into it, or a template with {{date}} in it lies
+      // on every entry but the one made on the day. Inside the SAME commit as
+      // the pages, so ⌘Z still takes back "I opened today's journal" in one
+      // step. The Journal parent page, when it is new too, is never templated —
+      // it is furniture, not an entry.
+      const tpl = journalTemplate(s.doc)
+      if (tpl) applyTemplate(plan.page, tpl, { date: iso, locale: locale() }, true)
       s.commit(() => {
         for (const { page, after } of plan.add) {
           const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
@@ -1158,6 +1179,32 @@ export class Editor {
     const cur = this.store.page
     if (!cur || !isJournal(cur)) return
     this.openJournal(stepDay(String(cur.journal), n))
+  }
+
+  /**
+   * The narrow contract src/templateui.ts gets — the store operations it
+   * needs, and nothing else. Rebuilt on every read so `page` is never a stale
+   * reference to a page that has since been deleted.
+   */
+  private get templateHost(): TemplateHost {
+    const s = this.store
+    return {
+      get doc() { return s.doc },
+      get readOnly() { return s.readOnly },
+      get page() { return s.page },
+      commit: (fn: () => void) => { s.commit(fn) },
+      goToPage: (id: string) => { s.goToPage(id) },
+      status: (msg: string) => { this.status(msg) },
+      afterCreate: () => {
+        this.repaint()
+        afterPaint(() => {
+          const h = this.main.querySelector<HTMLElement>('[data-page-title]')
+          h?.focus()
+          if (h) selectAll(h)
+        })
+      },
+      pageIcon: (icon: string | undefined) => pageIcon(icon),
+    }
   }
 
   newPage(parent?: string): void {
@@ -4026,6 +4073,13 @@ export class Editor {
       this.closeOverlay()
       this.newPage(pageId)
     }))
+
+    if (!s.readOnly) {
+      pop.append(this.menuItem('copy', t('Save as template'), t('New pages can start as a copy of this one'), () => {
+        this.closeOverlay()
+        savePageAsTemplate(this.templateHost, page)
+      }))
+    }
 
     // A thread about the PAGE — the second and last anchor. It is offered
     // where the page's own actions are, and only for the page in view,

@@ -6390,3 +6390,58 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-09 — bento/spaces page templates live in `doc.templates`, not in flagged pages
+
+A page template is a saved page shape that new pages start from, and there were
+two honest places to put it. **A template could be a PAGE** carrying a flag and
+hidden from the sidebar — no new format shape, and it is editable with the page
+editor for free. **Or a SEPARATE COLLECTION**, `doc.templates`, which nothing
+that walks pages can see. The second was chosen, and the reason is a count.
+
+`doc.pages` is enumerated in roughly forty places in this app: search, the graph
+(`graph.ts`), backlinks and the tree (`buildIndex`), `issuesOf` and every board,
+table and gallery view in `fields.ts`, the Markdown export in `portable.ts`, the
+About counts, the agent API's `pages`/`stats`/`outline`/`validate`, the archive
+list, the print sheet, and the file-manager preview. A flagged page needs a gate
+at every one of them — and, the part that decides it, at every surface added
+AFTERWARDS by someone who has never heard of templates. This zone has already
+shipped that exact class twice: an allow-list applied BEFORE an indirection
+(`isRemote` on the string an author wrote rather than on the resolved asset,
+2026-08-28), and a source-grep assertion that passed straight through a live
+regression (#392). A separate collection cannot be forgotten by a surface that
+does not know it exists.
+
+**What the choice costs is real and is stated rather than hidden.** A template
+is not a page, so it is not searched, not in the graph, not back-linked, not
+printed, and not in the Markdown export — `extractSpace` walks pages. Grafting a
+subtree from another space brings that subtree's pages and brings NO templates.
+So `doc.templates` is document data that travels with the FILE and not with a
+subtree. A page-flag design would have grafted; it would also have leaked into
+all thirteen surfaces above, and one forgotten gate is a template appearing in a
+reader's search results or, worse, in an export they hand to somebody else.
+
+**Tokens expand ONCE, at instantiation, and the model stores the result.**
+bento/slides resolves `{{page}}`/`{{date}}` at RENDER time because a footer must
+re-number when slides move (`resolveFields`, v0.9.12). A template has no such
+need: the moment the page is made is the moment its date is decided, and a live
+field would mean a page whose text changed under its author overnight. So this
+is a string substitution at creation and the new page is an ORDINARY page — an
+older build reads it exactly as this one does, with no field system to
+understand. `{{date}}`, `{{date:iso}}`, `{{date:short}}`, `{{date+1:iso}}`,
+`{{time}}` and `{{title}}`; anything else stays literal, so a `{{mustache}}` in
+somebody's prose survives.
+
+**The date a journal template writes is the ENTRY'S date, never today's.**
+Backfilling Tuesday's note on Thursday must write Tuesday, or the feature lies
+on every entry except the one made on the day. `doc.journalTemplate` names the
+template new daily notes start from; absent means a blank entry, which is what
+every file written before this gets.
+
+Two prototype guards, both because the ids come out of a file somebody mailed
+you: `templateById` scans a list rather than indexing an object (so
+`journalTemplate:"constructor"` resolves to nothing), and the date-format lookup
+uses `Object.hasOwn` (so `{{date:constructor}}` is literal text rather than
+`Object`'s constructor stringified into the reader's page). Both are pinned by
+assertions in `scripts/test-spaces-model.ts` that were watched to fail under
+deliberate sabotage.
