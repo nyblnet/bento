@@ -404,6 +404,22 @@ jobs:
         # Source-shape checks; the Swift half self-skips without a toolchain.
         run: node scripts/test-home-bridge.ts
 
+      - name: No AI attribution in the tree or the PR text
+        # A session-start instruction told agents to append a Claude-Session
+        # trailer; one session put it in the BODY of a DECISIONS.md entry and
+        # in its PR description, and the squash-merge copied the latter into
+        # main (#415). The commit-msg hook cannot see file contents and does
+        # not run when GitHub builds a squash commit, so this scans every
+        # tracked file and the PR title/body — the text that becomes that
+        # commit. Self-test first: a regex edit that stops matching fails
+        # here rather than passing quietly.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          node scripts/test-no-attribution.ts --self-test
+          node scripts/test-no-attribution.ts
+
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
         # generated from it: the Android launcher vectors (which have no <rect>,

@@ -6389,4 +6389,43 @@ so an entry missing at the cut cannot be added afterwards — the check has one
 chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
-Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+## 2026-09-12 — the session-link trailer: cause found, and the gate is on file contents
+
+**What was in the tree.** `docs/DECISIONS.md` ended with a `Claude-Session:`
+line — inside the file, as the last line of the 2026-09-04 changelog-
+reconciliation entry. It arrived in #415 (`bde4dce`), whose squash commit
+carries the same trailer, copied from the PR body. It sat there eight days
+while the rule forbidding it was in force the whole time. Removed here.
+
+**Why it happened, measured rather than assumed.** The trailer is emitted by
+the tool, not typed by anyone: Claude Code's `attribution.sessionUrl` setting
+(*"Whether to append the claude.ai session link to commits and PRs created
+from web or Remote Control sessions (default: true)"*) injects a session-start
+instruction telling the agent to end commit messages and PR bodies with the
+link. The maintainer's settings had `attribution.commit: ""` and `pr: ""` —
+which hide the co-author text — but `sessionUrl` was unset, so the default
+applied and the instruction kept arriving in every Remote Control session. One
+session then wrote a DECISIONS entry *as if it were a commit message* and put
+the trailer where the message would have ended.
+
+**The fix has three layers, because each earlier layer already failed once.**
+1. **The setting**, at the source: `attribution.sessionUrl: false` in the
+   maintainer's user settings AND in the tracked `.claude/settings.json` in
+   this repository, so every clone, every machine and every session gets it.
+   That file is deliberately tiny and deliberately tracked; do not delete it
+   as clutter.
+2. **The commit-msg hook** (`.githooks/`, ops' branch) for the local commit
+   path — it cannot see file contents and does not run when GitHub builds a
+   squash commit from a PR body.
+3. **`scripts/test-no-attribution.ts`**, in CI, for the two paths the hook
+   cannot reach: every tracked text file, and the PR title/body handed over
+   from the `pull_request` event — the exact text GitHub turns into the
+   squash commit. Patterns are anchored to the shapes the tooling emits (a
+   trailer at line start, the session URL anywhere) so prose that names the
+   rule does not trip it; `--self-test` plants each shape and asserts it is
+   caught, and runs first in CI so a regex edit cannot go quietly green.
+   Verified by re-injecting the actual line from `bde4dce`: 2 findings.
+
+**The rule the incident adds:** a DECISIONS entry is a document, not a commit
+message. Nothing that belongs at the end of a commit belongs at the end of an
+entry.
