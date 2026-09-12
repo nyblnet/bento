@@ -66,7 +66,7 @@ export const STARTER_DIAGRAM =
 //     for (const [n, v] of Object.entries(m.STARTER_COVERS))
 //       console.log(n, 's' + c.createHash('sha256').update(v.uri).digest('base64url').slice(0, 22)) })"
 //
-// Six drawings, 5,681 B of URI between them (614–1,189 B each).
+// Six drawings; the home cover is the mark itself at 472 B, the rest 614–1,189 B.
 
 const A = '%23F7A600', B = '%235B8DEF', G = '%232FA37C', P = '%23A97BE0', R = '%23E5484D', S = '%238B95A5'
 
@@ -79,17 +79,21 @@ export interface StarterCover { key: string; uri: string }
 
 /** The six covers, by the page they belong to. */
 export const STARTER_COVERS: Record<'home' | 'writing' | 'media' | 'links' | 'tracker' | 'planning', StarterCover> = {
-  // the space: one box, with compartments
-  home: { key: 'sA5CF4JmFucHJbqnXZp2Klo', uri: svgUri(`
-    <rect x='330' y='70' width='540' height='260' rx='22' fill='none' stroke='${S}' stroke-opacity='.7' stroke-width='6'/>
-    <rect x='348' y='88' width='208' height='224' rx='12' fill='${A}' fill-opacity='.9'/>
-    <rect x='570' y='88' width='134' height='105' rx='12' fill='${B}' fill-opacity='.9'/>
-    <rect x='718' y='88' width='134' height='105' rx='12' fill='${G}' fill-opacity='.9'/>
-    <rect x='570' y='207' width='282' height='105' rx='12' fill='${P}' fill-opacity='.9'/>
-    <g fill='%23fff' fill-opacity='.55'>
-      <rect x='368' y='112' width='120' height='10' rx='5'/><rect x='368' y='134' width='150' height='10' rx='5'/><rect x='368' y='156' width='96' height='10' rx='5'/>
-      <rect x='590' y='112' width='80' height='10' rx='5'/><rect x='738' y='112' width='60' height='10' rx='5'/>
-      <rect x='590' y='231' width='190' height='10' rx='5'/><rect x='590' y='253' width='130' height='10' rx='5'/>
+  // THE BENTO MARK ITSELF, not a drawing that resembles one — the same
+  // geometry as docs/assets/bento-logo.svg (navy tile, three compartments:
+  // slate, coral, cream), scaled 8.125x so the 32-unit tile fills the cover's
+  // 260-unit height and sits centred in the 540-wide frame the other covers
+  // use. Drawn with the logo's own coordinates under a transform rather than
+  // re-plotted, so it cannot drift from the mark by a rounding error, and so a
+  // change to the logo is a change to four numbers here. Transparent ground:
+  // `.sp-cover` paints --chrome-2 behind it in both themes, and a navy tile
+  // reads on both.
+  home: { key: 's_MrnxMY8vZdq3MbTnOhbB-', uri: svgUri(`
+    <g transform='translate(470 70) scale(8.125)'>
+      <rect width='32' height='32' rx='7' fill='%2316273E'/>
+      <rect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/>
+      <rect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/>
+      <rect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/>
     </g>`) },
   // the writing: lines, a highlight, a link, a coloured word, the caret
   writing: { key: 's1Jd2yy44lrQZAPuRiSZCbd', uri: svgUri(`
