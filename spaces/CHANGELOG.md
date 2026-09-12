@@ -1097,6 +1097,35 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   **One loss, said out loud:** `clearTrail()` exists and has no UI wired to it,
   so a reader who wants the sample rows gone has no button. That is the
   strongest argument for the other answer and it is filed, not hidden.
+- **A page with no cover gets a procedural one — on the home page and on every
+  gallery card, and nowhere else.** A gradient plus a geometric figure (orbs,
+  bands, a dot lattice, rings, facets or waves), seeded from the page id, drawn
+  at render time and never written into the file: `cover` absent stays absent,
+  an older build sees no cover exactly as before, and a saved space does not
+  grow by a byte. The same id draws the same cover on every machine and every
+  reload; a page that gains a real cover shows that and nothing else, and a
+  page whose cover is removed gets its procedural one back. The gallery already
+  tinted its coverless cards on a hue from the id — this is that tint with a
+  figure on it, in the same two hues at the same alphas, over the theme's own
+  ground, so one SVG is right in light and in dark.
+
+  Home page and gallery only, on purpose. A cover is a full-bleed band that
+  pushes the title down and lifts the icon into a disc; on a space of two
+  hundred plain notes that is two hundred posters, and a journal entry under a
+  banner is wrong however restrained the artwork. The two surfaces chosen are
+  the two that already single a page out. Never on paper (5cm of toner for a
+  figure nobody chose) and never in the file-manager thumbnail (a still of the
+  author's document, and this is not in it).
+
+  Measured with real pixels, the SVG rasterised over the theme ground, across
+  400 ids covering all eight hues and all six figures: the card's letter-mark
+  keeps at least 4.29:1 in light and 3.28:1 in dark (34px bold; the figure
+  costs about a point against the plain tint, which sat at 6.55 and 4.13);
+  the icon on the home page's disc reads at 9.94:1 light / 9.30:1 dark. The
+  disc's EDGE against the cover is 1.33–2.31:1 in light and 1.91–3.53:1 in
+  dark — the disc is white-on-a-wash by design, as it is over a pale
+  photograph, and its shadow carries the boundary; the glyph is what has to
+  read. Shell +1,412 B.
 
 ## [0.1.0] — 2026-08-03
 

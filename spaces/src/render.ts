@@ -10,6 +10,7 @@
 // one decision.
 
 import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
+import { proceduralCoverSvg, proceduralCoverFor } from './procedural'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { decorateTags } from './tags.ts'
 import { tokenize } from './highlight'
@@ -1165,6 +1166,19 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
     img.setAttribute('aria-hidden', 'true')
     wrap.appendChild(img)
     art.appendChild(wrap)
+  } else {
+    // NO COVER: the HOME page gets a procedural one — a figure seeded from its
+    // id, never written to the document. The home page only, and never on
+    // paper or in the thumbnail; procedural.ts decides and argues both. A page
+    // whose cover is removed lands here again, which is the "gets it back" half.
+    const gen = proceduralCoverFor(page, doc, opts.printing === true)
+    if (gen) {
+      art.classList.add('sp-has-cover')
+      const wrap = document.createElement('div')
+      wrap.className = 'sp-cover sp-cover-gen'
+      wrap.innerHTML = gen
+      art.appendChild(wrap)
+    }
   }
 
   const h = document.createElement('h1')
@@ -1254,29 +1268,6 @@ function shownValue(f: FieldSpec | undefined, value: unknown): string {
   if (f?.vt === 'select') return optionOf(f, value)?.label ?? String(value)
   if (f?.vt === 'labels') return Array.isArray(value) ? value.join(', ') : String(value)
   return String(value)
-}
-
-/**
- * A stable hue for a page with no cover.
- *
- * FNV-1a over the id, which is the same cheap hash assets.ts falls back to:
- * every reader of one file computes the same colour, and a page keeps its
- * colour when it is renamed.
- *
- * A CURATED SET, not 360 free hues. Free hue was measured drawing 61 and 54 in
- * the same grid — the same dirty chartreuse twice — and five cards as
- * peach/pink/pink/lavender/lavender: two near-duplicate pairs out of five. It
- * also lands on olive and mustard, which no amount of alpha rescues, and goes
- * muddy in the dark theme. Eight stops spaced around the wheel and chosen to
- * be distinguishable at 30% alpha on both grounds; neighbours in a grid differ
- * because the stops differ, not because the hash happened to spread.
- */
-const CARD_HUES = [210, 265, 320, 8, 32, 48, 152, 186]
-
-function hueOf(id: string): number {
-  let h = 0x811c9dc5
-  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
-  return CARD_HUES[h % CARD_HUES.length]
 }
 
 /**
@@ -1621,10 +1612,10 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
         shot.appendChild(img)
       } else {
         shot.classList.add('sp-gcard-bare')
-        // deterministic, so a page keeps its colour across reloads, readers and
+        // deterministic, so a page keeps its cover across reloads, readers and
         // machines — the same reason ids are repaired from the id and never
-        // from Math.random
-        shot.style.setProperty('--h', String(hueOf(r.page.id)))
+        // from Math.random. The figure is procedural.ts's; the mark rides on it.
+        shot.innerHTML = proceduralCoverSvg(r.page.id, 'card')
         const mark = document.createElement('span')
         mark.className = 'sp-gcard-mark'
         pageMark(mark, r.page)
