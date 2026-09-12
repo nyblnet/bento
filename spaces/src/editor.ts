@@ -47,6 +47,9 @@ import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
 import { PropsPanel } from './props'
 import {
+  nameIndex, namesOf, mentionsOf, linkMention, type Mention,
+} from './mentions.ts'
+import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
 
@@ -1269,6 +1272,10 @@ export class Editor {
     this.main.append(view)
     this.wire(view)
     view.querySelector('.sp-page-inner')?.append(this.backlinks(page.id))
+    // Unlinked mentions sit BESIDE the backlinks and below them: "what links
+    // here" is a fact about the space, "what could have" is a suggestion, and
+    // a suggestion above a fact reads as one.
+    view.querySelector('.sp-page-inner')?.append(this.unlinked(page.id))
     // Comments are EDITOR-ONLY. The gate is here rather than in comments.ts
     // because this is the object that knows which view it is in — and the
     // renderer, which print and the reading view share, has never heard of
@@ -3002,6 +3009,78 @@ export class Editor {
     return box
   }
 
+  /**
+   * WHAT COULD LINK HERE — this page's names, found as plain words elsewhere.
+   *
+   * Derived at paint like the backlinks above it, never stored: a count
+   * written into the file goes stale in somebody else's copy the moment they
+   * type. `mentionsOf` makes ONE pass over the document for THIS page's names,
+   * so the cost does not grow with the number of pages — see mentions.ts.
+   *
+   * A reader with nothing to link gets nothing at all: an empty "Unlinked
+   * mentions (0)" heading on every page is chrome that only ever says no.
+   */
+  private unlinked(pageId: string): HTMLElement {
+    const s = this.store
+    const box = el('section', 'sp-mentions')
+    let found: Mention[]
+    // A malformed page (a title that is somehow not a string, an `aliases`
+    // shape nobody anticipated) must cost the reader a panel, never the page.
+    try { found = mentionsOf(s.doc, s.index, pageId) } catch { return box }
+    if (!found.length) return box
+
+    box.append(el('h2', 'sp-backlinks-h', t('Unlinked mentions')))
+    const ul = el('ul', 'sp-backlink-list')
+    for (const m of found) {
+      const from = s.index.page.get(m.fromPage)
+      if (!from) continue
+      const li = document.createElement('li')
+      const a = document.createElement('a')
+      a.href = `#p/${from.id}`
+      a.textContent = from.title || t('Untitled')
+      a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(from.id) })
+      li.append(a, el('span', 'sp-snippet', m.snippet))
+      // The whole point of the panel: one click turns the words into the link
+      // somebody meant to make. Hidden in a locked/reader copy, where the
+      // mentions are still worth SEEING and the button would only fail.
+      if (!(this.store.readOnly || this.reading)) {
+        const btn = document.createElement('button')
+        btn.className = 'sp-btn sp-mention-link'
+        btn.type = 'button'
+        btn.textContent = t('Link')
+        btn.title = t('Turn these words into a link to this page')
+        btn.addEventListener('click', () => this.linkMentionNow(m, pageId))
+        li.append(btn)
+      }
+      ul.append(li)
+    }
+    box.append(ul)
+    return box
+  }
+
+  /**
+   * Turn one unlinked mention into a real link.
+   *
+   * The offsets were computed when the panel was painted, and the document may
+   * have moved since — a collaborator's op, an undo, an edit in another tab.
+   * `linkMention` returns null rather than splicing into a stale offset, and
+   * this repaints instead of writing, which re-derives the mention from the
+   * text as it now is. Silently writing the wrong span would corrupt a block.
+   */
+  private linkMentionNow(m: Mention, targetId: string): void {
+    const s = this.store
+    if (s.readOnly) return
+    const found = s.index.block.get(m.fromBlock)
+    const next = found ? linkMention(String(found.block.html ?? ''), m, targetId) : null
+    if (next === null) {
+      this.status(t('That text has changed — nothing was linked'))
+      this.paintPage()
+      return
+    }
+    s.commit(() => { const b = s.block(m.fromBlock); if (b) b.html = sanitizeInline(next) })
+    this.paintPage()
+  }
+
   // ---- editing ------------------------------------------------------------
   private blockAt(node: Node | null): { id: string; host: HTMLElement } | null {
     const host = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>('[data-edit]')
@@ -3602,6 +3681,13 @@ export class Editor {
         for (const p of s.doc.pages) {
           const hits: string[] = []
           if (p.title.toLowerCase().includes(q)) hits.push(p.title)
+          // ⌘K FINDS A PAGE BY ITS ALIASES. An alias that reaches the `[[…]]`
+          // resolver but not search is worse than no alias: you can link to
+          // the page by the name you use for it and then cannot find it by
+          // that name, which reads as the search being broken.
+          for (const alias of namesOf(p).slice(1)) {
+            if (alias.toLowerCase().includes(q)) hits.push(t('also called “{name}”', { name: alias }))
+          }
           for (const b of p.blocks) {
             const text = textOf(b.html)
             if (text.toLowerCase().includes(q)) hits.push(text)
@@ -3865,14 +3951,22 @@ export class Editor {
         const q = input.value.trim().toLowerCase()
         list.innerHTML = ''
         for (const p of s.doc.pages) {
-          if (q && !p.title.toLowerCase().includes(q)) continue
+          // `[[` FINDS A PAGE BY ITS ALIASES TOO — the third of the three
+          // places an alias has to reach (the resolver, ⌘K, here). Typing
+          // `[[NYC` must offer the page titled "New York", or the alias only
+          // works for text somebody imported and never for text you type.
+          const names = namesOf(p)
+          const alias = q ? names.slice(1).find((n) => n.toLowerCase().includes(q)) : undefined
+          if (q && !p.title.toLowerCase().includes(q) && !alias) continue
           const li = document.createElement('li')
           const b = document.createElement('button')
           b.className = 'sp-result'
           b.type = 'button'
           b.innerHTML =
             `<span class="sp-result-ico">${ICONS.page}</span>` +
-            `<span class="sp-result-txt"><strong>${escapeHtml(p.title || t('Untitled'))}</strong></span>`
+            `<span class="sp-result-txt"><strong>${escapeHtml(p.title || t('Untitled'))}</strong>` +
+            (alias ? `<span>${escapeHtml(t('also called “{name}”', { name: alias }))}</span>` : '') +
+            `</span>`
           b.addEventListener('click', () => choose(p.id, p.title || t('Untitled')))
           li.append(b)
           list.append(li)
@@ -4725,12 +4819,12 @@ export class Editor {
       return
     }
 
-    // pages this space already has, so an incremental import links INTO it
-    const existing = new Map<string, string>()
-    for (const page of s.doc.pages) {
-      const key = page.title.trim().toLowerCase()
-      if (key && !existing.has(key)) existing.set(key, page.id)
-    }
+    // Pages this space already has, so an incremental import links INTO it —
+    // BY EVERY NAME they answer to. `nameIndex` carries titles and aliases and
+    // settles the ties, which is what makes `[[NYC]]` in an imported vault
+    // land on the page already titled "New York": aliases have to reach the
+    // resolver or they are an alias in name only.
+    const existing = nameIndex(s.doc).byName
     const plan = planImport(files, {
       rootTitle: t('Imported notes'),
       resolveExisting: (target) => existing.get(target),

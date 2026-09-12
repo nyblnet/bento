@@ -69,6 +69,7 @@ load contract and format additivity.
 | File | What it owns |
 |---|---|
 | `src/model.ts` | the format, `buildIndex()` (tree, backlinks), id repair |
+| `src/mentions.ts` | page **aliases** (the one place a name becomes a page id) and **unlinked mentions** — the matching rule, and everything it refuses to match |
 | `src/sanitize.ts` | the inline allowlist — the only thing between a file someone mailed you and script execution |
 | `src/store.ts` | undo, and the **typing run** |
 | `src/journal.ts` | daily notes — the date is `page.journal`, never the title |
