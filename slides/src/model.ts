@@ -456,6 +456,25 @@ export interface BentoDoc {
     chartPalette?: string[]
     /** defaults for newly inserted tables; omitted decks keep the standard look */
     table?: Partial<TableStyle>
+    /** Code Palette (Tier-0). */
+    codePalette?: {
+      // comment
+      c?: string,
+      // string
+      s?: string,
+      // number
+      n?: string,
+      // keyword
+      k?: string,
+      // function calls
+      f?: string,
+      // punctutations
+      p?: string,
+      // diff: additions
+      a?: string,
+      // diff: deletions / removals
+      d?: string,
+    }
   }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {

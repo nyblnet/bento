@@ -18,11 +18,11 @@ import { BentoDoc, CodeElement } from './model'
 import { HeckelDiff, type Match, type Insert, type Delete } from './diff'
 
 /**
- * Seven colours, not four hundred scopes — the zero-cost tier. When the
+ * 8 Colors, not four hundred scopes — the zero-cost tier. When the
  * signed-extension tier lands, grammarAssetId/themeAssetId select real
  * TextMate rendering and this map becomes the fallback.
  */
-const CODE_COLORS: Record<string, string> = {
+const DEFAULT_CODE_COLORS: Record<string, string> = {
   c: '#6b7f8f', // comment
   s: '#c98a3e', // string
   n: '#b0688f', // number
@@ -72,6 +72,7 @@ function diffFor(doc: BentoDoc, morphKey: string) {
  */
 export function renderCodeInto(pre: HTMLElement, el: CodeElement, doc: BentoDoc): boolean {
   const morphKey = el.morphId ?? el.id
+  const codePalette = doc.theme?.codePalette as any
   // REFERENCE equality, not id: the duplicate-a-slide idiom gives every twin
   // the SAME element id across slides (that is the default morph pairing), so
   // an id lookup finds the first twin and every later slide would render the
@@ -100,7 +101,9 @@ export function renderCodeInto(pre: HTMLElement, el: CodeElement, doc: BentoDoc)
     // diff.ts fromTok has already split multiline tokens, so ink never
     // carries a newline here.
     if (/\S/.test(token.content)) span.dataset.tok = ''
-    const color = CODE_COLORS[token.scopes[0] ?? 'x']
+    // Derive the color from the codePalette if it exists.
+    // Otherwise, gracefully fallback to the default colors.
+    const color = codePalette?.[token.scopes[0]] ?? DEFAULT_CODE_COLORS[token.scopes[0] ?? 'x']
     if (color) span.style.color = color
     const kind = token.scopes[0]
     if (kind === 'k' || kind === 'f') span.style.fontWeight = '600'

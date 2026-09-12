@@ -321,6 +321,22 @@ export function starterDoc(): BentoDoc {
   doc.theme.accent = PEACH
   // new charts (＋ Chart, table→chart) inherit the deck's midnight-&-peach family
   doc.theme.chartPalette = [PEACH, STEEL, PEACH_SOFT, STEEL_SOFT, MIST, PEACH_DEEP]
+  /**
+   * Code Palette:
+   * 8 colours, not four hundred scopes — the zero-cost tier. When the
+   * signed-extension tier lands, grammarAssetId/themeAssetId select real
+   * TextMate rendering and this map becomes the fallback.
+   */
+  doc.theme.codePalette = {
+    c: '#6b7f8f', // comment
+    s: '#c98a3e', // string
+    n: '#b0688f', // number
+    k: '#5b8def', // keyword
+    f: '#3fa9a0', // call
+    p: '#7c8794', // punctuation
+    a: '#3f9142', // diff: added
+    d: '#c25a43', // diff: removed
+  }
   doc.fonts = [
     { family: 'Fraunces', asset: 'font-fraunces-900', weight: '900' },
     { family: 'Instrument Sans', asset: 'font-instrument', weight: '400 700' },
