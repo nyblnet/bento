@@ -14,6 +14,7 @@
 type Scope = 'doc' | 'page'
 
 import { type SpacesDoc, type Page, type Block, buildIndex, type SpaceIndex, homePage } from './model'
+import { buildTagIndex, type TagIndex } from './tags.ts'
 
 type Listener = () => void
 type Event = 'doc' | 'page' | 'tree' | 'selection' | 'dirty'
@@ -48,6 +49,19 @@ type Entry =
 export class Store {
   doc: SpacesDoc
   index: SpaceIndex
+  /**
+   * Every `#tag` in the prose, derived and LAZY.
+   *
+   * Lazy because `touch()` reindexes on every keystroke of a typing run, and a
+   * tag index is a second full scan of every block in the document. Nothing
+   * reads it per-keystroke — the chips a render draws come from the text in
+   * front of them, not from here — so it is built when something asks (a view
+   * sourced on a tag, ⌘K, the graph, the tag sheet) and dropped whenever the
+   * document changes. Same derived-never-stored rule as `index`, one less full
+   * pass per keystroke.
+   */
+  get tags(): TagIndex { return (this.tagIx ??= buildTagIndex(this.doc)) }
+  private tagIx: TagIndex | null = null
   /** the page being viewed */
   pageId: string
   /** blocks currently selected at block level (Esc from text editing) */
@@ -219,6 +233,7 @@ export class Store {
    */
   reindex(): void {
     this.index = buildIndex(this.doc)
+    this.tagIx = null
     if (!this.index.page.has(this.pageId)) this.pageId = homePage(this.doc)?.id ?? ''
   }
 

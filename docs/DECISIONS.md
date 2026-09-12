@@ -6390,3 +6390,60 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+---
+
+## 2026-09-10 — bento/spaces: a tag is the `#` in the prose, and nothing else
+
+**Decided by** bento-team-spaces, on `spaces-tags`.
+
+**A tag has exactly one storage location: the text of the block.** There is no
+`Page.tags` array, and adding one later would be a regression rather than an
+optimisation. The index (`spaces/src/tags.ts buildTagIndex`) is derived at read
+time, invalidated by `store.reindex()` like `SpaceIndex`, and built lazily
+because `touch()` reindexes on every keystroke of a typing run.
+
+The argument is the one `buildIndex` already made for backlinks, and it is
+about who else writes `html`: an agent calling `updateBlock`, a Markdown
+import, a remote collaborator's CRDT op, a hand-edited `#bento-doc`. None of
+them knows tags exist. A derived index is simply wrong for a moment and then
+right; a stored array is wrong permanently, and nothing in a format with no
+server can reconcile it.
+
+It also makes **format additivity free rather than argued**, which was measured
+rather than assumed: a build of the previous release renders a tagged paragraph
+as ordinary prose, byte-identical html, no text lost — because a tag adds no
+field, no attribute and no block type. The chip is drawn at render into the
+DOM and taken back out of anything the editor commits (`readInline`), so the
+model never learns it happened; the same move `wireCode` makes for syntax
+colour.
+
+**`#project/bento` is ONE nested tag.** Decided now because the timing is the
+whole argument: if this build read it as the flat tag `project` followed by the
+text `/bento`, adding nesting afterwards would silently change the meaning of
+text already sitting in files on other people's disks — the one-way hazard
+sanitize.ts records for the href allowlist. A parent nobody wrote gets no index
+entry of its own; what nesting buys is that a query for `#project` reaches it.
+
+**What is NOT a tag** is the expensive half, and every clause has a case in
+`scripts/test-spaces-model.ts` that runs the parser: a `#` must open a word (so
+`C#`, `a#b` and every URL fragment are out), must be followed immediately by a
+tag character (so `# Title`, the Markdown heading, is out — and markdown.ts's
+own reader requires that same space), must not be all digits (`#42`, `#404`),
+and must not be a bare CSS hex colour (`#fff`, `#f7a600`). Inline `<code>` and
+`<a>` are skipped structurally by both readers, which is what makes this app's
+own `#p/` page links impossible to misread: an href is an attribute, never
+text.
+
+**The chip carries no `href`.** Two reasons, and the second is the safety net:
+inventing a `#t/` fragment form would be the one-way hazard above, and an `<a>`
+with no href is exactly what `sanitizeInline` UNWRAPS — so a chip that ever did
+leak into `Block.html` is removed by the canonicalizer that already runs on
+blur, leaving the text. The feature fails back to plain prose rather than into
+the format.
+
+**Related, found while doing this:** `unknownSourceKeys` existed in `fields.ts`
+and nothing called it, so a view whose `source` a build cannot read fell back to
+the backlog silently while its header still named the source. `render.ts` says
+so now. Builds already shipped cannot be told, so a view sourced on a tag reads
+as Issues on them — stated in the changelog rather than glossed.

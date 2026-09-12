@@ -41,6 +41,7 @@
 // on the first frame, which is the same picture, immediately.
 
 import type { SpacesDoc, SpaceIndex } from './model.ts'
+import { buildTagIndex } from './tags.ts'
 import { ICONS } from './icons.ts'
 import { t } from './i18n.ts'
 
@@ -77,6 +78,8 @@ export interface GraphEdge {
   links: number
   /** true when one is the other's parent in the page tree */
   tree: boolean
+  /** true when the two pages carry a tag in common */
+  tag: boolean
 }
 
 export interface Graph {
@@ -93,6 +96,10 @@ export interface Graph {
  * than one with one, and a linear map makes the hub a disc that swallows its
  * own neighbourhood. Floor 4 so an orphan is still a thing you can click.
  */
+/** Past this many pages a tag stops being a relationship and starts being a
+ *  category. See buildGraph. */
+export const TAG_EDGE_MAX = 8
+
 export const nodeRadius = (deg: number): number => Math.min(4 + 3.1 * Math.sqrt(deg), 20)
 
 /** Golden-angle spiral: even, deterministic, and not a grid. */
@@ -142,7 +149,7 @@ export function buildGraph(doc: SpacesDoc, index: SpaceIndex): Graph {
     const k = key(a, b)
     const hit = seen.get(k)
     if (hit !== undefined) return edges[hit]
-    const e: GraphEdge = { a: Math.min(a, b), b: Math.max(a, b), links: 0, tree: false }
+    const e: GraphEdge = { a: Math.min(a, b), b: Math.max(a, b), links: 0, tree: false, tag: false }
     seen.set(k, edges.length)
     edges.push(e)
     return e
@@ -170,10 +177,33 @@ export function buildGraph(doc: SpacesDoc, index: SpaceIndex): Graph {
     edgeFor(a, b).tree = true
   }
 
+  // …and shared TAGS, which are the only relationship in this format that
+  // somebody states without meaning to state it. Two pages both tagged
+  // `#recipe` are related; neither links to the other and neither is the
+  // other's parent, so before this the graph drew them as strangers.
+  //
+  // CAPPED, and the cap is the whole design. A tag on n pages is n(n-1)/2
+  // edges — `#note` on twenty pages is 190 lines, which is not a picture of
+  // anything. Past the cap the tag is saying "these are notes", not "these two
+  // specifically", and the tag sheet is the right way to read it. Below it,
+  // co-tagging is exactly the weak association a graph is for.
+  const tix = buildTagIndex(doc)
+  for (const entry of tix.tags.values()) {
+    if (entry.pages.length < 2 || entry.pages.length > TAG_EDGE_MAX) continue
+    for (let i = 0; i < entry.pages.length; i++) {
+      for (let j = i + 1; j < entry.pages.length; j++) {
+        const a = at.get(entry.pages[i])
+        const b = at.get(entry.pages[j])
+        if (a === undefined || b === undefined || a === b) continue
+        edgeFor(a, b).tag = true
+      }
+    }
+  }
+
   for (const e of edges) {
     nodes[e.a].deg++
     nodes[e.b].deg++
-    const w = e.links + (e.tree ? 1 : 0)
+    const w = e.links + (e.tree ? 1 : 0) + (e.tag ? 1 : 0)
     nodes[e.a].weight += w
     nodes[e.b].weight += w
   }
