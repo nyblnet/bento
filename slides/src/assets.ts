@@ -32,6 +32,13 @@ export function referencedAssetKeys(doc: BentoDoc): Set<string> {
         case 'media': prefixed(el.src); prefixed(el.poster); break
         case 'svg': bare(el.asset); break
         case 'code': bare(el.grammarAssetId); bare(el.themeAssetId); break
+        // Both may be inline (svg markup / a JSON object) or an asset ref;
+        // only the ref form names an asset, and `prefixed` already ignores
+        // anything that does not start with "asset:".
+        case 'embed':
+          prefixed(el.view)
+          if (typeof el.doc === 'string') prefixed(el.doc)
+          break
       }
     }
   }
