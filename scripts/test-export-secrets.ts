@@ -218,8 +218,16 @@ console.log('\npasswords')
 // serializeFile has exactly one legitimate caller left in the app: the
 // documented window.bento.serialize() tooling hook, which is synchronous by
 // contract and never writes a file for a person.
+//
+// A CALL, not a definition: slides/src/save.ts shadows serializeFile with a
+// wrapper (it prunes unreferenced assets before handing off to the kernel —
+// #442), and `function serializeFile(` is that wrapper being declared, not
+// the plain serializer being reached for. The wrapper's own call goes to the
+// kernel under the alias `kernelSerializeFile`, which this pattern does not
+// match — so a NEW call to the plain path anywhere in these files still fails
+// here, which is the property this check exists for.
 const callers = ['slides/src/editor/editor.ts', 'slides/src/main.ts', 'slides/src/save.ts', 'slides/src/autosave.ts', 'slides/src/present.ts']
-  .filter((f) => /\bserializeFile\(/.test(mask(read(f))))
+  .filter((f) => /(?<!function )\bserializeFile\(/.test(mask(read(f))))
 ok(callers.length === 1 && callers[0] === 'slides/src/main.ts',
   `serializeFile() is called from ${callers.join(', ') || 'nowhere'} — and only there`)
 ok(/serialize:\s*\(\)\s*=>\s*\{[^}]*\bserializeFile\(store\.doc\)/.test(read('slides/src/main.ts')),
