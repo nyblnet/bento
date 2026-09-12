@@ -226,7 +226,14 @@ export class Store {
   private snapshot(): string {
     // assets are excluded: they are the largest thing in the document and never
     // change during an ordinary edit, so snapshotting them 100 times is waste
-    const { assets: _assets, ...rest } = this.doc
+    //
+    // `revisions` is excluded for BOTH of the reasons assets are, and a third.
+    // It is bounded at 128 KB (history.ts), so 100 undo entries would retain
+    // 12 MB of it; it changes only on save, so nearly every copy is identical;
+    // and it is a LOG, not content — undoing an edit should not un-record that
+    // the edit happened. `restore` puts the live list back for the same reason
+    // it puts the live assets back.
+    const { assets: _assets, revisions: _revisions, ...rest } = this.doc
     return JSON.stringify(rest)
   }
 
@@ -263,7 +270,12 @@ export class Store {
       if (at >= 0) this.doc.pages[at] = JSON.parse(entry.json) as Page
     } else {
       const assets = this.doc.assets
-      this.doc = { ...(JSON.parse(entry.json) as SpacesDoc), ...(assets ? { assets } : {}) }
+      const revisions = this.doc.revisions
+      this.doc = {
+        ...(JSON.parse(entry.json) as SpacesDoc),
+        ...(assets ? { assets } : {}),
+        ...(revisions ? { revisions } : {}),
+      }
     }
     this.pageId = entry.viewId
     this.reindex()

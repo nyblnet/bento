@@ -25,6 +25,7 @@ import {
   plainTitle, badTitle,
   type Plan, type PlanError, type IssueQuery, type CommentQuery,
 } from './agent'
+import { recordRevision } from './history'
 import { starterDoc } from './starter'
 import { todayISO, isISO, journalFor } from './journal'
 import { textOf } from './sanitize'
@@ -313,6 +314,17 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   async function doSave(): Promise<void> {
     store.endRun()
     editor.status(t('Saving…'))
+    // IN-FILE HISTORY, recorded BEFORE the bytes are written, so the file that
+    // lands on disk contains the revision that describes it. Recording after
+    // the write would leave every saved file one revision behind itself, and
+    // the invariant history.ts rests on — restore(N) is what was saved at N —
+    // would be false of the very last entry, which is the one people use.
+    //
+    // Unconditional: an encrypted space keeps history like any other, because
+    // `revisions` is a field of the document and goes inside the same envelope
+    // as the pages it describes. That is the whole difference from addVersion
+    // below, which writes plain JSON to this machine's IndexedDB and must not.
+    recordRevision(store.doc)
     const res = await saveFile(store.doc)
     if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
       // the document is on disk now — the dot goes out

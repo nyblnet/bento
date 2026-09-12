@@ -6390,3 +6390,69 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-10 — bento/spaces keeps its version history INSIDE the file, as bounded deltas
+
+**Decision.** `doc.revisions` (spaces/src/history.ts): the space's own timeline,
+travelling with the file. Four calls settled together, all of them things a
+parallel session could otherwise contradict.
+
+**1. A revision covers the WHOLE SPACE, not one page.** A page here is not
+self-contained — it has a `parent`, it can be the `home`, links point at it by
+id — so a page restored on its own lands in a tree that no longer matches it.
+The covered content is `title`, `home`, `theme`, `pages`. Deliberately NOT
+covered: `assets` (orders of magnitude larger and content-addressed; `store.ts`
+excludes them from undo snapshots for the same reason — a restored page whose
+asset was later removed shows the missing-image fallback), `collab` (bearer
+capabilities and a live room), and the file's identity fields. A restore is an
+edit, never "become a different file".
+
+**2. Each entry is a DELTA, not a snapshot — because the file gets emailed.**
+bento/type's `Revision {id, at, label, body}` (type/src/model.ts) is followed for
+`id`/`at`, and diverges twice. The body is a patch at page-and-block
+granularity: measured on the starter space, 269 B per save against 37,572 B for
+a whole snapshot. And `label` is OPTIONAL, present only when a person typed one
+— a label minted by the app would be a sentence frozen in one author's UI
+language and shown to every reader of an eight-language file, so the summary is
+DERIVED from the patch at render time and the file stores only counts.
+
+**3. The budget TIERS rather than fails**, following PREVIEW_BUDGET.
+`HISTORY_BUDGET` 128 KB (against a ~278 KB shell) and `HISTORY_MAX` 60 entries.
+Over either, the oldest two entries are folded into one — so RESOLUTION is what
+is dropped and it is dropped from the distant past first, while this afternoon
+keeps every save. The fold re-derives the replacement from the state those two
+produce rather than merging two patch objects, which is what makes "every
+surviving revision still restores exactly what it did" true by construction
+rather than by care. A space whose own content exceeds the budget keeps NO
+history and the dialog says so.
+
+**4. An ENCRYPTED space keeps history, and that is not a loophole in slides'
+preview rule.** Slides refuses a preview to an encrypted deck because a
+plaintext title slide beside the ciphertext is the leak the password exists to
+prevent; `kernel/src/autosave.ts` is refused an encrypted space because a
+recovery snapshot is plain JSON on this machine's disk. Neither describes this:
+`revisions` is a field of the document, so it is inside the `bento/enc` envelope,
+encrypted by the same AES-GCM pass over the same JSON as the pages it describes.
+There is no plaintext artefact. Verified in a browser: the envelope decrypts to
+a document carrying its revisions, and no page text — current or historical —
+appears in the file in the clear.
+
+**The invariant it all rests on** is the equivalent of type/src/redline.ts's
+`accept(all)`/`reject(all)`: **restore(N) == the content saved at N**, asserted
+on the SERIALIZED bytes, in the rig and again in a real browser through the
+shipped ⌘S and Restore paths. The word diff carries redline's own pair — anything
+that is not an insertion reconstructs the old text, anything that is not a
+deletion the new one — and its granularity is WORDS for the reason that file
+argues: line diffs call a reflowed paragraph wholly rewritten, character diffs
+mark "30" → "60" as one glyph nobody can see. redline.ts is CITED, never
+imported: it is bento/type's runtime, and forty lines of LCS is not worth
+coupling two apps' shells.
+
+**Said out loud, because it is the property people miss:** history remembers
+deleted pages, and a document you MAIL carries that with it. Hence a first-class
+**Clear history**, a note in the dialog that says so, and `portable.ts` stripping
+`revisions` from a page extract outright.
+
+Pointers: spaces/src/history.ts (the reasoning in full), spaces/CHANGELOG.md,
+docs/spaces-agents.md Gotchas (an agent rewriting a whole document must carry
+the field across), rig coverage in scripts/test-spaces-model.ts.

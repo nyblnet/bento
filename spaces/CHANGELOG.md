@@ -477,6 +477,48 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **Version history inside the file.** Every save records what changed, in the
+  document itself, under `doc.revisions` — so the history travels with the
+  file. Mail the space and the recipient has it; open it on a phone and it is
+  there; open it in six months on a different machine and it is still there.
+  Until now the timeline lived in one browser's IndexedDB, which meant a space
+  that left this computer left its past behind. That browser-local timeline is
+  unchanged and still listed beside this one; what is new is the half that
+  survives being sent.
+
+  **Restore is exact.** Restoring a version reproduces the space's content —
+  title, home page, theme and every page — byte for byte as it was when that
+  version was saved, verified on the serialized document rather than on a count
+  of blocks. It is an ordinary edit: `⌘Z` walks it back, the file stays the
+  same document, and the timeline is not rewound with it.
+
+  **Changes, in words.** Beside every version, a **Changes** view showing what
+  moved — pages added, deleted and renamed, and inside each page the words that
+  went and the words that arrived. Word granularity, not lines and not
+  characters: a line diff calls a reflowed paragraph wholly rewritten, and a
+  character diff marks "30" → "60" as one glyph nobody can see.
+
+  **It is bounded, because this file gets emailed.** A revision stores only what
+  changed since the one before it, at page and block granularity, so an ordinary
+  save costs a few hundred bytes rather than a copy of the space — measured on
+  the starter space, 269 bytes per save against 37 KB for a whole snapshot.
+  History is capped at 128 KB and sixty entries; past either, the oldest entries
+  are folded together, so the distant past gets coarser while this afternoon
+  keeps every save, and every version that remains still restores exactly what
+  it did before. A space too large to carry even one revision keeps none and
+  says so, rather than half-keeping a history it cannot honour.
+
+  **Encrypted spaces get history too** — the first place they have ever had any.
+  `revisions` is a field of the document, so it is inside the `bento/enc`
+  envelope, encrypted by the same pass over the same JSON as the pages it
+  describes. Nothing is written in the clear beside the ciphertext.
+
+  **And it is said out loud that history remembers what you deleted.** A page you
+  removed is still in the file, in the version that last held it, which is true
+  of every version history ever built and matters more when the document is
+  something you send. The dialog says so and offers **Clear history**; a page
+  extracted as its own space carries none of the parent's.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
