@@ -2130,6 +2130,9 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   box-shadow: inset 0 0 0 1px rgb(var(--shade) / .08);
 }
 .sp-cover-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A PROCEDURAL cover (procedural.ts): the figure fills the same box, over the
+   same ground — `slice` crops it to whatever the band's aspect is. */
+.sp-gen { display: block; width: 100%; height: 100%; }
 /* The lift is what makes it read as a cover rather than as a banner sitting on
    top of a document: the title rises INTO the picture's lower edge, which is
    the arrangement everyone recognises. A scrim under the title would fight the
@@ -2188,14 +2191,14 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .sp-gcard-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* A CARD WITH NO COVER IS NOT A HOLE. Its own hue, derived from the page id, so
-   a gallery nobody has given pictures to still reads as a set of distinct
-   things. `hsl` with an alpha keeps it a tint in both themes rather than a
-   colour that glows on the dark one. */
-.sp-gcard-bare {
-  background:
-    linear-gradient(150deg, hsl(var(--h, 210) 62% 62% / .30), hsl(calc(var(--h, 210) * 1deg + 40deg) 62% 58% / .16));
-}
+/* A CARD WITH NO COVER IS NOT A HOLE. Its own figure, derived from the page id
+   (procedural.ts — the tint this rule used to draw, plus a pattern), so a
+   gallery nobody has given pictures to still reads as a set of distinct
+   things. Alpha over the ground keeps it a tint in both themes rather than a
+   colour that glows on the dark one. The mark sits above the figure. */
+.sp-gcard-bare { position: relative; }
+.sp-gcard-bare .sp-gen { position: absolute; inset: 0; }
+.sp-gcard-bare .sp-gcard-mark { position: relative; }
 /* --ink-2, not --muted: a grey letter on a 30% tint was the same value as the
    tint in the dark theme. */
 .sp-gcard-mark { font-size: 34px; line-height: 1; color: var(--ink-2, var(--ink)); font-weight: 600; }

@@ -63,6 +63,7 @@ import type { Block, Page } from '../spaces/src/model.ts'
 import {
   buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
 } from '../spaces/src/graph.ts'
+import { proceduralCoverSvg, proceduralCoverFor, hueOf, CARD_HUES } from '../spaces/src/procedural.ts'
 
 let failures = 0
 let checks = 0
@@ -675,6 +676,55 @@ for (const [label, input, err] of [
     '…through the IMAGE pipeline: downscaled, content-addressed, and the same budget question')
   ok(/delete p\.cover/.test(ed2), 'removing a cover DELETES the key rather than storing an empty string')
   ok(/pickCover\(page\.id\)/.test(props2), 'the properties panel offers it, beside the icon')
+
+  // 6. PROCEDURAL COVERS (procedural.ts). A render-time default, never data:
+  //    the properties below are the ones a reader would notice breaking, and
+  //    every one is asserted on the OUTPUT, not on the source.
+  const same = proceduralCoverSvg('p-one') === proceduralCoverSvg('p-one')
+  ok(same, 'the same id yields the same SVG twice — a page keeps its cover across reloads and readers')
+  ok(proceduralCoverSvg('p-one') !== proceduralCoverSvg('p-two'),
+    'two ids yield different SVGs — a gallery of coverless pages is a set of distinct things')
+  ok(new Set(Array.from({ length: 64 }, (_, i) => proceduralCoverSvg(`id${i}`))).size === 64,
+    '…sixty-four ids, sixty-four covers')
+  ok(CARD_HUES.includes(hueOf('p-one')) && hueOf('p-one') === hueOf('p-one'),
+    'the hue is one of the curated stops, and stable')
+  // CODE lines only — the file's own commentary explains why it never does
+  const genSrc = fs.readFileSync(new URL('../spaces/src/procedural.ts', import.meta.url), 'utf8')
+    .split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
+  ok(!/Math\.random|Date\.now|new Date/.test(genSrc), 'nothing in the generator reads a clock or a die')
+  const svg = proceduralCoverSvg('p-one', 'page')
+  ok(/^<svg /.test(svg) && /<\/svg>$/.test(svg) && /aria-hidden="true"/.test(svg),
+    'the output is one decorative <svg> element')
+  ok(!/<script|on[a-z]+=|<foreignObject|href=/i.test(svg), 'and it carries nothing that could run, load or link')
+  ok(proceduralCoverSvg('p-one', 'page') !== proceduralCoverSvg('p-one', 'card')
+    && Buffer.byteLength(svg) < 2048,
+    'the page wash is its own strength, and a cover costs under 2KB — and none of it is saved')
+  // the decision, as the renderer asks it
+  const pdoc = (parseDoc(doc({
+    home: 'h',
+    pages: [
+      { id: 'h', title: 'Home', blocks: [] },
+      { id: 'n', title: 'Note', blocks: [] },
+      { id: 'c', title: 'Covered', cover: 'data:image/png;base64,AAA', blocks: [] },
+      { id: 'r', title: 'Remote', cover: 'https://x/y.png', blocks: [] },
+    ],
+  })) as { doc: SpacesDoc }).doc
+  const pg = (id: string) => pdoc.pages.find((p) => p.id === id)!
+  ok(proceduralCoverFor(pg('h'), pdoc, false).length > 0, 'the home page gets a procedural cover')
+  ok(proceduralCoverFor(pg('n'), pdoc, false) === '',
+    '…and an ordinary page does NOT — two hundred notes are not two hundred posters')
+  ok(proceduralCoverFor(pg('h'), pdoc, true) === '', '…and nothing procedural under printing (paper, the thumbnail)')
+  pdoc.home = 'c'
+  ok(proceduralCoverFor(pg('c'), pdoc, false) === '', 'a page with a real cover draws no procedural one, home or not')
+  const c = pg('c')
+  delete (c as { cover?: unknown }).cover
+  ok(proceduralCoverFor(c, pdoc, false).length > 0, '…and a page whose cover is REMOVED gets its procedural one back')
+  pdoc.home = 'r'
+  ok(proceduralCoverFor(pg('r'), pdoc, false).length > 0,
+    'a remote cover is refused (PLATFORM §1), so that page is coverless and gets the procedural one')
+  ok(/proceduralCoverFor\(page, doc, opts\.printing === true\)/.test(render)
+    && /proceduralCoverSvg\(r\.page\.id, 'card'\)/.test(render),
+    'the renderer asks that decision for the page view and draws the card figure in the gallery')
 }
 
 

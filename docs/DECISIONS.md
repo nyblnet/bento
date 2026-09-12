@@ -6390,3 +6390,61 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-12 — bento/spaces: procedural covers are a render-time default on two surfaces, and a document theme preset is not a thing this app can honestly offer
+
+**A page with no `cover` draws a generated one — never stored, never on paper,
+never in the thumbnail.** `spaces/src/procedural.ts` builds an SVG (gradient +
+one of six geometric figures) seeded by FNV-1a over the page id, so every reader
+of one file sees the same cover on the same page and a page keeps it across
+renames. Nothing is written: `cover` absent stays absent, an older build sees no
+cover, and a saved file does not change. A page with a usable cover of its own
+draws only that; a remote cover, which `coverSrc` already refuses, counts as
+none. The decision is one pure function (`proceduralCoverFor`) so the model
+rig pins every branch without a DOM; the browser pass is what proves the
+render.
+
+**Two surfaces, chosen structurally rather than by a field: the HOME page, and
+every coverless GALLERY card.** Not every page. A cover is a 150–320px
+full-bleed band that pushes the title down and lifts the icon into a disc; on a
+space of two hundred plain notes that is two hundred posters, and a journal
+entry under a banner is wrong however quiet the figure. The gallery already
+drew a procedural tint on its bare cards (the id-derived hue), so the card is a
+refinement of an accepted default; the home page is the one page the format
+itself names. A per-page opt-in would be a format field for a thing that is
+not document data — the reason the surfaces are structural.
+
+**Print and the preview draw nothing procedural.** Both pass `printing: true`
+and the decision returns '' under it: five centimetres of toner for artwork
+nobody chose, and the file-manager still is a render of the AUTHOR's document,
+which this is not in — and every saved file would otherwise grow by the SVG.
+
+**Restraint is by construction, and measured.** The gradient is the gallery's
+former CSS tint exactly (hue → hue+40°, 0.30/0.16 on a card; 0.44/0.26 on the
+page, where a white disc has to read against it); the figure sits on it at
+6–14% alpha at lightness 44. Everything is alpha over the surface's own ground
+(`--chrome-2`), which is how one SVG serves both themes. Rasterised over each
+ground across 400 ids: the card mark's worst case is 4.29:1 light / 3.28:1
+dark (from 6.55 / 4.13 with the tint alone — the figure costs about a point
+and stays above the 3:1 large-text line); the disc glyph is 9.94 / 9.30. The
+disc EDGE against the cover is 1.33–2.31 light and 1.91–3.53 dark; it was not
+chased to 3:1 because the only way there is a wash loud enough to be the thing
+this rule exists to refuse, and the glyph, not the boundary, is what identifies
+the control — the same bargain a real cover already makes over a pale photo.
+
+**Theme presets were asked for and NOT built, and the reason is the
+2026-08-22 entry above.** A preset would be a bundle of `doc.theme` values,
+and in this app `doc.theme.background/color/accent/fontFamily` are painted by
+NOTHING in the live app — only `preview.ts` reads the colours, only `measure`
+and `dir` reach the reading column. That was ruled, not forgotten: the reading
+surface is chrome and follows the reader, and "if it ever changes it changes
+with the FORMAT". So a "Dark" or "High contrast" document preset would change
+the thumbnail and nothing a reader can see, and a rig asserting "the preset
+wrote the resolved keys" would be green over a control that does nothing —
+the source-grep-over-a-dead-renderer failure this zone has recorded twice.
+Painting `doc.theme` onto the column reverses that ruling and pre-empts the
+open cross-app dark-mode question, and is not a change one app zone makes on
+its own. What is honest without a ruling is smaller and differently shaped:
+typography presets (`fontFamily`/`headingFamily`/`measure`, which ARE document
+data), which would first need the column to paint the font fields at all. Left
+for the ruling rather than shipped under the wrong name.
