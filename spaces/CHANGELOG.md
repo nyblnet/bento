@@ -994,6 +994,22 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   and page extracts: the aggregate counts are dull, but the pattern of which
   days a file was touched is not, and that should not travel to a client by
   accident.
+- **The starter space looks like the app it is a demonstration of.** Measured
+  before: no cover, no gallery, no canvas and one image across seventeen pages
+  — the three most visual things in the app, and the first document every
+  reader opens used none of them. Now **Welcome opens on a cover** and is a
+  **gallery** of the tour, which is nested under it (Journal and Inbox stay at
+  the root, because they are yours rather than the guide's); five more pages
+  carry covers and two deliberately do not, so the gallery shows the tinted
+  fallback beside the pictures. **Planning gains a roadmap on a canvas** —
+  three lanes, eight cards, one of them a page link — and the limits page says
+  its three awkward parts in the callout tones that mean them (warning,
+  caution, important). The five tracker cards, the only pages with no icon,
+  have one each. The covers are six hand-drawn SVGs on a transparent ground, so
+  they take the page's own light or dark theme rather than shipping a bright
+  slab; they are stored under the same content-addressed keys `internAsset`
+  would mint, which a rig now proves. Cost, measured: 5,681 B of drawing in
+  the document and 2,460 B on the compressed shell (373,257 → 375,717).
 
 ## [0.1.0] — 2026-08-03
 

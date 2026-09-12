@@ -33,8 +33,10 @@
 // construction (it plans mutations; the editor applies them), which is what
 // makes this rig possible at all — and is worth preserving.
 
-import { parseDoc, buildIndex, FORMAT, type SpacesDoc } from '../spaces/src/model.ts'
+import { parseDoc, buildIndex, pageAssetKeys, FORMAT, type SpacesDoc } from '../spaces/src/model.ts'
 import { starterDoc } from '../spaces/src/starter.ts'
+import { STARTER_COVERS } from '../spaces/src/starterdata.ts'
+import { internAsset } from '../spaces/src/assets.ts'
 import {
   validateDoc, outlineDoc, statsDoc,
   planInsertBlocks, planUpdateBlock, planRemoveBlocks, planMoveBlock,
@@ -246,8 +248,26 @@ console.log('bento/spaces agent surface\n')
     ['an archived page', starter.pages.some((pg) => pg.archived === true)],
     ['a journal home for ⌘⇧J to hang entries from', starter.pages.some((pg) => pg.journalHome === true)],
     ['a page that sets its own width', starter.pages.some((pg) => !!pg.width)],
+    // the three most visual things in the app, and the last three to arrive
+    // here — the first thing every user opens used none of them
+    ['a page cover, embedded as an asset', starter.pages.some((pg) => String(pg.cover ?? '').startsWith('asset:'))],
+    ['a cover on the front page, so the first screen is not a blank one',
+      String(starter.pages.find((pg) => pg.id === starter.home)?.cover ?? '').startsWith('asset:')],
+    ['a gallery view', blocks.some((bl) => bl.type === 'view' && bl.layout === 'gallery')],
+    ['a canvas with cards placed on it', blocks.some((bl) => bl.type === 'canvas')
+      && blocks.some((bl) => typeof bl.x === 'number' && blocks.some((c) => c.id === bl.parent && c.type === 'canvas'))],
+    ['a page-link card on a canvas', blocks.some((bl) => bl.type === 'pagelink'
+      && blocks.some((c) => c.id === bl.parent && c.type === 'canvas'))],
+    ['callouts in more than one tone', new Set(blocks.filter((bl) => bl.type === 'callout').map((bl) => bl.tone)).size >= 3],
+    ['a page with no icon is a thing of the past', starter.pages.every((pg) => !!pg.icon)],
   ]
   for (const [what, present] of demos) ok(present, `the starter shows ${what}`)
+
+  // …and a page WITHOUT a cover in the gallery's reach, so the gallery shows
+  // what the tinted fallback looks like rather than claiming every card needs
+  // a picture
+  ok(starter.pages.some((pg) => pg.parent === starter.home && !pg.cover && !isIssue(pg as never)),
+    'the gallery holds at least one page with no cover, so the fallback is on show')
 
   // the archived page is the ⌘K-only one: nothing may link to it, or the
   // demonstration on the Welcome page is a lie
@@ -256,12 +276,32 @@ console.log('bento/spaces agent surface\n')
     archived.some((id) => String(bl.html ?? '').includes(`#p/${id}`) || bl.page === id))
   ok(!linked, 'nothing links to the archived page — ⌘K is the way in, as the starter says')
 
-  // every asset it ships is used, and every used asset ships
+  // every asset it ships is used, and every used asset ships. A page's COVER
+  // is a reference outside its blocks — the one `orphanAssets` also has to
+  // know about — so it counts here too, or six covers read as six orphans.
   const keys = Object.keys(starter.assets ?? {})
-  const refs = new Set(blocks.flatMap((bl) => [String(bl.src ?? ''), String(bl.poster ?? '')])
-    .filter((s) => s.startsWith('asset:')).map((s) => s.slice(6)))
+  const refs = new Set([
+    ...blocks.flatMap((bl) => [String(bl.src ?? ''), String(bl.poster ?? '')])
+      .filter((s) => s.startsWith('asset:')).map((s) => s.slice(6)),
+    ...starter.pages.flatMap((pg) => pageAssetKeys(pg as never)),
+  ])
   ok(keys.length > 0 && keys.every((k) => refs.has(k)) && [...refs].every((k) => keys.includes(k)),
     `the starter's assets and its references agree (${keys.length} asset(s))`)
+
+  // THE COVER KEYS ARE CONTENT-ADDRESSED, and this is what makes that claim
+  // true rather than a comment: `starterDoc()` is synchronous, so the keys
+  // are written down in starterdata.ts, and the only proof they are the keys
+  // `internAsset` would mint is to intern the same bytes and get the SAME
+  // reference back. A wrong key would come back as a fresh `s…` entry (the
+  // table grows by one); a right key with wrong bytes would come back as a
+  // `~1` collision variant. Either way `assets` changes, and it must not.
+  for (const [name, c] of Object.entries(STARTER_COVERS)) {
+    const fresh = starterDoc() as unknown as SpacesDoc
+    const before = Object.keys(fresh.assets ?? {}).length
+    const ref = await internAsset(fresh, c.uri)
+    ok(ref === `asset:${c.key}` && Object.keys(fresh.assets ?? {}).length === before,
+      `the ${name} cover's key is the one internAsset mints for its bytes (${c.key})`)
+  }
 }
 
 // ---- a title has to BE a title --------------------------------------------

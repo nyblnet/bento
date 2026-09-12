@@ -32,6 +32,18 @@
 // be pointed at, so they are pointed at from a page whose own shape is the
 // thing they act on, and never from a page about them.
 //
+// And the three most visual things in the app, which the starter had denied
+// longest: page COVERS (six drawings, starterdata.ts — Welcome opens on one),
+// the GALLERY (Welcome is one, of the tour nested under it), and the CANVAS
+// (the roadmap on Planning). Measured before this: seventeen pages, no cover,
+// no gallery, no canvas, one image, against 123 paragraphs — a white page with
+// a small icon and a checklist, which is clean and a demonstration of nothing.
+// The same rule cuts the other way, though: a cover on every page and a canvas
+// wherever one fits would be a brochure. A visual element is here where it is
+// the page being what it is — the roadmap is laid out like a roadmap, the
+// gallery is an index, and two tour pages have no cover on purpose, so the
+// gallery shows what a page without one looks like.
+//
 // WHAT THIS IS NOT is a manual. A feature tour that lists features is a
 // reference nobody reads twice; this should be a space somebody would keep and
 // write in, where the demonstration is the page rather than an aside on it.
@@ -44,7 +56,7 @@
 
 import { FORMAT, FORMAT_VERSION, defaultTheme, writeTable, type SpacesDoc, type Block, type Page } from './model.ts'
 import { DEFAULT_FIELDS, ISSUE_FIELDS, propBlock } from './fields.ts'
-import { STARTER_DIAGRAM, STARTER_TONE } from './starterdata.ts'
+import { STARTER_COVERS, STARTER_DIAGRAM, STARTER_TONE } from './starterdata.ts'
 
 const nextId = (): string => `sd-${(seq++).toString(36)}`
 
@@ -82,11 +94,11 @@ const AT = '2026-08-20T09:14:00.000Z'
  * on it. `Object.hasOwn`, not `in` or truthiness: `values` is a plain record
  * and a key named `constructor` must not silently add a field.
  */
-function issue(title: string, parent: string, values: Record<string, string>, body: string): Page {
+function issue(title: string, icon: string, parent: string, values: Record<string, string>, body: string): Page {
   const props = DEFAULT_FIELDS
     .filter((f) => ISSUE_FIELDS.includes(f.key) || Object.hasOwn(values, f.key))
     .map((f) => propBlock(f, values[f.key] ?? f.def ?? '', nextId()))
-  return { id: nextId(), title, parent, blocks: [...props, b('p', body)] }
+  return { id: nextId(), title, icon, parent, blocks: [...props, b('p', body)] }
 }
 
 /** Deterministic ids: a generator must emit the same document twice. */
@@ -144,6 +156,35 @@ export function starterDoc(): SpacesDoc {
   const callout = b('callout', 'A callout. Click the mark to make it a note, a tip, an important, a warning or a caution — or to give it an emoji of your own.', { tone: 'tip' })
   const toggle = b('toggle', 'A toggle, and this one starts folded', { open: false })
 
+  // THE CANVAS — a roadmap, on the Planning page, because that is the page
+  // where things are laid out rather than listed. Three lanes as three bold
+  // cards along the top, and under each the two things somebody who has just
+  // read this space would actually do next: a plan, not a list of features.
+  //
+  // A card is a block whose `parent` is the canvas (canvas.ts explains why it
+  // is not an entry in an array), and `x`/`y` are percentages of the surface,
+  // so the layout is the same at 700px and on paper. Every card here is placed
+  // explicitly: an unplaced card takes a slot from its index, which would lay
+  // these out as a grid rather than as lanes. One card is a page link — the
+  // "Add a page" button makes those — so the two kinds of card are both here.
+  // `ratio` 2.5 rather than the 1.6 default: three lanes of three cards are a
+  // strip, and at 1.6 on a wide page the surface was 1130×706 with the lower
+  // half empty (measured). The shape button still calls it Wide — it names the
+  // nearest of its three — and a hand-written ratio is explicitly a thing a
+  // file may say (canvas.ts canvasRatio).
+  const roadmap = b('canvas', 'Roadmap', { ratio: 2.5 })
+  const card = (html: string, x: number, y: number, extra: Partial<Block> = {}): Block =>
+    b('p', html, { parent: roadmap.id, x, y, ...extra })
+  const cards = [
+    card('<strong>Now</strong>', 4, 8), card('<strong>Next</strong>', 39, 8), card('<strong>Later</strong>', 74, 8),
+    card('Read the tour, then delete the five cards on the board', 4, 34),
+    card('Write the first real issue — <code>⌘⇧I</code>', 4, 66),
+    card('Move the inbox lines that turned out to be work onto the board', 39, 34),
+    b('pagelink', '', { parent: roadmap.id, x: 39, y: 66, page: P.inbox }),
+    card('Send Ada a reading copy', 74, 34),
+    card('Print it, once it is a handbook', 74, 66),
+  ]
+
   // THE ONE TRANSCLUSION, and it points at a SECTION rather than a whole page
   // because that is the case the feature was built for: one canonical
   // statement of something, shown where it is needed. Saving is the thing a
@@ -185,7 +226,14 @@ export function starterDoc(): SpacesDoc {
     title: 'My space',
     home: P.home,
     theme: defaultTheme(),
-    assets: { [DIAGRAM]: STARTER_DIAGRAM },
+    // The diagram under its own name (it predates content addressing), and the
+    // six covers under the keys `internAsset` would mint for them — see
+    // starterdata.ts — so a reader who picks the same drawing as a cover for a
+    // seventh page stores it once, which is the claim the pictures page makes.
+    assets: {
+      [DIAGRAM]: STARTER_DIAGRAM,
+      ...Object.fromEntries(Object.values(STARTER_COVERS).map((c) => [c.key, c.uri])),
+    },
 
     // THE NOTES, keyed by label, doc-level. Numbering is NOT here and is not
     // anywhere — it is order of appearance on a page, worked out at render
@@ -240,12 +288,42 @@ export function starterDoc(): SpacesDoc {
     journalTemplate: 'sd-tpl-daily',
 
     pages: [
+      // THE TOUR IS NESTED UNDER WELCOME, and Welcome is a gallery of it. Two
+      // decisions, and the second is why the first was made.
+      //
+      // A gallery is a `view`, and a view holds pages by one of three
+      // questions — carries a field, sits under a page, or is tagged — so the
+      // only way for Welcome to hold "the tour" without stamping a field or a
+      // #tag onto seven pages of prose is for the tour to sit under it. That
+      // is also the honest shape: the tree in the sidebar now IS a tree, with
+      // the guide under its front page and the two pages you keep writing in
+      // (Journal, Inbox) beside it at the root, which is what "drag a page onto
+      // another to nest it" looks like once somebody has.
+      //
+      // The tracker's cards are under Welcome too, through the tracker, and
+      // the gallery keeps them out with `status is empty` rather than by
+      // listing the seven — a page with a status is work, and work has the
+      // board. So a page you nest under Welcome joins the gallery, and an issue
+      // you file under the tracker does not, without anybody editing the view.
+      //
+      // The cost, measured: a page carrying a view is laid out WIDE (render.ts
+      // `auto`) and there is no value of `width` that says "the measure" on
+      // such a page — the editor's Normal deletes the key, and an absent key on
+      // a view page is the board default. So Welcome's prose runs wide. The
+      // paragraphs here are kept short for that reason, and the gap is filed.
       {
         id: P.home,
         title: 'Welcome',
         icon: 'compass',
+        cover: `asset:${STARTER_COVERS.home.key}`,
         blocks: [
           b('p', 'This whole space — every page, the editor, the search — is <strong>one HTML file</strong>. No account, no server, nothing installed.'),
+          b('view', 'What is here', {
+            layout: 'gallery',
+            source: { under: P.home },
+            filter: { where: [{ key: 'status', op: 'empty' }] },
+          }),
+          b('p', 'Seven pages, nested under this one and drawn as a gallery. Each demonstrates the thing it describes — the page about tables is one, the page about the board holds it — and every one is yours to rewrite or delete. The picture on a card is the page’s <strong>cover</strong>, set from the page menu; a page without one gets a tint and its icon instead. The five cards on the tracker are under this page too, and are kept out of the gallery by one filter: a page with a status is work, and work has a board of its own.'),
           b('h2', 'Try it'),
           b('todo', 'Type something on this line', { done: false }),
           b('todo', 'Press <code>⏎</code> to make a new block, <code>Tab</code> to indent it', { done: false }),
@@ -258,24 +336,16 @@ export function starterDoc(): SpacesDoc {
           b('p', 'That box is the <strong>Saving</strong> section of <a href="#p/sd-limits">Sharing &amp; limits</a>, live. Edit it there and it changes here, because there is only one of it. <code>/</code> → <strong>Embed a page</strong> puts one anywhere, holding a whole page or a single section of it.'),
           b('h2', 'If you are holding a phone'),
           b('p', 'The two chevrons at the edges of the screen are the page list and the properties panel; on a phone both start out of the way. Anything you would drag with a mouse — a block by its grip, a page onto another page to nest it, a card to the next column — moves if you <strong>press and hold it still for a moment first</strong> and then drag. Move straight away and the page scrolls, which is what you meant the other nine times.'),
-          b('h2', 'What is here'),
-          b('p', 'Nine more pages. Each one demonstrates the thing it describes, and every one of them is yours to rewrite or delete.'),
-          b('bullet', '<a href="#p/sd-writing">Writing</a> — the blocks you can make, and the marks you can put on them'),
-          b('bullet', '<a href="#p/sd-media">Tables, pictures and clips</a> — the things that are not paragraphs'),
-          b('bullet', '<a href="#p/sd-links">Pages and links</a> — how a space holds more than one page'),
-          b('bullet', '<a href="#p/sd-tracker">Tracker</a> — the same pages, on a board'),
-          b('bullet', '<a href="#p/sd-planning">Planning</a> — the same pages again, by date, and only the ones you asked for'),
-          b('bullet', '<a href="#p/sd-journal">Journal</a> — a page per day, when you want one'),
-          b('bullet', '<a href="#p/sd-inbox">Inbox</a> — somewhere to put things you have not filed'),
-          b('bullet', '<a href="#p/sd-handover">Handing it over</a> — reading it, sending it, presenting it, printing it'),
-          b('bullet', '<a href="#p/sd-limits">Sharing &amp; limits</a> — what this file can and cannot do'),
-          b('p', 'The sidebar holds the whole tree; drag a page onto another to nest it. <code>[</code> gets the sidebar out of the way, and <code>]</code> opens the properties panel on the other side — one place that answers what you can change about the block the caret is in.'),
+          b('h2', 'Two pages that are not the tour'),
+          b('p', '<a href="#p/sd-journal">Journal</a> — a page per day, when you want one — and <a href="#p/sd-inbox">Inbox</a> — somewhere to put things you have not filed — sit beside this page in the sidebar rather than under it, because they are yours rather than the guide’s. The sidebar holds the whole tree; drag a page onto another to nest it. <code>[</code> gets the sidebar out of the way, and <code>]</code> opens the properties panel on the other side — one place that answers what you can change about the block the caret is in.'),
         ],
       },
       {
         id: P.writing,
         title: 'Writing',
         icon: 'pen',
+        parent: P.home,
+        cover: `asset:${STARTER_COVERS.writing.key}`,
         blocks: [
           b('p', 'Markdown shortcuts convert as you type them. What is stored is the block, never the markdown — so a heading is a heading rather than a line that starts with a hash.'),
           b('h2', 'Headings and lists'),
@@ -320,6 +390,8 @@ export function starterDoc(): SpacesDoc {
         id: P.media,
         title: 'Tables, pictures and clips',
         icon: 'image',
+        parent: P.home,
+        cover: `asset:${STARTER_COVERS.media.key}`,
         width: 'wide',
         blocks: [
           b('p', 'This page is set to <strong>Wide</strong> in the page menu, because a table wants room a paragraph does not. Column, Wide and Full are chosen per page and travel in the file; how much room the window itself gives a column is remembered for your screen and never written down.'),
@@ -360,6 +432,8 @@ export function starterDoc(): SpacesDoc {
         id: P.links,
         title: 'Pages and links',
         icon: 'link',
+        parent: P.home,
+        cover: `asset:${STARTER_COVERS.links.key}`,
         blocks: [
           b('p', 'A space is a <strong>tree of pages</strong>, not one long scroll. New page: the ＋ in the sidebar, or <code>⌘⌥N</code>. Drag a page onto another to nest it.'),
           b('h2', 'Linking'),
@@ -383,6 +457,8 @@ export function starterDoc(): SpacesDoc {
         id: P.tracker,
         title: 'Tracker',
         icon: 'board',
+        parent: P.home,
+        cover: `asset:${STARTER_COVERS.tracker.key}`,
         // The alias that makes the unlinked-mentions section on this page hold
         // something. Three characters at least, or the scanner will not look
         // for it, and it must collide with no other page's title or alias —
@@ -403,20 +479,23 @@ export function starterDoc(): SpacesDoc {
           b('p', 'This page is not set to Wide and is still wide: a board takes the room it needs unless the page menu says otherwise.'),
         ],
       },
+      // Each card carries the glyph of what it asks you to do — the five were
+      // the only pages in the space with no icon, and in the sidebar and the
+      // calendar an icon is what tells five short titles apart at a glance.
       ...[
-        issue('Open this card — it is an ordinary page', P.tracker,
+        issue('Open this card — it is an ordinary page', 'star', P.tracker,
           { status: 'doing', priority: 'high', estimate: '3', due: DUE.a, project: 'Starter tour' },
           'You are in it. The row above is fields; everything from here down is a page — write notes, paste a picture, nest a toggle. That is the whole trick: the tracker did not invent a new thing to hold work in, it put fields on the thing you already had.'),
-        issue('Drag me to another column', P.tracker,
+        issue('Drag me to another column', 'grip', P.tracker,
           { status: 'todo', priority: 'medium', estimate: '1', due: DUE.b, project: 'Starter tour' },
           'Dragging a card writes the new status onto this page. Go the other way too: change the field at the top and watch the card move on the board.'),
-        issue('Press ⌘⇧I to make your own', P.tracker,
+        issue('Press ⌘⇧I to make your own', 'plus', P.tracker,
           { status: 'todo', priority: 'urgent', estimate: '5', due: DUE.c, project: 'Starter tour' },
           'A new issue arrives with status, priority, assignee and estimate already on it, and the caret in the body waiting for you.'),
-        issue('Delete all of this once you have seen it', P.tracker,
+        issue('Delete all of this once you have seen it', 'trash', P.tracker,
           { status: 'backlog', project: 'Starter tour' },
           'These five are a demonstration, not a template. Delete them and the board is empty and yours — it shows whatever pages in this space have a status, wherever they live in the tree.'),
-        issue('This one is finished', P.tracker,
+        issue('This one is finished', 'todo', P.tracker,
           { status: 'done', estimate: '2', due: DUE.a, project: 'Starter tour' },
           'Done and cancelled are <em>phases</em>, not just names, which is what lets <strong>Open only</strong> mean something without anyone configuring a filter.'),
       ],
@@ -424,6 +503,8 @@ export function starterDoc(): SpacesDoc {
         id: P.planning,
         title: 'Planning',
         icon: 'todo',
+        parent: P.home,
+        cover: `asset:${STARTER_COVERS.planning.key}`,
         blocks: [
           b('p', 'The same pages as the board next door, asked three different questions. None of these is a new kind of thing and none of them stores a copy of anything: a view is a question, answered from the pages themselves every time it is drawn.'),
           b('h2', 'What has a date'),
@@ -444,6 +525,10 @@ export function starterDoc(): SpacesDoc {
             filter: { where: [{ key: 'project', op: 'contains', v: 'starter' }, { key: 'estimate', op: 'gte', v: 2 }] },
           }),
           b('p', '<strong>Project contains “starter”</strong> matches the words you would see on the screen, not an id hidden behind them, and it does not care about capitals. <strong>Estimate is 2 or more</strong> is the other half of a range — pair it with <em>is at most</em> and you have one. The card with no estimate is not swept in on a technicality: an unset value is the absence of a value, not a small one.'),
+          b('h2', 'Where this is going'),
+          roadmap,
+          ...cards,
+          b('p', 'A <strong>canvas</strong> is the one block where things sit where you put them: a roadmap, a storyboard, a map of an argument. Drag a card by its grip; <code>⏎</code> in a card makes another; <strong>Add a page</strong> makes a card that opens one, like the Inbox above. Positions are stored as a share of the surface rather than in pixels, so the same file lays out the same on a laptop, a monitor and a printout — and on a phone the surface gives up and becomes the list of what is on it.'),
           b('p', 'Somewhere to put the ones that are not work yet: a view that only shows what I could finish before lunch #idea.'),
         ],
       },
@@ -485,6 +570,11 @@ export function starterDoc(): SpacesDoc {
         id: P.handover,
         title: 'Handing it over',
         icon: 'people',
+        // NO COVER, on purpose, and the same for Sharing & limits: the gallery
+        // has to show what a page without a picture looks like — a tint from
+        // the page id and the page's own icon — or the starter would be
+        // claiming that every card needs one.
+        parent: P.home,
         blocks: [
           b('p', 'Four ways a space stops being only yours. This page is deliberately built out of four headings and nothing else above them, because the third one turns each heading into a slide — so the page is the demonstration, and you can watch it happen to the words you are reading.'),
           b('h2', 'Reading it'),
@@ -502,6 +592,7 @@ export function starterDoc(): SpacesDoc {
         id: P.limits,
         title: 'Sharing & limits',
         icon: 'scale',
+        parent: P.home,
         blocks: [
           b('p', 'Worth knowing before you rely on this.'),
           b('h2', 'The file is the sharing'),
@@ -509,7 +600,7 @@ export function starterDoc(): SpacesDoc {
           b('h2', 'Working live'),
           b('p', 'Two tabs of the same space, or two people with the same file, edit it together: changes merge per character, and the file you save carries the state, so a copy edited on a plane rejoins as a fork rather than overwriting anybody. A coloured initial sits on the page each person is reading; click somebody in the people panel to go to where they are.'),
           b('p', 'A space goes live only when it arrived carrying a session — a file that was saved or shared — or when you start one from the button beside ⋯. A fresh space and a template stay offline. That button says which of the three situations you are in, including the usual one, which is that nothing is shared at all.'),
-          b('p', 'The awkward part: a session is a room whose keys live in the file. Whoever holds a copy holds the room, and there are no accounts to take it back from them. <strong>Reset access…</strong> is what revocation looks like here — it mints a new room[^room] and leaves the old copies talking to nobody.'),
+          b('callout', 'The awkward part: a session is a room whose keys live in the file. Whoever holds a copy holds the room, and there are no accounts to take it back from them. <strong>Reset access…</strong> is what revocation looks like here — it mints a new room[^room] and leaves the old copies talking to nobody.', { tone: 'warning' }),
           b('h2', 'Comments'),
           commented,
           b('h2', 'Sending one page out'),
@@ -528,7 +619,7 @@ export function starterDoc(): SpacesDoc {
           b('p', 'On Chrome and Edge, <code>⌘S</code> writes back to the file you opened. Everywhere else — Safari, Firefox, and every browser on iOS — the browser gives a page no way to write to its own file, so each save downloads a <strong>new copy</strong>. That is a browser limitation, not a setting: every browser on iOS is the same engine underneath whatever name is on it.'),
           b('h2', 'What you saved before'),
           b('p', 'Every save keeps a version <em>inside the file</em>. ⋯ → <strong>About this space</strong> → <strong>Versions in this file</strong> is the list, with <strong>Changes</strong> beside each row to see what moved and <strong>Restore</strong> to go back — and <code>⌘Z</code> undoes a restore, so it is not a decision you have to be sure about. Because they live in the document rather than in this browser, they are still there on another machine, and still there for whoever you send the file to, and sealed inside the password when there is one[^hist].'),
-          b('p', 'Which is the awkward part, and the reason it is on this page rather than a happier one: a version holds text you have since deleted. Anyone you send the file to can read it back out. <strong>Clear history</strong> sits in the same dialog, next to the number telling you how much of the file the versions are currently taking; the list stops at sixty, oldest first, so it cannot grow without limit.'),
+          b('callout', 'Which is the awkward part, and the reason it is on this page rather than a happier one: a version holds text you have since deleted. Anyone you send the file to can read it back out. <strong>Clear history</strong> sits in the same dialog, next to the number telling you how much of the file the versions are currently taking; the list stops at sixty, oldest first, so it cannot grow without limit.', { tone: 'caution' }),
           b('h2', 'Archived is not deleted'),
           b('p', 'This space ships one archived page, called <strong>The archived page</strong>. Archiving takes a page out of the sidebar and leaves it in the file: still found by <code>⌘K</code>, still linkable, still there when you send the file to somebody. Archiving is the delete this app offers, because the file is the only copy there is.'),
           b('h2', 'Two copies and no session'),
@@ -545,7 +636,7 @@ export function starterDoc(): SpacesDoc {
         blocks: [
           b('p', 'You found this with <code>⌘K</code>. Nothing in this space links here, and it is not in the page list.'),
           b('p', 'It is archived: out of the sidebar, still in the file, still searchable, still linkable. The page list keeps an <strong>Archived</strong> group at the bottom to restore from, and a page’s ⋯ menu is what puts one here.'),
-          b('p', 'Which is why <a href="#p/sd-limits">Sharing &amp; limits</a> names this page by name. Archived is not deleted, and it is not private — send the file and this goes with it.'),
+          b('callout', 'Which is why <a href="#p/sd-limits">Sharing &amp; limits</a> names this page by name. Archived is not deleted, and it is not private — send the file and this goes with it.', { tone: 'important' }),
         ],
       },
     ],

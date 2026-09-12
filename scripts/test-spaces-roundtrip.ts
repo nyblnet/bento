@@ -61,7 +61,7 @@ const strip = (h: unknown): string =>
 const words = (s: string): string[] =>
   s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 3)
 
-const doc = starterDoc() as unknown as { pages: Array<{ title: string; blocks: unknown[] }> }
+const doc = starterDoc() as unknown as { pages: Array<{ id: string; title: string; parent?: string; blocks: unknown[] }> }
 const md = toMarkdown(new Store(doc as never) as never)
 
 ok(md.length > 5000, `the starter space exports something substantial (${md.length} B)`)
@@ -69,16 +69,34 @@ ok(/^# /m.test(md), 'every page arrives under its own heading')
 
 // The export is one document; a note is one page. Split it the way a reader
 // would, and read each page back through the importer.
-const sections = md.split(/\n(?=# )/)
+//
+// A PAGE'S HEADING FOLLOWS ITS DEPTH — a root page leaves as `# Title`, a page
+// nested one down as `## Title`, and so on (about.ts walk) — so the split is at
+// each page's OWN marker, built from the tree, rather than at every `# `. The
+// first draft split at `# ` alone, which was the same thing while every page
+// in the starter was a root; the moment the tour nested under Welcome it read
+// four pages back and reported the other twelve as fine by never looking. And
+// a nested page's marker is the same string as a section heading inside its
+// parent (`## Writing` the page, `## Try it` the section), which is why the
+// split is at the page TITLES specifically and not at any `## `.
+const depthOf = (p: { parent?: string }): number => {
+  let d = 0
+  const seen = new Set<string>()
+  for (let cur = p.parent; cur && !seen.has(cur); cur = doc.pages.find((q) => q.id === cur)?.parent) { seen.add(cur); d++ }
+  return d
+}
+const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const markers = doc.pages.map((p) => `${'#'.repeat(Math.min(depthOf(p) + 1, 6))} ${esc(p.title)}`)
+const sections = md.split(new RegExp(`\\n(?=(?:${markers.join('|')})\\n)`))
 let pagesChecked = 0
 const lostBy: Array<[string, string[]]> = []
 
 for (const sec of sections) {
-  const title = (sec.match(/^# (.+)$/m) ?? [])[1]
+  const title = (sec.match(/^#{1,6} (.+)$/m) ?? [])[1]
   if (!title) continue
   const orig = doc.pages.find((p) => p.title === title)
   if (!orig) continue
-  const parsed = parseNote(sec.replace(/^# .+\n/, ''), title) as { blocks?: unknown[] }
+  const parsed = parseNote(sec.replace(/^#{1,6} .+\n/, ''), title) as { blocks?: unknown[] }
   const backText = (parsed.blocks ?? []).map((b) => strip((b as { html?: unknown }).html)).join(' ')
 
     // VOLUME, not sequence, and not a set.
@@ -121,7 +139,8 @@ for (const sec of sections) {
   }
 }
 
-ok(pagesChecked >= 8, `read every page of the starter space back (${pagesChecked})`)
+ok(pagesChecked >= 8 && pagesChecked === doc.pages.length,
+  `read every page of the starter space back (${pagesChecked} of ${doc.pages.length})`)
 
 if (lostBy.length) {
   for (const [title, missing] of lostBy) {
