@@ -85,6 +85,7 @@ load contract and format additivity.
 | `src/assets.ts` | content-addressed images and clips, and the image downscale |
 | `src/assets.ts` | content-addressed images and the downscale |
 | `src/portable.ts` | the two exits: a page out as its own space, another space in under a page |
+| `src/todeck.ts` | a page out as a **`bento/slides` document** — the mapping, and what it says it dropped. Pure and DOM-free |
 | `src/about.ts` | updates, language, password, exports |
 | `src/i18n/` | per-locale catalogs; `packed.ts` is generated and is what ships |
 
@@ -146,6 +147,54 @@ The imported file is UNTRUSTED and gets no side door: its document block is
 read from an inert `DOMParser` document, `parseDoc` decides whether it is a
 space (refusing rather than degrading), and `sanitizeInline` runs over every
 arriving block before any of it reaches the document.
+
+### A page as a deck
+
+**Save → Export page as slides…** turns one page into a `bento/slides`
+DOCUMENT, which you paste into Bento Slides through its own "Replace from
+JSON…" (or `window.bento.loadDoc()`). It is not a `.bento.html` deck: a
+self-contained deck is a document spliced into a slides SHELL, this app has no
+shell but its own, and the two ways to get one are bundling half a megabyte of
+another app into every space or fetching it — which PLATFORM §1 forbids. So the
+hand-off is the interchange path slides already documents, exactly as the
+Markdown exporter hands over Markdown.
+
+`src/todeck.ts` is the whole of it, pure and DOM-free so the mapping is asserted
+in node. What it does:
+
+| in a page | on a slide |
+|---|---|
+| `h1`, `h2` | start a new slide, and become its title |
+| `divider` | starts a new slide with no title |
+| `h3` | a bold lead-in inside the body |
+| `p`, `quote`, `prop` | a text box; a quote gets an accent rule |
+| `bullet`, `number`, `todo` | one text box holding a real `<ul>`/`<ol>`, nesting kept, `☐`/`☑` for a to-do |
+| `code` | monospace text on a tinted panel (no highlighting — the grammar lives in assets a deck has none of) |
+| `callout`, `toggle` | a tinted panel; a callout keeps its tone as a label, a toggle is shown open |
+| `table` | a real slides table — column weights, per-column alignment, header — continued on further slides when it is too tall |
+| `view` (board or list) | a table of the rows it stands for, same source, filter, sort and grouping as the screen |
+| `canvas` | its own slide, each card placed where the author put it (percentages in, percentages out) |
+| `image`, `media` | its own slide, bytes embedded |
+| `link`, `pagelink` | the words, and the address as a second line — a slide has no inline link |
+| the page's title, icon, cover | the title slide; a cover becomes a full-bleed background under a scrim |
+| the theme | the deck's background, ink, accent and faces |
+
+**Nothing is fetched and nothing dangles.** Every picture is resolved through
+the asset table to its bytes and re-interned in the DECK's own `assets`;
+anything that would still reach the network — including bytes hidden one
+`asset:` indirection away — is left out. **Speaker notes are not invented**: a
+page has no such concept, and mapping review comments onto them would move a
+remark addressed to a person into a file people present from. What the notes
+carry instead is the export's own account of what did not come across, the same
+list the dialog shows before you download anything.
+
+The deck is `bento/slides`, which is another app's format and another zone's
+file. Nothing under `slides/` is edited for this; what holds the two together is
+a TYPE-ONLY import of `slides/src/model.ts` (so a renamed field is a compile
+error here) and a rig that runs the emitted document through slides' own
+`parseDoc` and checks every key it writes against slides' generated key list.
+Behaviour is not covered by anything on the slides side. That is a real cost and
+it is written down rather than papered over.
 
 ### Links are fragments
 
