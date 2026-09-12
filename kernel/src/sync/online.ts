@@ -151,7 +151,19 @@ export async function mintCollab(): Promise<CollabCreds> {
 
 /** The relay host: the localStorage dev override (e.g. ws://localhost:8787),
  *  else the host the app configured (a fork running its own relay), else the
- *  platform default. Rigs that never call configureApp() get the default. */
+ *  platform default. Rigs that never call configureApp() get the default.
+ *
+ *  A file's collab capability is complete only WITHIN the publisher that
+ *  minted it. `CollabCreds` carries the room and the key and no host, which
+ *  was total while every build had one relay; with per-publisher relays, the
+ *  same file opened in another publisher's build joins that publisher's
+ *  relay, where the room id is a valid commitment and is simply created
+ *  fresh. Both sides are live, on two relays, and never meet — a silent
+ *  split, not a leak (the relay is blind and the payloads are E2EE). This is
+ *  accepted and consistent with the update channel refusing another
+ *  publisher's manifests: a fork is its own trust domain. Cross-publisher
+ *  collaboration would need the host stamped into `collab` — an additive
+ *  format change, and its own serialized kernel PR. */
 export function syncHost(): string {
   let configured: string | undefined
   try { configured = appConfig().syncHost } catch { /* not configured: platform default */ }
