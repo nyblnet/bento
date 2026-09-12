@@ -47,6 +47,12 @@ import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
 import { PropsPanel } from './props'
 import {
+  SEAT_SEL, seatsIn, lineBoxes, caretBox, onEdgeLine, stepSeat, tableStep, nearestByX,
+  placeCaretAtX, caretToStart, caretToEndOf, atEndOf,
+} from './caret'
+import { indentTarget, canOutdent } from './nesting'
+import { blockFormatRow } from './blockbar'
+import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
 
@@ -58,6 +64,9 @@ const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctr
 const AUTOFORMAT = MD_SPECS
 
 const SLASH_ITEMS = MENU_SPECS
+
+/** The four keys caret.ts answers for. A Set so the keymap's hot path is one lookup. */
+const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
 /** What counts as a note when a folder is dropped on the app. */
 const NOTE_EXT = /\.(md|markdown|mdown|mkd)$/i
 /** …and what counts as another SPACE: a saved shell, or the bare document JSON
@@ -114,6 +123,15 @@ export class Editor {
   private painting = false
   /** reading view: the document without the machinery for changing it */
   private reading = false
+  /**
+   * The column ↑/↓ are aiming for, in viewport px, or null.
+   *
+   * Held across CONSECUTIVE vertical steps and dropped by anything else — a
+   * horizontal key, a click, and also a vertical step we hand to the browser,
+   * because inside one host the browser keeps its own goal column and two
+   * memories of the same thing is how they start to disagree.
+   */
+  private goalX: number | null = null
   /**
    * Remote image urls this READER has agreed to load, this session only.
    *
@@ -540,6 +558,14 @@ export class Editor {
     this.syncHistoryButtons()
     this.syncDirty()
     document.addEventListener('keydown', (e) => this.onKey(e), true)
+    // A POINTER ENDS THE VERTICAL RUN. Found in the browser, not by reading the
+    // code: the goal column was cleared by every key except ↑ and ↓ and by
+    // nothing else, so after clicking somewhere new the first ↓ still aimed at
+    // the column of the run before it — measured entering a table three times
+    // at three different columns and landing in the first one every time.
+    const dropGoal = () => { this.goalX = null }
+    document.addEventListener('mousedown', dropGoal, true)
+    document.addEventListener('touchstart', dropGoal, { capture: true, passive: true })
 
     // Dropping notes anywhere on the app imports them — the sidebar, the
     // topbar, the grey around the page. The page's own drop handler takes
@@ -2041,6 +2067,27 @@ export class Editor {
     const pop = el('div', sheet ? 'sp-pop sp-sheet' : 'sp-pop')
     pop.setAttribute('role', 'menu')
     this.trapAndClose(pop, () => this.focusBlock(id))
+    // FIRST, above the actions: the block's own format. blockbar.ts records why
+    // these are here and not in the selection toolbar.
+    const page = this.store.page
+    const blk = this.store.block(id)
+    if (page && blk) {
+      pop.append(blockFormatRow({
+        type: String(blk.type ?? 'p'),
+        canIndent: indentTarget(page.blocks, id).ok,
+        canOutdent: canOutdent(effectiveParents(page), id),
+        indentRefusal: t('a block nests under the one above it'),
+        setType: (type) => { this.closeOverlay(); this.setType(id, type) },
+        // NOT closed first when the gesture is refused: `indent` answers with
+        // the reason, and closing the menu would take the disabled control
+        // away at the moment it is explaining itself.
+        indent: (deeper) => {
+          const allowed = deeper ? indentTarget(page.blocks, id).ok : canOutdent(effectiveParents(page), id)
+          if (allowed) this.closeOverlay()
+          this.indent(id, deeper)
+        },
+      }))
+    }
     for (const a of this.blockActions(id)) {
       const item = this.menuItem(a.icon, a.label, a.hint, () => { this.closeOverlay(); a.run() })
       if (a.off) { item.setAttribute('aria-disabled', 'true'); item.classList.add('sp-off') }
@@ -3085,6 +3132,19 @@ export class Editor {
     // so without it the save dialog opened every time someone struck text out.
     if (mod && e.key.toLowerCase() === 's' && !e.shiftKey) { e.preventDefault(); this.onSave?.(); return }
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
+    // ⌘/ — the block menu, and THE ONLY KEYBOARD ROUTE TO IT. The menu hangs
+    // off the gutter grip, the gutter is hover-revealed, and Tab inside a
+    // block is indent — so without this key the block format row, and with it
+    // every list, heading and indent control, is reachable by pointer only.
+    if (mod && e.key === '/') {
+      const at = this.focused() ?? this.cellAt(document.activeElement)
+      const grip = at
+        ? this.main.querySelector<HTMLElement>(
+          `[data-block-id="${CSS.escape(at.id)}"] > .sp-gutter > .sp-ghost[draggable]`)
+        : null
+      if (at) { e.preventDefault(); this.openBlockMenu(at.id, grip ?? this.main) }
+      return
+    }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
@@ -3127,6 +3187,17 @@ export class Editor {
     const inCell = this.cellAt(document.activeElement)
     if (inCell && !s.readOnly && !this.reading) {
       if (this.tableKey(e, inCell)) return
+    }
+
+    // ARROWS COME AFTER `tableKey` AND BEFORE `focused()`. After, because the
+    // table owns ⏎ and ⇥ inside a cell and must get first refusal on every
+    // key; before, because `focused()` looks for `[data-edit]` and a cell is
+    // deliberately not one — so caret navigation would never run in a table at
+    // all if it sat below. It handles the cell case itself.
+    if (ARROWS.has(e.key)) {
+      if (this.caretNav(e, inCell)) return
+    } else if (!mod) {
+      this.goalX = null
     }
 
     const cur = this.focused()
@@ -3259,7 +3330,116 @@ export class Editor {
     })
   }
 
-  /** Tab sets `parent` to the previous sibling — one field write. */
+  /**
+   * ↑ ↓ ← → across blocks. True when it handled the key.
+   *
+   * The rules, in the order they are asked:
+   *
+   *  - A held Shift or ⌥ is a SELECTION or a word jump; both are the browser's
+   *    and neither should jump a block. A non-collapsed selection likewise.
+   *  - ← and → only do anything at the very edge of the seat; everywhere else
+   *    the browser is already right.
+   *  - ↑ and ↓ only do anything on the seat's edge VISUAL LINE, which is why
+   *    caret.ts measures boxes rather than counting characters: a wrapped
+   *    paragraph is several lines and the first ↓ in it means the second line.
+   *  - The goal column is remembered across consecutive vertical steps, so
+   *    down-through-a-short-line-and-out comes back near the original x.
+   */
+  private caretNav(e: KeyboardEvent, inCell: ReturnType<Editor['cellAt']>): boolean {
+    if (e.shiftKey || e.altKey || (e as any)[CTRL]) { this.goalX = null; return false }
+    const active = document.activeElement as HTMLElement | null
+    const host = active?.closest<HTMLElement>(SEAT_SEL) ?? null
+    if (!host || !this.main.contains(host)) return false
+    const sel = getSelection()
+    if (!sel || !sel.rangeCount || !sel.isCollapsed) { this.goalX = null; return false }
+
+    const seats = seatsIn(this.main)
+    const i = seats.indexOf(host)
+    if (i < 0) return false
+    const dir: -1 | 1 = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 1
+    const vertical = e.key === 'ArrowUp' || e.key === 'ArrowDown'
+
+    if (!vertical) {
+      this.goalX = null
+      // at the edge, ← leaves for the END of the seat before and → for the
+      // START of the seat after — which is exactly what the caret would have
+      // done had the page been one editable rather than many
+      if (dir < 0 ? !atStart(host) : !atEndOf(host)) return false
+      const j = stepSeat(seats.length, i, dir)
+      if (j < 0) return false
+      e.preventDefault()
+      const next = seats[j]
+      next.focus()
+      if (dir < 0) caretToEndOf(next); else caretToStart(next)
+      return true
+    }
+
+    const caret = caretBox(host)
+    if (!caret) return false
+    if (!onEdgeLine(caret, lineBoxes(host), dir)) { this.goalX = null; return false }
+    const x = this.goalX ?? caret.left
+
+    // INSIDE A TABLE the grid is the truth, not document order: cells are
+    // row-major in the DOM, so the seat before (1,2) is (1,1) and stepping to
+    // it would walk sideways along the row the reader was trying to leave.
+    if (inCell) {
+      const b = this.store.block(inCell.id)
+      const shape = b ? tableOf(b) : null
+      const to = shape ? tableStep(inCell, shape, dir) : null
+      if (to) {
+        e.preventDefault()
+        this.goalX = x
+        const td = this.main.querySelector<HTMLElement>(
+          `[data-cell="${CSS.escape(inCell.id)}"][data-r="${to.r}"][data-c="${to.c}"]`)
+        if (td) { placeCaretAtX(td, x, dir < 0 ? 'last' : 'first'); return true }
+      }
+      // off the top or the bottom of the grid: out of the table altogether,
+      // past every one of its other cells
+      const out = this.outOfTable(seats, i, dir, inCell.id)
+      if (out < 0) return false
+      e.preventDefault()
+      this.goalX = x
+      placeCaretAtX(seats[out], x, dir < 0 ? 'last' : 'first')
+      return true
+    }
+
+    let j = stepSeat(seats.length, i, dir)
+    if (j < 0) return false
+    // ENTERING a table from outside lands on whichever cell of the entry row
+    // the goal column is over, not on the first one in the DOM
+    const cellId = seats[j].dataset.cell
+    if (cellId !== undefined) {
+      const row = seats.filter((sea) => sea.dataset.cell === cellId
+        && sea.dataset.r === seats[j].dataset.r)
+      const pick = nearestByX(row.map((sea) => sea.getBoundingClientRect()), x)
+      if (pick >= 0) j = seats.indexOf(row[pick])
+    }
+    e.preventDefault()
+    this.goalX = x
+    placeCaretAtX(seats[j], x, dir < 0 ? 'last' : 'first')
+    return true
+  }
+
+  /** The first seat after (dir 1) or before (dir -1) every cell of one table. */
+  private outOfTable(seats: HTMLElement[], from: number, dir: -1 | 1, tableId: string): number {
+    for (let j = from + dir; j >= 0 && j < seats.length; j += dir) {
+      if (seats[j].dataset.cell !== tableId) return j
+    }
+    return -1
+  }
+
+  /**
+   * Tab sets `parent` to the previous sibling — one field write.
+   *
+   * AND WHEN THERE IS NO PREVIOUS SIBLING IT SAYS SO. This loop used to fall
+   * off its own end and return, so Tab on the first item of a list — the most
+   * common list gesture there is — did nothing, showed nothing and explained
+   * nothing. nesting.ts holds the argument for refusing rather than inventing
+   * an indent level; what belongs here is that a refusal has to be VISIBLE, in
+   * the status line the app already has (a second transient-message mechanism
+   * in one app is one too many — collabui.ts) and as a nudge on the block, so
+   * the answer arrives where the reader is looking.
+   */
   private indent(id: string, deeper: boolean): void {
     const s = this.store
     const page = s.page
@@ -3267,6 +3447,20 @@ export class Editor {
     const i = page.blocks.findIndex((x) => x.id === id)
     const b = page.blocks[i]
     if (!b) return
+    if (deeper) {
+      const aim = indentTarget(page.blocks, id)
+      if (!aim.ok) {
+        if (aim.why === 'first') {
+          this.status(t('A block nests under the one above it — this one has nothing above it'))
+          this.nudge(id)
+        }
+        return
+      }
+    } else if (!canOutdent(effectiveParents(page), id)) {
+      this.status(t('This block is not nested'))
+      this.nudge(id)
+      return
+    }
     s.commit(() => {
       if (!deeper) {
         // by the EFFECTIVE parent (model.ts), not by whatever `parent` names:
@@ -3288,6 +3482,25 @@ export class Editor {
     })
     this.paintPage()
     this.focusBlock(id)
+  }
+
+  /**
+   * A refused gesture, shown where the reader is looking.
+   *
+   * The status line carries the WORDS and this carries the pointer: the block
+   * you aimed at is the one that twitches, so a message in the topbar is not
+   * left to be connected to a keystroke by guesswork. Purely a class the
+   * stylesheet animates — nothing here touches the model, so a refusal can
+   * never end up in the file or in an undo step.
+   */
+  private nudge(id: string): void {
+    const node = this.main.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`)
+    if (!node) return
+    node.classList.remove('sp-nudge')
+    // reflow between the two writes, or the class never leaves and re-arrives
+    void node.offsetWidth
+    node.classList.add('sp-nudge')
+    setTimeout(() => node.classList.remove('sp-nudge'), 400)
   }
 
   setType(id: string, type: string): void {
@@ -3400,6 +3613,7 @@ export class Editor {
       [t('Writing'), [
         ['↵', t('A new block')],
         ['Tab / ⇧Tab', t('Indent, or move back out')],
+        ['⌘/', t('Block options — type, list, indent')],
         ['/', t('The block menu, on an empty line')],
         ['[[', t('Link to another page')],
         ['⌘Z / ⇧⌘Z', t('Undo, redo')],
@@ -3414,6 +3628,8 @@ export class Editor {
         ['⌘K', t('Link the selected words')],
       ]],
       [t('Getting around'), [
+        ['↑ ↓', t('Between blocks, and between the lines of one')],
+        ['← →', t('Off the edge of a block, into the next')],
         ['⌘K', t('Search all pages, with nothing selected')],
         ['⌘F', t('Find and replace')],
         ['⌘⌥N', t('New page')],

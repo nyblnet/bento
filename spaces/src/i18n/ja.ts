@@ -629,4 +629,13 @@ export const ja: Catalog = {
   "Date": "日付",
   "Person": "担当者",
   "Labels": "ラベル",
+  "Indent": "字下げ",
+  "Move back out": "戻す",
+  "Block format": "ブロックの書式",
+  "Block options — type, list, indent": "ブロックのオプション — 種類、リスト、字下げ",
+  "This block is not nested": "このブロックは入れ子になっていません",
+  "a block nests under the one above it": "ブロックは一つ上のブロックの中に入ります",
+  "A block nests under the one above it — this one has nothing above it": "ブロックは一つ上のブロックの中に入ります — このブロックより上には何もありません",
+  "Between blocks, and between the lines of one": "ブロック間、および一つのブロック内の行間",
+  "Off the edge of a block, into the next": "ブロックの端を越えて次のブロックへ",
 }

@@ -6390,3 +6390,47 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+
+## 2026-09-11 — spaces: Tab REFUSES on a block with nothing above it, visibly
+
+bento/spaces expresses nesting with one field: `Block.parent`, pointing at a
+preceding sibling. Every reader downstream treats that as structural — the
+renderer's indent, the markdown export's list levels, the outline, the graph,
+`mergeBack` re-homing orphans, the CRDT's per-node diff. There is no second
+representation and there never has been.
+
+So "indent the first item" is not a hard case, it is a case with no answer, and
+`editor.ts indent()` fell off the end of its backwards walk and returned. That
+was correct and completely silent: no indent, no feedback, no explanation. A
+control that does nothing and says nothing is worse than a missing one, because
+the reader concludes the app is broken rather than that the gesture does not
+apply. That silence was the bug, and it is what this fixes.
+
+**The considered alternative was an indent LEVEL**, which is what Google Docs
+stores and what would make Tab always "work". Rejected, and the deciding
+argument is permanence rather than taste: the format is additive and forever, so
+a level field would be a SECOND way to express nesting that every future reader
+must reconcile — what a `level: 2` block with a `parent` means, which wins, what
+the markdown export emits for an orphan at level 2, what two replicas do when
+one sets `parent` and the other sets `level`. A silent Tab costs an afternoon;
+a duplicate nesting model costs every version of the reader from here on.
+Notion, Workflowy, Bear and Logseq all refuse the same case, because they all
+nest by parenthood too.
+
+The refusal is now spoken: the status line says the rule, the block nudges, and
+the indent control in the block menu carries the reason as its label before the
+key is pressed. `spaces/src/nesting.ts` holds the argument and the pure
+resolution; `scripts/test-spaces-caret.ts` asserts the first item, the only
+block, the first child of a container and a block absent from the page —
+deliberately, because a Tab test written against the SECOND list item passes
+against the broken code exactly as happily as against the fixed code, which is
+how this shipped in the first place. NO FORMAT CHANGE.
+
+**Also settled here: where block controls live.** Not in the formatting bar —
+that appears on a SELECTION and is inline-only, and "make this a bullet" is
+something you do with a caret and nothing selected. They are a row at the top of
+the block menu (gutter grip, and a bottom sheet on a phone), which is per-block
+by construction and already the home of every other whole-block action. ⌘/ is
+its keyboard route, because the gutter is hover-revealed and ⇥ inside a block is
+indent.

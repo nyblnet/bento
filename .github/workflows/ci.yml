@@ -233,6 +233,12 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: spaces caret + nesting
+        # Which seat an arrow key lands in, and what Tab resolves to. Caret
+        # MOVEMENT needs a browser; the arithmetic under it does not, and the
+        # arithmetic is where Tab-on-the-first-list-item was silently wrong.
+        run: node scripts/test-spaces-caret.ts
+
       - name: spaces rig manifest
         # Bookkeeping, not a ninth run of the eight steps above. scripts/
         # test-spaces.mjs is the local entry point for the spaces suite (two of

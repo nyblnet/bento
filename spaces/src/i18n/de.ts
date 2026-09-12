@@ -629,4 +629,13 @@ export const de: Catalog = {
   "Date": "Datum",
   "Person": "Person",
   "Labels": "Labels",
+  "Indent": "Einrücken",
+  "Move back out": "Wieder heraus",
+  "Block format": "Blockformat",
+  "Block options — type, list, indent": "Block-Optionen — Typ, Liste, Einrückung",
+  "This block is not nested": "Dieser Block ist nicht verschachtelt",
+  "a block nests under the one above it": "ein Block wird unter dem darüberliegenden verschachtelt",
+  "A block nests under the one above it — this one has nothing above it": "Ein Block wird unter dem darüberliegenden verschachtelt — über diesem steht nichts",
+  "Between blocks, and between the lines of one": "Zwischen Blöcken, und zwischen den Zeilen eines Blocks",
+  "Off the edge of a block, into the next": "Über den Rand eines Blocks in den nächsten",
 }

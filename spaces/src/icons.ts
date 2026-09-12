@@ -89,6 +89,10 @@ export const ICONS = {
   toggle: svg('<polyline points="9 6 15 12 9 18"/><line x1="19" y1="12" x2="21" y2="12"/>'),
   quote: svg('<path d="M6 17h3l2-4V7H5v6h3zM16 17h3l2-4V7h-6v6h3z"/>'),
   code: svg('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
+  // The two controls that existed on no surface at all before the block
+  // format row: lines, with an arrow saying which way the nesting goes.
+  indent: svg('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><polyline points="3 8 6 12 3 16"/>'),
+  outdent: svg('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><polyline points="6 8 3 12 6 16"/>'),
   divider: svg('<line x1="3" y1="12" x2="21" y2="12"/>'),
   callout: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="7" y1="5" x2="7" y2="19"/><line x1="11" y1="10" x2="17" y2="10"/><line x1="11" y1="14" x2="15" y2="14"/>'),
 
