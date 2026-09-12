@@ -47,6 +47,10 @@ const RIGS = [
   { name: 'agent',   file: 'scripts/test-spaces-agent.ts' },
   { name: 'journal', file: 'scripts/test-spaces-journal.ts', tzs: TZS_JOURNAL },
   { name: 'calc',    file: 'scripts/test-spaces-calc.ts', tzs: TZS_CALC },
+  // Same reason as journal and calc: every number this rig asserts is a date
+  // or a sum derived from one, and a date bug that only shows east of UTC is
+  // exactly what a one-timezone run cannot see.
+  { name: 'gantt',   file: 'scripts/test-spaces-gantt.ts', tzs: TZS_JOURNAL },
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },

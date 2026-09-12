@@ -14,6 +14,44 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **A timeline and a workload chart, as view layouts.** The one layout control
+  cycles through two more shapes. `gantt` draws a bar per page from its start
+  date to its due date, with today marked and overdue work outlined; `workload`
+  adds up the estimates per assignee and draws a bar chart. Both read the view's
+  existing `source`, `filter`, `sort` and `groupBy`, so "the workload for this
+  project, open only" is expressible with no key of its own.
+
+  **They are layouts and not a new `chart` block**, and that choice is argued in
+  `spaces/src/gantt.ts` because every chart this app grows will inherit it. The
+  measurable half: a shell built from the previous release, shown a view block
+  with `layout:"gantt"`, renders a BOARD of the same pages, keeps the key
+  through a save, and keeps the new `start` values too — checked against a real
+  build, not asserted. A `chart` block would have fallen to the unknown-type
+  path and drawn one line of text where a schedule was.
+
+- **A `start` date field.** The tracker shipped with `Due` and nothing else,
+  which is enough for a deadline and not for a bar. It is optional and appears
+  when set, like `Due` and `Labels` — but it has a consequence worth stating:
+  every issue in every file already written has a due date and NO start, so
+  absent-start is the whole installed base rather than an edge case. Those draw
+  as a **milestone diamond** at the due date — a date with no duration, which is
+  what the file actually says — not as a zero-width bar.
+
+- **What the pictures refuse to do quietly.** A chart is a picture of numbers
+  out of a file somebody mailed you, so each wrong-data case is decided and
+  asserted rather than left to arithmetic: a due date before the start is drawn
+  between the two dates that are really there and FLAGGED, never silently
+  swapped; a malformed date is an absent date; a negative or non-numeric
+  estimate is excluded from the sum and counted, because a −3 absorbed into a
+  bar makes somebody look lighter than the work they hold; and a 10,000-page
+  view draws a capped, ordered chart that says how many it did not draw. Every
+  date is compared as an integer day number computed arithmetically, with no
+  `Date` involved, so the answer is the same in Kiritimati and in Niue.
+
+  Both charts print, and both survive into the file-manager thumbnail: colour
+  and geometry travel as presentation attributes inside the SVG rather than in
+  `styles.css`, which the still's own stylesheet is not.
+
 - **The whole gallery card is the target, and a long title stops inflating its
   row.** In a shelf of covers the picture is what you point at, so the title's
   link now stretches over the card rather than the card holding a second one —
