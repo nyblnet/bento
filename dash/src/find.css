@@ -21,14 +21,20 @@
      chip", and a find hit is a different kind of thing. Green reads as "here
      it is" against both the blue selection fill (--sel) and the amber accent,
      and stays distinguishable from the red error cells. */
-  --find-hit: light-dark(#d9f2e3, #17402c);
+  --find-hit: #d9f2e3;
   /* The CURRENT match is a fill the document did not choose, so its ink is
      --ink-on-fill (#1e2a3a) in BOTH themes — the same rule the conditional
      formatting section states. That fixes the dark value: #2f9e68 measured
      4.29:1 against that ink, under AA on the one cell the whole feature exists
      to point at. #3aad74 is 5.12:1 and reads as the same green. */
-  --find-cur: light-dark(#7ddaa6, #3aad74);
-  --find-ring: light-dark(#0f8f57, #4fd18d);
+  --find-cur: #7ddaa6;
+  --find-ring: #0f8f57;
+}
+
+:root[data-theme="dark"] {
+  --find-hit: #17402c;
+  --find-cur: #3aad74;
+  --find-ring: #4fd18d;
 }
 
 /* ————— the bar ————— */

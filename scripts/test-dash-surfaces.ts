@@ -344,22 +344,38 @@ closeAll()
   closeAll()
 }
 
-// ============================================================ the theme is transient
+// ============================================================ the theme stays out of the file
 //
-// A `data-theme` attribute on <html> would be cloned into every saved file by
-// capturePristine() and force one reader's choice on everyone who opens it.
-// The override is a <style> carrying `data-bento-transient`, which the kernel
-// strips from every serialized shell.
+// A `data-theme` attribute on <html> is cloned into every saved file by
+// capturePristine() and would force one reader's choice on everyone who opens
+// it — dash MEASURED that once (`bento.serialize()` came back with
+// `<html data-theme="light">`), which is why it used to theme through a
+// transient <style> instead. It now uses kernel/src/theme.ts like the other
+// three apps, and the guarantee comes from ORDER: main.ts must call
+// startTheme() AFTER capturePristine(). That order is the whole invariant, so
+// it is asserted on the source, where reordering two lines would silently
+// reintroduce the leak. The outcome itself — a dark-themed session serializing
+// a shell with no data-theme in it — is layout-free and is checked in the
+// built shell in a browser, because this DOM stub cannot clone or serialize.
 {
-  settings.setThemePref('dark')
-  const style = doc.getElementById('dx-theme')
-  ok(style !== null && style.hasAttribute('data-bento-transient'),
-    'the theme override is a transient <style> — an untagged one is saved into the file and changes everybody’s screen')
-  ok(doc.documentElement.getAttribute('data-theme') === null,
-    'and nothing is written onto <html>, which is the shape that caused that')
-  settings.setThemePref('auto')
-  ok(doc.getElementById('dx-theme') === null,
-    'and "Match my system" REMOVES it — the absence of an override is what following the OS means')
+  const main = src('main.ts')
+  const cap = main.indexOf('capturePristine()')
+  const start = main.indexOf('startTheme()')
+  ok(cap > 0 && start > 0, 'main.ts calls both capturePristine() and startTheme()')
+  ok(cap < start,
+    'and capturePristine() comes FIRST — the pristine copy every save re-serializes must never carry data-theme')
+  ok(!/applyTheme\(|setThemePref\(|dx-theme/.test(src('settings.ts')),
+    'the private theme store is gone from settings.ts — one mechanism, kernel/src/theme.ts, across four apps')
+  // and the shared mechanism actually reaches the root element
+  const kernel = await import('../kernel/src/theme.ts')
+  // `dataset.theme`, not getAttribute: that is what theme.ts writes, and this
+  // stub's dataset is one-way (setAttribute fills it; assignment does not
+  // reflect back). A real DOM reflects both ways, which the browser check sees.
+  kernel.setTheme('dark')
+  ok(doc.documentElement.dataset.theme === 'dark',
+    'setTheme writes data-theme onto <html> — the attribute the stylesheet keys off')
+  kernel.setTheme('light')
+  ok(doc.documentElement.dataset.theme === 'light', 'and back')
 }
 
 // ============================================================ the size

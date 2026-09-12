@@ -81,6 +81,15 @@ The release that came out of watching somebody use 0.2.0.
   and take unsaved edits with it; a `?` shortcut card generated from the key map
   itself; and ⇧Space selects the row, which had never worked.
 
+- **Dark theme works the way it does in every other Bento app.** Dash was
+  themed through a mechanism of its own — the only one of the four apps that
+  was — and it meant a stylesheet shared across the suite could not have
+  themed dash at all. The palette is unchanged, light and dark, value for
+  value; the switch underneath it is now the shared one. An existing theme
+  preference carries over. Controls (buttons, inputs, chips) take the shared
+  10px radius rather than dash's 7px, so a button looks the same here as in
+  slides, spaces and type.
+
 ## [0.2.0] — 2026-08-03
 
 First release. A workbook is one self-contained HTML file: the data, the grid,

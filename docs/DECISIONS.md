@@ -6390,3 +6390,52 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-12 — bento/dash keys its theme off `data-theme`, like the other three apps
+
+**The divergence the maintainer asked dash to fix was a MECHANISM, not a
+palette.** Ten token names are shared across all four apps; dash differed on
+nine of their values. That was the symptom. Measured in a browser with one
+gesture per app: slides, spaces and type all theme off `:root[data-theme="dark"]`
+and none respond to `color-scheme` alone; dash themed off `light-dark()` — which
+resolves against `color-scheme` — and setting `data-theme="dark"` on it did
+NOTHING. Three apps on one switch and one on another.
+
+**Why it matters more than a palette difference:** kernel's shared stylesheet
+(UI primitives, tier 4) can only key off `data-theme`, because slides pins
+`color-scheme: only light` for a documented reason (dark-mode phones render
+native form controls dark against dark ink — blank dropdowns). A shared sheet
+built that way could not have themed dash at all. So dash conforms; keeping its
+dark palette, which is good, as a mechanical transform into a dark block.
+
+**Dash's `light-dark()` was a reasoned choice, and this entry exists so nobody
+reverts it from the old reasoning.** Its stylesheet gave two arguments. One: a
+token's two values on ONE line, with no second copy to drift — a real advantage
+and the honest cost of this change, mitigated by giving the dark block the
+same order and section markers as `:root`, and a rig check that fails on any
+dark token without a light twin. Two: "`data-theme` on `<html>` is cloned into
+every saved file by `capturePristine()`" — a bug dash had MEASURED
+(`bento.serialize()` returned `<html data-theme="light">`). That is answered by
+ORDER, not by a different mechanism: `startTheme()` runs after
+`capturePristine()` and before the first paint, which slides already documents
+at its call site. Re-measured after this change: live root `data-theme="dark"`,
+serialized `<html lang="en">`. The old comment also said slides "has none to
+copy"; it has had a dark block since #285.
+
+**`--radius` was NOT drift, and the record should say so.** It was reported to
+the lead as "7px, no reasoning anywhere". Wrong: dash's rig listed it as a
+deliberate three-step scale (control / floating surface / dialog) with 7px as
+the control step. It takes the shared 10px anyway, because a shared token
+should mean one thing across four apps and kernel's sheet is about to own it;
+`--radius-lg` and `--radius-xl` are dash's own and keep the scale where dash
+still needs it. A documented choice was overridden for a stated reason, not
+undone by mistake — and the rig's DIVERGENCES loop now fails on any exemption
+for a token that has come back into line, so a stale allowance cannot outlive
+its reason again.
+
+**What this entry does NOT decide:** whether the sheet itself inverts. Dash's
+`--bg` is themed and its comment reads "the page, and the sheet itself" — so on
+a grid the paper goes dark, where bento/type keeps its page white because a
+contract will be printed. That is defensible for a grid and undecided for the
+platform. `--bg` is left exactly as it was, themed and commented, so the
+question stays visible until the maintainer rules on it.
