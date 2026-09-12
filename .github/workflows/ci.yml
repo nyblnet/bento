@@ -1185,6 +1185,14 @@ jobs:
         # is the regression.
         run: node scripts/test-layouts.ts
 
+      - name: slides asset-pruning rig
+        # doc.assets was append-only: delete every slide, save, and the "empty"
+        # deck was still 20 MB (#442). A save now writes a copy with the
+        # unreferenced assets dropped. Weighted toward "kept", one case per
+        # reference form, because dropping too much is the worse failure — an
+        # image gone from a file with nothing on screen to say so.
+        run: node scripts/test-slides-assets.ts
+
       - name: slides store rig
         # The editor's undo/redo, selection and whole-deck replacement, at the
         # store level rather than through the DOM. Bundled first for the same
