@@ -831,7 +831,7 @@ export function toMarkdown(store: Store): string {
       const field = fieldByKey(doc, groupKey)
       const rows = sortRows(
         doc,
-        issuesOf(doc).filter((r) => passesFilter(doc, r.values, (b as { filter?: unknown }).filter)),
+        issuesOf(doc).filter((r) => passesFilter(doc, r.values, (b as { filter?: unknown }).filter, r.page)),
         (b as { sort?: unknown }).sort)
       // the board's column order, so an export reads top-to-bottom the way the
       // board reads left-to-right

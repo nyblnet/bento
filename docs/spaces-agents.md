@@ -79,7 +79,7 @@ unique ids the first time.
 | `pagelink` | `page` | a card linking to another page |
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
-| `view` | `layout`, `groupBy`, `html` | a board or list of this space's issues |
+| `view` | `layout`, `groupBy`, `sort`, `source`, `filter`, `html` | a board or list of this space's issues |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
@@ -265,6 +265,49 @@ A board or list is a `view` block, and it stores a **query, never a membership
 list**: `{ "type": "view", "layout": "board", "groupBy": "status",
 "html": "Issues by status" }`. Put it on a page of its own — a page carrying a
 view is laid out wide.
+
+### Narrowing a view
+
+`filter` is optional and every key inside it is too. **Absent means everything**,
+and so does an absent key — a view with no `filter` shows every row, forever.
+Write no `filter` key at all rather than an empty object.
+
+```json
+{ "type": "view", "layout": "table", "filter": {
+    "open": true,
+    "is": { "labels": ["ui"] },
+    "where": [
+      { "key": "due",    "op": "in",       "v": "past" },
+      { "key": ":title", "op": "contains", "v": "onboarding" }
+    ]
+} }
+```
+
+- `open` — only rows whose status phase is neither `done` nor `cancelled`.
+- `is` — `{ fieldKey: [values] }`, membership; a row passes a key if it holds
+  any of the listed values. **An empty list is no constraint**, not "nothing
+  passes".
+- `where` — a flat list of conditions, ANDed. Set `"any": true` alongside it to
+  OR them instead; `any` reaches `where` only, and `open`/`is` always AND.
+- Each condition is `{ key, op, v? }`. `key` is a field key, or `":title"` for
+  the page title.
+
+| `op` | means | `v` |
+|---|---|---|
+| `eq` / `ne` | exact match on the STORED value; membership for a list-valued field | string or number |
+| `gt` `gte` `lt` `lte` | numeric for a `number` field, otherwise text — and a `date` field's `YYYY-MM-DD` sorts chronologically as text | string or number |
+| `contains` / `notContains` | case-insensitive substring of the READABLE value (a select's label, a labels list joined) | string |
+| `empty` / `notEmpty` | the value is unset — absent, `""` or `[]` | — omit `v` |
+| `in` | a date within a window resolved against the READER's today | `"today"` `"week"` `"month"` `"past"` `"future"` |
+
+Two conditions on one number make a range. `"past"` on a due date is "overdue".
+Relative windows are stored as the WORD and resolved when the view is drawn, in
+the reader's own timezone and week — a stored `{"op":"lt","v":"2026-09-10"}`
+would be right on the day you wrote it and wrong every day after.
+
+An operator a build cannot evaluate is **not applied and reported**, so the view
+shows a superset with a banner over it rather than the wrong rows. That is the
+same trade the format makes everywhere: never silently narrow.
 
 **Not in this format, deliberately**: teams, per-user permissions,
 notifications, automation. The file is the team boundary and the capability.
