@@ -994,7 +994,6 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   and page extracts: the aggregate counts are dull, but the pattern of which
   days a file was touched is not, and that should not travel to a client by
   accident.
-
 - **A reading copy really does strip the working record now.** The line above,
   and `docs/spaces-agents.md`, and `trail.ts`'s own header have all said since
   the trail landed that a reading copy carries none of it. It carried all of
@@ -1011,21 +1010,41 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   claim. That is the argument for falsifiable documentation in one line: the
   sentence could not be written without somebody looking.
 
-- **The starter space demonstrates the project-management work.** A feature the
-  starter does not demonstrate is a feature the starter denies, and five had
-  arrived since it was last written. It gains a page — **How it is going** —
-  and extends four others.
+- **The starter space demonstrates the project-management work, and looks
+  like the app it is a demonstration of.** Two passes over `starter.ts`,
+  written from the same base without seeing each other and reconciled here
+  into one; nothing from either is dropped and nothing is said twice.
 
+  A feature the starter does not demonstrate is a feature the starter denies,
+  and eight had arrived since it was last written. Measured before: no cover,
+  no gallery, no canvas and one image across seventeen pages — the three most
+  visual things in the app, and the first document every reader opens used
+  none of them — and no Gantt, no workload, no chart, no block bar.
+
+  - **Welcome opens on a cover** and is a **gallery** of the tour, which is
+    nested under it (Journal and Inbox stay at the root, because they are yours
+    rather than the guide's). The eight tour cards include the new page; five
+    carry covers and three deliberately do not, so the gallery shows the tinted
+    fallback beside the pictures. The list of pages that used to be here is
+    gone — the gallery is that list — and the sentence it carried about two
+    pages left deliberately unfinished moved into the gallery's caption.
   - **Planning** now carries a **Gantt** and a **workload chart**, because both
-    are live views of the same pages the rest of that page is about. The five
-    demo cards gained `start` dates and two assignees to give them something to
-    draw: three bars, one **milestone diamond** (a card with a due date and no
-    start — which is not an edge case, it is every issue in every file written
-    before `start` existed) and one card with neither date, which is not drawn
-    and is counted underneath instead.
-  - **How it is going** carries the three trail charts. Two are drawn from a
-    **labelled, invented fortnight** and the third has no period at all and is
-    the one you start yourself.
+    are live views of the same pages the rest of that page is about, and then a
+    **roadmap on a canvas** — three lanes, eight cards, one of them a page
+    link. The canvas is LAST, after the five views, because it is the one block
+    on the page that is written rather than asked, and the page's opening
+    sentence says so. The five demo cards gained `start` dates and two
+    assignees to give the Gantt and the workload something to draw: three bars,
+    one **milestone diamond** (a card with a due date and no start — which is
+    not an edge case, it is every issue in every file written before `start`
+    existed) and one card with neither date, which is not drawn and is counted
+    underneath instead. Each card also carries an icon — they were the only
+    pages without one.
+  - **How it is going** is a new page under Welcome, with no cover (a drawing
+    of a chart on a page of charts would be the brochure the file's own note
+    warns against). It carries the three trail charts: two drawn from a
+    **labelled, invented fortnight** and a third with no period at all, which
+    is the one you start yourself.
   - **Writing** gains a six-line list that is FLAT AND SHOULD NOT BE, and the
     **Inbox** gains two paragraphs sitting among its to-dos. Both are wrong on
     purpose: the block bar (⌘/), indent, and the change-this-block-type row are
@@ -1034,8 +1053,24 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
     reader ends up having USED the gesture. The first line of the Inbox is
     where Tab's refusal is met, because the only block that refuses is the
     first one on a page.
+  - **Sharing & limits** says its awkward parts in the callout tones that mean
+    them — the room keys as a **warning**, the version history as a
+    **caution** — and gains a section on what the file remembers about how you
+    work: the daily record's cadence, why a reading copy carries none of it,
+    and why the sample fortnight is invented. The archived page's reminder is
+    an **important**. **Handing it over** tells the reader to go and check the
+    reading-copy claim on two pages of this file, which is how the fix below
+    was found.
   - The tracker said the view button "steps through the five shapes". There are
     seven.
+
+  The covers are six hand-drawn SVGs on a transparent ground, so they take the
+  page's own light or dark theme rather than shipping a bright slab; they are
+  stored under the same content-addressed keys `internAsset` would mint, which
+  a rig now proves. The roundtrip rig split the Markdown export at `# ` alone,
+  which read four pages back and reported the other twelve fine by never
+  looking once the tour nested; it splits at each page's own depth marker now
+  and reads all 17 of 17.
 
   **THE STARTER SHIPS A SEEDED `doc.trail`, AND IT IS QUARANTINED AND
   LABELLED.** This was the hard call and the reasoning is written out at the
@@ -1052,10 +1087,12 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   header prints; and a fourth chart with no period, whose **Choose a period…**
   button takes a real baseline from the board and writes today's real row.
 
-  **What it costs, measured:** 1,222 B of document JSON in every saved file
-  (1,052 B of trail across 10 rows — 105 B/row — plus 170 B of period), which
-  is 1.7% of the 70,964 B starter document, and 492 B in the compressed shell.
-  The whole content change is 5,204 B of shell (373,257 → 378,461 B).
+  **What it costs, measured.** The trail: 1,222 B of document JSON in every
+  saved file (1,052 B of trail across 10 rows — 105 B/row — plus 170 B of
+  period), 492 B in the compressed shell. The covers: 5,681 B of drawing in the
+  document. The two passes built back to back on the same machine: the
+  project-management pass alone 378,709 B of shell, both together 381,409 B —
+  the pictures and the canvas cost 2,700 B on top of the charts.
 
   **One loss, said out loud:** `clearTrail()` exists and has no UI wired to it,
   so a reader who wants the sample rows gone has no button. That is the
