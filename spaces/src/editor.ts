@@ -30,6 +30,7 @@ import {
   cycleSort, nextLayout,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
+import { nextSpan } from './calendar.ts'
 import { planImport, type SourceFile } from './markdown'
 import { extractSpace, planGraft } from './portable'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
@@ -1599,6 +1600,8 @@ export class Editor {
       fb?.addEventListener('click', () => this.openViewFilter(v.dataset.blockId!, fb))
       const lb = v.querySelector<HTMLElement>('[data-view-layout]')
       lb?.addEventListener('click', () => this.toggleViewLayout(v.dataset.blockId!))
+      const spb = v.querySelector<HTMLElement>('[data-view-span]')
+      spb?.addEventListener('click', () => this.toggleViewSpan(v.dataset.blockId!))
       const gb = v.querySelector<HTMLElement>('[data-view-group]')
       gb?.addEventListener('click', () => this.openViewGroup(v.dataset.blockId!, gb))
       const sb = v.querySelector<HTMLElement>('[data-view-sort]')
@@ -1796,7 +1799,7 @@ export class Editor {
    * list and back is byte-identical to one that was never touched, and a file
    * written before this control existed stays that way.
    */
-  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort' | 'source', value: unknown): void {
+  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort' | 'source' | 'span', value: unknown): void {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
@@ -1866,6 +1869,21 @@ export class Editor {
     // 'board' back into a deletion is the writer's job, and this is the writer.
     const to = nextLayout((b as { layout?: unknown } | undefined)?.layout)
     this.editView(blockId, 'layout', to === 'board' ? undefined : to)
+  }
+
+  /**
+   * MONTH ⇄ TIMELINE, the calendar's own second shape.
+   *
+   * A parameter of one layout, like `groupBy` — not a sixth entry in the layout
+   * cycle, whose cost is one click for everybody every time they pass it. Same
+   * writer discipline as every other view key: `month` is the DEFAULT, so it is
+   * stored as an ABSENT key and a view toggled to the timeline and back is
+   * byte-identical to one nobody touched.
+   */
+  private toggleViewSpan(blockId: string): void {
+    const b = this.store.block(blockId)
+    const to = nextSpan((b as { span?: unknown } | undefined)?.span)
+    this.editView(blockId, 'span', to === 'month' ? undefined : to)
   }
 
   /**

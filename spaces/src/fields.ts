@@ -638,7 +638,7 @@ export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
  * and source already follow. `nextLayout` returns the word; the caller that
  * WRITES is the one that turns 'board' back into a deletion.
  */
-export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery'] as const
+export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery', 'calendar'] as const
 export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
 
 /**
@@ -656,7 +656,7 @@ export function layoutOf(raw: unknown): ViewLayout {
   return (VIEW_LAYOUTS as readonly string[]).includes(s) ? (s as ViewLayout) : 'board'
 }
 
-/** The next shape in the cycle: board → list → table → gallery → board. */
+/** The next shape: board → list → table → gallery → calendar → board. */
 export function nextLayout(raw: unknown): ViewLayout {
   const here = layoutOf(raw)
   return VIEW_LAYOUTS[(VIEW_LAYOUTS.indexOf(here) + 1) % VIEW_LAYOUTS.length]

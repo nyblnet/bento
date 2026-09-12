@@ -79,7 +79,7 @@ unique ids the first time.
 | `pagelink` | `page` | a card linking to another page |
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
-| `view` | `layout`, `groupBy`, `html` | a board or list of this space's issues |
+| `view` | `layout`, `span`, `groupBy`, `html` | a board, list, table, gallery or calendar of this space's pages |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
@@ -265,6 +265,22 @@ A board or list is a `view` block, and it stores a **query, never a membership
 list**: `{ "type": "view", "layout": "board", "groupBy": "status",
 "html": "Issues by status" }`. Put it on a page of its own — a page carrying a
 view is laid out wide.
+
+`layout` is one of `list`, `table`, `gallery`, `calendar` — **or absent, which
+means a board.** Never write `"layout": "board"`: absence is what every view
+written before layouts existed carries, and a stored `"board"` is a byte
+difference that says nothing.
+
+A **calendar** lays the view's pages out by date, and has two shapes: a month
+grid (`span` absent) and a chronological timeline (`span: "timeline"`, newest
+first). Which date a page sits on is a **fixed rule, not a setting** — its
+`journal` date if it has one, otherwise the first `date`-typed field in the
+schema it carries a real `YYYY-MM-DD` value for. A page the rule finds no date
+for is listed under "No date" rather than dropped, and a value that is
+digit-shaped but not a real day (`2026-13-99`) counts as no date rather than
+being rolled into some other day. Month names, weekday names and the first day
+of the week come from the reader's locale at display time; nothing formatted is
+ever stored.
 
 **Not in this format, deliberately**: teams, per-user permissions,
 notifications, automation. The file is the team boundary and the capability.
