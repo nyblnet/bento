@@ -2376,7 +2376,65 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-cv-grip { display: none; }
 }
 
+/* ——— CHARTS OF THE TRAIL ————————————————————————————————————————————————
+   Burndown, burnup, cumulative flow (src/charts.ts). The svg carries no
+   colours of its own beyond the band fills the schema declares, so the chrome
+   below is the one place light and dark are answered.
+
+   THE GAP AND THE SAMPLE ARE STYLED HERE AND NOWHERE ELSE. A hatched band
+   means "not recorded" and a dashed segment means "this reading stands for
+   more than a day"; both are content, not decoration, so both are legible on
+   a monochrome printout and neither depends on colour vision. */
+.sp-b-chart { margin: 0 0 18px; }
+.sp-chart-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.sp-chart-title { font-weight: 600; }
+.sp-chart-range { color: var(--muted); font-size: 12.5px; }
+.sp-chart-empty { color: var(--muted); font-size: 13.5px; margin: 6px 0; }
+/* 100% of the column, but never BIGGER than it was drawn: the viewBox is
+   640×300, and scaling that up to a 1100px board page gave a 520px-tall chart
+   in the middle of a page of prose — measured. A chart is evidence in a
+   document, not a dashboard tile. */
+.sp-chart-svg { display: block; width: 100%; max-width: 640px; height: auto; overflow: visible; }
+.sp-chart-grid { stroke: var(--edge); stroke-width: 0.5; opacity: 0.5; }
+.sp-chart-axisline { stroke: var(--edge); stroke-width: 1; }
+.sp-chart-axis { fill: var(--muted); font-size: 10px; }
+.sp-chart-note { fill: var(--muted); font-size: 9.5px; }
+.sp-chart-hatch { stroke: var(--edge); stroke-width: 1.5; }
+.sp-chart-gap { opacity: 0.55; }
+.sp-chart-line { stroke-width: 2; fill: none; stroke-linecap: round; }
+/* A SAMPLE IS DASHED. Thinning keeps one row per week and drops the rest, so
+   the segment arriving at it covers days nobody observed one at a time — and a
+   weekly reading drawn as a solid daily line is the same lie as interpolating
+   a gap. */
+.sp-chart-sampled { stroke-dasharray: 5 4; }
+.sp-chart-sampledot { stroke: var(--bg); stroke-width: 1.5; }
+.sp-chart-band { opacity: 0.82; }
+.sp-chart-ideal { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 4; }
+.sp-chart-committed { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 8 4; }
+.sp-chart-cut { stroke: var(--edge); stroke-width: 2; }
+.sp-chart-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.sp-chart-key { display: inline-flex; align-items: center; gap: 6px; }
+.sp-chart-key i { width: 10px; height: 10px; border-radius: 2px; background: var(--edge); display: inline-block; }
+.sp-chart-keygap i { background: repeating-linear-gradient(45deg, var(--edge) 0 2px, transparent 2px 4px); }
+.sp-chart-keysample i { background: none; border-top: 2px dashed var(--muted); height: 0; border-radius: 0; }
+.sp-chart-pick { margin-top: 8px; }
+.sp-chart-menu {
+  position: absolute; z-index: 60; min-width: 220px; max-width: 320px;
+  background: var(--chrome); border: 1px solid var(--edge); border-radius: 8px;
+  padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+.sp-chart-menuitem {
+  display: block; width: 100%; text-align: start; padding: 7px 9px;
+  background: none; border: 0; border-radius: 6px; color: var(--ink); font: inherit; font-size: 13px;
+  cursor: pointer;
+}
+.sp-chart-menuitem:hover { background: var(--chrome-2); }
+.sp-chart-menunew { border-top: 1px solid var(--edge); border-radius: 0 0 6px 6px; margin-top: 2px; }
+
 @media print {
+  /* a chart is the page's evidence: it prints, whole, and without its control */
+  .sp-b-chart { break-inside: avoid; }
+  .sp-chart-pick, .sp-chart-menu { display: none !important; }
   /* the surface IS the content: it prints where it was placed, and it is not
      broken across a page boundary */
   .sp-b-canvas { break-inside: avoid; }

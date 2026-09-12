@@ -19,6 +19,7 @@
 // `.ts` extensions ON PURPOSE: node resolves this module directly for the rig.
 import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
 import { esc } from './sanitize.ts'
+import { stripRecord } from './trail.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
 const PAGE_LINK = /<a\s([^>]*?)href="#p\/([^"]*)"([^>]*)>([\s\S]*?)<\/a>/g
@@ -230,6 +231,14 @@ export function extractSpace(
   if (!fonts.length) delete out.fonts
   delete out.collab
   delete out.template
+  // THE RECORD GOES TOO — the trail and the periods. Same reasoning as
+  // `collab`: an extract of three pages has no business carrying the working
+  // record of a team whose pages did not travel with it, and the numbers in it
+  // were counted over a board that is not in this file. What a trail discloses
+  // is cadence, and an extract is the copy most likely to be sent to somebody
+  // outside the room. Derived from `DOC_MAPS`, so a third record map added
+  // later is covered without anyone remembering to act.
+  stripRecord(out)
 
   return {
     doc: out,

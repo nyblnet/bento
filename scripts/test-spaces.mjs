@@ -41,12 +41,17 @@ const esbuild = join(root, 'slides/node_modules/.bin/esbuild')
 // DST offset, which is where "add 86,400,000 ms" stops being "add a day".
 const TZS_JOURNAL = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Australia/Lord_Howe']
 const TZS_CALC = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati']
+// The trail's key is a LOCAL day. Kiritimati (UTC+14) and Niue (UTC-11) bracket
+// every hour where "which day is it" has two answers, which is the whole bug
+// class here.
+const TZS_TRAIL = ['UTC', 'Europe/Berlin', 'Pacific/Kiritimati', 'Pacific/Niue']
 
 const RIGS = [
   { name: 'model',   file: 'scripts/test-spaces-model.ts' },
   { name: 'agent',   file: 'scripts/test-spaces-agent.ts' },
   { name: 'journal', file: 'scripts/test-spaces-journal.ts', tzs: TZS_JOURNAL },
   { name: 'calc',    file: 'scripts/test-spaces-calc.ts', tzs: TZS_CALC },
+  { name: 'trail',   file: 'scripts/test-spaces-trail.ts', tzs: TZS_TRAIL, bundle: true },
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },

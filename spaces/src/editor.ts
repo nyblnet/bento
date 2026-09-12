@@ -19,6 +19,7 @@ import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { wireCanvas, placeNewCard } from './canvas.ts'
+import { wireCharts } from './charts.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
@@ -2356,6 +2357,16 @@ export class Editor {
       }
       this.wireBoard(view)
       this.wireTables(view)
+      // Charts keep their own wiring in their own file, like the canvas: one
+      // control (which period) over data this file knows nothing about.
+      wireCharts(view, {
+        block: (id) => this.store.block(id),
+        doc: () => this.store.doc,
+        commit: (fn) => this.store.commit(fn),
+        repaint: () => this.paintPage(),
+        today: () => todayISO(),
+        uid: () => uid('pd'),
+      })
       // The canvas keeps its own wiring in its own file: the drag, the cards
       // and the shape button are one feature and touch nothing else here.
       wireCanvas(view, {

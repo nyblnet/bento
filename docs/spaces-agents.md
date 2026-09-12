@@ -80,6 +80,7 @@ unique ids the first time.
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
 | `view` | `layout`, `groupBy`, `html` | a board or list of this space's issues |
+| `chart` | `kind` (`burndown`/`burnup`/`cfd`), `period`, `html` | a progress chart over `doc.trail` — see **Progress charts** |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
@@ -268,6 +269,48 @@ view is laid out wide.
 
 **Not in this format, deliberately**: teams, per-user permissions,
 notifications, automation. The file is the team boundary and the capability.
+
+### Progress charts
+
+A `chart` block draws **burndown**, **burnup** or **cumulative flow** from
+`doc.trail` — a record the file keeps of itself, one row per local day:
+
+```jsonc
+{
+  "trail": {                                   // document-level, optional
+    "2026-09-08": {
+      "n": { "todo": 3, "doing": 2, "done": 1 },   // issues per STATUS OPTION id
+      "e": { "todo": 11, "doing": 8, "done": 4 },  // summed estimate, absent if nothing is estimated
+      "x": 2                                       // issues counted that carried no estimate
+    }
+  },
+  "periods": {                                 // the windows charts are drawn over
+    "pd-1": { "label": "Sprint 12", "from": "2026-09-01", "to": "2026-09-20",
+              "base": { "at": "2026-09-01", "n": 6, "e": 23 } }
+  }
+}
+```
+
+Three things to know before you touch either of them.
+
+**Do not write past rows.** The app writes TODAY's key and only today's; a row,
+once written, is immutable for the rest of the file's life. Rewriting yesterday
+from today's numbers is the one thing the whole design exists to prevent.
+
+**A missing key is a GAP and is drawn as one** — a broken line and a hatched
+band labelled "not recorded". Do not fill gaps in, and never carry a value
+forward: a carried value looks exactly like data. A row carrying `s` stands for
+that many days ending on its own key and draws dashed, so a weekly sample is
+never mistaken for a daily reading.
+
+**A row holds counts and nothing else.** No page ids, no assignee breakdown, no
+per-issue anything — that is a budget rule and a privacy rule at once, and it
+is not an oversight to be helpfully corrected. What a trail discloses is the
+team's cadence, which is why a reading copy and a page extract carry none of it.
+
+Both keys are absent until something is recorded, and a cleared space deletes
+the key rather than storing `{}`. A `chart` block whose `period` names nothing
+renders "this chart's period is gone" rather than an empty graph.
 
 ## What makes a space good rather than merely correct
 

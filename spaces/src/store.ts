@@ -225,8 +225,21 @@ export class Store {
   // ---- history ------------------------------------------------------------
   private snapshot(): string {
     // assets are excluded: they are the largest thing in the document and never
-    // change during an ordinary edit, so snapshotting them 100 times is waste
-    const { assets: _assets, ...rest } = this.doc
+    // change during an ordinary edit, so snapshotting them 100 times is waste.
+    //
+    // `trail` IS EXCLUDED FOR A DIFFERENT AND STRONGER REASON. A row is an
+    // OBSERVATION, not an editing step: it lands on the autosave debounce,
+    // outside any commit, so a row written between a checkpoint and an undo
+    // would be reverted by that undo — worse, an undo could restore a STALE row
+    // over a newer one, silently deleting a day of chart nobody asked to
+    // delete. Excluding it here makes the record non-undoable by construction
+    // rather than by anybody remembering.
+    //
+    // `doc.periods` is deliberately NOT excluded. Starting a period is
+    // something a person DID, inside a commit, and ⌘Z must take it back like
+    // any other edit. The two fields look alike and are not: one is a record of
+    // what was, the other is an authored decision about what to chart.
+    const { assets: _assets, trail: _trail, ...rest } = this.doc
     return JSON.stringify(rest)
   }
 
@@ -262,8 +275,15 @@ export class Store {
       // reach here, and dropping the entry is better than throwing.
       if (at >= 0) this.doc.pages[at] = JSON.parse(entry.json) as Page
     } else {
-      const assets = this.doc.assets
-      this.doc = { ...(JSON.parse(entry.json) as SpacesDoc), ...(assets ? { assets } : {}) }
+      // Everything snapshot() left out is carried across from the LIVE document,
+      // never from the entry — that is what "excluded from undo" has to mean on
+      // the way back as well as on the way in.
+      const { assets, trail } = this.doc
+      this.doc = {
+        ...(JSON.parse(entry.json) as SpacesDoc),
+        ...(assets ? { assets } : {}),
+        ...(trail ? { trail } : {}),
+      }
     }
     this.pageId = entry.viewId
     this.reindex()
