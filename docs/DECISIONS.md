@@ -6390,3 +6390,54 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-09 — a derived column is never an independent axis, and a view that ignores the filter is worse than no view
+
+**bento/dash keeps its 3D view.** The cut was proposed with numbers — 2,240
+lines across `viz3d.ts` and `gl.ts`, and a starter plot that looked like it said
+nothing — and declined by the maintainer: *"I think 3d is a wow feature of dash
+that excel doesn't have."* This entry records the decision and, more usefully,
+what the investigation behind it turned out to have been measuring.
+
+**The strongest argument for cutting was a DEFAULT-BINDING bug, not a property
+of three dimensions.** `defaultViz3d` bound the first three numeric columns in
+declaration order. On `sheet-pipeline` — the workbook every new user meets —
+those are Value, Probability and Weighted, and `weighted` is
+`formula: 'value * prob'`. So the first 3D plot anyone saw was x = Value,
+y = Probability, **z = Value × Probability**: a surface drawn as a cloud, in
+which the third dimension carried nothing the first two did not. The feature was
+being judged on a demo defect. *(Found by bento-team-lead.)*
+
+**The rule, which generalises past this view.** A column with a `formula` is a
+function of columns already on the sheet, so using one as an axis plots a
+variable against itself. Stored columns are preferred for x/y/z; a derived one
+may still colour or size the points, where being derived is informative rather
+than degenerate. It is a preference and not a ban — a sheet whose numeric
+columns are all computed is still better plotted than refused.
+
+**A preference alone was not enough, and that is the more interesting half.**
+The starter has only TWO stored measures, so the third axis fell to the derived
+column regardless: there is no honest scatter of that sheet to pick. When fewer
+than three independent measures exist and there are two categories to group by,
+the default is now 3D BARS — a category × category × measure grid, which is both
+truthful about the data and the thing a spreadsheet cannot draw. A degenerate
+scatter drawn ahead of a truthful grid was the default arguing against its own
+feature.
+
+**Two ordinary faults, both of the same family this repo keeps finding.**
+`draw3d` subscribed to `doc` and not `view`, so filtering changed the grid, the
+status bar, the footer and the 2D chart and left the plot showing every row —
+the same failure as the footer that ignored the filter, in the panel beside the
+one where it was fixed, because the fix went into `drawChart` and never crossed.
+And `overlaySvg` — axis titles, legend, and the count of rows dropped for having
+no value — had exactly one call site, inside the SVG fallback, so a machine that
+could NOT do WebGL2 got the labelled picture and every ordinary browser got a
+bare canvas. The dropped-row count is the load-bearing half: nulls are dropped
+rather than zeroed (correct — a zero is a crater, and craters look like
+findings), and the primary renderer never said so.
+
+**The view vector is projected inside `buildScene`, not at the call site**, for
+the reason `chart.ts` already gives: it applies to every bound column or to
+none. The builders zip x, y, z, colour and size by index; project one and not
+another and the plot pairs the wrong height with the wrong position, plausibly.
+
