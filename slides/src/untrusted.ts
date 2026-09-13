@@ -39,6 +39,7 @@
 // untrusted intake — remote CRDT ops off the relay — can adopt the same
 // checks, key by key, through `checkElementProp`.
 
+import { stripEnvelope } from './envelope'
 import type { Slide, SlideElement } from './model'
 import { isWebUrl } from './model'
 import { parseThemeRef } from './palette.ts'
@@ -332,17 +333,9 @@ const webUrl: Check = (v) =>
 // saved sync state) and `docId`. Neither is content. Left in place they would
 // pass this gate, survive every save by additivity, and travel with every copy
 // and export — and the export-secrets rig reads the top-level block only. So
-// an object source leaves here without them, whatever put them there.
-const EMBED_ENVELOPE = ['collab', 'docId'] as const
-const embedDoc: Check = (v) => {
-  if (typeof v === 'string') return cssValue()(v)
-  const out = chartOption(v)
-  if (!isPlainObject(out)) return out
-  if (!EMBED_ENVELOPE.some((k) => k in out)) return out
-  const copy = { ...out }
-  for (const k of EMBED_ENVELOPE) delete copy[k]
-  return copy
-}
+// an object source leaves here without them, whatever put them there — by the
+// same rule the export strip applies on the way out (envelope.ts).
+const embedDoc: Check = (v) => (typeof v === 'string' ? cssValue()(v) : stripEnvelope(chartOption(v)))
 
 // `el` is required: a connector end with no element to anchor to is dangling,
 // and editor.syncConnectors drops those anyway

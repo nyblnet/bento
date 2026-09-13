@@ -37,6 +37,7 @@ import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
+import { stripEmbeddedEnvelopes } from '../envelope'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 const i18nT = t
@@ -3590,6 +3591,12 @@ function releaseNotes(notes: string): HTMLElement {
  * symmetric read key and the public keys, and lose only the private halves.
  */
 function stripCollabSecrets(doc: import('../model').BentoDoc, opts: { keepRoom?: boolean } = {}) {
+  // Embedded documents first, whether or not this copy keeps a session of
+  // its own: an embed's `doc` is another deck's JSON and carries that deck's
+  // envelope (collab + docId) if the file was authored with it in place. The
+  // shape gate strips it on the way IN for pasted content; this strips it on
+  // the way OUT for every copy — the same rule (envelope.ts).
+  stripEmbeddedEnvelopes(doc)
   if (!doc.collab) return
   if (!opts.keepRoom) {
     delete doc.collab
