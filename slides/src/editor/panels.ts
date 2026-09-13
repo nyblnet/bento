@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
@@ -910,15 +910,22 @@ export class PropsPanel {
     this.store.goTo(insertAt)
   }
 
-  /** Human label for a slide in pickers. */
-  private slideLabel(s: { id: string; name?: string; stateOf?: string }, i: number): string {
-    const linear = this.store.doc.slides.slice(0, i + 1).filter((x) => !x.stateOf).length
+  /**
+   * Human label for a slide in pickers — the number the SIDEBAR shows, so an
+   * author who reads "4" there finds "slide 4" here. That is the page number
+   * (`paginates`), not the position: an unnumbered or hidden slide shows the
+   * number it continues, marked, so two entries can share a number without
+   * being confused for each other.
+   */
+  private slideLabel(s: { id: string; name?: string; stateOf?: string; hidden?: boolean; unnumbered?: boolean }, i: number): string {
+    const doc = this.store.doc
+    const pageAt = (idx: number) => doc.slides.slice(0, idx + 1).filter((x) => paginates(x, doc)).length
     if (s.stateOf) {
-      const p = this.store.doc.slides.findIndex((x) => x.id === s.stateOf)
-      const pn = this.store.doc.slides.slice(0, p + 1).filter((x) => !x.stateOf).length
-      return `state of ${pn}${s.name ? ` — ${s.name}` : ''}`
+      const p = doc.slides.findIndex((x) => x.id === s.stateOf)
+      return `state of ${pageAt(p)}${s.name ? ` — ${s.name}` : ''}`
     }
-    return `slide ${linear}${s.name ? ` — ${s.name}` : ''}`
+    const mark = s.hidden ? ` (${t('hidden')})` : s.unnumbered ? ` (${t('unnumbered')})` : ''
+    return `slide ${pageAt(i)}${mark}${s.name ? ` — ${s.name}` : ''}`
   }
 
   /**

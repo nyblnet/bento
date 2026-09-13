@@ -809,4 +809,6 @@ export const ja: Catalog = {
   "Reveal step": "表示ステップ",
   "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "プレゼン中、その回数目の → を押すまで非表示。← で再び隠れます。複数の要素に同じステップを設定すると一緒に表示されます。",
   "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "クリックでアニメーション：このスライドで n 回目の → まで非表示（0 = スライドと同時に表示）",
+  "hidden": "非表示",
+  "unnumbered": "番号なし",
 }

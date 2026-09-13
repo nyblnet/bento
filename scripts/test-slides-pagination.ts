@@ -88,6 +88,8 @@ const read = (f: string) => readFileSync(join(root, f), 'utf8')
 ok(/page: upto\.filter\(\(s\) => paginates\(s, doc\)\)\.length/.test(read('slides/src/render.ts')), 'render.ts fieldContext: page counts by paginates (the rule reproduced above)')
 ok(/visibleIndex = \(i: number\) => doc\.slides\.slice\(0, i \+ 1\)\.filter\(\(s\) => paginates\(s, doc\)\)/.test(read('slides/src/present.ts')), 'present.ts: the presenter counter counts by paginates')
 ok(/filter\(\(s\) => paginates\(s, this\.store\.doc\)\)/.test(read('slides/src/editor/editor.ts')), 'editor.ts: the sidebar number counts by paginates')
+ok(/private slideLabel\([\s\S]{0,400}paginates\(x, doc\)/.test(read('slides/src/editor/panels.ts')) && !/slideLabel\([\s\S]{0,400}!x\.stateOf\)\.length/.test(read('slides/src/editor/panels.ts')),
+  'panels.ts: the link/state pickers label slides by paginates too — "slide 4" in the picker is "4" in the sidebar (found by the lead: it counted by position)')
 ok(/const isState = \(i: number\) => \{[^}]*!inLinearFlow\(sl\)/.test(read('slides/src/present.ts')), 'present.ts: navigation skips by inLinearFlow, not by paginates')
 ok(/unnumbered: bool/.test(read('slides/src/untrusted.ts')), 'untrusted.ts: the shape gate knows the key (a pasted unnumbered slide keeps it)')
 ok(/"unnumbered"/.test(read('slides/src/modelkeys.generated.ts')), 'modelkeys: the key is in the generated slide table')

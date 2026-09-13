@@ -809,4 +809,6 @@ export const zhHant: Catalog = {
   "Reveal step": "顯示步驟",
   "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "簡報時按到該次 → 之前保持隱藏；按 ← 會再次隱藏。給多個元素設定相同步驟可一起顯示。",
   "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "點擊時動畫：在此投影片上按第 n 次 → 之前隱藏（0 = 隨投影片顯示）",
+  "hidden": "已隱藏",
+  "unnumbered": "不編號",
 }

@@ -807,4 +807,6 @@ export const pt: Catalog = {
   "Reveal step": "Passo de revelação",
   "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Oculto até essa pressão de → ao apresentar; ← volta a ocultá-lo. Dê o mesmo passo a vários elementos para os revelar em conjunto.",
   "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animar ao clicar: oculto até ao n-ésimo → neste slide (0 = visível com o slide)",
+  "hidden": "oculto",
+  "unnumbered": "sem número",
 }
