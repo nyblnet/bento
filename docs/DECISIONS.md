@@ -6818,3 +6818,36 @@ updated guard (adding to the themed set can only relax, never regress).
 Pointers: `kernel/src/ui/toggle.{ts,css}`, `scripts/test-ui-toggle.ts` (61
 checks; role, click-toggle, aria, set-not-firing-onChange, destroy each
 mutation-caught).
+
+## 2026-09-14 — A deck names the shell's fonts instead of embedding them
+
+**Measured first.** Three real decks, document block only: a photo deck was
+96% assets; two text decks were 80% assets — and in those two, the "assets"
+were the same two woff2 files, Fraunces 900 and Instrument Sans, 86 KB. Both
+faces are compiled into every shell (`fontdata.ts`). Every saved deck carried
+them again. The structure an AI actually edits was 17–21 KB.
+
+**Decision.** A `doc.fonts[]` entry may name a face the shell carries —
+`asset: 'builtin:fraunces-900'`, `'builtin:instrument-sans'` — with no bytes
+in `assets`. `resolveFontSrc` asks the deck's table first, then
+`BUILTIN_FONTS`; `injectFonts` goes through it. The starter deck names both.
+At save, `adoptBuiltinFonts` (slides' save facade, beside the asset prune)
+rewrites any deck whose embedded bytes are IDENTICAL to a built-in face —
+by bytes, not by family name, so a deck carrying its own cut of Fraunces
+keeps it — and the bytes leave the file. The live document is never touched.
+Measured in Chrome: both faces load from the shell; a legacy deck saved
+85,269 bytes smaller.
+
+**What it costs, said plainly.** An older shell opening a new deck looks
+the `builtin:` key up in `assets`, finds nothing, and skips the rule: those
+two families render in the system fallback until the shell updates itself.
+That is a degrade, not a break, and it is the additivity promise's edge —
+"opens plain", not "opens wrong". Accepted because the saving is 80% of a
+typical text deck's data and the update channel closes the window.
+
+**What was rejected.** Compressing the document block (the splice contract
+says plaintext, and a chat AI reads it); subsetting fonts to used glyphs
+(fragile under editing); moving assets to a payload block outside
+`#bento-doc` (an old shell re-serialises from the doc alone and would drop
+them). The next lever is photos — there is no downscale or recompression at
+insert today — and that is format-neutral.

@@ -49,6 +49,14 @@ pre-1.0.
   otherwise the captured view shows. Embedded documents are stripped of
   envelope secrets at the shape gate, and a save keeps an embed's view and
   source (the asset prune learned the new reference form).
+- **Files are about 86 KB smaller.** Every saved deck used to carry the two
+  built-in typefaces (Fraunces and Instrument Sans) as embedded font data —
+  the same bytes the app itself already ships, so they existed twice in every
+  file, and were most of a typical text deck's data. A deck now names those
+  faces instead, and any deck that embedded them is slimmed on its next save.
+  Other fonts you add are embedded exactly as before. A copy of the app older
+  than this one shows those two families in the system fallback until it
+  updates itself.
 
 ## [1.0.19] — 2026-09-04
 

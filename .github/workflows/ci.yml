@@ -1310,6 +1310,13 @@ jobs:
         # image gone from a file with nothing on screen to say so.
         run: node scripts/test-slides-assets.ts
 
+      - name: Slides built-in fonts rig
+        # The shell carries two faces; a deck names them (builtin:…) instead
+        # of embedding 86 KB the file already has. At save a deck embedding
+        # byte-identical bytes is rewritten to name them; a different font
+        # keeps its bytes; the live document is untouched; measured saving.
+        run: node scripts/test-slides-fonts.ts
+
       - name: Slides pagination rig
         # Three ways a slide declines a page number (state, hidden, unnumbered)
         # and only one of them stays in the walk; every surface — page fields,

@@ -16,14 +16,15 @@ export * from '../../kernel/src/save.ts'
 import { serializeAuto as kernelSerializeAuto, serializeFile as kernelSerializeFile } from '../../kernel/src/save.ts'
 import type { BentoDoc } from './model'
 import { pruneUnusedAssets } from './assets'
+import { adoptBuiltinFonts } from './fonts'
 
 /** Encryption-aware serializer, with unreferenced assets pruned from the copy it writes. */
 export function serializeAuto(doc: BentoDoc): Promise<string> {
-  return kernelSerializeAuto(pruneUnusedAssets(doc))
+  return kernelSerializeAuto(pruneUnusedAssets(adoptBuiltinFonts(doc)))
 }
 
 /** Plain serializer (tooling, window.bento.serialize), pruned the same way so
  *  a script sees the file a save would produce rather than a larger one. */
 export function serializeFile(doc: BentoDoc): string {
-  return kernelSerializeFile(pruneUnusedAssets(doc))
+  return kernelSerializeFile(pruneUnusedAssets(adoptBuiltinFonts(doc)))
 }
