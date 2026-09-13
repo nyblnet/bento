@@ -320,12 +320,25 @@ already gives key-holders content integrity; `g` adds *authorization*.
 
 ### Relay enforcement (`w`-rooms only)
 
-    on connect (w-room):  require ?w, verify "w"+b64url(sha256(w)) == name,
-                          store `w` in DO storage (like `tok`; commitment-safe)
-    on {p:1} / {snap:1}:  require valid `g` over `${i}.${d}` vs stored `w`,
-                          else DROP the frame (no persist, no fan-out)
-    on ephemeral frames:  unchanged
+    on connect (w-room):  require ?w, verify "w"+b64url(sha256(w)) == name
+                          (or the invite chain), PIN `w` on the socket; issue a
+                          per-socket nonce `c` on `ready`
+    on {ctl:'prove', g}:  verify `g` over `prove.${c}.${name}` vs the pinned `w`;
+                          nonce consumed either way; on success mark the socket
+                          PROVEN and send {ctl:'wt', wt}
+    on {p:1} / {snap:1}:  require valid `g` over `${i}.${d}` vs pinned `w`,
+                          else DROP the frame (no persist, no fan-out);
+                          {snap:1} with q > seq → refuse `snap-ahead`
+    on ephemeral + `g`:   verify the same way; DROP if bad; ECHO `g` if good
+    on ephemeral, no `g`: fan out unstamped (presence must work)
     on r-rooms:           unchanged (permissive) — legacy files keep working
+
+    A hash-match on `?w=` CERTIFIES a socket (its frames are verified against
+    that key) but is NOT proof of possession: the key it matches is the owner's
+    PUBLIC key and every copy of the file carries it, reader copies included.
+    Per-frame signatures make that harmless on the op channel. The blob write
+    ticket is a bearer capability issued over the socket, so it — and the latch
+    that turns a room ticket-only — wait for `prove`.
 
 ### Rollout & backward-compat (the reason to ship now)
 
@@ -389,10 +402,12 @@ the read capability.*
 ## Phase 1 wire format (as shipped)
 
 - Room id: `w` + b64url(SHA-256(ownerPubRaw)) — commits to the OWNER key.
-- Writer connect params: `?w=<signingPub>` plus, for members, the chain
+- Writer connect params: `?w=<signingPub>&bt=1` plus, for members, the chain
   `&o=<ownerPub>&ivp=<invitePub>&ivr=writer&ive=<expiryMs|0>&ivs=<ownerSigOverInvite>&dg=<inviteSigOverMemberPub>`.
   Signature texts: invite = `inv.${ivp}.${ivr}.${ive}`, delegation =
-  `dlg.${memberPub}`, revocation = `rev.${pub}`.
+  `dlg.${memberPub}`, revocation = `rev.${pub}`, possession =
+  `prove.${nonce}.${roomName}`. `scripts/test-relay-protocol.ts` holds the
+  kernel and dash transports to the same spelling of every one of these.
 - The relay pins the verified key PER SOCKET and checks every persisted
   frame's `g` against it. Direct (hash-matching) keys cover the owner and
   legacy 1.0.2 shared-writer rooms unchanged.
@@ -401,15 +416,28 @@ the read capability.*
   its sequence number, and a signed frame it fanned out comes back with its
   signature echoed. In a signed room the client accepts only stamped frames —
   that is the client half of the read-only guarantee described under *Threat
-  model / limits*, and it is why the stamp exists at all. (The relay is being
-  changed concurrently; treat the stamp fields in `sync/online.ts` as the
-  authority for their exact names.)
-- **Blob write tickets**: a writer that understands them announces `bt=1` on
-  connect, and the relay — which only mints a ticket once it has seen such a
-  writer — hands one back on the room's ready message (`wt`), reissuing it when
-  a member is revoked. The client uses it to authorize blob uploads, so blob
-  writes are gated by the same per-socket verification as ops instead of by
-  mere possession of the room key.
+  model / limits*, and it is why the stamp exists at all. The stamps are `q`
+  (persisted; the sequence number) and `g` (the echoed signature); the fork
+  snapshot is signed on the way out precisely so it can earn the second one.
+- **Possession proof and blob write tickets.** A certified socket's `ready`
+  carries a nonce `c`; the client answers `{ctl:'prove', g}` with `g` over
+  `prove.${c}.${name}` under the key it presented as `?w=`; on success the
+  relay sends `{ctl:'wt', wt}` — the ticket never rides on `ready`. The room
+  name in the signed text stops cross-room replay; the nonce is single-use.
+  A writer that will USE the ticket announces `bt=1` on connect, and a room
+  latches into ticket-only uploads (`wtReq`) the first time a PROVEN `bt=1`
+  writer joins — never on a hash-match alone, or any reader holding the
+  owner's public key could latch a room and 403 every older client's upload.
+  Until a room latches, uploads take the room token exactly as shipped
+  clients send it, which is what lets the relay deploy first. The ticket is
+  re-minted on revocation and the replacement goes to proven sockets only.
+  Reads still take the room token. The public guestbook is latchable by
+  anyone (its writer invite is public); acceptable, since the room re-mints
+  every 30 minutes and the guestbook deck is a current client.
+- **Snapshot clamp.** `{snap:1, q}` with `q` beyond the room's `seq` is refused
+  with `snap-ahead` (naming the frame) rather than stored, because storing it
+  prunes every op up to `q`. A writer is trusted to edit, not to wipe the log.
+  Nothing is lost on refusal; the client logs it and does not surface it.
 - Revocation: owner sends `{ctl:'revoke', p, o, g}`; the relay stores `p` in a
   `rev` set, closes matching sockets, fans out `{ctl:'revoked', p}` (clients
   seeing their own key stand down permanently), and refuses future connects/

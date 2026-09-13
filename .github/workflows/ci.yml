@@ -847,6 +847,19 @@ jobs:
         # in people's files. This diffs only what goes on the wire.
         run: node scripts/test-relay-protocol.ts
 
+      - name: relay authorization rig
+        # Drives the real Room durable object with fake sockets and storage.
+        # What it guards: the relay stamps a fanned-out frame with exactly what
+        # it verified and never with what it did not; a socket that merely
+        # hash-matches the room's public key is challenged and handed no blob
+        # write ticket, cannot latch the room, and cannot answer with a forged,
+        # replayed or cross-room proof; revocation re-mints the ticket to
+        # proven sockets only; and a snapshot claiming a seq the room has not
+        # reached is refused rather than allowed to prune the op log. Every
+        # one of these is silent when it regresses — the relay keeps working
+        # and simply trusts more than it should.
+        run: node scripts/test-relay-auth.ts
+
       - name: dash validator rig
         # 109 checks over the shapes that read as DATA rather than as damage —
         # a column shorter than the sheet has rows, a dictionary index past the

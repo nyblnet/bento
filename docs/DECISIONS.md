@@ -6390,3 +6390,61 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-13 — The relay vouches for what it verified; a hash-match certifies but does not prove
+
+**Decision.** Three rules for the sync relay and its two client transports
+(`kernel/src/sync/online.ts`; `dash/src/sync/online.ts`, a deliberate twin
+held to the same wire by `scripts/test-relay-protocol.ts`):
+
+1. **The relay stamps a fanned-out frame with exactly what it checked** — `q`
+   on a frame it persisted, the sender's `g` echoed on a signed ephemeral
+   frame it verified — and never with what it did not. In a `w` room a client
+   applies op batches and fork snapshots only when stamped; legacy `r` rooms,
+   which have no signatures, stay on the older model. The fork snapshot is
+   signed on the way out so it can earn the stamp. This is the client half of
+   the read-only guarantee; relay enforcement alone covers only what the relay
+   *persists*, and a blind relay cannot tell an op batch from a presence beat.
+
+2. **A hash-match on `?w=` certifies a socket; it does not prove possession.**
+   The key it matches is the owner's *public* key, in every copy of the file.
+   That is harmless for the op channel, where each persisted frame carries its
+   own signature. It is not harmless for anything issued *over the socket* as
+   a bearer capability. So the blob write ticket — and the per-room latch that
+   makes uploads ticket-only — wait for a possession proof: `ready` carries a
+   nonce, the client signs `prove.<nonce>.<room>`, the ticket follows on its
+   own `wt` frame. Room name in the text, nonce single-use. The ticket is
+   re-minted on revocation to proven sockets only. Reads keep the room token.
+
+3. **A snapshot cannot claim to cover ops the room has not seen.** `snap` with
+   `q > seq` is refused with a code (`snap-ahead`), because storing it prunes
+   the log up to `q`. Writers are trusted to edit, not to destroy the log.
+   Refusal loses nothing, so it never becomes a user-facing notice.
+
+**Why the latch stays.** It was proposed to drop the per-room latch as
+"anonymously triggerable". Without it the ticket either breaks every shipped
+file's asset offload on deploy day (require it everywhere) or protects
+nothing (require it nowhere, forever — files that never update exist). The
+latch flips a room to ticket-only the first time a *proven*, ticket-capable
+writer joins it; the objection was real only while a hash-match could trip
+it. The public guestbook is latchable by anyone by design (public writer
+invite) and that is acceptable: its room re-mints every 30 minutes and the
+guestbook deck is a current client.
+
+**Deploy order.** Relay first, then clients through the update channel, both
+apps in the same release. A client newer than the relay degrades to the older
+behaviour on every path but one — its fork snapshot, unstamped by an old
+relay, is refused live and the fork converges through the persisted log
+instead. Bounded, not lossy.
+
+**The wire-parity guard was checking almost nothing.** `test-relay-protocol.ts`
+listed query parameters that are not on the wire and omitted most that are;
+its signature-text alternation lacked `dlg.`. It reported the two transports
+identical while matching `tok=` alone. Now it compares the parameters, the
+signature texts, and the control-frame names the worker actually reads.
+
+Pointers: `server/sync-worker/src/worker.js` (the connect path comment on
+certified-vs-proven, the `prove` handler, the clamp), `kernel/src/sync/
+online.ts` (`vouched`, `prove`, `writeReady`), `docs/collab-design.md` "Relay
+enforcement" and "Phase 1 wire format", `scripts/test-relay-auth.ts` (49
+checks; the review's negatives are named as such).
