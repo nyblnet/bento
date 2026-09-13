@@ -104,8 +104,14 @@ Authoritative spec: `docs/collab-design.md`. The non-negotiables:
 
 - Shipped files check `https://bento.page/releases/<app>/manifest.json`
   (user-initiated or launch check) and verify: ECDSA P-256 signature over the
-  manifest payload against the `PUBLIC_KEY_JWK` embedded in the shell, sha256
-  of the fetched shell, and **version monotonicity**.
+  manifest payload against the **publisher's public key** — the platform's
+  `PUBLIC_KEY_JWK` unless the app was built with its own via
+  `configureApp({ publicKeyJwk })` — sha256 of the fetched shell, and
+  **version monotonicity**. The key is fixed at build time and is never read
+  from a document, a URL or the network. **A shell built for one publisher
+  never accepts another publisher's signatures**: an upstream build refuses a
+  fork-signed manifest and a fork build refuses the platform's
+  (`scripts/test-release-channel.mjs` pins both directions).
 - Manifest shape: `{ payload: "<json string>", sig: "<b64>" }` where payload
   carries `{ app, version, sha256, url, at }`.
 - The signing key lives offline (`~/.bento/release-key.json`), never in the
