@@ -42,6 +42,20 @@ pre-1.0.
   the slide number, and an audience following a live broadcast follows the
   steps too. A deck opened in an older version shows every element at once.
   The other half of discussion #282, and the one its author wanted more.
+- **Clickable links.** Give any element a *Web link* in the Presenting
+  section, or type `[caption](https://…)` in a text box, and clicking it
+  during the show opens the page in a new tab — never navigating the deck
+  away, never telling the page where it came from. Only `https://` and
+  `http://` count as links; anything else stays plain text. In the editor a
+  link is just text to edit. Offline mode keeps its promise: links are off
+  while it is on. Asked for by Hermholtz (#373, #374, #421).
+- **`*` makes a bullet, and bullets can indent.** Typing `* ` at the start
+  of a line makes a bullet like `- ` does, and two or more spaces before
+  either makes an indented sub-bullet — while typing and when pasting
+  markdown. (#255 and #368.)
+- **The `?` shortcut list is complete.** It now names black screen (`B`),
+  the all-slides grid (`G`), the side-panel toggles (`[` `]`), bold/italic/
+  underline, the zoom keys, and the arrow keys' two jobs. (#269.)
 
 ## [1.0.19] — 2026-09-04
 

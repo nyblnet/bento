@@ -3,8 +3,9 @@
 // Lightweight markdown affordances for text editing. Two entry points:
 // - autoformatAtCaret: called on every input; when the text just before the
 //   caret completes an inline pattern (**bold**, *italic*, `code`, ~~strike~~)
-//   the markers collapse into the real element, Notion-style. "- " at the
-//   start of a line becomes a bullet glyph.
+//   the markers collapse into the real element, Notion-style. "- " or "* " at
+//   the start of a line becomes a bullet glyph (indented: a sub-bullet), and
+//   [caption](https://…) becomes a link.
 // - markdownToHtml: converts pasted plain text (inline patterns + bullets +
 //   line breaks) into the sanitized inline-HTML subset text elements store.
 //
@@ -14,6 +15,8 @@
 // fires mid-keystroke, and silently converting the line you are typing into a
 // list item moves the caret and captures Enter from then on. The bar is where
 // a list is asked for explicitly; this is where a bullet is typed.
+
+import { isWebUrl } from '../model.ts'
 
 const INLINE: Array<{ re: RegExp; tag: string }> = [
   { re: /\*\*([^*\n]+)\*\*$/, tag: 'b' },
@@ -63,13 +66,35 @@ export function autoformatAtCaret(): boolean {
   const off = sel.anchorOffset // capture — DOM mutation below resets the live selection
   const upto = node.data.slice(0, off)
 
-  // "- " at line start → bullet glyph (contentEditable renders the trailing
-  // space as NBSP, so match both; keep NBSP so the glyph's gap can't collapse)
-  if (/(?:^|\n)-[  ]$/.test(upto) && off >= 2 && isLineStart(node, off - 2)) {
+  // "- " or "* " at line start → bullet glyph (contentEditable renders the
+  // trailing space as NBSP, so match both; keep NBSP so the glyph's gap can't
+  // collapse). Indented by two or more spaces → a hollow sub-bullet, the
+  // indent kept (discussions #255, #368).
+  const bullet = upto.match(/(?:^|\n)([  ]{2,})?[-*][  ]$/)
+  if (bullet && off >= 2 && isLineStart(node, off - 2 - (bullet[1]?.length ?? 0))) {
     const source = node.data.slice(off - 2, off)
-    node.replaceData(off - 2, 2, '• ')
+    node.replaceData(off - 2, 2, bullet[1] ? '◦ ' : '• ')
     placeCaret(node, off)
     lastFormat = { kind: 'bullet', node, offset: off - 2, source }
+    return true
+  }
+  // [caption](https://…) → a link. Only a web URL: the same test the show and
+  // the sanitizer apply, so a javascript: "link" is just the literal text.
+  const link = upto.match(/\[([^\[\]\n]+)\]\((https?:\/\/[^\s()]+)\)$/i)
+  if (link && isWebUrl(link[2])) {
+    const start = off - link[0].length
+    const a = document.createElement('a')
+    a.setAttribute('href', link[2])
+    a.textContent = link[1]
+    const tail = document.createTextNode('\u200b')
+    const range = document.createRange()
+    range.setStart(node, start)
+    range.setEnd(node, off)
+    range.deleteContents()
+    range.insertNode(tail)
+    range.insertNode(a)
+    placeCaret(tail, 1)
+    lastFormat = { kind: 'inline', el: a, source: link[0], tail }
     return true
   }
 
@@ -133,7 +158,12 @@ export function markdownToHtml(text: string): string {
   const out = withParked
     .split('\n')
     .map((line) => {
-      let s = escapeHtml(line).replace(/^(\s*)- /, '$1• ')
+      // "- " / "* " → bullet; indented two+ spaces → sub-bullet, indent kept as
+      // NBSPs so it survives HTML whitespace collapsing
+      let s = escapeHtml(line).replace(/^( {2,})[-*] /, (_, sp: string) => '\u00a0'.repeat(sp.length) + '◦ ')
+        .replace(/^( ?)[-*] /, '$1• ')
+      s = s.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/gi, (m, cap: string, href: string) =>
+        isWebUrl(href) ? `<a href="${href.replaceAll('"', '&quot;')}">${cap}</a>` : m)
       s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
       s = s.replace(/__([^_]+)__/g, '<b>$1</b>')
       s = s.replace(/(?<![*\w])\*([^*]+)\*/g, '<i>$1</i>')

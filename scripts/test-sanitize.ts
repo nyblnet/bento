@@ -299,7 +299,7 @@ const CHROME = [
  * it. Written without backticks or `${` so it can live in a template literal.
  */
 const probeSource = (renderPath: string, modelPath: string) => `
-import { renderSlide } from ${JSON.stringify(renderPath)}
+import { renderSlide, sanitizeHtml } from ${JSON.stringify(renderPath)}
 import { newDoc } from ${JSON.stringify(modelPath)}
 
 const O = location.origin
@@ -357,6 +357,25 @@ if (location.pathname === '/meta.html') {
     const based = draw('<div>x</div><base href="' + O + '/evil/"><svg><rect width="10" height="10"/></svg>')
     check('3 — no <base> survives the walk', based.querySelectorAll('base').length === 0)
     check('3 — relative urls still resolve against this document', document.baseURI === baseBefore)
+
+    // --- 3b. links in text ---------------------------------------------------
+    // <a href> is allowed now (issue #421) — with a web URL only, and no
+    // other attribute. The three shapes that would matter: a javascript:
+    // href, an event handler on an allowed anchor, and a target that would
+    // let the page reach this window. All decided at click time in present.ts;
+    // none stored.
+    const linked = sanitizeHtml('<a href="https://bento.page/" onclick="window.__pwn(31)" target="_top" rel="opener">ok</a>' +
+      '<a href="javascript:window.__pwn(32)">bad</a><a href="data:text/html,x">bad2</a><a>plain</a>')
+    const box = document.createElement('div'); box.innerHTML = linked
+    const anchors = Array.from(box.querySelectorAll('a'))
+    check('3b — a web link keeps exactly its href and nothing else',
+      anchors.length === 1 && anchors[0].getAttribute('href') === 'https://bento.page/' && anchors[0].attributes.length === 1)
+    check('3b — javascript:/data:/attribute-less anchors are unwrapped to their text',
+      box.textContent === 'okbadbad2plain' && !linked.includes('javascript:') && !linked.includes('data:'))
+    // NOT clicked: a click on the surviving https anchor navigates the probe
+    // away and it reports nothing (the same trap the click loop below avoids).
+    // The handler cannot survive without the attribute, which is asserted.
+    check('3b — no handler attribute survives on the surviving anchor', !linked.includes('onclick') && !linked.includes('__pwn(31)'))
 
     // --- 4. network out of a self-contained file -------------------------------
     draw('<div>x</div><link rel="stylesheet" href="' + O + '/tracker.css">' +

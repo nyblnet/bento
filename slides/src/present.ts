@@ -9,7 +9,7 @@ import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
-import { morphKey, paginates, inLinearFlow } from './model'
+import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { ICONS } from './icons'
@@ -1353,11 +1353,37 @@ export function startPresentation(
     updateSpeaker()
   }) as any)
 
-  // Clicking an element with a link jumps to its target slide.
+  // Open a web page from the show — always a NEW tab, never navigating the
+  // deck away (the file IS the presentation; a same-tab navigation would end
+  // it and, on a file:// deck, leave nothing to come back to). noopener so the
+  // page cannot reach this window; noreferrer so the deck's location is not
+  // sent. The offline switch is honoured: a viewer who asked for no network
+  // activity does not get a browser tab making a request on a click.
+  const openWeb = (url: string) => {
+    if (offlineEnabled()) { flashPresentMsg(t('Links are off in offline mode')); return }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  // Clicking an element with a link jumps to its target slide, or opens a web
+  // page; an <a href> inside text (the [caption](url) markdown) opens too.
   slidesEl.addEventListener('click', (ev) => {
+    const anchor = (ev.target as HTMLElement).closest<HTMLAnchorElement>('a[href]')
+    if (anchor && slidesEl.contains(anchor)) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const href = anchor.getAttribute('href') ?? ''
+      if (isWebUrl(href)) openWeb(href)
+      return
+    }
     const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-link]')
     if (!target) return
-    const idx = doc.slides.findIndex((s) => s.id === target.dataset.link)
+    const link = target.dataset.link ?? ''
+    if (isWebUrl(link)) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      openWeb(link)
+      return
+    }
+    const idx = doc.slides.findIndex((s) => s.id === link)
     if (idx >= 0) {
       ev.preventDefault()
       ev.stopPropagation()

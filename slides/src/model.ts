@@ -93,6 +93,12 @@ export interface ElementBase {
         }
   }
   /** while presenting, clicking this element jumps to the slide with this id */
+  /**
+   * Click target while presenting: a slide id (jump there — the state-slide
+   * idiom), or an http(s) URL (opens in a NEW tab, never navigating the deck
+   * away; `isWebUrl` is the whole scheme test, so `javascript:` and `data:`
+   * are not links). Discussion #373/#374. Editor clicks never follow it.
+   */
   link?: string
   /** semantic group tag — hover focus and multi-element behaviours target it */
   group?: string
@@ -1185,6 +1191,15 @@ export const paginates = (s: Slide, doc: BentoDoc): boolean =>
  * the audience into a slide that was hidden on purpose.
  */
 export const inLinearFlow = (s: Slide): boolean => !s.stateOf && !s.hidden
+
+/**
+ * The one scheme test for anything that opens a web page — an element `link`,
+ * a text `<a href>` — shared by the render, the shape gate and the editor so
+ * no surface is looser than another. http and https only; a URL that is
+ * merely well-formed but `javascript:`/`data:`/`file:` is not a link here.
+ */
+export const isWebUrl = (v: unknown): v is string =>
+  typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s"'<>]+$/i.test(v)
 
 export const newDocId = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid('doc')

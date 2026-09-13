@@ -78,6 +78,12 @@ export class SlideCanvas {
     this.scroller.className = 'ed-scroll'
     this.stage = document.createElement('div')
     this.stage.className = 'ed-stage'
+    // A link in text (<a href>, from [caption](url)) is content here, not a
+    // control: a click selects and edits like any other text, and never
+    // navigates the editor away. Links open only from the show (present.ts).
+    this.stage.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest('a[href]')) ev.preventDefault()
+    }, true)
     this.scaleHost = document.createElement('div')
     this.scaleHost.className = 'ed-stage-scale'
     this.stage.appendChild(this.scaleHost)
