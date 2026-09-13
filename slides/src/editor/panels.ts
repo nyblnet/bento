@@ -48,6 +48,7 @@ const ROW_TIPS: Record<string, string> = {
   'Color': 'Colour with opacity — pick with the swatch, the % field is how opaque it is',
   'Enter': 'Entrance animation when the slide appears (plays on non-morph entries; equal order = together)',
   'Enter secs': 'How long the entrance takes, in seconds',
+  'Reveal step': 'Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)',
   'Count up': 'Numbers in this text count up from zero when the slide enters',
   'Ambient': 'Continuous motion while the slide is on screen — Ken Burns drift or zoom',
   'Zoom': 'Ken Burns direction — drift, settle out, or settle in',
@@ -677,7 +678,7 @@ export class PropsPanel {
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
-        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop) delete e.fx
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete e.fx
         else e.fx = fx
       }, true)
 
@@ -692,6 +693,16 @@ export class PropsPanel {
       this.row('Enter secs', this.number(
         el.fx.enterDur ?? (el.fx.enter.startsWith('slide-') ? 0.75 : 0.55), 0.05,
         (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }))
+    }
+    // "Animate on click": hidden until the n-th → on this slide (0 = with the
+    // slide). The element's Enter plays when its step comes, or a plain fade.
+    this.row('Reveal step', this.number(el.fx?.step ?? 0, 1,
+      (v, fin) => { if (fin) setFx({ step: v >= 1 ? Math.floor(v) : undefined }) }))
+    if (el.fx?.step) {
+      const hint = document.createElement('p')
+      hint.className = 'ed-hint'
+      hint.textContent = t('Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.')
+      this.host.appendChild(hint)
     }
     this.row('Count up', this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',

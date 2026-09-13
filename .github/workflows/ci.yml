@@ -1295,6 +1295,13 @@ jobs:
         # morph steps reads "18, 18, 18" rather than "18, 19, 20" (#282).
         run: node scripts/test-slides-pagination.ts
 
+      - name: Slides reveal-steps rig
+        # fx.step, "animate on click": → reveals the next step before it
+        # leaves the slide, ← hides it; backward arrival is fully revealed;
+        # gaps are pressed through; the audience follows the presenter's
+        # step. Decisions in slides/src/steps.ts, DOM-free (#282, option 2).
+        run: node scripts/test-slides-steps.ts
+
       - name: Audience projection rig
         # Live broadcast: the handout, the join snapshot and every streamed op
         # go through slides/src/audience.ts, which keeps back speaker notes

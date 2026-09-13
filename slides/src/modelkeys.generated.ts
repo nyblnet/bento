@@ -22,7 +22,7 @@ export const MODEL_KEYS = {
       "table": ["backdropFilter", "blend", "blur", "columns", "fx", "group", "groupId", "h", "header", "id", "link", "morphId", "opacity", "role", "rotation", "rows", "shadow", "showOnHover", "style", "themeRefs", "type", "w", "x", "y"],
       "media": ["autoplay", "backdropFilter", "blend", "blur", "controls", "fit", "fx", "group", "groupId", "h", "id", "kind", "link", "loop", "morphId", "muted", "opacity", "poster", "radius", "role", "rotation", "shadow", "showOnHover", "src", "themeRefs", "type", "w", "x", "y"],
     },
-    "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order"],
+    "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order", "step"],
     "fxKen": ["dir", "duration", "scale"],
     "fxLoop": ["delay", "distance", "duration", "ease", "path", "speeds", "type"],
     "shadow": ["blur", "color", "x", "y"],

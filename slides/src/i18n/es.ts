@@ -806,4 +806,7 @@ export const es: Catalog = {
   "Unnumbered": "Sin número",
   "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Permanece en la presentación pero no ocupa número de página: el campo de página continúa el de la diapositiva anterior. Para una revelación construida en varios pasos con morph, o una tarjeta que no debe contar.",
   "Unnumbered — in the show, continues the previous page number": "Sin número — en la presentación, continúa el número de página anterior",
+  "Reveal step": "Paso de revelado",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Oculto hasta esa pulsación de → al presentar; ← lo vuelve a ocultar. Da a varios elementos el mismo paso para revelarlos juntos.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animar al hacer clic: oculto hasta la n-ésima → en esta diapositiva (0 = visible con la diapositiva)",
 }

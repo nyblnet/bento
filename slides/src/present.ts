@@ -17,6 +17,7 @@ import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
 import type { ShowEvent, ShowVerbs } from '../../kernel/src/sync/session.ts'
 import { FollowState, laserDue } from './follow'
+import { StepState, stepOf, shownAt } from './steps'
 import { offlineEnabled } from './update'
 
 const MORPH_DURATION_DEFAULT = 0.65
@@ -140,13 +141,53 @@ export function startPresentation(
     const p = doc.slides.findIndex((s) => s.id === pid)
     return p >= 0 ? p : i
   }
+  // ——— reveal steps (fx.step): → reveals the next step before it leaves the
+  // slide, ← hides the last one before it leaves. Decisions in steps.ts.
+  const steps = new StepState<SlideElement>()
+  /** Hide/show every stepped element of a section for the current step. */
+  const applyStep = (section: HTMLElement, slide: Slide, step: number) => {
+    for (const el of slide.elements ?? []) {
+      if (!stepOf(el)) continue
+      const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      node?.classList.toggle('bento-step-hidden', !shownAt(el, step))
+    }
+  }
+  const currentSection = () => deck.getCurrentSlide() as HTMLElement | null
+  const revealStep = (r: { step: number; reveal: SlideElement[] }) => {
+    const cur = deck.getIndices().h
+    const section = currentSection()
+    if (!section) return
+    applyStep(section, doc.slides[cur], r.step)
+    if (!reduceMotion) runEnterFx(doc.slides[cur], section, new Set(r.reveal.map((el) => el.id)), true)
+    sendNav(cur)
+    updateSpeakerControls()
+  }
+  const hideStep = (r: { step: number; hide: SlideElement[] }) => {
+    const cur = deck.getIndices().h
+    const section = currentSection()
+    if (!section) return
+    for (const el of r.hide) {
+      const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (!node) continue
+      anim.killTweensOf(node)
+      applyElementFrame(node, el)
+      resetXform(node)
+    }
+    applyStep(section, doc.slides[cur], r.step)
+    sendNav(cur)
+    updateSpeakerControls()
+  }
   const goNext = () => {
+    const r = steps.next()
+    if (r.kind === 'step') return revealStep(r)
     const cur = deck.getIndices().h
     for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
       if (!isState(i)) return deck.slide(i, 0)
     }
   }
   const goPrev = () => {
+    const r = steps.prev()
+    if (r.kind === 'step') return hideStep(r)
     const cur = deck.getIndices().h
     if (isState(cur)) return deck.slide(anchorOf(cur), 0)
     for (let i = cur - 1; i >= 0; i--) {
@@ -154,6 +195,7 @@ export function startPresentation(
     }
   }
   const hasNext = () => {
+    if (steps.hasNext()) return true
     const cur = deck.getIndices().h
     for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
       if (!isState(i)) return true
@@ -161,6 +203,7 @@ export function startPresentation(
     return false
   }
   const hasPrev = () => {
+    if (steps.hasPrev()) return true
     const cur = deck.getIndices().h
     if (isState(cur)) return true // right-swipe returns to the parent slide
     for (let i = cur - 1; i >= 0; i--) {
@@ -727,7 +770,7 @@ export function startPresentation(
   }
   const sendNav = (idx: number) => {
     if (!showOn) return
-    bc?.presenter?.verbs()?.nav({ id: doc.slides[idx]?.id, i: visibleIndex(idx), lock: showLock })
+    bc?.presenter?.verbs()?.nav({ id: doc.slides[idx]?.id, i: visibleIndex(idx), lock: showLock, step: steps.step })
   }
 
   // Second-screen placement is set up in the EDITOR (properties panel) before
@@ -766,7 +809,10 @@ export function startPresentation(
     const cur = deck.getIndices().h
     const anchor = isState(cur) ? anchorOf(cur) : cur
     const count = d.querySelector('.sv-count')
-    if (count) count.textContent = `${visibleIndex(cur)} / ${visibleTotal}`
+    if (count) {
+      const max = doc.slides[cur] ? Math.max(0, ...doc.slides[cur].elements.map(stepOf)) : 0
+      count.textContent = `${visibleIndex(cur)} / ${visibleTotal}` + (max ? ` · ${steps.step}/${max}` : '')
+    }
     d.querySelectorAll<HTMLElement>('.sv-thumb').forEach((th) => {
       const on = Number(th.dataset.idx) === anchor
       th.classList.toggle('current', on)
@@ -1270,6 +1316,11 @@ export function startPresentation(
     // (Reveal keeps sections mounted) — start clean before any fx runs.
     sweepSymbolSpans(to)
     const forward = toIdx > fromIdx
+    // Reveal steps: forward arrives with them hidden, backward fully shown —
+    // unless the audience is following a presenter who named the step.
+    steps.enter(doc.slides[toIdx]?.elements ?? [], forward)
+    if (pendingStep !== null) { steps.set(pendingStep); pendingStep = null }
+    applyStep(to, doc.slides[toIdx], steps.step)
     // Morph forward into a morph slide, and un-morph when backing out of one.
     const morphing =
       from &&
@@ -1281,7 +1332,7 @@ export function startPresentation(
         runMorphArrivalCountUps(doc.slides[fromIdx], doc.slides[toIdx], to)
       }
     }
-    else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to)
+    else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to, undefined, false, steps.step)
     if (!reduceMotion) {
       runAmbientFx(doc.slides[toIdx], to)
       restartSvgAnimations(to)
@@ -1317,6 +1368,32 @@ export function startPresentation(
   const goTo = (index: number) => {
     if (deckReady) deck.slide(index, 0)
     else pendingIndex = index
+  }
+  // A presenter's nav names the step too. Same slide: apply it here (reveal
+  // forward with the entrance, hide backward); another slide: park it for
+  // slidechanged, which enters the slide and then sets it.
+  let pendingStep: number | null = null
+  const followStep = (index: number, step: number | undefined) => {
+    if (typeof step !== 'number') return
+    if (index !== deck.getIndices().h) { pendingStep = step; return }
+    const was = steps.step
+    steps.set(step)
+    if (steps.step === was) return
+    const section = currentSection()
+    const slide = doc.slides[index]
+    if (!section || !slide) return
+    if (steps.step > was) {
+      applyStep(section, slide, steps.step)
+      const ids = new Set(slide.elements.filter((el) => stepOf(el) > was && stepOf(el) <= steps.step).map((el) => el.id))
+      if (!reduceMotion) runEnterFx(slide, section, ids, true)
+    } else {
+      for (const el of slide.elements) {
+        if (stepOf(el) <= steps.step || stepOf(el) > was) continue
+        const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+        if (node) { anim.killTweensOf(node); applyElementFrame(node, el); resetXform(node) }
+      }
+      applyStep(section, slide, steps.step)
+    }
   }
 
   // ——— the audience side: follow the presenter ———
@@ -1370,7 +1447,7 @@ export function startPresentation(
         overlay.querySelector<HTMLElement>('.bento-show-card')?.setAttribute('hidden', '')
         const jump = follow.nav(doc.slides, p)
         updateFollowChip()
-        if (jump !== null) goTo(jump)
+        if (jump !== null) { followStep(jump, (p as { step?: number }).step); goTo(jump) }
       } else if (e.kind === 'black') {
         follow.applyLock(p.lock)
         updateFollowChip()
@@ -1397,8 +1474,10 @@ export function startPresentation(
     setTimeout(onResize, 600)
     const first = slidesEl.children[startIndex] as HTMLElement | undefined
     if (first) {
+      steps.enter(doc.slides[startIndex]?.elements ?? [], true)
+      applyStep(first, doc.slides[startIndex], steps.step)
       if (!reduceMotion) {
-        runEnterFx(doc.slides[startIndex], first)
+        runEnterFx(doc.slides[startIndex], first, undefined, false, steps.step)
         runAmbientFx(doc.slides[startIndex], first)
         restartSvgAnimations(first)
       }
@@ -1510,10 +1589,18 @@ function enterSpec(kind: EnterKind, enterDur?: number) {
 }
 
 /** Staggered entrance animations + count-ups for the incoming slide. */
-function runEnterFx(slide: Slide, section: HTMLElement) {
+/**
+ * `only` restricts the run to those element ids (a reveal step); `revealing`
+ * gives an element with no `fx.enter` of its own a plain fade, because a
+ * stepped element that simply pops in reads as a glitch, not a reveal. `step`
+ * `atStep` (slide entry) leaves elements hidden by the step counter alone — they run
+ * their entrance when their step comes.
+ */
+function runEnterFx(slide: Slide, section: HTMLElement, only?: Set<string>, revealing = false, atStep = 0) {
   const entering = fxNodes(slide, section)
     // reveal-set members are shown/hidden by hover, never by entrance tweens
-    .filter(([el]) => (el.fx!.enter || el.fx!.countUp) && !el.showOnHover)
+    .filter(([el]) => (el.fx!.enter || el.fx!.countUp || (revealing && only?.has(el.id))) && !el.showOnHover)
+    .filter(([el]) => (only ? only.has(el.id) : shownAt(el, atStep)))
     .sort((a, b) => (a[0].fx!.order ?? 0) - (b[0].fx!.order ?? 0))
   // Delay derives from fx.order when set (equal order ⇒ elements enter
   // together — how a diagram reveals band-by-band), else from list position.
@@ -1523,8 +1610,9 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
     // motion-path loops own the transform — an entrance tween on the same
     // node would fight it and freeze the dot off its path
     if (fx.loop?.type === 'motion-path') return
-    if (fx.enter) {
-      const spec = enterSpec(fx.enter, fx.enterDur)
+    const kind = fx.enter ?? (revealing ? 'fade' : undefined)
+    if (kind) {
+      const spec = enterSpec(kind, fx.enterDur)
       anim.fromTo(
         node,
         spec.from,
@@ -1533,7 +1621,7 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
           x: 0,
           y: 0,
           duration: spec.duration,
-          delay: 0.12 + Math.min(step, 24) * 0.05,
+          delay: (revealing ? 0 : 0.12) + Math.min(step, 24) * 0.05,
           ease: spec.ease,
         },
       )

@@ -247,6 +247,7 @@ const fx = shape(MODEL_KEYS.fx, {
   enter: oneOf('fade-up', 'fade', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'),
   enterDur: num(0, 600),
   order: num(-1e4, 1e4),
+  step: num(0, 1e4),
   countUp: bool,
   ambient: oneOf('kenburns'),
   ken: shape(MODEL_KEYS.fxKen, {

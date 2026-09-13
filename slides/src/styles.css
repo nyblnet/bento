@@ -1687,6 +1687,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   background: #000;
 }
 .bento-blackout[hidden] { display: none; }
+/* Reveal steps (fx.step): an element whose step has not come yet. Visibility,
+   not display — it keeps its box (nothing reflows when it appears), keeps
+   morph and layout measurements honest, and its entrance tween can start
+   from opacity 0 the moment the class comes off. Present-mode only. */
+.bento-present-overlay .bento-step-hidden { visibility: hidden !important; pointer-events: none; }
 
 /* transient confirmation pill in present mode (e.g. Reduced motion on/off) */
 .bento-present-toast {

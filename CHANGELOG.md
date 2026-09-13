@@ -31,6 +31,17 @@ pre-1.0.
   not count. Asked for in discussion #282 by OuPDO, whose one-slide-per-step
   decks already worked except for that number. Distinct from *Hide slide*,
   which takes a slide out of the walk altogether.
+- **Reveal elements one at a time within a slide.** Give an element a *Reveal
+  step* in the Presenting section (1, 2, 3…): it is hidden when the slide
+  appears and shows on that press of →, running its entrance — a plain fade
+  if it has none — and ← hides it again; → moves to the next slide only once
+  every step is shown. Elements sharing a step appear together, and arriving
+  from the next slide lands with everything revealed, so stepping back
+  through a talk retraces it. One slide stays one slide: one page number, one
+  morph pairing, one speaker note. The speaker view counts the steps beside
+  the slide number, and an audience following a live broadcast follows the
+  steps too. A deck opened in an older version shows every element at once.
+  The other half of discussion #282, and the one its author wanted more.
 
 ## [1.0.19] — 2026-09-04
 
