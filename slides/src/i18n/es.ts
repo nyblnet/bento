@@ -822,4 +822,5 @@ export const es: Catalog = {
   "The web page the live frame loads while online (http or https)": "La página web que carga el marco en vivo mientras hay conexión (http o https)",
   "Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.": "Carga la página en un marco aislado mientras hay conexión. Sin conexión, o con el modo sin conexión activado, se muestra la vista capturada.",
   "The live frame loads only while online. Offline mode and a missing network show the captured view instead.": "El marco en vivo solo carga con conexión. El modo sin conexión y la falta de red muestran la vista capturada.",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "Al presentar, un marco en el que hayas hecho clic retiene las teclas de flecha hasta que hagas clic fuera de él. Todo el que presente esta presentación carga la página desde su sitio.",
 }

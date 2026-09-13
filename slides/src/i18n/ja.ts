@@ -822,4 +822,5 @@ export const ja: Catalog = {
   "The web page the live frame loads while online (http or https)": "オンライン時にライブフレームが読み込むウェブページ（http または https）",
   "Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.": "オンライン時にページをサンドボックス化されたフレームに読み込みます。オフライン時、またはオフラインモードが有効な場合は、取り込んだビューを表示します。",
   "The live frame loads only while online. Offline mode and a missing network show the captured view instead.": "ライブフレームはオンライン時のみ読み込まれます。オフラインモードやネットワークがない場合は、取り込んだビューを表示します。",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "プレゼン中にフレームをクリックすると、その外側をクリックするまで矢印キーがフレームに取られます。このデッキを発表する人は全員、そのサイトからページを読み込みます。",
 }

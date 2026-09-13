@@ -322,7 +322,7 @@ function draw(markup: string, css?: string): HTMLElement {
   return surface
 }
 
-/** Beta build: the same path for an embed element's view. */
+/** The same path for an embed element's view. */
 function drawEmbed(view: string): HTMLElement {
   const doc = newDoc()
   const slide = doc.slides[0]
@@ -530,7 +530,7 @@ if (location.pathname === '/meta.html') {
     check('an unclosed tag still draws — text/html, not the fatal xml parser',
       !!sloppy.querySelector('svg') && !!sloppy.querySelector('circle'))
 
-    // Beta build: the embed element's view is the same kind of author markup
+    // The embed element's view is the same kind of author markup
     // and goes through the same walk. Its whole purpose is to carry markup
     // someone else produced, which makes it the most attractive place in the
     // format to hide a script. (No backticks in this comment: it lives inside

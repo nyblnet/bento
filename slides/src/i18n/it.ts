@@ -822,4 +822,5 @@ export const it: Catalog = {
   "The web page the live frame loads while online (http or https)": "La pagina web che il riquadro live carica quando sei online (http o https)",
   "Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.": "Carica la pagina in un riquadro isolato quando sei online. Offline, o con la modalità offline attiva, viene mostrata la vista catturata.",
   "The live frame loads only while online. Offline mode and a missing network show the captured view instead.": "Il riquadro live carica solo online. La modalità offline e l’assenza di rete mostrano la vista catturata.",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "Durante la presentazione, un riquadro su cui hai fatto clic trattiene i tasti freccia finché non fai clic fuori. Chiunque presenti questa presentazione carica la pagina dal suo sito.",
 }

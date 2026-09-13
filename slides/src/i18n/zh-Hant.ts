@@ -822,4 +822,5 @@ export const zhHant: Catalog = {
   "The web page the live frame loads while online (http or https)": "連線時即時框架載入的網頁（http 或 https）",
   "Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.": "連線時在沙箱框架中載入頁面。離線或開啟離線模式時，改為顯示擷取的檢視。",
   "The live frame loads only while online. Offline mode and a missing network show the captured view instead.": "即時框架僅在連線時載入。離線模式和沒有網路時會顯示擷取的檢視。",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "簡報時，點擊過的框架會佔用方向鍵，直到你在其外部點擊。所有簡報此文稿的人都會從該網站載入頁面。",
 }

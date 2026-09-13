@@ -343,13 +343,13 @@ export interface MediaElement extends ElementBase {
 }
 
 /**
- * Beta build: an embedded artifact, built to upstream's `bento/embed` shape
+ * An embedded artifact, built to the `bento/embed` shape
  * (docs/DECISIONS.md, 2026-08-19) so it round-trips through upstream shells.
  * Three tiers, and the ORDER is the design: `view` is a static render that
  * ALWAYS paints, with no extra code, in any app; `doc` is the source, so the
  * embed is not a screenshot; a live sandboxed iframe is OPT-IN per element.
  *
- * Beta adds `app: 'web'` with a `url`: a live web surface on a slide. The
+ * `app: 'web'` with a `url` is a live web surface on a slide. The
  * frame is created only while online AND with the offline switch off
  * (render.ts:liveFrameAllowed); otherwise the view shows. Unknown `app`
  * values are RENDERED (their view), never rejected.

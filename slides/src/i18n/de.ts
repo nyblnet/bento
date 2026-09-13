@@ -822,4 +822,5 @@ export const de: Catalog = {
   "The web page the live frame loads while online (http or https)": "Die Webseite, die der Live-Rahmen online lädt (http oder https)",
   "Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.": "Lädt die Seite online in einem isolierten Rahmen. Offline oder bei aktiviertem Offline-Modus wird stattdessen die erfasste Ansicht angezeigt.",
   "The live frame loads only while online. Offline mode and a missing network show the captured view instead.": "Der Live-Rahmen lädt nur online. Offline-Modus und fehlendes Netzwerk zeigen stattdessen die erfasste Ansicht.",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "Beim Präsentieren behält ein angeklickter Rahmen die Pfeiltasten, bis Sie außerhalb klicken. Jede Person, die dieses Deck präsentiert, lädt die Seite von deren Website.",
 }

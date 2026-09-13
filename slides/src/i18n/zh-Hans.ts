@@ -822,4 +822,5 @@ export const zhHans: Catalog = {
   "The web page the live frame loads while online (http or https)": "联网时实时框架加载的网页（http 或 https）",
   "Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.": "联网时在沙盒框架中加载页面。离线或开启离线模式时，改为显示截取的视图。",
   "The live frame loads only while online. Offline mode and a missing network show the captured view instead.": "实时框架仅在联网时加载。离线模式和无网络时显示截取的视图。",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "演示时，点击过的框架会占用方向键，直到你在其外部点击。所有演示此文稿的人都会从该网站加载页面。",
 }
