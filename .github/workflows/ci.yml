@@ -339,6 +339,16 @@ jobs:
         # plus listener cleanup and the shared theming guard. Each is
         # mutation-caught; none is visible to a developer with a mouse.
         run: node scripts/test-ui-dialog.ts
+      - name: Shared tooltip primitive rig
+        # kernel/src/ui/tooltip.ts — built ahead of a consumer (no app has a
+        # hover tooltip; all four use native title=), so the checks pin the
+        # contract chosen, not a behaviour found: shows after a delay on
+        # hover/focus, hides on leave/blur/Escape, wires aria-describedby, does
+        # not flash on a pointer passing through, and — the one that matters —
+        # renders in document.body as a fixed element so no scroll container
+        # clips it (hard-won detail 10). Behaviours mutation-caught; themed
+        # through the shared guard.
+        run: node scripts/test-ui-tooltip.ts
       - name: Shared menu primitive rig
         # kernel/src/ui/menu.ts replaces four hand-rolled dropdowns, and what
         # differed between them was all INVISIBLE: three of the four apps

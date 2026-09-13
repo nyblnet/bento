@@ -6720,3 +6720,30 @@ Pointers: `kernel/src/ui/dialog.{ts,css}`, `scripts/test-ui-dialog.ts` (66
 checks; focus restore, capture-phase Escape, backdrop guard, focus trap and
 listener cleanup each mutation-caught), `working/team/notes/kernel.md` (the
 tier-3 four-way read and its correction).
+
+## 2026-09 — UI primitives tier 3: the tooltip (built ahead of a consumer)
+
+**Decision.** `kernel/src/ui/tooltip.ts` + `tooltip.css`, guarded by
+`scripts/test-ui-tooltip.ts`. Kernel half only; same discipline as the other
+primitives (`--bkt-*` chains onto host tokens, never `light-dark()`, the shared
+theming guard).
+
+**This is NOT a consolidation** — recorded here as one of the three tier-3
+primitives the maintainer chose to build ahead of a consumer ("build all four,
+they would come into play soon"). The four-way read found no app has a hover
+tooltip: all four use the native `title` attribute (99/132/135/65 uses), and the
+`*-tip` classes that exist are a help overlay, a tone indicator and a drop
+marker. So this is a new, deliberately minimal abstraction, to be revisited if
+no app adopts it.
+
+**The one thing it gets right on purpose:** it is never clipped. A tooltip is
+the primitive most likely to be born inside a scroll container (a panel, a
+menu), and hard-won detail 10 says an ancestor with `overflow:auto` clips both
+axes. So the tip is a single `document.body`-level, `position: fixed` element,
+positioned from the anchor's rect — it has no scrolling ancestor to be trapped
+by, by construction. Shown after a delay (no flash on a pointer passing
+through), hidden on leave/blur/Escape, wired with `aria-describedby`.
+
+Pointers: `kernel/src/ui/tooltip.{ts,css}`, `scripts/test-ui-tooltip.ts` (34
+checks; delay, the body/fixed placement, the flash-guard, aria wiring and Escape
+each mutation-caught).
