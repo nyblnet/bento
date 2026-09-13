@@ -6678,3 +6678,45 @@ the whole primitive in node with no build machinery and no CSS-import stub.
 Pointers: `kernel/src/ui/menu.ts` (the four-app comparison, function by
 function), `kernel/src/ui/menu.css` (details 9 and 10, written down once),
 `scripts/test-ui-menu.ts` (what each check guards, and which app's gap it is).
+
+## 2026-09 — UI primitives tier 3: the modal dialog (and three built ahead of a consumer)
+
+**Decision.** Tier 3 of the UI primitives is `kernel/src/ui/dialog.ts` +
+`dialog.css`, guarded by `scripts/test-ui-dialog.ts`. Kernel half only; same
+discipline as the menu and the panel (values through `--bkd-*` chains onto the
+host's own tokens, never `light-dark()`, the shared theming guard).
+
+**The dialog is a real consolidation.** All four apps build their About dialog
+(and smaller confirms) on a per-app overlay — slides `.ed-about-overlay`, spaces
+`.sp-overlay`, dash `.dx-about`, type `.t-overlay`, each with its own open/close
+in an `about.ts`. As the tier's brief predicted, this is where "slides is the
+basis" gives the LEAST: slides' dialog machinery is one class and a blur, while
+spaces captures and restores focus and closes on a capture-phase document
+Escape, and type cleans up a named handler. The primitive takes spaces'/type's
+behaviour and adds what no app had — a focus trap, backdrop dismissal, and
+`role="dialog"`/`aria-modal`/`aria-labelledby` — so the modal works for the
+keyboard, not only the mouse. The overlay is `position: fixed` at a z above the
+topbar's ceiling, so it escapes every ancestor stacking context (detail 9) and
+clip (detail 10).
+
+**The other three of tier 3 are built ahead of a consumer, on the maintainer's
+call ("build all four, they would come into play soon"), NOT as consolidations.**
+The four-way read found nothing to consolidate for them, and that read stands as
+the record:
+- **tooltip** — no app has a CSS tooltip; all four use the native `title`
+  attribute. A custom one is a new abstraction, built forward-looking.
+- **toggle** — the three toggle-named classes are three concepts (a native
+  checkbox, a disclosure block body, a segmented button group); no shared switch
+  exists. Built as a labelled `role="switch"`, forward-looking.
+- **chip** — 21 classes across four apps are homonyms (a removable filter chip,
+  static badges, clickable pickers); the only behavioural one is dash-only. Built
+  minimal — a label with an optional removable ✕ and count — shaped against
+  dash's filter chip, forward-looking.
+
+Each of the three ships as its own PR and should be revisited if no app adopts
+it. This entry is their record as design decisions rather than consolidations.
+
+Pointers: `kernel/src/ui/dialog.{ts,css}`, `scripts/test-ui-dialog.ts` (66
+checks; focus restore, capture-phase Escape, backdrop guard, focus trap and
+listener cleanup each mutation-caught), `working/team/notes/kernel.md` (the
+tier-3 four-way read and its correction).

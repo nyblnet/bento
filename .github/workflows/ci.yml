@@ -329,6 +329,16 @@ jobs:
         # plus the theming guard (every colour chain reaches a token each of the
         # four apps defines and themes). Each is mutation-caught.
         run: node scripts/test-ui-panel.ts
+      - name: Shared dialog primitive rig
+        # kernel/src/ui/dialog.ts is the tier-3 consolidation: the modal all
+        # four apps build their About dialog on. The checks guard behaviour that
+        # lived in one app or none — focus captured on open and restored to the
+        # opener on close, a capture-phase document Escape that does not fall
+        # through to the editor behind it, backdrop dismissal that a click on the
+        # card does not trigger, and a real focus trap (Tab wraps in the card) —
+        # plus listener cleanup and the shared theming guard. Each is
+        # mutation-caught; none is visible to a developer with a mouse.
+        run: node scripts/test-ui-dialog.ts
       - name: Shared menu primitive rig
         # kernel/src/ui/menu.ts replaces four hand-rolled dropdowns, and what
         # differed between them was all INVISIBLE: three of the four apps
