@@ -15,6 +15,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { checkThemedChains } from './lib/ui-theme-guard.ts'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 // ——— a DOM just big enough for panel.ts ———
@@ -224,46 +225,21 @@ const chevronOf = (p: P) => (p.resizer as unknown as El).children[0]
   ok(R(p).parent === null || !R(p).parent, 'destroy removes the root')
 }
 
-// ——— THEMING GUARD (reproduced from tier 1's test-ui-menu): every colour
-// chain in panel.css must reach a token each of the four apps both DEFINES and
-// THEMES. When both primitives land, factor this into one shared helper. ———
+// ——— THEMING GUARD — shared with the menu primitive's rig via
+// scripts/lib/ui-theme-guard.ts. It pins one property: every colour panel.css
+// paints resolves, for each of the four apps, to a token that app both defines
+// and themes. `--bkp-bg` chaining --surface → --chrome is why type (which has
+// --chrome, not --surface) resolves at all. ———
 {
-  const css = readFileSync(join(root, 'kernel/src/ui/panel.css'), 'utf8')
-  const chains: Array<{ prop: string; tokens: string[] }> = []
-  for (const line of css.split('\n')) {
-    const m = /(background|color|border[a-z-]*|box-shadow)\s*:\s*var\(--bkp-([a-z-]+),(.*)$/.exec(line)
-    if (!m) continue
-    const tokens = [...m[3].matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((x) => x[1])
-    if (tokens.length) chains.push({ prop: m[2], tokens })
-  }
-  ok(chains.length >= 3, 'found the themed chains to check')
-
-  function tokensOf(app: string) {
-    const src = readFileSync(join(root, `${app}/src/styles.css`), 'utf8')
-    const all = new Set<string>(); const themed = new Set<string>()
-    for (const m of src.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
-      all.add(m[1]); if (m[2].includes('light-dark(')) themed.add(m[1])
-    }
-    for (const start of [...src.matchAll(/\[data-theme=["']dark["']\][^{]*\{|@media[^{]*prefers-color-scheme:\s*dark[^{]*\{/g)]) {
-      let depth = 0, i = start.index! + start[0].length - 1
-      for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}') { depth--; if (!depth) break } }
-      for (const m of src.slice(start.index!, i).matchAll(/(--[a-z0-9-]+)\s*:/g)) themed.add(m[1])
-    }
-    return { all, themed }
-  }
-  // shadow is exempt (a translucent overlay shadow need not follow the theme,
-  // and only some apps have a shadow token) — matches tier 1's exemption.
-  const COLOUR = new Set(['bg', 'border', 'toggle-ink', 'resizer-hover'])
-  for (const app of ['slides', 'spaces', 'dash', 'type']) {
-    const { all, themed } = tokensOf(app)
-    for (const { prop, tokens } of chains) {
-      const defined = tokens.find((t) => all.has(t))
-      ok(defined, `${app}: --bkp-${prop} reaches a token ${app} defines (${tokens.join(' → ')})`)
-      if (!defined || !COLOUR.has(prop)) continue
-      ok(themed.has(defined), `${app}: --bkp-${prop} lands on ${defined}, which ${app} themes`)
-    }
-  }
+  const appStyles = Object.fromEntries(
+    ['slides', 'spaces', 'dash', 'type'].map((a) => [a, join(root, `${a}/src/styles.css`)]),
+  )
+  for (const r of checkThemedChains({
+    cssPath: join(root, 'kernel/src/ui/panel.css'),
+    prefix: 'bkp',
+    colourProps: new Set(['bg', 'border', 'toggle-ink', 'resizer-hover']),
+    appStyles,
+  })) ok(r.pass, r.msg)
 }
-
 console.log(failures ? `\n${failures} FAILED of ${checks}` : `\ntest-ui-panel: ${checks} checks OK`)
 process.exit(failures ? 1 : 0)
