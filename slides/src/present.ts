@@ -1390,6 +1390,19 @@ export function startPresentation(
       deck.slide(idx, 0)
     }
   })
+  // A middle-click fires `auxclick`, not `click`, and the browser's default
+  // for it on an anchor is "open in a new tab" — straight past the offline
+  // gate and the noreferrer flag. Route it through the same door.
+  slidesEl.addEventListener('auxclick', (ev) => {
+    const anchor = (ev.target as HTMLElement).closest<HTMLAnchorElement>('a[href]')
+    if (!anchor) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    if (ev.button === 1) {
+      const href = anchor.getAttribute('href') ?? ''
+      if (isWebUrl(href)) openWeb(href)
+    }
+  })
 
   const goTo = (index: number) => {
     if (deckReady) deck.slide(index, 0)

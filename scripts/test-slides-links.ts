@@ -70,6 +70,8 @@ ok(/closest<HTMLAnchorElement>\('a\[href\]'\)[\s\S]{0,200}ev\.preventDefault\(\)
   'present.ts intercepts anchors inside text: preventDefault always, open only a web URL')
 ok(/const link = target\.dataset\.link \?\? ''\s*if \(isWebUrl\(link\)\)/.test(present), 'present.ts: an element link that is a web URL opens; a slide id still jumps')
 ok(/closest\('a\[href\]'\)\) ev\.preventDefault\(\)/.test(read('slides/src/editor/canvas.ts')), 'canvas.ts: a link click in the editor never navigates')
+ok(/addEventListener\('auxclick'[\s\S]{0,300}ev\.preventDefault\(\)[\s\S]{0,200}if \(isWebUrl\(href\)\) openWeb\(href\)/.test(present),
+  'present.ts: a middle-click on an anchor goes through the same door (auxclick would otherwise bypass the offline gate and noreferrer)')
 ok(/link: \(v\) => \(isWebUrl\(v\) \? v : cssValue\(\)\(v\)\)/.test(read('slides/src/untrusted.ts')), 'untrusted.ts: the shape gate accepts a link that is a web URL or a slide id')
 ok(!/target="_blank"|rel="noopener"/.test(render), 'render.ts stores no target/rel — those are decided at click time, never in the document')
 
