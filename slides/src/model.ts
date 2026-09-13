@@ -55,6 +55,16 @@ export interface ElementBase {
     enterDur?: number
     /** stagger step within the entrance sequence; equal values enter together */
     order?: number
+    /**
+     * Reveal step ("animate on click", discussion #282): 1 or more means the
+     * element is HIDDEN when the slide appears and revealed on the n-th → —
+     * running its `enter` then, or a plain fade when it has none; ← hides it
+     * again; → leaves the slide only once every step is shown. Arriving
+     * backward shows every step. Absent/0 = shown with the slide. Presentation
+     * state, not slides: one slide, one page number, one morph pairing. An
+     * older shell shows every element at once. Decisions in src/steps.ts.
+     */
+    step?: number
     /** animate numeric parts of the text from 0 to their final value */
     countUp?: boolean
     /** continuous ambient motion (slow zoom, for full-bleed photos) */
@@ -390,6 +400,18 @@ export interface Slide {
    * office-suite behaviour of counting it.
    */
   hidden?: boolean
+  /**
+   * In the walk, but takes no page number. The arrow keys reach it like any
+   * slide; `{{page}}` on it shows the number of the slide before it, so it
+   * reads as a CONTINUATION of that page. For a build — three recommendations
+   * revealed one slide at a time with `morph` — the audience sees "18" three
+   * times instead of 18, 19, 20 (discussion #282); equally for an interstitial
+   * or a section card that should not count. Distinct from `hidden` (out of
+   * the walk) and from `stateOf` (a variant reached by link): this is the
+   * third answer to `paginates`, and the ONLY one that stays in `inLinearFlow`.
+   * Absent = counts, so every existing file is unchanged.
+   */
+  unnumbered?: boolean
   /**
    * present-mode hover behaviour:
    * - focus-group: dim every element outside the hovered element's group
@@ -1147,11 +1169,12 @@ export function layoutElementIds(doc: BentoDoc): Set<string> {
  *
  * The single answer to that question — page fields, the presenter's counter,
  * the sidebar — so they cannot disagree about which slide is "4". Interactive
- * states never count; hidden slides count only when the deck opts into
+ * states never count; an `unnumbered` slide never counts (it continues the
+ * page before it); hidden slides count only when the deck opts into
  * office-suite numbering.
  */
 export const paginates = (s: Slide, doc: BentoDoc): boolean =>
-  !s.stateOf && (!s.hidden || !!doc.present?.numberHidden)
+  !s.stateOf && !s.unnumbered && (!s.hidden || !!doc.present?.numberHidden)
 
 /**
  * Is this slide part of the linear walk?

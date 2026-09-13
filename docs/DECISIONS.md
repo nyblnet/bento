@@ -6747,3 +6747,45 @@ through), hidden on leave/blur/Escape, wired with `aria-describedby`.
 Pointers: `kernel/src/ui/tooltip.{ts,css}`, `scripts/test-ui-tooltip.ts` (34
 checks; delay, the body/fixed placement, the flash-guard, aria wiring and Escape
 each mutation-caught).
+
+## 2026-09-13 — Reveal steps are presentation state, not slides; unnumbered slides are the other half
+
+Discussion #282 asked for "animate on click" and offered two shapes. Both
+shipped, because they answer different questions.
+
+**`unnumbered: true` on a slide** — in the walk, takes no page number, and
+`{{page}}` on it continues the previous slide's. It is the THIRD answer to
+`paginates` (beside `stateOf` and `hidden`) and the only one that stays in
+`inLinearFlow`; every surface counts by that one predicate, so nothing else
+changed. It covers more than reveals — a section card, an interstitial — which
+is why it exists on its own. `numberHidden` is about hidden slides and does not
+touch it.
+
+**`fx.step` on an element** — hidden when the slide appears, revealed on the
+n-th `→` (running its entrance, or a plain fade if it has none), hidden again by
+`←`; `→` leaves the slide only once every step is shown. Elements sharing a
+step appear together; gaps in the numbering are pressed through in one go;
+arriving BACKWARD lands fully revealed, the way PowerPoint and reveal.js do.
+The decisions live in `slides/src/steps.ts`, DOM-free, so the rig drives them
+(`scripts/test-slides-steps.ts`); present.ts is the DOM around them.
+
+**Why state and not slides.** One slide stays one slide: one page number, one
+morph pairing, one speaker note, one thumbnail, one entry in the sidebar. The
+alternative — steps as hidden slides — would have leaked into all five. The
+cost is one navigation state the old shell does not know, and that degrades
+the right way: an older shell shows every element at once, the same slide
+fully revealed, which is what additivity promises ("opens plain", not "opens
+wrong").
+
+**Hidden by `visibility`, not `display`.** A stepped element keeps its box, so
+nothing reflows when it appears, morph measurements stay honest, and the
+entrance tween starts from opacity 0 the instant the class comes off.
+Measured in a real browser on the manual clock (the driven tab was hidden and
+rAF would have lied): the revealed element's opacity went 0.00 → 0.08 → 0.66
+→ 1.00 across the fade; on a morph arrival the stepped elements sat hidden
+while the carried element morphed, then revealed on `→`.
+
+**The wire.** A presenter's `nav` carries `step`; an audience copy following a
+live broadcast applies it — forward with the entrance, backward as a hide —
+and parks it when the nav names another slide, applying it after that slide
+enters. The speaker view shows `step/max` beside the slide number.

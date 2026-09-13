@@ -740,4 +740,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} açıldı — ⌘S bir kopya kaydedecek",
   "⌘S asks where to save, then rewrites that file in place": "⌘S nereye kaydedileceğini sorar, sonra o dosyanın üzerine doğrudan yazar",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} kaydedilmiş bir sunu değil, Bento'nun boş bir kopyası. Yeni bir sunuya başlamak için onu tek başına açın.",
+  "Unnumbered": "Numarasız",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Gösteride kalır ama sayfa numarası almaz — sayfa alanı önceki slaydın numarasını sürdürür. Birkaç morf adımından oluşan bir açığa çıkarma ya da sayılmaması gereken bir kart için.",
+  "Unnumbered — in the show, continues the previous page number": "Numarasız — gösteride, önceki sayfa numarasını sürdürür",
+  "Reveal step": "Açığa çıkarma adımı",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Sunum sırasında → tuşuna o basışa kadar gizli; ← yeniden gizler. Birlikte açığa çıkarmak için birkaç öğeye aynı adımı verin.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Tıklayınca canlandır: bu slaytta n’inci → tuşuna kadar gizli (0 = slaytla birlikte gösterilir)",
+  "hidden": "gizli",
+  "unnumbered": "numarasız",
 }

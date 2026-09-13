@@ -739,4 +739,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "Đã mở {name} — ⌘S sẽ lưu một bản sao",
   "⌘S asks where to save, then rewrites that file in place": "⌘S hỏi nơi lưu, rồi ghi đè tệp đó tại chỗ",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} là một bản sao trống của Bento, không phải bản trình chiếu đã lưu. Hãy mở riêng để bắt đầu.",
+  "Unnumbered": "Không đánh số",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Vẫn trong buổi trình chiếu nhưng không nhận số trang — trường số trang tiếp tục số của trang chiếu trước. Dành cho phần hé lộ dựng từ nhiều bước morph, hoặc một thẻ không nên được tính.",
+  "Unnumbered — in the show, continues the previous page number": "Không đánh số — trong buổi trình chiếu, tiếp tục số trang trước",
+  "Reveal step": "Bước hé lộ",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Ẩn cho đến lần nhấn → đó khi trình bày; ← ẩn lại. Đặt cùng một bước cho nhiều phần tử để hé lộ chúng cùng lúc.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Hoạt ảnh khi nhấp: ẩn cho đến lần nhấn → thứ n trên trang chiếu này (0 = hiện cùng trang chiếu)",
+  "hidden": "đã ẩn",
+  "unnumbered": "không đánh số",
 }

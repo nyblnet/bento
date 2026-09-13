@@ -758,4 +758,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "Binuksan ang {name} — magse-save ng kopya ang ⌘S",
   "⌘S asks where to save, then rewrites that file in place": "Tatanungin ng ⌘S kung saan ise-save, pagkatapos ay muling isusulat ang file na iyon sa mismong lugar nito",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "Ang {name} ay walang lamang kopya ng Bento, hindi isang naka-save na deck. Buksan ito nang hiwalay upang magsimula.",
+  "Unnumbered": "Walang numero",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Nananatili sa palabas pero walang numero ng pahina — ipinagpapatuloy ng field ng pahina ang numero ng nakaraang slide. Para sa pagbubunyag na binuo sa ilang morph step, o card na hindi dapat mabilang.",
+  "Unnumbered — in the show, continues the previous page number": "Walang numero — nasa palabas, ipinagpapatuloy ang nakaraang numero ng pahina",
+  "Reveal step": "Hakbang ng pagbubunyag",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Nakatago hanggang sa pindot na iyon ng → habang nagpe-present; itinatago itong muli ng ←. Bigyan ng parehong hakbang ang ilang elemento para sabay silang lumitaw.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "I-animate sa click: nakatago hanggang sa ika-n na → sa slide na ito (0 = ipinapakita kasabay ng slide)",
+  "hidden": "nakatago",
+  "unnumbered": "walang numero",
 }

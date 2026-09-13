@@ -801,4 +801,12 @@ export const pt: Catalog = {
   "The show has ended — this copy stays a working deck": "A sessão terminou — esta cópia continua a ser uma apresentação utilizável",
   "Your audience copy is no longer valid — ask the presenter for a new one": "A sua cópia para o público já não é válida — peça uma nova ao apresentador",
   "You left the show — reopen this file to rejoin": "Saiu da sessão — volte a abrir este ficheiro para regressar",
+  "Unnumbered": "Sem número",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Fica na apresentação mas não ocupa número de página — o campo de página continua o do slide anterior. Para uma revelação construída em vários passos com morph, ou um cartão que não deve contar.",
+  "Unnumbered — in the show, continues the previous page number": "Sem número — na apresentação, continua o número de página anterior",
+  "Reveal step": "Passo de revelação",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Oculto até essa pressão de → ao apresentar; ← volta a ocultá-lo. Dê o mesmo passo a vários elementos para os revelar em conjunto.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animar ao clicar: oculto até ao n-ésimo → neste slide (0 = visível com o slide)",
+  "hidden": "oculto",
+  "unnumbered": "sem número",
 }

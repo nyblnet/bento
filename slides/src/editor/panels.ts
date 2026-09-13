@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
@@ -48,6 +48,7 @@ const ROW_TIPS: Record<string, string> = {
   'Color': 'Colour with opacity — pick with the swatch, the % field is how opaque it is',
   'Enter': 'Entrance animation when the slide appears (plays on non-morph entries; equal order = together)',
   'Enter secs': 'How long the entrance takes, in seconds',
+  'Reveal step': 'Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)',
   'Count up': 'Numbers in this text count up from zero when the slide enters',
   'Ambient': 'Continuous motion while the slide is on screen — Ken Burns drift or zoom',
   'Zoom': 'Ken Burns direction — drift, settle out, or settle in',
@@ -273,6 +274,20 @@ export class PropsPanel {
           if (v) this.store.slide.hidden = true
           else delete this.store.slide.hidden
         }, true)))
+      // The third answer to "does it take a number": stays in the walk, counts
+      // for nothing, and {{page}} on it continues the slide before. Builds
+      // (one element revealed per morph step) and interstitials.
+      this.row('Unnumbered', this.toggle(!!slide.unnumbered, (v) =>
+        this.edit(() => {
+          if (v) this.store.slide.unnumbered = true
+          else delete this.store.slide.unnumbered
+        }, true)))
+      if (slide.unnumbered) {
+        const hint = document.createElement('p')
+        hint.className = 'ed-hint'
+        hint.textContent = t('Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.')
+        this.host.appendChild(hint)
+      }
     }
     if (slide.transition === 'morph') {
       const hint = document.createElement('p')
@@ -663,7 +678,7 @@ export class PropsPanel {
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
-        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop) delete e.fx
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete e.fx
         else e.fx = fx
       }, true)
 
@@ -678,6 +693,16 @@ export class PropsPanel {
       this.row('Enter secs', this.number(
         el.fx.enterDur ?? (el.fx.enter.startsWith('slide-') ? 0.75 : 0.55), 0.05,
         (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }))
+    }
+    // "Animate on click": hidden until the n-th → on this slide (0 = with the
+    // slide). The element's Enter plays when its step comes, or a plain fade.
+    this.row('Reveal step', this.number(el.fx?.step ?? 0, 1,
+      (v, fin) => { if (fin) setFx({ step: v >= 1 ? Math.floor(v) : undefined }) }))
+    if (el.fx?.step) {
+      const hint = document.createElement('p')
+      hint.className = 'ed-hint'
+      hint.textContent = t('Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.')
+      this.host.appendChild(hint)
     }
     this.row('Count up', this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
@@ -885,15 +910,22 @@ export class PropsPanel {
     this.store.goTo(insertAt)
   }
 
-  /** Human label for a slide in pickers. */
-  private slideLabel(s: { id: string; name?: string; stateOf?: string }, i: number): string {
-    const linear = this.store.doc.slides.slice(0, i + 1).filter((x) => !x.stateOf).length
+  /**
+   * Human label for a slide in pickers — the number the SIDEBAR shows, so an
+   * author who reads "4" there finds "slide 4" here. That is the page number
+   * (`paginates`), not the position: an unnumbered or hidden slide shows the
+   * number it continues, marked, so two entries can share a number without
+   * being confused for each other.
+   */
+  private slideLabel(s: { id: string; name?: string; stateOf?: string; hidden?: boolean; unnumbered?: boolean }, i: number): string {
+    const doc = this.store.doc
+    const pageAt = (idx: number) => doc.slides.slice(0, idx + 1).filter((x) => paginates(x, doc)).length
     if (s.stateOf) {
-      const p = this.store.doc.slides.findIndex((x) => x.id === s.stateOf)
-      const pn = this.store.doc.slides.slice(0, p + 1).filter((x) => !x.stateOf).length
-      return `state of ${pn}${s.name ? ` — ${s.name}` : ''}`
+      const p = doc.slides.findIndex((x) => x.id === s.stateOf)
+      return `state of ${pageAt(p)}${s.name ? ` — ${s.name}` : ''}`
     }
-    return `slide ${linear}${s.name ? ` — ${s.name}` : ''}`
+    const mark = s.hidden ? ` (${t('hidden')})` : s.unnumbered ? ` (${t('unnumbered')})` : ''
+    return `slide ${pageAt(i)}${mark}${s.name ? ` — ${s.name}` : ''}`
   }
 
   /**

@@ -733,4 +733,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} 열림 — ⌘S는 사본을 저장합니다",
   "⌘S asks where to save, then rewrites that file in place": "⌘S는 저장 위치를 물은 다음 그 파일을 제자리에서 덮어씁니다",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name}은(는) 저장된 덱이 아니라 Bento의 빈 사본입니다. 새로 시작하려면 따로 여세요.",
+  "Unnumbered": "번호 없음",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "쇼에는 포함되지만 페이지 번호를 차지하지 않습니다 — 페이지 필드는 이전 슬라이드의 번호를 이어갑니다. 여러 모프 단계로 만든 단계별 공개나, 세지 않아야 할 카드에 사용합니다.",
+  "Unnumbered — in the show, continues the previous page number": "번호 없음 — 쇼에 포함되며 이전 페이지 번호를 이어갑니다",
+  "Reveal step": "공개 단계",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "발표 중 해당 횟수의 → 를 누를 때까지 숨겨집니다. ← 는 다시 숨깁니다. 여러 요소에 같은 단계를 주면 함께 나타납니다.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "클릭 시 애니메이션: 이 슬라이드에서 n번째 → 까지 숨김 (0 = 슬라이드와 함께 표시)",
+  "hidden": "숨김",
+  "unnumbered": "번호 없음",
 }

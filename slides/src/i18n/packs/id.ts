@@ -739,4 +739,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} dibuka — ⌘S akan menyimpan salinan",
   "⌘S asks where to save, then rewrites that file in place": "⌘S menanyakan lokasi penyimpanan, lalu menimpa berkas itu di tempatnya",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} adalah salinan kosong Bento, bukan presentasi tersimpan. Buka tersendiri untuk memulai.",
+  "Unnumbered": "Tanpa nomor",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Tetap dalam pertunjukan tetapi tidak mengambil nomor halaman — bidang halaman melanjutkan nomor slide sebelumnya. Untuk pengungkapan yang dibangun dari beberapa langkah morph, atau kartu yang tidak seharusnya dihitung.",
+  "Unnumbered — in the show, continues the previous page number": "Tanpa nomor — dalam pertunjukan, melanjutkan nomor halaman sebelumnya",
+  "Reveal step": "Langkah pengungkapan",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Tersembunyi hingga tekanan → itu saat presentasi; ← menyembunyikannya lagi. Beri beberapa elemen langkah yang sama agar muncul bersama.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animasikan saat klik: tersembunyi hingga → ke-n pada slide ini (0 = tampil bersama slide)",
+  "hidden": "tersembunyi",
+  "unnumbered": "tanpa nomor",
 }

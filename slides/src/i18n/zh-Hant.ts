@@ -803,4 +803,12 @@ export const zhHant: Catalog = {
   "The show has ended — this copy stays a working deck": "簡報已結束 — 此副本仍是可用的簡報",
   "Your audience copy is no longer valid — ask the presenter for a new one": "你的觀眾副本已失效 — 請向講者索取新的副本",
   "You left the show — reopen this file to rejoin": "你已退出簡報 — 重新開啟此檔案即可重新加入",
+  "Unnumbered": "不編號",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "仍在放映中，但不佔用頁碼 — 頁碼欄位沿用上一張投影片的頁碼。適用於用多個變形步驟構成的逐步展示，或不應計數的卡片。",
+  "Unnumbered — in the show, continues the previous page number": "不編號 — 在放映中，沿用上一頁的頁碼",
+  "Reveal step": "顯示步驟",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "簡報時按到該次 → 之前保持隱藏；按 ← 會再次隱藏。給多個元素設定相同步驟可一起顯示。",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "點擊時動畫：在此投影片上按第 n 次 → 之前隱藏（0 = 隨投影片顯示）",
+  "hidden": "已隱藏",
+  "unnumbered": "不編號",
 }

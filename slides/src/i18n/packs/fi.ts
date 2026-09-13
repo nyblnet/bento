@@ -746,4 +746,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} avattu — ⌘S tallentaa kopion",
   "⌘S asks where to save, then rewrites that file in place": "⌘S kysyy tallennuspaikan ja korvaa sitten kyseisen tiedoston suoraan",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} on tyhjä kopio Bentosta, ei tallennettu esitys. Avaa se yksinään aloittaaksesi.",
+  "Unnumbered": "Numeroimaton",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Pysyy esityksessä mutta ei saa sivunumeroa — sivukenttä jatkaa edellisen dian numeroa. Useasta morph-vaiheesta rakennettuun paljastukseen tai korttiin, jota ei lasketa.",
+  "Unnumbered — in the show, continues the previous page number": "Numeroimaton — esityksessä, jatkaa edellistä sivunumeroa",
+  "Reveal step": "Paljastusvaihe",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Piilossa siihen →-painallukseen asti esitettäessä; ← piilottaa sen uudelleen. Anna usealle elementille sama vaihe, niin ne paljastuvat yhdessä.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animoi napsautuksella: piilossa tämän dian n:nteen →-painallukseen asti (0 = näkyy dian mukana)",
+  "hidden": "piilotettu",
+  "unnumbered": "numeroimaton",
 }

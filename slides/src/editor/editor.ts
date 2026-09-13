@@ -1721,6 +1721,13 @@ export class Editor {
       // glance, because a slide you forgot you hid is found mid-presentation.
       num.textContent = paginates(slide, this.store.doc) ? String(this.linearNumber(i)) : '—'
       num.title = t('Hidden — skipped while presenting and left out of PDF export')
+    } else if (slide.unnumbered) {
+      // In the walk but not counted: the audience's page field shows the
+      // previous slide's number on it, so that is what the sidebar shows too,
+      // dimmed, with the marker that says why it is not the next number.
+      num.textContent = `${this.linearNumber(i)}·`
+      num.classList.add('ed-num-unnumbered')
+      num.title = t('Unnumbered — in the show, continues the previous page number')
     } else {
       num.textContent = String(this.linearNumber(i))
     }

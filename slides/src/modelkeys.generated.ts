@@ -11,7 +11,7 @@
 
 export const MODEL_KEYS = {
     "doc": ["assets", "blobs", "collab", "docId", "fonts", "format", "layouts", "meta", "modified", "present", "readonly", "size", "slides", "template", "theme", "title", "version"],
-    "slide": ["background", "comments", "elements", "hidden", "hover", "id", "name", "notes", "stateOf", "themeRefs", "transition"],
+    "slide": ["background", "comments", "elements", "hidden", "hover", "id", "name", "notes", "stateOf", "themeRefs", "transition", "unnumbered"],
     "comment": ["at", "author", "elementId", "id", "replies", "resolved", "text", "x", "y"],
     "element": {
       "text": ["align", "backdropFilter", "blend", "blur", "color", "colorGradient", "fontFamily", "fontSize", "fontWeight", "fx", "group", "groupId", "h", "html", "id", "letterSpacing", "lineHeight", "link", "morphId", "opacity", "placeholder", "role", "rotation", "shadow", "showOnHover", "textStroke", "themeRefs", "type", "valign", "w", "x", "y"],
@@ -22,7 +22,7 @@ export const MODEL_KEYS = {
       "table": ["backdropFilter", "blend", "blur", "columns", "fx", "group", "groupId", "h", "header", "id", "link", "morphId", "opacity", "role", "rotation", "rows", "shadow", "showOnHover", "style", "themeRefs", "type", "w", "x", "y"],
       "media": ["autoplay", "backdropFilter", "blend", "blur", "controls", "fit", "fx", "group", "groupId", "h", "id", "kind", "link", "loop", "morphId", "muted", "opacity", "poster", "radius", "role", "rotation", "shadow", "showOnHover", "src", "themeRefs", "type", "w", "x", "y"],
     },
-    "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order"],
+    "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order", "step"],
     "fxKen": ["dir", "duration", "scale"],
     "fxLoop": ["delay", "distance", "duration", "ease", "path", "speeds", "type"],
     "shadow": ["blur", "color", "x", "y"],

@@ -737,4 +737,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} geopend — ⌘S bewaart een kopie",
   "⌘S asks where to save, then rewrites that file in place": "⌘S vraagt waar op te slaan en overschrijft dat bestand daarna rechtstreeks",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} is een lege kopie van Bento, geen opgeslagen presentatie. Open het apart om er een te beginnen.",
+  "Unnumbered": "Ongenummerd",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Blijft in de show maar krijgt geen paginanummer — het paginaveld zet het nummer van de vorige dia voort. Voor een onthulling opgebouwd uit meerdere morph-stappen, of een kaart die niet mag meetellen.",
+  "Unnumbered — in the show, continues the previous page number": "Ongenummerd — in de show, zet het vorige paginanummer voort",
+  "Reveal step": "Onthulstap",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Verborgen tot die druk op → tijdens het presenteren; ← verbergt het weer. Geef meerdere elementen dezelfde stap om ze samen te onthullen.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animeren bij klik: verborgen tot de n-de → op deze dia (0 = zichtbaar met de dia)",
+  "hidden": "verborgen",
+  "unnumbered": "ongenummerd",
 }

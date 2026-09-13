@@ -247,6 +247,7 @@ const fx = shape(MODEL_KEYS.fx, {
   enter: oneOf('fade-up', 'fade', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'),
   enterDur: num(0, 600),
   order: num(-1e4, 1e4),
+  step: num(0, 1e4),
   countUp: bool,
   ambient: oneOf('kenburns'),
   ken: shape(MODEL_KEYS.fxKen, {
@@ -482,7 +483,7 @@ const SLIDE_CHECKS: Record<string, Check> = {
   // the shorthand's length — wide enough for a multi-stop linear-gradient(),
   // still no url() reaching for the network from a pasted slide
   background: color(LIMITS.scalar), notes: str(LIMITS.html),
-  hidden: bool,
+  hidden: bool, unnumbered: bool,
   transition: oneOf('none', 'fade', 'slide', 'zoom', 'morph'),
   hover: shape(['type', 'dim', 'default'], {
     type: oneOf('focus-group', 'reveal'), dim: num(0, 1), default: cssValue(),

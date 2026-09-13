@@ -4,8 +4,10 @@
 // never enters the module graph. scripts/build-i18n.mjs --packs emits it as
 // downloadable JSON. See docs/i18n-packs.md.
 //
-// Translator: Mekan Soltanov (github.com/msoltanov). Complete at 706/706.
-// Corrections go to the translator.
+// Translator: Mekan Soltanov (github.com/msoltanov). Complete at 706/706;
+// the eight strings for unnumbered slides and reveal steps (2026-09-13)
+// are machine-drafted, awaiting the translator's review. Corrections go
+// to the translator.
 //
 // Terminology follows the Latin-script conventions Turkmen speakers meet in
 // localized office software (slaýd, prezentasiýa, ýerleşiş, element, geçiş,
@@ -760,4 +762,12 @@ export const strings: Catalog = {
   "⌘S asks where to save, then rewrites that file in place": "⌘S nirä saklamalydygyny soraýar, soňra şol faýlyň üstüne göni ýazýar",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} saklanan prezentasiýa däl-de, Bento-nyň boş nusgasy. Täzesine başlamak üçin ony aýratyn açyň.",
   "Your work auto-saves; restore earlier versions from Save → Version history.": "Işiňiz awtomatik saklanýar; öňki wersiýalary «Barada» → «Wersiýa taryhy» arkaly dikeldiň.",
+  "Unnumbered": "Belgisiz",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Görkezişde galýar, ýöne sahypa belgisini almaýar — sahypa meýdany öňki slaýdyň belgisini dowam etdirýär. Birnäçe morf ädiminden gurlan açyş üçin ýa-da sanalmaly däl kart üçin.",
+  "Unnumbered — in the show, continues the previous page number": "Belgisiz — görkezişde, öňki sahypa belgisini dowam etdirýär",
+  "Reveal step": "Açyş ädimi",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Prezentasiýa wagtynda → şol basyşyna çenli gizlin; ← ony ýene gizleýär. Bilelikde açmak üçin birnäçe elemente şol bir ädimi beriň.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Basylanda animasiýa: bu slaýdda n-nji → çenli gizlin (0 = slaýd bilen görkezilýär)",
+  "hidden": "gizlin",
+  "unnumbered": "belgisiz",
 }
